@@ -227,7 +227,7 @@
   "execution": {
     "status": "in_progress",
     "current_phase_index": 2,
-    "current_task_index": 3,
+    "current_task_index": 4,
     "total_phases": 4,
     "phases": {
       "phase_1": {
@@ -253,7 +253,7 @@
       "phase_2": {
         "name": "安全与关键业务纠错",
         "total_tasks": 4,
-        "completed_tasks": 2,
+        "completed_tasks": 3,
         "status": "in_progress",
         "tasks": {
           "task_01_harden_otp_log_storage_and_admin_exposure": {
@@ -270,14 +270,14 @@
           },
           "task_03_align_order_quantity_contract_and_persistence": {
             "name": "align-order-quantity-contract-and-persistence",
-            "status": "in_progress",
+            "status": "completed",
             "started_at": "2026-04-07T20:38:24.1845206+08:00",
-            "completed_at": null
+            "completed_at": "2026-04-07T20:38:24.1845206+08:00"
           },
           "task_04_enforce_user_phone_uniqueness_end_to_end": {
             "name": "enforce-user-phone-uniqueness-end-to-end",
-            "status": "pending",
-            "started_at": null,
+            "status": "in_progress",
+            "started_at": "2026-04-07T20:38:24.1845206+08:00",
             "completed_at": null
           }
         }
@@ -355,8 +355,8 @@
     },
     "test_baseline": {
       "has_tests": true,
-      "total_tests": 40,
-      "passing": 40,
+      "total_tests": 42,
+      "passing": 42,
       "failing": 0,
       "failing_test_ids": [],
       "captured_at": "2026-04-07T20:38:24.1845206+08:00"
