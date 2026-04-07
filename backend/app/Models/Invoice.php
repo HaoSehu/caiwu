@@ -25,13 +25,6 @@ class Invoice extends Model
         ];
     }
 
-    protected static function booted(): void
-    {
-        static::saved(function (self $invoice): void {
-            $invoice->syncInvoiceItemProjection();
-        });
-    }
-
     public function user()  { return $this->belongsTo(User::class); }
     public function order() { return $this->belongsTo(Order::class); }
     public function payments() { return $this->hasMany(Payment::class); }

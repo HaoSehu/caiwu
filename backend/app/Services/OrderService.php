@@ -278,6 +278,7 @@ class OrderService
                         'status' => PaymentStatus::FAILED,
                         'callback_raw' => $callbackRaw,
                     ])->save();
+                    $this->paymentService->syncProjection($pendingPayment);
                 }
 
                 if ((int) $invoice->status !== InvoiceStatus::CANCELLED) {
@@ -439,7 +440,7 @@ class OrderService
                     'status' => PaymentStatus::FAILED,
                 ]);
 
-            Payment::query()->create([
+            $payment = Payment::query()->create([
                 'payment_no' => Payment::generatePaymentNo(),
                 'user_id' => $order->user_id,
                 'invoice_id' => $invoice->id,
@@ -459,6 +460,7 @@ class OrderService
                 ],
                 'paid_at' => $paidAt,
             ]);
+            $this->paymentService->syncProjection($payment);
 
             $invoice->forceFill([
                 'status' => InvoiceStatus::PAID,
@@ -533,10 +535,15 @@ class OrderService
         $remark = trim((string) ($payload['remark'] ?? ''));
 
         DB::transaction(function () use ($order, $invoice, $manualSuccessPayments) {
+            $payments = $manualSuccessPayments->get();
             $manualSuccessPayments->update([
                 'status' => PaymentStatus::FAILED,
                 'paid_at' => null,
             ]);
+            foreach ($payments as $payment) {
+                $payment->refresh();
+                $this->paymentService->syncProjection($payment);
+            }
 
             $invoice->forceFill([
                 'status' => InvoiceStatus::UNPAID,

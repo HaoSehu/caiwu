@@ -89,6 +89,7 @@ class PaymentService
                     ],
                     'paid_at' => now(),
                 ]);
+                $this->syncProjection($payment);
 
                 $lockedInvoice->forceFill([
                     'status' => InvoiceStatus::PAID,
@@ -189,6 +190,7 @@ class PaymentService
                 'source' => 'alipay_recharge_precreate',
             ]),
         ])->save();
+        $this->syncProjection($payment);
 
         return [
             'payment_no' => $payment->payment_no,
@@ -236,6 +238,7 @@ class PaymentService
                     'callback_raw' => $raw,
                     'paid_at'      => now(),
                 ]);
+                $this->syncProjection($payment);
 
                 $user = User::query()->lockForUpdate()->findOrFail($payment->user_id);
                 $account = $this->lockUserAccount($user->id);
@@ -307,6 +310,7 @@ class PaymentService
                             'trace_id' => $traceId,
                         ],
                     ]);
+                    $this->syncProjection($payment);
                 }
 
                 return [
@@ -441,6 +445,7 @@ class PaymentService
                             ]),
                             'paid_at' => now(),
                         ])->save();
+                        $this->syncProjection($lockedPayment);
 
                         Log::warning('[支付宝回调] 检测到重复支付回调，已拦截二次入账', [
                             'payment_no' => $lockedPayment->payment_no,
@@ -464,6 +469,7 @@ class PaymentService
                                 'ignored_business_update' => true,
                             ]),
                         ])->save();
+                        $this->syncProjection($lockedPayment);
 
                         Log::warning('[支付宝回调] 已取消账单收到支付回调，已拦截入账', [
                             'payment_no' => $lockedPayment->payment_no,
@@ -489,6 +495,7 @@ class PaymentService
                         'callback_raw' => $params,
                         'paid_at' => now(),
                     ])->save();
+                    $this->syncProjection($lockedPayment);
 
                     $invoice->forceFill([
                         'status' => InvoiceStatus::PAID,
@@ -636,6 +643,7 @@ class PaymentService
                             ]),
                             'paid_at' => now(),
                         ])->save();
+                        $this->syncProjection($lockedPayment);
 
                         Log::warning('[支付宝主动查询] 检测到重复支付，已拦截二次入账', [
                             'payment_no' => $lockedPayment->payment_no,
@@ -655,6 +663,7 @@ class PaymentService
                                 'cancelled_invoice' => true,
                             ]),
                         ])->save();
+                        $this->syncProjection($lockedPayment);
 
                         return ['dispatch' => false, 'invoice' => $invoice, 'payment_no' => (string) $lockedPayment->payment_no];
                     }
@@ -674,6 +683,7 @@ class PaymentService
                         ]),
                         'paid_at' => now(),
                     ])->save();
+                    $this->syncProjection($lockedPayment);
 
                     $invoice->forceFill([
                         'status' => InvoiceStatus::PAID,
@@ -849,6 +859,7 @@ class PaymentService
                     'status' => PaymentStatus::REFUNDED,
                     'callback_raw' => $callbackRaw,
                 ])->save();
+                $this->syncProjection($payment);
 
                 $lockedOrder->forceFill([
                     'status' => OrderStatus::REFUNDED,
@@ -977,6 +988,7 @@ class PaymentService
                     'status' => PaymentStatus::REFUNDED,
                     'callback_raw' => $callbackRaw,
                 ])->save();
+                $this->syncProjection($payment);
 
                 if ($order) {
                     $order->forceFill([
@@ -1129,6 +1141,7 @@ class PaymentService
                 'status' => PaymentStatus::FAILED,
                 'callback_raw' => $callbackRaw,
             ])->save();
+            $this->syncProjection($pendingPayment);
         }
     }
 
@@ -1232,5 +1245,12 @@ class PaymentService
         } catch (LockTimeoutException) {
             throw new BusinessException($timeoutMessage);
         }
+    }
+
+    public function syncProjection(Payment $payment): Payment
+    {
+        $payment->syncPaymentCallbackProjection();
+
+        return $payment->fresh(['callbacks']) ?? $payment;
     }
 }
