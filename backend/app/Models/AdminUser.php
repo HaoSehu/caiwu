@@ -5,7 +5,6 @@ namespace App\Models;
 use App\Support\AdminPermissions;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\HasApiTokens;
 
@@ -32,32 +31,6 @@ class AdminUser extends Authenticatable
             'last_login_at' => 'datetime',
             'password'      => 'hashed',
         ];
-    }
-
-    protected static function booted(): void
-    {
-        static::saved(function (self $admin): void {
-            if (! $admin->exists || ! Schema::hasTable('admin_user_roles')) {
-                return;
-            }
-
-            $roleId = (int) ($admin->role_id ?? 0);
-            if ($roleId <= 0) {
-                DB::table('admin_user_roles')
-                    ->where('admin_user_id', $admin->id)
-                    ->delete();
-
-                return;
-            }
-
-            DB::table('admin_user_roles')->updateOrInsert(
-                [
-                    'admin_user_id' => (int) $admin->id,
-                    'role_id' => $roleId,
-                ],
-                []
-            );
-        });
     }
 
     public function role()
