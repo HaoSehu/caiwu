@@ -1,0 +1,808 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Services\User\Concerns;
+
+use App\Constants\InvoiceStatus;
+use App\Constants\OrderStatus;
+use App\Constants\PaymentStatus;
+use App\Constants\ServiceStatus;
+use App\Exceptions\BusinessException;
+use App\Models\Invoice;
+use App\Models\Order;
+use App\Models\Payment;
+use App\Models\Product;
+use App\Models\Service;
+use App\Models\Supplier;
+use App\Models\Ticket;
+use App\Models\User;
+use App\Support\ServiceHostname;
+use App\Support\TextSanitizer;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+
+trait HandlesAdminUserServices
+{
+    /**
+     * 用户服务列表
+     */
+    public function services(User $user, array $filters, int $perPage = 20)
+    {
+        return $this->clientServiceConsoleService->paginateForUser($user, array_merge($filters, [
+            'page_size' => $perPage,
+        ]));
+    }
+
+    /**
+     * 用户服务详情
+     */
+    public function serviceDetail(User $user, int $serviceId, bool $refreshRemote = false, bool $includeSensitiveConnection = true): array
+    {
+        return $this->clientServiceConsoleService->getDetailForUser($user, $serviceId, $refreshRemote, $includeSensitiveConnection);
+    }
+
+    public function serviceBaseDetail(User $user, int $serviceId, bool $includeSensitiveConnection = true): array
+    {
+        return $this->clientServiceConsoleService->getBaseDetailForUser($user, $serviceId, $includeSensitiveConnection);
+    }
+
+    public function serviceRemoteStatusPatch(User $user, int $serviceId, bool $includeSensitiveConnection = true): array
+    {
+        return $this->clientServiceConsoleService->getRemoteStatusPatchForUser($user, $serviceId, $includeSensitiveConnection);
+    }
+
+    public function refreshServiceStatuses(User $user, array $serviceIds = []): array
+    {
+        $ids = collect($serviceIds)
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        $services = Service::query()
+            ->select([
+                'id',
+                'user_id',
+                'product_id',
+                'name',
+                'domain',
+                'status',
+                'provision_data',
+                'expires_at',
+            ])
+            ->where('user_id', $user->id)
+            ->when($ids !== [], fn ($query) => $query->whereIn('id', $ids))
+            ->get();
+
+        throw_if($services->isEmpty(), new BusinessException('没有可刷新的服务记录'));
+
+        return $this->serviceStatusSyncService->syncServices($services);
+    }
+
+    /**
+     * 更新用户服务业务信息
+     */
+    public function updateServiceMeta(User $user, int $serviceId, array $data, array $context = []): array
+    {
+        $service = Service::query()
+            ->with(['product.supplier', 'user'])
+            ->where('user_id', $user->id)
+            ->findOrFail($serviceId);
+
+        $currentProvisionData = is_array($service->provision_data ?? null) ? $service->provision_data : [];
+        $previousCustomHostname = ServiceHostname::custom($currentProvisionData);
+        $supportsUpstream = $this->supportsMofangUpstream($service->product);
+        $hasUpstreamBinding = (int) (($currentProvisionData['supplier_id'] ?? ($service->product?->supplier_id ?? 0)) ?: 0) > 0;
+        $rawUpstreamHostId = $data['upstream_host_id'] ?? null;
+        $upstreamHostId = $rawUpstreamHostId === null ? null : (int) $rawUpstreamHostId;
+
+        if ($upstreamHostId !== null) {
+            throw_if($upstreamHostId <= 0, new BusinessException('请输入有效的上游主机 ID'));
+            throw_if(! $supportsUpstream && ! $hasUpstreamBinding, new BusinessException('当前服务未接入可控上游，无法修改上游主机 ID'));
+        }
+
+        $traceId = trim((string) ($context['trace_id'] ?? ''));
+        $operatorId = (int) (($context['operator_id'] ?? 0) ?: 0);
+        $operatorName = trim((string) ($context['operator_name'] ?? ''));
+        $clearCustomHostname = !empty($data['clear_custom_hostname']);
+        $newCustomHostname = 'skip';
+
+        if ($clearCustomHostname) {
+            $newCustomHostname = '';
+        } elseif (array_key_exists('custom_hostname', $data)) {
+            $rawCustomHostname = trim((string) ($data['custom_hostname'] ?? ''));
+            $normalizedCustomHostname = $rawCustomHostname !== ''
+                ? $this->settingService->normalizeHostname($rawCustomHostname, true)
+                : '';
+
+            if ($rawCustomHostname !== '' && $normalizedCustomHostname === '') {
+                throw new BusinessException('请输入有效的自定义主机名');
+            }
+
+            $newCustomHostname = $normalizedCustomHostname;
+        }
+
+        $productPricing = Service::extractSupportedRenewPricing(
+            is_array($service->product?->pricing ?? null) ? $service->product->pricing : []
+        );
+        $currentRenewPricing = $service->resolveRenewPricingConfig($productPricing);
+
+        // 处理续费配置：clear_locked_pricing=true 恢复默认快照，否则按传入值更新，未传则跳过
+        $clearLocked = !empty($data['clear_locked_pricing']);
+        $newLockedPricing = 'skip';
+
+        if ($clearLocked) {
+            $newLockedPricing = $service->resetRenewPricingConfig($productPricing);
+        } elseif (isset($data['locked_pricing']) && is_array($data['locked_pricing'])) {
+            $newLockedPricing = [];
+
+            foreach (Service::SUPPORTED_RENEW_BILLING_CYCLES as $cycle => $cycleLabel) {
+                $incoming = is_array($data['locked_pricing'][$cycle] ?? null) ? $data['locked_pricing'][$cycle] : [];
+                $currentCycleConfig = is_array($currentRenewPricing[$cycle] ?? null) ? $currentRenewPricing[$cycle] : [
+                    'enabled' => false,
+                    'base_amount' => null,
+                    'manual_amount' => null,
+                ];
+
+                $baseAmount = $this->normalizeRenewPricingBaseAmount($currentCycleConfig['base_amount'] ?? null);
+                $manualAmount = array_key_exists('manual_amount', $incoming)
+                    ? $this->normalizeRenewPricingManualAmount($incoming['manual_amount'])
+                    : $this->normalizeRenewPricingManualAmount($currentCycleConfig['manual_amount'] ?? null);
+                $enabled = array_key_exists('enabled', $incoming)
+                    ? filter_var($incoming['enabled'], FILTER_VALIDATE_BOOLEAN)
+                    : (bool) ($currentCycleConfig['enabled'] ?? false);
+
+                $effectiveAmount = $manualAmount !== null && $manualAmount > 0 ? $manualAmount : $baseAmount;
+                if ($enabled && ($effectiveAmount === null || $effectiveAmount <= 0)) {
+                    throw new BusinessException("{$cycleLabel}已开启，请填写有效续费价格");
+                }
+
+                $newLockedPricing[$cycle] = [
+                    'enabled' => (bool) ($enabled && $effectiveAmount !== null && $effectiveAmount > 0),
+                    'base_amount' => $baseAmount !== null && $baseAmount > 0 ? number_format($baseAmount, 2, '.', '') : null,
+                    'manual_amount' => $manualAmount !== null && $manualAmount > 0 ? number_format($manualAmount, 2, '.', '') : null,
+                ];
+            }
+        }
+
+        DB::transaction(function () use ($service, $upstreamHostId, $currentProvisionData, $traceId, $operatorId, $operatorName, $newLockedPricing, $newCustomHostname) {
+            $provisionData = $currentProvisionData;
+
+            if ($upstreamHostId !== null) {
+                $provisionData['source_type'] = (string) ($provisionData['source_type'] ?? 'upstream');
+                $provisionData['provider'] = (string) ($provisionData['provider'] ?? 'mofang_finance_api');
+                $provisionData['supplier_id'] = (int) (($provisionData['supplier_id'] ?? ($service->product?->supplier_id ?? 0)) ?: 0);
+                $provisionData['supplier_product_id'] = (int) (($provisionData['supplier_product_id'] ?? ($service->product?->supplier_product_id ?? 0)) ?: 0);
+                $provisionData['upstream_host_id'] = $upstreamHostId;
+                $provisionData['last_manual_linked_at'] = now()->format('Y-m-d H:i:s');
+            }
+
+            if ($traceId !== '') {
+                $provisionData['trace_id'] = $traceId;
+            }
+
+            if ($operatorId > 0) {
+                $provisionData['updated_from_admin_id'] = $operatorId;
+            }
+
+            if ($operatorName !== '') {
+                $provisionData['updated_from_admin_name'] = $operatorName;
+            }
+
+            if ($newCustomHostname !== 'skip') {
+                $provisionData = ServiceHostname::writeCustomHostname($provisionData, (string) $newCustomHostname, [
+                    'operator_id' => $operatorId,
+                    'operator_name' => $operatorName,
+                ]);
+            }
+
+            $fillData = [
+                'provision_data' => $provisionData,
+            ];
+
+            // 'skip' 表示请求未传 locked_pricing 字段，保持现有值不变
+            if ($newLockedPricing !== 'skip') {
+                $fillData['locked_pricing'] = $newLockedPricing;
+            }
+
+            $service->forceFill($fillData)->save();
+        });
+
+        if ($newCustomHostname !== 'skip' && $previousCustomHostname !== $newCustomHostname) {
+            try {
+                $this->operationLogService->writeServiceConsoleLog($service->refresh()->loadMissing(['product', 'order']), 'service.console.hostname.update', [
+                    'category' => 'service',
+                    'summary' => $newCustomHostname !== '' ? '设置自定义主机名' : '清空自定义主机名',
+                    'hostname' => $newCustomHostname,
+                    'previous_hostname' => $previousCustomHostname,
+                ], [
+                    'actor_type' => 'admin',
+                    'actor_user_id' => $operatorId,
+                    'actor_name' => $operatorName,
+                    'trace_id' => $traceId,
+                ]);
+            } catch (\Throwable $exception) {
+                Log::warning('[管理员更新服务业务信息] 自定义主机名日志写入失败', [
+                    'user_id' => $user->id,
+                    'service_id' => $service->id,
+                    'operator_id' => $operatorId,
+                    'message' => $exception->getMessage(),
+                    'exception' => $exception::class,
+                ]);
+            }
+        }
+
+        return $this->clientServiceConsoleService->getDetailForUser($user, $serviceId, false);
+    }
+
+    /**
+     * 用户服务电源操作
+     */
+    public function servicePower(User $user, int $serviceId, string $action, array $context = []): array
+    {
+        return $this->clientServiceConsoleService->powerActionForUser($user, $serviceId, $action, $context);
+    }
+
+    /**
+     * 用户服务模块状态
+     */
+    public function serviceModuleStatus(User $user, int $serviceId, string $type = 'host'): array
+    {
+        return $this->clientServiceConsoleService->getModuleStatusForUser($user, $serviceId, $type);
+    }
+
+    /**
+     * 用户服务重装系统选项
+     */
+    public function serviceReinstallOptions(User $user, int $serviceId, bool $forceRefresh = false): array
+    {
+        return $this->clientServiceConsoleService->getReinstallOptionsForUser($user, $serviceId, $forceRefresh);
+    }
+
+    /**
+     * 用户服务 VNC 控制台
+     */
+    public function serviceVnc(User $user, int $serviceId, array $context = []): array
+    {
+        return $this->clientServiceConsoleService->getVncUrlForUser($user, $serviceId, $context);
+    }
+
+    /**
+     * 用户服务重置密码
+     */
+    public function serviceResetPassword(User $user, int $serviceId, array $data, array $context = []): array
+    {
+        return $this->clientServiceConsoleService->resetPasswordForUser($user, $serviceId, $data, $context);
+    }
+
+    /**
+     * 用户服务重装系统
+     */
+    public function serviceReinstall(User $user, int $serviceId, array $data, array $context = []): array
+    {
+        return $this->clientServiceConsoleService->reinstallForUser($user, $serviceId, $data, $context);
+    }
+
+    /**
+     * 管理员手动新增服务
+     */
+    public function createManualService(User $user, array $data, array $context = []): array
+    {
+        $product = Product::query()
+            ->with('supplier')
+            ->findOrFail((int) $data['product_id']);
+
+        throw_if((int) $product->status !== 1, new BusinessException('商品已下架，无法开通'));
+        throw_if((int) $product->stock === 0, new BusinessException('该商品库存不足，无法继续开通'));
+
+        $billingCycle = trim((string) ($data['billing_cycle'] ?? ''));
+        $cyclePrice = $product->getPriceByBillingCycle($billingCycle);
+
+        throw_if(
+            $cyclePrice <= 0,
+            new BusinessException('所选计费周期不在当前商品的可售范围内')
+        );
+
+        $status = (int) ($data['status'] ?? ServiceStatus::ACTIVE);
+        $sourceType = trim((string) ($data['source_type'] ?? 'manual'));
+        $domain = trim((string) ($data['domain'] ?? ''));
+        $amount = isset($data['amount'])
+            ? round((float) $data['amount'], 2)
+            : round((float) $cyclePrice, 2);
+
+        throw_if($amount < 0, new BusinessException('服务金额不能小于 0'));
+
+        $supportsUpstream = $this->supportsMofangUpstream($product);
+        $upstreamHostId = (int) (($data['upstream_host_id'] ?? 0) ?: 0);
+
+        if ($sourceType === 'upstream') {
+            throw_if(! $supportsUpstream, new BusinessException('当前商品未接入可控上游，无法绑定上游主机'));
+            throw_if($upstreamHostId <= 0, new BusinessException('请输入有效的上游实例 ID'));
+        }
+
+        $now = now();
+        $orderStatus = $status === ServiceStatus::PENDING ? OrderStatus::PROCESSING : OrderStatus::COMPLETED;
+        $expiresAt = $this->resolveManualServiceExpiresAt(
+            $data['expires_at'] ?? null,
+            $billingCycle,
+            $status
+        );
+        $serviceName = $this->resolveManualServiceName($product, $data, $domain);
+        $traceId = trim((string) ($context['trace_id'] ?? ''));
+        $operatorId = (int) (($context['operator_id'] ?? 0) ?: 0);
+        $operatorName = trim((string) ($context['operator_name'] ?? ''));
+        $ipAddress = trim((string) ($context['ip_address'] ?? ''));
+        $autoRenew = (int) ($data['auto_renew'] ?? 1);
+        $remark = trim((string) ($data['remark'] ?? ''));
+        $upstreamStatus = trim((string) ($data['upstream_status'] ?? ''));
+        $dedicatedIp = trim((string) ($data['dedicated_ip'] ?? ''));
+        $internalIp = trim((string) ($data['internal_ip'] ?? ''));
+        $username = trim((string) ($data['username'] ?? ''));
+        $password = (string) ($data['password'] ?? '');
+        $os = trim((string) ($data['os'] ?? ''));
+        $port = (int) (($data['port'] ?? 0) ?: 0);
+
+        $service = DB::transaction(function () use (
+            $user,
+            $product,
+            $billingCycle,
+            $amount,
+            $status,
+            $sourceType,
+            $domain,
+            $now,
+            $orderStatus,
+            $expiresAt,
+            $serviceName,
+            $traceId,
+            $operatorId,
+            $operatorName,
+            $remark,
+            $upstreamHostId,
+            $upstreamStatus,
+            $dedicatedIp,
+            $internalIp,
+            $username,
+            $password,
+            $os,
+            $port,
+            $autoRenew
+        ) {
+            $order = Order::create([
+                'order_no' => Order::generateOrderNo(),
+                'user_id' => $user->id,
+                'product_id' => $product->id,
+                'product_name_snapshot' => (string) $product->name,
+                'product_type_snapshot' => (string) $product->product_type,
+                'type' => 'new',
+                'amount' => $amount,
+                'discount' => 0,
+                'paid_amount' => $amount,
+                'billing_cycle' => $billingCycle,
+                'config_snapshot' => array_filter([
+                    'hostname' => $domain,
+                    'source_type' => $sourceType,
+                    'admin_manual' => true,
+                    'remark' => $remark,
+                    'trace_id' => $traceId,
+                ], fn ($value) => ! in_array($value, ['', null], true)),
+                'status' => $orderStatus,
+                'paid_at' => $now,
+            ]);
+
+            $invoice = $this->createPaidInvoiceForManualService(
+                $order,
+                $now,
+                $remark,
+                $sourceType,
+                $operatorId,
+                $operatorName,
+                $traceId
+            );
+
+            $provisionData = array_filter([
+                'source_type' => $sourceType,
+                'provider' => $sourceType === 'upstream' ? 'mofang_finance_api' : '',
+                'supplier_id' => $sourceType === 'upstream' ? (int) ($product->supplier_id ?? 0) : 0,
+                'supplier_product_id' => $sourceType === 'upstream' ? (int) ($product->supplier_product_id ?? 0) : 0,
+                'upstream_host_id' => $sourceType === 'upstream' ? $upstreamHostId : 0,
+                'upstream_status' => $sourceType === 'upstream'
+                    ? ($upstreamStatus !== '' ? $upstreamStatus : ($status === ServiceStatus::ACTIVE ? 'active' : 'pending'))
+                    : '',
+                'dedicated_ip' => $dedicatedIp,
+                'os' => $os,
+                'requested_host' => $domain,
+                'manual_remark' => $remark,
+                'created_from_admin' => true,
+                'created_from_admin_id' => $operatorId > 0 ? $operatorId : null,
+                'created_from_admin_name' => $operatorName,
+                'trace_id' => $traceId,
+                'last_manual_linked_at' => $now->format('Y-m-d H:i:s'),
+                'connection_secret' => $this->buildConnectionSecret([
+                    'hostname' => $domain,
+                    'username' => $username,
+                    'password' => $password,
+                    'port' => $port,
+                    'internal_ip' => $internalIp,
+                ]),
+                'connection_cached_at' => ($domain !== '' || $username !== '' || $password !== '' || $port > 0 || $internalIp !== '')
+                    ? $now->format('Y-m-d H:i:s')
+                    : '',
+            ], function ($value, string $key) {
+                if (in_array($key, ['created_from_admin', 'source_type'], true)) {
+                    return true;
+                }
+
+                return ! in_array($value, ['', null, 0], true);
+            }, ARRAY_FILTER_USE_BOTH);
+
+            $service = Service::create([
+                'user_id' => $user->id,
+                'product_id' => $product->id,
+                'order_id' => $order->id,
+                'name' => $serviceName,
+                'domain' => $domain,
+                'billing_cycle' => $billingCycle,
+                'amount' => $amount,
+                'locked_pricing' => Service::buildDefaultRenewPricing(
+                    is_array($product->pricing ?? null) ? $product->pricing : [],
+                    $billingCycle,
+                    $amount
+                ),
+                'status' => $status,
+                'provision_data' => $provisionData,
+                'expires_at' => $expiresAt,
+                'auto_renew' => $autoRenew,
+                'suspended_reason' => $status === ServiceStatus::PENDING
+                    ? '管理员已创建服务，等待后续开通'
+                    : ($status === ServiceStatus::SUSPENDED ? '管理员手动暂停' : null),
+            ]);
+
+            $order->forceFill([
+                'service_id' => $service->id,
+            ])->save();
+
+            if ((int) $product->stock > 0) {
+                $product->decrement('stock');
+            }
+
+            return $service;
+        });
+
+        $service->loadMissing('order.invoice');
+
+        try {
+            $this->operationLogService->write(
+                userId: $operatorId > 0 ? $operatorId : null,
+                userType: 'admin',
+                action: 'order.service.manual_create',
+                module: 'order',
+                targetId: (int) ($service->order?->id ?? 0) ?: null,
+                detail: [
+                    'order_no' => $service->order?->order_no ?? '',
+                    'invoice_id' => (int) ($service->order?->invoice?->id ?? 0),
+                    'invoice_no' => $service->order?->invoice?->invoice_no ?? '',
+                    'service_id' => (int) $service->id,
+                    'source_type' => $sourceType,
+                    'service_status' => $status,
+                    'billing_cycle' => $billingCycle,
+                    'amount' => number_format($amount, 2, '.', ''),
+                    'operator_name' => $operatorName,
+                    'trace_id' => $traceId,
+                ],
+                ipAddress: $ipAddress !== '' ? $ipAddress : null,
+            );
+        } catch (\Throwable $exception) {
+            Log::warning('[管理员添加服务] 操作日志写入失败', [
+                'user_id' => $user->id,
+                'service_id' => $service->id,
+                'order_id' => (int) ($service->order?->id ?? 0),
+                'message' => $exception->getMessage(),
+                'exception' => $exception::class,
+            ]);
+        }
+
+        return $this->clientServiceConsoleService->getDetailForUser($user, (int) $service->id, false);
+    }
+
+    private function normalizeRenewPricingManualAmount(mixed $value): ?float
+    {
+        if ($value === null || $value === '' || ! is_numeric($value)) {
+            return null;
+        }
+
+        $amount = round((float) $value, 2);
+
+        return $amount > 0 ? $amount : null;
+    }
+
+    private function normalizeRenewPricingBaseAmount(mixed $value): ?float
+    {
+        if ($value === null || $value === '' || ! is_numeric($value)) {
+            return null;
+        }
+
+        $amount = round((float) $value, 2);
+
+        return $amount > 0 ? $amount : null;
+    }
+
+    /**
+     * 失败服务重新提交上游开通
+     */
+    public function manualProvisionService(User $user, int $serviceId, array $data, array $context = []): array
+    {
+        $service = Service::query()
+            ->with(['product', 'order'])
+            ->where('user_id', $user->id)
+            ->findOrFail($serviceId);
+
+        $product = $service->product;
+        throw_if(! $product, new BusinessException('服务未关联商品，暂不支持重新提交上游开通'));
+
+        $currentProvisionData = is_array($service->provision_data ?? null) ? $service->provision_data : [];
+        $provisionError = trim((string) ($currentProvisionData['provision_error'] ?? ''));
+
+        throw_if($provisionError === '', new BusinessException('当前服务不存在上游开通失败记录，无需重新提交'));
+        throw_if(! $service->order, new BusinessException('服务未关联订单，无法重新提交上游开通'));
+
+        $operatorId = (int) (($context['operator_id'] ?? 0) ?: 0);
+        $operatorName = trim((string) ($context['operator_name'] ?? ''));
+        $traceId = trim((string) ($context['trace_id'] ?? ''));
+        $ipAddress = trim((string) ($context['ip_address'] ?? ''));
+        $remark = TextSanitizer::clean((string) ($data['remark'] ?? ''), true);
+        $logContext = [
+            'actor_type' => 'admin',
+            'actor_user_id' => $operatorId,
+            'actor_name' => $operatorName,
+            'ip_address' => $ipAddress,
+            'trace_id' => $traceId,
+        ];
+
+        try {
+            $service = $this->provisionService->retryFailedProvision($service->order);
+        } catch (\Throwable $exception) {
+            try {
+                $this->operationLogService->writeServiceConsoleLog($service->refresh()->loadMissing(['product', 'order']), 'service.console.manual_provision', [
+                    'category' => 'service',
+                    'summary' => '管理员重新提交上游开通失败',
+                    'remark' => $remark,
+                    'manual_source' => 'retry_upstream_purchase',
+                    'previous_provision_error' => $provisionError,
+                    'provision_error' => $exception->getMessage(),
+                    'result' => 'failed',
+                ], $logContext);
+            } catch (\Throwable $logException) {
+                Log::warning('[管理员重试上游开通] 失败日志写入失败', [
+                    'user_id' => $user->id,
+                    'service_id' => $service->id,
+                    'operator_id' => $operatorId,
+                    'message' => $logException->getMessage(),
+                    'exception' => $logException::class,
+                ]);
+            }
+
+            throw $exception;
+        }
+
+        try {
+            $this->operationLogService->writeServiceConsoleLog($service->refresh()->loadMissing(['product', 'order']), 'service.console.manual_provision', [
+                'category' => 'service',
+                'summary' => '管理员重新提交上游开通',
+                'remark' => $remark,
+                'manual_source' => 'retry_upstream_purchase',
+                'previous_provision_error' => $provisionError,
+                'result' => 'submitted',
+            ], $logContext);
+        } catch (\Throwable $exception) {
+            Log::warning('[管理员重试上游开通] 操作日志写入失败', [
+                'user_id' => $user->id,
+                'service_id' => $service->id,
+                'operator_id' => $operatorId,
+                'message' => $exception->getMessage(),
+                'exception' => $exception::class,
+            ]);
+        }
+
+        return $this->clientServiceConsoleService->getDetailForUser($user, (int) $service->id, true);
+    }
+
+    /**
+     * 删除用户服务记录
+     */
+    public function deleteService(User $user, int $serviceId, array $context = []): void
+    {
+        $service = Service::query()
+            ->with(['product', 'order.invoice'])
+            ->where('user_id', $user->id)
+            ->findOrFail($serviceId);
+
+        $product = $service->product;
+        $order = $service->order;
+        $serviceName = trim((string) ($service->name ?: ($product?->name ?? '')));
+        $orderNo = trim((string) ($order?->order_no ?? ''));
+        $operatorId = (int) (($context['operator_id'] ?? 0) ?: 0);
+        $operatorName = trim((string) ($context['operator_name'] ?? ''));
+        $traceId = trim((string) ($context['trace_id'] ?? ''));
+        $ipAddress = trim((string) ($context['ip_address'] ?? ''));
+
+        DB::transaction(function () use ($service, $product) {
+            Order::query()
+                ->where('service_id', $service->id)
+                ->update(['service_id' => null]);
+
+            Ticket::query()
+                ->where('service_id', $service->id)
+                ->update(['service_id' => null]);
+
+            if ($product instanceof Product && (int) $product->stock >= 0) {
+                $product->increment('stock');
+            }
+
+            $service->delete();
+        });
+
+        try {
+            $this->operationLogService->write(
+                userId: $user->id,
+                userType: 'client',
+                action: 'service.record.deleted',
+                module: 'service',
+                targetId: $serviceId,
+                detail: [
+                    'service_id' => $serviceId,
+                    'service_name' => $serviceName,
+                    'product_name' => trim((string) ($product?->name ?? '')),
+                    'order_no' => $orderNo,
+                    'operator_type' => 'admin',
+                    'operator_id' => $operatorId,
+                    'operator_name' => $operatorName,
+                    'trace_id' => $traceId,
+                ],
+                ipAddress: $ipAddress !== '' ? $ipAddress : null,
+            );
+
+            $this->operationLogService->write(
+                userId: $operatorId > 0 ? $operatorId : null,
+                userType: 'admin',
+                action: 'user.service.record.deleted',
+                module: 'service',
+                targetId: $serviceId,
+                detail: [
+                    'target_user_id' => (int) $user->id,
+                    'target_user_email' => trim((string) $user->email),
+                    'service_name' => $serviceName,
+                    'product_name' => trim((string) ($product?->name ?? '')),
+                    'order_no' => $orderNo,
+                    'operator_name' => $operatorName,
+                    'trace_id' => $traceId,
+                ],
+                ipAddress: $ipAddress !== '' ? $ipAddress : null,
+            );
+        } catch (\Throwable $exception) {
+            Log::warning('[管理员删除服务记录] 操作日志写入失败', [
+                'user_id' => $user->id,
+                'service_id' => $serviceId,
+                'operator_id' => $operatorId,
+                'message' => $exception->getMessage(),
+                'exception' => $exception::class,
+            ]);
+        }
+    }
+
+    private function supportsMofangUpstream(Product $product): bool
+    {
+        $supplier = $product->supplier;
+
+        return (int) ($product->supplier_id ?? 0) > 0
+            && $supplier instanceof Supplier
+            && trim((string) $supplier->interface_type) === 'mofang_finance_api';
+    }
+
+    private function resolveManualServiceExpiresAt(mixed $expiresAt, string $billingCycle, int $status): ?Carbon
+    {
+        if ($expiresAt !== null && $expiresAt !== '') {
+            return Carbon::parse((string) $expiresAt);
+        }
+
+        if ($status === ServiceStatus::CANCELLED) {
+            return null;
+        }
+
+        return match ($billingCycle) {
+            'monthly' => now()->addMonth(),
+            'quarterly' => now()->addMonths(3),
+            'semiannually' => now()->addMonths(6),
+            'annually' => now()->addYear(),
+            'biennially' => now()->addYears(2),
+            'triennially' => now()->addYears(3),
+            default => null,
+        };
+    }
+
+    private function resolveManualServiceName(Product $product, array $data, string $domain): string
+    {
+        $name = trim((string) ($data['name'] ?? ''));
+        if ($name !== '') {
+            return $name;
+        }
+
+        if ($domain !== '') {
+            return $domain;
+        }
+
+        return trim((string) $product->name) !== '' ? (string) $product->name : '未命名服务';
+    }
+
+    private function createPaidInvoiceForManualService(
+        Order $order,
+        Carbon $paidAt,
+        string $remark,
+        string $sourceType,
+        int $operatorId,
+        string $operatorName,
+        string $traceId,
+    ): Invoice {
+        $invoiceAmount = round(max((float) $order->amount - (float) $order->discount, 0), 2);
+        $paymentNo = Payment::generatePaymentNo();
+
+        $invoice = Invoice::query()->create([
+            'invoice_no' => Invoice::generateInvoiceNoFromOrderNo((string) $order->order_no),
+            'user_id' => $order->user_id,
+            'order_id' => $order->id,
+            'type' => $order->type === 'renew' ? 'renew' : 'normal',
+            'amount' => $invoiceAmount,
+            'paid_amount' => $invoiceAmount,
+            'status' => InvoiceStatus::PAID,
+            'due_date' => $paidAt->copy()->addDays(7)->toDateString(),
+            'paid_at' => $paidAt,
+        ]);
+        app(InvoiceService::class)->syncProjection($invoice);
+
+        $payment = Payment::query()->create([
+            'payment_no' => $paymentNo,
+            'user_id' => $order->user_id,
+            'invoice_id' => $invoice->id,
+            'gateway' => 'manual',
+            'trade_no' => 'ADMIN-' . $paymentNo,
+            'amount' => $invoiceAmount,
+            'status' => PaymentStatus::SUCCESS,
+            'callback_raw' => [
+                'source' => 'admin_manual_service_create',
+                'action' => 'create_paid_service',
+                'payment_gateway' => 'manual',
+                'source_type' => $sourceType,
+                'remark' => $remark,
+                'operator_id' => $operatorId,
+                'operator_name' => $operatorName,
+                'trace_id' => $traceId,
+            ],
+            'paid_at' => $paidAt,
+        ]);
+        $this->paymentService->syncProjection($payment);
+
+        return $invoice;
+    }
+
+    private function buildConnectionSecret(array $connection): ?string
+    {
+        $payload = [
+            'hostname' => trim((string) ($connection['hostname'] ?? '')),
+            'username' => trim((string) ($connection['username'] ?? '')),
+            'password' => (string) ($connection['password'] ?? ''),
+            'port' => (int) (($connection['port'] ?? 0) ?: 0),
+            'internal_ip' => trim((string) ($connection['internal_ip'] ?? '')),
+        ];
+
+        $hasValue = collect($payload)->contains(fn ($value) => ! in_array($value, ['', null, 0], true));
+        if (! $hasValue) {
+            return null;
+        }
+
+        return Crypt::encryptString((string) json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    }
+}

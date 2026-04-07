@@ -13,7 +13,7 @@ class InvoiceService
      */
     public function createFromOrder(Order $order): Invoice
     {
-        return Invoice::create([
+        $invoice = Invoice::create([
             'invoice_no' => Invoice::generateInvoiceNoFromOrderNo((string) $order->order_no),
             'user_id'    => $order->user_id,
             'order_id'   => $order->id,
@@ -22,6 +22,8 @@ class InvoiceService
             'status'     => InvoiceStatus::UNPAID,
             'due_date'   => now()->addDays(7),
         ]);
+
+        return $this->syncProjection($invoice);
     }
 
     /**
@@ -42,5 +44,12 @@ class InvoiceService
         }
 
         return $query->orderByDesc('id')->paginate($perPage);
+    }
+
+    public function syncProjection(Invoice $invoice): Invoice
+    {
+        $invoice->syncInvoiceItemProjection();
+
+        return $invoice->fresh(['items', 'order']) ?? $invoice;
     }
 }
