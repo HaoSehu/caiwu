@@ -121,7 +121,7 @@ class UserService
             return $user;
         });
 
-        return $user->refresh();
+        return $this->reloadUserReadRelations($user);
     }
 
     /**
@@ -171,7 +171,7 @@ class UserService
             }
         });
 
-        return $user->refresh();
+        return $this->reloadUserReadRelations($user);
     }
 
     /**
@@ -180,7 +180,7 @@ class UserService
     public function toggleStatus(User $user): User
     {
         $user->update(['status' => $user->status === 1 ? 0 : 1]);
-        return $user->refresh();
+        return $this->reloadUserReadRelations($user);
     }
 
     /**
@@ -189,8 +189,14 @@ class UserService
     public function detail(User $user): array
     {
         $user->loadMissing([
-            'account',
+            'memberLevel',
         ]);
+        if (User::accountTableAvailable()) {
+            $user->loadMissing('account');
+        }
+        if (User::profileTableAvailable()) {
+            $user->loadMissing('profile');
+        }
         $memberLevel = $user->memberLevel;
         $countStats = User::query()
             ->whereKey($user->id)
@@ -667,6 +673,25 @@ class UserService
         if ($query->exists()) {
             throw new BusinessException('手机号已被注册');
         }
+    }
+
+    private function reloadUserReadRelations(User $user): User
+    {
+        $relations = [];
+
+        if (User::accountTableAvailable()) {
+            $relations[] = 'account';
+        }
+
+        if (User::profileTableAvailable()) {
+            $relations[] = 'profile';
+        }
+
+        if ($relations === []) {
+            return $user->fresh() ?? $user;
+        }
+
+        return $user->fresh($relations) ?? $user->loadMissing($relations);
     }
 
     private function shouldRedactSmsLog(array $item): bool
