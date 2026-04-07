@@ -24,6 +24,7 @@ class ServiceVncTokenSecurityTest extends TestCase
             'password' => 'secret-password',
             'username' => 'root',
             'target' => '10.0.0.8:5900',
+            'single_use' => true,
         ], now()->addMinutes(5));
 
         $service = new ServiceVncService(
@@ -43,6 +44,31 @@ class ServiceVncTokenSecurityTest extends TestCase
         $this->expectExceptionMessage('VNC 链接已过期或无效，请重新获取');
 
         $service->resolvePublicVncTokenPayload('test-token');
+    }
+
+    public function test_admin_vnc_token_payload_is_reusable_within_ttl(): void
+    {
+        Cache::put('vnc_token:admin-token', [
+            'service_id' => 34,
+            'password' => 'admin-secret',
+            'username' => 'administrator',
+            'target' => '10.0.0.9:5900',
+            'single_use' => false,
+        ], now()->addMinutes(5));
+
+        $service = new ServiceVncService(
+            $this->createMock(MofangFinanceClient::class),
+            $this->createMock(OperationLogService::class),
+            $this->createMock(ServiceDetailService::class),
+            $this->createMock(ServiceTransformService::class),
+        );
+
+        $firstPayload = $service->resolvePublicVncTokenPayload('admin-token');
+        $secondPayload = $service->resolvePublicVncTokenPayload('admin-token');
+
+        $this->assertSame(34, $firstPayload['service_id']);
+        $this->assertSame(34, $secondPayload['service_id']);
+        $this->assertSame('admin-secret', $secondPayload['password']);
     }
 
     public function test_service_transform_service_redacts_raw_remote_error_message(): void
