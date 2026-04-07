@@ -85,6 +85,7 @@ class ServiceVncService
                 $token = bin2hex(random_bytes(24));
                 Cache::put('vnc_token:' . $token, array_merge($vncParams, [
                     'service_id' => $serviceId,
+                    'single_use' => ($context['actor_type'] ?? 'client') !== 'admin',
                 ]), now()->addSeconds(self::VNC_TOKEN_TTL_SECONDS));
 
                 $viewerUrl = $this->resolveNoVncViewerUrl($novncBaseUrl);
@@ -116,9 +117,15 @@ class ServiceVncService
 
     public function resolveVncToken(string $token): array
     {
-        $params = Cache::pull('vnc_token:' . $token);
+        $cacheKey = 'vnc_token:' . $token;
+        $params = Cache::get($cacheKey);
 
         throw_if(! is_array($params) || empty($params), new BusinessException('VNC 链接已过期或无效，请重新获取', 40400, 404));
+
+        if ((bool) ($params['single_use'] ?? true)) {
+            $params = Cache::pull($cacheKey);
+            throw_if(! is_array($params) || empty($params), new BusinessException('VNC 链接已过期或无效，请重新获取', 40400, 404));
+        }
 
         return $params;
     }
