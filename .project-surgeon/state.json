@@ -1,0 +1,374 @@
+{
+  "version": "1.0",
+  "skill": "project-surgeon",
+  "project_name": "php财务 backend",
+  "project_path": "c:/Users/Admin/Desktop/php财务/backend",
+  "created_at": "2026-04-07T19:52:15.5079434+08:00",
+  "updated_at": "2026-04-07T20:38:24.1845206+08:00",
+  "current_phase": "execution",
+  "phase_history": [
+    {
+      "phase": "analysis",
+      "entered_at": "2026-04-07T19:52:15.5079434+08:00",
+      "exited_at": "2026-04-07T19:57:27.3567537+08:00",
+      "exit_reason": "approved"
+    },
+    {
+      "phase": "review",
+      "entered_at": "2026-04-07T19:57:27.3567537+08:00",
+      "exited_at": "2026-04-07T20:17:49.4718619+08:00",
+      "exit_reason": "approved"
+    },
+    {
+      "phase": "planning",
+      "entered_at": "2026-04-07T20:17:49.4718619+08:00",
+      "exited_at": "2026-04-07T20:38:24.1845206+08:00",
+      "exit_reason": "execution_started"
+    },
+    {
+      "phase": "execution",
+      "entered_at": "2026-04-07T20:38:24.1845206+08:00",
+      "exited_at": null,
+      "exit_reason": ""
+    }
+  ],
+  "analysis": {
+    "status": "completed",
+    "started_at": "2026-04-07T19:52:15.5079434+08:00",
+    "completed_at": "2026-04-07T19:52:15.5079434+08:00",
+    "steps_completed": [
+      "project_discovery",
+      "architecture_detection",
+      "dependency_health",
+      "documentation_inventory",
+      "report_generated"
+    ],
+    "project_fingerprint": {
+      "root_path": "c:/Users/Admin/Desktop/php财务/backend",
+      "tech_stack": [
+        "PHP 8.2",
+        "Laravel 11",
+        "Laravel Sanctum 4",
+        "MySQL 8",
+        "Redis",
+        "Database Queue",
+        "PHPUnit 11"
+      ],
+      "total_files": 301,
+      "total_loc": 69014,
+      "file_breakdown": {
+        ".php": 295,
+        ".png": 5,
+        ".jpg": 1
+      },
+      "has_tests": true,
+      "test_framework": "PHPUnit 11",
+      "has_ci": false,
+      "has_docker": false
+    },
+    "architecture_analysis": {
+      "pattern": "Laravel MVC + Service 分层 + Admin/Client/Site 三套 API + 调度/队列自动化",
+      "entry_points": [
+        "backend/bootstrap/app.php",
+        "backend/public/index.php",
+        "backend/routes/admin.php",
+        "backend/routes/client.php",
+        "backend/routes/api.php",
+        "backend/routes/web.php",
+        "backend/routes/console.php"
+      ],
+      "key_abstractions": [
+        "backend/app/Http/Controllers",
+        "backend/app/Services",
+        "backend/app/Models",
+        "backend/app/Http/Requests",
+        "backend/app/Http/Resources",
+        "backend/app/Support",
+        "backend/app/Jobs"
+      ],
+      "module_count": 14
+    },
+    "dependency_health": {
+      "total_dependencies": 110,
+      "audit_results": {
+        "critical": 0,
+        "high": 0,
+        "moderate": 0,
+        "low": 0
+      },
+      "outdated_major": 2,
+      "potentially_unused": 0
+    },
+    "documentation_inventory": {
+      "files": [
+        "AGENTS.md",
+        "开发规范.md",
+        "数据库结构.md",
+        "数据库表结构-idc.md",
+        "后端审查计划.md",
+        "旧版SQL到新版库迁移对照表.md"
+      ],
+      "config_approach": "Laravel config/*.php + .env + routes/*.php + config/idc.php",
+      "has_docker": false,
+      "has_iac": false,
+      "ci_platform": null
+    },
+    "report_file": ".project-surgeon/analysis-report.md",
+    "user_objective": {
+      "type": "comprehensive-refactoring",
+      "description": "按模块对 backend 现有全部代码进行细致审查和优化，尽量覆盖每个文件，先完成全量问题清单，再按优先级实施优化。",
+      "confirmed_at": "2026-04-07T19:52:15.5079434+08:00"
+    }
+  },
+  "review": {
+    "status": "completed",
+    "started_at": "2026-04-07T19:57:27.3567537+08:00",
+    "completed_at": "2026-04-07T20:17:49.4718619+08:00",
+    "scope": "backend 全量扫描（app、routes、config、database/migrations、scripts、.env.example）",
+    "dimensions_completed": [
+      "scope_determined",
+      "D1",
+      "D2",
+      "D3",
+      "D4",
+      "D5",
+      "D6",
+      "D7"
+    ],
+    "findings": {
+      "total": 15,
+      "by_severity": {
+        "critical": 0,
+        "high": 5,
+        "medium": 8,
+        "low": 2,
+        "info": 0
+      },
+      "by_dimension": {
+        "D1": 3,
+        "D2": 2,
+        "D3": 1,
+        "D4": 3,
+        "D5": 2,
+        "D6": 1,
+        "D7": 3
+      }
+    },
+    "hot_spots": [
+      "backend/app/Services/UserService.php",
+      "backend/routes/console.php",
+      "backend/app/Models/AdminUser.php",
+      "backend/app/Services/ClientServiceConsole/ServiceVncService.php",
+      "backend/app/Services/CheckoutSecurityService.php",
+      "backend/app/Services/OrderService.php",
+      "backend/app/Services/CouponService.php",
+      "backend/app/Models/User.php",
+      "backend/app/Services/SmsService.php",
+      "backend/app/Services/ClientServiceConsole/ServiceTransformService.php"
+    ],
+    "systemic_issues": [
+      "兼容层残留仍分散在模型、访问器、迁移和脚本中",
+      "前后端契约出现数量与手机号唯一性漂移",
+      "敏感数据治理边界不统一（验证码、VNC、上游错误）",
+      "控制器偏胖、模型有副作用、服务又夹带环境回退"
+    ],
+    "report_file": ".project-surgeon/review-report.md",
+    "user_priorities": {
+      "mode": "full-backend-remediation",
+      "selected_findings": [
+        "D1-001",
+        "D1-002",
+        "D1-003",
+        "D2-001",
+        "D2-002",
+        "D3-001",
+        "D4-001",
+        "D4-002",
+        "D4-003",
+        "D5-001",
+        "D5-002",
+        "D6-001",
+        "D7-001",
+        "D7-002",
+        "D7-003"
+      ],
+      "confirmed_at": "2026-04-07T20:17:49.4718619+08:00"
+    }
+  },
+  "brainstorm": {
+    "bs1": {
+      "status": "completed",
+      "completed_at": "2026-04-07T19:52:15.5079434+08:00",
+      "artifact": ".project-surgeon/analysis-report.md"
+    },
+    "bs2": {
+      "status": "completed",
+      "completed_at": "2026-04-07T20:17:49.4718619+08:00",
+      "audit_score": null,
+      "artifact": ".project-surgeon/brainstorm-bs-2.md"
+    },
+    "bs3": {
+      "status": "completed",
+      "completed_at": "2026-04-07T20:38:24.1845206+08:00",
+      "artifact": ".project-surgeon/brainstorm-bs-3.md"
+    },
+    "bs7_count": 0
+  },
+  "planning": {
+    "status": "completed",
+    "total_phases": 4,
+    "total_tasks": 15,
+    "plans_written": {
+      "level_1": true,
+      "level_2_count": 4,
+      "level_3_count": 15
+    }
+  },
+  "execution": {
+    "status": "in_progress",
+    "current_phase_index": 1,
+    "current_task_index": 2,
+    "total_phases": 4,
+    "phases": {
+      "phase_1": {
+        "name": "配置与基础设施护栏",
+        "total_tasks": 2,
+        "completed_tasks": 1,
+        "status": "in_progress",
+        "tasks": {
+          "task_01_sanitize_env_example_and_runtime_config_access": {
+            "name": "sanitize-env-example-and-runtime-config-access",
+            "status": "completed",
+            "started_at": "2026-04-07T20:38:24.1845206+08:00",
+            "completed_at": "2026-04-07T20:38:24.1845206+08:00"
+          },
+          "task_02_restore_scheduler_locking_and_ops_visibility": {
+            "name": "restore-scheduler-locking-and-ops-visibility",
+            "status": "in_progress",
+            "started_at": "2026-04-07T20:38:24.1845206+08:00",
+            "completed_at": null
+          }
+        }
+      },
+      "phase_2": {
+        "name": "安全与关键业务纠错",
+        "total_tasks": 4,
+        "completed_tasks": 0,
+        "status": "pending",
+        "tasks": {
+          "task_01_harden_otp_log_storage_and_admin_exposure": {
+            "name": "harden-otp-log-storage-and-admin-exposure",
+            "status": "pending",
+            "started_at": null,
+            "completed_at": null
+          },
+          "task_02_secure_vnc_token_and_upstream_error_contracts": {
+            "name": "secure-vnc-token-and-upstream-error-contracts",
+            "status": "pending",
+            "started_at": null,
+            "completed_at": null
+          },
+          "task_03_align_order_quantity_contract_and_persistence": {
+            "name": "align-order-quantity-contract-and-persistence",
+            "status": "pending",
+            "started_at": null,
+            "completed_at": null
+          },
+          "task_04_enforce_user_phone_uniqueness_end_to_end": {
+            "name": "enforce-user-phone-uniqueness-end-to-end",
+            "status": "pending",
+            "started_at": null,
+            "completed_at": null
+          }
+        }
+      },
+      "phase_3": {
+        "name": "性能与结构收敛",
+        "total_tasks": 7,
+        "completed_tasks": 0,
+        "status": "pending",
+        "tasks": {
+          "task_01_move_coupon_pagination_and_summary_to_database": {
+            "name": "move-coupon-pagination-and-summary-to-database",
+            "status": "pending",
+            "started_at": null,
+            "completed_at": null
+          },
+          "task_02_remove_user_read_side_effects_from_hot_paths": {
+            "name": "remove-user-read-side-effects-from-hot-paths",
+            "status": "pending",
+            "started_at": null,
+            "completed_at": null
+          },
+          "task_03_eliminate_ticket_admin_permission_n_plus_one": {
+            "name": "eliminate-ticket-admin-permission-n-plus-one",
+            "status": "pending",
+            "started_at": null,
+            "completed_at": null
+          },
+          "task_04_externalize_payment_and_invoice_projection_side_effects": {
+            "name": "externalize-payment-and-invoice-projection-side-effects",
+            "status": "pending",
+            "started_at": null,
+            "completed_at": null
+          },
+          "task_05_externalize_admin_role_bridge_side_effects": {
+            "name": "externalize-admin-role-bridge-side-effects",
+            "status": "pending",
+            "started_at": null,
+            "completed_at": null
+          },
+          "task_06_thin_finance_referral_verification_read_controllers": {
+            "name": "thin-finance-referral-verification-read-controllers",
+            "status": "pending",
+            "started_at": null,
+            "completed_at": null
+          },
+          "task_07_extract_site_product_read_and_quote_assembly": {
+            "name": "extract-site-product-read-and-quote-assembly",
+            "status": "pending",
+            "started_at": null,
+            "completed_at": null
+          }
+        }
+      },
+      "phase_4": {
+        "name": "收尾验证与清理",
+        "total_tasks": 2,
+        "completed_tasks": 0,
+        "status": "pending",
+        "tasks": {
+          "task_01_finalize_dependency_follow_up_and_regression_suite": {
+            "name": "finalize-dependency-follow-up-and-regression-suite",
+            "status": "pending",
+            "started_at": null,
+            "completed_at": null
+          },
+          "task_02_cleanup_repo_residue_and_publish_validation_docs": {
+            "name": "cleanup-repo-residue-and-publish-validation-docs",
+            "status": "pending",
+            "started_at": null,
+            "completed_at": null
+          }
+        }
+      }
+    },
+    "test_baseline": {
+      "has_tests": true,
+      "total_tests": 35,
+      "passing": 35,
+      "failing": 0,
+      "failing_test_ids": [],
+      "captured_at": "2026-04-07T20:38:24.1845206+08:00"
+    },
+    "deepwiki_cache": {
+      "phases_researched": [],
+      "cache_dir": ".project-surgeon/deepwiki-cache/"
+    },
+    "error_log": []
+  },
+  "bug_fixer": {
+    "reviews": []
+  },
+  "change_requests": []
+}
