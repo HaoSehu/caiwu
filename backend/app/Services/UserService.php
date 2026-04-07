@@ -21,6 +21,7 @@ use App\Models\Ticket;
 use App\Models\User;
 use App\Models\UserAccount;
 use App\Services\User\Concerns\HandlesAdminUserServices;
+use App\Support\AccountIdentifier;
 use App\Support\TextSanitizer;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -95,12 +96,14 @@ class UserService
     {
         $exists = User::where('email', $data['email'])->exists();
         throw_if($exists, new BusinessException('邮箱已存在'));
+        $phone = AccountIdentifier::normalizeOptionalPhone((string) ($data['phone'] ?? ''));
+        $this->assertUniquePhone($phone);
 
-        $user = \DB::transaction(function () use ($data) {
+        $user = \DB::transaction(function () use ($data, $phone) {
             $user = User::create([
                 'email'        => $data['email'],
                 'password'     => $data['password'],
-                'phone'        => TextSanitizer::clean((string) ($data['phone'] ?? '')),
+                'phone'        => $phone,
                 'status'       => $data['status'] ?? 1,
                 'nickname'     => TextSanitizer::clean((string) ($data['nickname'] ?? '')) ?: null,
             ]);
@@ -141,7 +144,8 @@ class UserService
         }
 
         if (array_key_exists('phone', $baseUpdateData)) {
-            $baseUpdateData['phone'] = TextSanitizer::clean((string) $baseUpdateData['phone']);
+            $baseUpdateData['phone'] = AccountIdentifier::normalizeOptionalPhone((string) $baseUpdateData['phone']);
+            $this->assertUniquePhone($baseUpdateData['phone'], (int) $user->id);
         }
 
         if (!empty($data['password'])) {
@@ -647,6 +651,22 @@ class UserService
             ->selectRaw('COALESCE(SUM(CASE WHEN change_amount < 0 THEN ABS(change_amount) ELSE 0 END), 0) as total_expense')
             ->selectRaw('COUNT(*) as total_count')
             ->first();
+    }
+
+    private function assertUniquePhone(?string $phone, ?int $ignoreUserId = null): void
+    {
+        if ($phone === null || $phone === '') {
+            return;
+        }
+
+        $query = User::query()->where('phone', $phone);
+        if ($ignoreUserId !== null) {
+            $query->where('id', '<>', $ignoreUserId);
+        }
+
+        if ($query->exists()) {
+            throw new BusinessException('手机号已被注册');
+        }
     }
 
     private function shouldRedactSmsLog(array $item): bool
