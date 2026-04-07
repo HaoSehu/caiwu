@@ -226,15 +226,15 @@
   },
   "execution": {
     "status": "in_progress",
-    "current_phase_index": 1,
-    "current_task_index": 2,
+    "current_phase_index": 2,
+    "current_task_index": 1,
     "total_phases": 4,
     "phases": {
       "phase_1": {
         "name": "配置与基础设施护栏",
         "total_tasks": 2,
-        "completed_tasks": 1,
-        "status": "in_progress",
+        "completed_tasks": 2,
+        "status": "completed",
         "tasks": {
           "task_01_sanitize_env_example_and_runtime_config_access": {
             "name": "sanitize-env-example-and-runtime-config-access",
@@ -244,9 +244,9 @@
           },
           "task_02_restore_scheduler_locking_and_ops_visibility": {
             "name": "restore-scheduler-locking-and-ops-visibility",
-            "status": "in_progress",
+            "status": "completed",
             "started_at": "2026-04-07T20:38:24.1845206+08:00",
-            "completed_at": null
+            "completed_at": "2026-04-07T20:38:24.1845206+08:00"
           }
         }
       },
@@ -254,12 +254,12 @@
         "name": "安全与关键业务纠错",
         "total_tasks": 4,
         "completed_tasks": 0,
-        "status": "pending",
+        "status": "in_progress",
         "tasks": {
           "task_01_harden_otp_log_storage_and_admin_exposure": {
             "name": "harden-otp-log-storage-and-admin-exposure",
-            "status": "pending",
-            "started_at": null,
+            "status": "in_progress",
+            "started_at": "2026-04-07T20:38:24.1845206+08:00",
             "completed_at": null
           },
           "task_02_secure_vnc_token_and_upstream_error_contracts": {
@@ -355,8 +355,8 @@
     },
     "test_baseline": {
       "has_tests": true,
-      "total_tests": 35,
-      "passing": 35,
+      "total_tests": 36,
+      "passing": 36,
       "failing": 0,
       "failing_test_ids": [],
       "captured_at": "2026-04-07T20:38:24.1845206+08:00"
