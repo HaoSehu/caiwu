@@ -1,0 +1,74 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Feature;
+
+use App\Exceptions\BusinessException;
+use App\Models\Service;
+use App\Services\ClientServiceConsole\ServiceDetailService;
+use App\Services\ClientServiceConsole\ServiceResolverService;
+use App\Services\ClientServiceConsole\ServiceTransformService;
+use App\Services\ClientServiceConsole\ServiceVncService;
+use App\Services\MofangFinanceClient;
+use App\Services\OperationLogService;
+use Illuminate\Support\Facades\Cache;
+use Tests\TestCase;
+
+class ServiceVncTokenSecurityTest extends TestCase
+{
+    public function test_vnc_token_payload_is_single_use(): void
+    {
+        Cache::put('vnc_token:test-token', [
+            'service_id' => 12,
+            'password' => 'secret-password',
+            'username' => 'root',
+            'target' => '10.0.0.8:5900',
+        ], now()->addMinutes(5));
+
+        $service = new ServiceVncService(
+            $this->createMock(MofangFinanceClient::class),
+            $this->createMock(OperationLogService::class),
+            $this->createMock(ServiceDetailService::class),
+            $this->createMock(ServiceTransformService::class),
+        );
+
+        $payload = $service->resolvePublicVncTokenPayload('test-token');
+
+        $this->assertSame('test-token', $payload['token']);
+        $this->assertSame(12, $payload['service_id']);
+        $this->assertSame('secret-password', $payload['password']);
+
+        $this->expectException(BusinessException::class);
+        $this->expectExceptionMessage('VNC 链接已过期或无效，请重新获取');
+
+        $service->resolvePublicVncTokenPayload('test-token');
+    }
+
+    public function test_service_transform_service_redacts_raw_remote_error_message(): void
+    {
+        $resolver = $this->createMock(ServiceResolverService::class);
+        $resolver->method('resolveGroupedOverviewTypeValue')->willReturn('server');
+        $resolver->method('resolveConsoleMode')->willReturn('default');
+
+        $service = new Service([
+            'id' => 99,
+            'name' => '测试实例',
+            'status' => 1,
+            'billing_cycle' => 'monthly',
+            'amount' => '19.90',
+            'auto_renew' => 0,
+            'provision_data' => [],
+        ]);
+
+        $transformService = new ServiceTransformService($resolver);
+        $detail = $transformService->transformDetail(
+            $service,
+            null,
+            'cURL error 28: Operation timed out after 10001 milliseconds for https://secret-supplier.example/v1/host'
+        );
+
+        $this->assertSame('上游状态同步超时，请稍后重试', data_get($detail, 'upstream.remote_error'));
+        $this->assertStringNotContainsString('secret-supplier.example', (string) data_get($detail, 'upstream.remote_error'));
+    }
+}

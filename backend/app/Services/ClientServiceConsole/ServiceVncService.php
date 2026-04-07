@@ -116,7 +116,7 @@ class ServiceVncService
 
     public function resolveVncToken(string $token): array
     {
-        $params = Cache::get('vnc_token:' . $token);
+        $params = Cache::pull('vnc_token:' . $token);
 
         throw_if(! is_array($params) || empty($params), new BusinessException('VNC 链接已过期或无效，请重新获取', 40400, 404));
 
