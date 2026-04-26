@@ -5,16 +5,20 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Models\AdminUser;
+use App\Models\EmailLog;
 use App\Models\NotificationLog;
 use App\Models\OperationLog;
 use App\Models\Role;
+use App\Models\SmsLog;
 use App\Models\User;
 use App\Services\AdminLog\Concerns\HandlesAdminLogCleanup;
 use App\Support\SensitiveDataSanitizer;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Schema;
 
 class AdminLogService
 {
@@ -27,9 +31,9 @@ class AdminLogService
     private const FILE_LOG_SUMMARY_CACHE_TTL_SECONDS = 20;
 
     private const TASK_META = [
-        'refresh-mofang-jwt' => [
-            'title' => '魔方 JWT 刷新',
-            'log_keywords' => ['JWT刷新', 'refresh-mofang-jwt'],
+        'refresh-hosting-panel-auth' => [
+            'title' => '接口认证刷新',
+            'log_keywords' => ['JWT刷新', '接口认证刷新', 'refresh-hosting-panel-auth'],
         ],
         'service-auto-renew' => [
             'title' => '服务自动续费',
@@ -51,27 +55,44 @@ class AdminLogService
             'title' => '账单自动化维护',
             'log_keywords' => ['账单自动化维护执行完成', 'billing-maintenance'],
         ],
+        'product-upstream-config-sync' => [
+            'title' => '上游产品配置同步',
+            'log_keywords' => ['上游产品配置同步执行完成', 'product-upstream-config-sync'],
+        ],
+        'coupon-campaign-dispatch' => [
+            'title' => '优惠券活动发放',
+            'log_keywords' => ['优惠券活动自动发放执行完成', 'coupon-campaign-dispatch'],
+        ],
         'ticket-auto-close' => [
             'title' => '工单自动关闭',
             'log_keywords' => ['工单自动关闭执行完成', 'ticket-auto-close'],
         ],
         'order-cleanup' => [
-            'title' => '订单与充值清理',
-            'log_keywords' => ['订单与充值清理执行完成', 'order-cleanup'],
+            'title' => '账单与充值清理',
+            'log_keywords' => ['账单与充值清理执行完成', '订单与充值清理执行完成', 'order-cleanup'],
         ],
         'sync-processing-order-status' => [
-            'title' => '处理中订单状态同步',
+            'title' => '账单状态同步（兼容）',
             'log_keywords' => ['处理中订单状态同步执行完成', 'sync-processing-order-status', 'orders:sync-processing-status'],
+        ],
+        'queue-backlog-drain' => [
+            'title' => '队列积压消费',
+            'log_keywords' => ['队列积压消费', 'queue:work'],
         ],
     ];
 
     public function getSmsLogs(array $filters, int $perPage): array
     {
         $query = $this->buildSmsLogQuery($filters);
+        if ($query === null) {
+            return $this->buildPaginatorPayload($this->emptyPaginator($perPage));
+        }
 
         $logs = (clone $query)->orderByDesc('created_at')->paginate($perPage);
-        $logs->setCollection($logs->getCollection()->map(function (NotificationLog $log) {
-            $item = $this->sanitizeSmsLogItem($log->toArray());
+        $logs->setCollection($logs->getCollection()->map(function ($log) {
+            $item = $log->toArray();
+            $item['params_json'] = $this->normalizeNotificationParams($item['params_json'] ?? []);
+            $item = $this->sanitizeSmsLogItem($item);
             $item['params'] = $item['params_json'] ?? [];
             unset($item['params_json']);
 
@@ -87,7 +108,17 @@ class AdminLogService
             $this->buildListSummaryCacheKey('sms', $filters),
             now()->addSeconds(self::LIST_SUMMARY_CACHE_TTL_SECONDS),
             function () use ($filters) {
-                $summary = $this->buildNotificationSummaryQuery('sms', $filters)
+                $query = $this->buildNotificationSummaryQuery('sms', $filters);
+                if ($query === null) {
+                    return [
+                        'total' => 0,
+                        'success' => 0,
+                        'failed' => 0,
+                        'pending' => 0,
+                    ];
+                }
+
+                $summary = $query
                     ->selectRaw('COUNT(*) as total')
                     ->selectRaw("COALESCE(SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END), 0) as success")
                     ->selectRaw("COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) as failed")
@@ -107,6 +138,9 @@ class AdminLogService
     public function getEmailLogs(array $filters, int $perPage): array
     {
         $query = $this->buildEmailLogQuery($filters);
+        if ($query === null) {
+            return $this->buildPaginatorPayload($this->emptyPaginator($perPage));
+        }
 
         $logs = (clone $query)->orderByDesc('created_at')->paginate($perPage);
 
@@ -119,7 +153,17 @@ class AdminLogService
             $this->buildListSummaryCacheKey('email', $filters),
             now()->addSeconds(self::LIST_SUMMARY_CACHE_TTL_SECONDS),
             function () use ($filters) {
-                $summary = $this->buildNotificationSummaryQuery('email', $filters)
+                $query = $this->buildNotificationSummaryQuery('email', $filters);
+                if ($query === null) {
+                    return [
+                        'total' => 0,
+                        'success' => 0,
+                        'failed' => 0,
+                        'pending' => 0,
+                    ];
+                }
+
+                $summary = $query
                     ->selectRaw('COUNT(*) as total')
                     ->selectRaw("COALESCE(SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END), 0) as success")
                     ->selectRaw("COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) as failed")
@@ -355,14 +399,23 @@ class AdminLogService
         ]);
     }
 
-    private function buildSmsLogQuery(array $filters)
+    private function buildSmsLogQuery(array $filters): ?Builder
     {
-        $query = NotificationLog::query()
-            ->where('channel', 'sms')
-            ->selectRaw("id, recipient as phone, template_code, content, params_json, status, provider, request_id, error_msg, sent_at, created_at, updated_at, origin_type");
+        if (Schema::hasTable('notification_logs')) {
+            $query = NotificationLog::query()
+                ->where('channel', 'sms')
+                ->selectRaw("id, recipient as phone, template_code, content, params_json, status, provider, request_id, error_msg, sent_at, created_at, updated_at, origin_type");
+            $recipientColumn = 'recipient';
+        } elseif (Schema::hasTable('sms_logs')) {
+            $query = SmsLog::query()
+                ->selectRaw("id, phone, template_code, content, params as params_json, status, provider, request_id, error_msg, sent_at, created_at, updated_at, 'sms_log' as origin_type");
+            $recipientColumn = 'phone';
+        } else {
+            return null;
+        }
 
         if (! empty($filters['phone'])) {
-            $query->where('recipient', 'like', '%' . trim((string) $filters['phone']) . '%');
+            $query->where($recipientColumn, 'like', '%' . trim((string) $filters['phone']) . '%');
         }
 
         if (! empty($filters['keyword'])) {
@@ -380,14 +433,23 @@ class AdminLogService
         return $query;
     }
 
-    private function buildEmailLogQuery(array $filters)
+    private function buildEmailLogQuery(array $filters): ?Builder
     {
-        $query = NotificationLog::query()
-            ->where('channel', 'email')
-            ->selectRaw("id, template_code, recipient as to_email, subject, content, status, error_msg, sent_at, created_at, updated_at");
+        if (Schema::hasTable('notification_logs')) {
+            $query = NotificationLog::query()
+                ->where('channel', 'email')
+                ->selectRaw("id, template_code, recipient as to_email, subject, content, status, error_msg, sent_at, created_at, updated_at");
+            $recipientColumn = 'recipient';
+        } elseif (Schema::hasTable('email_logs')) {
+            $query = EmailLog::query()
+                ->selectRaw("id, template_code, to_email, subject, content, status, error_msg, sent_at, created_at, updated_at");
+            $recipientColumn = 'to_email';
+        } else {
+            return null;
+        }
 
         if (! empty($filters['email'])) {
-            $query->where('recipient', 'like', '%' . trim((string) $filters['email']) . '%');
+            $query->where($recipientColumn, 'like', '%' . trim((string) $filters['email']) . '%');
         }
 
         if (! empty($filters['keyword'])) {
@@ -406,32 +468,52 @@ class AdminLogService
         return $query;
     }
 
-    private function buildNotificationSummaryQuery(string $channel, array $filters)
+    private function buildNotificationSummaryQuery(string $channel, array $filters): ?Builder
     {
-        $query = NotificationLog::query()->where('channel', $channel);
+        if (Schema::hasTable('notification_logs')) {
+            $query = NotificationLog::query()->where('channel', $channel);
+            $recipientColumn = 'recipient';
+            $hasRequestId = true;
+        } elseif ($channel === 'sms' && Schema::hasTable('sms_logs')) {
+            $query = SmsLog::query();
+            $recipientColumn = 'phone';
+            $hasRequestId = true;
+        } elseif ($channel === 'email' && Schema::hasTable('email_logs')) {
+            $query = EmailLog::query();
+            $recipientColumn = 'to_email';
+            $hasRequestId = false;
+        } else {
+            return null;
+        }
 
         if ($channel === 'sms' && ! empty($filters['phone'])) {
-            $query->where('recipient', 'like', '%' . trim((string) $filters['phone']) . '%');
+            $query->where($recipientColumn, 'like', '%' . trim((string) $filters['phone']) . '%');
         }
 
         if ($channel === 'email' && ! empty($filters['email'])) {
-            $query->where('recipient', 'like', '%' . trim((string) $filters['email']) . '%');
+            $query->where($recipientColumn, 'like', '%' . trim((string) $filters['email']) . '%');
         }
 
         if (! empty($filters['keyword'])) {
             $keyword = trim((string) $filters['keyword']);
-            $query->where(function ($builder) use ($keyword) {
+            $query->where(function ($builder) use ($channel, $hasRequestId, $keyword) {
                 if ($channel === 'sms') {
-                    $builder->where('template_code', 'like', "%{$keyword}%")
-                        ->orWhere('request_id', 'like', "%{$keyword}%");
+                    $builder->where('template_code', 'like', "%{$keyword}%");
+
+                    if ($hasRequestId) {
+                        $builder->orWhere('request_id', 'like', "%{$keyword}%");
+                    }
 
                     return;
                 }
 
                 $builder->where('content', 'like', "%{$keyword}%")
                     ->orWhere('template_code', 'like', "%{$keyword}%")
-                    ->orWhere('request_id', 'like', "%{$keyword}%")
                     ->orWhere('subject', 'like', "%{$keyword}%");
+
+                if ($hasRequestId) {
+                    $builder->orWhere('request_id', 'like', "%{$keyword}%");
+                }
             });
         }
 
@@ -447,6 +529,26 @@ class AdminLogService
         ksort($filters);
 
         return 'admin_logs:summary:' . $type . ':' . md5(json_encode($filters, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    }
+
+    private function emptyPaginator(int $perPage): LengthAwarePaginator
+    {
+        return new LengthAwarePaginator([], 0, $perPage);
+    }
+
+    private function normalizeNotificationParams(mixed $value): array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+
+        if (is_string($value) && trim($value) !== '') {
+            $decoded = json_decode($value, true);
+
+            return is_array($decoded) ? $decoded : [];
+        }
+
+        return [];
     }
 
     private function sanitizeSmsLogItem(array $item): array
