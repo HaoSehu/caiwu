@@ -16,15 +16,15 @@ class ScheduleTaskService
         private ScheduleTaskTriggerService $scheduleTaskTriggerService,
     ) {}
     private const TASK_META = [
-        'refresh-mofang-jwt' => [
-            'title' => '魔方 JWT 刷新',
-            'description' => '定时刷新供应商 JWT 会话，减少上游接口因登录态过期导致的请求失败。',
+        'refresh-hosting-panel-auth' => [
+            'title' => '接口认证刷新',
+            'description' => '定时刷新主机面板接口认证会话，减少上游登录态过期导致的请求失败。',
             'category' => '供应商接口',
-            'log_keywords' => ['JWT刷新', 'refresh-mofang-jwt'],
+            'log_keywords' => ['JWT刷新', '接口认证刷新', 'refresh-hosting-panel-auth'],
         ],
         'service-auto-renew' => [
             'title' => '服务自动续费',
-            'description' => '扫描开启自动续费的服务，余额充足时自动创建续费订单并完成支付处理。',
+            'description' => '扫描开启自动续费的服务，余额充足时自动创建续费账单并完成支付处理。',
             'category' => '服务续费',
             'log_keywords' => ['自动续费执行完成', '[自动续费]', 'service-auto-renew'],
         ],
@@ -48,9 +48,15 @@ class ScheduleTaskService
         ],
         'billing-maintenance' => [
             'title' => '账单自动化维护',
-            'description' => '处理续费提醒、自动建单、账单到期提醒和逾期标记。',
+            'description' => '处理续费提醒、自动生成账单、账单到期提醒和逾期标记。',
             'category' => '账单提醒',
             'log_keywords' => ['账单自动化维护执行完成', 'billing-maintenance'],
+        ],
+        'product-upstream-config-sync' => [
+            'title' => '上游产品配置同步',
+            'description' => '每 24 小时拉取已绑定上游商品的配置项，并自动保存到本地商品配置，不同步商品定价。',
+            'category' => '商品同步',
+            'log_keywords' => ['上游产品配置同步执行完成', 'product-upstream-config-sync'],
         ],
         'coupon-campaign-dispatch' => [
             'title' => '优惠券活动发放',
@@ -65,16 +71,22 @@ class ScheduleTaskService
             'log_keywords' => ['工单自动关闭执行完成', 'ticket-auto-close'],
         ],
         'order-cleanup' => [
-            'title' => '订单与充值清理',
-            'description' => '自动取消超时未付款订单，并失效超时未付款充值单。',
-            'category' => '订单清理',
-            'log_keywords' => ['订单与充值清理执行完成', 'order-cleanup'],
+            'title' => '账单与充值清理',
+            'description' => '自动取消超时未付款账单，并失效超时未付款充值单。',
+            'category' => '账单清理',
+            'log_keywords' => ['账单与充值清理执行完成', '订单与充值清理执行完成', 'order-cleanup'],
         ],
         'sync-processing-order-status' => [
-            'title' => '处理中订单状态同步',
-            'description' => '定时校准开通中的订单状态，服务已激活时自动将订单更新为已完成。',
-            'category' => '订单状态',
+            'title' => '账单状态同步（兼容）',
+            'description' => '保留兼容历史开通过程状态校准，现行流程以账单为准。',
+            'category' => '账单状态',
             'log_keywords' => ['处理中订单状态同步执行完成', 'sync-processing-order-status', 'orders:sync-processing-status'],
+        ],
+        'queue-backlog-drain' => [
+            'title' => '队列积压消费',
+            'description' => '每分钟拉起一轮限时队列消费，处理支付后开通、返佣等异步任务，无需额外常驻守护进程。',
+            'category' => '异步队列',
+            'log_keywords' => ['队列积压消费', 'queue:work'],
         ],
     ];
 
@@ -182,7 +194,7 @@ class ScheduleTaskService
             [
                 'key' => 'schedule_run',
                 'title' => '调度入口',
-                'description' => '请设置以下命令每 1 分钟运行一次。',
+                'description' => '宝塔生产环境请仅保留这一条，每 1 分钟运行一次；调度内已包含一轮队列消费。',
                 'command' => "{$quotedPhp} {$quotedArtisan} schedule:run",
             ],
             [
@@ -193,9 +205,9 @@ class ScheduleTaskService
             ],
             [
                 'key' => 'queue_work',
-                'title' => '队列 Worker',
-                'description' => '请在服务器上常驻运行以下命令（需 Supervisor 或 systemd 守护）。',
-                'command' => "{$quotedPhp} {$quotedArtisan} queue:work --queue=referral,provision,default --sleep=3 --tries=3",
+                'title' => '队列 Worker（可选）',
+                'description' => '仅在你需要更低延迟时再单独常驻运行；宝塔单计划任务方案下不是必需。',
+                'command' => "{$quotedPhp} {$quotedArtisan} queue:work --queue=provision,referral,default --sleep=1 --tries=3",
             ],
         ];
     }
@@ -409,17 +421,17 @@ class ScheduleTaskService
                     : '工单仅支持人工关闭',
             ],
             [
-                'label' => '未付款订单清理',
+                'label' => '未付款账单清理',
                 'value' => $config['pending_order_cleanup_enabled'] ? '已开启' : '已关闭',
                 'note' => $config['pending_order_cleanup_enabled']
-                    ? "未付款订单保留 {$config['pending_order_cleanup_after_hours']} 小时，任务周期："
+                    ? "未付款账单保留 {$config['pending_order_cleanup_after_hours']} 小时，任务周期："
                         . AutomationScheduleExpression::describe(
                             (string) $config['order_cleanup_schedule_mode'],
                             (string) $config['order_cleanup_schedule_time'],
                             AutomationScheduleExpression::MODE_EVERY_FIVE_MINUTES,
                             '00:00:00'
                         )
-                    : '不会自动取消未付款订单',
+                    : '不会自动取消未付款账单',
             ],
         ];
     }
