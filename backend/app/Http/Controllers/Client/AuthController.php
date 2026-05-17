@@ -4,20 +4,18 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Client;
 
+use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use App\Models\UserProfile;
+use App\Services\Auth\AuthService;
+use App\Services\Auth\GeeTestService;
+use App\Services\Auth\LoginRiskControlService;
+use App\Services\Auth\MessageRateLimitService;
+use App\Services\Auth\VerificationCodeService;
+use App\Services\System\NotificationService;
+use App\Services\System\SmsService;
 use App\Support\AccountIdentifier;
-use App\Support\TextSanitizer;
-use App\Services\AuthService;
-use App\Services\GeeTestService;
-use App\Services\LoginRiskControlService;
-use App\Services\MessageRateLimitService;
-use App\Services\NotificationService;
-use App\Services\SmsService;
-use App\Services\VerificationCodeService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\PersonalAccessToken;
 
 class AuthController extends Controller
@@ -42,7 +40,7 @@ class AuthController extends Controller
         ]);
 
         $data = $request->validate([
-            'account'  => ['required', 'string', 'max:100', function (string $attribute, mixed $value, \Closure $fail) {
+            'account' => ['required', 'string', 'max:100', function (string $attribute, mixed $value, \Closure $fail) {
                 if (AccountIdentifier::detectType((string) $value) === null) {
                     $fail('请输入正确的邮箱或手机号');
                 }
@@ -67,15 +65,14 @@ class AuthController extends Controller
                 $requestIp,
                 $request->userAgent()
             );
-        } catch (\App\Exceptions\BusinessException $exception) {
+        } catch (BusinessException $exception) {
             if ($exception->getErrorCode() === 40100) {
                 $this->loginRiskControlService->recordFailedAttempt($normalizedAccount, $requestIp);
-
-                if ($this->loginRiskControlService->shouldRequireCaptcha($normalizedAccount, $requestIp)) {
-                    return $this->error(42210, '当前登录环境需要行为验证，请完成后重试', [
-                        'captcha_required' => true,
-                    ]);
-                }
+                $this->authService->notifyClientLoginFailureOnce(
+                    $normalizedAccount,
+                    $requestIp,
+                    $request->userAgent()
+                );
             }
 
             throw $exception;
@@ -98,16 +95,16 @@ class AuthController extends Controller
         ]);
 
         $data = $request->validate([
-            'account'  => ['required', 'string', 'max:100', function (string $attribute, mixed $value, \Closure $fail) {
+            'account' => ['required', 'string', 'max:100', function (string $attribute, mixed $value, \Closure $fail) {
                 if (AccountIdentifier::detectType((string) $value) === null) {
                     $fail('请输入正确的邮箱或手机号');
                 }
             }],
-            'code'     => 'required|string|size:6',
+            'code' => 'required|string|size:6',
             'password' => 'required|string|min:6|confirmed',
             'nickname' => 'nullable|string|max:50',
-            'email'    => 'nullable|email|max:100',
-            'phone'    => ['nullable', 'string', 'max:20', function (string $attribute, mixed $value, \Closure $fail) {
+            'email' => 'nullable|email|max:100',
+            'phone' => ['nullable', 'string', 'max:20', function (string $attribute, mixed $value, \Closure $fail) {
                 if ($value !== null && $value !== '' && AccountIdentifier::detectType((string) $value) !== 'phone') {
                     $fail('请输入正确的手机号');
                 }
@@ -149,18 +146,17 @@ class AuthController extends Controller
     public function captchaScript()
     {
         try {
-            return response($this->geeTestService->getScriptContent(), 200, [
-                'Content-Type' => 'application/javascript; charset=UTF-8',
-                'Cache-Control' => 'public, max-age=43200',
-            ]);
+            $scriptContent = $this->geeTestService->getScriptContent();
         } catch (\Throwable $exception) {
             report($exception);
 
-            return response('', 503, [
-                'Content-Type' => 'text/plain; charset=UTF-8',
-                'Cache-Control' => 'no-store',
-            ]);
+            $scriptContent = $this->geeTestService->getFallbackScriptContent();
         }
+
+        return response($scriptContent, 200, [
+            'Content-Type' => 'application/javascript; charset=UTF-8',
+            'Cache-Control' => 'public, max-age=43200',
+        ]);
     }
 
     public function exchangeLoginAsCode(Request $request)
@@ -188,19 +184,21 @@ class AuthController extends Controller
         $user->loadMissing([
             'memberLevel',
         ]);
-        if (\App\Models\User::accountTableAvailable()) {
+        if (User::accountTableAvailable()) {
             $user->loadMissing('account');
         }
-        if (\App\Models\User::profileTableAvailable()) {
+        if (User::profileTableAvailable()) {
             $user->loadMissing('profile');
         }
         $memberLevel = $user->memberLevel;
+
         return $this->success([
-            'id'          => $user->id,
-            'email'       => (string) ($user->email ?? ''),
-            'nickname'    => $user->nickname,
-            'phone'       => (string) ($user->phone ?? ''),
-            'balance'     => (string) ($user->account?->cash_balance ?? $user->balance),
+            'id' => $user->id,
+            'email' => (string) ($user->email ?? ''),
+            'nickname' => $user->nickname,
+            'display_name' => (string) ($user->display_name ?? ''),
+            'phone' => (string) ($user->phone ?? ''),
+            'balance' => (string) $user->balance,
             'referral_code' => $user->referral_code,
             'referrer_user_id' => $user->referrer_user_id,
             'member_level_id' => $user->member_level_id,
@@ -211,21 +209,29 @@ class AuthController extends Controller
                 'code' => $memberLevel->code,
                 'reward_rate' => $memberLevel->reward_rate,
             ] : null,
-            'status'      => $user->status,
+            'status' => $user->status,
             'is_verified' => $user->is_verified,
-            'real_name'   => $user->real_name,
+            'real_name' => $user->real_name,
             'id_card_masked' => $this->maskIdCard((string) $user->id_card),
             'verification_status' => $user->verification_status,
             'verification_message' => $user->verification_message,
             'verification_certify_id' => $user->verification_certify_id,
             'login_email_alert' => (int) $user->login_email_alert,
+            'login_notify' => (int) (($user->login_notify ?? null) ?? $user->login_email_alert),
+            'login_location_alert' => (int) ($user->login_location_alert ?? 1),
+            'password_change_alert' => (int) ($user->password_change_alert ?? 1),
+            'phone_change_alert' => (int) ($user->phone_change_alert ?? 1),
+            'email_change_alert' => (int) ($user->email_change_alert ?? 1),
+            'marketing_alert' => (int) ($user->marketing_alert ?? 0),
             'alipay_account' => [
                 'real_name' => $user->alipay_real_name,
                 'account' => $user->alipay_account,
                 'is_bound' => $this->hasBoundAlipayAccount($user),
             ],
+            'last_login_at' => $user->last_login_at?->format('Y-m-d H:i:s'),
+            'last_login_ip' => (string) ($user->last_login_ip ?? ''),
             'verified_at' => $user->verified_at?->format('Y-m-d H:i:s'),
-            'created_at'  => $user->created_at?->format('Y-m-d H:i:s'),
+            'created_at' => $user->created_at?->format('Y-m-d H:i:s'),
         ]);
     }
 
@@ -235,6 +241,7 @@ class AuthController extends Controller
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();
+
         return $this->success(null, '已退出登录');
     }
 
@@ -244,17 +251,11 @@ class AuthController extends Controller
             'nickname' => 'nullable|string|max:50',
         ]);
 
-        $user = $request->user();
-        $nickname = TextSanitizer::clean((string) ($data['nickname'] ?? ''));
-
-        UserProfile::query()->updateOrCreate(
-            ['user_id' => $user->id],
-            ['nickname' => $nickname !== '' ? $nickname : null]
+        $freshUser = $this->authService->updateClientProfile(
+            $request->user(),
+            $data,
+            $this->clientOperationContext($request)
         );
-        $user->unsetRelation('profile');
-        $freshUser = \App\Models\User::profileTableAvailable()
-            ? $user->fresh(['profile'])
-            : $user->fresh();
 
         return $this->success([
             'nickname' => $freshUser?->nickname,
@@ -294,12 +295,14 @@ class AuthController extends Controller
             return $this->error(42200, '短信验证码错误或已过期');
         }
 
-        $user->update([
-            'alipay_real_name' => TextSanitizer::clean((string) $data['real_name']),
-            'alipay_account' => $phone,
-        ]);
-
-        $freshUser = $user->fresh();
+        $freshUser = $this->authService->updateClientAlipayAccount(
+            $user,
+            [
+                'real_name' => (string) $data['real_name'],
+                'account' => $phone,
+            ],
+            $this->clientOperationContext($request)
+        );
 
         return $this->success([
             'real_name' => $freshUser?->alipay_real_name,
@@ -308,19 +311,44 @@ class AuthController extends Controller
         ], '支付宝资料保存成功');
     }
 
-    public function updateNotificationPreferences(Request $request)
+    public function notificationPreferences(Request $request)
     {
-        $request->validate([
-            'login_email_alert' => 'required|boolean',
-        ]);
-
         $user = $request->user();
-        $user->update([
-            'login_email_alert' => $request->boolean('login_email_alert'),
-        ]);
 
         return $this->success([
-            'login_email_alert' => (int) $user->login_email_alert,
+            'login_notify' => (int) (($user->login_notify ?? null) ?? $user->login_email_alert),
+            'login_location_alert' => (int) ($user->login_location_alert ?? 1),
+            'password_change_alert' => (int) ($user->password_change_alert ?? 1),
+            'phone_change_alert' => (int) ($user->phone_change_alert ?? 1),
+            'email_change_alert' => (int) ($user->email_change_alert ?? 1),
+            'marketing_alert' => (int) ($user->marketing_alert ?? 0),
+        ]);
+    }
+
+    public function updateNotificationPreferences(Request $request)
+    {
+        $data = $request->validate([
+            'login_notify' => 'required|boolean',
+            'login_location_alert' => 'required|boolean',
+            'password_change_alert' => 'required|boolean',
+            'phone_change_alert' => 'required|boolean',
+            'email_change_alert' => 'required|boolean',
+            'marketing_alert' => 'required|boolean',
+        ]);
+
+        $freshUser = $this->authService->updateClientNotificationPreferences(
+            $request->user(),
+            $data,
+            $this->clientOperationContext($request)
+        );
+
+        return $this->success([
+            'login_notify' => (int) (($freshUser->login_notify ?? null) ?? $freshUser->login_email_alert),
+            'login_location_alert' => (int) ($freshUser->login_location_alert ?? 1),
+            'password_change_alert' => (int) ($freshUser->password_change_alert ?? 1),
+            'phone_change_alert' => (int) ($freshUser->phone_change_alert ?? 1),
+            'email_change_alert' => (int) ($freshUser->email_change_alert ?? 1),
+            'marketing_alert' => (int) ($freshUser->marketing_alert ?? 0),
         ], '通知设置更新成功');
     }
 
@@ -350,14 +378,14 @@ class AuthController extends Controller
             return $this->error(42200, '短信验证码错误或已过期');
         }
 
-        $this->authService->ensureUniqueClientPhone($phone, (int) $user->id);
-
-        $user->update([
-            'phone' => $phone,
-        ]);
+        $freshUser = $this->authService->updateClientPhone(
+            $user,
+            $phone,
+            $this->clientOperationContext($request)
+        );
 
         return $this->success([
-            'phone' => $user->phone,
+            'phone' => $freshUser->phone,
         ], '手机号修改成功');
     }
 
@@ -409,7 +437,7 @@ class AuthController extends Controller
         ]);
 
         $data = $request->validate([
-            'email' => 'required|email|max:100|unique:users,email,' . $request->user()->id,
+            'email' => 'required|email|max:100|unique:users,email,'.$request->user()->id,
             'code' => 'required|string|size:6',
         ]);
 
@@ -424,12 +452,14 @@ class AuthController extends Controller
             return $this->error(42200, '邮箱验证码错误或已过期');
         }
 
-        $user->update([
-            'email' => $email,
-        ]);
+        $freshUser = $this->authService->updateClientEmail(
+            $user,
+            $email,
+            $this->clientOperationContext($request)
+        );
 
         return $this->success([
-            'email' => $user->email,
+            'email' => $freshUser->email,
         ], '邮箱修改成功');
     }
 
@@ -515,24 +545,29 @@ class AuthController extends Controller
 
     public function updatePassword(Request $request)
     {
-        $request->validate([
+        $data = $request->validate([
             'oldPassword' => 'required|string|min:6',
             'newPassword' => 'required|string|min:6',
             'confirmPassword' => 'required|string|same:newPassword',
         ]);
 
-        $user = $request->user();
-        if (! Hash::check($request->input('oldPassword'), $user->password)) {
-            return $this->error(42200, '原密码错误');
-        }
-
-        $user->update([
-            'password' => $request->input('newPassword'),
-        ]);
-
-        $user->tokens()->delete();
+        $this->authService->updateClientPassword(
+            $request->user(),
+            (string) $data['oldPassword'],
+            (string) $data['newPassword'],
+            $this->clientOperationContext($request)
+        );
 
         return $this->success(null, '密码修改成功');
+    }
+
+    private function clientOperationContext(Request $request): array
+    {
+        return [
+            'ip_address' => (string) $request->ip(),
+            'user_agent' => (string) ($request->userAgent() ?? ''),
+            'trace_id' => (string) $request->header('X-Request-Id', ''),
+        ];
     }
 
     private function resolveCodeOwnerId(Request $request): int|string
@@ -611,6 +646,6 @@ class AuthController extends Controller
             return $idCard;
         }
 
-        return mb_substr($idCard, 0, 1) . str_repeat('*', max($length - 2, 1)) . mb_substr($idCard, -1);
+        return mb_substr($idCard, 0, 1).str_repeat('*', max($length - 2, 1)).mb_substr($idCard, -1);
     }
 }

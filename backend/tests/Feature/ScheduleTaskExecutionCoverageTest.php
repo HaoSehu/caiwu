@@ -9,19 +9,19 @@ use App\Constants\ServiceStatus;
 use App\Models\Order;
 use App\Models\Service;
 use App\Models\Supplier;
-use App\Services\AutoRenewService;
-use App\Services\BillingAutomationService;
-use App\Services\CheckoutService;
-use App\Services\CouponCampaignService;
-use App\Services\InvoiceCleanupAutomationService;
-use App\Services\ProductCatalogService;
-use App\Services\ReferralService;
-use App\Services\ScheduleTaskService;
-use App\Services\ScheduleTaskTriggerService;
-use App\Services\ServiceLifecycleAutomationService;
-use App\Services\ServiceStatusSyncService;
-use App\Services\SettingService;
-use App\Services\TicketAutomationService;
+use App\Services\Automation\AutoRenewService;
+use App\Services\Automation\BillingAutomationService;
+use App\Services\Automation\InvoiceCleanupAutomationService;
+use App\Services\Automation\ScheduleTaskService;
+use App\Services\Automation\ScheduleTaskTriggerService;
+use App\Services\Automation\ServiceLifecycleAutomationService;
+use App\Services\Automation\ServiceStatusSyncService;
+use App\Services\Finance\CheckoutService;
+use App\Services\Finance\CouponCampaignService;
+use App\Services\ProductCatalog\ProductCatalogService;
+use App\Services\Referral\ReferralService;
+use App\Services\System\SettingService;
+use App\Services\Ticket\TicketAutomationService;
 use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiTransport;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Artisan;
@@ -71,7 +71,7 @@ class ScheduleTaskExecutionCoverageTest extends TestCase
         ] as $expectedKey) {
             $this->assertTrue(
                 $tasks->contains(fn (array $task): bool => ($task['key'] ?? null) === $expectedKey),
-                'Missing schedule task key: ' . $expectedKey
+                'Missing schedule task key: '.$expectedKey
             );
         }
 

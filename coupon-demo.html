@@ -1,0 +1,1350 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>优惠券中心 - 创欧云</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<!-- Element Plus CSS -->
+<link rel="stylesheet" href="https://unpkg.com/element-plus@2.9.1/dist/index.css">
+<style>
+/* ─── Design Tokens ─── */
+:root {
+  --brand: #3978ff;
+  --brand-dark: #256dff;
+  --brand-soft: rgba(57, 120, 255, 0.08);
+  --success: #12b76a;
+  --success-soft: #f0fdf4;
+  --warning: #f59e0b;
+  --warning-soft: #fff7ed;
+  --danger: #f04438;
+  --danger-soft: #fff1f0;
+  --orange: #dd7a1f;
+  --orange-soft: #fff7ed;
+  --bg-page: #f5f7fb;
+  --bg-card: #ffffff;
+  --text-primary: #19263d;
+  --text-secondary: #5d6b83;
+  --text-muted: #91a0b6;
+  --border: #e0e7f0;
+  --border-light: #edf1f7;
+  --shadow: 0 10px 24px rgba(20, 47, 88, 0.05);
+  --shadow-hover: 0 16px 32px rgba(20, 47, 88, 0.08);
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ─── Reset ─── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+  font-size: 14px;
+  color: var(--text-primary);
+  background: var(--bg-page);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+/* ─── Page Layout ─── */
+.client-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 28px 24px 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ─── Filter Card ─── */
+.coupon-filter-card {
+  border: 1px solid rgba(225, 231, 241, 0.9);
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
+  box-shadow: 0 12px 28px rgba(20, 47, 88, 0.05);
+}
+
+.coupon-filter-bar {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.5fr) minmax(160px, 0.72fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 18px;
+}
+
+.coupon-filter-bar__toggle {
+  min-width: 96px;
+  height: 42px;
+  border: 1px solid #dfe6f1;
+  border-radius: 12px;
+  background: #fff;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.15s var(--ease);
+}
+.coupon-filter-bar__toggle:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+.coupon-filter-bar__toggle svg {
+  width: 16px;
+  height: 16px;
+}
+
+.coupon-search-wrap {
+  position: relative;
+}
+.coupon-search-wrap input {
+  width: 100%;
+  height: 42px;
+  padding: 0 40px 0 14px;
+  border: 1px solid #dfe6f1;
+  border-radius: 12px;
+  background: #fff;
+  font-size: 13px;
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.coupon-search-wrap input:focus {
+  border-color: var(--brand);
+}
+.coupon-search-wrap input::placeholder {
+  color: var(--text-muted);
+}
+.coupon-search-trigger {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(57, 132, 255, 0.08);
+  color: var(--brand);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.coupon-search-trigger svg {
+  width: 14px;
+  height: 14px;
+}
+
+.coupon-status-select {
+  position: relative;
+}
+.coupon-status-select select {
+  width: 100%;
+  height: 42px;
+  padding: 0 32px 0 14px;
+  border: 1px solid #dfe6f1;
+  border-radius: 12px;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235d6b83' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 12px center;
+  font-size: 13px;
+  color: var(--text-secondary);
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.coupon-status-select select:focus {
+  border-color: var(--brand);
+}
+
+/* ─── Panel Card ─── */
+.panel-card {
+  border: 1px solid rgba(225, 231, 241, 0.9);
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
+  box-shadow: 0 12px 28px rgba(20, 47, 88, 0.05);
+  padding: 20px;
+}
+
+/* ─── Tabs ─── */
+.coupon-tabs {
+  --el-tabs-header-height: 48px;
+}
+.coupon-tabs .el-tabs__header {
+  margin-bottom: 20px;
+}
+.coupon-tabs .el-tabs__nav-wrap::after {
+  background: rgba(15, 23, 42, 0.08);
+  height: 2px;
+}
+.coupon-tabs .el-tabs__item {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  height: 48px;
+  line-height: 48px;
+}
+.coupon-tabs .el-tabs__item.is-active {
+  color: var(--brand);
+  font-weight: 600;
+}
+.coupon-tabs .el-tabs__active-bar {
+  background-color: var(--brand);
+  height: 3px;
+  border-radius: 2px;
+}
+.coupon-tabs .el-tabs__nav-prev,
+.coupon-tabs .el-tabs__nav-next {
+  line-height: 48px;
+}
+
+/* ─── Coupon Grid ─── */
+.coupon-list-shell {
+  min-height: 240px;
+}
+
+.coupon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 16px;
+}
+
+/* ─── Coupon Card ─── */
+.coupon-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(225, 231, 241, 0.9);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at top left, rgba(57, 120, 255, 0.06), transparent 28%),
+    linear-gradient(180deg, #ffffff 0%, #f8faff 100%);
+  box-shadow: var(--shadow);
+  transition: all 0.2s var(--ease);
+  display: flex;
+  flex-direction: column;
+  min-height: 187px;
+}
+.coupon-card:hover {
+  border-color: rgba(57, 120, 255, 0.25);
+  box-shadow: var(--shadow-hover);
+  transform: translateY(-2px);
+}
+
+/* 锯齿分割线 */
+.coupon-card::before {
+  content: '';
+  position: absolute;
+  left: 260px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border-light);
+}
+.coupon-card::after {
+  content: '';
+  position: absolute;
+  left: 256px;
+  top: -10px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--bg-page);
+  border: 1px solid var(--border);
+  z-index: 2;
+}
+.coupon-card .coupon-dots-bottom::before {
+  content: '';
+  position: absolute;
+  left: 256px;
+  bottom: -10px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--bg-page);
+  border: 1px solid var(--border);
+  z-index: 2;
+}
+
+/* ─── Info Button ─── */
+.coupon-card__info {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 3;
+  width: 26px;
+  height: 26px;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 50%;
+  background: var(--warning-soft);
+  color: var(--warning);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s var(--ease);
+}
+.coupon-card__info:hover {
+  border-color: rgba(245, 158, 11, 0.5);
+  background: #fff1cc;
+  color: #c76a05;
+  transform: scale(1.1);
+}
+.coupon-card__info svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ─── Card Head ─── */
+.coupon-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 16px 40px 0 18px;
+  position: relative;
+  z-index: 1;
+}
+
+.coupon-card__value {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.coupon-card__value span {
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.coupon-card__value strong {
+  color: var(--text-primary);
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+/* ─── Status Tag ─── */
+.coupon-card__head .el-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+.el-tag--success {
+  --el-tag-bg-color: var(--success-soft);
+  --el-tag-text-color: var(--success);
+  --el-tag-border-color: transparent;
+}
+.el-tag--warning {
+  --el-tag-bg-color: var(--warning-soft);
+  --el-tag-text-color: var(--warning);
+  --el-tag-border-color: transparent;
+}
+.el-tag--info {
+  --el-tag-bg-color: #f0f2f5;
+  --el-tag-text-color: #909399;
+  --el-tag-border-color: transparent;
+}
+
+/* ─── Card Body ─── */
+.coupon-card__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 18px 0;
+  gap: 10px;
+}
+
+.coupon-card__title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.coupon-card__title strong {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  overflow: hidden;
+}
+
+.coupon-card__title p {
+  color: #7d8aa0;
+  font-size: 11px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  overflow: hidden;
+  margin: 0;
+}
+
+.coupon-card__amounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: auto;
+}
+
+.coupon-card__amounts span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #f4f7fb;
+  color: #5d6b83;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* ─── Card Footer ─── */
+.coupon-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px 14px;
+  border-top: 1px solid var(--border-light);
+  margin-top: auto;
+}
+
+.coupon-card__foot span {
+  color: #6f7d93;
+  font-size: 11px;
+}
+
+.coupon-card__foot--action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px 14px;
+  border-top: 1px solid var(--border-light);
+  margin-top: auto;
+}
+
+/* ─── Action Button ─── */
+.coupon-action-btn {
+  height: 30px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s var(--ease);
+}
+.coupon-action-btn--primary {
+  background: linear-gradient(135deg, var(--brand) 0%, #5a91ff 100%);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(57, 120, 255, 0.3);
+}
+.coupon-action-btn--primary:hover {
+  box-shadow: 0 6px 16px rgba(57, 120, 255, 0.4);
+  transform: translateY(-1px);
+}
+.coupon-action-btn--primary:disabled {
+  background: #e8eaf0;
+  color: #a0a8b8;
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
+}
+.coupon-action-btn--outline {
+  background: transparent;
+  color: var(--brand);
+  border: 1px solid var(--brand);
+}
+.coupon-action-btn--outline:hover {
+  background: var(--brand);
+  color: #fff;
+}
+
+/* ─── Table Card ─── */
+.coupon-table-card {
+  overflow: hidden;
+  border: 1px solid rgba(225, 231, 241, 0.9);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(20, 47, 88, 0.05);
+}
+
+.coupon-list-table {
+  --el-table-border-color: var(--border-light);
+  --el-table-header-bg-color: #f8faff;
+  --el-table-header-text-color: #74839a;
+}
+.coupon-list-table .el-table__inner-wrapper::before {
+  display: none;
+}
+.coupon-list-table th.el-table__cell {
+  background: #f8faff;
+  font-size: 12px;
+  font-weight: 700;
+}
+.coupon-list-table td.el-table__cell {
+  padding-top: 18px;
+  padding-bottom: 18px;
+}
+
+.coupon-table-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.coupon-table-mark {
+  width: 54px;
+  min-width: 54px;
+  height: 54px;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #f5f8ff, #eaf0fb);
+  color: var(--brand);
+  font-size: 16px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.coupon-table-copy {
+  min-width: 0;
+}
+
+.coupon-table-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.coupon-table-title-row strong {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.coupon-table-copy p {
+  margin: 6px 0 0;
+  color: #7d8aa0;
+  font-size: 12px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  overflow: hidden;
+}
+
+.coupon-table-id {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #f4f7fb;
+  color: #91a0b6;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.coupon-table-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+.coupon-detail-button {
+  min-width: 52px;
+  height: 30px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #256dff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.coupon-detail-button:hover {
+  background: rgba(37, 109, 255, 0.08);
+}
+
+/* ─── Pagination ─── */
+.pager-wrap {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.el-pagination {
+  --el-pagination-hover-color: var(--brand);
+  --el-pagination-button-bg-color: #fff;
+  --el-pagination-button-color: var(--text-secondary);
+}
+.el-pagination button {
+  border-radius: 8px;
+}
+
+/* ─── Drawer ─── */
+.el-drawer {
+  --el-drawer-padding-primary: 24px;
+}
+.el-drawer__header {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-light);
+}
+.el-drawer__title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.coupon-detail-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.coupon-detail-hero {
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at top right, rgba(221, 122, 31, 0.12), transparent 35%),
+    linear-gradient(145deg, #f8faff, #ffffff);
+}
+
+.coupon-detail-hero span {
+  display: inline-block;
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+
+.coupon-detail-hero strong {
+  display: block;
+  color: var(--text-primary);
+  font-size: 38px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.coupon-detail-hero p {
+  margin: 8px 0 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.coupon-detail-descriptions {
+  --el-descriptions-label-width: 100px;
+}
+.coupon-detail-descriptions .el-descriptions__label {
+  color: #74839a;
+  font-weight: 600;
+  background: #fafbfd;
+}
+
+.coupon-hierarchy-sheet {
+  border: 1px solid #dbe4f0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.coupon-hierarchy-sheet__head,
+.coupon-hierarchy-sheet__row {
+  display: grid;
+  grid-template-columns: 90px 90px 90px 1fr;
+}
+
+.coupon-hierarchy-sheet__head {
+  background: #f5f8fd;
+}
+
+.coupon-hierarchy-sheet__head span,
+.coupon-hierarchy-sheet__row span {
+  padding: 10px 12px;
+  border-right: 1px solid #dbe4f0;
+  border-bottom: 1px solid #dbe4f0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.coupon-hierarchy-sheet__head span {
+  color: #6f7d93;
+  font-weight: 700;
+}
+
+.coupon-hierarchy-sheet__row span {
+  color: #1f2a44;
+  background: #fff;
+}
+
+.coupon-hierarchy-sheet__head span:last-child,
+.coupon-hierarchy-sheet__row span:last-child {
+  border-right: none;
+}
+
+.coupon-hierarchy-sheet__row:last-child span {
+  border-bottom: none;
+}
+
+/* ─── Empty State ─── */
+.el-empty {
+  --el-empty-description-margin-top: 16px;
+}
+.el-empty__description p {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 1080px) {
+  .coupon-filter-bar {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .coupon-filter-bar__toggle {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 960px) {
+  .coupon-grid {
+    grid-template-columns: 1fr;
+  }
+  .pager-wrap {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 767px) {
+  .client-page {
+    padding: 20px 16px 40px;
+  }
+  .coupon-filter-card,
+  .panel-card {
+    border-radius: 16px;
+  }
+  .coupon-filter-bar {
+    grid-template-columns: 1fr auto auto;
+    gap: 10px;
+    padding: 14px 12px;
+  }
+  .panel-card {
+    padding: 16px;
+  }
+  .coupon-card {
+    min-height: 170px;
+  }
+  .coupon-card::before {
+    left: 0;
+    right: 0;
+    top: 150px;
+    bottom: auto;
+    width: auto;
+    height: 1px;
+  }
+  .coupon-card::after {
+    left: -9px;
+    top: 144px;
+  }
+  .coupon-card .coupon-dots-bottom::before {
+    left: auto;
+    right: -9px;
+    bottom: auto;
+    top: 144px;
+  }
+  .coupon-card__value strong {
+    font-size: 26px;
+  }
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+
+<div class="client-page">
+
+  <!-- Filter Card -->
+  <section class="coupon-filter-card">
+    <div class="coupon-filter-bar">
+      <div class="coupon-search-wrap">
+        <input
+          type="text"
+          placeholder="搜索优惠券名称"
+          v-model="keyword"
+          @keyup.enter="handleSearch"
+        >
+        <button class="coupon-search-trigger" type="button" @click="handleSearch">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        </button>
+      </div>
+
+      <div class="coupon-status-select">
+        <select v-model="status" @change="handleSearch">
+          <option value="">全部状态</option>
+          <option value="available">可用</option>
+          <option value="used_up">已用完</option>
+          <option value="expired">已过期</option>
+        </select>
+      </div>
+
+      <button class="coupon-filter-bar__toggle" @click="toggleViewMode">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <template v-if="viewMode === 'grid'">
+            <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+          </template>
+          <template v-else>
+            <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>
+          </template>
+        </svg>
+        {{ viewMode === 'grid' ? '列表' : '卡片' }}
+      </button>
+    </div>
+  </section>
+
+  <!-- Panel Card with Tabs -->
+  <section class="panel-card">
+    <div class="coupon-tabs">
+      <div class="el-tabs__header" role="tablist">
+        <button
+          class="el-tabs__item"
+          :class="{ 'is-active': activeTab === 'owned' }"
+          @click="switchTab('owned')"
+        >我拥有的优惠券</button>
+        <button
+          class="el-tabs__item"
+          :class="{ 'is-active': activeTab === 'plaza' }"
+          @click="switchTab('plaza')"
+        >优惠券广场</button>
+        <div class="el-tabs__nav-wrap">
+          <div class="el-tabs__nav" style="transform: translateX(0px);">
+            <div class="el-tabs__active-bar" :style="{ left: activeTab === 'owned' ? '0px' : '150px', width: '150px' }"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Owned Tab -->
+      <div v-show="activeTab === 'owned'" class="coupon-list-shell">
+        <div v-if="ownedList.length" :class="viewMode === 'grid' ? 'coupon-grid' : 'coupon-table-card'">
+
+          <!-- Grid View -->
+          <template v-if="viewMode === 'grid'">
+            <article v-for="item in ownedList" :key="item.id" class="coupon-card">
+              <button class="coupon-card__info" type="button" @click="openDetail(item)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+              </button>
+
+              <div class="coupon-card__head">
+                <div class="coupon-card__value">
+                  <span>{{ item.discount_type === 'fixed' ? '满减券' : '折扣券' }}</span>
+                  <strong>{{ resolveDiscountValue(item) }}</strong>
+                </div>
+                <span class="el-tag" :class="getTagClass(item.status)">{{ item.status_label }}</span>
+              </div>
+
+              <div class="coupon-card__body">
+                <div class="coupon-card__title">
+                  <strong>{{ item.name }}</strong>
+                  <p>{{ item.description || '满足条件后可在结算时直接抵扣' }}</p>
+                </div>
+                <div class="coupon-card__amounts">
+                  <span>{{ resolveThresholdText(item) }}</span>
+                  <span>{{ resolveDiscountAmountText(item) }}</span>
+                </div>
+              </div>
+
+              <div class="coupon-card__foot">
+                <span>{{ item.validity_text }}</span>
+                <span v-if="item.receive_type_label">{{ item.receive_type_label }}</span>
+              </div>
+
+              <div class="coupon-dots-bottom"></div>
+            </article>
+          </template>
+
+          <!-- List View -->
+          <template v-else>
+            <table class="el-table coupon-list-table" style="width: 100%;">
+              <thead class="el-table__header">
+                <tr>
+                  <th>优惠券信息</th>
+                  <th>优惠类型</th>
+                  <th>满减金额</th>
+                  <th>折扣金额</th>
+                  <th>状态</th>
+                  <th>有效期</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody class="el-table__body">
+                <tr v-for="row in ownedList" :key="row.id">
+                  <td>
+                    <div class="coupon-table-info">
+                      <div class="coupon-table-mark">{{ (row.discount_type === 'fixed' ? '满减' : '折扣').slice(0, 2) }}</div>
+                      <div class="coupon-table-copy">
+                        <div class="coupon-table-title-row">
+                          <strong>{{ row.name }}</strong>
+                          <span class="coupon-table-id">ID {{ row.id }}</span>
+                        </div>
+                        <p>{{ row.description || '满足条件后可在结算时直接抵扣' }}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td>{{ row.discount_type === 'fixed' ? '满减券' : '折扣券' }}</td>
+                  <td>{{ resolveThresholdText(row) }}</td>
+                  <td>{{ resolveDiscountAmountText(row) }}</td>
+                  <td><span class="el-tag" :class="getTagClass(row.status)">{{ row.status_label }}</span></td>
+                  <td>{{ row.validity_text }}</td>
+                  <td>
+                    <button class="coupon-detail-button" @click="openDetail(row)">详情</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </template>
+
+        </div>
+
+        <div v-else class="el-empty">
+          <div class="el-empty__image">
+            <svg width="64" height="64" viewBox="0 0 64 64" fill="none"><rect x="8" y="12" width="48" height="40" rx="4" stroke="#d1d5db" stroke-width="2"/><path d="M8 22h48" stroke="#d1d5db" stroke-width="2"/><path d="M20 32h24M20 40h16" stroke="#d1d5db" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+          <div class="el-empty__description">
+            <p>你还没有优惠券</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Plaza Tab -->
+      <div v-show="activeTab === 'plaza'" class="coupon-list-shell">
+        <div v-if="plazaList.length" :class="viewMode === 'grid' ? 'coupon-grid' : 'coupon-table-card'">
+
+          <!-- Grid View -->
+          <template v-if="viewMode === 'grid'">
+            <article v-for="item in plazaList" :key="item.id" class="coupon-card">
+              <button class="coupon-card__info" type="button" @click="openDetail(item)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+              </button>
+
+              <div class="coupon-card__head">
+                <div class="coupon-card__value">
+                  <span>{{ item.discount_type === 'fixed' ? '满减券' : '折扣券' }}</span>
+                  <strong>{{ resolveDiscountValue(item) }}</strong>
+                </div>
+                <span class="el-tag" :class="getTagClass(item.status)">{{ item.status_label }}</span>
+              </div>
+
+              <div class="coupon-card__body">
+                <div class="coupon-card__title">
+                  <strong>{{ item.name }}</strong>
+                  <p>{{ item.description || '领取后可在结算时使用' }}</p>
+                </div>
+                <div class="coupon-card__amounts">
+                  <span>{{ resolveThresholdText(item) }}</span>
+                  <span>{{ resolveDiscountAmountText(item) }}</span>
+                </div>
+              </div>
+
+              <div class="coupon-card__foot--action">
+                <span v-if="item.remaining_stock !== null">剩余 {{ item.remaining_stock }} 张</span>
+                <span v-else>领取后进入你的优惠券账户</span>
+                <button
+                  class="coupon-action-btn"
+                  :class="item.can_claim ? 'coupon-action-btn--primary' : 'coupon-action-btn--primary coupon-action-btn--primary:disabled'"
+                  :disabled="!item.can_claim"
+                  @click="claimCoupon(item.id)"
+                >
+                  {{ item.can_claim ? '领取' : item.status_label }}
+                </button>
+              </div>
+
+              <div class="coupon-dots-bottom"></div>
+            </article>
+          </template>
+
+          <!-- List View -->
+          <template v-else>
+            <table class="el-table coupon-list-table" style="width: 100%;">
+              <thead class="el-table__header">
+                <tr>
+                  <th>优惠券信息</th>
+                  <th>优惠类型</th>
+                  <th>满减金额</th>
+                  <th>折扣金额</th>
+                  <th>状态</th>
+                  <th>有效期</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody class="el-table__body">
+                <tr v-for="row in plazaList" :key="row.id">
+                  <td>
+                    <div class="coupon-table-info">
+                      <div class="coupon-table-mark">{{ (row.discount_type === 'fixed' ? '满减' : '折扣').slice(0, 2) }}</div>
+                      <div class="coupon-table-copy">
+                        <div class="coupon-table-title-row">
+                          <strong>{{ row.name }}</strong>
+                          <span class="coupon-table-id">ID {{ row.id }}</span>
+                        </div>
+                        <p>{{ row.description || '领取后可在结算时使用' }}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td>{{ row.discount_type === 'fixed' ? '满减券' : '折扣券' }}</td>
+                  <td>{{ resolveThresholdText(row) }}</td>
+                  <td>{{ resolveDiscountAmountText(row) }}</td>
+                  <td><span class="el-tag" :class="getTagClass(row.status)">{{ row.status_label }}</span></td>
+                  <td>{{ row.validity_text }}</td>
+                  <td>
+                    <div class="coupon-table-actions">
+                      <button class="coupon-detail-button" @click="openDetail(row)">详情</button>
+                      <button
+                        class="coupon-action-btn coupon-action-btn--primary"
+                        :disabled="!row.can_claim"
+                        @click="claimCoupon(row.id)"
+                      >
+                        {{ row.can_claim ? '领取' : '不可领' }}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </template>
+
+        </div>
+
+        <div v-else class="el-empty">
+          <div class="el-empty__image">
+            <svg width="64" height="64" viewBox="0 0 64 64" fill="none"><rect x="8" y="12" width="48" height="40" rx="4" stroke="#d1d5db" stroke-width="2"/><path d="M8 22h48" stroke="#d1d5db" stroke-width="2"/><path d="M20 32h24M20 40h16" stroke="#d1d5db" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+          <div class="el-empty__description">
+            <p>当前暂无可领取的优惠券</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pagination -->
+      <div v-if="currentList.length > 0" class="pager-wrap">
+        <div class="el-pagination">
+          <span class="el-pagination__total">共 {{ currentTotal }} 条</span>
+          <button class="btn-prev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>
+          <button class="el-pager number active">1</button>
+          <button class="el-pager number">2</button>
+          <button class="el-pager number">3</button>
+          <button class="btn-next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></button>
+          <span class="el-pagination__sizes">
+            <span class="el-pagination__goto">到第</span>
+            <input type="text" class="el-pagination__editor" style="width: 40px;">
+            <span class="el-pagination__classifier">页</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Drawer -->
+  <div class="el-drawer el-drawer--rtl" :class="{ 'is-open': drawerVisible }">
+    <div class="el-drawer__overlay" @click="drawerVisible = false"></div>
+    <div class="el-drawer__wrapper" style="width: 480px;">
+      <div class="el-drawer__header">
+        <span class="el-drawer__title">优惠券详情</span>
+        <button class="el-drawer__close-btn" @click="drawerVisible = false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="el-drawer__body" v-if="selectedCoupon">
+        <div class="coupon-detail-drawer">
+          <div class="coupon-detail-hero">
+            <span>{{ selectedCoupon.discount_type === 'fixed' ? '满减券' : '折扣券' }}</span>
+            <strong>{{ resolveDiscountValue(selectedCoupon) }}</strong>
+            <p>{{ selectedCoupon.name }}</p>
+          </div>
+
+          <table class="el-table el-table--bordered coupon-detail-descriptions" style="width: 100%;">
+            <tbody>
+              <tr><td style="background: #fafbfd; font-weight: 600; color: #74839a; width: 100px;">优惠券名称</td><td>{{ selectedCoupon.name }}</td></tr>
+              <tr><td style="background: #fafbfd; font-weight: 600; color: #74839a;">优惠类型</td><td>{{ selectedCoupon.discount_type === 'fixed' ? '满减券' : '折扣券' }}</td></tr>
+              <tr><td style="background: #fafbfd; font-weight: 600; color: #74839a;">满减金额</td><td>{{ resolveThresholdText(selectedCoupon) }}</td></tr>
+              <tr><td style="background: #fafbfd; font-weight: 600; color: #74839a;">折扣金额</td><td>{{ resolveDiscountAmountText(selectedCoupon) }}</td></tr>
+              <tr><td style="background: #fafbfd; font-weight: 600; color: #74839a;">优惠范围</td><td>{{ selectedCoupon.discount_scope_label || '全场通用' }}</td></tr>
+              <tr><td style="background: #fafbfd; font-weight: 600; color: #74839a;">有效期</td><td>{{ selectedCoupon.validity_text }}</td></tr>
+              <tr><td style="background: #fafbfd; font-weight: 600; color: #74839a;">状态</td><td>{{ selectedCoupon.status_label }}</td></tr>
+              <tr v-if="selectedCoupon.remaining_stock !== null"><td style="background: #fafbfd; font-weight: 600; color: #74839a;">剩余库存</td><td>{{ selectedCoupon.remaining_stock }} 张</td></tr>
+              <tr><td style="background: #fafbfd; font-weight: 600; color: #74839a;">使用说明</td><td>{{ selectedCoupon.description || '满足条件后可在结算时直接抵扣' }}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</div>
+
+<!-- Vue 3 -->
+<script src="https://unpkg.com/vue@3.4.0/dist/vue.global.prod.js"></script>
+<script>
+const { createApp, ref, computed } = Vue;
+
+createApp({
+  setup() {
+    // 状态
+    const activeTab = ref('owned');
+    const viewMode = ref('grid');
+    const keyword = ref('');
+    const status = ref('');
+    const drawerVisible = ref(false);
+    const selectedCoupon = ref(null);
+
+    // 模拟数据 - 我拥有的优惠券
+    const ownedList = ref([
+      {
+        id: 1001,
+        name: '新用户首充礼遇',
+        description: '充值满500元可用，限首次充值',
+        discount_type: 'fixed',
+        discount_value: 50,
+        min_amount: 500,
+        max_discount_amount: null,
+        status: 'available',
+        status_label: '可用',
+        validity_text: '2026.05.01 - 2026.06.30',
+        receive_type_label: '系统发放',
+      },
+      {
+        id: 1002,
+        name: '云服务器专属折扣',
+        description: '购买云服务器享8折优惠，最高抵扣200元',
+        discount_type: 'percentage',
+        discount_value: 80,
+        min_amount: 0,
+        max_discount_amount: 200,
+        status: 'available',
+        status_label: '可用',
+        validity_text: '2026.05.10 - 2026.05.31',
+        receive_type_label: '活动领取',
+      },
+      {
+        id: 1003,
+        name: '充值满减优惠',
+        description: '充值满200元可用',
+        discount_type: 'fixed',
+        discount_value: 20,
+        min_amount: 200,
+        max_discount_amount: null,
+        status: 'used_up',
+        status_label: '已用完',
+        validity_text: '2026.04.01 - 2026.04.30',
+        receive_type_label: '活动领取',
+      },
+      {
+        id: 1004,
+        name: '周年庆专属福利',
+        description: '充值满1000元可用',
+        discount_type: 'fixed',
+        discount_value: 100,
+        min_amount: 1000,
+        max_discount_amount: null,
+        status: 'expired',
+        status_label: '已过期',
+        validity_text: '2026.03.01 - 2026.04.01',
+        receive_type_label: '系统发放',
+      },
+      {
+        id: 1005,
+        name: '订单金额直减',
+        description: '所有订单可用，无门槛限制',
+        discount_type: 'fixed',
+        discount_value: 5,
+        min_amount: 0,
+        max_discount_amount: null,
+        status: 'available',
+        status_label: '可用',
+        validity_text: '2026.05.01 - 2026.05.31',
+        receive_type_label: '邀请得好礼',
+      },
+    ]);
+
+    // 模拟数据 - 优惠券广场
+    const plazaList = ref([
+      {
+        id: 2001,
+        name: '限时充值特惠',
+        description: '充值满300元可用，限时3天',
+        discount_type: 'fixed',
+        discount_value: 30,
+        min_amount: 300,
+        max_discount_amount: null,
+        status: 'available',
+        status_label: '可领取',
+        validity_text: '领取后7天内有效',
+        remaining_stock: 156,
+        can_claim: true,
+      },
+      {
+        id: 2002,
+        name: '数据库产品专享',
+        description: '购买云数据库产品享9折',
+        discount_type: 'percentage',
+        discount_value: 90,
+        min_amount: 0,
+        max_discount_amount: 100,
+        status: 'available',
+        status_label: '可领取',
+        validity_text: '2026.05.15 - 2026.06.15',
+        remaining_stock: 89,
+        can_claim: true,
+      },
+      {
+        id: 2003,
+        name: 'CDN流量包优惠',
+        description: 'CDN流量包专属折扣',
+        discount_type: 'fixed',
+        discount_value: 15,
+        min_amount: 100,
+        max_discount_amount: null,
+        status: 'used_up',
+        status_label: '已领完',
+        validity_text: '2026.05.01 - 2026.05.31',
+        remaining_stock: 0,
+        can_claim: false,
+      },
+      {
+        id: 2004,
+        name: 'SSL证书专享券',
+        description: '购买SSL证书立减50元',
+        discount_type: 'fixed',
+        discount_value: 50,
+        min_amount: 200,
+        max_discount_amount: null,
+        status: 'expired',
+        status_label: '已过期',
+        validity_text: '2026.04.01 - 2026.04.30',
+        remaining_stock: null,
+        can_claim: false,
+      },
+    ]);
+
+    // 计算属性
+    const currentList = computed(() => activeTab.value === 'owned' ? ownedList.value : plazaList.value);
+    const currentTotal = computed(() => currentList.value.length);
+
+    // 方法
+    function switchTab(tab) {
+      activeTab.value = tab;
+    }
+
+    function toggleViewMode() {
+      viewMode.value = viewMode.value === 'grid' ? 'list' : 'grid';
+    }
+
+    function handleSearch() {
+      console.log('Search:', keyword.value, 'Status:', status.value);
+    }
+
+    function openDetail(item) {
+      selectedCoupon.value = item;
+      drawerVisible.value = true;
+    }
+
+    function claimCoupon(id) {
+      console.log('Claim coupon:', id);
+      // 模拟领取成功
+      const item = plazaList.value.find(i => i.id === id);
+      if (item && item.can_claim) {
+        item.can_claim = false;
+        item.status = 'available';
+        item.status_label = '已领取';
+        item.remaining_stock = Math.max(0, (item.remaining_stock || 0) - 1);
+        alert('领取成功！优惠券已放入你的账户');
+      }
+    }
+
+    function getTagClass(status) {
+      if (status === 'available') return 'el-tag--success';
+      if (status === 'used_up') return 'el-tag--warning';
+      return 'el-tag--info';
+    }
+
+    function formatAmount(value) {
+      const amount = Number(value || 0);
+      if (!Number.isFinite(amount) || amount <= 0) return '0';
+      return amount % 1 === 0 ? String(amount) : amount.toFixed(2);
+    }
+
+    function resolveDiscountValue(item) {
+      if (item.discount_type === 'fixed') {
+        return `¥${formatAmount(item.discount_value)}`;
+      }
+      if (item.discount_type === 'percentage') {
+        const discount = Number(item.discount_value || 0) / 10;
+        if (!Number.isFinite(discount) || discount <= 0) return item.discount_label || '--';
+        return `${discount % 1 === 0 ? discount.toFixed(0) : discount.toFixed(1)}折`;
+      }
+      return item.discount_label || '--';
+    }
+
+    function resolveThresholdText(item) {
+      const amount = Number(item.min_amount || 0);
+      return amount > 0 ? `满 ¥${formatAmount(amount)} 可用` : '无门槛';
+    }
+
+    function resolveDiscountAmountText(item) {
+      if (item.discount_type === 'fixed') {
+        return `减 ¥${formatAmount(item.discount_value)}`;
+      }
+      if (item.discount_type === 'percentage') {
+        return item.max_discount_amount
+          ? `最高减 ¥${formatAmount(item.max_discount_amount)}`
+          : (item.discount_label || '--');
+      }
+      return item.discount_amount ? `减 ¥${formatAmount(item.discount_amount)}` : (item.discount_label || '--');
+    }
+
+    return {
+      activeTab,
+      viewMode,
+      keyword,
+      status,
+      ownedList,
+      plazaList,
+      currentList,
+      currentTotal,
+      drawerVisible,
+      selectedCoupon,
+      switchTab,
+      toggleViewMode,
+      handleSearch,
+      openDetail,
+      claimCoupon,
+      getTagClass,
+      resolveDiscountValue,
+      resolveThresholdText,
+      resolveDiscountAmountText,
+    };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>

@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Http\Resources\AdminUserListResource;
-use App\Http\Resources\UserResource;
+use App\Http\Resources\Admin\AdminUserListResource;
+use App\Http\Resources\User\UserResource;
 use App\Models\User;
 use App\Models\UserAccount;
 use App\Models\UserProfile;
@@ -20,20 +20,20 @@ class UserReadAggregateLoadingTest extends TestCase
         $user = User::query()->create([
             'email' => "user-read-{$suffix}@example.com",
             'password' => 'secret123',
-            'phone' => '131' . str_pad((string) random_int(0, 99999999), 8, '0', STR_PAD_LEFT),
+            'phone' => '131'.str_pad((string) random_int(0, 99999999), 8, '0', STR_PAD_LEFT),
             'status' => 1,
-            'nickname' => '测试昵称',
-            'real_name' => '张三',
+            'nickname' => '娴嬭瘯鏄电О',
+            'real_name' => '寮犱笁',
             'verification_status' => 2,
         ]);
 
         if (User::profileTableAvailable()) {
             UserProfile::query()->create([
                 'user_id' => (int) $user->id,
-                'nickname' => '测试昵称',
-                'company' => '测试公司',
+                'nickname' => '娴嬭瘯鏄电О',
+                'company' => '娴嬭瘯鍏徃',
                 'qq' => '123456',
-                'admin_note' => '测试备注',
+                'admin_note' => '娴嬭瘯澶囨敞',
             ]);
         }
 
@@ -61,9 +61,9 @@ class UserReadAggregateLoadingTest extends TestCase
         DB::disableQueryLog();
 
         $this->assertCount(0, $queries);
-        $this->assertSame('测试昵称', $detailPayload['nickname'] ?? null);
+        $this->assertSame('娴嬭瘯鏄电О', $detailPayload['nickname'] ?? null);
         $this->assertSame('88.80', $detailPayload['balance'] ?? null);
-        $this->assertSame('测试昵称', $listPayload[0]['nickname'] ?? null);
+        $this->assertSame('娴嬭瘯鏄电О', $listPayload[0]['nickname'] ?? null);
         $this->assertSame(88.8, (float) ($listPayload[0]['balance'] ?? 0));
     }
 

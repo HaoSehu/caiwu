@@ -1,0 +1,623 @@
+{
+  "table": "settings",
+  "columns": [
+    "id",
+    "group_key",
+    "item_key",
+    "item_value"
+  ],
+  "rows": [
+    {
+      "id": 1,
+      "group_key": "system",
+      "item_key": "geetest_enabled",
+      "item_value": "1"
+    },
+    {
+      "id": 2,
+      "group_key": "system",
+      "item_key": "geetest_captcha_id",
+      "item_value": "4ca14bcb40e59e3657b864a67badf899"
+    },
+    {
+      "id": 3,
+      "group_key": "system",
+      "item_key": "geetest_captcha_key",
+      "item_value": "enc:eyJpdiI6IlkyNDlzV2FPQ3hYaTZteE4yZG0wMHc9PSIsInZhbHVlIjoiNkdYNWVpRW5LTFRDSTExWlpsU09hWU50MnZlbW96c2lMRjlpRFpEQlRMcmhTSjBaUDdjVmNuNzY2N0tLOUlvUSIsIm1hYyI6IjdiNzMwNjFiZTcxOTAzODIxM2VkY2Q4NjNhNWNiN2VhZTQyYTJhMjE0YmQ0Y2U4N2Y2Yzc0ZGUxZjYzODFlZWMiLCJ0YWciOiIifQ=="
+    },
+    {
+      "id": 4,
+      "group_key": "system",
+      "item_key": "provision_hostname_enforce",
+      "item_value": "0"
+    },
+    {
+      "id": 5,
+      "group_key": "system",
+      "item_key": "provision_hostname_prefix",
+      "item_value": "srv"
+    },
+    {
+      "id": 6,
+      "group_key": "system",
+      "item_key": "provision_hostname_charsets",
+      "item_value": "number"
+    },
+    {
+      "id": 7,
+      "group_key": "system",
+      "item_key": "provision_hostname_length",
+      "item_value": "12"
+    },
+    {
+      "id": 8,
+      "group_key": "message_limit",
+      "item_key": "email_rate_limit_enabled",
+      "item_value": "1"
+    },
+    {
+      "id": 9,
+      "group_key": "message_limit",
+      "item_key": "email_cooldown_seconds",
+      "item_value": "60"
+    },
+    {
+      "id": 10,
+      "group_key": "message_limit",
+      "item_key": "email_target_hourly_limit",
+      "item_value": "10"
+    },
+    {
+      "id": 11,
+      "group_key": "message_limit",
+      "item_key": "email_ip_hourly_limit",
+      "item_value": "20"
+    },
+    {
+      "id": 12,
+      "group_key": "message_limit",
+      "item_key": "sms_rate_limit_enabled",
+      "item_value": "1"
+    },
+    {
+      "id": 13,
+      "group_key": "message_limit",
+      "item_key": "sms_cooldown_seconds",
+      "item_value": "60"
+    },
+    {
+      "id": 14,
+      "group_key": "message_limit",
+      "item_key": "sms_target_hourly_limit",
+      "item_value": "10"
+    },
+    {
+      "id": 15,
+      "group_key": "message_limit",
+      "item_key": "sms_ip_hourly_limit",
+      "item_value": "20"
+    },
+    {
+      "id": 16,
+      "group_key": "notification",
+      "item_key": "email_enabled",
+      "item_value": "1"
+    },
+    {
+      "id": 17,
+      "group_key": "notification",
+      "item_key": "email_host",
+      "item_value": "smtphk.qiye.aliyun.com"
+    },
+    {
+      "id": 18,
+      "group_key": "notification",
+      "item_key": "email_port",
+      "item_value": "465"
+    },
+    {
+      "id": 19,
+      "group_key": "notification",
+      "item_key": "email_username",
+      "item_value": "mail@coyjs.cn"
+    },
+    {
+      "id": 20,
+      "group_key": "notification",
+      "item_key": "email_password",
+      "item_value": "SVxHTmNx6XjByT0Z"
+    },
+    {
+      "id": 21,
+      "group_key": "notification",
+      "item_key": "email_from_name",
+      "item_value": "创欧云"
+    },
+    {
+      "id": 22,
+      "group_key": "notification",
+      "item_key": "sms_enabled",
+      "item_value": "1"
+    },
+    {
+      "id": 23,
+      "group_key": "notification",
+      "item_key": "sms_provider",
+      "item_value": "aliyun"
+    },
+    {
+      "id": 24,
+      "group_key": "notification",
+      "item_key": "sms_access_key",
+      "item_value": "enc:eyJpdiI6Ikg1U3pCZ0Qyam1IVXQ1eURsdktXbFE9PSIsInZhbHVlIjoiOXRxcXJyZEd5dFhEQkJrVDBHQnV4SGpIQXJMY1pSTTBweFJBYnd1UENsQT0iLCJtYWMiOiJmY2I4Y2Q2Yjk4OTgzNDQwNzFlZTg0YWM1YTIyMDM2YTJiOWQ1NmU5NWJmYTI4ZmI0MTU4YWYwMTZjN2EyMTJlIiwidGFnIjoiIn0="
+    },
+    {
+      "id": 25,
+      "group_key": "notification",
+      "item_key": "sms_secret_key",
+      "item_value": "enc:eyJpdiI6Ild0Kzhad2t3MURFZWxWSjRLQ2twNGc9PSIsInZhbHVlIjoiZ0g0dm9NeWZVMnpwRG5ib3o2QnAvd1hTajJmemFQeUtUY0srd2JmM3R6OD0iLCJtYWMiOiIxZTNhMjQwM2ZkMmNjYjk0NWQ1OTY3Zjg0NTJiYTI0YWRjMzU1YzVmN2ZlZWE4NmZkN2JjZGEwMDE5YTU4M2IzIiwidGFnIjoiIn0="
+    },
+    {
+      "id": 26,
+      "group_key": "notification",
+      "item_key": "sms_sign_name",
+      "item_value": "速通互联验证码"
+    },
+    {
+      "id": 27,
+      "group_key": "notification",
+      "item_key": "sms_template_code",
+      "item_value": "100001"
+    },
+    {
+      "id": 28,
+      "group_key": "automation",
+      "item_key": "expire_suspend_enabled",
+      "item_value": "1"
+    },
+    {
+      "id": 29,
+      "group_key": "automation",
+      "item_key": "expire_suspend_after_days",
+      "item_value": "1"
+    },
+    {
+      "id": 30,
+      "group_key": "automation",
+      "item_key": "expire_suspend_notify_enabled",
+      "item_value": "1"
+    },
+    {
+      "id": 31,
+      "group_key": "automation",
+      "item_key": "expire_unsuspend_notify_enabled",
+      "item_value": "1"
+    },
+    {
+      "id": 32,
+      "group_key": "automation",
+      "item_key": "expire_terminate_enabled",
+      "item_value": "1"
+    },
+    {
+      "id": 33,
+      "group_key": "automation",
+      "item_key": "expire_terminate_after_days",
+      "item_value": "3"
+    },
+    {
+      "id": 34,
+      "group_key": "automation",
+      "item_key": "renew_notice_enabled",
+      "item_value": "1"
+    },
+    {
+      "id": 35,
+      "group_key": "automation",
+      "item_key": "renew_notice_days_before",
+      "item_value": "7,3,1"
+    },
+    {
+      "id": 36,
+      "group_key": "automation",
+      "item_key": "renew_create_invoice_enabled",
+      "item_value": "1"
+    },
+    {
+      "id": 37,
+      "group_key": "automation",
+      "item_key": "invoice_unpaid_reminder_enabled",
+      "item_value": "1"
+    },
+    {
+      "id": 38,
+      "group_key": "automation",
+      "item_key": "invoice_unpaid_before_due_days",
+      "item_value": "1"
+    },
+    {
+      "id": 39,
+      "group_key": "automation",
+      "item_key": "invoice_overdue_reminder_days",
+      "item_value": "1,3,5"
+    },
+    {
+      "id": 40,
+      "group_key": "automation",
+      "item_key": "invoice_overdue_after_days",
+      "item_value": "0"
+    },
+    {
+      "id": 41,
+      "group_key": "automation",
+      "item_key": "ticket_auto_close_enabled",
+      "item_value": "1"
+    },
+    {
+      "id": 42,
+      "group_key": "automation",
+      "item_key": "ticket_auto_close_after_hours",
+      "item_value": "48"
+    },
+    {
+      "id": 43,
+      "group_key": "automation",
+      "item_key": "pending_order_cleanup_enabled",
+      "item_value": "1"
+    },
+    {
+      "id": 44,
+      "group_key": "automation",
+      "item_key": "pending_order_cleanup_after_days",
+      "item_value": "7"
+    },
+    {
+      "id": 45,
+      "group_key": "automation",
+      "item_key": "pending_recharge_cleanup_enabled",
+      "item_value": "1"
+    },
+    {
+      "id": 46,
+      "group_key": "automation",
+      "item_key": "pending_recharge_cleanup_after_days",
+      "item_value": "3"
+    },
+    {
+      "id": 47,
+      "group_key": "product",
+      "item_key": "product_types",
+      "item_value": "[{\"internal_id\":1,\"value\":\"vps\",\"label\":\"云服务器\",\"is_builtin\":true},{\"internal_id\":4,\"value\":\"domain\",\"label\":\"NAT/云电脑\",\"is_builtin\":true},{\"internal_id\":2,\"value\":\"dedicated\",\"label\":\"物理机\",\"is_builtin\":true},{\"internal_id\":3,\"value\":\"hosting\",\"label\":\"虚拟主机\",\"is_builtin\":true},{\"internal_id\":5,\"value\":\"other\",\"label\":\"CDN\",\"is_builtin\":true},{\"internal_id\":6,\"value\":\"type_ipragu\",\"label\":\"其他\",\"is_builtin\":false}]"
+    },
+    {
+      "id": 48,
+      "group_key": "verification",
+      "item_key": "verification_api",
+      "item_value": "app_20250920042304_ff967b45e09223c8dee552967abc7bb1"
+    },
+    {
+      "id": 49,
+      "group_key": "verification",
+      "item_key": "verification_key",
+      "item_value": "enc:eyJpdiI6Ims3R2V2RTZvK2tSQ0N4QmhxMmt4WlE9PSIsInZhbHVlIjoiY2pxSUpzOHZUVC9WZkN1djR3dlU1K3ZXQm9odW9NSmUrcC9zN1RFYmZEUEIzSEwvYzd3bG5abUY0L09KNnZiQSIsIm1hYyI6ImQ5ZTRmM2ZlNWExYzk3NWY5N2VkYmZkMjNmMzE0OTZkYTQ1Yjk3Mzg3YzcyYTlhMzVjODUyZTI4MWJhZjIwN2EiLCJ0YWciOiIifQ=="
+    },
+    {
+      "id": 50,
+      "group_key": "verification",
+      "item_key": "verification_biz_code",
+      "item_value": "FACE"
+    },
+    {
+      "id": 51,
+      "group_key": "payment",
+      "item_key": "alipay_enabled",
+      "item_value": "1"
+    },
+    {
+      "id": 52,
+      "group_key": "product",
+      "item_key": "product_auto_publish",
+      "item_value": "1"
+    },
+    {
+      "id": 53,
+      "group_key": "referral",
+      "item_key": "enabled",
+      "item_value": "1"
+    },
+    {
+      "id": 54,
+      "group_key": "payment",
+      "item_key": "alipay_name",
+      "item_value": "支付宝支付"
+    },
+    {
+      "id": 55,
+      "group_key": "referral",
+      "item_key": "reward_freeze_days",
+      "item_value": "4"
+    },
+    {
+      "id": 56,
+      "group_key": "product",
+      "item_key": "show_out_of_stock",
+      "item_value": "0"
+    },
+    {
+      "id": 57,
+      "group_key": "payment",
+      "item_key": "alipay_app_id",
+      "item_value": "2021003173629954"
+    },
+    {
+      "id": 58,
+      "group_key": "referral",
+      "item_key": "withdraw_min_amount",
+      "item_value": "20"
+    },
+    {
+      "id": 59,
+      "group_key": "product",
+      "item_key": "product_sort_mode",
+      "item_value": "sort_order"
+    },
+    {
+      "id": 60,
+      "group_key": "payment",
+      "item_key": "alipay_private_key",
+      "item_value": "enc:eyJpdiI6IityNTQxVitwNmJyNS9zNHROcHZSM0E9PSIsInZhbHVlIjoidnNoMWtqeGcwVmlxdUgxdDh2bDlHM2ExK3JWOFFlcnpScFE1ZTZkeDUrbENGWW1jRU5YbndzR0x6TUtLUVJKZFUzdUo1c3NZM3dOUS9xL3JTVVVpNHFmOVBza1E5UXdQR25TaEUwVHhVc1owZVlnMEJYMnNvRG1naDc5VXlVWDlwT1M4UXlmLzFXc3NhRzRVQTZFZXZ3UjUwSytybnAyWi9HUDNiZk50eUR3OVJ5cXVVU3Y1cmNLWnI0S1U4N1N6aUtwMXgvTHEyOXdPbWd5ZmRnVlU3WkszM3JiaGdDSmZ4Nm8rblNDV1JPS2x0UXFPekJtbHNwS3phU0krTEh0a0NNWW9KS3hWNjlKMVBpV2ljbEdzYU94bSs2TzdTRXRnYnZ1M2pydHllakpGOXM3eUUvaEQ0OGo4cThoR1gyQ2JJallITlhOcDM5WGZvS08wTURNbmZJaE5ZTk9XVzZpN0tVT3puNHRmc1RrZ1RkcThsMDY3cjJiQ2NRdXBKNGV5NFBrR1h6WEk0U3hYaDFldXdLTWpIU0JkR1d5NmxNWEZ1MzIrVFE1Z1dNVVlBNUNiVTJRZFBTM0EwU2RsREZlU2h3WG12ZytNMHo1Z0pVRFFhRXlLNTEvbXRQb1BQdVhMSHFyQ1hjT04rVThZMjNDOEZpdkNNeGhzb0tsbzZXb25HeTlNN0g2eXBNMzBGMzlkRDQ3OXJCYlJrUG1pUHFIcmFTOTBFVzZjU2hDQWkxQW1TU2syNHJ1dVYrNG9POTBIVGlJRFBxNnU0QytsY3lZWGVZUm5WZEIzMnp1eG4rRGlFVjh1OS83cVErSHBoV2ZSSGJNMmkxcFdRM1M1eG94YjhtL3paTCtsZzFoOFQ4TkQ0eVJ0NTA2TjlLSHJjNTZ1QXJvL1BtMXRaT2ZBS2ZXaUZvQVh5SmxaNDRLYlI2YWg2K0IrNVZvV2V2KzVyNURpcFYrT3VnZXI2SzF4V3BjNG8zM0hFbExlNS9sVDBCWlh0UkpGc1JCUHEzME01TEM3cURSQWJOeUJkRXA1MHAwV0xPVkhqWmQvdEp2YndrRzlRU3FqbnQwUFhKdzROME5nWTYvb2RHb1hJOWlRVUNKSmdhS0xtbnRwc1Q5d1ZjQnFHWjFJSmwzeHRvMFZlR2RNTHUvZkEwcUxhNnZUNlY4YWRoQjlVRklvN1p6dzd6TmtSYTV4aUN3cE9HamZGUHRPNGdSKzN5SjkwdXZFRHdEODRoemlHWDBJREgrZS9tNjBrZUE0V3JrVGk2TG94dkl4Z09YWVc0ZlhMVk56MEY5cHA3N3gvd0M3ajlENHlGMlg1aVBKLzI3ZHZrVmFaWXVJemR4cXptSm00dFc0ZUp6RlVCSS9QV1hrYXBteTE0WWdiOFR1TWEzRDhtUnVySHFwZlZZTSttUWkzZTVDclZPQWNPWGtOOUZUNGF6bGMxWkV4N2xaYUZadjdDZE00Z2tERUNQRWdDTWRXWldCaldQOG1FOFFUTGJ0QmlySFZubUxtNEl1ZUIxaU1xNlNpYVVyOFZ2VndydjFzTTljZU0wV2JHSHBCT2g4b29GazFYWnJJWFE4anpGdDFCWXo3Z0hScHhMWVJaZURsMVQyWlR6c2JObU5ZNEtiaG53MlBsM3psQjM0cFR3ZmhNV1BxalpnUkRSUG5ZUjEraURMeXZkM1BhQndzK2tVVmsxaGNHR3M2VjJMWjA3b1Y3MG9xVFpZb2pCcEdjeHR6QkRwcnJlWHc4a3dHSG5MR2JwU0h1TVR6SmRYYkNqb3A0UEgvUG4vZU11U01NN01hWk82K1hVd0g1aTczOEJ2NkdhZHE4bFNob2lpSTVoTmkzSTJrY2RoWGxHMVpDY1hsZW9nR0RzUmxsVkpZU3o4VUNQMVNsSllPYVg5Yis0ZzNKVUZkOW9QRU9haEhFVW9jNlhKYW9UcFpoNTFIczN1OWJmNjRwS3IvRXZzV0pJNGdxMUJBbXFpeVBmLzBHQy9jWmgwYzU2bjU0L1A3MWJ6OUlsNVk3b0l5K3dKMUVFM25Sc1FhSzcwRndSUjNzSVRCeGpkS1gzTStXZllzcE1RdGFhZHdtWURJUGpiR0p4TUZ6V2VqTnc1Ym5HN0dIeUtkUEEvaGl5SlVXVTdyaGh3dHBORVlqUXZBejdocGJFVkdYT0FqYVo4amNERDNOcXAvQnJUL1RvaXVENXdGK016WHFZV3EvSWlGeVErYVZKdEFwM1JMZzNhNlFKMmdrYllsMURONUpKUDgxMkNPbGtKVEkybDc3QTVyL3ZuTS9wM3Y5ZjZON2hMSEtLbzYwd2xLVmwzY01NeFgwZTJLQzdqVU5pcDJ2VU5ZK1l1YmQxejV0elRBQnc0REd6akR1YW9BQmdybGptbzlSTGJZOG5BMlh1emZpR1ZnUVM0aU1vNVlybWQ4a2FSR2R2Y2Z2cjFNQThqUUVQMml0aW9aME1JMHBLTCtuSHFIcXliKzgwYmsrWWtKY29CU3RHQlQ3bG5LTHBTa0YycmdaYk11eEVtcndsWVpUYTk0WUFDUUZyTCtkNngxNFgraVdwSnU0ZXNNd2FwSHN3clhSZTRMWmVpV2dKWEVHY24wU3pqdVFBdnFwZnAwTE9iTno3UDdGbHI1MTNWc0pTcFcza2d6L1M4b1JvZlVNWk9mTy93bjFNMi96WENydVpiZ2llcStsUCtpZmtKSS9STFBpL0I0K3VrdndvTCtCcWNtYklrWEtrMU8vbUcyOVRZeGhCQkdSaUwwN2RPZnJvRm1hQ3E2dncxcy9OaWxYbGtKc3VGejdaZ2U5bURpN3E5OTFZTDl4dDd2alZxeEZYSTYvSGtsaFRRbHBaTDZjVDNKQSs0Y0N4VG9LaGxCUjBwV2swTVBWNTJpYUF1Qmt1ZSIsIm1hYyI6ImQ4YmRmNGI0ZDc3MTJlZjA3YzBiNGJkZDJjMDkzYmQ4MmI1NGQwYzRhNjJjNjY4NmRmN2VlZTVhNDZlY2JjMTAiLCJ0YWciOiIifQ=="
+    },
+    {
+      "id": 61,
+      "group_key": "product",
+      "item_key": "enable_stock_warning",
+      "item_value": "1"
+    },
+    {
+      "id": 62,
+      "group_key": "payment",
+      "item_key": "alipay_public_key",
+      "item_value": "enc:eyJpdiI6InhVd1EvQmlJVlA2WFF2U2orZDdmcEE9PSIsInZhbHVlIjoiM2tuenUwSjhiOFZTWVErQzRzWGVXcUhTYWFpOXc3S3VocFQxZkhlU0JvalpMelREOFZ3aFNGR0gyN1JFN1p4Vjh2LzFuNTJES0UxTGx3cVZpaWpwWnN4VDEvc2RsekU1RUlFb2M3dSs1ejZYY3J6NHFEYWhMeXcxTEFKSGpTTm92WUc1SVY5MkJKWVJOYTlZUXJrVEI1VE1DZFJ3eFhWbGl6NzZheXBPRnc5azlYYWtsbWdKd0Z6M2NHRVVPeUNNSm1SeTVRM3FTMFhkcW9EQnhTSmNKV3pwNnZZbWVpTHczWk9VZVZuTTR3emkwNlFmZm1hTXRvbEtSQ0VjQTZ0bWVLOXEwLy93UUVoN2NZK2twai93b0o5azZmN1Y5SE5DOUJlZVNyMWc0R1N2SGx3LytPN09yWDVPS1lIQ2dvRE5mUmhUT05FMWQwU3RLMngvbVVQYjFYVmVqZkVLWG9lV2FCajFSdU53ODJhVGk4eGJSQm9mZkNMVkFTT3diNnNXakswSE1zc1NFQ2dVNHpHamE2SzRObDl1eWxKeGlYTWlEVFNySnZ1ckVvVm90dDNSZ3FXTTBBYnNBSUIwY0lCWTQ5VDFOenlOUkxRMk5ST1hUVzFxdG5CUWdjL09vSGdZTHh0YlFUdXJJTGF4R1NIQ3RCNTlSKzFmOHV3TEg0cXBLWnBTdzROdm4rS3JnMjJnYTc2SlVnPT0iLCJtYWMiOiJjZmEyZjIzMDY0NjJlZjBhMTEwZmZjYzM3YjA3MmJlZjkyZjYzYTA3ZjVlODEyOTliOTc3MmI1ODNmNzQzNzVmIiwidGFnIjoiIn0="
+    },
+    {
+      "id": 63,
+      "group_key": "product",
+      "item_key": "stock_warning_value",
+      "item_value": "5"
+    },
+    {
+      "id": 64,
+      "group_key": "product",
+      "item_key": "default_billing_cycle",
+      "item_value": "monthly"
+    },
+    {
+      "id": 65,
+      "group_key": "product",
+      "item_key": "order_auto_cancel_minutes",
+      "item_value": "30"
+    },
+    {
+      "id": 74,
+      "group_key": "codex_runtime_7e531433",
+      "item_key": "sample_key",
+      "item_value": "sample-value-7e531433"
+    },
+    {
+      "id": 75,
+      "group_key": "codex_service_6c05c760",
+      "item_key": "custom_key",
+      "item_value": "custom-value-6c05c760"
+    },
+    {
+      "id": 82,
+      "group_key": "codex_runtime_47d78c64",
+      "item_key": "sample_key",
+      "item_value": "sample-value-47d78c64"
+    },
+    {
+      "id": 83,
+      "group_key": "codex_service_152594ac",
+      "item_key": "custom_key",
+      "item_value": "custom-value-152594ac"
+    },
+    {
+      "id": 90,
+      "group_key": "codex_runtime_5aade047",
+      "item_key": "sample_key",
+      "item_value": "sample-value-5aade047"
+    },
+    {
+      "id": 91,
+      "group_key": "codex_service_e0e45c1b",
+      "item_key": "custom_key",
+      "item_value": "custom-value-e0e45c1b"
+    },
+    {
+      "id": 98,
+      "group_key": "codex_runtime_9a9108d9",
+      "item_key": "sample_key",
+      "item_value": "sample-value-9a9108d9"
+    },
+    {
+      "id": 99,
+      "group_key": "codex_service_08519445",
+      "item_key": "custom_key",
+      "item_value": "custom-value-08519445"
+    },
+    {
+      "id": 108,
+      "group_key": "codex_runtime_11e41e9b",
+      "item_key": "sample_key",
+      "item_value": "sample-value-11e41e9b"
+    },
+    {
+      "id": 109,
+      "group_key": "codex_service_e887046e",
+      "item_key": "custom_key",
+      "item_value": "custom-value-e887046e"
+    },
+    {
+      "id": 116,
+      "group_key": "codex_runtime_958a9ab5",
+      "item_key": "sample_key",
+      "item_value": "sample-value-958a9ab5"
+    },
+    {
+      "id": 117,
+      "group_key": "codex_service_90617248",
+      "item_key": "custom_key",
+      "item_value": "custom-value-90617248"
+    },
+    {
+      "id": 134,
+      "group_key": "codex_runtime_d17c0b8b",
+      "item_key": "sample_key",
+      "item_value": "sample-value-d17c0b8b"
+    },
+    {
+      "id": 135,
+      "group_key": "codex_service_46d6867b",
+      "item_key": "custom_key",
+      "item_value": "custom-value-46d6867b"
+    },
+    {
+      "id": 144,
+      "group_key": "codex_runtime_8a349722",
+      "item_key": "sample_key",
+      "item_value": "sample-value-8a349722"
+    },
+    {
+      "id": 145,
+      "group_key": "codex_service_c5a11d40",
+      "item_key": "custom_key",
+      "item_value": "custom-value-c5a11d40"
+    },
+    {
+      "id": 156,
+      "group_key": "codex_runtime_0202546b",
+      "item_key": "sample_key",
+      "item_value": "sample-value-0202546b"
+    },
+    {
+      "id": 157,
+      "group_key": "codex_service_7ed38997",
+      "item_key": "custom_key",
+      "item_value": "custom-value-7ed38997"
+    },
+    {
+      "id": 170,
+      "group_key": "codex_runtime_e3e9305d",
+      "item_key": "sample_key",
+      "item_value": "sample-value-e3e9305d"
+    },
+    {
+      "id": 171,
+      "group_key": "codex_service_d62165ad",
+      "item_key": "custom_key",
+      "item_value": "custom-value-d62165ad"
+    },
+    {
+      "id": 183,
+      "group_key": "codex_runtime_60477b00",
+      "item_key": "sample_key",
+      "item_value": "sample-value-60477b00"
+    },
+    {
+      "id": 184,
+      "group_key": "codex_service_d2ab9a9e",
+      "item_key": "custom_key",
+      "item_value": "custom-value-d2ab9a9e"
+    },
+    {
+      "id": 196,
+      "group_key": "codex_runtime_be3e3809",
+      "item_key": "sample_key",
+      "item_value": "sample-value-be3e3809"
+    },
+    {
+      "id": 197,
+      "group_key": "codex_service_3ff16de5",
+      "item_key": "custom_key",
+      "item_value": "custom-value-3ff16de5"
+    },
+    {
+      "id": 209,
+      "group_key": "codex_runtime_a2105385",
+      "item_key": "sample_key",
+      "item_value": "sample-value-a2105385"
+    },
+    {
+      "id": 210,
+      "group_key": "codex_service_13ca9987",
+      "item_key": "custom_key",
+      "item_value": "custom-value-13ca9987"
+    },
+    {
+      "id": 220,
+      "group_key": "basic",
+      "item_key": "site_logo",
+      "item_value": ""
+    },
+    {
+      "id": 221,
+      "group_key": "basic",
+      "item_key": "site_name",
+      "item_value": ""
+    },
+    {
+      "id": 222,
+      "group_key": "codex_runtime_daf41210",
+      "item_key": "sample_key",
+      "item_value": "sample-value-daf41210"
+    },
+    {
+      "id": 223,
+      "group_key": "codex_service_3b1dbbaf",
+      "item_key": "custom_key",
+      "item_value": "custom-value-3b1dbbaf"
+    },
+    {
+      "id": 224,
+      "group_key": "content",
+      "item_key": "published_cache_version",
+      "item_value": "2"
+    },
+    {
+      "id": 225,
+      "group_key": "seo",
+      "item_key": "site_description",
+      "item_value": null
+    },
+    {
+      "id": 226,
+      "group_key": "seo",
+      "item_key": "site_keywords",
+      "item_value": null
+    },
+    {
+      "id": 227,
+      "group_key": "seo",
+      "item_key": "canonical_base",
+      "item_value": null
+    },
+    {
+      "id": 228,
+      "group_key": "seo",
+      "item_key": "og_image",
+      "item_value": null
+    },
+    {
+      "id": 229,
+      "group_key": "seo",
+      "item_key": "twitter_handle",
+      "item_value": null
+    },
+    {
+      "id": 230,
+      "group_key": "seo",
+      "item_key": "robots_directive",
+      "item_value": null
+    }
+  ]
+}

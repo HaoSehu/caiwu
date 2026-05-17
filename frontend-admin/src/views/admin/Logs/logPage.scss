@@ -1,0 +1,265 @@
+@use '../../../assets/styles/variables.scss' as *;
+
+.admin-log-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid $divider-color;
+}
+
+.page-title-group h2 {
+  margin: 0;
+  font-size: 24px;
+  color: $text-color-primary;
+}
+
+.page-title-group p {
+  margin: 8px 0 0;
+  color: $text-color-secondary;
+  line-height: 1.7;
+}
+
+.page-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.panel-card {
+  border: 1px solid $border-color;
+  border-radius: $base-border-radius;
+}
+
+.filter-form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+  gap: 16px;
+  align-items: end;
+}
+
+.filter-form :deep(.el-form-item) {
+  margin-bottom: 0;
+}
+
+.filter-form :deep(.el-input__wrapper),
+.filter-form :deep(.el-select__wrapper),
+.filter-form :deep(.el-date-editor) {
+  min-height: 40px;
+}
+
+.filter-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.table-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.table-header h3,
+.section-head h3 {
+  margin: 0;
+  font-size: 16px;
+  color: $text-color-primary;
+}
+
+.table-header p,
+.section-head p {
+  margin: 6px 0 0;
+  color: $text-color-secondary;
+  font-size: 13px;
+}
+
+.pagination-wrap {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.mobile-scroll-hint {
+  display: none;
+  margin: 0 0 10px;
+  color: $text-color-secondary;
+  font-size: 12px;
+}
+
+.table-scroll-shell {
+  overflow-x: auto;
+}
+
+.table-scroll-shell :deep(.el-table) {
+  width: 100%;
+}
+
+.admin-log-table {
+  min-width: 960px;
+}
+
+.summary-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.summary-item,
+.count-card {
+  padding: 16px;
+  border: 1px solid $border-color;
+  border-radius: $base-border-radius;
+  background: $bg-color-card;
+}
+
+.summary-item strong,
+.count-card strong {
+  display: block;
+  font-size: 24px;
+  line-height: 1;
+  color: $text-color-primary;
+}
+
+.summary-item span,
+.count-card span {
+  display: block;
+  margin-top: 8px;
+  color: $text-color-secondary;
+  font-size: 13px;
+}
+
+.drawer-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.drawer-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: $sm-border-radius;
+  background: $bg-color-soft;
+}
+
+.drawer-item strong {
+  color: $text-color-primary;
+  word-break: break-all;
+}
+
+.drawer-label {
+  color: $text-color-secondary;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.json-block {
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: $sm-border-radius;
+  background: #0f172a;
+  color: #f8fafc;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: Consolas, 'Courier New', monospace;
+}
+
+.content-preview {
+  display: -webkit-box;
+  overflow: hidden;
+  color: $text-color-secondary;
+  line-height: 1.7;
+  word-break: break-word;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.mono-text {
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 12px;
+}
+
+.dim-text {
+  color: $text-color-secondary;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.section-block {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+@media (max-width: 1200px) {
+  .filter-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .filter-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
+  .summary-strip,
+  .card-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-header,
+  .section-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .filter-form,
+  .drawer-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .page-actions,
+  .filter-actions {
+    width: 100%;
+  }
+
+  .mobile-scroll-hint {
+    display: block;
+  }
+
+  .table-scroll-shell {
+    margin: 0 -12px;
+    padding: 0 12px 6px;
+  }
+
+  .filter-actions :deep(.el-button) {
+    flex: 1;
+  }
+
+  .pagination-wrap {
+    overflow-x: auto;
+  }
+}

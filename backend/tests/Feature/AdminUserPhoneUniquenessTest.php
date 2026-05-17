@@ -6,16 +6,29 @@ namespace Tests\Feature;
 
 use App\Exceptions\BusinessException;
 use App\Models\User;
-use App\Services\UserService;
+use App\Services\User\UserService;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class AdminUserPhoneUniquenessTest extends TestCase
 {
+    public function test_user_service_create_allows_empty_nickname_without_database_error(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+
+        $user = app(UserService::class)->create([
+            'email' => "user-empty-nickname-{$suffix}@example.com",
+            'password' => 'secret123',
+            'status' => 1,
+        ]);
+
+        $this->assertSame('', (string) DB::table('users')->where('id', (int) $user->id)->value('nickname'));
+    }
+
     public function test_user_service_create_and_update_reject_duplicate_phone(): void
     {
         $suffix = bin2hex(random_bytes(4));
-        $phone = '137' . str_pad((string) random_int(0, 99999999), 8, '0', STR_PAD_LEFT);
+        $phone = '137'.str_pad((string) random_int(0, 99999999), 8, '0', STR_PAD_LEFT);
 
         User::query()->create([
             'email' => "user-phone-a-{$suffix}@example.com",
@@ -30,7 +43,7 @@ class AdminUserPhoneUniquenessTest extends TestCase
             $service->create([
                 'email' => "user-phone-b-{$suffix}@example.com",
                 'password' => 'secret123',
-                'phone' => '86 ' . $phone,
+                'phone' => '86 '.$phone,
                 'status' => 1,
             ]);
             $this->fail('Expected duplicate phone create to fail.');
@@ -41,7 +54,7 @@ class AdminUserPhoneUniquenessTest extends TestCase
         $second = User::query()->create([
             'email' => "user-phone-c-{$suffix}@example.com",
             'password' => 'secret123',
-            'phone' => '139' . str_pad((string) random_int(0, 99999999), 8, '0', STR_PAD_LEFT),
+            'phone' => '139'.str_pad((string) random_int(0, 99999999), 8, '0', STR_PAD_LEFT),
             'status' => 1,
         ]);
 

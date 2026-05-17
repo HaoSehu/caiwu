@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>管理端移动端原型 - 列表页</title>
+<style>
+/* ========== Design Tokens ========== */
+:root {
+  --color-primary: #0052d9;
+  --color-primary-hover: #0041b3;
+  --color-primary-soft: #edf4ff;
+  --color-primary-border: #bfd4ff;
+  --color-success: #059669;
+  --color-success-soft: #ecfdf5;
+  --color-warning: #d97706;
+  --color-warning-soft: #fff7ed;
+  --color-danger: #dc2626;
+  --color-danger-soft: #fef2f2;
+  --color-info: #4e5969;
+  --color-info-soft: #f2f3f5;
+  --bg-color: #f5f7fa;
+  --bg-card: #ffffff;
+  --bg-soft: #fafbfd;
+  --bg-hover: #f2f3f5;
+  --text-primary: #1d2129;
+  --text-secondary: #4e5969;
+  --text-placeholder: #86909c;
+  --text-inverse: #ffffff;
+  --border-color: #e5e6eb;
+  --divider-color: #ebedf0;
+  --border-strong: #c9cdd4;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --shadow-xs: 0 1px 1px rgba(29,33,41,0.04);
+  --shadow-sm: 0 1px 2px rgba(29,33,41,0.05), 0 1px 3px rgba(29,33,41,0.04);
+  --shadow-md: 0 4px 12px rgba(29,33,41,0.08);
+  --font-main: "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: var(--font-main);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  background: var(--bg-color);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ========== Shell ========== */
+.admin-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ========== TopBar ========== */
+.shell-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 52px;
+  padding: 0 14px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--divider-color);
+  flex-shrink: 0;
+}
+.topbar-left { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+.topbar-right { display: flex; flex-shrink: 0; align-items: center; }
+.hamburger {
+  display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border: none; background: none;
+  border-radius: var(--radius-sm); cursor: pointer; color: var(--text-secondary);
+}
+.hamburger:active { background: var(--bg-hover); }
+.page-title {
+  font-size: 15px; font-weight: 600; color: var(--text-primary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.avatar {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
+  color: var(--text-inverse); display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 600;
+}
+
+/* ========== Content ========== */
+.shell-content {
+  flex: 1; overflow-y: auto; padding: 14px 14px 24px;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ========== Page Head ========== */
+.admin-page { display: flex; flex-direction: column; gap: 16px; }
+.admin-page-head {
+  display: flex; flex-direction: column; gap: 12px;
+  padding-bottom: 14px; border-bottom: 1px solid var(--divider-color);
+}
+.admin-page-heading h2 {
+  font-size: 18px; font-weight: 600; letter-spacing: -0.2px; color: var(--text-primary);
+}
+.admin-page-heading p {
+  margin-top: 4px; font-size: 13px; color: var(--text-secondary); line-height: 1.6;
+}
+.page-actions { display: flex; gap: 8px; width: 100%; }
+.page-actions .btn { flex: 1; }
+
+/* ========== Buttons ========== */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 36px; padding: 0 16px; border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm); font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: all 0.15s ease;
+  font-family: inherit; background: var(--bg-card); color: var(--text-secondary);
+  white-space: nowrap;
+}
+.btn:active { transform: scale(0.98); }
+.btn-primary {
+  background: var(--color-primary); border-color: var(--color-primary);
+  color: var(--text-inverse); box-shadow: 0 1px 2px rgba(0,82,217,0.18);
+}
+.btn-primary:hover { background: var(--color-primary-hover); border-color: var(--color-primary-hover); }
+.btn-sm { height: 32px; padding: 0 12px; font-size: 12px; }
+.btn-block { width: 100%; }
+
+/* ========== Filter Panel ========== */
+.filter-panel {
+  padding: 14px; background: var(--bg-card); border: 1px solid var(--border-color);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-xs);
+}
+.search-bar { display: flex; flex-direction: column; gap: 10px; }
+.search-bar .input-group { display: flex; gap: 8px; }
+.search-bar .input-group .input-wrap { flex: 1; }
+.search-bar .btn-group { display: flex; gap: 8px; }
+.search-bar .btn-group .btn { flex: 1; }
+
+/* ========== Inputs ========== */
+.input-wrap { position: relative; }
+.input-wrap input, .input-wrap select {
+  width: 100%; height: 36px; padding: 0 12px;
+  border: 1px solid var(--border-color); border-radius: var(--radius-sm);
+  font-size: 13px; font-family: inherit; color: var(--text-primary);
+  background: var(--bg-card); outline: none; transition: border-color 0.15s, box-shadow 0.15s;
+}
+.input-wrap input:focus, .input-wrap select:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(0,82,217,0.12);
+}
+.input-wrap input::placeholder { color: var(--text-placeholder); }
+
+/* ========== Table Card ========== */
+.table-card {
+  background: var(--bg-card); border: 1px solid var(--border-color);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-xs); overflow: hidden;
+}
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.table-scroll-hint {
+  display: flex; align-items: center; gap: 4px;
+  padding: 8px 14px; font-size: 12px; color: var(--text-placeholder);
+  border-bottom: 1px solid var(--divider-color); background: var(--bg-soft);
+}
+.table-scroll-hint svg { flex-shrink: 0; }
+
+/* ========== Table ========== */
+table {
+  width: 100%; min-width: 640px; border-collapse: collapse;
+  font-size: 13px;
+}
+thead { background: var(--bg-soft); }
+th {
+  padding: 11px 14px; text-align: left; font-weight: 600; font-size: 12px;
+  color: var(--text-secondary); border-bottom: 1px solid var(--divider-color);
+  white-space: nowrap;
+}
+td {
+  padding: 12px 14px; border-bottom: 1px solid var(--divider-color);
+  color: var(--text-primary); vertical-align: middle;
+}
+tr:last-child td { border-bottom: none; }
+tbody tr { transition: background 0.12s; }
+tbody tr:hover { background: var(--bg-hover); }
+
+/* Hide次要列 on mobile */
+@media (max-width: 900px) {
+  .col-hide-tablet { display: none; }
+}
+
+/* ========== Cell Styles ========== */
+.cell-account { font-weight: 500; color: var(--color-primary); cursor: pointer; }
+.cell-account:hover { color: var(--color-primary-hover); }
+.cell-balance { font-weight: 600; color: var(--color-success); }
+.cell-muted { color: var(--text-placeholder); }
+
+.tag {
+  display: inline-flex; align-items: center; height: 22px; padding: 0 8px;
+  border-radius: 4px; font-size: 12px; font-weight: 500; white-space: nowrap;
+}
+.tag-success { background: var(--color-success-soft); color: var(--color-success); }
+.tag-danger { background: var(--color-danger-soft); color: var(--color-danger); }
+.tag-warning { background: var(--color-warning-soft); color: var(--color-warning); }
+.tag-info { background: var(--color-info-soft); color: var(--color-info); }
+
+.actions { display: flex; gap: 10px; white-space: nowrap; }
+.action-link {
+  font-size: 13px; color: var(--color-primary); cursor: pointer;
+  text-decoration: none; transition: color 0.15s;
+}
+.action-link:hover { color: var(--color-primary-hover); }
+
+/* ========== Pagination ========== */
+.pagination {
+  display: flex; justify-content: center; align-items: center; gap: 6px;
+  padding: 14px; border-top: 1px solid var(--divider-color);
+}
+.page-btn {
+  display: flex; align-items: center; justify-content: center;
+  min-width: 32px; height: 32px; padding: 0 6px;
+  border: 1px solid var(--border-color); border-radius: var(--radius-sm);
+  font-size: 13px; color: var(--text-secondary); background: var(--bg-card);
+  cursor: pointer; transition: all 0.15s;
+}
+.page-btn:hover { border-color: var(--color-primary-border); color: var(--color-primary); background: var(--color-primary-soft); }
+.page-btn.active { background: var(--color-primary); border-color: var(--color-primary); color: var(--text-inverse); }
+.page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.page-info { font-size: 12px; color: var(--text-placeholder); padding: 0 4px; }
+
+/* ========== Mobile Drawer (overlay preview) ========== */
+.drawer-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(15,23,42,0.32); opacity: 0; pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+.drawer-overlay.open { opacity: 1; pointer-events: auto; }
+.drawer-panel {
+  position: fixed; top: 0; left: 0; bottom: 0; z-index: 1001;
+  width: min(280px, 80vw); background: var(--bg-card);
+  box-shadow: var(--shadow-md);
+  transform: translateX(-100%); transition: transform 0.25s cubic-bezier(0.22,1,0.36,1);
+}
+.drawer-overlay.open .drawer-panel { transform: translateX(0); }
+.drawer-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 16px; border-bottom: 1px solid var(--divider-color);
+}
+.drawer-logo { height: 28px; }
+.drawer-subtitle { font-size: 12px; color: var(--text-secondary); }
+.drawer-menu { padding: 8px; overflow-y: auto; flex: 1; }
+.menu-section-title {
+  padding: 8px 10px 4px; font-size: 11px; font-weight: 600;
+  color: var(--text-placeholder); text-transform: uppercase; letter-spacing: 0.5px;
+}
+.menu-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 12px; height: 44px; border-radius: var(--radius-md);
+  font-size: 14px; font-weight: 500; color: var(--text-secondary);
+  cursor: pointer; transition: all 0.15s; text-decoration: none;
+}
+.menu-item:hover { background: var(--bg-soft); color: var(--text-primary); }
+.menu-item.active { background: var(--color-primary-soft); color: var(--color-primary); font-weight: 600; }
+.menu-item .icon { width: 20px; text-align: center; font-size: 16px; }
+
+/* ========== Responsive ========== */
+@media (min-width: 901px) {
+  .hamburger { display: none; }
+  .shell-content { padding: 20px 24px 32px; }
+  .admin-page-head { flex-direction: row; justify-content: space-between; align-items: flex-end; }
+  .page-actions { width: auto; flex: 0 0 auto; }
+  .search-bar { flex-direction: row; flex-wrap: wrap; align-items: center; }
+  .search-bar .input-group { flex: 1; }
+  .search-bar .btn-group { flex: 0 0 auto; }
+  .admin-page-heading h2 { font-size: 22px; }
+}
+</style>
+</head>
+<body>
+
+<div class="admin-shell">
+  <!-- TopBar -->
+  <header class="shell-topbar">
+    <div class="topbar-left">
+      <button class="hamburger" onclick="toggleDrawer()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <span class="page-title">用户管理</span>
+    </div>
+    <div class="topbar-right">
+      <div class="avatar">C</div>
+    </div>
+  </header>
+
+  <!-- Content -->
+  <main class="shell-content">
+    <div class="admin-page">
+
+      <!-- Page Head -->
+      <section class="admin-page-head">
+        <div class="admin-page-heading">
+          <h2>用户管理</h2>
+          <p>查看和管理所有注册用户，包括账户状态、余额和服务开通情况。</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-primary btn-block">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            新增用户
+          </button>
+        </div>
+      </section>
+
+      <!-- Filter Panel -->
+      <section class="filter-panel">
+        <div class="search-bar">
+          <div class="input-group">
+            <div class="input-wrap">
+              <input type="text" placeholder="搜索手机号 / 邮箱 / 昵称">
+            </div>
+            <div class="input-wrap" style="max-width: 120px;">
+              <select>
+                <option>全部状态</option>
+                <option>正常</option>
+                <option>禁用</option>
+              </select>
+            </div>
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm btn-block">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              搜索
+            </button>
+            <button class="btn btn-sm btn-block">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+              重置
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Table Card -->
+      <div class="table-card">
+        <div class="table-scroll">
+          <div class="table-scroll-hint">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="5 9 2 12 5 15"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
+            左右滑动查看完整表格
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th style="width:56px">ID</th>
+                <th>账号</th>
+                <th class="col-hide-tablet">昵称</th>
+                <th>余额</th>
+                <th class="col-hide-tablet">已开通服务</th>
+                <th>状态</th>
+                <th class="col-hide-tablet">注册时间</th>
+                <th style="width:70px">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>1001</td>
+                <td><span class="cell-account">138****6789</span></td>
+                <td class="col-hide-tablet">张先生</td>
+                <td><span class="cell-balance">1,280.00</span></td>
+                <td class="col-hide-tablet"><span class="tag tag-success">3 个</span></td>
+                <td><span class="tag tag-success">正常</span></td>
+                <td class="col-hide-tablet cell-muted">2026-03-15</td>
+                <td><div class="actions"><a class="action-link">详情</a></div></td>
+              </tr>
+              <tr>
+                <td>1002</td>
+                <td><span class="cell-account">user@example.com</span></td>
+                <td class="col-hide-tablet">李女士</td>
+                <td><span class="cell-balance">560.50</span></td>
+                <td class="col-hide-tablet"><span class="tag tag-info">1 个</span></td>
+                <td><span class="tag tag-success">正常</span></td>
+                <td class="col-hide-tablet cell-muted">2026-02-28</td>
+                <td><div class="actions"><a class="action-link">详情</a></div></td>
+              </tr>
+              <tr>
+                <td>1003</td>
+                <td><span class="cell-account">139****1234</span></td>
+                <td class="col-hide-tablet">王工</td>
+                <td><span class="cell-balance">0.00</span></td>
+                <td class="col-hide-tablet"><span class="cell-muted">无</span></td>
+                <td><span class="tag tag-danger">禁用</span></td>
+                <td class="col-hide-tablet cell-muted">2026-01-10</td>
+                <td><div class="actions"><a class="action-link">详情</a></div></td>
+              </tr>
+              <tr>
+                <td>1004</td>
+                <td><span class="cell-account">186****5678</span></td>
+                <td class="col-hide-tablet">赵经理</td>
+                <td><span class="cell-balance">3,420.00</span></td>
+                <td class="col-hide-tablet"><span class="tag tag-success">5 个</span></td>
+                <td><span class="tag tag-success">正常</span></td>
+                <td class="col-hide-tablet cell-muted">2025-12-20</td>
+                <td><div class="actions"><a class="action-link">详情</a></div></td>
+              </tr>
+              <tr>
+                <td>1005</td>
+                <td><span class="cell-account">test@demo.cn</span></td>
+                <td class="col-hide-tablet">测试账号</td>
+                <td><span class="cell-balance">100.00</span></td>
+                <td class="col-hide-tablet"><span class="tag tag-warning">2 个</span></td>
+                <td><span class="tag tag-success">正常</span></td>
+                <td class="col-hide-tablet cell-muted">2026-04-01</td>
+                <td><div class="actions"><a class="action-link">详情</a></div></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="pagination">
+          <button class="page-btn" disabled>&lt;</button>
+          <button class="page-btn active">1</button>
+          <button class="page-btn">2</button>
+          <button class="page-btn">3</button>
+          <span class="page-info">...</span>
+          <button class="page-btn">12</button>
+          <button class="page-btn">&gt;</button>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- Mobile Drawer -->
+<div class="drawer-overlay" id="drawer" onclick="closeDrawer()">
+  <div class="drawer-panel" onclick="event.stopPropagation()">
+    <div class="drawer-header">
+      <div>
+        <svg class="drawer-logo" viewBox="0 0 120 28" fill="none"><rect width="120" height="28" rx="4" fill="var(--color-primary)"/><text x="60" y="19" text-anchor="middle" fill="white" font-size="14" font-weight="600">管理控制台</text></svg>
+      </div>
+    </div>
+    <nav class="drawer-menu">
+      <p class="menu-section-title">数据总览</p>
+      <a class="menu-item" href="#"><span class="icon">&#9673;</span> 仪表盘</a>
+      <p class="menu-section-title">用户体系</p>
+      <a class="menu-item active" href="#"><span class="icon">&#9679;</span> 用户管理</a>
+      <a class="menu-item" href="#"><span class="icon">&#9733;</span> 会员等级</a>
+      <p class="menu-section-title">产品</p>
+      <a class="menu-item" href="#"><span class="icon">&#9632;</span> 商品目录</a>
+      <a class="menu-item" href="#"><span class="icon">&#9638;</span> 规格管理</a>
+      <a class="menu-item" href="#"><span class="icon">&#9881;</span> CPU型号管理</a>
+      <p class="menu-section-title">财务</p>
+      <a class="menu-item" href="#"><span class="icon">&#9776;</span> 账单与服务</a>
+      <p class="menu-section-title">工单</p>
+      <a class="menu-item" href="#"><span class="icon">&#9993;</span> 工单管理</a>
+      <p class="menu-section-title">运营</p>
+      <a class="menu-item" href="#"><span class="icon">&#9830;</span> 优惠券</a>
+      <a class="menu-item" href="#"><span class="icon">&#10003;</span> 活动券</a>
+      <a class="menu-item" href="#"><span class="icon">&#10148;</span> 推广返利</a>
+      <a class="menu-item" href="#"><span class="icon">&#9888;</span> 通知管理</a>
+      <p class="menu-section-title">系统管理</p>
+      <a class="menu-item" href="#"><span class="icon">&#9881;</span> 系统设置</a>
+      <a class="menu-item" href="#"><span class="icon">&#9776;</span> 日志</a>
+    </nav>
+  </div>
+</div>
+
+<script>
+function toggleDrawer() {
+  document.getElementById('drawer').classList.toggle('open');
+}
+function closeDrawer() {
+  document.getElementById('drawer').classList.remove('open');
+}
+</script>
+
+</body>
+</html>

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Services\ScheduleTaskService;
+use App\Services\Automation\ScheduleTaskService;
 use Tests\TestCase;
 
 class ScheduleTaskOverviewTest extends TestCase
@@ -35,5 +35,31 @@ class ScheduleTaskOverviewTest extends TestCase
         $this->assertIsBool($scheduleMutex['degraded']);
         $this->assertIsString((string) $scheduleMutex['mode']);
         $this->assertIsString((string) $automationConfig['fallback_reason']);
+    }
+
+    public function test_schedule_task_overview_includes_product_upstream_config_sync_task(): void
+    {
+        $service = app(ScheduleTaskService::class);
+
+        $overview = $service->overview();
+        $tasks = collect($overview['tasks'] ?? []);
+        $task = $tasks->firstWhere('key', 'product-upstream-config-sync');
+
+        $this->assertIsArray($task);
+        $this->assertSame('上游产品配置同步', $task['title'] ?? null);
+        $this->assertTrue((bool) ($task['manual_triggerable'] ?? false));
+    }
+
+    public function test_schedule_task_overview_marks_queue_backlog_drain_as_manual_triggerable(): void
+    {
+        $service = app(ScheduleTaskService::class);
+
+        $overview = $service->overview();
+        $tasks = collect($overview['tasks'] ?? []);
+        $task = $tasks->firstWhere('key', 'queue-backlog-drain');
+
+        $this->assertIsArray($task);
+        $this->assertSame('队列积压消费', $task['title'] ?? null);
+        $this->assertTrue((bool) ($task['manual_triggerable'] ?? false));
     }
 }

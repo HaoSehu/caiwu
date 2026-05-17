@@ -223,6 +223,7 @@ trait HandlesOrderCalculation
                         'amount' => $this->formatAmount($detail['amount']),
                     ];
                 }
+
                 continue;
             }
 
@@ -319,7 +320,7 @@ trait HandlesOrderCalculation
                 return $amount;
             }
 
-            return round((float) ($pricing[$billingCycle . '_fee'] ?? 0), 2);
+            return round((float) ($pricing[$billingCycle.'_fee'] ?? 0), 2);
         }
 
         return 0;
@@ -521,6 +522,7 @@ trait HandlesOrderCalculation
                 }
 
                 $options[] = ['id' => $value, 'value' => $value, 'label' => $value];
+
                 continue;
             }
 
@@ -546,7 +548,7 @@ trait HandlesOrderCalculation
         $buffer = '';
 
         foreach (array_filter(array_map('trim', explode(',', $parameter))) as $part) {
-            $buffer = $buffer === '' ? $part : ($buffer . ',' . $part);
+            $buffer = $buffer === '' ? $part : ($buffer.','.$part);
 
             if (str_contains($buffer, '|')) {
                 $segments[] = $buffer;
@@ -569,24 +571,24 @@ trait HandlesOrderCalculation
 
         if (is_numeric($value)) {
             return match ($field) {
-                'cpu' => $this->normalizeNumericString($value) . '核',
+                'cpu' => $this->normalizeNumericString($value).'核',
                 'memory' => $this->formatMemorySnapshotValue((int) round((float) $value)),
-                'bw', 'in_bw', 'out_bw' => $this->normalizeNumericString($value) . 'Mbps',
+                'bw', 'in_bw', 'out_bw' => $this->normalizeNumericString($value).'Mbps',
                 'flow_limit' => $this->formatFlowSnapshotValue((float) $value),
-                'ip_num', 'ipv6_num' => $this->normalizeNumericString($value) . '个',
-                'system_disk_size', 'data_disk_size' => $this->normalizeNumericString($value) . 'G',
+                'ip_num', 'ipv6_num' => $this->normalizeNumericString($value).'个',
+                'system_disk_size', 'data_disk_size' => $this->normalizeNumericString($value).'G',
                 default => $this->appendConfigUnit($value, $item),
             };
         }
 
         if (in_array($field, ['system_disk_size', 'data_disk_size'], true)) {
             if (preg_match('/^lin:(\d+(?:\.\d+)?),win:(\d+(?:\.\d+)?)(?:,\d+)?$/i', $value, $matches) === 1) {
-                return 'Linux ' . $this->normalizeNumericString($matches[1]) . 'G / Windows ' . $this->normalizeNumericString($matches[2]) . 'G';
+                return 'Linux '.$this->normalizeNumericString($matches[1]).'G / Windows '.$this->normalizeNumericString($matches[2]).'G';
             }
 
             $parts = array_map('trim', explode(',', $value));
             if (isset($parts[0]) && is_numeric($parts[0])) {
-                return $this->normalizeNumericString($parts[0]) . 'G';
+                return $this->normalizeNumericString($parts[0]).'G';
             }
         }
 
@@ -615,7 +617,7 @@ trait HandlesOrderCalculation
         $unit = trim((string) ($item['unit'] ?? ''));
 
         return $unit !== '' && is_numeric($value)
-            ? $this->normalizeNumericString($value) . $unit
+            ? $this->normalizeNumericString($value).$unit
             : $value;
     }
 
@@ -626,14 +628,14 @@ trait HandlesOrderCalculation
         }
 
         if ($value < 1024) {
-            return $value . 'M';
+            return $value.'M';
         }
 
         if ($value % 1024 === 0) {
-            return ((string) ($value / 1024)) . 'G';
+            return ((string) ($value / 1024)).'G';
         }
 
-        return $value . 'M';
+        return $value.'M';
     }
 
     private function formatFlowSnapshotValue(float $value): string
@@ -643,10 +645,10 @@ trait HandlesOrderCalculation
         }
 
         if ($value >= 1024 && fmod($value, 1024.0) === 0.0) {
-            return $this->normalizeNumericString($value / 1024) . 'TB';
+            return $this->normalizeNumericString($value / 1024).'TB';
         }
 
-        return $this->normalizeNumericString($value) . 'G';
+        return $this->normalizeNumericString($value).'G';
     }
 
     private function normalizeNumericString(float|int|string $value): string

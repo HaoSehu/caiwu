@@ -1,0 +1,12 @@
+START 
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.8
+Configuration: C:\Users\cloud_user\Desktop\caiwu\backend\phpunit.xml.dist
+
+........                                                            8 / 8 (100%)
+
+Time: 00:01.469, Memory: 12.00 MB
+
+OK (8 tests, 31 assertions)
+EXIT=0 

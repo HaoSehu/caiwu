@@ -1,0 +1,992 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Services\Ticket;
+
+use App\Constants\ServiceStatus;
+use App\Exceptions\BusinessException;
+use App\Jobs\SendTicketNotificationEmailJob;
+use App\Models\AdminUser;
+use App\Models\Service;
+use App\Models\Ticket;
+use App\Models\TicketReply;
+use App\Services\System\NotificationService;
+use App\Services\System\UploadedAssetReferenceService;
+use App\Services\ClientServiceConsole\ServiceTransformService;
+use App\Support\AdminPermissions;
+use App\Support\SecureAsset;
+use App\Support\ServiceHostname;
+use App\Support\TextSanitizer;
+use App\Support\UploadedImage;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
+use Predis\Client;
+
+class TicketService
+{
+    private static array $tableExistsCache = [];
+
+    private ?bool $databaseQueueReady = null;
+
+    private static function tableExists(string $table): bool
+    {
+        return self::$tableExistsCache[$table] ??= Schema::hasTable($table);
+    }
+
+    public const DEPARTMENTS = ['sales', 'support', 'billing', 'abuse'];
+
+    public const DEPT_LABELS = ['sales' => '销售', 'support' => '技术支持', 'billing' => '财务', 'abuse' => '投诉'];
+
+    public const PRIORITIES = [1 => '低', 2 => '中', 3 => '高', 4 => '紧急'];
+
+    public const STATUS_OPEN = 0;
+
+    public const STATUS_CLIENT_REPLY = 1;
+
+    public const STATUS_STAFF_REPLY = 2;
+
+    public const STATUS_CLOSED = 3;
+
+    public const STATUS_LABELS = [0 => '开启', 1 => '客户回复', 2 => '员工回复', 3 => '已关闭'];
+
+    public const CLOSE_REASON_ADMIN = 'admin';
+
+    public const CLOSE_REASON_CLIENT = 'client';
+
+    public const CLOSE_REASON_AUTO = 'auto';
+
+    public const CLOSE_REASON_LABELS = [
+        'admin' => '管理员关闭',
+        'client' => '用户关闭',
+        'auto' => '自动关闭',
+    ];
+
+    public function __construct(
+        private UploadedAssetReferenceService $uploadedAssetReferenceService,
+        private NotificationService $notificationService,
+        private ServiceTransformService $serviceTransformService,
+    ) {}
+
+    /**
+     * 客户创建工单
+     */
+    public function create(int $userId, array $data): Ticket
+    {
+        $subject = TextSanitizer::clean((string) ($data['subject'] ?? ''));
+        $content = $this->normalizeReplyContent($data['content'] ?? null);
+        $attachments = $this->normalizeAttachments($data['attachments'] ?? [], 'client', $userId);
+        $this->ensureReplyPayload($content, $attachments);
+        throw_if($subject === '', new BusinessException('工单标题不能为空'));
+
+        $ticket = DB::transaction(function () use ($userId, $data, $subject, $content, $attachments) {
+            if (! empty($data['service_id'])) {
+                $svc = Service::where('id', $data['service_id'])->where('user_id', $userId)->first();
+                throw_if(! $svc, new BusinessException('服务不存在'));
+            }
+
+            $ticket = Ticket::create([
+                'user_id' => $userId,
+                'department' => $data['department'],
+                'subject' => $subject,
+                'priority' => $data['priority'] ?? 2,
+                'status' => self::STATUS_OPEN,
+                'service_id' => $data['service_id'] ?? null,
+            ]);
+
+            TicketReply::create([
+                'ticket_id' => $ticket->id,
+                'user_id' => $userId,
+                'content' => $content,
+                'is_staff' => 0,
+                'attachments' => $attachments,
+                'created_at' => now(),
+            ]);
+
+            return $ticket->fresh();
+        });
+
+        $this->notifyAdminsOfNewTicket($ticket, $content, $attachments !== []);
+
+        return $ticket;
+    }
+
+    /**
+     * 客户回复
+     */
+    public function clientReply(Ticket $ticket, int $userId, ?string $content, array $attachmentPaths = []): array
+    {
+        throw_if($ticket->user_id !== $userId, new BusinessException('无权操作'));
+        throw_if($ticket->status === self::STATUS_CLOSED, new BusinessException('工单已关闭'));
+
+        $content = $this->normalizeReplyContent($content);
+        $attachments = $this->normalizeAttachments($attachmentPaths, 'client', $userId);
+        $this->ensureReplyPayload($content, $attachments);
+
+        $formattedReply = DB::transaction(function () use ($ticket, $userId, $content, $attachments) {
+            $reply = TicketReply::create([
+                'ticket_id' => $ticket->id,
+                'user_id' => $userId,
+                'content' => $content,
+                'is_staff' => 0,
+                'attachments' => $attachments,
+                'created_at' => now(),
+            ]);
+            $ticket->update(['status' => self::STATUS_CLIENT_REPLY]);
+
+            $ticket->loadMissing('user:id,email,nickname');
+
+            return $this->formatReply($reply, $ticket->user?->display_name ?: '客户');
+        });
+
+        $this->notifyAdminsOfClientReply($ticket, $content, $attachments !== []);
+
+        return $formattedReply;
+    }
+
+    /**
+     * 客户关闭工单
+     */
+    public function clientClose(Ticket $ticket, int $userId): void
+    {
+        throw_if($ticket->user_id !== $userId, new BusinessException('无权操作'));
+        throw_if($ticket->status === self::STATUS_CLOSED, new BusinessException('工单已关闭'));
+        $this->closeTicketAndReplaceAttachments($ticket, self::CLOSE_REASON_CLIENT);
+    }
+
+    /**
+     * 管理端回复
+     */
+    public function staffReply(Ticket $ticket, int $staffId, ?string $content, array $attachmentPaths = []): array
+    {
+        throw_if($ticket->status === self::STATUS_CLOSED, new BusinessException('工单已关闭'));
+
+        $content = $this->normalizeReplyContent($content);
+        $attachments = $this->normalizeAttachments($attachmentPaths, 'admin', $staffId);
+        $this->ensureReplyPayload($content, $attachments);
+        $staff = AdminUser::query()->find($staffId);
+        $staffName = $staff?->nickname ?: $staff?->username ?: '员工';
+
+        $formattedReply = DB::transaction(function () use ($ticket, $staffId, $content, $attachments, $staffName) {
+            $reply = TicketReply::create([
+                'ticket_id' => $ticket->id,
+                'user_id' => $staffId,
+                'content' => $content,
+                'is_staff' => 1,
+                'attachments' => $attachments,
+                'created_at' => now(),
+            ]);
+            $ticket->update(['status' => self::STATUS_STAFF_REPLY]);
+
+            return $this->formatReply($reply, $staffName);
+        });
+
+        $this->notifyClientOfStaffReply($ticket, $staffName, $content, $attachments !== []);
+
+        return $formattedReply;
+    }
+
+    /**
+     * 管理端关闭工单
+     */
+    public function staffClose(Ticket $ticket): void
+    {
+        throw_if($ticket->status === self::STATUS_CLOSED, new BusinessException('工单已关闭'));
+        $this->closeTicketAndReplaceAttachments($ticket, self::CLOSE_REASON_ADMIN);
+    }
+
+    public function autoClose(Ticket $ticket): void
+    {
+        if ((int) $ticket->status === self::STATUS_CLOSED) {
+            return;
+        }
+
+        $this->closeTicketAndReplaceAttachments($ticket, self::CLOSE_REASON_AUTO);
+    }
+
+    /**
+     * 管理端指派处理人
+     */
+    public function assign(Ticket $ticket, int $assigneeId): Ticket
+    {
+        $assignee = AdminUser::query()->withResolvedPermissionRelations()->find($assigneeId);
+
+        throw_if(! $assignee, new BusinessException('管理员不存在'));
+        throw_if((int) $assignee->status !== 1, new BusinessException('管理员已禁用'));
+        throw_if(! $assignee->hasPermission(AdminPermissions::TICKET_REPLY), new BusinessException('该管理员无工单处理权限'));
+
+        $ticket->update(['assignee_id' => $assigneeId]);
+
+        return $ticket->fresh();
+    }
+
+    /**
+     * 客户端列表
+     */
+    public function clientList(int $userId, array $filters, int $perPage): LengthAwarePaginator
+    {
+        $query = Ticket::where('user_id', $userId);
+
+        if (self::tableExists('ticket_replies')) {
+            $query->with(['replies' => fn ($q) => $q->latest('created_at')->limit(1)]);
+        }
+
+        if (isset($filters['status']) && $filters['status'] !== '') {
+            $query->where('status', $filters['status']);
+        }
+
+        if (! empty($filters['keyword'])) {
+            $query->where('subject', 'like', "%{$filters['keyword']}%");
+        }
+
+        return $query->orderByDesc('updated_at')->paginate($perPage);
+    }
+
+    /**
+     * 管理端列表
+     */
+    public function adminList(array $filters, int $perPage): LengthAwarePaginator
+    {
+        $query = Ticket::with(['user:id,email,nickname', 'assignee:id,username,nickname']);
+
+        if (isset($filters['status']) && $filters['status'] !== '') {
+            if ((string) $filters['status'] === 'ongoing') {
+                $query->whereIn('status', [
+                    self::STATUS_OPEN,
+                    self::STATUS_CLIENT_REPLY,
+                    self::STATUS_STAFF_REPLY,
+                ]);
+            } else {
+                $query->where('status', $filters['status']);
+            }
+        }
+
+        if (! empty($filters['priority'])) {
+            $query->where('priority', $filters['priority']);
+        }
+
+        if (! empty($filters['department'])) {
+            $query->where('department', $filters['department']);
+        }
+
+        if (! empty($filters['keyword'])) {
+            $kw = $filters['keyword'];
+            $query->where(function ($q) use ($kw) {
+                $q->where('subject', 'like', "%{$kw}%")
+                    ->orWhere('id', $kw);
+            });
+        }
+
+        return $query->orderByDesc('updated_at')->paginate($perPage);
+    }
+
+    /**
+     * 工单详情（含全部回复）
+     */
+    public function detail(Ticket $ticket): array
+    {
+        $ticket->load([
+            'user:id,email,nickname',
+            'service:id,name,domain,product_id,billing_cycle,amount,status,provision_data,expires_at',
+            'assignee:id,username,nickname',
+        ]);
+
+        $clientName = $ticket->user?->display_name ?: '客户';
+        $replies = $this->resolveTicketReplies($ticket, $clientName);
+
+        return [
+            'id' => (int) $ticket->id,
+            'user_id' => (int) $ticket->user_id,
+            'department' => $ticket->department,
+            'subject' => $ticket->subject,
+            'priority' => (int) $ticket->priority,
+            'status' => (int) $ticket->status,
+            'service_id' => $ticket->service_id ? (int) $ticket->service_id : null,
+            'assignee_id' => $ticket->assignee_id ? (int) $ticket->assignee_id : null,
+            'close_reason' => $ticket->close_reason,
+            'close_reason_label' => self::CLOSE_REASON_LABELS[$ticket->close_reason ?? ''] ?? null,
+            'created_at' => $ticket->created_at?->format('Y-m-d H:i:s'),
+            'updated_at' => $ticket->updated_at?->format('Y-m-d H:i:s'),
+            'user' => $ticket->user ? [
+                'id' => (int) $ticket->user->id,
+                'email' => $ticket->user->email,
+                'nickname' => $ticket->user->nickname,
+                'display_name' => $ticket->user->display_name,
+            ] : null,
+            'service' => $ticket->service ? [
+                'id' => (int) $ticket->service->id,
+                'name' => $ticket->service->name,
+                'display_name' => $this->resolveServiceDisplayName($ticket->service),
+                ...$this->resolveLinkedServicePayload($ticket->service),
+            ] : null,
+            'assignee' => $ticket->assignee ? [
+                'id' => (int) $ticket->assignee->id,
+                'username' => $ticket->assignee->username,
+                'nickname' => trim((string) $ticket->assignee->nickname) !== '' ? $ticket->assignee->nickname : $ticket->assignee->username,
+            ] : null,
+            'replies' => $replies,
+        ];
+    }
+
+    /**
+     * 管理端统计
+     */
+    public function adminSummary(): array
+    {
+        return [
+            'open' => Ticket::where('status', self::STATUS_OPEN)->count(),
+            'client_reply' => Ticket::where('status', self::STATUS_CLIENT_REPLY)->count(),
+            'closed_today' => Ticket::where('status', self::STATUS_CLOSED)
+                ->whereDate('updated_at', today())->count(),
+            'total' => Ticket::count(),
+        ];
+    }
+
+    public function clientServiceOptions(int $userId, string $keyword = '', int $limit = 20): array
+    {
+        $query = Service::query()
+            ->select(['id', 'user_id', 'product_id', 'name', 'domain', 'status', 'provision_data'])
+            ->with(['product:id,product_type,product_group_id,config_options,purchase_requires'])
+            ->where('user_id', $userId);
+
+        $keyword = trim($keyword);
+        if ($keyword !== '') {
+            $query->where(function ($builder) use ($keyword) {
+                $builder->where('name', 'like', '%'.$keyword.'%')
+                    ->orWhere('domain', 'like', '%'.$keyword.'%')
+                    ->orWhere('id', $keyword)
+                    ->orWhere('provision_data->requested_host', 'like', '%'.$keyword.'%');
+            });
+        }
+
+        return $query->orderByDesc('id')
+            ->limit(max(1, min($limit, 50)))
+            ->get()
+            ->map(fn (Service $service) => [
+                'id' => (int) $service->id,
+                'name' => $this->resolveServiceDisplayName($service),
+                'service_name' => trim((string) $service->name),
+                'product_name' => trim((string) ($service->product?->name ?? '')),
+                'domain' => ServiceHostname::resolveDisplayDomain($service, (array) ($service->provision_data ?? [])),
+                'status' => (int) $service->status,
+                'status_label' => ServiceStatus::$labels[(int) $service->status] ?? (string) $service->status,
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function notifyAdminsOfNewTicket(Ticket $ticket, string $content, bool $hasAttachments): void
+    {
+        $ticket->loadMissing('user:id,email,nickname');
+
+        $recipients = $this->resolveTicketAdminRecipients($ticket);
+        if ($recipients->isEmpty()) {
+            return;
+        }
+
+        $department = self::DEPT_LABELS[$ticket->department] ?? (string) $ticket->department;
+        $priority = self::PRIORITIES[(int) $ticket->priority] ?? (string) $ticket->priority;
+        $status = self::STATUS_LABELS[(int) $ticket->status] ?? (string) $ticket->status;
+        $clientName = $ticket->user?->display_name ?: ($ticket->user?->email ?: '客户');
+        $preview = $this->buildReplyPreview($content, $hasAttachments);
+
+        foreach ($recipients as $admin) {
+            $this->sendTicketEmail(
+                (string) $admin->email,
+                NotificationService::TEMPLATE_TICKET_CREATED,
+                [
+                    'site_name' => $this->siteName(),
+                    'recipient_name' => (string) $admin->display_name,
+                    'ticket_id' => (int) $ticket->id,
+                    'ticket_subject' => (string) $ticket->subject,
+                    'department' => $department,
+                    'priority' => $priority,
+                    'status' => $status,
+                    'client_name' => $clientName,
+                    'client_email' => (string) ($ticket->user?->email ?: '未绑定'),
+                    'message_preview' => $preview,
+                ],
+                [
+                    'scene' => 'ticket_created',
+                    'ticket_id' => (int) $ticket->id,
+                    'recipient_admin_id' => (int) $admin->id,
+                ]
+            );
+        }
+    }
+
+    private function notifyAdminsOfClientReply(Ticket $ticket, string $content, bool $hasAttachments): void
+    {
+        $ticket->loadMissing('user:id,email,nickname');
+
+        $recipients = $this->resolveTicketAdminRecipients($ticket);
+        if ($recipients->isEmpty()) {
+            return;
+        }
+
+        $department = self::DEPT_LABELS[$ticket->department] ?? (string) $ticket->department;
+        $priority = self::PRIORITIES[(int) $ticket->priority] ?? (string) $ticket->priority;
+        $status = self::STATUS_LABELS[(int) $ticket->status] ?? (string) $ticket->status;
+        $clientName = $ticket->user?->display_name ?: ($ticket->user?->email ?: '客户');
+        $preview = $this->buildReplyPreview($content, $hasAttachments);
+
+        foreach ($recipients as $admin) {
+            $this->sendTicketEmail(
+                (string) $admin->email,
+                NotificationService::TEMPLATE_TICKET_CLIENT_REPLY,
+                [
+                    'site_name' => $this->siteName(),
+                    'recipient_name' => (string) $admin->display_name,
+                    'ticket_id' => (int) $ticket->id,
+                    'ticket_subject' => (string) $ticket->subject,
+                    'department' => $department,
+                    'priority' => $priority,
+                    'status' => $status,
+                    'client_name' => $clientName,
+                    'client_email' => (string) ($ticket->user?->email ?: '未绑定'),
+                    'message_preview' => $preview,
+                ],
+                [
+                    'scene' => 'ticket_client_reply',
+                    'ticket_id' => (int) $ticket->id,
+                    'recipient_admin_id' => (int) $admin->id,
+                ]
+            );
+        }
+    }
+
+    private function notifyClientOfStaffReply(Ticket $ticket, string $staffName, string $content, bool $hasAttachments): void
+    {
+        $ticket->loadMissing('user:id,email,nickname');
+
+        $email = trim((string) ($ticket->user?->email ?? ''));
+        if ($email === '') {
+            return;
+        }
+
+        $status = self::STATUS_LABELS[(int) $ticket->status] ?? (string) $ticket->status;
+        $clientName = $ticket->user?->display_name ?: '客户';
+        $preview = $this->buildReplyPreview($content, $hasAttachments);
+        $ticketsUrl = $this->clientTicketsUrl();
+        $this->sendTicketEmail($email, NotificationService::TEMPLATE_TICKET_STAFF_REPLY, [
+            'site_name' => $this->siteName(),
+            'display_name' => $clientName,
+            'ticket_id' => (int) $ticket->id,
+            'ticket_subject' => (string) $ticket->subject,
+            'status' => $status,
+            'staff_name' => $staffName,
+            'message_preview' => $preview,
+            'tickets_url' => $ticketsUrl,
+            'login_tip' => $ticketsUrl === '' ? '请登录会员中心的工单页面查看详情。' : '',
+        ], [
+            'scene' => 'ticket_staff_reply',
+            'ticket_id' => (int) $ticket->id,
+            'recipient_user_id' => (int) ($ticket->user?->id ?? 0),
+        ]);
+    }
+
+    private function resolveTicketAdminRecipients(Ticket $ticket)
+    {
+        $admins = AdminUser::query()
+            ->with('role')
+            ->where('status', 1)
+            ->whereNotNull('email')
+            ->orderBy('id')
+            ->get(['id', 'username', 'nickname', 'email', 'role_id'])
+            ->filter(function (AdminUser $admin) {
+                $email = trim((string) ($admin->email ?? ''));
+
+                return $email !== '' && $admin->hasPermission(AdminPermissions::TICKET_REPLY);
+            })
+            ->unique(fn (AdminUser $admin) => mb_strtolower(trim((string) $admin->email)))
+            ->values();
+
+        if ($admins->isEmpty()) {
+            return $admins;
+        }
+
+        $assigneeId = (int) ($ticket->assignee_id ?? 0);
+        if ($assigneeId > 0) {
+            $assignee = $admins->firstWhere('id', $assigneeId);
+            if ($assignee) {
+                return collect([$assignee]);
+            }
+        }
+
+        return $admins;
+    }
+
+    private function buildReplyPreview(string $content, bool $hasAttachments): string
+    {
+        $text = trim((string) preg_replace('/\s+/u', ' ', $content));
+
+        if ($text === '') {
+            return $hasAttachments ? '本次消息包含图片附件，请登录系统查看。' : '请登录系统查看详情。';
+        }
+
+        $preview = Str::limit($text, 120, '...');
+
+        return $hasAttachments ? $preview.'（含图片附件）' : $preview;
+    }
+
+    private function sendTicketEmail(string $to, string $templateCode, array $params, array $context = []): void
+    {
+        $email = trim($to);
+        if ($email === '') {
+            return;
+        }
+
+        if ($this->shouldUseQueue()) {
+            SendTicketNotificationEmailJob::dispatch($email, $templateCode, $params, $context);
+
+            return;
+        }
+
+        SendTicketNotificationEmailJob::dispatchAfterResponse($email, $templateCode, $params, $context);
+    }
+
+    private function shouldUseQueue(): bool
+    {
+        $driver = (string) config('queue.default', 'sync');
+
+        if ($driver === '' || $driver === 'sync') {
+            return false;
+        }
+
+        if ($driver === 'database') {
+            return $this->databaseQueueIsReady();
+        }
+
+        if ($driver === 'redis') {
+            return extension_loaded('redis') || class_exists(Client::class);
+        }
+
+        return true;
+    }
+
+    private function databaseQueueIsReady(): bool
+    {
+        if ($this->databaseQueueReady !== null) {
+            return $this->databaseQueueReady;
+        }
+
+        $table = (string) config('queue.connections.database.table', 'jobs');
+
+        try {
+            $this->databaseQueueReady = $table !== '' && Schema::hasTable($table);
+        } catch (\Throwable $exception) {
+            Log::warning('[工单通知] 检查队列表失败，回退为 afterResponse/同步执行', [
+                'table' => $table,
+                'message' => $exception->getMessage(),
+                'exception' => $exception::class,
+            ]);
+
+            $this->databaseQueueReady = false;
+        }
+
+        return $this->databaseQueueReady;
+    }
+
+    private function siteName(): string
+    {
+        return (string) config('idc.site_name', config('app.name', '创欧云'));
+    }
+
+    private function clientTicketsUrl(): string
+    {
+        $frontendUrl = trim((string) config('app.frontend_url', ''));
+
+        return $frontendUrl !== '' ? rtrim($frontendUrl, '/').'/client/tickets' : '';
+    }
+
+    public function uploadImage(int $actorId, string $actorType, UploadedFile $file): array
+    {
+        $directoryPath = 'private/tickets/'.now()->format('Ymd');
+        $directory = storage_path('app/'.$directoryPath);
+        File::ensureDirectoryExists($directory);
+
+        $extension = UploadedImage::extension($file);
+        $mimeType = UploadedImage::mimeType($file);
+        $filename = sprintf(
+            'ticket-%s-%d-%s.%s',
+            $actorType,
+            $actorId,
+            now()->format('His').'-'.Str::lower(Str::random(12)),
+            $extension
+        );
+
+        $file->move($directory, $filename);
+
+        $attachment = $this->buildStoredAttachmentMeta(
+            $directoryPath.'/'.$filename,
+            UploadedImage::originalName($file, $filename),
+            $mimeType
+        );
+
+        $reference = $this->uploadedAssetReferenceService->issue(
+            UploadedAssetReferenceService::CATEGORY_TICKET_ATTACHMENT,
+            (string) $attachment['path'],
+            $actorType,
+            $actorId
+        );
+
+        return $this->serializeAttachmentForClient($attachment, $reference['token']);
+    }
+
+    private function ensureReplyPayload(string $content, array $attachments): void
+    {
+        throw_if($content === '' && $attachments === [], new BusinessException('内容或图片至少填写一项'));
+    }
+
+    private function closeTicketAndReplaceAttachments(Ticket $ticket, string $reason = 'admin'): void
+    {
+        $pathsToDelete = [];
+
+        DB::transaction(function () use ($ticket, $reason, &$pathsToDelete) {
+            $ticket->update(['status' => self::STATUS_CLOSED, 'close_reason' => $reason]);
+
+            $replies = TicketReply::where('ticket_id', $ticket->id)
+                ->whereNotNull('attachments')
+                ->get(['id', 'attachments']);
+
+            foreach ($replies as $reply) {
+                $attachments = collect($reply->attachments ?? [])
+                    ->map(function ($attachment) use (&$pathsToDelete) {
+                        if (! is_array($attachment)) {
+                            return $attachment;
+                        }
+
+                        $path = trim((string) ($attachment['path'] ?? ''));
+                        if ($path !== '' && empty($attachment['deleted'])) {
+                            $pathsToDelete[$path] = $path;
+                            $attachment['deleted'] = true;
+                        }
+
+                        return $attachment;
+                    })
+                    ->all();
+
+                $reply->update(['attachments' => $attachments]);
+            }
+
+            if ($pathsToDelete !== []) {
+                DB::afterCommit(fn () => $this->deleteTicketAttachmentFiles(array_values($pathsToDelete), (int) $ticket->id));
+            }
+        });
+    }
+
+    private function normalizeReplyContent(?string $content): string
+    {
+        return TextSanitizer::clean($content, true);
+    }
+
+    private function normalizeAttachments(array $attachments, string $ownerType, int $ownerId): array
+    {
+        $items = collect($attachments)
+            ->map(function ($item) {
+                if (is_array($item)) {
+                    return [
+                        'token' => $item['path'] ?? null,
+                        'name' => $item['name'] ?? null,
+                    ];
+                }
+
+                return [
+                    'token' => $item,
+                    'name' => null,
+                ];
+            })
+            ->filter(fn ($item) => is_array($item) && is_string($item['token'] ?? null) && trim((string) $item['token']) !== '')
+            ->map(function (array $item) use ($ownerType, $ownerId) {
+                return $this->buildStoredAttachmentMeta(
+                    $this->uploadedAssetReferenceService->resolve(
+                        trim((string) $item['token']),
+                        UploadedAssetReferenceService::CATEGORY_TICKET_ATTACHMENT,
+                        $ownerType,
+                        $ownerId
+                    ),
+                    $item['name'] ?? null,
+                    null
+                );
+            })
+            ->unique('path')
+            ->values()
+            ->all();
+
+        if ($items === []) {
+            return [];
+        }
+
+        throw_if(count($items) > 9, new BusinessException('单条消息最多上传 9 张图片'));
+
+        return $items;
+    }
+
+    private function normalizeAttachmentPath(string $path): string
+    {
+        $path = trim($path);
+
+        if ($path === '') {
+            throw new BusinessException('图片不存在或已失效');
+        }
+
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            $path = (string) (parse_url($path, PHP_URL_PATH) ?: '');
+        }
+
+        $normalizedPath = str_replace('\\', '/', $path);
+        $publicRoot = str_replace('\\', '/', public_path());
+        $storageRoot = str_replace('\\', '/', storage_path('app'));
+
+        if (str_starts_with($normalizedPath, $publicRoot.'/')) {
+            $path = substr($normalizedPath, strlen($publicRoot) + 1);
+        } elseif (str_starts_with($normalizedPath, $storageRoot.'/')) {
+            $path = substr($normalizedPath, strlen($storageRoot) + 1);
+        }
+
+        $path = ltrim($path, '/');
+
+        if (! str_starts_with($path, 'private/tickets/') && ! str_starts_with($path, 'uploads/tickets/')) {
+            throw new BusinessException('工单图片路径不合法');
+        }
+
+        return $path;
+    }
+
+    private function buildStoredAttachmentMeta(string $path, ?string $name = null, ?string $mimeType = null): array
+    {
+        $path = $this->normalizeAttachmentPath($path);
+        $absolutePath = SecureAsset::absolutePath($path);
+
+        throw_if(! File::exists($absolutePath), new BusinessException('图片不存在或已失效'));
+
+        $resolvedMimeType = (string) ($mimeType ?: File::mimeType($absolutePath) ?: '');
+        throw_if(! str_starts_with($resolvedMimeType, 'image/'), new BusinessException('仅支持图片附件'));
+
+        return [
+            'name' => TextSanitizer::clean($name) !== '' ? TextSanitizer::clean($name) : basename($path),
+            'path' => $path,
+            'size' => (int) File::size($absolutePath),
+            'mime_type' => $resolvedMimeType,
+            'type' => 'image',
+        ];
+    }
+
+    private function buildSecureAssetUrl(string $path): string
+    {
+        return SecureAsset::temporaryUrl($path, 10);
+    }
+
+    private function deleteTicketAttachmentFiles(array $paths, int $ticketId): void
+    {
+        foreach (array_values(array_unique($paths)) as $path) {
+            try {
+                $absolutePath = SecureAsset::absolutePath($this->normalizeAttachmentPath((string) $path));
+
+                if (File::exists($absolutePath)) {
+                    File::delete($absolutePath);
+                }
+            } catch (\Throwable $exception) {
+                Log::warning('工单附件物理删除失败', [
+                    'ticket_id' => $ticketId,
+                    'path' => $path,
+                    'message' => $exception->getMessage(),
+                ]);
+            }
+        }
+    }
+
+    private function resolveServiceDisplayName(Service $service): string
+    {
+        $serviceName = trim((string) $service->name);
+        $productName = trim((string) ($service->product?->name ?? ''));
+
+        if ($serviceName !== '' && $productName !== '' && $serviceName !== $productName) {
+            return $productName.' / '.$serviceName;
+        }
+
+        if ($serviceName !== '') {
+            return $serviceName;
+        }
+
+        if ($productName !== '') {
+            return $productName;
+        }
+
+        return '服务 #'.$service->id;
+    }
+
+    private function resolveLinkedServicePayload(Service $service): array
+    {
+        $service->loadMissing('product');
+        $provisionData = (array) ($service->provision_data ?? []);
+        $cachedConnection = $this->serviceTransformService->readCachedConnection($provisionData);
+        $connection = [
+            'dedicated_ip' => trim((string) ($provisionData['dedicated_ip'] ?? ($cachedConnection['hostname'] ?? ''))),
+            'internal_ip' => trim((string) ($cachedConnection['internal_ip'] ?? '')),
+            'username' => trim((string) ($cachedConnection['username'] ?? '')),
+            'password' => trim((string) ($cachedConnection['password'] ?? '')),
+            'has_password' => trim((string) ($cachedConnection['password'] ?? '')) !== '',
+            'port' => (int) (($cachedConnection['port'] ?? 0) ?: 0),
+        ];
+        $specs = $this->serviceTransformService->transformListItem($service)['specs'] ?? [];
+
+        return [
+            'domain' => (string) ($service->domain ?? ''),
+            'status' => (int) $service->status,
+            'billing_cycle' => (string) ($service->billing_cycle ?? ''),
+            'amount' => number_format((float) $service->amount, 2, '.', ''),
+            'expires_at' => $service->expires_at?->format('Y-m-d H:i:s'),
+            'connection' => $connection,
+            'specs' => is_array($specs) ? $specs : [],
+        ];
+    }
+
+    private function formatReply(TicketReply $reply, string $senderName): array
+    {
+        $attachments = collect($reply->attachments ?? [])->map(function ($item) use ($reply) {
+            if (! is_array($item)) {
+                return null;
+            }
+            if (! empty($item['deleted'])) {
+                $publicId = trim((string) ($item['path'] ?? '')) !== ''
+                    ? $this->uploadedAssetReferenceService->publicId((string) $item['path'])
+                    : 'deleted-'.$reply->id;
+
+                return [
+                    'id' => $publicId,
+                    'name' => $item['name'] ?? '图片',
+                    'path' => $publicId,
+                    'url' => null,
+                    'deleted' => true,
+                    'type' => 'image',
+                ];
+            }
+            try {
+                $attachment = $this->buildStoredAttachmentMeta($item['path'] ?? '', $item['name'] ?? null, $item['mime_type'] ?? null);
+
+                return $this->serializeAttachmentForClient($attachment);
+            } catch (\Throwable) {
+                return null;
+            }
+        })->filter()->values()->all();
+
+        return [
+            'id' => (int) $reply->id,
+            'ticket_id' => (int) $reply->ticket_id,
+            'user_id' => (int) $reply->user_id,
+            'content' => $reply->content,
+            'is_staff' => (int) $reply->is_staff,
+            'sender_name' => $senderName,
+            'attachments' => $attachments,
+            'created_at' => $reply->created_at?->format('Y-m-d H:i:s'),
+        ];
+    }
+
+    private function serializeAttachmentForClient(array $attachment, ?string $referenceToken = null): array
+    {
+        $path = (string) ($attachment['path'] ?? '');
+        $publicId = $this->uploadedAssetReferenceService->publicId($path);
+
+        return [
+            'id' => $publicId,
+            'name' => $attachment['name'] ?? '图片',
+            'path' => $referenceToken ?? $publicId,
+            'url' => $this->buildSecureAssetUrl($path),
+            'size' => (int) ($attachment['size'] ?? 0),
+            'mime_type' => (string) ($attachment['mime_type'] ?? ''),
+            'type' => (string) ($attachment['type'] ?? 'image'),
+        ];
+    }
+
+    private function resolveTicketReplies(Ticket $ticket, string $clientName): array
+    {
+        if (self::tableExists('ticket_replies')) {
+            $ticket->load(['replies' => fn ($q) => $q->orderBy('created_at')]);
+
+            $staffMap = AdminUser::query()
+                ->whereIn('id', $ticket->replies->where('is_staff', 1)->pluck('user_id')->unique()->values())
+                ->get(['id', 'username', 'nickname'])
+                ->mapWithKeys(fn (AdminUser $admin) => [
+                    (int) $admin->id => trim((string) $admin->nickname) !== '' ? $admin->nickname : $admin->username,
+                ])
+                ->all();
+
+            return $ticket->replies
+                ->map(fn (TicketReply $reply) => $this->formatReply(
+                    $reply,
+                    $reply->is_staff ? ($staffMap[(int) $reply->user_id] ?? '员工') : $clientName
+                ))
+                ->values()
+                ->all();
+        }
+
+        if (! self::tableExists('ticket_messages')) {
+            return [];
+        }
+
+        $messages = DB::table('ticket_messages')
+            ->where('ticket_id', (int) $ticket->id)
+            ->orderBy('created_at')
+            ->get();
+
+        if ($messages->isEmpty()) {
+            return [];
+        }
+
+        $messageIds = $messages->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $attachmentsByMessage = self::tableExists('ticket_attachments')
+            ? DB::table('ticket_attachments')
+                ->whereIn('ticket_message_id', $messageIds)
+                ->orderBy('id')
+                ->get()
+                ->groupBy('ticket_message_id')
+            : collect();
+        $staffMap = AdminUser::query()
+            ->whereIn('id', $messages->where('sender_type', 'admin')->pluck('sender_id')->filter()->unique()->values())
+            ->get(['id', 'username', 'nickname'])
+            ->mapWithKeys(fn (AdminUser $admin) => [
+                (int) $admin->id => trim((string) $admin->nickname) !== '' ? $admin->nickname : $admin->username,
+            ])
+            ->all();
+
+        return $messages->map(function ($message) use ($attachmentsByMessage, $staffMap, $clientName) {
+            $attachments = collect($attachmentsByMessage->get($message->id, collect()))
+                ->map(function ($attachment) {
+                    try {
+                        return $this->serializeAttachmentForClient($this->buildStoredAttachmentMeta(
+                            (string) ($attachment->file_path ?? ''),
+                            (string) ($attachment->file_name ?? '图片'),
+                            (string) ($attachment->mime_type ?? '')
+                        ));
+                    } catch (\Throwable) {
+                        return null;
+                    }
+                })
+                ->filter()
+                ->values()
+                ->all();
+
+            $isStaff = (string) ($message->sender_type ?? '') === 'admin';
+
+            return [
+                'id' => (int) ($message->id ?? 0),
+                'ticket_id' => (int) ($message->ticket_id ?? 0),
+                'user_id' => (int) ($message->sender_id ?? 0),
+                'content' => (string) ($message->content ?? ''),
+                'is_staff' => $isStaff ? 1 : 0,
+                'sender_name' => $isStaff ? ($staffMap[(int) ($message->sender_id ?? 0)] ?? '员工') : $clientName,
+                'attachments' => $attachments,
+                'created_at' => ! empty($message->created_at)
+                    ? Carbon::parse((string) $message->created_at)->format('Y-m-d H:i:s')
+                    : null,
+            ];
+        })->values()->all();
+    }
+}

@@ -1,0 +1,113 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Feature;
+
+use App\Exceptions\BusinessException;
+use App\Services\PaymentGateway\AlipayFaceToFaceService;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\Http;
+use ReflectionMethod;
+use Tests\TestCase;
+
+class RechargeGatewayFailureTest extends TestCase
+{
+    public function test_alipay_precreate_connection_failure_returns_business_exception(): void
+    {
+        config([
+            'alipay.gateway' => 'https://openapi.alipay.com/gateway.do',
+            'alipay.notify_url' => 'https://example.com/api/client/payment/alipay/notify',
+            'alipay.app_id' => 'test-app-id',
+            'alipay.private_key' => str_repeat('A', 200),
+        ]);
+
+        Http::fake(function (): never {
+            throw new ConnectionException('cURL error 28: Operation timed out');
+        });
+
+        $service = new AlipayFaceToFaceService;
+
+        $this->expectException(BusinessException::class);
+        $this->expectExceptionMessage('支付网关暂时不可用，请稍后重试');
+
+        $this->invokePrivateMethod($service, 'request', [[
+            'app_id' => 'test-app-id',
+            'method' => 'alipay.trade.precreate',
+            'format' => 'JSON',
+            'charset' => 'utf-8',
+            'sign_type' => 'RSA2',
+            'timestamp' => now()->format('Y-m-d H:i:s'),
+            'version' => '1.0',
+            'biz_content' => '{}',
+            'sign' => 'signature',
+        ]]);
+    }
+
+    public function test_precreate_notify_url_accepts_public_https_address(): void
+    {
+        config([
+            'alipay.notify_url' => 'https://pay.example.com/api/client/payment/alipay/notify',
+            'app.url' => 'http://127.0.0.1:8000',
+        ]);
+
+        $service = new AlipayFaceToFaceService;
+
+        $this->assertSame(
+            'https://pay.example.com/api/client/payment/alipay/notify',
+            $this->invokePrivateMethod($service, 'resolvePrecreateNotifyUrl')
+        );
+    }
+
+    public function test_precreate_notify_url_accepts_public_http_address(): void
+    {
+        config([
+            'alipay.notify_url' => 'http://47.109.144.223:6107/api/client/payment/alipay/notify',
+            'app.url' => 'http://127.0.0.1:8000',
+        ]);
+
+        $service = new AlipayFaceToFaceService;
+
+        $this->assertSame(
+            'http://47.109.144.223:6107/api/client/payment/alipay/notify',
+            $this->invokePrivateMethod($service, 'resolvePrecreateNotifyUrl')
+        );
+    }
+
+    public function test_precreate_notify_url_falls_back_to_frontend_url(): void
+    {
+        config([
+            'alipay.notify_url' => '',
+            'app.frontend_url' => 'http://47.109.144.223:6107',
+            'app.url' => 'http://127.0.0.1:8000',
+        ]);
+
+        $service = new AlipayFaceToFaceService;
+
+        $this->assertSame(
+            'http://47.109.144.223:6107/api/client/payment/alipay/notify',
+            $this->invokePrivateMethod($service, 'resolvePrecreateNotifyUrl')
+        );
+    }
+
+    public function test_precreate_notify_url_rejects_local_backend_address(): void
+    {
+        config([
+            'alipay.notify_url' => '',
+            'app.frontend_url' => '',
+            'app.url' => 'http://127.0.0.1:8000',
+        ]);
+
+        $service = new AlipayFaceToFaceService;
+
+        $this->assertNull($this->invokePrivateMethod($service, 'resolvePrecreateNotifyUrl'));
+    }
+
+    private function invokePrivateMethod(object $target, string $method, array $arguments = []): mixed
+    {
+        $reflection = new ReflectionMethod($target, $method);
+        $reflection->setAccessible(true);
+
+        return $reflection->invokeArgs($target, $arguments);
+    }
+}

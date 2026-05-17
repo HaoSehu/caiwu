@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>管理端移动端原型 - 仪表盘</title>
+<style>
+:root {
+  --color-primary: #0052d9; --color-primary-hover: #0041b3; --color-primary-soft: #edf4ff;
+  --color-primary-border: #bfd4ff; --color-success: #059669; --color-success-soft: #ecfdf5;
+  --color-warning: #d97706; --color-warning-soft: #fff7ed; --color-danger: #dc2626;
+  --color-danger-soft: #fef2f2; --color-info: #4e5969; --color-info-soft: #f2f3f5;
+  --bg-color: #f5f7fa; --bg-card: #ffffff; --bg-soft: #fafbfd; --bg-hover: #f2f3f5;
+  --text-primary: #1d2129; --text-secondary: #4e5969; --text-placeholder: #86909c; --text-inverse: #ffffff;
+  --border-color: #e5e6eb; --divider-color: #ebedf0;
+  --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
+  --shadow-xs: 0 1px 1px rgba(29,33,41,0.04); --shadow-sm: 0 1px 2px rgba(29,33,41,0.05), 0 1px 3px rgba(29,33,41,0.04);
+  --shadow-md: 0 4px 12px rgba(29,33,41,0.08);
+  --font-main: "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: var(--font-main); font-size: 14px; line-height: 1.5; color: var(--text-primary); background: var(--bg-color); -webkit-font-smoothing: antialiased; }
+
+.admin-shell { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+.shell-topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 52px; padding: 0 14px; background: var(--bg-card); border-bottom: 1px solid var(--divider-color); flex-shrink: 0; }
+.topbar-left { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+.topbar-right { display: flex; flex-shrink: 0; align-items: center; }
+.hamburger { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border: none; background: none; border-radius: var(--radius-sm); cursor: pointer; color: var(--text-secondary); }
+.hamburger:active { background: var(--bg-hover); }
+.page-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover)); color: var(--text-inverse); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; }
+.shell-content { flex: 1; overflow-y: auto; padding: 14px 14px 24px; -webkit-overflow-scrolling: touch; }
+.admin-page { display: flex; flex-direction: column; gap: 20px; }
+.admin-page-head { display: flex; flex-direction: column; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--divider-color); }
+.admin-page-heading h2 { font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
+.admin-page-heading p { margin-top: 4px; font-size: 13px; color: var(--text-secondary); }
+.page-actions { display: flex; gap: 8px; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 16px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; background: var(--bg-card); color: var(--text-secondary); white-space: nowrap; transition: all 0.15s; }
+.btn:active { transform: scale(0.98); }
+.btn-primary { background: var(--color-primary); border-color: var(--color-primary); color: var(--text-inverse); box-shadow: 0 1px 2px rgba(0,82,217,0.18); }
+
+/* ========== Headline Grid ========== */
+.headline-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.headline-card {
+  display: flex; gap: 12px; align-items: flex-start; padding: 16px;
+  background: var(--bg-card); border: 1px solid var(--border-color);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-xs);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.headline-card:hover { border-color: var(--color-primary-border); box-shadow: var(--shadow-sm); }
+.headline-card.blue { border-top: 2px solid var(--color-primary); }
+.headline-card.green { border-top: 2px solid var(--color-success); }
+.headline-card.orange { border-top: 2px solid var(--color-warning); }
+.headline-card.slate { border-top: 2px solid var(--color-info); }
+.headline-icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; border-radius: var(--radius-sm); font-size: 18px; flex-shrink: 0;
+}
+.headline-card.blue .headline-icon { background: var(--color-primary-soft); color: var(--color-primary); }
+.headline-card.green .headline-icon { background: var(--color-success-soft); color: var(--color-success); }
+.headline-card.orange .headline-icon { background: var(--color-warning-soft); color: var(--color-warning); }
+.headline-card.slate .headline-icon { background: var(--color-info-soft); color: var(--color-info); }
+.headline-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.headline-label { font-size: 12px; color: var(--text-secondary); }
+.headline-value { font-size: 24px; font-weight: 600; line-height: 1.2; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.headline-note { font-size: 12px; color: var(--text-placeholder); line-height: 1.5; }
+
+/* ========== Stat Card (summary strip) ========== */
+.stat-strip { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.stat-card {
+  display: flex; flex-direction: column; gap: 6px; padding: 14px 16px;
+  background: var(--bg-card); border: 1px solid var(--border-color);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-xs);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.stat-card:hover { border-color: var(--color-primary-border); box-shadow: var(--shadow-sm); }
+.stat-value { font-size: 20px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.stat-label { font-size: 12px; color: var(--text-secondary); }
+
+/* ========== Panel Card ========== */
+.panel-card {
+  background: var(--bg-card); border: 1px solid var(--border-color);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-xs); overflow: hidden;
+}
+.panel-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; border-bottom: 1px solid var(--divider-color);
+}
+.panel-head h3 { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.panel-head a { font-size: 13px; color: var(--color-primary); text-decoration: none; }
+.panel-body { padding: 0; }
+
+/* ========== Recent List ========== */
+.recent-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; border-bottom: 1px solid var(--divider-color);
+  transition: background 0.12s;
+}
+.recent-item:last-child { border-bottom: none; }
+.recent-item:hover { background: var(--bg-hover); }
+.recent-left { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.recent-title { font-size: 13px; font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recent-sub { font-size: 12px; color: var(--text-placeholder); }
+.recent-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.recent-amount { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.recent-amount.income { color: var(--color-success); }
+.recent-amount.expense { color: var(--color-danger); }
+
+.tag { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 4px; font-size: 12px; font-weight: 500; white-space: nowrap; }
+.tag-success { background: var(--color-success-soft); color: var(--color-success); }
+.tag-warning { background: var(--color-warning-soft); color: var(--color-warning); }
+.tag-info { background: var(--color-info-soft); color: var(--color-info); }
+
+/* ========== Chart Placeholder ========== */
+.chart-placeholder {
+  display: flex; align-items: center; justify-content: center;
+  height: 180px; background: var(--bg-soft); color: var(--text-placeholder);
+  font-size: 13px; border-bottom: 1px solid var(--divider-color);
+}
+
+/* ========== Priority Panel ========== */
+.priority-list { padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+.priority-item { display: flex; align-items: center; gap: 10px; }
+.priority-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.priority-dot.high { background: var(--color-danger); }
+.priority-dot.medium { background: var(--color-warning); }
+.priority-dot.low { background: var(--color-info); }
+.priority-text { font-size: 13px; color: var(--text-primary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.priority-count { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+
+/* ========== Responsive ========== */
+@media (min-width: 901px) {
+  .hamburger { display: none; }
+  .shell-content { padding: 20px 24px 32px; }
+  .admin-page-head { flex-direction: row; justify-content: space-between; align-items: flex-end; }
+  .admin-page-heading h2 { font-size: 22px; }
+  .headline-grid { grid-template-columns: repeat(4, 1fr); }
+  .stat-strip { grid-template-columns: repeat(4, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<div class="admin-shell">
+  <header class="shell-topbar">
+    <div class="topbar-left">
+      <button class="hamburger">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <span class="page-title">仪表盘</span>
+    </div>
+    <div class="topbar-right"><div class="avatar">C</div></div>
+  </header>
+
+  <main class="shell-content">
+    <div class="admin-page">
+
+      <section class="admin-page-head">
+        <div class="admin-page-heading">
+          <h2>仪表盘</h2>
+          <p>系统运行概览与关键业务指标。</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+            刷新
+          </button>
+        </div>
+      </section>
+
+      <!-- Headline Grid -->
+      <div class="headline-grid">
+        <div class="headline-card blue">
+          <div class="headline-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+          <div class="headline-text">
+            <span class="headline-label">总用户数</span>
+            <strong class="headline-value">2,847</strong>
+            <small class="headline-note">较上周 +12.3%</small>
+          </div>
+        </div>
+        <div class="headline-card green">
+          <div class="headline-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+          </div>
+          <div class="headline-text">
+            <span class="headline-label">活跃服务</span>
+            <strong class="headline-value">1,234</strong>
+            <small class="headline-note">运行中 1,180 / 迁移中 54</small>
+          </div>
+        </div>
+        <div class="headline-card orange">
+          <div class="headline-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          </div>
+          <div class="headline-text">
+            <span class="headline-label">本月收入</span>
+            <strong class="headline-value">89,420</strong>
+            <small class="headline-note">较上月 +8.7%</small>
+          </div>
+        </div>
+        <div class="headline-card slate">
+          <div class="headline-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          </div>
+          <div class="headline-text">
+            <span class="headline-label">待处理工单</span>
+            <strong class="headline-value">23</strong>
+            <small class="headline-note">紧急 3 / 普通 20</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- Summary Strip -->
+      <div class="stat-strip">
+        <div class="stat-card">
+          <span class="stat-value">156</span>
+          <span class="stat-label">今日新增用户</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">42</span>
+          <span class="stat-label">今日新开服务</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">12,580</span>
+          <span class="stat-label">今日收入 (元)</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value">99.8%</span>
+          <span class="stat-label">系统可用率</span>
+        </div>
+      </div>
+
+      <!-- Chart -->
+      <div class="panel-card">
+        <div class="panel-head">
+          <h3>收入趋势</h3>
+          <a href="#">查看详情</a>
+        </div>
+        <div class="chart-placeholder">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" style="margin-right:8px;opacity:0.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          图表区域（ECharts 渲染）
+        </div>
+      </div>
+
+      <!-- Recent Invoices -->
+      <div class="panel-card">
+        <div class="panel-head">
+          <h3>最近账单</h3>
+          <a href="#">查看全部</a>
+        </div>
+        <div class="panel-body">
+          <div class="recent-item">
+            <div class="recent-left">
+              <span class="recent-title">INV-20260508-001</span>
+              <span class="recent-sub">用户 138****6789 / 云服务器 Pro</span>
+            </div>
+            <div class="recent-right">
+              <span class="recent-amount income">1,280.00</span>
+              <span class="tag tag-success">已支付</span>
+            </div>
+          </div>
+          <div class="recent-item">
+            <div class="recent-left">
+              <span class="recent-title">INV-20260508-002</span>
+              <span class="recent-sub">用户 user@example.com / 流量包 100GB</span>
+            </div>
+            <div class="recent-right">
+              <span class="recent-amount income">299.00</span>
+              <span class="tag tag-success">已支付</span>
+            </div>
+          </div>
+          <div class="recent-item">
+            <div class="recent-left">
+              <span class="recent-title">INV-20260507-015</span>
+              <span class="recent-sub">用户 139****1234 / 云服务器 Basic</span>
+            </div>
+            <div class="recent-right">
+              <span class="recent-amount expense">560.00</span>
+              <span class="tag tag-warning">待支付</span>
+            </div>
+          </div>
+          <div class="recent-item">
+            <div class="recent-left">
+              <span class="recent-title">INV-20260507-014</span>
+              <span class="recent-sub">用户 186****5678 / 独立服务器</span>
+            </div>
+            <div class="recent-right">
+              <span class="recent-amount income">3,420.00</span>
+              <span class="tag tag-success">已支付</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Priority Tickets -->
+      <div class="panel-card">
+        <div class="panel-head">
+          <h3>待处理工单</h3>
+          <a href="#">查看全部</a>
+        </div>
+        <div class="priority-list">
+          <div class="priority-item">
+            <span class="priority-dot high"></span>
+            <span class="priority-text">服务器无法连接，SSH 超时</span>
+            <span class="priority-count">2</span>
+          </div>
+          <div class="priority-item">
+            <span class="priority-dot high"></span>
+            <span class="priority-text">数据盘空间不足告警</span>
+            <span class="priority-count">1</span>
+          </div>
+          <div class="priority-item">
+            <span class="priority-dot medium"></span>
+            <span class="priority-text">续费流程异常</span>
+            <span class="priority-count">5</span>
+          </div>
+          <div class="priority-item">
+            <span class="priority-dot medium"></span>
+            <span class="priority-text">域名解析配置咨询</span>
+            <span class="priority-count">8</span>
+          </div>
+          <div class="priority-item">
+            <span class="priority-dot low"></span>
+            <span class="priority-text">发票申请</span>
+            <span class="priority-count">7</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+</body>
+</html>

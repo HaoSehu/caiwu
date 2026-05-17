@@ -29,7 +29,7 @@ return new class extends Migration
         if ($duplicates->isNotEmpty()) {
             $phones = $duplicates->pluck('phone')->map(fn ($phone) => (string) $phone)->implode(', ');
 
-            throw new RuntimeException('users.phone 存在重复值，无法添加唯一索引，请先清洗数据：' . $phones);
+            throw new RuntimeException('users.phone 存在重复值，无法添加唯一索引，请先清洗数据：'.$phones);
         }
 
         Schema::table('users', function (Blueprint $table): void {

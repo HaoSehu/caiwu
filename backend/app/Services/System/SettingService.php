@@ -1,0 +1,606 @@
+<?php
+
+namespace App\Services\System;
+
+use App\Models\ProductCategory;
+use App\Models\Setting;
+use App\Models\SystemSetting;
+use App\Support\AutomationScheduleExpression;
+use App\Support\IndexNowKeyFileSyncer;
+use App\Support\SiteVerificationHtmlSyncer;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
+
+class SettingService
+{
+    private const FIXED_RENEW_NOTICE_DAYS = [7, 3, 1];
+
+    public static function defaultTrafficPackageConfig(): array
+    {
+        return [
+            'traffic_package_enabled' => true,
+            'traffic_package_display_threshold_percent' => 0,
+            'traffic_package_button_text' => '购买流量包',
+            'traffic_package_option_field' => 'flow_limit',
+            'traffic_package_option_keyword' => '流量',
+            'traffic_package_allow_choice_mode' => true,
+            'traffic_package_allow_quantity_mode' => true,
+        ];
+    }
+
+    public static function defaultAutomationConfig(): array
+    {
+        return [
+            'expire_suspend_enabled' => true,
+            'expire_suspend_after_days' => 0,
+            'expire_suspend_notify_enabled' => true,
+            'expire_unsuspend_notify_enabled' => true,
+            'expire_terminate_enabled' => false,
+            'expire_terminate_after_days' => 7,
+            'service_lifecycle_schedule_mode' => AutomationScheduleExpression::MODE_EVERY_FIVE_MINUTES,
+            'service_lifecycle_schedule_time' => '00:05:00',
+            'renew_notice_enabled' => true,
+            'renew_notice_days_before' => self::FIXED_RENEW_NOTICE_DAYS,
+            'renew_create_invoice_enabled' => true,
+            'invoice_unpaid_reminder_enabled' => true,
+            'invoice_unpaid_before_due_days' => 1,
+            'invoice_overdue_reminder_days' => [1, 3, 5],
+            'invoice_overdue_after_days' => 0,
+            'billing_maintenance_schedule_mode' => AutomationScheduleExpression::MODE_HOURLY,
+            'billing_maintenance_schedule_time' => '00:00:00',
+            'ticket_auto_close_enabled' => true,
+            'ticket_auto_close_after_hours' => 48,
+            'ticket_auto_close_schedule_mode' => AutomationScheduleExpression::MODE_HOURLY,
+            'ticket_auto_close_schedule_time' => '00:00:00',
+            'pending_order_cleanup_enabled' => true,
+            'pending_order_cleanup_after_hours' => 1,
+            'pending_recharge_cleanup_enabled' => true,
+            'pending_recharge_cleanup_after_days' => 3,
+            'order_cleanup_schedule_mode' => AutomationScheduleExpression::MODE_EVERY_FIVE_MINUTES,
+            'order_cleanup_schedule_time' => '00:00:00',
+        ];
+    }
+
+    public function getGroupSettings(string $group): Collection
+    {
+        $fallbackSettingMap = $this->getGroupFallbackSettings($group);
+        $storedSettings = $this->getStoredSettings($group);
+
+        if ($fallbackSettingMap !== []) {
+            $this->syncFallbackSettingsToDatabase($group, $fallbackSettingMap, $storedSettings);
+            $storedSettings = $this->getStoredSettings($group);
+        }
+
+        $fallbackSettings = collect($fallbackSettingMap)
+            ->map(fn (mixed $fallbackValue, string $key) => $this->formatSettingPayload(
+                $group,
+                $key,
+                $this->resolveSettingValue($group, $key, $fallbackValue)
+            ));
+
+        $dynamicSettings = $storedSettings
+            ->reject(fn ($setting, string $key) => array_key_exists($key, $fallbackSettingMap))
+            ->map(fn (SystemSetting $setting) => $this->formatSettingPayload(
+                (string) ($setting->group_key ?? $group),
+                (string) ($setting->item_key ?? ''),
+                $setting->item_value ?? ''
+            ));
+
+        return $fallbackSettings
+            ->concat($dynamicSettings)
+            ->values();
+    }
+
+    public function saveGroupSettings(string $group, array $settings): void
+    {
+        Setting::setValues($group, $settings);
+
+        $this->syncSiteVerificationMetaIfNeeded($group, $settings);
+        $this->syncIndexNowKeyFileIfNeeded($group, $settings);
+    }
+
+    public function getProvisionHostnameConfig(): array
+    {
+        $enforce = $this->getBool('system', 'provision_hostname_enforce', false);
+        $prefix = $this->sanitizeHostnamePrefix(
+            $this->getString('system', 'provision_hostname_prefix', 'srv')
+        );
+        $charsets = $this->parseProvisionHostnameCharsets(
+            $this->getString('system', 'provision_hostname_charsets', 'number')
+        );
+        $length = $this->getInt('system', 'provision_hostname_length', 12, 4, 200);
+        $prefix = $prefix !== '' ? $prefix : 'srv';
+
+        return [
+            'enforce' => $enforce,
+            'prefix' => $prefix,
+            'length' => max($length, mb_strlen($prefix)),
+            'charsets' => $charsets,
+            'pool' => $this->buildProvisionHostnamePool($charsets),
+        ];
+    }
+
+    public function normalizeHostname(string $hostname, bool $forceLowercase = true): string
+    {
+        $value = trim($hostname);
+        if ($forceLowercase) {
+            $value = mb_strtolower($value);
+        }
+
+        $value = preg_replace('/[^a-zA-Z0-9-]+/', '-', $value) ?? '';
+        $value = preg_replace('/-+/', '-', $value) ?? '';
+        $value = trim($value, '-');
+
+        if ($value === '') {
+            return '';
+        }
+
+        return mb_substr($value, 0, 63);
+    }
+
+    public function sanitizeHostnameFragment(string $value): string
+    {
+        $value = $this->normalizeHostname($value, true);
+
+        return trim($value, '-');
+    }
+
+    public function sanitizeHostnamePrefix(string $value): string
+    {
+        $value = preg_replace('/[^a-zA-Z]+/', '', trim($value)) ?? '';
+        $value = mb_strtolower($value);
+
+        return mb_substr($value, 0, 10);
+    }
+
+    public function getAutomationConfig(): array
+    {
+        $defaults = self::defaultAutomationConfig();
+
+        return [
+            'expire_suspend_enabled' => $this->getBool('automation', 'expire_suspend_enabled', $defaults['expire_suspend_enabled']),
+            'expire_suspend_after_days' => $this->getInt('automation', 'expire_suspend_after_days', $defaults['expire_suspend_after_days'], 0, 365),
+            'expire_suspend_notify_enabled' => $this->getBool('automation', 'expire_suspend_notify_enabled', $defaults['expire_suspend_notify_enabled']),
+            'expire_unsuspend_notify_enabled' => $this->getBool('automation', 'expire_unsuspend_notify_enabled', $defaults['expire_unsuspend_notify_enabled']),
+            'expire_terminate_enabled' => $this->getBool('automation', 'expire_terminate_enabled', $defaults['expire_terminate_enabled']),
+            'expire_terminate_after_days' => $this->getInt('automation', 'expire_terminate_after_days', $defaults['expire_terminate_after_days'], 1, 365),
+            'service_lifecycle_schedule_mode' => $this->getScheduleMode('automation', 'service_lifecycle_schedule_mode', $defaults['service_lifecycle_schedule_mode']),
+            'service_lifecycle_schedule_time' => $this->getScheduleTime('automation', 'service_lifecycle_schedule_time', $defaults['service_lifecycle_schedule_time']),
+            'renew_notice_enabled' => $this->getBool('automation', 'renew_notice_enabled', $defaults['renew_notice_enabled']),
+            'renew_notice_days_before' => self::FIXED_RENEW_NOTICE_DAYS,
+            'renew_create_invoice_enabled' => $this->getBool('automation', 'renew_create_invoice_enabled', $defaults['renew_create_invoice_enabled']),
+            'invoice_unpaid_reminder_enabled' => $this->getBool('automation', 'invoice_unpaid_reminder_enabled', $defaults['invoice_unpaid_reminder_enabled']),
+            'invoice_unpaid_before_due_days' => $this->getInt('automation', 'invoice_unpaid_before_due_days', $defaults['invoice_unpaid_before_due_days'], 0, 30),
+            'invoice_overdue_reminder_days' => $this->parseIntegerList($this->getString('automation', 'invoice_overdue_reminder_days', '1,3,5'), 0, 365),
+            'invoice_overdue_after_days' => $this->getInt('automation', 'invoice_overdue_after_days', $defaults['invoice_overdue_after_days'], 0, 365),
+            'billing_maintenance_schedule_mode' => $this->getScheduleMode('automation', 'billing_maintenance_schedule_mode', $defaults['billing_maintenance_schedule_mode']),
+            'billing_maintenance_schedule_time' => $this->getScheduleTime('automation', 'billing_maintenance_schedule_time', $defaults['billing_maintenance_schedule_time']),
+            'ticket_auto_close_enabled' => $this->getBool('automation', 'ticket_auto_close_enabled', $defaults['ticket_auto_close_enabled']),
+            'ticket_auto_close_after_hours' => $this->getInt('automation', 'ticket_auto_close_after_hours', $defaults['ticket_auto_close_after_hours'], 1, 720),
+            'ticket_auto_close_schedule_mode' => $this->getScheduleMode('automation', 'ticket_auto_close_schedule_mode', $defaults['ticket_auto_close_schedule_mode']),
+            'ticket_auto_close_schedule_time' => $this->getScheduleTime('automation', 'ticket_auto_close_schedule_time', $defaults['ticket_auto_close_schedule_time']),
+            'pending_order_cleanup_enabled' => $this->getBool('automation', 'pending_order_cleanup_enabled', $defaults['pending_order_cleanup_enabled']),
+            'pending_order_cleanup_after_hours' => $this->getInt('automation', 'pending_order_cleanup_after_hours', $defaults['pending_order_cleanup_after_hours'], 1, 720),
+            'pending_recharge_cleanup_enabled' => $this->getBool('automation', 'pending_recharge_cleanup_enabled', $defaults['pending_recharge_cleanup_enabled']),
+            'pending_recharge_cleanup_after_days' => $this->getInt('automation', 'pending_recharge_cleanup_after_days', $defaults['pending_recharge_cleanup_after_days'], 0, 365),
+            'order_cleanup_schedule_mode' => $this->getScheduleMode('automation', 'order_cleanup_schedule_mode', $defaults['order_cleanup_schedule_mode']),
+            'order_cleanup_schedule_time' => $this->getScheduleTime('automation', 'order_cleanup_schedule_time', $defaults['order_cleanup_schedule_time']),
+        ];
+    }
+
+    public function getTrafficPackageConfig(): array
+    {
+        $defaults = self::defaultTrafficPackageConfig();
+
+        return [
+            'enabled' => $this->getBool('traffic_package', 'traffic_package_enabled', $defaults['traffic_package_enabled']),
+            'display_threshold_percent' => $this->getInt(
+                'traffic_package',
+                'traffic_package_display_threshold_percent',
+                $defaults['traffic_package_display_threshold_percent'],
+                0,
+                100
+            ),
+            'button_text' => $this->getString(
+                'traffic_package',
+                'traffic_package_button_text',
+                $defaults['traffic_package_button_text']
+            ),
+            'option_field' => $this->getString(
+                'traffic_package',
+                'traffic_package_option_field',
+                $defaults['traffic_package_option_field']
+            ),
+            'option_keyword' => $this->getString(
+                'traffic_package',
+                'traffic_package_option_keyword',
+                $defaults['traffic_package_option_keyword']
+            ),
+            'allow_choice_mode' => $this->getBool(
+                'traffic_package',
+                'traffic_package_allow_choice_mode',
+                $defaults['traffic_package_allow_choice_mode']
+            ),
+            'allow_quantity_mode' => $this->getBool(
+                'traffic_package',
+                'traffic_package_allow_quantity_mode',
+                $defaults['traffic_package_allow_quantity_mode']
+            ),
+        ];
+    }
+
+    public function getTrafficPackageCatalog(): array
+    {
+        $raw = Setting::getValue('traffic_package_catalog', 'items', '[]');
+
+        if (! is_string($raw) || trim($raw) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($raw, true);
+        if (! is_array($decoded)) {
+            return [];
+        }
+
+        return collect($decoded)
+            ->filter(fn ($item) => is_array($item))
+            ->map(fn (array $item) => $this->normalizeTrafficPackageCatalogItem($item))
+            ->filter(fn (array $item) => (int) $item['category_id'] > 0 && (int) $item['target_value'] > 0)
+            ->sortBy([
+                ['product_type', 'asc'],
+                ['category_id', 'asc'],
+                ['sort_order', 'asc'],
+                ['target_value', 'asc'],
+            ])
+            ->values()
+            ->all();
+    }
+
+    public function getTrafficPackageCatalogForCategory(int $categoryId, string $productType = '', int $productId = 0): array
+    {
+        $normalizedType = trim($productType);
+        $normalizedProductId = max($productId, 0);
+        $categoryIds = $this->resolveTrafficPackageCategoryIds($categoryId);
+
+        return collect($this->getTrafficPackageCatalog())
+            ->filter(function (array $item) use ($categoryIds, $normalizedType, $normalizedProductId) {
+                if (! in_array((int) $item['category_id'], $categoryIds, true)) {
+                    return false;
+                }
+
+                if ($normalizedType === '') {
+                    if ($normalizedProductId <= 0) {
+                        return true;
+                    }
+                } elseif (trim((string) $item['product_type']) !== $normalizedType) {
+                    return false;
+                }
+
+                if ($normalizedProductId <= 0) {
+                    return true;
+                }
+
+                $productIds = is_array($item['product_ids'] ?? null) ? $item['product_ids'] : [];
+
+                return $productIds === [] || in_array($normalizedProductId, $productIds, true);
+            })
+            ->values()
+            ->all();
+    }
+
+    private function resolveTrafficPackageCategoryIds(int $categoryId): array
+    {
+        $categoryId = max($categoryId, 0);
+        if ($categoryId <= 0) {
+            return [];
+        }
+
+        $ids = [$categoryId];
+        $category = ProductCategory::query()
+            ->select(['id', 'parent_group_id'])
+            ->find($categoryId);
+
+        if ($category instanceof ProductCategory && (int) ($category->parent_group_id ?? 0) > 0) {
+            $ids[] = (int) $category->parent_group_id;
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    public function saveTrafficPackageCatalog(array $items): void
+    {
+        $normalized = collect($items)
+            ->filter(fn ($item) => is_array($item))
+            ->map(fn (array $item) => $this->normalizeTrafficPackageCatalogItem($item))
+            ->filter(fn (array $item) => (int) $item['category_id'] > 0 && (int) $item['target_value'] > 0)
+            ->sortBy([
+                ['product_type', 'asc'],
+                ['category_id', 'asc'],
+                ['sort_order', 'asc'],
+                ['target_value', 'asc'],
+            ])
+            ->values()
+            ->all();
+
+        Setting::setValue(
+            'traffic_package_catalog',
+            'items',
+            json_encode($normalized, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+        );
+    }
+
+    private function getString(string $group, string $key, string $default = ''): string
+    {
+        return trim((string) Setting::getValue($group, $key, $default));
+    }
+
+    /**
+     * @return Collection<string, SystemSetting>
+     */
+    private function getStoredSettings(string $group): Collection
+    {
+        return SystemSetting::query()
+            ->where('group_key', $group)
+            ->get()
+            ->keyBy(fn (SystemSetting $setting) => (string) $setting->item_key);
+    }
+
+    /**
+     * 返回管理端需要直接回显的默认配置。
+     *
+     * @return array<string, mixed>
+     */
+    private function getGroupFallbackSettings(string $group): array
+    {
+        return match ($group) {
+            'system' => [
+                'geetest_enabled' => $this->normalizeBooleanConfigValue(config('idc.geetest.enabled', false)) ? '1' : '0',
+                'geetest_captcha_id' => (string) config('idc.geetest.captcha_id', ''),
+                'geetest_captcha_key' => (string) config('idc.geetest.captcha_key', ''),
+            ],
+            'payment' => [
+                'alipay_enabled' => '0',
+                'alipay_name' => '支付宝支付',
+                'alipay_app_id' => (string) config('alipay.app_id', ''),
+                'alipay_private_key' => (string) config('alipay.private_key', ''),
+                'alipay_public_key' => (string) config('alipay.alipay_public_key', ''),
+            ],
+            'traffic_package' => [
+                'traffic_package_enabled' => '1',
+                'traffic_package_display_threshold_percent' => '0',
+                'traffic_package_button_text' => '购买流量包',
+                'traffic_package_option_field' => 'flow_limit',
+                'traffic_package_option_keyword' => '流量',
+                'traffic_package_allow_choice_mode' => '1',
+                'traffic_package_allow_quantity_mode' => '1',
+            ],
+            default => [],
+        };
+    }
+
+    /**
+     * 将配置文件中的默认值首次写入数据库，后续统一走数据库配置。
+     *
+     * @param  array<string, mixed>  $fallbackSettingMap
+     * @param  Collection<string, SystemSetting>  $storedSettings
+     */
+    private function syncFallbackSettingsToDatabase(string $group, array $fallbackSettingMap, Collection $storedSettings): void
+    {
+        $pending = [];
+
+        foreach ($fallbackSettingMap as $key => $value) {
+            if ($storedSettings->has($key)) {
+                continue;
+            }
+
+            if ($value === null) {
+                continue;
+            }
+
+            if (is_string($value) && trim($value) === '' && ! $this->shouldPersistEmptyFallback($group, $key)) {
+                continue;
+            }
+
+            $pending[$key] = $value;
+        }
+
+        Setting::setValues($group, $pending);
+    }
+
+    private function shouldPersistEmptyFallback(string $group, string $key): bool
+    {
+        return in_array($group.':'.$key, [
+            'system:geetest_enabled',
+            'payment:alipay_enabled',
+        ], true);
+    }
+
+    private function resolveSettingValue(string $group, string $key, mixed $fallbackValue = ''): mixed
+    {
+        $value = Setting::getValue($group, $key);
+
+        return ($value !== null && $value !== '') ? $value : $fallbackValue;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function formatSettingPayload(string $group, string $key, mixed $value): array
+    {
+        return [
+            'group' => $group,
+            'key' => $key,
+            'value' => $value,
+            'is_secret' => Setting::isSensitiveKey($key),
+            'has_value' => $this->hasSettingValue($value),
+            'masked_value' => is_string($value) ? trim($value) : (string) $value,
+        ];
+    }
+
+    private function hasSettingValue(mixed $value): bool
+    {
+        if ($value === null) {
+            return false;
+        }
+
+        if (is_string($value)) {
+            return trim($value) !== '';
+        }
+
+        return true;
+    }
+
+    private function syncSiteVerificationMetaIfNeeded(string $group, array $settings): void
+    {
+        if ($group !== 'seo') {
+            return;
+        }
+
+        try {
+            app(SiteVerificationHtmlSyncer::class)->sync($settings);
+        } catch (\Throwable $exception) {
+            Log::warning('同步站点验证 meta 标签失败', [
+                'group' => $group,
+                'exception' => $exception::class,
+                'message' => $exception->getMessage(),
+            ]);
+        }
+    }
+
+    private function syncIndexNowKeyFileIfNeeded(string $group, array $settings): void
+    {
+        if ($group !== 'seo' || ! array_key_exists('indexnow_key', $settings)) {
+            return;
+        }
+
+        try {
+            app(IndexNowKeyFileSyncer::class)->sync($settings);
+        } catch (\Throwable $exception) {
+            Log::warning('同步 IndexNow 密钥验证文件失败', [
+                'group' => $group,
+                'exception' => $exception::class,
+                'message' => $exception->getMessage(),
+            ]);
+        }
+    }
+
+    private function getInt(string $group, string $key, int $default, int $min, int $max): int
+    {
+        $value = Setting::getValue($group, $key, $default);
+        $value = is_numeric($value) ? (int) $value : $default;
+
+        return max($min, min($max, $value));
+    }
+
+    private function getBool(string $group, string $key, bool $default): bool
+    {
+        $value = Setting::getValue($group, $key, $default ? '1' : '0');
+
+        return in_array($value, [true, 1, '1', 'true', 'on'], true);
+    }
+
+    private function getScheduleMode(string $group, string $key, string $default): string
+    {
+        return AutomationScheduleExpression::normalizeMode(
+            $this->getString($group, $key, $default),
+            $default
+        );
+    }
+
+    private function getScheduleTime(string $group, string $key, string $default): string
+    {
+        return AutomationScheduleExpression::normalizeTime(
+            $this->getString($group, $key, $default),
+            $default
+        );
+    }
+
+    private function normalizeBooleanConfigValue(mixed $value): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if (is_string($value)) {
+            return in_array(strtolower(trim($value)), ['1', 'true', 'on', 'yes'], true);
+        }
+
+        return (bool) $value;
+    }
+
+    private function parseProvisionHostnameCharsets(string $value): array
+    {
+        $items = collect(explode(',', $value))
+            ->map(fn (string $item) => trim($item))
+            ->filter(fn (string $item) => in_array($item, ['number', 'uppercase', 'lowercase'], true))
+            ->unique()
+            ->values()
+            ->all();
+
+        return $items !== [] ? $items : ['number'];
+    }
+
+    private function buildProvisionHostnamePool(array $charsets): string
+    {
+        $pool = '';
+
+        if (in_array('number', $charsets, true)) {
+            $pool .= '0123456789';
+        }
+
+        if (in_array('uppercase', $charsets, true)) {
+            $pool .= 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        }
+
+        if (in_array('lowercase', $charsets, true)) {
+            $pool .= 'abcdefghijklmnopqrstuvwxyz';
+        }
+
+        return $pool !== '' ? $pool : '0123456789';
+    }
+
+    private function parseIntegerList(string $value, int $min = 0, int $max = 365): array
+    {
+        return collect(explode(',', $value))
+            ->map(fn (string $item) => trim($item))
+            ->filter(fn (string $item) => $item !== '' && is_numeric($item))
+            ->map(fn (string $item) => max($min, min($max, (int) $item)))
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+    }
+
+    private function normalizeTrafficPackageCatalogItem(array $item): array
+    {
+        $categoryId = max((int) ($item['category_id'] ?? 0), 0);
+        $targetValue = max((int) ($item['target_value'] ?? 0), 0);
+        $price = is_numeric($item['price'] ?? null)
+            ? number_format(max((float) $item['price'], 0), 2, '.', '')
+            : '0.00';
+        $sortOrder = max((int) ($item['sort_order'] ?? 0), 0);
+        $label = trim((string) ($item['label'] ?? ''));
+
+        if ($label === '' && $targetValue > 0) {
+            $label = $targetValue >= 1024 && $targetValue % 1024 === 0
+                ? ((int) ($targetValue / 1024)).'T'
+                : $targetValue.'G';
+        }
+
+        return [
+            'category_id' => $categoryId,
+            'product_type' => trim((string) ($item['product_type'] ?? '')),
+            'product_ids' => collect((array) ($item['product_ids'] ?? []))
+                ->map(fn ($value) => (int) $value)
+                ->filter(fn (int $value) => $value > 0)
+                ->unique()
+                ->values()
+                ->all(),
+            'label' => $label,
+            'target_value' => $targetValue,
+            'price' => $price,
+            'enabled' => in_array($item['enabled'] ?? 1, [true, 1, '1', 'true', 'on'], true) ? 1 : 0,
+            'sort_order' => $sortOrder,
+        ];
+    }
+}
