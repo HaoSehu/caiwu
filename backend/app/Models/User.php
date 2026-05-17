@@ -6,9 +6,13 @@ use App\Casts\LegacyEncrypted;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\HasApiTokens;
 
@@ -17,15 +21,16 @@ class User extends Authenticatable
     use HasApiTokens, HasFactory, Notifiable, SoftDeletes;
 
     private static ?bool $profileTableAvailable = null;
+
     private static ?bool $accountTableAvailable = null;
 
     protected $fillable = [
-        'email', 'password', 'phone', 'status',
+        'email', 'password', 'phone', 'status', 'balance',
         'nickname', 'company', 'qq', 'admin_note',
         'referral_code', 'referrer_user_id', 'referred_at', 'member_level_id', 'total_sales_amount',
         'is_verified', 'real_name', 'id_card', 'verification_status', 'verification_message', 'verification_certify_id', 'verified_at',
         'alipay_real_name', 'alipay_account',
-        'login_email_alert', 'last_login_ip', 'last_login_at',
+        'login_email_alert', 'login_notify', 'login_location_alert', 'password_change_alert', 'phone_change_alert', 'email_change_alert', 'marketing_alert', 'last_login_ip', 'last_login_at',
     ];
 
     protected $hidden = ['password'];
@@ -34,6 +39,12 @@ class User extends Authenticatable
     {
         return [
             'login_email_alert' => 'boolean',
+            'login_notify' => 'boolean',
+            'login_location_alert' => 'boolean',
+            'password_change_alert' => 'boolean',
+            'phone_change_alert' => 'boolean',
+            'email_change_alert' => 'boolean',
+            'marketing_alert' => 'boolean',
             'last_login_at' => 'datetime',
             'referred_at' => 'datetime',
             'verified_at' => 'datetime',
@@ -46,9 +57,7 @@ class User extends Authenticatable
         ];
     }
 
-    protected static function booted(): void
-    {
-    }
+    protected static function booted(): void {}
 
     public function getNicknameAttribute(mixed $value): string
     {
@@ -91,7 +100,7 @@ class User extends Authenticatable
 
     public function getIdCardAttribute(mixed $value): string
     {
-        return (new LegacyEncrypted())->get($this, 'id_card', $value, $this->attributes);
+        return (new LegacyEncrypted)->get($this, 'id_card', $value, $this->attributes);
     }
 
     public function getVerificationStatusAttribute(mixed $value): int
@@ -119,7 +128,7 @@ class User extends Authenticatable
 
         $normalized = trim((string) $value);
 
-        return $normalized === '' ? null : \Illuminate\Support\Carbon::parse($normalized);
+        return $normalized === '' ? null : Carbon::parse($normalized);
     }
 
     public function getIsVerifiedAttribute(mixed $value): int
@@ -145,7 +154,7 @@ class User extends Authenticatable
 
         $normalized = trim((string) $value);
 
-        return $normalized === '' ? null : \Illuminate\Support\Carbon::parse($normalized);
+        return $normalized === '' ? null : Carbon::parse($normalized);
     }
 
     public function getMemberLevelIdAttribute(mixed $value): ?int
@@ -211,97 +220,97 @@ class User extends Authenticatable
 
     // -------- 关联 --------
 
-    public function orders()
+    public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
     }
 
-    public function profile()
+    public function profile(): HasOne
     {
         return $this->hasOne(UserProfile::class, 'user_id');
     }
 
-    public function verificationProfile()
+    public function verificationProfile(): HasOne
     {
         return $this->hasOne(UserVerification::class, 'user_id');
     }
 
-    public function referralProfile()
+    public function referralProfile(): HasOne
     {
         return $this->hasOne(UserReferral::class, 'user_id');
     }
 
-    public function memberLevel()
+    public function memberLevel(): BelongsTo
     {
         return $this->belongsTo(MemberLevel::class, 'member_level_id');
     }
 
-    public function account()
+    public function account(): HasOne
     {
         return $this->hasOne(UserAccount::class, 'user_id');
     }
 
-    public function referrer()
+    public function referrer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'referrer_user_id');
     }
 
-    public function referrals()
+    public function referrals(): HasMany
     {
         return $this->hasMany(User::class, 'referrer_user_id');
     }
 
-    public function referralRewards()
+    public function referralRewards(): HasMany
     {
         return $this->hasMany(ReferralReward::class, 'referrer_user_id');
     }
 
-    public function referredRewards()
+    public function referredRewards(): HasMany
     {
         return $this->hasMany(ReferralReward::class, 'referred_user_id');
     }
 
-    public function referralWithdrawals()
+    public function referralWithdrawals(): HasMany
     {
         return $this->hasMany(ReferralWithdrawal::class);
     }
 
-    public function services()
+    public function services(): HasMany
     {
         return $this->hasMany(Service::class);
     }
 
-    public function userCoupons()
+    public function userCoupons(): HasMany
     {
         return $this->hasMany(UserCoupon::class);
     }
 
-    public function invoices()
+    public function invoices(): HasMany
     {
         return $this->hasMany(Invoice::class);
     }
 
-    public function payments()
+    public function payments(): HasMany
     {
         return $this->hasMany(Payment::class);
     }
 
-    public function balanceLogs()
+    public function balanceLogs(): HasMany
     {
         return $this->hasMany(BalanceLog::class);
     }
 
-    public function accountTransactions()
+    public function accountTransactions(): HasMany
     {
         return $this->hasMany(AccountTransaction::class, 'user_id');
     }
 
-    public function tickets()
+    public function tickets(): HasMany
     {
         return $this->hasMany(Ticket::class);
     }
 
-    public function verificationHistories()
+    public function verificationHistories(): HasMany
     {
         return $this->hasMany(VerificationHistory::class);
     }
@@ -330,7 +339,7 @@ class User extends Authenticatable
 
     public function scopeSearch(Builder $query, ?string $keyword): Builder
     {
-        if (!$keyword) {
+        if (! $keyword) {
             return $query;
         }
 
@@ -339,25 +348,24 @@ class User extends Authenticatable
         return $query->where(function ($q) use ($keyword) {
             if (ctype_digit($keyword)) {
                 $q->where('id', (int) $keyword)
-                  ->orWhere('email', 'like', '%' . $keyword . '%')
-                  ->orWhere('phone', 'like', '%' . $keyword . '%')
-                  ->orWhere('nickname', 'like', '%' . $keyword . '%')
-                  ->orWhere('company', 'like', '%' . $keyword . '%')
-                  ->orWhere('qq', 'like', '%' . $keyword . '%')
-                  ->orWhere('real_name', 'like', '%' . $keyword . '%');
+                    ->orWhere('email', 'like', '%'.$keyword.'%')
+                    ->orWhere('phone', 'like', '%'.$keyword.'%')
+                    ->orWhere('nickname', 'like', '%'.$keyword.'%')
+                    ->orWhere('company', 'like', '%'.$keyword.'%')
+                    ->orWhere('qq', 'like', '%'.$keyword.'%')
+                    ->orWhere('real_name', 'like', '%'.$keyword.'%');
+
                 return;
             }
 
-            $q->where('email', 'like', '%' . $keyword . '%')
-              ->orWhere('phone', 'like', '%' . $keyword . '%')
-              ->orWhere('nickname', 'like', '%' . $keyword . '%')
-              ->orWhere('company', 'like', '%' . $keyword . '%')
-              ->orWhere('qq', 'like', '%' . $keyword . '%')
-              ->orWhere('real_name', 'like', '%' . $keyword . '%');
+            $q->where('email', 'like', '%'.$keyword.'%')
+                ->orWhere('phone', 'like', '%'.$keyword.'%')
+                ->orWhere('nickname', 'like', '%'.$keyword.'%')
+                ->orWhere('company', 'like', '%'.$keyword.'%')
+                ->orWhere('qq', 'like', '%'.$keyword.'%')
+                ->orWhere('real_name', 'like', '%'.$keyword.'%');
         });
     }
-
-
 
     private function hasReadableNickname(string $nickname): bool
     {

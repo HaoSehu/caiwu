@@ -1,0 +1,16 @@
+# 创欧云官网 robots.txt
+# 允许抓取官网内容，禁止抓取用户中心、接口与上传等私域资源
+# 运行 `SITE_URL=https://www.coyjs.cn npm run generate:sitemap` 或
+# `npm run build:with-sitemap` 时，脚本会把下方 Sitemap 行替换为带协议的绝对 URL，
+# Bing / Google 需要的是完整 URL，不能只是相对路径。
+
+User-agent: *
+Allow: /
+Disallow: /client/
+Disallow: /api/
+Disallow: /uploads/
+Disallow: /vnc/
+Disallow: /novnc/
+Disallow: /ws/
+
+Sitemap: https://www.coyjs.cn/sitemap.xml

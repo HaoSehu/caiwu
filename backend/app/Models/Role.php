@@ -3,7 +3,10 @@
 namespace App\Models;
 
 use App\Support\AdminPermissions;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -12,6 +15,7 @@ class Role extends Model
     protected $fillable = ['name', 'label', 'permissions'];
 
     private static ?bool $rolePermissionsTableAvailable = null;
+
     private static ?bool $permissionsTableAvailable = null;
 
     protected function casts(): array
@@ -72,12 +76,12 @@ class Role extends Model
         });
     }
 
-    public function adminUsers()
+    public function adminUsers(): HasMany
     {
         return $this->hasMany(AdminUser::class);
     }
 
-    public function permissionItems()
+    public function permissionItems(): BelongsToMany
     {
         return $this->belongsToMany(Permission::class, 'role_permissions');
     }
@@ -106,7 +110,7 @@ class Role extends Model
     private function resolvePermissionsFromRelationTable(): array
     {
         if ($this->relationLoaded('permissionItems')) {
-            /** @var \Illuminate\Database\Eloquent\Collection<int, Permission> $permissionItems */
+            /** @var Collection<int, Permission> $permissionItems */
             $permissionItems = $this->getRelation('permissionItems');
 
             return $permissionItems

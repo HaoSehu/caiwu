@@ -1,0 +1,40 @@
+# Laravel - 包含数据库密码和 APP_KEY 等敏感信息
+backend/.env
+backend/vendor/
+backend/taskkill
+backend/node_modules/
+backend/storage/*.key
+backend/storage/logs/
+backend/storage/framework/cache/
+backend/storage/framework/sessions/
+backend/storage/framework/views/
+
+# Vue
+frontend-admin/node_modules/
+frontend-admin/dist/
+frontend-client/node_modules/
+frontend-client/dist/
+frontend-client/public/novnc/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Composer
+backend/composer.phar
+backend/composer-setup.php
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Temp/draft files
+anget.md
+mcloud/
+
+# OS
+Thumbs.db

@@ -1,10 +1,16 @@
-import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import clientApi from '@/api/client'
 import siteApi from '@/api/site'
+import { useUserStore } from '@/stores/user'
 import { getToken } from '@/utils/auth'
-import { normalizeMoneyText } from '@/utils/websiteProductConfig'
+import {
+  resolveMissingPurchaseRequirements,
+  resolvePurchaseRequirementList,
+  resolvePurchaseRequirementSummary,
+} from '@/utils/productPurchaseRequirements'
+import { normalizeMoneyText, resolveProductDisplayName } from '@/utils/websiteProductConfig'
 import { buildIdempotencyKey, savePendingWebsiteCheckout } from '@/utils/websiteCheckout'
 import { clearPendingWebsiteCoupon, getPendingWebsiteCouponId } from '@/utils/websiteCoupon'
 
@@ -17,6 +23,7 @@ export function useWebsiteProductCheckout({
   resetConfigForm,
 }) {
   const router = useRouter()
+  const userStore = useUserStore()
 
   const configLoading = ref(false)
   const submitting = ref(false)
@@ -29,7 +36,7 @@ export function useWebsiteProductCheckout({
   const productStockLoading = ref(false)
   const productStockError = ref('')
   const selectedCouponId = ref(getPendingWebsiteCouponId())
-  const productDetailCache = reactive({})
+  const productDetailCache = {}
 
   let currentProductId = 0
   let detailToken = 0
@@ -42,6 +49,7 @@ export function useWebsiteProductCheckout({
   let quoteWatchSuspendCount = 0
 
   const selectedProduct = computed(() => productDetail.value)
+  const selectedProductDisplayName = computed(() => resolveProductDisplayName(selectedProduct.value))
   const selectedPricingEntry = computed(() => pricingEntries.value.find((item) => item.cycle === selectedCycle.value) || null)
   const cyclePrice = computed(() => selectedPricingEntry.value?.amount || '0.00')
   const baseAmount = computed(() => quoteResult.value?.base_amount ?? cyclePrice.value)
@@ -86,7 +94,7 @@ export function useWebsiteProductCheckout({
     if (productStockError.value) return '实时库存同步失败，请稍后重试。'
     const stock = resolvedStock.value
     if (stock === null) return '正在同步实时库存，请稍候。'
-    if (stock === -1 || stock > 10) return '当前库存充足，可直接提交订单。'
+    if (stock === -1 || stock > 10) return '当前库存充足，可直接提交账单。'
     if (stock > 0) return `剩余 ${stock} 台，请尽快下单。`
     return '当前库存不足，请联系客服。'
   })
@@ -98,6 +106,8 @@ export function useWebsiteProductCheckout({
       && stock !== null
       && stock !== 0
   })
+  const purchaseRequirementList = computed(() => resolvePurchaseRequirementList(selectedProduct.value))
+  const purchaseRequirementSummary = computed(() => resolvePurchaseRequirementSummary(selectedProduct.value))
 
   function resetQuoteState() {
     quoteResult.value = null
@@ -151,6 +161,53 @@ export function useWebsiteProductCheckout({
     }
 
     return payload
+  }
+
+  async function redirectToLoginForCheckout(orderPayload, idempotencyKey) {
+    savePendingWebsiteCheckout({
+      source: 'website-products',
+      createdAt: Date.now(),
+      idempotencyKey,
+      orderPayload,
+    })
+    ElMessage.success('请先登录，登录后将继续创建账单')
+    await router.push({
+      path: '/client/login',
+      query: { redirect: '/client/checkout-resume' },
+    })
+  }
+
+  async function ensureClientCanCreateOrder(orderPayload, idempotencyKey) {
+    if (!getToken()) {
+      await redirectToLoginForCheckout(orderPayload, idempotencyKey)
+      return false
+    }
+
+    let userInfo = userStore.info
+    if (!userInfo || userStore.userType !== 'client') {
+      try {
+        await userStore.fetchUserInfo('client')
+        userInfo = userStore.info
+      } catch {
+        await redirectToLoginForCheckout(orderPayload, idempotencyKey)
+        return false
+      }
+    }
+
+    const missingRequirements = resolveMissingPurchaseRequirements(selectedProduct.value, userInfo)
+    if (missingRequirements.length === 0) {
+      return true
+    }
+
+    const nextRequirement = missingRequirements[0]
+    const requirementNames = missingRequirements.map((item) => item.label).join('、')
+    ElMessage.warning(
+      missingRequirements.length > 1
+        ? `该商品购买前需先完成${requirementNames}。`
+        : nextRequirement.unmetMessage
+    )
+    await router.push(nextRequirement.route)
+    return false
   }
 
   async function requestQuote(nextCouponId = selectedCouponId.value) {
@@ -258,7 +315,7 @@ export function useWebsiteProductCheckout({
     }, 250)
   }
 
-  async function handleSubmit() {
+  async function submitOrder() {
     if (productStockLoading.value) {
       ElMessage.warning('库存同步中，请稍候')
       return
@@ -275,7 +332,7 @@ export function useWebsiteProductCheckout({
     }
 
     if (!quoteToken.value) {
-      ElMessage.warning('报价凭证已失效，请稍候重试')
+      ElMessage.warning('报价凭证已失效，请稍后重试')
       return
     }
 
@@ -295,29 +352,18 @@ export function useWebsiteProductCheckout({
       const orderPayload = buildOrderPayload()
       const idempotencyKey = buildIdempotencyKey('website-order')
 
-      if (!getToken()) {
-        savePendingWebsiteCheckout({
-          source: 'website-products',
-          createdAt: Date.now(),
-          idempotencyKey,
-          orderPayload,
-        })
-        ElMessage.success('请先登录，登录后将继续创建订单')
-        await router.push({
-          path: '/client/login',
-          query: { redirect: '/client/checkout-resume' },
-        })
+      if (!await ensureClientCanCreateOrder(orderPayload, idempotencyKey)) {
         return
       }
 
-      const res = await clientApi.createOrder(orderPayload, {
+      const res = await clientApi.createInvoice(orderPayload, {
         headers: {
           'X-Idempotency-Key': idempotencyKey,
         },
       })
-      const orderId = Number(res.data?.id || 0)
-      ElMessage.success('订单创建成功，正在跳转支付')
-      await router.push(orderId > 0 ? `/client/orders/${orderId}` : '/client/orders')
+      const invoiceId = Number(res.data?.id || 0)
+      ElMessage.success('账单创建成功，正在跳转支付')
+      await router.push(invoiceId > 0 ? `/client/invoices/${invoiceId}` : '/client/invoices')
     } catch (error) {
       ElMessage.error(error?.response?.data?.message || '下单失败，请重试')
     } finally {
@@ -477,6 +523,7 @@ export function useWebsiteProductCheckout({
     quoteLoading,
     productStockLoading,
     productStockError,
+    selectedProductDisplayName,
     baseAmount,
     setupFee,
     quoteItems,
@@ -490,9 +537,11 @@ export function useWebsiteProductCheckout({
     stockHint,
     selectedCouponId,
     canSubmit,
+    purchaseRequirementList,
+    purchaseRequirementSummary,
     handleCouponChange,
     clearCoupon,
-    handleSubmit,
+    handleSubmit: submitOrder,
     loadSelectedProduct,
     resetSelection,
   }

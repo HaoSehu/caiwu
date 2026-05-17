@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
-use App\Services\ClientServiceConsoleService;
+use App\Services\ClientServiceConsole\ClientServiceConsoleService;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class VncRelayCommand extends Command
@@ -29,10 +30,11 @@ class VncRelayCommand extends Command
         set_time_limit(0);
 
         $host = trim((string) ($this->option('host') ?: config('idc.vnc_relay.host', '127.0.0.1')));
-        $port = (int) ($this->option('port') ?: config('idc.vnc_relay.port', 18080));
+        $port = (int) ($this->option('port') ?: config('idc.vnc_relay.port', 8100));
 
         if ($host === '' || $port <= 0 || $port > 65535) {
             $this->error('VNC Relay 启动失败：监听地址或端口无效。');
+
             return self::INVALID;
         }
 
@@ -44,6 +46,7 @@ class VncRelayCommand extends Command
 
         if (! is_resource($this->server)) {
             $this->error(sprintf('VNC Relay 启动失败：%s (%d)', $errstr ?: '未知错误', $errno));
+
             return self::FAILURE;
         }
 
@@ -83,12 +86,14 @@ class VncRelayCommand extends Command
             $ready = @stream_select($read, $write, $except, 1);
             if ($ready === false) {
                 usleep(100000);
+
                 continue;
             }
 
             foreach ($read as $socket) {
                 if ($socket === $this->server) {
                     $this->acceptClient();
+
                     continue;
                 }
 
@@ -170,12 +175,14 @@ class VncRelayCommand extends Command
         $connection = $this->connections[$connectionId] ?? null;
         if (! is_array($connection) || ! is_resource($connection['client'] ?? null)) {
             $this->closeConnection($connectionId);
+
             return;
         }
 
         $chunk = @fread($connection['client'], 8192);
         if (($chunk === false || $chunk === '') && feof($connection['client'])) {
             $this->closeConnection($connectionId);
+
             return;
         }
 
@@ -188,6 +195,7 @@ class VncRelayCommand extends Command
 
         if (! ($connection['handshake_done'] ?? false)) {
             $this->tryHandshake($connectionId, $consoleService);
+
             return;
         }
 
@@ -199,12 +207,14 @@ class VncRelayCommand extends Command
         $connection = $this->connections[$connectionId] ?? null;
         if (! is_array($connection) || ! is_resource($connection['upstream'] ?? null)) {
             $this->closeConnection($connectionId);
+
             return;
         }
 
         $chunk = @fread($connection['upstream'], 8192);
         if (($chunk === false || $chunk === '') && feof($connection['upstream'])) {
             $this->closeConnection($connectionId);
+
             return;
         }
 
@@ -235,6 +245,7 @@ class VncRelayCommand extends Command
         $written = @fwrite($connection[$socketKey], $connection[$bufferKey]);
         if ($written === false) {
             $this->closeConnection($connectionId);
+
             return;
         }
 
@@ -261,6 +272,7 @@ class VncRelayCommand extends Command
         if ($request === null) {
             $this->writeHttpError($connection['client'], 400, 'Bad Request', 'WebSocket 握手格式无效');
             $this->closeConnection($connectionId);
+
             return;
         }
 
@@ -271,15 +283,31 @@ class VncRelayCommand extends Command
         if ($wsKey === '' || $token === '') {
             $this->writeHttpError($connection['client'], 400, 'Bad Request', '缺少 token 或 WebSocket 握手头');
             $this->closeConnection($connectionId);
+
             return;
         }
+
+        $params = [];
 
         try {
             $params = $consoleService->resolveVncToken($token);
             [$upstream, $upstreamExtra] = $this->connectUpstream($params);
         } catch (Throwable $e) {
+            Log::warning('[VNC Relay] 上游连接失败', [
+                'token' => $token,
+                'message' => $e->getMessage(),
+                'exception' => $e::class,
+                'params' => [
+                    'host' => $params['host'] ?? '',
+                    'port' => $params['port'] ?? 0,
+                    'path' => $params['path'] ?? '',
+                    'encrypt' => $params['encrypt'] ?? '0',
+                    'origin' => $params['origin'] ?? '',
+                ],
+            ]);
             $this->writeHttpError($connection['client'], 502, 'Bad Gateway', 'VNC 中转连接上游失败');
             $this->closeConnection($connectionId);
+
             return;
         }
 
@@ -346,7 +374,7 @@ class VncRelayCommand extends Command
     }
 
     /**
-     * @param array<string, mixed> $params
+     * @param  array<string, mixed>  $params
      * @return array{0: resource, 1: string}
      */
     private function connectUpstream(array $params): array
@@ -393,27 +421,27 @@ class VncRelayCommand extends Command
         stream_set_blocking($socket, true);
         stream_set_timeout($socket, $timeout);
 
-        $requestPath = $path === '' ? '/' : '/' . $path;
+        $requestPath = $path === '' ? '/' : '/'.$path;
         $hostHeader = $host;
         if ((! $secure && $port !== 80) || ($secure && $port !== 443)) {
-            $hostHeader .= ':' . $port;
+            $hostHeader .= ':'.$port;
         }
 
-        $origin = $this->resolveOriginHeader();
+        $origin = $this->resolveOriginHeader($params);
         $handshake = [
             sprintf('GET %s HTTP/1.1', $requestPath),
-            'Host: ' . $hostHeader,
+            'Host: '.$hostHeader,
             'Upgrade: websocket',
             'Connection: Upgrade',
             'Sec-WebSocket-Version: 13',
-            'Sec-WebSocket-Key: ' . base64_encode(random_bytes(16)),
+            'Sec-WebSocket-Key: '.base64_encode(random_bytes(16)),
         ];
 
         if ($origin !== '') {
-            $handshake[] = 'Origin: ' . $origin;
+            $handshake[] = 'Origin: '.$origin;
         }
 
-        $payload = implode("\r\n", $handshake) . "\r\n\r\n";
+        $payload = implode("\r\n", $handshake)."\r\n\r\n";
         $writeResult = @fwrite($socket, $payload);
         if ($writeResult === false || $writeResult < strlen($payload)) {
             @fclose($socket);
@@ -443,8 +471,13 @@ class VncRelayCommand extends Command
         return [$socket, $extra];
     }
 
-    private function resolveOriginHeader(): string
+    private function resolveOriginHeader(array $params = []): string
     {
+        $upstreamOrigin = trim((string) ($params['origin'] ?? ''));
+        if ($upstreamOrigin !== '') {
+            return $upstreamOrigin;
+        }
+
         $frontendUrl = trim((string) config('app.frontend_url', ''));
         if ($frontendUrl !== '') {
             return $frontendUrl;
@@ -453,30 +486,87 @@ class VncRelayCommand extends Command
         return trim((string) config('app.url', ''));
     }
 
+    private function isAllowedClientOrigin(string $origin, array $params = []): bool
+    {
+        $allowedOrigin = $this->normalizeOrigin((string) ($params['allowed_origin'] ?? ''));
+        if ($allowedOrigin === '') {
+            return true;
+        }
+
+        $actualOrigin = $this->normalizeOrigin($origin);
+        if ($actualOrigin === '') {
+            return false;
+        }
+
+        return strcasecmp($allowedOrigin, $actualOrigin) === 0;
+    }
+
+    private function normalizeOrigin(string $origin): string
+    {
+        $origin = trim($origin);
+        if ($origin === '') {
+            return '';
+        }
+
+        $parts = parse_url($origin);
+        if (! is_array($parts)) {
+            return '';
+        }
+
+        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+        $host = strtolower((string) ($parts['host'] ?? ''));
+        if ($scheme === '' || $host === '') {
+            return '';
+        }
+
+        $port = (int) ($parts['port'] ?? 0);
+        $defaultPort = $scheme === 'https' ? 443 : 80;
+
+        if ($port > 0 && $port !== $defaultPort) {
+            return sprintf('%s://%s:%d', $scheme, $host, $port);
+        }
+
+        return sprintf('%s://%s', $scheme, $host);
+    }
+
+    private function maskToken(string $token): string
+    {
+        $token = trim($token);
+        if ($token === '') {
+            return '';
+        }
+
+        if (strlen($token) <= 8) {
+            return str_repeat('*', strlen($token));
+        }
+
+        return substr($token, 0, 4).str_repeat('*', max(strlen($token) - 8, 0)).substr($token, -4);
+    }
+
     private function buildClientHandshakeResponse(string $clientKey): string
     {
-        $accept = base64_encode(sha1($clientKey . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11', true));
+        $accept = base64_encode(sha1($clientKey.'258EAFA5-E914-47DA-95CA-C5AB0DC85B11', true));
 
         return implode("\r\n", [
             'HTTP/1.1 101 Switching Protocols',
             'Upgrade: websocket',
             'Connection: Upgrade',
-            'Sec-WebSocket-Accept: ' . $accept,
+            'Sec-WebSocket-Accept: '.$accept,
             '',
             '',
         ]);
     }
 
     /**
-     * @param resource $socket
+     * @param  resource  $socket
      */
     private function writeHttpError($socket, int $status, string $statusText, string $message): void
     {
-        $body = $message . "\n";
+        $body = $message."\n";
         $response = implode("\r\n", [
             sprintf('HTTP/1.1 %d %s', $status, $statusText),
             'Content-Type: text/plain; charset=utf-8',
-            'Content-Length: ' . strlen($body),
+            'Content-Length: '.strlen($body),
             'Connection: close',
             '',
             $body,
@@ -501,6 +591,7 @@ class VncRelayCommand extends Command
             switch ($frame['opcode']) {
                 case 0x8:
                     $this->closeConnection($connectionId);
+
                     return;
 
                 case 0x9:
@@ -535,6 +626,7 @@ class VncRelayCommand extends Command
             switch ($frame['opcode']) {
                 case 0x8:
                     $this->closeConnection($connectionId);
+
                     return;
 
                 case 0x9:
@@ -554,7 +646,6 @@ class VncRelayCommand extends Command
     }
 
     /**
-     * @param string $buffer
      * @return array{fin:bool,opcode:int,payload:string}|null
      */
     private function extractFrame(string &$buffer, bool $expectMasked): ?array
@@ -627,19 +718,19 @@ class VncRelayCommand extends Command
         if ($length < 126) {
             $frame .= chr(($masked ? 0x80 : 0x00) | $length);
         } elseif ($length <= 0xFFFF) {
-            $frame .= chr(($masked ? 0x80 : 0x00) | 126) . pack('n', $length);
+            $frame .= chr(($masked ? 0x80 : 0x00) | 126).pack('n', $length);
         } else {
             $frame .= chr(($masked ? 0x80 : 0x00) | 127)
-                . pack('NN', ($length >> 32) & 0xFFFFFFFF, $length & 0xFFFFFFFF);
+                .pack('NN', ($length >> 32) & 0xFFFFFFFF, $length & 0xFFFFFFFF);
         }
 
         if (! $masked) {
-            return $frame . $payload;
+            return $frame.$payload;
         }
 
         $maskKey = random_bytes(4);
 
-        return $frame . $maskKey . $this->applyMask($payload, $maskKey);
+        return $frame.$maskKey.$this->applyMask($payload, $maskKey);
     }
 
     private function applyMask(string $payload, string $maskKey): string

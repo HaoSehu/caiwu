@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>管理端移动端原型 - 详情抽屉 + 表单</title>
+<style>
+:root {
+  --color-primary: #0052d9; --color-primary-hover: #0041b3; --color-primary-soft: #edf4ff;
+  --color-primary-border: #bfd4ff; --color-success: #059669; --color-success-soft: #ecfdf5;
+  --color-warning: #d97706; --color-warning-soft: #fff7ed; --color-danger: #dc2626;
+  --color-danger-soft: #fef2f2; --color-info: #4e5969; --color-info-soft: #f2f3f5;
+  --bg-color: #f5f7fa; --bg-card: #ffffff; --bg-soft: #fafbfd; --bg-hover: #f2f3f5;
+  --text-primary: #1d2129; --text-secondary: #4e5969; --text-placeholder: #86909c; --text-inverse: #ffffff;
+  --border-color: #e5e6eb; --divider-color: #ebedf0;
+  --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
+  --shadow-xs: 0 1px 1px rgba(29,33,41,0.04); --shadow-md: 0 4px 12px rgba(29,33,41,0.08);
+  --shadow-xl: 0 20px 48px rgba(29,33,41,0.14);
+  --font-main: "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: var(--font-main); font-size: 14px; line-height: 1.5; color: var(--text-primary); background: var(--bg-color); -webkit-font-smoothing: antialiased; }
+
+.admin-shell { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+.shell-topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 52px; padding: 0 14px; background: var(--bg-card); border-bottom: 1px solid var(--divider-color); flex-shrink: 0; }
+.topbar-left { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+.topbar-right { display: flex; flex-shrink: 0; align-items: center; }
+.hamburger { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border: none; background: none; border-radius: var(--radius-sm); cursor: pointer; color: var(--text-secondary); }
+.hamburger:active { background: var(--bg-hover); }
+.page-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover)); color: var(--text-inverse); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; }
+.shell-content { flex: 1; overflow-y: auto; padding: 14px 14px 24px; -webkit-overflow-scrolling: touch; }
+.admin-page { display: flex; flex-direction: column; gap: 16px; }
+.admin-page-head { display: flex; flex-direction: column; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--divider-color); }
+.admin-page-heading h2 { font-size: 18px; font-weight: 600; letter-spacing: -0.2px; }
+.admin-page-heading p { margin-top: 4px; font-size: 13px; color: var(--text-secondary); }
+.page-actions { display: flex; gap: 8px; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 16px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; background: var(--bg-card); color: var(--text-secondary); white-space: nowrap; transition: all 0.15s; }
+.btn:active { transform: scale(0.98); }
+.btn-primary { background: var(--color-primary); border-color: var(--color-primary); color: var(--text-inverse); box-shadow: 0 1px 2px rgba(0,82,217,0.18); }
+.btn-sm { height: 32px; padding: 0 12px; font-size: 12px; }
+.btn-block { width: 100%; }
+.btn-danger { background: var(--color-danger-soft); border-color: var(--color-danger); color: var(--color-danger); }
+.btn-success { background: var(--color-success-soft); border-color: var(--color-success); color: var(--color-success); }
+
+/* ========== Drawer ========== */
+.drawer-overlay {
+  position: fixed; inset: 0; z-index: 2000;
+  background: rgba(15,23,42,0.32); opacity: 0; pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+.drawer-overlay.open { opacity: 1; pointer-events: auto; }
+.drawer-panel {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 2001;
+  width: min(100vw, calc(100vw - 8px)); max-width: 480px;
+  background: var(--bg-card); box-shadow: var(--shadow-xl);
+  display: flex; flex-direction: column;
+  transform: translateX(100%); transition: transform 0.25s cubic-bezier(0.22,1,0.36,1);
+}
+.drawer-overlay.open .drawer-panel { transform: translateX(0); }
+
+.drawer-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 18px; border-bottom: 1px solid var(--divider-color); flex-shrink: 0;
+}
+.drawer-header h3 { font-size: 16px; font-weight: 600; color: var(--text-primary); }
+.drawer-close {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border: none; background: none;
+  border-radius: var(--radius-sm); cursor: pointer; color: var(--text-secondary);
+  font-size: 18px;
+}
+.drawer-close:hover { background: var(--bg-hover); }
+.drawer-body { flex: 1; overflow-y: auto; padding: 18px; -webkit-overflow-scrolling: touch; }
+.drawer-footer {
+  display: flex; gap: 10px; padding: 14px 18px;
+  border-top: 1px solid var(--divider-color); flex-shrink: 0;
+}
+.drawer-footer .btn { flex: 1; }
+
+/* ========== Description List ========== */
+.desc-section { margin-bottom: 20px; }
+.desc-section-title {
+  font-size: 13px; font-weight: 600; color: var(--text-primary);
+  padding-bottom: 10px; margin-bottom: 12px;
+  border-bottom: 1px solid var(--divider-color);
+}
+.desc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+.desc-item { display: flex; flex-direction: column; gap: 2px; }
+.desc-item.full { grid-column: 1 / -1; }
+.desc-label { font-size: 12px; color: var(--text-placeholder); }
+.desc-value { font-size: 13px; color: var(--text-primary); font-weight: 500; word-break: break-all; }
+
+.tag { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 4px; font-size: 12px; font-weight: 500; white-space: nowrap; }
+.tag-success { background: var(--color-success-soft); color: var(--color-success); }
+.tag-danger { background: var(--color-danger-soft); color: var(--color-danger); }
+.tag-warning { background: var(--color-warning-soft); color: var(--color-warning); }
+
+/* ========== Timeline ========== */
+.timeline { display: flex; flex-direction: column; gap: 0; padding-left: 16px; border-left: 2px solid var(--divider-color); }
+.timeline-item { position: relative; padding: 0 0 18px 16px; }
+.timeline-item:last-child { padding-bottom: 0; }
+.timeline-item::before {
+  content: ''; position: absolute; left: -21px; top: 4px;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--color-primary); border: 2px solid var(--bg-card);
+}
+.timeline-item.muted::before { background: var(--border-color); }
+.timeline-time { font-size: 12px; color: var(--text-placeholder); margin-bottom: 2px; }
+.timeline-text { font-size: 13px; color: var(--text-primary); }
+.timeline-user { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+/* ========== Action Card ========== */
+.action-card {
+  background: var(--bg-soft); border: 1px solid var(--border-color);
+  border-radius: var(--radius-md); padding: 16px; margin-bottom: 16px;
+}
+.action-card-title {
+  font-size: 13px; font-weight: 600; color: var(--text-primary);
+  margin-bottom: 12px;
+}
+.action-card .form-item { margin-bottom: 12px; }
+.form-label { display: block; margin-bottom: 4px; font-size: 12px; font-weight: 500; color: var(--text-secondary); }
+.input-wrap input, .input-wrap select, .input-wrap textarea {
+  width: 100%; height: 36px; padding: 0 12px;
+  border: 1px solid var(--border-color); border-radius: var(--radius-sm);
+  font-size: 13px; font-family: inherit; color: var(--text-primary);
+  background: var(--bg-card); outline: none; transition: border-color 0.15s, box-shadow 0.15s;
+}
+.input-wrap textarea { height: 80px; padding: 8px 12px; resize: vertical; }
+.input-wrap input:focus, .input-wrap select:focus, .input-wrap textarea:focus {
+  border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(0,82,217,0.12);
+}
+
+/* ========== Tabs (horizontal scroll) ========== */
+.tab-scroll {
+  display: flex; gap: 0; overflow-x: auto; -webkit-overflow-scrolling: touch;
+  border-bottom: 1px solid var(--divider-color); margin-bottom: 16px;
+  scrollbar-width: none;
+}
+.tab-scroll::-webkit-scrollbar { display: none; }
+.tab-item {
+  flex-shrink: 0; padding: 10px 16px;
+  font-size: 13px; font-weight: 500; color: var(--text-secondary);
+  border-bottom: 2px solid transparent; cursor: pointer;
+  transition: color 0.15s, border-color 0.15s; white-space: nowrap;
+}
+.tab-item:hover { color: var(--text-primary); }
+.tab-item.active { color: var(--color-primary); border-bottom-color: var(--color-primary); font-weight: 600; }
+
+/* ========== Alert ========== */
+.alert {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px 14px; border-radius: var(--radius-sm);
+  font-size: 13px; line-height: 1.5;
+}
+.alert-warning { background: var(--color-warning-soft); color: #92400e; border: 1px solid rgba(217,119,6,0.2); }
+.alert-icon { flex-shrink: 0; font-size: 16px; margin-top: 1px; }
+
+@media (min-width: 901px) {
+  .hamburger { display: none; }
+  .shell-content { padding: 20px 24px 32px; }
+  .admin-page-head { flex-direction: row; justify-content: space-between; align-items: flex-end; }
+  .admin-page-heading h2 { font-size: 22px; }
+  .drawer-panel { max-width: 560px; }
+}
+</style>
+</head>
+<body>
+
+<div class="admin-shell">
+  <header class="shell-topbar">
+    <div class="topbar-left">
+      <button class="hamburger">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <span class="page-title">工单管理</span>
+    </div>
+    <div class="topbar-right"><div class="avatar">C</div></div>
+  </header>
+
+  <main class="shell-content">
+    <div class="admin-page">
+      <section class="admin-page-head">
+        <div class="admin-page-heading">
+          <h2>工单管理</h2>
+          <p>查看和处理客户提交的技术支持工单。</p>
+        </div>
+      </section>
+
+      <div style="text-align:center; padding: 40px 20px;">
+        <p style="color: var(--text-secondary); margin-bottom: 16px;">点击下方按钮预览工单详情抽屉</p>
+        <button class="btn btn-primary" onclick="openDrawer()">打开工单详情</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Detail Drawer -->
+<div class="drawer-overlay" id="drawer" onclick="closeDrawer()">
+  <div class="drawer-panel" onclick="event.stopPropagation()">
+
+    <div class="drawer-header">
+      <h3>工单 #1024</h3>
+      <button class="drawer-close" onclick="closeDrawer()">&times;</button>
+    </div>
+
+    <div class="drawer-body">
+
+      <!-- Tabs -->
+      <div class="tab-scroll">
+        <div class="tab-item active">详情</div>
+        <div class="tab-item">处理记录</div>
+        <div class="tab-item">操作</div>
+      </div>
+
+      <!-- Ticket Info -->
+      <div class="desc-section">
+        <div class="desc-section-title">工单信息</div>
+        <div class="desc-grid">
+          <div class="desc-item full">
+            <span class="desc-label">标题</span>
+            <span class="desc-value">服务器无法连接，SSH 超时</span>
+          </div>
+          <div class="desc-item">
+            <span class="desc-label">提交用户</span>
+            <span class="desc-value">138****6789</span>
+          </div>
+          <div class="desc-item">
+            <span class="desc-label">状态</span>
+            <span class="desc-value"><span class="tag tag-warning">处理中</span></span>
+          </div>
+          <div class="desc-item">
+            <span class="desc-label">优先级</span>
+            <span class="desc-value"><span class="tag tag-danger">紧急</span></span>
+          </div>
+          <div class="desc-item">
+            <span class="desc-label">分类</span>
+            <span class="desc-value">网络问题</span>
+          </div>
+          <div class="desc-item">
+            <span class="desc-label">创建时间</span>
+            <span class="desc-value">2026-05-08 14:32</span>
+          </div>
+          <div class="desc-item">
+            <span class="desc-label">最后更新</span>
+            <span class="desc-value">2026-05-08 16:45</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Description -->
+      <div class="desc-section">
+        <div class="desc-section-title">问题描述</div>
+        <div class="alert alert-warning">
+          <span class="alert-icon">&#9888;</span>
+          <div>从今天下午 2 点开始，服务器 192.168.1.100 的 SSH 连接超时，无法正常登录。ping 测试显示丢包率 100%。已尝试重启路由器和更换网络环境，问题依然存在。</div>
+        </div>
+      </div>
+
+      <!-- Action Card -->
+      <div class="action-card">
+        <div class="action-card-title">处理工单</div>
+        <div class="form-item">
+          <label class="form-label">指派给</label>
+          <div class="input-wrap">
+            <select>
+              <option>选择技术人员</option>
+              <option>张工 - 网络工程师</option>
+              <option>李工 - 系统工程师</option>
+              <option>王工 - 运维工程师</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-item">
+          <label class="form-label">回复内容</label>
+          <div class="input-wrap">
+            <textarea placeholder="输入回复内容..."></textarea>
+          </div>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-primary btn-sm" style="flex:1">提交回复</button>
+          <button class="btn btn-danger btn-sm" style="flex:0 0 auto">关闭工单</button>
+        </div>
+      </div>
+
+      <!-- Timeline -->
+      <div class="desc-section">
+        <div class="desc-section-title">沟通记录</div>
+        <div class="timeline">
+          <div class="timeline-item">
+            <div class="timeline-time">2026-05-08 16:45</div>
+            <div class="timeline-text">已收到您的工单，正在排查中。初步判断是机房网络波动导致。</div>
+            <div class="timeline-user">张工 (管理员)</div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-time">2026-05-08 15:20</div>
+            <div class="timeline-text">补充信息：同一机房的其他服务器也有类似问题，不是个例。</div>
+            <div class="timeline-user">138****6789 (用户)</div>
+          </div>
+          <div class="timeline-item muted">
+            <div class="timeline-time">2026-05-08 14:32</div>
+            <div class="timeline-text">工单创建：服务器无法连接，SSH 超时</div>
+            <div class="timeline-user">138****6789 (用户)</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="drawer-footer">
+      <button class="btn" onclick="closeDrawer()">关闭</button>
+      <button class="btn btn-primary">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function openDrawer() {
+  document.getElementById('drawer').classList.add('open');
+}
+function closeDrawer() {
+  document.getElementById('drawer').classList.remove('open');
+}
+</script>
+
+</body>
+</html>

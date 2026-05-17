@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Constants\CouponStatus;
+use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
 use App\Models\Coupon;
+use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\User;
 use App\Models\UserCoupon;
-use App\Services\CouponService;
+use App\Services\Finance\CouponService;
 use Tests\TestCase;
 
 class ClientCouponPaginationTest extends TestCase
@@ -21,7 +23,7 @@ class ClientCouponPaginationTest extends TestCase
         $user = User::query()->create([
             'email' => "coupon-owner-{$suffix}@example.com",
             'password' => 'secret123',
-            'phone' => '136' . str_pad((string) random_int(0, 99999999), 8, '0', STR_PAD_LEFT),
+            'phone' => '136'.str_pad((string) random_int(0, 99999999), 8, '0', STR_PAD_LEFT),
             'status' => 1,
         ]);
 
@@ -58,8 +60,8 @@ class ClientCouponPaginationTest extends TestCase
             'claimed_at' => now(),
         ]);
 
-        Order::query()->create([
-            'order_no' => 'CPN' . strtoupper($suffix) . '001',
+        $order = Order::query()->create([
+            'order_no' => 'CPN'.strtoupper($suffix).'001',
             'user_id' => (int) $user->id,
             'coupon_id' => (int) $usedUpCoupon->id,
             'user_coupon_id' => (int) $usedUpUserCoupon->id,
@@ -67,6 +69,17 @@ class ClientCouponPaginationTest extends TestCase
             'amount' => '99.00',
             'discount' => '10.00',
             'status' => OrderStatus::PAID,
+        ]);
+        Invoice::query()->create([
+            'invoice_no' => 'INV'.strtoupper($suffix).'001',
+            'user_id' => (int) $user->id,
+            'order_id' => (int) $order->id,
+            'coupon_id' => (int) $usedUpCoupon->id,
+            'status' => InvoiceStatus::PAID,
+            'amount' => '99.00',
+            'paid_amount' => '89.00',
+            'due_date' => now()->addDay(),
+            'paid_at' => now(),
         ]);
 
         $service = app(CouponService::class);
@@ -96,13 +109,13 @@ class ClientCouponPaginationTest extends TestCase
         $user = User::query()->create([
             'email' => "coupon-public-{$suffix}@example.com",
             'password' => 'secret123',
-            'phone' => '135' . str_pad((string) random_int(0, 99999999), 8, '0', STR_PAD_LEFT),
+            'phone' => '135'.str_pad((string) random_int(0, 99999999), 8, '0', STR_PAD_LEFT),
             'status' => 1,
         ]);
         $otherUser = User::query()->create([
             'email' => "coupon-public-other-{$suffix}@example.com",
             'password' => 'secret123',
-            'phone' => '134' . str_pad((string) random_int(0, 99999999), 8, '0', STR_PAD_LEFT),
+            'phone' => '134'.str_pad((string) random_int(0, 99999999), 8, '0', STR_PAD_LEFT),
             'status' => 1,
         ]);
 

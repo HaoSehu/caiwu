@@ -1,18 +1,19 @@
 <?php
 
 use App\Models\Supplier;
-use App\Services\AutoRenewService;
-use App\Services\BillingAutomationService;
-use App\Services\CouponCampaignService;
-use App\Services\MofangFinanceClient;
-use App\Services\OrderCleanupAutomationService;
-use App\Services\ReferralService;
-use App\Services\ServiceLifecycleAutomationService;
-use App\Services\SettingService;
-use App\Services\ServiceStatusSyncService;
-use App\Services\TicketAutomationService;
+use App\Services\Automation\AutoRenewService;
+use App\Services\Automation\BillingAutomationService;
+use App\Services\Automation\InvoiceCleanupAutomationService;
+use App\Services\Automation\ServiceLifecycleAutomationService;
+use App\Services\Automation\ServiceStatusSyncService;
+use App\Services\Finance\CouponCampaignService;
+use App\Services\ProductCatalog\ProductCatalogService;
+use App\Services\Referral\ReferralService;
+use App\Services\System\SettingService;
+use App\Services\Ticket\TicketAutomationService;
+use App\Services\Upstream\Contracts\ProvidesScheduledAuthRefresh;
+use App\Services\Upstream\ProviderResolver;
 use App\Support\AutomationScheduleExpression;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schedule;
 
@@ -66,18 +67,18 @@ $writeScheduleOutput = static function (string $message): void {
     }
 
     if (defined('STDOUT')) {
-        fwrite(STDOUT, $resolvedMessage . PHP_EOL);
+        fwrite(STDOUT, $resolvedMessage.PHP_EOL);
 
         return;
     }
 
-    echo $resolvedMessage . PHP_EOL;
+    echo $resolvedMessage.PHP_EOL;
 };
 
 $automationConfig = (static function () use ($updateScheduleRuntimeState): array {
     try {
         return app(SettingService::class)->getAutomationConfig();
-    } catch (\Throwable $exception) {
+    } catch (Throwable $exception) {
         $updateScheduleRuntimeState([
             'automation_config' => [
                 'status' => 'fallback_default',
@@ -109,7 +110,7 @@ $resolveAutomationCron = static function (
 };
 
 $applyScheduleMutex(Schedule::call(function () use ($writeScheduleOutput) {
-    $client = app(MofangFinanceClient::class);
+    $providerResolver = app(ProviderResolver::class);
     $suppliers = Supplier::enabled()->get();
     $summary = [
         'matched' => 0,
@@ -118,12 +119,18 @@ $applyScheduleMutex(Schedule::call(function () use ($writeScheduleOutput) {
     ];
 
     foreach ($suppliers as $supplier) {
+        $provider = $providerResolver->resolveForSupplier($supplier);
+        if (! $provider->supports(ProvidesScheduledAuthRefresh::class)) {
+            continue;
+        }
+
         $summary['matched']++;
 
         try {
-            $client->refreshJwt($supplier);
+            $provider->require(ProvidesScheduledAuthRefresh::class, '当前供应商不支持认证刷新')
+                ->refreshJwt($supplier);
             $summary['refreshed']++;
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             $summary['failed']++;
 
             Log::error('[定时任务] JWT刷新失败', [
@@ -133,26 +140,33 @@ $applyScheduleMutex(Schedule::call(function () use ($writeScheduleOutput) {
         }
     }
 
-    Log::info('[定时任务] JWT刷新执行完成', $summary);
-    $writeScheduleOutput('魔方 JWT 刷新成功');
-})->everyFifteenMinutes()->name('魔方 JWT 刷新'), 10);
+    Log::info('[定时任务] 接口认证刷新执行完成', $summary);
+    $writeScheduleOutput('接口认证刷新成功');
+})->everyFifteenMinutes()->name('接口认证刷新'), 10);
 
 $applyScheduleMutex(Schedule::call(function () use ($writeScheduleOutput) {
     $summary = app(AutoRenewService::class)->handle(10);
-
-    Log::info('[定时任务] 自动续费执行完成', $summary);
+    if (($summary['matched'] ?? 0) > 0) {
+        Log::info('[定时任务] 自动续费执行完成', $summary);
+    } else {
+        Log::debug('[定时任务] 自动续费执行完成（无匹配）', $summary);
+    }
     $writeScheduleOutput('服务自动续费刷新成功');
 })->everyFiveMinutes()->name('服务自动续费'), 15);
 
 $applyScheduleMutex(Schedule::call(function () use ($writeScheduleOutput) {
-    app(ReferralService::class)->releaseMaturedRewards();
-    Log::info('[定时任务] 推荐奖励释放执行完成');
+    $released = app(ReferralService::class)->releaseMaturedRewards();
+    if ($released > 0) {
+        Log::info('[定时任务] 推荐奖励释放执行完成', ['released' => $released]);
+    }
     $writeScheduleOutput('推荐奖励释放刷新成功');
 })->everyTenMinutes()->name('推荐奖励释放'), 20);
 
 $applyScheduleMutex(Schedule::call(function () use ($writeScheduleOutput) {
     $summary = app(ServiceLifecycleAutomationService::class)->handle();
-    Log::info('[定时任务] 服务生命周期维护执行完成', $summary);
+    if (array_sum($summary) > 0) {
+        Log::info('[定时任务] 服务生命周期维护执行完成', $summary);
+    }
     $writeScheduleOutput('服务生命周期维护刷新成功');
 })->cron($resolveAutomationCron(
     'service_lifecycle_schedule_mode',
@@ -179,8 +193,16 @@ $applyScheduleMutex(Schedule::call(function () use ($writeScheduleOutput) {
 ))->name('账单自动化维护'), 30);
 
 $applyScheduleMutex(Schedule::call(function () use ($writeScheduleOutput) {
+    $summary = app(ProductCatalogService::class)->syncUpstreamProductConfigOptions();
+    Log::info('[定时任务] 上游产品配置同步执行完成', $summary);
+    $writeScheduleOutput('上游产品配置同步刷新成功');
+})->daily()->name('上游产品配置同步'), 180);
+
+$applyScheduleMutex(Schedule::call(function () use ($writeScheduleOutput) {
     $summary = app(CouponCampaignService::class)->dispatchDueCampaigns();
-    Log::info('[定时任务] 优惠券活动自动发放执行完成', $summary);
+    if (($summary['triggered'] ?? 0) > 0 || ($summary['failed'] ?? 0) > 0) {
+        Log::info('[定时任务] 优惠券活动自动发放执行完成', $summary);
+    }
     $writeScheduleOutput('优惠券活动发放刷新成功');
 })->everyMinute()->name('优惠券活动发放'), 10);
 
@@ -196,22 +218,21 @@ $applyScheduleMutex(Schedule::call(function () use ($writeScheduleOutput) {
 ))->name('工单自动关闭'), 20);
 
 $applyScheduleMutex(Schedule::call(function () use ($writeScheduleOutput) {
-    $summary = app(OrderCleanupAutomationService::class)->handle();
-    Log::info('[定时任务] 订单与充值清理执行完成', $summary);
-    $writeScheduleOutput('订单与充值清理刷新成功');
+    $summary = app(InvoiceCleanupAutomationService::class)->handle();
+    if (array_sum($summary) > 0) {
+        Log::info('[定时任务] 账单与充值清理执行完成', $summary);
+    }
+    $writeScheduleOutput('账单与充值清理刷新成功');
 })->cron($resolveAutomationCron(
     'order_cleanup_schedule_mode',
     'order_cleanup_schedule_time',
     AutomationScheduleExpression::MODE_EVERY_FIVE_MINUTES,
     '00:00:00'
-))->name('订单与充值清理'), 15);
+))->name('账单与充值清理'), 15);
 
-$applyScheduleMutex(Schedule::call(function () use ($writeScheduleOutput) {
-    $exitCode = Artisan::call('orders:sync-processing-status');
+$applyScheduleMutex(Schedule::command('vnc:ensure-relay')
+    ->everyMinute()->name('VNC Relay 守护'), 2);
 
-    if ($exitCode !== 0) {
-        throw new RuntimeException('处理中订单状态同步执行失败，退出码：' . $exitCode);
-    }
-
-    $writeScheduleOutput('处理中订单状态同步刷新成功');
-})->everyFiveMinutes()->name('处理中订单状态同步'), 10);
+$applyScheduleMutex(Schedule::command(
+    'queue:work --queue=provision,referral,default --sleep=1 --tries=3 --stop-when-empty --max-time=50'
+)->everyMinute()->name('队列积压消费'), 2);

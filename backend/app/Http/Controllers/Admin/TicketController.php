@@ -5,9 +5,9 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\AdminUser;
 use App\Models\Ticket;
-use App\Services\TicketService;
-use App\Traits\ApiResponse;
+use App\Services\Ticket\TicketService;
 use App\Support\AdminPermissions;
+use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 
@@ -28,10 +28,17 @@ class TicketController extends Controller
         $perPage = min((int) $request->input('page_size', 20), 100);
         $paginator = $this->ticketService->adminList($filters, $perPage);
 
+        $items = collect($paginator->items())->map(function (Ticket $ticket) {
+            $data = $ticket->toArray();
+            $data['close_reason_label'] = TicketService::CLOSE_REASON_LABELS[$ticket->close_reason ?? ''] ?? null;
+
+            return $data;
+        })->all();
+
         return $this->success([
-            'list'      => $paginator->items(),
-            'total'     => $paginator->total(),
-            'page'      => $paginator->currentPage(),
+            'list' => $items,
+            'total' => $paginator->total(),
+            'page' => $paginator->currentPage(),
             'page_size' => $paginator->perPage(),
         ]);
     }
@@ -44,7 +51,7 @@ class TicketController extends Controller
     public function uploadImage(Request $request)
     {
         $data = $request->validate([
-            'file' => ['required', 'file', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'file' => ['required', 'image', 'mimetypes:image/jpeg,image/png,image/webp', 'max:5120'],
         ]);
 
         $image = $this->ticketService->uploadImage($request->user()->id, 'admin', $data['file']);
@@ -65,12 +72,14 @@ class TicketController extends Controller
             $data['content'] ?? null,
             $data['attachments'] ?? []
         );
+
         return $this->success($reply, '回复成功');
     }
 
     public function close(Ticket $ticket)
     {
         $this->ticketService->staffClose($ticket);
+
         return $this->success(null, '工单已关闭');
     }
 
@@ -78,6 +87,7 @@ class TicketController extends Controller
     {
         $data = $request->validate(['assignee_id' => ['required', 'integer', 'exists:admin_users,id']]);
         $ticket = $this->ticketService->assign($ticket, $data['assignee_id']);
+
         return $this->success($ticket->load('assignee:id,username,nickname'), '指派成功');
     }
 
@@ -99,10 +109,10 @@ class TicketController extends Controller
             ->values();
 
         return $this->success($admins->map(fn (AdminUser $a) => [
-            'id'       => (int) $a->id,
+            'id' => (int) $a->id,
             'username' => $a->username,
             'nickname' => $a->display_name,
-            'email'    => $hasEmailColumn ? (string) ($a->email ?? '') : '',
+            'email' => $hasEmailColumn ? (string) ($a->email ?? '') : '',
         ])->values());
     }
 }

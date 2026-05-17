@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Support\OrderInvoiceNoGenerator;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Order extends Model
 {
@@ -14,7 +18,7 @@ class Order extends Model
         'order_no',
         'user_id',
         'product_id',
-        'product_name_snapshot',
+        'product_spec_snapshot',
         'product_type_snapshot',
         'service_id',
         'type',
@@ -52,16 +56,53 @@ class Order extends Model
         ];
     }
 
-    public function getProductNameSnapshotAttribute(mixed $value): ?string
+    public function getProductSpecSnapshotAttribute(mixed $value): ?string
     {
         $resolved = trim((string) $value);
         if ($resolved !== '') {
             return $resolved;
         }
 
-        $productName = trim((string) ($this->product?->name ?? ''));
+        $legacySnapshot = trim((string) ($this->attributes['product_name_snapshot'] ?? ''));
+        if ($legacySnapshot !== '') {
+            return $legacySnapshot;
+        }
 
-        return $productName !== '' ? $productName : null;
+        return null;
+    }
+
+    public function getProductNameSnapshotAttribute(mixed $value): ?string
+    {
+        $resolved = trim((string) ($this->product_spec_snapshot ?? $value));
+        if ($resolved !== '') {
+            return $resolved;
+        }
+
+        $product = $this->product;
+        if ($product instanceof Product) {
+            $displayName = trim((string) ((new ProductDisplayNameResolver)->resolveForProduct($product)['product_display_name'] ?? ''));
+
+            return $displayName !== '' ? $displayName : null;
+        }
+
+        return null;
+    }
+
+    public function setProductNameSnapshotAttribute(mixed $value): void
+    {
+        $normalized = trim((string) $value);
+
+        if ($normalized !== '' && trim((string) ($this->attributes['product_spec_snapshot'] ?? '')) === '') {
+            $this->attributes['product_spec_snapshot'] = $normalized;
+        }
+
+        if ($this->hasPhysicalColumn('product_name_snapshot')) {
+            $this->attributes['product_name_snapshot'] = $normalized !== '' ? $normalized : null;
+
+            return;
+        }
+
+        unset($this->attributes['product_name_snapshot']);
     }
 
     public function getProductTypeSnapshotAttribute(mixed $value): ?string
@@ -78,7 +119,9 @@ class Order extends Model
 
     public function getDisplayProductNameAttribute(): string
     {
-        return $this->product_name_snapshot ?: '未命名商品';
+        $resolved = trim((string) ($this->product_name_snapshot ?? ''));
+
+        return $resolved !== '' ? $resolved : '未配置规格';
     }
 
     public function getConfigSnapshotAttribute(mixed $value): array
@@ -98,37 +141,42 @@ class Order extends Model
         return $this->decodeSnapshotArray($value);
     }
 
-    public function user()
+    public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
-    public function product()
+    public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
     }
 
-    public function coupon()
+    public function coupon(): BelongsTo
     {
         return $this->belongsTo(Coupon::class);
     }
 
-    public function userCoupon()
+    public function userCoupon(): BelongsTo
     {
         return $this->belongsTo(UserCoupon::class);
     }
 
-    public function service()
+    public function service(): BelongsTo
     {
         return $this->belongsTo(Service::class);
     }
 
-    public function invoice()
+    public function invoice(): HasOne
     {
         return $this->hasOne(Invoice::class);
     }
 
-    public function referralReward()
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
+    }
+
+    public function referralReward(): HasOne
     {
         return $this->hasOne(ReferralReward::class);
     }
@@ -160,5 +208,14 @@ class Order extends Model
         }
 
         return null;
+    }
+
+    private function hasPhysicalColumn(string $column): bool
+    {
+        try {
+            return $this->getConnection()->getSchemaBuilder()->hasColumn($this->getTable(), $column);
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }

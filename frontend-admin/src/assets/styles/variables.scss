@@ -1,0 +1,98 @@
+// 1. Brand & semantic colors
+$color-primary: #0052d9;
+$color-primary-hover: #0041b3;
+$color-primary-active: #00358f;
+$color-primary-soft: #edf4ff;
+$color-primary-border: #bfd4ff;
+
+$color-success: #059669;
+$color-success-soft: #ecfdf5;
+$color-warning: #d97706;
+$color-warning-soft: #fff7ed;
+$color-danger: #dc2626;
+$color-danger-soft: #fef2f2;
+$color-info: #4e5969;
+$color-info-soft: #f2f3f5;
+
+// 2. Surface system
+$bg-color: #f5f7fa;
+$bg-color-soft: #fafbfd;
+$bg-color-card: #ffffff;
+$bg-color-hover: #f2f3f5;
+$bg-color-stripe: #f7f8fa;
+$bg-color-overlay: rgba(255, 255, 255, 0.92);
+
+// 3. Text
+$text-color-primary: #1d2129;
+$text-color-secondary: #4e5969;
+$text-color-placeholder: #86909c;
+$text-color-disabled: #c9cdd4;
+$text-color-inverse: #ffffff;
+
+// 4. Border & divider
+$border-color: #e5e6eb;
+$divider-color: #ebedf0;
+$border-color-strong: #c9cdd4;
+
+// 5. Typography
+$font-family-main: "PingFang SC", "Microsoft YaHei", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+$font-size-base: 14px;
+$font-size-lg: 16px;
+$font-size-sm: 12px;
+$font-size-xs: 11px;
+$font-size-h1: 22px;
+$font-size-h2: 18px;
+
+// 6. Layout & spacing
+$sidebar-width: 220px;
+$sidebar-width-collapsed: 72px;
+$navbar-height: 56px;
+$base-padding: 16px;
+$base-margin: 16px;
+$base-border-radius: 8px;
+$sm-border-radius: 6px;
+$lg-border-radius: 12px;
+
+$spacing-xs: 4px;
+$spacing-sm: 8px;
+$spacing-md: 12px;
+$spacing-lg: 16px;
+$spacing-xl: 20px;
+$spacing-2xl: 24px;
+$spacing-3xl: 32px;
+
+// 7. Shadow
+$shadow-xs: 0 1px 1px rgba(29, 33, 41, 0.04);
+$shadow-sm: 0 1px 2px rgba(29, 33, 41, 0.05), 0 1px 3px rgba(29, 33, 41, 0.04);
+$shadow-md: 0 4px 12px rgba(29, 33, 41, 0.08);
+$shadow-lg: 0 12px 32px rgba(29, 33, 41, 0.12);
+$shadow-xl: 0 20px 48px rgba(29, 33, 41, 0.14);
+
+// 8. Motion
+$duration-fast: 0.14s;
+$duration-base: 0.2s;
+$duration-slow: 0.32s;
+$ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+$ease-in-out-soft: cubic-bezier(0.4, 0, 0.2, 1);
+
+// 9. z-index
+$zindex-navbar: 1000;
+$zindex-sidebar: 1010;
+$zindex-modal: 1050;
+
+// 10. Legacy aliases (do not remove, referenced by older components)
+$primary-color: $color-primary;
+$success-color: $color-success;
+$warning-color: $color-warning;
+$danger-color: $color-danger;
+$info-color: $color-info;
+
+$font-family: $font-family-main;
+$border-radius: $base-border-radius;
+$box-shadow: $shadow-md;
+
+$sidebar-collapsed-width: $sidebar-width-collapsed;
+$sidebar-bg: $bg-color-card;
+$sidebar-text: $text-color-secondary;
+$sidebar-active-text: $color-primary;
+$navbar-bg: $bg-color-card;

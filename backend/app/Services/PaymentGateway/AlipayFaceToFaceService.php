@@ -1,0 +1,383 @@
+<?php
+
+namespace App\Services\PaymentGateway;
+
+use App\Exceptions\BusinessException;
+use App\Models\Setting;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+
+class AlipayFaceToFaceService
+{
+    private string $appId;
+
+    private string $privateKey;
+
+    private string $alipayPublicKey;
+
+    private string $gateway;
+
+    private string $signType;
+
+    private string $charset;
+
+    private string $notifyUrl;
+
+    private string $timeout;
+
+    private bool $enabled;
+
+    public function __construct()
+    {
+        $this->appId = $this->setting('alipay_app_id', config('alipay.app_id', ''));
+        $this->privateKey = $this->setting('alipay_private_key', config('alipay.private_key', ''));
+        $this->alipayPublicKey = $this->setting('alipay_public_key', config('alipay.alipay_public_key', ''));
+        $this->gateway = config('alipay.gateway', 'https://openapi.alipay.com/gateway.do');
+        $this->notifyUrl = $this->resolveNotifyUrl();
+        $this->timeout = config('alipay.timeout', '30m');
+        $this->signType = 'RSA2';
+        $this->charset = 'utf-8';
+        $this->enabled = in_array($this->setting('alipay_enabled', '0'), ['1', 'true', true, 1], true);
+    }
+
+    /**
+     * 解析支付宝异步通知回调 URL
+     * 必须指向后端 API 地址（支付宝服务器直接 POST 到此地址）
+     * 优先使用 ALIPAY_NOTIFY_URL，fallback 到 APP_URL
+     */
+    private function resolveNotifyUrl(): string
+    {
+        // 优先使用专门配置的回调 URL
+        $notifyUrl = config('alipay.notify_url', '');
+        if ($notifyUrl !== '') {
+            return $notifyUrl;
+        }
+
+        // fallback 到后端 APP_URL
+        $frontendUrl = trim((string) config('app.frontend_url', ''));
+        if ($frontendUrl !== '') {
+            return rtrim($frontendUrl, '/').'/api/client/payment/alipay/notify';
+        }
+
+        return rtrim(config('app.url', ''), '/').'/api/client/payment/alipay/notify';
+    }
+
+    public function isEnabled(): bool
+    {
+        return $this->enabled && $this->appId !== '' && $this->privateKey !== '';
+    }
+
+    public function matchesAppId(?string $appId): bool
+    {
+        $expected = trim($this->appId);
+        $actual = trim((string) $appId);
+
+        return $expected === '' || ($actual !== '' && hash_equals($expected, $actual));
+    }
+
+    /**
+     * 从 settings 表读取，fallback 到 .env/config
+     */
+    private function setting(string $key, string $default = ''): string
+    {
+        $value = Setting::getValue('payment', $key);
+
+        return ($value !== null && $value !== '') ? (string) $value : $default;
+    }
+
+    /**
+     * 预下单（生成二维码链接）
+     */
+    public function precreate(string $outTradeNo, float $amount, string $subject): array
+    {
+        $bizContent = [
+            'out_trade_no' => $outTradeNo,
+            'total_amount' => number_format($amount, 2, '.', ''),
+            'subject' => $subject,
+            'timeout_express' => $this->timeout,
+        ];
+
+        $notifyUrlMeta = $this->describePrecreateNotifyUrl();
+        $params = $this->buildRequestParams('alipay.trade.precreate', $bizContent);
+        $result = $this->request($params);
+
+        if (! $notifyUrlMeta['usable']) {
+            Log::warning('[支付宝当面付] precreate 未附带异步回调地址，将依赖主动查询', [
+                'out_trade_no' => $outTradeNo,
+                'notify_url' => $notifyUrlMeta['notify_url'],
+                'reason' => $notifyUrlMeta['reason'],
+            ]);
+        }
+
+        Log::info('[支付宝当面付] precreate 响应', ['out_trade_no' => $outTradeNo, 'response' => $result]);
+
+        $data = $result['alipay_trade_precreate_response'] ?? [];
+
+        if (($data['code'] ?? '') !== '10000') {
+            Log::error('[支付宝当面付] 预下单失败', ['data' => $data]);
+            throw new BusinessException($data['sub_msg'] ?? $data['msg'] ?? '支付宝预下单失败');
+        }
+
+        return [
+            'qr_code' => $data['qr_code'] ?? '',
+            'out_trade_no' => $data['out_trade_no'] ?? $outTradeNo,
+        ];
+    }
+
+    /**
+     * 主动查询订单状态
+     */
+    public function query(string $outTradeNo): array
+    {
+        $bizContent = ['out_trade_no' => $outTradeNo];
+        $params = $this->buildRequestParams('alipay.trade.query', $bizContent);
+        $result = $this->request($params);
+
+        $data = $result['alipay_trade_query_response'] ?? [];
+
+        return [
+            'trade_status' => $data['trade_status'] ?? '',
+            'trade_no' => $data['trade_no'] ?? '',
+            'out_trade_no' => $data['out_trade_no'] ?? $outTradeNo,
+            'total_amount' => $data['total_amount'] ?? '0.00',
+            'raw' => $data,
+        ];
+    }
+
+    /**
+     * 交易退款
+     */
+    public function refund(
+        string $outTradeNo,
+        float $refundAmount,
+        string $refundReason = '',
+        ?string $tradeNo = null,
+        ?string $outRequestNo = null,
+    ): array {
+        $bizContent = [
+            'out_trade_no' => $outTradeNo,
+            'refund_amount' => number_format($refundAmount, 2, '.', ''),
+        ];
+
+        if ($tradeNo !== null && trim($tradeNo) !== '') {
+            $bizContent['trade_no'] = trim($tradeNo);
+        }
+
+        if ($refundReason !== '') {
+            $bizContent['refund_reason'] = $refundReason;
+        }
+
+        if ($outRequestNo !== null && trim($outRequestNo) !== '') {
+            $bizContent['out_request_no'] = trim($outRequestNo);
+        }
+
+        $params = $this->buildRequestParams('alipay.trade.refund', $bizContent);
+        $result = $this->request($params);
+
+        Log::info('[支付宝当面付] refund 响应', [
+            'out_trade_no' => $outTradeNo,
+            'trade_no' => $tradeNo,
+            'out_request_no' => $outRequestNo,
+            'response' => $result,
+        ]);
+
+        $data = $result['alipay_trade_refund_response'] ?? [];
+
+        if (($data['code'] ?? '') !== '10000') {
+            Log::error('[支付宝当面付] 退款失败', ['data' => $data]);
+            throw new BusinessException($data['sub_msg'] ?? $data['msg'] ?? '支付宝退款失败');
+        }
+
+        return [
+            'trade_no' => $data['trade_no'] ?? ($tradeNo ?? ''),
+            'out_trade_no' => $data['out_trade_no'] ?? $outTradeNo,
+            'refund_fee' => $data['refund_fee'] ?? number_format($refundAmount, 2, '.', ''),
+            'fund_change' => $data['fund_change'] ?? '',
+            'gmt_refund_pay' => $data['gmt_refund_pay'] ?? '',
+            'raw' => $data,
+        ];
+    }
+
+    /**
+     * 验证异步通知签名
+     */
+    public function verifyNotify(array $params): bool
+    {
+        $sign = $params['sign'] ?? '';
+        $signType = $params['sign_type'] ?? 'RSA2';
+
+        unset($params['sign'], $params['sign_type']);
+        ksort($params);
+
+        $stringToSign = urldecode(http_build_query($params));
+
+        $publicKey = "-----BEGIN PUBLIC KEY-----\n"
+            .wordwrap($this->alipayPublicKey, 64, "\n", true)
+            ."\n-----END PUBLIC KEY-----";
+
+        $algorithm = $signType === 'RSA2' ? OPENSSL_ALGO_SHA256 : OPENSSL_ALGO_SHA1;
+
+        return openssl_verify($stringToSign, base64_decode($sign), $publicKey, $algorithm) === 1;
+    }
+
+    /**
+     * 发送请求到支付宝网关，自动处理 GBK→UTF-8 转码
+     */
+    private function request(array $params): array
+    {
+        // charset 必须放在 URL 查询字符串中，否则支付宝按 GBK 解码 POST body 导致中文签名不一致
+        $url = $this->gateway.'?charset='.$this->charset;
+
+        try {
+            $response = Http::asForm()
+                ->timeout(15)
+                ->retry(1, 200)
+                ->withoutVerifying()
+                ->post($url, $params);
+        } catch (ConnectionException $exception) {
+            Log::error('[支付宝当面付] 网关请求失败', [
+                'gateway' => $this->gateway,
+                'message' => $exception->getMessage(),
+                'exception' => $exception::class,
+            ]);
+
+            throw new BusinessException('支付网关暂时不可用，请稍后重试', 42200, 422);
+        }
+
+        $body = $response->body();
+
+        // 支付宝网关始终返回 GBK 编码，需转为 UTF-8 才能 json_decode
+        if (! json_decode($body)) {
+            $body = mb_convert_encoding($body, 'UTF-8', 'GBK');
+        }
+
+        $result = json_decode($body, true);
+
+        if (! is_array($result)) {
+            Log::error('[支付宝当面付] 响应解析失败', [
+                'http_status' => $response->status(),
+                'body' => mb_substr($response->body(), 0, 500),
+            ]);
+
+            return [];
+        }
+
+        return $result;
+    }
+
+    /**
+     * 构建请求公共参数
+     */
+    private function buildRequestParams(string $method, array $bizContent): array
+    {
+        $params = [
+            'app_id' => $this->appId,
+            'method' => $method,
+            'format' => 'JSON',
+            'charset' => $this->charset,
+            'sign_type' => $this->signType,
+            'timestamp' => date('Y-m-d H:i:s'),
+            'version' => '1.0',
+            'biz_content' => json_encode($bizContent, JSON_UNESCAPED_UNICODE),
+        ];
+
+        if ($method === 'alipay.trade.precreate') {
+            $notifyUrl = $this->resolvePrecreateNotifyUrl();
+            if ($notifyUrl !== null) {
+                $params['notify_url'] = $notifyUrl;
+            }
+        }
+
+        $params['sign'] = $this->generateSign($params);
+
+        return $params;
+    }
+
+    private function describePrecreateNotifyUrl(): array
+    {
+        $notifyUrl = trim($this->notifyUrl);
+
+        if ($notifyUrl === '') {
+            return [
+                'usable' => false,
+                'notify_url' => '',
+                'reason' => 'empty',
+            ];
+        }
+
+        $scheme = strtolower((string) parse_url($notifyUrl, PHP_URL_SCHEME));
+        if (! in_array($scheme, ['http', 'https'], true)) {
+            return [
+                'usable' => false,
+                'notify_url' => $notifyUrl,
+                'reason' => 'unsupported_scheme',
+            ];
+        }
+
+        $host = strtolower((string) parse_url($notifyUrl, PHP_URL_HOST));
+        if ($host === '') {
+            return [
+                'usable' => false,
+                'notify_url' => $notifyUrl,
+                'reason' => 'invalid_host',
+            ];
+        }
+
+        if (in_array($host, ['localhost', '127.0.0.1', '::1'], true)) {
+            return [
+                'usable' => false,
+                'notify_url' => $notifyUrl,
+                'reason' => 'loopback_host',
+            ];
+        }
+
+        if (filter_var($host, FILTER_VALIDATE_IP) && ! filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+            return [
+                'usable' => false,
+                'notify_url' => $notifyUrl,
+                'reason' => 'private_or_reserved_ip',
+            ];
+        }
+
+        return [
+            'usable' => true,
+            'notify_url' => $notifyUrl,
+            'reason' => 'ok',
+        ];
+    }
+
+    private function resolvePrecreateNotifyUrl(): ?string
+    {
+        $notifyUrlMeta = $this->describePrecreateNotifyUrl();
+
+        return $notifyUrlMeta['usable'] ? $notifyUrlMeta['notify_url'] : null;
+    }
+
+    /**
+     * RSA2 签名
+     */
+    private function generateSign(array $params): string
+    {
+        ksort($params);
+        $stringToSign = urldecode(http_build_query($params));
+
+        // 自动检测 PKCS8 / PKCS1 格式
+        $key = $this->privateKey;
+        if (str_starts_with($key, 'MIIEv')) {
+            $pemKey = "-----BEGIN PRIVATE KEY-----\n"
+                .wordwrap($key, 64, "\n", true)
+                ."\n-----END PRIVATE KEY-----";
+        } else {
+            $pemKey = "-----BEGIN RSA PRIVATE KEY-----\n"
+                .wordwrap($key, 64, "\n", true)
+                ."\n-----END RSA PRIVATE KEY-----";
+        }
+
+        $algorithm = $this->signType === 'RSA2' ? OPENSSL_ALGO_SHA256 : OPENSSL_ALGO_SHA1;
+
+        openssl_sign($stringToSign, $signature, $pemKey, $algorithm);
+
+        return base64_encode($signature);
+    }
+}

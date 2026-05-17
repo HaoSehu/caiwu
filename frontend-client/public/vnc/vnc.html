@@ -300,6 +300,55 @@
       font-size: 13px;
     }
     #noVNC_error button:hover { background: #e2e8f0; }
+
+    @media (max-width: 767px) {
+      #noVNC_status {
+        padding: 8px 10px;
+        font-size: 13px;
+      }
+
+      #noVNC_control_bar {
+        padding: 8px 6px;
+        border-radius: 0 10px 10px 0;
+      }
+
+      #noVNC_control_bar_handle {
+        right: -22px;
+        width: 22px;
+        height: 46px;
+      }
+
+      .noVNC_button {
+        width: 34px;
+        height: 34px;
+      }
+
+      .noVNC_button svg {
+        width: 18px;
+        height: 18px;
+      }
+
+      .noVNC_panel {
+        min-width: 0;
+        width: calc(100vw - 74px);
+        max-width: calc(100vw - 74px);
+        padding: 12px;
+      }
+
+      .noVNC_panel.open {
+        transform: translateX(58px);
+      }
+
+      .noVNC_panel textarea {
+        width: 100%;
+        min-height: 120px;
+      }
+
+      #noVNC_error_box {
+        width: calc(100vw - 32px);
+        padding: 24px 20px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -474,19 +523,30 @@
     }
   }
 
+  // 读取 storage 前的属性访问本身就可能因跨域 iframe 限制抛出 SecurityError，
+  // 因此统一在 getter 外层包裹 try/catch，任何异常都静默跳过当前候选。
+  function safeResolveStorage(getter) {
+    try {
+      return getter()
+    } catch {
+      return null
+    }
+  }
+
   function getAuthToken(mode = 'client') {
     const tokenKey = mode === 'admin' ? 'admin_token' : 'client_token'
     const candidates = [
-      () => readStorageValue(window.sessionStorage, tokenKey),
-      () => readStorageValue(window.localStorage, tokenKey),
-      () => readStorageValue(window.parent?.sessionStorage, tokenKey),
-      () => readStorageValue(window.parent?.localStorage, tokenKey),
-      () => readStorageValue(window.opener?.sessionStorage, tokenKey),
-      () => readStorageValue(window.opener?.localStorage, tokenKey),
+      () => window.sessionStorage,
+      () => window.localStorage,
+      () => (window.parent && window.parent !== window ? window.parent.sessionStorage : null),
+      () => (window.parent && window.parent !== window ? window.parent.localStorage : null),
+      () => (window.opener ? window.opener.sessionStorage : null),
+      () => (window.opener ? window.opener.localStorage : null),
     ]
 
-    for (const resolve of candidates) {
-      const token = String(resolve() || '').trim()
+    for (const getStorage of candidates) {
+      const storage = safeResolveStorage(getStorage)
+      const token = String(readStorageValue(storage, tokenKey) || '').trim()
       if (token) return token
     }
 
@@ -503,9 +563,31 @@
     }
   }
 
+  // 跨域 iframe 场景下 location.origin 指向 noVNC 宿主，相对路径无法命中业务后端，
+  // 因此允许宿主通过 URL 参数 api_base 显式指定业务 API 的绝对基址。
+  function resolveApiUrl(path) {
+    const rawPath = String(path || '')
+    if (/^https?:\/\//i.test(rawPath)) return rawPath
+
+    const apiBase = String(q('api_base', '') || '').trim().replace(/\/+$/, '')
+    if (!apiBase) return rawPath
+    return apiBase + (rawPath.startsWith('/') ? rawPath : `/${rawPath}`)
+  }
+
+  function isCrossOriginRequest(resolvedUrl) {
+    if (!/^https?:\/\//i.test(resolvedUrl)) return false
+    try {
+      return new URL(resolvedUrl).origin !== location.origin
+    } catch {
+      return false
+    }
+  }
+
   async function readJson(url, options = {}, fallbackMessage = '请求失败', mode = 'client') {
-    const res = await fetch(url, {
-      credentials: 'include',
+    const resolvedUrl = resolveApiUrl(url)
+    const res = await fetch(resolvedUrl, {
+      // 跨域请求默认不带凭证，避免 CORS 预检失败；同域保留 include 以兼容 Cookie Session
+      credentials: isCrossOriginRequest(resolvedUrl) ? 'omit' : 'include',
       headers: buildRequestHeaders(options.headers || {}, mode),
       ...options,
     })
@@ -540,10 +622,30 @@
     return rawPath ? `${proto}://${host}:${port}/${rawPath}` : `${proto}://${host}:${port}`
   }
 
-  async function renewParamsByServiceId(serviceId) {
-    const id = Number(serviceId || 0)
-    const adminUserId = Number(q('admin_user_id') || 0)
-    const isAdminMode = Number.isFinite(adminUserId) && adminUserId > 0
+  function buildInitialCredentials(params) {
+    const creds = {}
+    const username = String(params?.username || '').trim()
+    const target = String(params?.target || '').trim()
+    const password = String(params?.password || '').trim()
+
+    if (username && target && password) {
+      creds.username = username
+      creds.target = target
+      creds.password = password
+      return creds
+    }
+
+    if (password) {
+      creds.password = password
+    }
+
+    return creds
+  }
+
+    async function renewParamsByServiceId(serviceId) {
+      const id = Number(serviceId || 0)
+      const adminUserId = Number(q('admin_user_id') || 0)
+      const isAdminMode = Number.isFinite(adminUserId) && adminUserId > 0
     if (!Number.isFinite(id) || id <= 0) {
       throw new Error('服务编号无效，无法重新获取 VNC 连接')
     }
@@ -562,12 +664,22 @@
     if (isAdminMode) {
       freshLocation.searchParams.set('admin_user_id', String(adminUserId))
     }
+    // 如果后端未回填 api_base，则继承当前页面的 api_base，避免 renew 后跨域请求失效
+    const currentApiBase = q('api_base', '')
+    if (currentApiBase && !freshLocation.searchParams.get('api_base')) {
+      freshLocation.searchParams.set('api_base', currentApiBase)
+    }
     history.replaceState(null, '', freshLocation.toString())
 
     const freshToken = freshLocation.searchParams.get('token')
+    const freshRelayPath = freshLocation.searchParams.get('relay_path')
     if (freshToken) {
       const relaySession = await readJson(`/api/client/vnc-tokens/${encodeURIComponent(freshToken)}`, {}, '新的 VNC 链接已失效', isAdminMode ? 'admin' : 'client')
-      return { token: freshToken, ...relaySession }
+      return {
+        token: freshToken,
+        ...relaySession,
+        relay_path: freshRelayPath || relaySession.relay_path || '',
+      }
     }
 
     return {
@@ -583,11 +695,16 @@
 
   async function resolveParams() {
     const token = q('token')
+    const relayPath = q('relay_path')
     const serviceId = q('service_id') || q('sid')
     if (token) {
       try {
         const relaySession = await readJson(`/api/client/vnc-tokens/${encodeURIComponent(token)}`, {}, 'VNC 链接已失效，请重新获取')
-        return { token, ...relaySession }
+        return {
+          token,
+          ...relaySession,
+          relay_path: relayPath || relaySession.relay_path || '',
+        }
       } catch (error) {
         if (serviceId) {
           return await renewParamsByServiceId(serviceId)
@@ -603,7 +720,6 @@
     return {
       host: q('host', location.hostname),
       port: q('port', location.port),
-      password: q('password'),
       path: q('path', 'websockify'),
       encrypt: q('encrypt', location.protocol === 'https:' ? '1' : '0'),
       username: q('username'),
@@ -624,10 +740,7 @@
       const url = buildWsUrl(params)
       if (!url) throw new Error('VNC 连接参数无效')
 
-      const creds = {}
-      if (params.password) creds.password = String(params.password)
-      if (params.username) creds.username = String(params.username)
-      if (params.target)   creds.target   = String(params.target)
+      const creds = buildInitialCredentials(params)
 
       rfb = new RFB(container, url, { credentials: creds })
       rfb.scaleViewport = true
@@ -649,7 +762,7 @@
         if (e.detail?.clean) {
           showStatus('已断开连接', 'normal', 4000)
         } else {
-          showError('VNC 连接已中断，请重新尝试')
+          showError('VNC 连接已中断，请重新尝试\n\n目标地址：' + url)
         }
       })
 
@@ -662,17 +775,26 @@
         clipboardText.value = e.detail?.text || ''
       })
 
-      rfb.addEventListener('credentialsrequired', () => {
-        if (Object.keys(creds).length > 0) {
-          rfb.sendCredentials(creds)
-        } else {
-          const pwd = prompt('请输入 VNC 密码')
-          if (pwd !== null) rfb.sendCredentials({ password: pwd })
+      rfb.addEventListener('credentialsrequired', async () => {
+        if (creds.password) {
+          rfb.sendCredentials({ password: creds.password })
+          return
+        }
+
+        const pwd = prompt('请输入 VNC 密码')
+        if (pwd !== null) {
+          const password = String(pwd).trim()
+          if (password) {
+            creds.password = password
+            rfb.sendCredentials({ password })
+          }
         }
       })
 
     } catch (err) {
-      showError(err?.message || 'VNC 连接失败')
+      const detail = err?.message || 'VNC 连接失败'
+      showError(detail)
+      console.error('[VNC] connectVnc 失败:', detail, err)
     }
   }
 

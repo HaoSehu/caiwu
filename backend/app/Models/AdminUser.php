@@ -4,6 +4,9 @@ namespace App\Models;
 
 use App\Support\AdminPermissions;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\HasApiTokens;
@@ -13,7 +16,9 @@ class AdminUser extends Authenticatable
     use HasApiTokens;
 
     private static ?bool $adminUserRolesTableAvailable = null;
+
     private static ?bool $rolePermissionsTableAvailable = null;
+
     private static ?bool $permissionsTableAvailable = null;
 
     protected $table = 'admin_users';
@@ -29,16 +34,16 @@ class AdminUser extends Authenticatable
     {
         return [
             'last_login_at' => 'datetime',
-            'password'      => 'hashed',
+            'password' => 'hashed',
         ];
     }
 
-    public function role()
+    public function role(): BelongsTo
     {
         return $this->belongsTo(Role::class);
     }
 
-    public function roles()
+    public function roles(): BelongsToMany
     {
         return $this->belongsToMany(Role::class, 'admin_user_roles');
     }
@@ -76,14 +81,20 @@ class AdminUser extends Authenticatable
 
     public function scopeWithResolvedPermissionRelations(Builder $query): Builder
     {
-        return $query->with([
-            'roles.permissionItems',
-            'role.permissionItems',
-        ]);
+        $relations = self::hasAdminPermissionTables()
+            ? ['roles.permissionItems', 'role.permissionItems']
+            : ['role'];
+
+        return $query->with($relations);
     }
 
     public function resolvedPermissions(): array
     {
+        $primaryRole = $this->resolvePrimaryRoleForRead();
+        if ($primaryRole instanceof Role) {
+            return $primaryRole->resolvedPermissions();
+        }
+
         if (self::hasAdminPermissionTables()) {
             $roles = $this->resolveRolesForRead();
             if ($roles !== []) {
@@ -105,6 +116,11 @@ class AdminUser extends Authenticatable
 
     public function resolvedRoleLabel(): string
     {
+        $primaryRole = $this->resolvePrimaryRoleForRead();
+        if ($primaryRole instanceof Role) {
+            return trim((string) ($primaryRole->label ?? $primaryRole->name ?? ''));
+        }
+
         $roles = $this->resolveRolesForRead();
         if ($roles !== []) {
             $primary = $roles[0];
@@ -113,6 +129,30 @@ class AdminUser extends Authenticatable
         }
 
         return trim((string) ($this->role?->label ?? $this->role?->name ?? ''));
+    }
+
+    private function resolvePrimaryRoleForRead(): ?Role
+    {
+        $roleId = (int) ($this->role_id ?? 0);
+        if ($roleId <= 0) {
+            return null;
+        }
+
+        if ($this->relationLoaded('role')) {
+            $role = $this->getRelation('role');
+
+            return $role instanceof Role && (int) $role->id === $roleId
+                ? $role
+                : null;
+        }
+
+        $query = $this->role();
+
+        if (self::rolePermissionsTableAvailable() && self::permissionsTableAvailable()) {
+            $query->with('permissionItems');
+        }
+
+        return $query->first();
     }
 
     /**
@@ -125,7 +165,7 @@ class AdminUser extends Authenticatable
         }
 
         if ($this->relationLoaded('roles')) {
-            /** @var \Illuminate\Database\Eloquent\Collection<int, Role> $roles */
+            /** @var Collection<int, Role> $roles */
             $roles = $this->getRelation('roles');
 
             return $roles->values()->all();

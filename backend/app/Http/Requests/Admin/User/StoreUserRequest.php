@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Admin\User;
 
-use App\Http\Requests\Admin\AdminFormRequest;
+use App\Http\Requests\Admin\Common\AdminFormRequest;
 use App\Support\AccountIdentifier;
 use Illuminate\Validation\Rule;
 

@@ -7,8 +7,10 @@ namespace Tests\Feature;
 use App\Constants\PaymentStatus;
 use App\Models\Order;
 use App\Models\Payment;
-use App\Services\InvoiceService;
-use App\Services\PaymentService;
+use App\Services\Finance\InvoiceService;
+use App\Services\Finance\PaymentService;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class PaymentInvoiceProjectionSyncTest extends TestCase
@@ -17,10 +19,10 @@ class PaymentInvoiceProjectionSyncTest extends TestCase
     {
         $suffix = bin2hex(random_bytes(4));
         $order = Order::query()->create([
-            'order_no' => 'INVPRJ' . strtoupper($suffix),
+            'order_no' => 'INVPRJ'.strtoupper($suffix),
             'user_id' => 1,
             'product_id' => null,
-            'product_name_snapshot' => '投影测试商品',
+            'product_spec_snapshot' => '投影测试配置',
             'product_type_snapshot' => 'server',
             'type' => 'new',
             'amount' => '99.00',
@@ -45,14 +47,14 @@ class PaymentInvoiceProjectionSyncTest extends TestCase
             'user_id' => 1,
             'invoice_id' => null,
             'gateway' => 'alipay',
-            'trade_no' => 'TRADE-' . bin2hex(random_bytes(4)),
+            'trade_no' => 'TRADE-'.bin2hex(random_bytes(4)),
             'amount' => '19.90',
             'status' => PaymentStatus::SUCCESS,
             'callback_raw' => [
-                'trade_no' => 'TRADE-CALLBACK-' . bin2hex(random_bytes(4)),
+                'trade_no' => 'TRADE-CALLBACK-'.bin2hex(random_bytes(4)),
                 'trade_status' => 'TRADE_SUCCESS',
                 'refund' => [
-                    'trade_no' => 'REFUND-' . bin2hex(random_bytes(4)),
+                    'trade_no' => 'REFUND-'.bin2hex(random_bytes(4)),
                     'refunded_at' => now()->format('Y-m-d H:i:s'),
                 ],
             ],
@@ -65,6 +67,38 @@ class PaymentInvoiceProjectionSyncTest extends TestCase
         $this->assertCount(2, $payment->callbacks);
         $this->assertNotNull($payment->callbacks->firstWhere('callback_type', 'payment'));
         $this->assertNotNull($payment->callbacks->firstWhere('callback_type', 'refund'));
+    }
+
+    public function test_payment_service_sync_projection_gracefully_skips_callback_relation_when_projection_table_missing(): void
+    {
+        $payment = Payment::query()->create([
+            'payment_no' => Payment::generatePaymentNo(),
+            'user_id' => 1,
+            'invoice_id' => null,
+            'gateway' => 'alipay',
+            'trade_no' => 'TRADE-'.bin2hex(random_bytes(4)),
+            'amount' => '29.90',
+            'status' => PaymentStatus::SUCCESS,
+            'callback_raw' => [
+                'trade_no' => 'TRADE-CALLBACK-'.bin2hex(random_bytes(4)),
+                'trade_status' => 'TRADE_SUCCESS',
+            ],
+            'paid_at' => now(),
+        ]);
+
+        $actualSchema = DB::connection()->getSchemaBuilder();
+
+        Schema::shouldReceive('hasTable')
+            ->andReturnUsing(static function (string $table) use ($actualSchema): bool {
+                return $table === 'payment_callbacks' ? false : $actualSchema->hasTable($table);
+            });
+
+        $synced = app(PaymentService::class)->syncProjection($payment);
+
+        $this->assertInstanceOf(Payment::class, $synced);
+        $this->assertSame((int) $payment->id, (int) $synced->id);
+        $this->assertSame('TRADE_SUCCESS', (string) ($synced->callback_raw['trade_status'] ?? ''));
+        $this->assertFalse($synced->relationLoaded('callbacks'));
     }
 
     public function test_payment_and_invoice_models_no_longer_use_saved_projection_hooks(): void

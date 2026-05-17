@@ -17,18 +17,18 @@ class AdminTicketAssignableUsersTest extends TestCase
         $suffix = bin2hex(random_bytes(4));
 
         $replyRole = Role::query()->create([
-            'name' => 'ticket-reply-' . $suffix,
+            'name' => 'ticket-reply-'.$suffix,
             'label' => '工单处理',
             'permissions' => [AdminPermissions::TICKET_REPLY],
         ]);
         $readonlyRole = Role::query()->create([
-            'name' => 'ticket-read-' . $suffix,
+            'name' => 'ticket-read-'.$suffix,
             'label' => '只读角色',
             'permissions' => [],
         ]);
 
         AdminUser::query()->create([
-            'username' => 'reply-admin-' . $suffix,
+            'username' => 'reply-admin-'.$suffix,
             'password' => 'secret123',
             'role_id' => (int) $replyRole->id,
             'nickname' => '可回复管理员',
@@ -36,7 +36,7 @@ class AdminTicketAssignableUsersTest extends TestCase
             'status' => 1,
         ]);
         AdminUser::query()->create([
-            'username' => 'readonly-admin-' . $suffix,
+            'username' => 'readonly-admin-'.$suffix,
             'password' => 'secret123',
             'role_id' => (int) $readonlyRole->id,
             'nickname' => '只读管理员',
@@ -44,8 +44,8 @@ class AdminTicketAssignableUsersTest extends TestCase
             'status' => 1,
         ]);
 
-        $replyAdminId = (int) AdminUser::query()->where('username', 'reply-admin-' . $suffix)->value('id');
-        $readonlyAdminId = (int) AdminUser::query()->where('username', 'readonly-admin-' . $suffix)->value('id');
+        $replyAdminId = (int) AdminUser::query()->where('username', 'reply-admin-'.$suffix)->value('id');
+        $readonlyAdminId = (int) AdminUser::query()->where('username', 'readonly-admin-'.$suffix)->value('id');
 
         DB::flushQueryLog();
         DB::enableQueryLog();

@@ -17,6 +17,11 @@ use App\Models\Service;
 use App\Models\Supplier;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Services\ClientServiceConsole\ServiceDetailService;
+use App\Services\Finance\InvoiceService;
+use App\Services\Upstream\Contracts\ProvidesConsoleRuntime;
+use App\Services\Upstream\ProviderKey;
+use App\Services\Upstream\ProviderResolver;
 use App\Support\ServiceHostname;
 use App\Support\TextSanitizer;
 use Carbon\Carbon;
@@ -95,20 +100,54 @@ trait HandlesAdminUserServices
 
         $currentProvisionData = is_array($service->provision_data ?? null) ? $service->provision_data : [];
         $previousCustomHostname = ServiceHostname::custom($currentProvisionData);
-        $supportsUpstream = $this->supportsMofangUpstream($service->product);
+        $previousAmount = round((float) ($service->amount ?? 0), 2);
+        $previousSupplierId = (int) (($currentProvisionData['supplier_id'] ?? ($service->product?->supplier_id ?? 0)) ?: 0);
+        $previousUpstreamHostId = (int) (($currentProvisionData['upstream_host_id'] ?? 0) ?: 0);
+        $supportsUpstream = $this->supportsManagedUpstream($service->product);
         $hasUpstreamBinding = (int) (($currentProvisionData['supplier_id'] ?? ($service->product?->supplier_id ?? 0)) ?: 0) > 0;
+        $rawAmount = $data['amount'] ?? null;
+        $newAmount = $rawAmount === null ? null : round((float) $rawAmount, 2);
+        $rawSupplierId = $data['supplier_id'] ?? null;
+        $supplierId = $rawSupplierId === null ? null : (int) $rawSupplierId;
         $rawUpstreamHostId = $data['upstream_host_id'] ?? null;
         $upstreamHostId = $rawUpstreamHostId === null ? null : (int) $rawUpstreamHostId;
+        $selectedSupplier = null;
+
+        if ($newAmount !== null) {
+            throw_if($newAmount < 0, new BusinessException('请输入有效的购买价格'));
+        }
+
+        if ($supplierId !== null) {
+            $selectedSupplier = Supplier::query()
+                ->enabled()
+                ->find($supplierId);
+
+            throw_if(! $selectedSupplier instanceof Supplier, new BusinessException('请选择有效的上游接口'));
+            throw_if(
+                trim((string) $selectedSupplier->interface_type) !== ProviderKey::HOSTING_PANEL_API,
+                new BusinessException('当前仅支持绑定 hosting_panel_api 上游接口')
+            );
+            throw_if(
+                ! app(ProviderResolver::class)->resolveForSupplier($selectedSupplier)->supports(ProvidesConsoleRuntime::class),
+                new BusinessException('当前上游接口不支持实例控制')
+            );
+            throw_if($upstreamHostId === null, new BusinessException('重新绑定上游接口时必须填写新的上游实例 ID'));
+        }
 
         if ($upstreamHostId !== null) {
             throw_if($upstreamHostId <= 0, new BusinessException('请输入有效的上游主机 ID'));
-            throw_if(! $supportsUpstream && ! $hasUpstreamBinding, new BusinessException('当前服务未接入可控上游，无法修改上游主机 ID'));
+            throw_if(
+                ! $supportsUpstream && ! $hasUpstreamBinding && ! $selectedSupplier instanceof Supplier,
+                new BusinessException('当前服务未接入可控上游，无法修改上游主机 ID')
+            );
         }
 
         $traceId = trim((string) ($context['trace_id'] ?? ''));
         $operatorId = (int) (($context['operator_id'] ?? 0) ?: 0);
         $operatorName = trim((string) ($context['operator_name'] ?? ''));
-        $clearCustomHostname = !empty($data['clear_custom_hostname']);
+        $rawServiceName = array_key_exists('service_name', $data) ? (string) ($data['service_name'] ?? '') : null;
+        $newServiceName = $rawServiceName === null ? 'skip' : mb_substr(TextSanitizer::clean($rawServiceName), 0, 120);
+        $clearCustomHostname = ! empty($data['clear_custom_hostname']);
         $newCustomHostname = 'skip';
 
         if ($clearCustomHostname) {
@@ -132,7 +171,7 @@ trait HandlesAdminUserServices
         $currentRenewPricing = $service->resolveRenewPricingConfig($productPricing);
 
         // 处理续费配置：clear_locked_pricing=true 恢复默认快照，否则按传入值更新，未传则跳过
-        $clearLocked = !empty($data['clear_locked_pricing']);
+        $clearLocked = ! empty($data['clear_locked_pricing']);
         $newLockedPricing = 'skip';
 
         if ($clearLocked) {
@@ -169,16 +208,78 @@ trait HandlesAdminUserServices
             }
         }
 
-        DB::transaction(function () use ($service, $upstreamHostId, $currentProvisionData, $traceId, $operatorId, $operatorName, $newLockedPricing, $newCustomHostname) {
+        $supplierChanged = false;
+        $amountChanged = false;
+        $upstreamHostChanged = false;
+
+        DB::transaction(function () use (
+            $service,
+            $newAmount,
+            $selectedSupplier,
+            $upstreamHostId,
+            $currentProvisionData,
+            $traceId,
+            $operatorId,
+            $operatorName,
+            $newLockedPricing,
+            $newServiceName,
+            $newCustomHostname,
+            &$supplierChanged,
+            &$amountChanged,
+            &$upstreamHostChanged,
+            $previousAmount,
+            $previousSupplierId,
+            $previousUpstreamHostId
+        ) {
             $provisionData = $currentProvisionData;
+            $fillData = [];
+
+            if ($newAmount !== null) {
+                $fillData['amount'] = $newAmount;
+                $amountChanged = abs($newAmount - $previousAmount) > 0.0001;
+            }
+
+            if ($selectedSupplier instanceof Supplier) {
+                $provisionData['source_type'] = (string) ($provisionData['source_type'] ?? 'upstream');
+                $provisionData['provider'] = ProviderKey::HOSTING_PANEL_API;
+                $provisionData['supplier_id'] = (int) $selectedSupplier->id;
+                $provisionData['supplier_product_id'] = (int) ($service->product?->supplier_product_id ?? 0);
+                $supplierChanged = (int) $selectedSupplier->id !== $previousSupplierId;
+            }
 
             if ($upstreamHostId !== null) {
                 $provisionData['source_type'] = (string) ($provisionData['source_type'] ?? 'upstream');
-                $provisionData['provider'] = (string) ($provisionData['provider'] ?? 'mofang_finance_api');
+                $provisionData['provider'] = (string) ($provisionData['provider'] ?? ProviderKey::HOSTING_PANEL_API);
                 $provisionData['supplier_id'] = (int) (($provisionData['supplier_id'] ?? ($service->product?->supplier_id ?? 0)) ?: 0);
                 $provisionData['supplier_product_id'] = (int) (($provisionData['supplier_product_id'] ?? ($service->product?->supplier_product_id ?? 0)) ?: 0);
                 $provisionData['upstream_host_id'] = $upstreamHostId;
                 $provisionData['last_manual_linked_at'] = now()->format('Y-m-d H:i:s');
+                $upstreamHostChanged = $upstreamHostId !== $previousUpstreamHostId;
+            }
+
+            if ($supplierChanged || $upstreamHostChanged) {
+                unset(
+                    $provisionData['connection_secret'],
+                    $provisionData['connection_cached_at'],
+                    $provisionData['last_synced_at'],
+                    $provisionData['last_status_sync_at'],
+                    $provisionData['last_status_sync_attempt_at'],
+                    $provisionData['status_sync_error'],
+                    $provisionData['runtime_status'],
+                    $provisionData['runtime_description'],
+                    $provisionData['host_config_option'],
+                    $provisionData['assigned_ips'],
+                    $provisionData['dedicated_ip'],
+                    $provisionData['nat_remote_address'],
+                    $provisionData['nat_remote_host'],
+                    $provisionData['nat_remote_port'],
+                    $provisionData['nat_remote_checked_at'],
+                    $provisionData['upstream_status'],
+                    $provisionData['upstream_product_id'],
+                    $provisionData['upstream_product_name'],
+                    $provisionData['os'],
+                    $provisionData['provision_error']
+                );
             }
 
             if ($traceId !== '') {
@@ -193,16 +294,22 @@ trait HandlesAdminUserServices
                 $provisionData['updated_from_admin_name'] = $operatorName;
             }
 
+            if ($newServiceName !== 'skip') {
+                $provisionData = ServiceHostname::rememberDefaultServiceName($provisionData, (string) ($service->name ?? ''));
+                $provisionData = ServiceHostname::writeCustomServiceName($provisionData, (string) $newServiceName, [
+                    'operator_id' => $operatorId,
+                    'operator_name' => $operatorName,
+                ]);
+                $fillData['name'] = ServiceHostname::resolveInstanceName($service, $provisionData);
+            }
+
             if ($newCustomHostname !== 'skip') {
                 $provisionData = ServiceHostname::writeCustomHostname($provisionData, (string) $newCustomHostname, [
                     'operator_id' => $operatorId,
                     'operator_name' => $operatorName,
                 ]);
             }
-
-            $fillData = [
-                'provision_data' => $provisionData,
-            ];
+            $fillData['provision_data'] = $provisionData;
 
             // 'skip' 表示请求未传 locked_pricing 字段，保持现有值不变
             if ($newLockedPricing !== 'skip') {
@@ -212,9 +319,12 @@ trait HandlesAdminUserServices
             $service->forceFill($fillData)->save();
         });
 
+        $service = $service->refresh()->loadMissing(['product', 'order']);
+        app(ServiceDetailService::class)->forgetDetailCaches($service);
+
         if ($newCustomHostname !== 'skip' && $previousCustomHostname !== $newCustomHostname) {
             try {
-                $this->operationLogService->writeServiceConsoleLog($service->refresh()->loadMissing(['product', 'order']), 'service.console.hostname.update', [
+                $this->operationLogService->writeServiceConsoleLog($service, 'service.console.hostname.update', [
                     'category' => 'service',
                     'summary' => $newCustomHostname !== '' ? '设置自定义主机名' : '清空自定义主机名',
                     'hostname' => $newCustomHostname,
@@ -236,7 +346,76 @@ trait HandlesAdminUserServices
             }
         }
 
-        return $this->clientServiceConsoleService->getDetailForUser($user, $serviceId, false);
+        if ($newServiceName !== 'skip') {
+            try {
+                $this->operationLogService->writeServiceConsoleLog($service, 'service.console.name.update', [
+                    'category' => 'service',
+                    'summary' => trim((string) ($service->name ?? '')) !== '' ? '管理员更新实例名称' : '管理员清空实例名称',
+                    'service_name' => (string) ($service->name ?? ''),
+                ], [
+                    'actor_type' => 'admin',
+                    'actor_user_id' => $operatorId,
+                    'actor_name' => $operatorName,
+                    'trace_id' => $traceId,
+                    'ip_address' => (string) ($context['ip_address'] ?? ''),
+                ]);
+            } catch (\Throwable $exception) {
+                Log::warning('[管理员更新服务业务信息] 实例名称日志写入失败', [
+                    'user_id' => $user->id,
+                    'service_id' => $service->id,
+                    'operator_id' => $operatorId,
+                    'message' => $exception->getMessage(),
+                    'exception' => $exception::class,
+                ]);
+            }
+        }
+
+        if ($amountChanged || $supplierChanged || $upstreamHostChanged || $newLockedPricing !== 'skip') {
+            try {
+                $renewPricingChanges = [];
+                if ($newLockedPricing !== 'skip') {
+                    foreach (Service::SUPPORTED_RENEW_BILLING_CYCLES as $cycle => $label) {
+                        $entry = is_array($newLockedPricing[$cycle] ?? null) ? $newLockedPricing[$cycle] : [];
+                        $renewPricingChanges[] = [
+                            'billing_cycle' => $cycle,
+                            'billing_cycle_label' => $label,
+                            'enabled' => (bool) ($entry['enabled'] ?? false),
+                            'manual_amount' => $entry['manual_amount'] ?? null,
+                        ];
+                    }
+                }
+
+                $this->operationLogService->writeServiceConsoleLog($service, 'service.console.meta.update', [
+                    'category' => 'service',
+                    'summary' => '管理员更新实例业务信息',
+                    'previous_amount' => number_format($previousAmount, 2, '.', ''),
+                    'amount' => number_format((float) $service->amount, 2, '.', ''),
+                    'previous_supplier_id' => $previousSupplierId > 0 ? $previousSupplierId : null,
+                    'supplier_id' => (int) (($service->provision_data['supplier_id'] ?? 0) ?: 0),
+                    'supplier_name' => $selectedSupplier?->name,
+                    'previous_upstream_host_id' => $previousUpstreamHostId > 0 ? $previousUpstreamHostId : null,
+                    'upstream_host_id' => (int) (($service->provision_data['upstream_host_id'] ?? 0) ?: 0),
+                    'clear_locked_pricing' => ! empty($data['clear_locked_pricing']),
+                    'renew_pricing_changes' => $renewPricingChanges,
+                ], [
+                    'actor_type' => 'admin',
+                    'actor_user_id' => $operatorId,
+                    'actor_name' => $operatorName,
+                    'trace_id' => $traceId,
+                    'ip_address' => (string) ($context['ip_address'] ?? ''),
+                ]);
+            } catch (\Throwable $exception) {
+                Log::warning('[管理员更新服务业务信息] 操作日志写入失败', [
+                    'user_id' => $user->id,
+                    'service_id' => $service->id,
+                    'operator_id' => $operatorId,
+                    'message' => $exception->getMessage(),
+                    'exception' => $exception::class,
+                ]);
+            }
+        }
+
+        return $this->clientServiceConsoleService->getDetailForUser($user, $serviceId, true);
     }
 
     /**
@@ -261,14 +440,6 @@ trait HandlesAdminUserServices
     public function serviceReinstallOptions(User $user, int $serviceId, bool $forceRefresh = false): array
     {
         return $this->clientServiceConsoleService->getReinstallOptionsForUser($user, $serviceId, $forceRefresh);
-    }
-
-    /**
-     * 用户服务 VNC 控制台
-     */
-    public function serviceVnc(User $user, int $serviceId, array $context = []): array
-    {
-        return $this->clientServiceConsoleService->getVncUrlForUser($user, $serviceId, $context);
     }
 
     /**
@@ -316,7 +487,7 @@ trait HandlesAdminUserServices
 
         throw_if($amount < 0, new BusinessException('服务金额不能小于 0'));
 
-        $supportsUpstream = $this->supportsMofangUpstream($product);
+        $supportsUpstream = $this->supportsManagedUpstream($product);
         $upstreamHostId = (int) (($data['upstream_host_id'] ?? 0) ?: 0);
 
         if ($sourceType === 'upstream') {
@@ -376,7 +547,7 @@ trait HandlesAdminUserServices
                 'order_no' => Order::generateOrderNo(),
                 'user_id' => $user->id,
                 'product_id' => $product->id,
-                'product_name_snapshot' => (string) $product->name,
+                'product_spec_snapshot' => trim((string) $product->name),
                 'product_type_snapshot' => (string) $product->product_type,
                 'type' => 'new',
                 'amount' => $amount,
@@ -406,7 +577,7 @@ trait HandlesAdminUserServices
 
             $provisionData = array_filter([
                 'source_type' => $sourceType,
-                'provider' => $sourceType === 'upstream' ? 'mofang_finance_api' : '',
+                'provider' => $sourceType === 'upstream' ? ProviderKey::HOSTING_PANEL_API : '',
                 'supplier_id' => $sourceType === 'upstream' ? (int) ($product->supplier_id ?? 0) : 0,
                 'supplier_product_id' => $sourceType === 'upstream' ? (int) ($product->supplier_product_id ?? 0) : 0,
                 'upstream_host_id' => $sourceType === 'upstream' ? $upstreamHostId : 0,
@@ -548,7 +719,7 @@ trait HandlesAdminUserServices
         $provisionError = trim((string) ($currentProvisionData['provision_error'] ?? ''));
 
         throw_if($provisionError === '', new BusinessException('当前服务不存在上游开通失败记录，无需重新提交'));
-        throw_if(! $service->order, new BusinessException('服务未关联订单，无法重新提交上游开通'));
+        throw_if(! $service->order, new BusinessException('服务未关联账单，无法重新提交上游开通'));
 
         $operatorId = (int) (($context['operator_id'] ?? 0) ?: 0);
         $operatorName = trim((string) ($context['operator_name'] ?? ''));
@@ -625,6 +796,7 @@ trait HandlesAdminUserServices
         $order = $service->order;
         $serviceName = trim((string) ($service->name ?: ($product?->name ?? '')));
         $orderNo = trim((string) ($order?->order_no ?? ''));
+        $productDisplayName = trim((string) ($product?->name ?? ''));
         $operatorId = (int) (($context['operator_id'] ?? 0) ?: 0);
         $operatorName = trim((string) ($context['operator_name'] ?? ''));
         $traceId = trim((string) ($context['trace_id'] ?? ''));
@@ -656,7 +828,7 @@ trait HandlesAdminUserServices
                 detail: [
                     'service_id' => $serviceId,
                     'service_name' => $serviceName,
-                    'product_name' => trim((string) ($product?->name ?? '')),
+                    'product_name' => $productDisplayName,
                     'order_no' => $orderNo,
                     'operator_type' => 'admin',
                     'operator_id' => $operatorId,
@@ -676,7 +848,7 @@ trait HandlesAdminUserServices
                     'target_user_id' => (int) $user->id,
                     'target_user_email' => trim((string) $user->email),
                     'service_name' => $serviceName,
-                    'product_name' => trim((string) ($product?->name ?? '')),
+                    'product_name' => $productDisplayName,
                     'order_no' => $orderNo,
                     'operator_name' => $operatorName,
                     'trace_id' => $traceId,
@@ -694,13 +866,13 @@ trait HandlesAdminUserServices
         }
     }
 
-    private function supportsMofangUpstream(Product $product): bool
+    private function supportsManagedUpstream(Product $product): bool
     {
         $supplier = $product->supplier;
 
         return (int) ($product->supplier_id ?? 0) > 0
             && $supplier instanceof Supplier
-            && trim((string) $supplier->interface_type) === 'mofang_finance_api';
+            && app(ProviderResolver::class)->resolveForSupplier($supplier)->supports(ProvidesConsoleRuntime::class);
     }
 
     private function resolveManualServiceExpiresAt(mixed $expiresAt, string $billingCycle, int $status): ?Carbon
@@ -768,7 +940,7 @@ trait HandlesAdminUserServices
             'user_id' => $order->user_id,
             'invoice_id' => $invoice->id,
             'gateway' => 'manual',
-            'trade_no' => 'ADMIN-' . $paymentNo,
+            'trade_no' => 'ADMIN-'.$paymentNo,
             'amount' => $invoiceAmount,
             'status' => PaymentStatus::SUCCESS,
             'callback_raw' => [

@@ -2,24 +2,30 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\NormalizesTraceId;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Str;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class Payment extends Model
 {
+    use NormalizesTraceId;
+
     protected $fillable = [
-        'payment_no', 'user_id', 'invoice_id', 'gateway',
+        'payment_no', 'user_id', 'order_id', 'invoice_id', 'gateway',
         'trade_no', 'amount', 'status', 'callback_raw', 'paid_at',
     ];
 
     protected function casts(): array
     {
         return [
-            'amount'       => 'decimal:2',
+            'amount' => 'decimal:2',
             'callback_raw' => 'array',
-            'paid_at'      => 'datetime',
+            'paid_at' => 'datetime',
         ];
     }
 
@@ -43,13 +49,29 @@ class Payment extends Model
         return [];
     }
 
-    public function user()    { return $this->belongsTo(User::class); }
-    public function invoice() { return $this->belongsTo(Invoice::class); }
-    public function callbacks() { return $this->hasMany(PaymentCallback::class, 'payment_id'); }
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function order(): BelongsTo
+    {
+        return $this->belongsTo(Order::class);
+    }
+
+    public function invoice(): BelongsTo
+    {
+        return $this->belongsTo(Invoice::class);
+    }
+
+    public function callbacks(): HasMany
+    {
+        return $this->hasMany(PaymentCallback::class, 'payment_id');
+    }
 
     public static function generatePaymentNo(): string
     {
-        return 'PAY' . now()->format('YmdHisv') . Str::upper(Str::random(8));
+        return 'PAY'.now()->format('YmdHisv').Str::upper(Str::random(8));
     }
 
     public function syncPaymentCallbackProjection(): void
@@ -130,7 +152,7 @@ class Payment extends Model
             $this->loadMissing('callbacks');
         }
 
-        /** @var \Illuminate\Database\Eloquent\Collection<int, PaymentCallback> $callbacks */
+        /** @var Collection<int, PaymentCallback> $callbacks */
         $callbacks = $this->getRelation('callbacks');
         if ($callbacks->isEmpty()) {
             return null;

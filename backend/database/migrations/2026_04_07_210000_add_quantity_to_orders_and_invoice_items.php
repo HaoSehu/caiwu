@@ -22,7 +22,7 @@ return new class extends Migration
         }
 
         if (Schema::hasTable('invoice_items') && Schema::hasTable('invoices') && Schema::hasTable('orders')) {
-            DB::statement("
+            DB::statement('
                 UPDATE invoice_items ii
                 INNER JOIN invoices i ON i.id = ii.invoice_id
                 INNER JOIN orders o ON o.id = i.order_id
@@ -36,7 +36,7 @@ return new class extends Migration
                     ii.discount_amount = ROUND(COALESCE(o.discount, 0), 2),
                     ii.line_amount = ROUND(COALESCE(i.amount, 0), 2),
                     ii.updated_at = CURRENT_TIMESTAMP
-            ");
+            ');
         }
     }
 
