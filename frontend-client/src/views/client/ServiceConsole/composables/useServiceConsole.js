@@ -1524,7 +1524,7 @@ export function useServiceConsole(props) {
     const requestSequence = ++monitorLoadSequence
     abortPendingMonitorRequests()
     const range = monitorState.range
-    const requestParams = { range, fresh: 1 }
+    const requestParams = { range }
     monitorState.loading = true
     monitorState.window = null
     monitorState.supported = true
@@ -1537,68 +1537,98 @@ export function useServiceConsole(props) {
       : MONITOR_FALLBACK_CARDS.map((c) => ({ value: c.type, label: c.label }))
     primeMonitorChartSlots(initialOptions)
 
-    let activeOptions = resolveMonitorChartSource(initialOptions).map((item) => ({
+    const activeOptions = resolveMonitorChartSource(initialOptions).map((item) => ({
       value: String(item?.type || item?.value || '').trim(),
       label: String(item?.label || item?.value || '').trim(),
     }))
     monitorState.options = activeOptions
+
+    if (_forceRefresh) {
+      requestParams.fresh = 1
+    }
+
+    const requestTypes = activeOptions
+      .map((item) => String(item?.value || '').trim())
+      .filter((type) => type !== '')
+
+    if (requestTypes.length) {
+      requestParams.types = requestTypes
+    } else {
+      requestParams.limit = MONITOR_CHART_REQUEST_LIMIT
+    }
+
+    const controller = new AbortController()
+    monitorAbortControllers.push(controller)
     try {
-      await Promise.allSettled(
-        activeOptions
-          .map((item) => String(item?.value || '').trim())
-          .filter((type) => type !== '')
-          .map(async (type) => {
-          const controller = new AbortController()
-          monitorAbortControllers.push(controller)
-          try {
-            const response = await clientApi.serviceMonitor(
-              serviceId.value,
-              { ...requestParams, type },
-              { timeout: MONITOR_REQUEST_TIMEOUT, signal: controller.signal }
-            )
-            if (requestSequence !== monitorLoadSequence) return
+      const response = await clientApi.serviceMonitorBatch(
+        serviceId.value,
+        requestParams,
+        { timeout: MONITOR_REQUEST_TIMEOUT, signal: controller.signal }
+      )
+      if (requestSequence !== monitorLoadSequence) return
 
-            monitorState.window = response.data?.range || monitorState.window
-            if (response.data?.supported === false) {
-              monitorState.supported = false
-              monitorState.message = String(response.data?.message || '当前服务暂不支持监控图表')
-              markMonitorChartSettled(type, activeOptions, {
-                error: String(response.data?.error || ''),
-                message: monitorState.message,
-              })
-              return
-            }
+      const payload = response.data && typeof response.data === 'object' ? response.data : {}
+      monitorState.window = payload.range || monitorState.window
 
-            const chartItem = buildMonitorChartItem(response.data, type)
-            if (chartItem) {
-              upsertMonitorChart(chartItem, activeOptions)
-              return
-            }
+      const responseOptions = Array.isArray(payload.options) && payload.options.length
+        ? payload.options
+        : activeOptions
+      const resolvedOptions = resolveMonitorChartSource(responseOptions).map((item) => ({
+        value: String(item?.type || item?.value || '').trim(),
+        label: String(item?.label || item?.value || '').trim(),
+      }))
+      monitorState.options = resolvedOptions
 
-            markMonitorChartSettled(type, activeOptions, {
-              error: String(response.data?.error || ''),
-              message: String(response.data?.message || '当前时间范围内暂无监控数据'),
-            })
-          } catch (error) {
-            if (isRequestCanceled(error)) return
-            if (requestSequence !== monitorLoadSequence) return
-            markMonitorChartSettled(type, activeOptions, {
-              error: resolveRequestErrorMessage(error, '加载监控数据失败'),
-            })
-          } finally {
-            monitorAbortControllers = monitorAbortControllers.filter((item) => item !== controller)
-          }
-          })
+      if (payload.supported === false) {
+        monitorState.supported = false
+        monitorState.message = String(payload.message || '当前服务暂不支持监控图表')
+        monitorState.charts = []
+        return
+      }
+
+      const chartMap = new Map(
+        (Array.isArray(payload.charts) ? payload.charts : [])
+          .map((item) => [String(item?.type || '').trim(), item])
+          .filter(([type]) => type !== '')
       )
 
-      if (requestSequence !== monitorLoadSequence) return
-      if (monitorState.supported !== false) {
-        const allFailed = monitorState.charts.length > 0 && monitorState.charts.every((item) => item.error)
-        if (allFailed) {
-          monitorState.error = '加载监控数据失败'
+      monitorState.charts = buildMonitorChartSlots(resolvedOptions, { reset: true, loading: false }).map((slot) => {
+        const chartPayload = chartMap.get(slot.type)
+        const chartItem = buildMonitorChartItem(chartPayload, slot.type)
+
+        if (chartItem) {
+          return {
+            ...slot,
+            ...chartItem,
+            key: slot.key,
+            loading: false,
+            error: String(chartPayload?.error || ''),
+            message: chartItem.message || String(chartPayload?.message || '基于上游采样数据生成'),
+          }
         }
+
+        return {
+          ...slot,
+          loading: false,
+          error: String(chartPayload?.error || ''),
+          message: String(chartPayload?.message || payload.message || '当前时间范围内暂无监控数据'),
+        }
+      })
+
+      const allFailed = monitorState.charts.length > 0 && monitorState.charts.every((item) => item.error)
+      if (String(payload.error || '') && (allFailed || !monitorState.charts.length)) {
+        monitorState.error = String(payload.error || '')
+      } else if (allFailed) {
+        monitorState.error = '加载监控数据失败'
       }
+    } catch (error) {
+      if (isRequestCanceled(error)) return
+      if (requestSequence !== monitorLoadSequence) return
+      const errorText = resolveRequestErrorMessage(error, '加载监控数据失败')
+      monitorState.error = errorText
+      monitorState.charts = buildMonitorChartSlots(activeOptions, { reset: false, loading: false, errorText })
     } finally {
+      monitorAbortControllers = monitorAbortControllers.filter((item) => item !== controller)
       if (requestSequence === monitorLoadSequence) {
         monitorState.loading = false
       }

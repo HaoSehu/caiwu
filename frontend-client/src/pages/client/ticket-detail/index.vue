@@ -103,4 +103,20 @@ onMounted(() => {
 .back-button {
   padding-left: 0;
 }
+
+@media (max-width: 768px) {
+  .ticket-detail-page {
+    position: fixed;
+    inset: 64px 0 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    gap: 0;
+  }
+
+  .ticket-detail-page__head {
+    flex-shrink: 0;
+    padding: 12px 14px 0;
+  }
+}
 </style>
