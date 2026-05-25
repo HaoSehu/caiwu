@@ -19,9 +19,11 @@ use App\Support\ServiceHostname;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 
 class FinanceLedgerQueryService
 {
+    private const SUMMARY_CACHE_TTL_SECONDS = 30;
     public function paginateForClient(User $user, array $filters, int $perPage): array
     {
         $paginator = $this->buildQuery(array_merge($filters, ['user_id' => (int) $user->id]))->paginate($perPage);
@@ -81,6 +83,19 @@ class FinanceLedgerQueryService
 
     private function summary(array $filters, ?User $boundUser = null): array
     {
+        $cacheKey = $this->buildSummaryCacheKey($filters);
+        $cached = Cache::get($cacheKey);
+
+        if (is_array($cached) && $cached !== []) {
+            $balance = $boundUser?->balance;
+            if ($balance === null && ! empty($filters['user_id'])) {
+                $balance = optional(User::query()->find((int) $filters['user_id']))->balance;
+            }
+            $cached['balance'] = number_format((float) ($balance ?? 0), 2, '.', '');
+
+            return $cached;
+        }
+
         $baseQuery = AccountTransaction::query()
             ->where('account_type', 'cash');
 
@@ -152,7 +167,7 @@ class FinanceLedgerQueryService
             $balance = optional(User::query()->find((int) $filters['user_id']))->balance;
         }
 
-        return [
+        $result = [
             'balance' => number_format((float) ($balance ?? 0), 2, '.', ''),
             'total_in' => number_format((float) ($summaryRow?->total_in ?? 0), 2, '.', ''),
             'total_out' => number_format((float) ($summaryRow?->total_out ?? 0), 2, '.', ''),
@@ -167,6 +182,20 @@ class FinanceLedgerQueryService
             'recent_30d_recharge' => number_format((float) $recharge30Days, 2, '.', ''),
             'recent_30d_refund' => number_format((float) $refund30Days, 2, '.', ''),
         ];
+
+        Cache::put($cacheKey, $result, now()->addSeconds(self::SUMMARY_CACHE_TTL_SECONDS));
+
+        return $result;
+    }
+
+    private function buildSummaryCacheKey(array $filters): string
+    {
+        $userId = (int) ($filters['user_id'] ?? 0);
+        $dateRange = isset($filters['date_range']) && is_array($filters['date_range'])
+            ? implode('_', $filters['date_range'])
+            : '';
+
+        return 'finance:ledger:summary:'.$userId.':'.md5($dateRange);
     }
 
     private function buildQuery(array $filters, bool $withRelations = true): Builder

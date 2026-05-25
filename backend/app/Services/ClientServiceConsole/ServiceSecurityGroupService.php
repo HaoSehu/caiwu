@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\ClientServiceConsole;
 
 use App\Exceptions\BusinessException;
+use App\Models\OperationLog;
 use App\Models\Service;
 use App\Models\User;
 use App\Services\System\OperationLogService;
@@ -85,6 +86,7 @@ class ServiceSecurityGroupService
             'product:id,product_type,product_group_id,supplier_id,provision_module,config_options,purchase_requires',
             'product.supplier',
         ]);
+        $this->assertSecurityGroupBoundToCurrentHost($service, $groupId);
 
         $result = $this->callSecurityGroupAction($service, 'showSecurityRules', ['id' => $groupId], '读取安全组规则');
         $payload = $this->detailService->extractPayload($result['response']);
@@ -244,7 +246,7 @@ class ServiceSecurityGroupService
     public function resolveSecurityGroupContext(Service $service, bool $fresh = false): array
     {
         [$supplier, $hostId] = $this->detailService->resolveManagedSupplierAndHost($service);
-        $cacheKey = $this->buildSecurityGroupContextCacheKey($supplier->id, $hostId);
+        $cacheKey = $this->buildSecurityGroupContextCacheKey($service);
 
         if (! $fresh && ($cached = Cache::get($cacheKey)) && is_array($cached)) {
             $cached['supplier'] = $supplier;
@@ -263,7 +265,7 @@ class ServiceSecurityGroupService
         $moduleKey = trim((string) ($module['function'] ?? ''));
         $moduleName = trim((string) ($module['name'] ?? '')) ?: '安全组';
         $html = $this->natService->fetchCustomModulePage($runtime, $supplier, $hostId, $jwt, $moduleKey);
-        $page = $this->parseSecurityGroupPage($html);
+        $page = $this->parseSecurityGroupPage($service, $html);
 
         $context = [
             'supplier' => $supplier,
@@ -276,6 +278,7 @@ class ServiceSecurityGroupService
             'host_type' => $page['host_type'],
             'directions' => $page['directions'],
             'protocols' => $page['protocols'],
+            'raw_groups' => $page['raw_groups'],
             'groups' => $page['groups'],
             'html' => $page['html'],
         ];
@@ -291,15 +294,11 @@ class ServiceSecurityGroupService
 
     public function forgetSecurityGroupContextCache(Service $service): void
     {
-        $provisionData = (array) ($service->provision_data ?? []);
-        $hostId = (int) (($provisionData['upstream_host_id'] ?? 0) ?: 0);
-        $supplierId = (int) (($provisionData['supplier_id'] ?? ($service->product?->supplier_id ?? 0)) ?: 0);
-
-        if ($supplierId <= 0 || $hostId <= 0) {
+        if ((int) ($service->id ?? 0) <= 0) {
             return;
         }
 
-        Cache::forget($this->buildSecurityGroupContextCacheKey($supplierId, $hostId));
+        Cache::forget($this->buildSecurityGroupContextCacheKey($service));
     }
 
     // ── Private helpers ────────────────────────────────────────────────────
@@ -328,11 +327,61 @@ class ServiceSecurityGroupService
 
         $context = $this->resolveSecurityGroupContext($service, true);
         $normalizedName = $this->normalizeKeywordText($name);
-        $exists = collect((array) ($context['groups'] ?? []))
+        $groups = (array) ($context['raw_groups'] ?? []);
+        if ($groups === []) {
+            $groups = (array) ($context['groups'] ?? []);
+        }
+
+        $exists = collect($groups)
             ->contains(fn ($item) => is_array($item)
                 && $this->normalizeKeywordText((string) ($item['name'] ?? '')) === $normalizedName);
 
         throw_if($exists, new BusinessException('安全组名称已存在，请换一个名称', 42200));
+    }
+
+    private function assertSecurityGroupBoundToCurrentHost(Service $service, int $groupId): void
+    {
+        if ($groupId <= 0) {
+            throw new BusinessException('安全组不存在或未绑定到当前主机', 42200);
+        }
+
+        $bindings = $this->resolveOwnedSecurityGroupBindingsForService($service);
+        $context = $this->resolveSecurityGroupContext($service, true);
+        throw_if(
+            ! $this->isSecurityGroupBoundToBindings($bindings, $groupId, (array) ($context['raw_groups'] ?? [])),
+            new BusinessException('安全组不存在或未绑定到当前主机', 42200)
+        );
+    }
+
+    private function isSecurityGroupBoundToBindings(array $bindings, int $groupId, array $availableGroups = []): bool
+    {
+        if ($groupId <= 0) {
+            return false;
+        }
+
+        $boundIds = array_values(array_filter(
+            array_map(static fn ($value) => (int) $value, (array) ($bindings['ids'] ?? [])),
+            static fn (int $value) => $value > 0
+        ));
+
+        if (in_array($groupId, $boundIds, true)) {
+            return true;
+        }
+
+        $boundNames = array_values(array_filter(
+            array_map(fn ($value) => $this->normalizeKeywordText((string) $value), (array) ($bindings['names'] ?? [])),
+            static fn (string $value) => $value !== ''
+        ));
+        if ($boundNames === []) {
+            return false;
+        }
+
+        $groupName = $this->resolveSecurityGroupName($availableGroups, $groupId);
+        if ($groupName === '') {
+            return false;
+        }
+
+        return in_array($this->normalizeKeywordText($groupName), $boundNames, true);
     }
 
     private function isSecurityGroupModule(array $module): bool
@@ -359,10 +408,11 @@ class ServiceSecurityGroupService
         return preg_replace('/\s+/u', '', mb_strtolower(trim($value), 'UTF-8')) ?? '';
     }
 
-    private function parseSecurityGroupPage(string $html): array
+    private function parseSecurityGroupPage(Service $service, string $html): array
     {
         $html = html_entity_decode($html, ENT_QUOTES | ENT_HTML5, 'UTF-8');
         $endpoint = $this->extractSecurityGroupEndpoint($html);
+        $ownedBindings = $this->resolveOwnedSecurityGroupBindingsForService($service);
 
         throw_if($endpoint === '', new BusinessException('已发现安全组模块，但未解析到上游请求地址', 50000));
 
@@ -372,7 +422,8 @@ class ServiceSecurityGroupService
             'host_type' => $this->extractSecurityGroupHostType($html),
             'directions' => $this->extractSecuritySelectOptions($html, 'direction'),
             'protocols' => $this->extractSecuritySelectOptions($html, 'protocol'),
-            'groups' => $this->extractSecurityGroupRows($html),
+            'raw_groups' => $this->extractSecurityGroupRows($html),
+            'groups' => $this->extractSecurityGroupRows($html, $ownedBindings),
         ];
     }
 
@@ -425,7 +476,7 @@ class ServiceSecurityGroupService
         return $normalized;
     }
 
-    private function extractSecurityGroupRows(string $html): array
+    private function extractSecurityGroupRows(string $html, array $ownedBindings = []): array
     {
         $xpath = $this->createHtmlXPath($html);
         if (! $xpath) {
@@ -485,7 +536,123 @@ class ServiceSecurityGroupService
             ];
         }
 
-        return $groups;
+        if ($ownedBindings === []) {
+            return $groups;
+        }
+
+        return $this->filterSecurityGroupsByOwnedBindings($groups, $ownedBindings);
+    }
+
+    private function filterSecurityGroupsByOwnedBindings(array $groups, array $ownedBindings = []): array
+    {
+        if ($groups === []) {
+            return [];
+        }
+
+        $ownedIds = array_fill_keys(
+            array_values(array_filter(
+                array_map(static fn ($value) => (int) $value, (array) ($ownedBindings['ids'] ?? [])),
+                static fn (int $value) => $value > 0
+            )),
+            true
+        );
+        $ownedNames = array_fill_keys(
+            array_values(array_filter(
+                array_map(fn ($value) => $this->normalizeKeywordText((string) $value), (array) ($ownedBindings['names'] ?? [])),
+                static fn (string $value) => $value !== ''
+            )),
+            true
+        );
+
+        return array_values(array_filter($groups, function (array $group) use ($ownedIds, $ownedNames): bool {
+            if ((bool) ($group['is_applied'] ?? false)) {
+                return true;
+            }
+
+            $groupId = (int) ($group['id'] ?? 0);
+            if ($groupId > 0 && isset($ownedIds[$groupId])) {
+                return true;
+            }
+
+            $normalizedName = $this->normalizeKeywordText((string) ($group['name'] ?? ''));
+
+            return $normalizedName !== '' && isset($ownedNames[$normalizedName]);
+        }));
+    }
+
+    private function resolveOwnedSecurityGroupBindingsForService(Service $service): array
+    {
+        $hostId = $this->resolveSecurityGroupBindingHostId($service);
+        if ($hostId <= 0) {
+            return ['ids' => [], 'names' => []];
+        }
+
+        $logs = OperationLog::query()
+            ->where('module', 'service')
+            ->whereIn('action', [
+                'service.console.security_group.create',
+                'service.console.security_group.apply',
+                'service.console.security_group.delete',
+            ])
+            ->where('context->host_id', $hostId)
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get(['action', 'context']);
+
+        return $this->collectOwnedSecurityGroupBindingsFromLogs($logs, $hostId);
+    }
+
+    private function collectOwnedSecurityGroupBindingsFromLogs(iterable $logs, int $hostId): array
+    {
+        if ($hostId <= 0) {
+            return ['ids' => [], 'names' => []];
+        }
+
+        $ownedIds = [];
+        $ownedNames = [];
+
+        foreach ($logs as $log) {
+            $detail = is_array($log)
+                ? (array) ($log['detail'] ?? $log['context'] ?? [])
+                : (array) ($log->detail ?? []);
+            if ((int) ($detail['host_id'] ?? 0) !== $hostId) {
+                continue;
+            }
+
+            $action = is_array($log) ? (string) ($log['action'] ?? '') : (string) ($log->action ?? '');
+            $groupId = (int) ($detail['group_id'] ?? 0);
+            $normalizedName = $this->normalizeKeywordText((string) ($detail['group_name'] ?? ''));
+
+            if ($action === 'service.console.security_group.delete') {
+                if ($groupId > 0) {
+                    unset($ownedIds[$groupId]);
+                }
+                if ($normalizedName !== '') {
+                    unset($ownedNames[$normalizedName]);
+                }
+
+                continue;
+            }
+
+            if ($groupId > 0) {
+                $ownedIds[$groupId] = true;
+            }
+            if ($normalizedName !== '') {
+                $ownedNames[$normalizedName] = true;
+            }
+        }
+
+        return [
+            'ids' => array_map('intval', array_keys($ownedIds)),
+            'names' => array_map('strval', array_keys($ownedNames)),
+        ];
+    }
+
+    private function resolveSecurityGroupBindingHostId(Service $service): int
+    {
+        $provisionData = (array) ($service->provision_data ?? []);
+
+        return (int) (($provisionData['upstream_host_id'] ?? 0) ?: 0);
     }
 
     private function extractSecurityGroupRowActions(\DOMXPath $xpath, \DOMNode $row): array
@@ -631,9 +798,9 @@ class ServiceSecurityGroupService
         return trim((string) ($group['name'] ?? ''));
     }
 
-    private function buildSecurityGroupContextCacheKey(int $supplierId, int $hostId): string
+    private function buildSecurityGroupContextCacheKey(Service $service): string
     {
-        return "sg_ctx:{$supplierId}:{$hostId}";
+        return 'sg_ctx:service:'.(int) $service->id;
     }
 
     private function createHtmlXPath(string $html): ?\DOMXPath

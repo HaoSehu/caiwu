@@ -34,7 +34,15 @@ class InvoiceController extends Controller
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
-        $query = Invoice::with(['product:id,product_type,product_group_id,config_options,purchase_requires'])
+        $query = Invoice::with([
+                'product:id,product_type,product_group_id,config_options,purchase_requires',
+                'user:id,email,nickname',
+                'service:id,name,status,expires_at',
+                'payments',
+                'items',
+                'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle',
+                'order.product:id,product_type,product_group_id,config_options,purchase_requires',
+            ])
             ->where('user_id', $request->user()->id)
             ->orderByDesc('id');
 

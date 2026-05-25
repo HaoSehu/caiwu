@@ -118,7 +118,7 @@ class ClientFinanceQueryService
                 'recharge' => 'recharge',
                 'consume', 'refund' => 'invoices',
                 'adjust', 'admin_deduct' => 'adjustment',
-                default => 'balance',
+                default => null,
             },
             'event_type' => match ($eventType) {
                 'consume' => 'invoice_payment',

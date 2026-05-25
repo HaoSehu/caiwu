@@ -34,6 +34,8 @@ class ServiceDetailService
 
     private const DETAIL_RESPONSE_CACHE_TTL_SECONDS = 20;
 
+    private const REMOTE_STATUS_CACHE_TTL_SECONDS = 15;
+
     private const SERVICE_CONFIG_CACHE_TTL_SECONDS = 60;
 
     private const PRODUCT_CONFIG_OPTIONS_CACHE_TTL_SECONDS = 604800;
@@ -181,6 +183,12 @@ class ServiceDetailService
             'invoice:id,invoice_no,status,paid_at',
         ]);
 
+        $remoteStatusCacheKey = $this->buildRemoteStatusCacheKey($service);
+        $cached = Cache::get($remoteStatusCacheKey);
+        if (is_array($cached) && $cached !== []) {
+            return $cached;
+        }
+
         $remote = null;
         $remoteError = '';
 
@@ -210,7 +218,7 @@ class ServiceDetailService
 
         $detail = $this->transformService->transformDetail($service, $remote, $remoteError);
 
-        return [
+        $result = [
             'id' => (int) ($detail['id'] ?? 0),
             'name' => (string) ($detail['name'] ?? ''),
             'domain' => (string) ($detail['domain'] ?? ''),
@@ -226,6 +234,17 @@ class ServiceDetailService
             'traffic' => is_array($detail['traffic'] ?? null) ? $detail['traffic'] : [],
             'actions' => is_array($detail['actions'] ?? null) ? $detail['actions'] : [],
         ];
+
+        if ($remoteError === '') {
+            Cache::put($remoteStatusCacheKey, $result, now()->addSeconds(self::REMOTE_STATUS_CACHE_TTL_SECONDS));
+        }
+
+        return $result;
+    }
+
+    private function buildRemoteStatusCacheKey(Service $service): string
+    {
+        return 'service_console:remote_status:'.$service->id.':'.$service->user_id.':'.optional($service->updated_at)?->timestamp;
     }
 
     public function getOperationLogsForUser(User $user, int $serviceId, array $filters = [], int $perPage = 10): array
@@ -760,6 +779,7 @@ class ServiceDetailService
     {
         Cache::forget($this->buildDetailResponseCacheKey($service));
         Cache::forget($this->buildServiceConfigCacheKey($service));
+        Cache::forget($this->buildRemoteStatusCacheKey($service));
     }
 
     // ── Private helpers ────────────────────────────────────────────────────

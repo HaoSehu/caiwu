@@ -13,6 +13,10 @@ use Illuminate\Support\Facades\Log;
 
 trait HandlesClientServiceConsoleMonitoring
 {
+    private const MONITOR_UPSTREAM_CONNECT_TIMEOUT_SECONDS = 5;
+
+    private const MONITOR_UPSTREAM_TIMEOUT_SECONDS = 8;
+
     public function getMonitorForUser(User $user, int $serviceId, array $filters = []): array
     {
         $service = $this->findUserService($user, $serviceId, [
@@ -407,28 +411,11 @@ trait HandlesClientServiceConsoleMonitoring
         $missingTypes = [];
 
         if (! $fresh) {
-            // 批量查询缓存，减少 Redis 往返次数
-            $keyMap = [];
-            foreach ($types as $type) {
-                $keyMap[$type] = $this->buildMonitorChartCacheKey($supplier, $hostId, $type, $range['start'], $range['end']);
-            }
-            $cachedValues = Cache::many(array_values($keyMap));
-
-            foreach ($types as $type) {
-                $cacheKey = $keyMap[$type];
-                $cached = $cachedValues[$cacheKey] ?? null;
-
-                if (is_array($cached) && is_array($cached['chart'] ?? null)) {
-                    $cachedCharts[$type] = [
-                        'chart' => $cached['chart'],
-                        'summary' => is_array($cached['summary'] ?? null) ? $cached['summary'] : $this->buildMonitorSummary($cached['chart']),
-                    ];
-
-                    continue;
-                }
-
-                $missingTypes[] = $type;
-            }
+            $cachedCharts = $this->getCachedMonitorChartsMap($supplier, $hostId, $types, $range['start'], $range['end']);
+            $missingTypes = array_values(array_filter(
+                $types,
+                fn (string $type) => ! is_array($cachedCharts[$type] ?? null)
+            ));
         } else {
             $missingTypes = $types;
         }
@@ -454,6 +441,8 @@ trait HandlesClientServiceConsoleMonitoring
                             'start' => $range['start'],
                             'end' => $range['end'],
                         ],
+                        'connect_timeout' => self::MONITOR_UPSTREAM_CONNECT_TIMEOUT_SECONDS,
+                        'timeout' => self::MONITOR_UPSTREAM_TIMEOUT_SECONDS,
                     ],
                 ])->all(),
                 $jwt
