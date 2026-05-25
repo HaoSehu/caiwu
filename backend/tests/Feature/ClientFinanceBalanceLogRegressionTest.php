@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Models\AccountTransaction;
 use App\Models\BalanceLog;
 use App\Models\User;
 use Laravel\Sanctum\Sanctum;
@@ -51,5 +52,93 @@ class ClientFinanceBalanceLogRegressionTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.total_in', '88.00')
             ->assertJsonPath('data.total_out', '0.00');
+    }
+
+    public function test_balance_logs_endpoints_do_not_default_to_balance_tab_when_account_transactions_table_exists(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+        $user = User::query()->create([
+            'email' => 'finance-ledger-'.$suffix.'@example.com',
+            'password' => 'Temp@123456',
+            'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
+            'status' => 1,
+            'nickname' => 'Finance Ledger',
+            'real_name' => '',
+            'id_card' => '',
+            'verification_status' => 0,
+            'verification_message' => '',
+            'verification_certify_id' => null,
+            'member_level_id' => null,
+            'total_sales_amount' => '0.00',
+            'referrer_user_id' => null,
+            'verified_at' => null,
+            'balance' => '65.00',
+        ]);
+
+        AccountTransaction::query()->create([
+            'user_id' => (int) $user->id,
+            'account_type' => 'cash',
+            'event_type' => 'consume',
+            'change_amount' => '-20.00',
+            'balance_after' => '80.00',
+            'source_type' => 'invoice',
+            'source_id' => 1001,
+            'origin_type' => 'balance_log',
+            'origin_id' => 2001,
+            'remark' => '账单支付测试',
+            'operator' => 'system',
+            'trace_id' => 'consume-'.$suffix,
+        ]);
+
+        AccountTransaction::query()->create([
+            'user_id' => (int) $user->id,
+            'account_type' => 'cash',
+            'event_type' => 'refund',
+            'change_amount' => '15.00',
+            'balance_after' => '95.00',
+            'source_type' => 'invoice',
+            'source_id' => 1002,
+            'origin_type' => 'balance_log',
+            'origin_id' => 2002,
+            'remark' => '账单退款测试',
+            'operator' => 'system',
+            'trace_id' => 'refund-'.$suffix,
+        ]);
+
+        AccountTransaction::query()->create([
+            'user_id' => (int) $user->id,
+            'account_type' => 'cash',
+            'event_type' => 'recharge',
+            'change_amount' => '50.00',
+            'balance_after' => '145.00',
+            'source_type' => 'payment',
+            'source_id' => 1003,
+            'origin_type' => 'balance_log',
+            'origin_id' => 2003,
+            'remark' => '充值到账测试',
+            'operator' => 'system',
+            'trace_id' => 'recharge-'.$suffix,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->getJson('/api/client/balance-logs?page=1&page_size=15')
+            ->assertOk()
+            ->assertJsonPath('data.total', 3)
+            ->assertJsonPath('data.list.0.event_type', 'recharge')
+            ->assertJsonPath('data.list.0.event_type_label', '充值到账')
+            ->assertJsonPath('data.list.1.event_type', 'refund')
+            ->assertJsonPath('data.list.1.event_type_label', '账单退款')
+            ->assertJsonPath('data.list.2.event_type', 'consume')
+            ->assertJsonPath('data.list.2.event_type_label', '账单支付');
+
+        $this->getJson('/api/client/balance-logs/summary')
+            ->assertOk()
+            ->assertJsonPath('data.balance', '65.00')
+            ->assertJsonPath('data.total_in', '65.00')
+            ->assertJsonPath('data.total_out', '20.00')
+            ->assertJsonPath('data.recharge_in', '50.00')
+            ->assertJsonPath('data.refund_in', '15.00')
+            ->assertJsonPath('data.invoice_payment_out', '20.00');
     }
 }

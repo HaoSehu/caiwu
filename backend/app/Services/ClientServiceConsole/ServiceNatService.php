@@ -166,7 +166,7 @@ class ServiceNatService
         throw_if(! $this->transformService->canManageService($service), new BusinessException('当前服务暂不支持 NAT 转发', 42200));
 
         [$supplier, $hostId] = $this->detailService->resolveManagedSupplierAndHost($service);
-        $cacheKey = $this->buildNatAclContextCacheKey($supplier->id, $hostId);
+        $cacheKey = $this->buildNatAclContextCacheKey($service);
 
         $cached = ! $fresh ? Cache::get($cacheKey) : null;
         if (! $fresh && is_array($cached)) {
@@ -203,15 +203,11 @@ class ServiceNatService
 
     public function forgetNatAclContextCache(Service $service): void
     {
-        $provisionData = (array) ($service->provision_data ?? []);
-        $hostId = (int) (($provisionData['upstream_host_id'] ?? 0) ?: 0);
-        $supplierId = (int) (($provisionData['supplier_id'] ?? ($service->product?->supplier_id ?? 0)) ?: 0);
-
-        if ($supplierId <= 0 || $hostId <= 0) {
+        if ((int) ($service->id ?? 0) <= 0) {
             return;
         }
 
-        Cache::forget($this->buildNatAclContextCacheKey($supplierId, $hostId));
+        Cache::forget($this->buildNatAclContextCacheKey($service));
     }
 
     // ── NAT ACL HTML parsing ───────────────────────────────────────────────
@@ -478,9 +474,9 @@ class ServiceNatService
         return trim($text);
     }
 
-    private function buildNatAclContextCacheKey(int $supplierId, int $hostId): string
+    private function buildNatAclContextCacheKey(Service $service): string
     {
-        return "nat_acl_ctx:{$supplierId}:{$hostId}";
+        return 'nat_acl_ctx:service:'.(int) $service->id;
     }
 
     private function buildCustomModuleContentUnavailableCacheKey(int $supplierId, int $hostId, string $moduleKey): string

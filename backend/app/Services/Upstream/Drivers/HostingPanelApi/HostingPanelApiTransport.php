@@ -373,6 +373,8 @@ class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsole
             $requestsByAlias[$alias] = [
                 'pool_alias' => $urlsAlias,
                 'url' => $this->buildUrl($baseUrl, (string) ($request['uri'] ?? ''), $query),
+                'connect_timeout' => max((int) ($request['connect_timeout'] ?? $this->serviceConfig['connect_timeout']), 1),
+                'timeout' => max((int) ($request['timeout'] ?? $this->serviceConfig['timeout']), 1),
             ];
         }
 
@@ -383,8 +385,8 @@ class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsole
             foreach ($requestsByAlias as $requestMeta) {
                 $request = $pool->as($requestMeta['pool_alias'])
                     ->withHeaders($headerMap)
-                    ->connectTimeout($this->serviceConfig['connect_timeout'])
-                    ->timeout($this->serviceConfig['timeout'])
+                    ->connectTimeout((int) $requestMeta['connect_timeout'])
+                    ->timeout((int) $requestMeta['timeout'])
                     ->withOptions($httpOptions);
 
                 if ($this->serviceConfig['user_agent'] !== '') {

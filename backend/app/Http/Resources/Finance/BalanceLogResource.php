@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\Finance;
 
+use App\Constants\FinanceLedgerEventType;
 use App\Models\BalanceLog;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -27,6 +28,7 @@ class BalanceLogResource extends JsonResource
         return [
             'id' => (int) $log->id,
             'event_type' => $normalizedEventType,
+            'event_type_label' => FinanceLedgerEventType::label($normalizedEventType),
             'change_amount' => number_format((float) ($log->change_amount ?? $log->amount ?? 0), 2, '.', ''),
             'balance_after' => number_format((float) ($log->balance_after ?? $log->balance ?? 0), 2, '.', ''),
             'reference_id' => $log->reference_id !== null
