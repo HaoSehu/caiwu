@@ -363,17 +363,23 @@ def fetch_table_columns(
     database: str,
     table_prefix: str = "",
 ) -> dict[str, dict[str, ColumnInfo]]:
-    prefix_filter = ""
+    filters: list[str] = []
     if table_prefix:
-        prefix_filter = f"AND LEFT(TABLE_NAME, {len(table_prefix)}) = {quote_string(table_prefix)}"
+        filters.append(f"LEFT(TABLE_NAME, {len(table_prefix)}) = {quote_string(table_prefix)}")
+    else:
+        filters.append("TABLE_NAME NOT LIKE '__legacy\\_%'")
+
+    where_suffix = ""
+    if filters:
+        where_suffix = " AND " + " AND ".join(filters)
 
     sql = """
         SELECT TABLE_NAME, COLUMN_NAME, IS_NULLABLE, COLUMN_DEFAULT, EXTRA
         FROM information_schema.COLUMNS
         WHERE TABLE_SCHEMA = DATABASE()
-        {prefix_filter}
+        {where_suffix}
         ORDER BY TABLE_NAME, ORDINAL_POSITION
-    """.format(prefix_filter=prefix_filter)
+    """.format(where_suffix=where_suffix)
     result: dict[str, dict[str, ColumnInfo]] = {}
     for table, column, nullable, default, extra in query_rows(config, sql, database):
         table_key = table[len(table_prefix) :] if table_prefix else table
@@ -576,6 +582,8 @@ def import_dump_to_prefixed_staging(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         env=mysql_env(config),
     )
     assert process.stdin is not None
