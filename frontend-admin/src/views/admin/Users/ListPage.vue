@@ -20,12 +20,12 @@
         v-model="filters.keyword"
         placeholder="搜索邮箱/昵称/手机号"
         clearable
-        style="width: 260px;"
+        class="users-search-input"
         @keyup.enter="loadList"
       >
         <template #prefix><el-icon><Search /></el-icon></template>
       </el-input>
-      <el-select v-model="filters.status" placeholder="状态" clearable style="width: 120px;">
+      <el-select v-model="filters.status" placeholder="状态" clearable class="users-search-select">
         <el-option label="正常" :value="1" />
         <el-option label="禁用" :value="0" />
       </el-select>
@@ -349,6 +349,45 @@ onMounted(loadList)
 .users-search-bar {
   align-items: center;
   margin: 0;
+
+  // 搜索输入框占满可用宽度
+  .users-search-input {
+    flex: 1 1 220px;
+    min-width: 160px;
+  }
+
+  // 状态下拉框
+  .users-search-select {
+    flex: 0 1 130px;
+    min-width: 100px;
+  }
+
+  // 按钮不换行
+  .el-button {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+}
+
+// 窄屏下优化
+@include tablet-and-below {
+  .users-search-bar {
+    flex-direction: row !important;
+    align-items: center !important;
+
+    .users-search-input {
+      flex: 1 1 100%;
+      min-width: 0;
+    }
+    .users-search-select {
+      flex: 1 1 auto;
+      min-width: 100px;
+      width: auto !important;
+    }
+    .el-button {
+      flex-shrink: 0;
+    }
+  }
 }
 
 .users-table-card {

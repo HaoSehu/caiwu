@@ -19,12 +19,7 @@
           type="button"
           class="catalog-kind-chip"
           :class="typeChipClass(item)"
-          draggable="true"
           @click="handleProductTypeChange(item.value)"
-          @dragstart="handleTypeDragStart(item, $event)"
-          @dragover.prevent="handleTypeDragOver(item, $event)"
-          @drop.prevent="handleTypeDrop(item)"
-          @dragend="handleTypeDragEnd"
         >
           <span v-if="resolveTypeIconComponent(item.icon)" class="catalog-kind-chip__icon" aria-hidden="true">
             <el-icon><component :is="resolveTypeIconComponent(item.icon)" /></el-icon>
@@ -37,10 +32,6 @@
         <button type="button" class="catalog-kind-chip catalog-kind-chip--ghost" @click="openTypeManagerDialog('create')">
           <span>新增种类</span>
         </button>
-      </div>
-
-      <div v-if="typeDragHint" class="drag-feedback-strip">
-        {{ typeDragHint }}
       </div>
     </section>
 
@@ -198,17 +189,25 @@
             <div class="product-panel-actions">
               <el-button class="mobile-sidebar-toggle" type="primary" plain @click="mobileCategorySidebarVisible = true">
                 <el-icon><Menu /></el-icon>
-                <span>菜单</span>
+                <span v-if="!isMobile">菜单</span>
               </el-button>
-              <el-button @click="openSplitProductDialog">拆分商品</el-button>
-              <el-button :loading="summaryLoading || typeLoading || categoryLoading || productLoading" @click="loadData">刷新</el-button>
+              <el-button v-if="!isMobile" @click="openSplitProductDialog">拆分商品</el-button>
+              <el-button :loading="summaryLoading || typeLoading || categoryLoading || productLoading" @click="loadData">
+                <template v-if="isMobile"><el-icon><Refresh /></el-icon></template>
+                <template v-else>刷新</template>
+              </el-button>
               <el-button v-if="selectedProductRows.length > 1" @click="openBatchCategoryDialog()">
                 批量改分类<span v-if="selectedProductRows.length">({{ selectedProductRows.length }})</span>
               </el-button>
               <el-button :disabled="!selectedProductRows.length" @click="openProvisionHostnameDialog()">
-                批量开通主机名<span v-if="selectedProductRows.length">({{ selectedProductRows.length }})</span>
+                <template v-if="isMobile">批量开通</template>
+                <template v-else>批量开通主机名</template>
+                <span v-if="selectedProductRows.length">({{ selectedProductRows.length }})</span>
               </el-button>
-              <el-button type="primary" @click="openProductDialog()">新增商品</el-button>
+              <el-button type="primary" @click="openProductDialog()">
+                <template v-if="isMobile">+ 新增</template>
+                <template v-else>新增商品</template>
+              </el-button>
             </div>
           </div>
         </template>
@@ -330,11 +329,11 @@
                     >
                       <div class="product-name-head">
                         <strong>{{ resolveProductModelLabel(row) }}</strong>
-                        <span v-if="row.remark" class="product-remark-inline" :title="row.remark">
+                        <span v-if="row.remark && !isMobile" class="product-remark-inline" :title="row.remark">
                           {{ row.remark }}
                         </span>
                       </div>
-                      <div class="product-meta-line">
+                      <div v-if="!isMobile" class="product-meta-line">
                         <span class="product-group-pill">{{ row.category_full_name || row.group_full_name || '未分类' }}</span>
                         <span v-if="row.provision_module" class="product-module">{{ interfaceTypeLabel(row.provision_module) }}</span>
                         <span
@@ -357,9 +356,9 @@
                     >
                       <div class="overview-price-line">
                         <strong>¥{{ row.primary_price?.amount || '0.00' }}</strong>
-                        <small>{{ billingCycleLabel(row.primary_cycle) ? '/' + billingCycleLabel(row.primary_cycle) : '' }}</small>
+                        <small v-if="!isMobile">{{ billingCycleLabel(row.primary_cycle) ? '/' + billingCycleLabel(row.primary_cycle) : '' }}</small>
                       </div>
-                      <div class="overview-meta-line">
+                      <div v-if="!isMobile" class="overview-meta-line">
                         <small>库存 {{ row.stock === -1 ? '不限' : row.stock }}</small>
                         <small>{{ row.services_count }} 服务</small>
                         <small>{{ row.orders_count }} 账单</small>
@@ -376,8 +375,8 @@
                       @drop.prevent="handleProductRowDrop(row, $event)"
                     >
                       <div class="status-cell-tags">
-                        <el-tag size="small" effect="plain" :type="typeTagType(row.type)">{{ row.type_label }}</el-tag>
-                        <el-tag size="small" effect="plain" :type="row.auto_setup === 1 ? 'success' : 'info'">
+                        <el-tag v-if="!isMobile" size="small" effect="plain" :type="typeTagType(row.type)">{{ row.type_label }}</el-tag>
+                        <el-tag v-if="!isMobile" size="small" effect="plain" :type="row.auto_setup === 1 ? 'success' : 'info'">
                           {{ row.auto_setup === 1 ? '自动开通' : '手动开通' }}
                         </el-tag>
                         <el-tag size="small" effect="plain" :type="row.status === 1 ? 'success' : 'info'">
@@ -417,7 +416,9 @@
                       </el-dropdown>
                     </div>
                     <el-dropdown v-else trigger="click" @command="(cmd) => handleCatalogProductAction(cmd, row)">
-                      <span class="action-link">···</span>
+                      <button type="button" class="mobile-action-btn" aria-label="操作">
+                        <el-icon :size="16"><MoreFilled /></el-icon>
+                      </button>
                       <template #dropdown>
                         <el-dropdown-menu>
                           <el-dropdown-item command="edit">编辑</el-dropdown-item>
@@ -909,32 +910,6 @@
                       inactive-text="下架"
                     />
                   </el-form-item>
-
-                  <div class="dialog-span-2 purchase-guard-panel">
-                    <div class="purchase-guard-panel__head">
-                      <strong>购买前校验</strong>
-                      <span>按商品单独控制购买前的实名和手机号要求。</span>
-                    </div>
-                    <div class="purchase-guard-panel__grid">
-                      <el-form-item label="实名认证校验" class="purchase-guard-panel__item">
-                        <el-switch
-                          v-model="productForm.purchase_requires.require_verification"
-                          active-text="需要"
-                          inactive-text="不需要"
-                        />
-                        <div class="field-help">开启后，用户必须先完成实名认证才能创建账单。</div>
-                      </el-form-item>
-
-                      <el-form-item label="手机号校验" class="purchase-guard-panel__item">
-                        <el-switch
-                          v-model="productForm.purchase_requires.require_phone"
-                          active-text="需要"
-                          inactive-text="不需要"
-                        />
-                        <div class="field-help">开启后，用户必须先绑定手机号才能创建账单。</div>
-                      </el-form-item>
-                    </div>
-                  </div>
                 </div>
               </section>
 
@@ -1084,7 +1059,9 @@
                               </el-popconfirm>
                             </div>
                             <el-dropdown v-else trigger="click" @command="(cmd) => handleConfigOptionAction(cmd, row, $index)">
-                              <span class="action-link">···</span>
+                              <button type="button" class="mobile-action-btn" aria-label="操作">
+                                <el-icon :size="16"><MoreFilled /></el-icon>
+                              </button>
                               <template #dropdown>
                                 <el-dropdown-menu>
                                   <el-dropdown-item command="edit">编辑</el-dropdown-item>
@@ -3810,8 +3787,6 @@ function applyProductForm(product = null) {
     supplier_product_id: product?.supplier_product_id ?? null,
     config_options: normalizeConfigOptions(product?.config_options),
     purchase_requires: {
-      require_verification: Boolean(product?.purchase_requires?.require_verification),
-      require_phone: Boolean(product?.purchase_requires?.require_phone),
       provision_hostname: {
         mode: product?.purchase_requires?.provision_hostname?.mode || 'system',
         value: product?.purchase_requires?.provision_hostname?.value || '',
@@ -4340,7 +4315,7 @@ onMounted(loadData)
   border-radius: 8px;
   background: $bg-color-card;
   color: $text-color-primary;
-  cursor: grab;
+  cursor: pointer;
   user-select: none;
   transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
 }
@@ -4406,28 +4381,6 @@ onMounted(loadData)
 
 .catalog-kind-chip.is-hidden:not(.active) {
   background: rgba($text-color-placeholder, 0.06);
-}
-
-.catalog-kind-chip.is-dragging {
-  opacity: 0.7;
-}
-
-.catalog-kind-chip.is-drop-before::before,
-.catalog-kind-chip.is-drop-after::after {
-  content: '';
-  width: 3px;
-  height: 22px;
-  border-radius: 999px;
-  background: $color-primary;
-  pointer-events: none;
-}
-
-.catalog-kind-chip.is-drop-before::before {
-  margin-right: 2px;
-}
-
-.catalog-kind-chip.is-drop-after::after {
-  margin-left: 2px;
 }
 
 .catalog-kind-chip--ghost {
@@ -5011,6 +4964,27 @@ onMounted(loadData)
   min-height: auto;
 }
 
+.mobile-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid #e5eaf3;
+  border-radius: 8px;
+  background: #fff;
+  color: #5b6b82;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:active {
+    background: #e8f1ff;
+    border-color: #c9dbff;
+    color: #165dff;
+  }
+}
+
 .catalog-dialog :deep(.el-dialog__body) {
   padding-top: 12px;
 }
@@ -5031,7 +5005,7 @@ onMounted(loadData)
 }
 
 .product-drawer :deep(.el-drawer__body) {
-  padding: 12px 18px 16px;
+  padding: 10px 14px 16px;
   overflow: auto;
 }
 
@@ -5039,7 +5013,7 @@ onMounted(loadData)
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  padding: 12px 18px 18px;
+  padding: 10px 14px 14px;
   border-top: 1px solid $divider-color;
 }
 
@@ -5084,11 +5058,11 @@ onMounted(loadData)
 }
 
 .product-drawer .dialog-section {
-  padding: 12px;
+  padding: 10px;
 }
 
 .product-drawer .dialog-section + .dialog-section {
-  margin-top: 10px;
+  margin-top: 8px;
 }
 
 .dialog-section-header {
@@ -5101,8 +5075,8 @@ onMounted(loadData)
 }
 
 .product-drawer .dialog-section-header {
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 8px;
+  margin-bottom: 8px;
   align-items: flex-start;
 }
 
@@ -5122,13 +5096,13 @@ onMounted(loadData)
 
 .product-drawer-tabs {
   position: sticky;
-  top: -12px;
+  top: -10px;
   z-index: 3;
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
-  margin: -12px -18px 12px;
-  padding: 12px 18px 10px;
+  margin: -10px -14px 10px;
+  padding: 10px 14px 8px;
   border-bottom: 1px solid $divider-color;
   background: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(12px);
@@ -5139,13 +5113,13 @@ onMounted(loadData)
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 30px;
-  padding: 0 12px;
+  min-height: 28px;
+  padding: 0 10px;
   border: 1px solid $border-color;
   border-radius: 999px;
   background: $bg-color-card;
   color: $text-color-secondary;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   line-height: 1;
   cursor: pointer;
@@ -5174,7 +5148,7 @@ onMounted(loadData)
 }
 
 .product-form :deep(.el-form-item) {
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .product-form :deep(.el-form-item__label) {
@@ -5739,7 +5713,7 @@ onMounted(loadData)
   }
 
   .search-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 1fr;
     gap: 8px;
   }
 
@@ -5752,11 +5726,23 @@ onMounted(loadData)
   }
 
   .search-field-keyword {
-    grid-column: span 1;
+    grid-column: 1 / -1;
+  }
+
+  // 选择器和按钮并排
+  .search-field:not(.search-field-keyword) {
+    grid-column: 1;
   }
 
   .search-actions {
-    justify-content: flex-start;
+    grid-column: 2;
+    justify-content: flex-end;
+    gap: 6px;
+
+    :deep(.el-button) {
+      padding: 5px 14px;
+      font-size: 12px;
+    }
   }
 
   .dialog-span-2,
@@ -5810,21 +5796,29 @@ onMounted(loadData)
 
 @media (max-width: 640px) {
   .catalog-kind-panel {
-    padding: 12px 14px;
-    gap: 10px;
+    padding: 10px 12px;
+    gap: 8px;
   }
 
   .catalog-kind-head {
-    flex-direction: row;
-    align-items: center;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
   }
 
   .catalog-kind-actions {
-    gap: 0;
+    gap: 6px;
+    width: 100%;
+
+    :deep(.el-button) {
+      flex: 1;
+      padding: 5px 12px;
+      font-size: 12px;
+    }
   }
 
   .catalog-kind-meta strong {
-    font-size: 14px;
+    font-size: 13px;
   }
 
   .catalog-kind-meta p {
@@ -5834,20 +5828,33 @@ onMounted(loadData)
   .catalog-kind-chips {
     flex-wrap: nowrap;
     overflow-x: auto;
-    padding-bottom: 4px;
+    overflow-y: hidden;
+    padding-bottom: 2px;
+    gap: 6px;
     -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    touch-action: pan-x;
+    &::-webkit-scrollbar {
+      height: 3px;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: #d0d5dd;
+      border-radius: 3px;
+    }
   }
 
   .catalog-kind-chip {
-    min-height: 30px;
-    padding: 0 10px;
-    gap: 6px;
+    min-height: 28px;
+    padding: 0 8px;
+    gap: 4px;
+    border-radius: 6px;
+    font-size: 12px;
   }
 
   .catalog-kind-chip__icon {
-    width: 16px;
-    height: 16px;
-    font-size: 13px;
+    width: 14px;
+    height: 14px;
+    font-size: 12px;
   }
 
   .catalog-kind-chip span {
@@ -5855,10 +5862,10 @@ onMounted(loadData)
   }
 
   .catalog-kind-chip small {
-    min-width: 18px;
-    height: 18px;
+    min-width: 16px;
+    height: 16px;
     padding: 0 4px;
-    font-size: 11px;
+    font-size: 10px;
   }
 
   .type-icon-picker {
@@ -5872,6 +5879,40 @@ onMounted(loadData)
   .type-icon-trigger {
     width: 38px;
     height: 38px;
+  }
+
+  // 种类列表项紧凑
+  .type-manager-list {
+    gap: 4px;
+  }
+
+  .type-manager-item {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+
+  .type-manager-item-main > span {
+    display: none;
+  }
+
+  .type-manager-item-actions {
+    gap: 2px;
+
+    :deep(.el-button) {
+      padding: 4px 6px;
+      font-size: 11px;
+    }
+  }
+
+  .dialog-intro {
+    margin-bottom: 12px;
+
+    strong { font-size: 14px; }
+    p { font-size: 12px; }
+  }
+
+  .catalog-dialog :deep(.el-dialog__body) {
+    padding: 14px 14px 20px;
   }
 
   .type-icon-field__row {
@@ -5904,8 +5945,22 @@ onMounted(loadData)
   }
 
   .product-panel-actions {
-    gap: 6px;
+    gap: 4px;
     flex-wrap: wrap;
+
+    :deep(.el-button) {
+      padding: 5px 10px;
+      font-size: 12px;
+      min-height: 30px;
+    }
+
+    :deep(.el-button--primary) {
+      padding: 5px 14px;
+    }
+
+    :deep(.el-button .el-icon) {
+      margin-right: 0;
+    }
   }
 
   .product-panel-actions :deep(.el-button) {
@@ -5914,7 +5969,13 @@ onMounted(loadData)
   }
 
   .product-filters {
-    gap: 8px;
+    gap: 6px;
+  }
+
+  .toolbar-foot {
+    margin-top: 4px;
+    padding-top: 6px;
+    gap: 4px;
   }
 
   .group-tree-node-actions {
@@ -5949,16 +6010,39 @@ onMounted(loadData)
     flex: 1;
   }
 
-  // ---- 表格：覆盖 el-table 固定布局，让隐藏列真正释放空间 ----
+  // 表格列宽统一
   .product-table :deep(.el-table__header),
   .product-table :deep(.el-table__body) {
-    table-layout: auto !important;
+    table-layout: fixed !important;
     width: 100% !important;
+  }
+
+  // 可见列宽分配：配置40% 价格25% 状态25% 操作10%
+  .product-table :deep(.el-table__header th.el-table_1_column_4),
+  .product-table :deep(.el-table__body td.el-table_1_column_4) {
+    width: 42% !important;
+  }
+  .product-table :deep(.el-table__header th.el-table_1_column_5),
+  .product-table :deep(.el-table__body td.el-table_1_column_5) {
+    width: 24% !important;
+  }
+  .product-table :deep(.el-table__header th.el-table_1_column_6),
+  .product-table :deep(.el-table__body td.el-table_1_column_6) {
+    width: 22% !important;
+  }
+  .product-table :deep(.el-table__header th.el-table_1_column_7),
+  .product-table :deep(.el-table__body td.el-table_1_column_7) {
+    width: 12% !important;
   }
 
   .product-table :deep(.el-table__header-wrapper),
   .product-table :deep(.el-table__body-wrapper) {
     width: 100%;
+  }
+
+  .product-table :deep(.el-scrollbar__view) {
+    display: block !important;
+    width: 100% !important;
   }
 
   .product-table :deep(colgroup col) {
@@ -5967,15 +6051,28 @@ onMounted(loadData)
 
   .product-table :deep(.col-selection),
   .product-table :deep(.col-drag),
-  .product-table :deep(.col-id),
-  .product-table :deep(.col-price),
-  .product-table :deep(.col-status) {
+  .product-table :deep(.col-id) {
     display: none;
+  }
+
+  // 单元格紧凑
+  .product-table :deep(td.el-table__cell) {
+    padding: 8px 6px;
+  }
+
+  .product-table :deep(.el-table__cell .cell) {
+    padding: 0;
   }
 
   .product-name-head strong {
     white-space: normal;
     word-break: break-word;
+    font-size: 13px;
+  }
+
+  .product-name-cell {
+    gap: 0;
+    padding: 0;
   }
 
   .product-meta-line {
@@ -5984,6 +6081,50 @@ onMounted(loadData)
 
   .product-group-pill {
     max-width: 120px;
+  }
+
+  // ---- 价格列紧凑 ----
+  .overview-cell {
+    gap: 0;
+    padding: 0;
+  }
+
+  .overview-price-line {
+    gap: 4px;
+
+    strong {
+      font-size: 13px;
+    }
+
+    small {
+      font-size: 10px;
+    }
+  }
+
+  .overview-meta-line {
+    gap: 4px;
+    flex-direction: column;
+    align-items: flex-start;
+
+    small {
+      font-size: 10px;
+    }
+  }
+
+  // ---- 状态列紧凑 ----
+  .status-cell {
+    padding: 0;
+  }
+
+  .status-cell-tags {
+    gap: 3px;
+
+    :deep(.el-tag--small) {
+      padding: 0 6px;
+      font-size: 11px;
+      height: 22px;
+      line-height: 22px;
+    }
   }
 
   .product-content {
@@ -6589,49 +6730,6 @@ onMounted(loadData)
 
 .type-manager-item-actions :deep(.el-button) {
   margin-left: 0;
-}
-
-.purchase-guard-panel {
-  padding: 14px 16px;
-  border: 1px solid $divider-color;
-  border-radius: 12px;
-  background: $bg-color-soft;
-}
-
-.purchase-guard-panel__head {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 12px;
-
-  strong {
-    color: $text-color-primary;
-    font-size: 14px;
-    font-weight: 600;
-  }
-
-  span {
-    color: $text-color-secondary;
-    font-size: 12px;
-    line-height: 1.6;
-  }
-}
-
-.purchase-guard-panel__grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-
-  @media (max-width: 900px) {
-    grid-template-columns: 1fr;
-  }
-}
-
-.purchase-guard-panel__item {
-  margin-bottom: 0;
-  padding: 12px;
-  border-radius: 10px;
-  background: #ffffff;
 }
 
 // ===== 商品拥有者抽屉 =====

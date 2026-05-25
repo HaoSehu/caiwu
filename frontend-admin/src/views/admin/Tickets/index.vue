@@ -14,7 +14,7 @@
           v-model="filters.keyword"
           placeholder="搜索工单标题或 ID"
           clearable
-          style="width: 260px"
+          class="tickets-search-input"
           @keyup.enter="handleSearch"
         >
           <template #prefix>
@@ -22,7 +22,7 @@
           </template>
         </el-input>
 
-        <el-select v-model="filters.status" placeholder="工单状态" clearable style="width: 140px">
+        <el-select v-model="filters.status" placeholder="工单状态" clearable class="tickets-search-select">
           <el-option
             v-for="option in statusOptions"
             :key="option.value"
@@ -31,7 +31,7 @@
           />
         </el-select>
 
-        <el-select v-model="filters.priority" placeholder="优先级" clearable style="width: 120px">
+        <el-select v-model="filters.priority" placeholder="优先级" clearable class="tickets-search-select tickets-search-select--sm">
           <el-option
             v-for="option in priorityOptions"
             :key="option.value"
@@ -40,7 +40,7 @@
           />
         </el-select>
 
-        <el-select v-model="filters.department" placeholder="工单分类" clearable style="width: 140px">
+        <el-select v-model="filters.department" placeholder="工单分类" clearable class="tickets-search-select">
           <el-option
             v-for="option in departmentOptions"
             :key="option.value"
@@ -249,6 +249,54 @@ onMounted(loadList)
 .tickets-search-bar {
   align-items: center;
   margin: 0;
+
+  // 搜索输入框占满可用宽度
+  .tickets-search-input {
+    flex: 1 1 220px;
+    min-width: 160px;
+  }
+
+  // 下拉选择器
+  .tickets-search-select {
+    flex: 0 1 140px;
+    min-width: 110px;
+
+    &--sm {
+      flex: 0 1 110px;
+      min-width: 90px;
+    }
+  }
+
+  // 按钮靠右对齐，不换行
+  .el-button {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+}
+
+// 窄屏下优化
+@include tablet-and-below {
+  .tickets-search-bar {
+    // 保持横向排列
+    flex-direction: row !important;
+    align-items: center !important;
+
+    // 搜索框独占第一行
+    .tickets-search-input {
+      flex: 1 1 100%;
+      min-width: 0;
+    }
+    // 下拉框自然换行，宽度自适应
+    .tickets-search-select {
+      flex: 1 1 auto;
+      min-width: 100px;
+      width: auto !important;
+    }
+    // 按钮紧跟最后
+    .el-button {
+      flex-shrink: 0;
+    }
+  }
 }
 
 .tickets-table-card {
