@@ -12,17 +12,23 @@
       </div>
     </section>
 
-    <HeadlineGrid :cards="headlineCards" />
+    <section class="dashboard-layout">
+      <div class="dashboard-layout__main">
+        <HeadlineGrid :cards="headlineCards" />
 
-    <InsightLower :status-distribution="statusDistribution" :progress-items="progressItems" />
+        <RecentInvoicesPanel
+          :invoices="recentInvoices"
+          :status-text="statusText"
+          :status-type="statusType"
+          :format-currency="formatCurrency"
+          @view-all="router.push('/admin/orders')"
+        />
+      </div>
 
-    <RecentInvoicesPanel
-      :invoices="recentInvoices"
-      :status-text="statusText"
-      :status-type="statusType"
-      :format-currency="formatCurrency"
-      @view-all="router.push('/admin/orders')"
-    />
+      <aside class="dashboard-layout__side">
+        <InsightLower :status-distribution="statusDistribution" :progress-items="progressItems" />
+      </aside>
+    </section>
   </div>
 </template>
 
@@ -56,5 +62,52 @@ onMounted(loadDashboard)
 .page-actions {
   display: flex;
   gap: 12px;
+}
+
+.dashboard-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(280px, 2fr);
+  align-items: start;
+  gap: 20px;
+}
+
+.dashboard-layout__main {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+.dashboard-layout__side {
+  position: sticky;
+  top: 12px;
+}
+
+@include desktop-lg-and-below {
+  .dashboard-layout {
+    grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+    gap: 16px;
+  }
+}
+
+@include tablet-and-below {
+  .dashboard-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .dashboard-layout__side {
+    position: static;
+  }
+}
+
+@include mobile-and-below {
+  .page-actions {
+    flex-direction: column;
+
+    :deep(.el-button) {
+      width: 100%;
+    }
+  }
 }
 </style>
