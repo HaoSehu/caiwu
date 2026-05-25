@@ -1,0 +1,18 @@
+<?php
+
+return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | 服务实例域迁移连接配置
+    |--------------------------------------------------------------------------
+    |
+    | source_connection: 旧库连接名（读取源数据）
+    | target_connection: 新库连接名（写入迁移数据）
+    |
+    */
+
+    'source_connection' => env('SERVICE_MIGRATION_SOURCE_DB', 'idc'),
+    'target_connection' => env('SERVICE_MIGRATION_TARGET_DB', 'idc'),
+
+];
