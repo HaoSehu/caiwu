@@ -101,6 +101,8 @@
 - 仓库里存在早期激进合并方向的历史迁移文件，**不要补跑**。
 - 真实表结构以实库 `information_schema` 为准；`文档/数据库/数据库结构说明-idc-2026-04-17.md` 是带日期的快照文档。
 - 数据库重构方向见 `文档/架构/架构现状说明.md`。
+初始化新库：backend\scripts\install_db.py
+迁移旧库：backend/scripts/migrate_legacy_dump.py
 
 ## 9. 视觉与交互
 
