@@ -64,7 +64,7 @@ const emit = defineEmits(['view-all'])
 <style lang="scss" scoped>
 .panel-card { border-radius: $base-border-radius; }
 
-.invoices-panel :deep(.el-card__body) { padding-top: 16px; }
+.invoices-panel :deep(.el-card__body) { padding-top: 12px; }
 
 .panel-header {
   display: flex;
@@ -74,7 +74,15 @@ const emit = defineEmits(['view-all'])
 }
 
 .panel-header strong { color: $text-color-primary; font-size: 15px; font-weight: 600; }
-.panel-header p { margin-top: 6px; color: $text-color-secondary; font-size: 12px; line-height: 1.6; }
+.panel-header p { margin-top: 4px; color: $text-color-secondary; font-size: 12px; line-height: 1.6; }
+
+.recent-invoices-table :deep(.el-table__header th) {
+  background: $bg-color-soft;
+}
+
+.recent-invoices-table :deep(.el-table__row) {
+  transition: background-color $duration-fast $ease-standard;
+}
 
 .table-empty {
   display: flex;
@@ -86,4 +94,15 @@ const emit = defineEmits(['view-all'])
 
 .table-empty strong { color: $text-color-primary; font-size: 15px; font-weight: 600; }
 .table-empty p { color: $text-color-secondary; font-size: 13px; }
+
+@include mobile-and-below {
+  .invoices-panel :deep(.el-table) {
+    font-size: 12px;
+  }
+
+  .invoices-panel :deep(.el-table .cell) {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+}
 </style>

@@ -8,7 +8,10 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AdminAsyncPane: typeof import('./src/components/common/AdminAsyncPane.vue')['default']
+    AdminEmptyState: typeof import('./src/components/common/AdminEmptyState.vue')['default']
+    AdminPage: typeof import('./src/components/common/AdminPage.vue')['default']
     AdminRouteLoadingFallback: typeof import('./src/components/common/AdminRouteLoadingFallback.vue')['default']
+    AdminTableSkeleton: typeof import('./src/components/common/AdminTableSkeleton.vue')['default']
     ElAlert: typeof import('element-plus/es')['ElAlert']
     ElAside: typeof import('element-plus/es')['ElAside']
     ElAvatar: typeof import('element-plus/es')['ElAvatar']
@@ -70,6 +73,8 @@ declare module 'vue' {
     ElTimePicker: typeof import('element-plus/es')['ElTimePicker']
     ElTree: typeof import('element-plus/es')['ElTree']
     ElUpload: typeof import('element-plus/es')['ElUpload']
+    PermissionGuard: typeof import('./src/components/common/PermissionGuard.vue')['default']
+    RequestErrorBlock: typeof import('./src/components/common/RequestErrorBlock.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
   }

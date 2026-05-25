@@ -1,5 +1,5 @@
 <template>
-  <section class="insight-row">
+  <div class="insight-stack">
     <el-card shadow="never" class="panel-card">
       <template #header>
         <div class="panel-header">
@@ -43,7 +43,7 @@
         </article>
       </div>
     </el-card>
-  </section>
+  </div>
 </template>
 
 <script setup>
@@ -54,13 +54,16 @@ defineProps({
 </script>
 
 <style lang="scss" scoped>
-.insight-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.7fr);
+.insight-stack {
+  display: flex;
+  flex-direction: column;
   gap: 16px;
 }
 
-.panel-card { border-radius: $base-border-radius; }
+.panel-card {
+  border-radius: $base-border-radius;
+  background: $bg-color-card;
+}
 
 .panel-header {
   display: flex;
@@ -72,20 +75,26 @@ defineProps({
 .panel-header strong { color: $text-color-primary; font-size: 15px; font-weight: 600; }
 .panel-header span { color: $text-color-placeholder; font-size: 12px; white-space: nowrap; }
 
-.distribution-list { display: grid; gap: 14px; }
+.distribution-list { display: grid; gap: 16px; }
 
 .distribution-item {
   display: grid;
-  grid-template-columns: minmax(0, 110px) minmax(0, 1fr) 44px;
+  grid-template-columns: minmax(0, 100px) minmax(0, 1fr) 40px;
   gap: 12px;
   align-items: center;
 }
 
 .distribution-main strong { display: block; color: $text-color-primary; font-size: 13px; font-weight: 600; }
-.distribution-main small { display: block; margin-top: 4px; color: $text-color-placeholder; font-size: 12px; }
+.distribution-main small { display: block; margin-top: 2px; color: $text-color-placeholder; font-size: 12px; }
 
-.distribution-bar { height: 8px; background: $bg-color-soft; overflow: hidden; border-radius: 4px; }
-.distribution-bar span { display: block; height: 100%; border-radius: 4px; }
+.distribution-bar {
+  height: 10px;
+  background: $bg-color-soft;
+  overflow: hidden;
+  border-radius: 5px;
+}
+
+.distribution-bar span { display: block; height: 100%; border-radius: 5px; }
 .distribution-bar span.blue { background: $color-primary; }
 .distribution-bar span.green { background: $color-success; }
 .distribution-bar span.orange { background: $color-warning; }
@@ -100,20 +109,25 @@ defineProps({
   text-align: right;
 }
 
-.progress-list { display: grid; gap: 16px; }
+.progress-list { display: grid; gap: 12px; }
 
 .progress-item {
   padding: 14px;
   border: 1px solid $divider-color;
   border-radius: $sm-border-radius;
   background: $bg-color-card;
+  transition: border-color $duration-fast $ease-standard;
+}
+
+.progress-item:hover {
+  border-color: $border-color-strong;
 }
 
 .progress-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .progress-head strong { color: $text-color-primary; font-size: 13px; font-weight: 600; }
@@ -133,12 +147,40 @@ defineProps({
   font-size: 13px;
 }
 
-@media (max-width: 1280px) {
-  .insight-row { grid-template-columns: 1fr; }
+@include tablet-and-below {
+  .insight-stack {
+    flex-direction: row;
+    gap: 12px;
+  }
+
+  .insight-stack > :deep(.el-card) {
+    flex: 1;
+    min-width: 0;
+  }
 }
 
-@media (max-width: 900px) {
-  .distribution-item { grid-template-columns: 1fr; }
-  .distribution-item em { text-align: left; }
+@include mobile-and-below {
+  .insight-stack {
+    flex-direction: column;
+  }
+
+  .distribution-item {
+    grid-template-columns: minmax(0, 80px) 1fr 40px;
+    gap: 8px;
+  }
+
+  .progress-item {
+    padding: 10px;
+  }
+}
+
+@include mobile-sm-and-below {
+  .distribution-item {
+    grid-template-columns: 1fr 40px;
+  }
+
+  .distribution-main small {
+    display: none;
+  }
 }
 </style>
