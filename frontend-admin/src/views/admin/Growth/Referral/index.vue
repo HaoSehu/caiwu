@@ -6,11 +6,6 @@
         <h2>推广返利与提现管理</h2>
         <p>查看推广概览、订单奖励记录和提现审核结果，统一管理推荐奖励业务流转。</p>
       </div>
-
-      <div class="page-actions">
-        <el-button @click="refreshCurrentTab">刷新当前视图</el-button>
-        <el-button type="primary" @click="loadAll">刷新全部</el-button>
-      </div>
     </section>
 
     <section class="tab-toolbar">

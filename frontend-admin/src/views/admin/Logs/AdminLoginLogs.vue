@@ -5,10 +5,6 @@
         <h2>管理员登录日志</h2>
         <p>记录管理员账号最近登录情况，支持区分操作日志来源与快照回退来源。</p>
       </div>
-
-      <div class="page-actions">
-        <el-button :icon="RefreshRight" @click="loadData">刷新</el-button>
-      </div>
     </section>
 
     <section class="summary-strip">

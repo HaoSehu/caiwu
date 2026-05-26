@@ -27,4 +27,9 @@ class DashboardController extends Controller
             'recent_invoices' => $this->dashboardService->recentInvoices(),
         ]);
     }
+
+    public function monthlyRevenue()
+    {
+        return $this->success($this->dashboardService->monthlyRevenue());
+    }
 }

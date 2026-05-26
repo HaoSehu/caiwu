@@ -5,10 +5,6 @@
         <h2>日志清理</h2>
         <p>按类型清理数据库日志与系统文件日志，释放存储并保留必要追踪窗口。</p>
       </div>
-
-      <div class="page-actions">
-        <el-button :icon="RefreshRight" @click="loadOverview">刷新概览</el-button>
-      </div>
     </section>
 
     <el-alert

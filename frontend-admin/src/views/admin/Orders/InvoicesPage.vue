@@ -8,108 +8,62 @@
       </div>
     </section>
 
-    <section class="ledger-summary-strip">
-      <article class="ledger-summary-card">
-        <span>资金记录</span>
-        <strong>{{ summary.total_count || 0 }}</strong>
-        <small>累计台账事件数</small>
-      </article>
-      <article class="ledger-summary-card">
-        <span>累计入账</span>
-        <strong class="amount-in">{{ formatMoney(summary.total_in) }}</strong>
-        <small>充值、退款与奖励入账</small>
-      </article>
-      <article class="ledger-summary-card">
-        <span>累计出账</span>
-        <strong class="amount-out">{{ formatMoney(summary.total_out) }}</strong>
-        <small>账单支付与人工扣款</small>
-      </article>
-      <article class="ledger-summary-card">
-        <span>充值入账</span>
-        <strong>{{ formatMoney(summary.recharge_in) }}</strong>
-        <small>用户充值与人工加款</small>
-      </article>
-      <article class="ledger-summary-card">
-        <span>退款金额</span>
-        <strong>{{ formatMoney(summary.refund_in) }}</strong>
-        <small>账单退款与原支付逆向</small>
-      </article>
-      <article class="ledger-summary-card">
-        <span>待支付账单</span>
-        <strong>{{ formatMoney(summary.unpaid_amount) }}</strong>
-        <small>{{ summary.unpaid_count || 0 }} 笔待处理</small>
-      </article>
-    </section>
-
     <section class="filter-panel">
-      <div class="search-bar ledger-search-bar">
-        <el-select v-model="filters.tab" placeholder="台账视图" style="width: 136px;" @change="handleSearch">
+      <div class="ledger-filter-top">
+        <el-select v-model="filters.tab" size="small" class="ledger-select--compact" placeholder="全部资金" @change="handleSearch">
           <el-option v-for="item in tabOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
-        <el-input
-          v-model="filters.user_id"
-          placeholder="用户 ID"
-          clearable
-          style="width: 120px;"
-          @keyup.enter="handleSearch"
-        />
-        <el-input
-          v-model="filters.invoice_no"
-          placeholder="账单号"
-          clearable
-          style="width: 180px;"
-          @keyup.enter="handleSearch"
-        >
-          <template #prefix><el-icon><Document /></el-icon></template>
-        </el-input>
-        <el-input
-          v-model="filters.payment_no"
-          placeholder="支付号"
-          clearable
-          style="width: 180px;"
-          @keyup.enter="handleSearch"
-        >
-          <template #prefix><el-icon><Tickets /></el-icon></template>
-        </el-input>
-        <el-select v-model="filters.event_type" placeholder="资金类型" clearable style="width: 168px;" @change="handleSearch">
+        <el-select v-model="filters.event_type" size="small" class="ledger-select--compact" placeholder="类型" clearable @change="handleSearch">
           <el-option v-for="item in eventTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
-        <el-select v-model="filters.direction" placeholder="收支方向" clearable style="width: 132px;" @change="handleSearch">
+        <el-select v-model="filters.direction" size="small" class="ledger-select--compact" placeholder="收支" clearable @change="handleSearch">
           <el-option label="收入" value="in" />
           <el-option label="支出" value="out" />
         </el-select>
-        <el-select v-model="filters.status" placeholder="状态" clearable style="width: 132px;" @change="handleSearch">
+        <el-select v-model="filters.status" size="small" class="ledger-select--compact" placeholder="状态" clearable @change="handleSearch">
           <el-option label="待支付" :value="0" />
           <el-option label="已支付" :value="1" />
           <el-option label="已取消" :value="2" />
           <el-option label="已逾期" :value="3" />
           <el-option label="已退款" :value="5" />
         </el-select>
+      </div>
+      <div class="ledger-filter-bottom">
+        <el-input
+          v-model="filters.keyword"
+          size="small"
+          class="ledger-keyword-input"
+          placeholder="搜索用户 ID / 账单号 / 支付号"
+          clearable
+          @keyup.enter="handleSearch"
+        >
+          <template #prefix><el-icon><Search /></el-icon></template>
+        </el-input>
         <el-date-picker
           v-model="filters.date_range"
+          size="small"
           type="daterange"
           value-format="YYYY-MM-DD"
           range-separator="至"
           start-placeholder="开始日期"
           end-placeholder="结束日期"
-          style="width: 250px;"
+          clearable
+          class="ledger-date"
           @change="handleSearch"
         />
-        <el-button type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
-        <el-button :icon="Refresh" @click="resetFilters">重置</el-button>
       </div>
     </section>
 
     <el-card shadow="never" class="ledger-table-card">
-      <el-table :data="list" v-loading="loading" stripe row-key="ledger_id">
-        <el-table-column prop="ledger_id" label="流水号" width="100" />
-        <el-table-column label="用户" min-width="170">
+      <!-- 桌面端：表格 -->
+      <el-table :data="list" v-loading="loading" stripe row-key="ledger_id" class="ledger-desktop-table">
+        <el-table-column prop="ledger_id" label="流水号" width="72" />
+        <el-table-column label="用户" min-width="130">
           <template #default="{ row }">
-            <div class="user-cell-name">{{ row.user?.display_name || row.user?.nickname || '-' }}</div>
-            <div class="user-cell-email">{{ row.user?.email || (row.user?.id ? `用户 #${row.user.id}` : '-') }}</div>
+            <span class="user-cell-name">{{ row.user?.display_name || row.user?.nickname || `用户 #${row.user?.id}` || '-' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="资金事项" min-width="220">
+        <el-table-column label="资金事项" min-width="140">
           <template #default="{ row }">
             <div class="event-cell">
               <strong>{{ row.display?.title || row.event_type_label || '--' }}</strong>
@@ -117,7 +71,7 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="关联对象" min-width="170">
+        <el-table-column label="关联对象" min-width="120" class-name="hide-on-narrow">
           <template #default="{ row }">
             <div class="event-cell">
               <strong>{{ resolveReferenceNo(row) }}</strong>
@@ -125,38 +79,63 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="渠道" min-width="120">
+        <el-table-column label="渠道" width="90" class-name="hide-on-narrow">
           <template #default="{ row }">{{ row.display?.channel_label || '--' }}</template>
         </el-table-column>
-        <el-table-column label="金额" width="120">
+        <el-table-column label="金额" width="100">
           <template #default="{ row }">
             <span :class="Number(row.change_amount || 0) >= 0 ? 'amount-in' : 'amount-out'">
               {{ Number(row.change_amount || 0) >= 0 ? '+' : '' }}{{ formatMoney(row.change_amount) }}
             </span>
           </template>
         </el-table-column>
-        <el-table-column label="余额变更" width="130">
+        <el-table-column label="余额" width="88" class-name="hide-on-narrow">
           <template #default="{ row }">{{ formatMoney(row.balance_after) }}</template>
         </el-table-column>
-        <el-table-column label="状态" width="100">
+        <el-table-column label="状态" width="76">
           <template #default="{ row }">
             <el-tag effect="plain" size="small" :type="resolveStatusTagType(row)">
               {{ row.display?.status_label || '--' }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作人" min-width="120">
+        <el-table-column label="操作人" width="88" class-name="hide-on-narrow">
           <template #default="{ row }">{{ row.operator || '--' }}</template>
         </el-table-column>
-        <el-table-column label="时间" min-width="168">
+        <el-table-column label="时间" width="148">
           <template #default="{ row }">{{ formatDateTime(row.occurred_at || row.created_at) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="120" fixed="right">
+        <el-table-column label="操作" width="68" fixed="right">
           <template #default="{ row }">
-            <el-button text type="primary" @click="openDetail(row)">详情</el-button>
+            <el-button text type="primary" size="small" @click="openDetail(row)">详情</el-button>
           </template>
         </el-table-column>
       </el-table>
+
+      <!-- 手机端：卡片列表 -->
+      <div v-loading="loading" class="ledger-mobile-cards">
+        <div v-for="row in list" :key="row.ledger_id" class="ledger-card" @click="openDetail(row)">
+          <div class="ledger-card-row">
+            <div class="ledger-card-left">
+              <strong class="ledger-card-title">{{ row.display?.title || row.event_type_label || '--' }}</strong>
+              <span class="ledger-card-user">{{ row.user?.display_name || row.user?.nickname || `用户 #${row.user?.id}` || '-' }}</span>
+            </div>
+            <div class="ledger-card-right">
+              <span :class="Number(row.change_amount || 0) >= 0 ? 'amount-in' : 'amount-out'">
+                {{ Number(row.change_amount || 0) >= 0 ? '+' : '' }}{{ formatMoney(row.change_amount) }}
+              </span>
+            </div>
+          </div>
+          <div class="ledger-card-meta">
+            <el-tag effect="plain" size="small" :type="resolveStatusTagType(row)">
+              {{ row.display?.status_label || '--' }}
+            </el-tag>
+            <span class="ledger-card-desc">{{ row.display?.subtitle || row.remark || '' }}</span>
+            <span class="ledger-card-time">{{ formatDateTime(row.occurred_at || row.created_at) }}</span>
+          </div>
+        </div>
+        <div v-if="!loading && list.length === 0" class="ledger-empty">暂无数据</div>
+      </div>
 
       <div class="table-pagination">
         <el-pagination
@@ -184,7 +163,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Document, Refresh, Search, Tickets } from '@element-plus/icons-vue'
+import { Search } from '@element-plus/icons-vue'
 import adminApi from '@/api/admin'
 import { formatDateTime } from '@/utils/datetime'
 import { FINANCE_LEDGER_EVENT_MAP } from '@shared/statusConfig'
@@ -194,7 +173,6 @@ const route = useRoute()
 const router = useRouter()
 
 const loading = ref(false)
-const summaryLoading = ref(false)
 const list = ref([])
 const total = ref(0)
 const detailVisible = ref(false)
@@ -208,23 +186,11 @@ const pagination = reactive({
 
 const filters = reactive({
   tab: 'all',
-  user_id: '',
-  invoice_no: '',
-  payment_no: '',
+  keyword: '',
   event_type: '',
   direction: '',
   status: '',
   date_range: null,
-})
-
-const summary = reactive({
-  total_count: 0,
-  total_in: '0.00',
-  total_out: '0.00',
-  recharge_in: '0.00',
-  refund_in: '0.00',
-  unpaid_amount: '0.00',
-  unpaid_count: 0,
 })
 
 const tabOptions = [
@@ -253,7 +219,7 @@ function buildParams() {
     tab: filters.tab,
   }
 
-  ;['user_id', 'invoice_no', 'payment_no', 'event_type', 'direction', 'status'].forEach((key) => {
+  ;['keyword', 'event_type', 'direction', 'status'].forEach((key) => {
     if (filters[key] !== '' && filters[key] !== null && filters[key] !== undefined) {
       params[key] = filters[key]
     }
@@ -281,29 +247,8 @@ async function loadList() {
   }
 }
 
-async function loadSummary() {
-  summaryLoading.value = true
-  try {
-    const res = await adminApi.financeLedger.summary(buildParams())
-    const payload = res.data || {}
-    Object.assign(summary, {
-      total_count: Number(payload.total_count || 0),
-      total_in: payload.total_in ?? '0.00',
-      total_out: payload.total_out ?? '0.00',
-      recharge_in: payload.recharge_in ?? '0.00',
-      refund_in: payload.refund_in ?? '0.00',
-      unpaid_amount: payload.unpaid_amount ?? '0.00',
-      unpaid_count: Number(payload.unpaid_count || 0),
-    })
-  } catch (error) {
-    ElMessage.error(error?.response?.data?.message || error?.message || '加载资金汇总失败')
-  } finally {
-    summaryLoading.value = false
-  }
-}
-
 async function loadAll() {
-  await Promise.all([loadList(), loadSummary()])
+  await loadList()
 }
 
 function resolveStatusTagType(row) {
@@ -334,9 +279,7 @@ function handlePageSizeChange() {
 
 function resetFilters() {
   filters.tab = 'all'
-  filters.user_id = ''
-  filters.invoice_no = ''
-  filters.payment_no = ''
+  filters.keyword = ''
   filters.event_type = ''
   filters.direction = ''
   filters.status = ''
@@ -372,35 +315,24 @@ function syncStateFromQuery() {
     return value ?? fallback
   }
 
-  filters.invoice_no = String(read('invoice_no', '')).trim()
-  filters.user_id = String(read('user_id', '')).trim()
-  if (filters.invoice_no === '' && filters.user_id === '') {
-    return false
-  }
-
-  return true
+  filters.keyword = String(read('keyword', '')).trim()
+  return filters.keyword !== ''
 }
 
 function syncQueryFromState() {
   const nextQuery = { ...route.query }
 
-  if (filters.invoice_no) {
-    nextQuery.invoice_no = filters.invoice_no
+  if (filters.keyword) {
+    nextQuery.keyword = filters.keyword
   } else {
-    delete nextQuery.invoice_no
-  }
-
-  if (filters.user_id) {
-    nextQuery.user_id = filters.user_id
-  } else {
-    delete nextQuery.user_id
+    delete nextQuery.keyword
   }
 
   router.replace({ query: nextQuery })
 }
 
 watch(
-  () => [route.query.invoice_no, route.query.user_id],
+  () => route.query.keyword,
   () => {
     const changed = syncStateFromQuery()
     if (changed) {
@@ -420,56 +352,217 @@ onMounted(() => {
 .ledger-page {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-}
-
-.ledger-summary-strip {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 14px;
 }
 
-.ledger-summary-card {
-  padding: 18px 18px 16px;
-  border-radius: 18px;
-  background: linear-gradient(180deg, #ffffff, #f8fafc);
-  border: 1px solid rgba(15, 23, 42, 0.06);
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.05);
+.filter-panel {
+  padding: 16px;
+  border: 1px solid $border-color;
+  border-radius: $base-border-radius;
+  background: $bg-color-card;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.ledger-summary-card span {
-  display: block;
-  font-size: 12px;
-  color: $text-color-secondary;
-}
-
-.ledger-summary-card strong {
-  display: block;
-  margin-top: 10px;
-  font-size: 24px;
-  line-height: 1.1;
-  color: $text-color-primary;
-}
-
-.ledger-summary-card small {
-  display: block;
-  margin-top: 8px;
-  font-size: 12px;
-  color: $text-color-placeholder;
-}
-
-.ledger-search-bar {
+// ========== 第一行：4 个下拉，居中 ==========
+.ledger-filter-top {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   align-items: center;
+  gap: 6px;
+
+  .ledger-select--compact {
+    flex-shrink: 0;
+    width: 76px;
+
+    // 压缩选中文字的显示空间
+    :deep(.el-select__placeholder),
+    :deep(.el-select__selected-item) {
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+}
+
+// ========== 第二行：关键词 + 日期 ==========
+.ledger-filter-bottom {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+
+  .ledger-keyword-input {
+    flex: 1 1 180px;
+    min-width: 150px;
+    max-width: 320px;
+  }
+
+  .ledger-date {
+    flex: 0 1 220px;
+    min-width: 180px;
+  }
+}
+
+// ========== 窄屏 ==========
+@media (max-width: 768px) {
+  .ledger-filter-top {
+    .ledger-select--compact {
+      flex: 1 1 auto;
+      width: auto;
+      min-width: 70px;
+    }
+  }
+
+  .ledger-filter-bottom {
+    .ledger-keyword-input,
+    .ledger-date {
+      flex: 1 1 100%;
+      min-width: 0;
+      max-width: none;
+    }
+  }
 }
 
 .ledger-table-card {
   overflow: hidden;
+
+  :deep(.el-card__body) {
+    padding: 12px;
+  }
+
+  :deep(.el-table) {
+    font-size: 12px;
+  }
+
+  :deep(.el-table__cell) {
+    padding: 6px 0;
+  }
+}
+
+// 手机端卡片样式
+.ledger-mobile-cards {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .filter-panel {
+    padding: 12px;
+  }
+
+  .ledger-desktop-table {
+    display: none !important;
+  }
+
+  .ledger-mobile-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .ledger-card {
+    padding: 12px 14px;
+    border: 1px solid $border-color;
+    border-radius: $sm-border-radius;
+    background: $bg-color-card;
+    cursor: pointer;
+    transition: border-color $duration-fast $ease-standard;
+
+    &:active {
+      border-color: $color-primary;
+    }
+  }
+
+  .ledger-card-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .ledger-card-left {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .ledger-card-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: $text-color-primary;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .ledger-card-user {
+    font-size: 12px;
+    color: $text-color-placeholder;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .ledger-card-right {
+    flex-shrink: 0;
+    text-align: right;
+
+    .amount-in,
+    .amount-out {
+      font-size: 15px;
+      font-weight: 700;
+    }
+  }
+
+  .ledger-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+  }
+
+  .ledger-card-desc {
+    font-size: 11px;
+    color: $text-color-placeholder;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+
+  .ledger-card-time {
+    font-size: 11px;
+    color: $text-color-placeholder;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .ledger-empty {
+    text-align: center;
+    padding: 32px 0;
+    color: $text-color-placeholder;
+    font-size: 13px;
+  }
+
+  .ledger-table-card {
+    :deep(.el-card__body) {
+      padding: 8px;
+    }
+  }
 }
 
 .event-cell {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .event-cell strong {
@@ -486,18 +579,30 @@ onMounted(() => {
 .user-cell-name {
   color: $text-color-primary;
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
 }
 
 .user-cell-email {
   margin-top: 2px;
   color: $text-color-placeholder;
   font-size: 12px;
+  display: none;
 }
 
 .table-pagination {
   display: flex;
   justify-content: flex-end;
-  margin-top: 16px;
+  margin-top: 12px;
+}
+
+@media (max-width: 768px) {
+  .table-pagination {
+    margin-top: 8px;
+    justify-content: center;
+  }
 }
 
 .amount-in {
@@ -510,15 +615,4 @@ onMounted(() => {
   font-weight: 700;
 }
 
-@media (max-width: 1500px) {
-  .ledger-summary-strip {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 768px) {
-  .ledger-summary-strip {
-    grid-template-columns: 1fr;
-  }
-}
 </style>

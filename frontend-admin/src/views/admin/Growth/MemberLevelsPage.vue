@@ -6,14 +6,10 @@
         <h2>会员等级与返利档位</h2>
         <p>按累计销售额设置会员等级和对应返利比例，推荐奖励会优先匹配这里的等级配置。</p>
       </div>
-
-      <div class="page-actions">
-        <el-button @click="loadLevels">刷新</el-button>
-        <el-button type="primary" @click="openCreateDialog">新增等级</el-button>
-      </div>
     </section>
 
-    <el-card shadow="never">
+    <!-- 桌面端用 el-card 包裹 -->
+    <el-card v-if="!isMobile" shadow="never">
       <template #header>
         <div class="panel-header">
           <div class="panel-header-meta">
@@ -23,6 +19,7 @@
         </div>
       </template>
 
+      <!-- 桌面端表格 -->
       <el-table :data="levels" stripe>
         <template #empty>
           <div class="panel-empty">
@@ -81,25 +78,55 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" :width="isMobile ? 60 : 120" fixed="right">
+        <el-table-column label="操作" width="120" fixed="right">
           <template #default="{ row }">
-            <div v-if="!isMobile" class="table-actions">
+            <div class="table-actions">
               <el-button size="small" text type="primary" @click="openEditDialog(row)">编辑</el-button>
               <el-button size="small" text type="danger" @click="handleDelete(row)">删除</el-button>
             </div>
-            <el-dropdown v-else trigger="click" @command="(cmd) => handleLevelAction(cmd, row)">
-              <span class="action-link">···</span>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="edit">编辑</el-dropdown-item>
-                  <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
           </template>
         </el-table-column>
       </el-table>
     </el-card>
+
+    <!-- 手机端卡片列表，无外层容器 -->
+    <div v-if="isMobile" class="mobile-card-list">
+      <div v-if="!levels.length" class="panel-empty">
+        <strong>暂无会员等级</strong>
+        <p>建议先创建基础等级，用于控制推荐返利比例。</p>
+        <el-button type="primary" size="small" @click="openCreateDialog">新增等级</el-button>
+      </div>
+
+      <div v-for="row in levels" :key="row.id" class="mobile-card">
+        <div class="mobile-card__head">
+          <div class="mobile-card__title">
+            <strong>{{ row.name }}</strong>
+            <el-tag size="small" type="success" effect="plain">{{ formatPercent(row.reward_rate) }}</el-tag>
+          </div>
+          <el-dropdown trigger="click" @command="(cmd) => handleLevelAction(cmd, row)">
+            <span class="action-link">···</span>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="edit">编辑</el-dropdown-item>
+                <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </div>
+        <div class="mobile-card__body">
+          <div class="mobile-card__row">
+            <span>门槛</span>
+            <strong>{{ formatCurrency(row.sales_amount_min) }} ~ {{ row.sales_amount_max ? formatCurrency(row.sales_amount_max) : '不封顶' }}</strong>
+          </div>
+          <div class="mobile-card__row">
+            <span>状态</span>
+            <el-tag size="small" :type="Number(row.status) === 1 ? 'success' : 'info'">
+              {{ Number(row.status) === 1 ? '启用' : '停用' }}
+            </el-tag>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <el-dialog
       v-model="dialogVisible"
@@ -455,7 +482,21 @@ onMounted(loadLevels)
 }
 
 @media (max-width: 900px) {
-  .page-actions,
+  .member-levels-page > :deep(.el-card) {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+  }
+
+  .member-levels-page > :deep(.el-card .el-card__header) {
+    padding: 0 0 12px;
+    border-bottom: none;
+  }
+
+  .member-levels-page > :deep(.el-card .el-card__body) {
+    padding: 0;
+  }
+
   .panel-header,
   .dialog-footer {
     flex-direction: column;
@@ -471,4 +512,71 @@ onMounted(loadLevels)
   }
 }
 
+.mobile-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mobile-card {
+  border: 1px solid $divider-color;
+  border-radius: $sm-border-radius;
+  background: $bg-color-card;
+  overflow: hidden;
+}
+
+.mobile-card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  border-bottom: 1px solid $divider-color;
+}
+
+.mobile-card__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mobile-card__title strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: $text-color-primary;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-card__body {
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mobile-card__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+}
+
+.mobile-card__row span {
+  color: $text-color-secondary;
+}
+
+.mobile-card__row strong {
+  color: $text-color-primary;
+  font-weight: 600;
+}
+
+.action-link {
+  cursor: pointer;
+  font-size: 16px;
+  letter-spacing: 2px;
+  color: $text-color-secondary;
+  padding: 4px;
+}
 </style>

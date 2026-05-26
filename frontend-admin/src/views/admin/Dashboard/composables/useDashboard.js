@@ -95,6 +95,10 @@ export function useDashboard() {
 
   const recentInvoices = computed(() => data.value.recent_invoices || [])
 
+  const revenueByProduct = computed(() => data.value.revenue_by_product || [])
+  const dailyRevenue = computed(() => data.value.daily_revenue || [])
+  const monthLabel = computed(() => data.value.month_label || '')
+
   function statusText(status) {
     return statusMap[status] || '未知'
   }
@@ -133,13 +137,17 @@ export function useDashboard() {
   async function loadDashboard() {
     loading.value = true
     try {
-      const [statsRes, recentInvoicesRes] = await Promise.all([
+      const [statsRes, recentInvoicesRes, monthlyRevenueRes] = await Promise.all([
         adminApi.dashboardStats(),
         adminApi.dashboardRecentInvoices(),
+        adminApi.dashboardMonthlyRevenue(),
       ])
       data.value = {
         ...(statsRes.data || {}),
         recent_invoices: recentInvoicesRes.data?.recent_invoices || [],
+        revenue_by_product: monthlyRevenueRes.data?.revenue_by_product || [],
+        daily_revenue: monthlyRevenueRes.data?.daily_revenue || [],
+        month_label: monthlyRevenueRes.data?.month_label || '',
       }
     } catch {
       data.value = {}
@@ -156,6 +164,9 @@ export function useDashboard() {
     progressItems,
     statusDistribution,
     recentInvoices,
+    revenueByProduct,
+    dailyRevenue,
+    monthLabel,
     statusText,
     statusType,
     formatCurrency,

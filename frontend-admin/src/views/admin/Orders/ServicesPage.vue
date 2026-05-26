@@ -8,35 +8,40 @@
       </div>
     </section>
 
-    <!-- 状态标签栏 + 搜索 -->
+    <!-- 筛选 + 搜索 -->
     <div class="toolbar-card">
-      <el-tabs v-model="filterStatus" class="status-tabs" @tab-change="handleTabChange">
-        <el-tab-pane
+      <el-select
+        v-model="filterStatus"
+        placeholder="主机状态"
+        clearable
+        style="width: 140px"
+        @change="handleStatusChange"
+      >
+        <el-option
           v-for="tab in statusTabs"
           :key="tab.value"
           :label="tab.label"
-          :name="tab.value"
+          :value="tab.value"
         />
-      </el-tabs>
+      </el-select>
 
-      <div class="toolbar-search">
-        <el-input
-          v-model="keyword"
-          placeholder="搜索主机名 / 主机ID / IP / 用户 / 账单号"
-          clearable
-          style="width: 340px"
-          @keyup.enter="handleSearch"
-          @clear="handleSearch"
-        >
-          <template #prefix>
-            <el-icon><Search /></el-icon>
-          </template>
-        </el-input>
-        <el-button type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
-        <el-button :disabled="!selectedRows.length" @click="openBatchHostnameDialog">
-          批量主机名<span v-if="selectedRows.length">({{ selectedRows.length }})</span>
-        </el-button>
-      </div>
+      <el-input
+        v-model="keyword"
+        placeholder="搜索主机名 / 主机ID / IP / 用户 / 账单号"
+        clearable
+        style="flex: 1; min-width: 200px"
+        @keyup.enter="handleSearch"
+        @clear="handleSearch"
+      >
+        <template #prefix>
+          <el-icon><Search /></el-icon>
+        </template>
+      </el-input>
+
+      <el-button type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
+      <el-button :disabled="!selectedRows.length" @click="openBatchHostnameDialog">
+        批量主机名<span v-if="selectedRows.length">({{ selectedRows.length }})</span>
+      </el-button>
     </div>
 
     <!-- 表格 -->
@@ -263,7 +268,7 @@ function handleSearch() {
   loadList()
 }
 
-function handleTabChange() {
+function handleStatusChange() {
   page.value = 1
   loadList()
 }
@@ -366,25 +371,24 @@ onMounted(() => loadList())
   background: #ffffff;
   border: 1px solid #e5e6eb;
   border-radius: 8px;
-  padding: 0 16px;
+  padding: 12px 16px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
 
-  .status-tabs {
-    flex: 1;
-    :deep(.el-tabs__header) { margin-bottom: 0; }
-    :deep(.el-tabs__nav-wrap::after) { height: 0; }
-    :deep(.el-tabs__item) { font-size: 13px; }
+@media (max-width: 1024px) {
+  .toolbar-card {
+    flex-wrap: wrap;
   }
 
-  .toolbar-search {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 0;
-    flex-shrink: 0;
+  .toolbar-card .el-select {
+    width: 100% !important;
+  }
+
+  .toolbar-card .el-input {
+    min-width: 100% !important;
   }
 }
 

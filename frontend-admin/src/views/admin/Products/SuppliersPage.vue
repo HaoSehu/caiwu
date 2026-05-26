@@ -8,143 +8,89 @@
           总数 {{ summary.total }} · 启用 {{ summary.active }} · 停用 {{ summary.inactive }}
         </p>
       </div>
-      <div class="page-actions">
-        <el-button :icon="Refresh" @click="loadData">刷新</el-button>
-        <el-button type="primary" :icon="Plus" @click="openDialog()">新增接口</el-button>
-      </div>
     </section>
-
-    <section class="filter-panel">
     <div class="search-bar">
       <el-input
         v-model="filters.keyword"
         placeholder="搜索接口名称 / 用户名"
         clearable
-        style="width: 320px;"
+        class="search-input"
         @keyup.enter="handleSearch"
       >
         <template #prefix>
           <el-icon><Search /></el-icon>
         </template>
       </el-input>
-      <el-select v-model="filters.status" placeholder="接口状态" clearable style="width: 140px;">
+      <el-select v-model="filters.status" placeholder="接口状态" clearable style="width: 140px;" @change="handleSearch">
         <el-option label="启用中" :value="1" />
         <el-option label="已停用" :value="0" />
       </el-select>
-      <el-button type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
-      <el-button :icon="RefreshLeft" @click="resetFilters">重置</el-button>
+      <el-button type="primary" :icon="Plus" circle @click="openDialog()" />
     </div>
-    </section>
 
-    <el-card shadow="never">
-      <el-table :data="list" v-loading="loading" stripe>
-        <el-table-column prop="id" label="ID" width="72" />
-        <el-table-column label="接口种类" width="150">
-          <template #default="{ row }">
-            <el-tag size="small" type="primary">
-              {{ interfaceTypeLabel(row.interface_type) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="接口信息" min-width="240">
-          <template #default="{ row }">
-            <div class="supplier-cell">
-              <div class="supplier-main">{{ row.name }}</div>
-              <div class="supplier-sub">
-                {{ canBatchConnect(row) ? '支持商品批量对接' : '请补全接口地址、用户名和 API 密钥后再使用远程能力' }}
-              </div>
+    <div class="supplier-card-list" v-loading="loading">
+      <template v-if="list.length">
+        <div v-for="row in list" :key="row.id" class="supplier-card">
+          <div class="supplier-card__head">
+            <div class="supplier-card__title">
+              <strong>{{ row.name }}</strong>
+              <el-tag size="small" type="primary" effect="plain">{{ interfaceTypeLabel(row.interface_type) }}</el-tag>
+              <el-tag size="small" :type="row.status === 1 ? 'success' : 'info'">
+                {{ row.status === 1 ? '启用中' : '已停用' }}
+              </el-tag>
             </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="接口地址" min-width="140">
-          <template #default="{ row }">
-            <span>{{ row.has_api_url ? '已隐藏' : '-' }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="用户名" min-width="140">
-          <template #default="{ row }">
-            <span>{{ row.api_username || '-' }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="API 密钥" min-width="220" show-overflow-tooltip>
-          <template #default="{ row }">
-            <span>{{ row.api_key || '-' }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="上游余额" min-width="170">
-          <template #default="{ row }">
-            <div class="balance-cell">
-              <strong v-if="row.remote_balance_status === 'success'">¥ {{ row.remote_balance }}</strong>
-              <span v-else-if="balanceLoadingMap[row.id] === true" class="balance-muted">同步中...</span>
-              <span v-else-if="row.remote_balance_status === 'error'" class="balance-muted">同步失败</span>
-              <span v-else-if="row.remote_balance_status === 'disabled'" class="balance-muted">未配置</span>
-              <span v-else>-</span>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column prop="status" label="状态" width="100">
-          <template #default="{ row }">
-            <el-tag :type="row.status === 1 ? 'success' : 'info'" size="small">
-              {{ row.status === 1 ? '启用中' : '已停用' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="最近更新" min-width="160">
-          <template #default="{ row }">{{ formatDateTime(row.updated_at) }}</template>
-        </el-table-column>
-        <el-table-column label="操作" :width="isMobile ? 60 : 200" fixed="right">
-          <template #default="{ row }">
-            <div v-if="!isMobile" class="table-actions">
-              <el-button size="small" text type="primary" @click="openDialog(row)">编辑</el-button>
-              <el-button
-                size="small"
-                text
-                type="success"
-                :disabled="!canBatchConnect(row)"
-                :title="canBatchConnect(row) ? '批量导入并绑定上游商品' : '请先补全接口地址、用户名和 API 密钥'"
-                @click="openBatchDialog(row)"
-              >
-                批量对接
-              </el-button>
-              <el-button size="small" text type="warning" @click="handleToggleStatus(row)">
-                {{ row.status === 1 ? '停用' : '启用' }}
-              </el-button>
-              <el-popconfirm title="确认删除该接口档案？" @confirm="handleDelete(row.id)">
-                <template #reference>
-                  <el-button size="small" text type="danger">删除</el-button>
-                </template>
-              </el-popconfirm>
-            </div>
-            <el-dropdown v-else trigger="click" @command="(cmd) => handleSupplierAction(cmd, row)">
+            <el-dropdown trigger="click" @command="(cmd) => handleSupplierAction(cmd, row)">
               <span class="action-link">···</span>
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item command="edit">编辑</el-dropdown-item>
-                  <el-dropdown-item command="batch">批量对接</el-dropdown-item>
+                  <el-dropdown-item command="batch" :disabled="!canBatchConnect(row)">批量对接</el-dropdown-item>
                   <el-dropdown-item command="toggle">{{ row.status === 1 ? '停用' : '启用' }}</el-dropdown-item>
                   <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <div class="table-footer">
-        <p class="footer-tip">
-          维护自动化接口的基础档案，并可从单个接口内批量拉取上游商品，直接完成本地商品创建或重新绑定。
-        </p>
-        <el-pagination
-          v-model:current-page="page"
-          v-model:page-size="pageSize"
-          :total="total"
-          :page-sizes="[10, 20, 50, 100]"
-          layout="total, sizes, prev, pager, next"
-          @size-change="loadList"
-          @current-change="loadList"
-        />
+          </div>
+          <div class="supplier-card__body">
+            <div class="supplier-card__row">
+              <span>用户名</span>
+              <strong>{{ row.api_username || '-' }}</strong>
+            </div>
+            <div class="supplier-card__row">
+              <span>上游余额</span>
+              <strong v-if="row.remote_balance_status === 'success'">¥ {{ row.remote_balance }}</strong>
+              <span v-else-if="balanceLoadingMap[row.id]" class="balance-muted">同步中...</span>
+              <span v-else-if="row.remote_balance_status === 'error'" class="balance-muted">同步失败</span>
+              <span v-else-if="row.remote_balance_status === 'disabled'" class="balance-muted">未配置</span>
+              <span v-else>-</span>
+            </div>
+            <div class="supplier-card__row">
+              <span>最近更新</span>
+              <span>{{ formatDateTime(row.updated_at) }}</span>
+            </div>
+          </div>
+        </div>
+      </template>
+      <div v-else class="panel-empty">
+        <strong>暂无供应商</strong>
+        <p>点击右上角 + 号新增接口</p>
       </div>
-    </el-card>
+    </div>
+
+    <div class="card-footer" v-if="list.length">
+      <p class="footer-tip">
+        维护自动化接口的基础档案，并可从单个接口内批量拉取上游商品，直接完成本地商品创建或重新绑定。
+      </p>
+      <el-pagination
+        v-model:current-page="page"
+        v-model:page-size="pageSize"
+        :total="total"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next"
+        @size-change="loadList"
+        @current-change="loadList"
+      />
+    </div>
 
     <el-drawer
       v-model="dialogVisible"
@@ -290,19 +236,35 @@
           class="supplier-form supplier-form--dense"
         >
           <div class="batch-form-grid">
-            <el-form-item label="所属一级菜单 / 导入到现有分类树" prop="product_type" class="is-span-2">
-              <el-cascader
-                v-model="batchCategorySelection"
-                clearable
-                filterable
-                :options="batchCategoryTreeOptions"
-                :props="batchCategoryCascaderProps"
-                :show-all-levels="false"
+            <el-form-item label="所属一级菜单" prop="product_type">
+              <el-select
+                v-model="batchForm.product_type"
+                placeholder="请选择一级菜单"
                 :disabled="batchProductTypesLoading"
                 style="width: 100%;"
-                placeholder="选择一级菜单后悬停展开分类树"
+                @change="handleBatchProductTypeChange"
+              >
+                <el-option
+                  v-for="item in productTypeOptions"
+                  :key="item.value"
+                  :label="item.label"
+                  :value="item.value"
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item v-if="batchForm.product_type" label="导入到分类" prop="root_category_id">
+              <el-cascader
+                v-model="batchCategoryPath"
+                clearable
+                filterable
+                :options="batchCategoryTreeForType"
+                :props="batchCategoryCascaderProps"
+                :show-all-levels="true"
+                :disabled="batchCategoryLoading"
+                style="width: 100%;"
+                placeholder="悬停展开选择目标分类"
               />
-              <div class="field-help">第一级为商品一级菜单，子级为现有分类树；支持悬停展开下级分类。</div>
+              <div class="field-help">支持悬停展开下级分类，可选任意层级作为目标。</div>
             </el-form-item>
             <el-form-item label="默认上架状态">
               <el-switch
@@ -346,7 +308,7 @@
               :disabled="batchProducts.length === 0"
               :show-all-levels="false"
               placeholder="选择上游商品分类"
-              style="width: 360px;"
+              style="flex: 1; min-width: 180px;"
             />
             <el-input
               v-model="batchFilters.keyword"
@@ -358,7 +320,7 @@
                 <el-icon><Search /></el-icon>
               </template>
             </el-input>
-            <el-select v-model="batchFilters.connection" placeholder="对接状态" style="width: 160px;">
+            <el-select v-model="batchFilters.connection" placeholder="对接状态" style="flex-shrink: 0;">
               <el-option label="全部状态" value="all" />
               <el-option label="仅未对接" value="pending" />
               <el-option label="仅已对接" value="connected" />
@@ -382,52 +344,36 @@
           class="batch-empty"
         />
 
-        <el-table
-          v-else
-          :data="batchVisibleProducts"
-          stripe
-          max-height="500"
-          class="batch-table"
-        >
-          <el-table-column label="选择" width="78" fixed="left">
-            <template #default="{ row }">
-              <el-checkbox
-                :model-value="isBatchProductSelected(row.id)"
-                @change="(checked) => toggleBatchProductSelection(row.id, checked)"
-              />
-            </template>
-          </el-table-column>
-          <el-table-column label="上游分组" min-width="170">
-            <template #default="{ row }">
-              <div class="batch-group-cell">
-                <strong>{{ row.remote_group_name || '-' }}</strong>
-                <span>ID {{ row.id }}</span>
-              </div>
-            </template>
-          </el-table-column>
-          <el-table-column label="上游商品" min-width="320">
-            <template #default="{ row }">
-              <div class="batch-product-cell">
+        <div v-else class="batch-card-list">
+          <div v-for="row in batchVisibleProducts" :key="row.id" class="supplier-card">
+            <div class="supplier-card__head">
+              <div class="supplier-card__title">
+                <el-checkbox
+                  :model-value="isBatchProductSelected(row.id)"
+                  @change="(checked) => toggleBatchProductSelection(row.id, checked)"
+                />
                 <strong>{{ row.name }}</strong>
-                <span>{{ row.type_label || '未标注类型' }}</span>
-                <span>月付 {{ formatCurrency(row.monthly_price) }}</span>
-                <span v-if="hasSetupFee(row)">设置费 {{ formatCurrency(row.setup_fee) }}</span>
               </div>
-            </template>
-          </el-table-column>
-          <el-table-column label="本地状态" min-width="300">
-            <template #default="{ row }">
-              <div class="batch-local-cell">
-                <el-tag :type="row.is_connected ? (row.connected_deleted ? 'warning' : 'success') : 'info'" size="small">
-                  {{ row.is_connected ? (row.connected_deleted ? '已对接 / 已删除' : '已对接') : '未对接' }}
-                </el-tag>
-                <span v-if="row.connected_display_name">{{ row.connected_display_name }}</span>
-                <span v-if="row.connected_group_full_name">{{ row.connected_group_full_name }}</span>
-                <span v-if="row.connected_updated_at">最近更新 {{ row.connected_updated_at }}</span>
-              </div>
-            </template>
-          </el-table-column>
-        </el-table>
+              <el-tag :type="row.is_connected ? (row.connected_deleted ? 'warning' : 'success') : 'info'" size="small">
+                {{ row.is_connected ? (row.connected_deleted ? '已对接 / 已删除' : '已对接') : '未对接' }}
+              </el-tag>
+            </div>
+            <div v-if="row.is_connected" class="supplier-card__body">
+                <div v-if="row.connected_display_name" class="supplier-card__row">
+                  <span>本地商品</span>
+                  <span>{{ row.connected_display_name }}</span>
+                </div>
+                <div v-if="row.connected_group_full_name" class="supplier-card__row">
+                  <span>本地分类</span>
+                  <span>{{ row.connected_group_full_name }}</span>
+                </div>
+                <div v-if="row.connected_updated_at" class="supplier-card__row">
+                  <span>最近更新</span>
+                  <span>{{ row.connected_updated_at }}</span>
+                </div>
+            </div>
+          </div>
+        </div>
 
         <div v-if="batchResult" class="batch-result">
           <div class="batch-result-head">
@@ -463,15 +409,15 @@
           </div>
         </div>
       </div>
+      </div>
     </div>
-  </div>
 
       <template #footer>
         <div class="drawer-footer">
           <el-button @click="batchDialogVisible = false">关闭</el-button>
           <el-button type="primary" :loading="batchSubmitting" @click="handleBatchConnect">
-          开始批量对接
-        </el-button>
+            开始批量对接
+          </el-button>
         </div>
       </template>
     </el-drawer>
@@ -481,7 +427,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Plus, Refresh, RefreshLeft, Search } from '@element-plus/icons-vue'
+import { Plus, Search } from '@element-plus/icons-vue'
 import {
   PROVIDER_KEYS,
   providerTypeLabel,
@@ -490,9 +436,6 @@ import {
 import productApi from '@/api/product'
 import supplierApi from '@/api/supplier'
 import { formatDateTime } from '@/utils/datetime'
-import { useResponsive } from '@/composables/useResponsive'
-
-const { isMobile } = useResponsive()
 
 const interfaceTypeLabel = providerTypeLabel
 const interfaceTypeOptions = providerTypeOptions
@@ -583,6 +526,7 @@ const batchForm = reactive(createDefaultBatchForm())
 
 const batchRules = computed(() => ({
   product_type: [{ required: true, message: '请选择所属一级菜单', trigger: 'change' }],
+  root_category_id: [{ required: true, message: '请选择目标分类', trigger: 'change' }],
 }))
 
 const productTypeOptions = computed(() => (
@@ -719,13 +663,11 @@ function applyBatchCategorySelection(value, nodes = []) {
   batchForm.child_category_id = null
 }
 
-const batchCategoryTreeOptions = computed(() => (
-  productTypeOptions.value.map((item) => ({
-    value: item.value,
-    label: item.label,
-    children: buildBatchCategoryTreeOptions(batchCategoryTrees.value?.[item.value] || []),
-  }))
-))
+const batchCategoryTreeForType = computed(() => {
+  const type = batchForm.product_type
+  if (!type) return []
+  return buildBatchCategoryTreeOptions(batchCategoryTrees.value?.[type] || [])
+})
 const batchCategoryCascaderProps = {
   value: 'value',
   label: 'label',
@@ -735,42 +677,31 @@ const batchCategoryCascaderProps = {
   expandTrigger: 'hover',
 }
 
-const batchCategorySelection = computed({
+const batchCategoryPath = computed({
   get() {
     if (batchForm.child_category_id) {
-      return [batchForm.product_type, batchForm.root_category_id, batchForm.child_category_id].filter(Boolean)
+      return [batchForm.root_category_id, batchForm.child_category_id].filter(Boolean)
     }
-
     if (batchForm.root_category_id) {
-      return [batchForm.product_type, batchForm.root_category_id].filter(Boolean)
+      return [batchForm.root_category_id]
     }
-
-    if (batchForm.product_type) {
-      return [batchForm.product_type]
-    }
-
     return []
   },
   set(value) {
     const path = Array.isArray(value) ? value : []
-    const productType = String(path[0] || '').trim()
-    batchForm.product_type = productType
-
-    if (!productType) {
+    if (path.length === 0) {
       batchForm.root_category_id = null
       batchForm.child_category_id = null
       return
     }
-
-    if (path.length < 2) {
-      batchForm.root_category_id = null
-      batchForm.child_category_id = null
-      return
-    }
-
-    applyBatchCategorySelection(path[path.length - 1], batchCategoryTrees.value?.[productType] || [])
+    applyBatchCategorySelection(path[path.length - 1], batchCategoryTrees.value?.[batchForm.product_type] || [])
   },
 })
+
+function handleBatchProductTypeChange() {
+  batchForm.root_category_id = null
+  batchForm.child_category_id = null
+}
 
 const batchVisibleProducts = computed(() => {
   const firstGroup = String(batchFilters.firstGroup || '').trim()
@@ -1315,6 +1246,28 @@ onMounted(loadData)
 </script>
 
 <style scoped>
+.page-container {
+  width: 100%;
+  min-width: 0;
+}
+
+.search-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+}
+
+.search-bar .search-input {
+  min-width: 0;
+  width: 100%;
+}
+
+.search-bar .el-select {
+  width: 140px;
+}
+
 .page-actions {
   display: flex;
   gap: 12px;
@@ -1340,20 +1293,105 @@ onMounted(loadData)
   gap: 4px;
 }
 
-.supplier-main {
-  font-weight: 600;
-  color: #303133;
+.supplier-card-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 12px;
+  min-height: 120px;
 }
 
-.supplier-sub {
-  font-size: 12px;
+.supplier-card {
+  border: 1px solid #e5e6eb;
+  border-radius: 8px;
+  background: #ffffff;
+  overflow: hidden;
+  transition: box-shadow 0.18s ease;
+}
+
+.supplier-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07);
+}
+
+.supplier-card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5e6eb;
+}
+
+.supplier-card__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.supplier-card__title strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1d2129;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.supplier-card__body {
+  padding: 10px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.supplier-card__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.supplier-card__row > span:first-child {
+  color: #86909c;
+  flex-shrink: 0;
+}
+
+.supplier-card__row strong {
+  font-weight: 600;
+  color: #1d2129;
+}
+
+.supplier-card__row .balance-muted {
+  color: #86909c;
+}
+
+.panel-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 48px 0;
   color: #909399;
 }
 
-.balance-cell {
+.panel-empty strong {
+  display: block;
+  font-size: 15px;
+  color: #303133;
+  margin-bottom: 6px;
+}
+
+.panel-empty p {
+  font-size: 13px;
+  margin: 0;
+}
+
+.card-footer {
   display: flex;
+  justify-content: space-between;
   align-items: center;
+  gap: 16px;
   flex-wrap: wrap;
+  margin-top: 16px;
 }
 
 .balance-muted {
@@ -1467,18 +1505,18 @@ onMounted(loadData)
 .batch-shell {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   min-height: 220px;
 }
 
 .batch-alert {
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .batch-overview {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
   align-items: stretch;
 }
 
@@ -1486,16 +1524,16 @@ onMounted(loadData)
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 6px;
-  min-height: 74px;
-  padding: 14px 16px;
+  gap: 4px;
+  min-height: 60px;
+  padding: 10px 14px;
   background: #f7f9fc;
   border: 1px solid #e4e7ed;
-  border-radius: 12px;
+  border-radius: 10px;
 }
 
 .batch-overview-item strong {
-  font-size: 22px;
+  font-size: 20px;
   color: #303133;
   line-height: 1;
 }
@@ -1506,32 +1544,44 @@ onMounted(loadData)
 }
 
 .batch-overview-actions {
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  padding-top: 2px;
 }
 
 .batch-toolbar {
   display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .batch-toolbar-search {
   display: flex;
-  gap: 12px;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.batch-toolbar-search :deep(.el-cascader) {
   flex: 1;
-  min-width: 320px;
+  min-width: 180px;
 }
 
 .batch-toolbar-search :deep(.el-input) {
   flex: 1;
+  min-width: 140px;
+}
+
+.batch-toolbar-search :deep(.el-select) {
+  width: 130px;
+  flex-shrink: 0;
 }
 
 .batch-toolbar-actions {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -1539,31 +1589,13 @@ onMounted(loadData)
   padding: 24px 0 12px;
 }
 
-.batch-table {
-  border: 1px solid #ebeef5;
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.batch-group-cell,
-.batch-product-cell,
-.batch-local-cell {
+.batch-card-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-}
-
-.batch-group-cell strong,
-.batch-product-cell strong {
-  color: #303133;
-}
-
-.batch-group-cell span,
-.batch-product-cell span,
-.batch-local-cell span {
-  color: #606266;
-  font-size: 12px;
-  line-height: 1.5;
+  gap: 10px;
+  max-height: 500px;
+  overflow-y: auto;
+  padding-right: 2px;
 }
 
 .batch-result {
@@ -1608,12 +1640,22 @@ onMounted(loadData)
 }
 
 .drawer-content--batch .batch-form-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 4px 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 14px;
 }
 
 .drawer-content--batch .is-span-2 {
-  grid-column: span 3;
+  grid-column: span 2;
+}
+
+@media (min-width: 961px) {
+  .drawer-content--batch .batch-form-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .drawer-content--batch .is-span-2 {
+    grid-column: span 3;
+  }
 }
 
 .batch-alert {
@@ -1697,34 +1739,30 @@ onMounted(loadData)
   border-top: 1px solid #ebeef5;
 }
 
-@media (max-width: 960px) {
-  .drawer-content--batch .batch-form-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .drawer-content--batch .is-span-2 {
-    grid-column: span 2;
-  }
-
+@media (min-width: 961px) {
   .batch-overview {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
-  .batch-overview-actions {
-    margin-left: 0;
-    width: 100%;
-    justify-content: flex-start;
+  .batch-toolbar {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-start;
   }
 
-  .batch-result-grid {
-    grid-template-columns: 1fr;
+  .batch-toolbar-search {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .batch-toolbar-actions {
+    flex-shrink: 0;
+    align-self: center;
   }
 }
 
 @media (max-width: 768px) {
-  .page-actions,
-  .batch-toolbar-actions,
-  .batch-toolbar-search {
+  .page-actions {
     width: 100%;
   }
 
@@ -1739,7 +1777,11 @@ onMounted(loadData)
   }
 
   .page-actions :deep(.el-button) {
-    flex: 1;
+    width: 100%;
+  }
+
+  .page-actions :deep(.el-button + .el-button) {
+    margin-left: 0;
   }
 
   .form-grid,
@@ -1752,11 +1794,21 @@ onMounted(loadData)
   }
 
   .batch-overview {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .batch-result-grid {
     grid-template-columns: 1fr;
   }
 
-  .batch-overview-actions {
-    grid-column: span 1;
+  .supplier-card-list {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .card-footer {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 </style>

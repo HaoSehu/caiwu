@@ -5,10 +5,6 @@
         <h2>定时任务日志</h2>
         <p>聚合展示调度任务的执行结果、错误级别和原始日志内容。</p>
       </div>
-
-      <div class="page-actions">
-        <el-button :icon="RefreshRight" @click="loadData">刷新</el-button>
-      </div>
     </section>
 
     <section class="summary-strip">
