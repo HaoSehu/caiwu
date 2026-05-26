@@ -8,14 +8,22 @@
     @update:model-value="handleVisibleUpdate"
   >
     <div class="console-shell" v-loading="state.loading">
+      <!-- 头部 -->
       <header class="console-header">
-        <div class="console-title">
-          <h3>{{ state.detail.name || `实例 #${state.serviceId}` }}</h3>
-          <el-tag
-            :type="resolveServiceToneTagType(state.detail.status_tone)"
-            effect="plain"
-            size="small"
-          >
+        <div class="console-top-row">
+          <h3 class="console-title">{{ state.detail.name || `实例 #${state.serviceId}` }}</h3>
+          <div class="console-top-actions">
+            <el-button
+              size="small"
+              :loading="state.actionLoading === 'remote-status'"
+              :icon="Refresh"
+              @click="emit('refresh-remote')"
+            />
+            <el-button size="small" circle :icon="Close" @click="emit('close')" />
+          </div>
+        </div>
+        <div class="console-tags">
+          <el-tag :type="resolveServiceToneTagType(state.detail.status_tone)" effect="plain" size="small">
             {{ state.detail.status_label || '-' }}
           </el-tag>
           <el-tag v-if="upstreamStatusLabel" size="small" effect="plain" type="info">
@@ -25,236 +33,100 @@
             运行：{{ runtimeLabel }}
           </el-tag>
         </div>
-        <div class="console-title-side">
-          <el-button
-            :loading="state.actionLoading === 'remote-status'"
-            :icon="Refresh"
-            @click="emit('refresh-remote')"
-          >
-            刷新状态
-          </el-button>
-          <el-button circle :icon="Close" @click="emit('close')" />
-        </div>
       </header>
 
       <div v-if="upstreamError" class="console-alert">
         <el-alert :title="upstreamError" type="warning" show-icon :closable="false" />
       </div>
 
-      <section class="console-section">
-        <div class="console-section-head">
-          <strong>基础信息</strong>
-        </div>
-        <div class="console-grid">
-          <div class="console-field">
-            <span>实例名称</span>
-            <strong>{{ state.detail.name || '-' }}</strong>
+      <!-- 全部平铺内容 -->
+      <div class="console-body">
+        <!-- 基础信息 -->
+        <section class="console-block">
+          <div class="block-title">基础信息</div>
+          <div class="info-grid">
+            <div class="info-item"><span>实例 ID</span><strong>#{{ state.detail.id || '-' }}</strong></div>
+            <div class="info-item"><span>配置名称</span><strong>{{ state.detail.product_display_name || state.detail.product?.display_name || (state.detail.product_id ? `未配置规格 #${state.detail.product_id}` : '-') }}</strong></div>
+            <div class="info-item"><span>类型</span><strong>{{ state.detail.product?.type_label || '-' }}</strong></div>
+            <div class="info-item"><span>计费</span><strong>{{ state.detail.billing_cycle_label || '-' }} · {{ formatMoney(state.detail.amount) }}</strong></div>
+            <div class="info-item"><span>账单号</span><strong class="mono">{{ state.detail.invoice?.invoice_no || state.detail.order?.invoice_no || '-' }}</strong></div>
+            <div class="info-item"><span>主机名</span><strong class="mono">{{ state.detail.domain || '-' }}</strong></div>
+            <div class="info-item"><span>购买时间</span><strong>{{ state.detail.created_at || '-' }}</strong></div>
+            <div class="info-item"><span>到期时间</span><strong>{{ state.detail.expires_at || '-' }}</strong></div>
           </div>
-          <div class="console-field">
-            <span>实例 ID</span>
-            <strong>#{{ state.detail.id || '-' }}</strong>
-          </div>
-          <div class="console-field">
-            <span>配置名称</span>
-            <strong>{{ state.detail.product_display_name || state.detail.product?.display_name || (state.detail.product_id ? `未配置规格 #${state.detail.product_id}` : '-') }}</strong>
-          </div>
-          <div class="console-field">
-            <span>类型</span>
-            <strong>{{ state.detail.product?.type_label || '-' }}</strong>
-          </div>
-          <div class="console-field">
-            <span>计费</span>
-            <strong>{{ state.detail.billing_cycle_label || '-' }} · {{ formatMoney(state.detail.amount) }}</strong>
-          </div>
-          <div class="console-field">
-            <span>账单号</span>
-            <strong class="mono">{{ state.detail.invoice?.invoice_no || state.detail.order?.invoice_no || '-' }}</strong>
-          </div>
-          <div class="console-field">
-            <span>购买时间</span>
-            <strong>{{ state.detail.created_at || '-' }}</strong>
-          </div>
-          <div class="console-field">
-            <span>到期时间</span>
-            <strong>{{ state.detail.expires_at || '-' }}</strong>
-          </div>
-          <div class="console-field">
-            <span>主机名</span>
-            <strong class="mono">{{ state.detail.domain || '-' }}</strong>
-          </div>
-        </div>
-      </section>
+        </section>
 
-      <section class="console-section">
-        <div class="console-section-head">
-          <strong>连接与上游</strong>
-          <div v-if="state.detail.upstream?.provider" class="console-upstream-meta">
-            <span>
-              上游：{{ state.detail.upstream.provider }}
-              <template v-if="state.detail.upstream.host_id">（host #{{ state.detail.upstream.host_id }}）</template>
-            </span>
-            <el-button
-              link
-              type="primary"
-              :disabled="isAnyActionLoading"
-              @click="emit('edit-upstream')"
-            >
-              更换id
-            </el-button>
+        <!-- 连接信息 -->
+        <section class="console-block">
+          <div class="block-title">
+            <span>连接信息</span>
+            <div v-if="state.detail.upstream?.provider" class="block-meta">
+              上游：{{ state.detail.upstream.provider }}<template v-if="state.detail.upstream.host_id">（host #{{ state.detail.upstream.host_id }}）</template>
+              <el-button link type="primary" size="small" :disabled="isAnyActionLoading" @click="emit('edit-upstream')">更换id</el-button>
+            </div>
           </div>
-        </div>
-        <div class="console-grid">
-          <div class="console-field">
-            <span>公网 IP</span>
-            <strong class="mono copyable" @click="copy(connection.dedicated_ip)">
-              {{ connection.dedicated_ip || '-' }}
-            </strong>
+          <div class="info-grid">
+            <div class="info-item"><span>公网 IP</span><strong class="mono copyable" @click="copy(connection.dedicated_ip)">{{ connection.dedicated_ip || '-' }}</strong></div>
+            <div class="info-item"><span>内网 IP</span><strong class="mono copyable" @click="copy(connection.internal_ip)">{{ connection.internal_ip || '-' }}</strong></div>
+            <div class="info-item"><span>登录账号</span><strong class="mono copyable" @click="copy(connection.username)">{{ connection.username || '-' }}</strong></div>
+            <div class="info-item"><span>登录端口</span><strong class="mono">{{ connection.port || '-' }}</strong></div>
+            <div class="info-item info-item--span-2">
+              <span>登录密码</span>
+              <strong class="mono password-cell">
+                <template v-if="connection.has_password">
+                  <span>{{ passwordVisible ? (connection.password || '') : '••••••••' }}</span>
+                  <el-button link size="small" :icon="passwordVisible ? Hide : View" @click="togglePassword" />
+                  <el-button link size="small" :icon="CopyDocument" @click="copy(connection.password)" />
+                </template>
+                <span v-else class="text-muted">未记录</span>
+              </strong>
+            </div>
           </div>
-          <div class="console-field">
-            <span>内网 IP</span>
-            <strong class="mono copyable" @click="copy(connection.internal_ip)">
-              {{ connection.internal_ip || '-' }}
-            </strong>
+        </section>
+
+        <!-- 规格 -->
+        <section v-if="specs.length" class="console-block">
+          <div class="block-title">规格</div>
+          <div class="spec-grid">
+            <div v-for="item in specs" :key="item.label" class="spec-chip">
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+            </div>
           </div>
-          <div class="console-field">
-            <span>登录账号</span>
-            <strong class="mono copyable" @click="copy(connection.username)">
-              {{ connection.username || '-' }}
-            </strong>
+        </section>
+
+        <!-- 操作 -->
+        <section class="console-block">
+          <div class="block-title">操作</div>
+          <div class="action-groups">
+            <template v-if="canPowerOn || canPowerOff || canReboot">
+              <div class="action-group-btns">
+                <el-button v-if="canPowerOn" :loading="state.actionLoading === 'power:on'" :disabled="isAnyActionLoading" type="success" size="small" @click="emit('power', 'on')">开机</el-button>
+                <el-button v-if="canPowerOff" :loading="state.actionLoading === 'power:off'" :disabled="isAnyActionLoading" type="danger" plain size="small" @click="emit('power', 'off')">关机</el-button>
+                <el-button v-if="canReboot" :loading="state.actionLoading === 'power:reboot'" :disabled="isAnyActionLoading" type="warning" plain size="small" @click="emit('power', 'reboot')">重启</el-button>
+              </div>
+            </template>
+            <div class="action-group-btns">
+              <el-button size="small" :loading="state.actionLoading === 'reset-password'" :disabled="!actions.password_reset || isAnyActionLoading" @click="emit('reset-password')">重置密码</el-button>
+              <el-button size="small" :disabled="isAnyActionLoading" @click="emit('edit-pricing')">改价格</el-button>
+              <el-button size="small" :disabled="isAnyActionLoading" @click="emit('edit-name')">改名称</el-button>
+              <el-button size="small" :loading="state.actionLoading === 'manual-provision'" :disabled="!actions.manual_provision || isAnyActionLoading" @click="emit('manual-provision')">手动开通</el-button>
+            </div>
+            <div v-if="canRefund || isRefunded" class="action-group-btns">
+              <el-button v-if="canRefund" size="small" :loading="state.actionLoading === 'refund'" :disabled="isAnyActionLoading" type="danger" @click="openRefundDialog">退款</el-button>
+              <el-tag v-else-if="isRefunded" type="danger" size="small" effect="plain">已退款</el-tag>
+            </div>
           </div>
-          <div class="console-field">
-            <span>登录端口</span>
-            <strong class="mono">{{ connection.port || '-' }}</strong>
-          </div>
-          <div class="console-field console-field--span-2">
-            <span>登录密码</span>
-            <strong class="mono password-cell">
-              <template v-if="connection.has_password">
-                <span>{{ passwordVisible ? (connection.password || '•••••••') : '••••••••' }}</span>
-                <el-button link :icon="passwordVisible ? Hide : View" @click="togglePassword" />
-                <el-button link :icon="CopyDocument" @click="copy(connection.password)" />
-              </template>
-              <span v-else class="text-muted">未记录</span>
-            </strong>
-          </div>
-        </div>
-      </section>
-
-      <section v-if="specs.length" class="console-section">
-        <div class="console-section-head">
-          <strong>规格</strong>
-        </div>
-        <div class="console-spec">
-          <div v-for="item in specs" :key="item.label" class="console-spec-item">
-            <span>{{ item.label }}</span>
-            <strong>{{ item.value }}</strong>
-          </div>
-        </div>
-      </section>
-
-      <section class="console-section">
-        <div class="console-section-head">
-          <strong>操作</strong>
-        </div>
-
-        <div class="console-actions">
-          <el-button
-            v-if="canPowerOn"
-            :loading="state.actionLoading === 'power:on'"
-            :disabled="isAnyActionLoading"
-            type="success"
-            @click="emit('power', 'on')"
-          >
-            开机
-          </el-button>
-          <el-button
-            v-if="canPowerOff"
-            :loading="state.actionLoading === 'power:off'"
-            :disabled="isAnyActionLoading"
-            type="danger"
-            plain
-            @click="emit('power', 'off')"
-          >
-            关机
-          </el-button>
-          <el-button
-            v-if="canReboot"
-            :loading="state.actionLoading === 'power:reboot'"
-            :disabled="isAnyActionLoading"
-            type="warning"
-            plain
-            @click="emit('power', 'reboot')"
-          >
-            重启
-          </el-button>
-
-          <el-divider direction="vertical" />
-
-          <el-button
-            :loading="state.actionLoading === 'reset-password'"
-            :disabled="!actions.password_reset || isAnyActionLoading"
-            @click="emit('reset-password')"
-          >
-            重置密码
-          </el-button>
-          <el-button
-            :disabled="isAnyActionLoading"
-            @click="emit('edit-pricing')"
-          >
-            改价格
-          </el-button>
-          <el-button
-            :disabled="isAnyActionLoading"
-            @click="emit('edit-name')"
-          >
-            改名称
-          </el-button>
-          <el-button
-            :loading="state.actionLoading === 'manual-provision'"
-            :disabled="!actions.manual_provision || isAnyActionLoading"
-            @click="emit('manual-provision')"
-          >
-            手动开通
-          </el-button>
-
-          <el-divider direction="vertical" />
-
-          <el-button
-            v-if="canRefund"
-            :loading="state.actionLoading === 'refund'"
-            :disabled="isAnyActionLoading"
-            type="danger"
-            @click="openRefundDialog"
-          >
-            退款
-          </el-button>
-          <span v-else-if="isRefunded" class="console-refund-tag">
-            <el-tag type="danger" size="small" effect="plain">已退款</el-tag>
-          </span>
-        </div>
-
-        <p class="console-hint">
-          操作会直接调用上游 API，请确认影响范围。重装等高危操作暂未开放，请使用“以该客户登录”进入用户控制台完成。
-        </p>
-      </section>
+          <p class="console-hint">操作会直接调用上游 API。重装等高危操作请使用"代登录"进入用户控制台完成。</p>
+        </section>
+      </div>
     </div>
   </el-drawer>
 
+  <!-- 退款弹窗 -->
   <el-dialog v-model="refundDialogVisible" title="服务退款" width="520px" destroy-on-close>
-    <el-alert
-      type="warning"
-      :closable="false"
-      show-icon
-      title="退款将把对应账单标记为已退款，并关闭该实例的计费流程，当前仅支持全额退款。"
-    />
-
-    <el-form
-      ref="refundFormRef"
-      :model="refundForm"
-      :rules="refundRules"
-      label-width="90px"
-      style="margin-top: 18px;"
-    >
+    <el-alert type="warning" :closable="false" show-icon title="退款将把对应账单标记为已退款，并关闭该实例的计费流程，当前仅支持全额退款。" />
+    <el-form ref="refundFormRef" :model="refundForm" :rules="refundRules" label-width="90px" style="margin-top: 18px;">
       <el-form-item label="服务实例">
         <el-input :model-value="state.detail.name || `实例 #${state.serviceId}`" disabled />
       </el-form-item>
@@ -269,22 +141,12 @@
           <el-radio value="balance">退回余额</el-radio>
           <el-radio value="original" :disabled="!canOriginalRefund">原路退款</el-radio>
         </el-radio-group>
-        <div v-if="!canOriginalRefund" class="refund-hint">
-          {{ originalRefundBlockedReason }}
-        </div>
+        <div v-if="!canOriginalRefund" class="refund-hint">{{ originalRefundBlockedReason }}</div>
       </el-form-item>
       <el-form-item label="退款原因" prop="remark">
-        <el-input
-          v-model="refundForm.remark"
-          type="textarea"
-          :rows="4"
-          maxlength="200"
-          show-word-limit
-          placeholder="请输入退款原因"
-        />
+        <el-input v-model="refundForm.remark" type="textarea" :rows="4" maxlength="200" show-word-limit placeholder="请输入退款原因" />
       </el-form-item>
     </el-form>
-
     <template #footer>
       <el-button @click="closeRefundDialog">取消</el-button>
       <el-button type="danger" :loading="refundSubmitting" @click="submitRefund">确认退款</el-button>
@@ -315,114 +177,94 @@ const emit = defineEmits([
   'refund',
 ])
 
+// --- local state ---
 const passwordVisible = ref(false)
 
+// --- drawer size ---
 const drawerSize = computed(() => {
-  if (typeof window === 'undefined') return '620px'
-  return window.innerWidth <= 768 ? '92%' : '620px'
+  if (typeof window === 'undefined') return '540px'
+  return window.innerWidth <= 768 ? '92%' : '540px'
 })
 
+// --- detail accessors ---
 const connection = computed(() => props.state.detail?.connection || {})
 const actions = computed(() => props.state.detail?.actions || {})
 const specs = computed(() => {
   const raw = props.state.detail?.specs
   if (!Array.isArray(raw)) return []
-  return raw.filter((item) => item && (item.label || item.name))
-    .map((item) => ({
-      label: item.label || item.name,
-      value: item.value ?? item.text ?? '-',
-    }))
+  return raw.filter((item) => item && (item.label || item.name)).map((item) => ({
+    label: item.label || item.name,
+    value: item.value || '-',
+  }))
 })
 
+// --- status tags ---
 const upstreamStatusLabel = computed(() => props.state.detail?.upstream?.status_label || '')
 const upstreamError = computed(() => props.state.detail?.upstream?.remote_error || '')
-
 const runtimeLabel = computed(() => props.state.detail?.runtime?.power_label || '')
-const runtimeState = computed(() => String(props.state.detail?.runtime?.power_state || '').toLowerCase())
-
 const runtimeTagType = computed(() => {
-  if (['running', 'on', 'started', 'poweron'].includes(runtimeState.value)) return 'success'
-  if (['stopped', 'off', 'shutdown', 'poweroff'].includes(runtimeState.value)) return 'danger'
-  if (['pending', 'starting', 'stopping', 'rebooting'].includes(runtimeState.value)) return 'warning'
+  const state = props.state.detail?.runtime?.power_state || ''
+  if (state === 'running') return 'success'
+  if (state === 'stopped') return 'info'
+  if (['starting', 'stopping', 'rebooting'].includes(state)) return 'warning'
   return 'info'
 })
 
-const canPowerOn = computed(() => (
-  actions.value.power !== false
-  && !['running', 'on', 'started', 'poweron'].includes(runtimeState.value)
-))
-const canPowerOff = computed(() => (
-  actions.value.power !== false
-  && !['stopped', 'off', 'shutdown', 'poweroff'].includes(runtimeState.value)
-))
-const canReboot = computed(() => (
-  actions.value.power !== false
-  && ['running', 'on', 'started', 'poweron', ''].includes(runtimeState.value)
-))
-
-const isAnyActionLoading = computed(() => Boolean(props.state.actionLoading))
-
-const orderStatus = computed(() => Number(props.state.detail?.order?.status ?? -1))
-const isRefunded = computed(() => orderStatus.value === 5)
+// --- power actions ---
+const canPowerOn = computed(() => actions.value.available?.includes('power:on') && (props.state.detail?.runtime?.power_state !== 'running'))
+const canPowerOff = computed(() => actions.value.available?.includes('power:off') && (props.state.detail?.runtime?.power_state === 'running'))
+const canReboot = computed(() => actions.value.available?.includes('power:reboot') && (props.state.detail?.runtime?.power_state === 'running'))
+const isAnyActionLoading = computed(() => !!props.state.actionLoading)
 const canRefund = computed(() => {
-  return !isRefunded.value
-    && Boolean(props.state.detail?.order?.id)
-    && [1, 2, 3].includes(orderStatus.value)
+  const status = props.state.detail?.status
+  // 已取消、已删除、已退款的不允许退款
+  if ([0, 5, 6].includes(Number(status))) return false
+  return (actions.value.available || []).includes('refund') !== false
 })
-const canOriginalRefund = computed(() => {
-  const gateway = String(props.state.detail?.order?.payment_gateway || '').toLowerCase()
-  return ['alipay', 'balance'].includes(gateway)
-})
-const originalRefundBlockedReason = computed(() => {
-  if (canOriginalRefund.value) return ''
-  const gateway = String(props.state.detail?.order?.payment_gateway || '').toLowerCase()
-  return gateway ? '当前支付方式不支持原路退款' : '当前账单暂无原路退款信息'
-})
-const refundAmountText = computed(() => {
-  const amount = props.state.detail?.amount || props.state.detail?.order?.amount || '0.00'
-  return `¥${amount}`
+const isRefunded = computed(() => {
+  const status = props.state.detail?.status
+  return [5, 6].includes(Number(status))
 })
 
+// --- refund dialog ---
 const refundDialogVisible = ref(false)
 const refundSubmitting = ref(false)
 const refundFormRef = ref(null)
-const refundForm = reactive({
-  refund_method: 'balance',
-  remark: '',
-})
+const refundForm = reactive({ refund_method: 'balance', remark: '' })
 const refundRules = {
   refund_method: [{ required: true, message: '请选择退款方式', trigger: 'change' }],
-  remark: [
-    { required: true, message: '请输入退款原因', trigger: 'blur' },
-    { min: 2, max: 200, message: '退款原因长度需为 2-200 个字符', trigger: 'blur' },
-  ],
+  remark: [{ required: true, message: '请填写退款原因', trigger: 'blur' }],
 }
 
+const canOriginalRefund = computed(() => props.state.detail?.refund?.can_original ?? true)
+const originalRefundBlockedReason = computed(() => props.state.detail?.refund?.original_blocked_reason || '当前不支持原路退款')
+const refundAmountText = computed(() => {
+  const amt = props.state.detail?.refund?.amount ?? props.state.detail?.amount ?? props.state.detail?.order?.amount
+  return props.formatMoney(amt)
+})
+
 function openRefundDialog() {
-  if (!canRefund.value) return
-  refundForm.refund_method = canOriginalRefund.value ? 'original' : 'balance'
-  refundForm.remark = refundForm.refund_method === 'original' ? '后台发起原路退款' : '后台退回用户余额'
+  refundForm.refund_method = 'balance'
+  refundForm.remark = ''
+  refundFormRef.value?.clearValidate?.()
   refundDialogVisible.value = true
 }
 
 function closeRefundDialog() {
-  if (refundSubmitting.value) return
   refundDialogVisible.value = false
-  refundForm.refund_method = 'balance'
-  refundForm.remark = ''
-  refundFormRef.value?.clearValidate?.()
 }
 
-async function submitRefund() {
-  await refundFormRef.value?.validate()
-  emit('refund', {
-    refund_method: refundForm.refund_method,
-    amount: props.state.detail?.amount || props.state.detail?.order?.amount,
-    remark: refundForm.remark,
+function submitRefund() {
+  refundFormRef.value?.validate((valid) => {
+    if (!valid) return
+    emit('refund', {
+      refund_method: refundForm.refund_method,
+      amount: props.state.detail?.refund?.amount ?? props.state.detail?.amount ?? props.state.detail?.order?.amount,
+      remark: refundForm.remark,
+    })
   })
 }
 
-// 父组件完成退款后 actionLoading 从 'refund' 变为 ''，自动关闭弹窗
 watch(() => props.state.actionLoading, (next, prev) => {
   if (prev === 'refund' && next !== 'refund' && refundDialogVisible.value) {
     refundDialogVisible.value = false
@@ -433,9 +275,7 @@ watch(() => props.state.actionLoading, (next, prev) => {
 })
 
 function handleVisibleUpdate(next) {
-  if (!next) {
-    emit('close')
-  }
+  if (!next) emit('close')
 }
 
 function togglePassword() {
@@ -444,10 +284,7 @@ function togglePassword() {
 
 async function copy(text) {
   const value = String(text || '').trim()
-  if (!value) {
-    ElMessage.info('内容为空')
-    return
-  }
+  if (!value) { ElMessage.info('内容为空'); return }
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(value)
@@ -465,12 +302,7 @@ async function copy(text) {
   }
 }
 
-// 关闭抽屉时重置密码显隐
-watch(() => props.state.visible, (next) => {
-  if (!next) {
-    passwordVisible.value = false
-  }
-})
+watch(() => props.state.visible, (next) => { if (!next) passwordVisible.value = false })
 </script>
 
 <style lang="scss" scoped>
@@ -482,102 +314,109 @@ watch(() => props.state.visible, (next) => {
 .console-shell {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   height: 100%;
-  padding: 18px 22px 24px;
+  padding: 14px 16px 20px;
   overflow-y: auto;
 }
 
 .console-header {
+  flex-shrink: 0;
+}
+
+.console-top-row {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid $divider-color;
 }
 
 .console-title {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
+  flex: 1;
   min-width: 0;
-
-  h3 {
-    margin: 0 6px 0 0;
-    color: $text-color-primary;
-    font-size: 18px;
-    font-weight: 600;
-    letter-spacing: -0.2px;
-    line-height: 1.3;
-  }
+  margin: 0;
+  color: $text-color-primary;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  line-height: 1.3;
+  word-break: break-all;
 }
 
-.console-title-side {
+.console-top-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
 }
 
-.console-alert {
-  margin-top: -4px;
+.console-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 0 2px;
 }
 
-.console-section {
+.console-alert {
+  flex-shrink: 0;
+}
+
+.console-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+
+.console-block {
+  padding: 12px 14px;
+  border: 1px solid $border-color;
+  border-radius: $sm-border-radius;
+  background: $bg-color-soft;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 14px 16px;
-  border: 1px solid $border-color;
-  border-radius: $base-border-radius;
-  background: $bg-color-soft;
 }
 
-.console-section-head {
+.block-title {
   display: flex;
-  justify-content: space-between;
   align-items: baseline;
-  gap: 8px;
-  color: $text-color-secondary;
-  font-size: 12px;
-
-  strong {
-    color: $text-color-primary;
-    font-size: 13px;
-    font-weight: 600;
-  }
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: $text-color-primary;
+  font-size: 13px;
+  font-weight: 600;
 }
 
-.console-upstream-meta {
+.block-meta {
+  font-size: 12px;
+  color: $text-color-secondary;
+  font-weight: 400;
   display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
+  gap: 6px;
   flex-wrap: wrap;
-  gap: 8px;
-  min-width: 0;
-
-  span {
-    line-height: 1.5;
-  }
 }
 
-.console-grid {
+.info-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 14px;
+  gap: 8px 14px;
 }
 
-.console-field {
+.info-item {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 1px;
   min-width: 0;
+
+  &--span-2 { grid-column: span 2; }
 
   span {
     color: $text-color-placeholder;
     font-size: 12px;
-    line-height: 1.2;
+    line-height: 1.3;
   }
 
   strong {
@@ -588,62 +427,35 @@ watch(() => props.state.visible, (next) => {
   }
 }
 
-.console-field--span-2 {
-  grid-column: span 2;
-}
-
-.mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-variant-numeric: tabular-nums;
-}
-
-.copyable {
-  cursor: copy;
-  transition: color $duration-fast $ease-standard;
-
-  &:hover {
-    color: $color-primary;
-  }
-}
-
-.password-cell {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.console-spec {
+.spec-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 8px 14px;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 6px;
 }
 
-.console-spec-item {
+.spec-chip {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   padding: 6px 8px;
   border-radius: $sm-border-radius;
   background: $bg-color-card;
   border: 1px solid $divider-color;
 
-  span {
-    color: $text-color-placeholder;
-    font-size: 11px;
-  }
-
-  strong {
-    color: $text-color-primary;
-    font-size: 13px;
-    font-weight: 500;
-  }
+  span { color: $text-color-placeholder; font-size: 11px; }
+  strong { color: $text-color-primary; font-size: 12px; font-weight: 500; }
 }
 
-.console-actions {
+.action-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.action-group-btns {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
+  gap: 6px;
 }
 
 .console-hint {
@@ -653,42 +465,48 @@ watch(() => props.state.visible, (next) => {
   margin-top: 4px;
 }
 
-.text-muted {
-  color: $text-color-placeholder;
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
 }
 
-.refund-hint {
-  margin-top: 6px;
-  color: $text-color-placeholder;
-  font-size: 12px;
-  line-height: 1.6;
+.copyable {
+  cursor: copy;
+  transition: color 0.15s;
+  &:hover { color: $color-primary; }
 }
 
-.console-refund-tag {
+.password-cell {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
 }
+
+.text-muted { color: $text-color-placeholder; }
+.refund-hint { margin-top: 6px; color: $text-color-placeholder; font-size: 12px; }
 
 @media (max-width: 768px) {
   .console-shell {
-    padding: 14px 16px 20px;
+    gap: 10px;
+    padding: 12px 12px 16px;
   }
 
-  .console-grid {
+  .console-title { font-size: 15px; }
+
+  .console-block { padding: 10px 12px; gap: 8px; }
+
+  .info-grid {
     grid-template-columns: 1fr;
+    gap: 6px 0;
   }
 
-  .console-field--span-2 {
-    grid-column: span 1;
-  }
+  .info-item--span-2 { grid-column: span 1; }
 
-  .console-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
+  .spec-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
-  .console-title-side {
-    justify-content: flex-end;
+  .action-group-btns :deep(.el-button) {
+    flex: 1;
+    min-width: 0;
   }
 }
 </style>

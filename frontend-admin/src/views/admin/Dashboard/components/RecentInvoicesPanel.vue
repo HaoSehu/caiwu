@@ -12,45 +12,35 @@
       </div>
     </template>
 
-    <el-table :data="invoices" stripe class="recent-invoices-table">
-      <template #empty>
-        <div class="table-empty">
-          <strong>暂无账单记录</strong>
-          <p>后台产生新账单后，这里会展示最新 10 条业务流水。</p>
+    <div v-if="!invoices.length" class="table-empty">
+      <strong>暂无账单记录</strong>
+      <p>后台产生新账单后，这里会展示最新 10 条业务流水。</p>
+    </div>
+
+    <div v-else class="invoice-list">
+      <div
+        v-for="row in invoices"
+        :key="row.id"
+        class="invoice-row"
+      >
+        <div class="invoice-row__top">
+          <span class="invoice-no">{{ row.invoice_no }}</span>
+          <span class="invoice-amount">{{ formatCurrency(row.amount) }}</span>
         </div>
-      </template>
-
-      <el-table-column prop="invoice_no" label="账单号" min-width="180" />
-
-      <el-table-column label="用户" min-width="160">
-        <template #default="{ row }">
-          {{ row.user?.nickname || row.user?.email || '-' }}
-        </template>
-      </el-table-column>
-
-      <el-table-column label="金额" min-width="120" align="right">
-        <template #default="{ row }">
-          {{ formatCurrency(row.amount) }}
-        </template>
-      </el-table-column>
-
-      <el-table-column label="状态" min-width="120">
-        <template #default="{ row }">
+        <div class="invoice-row__bottom">
           <el-tag effect="light" size="small" :type="statusType(row.status)">
             {{ statusText(row.status) }}
           </el-tag>
-        </template>
-      </el-table-column>
-
-      <el-table-column label="创建时间" min-width="180">
-        <template #default="{ row }">{{ formatDateTime(row.created_at) }}</template>
-      </el-table-column>
-    </el-table>
+          <span class="invoice-time">{{ formatDateTime(row.created_at) }}</span>
+        </div>
+      </div>
+    </div>
   </el-card>
 </template>
 
 <script setup>
 import { formatDateTime } from '@/utils/datetime'
+
 defineProps({
   invoices: { type: Array, required: true },
   statusText: { type: Function, required: true },
@@ -64,7 +54,7 @@ const emit = defineEmits(['view-all'])
 <style lang="scss" scoped>
 .panel-card { border-radius: $base-border-radius; }
 
-.invoices-panel :deep(.el-card__body) { padding-top: 12px; }
+.invoices-panel :deep(.el-card__body) { padding: 8px 0 0; }
 
 .panel-header {
   display: flex;
@@ -76,12 +66,58 @@ const emit = defineEmits(['view-all'])
 .panel-header strong { color: $text-color-primary; font-size: 15px; font-weight: 600; }
 .panel-header p { margin-top: 4px; color: $text-color-secondary; font-size: 12px; line-height: 1.6; }
 
-.recent-invoices-table :deep(.el-table__header th) {
-  background: $bg-color-soft;
+.invoice-list {
+  display: flex;
+  flex-direction: column;
 }
 
-.recent-invoices-table :deep(.el-table__row) {
-  transition: background-color $duration-fast $ease-standard;
+.invoice-row {
+  padding: 10px 16px;
+  border-bottom: 1px solid $divider-color;
+  transition: background-color 0.15s ease;
+
+  &:last-child { border-bottom: none; }
+  &:hover { background: $bg-color-soft; }
+}
+
+.invoice-row__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.invoice-no {
+  font-size: 13px;
+  font-weight: 600;
+  color: $text-color-primary;
+  font-family: "SF Mono", "Cascadia Code", "Consolas", monospace;
+  letter-spacing: .02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.invoice-amount {
+  font-size: 15px;
+  font-weight: 700;
+  color: $text-color-primary;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.invoice-row__bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.invoice-time {
+  font-size: 11px;
+  color: $text-color-placeholder;
+  white-space: nowrap;
 }
 
 .table-empty {
@@ -89,20 +125,9 @@ const emit = defineEmits(['view-all'])
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  padding: 40px 0;
+  padding: 48px 0;
 }
 
 .table-empty strong { color: $text-color-primary; font-size: 15px; font-weight: 600; }
 .table-empty p { color: $text-color-secondary; font-size: 13px; }
-
-@include mobile-and-below {
-  .invoices-panel :deep(.el-table) {
-    font-size: 12px;
-  }
-
-  .invoices-panel :deep(.el-table .cell) {
-    padding-left: 8px;
-    padding-right: 8px;
-  }
-}
 </style>

@@ -479,4 +479,60 @@ class UserController extends Controller
     {
         return $this->paginate($this->userService->emailLogs($user, $request->perPage()));
     }
+
+    /**
+     * 操作系统选项列表（用于手动开通服务时选择系统）
+     */
+    public function osOptions()
+    {
+        return $this->success([
+            'groups' => [
+                [
+                    'label' => 'CentOS',
+                    'children' => [
+                        ['label' => 'CentOS 7', 'value' => 'CentOS 7'],
+                        ['label' => 'CentOS 8', 'value' => 'CentOS 8'],
+                        ['label' => 'CentOS 9', 'value' => 'CentOS 9'],
+                    ],
+                ],
+                [
+                    'label' => 'Ubuntu',
+                    'children' => [
+                        ['label' => 'Ubuntu 20.04', 'value' => 'Ubuntu 20.04'],
+                        ['label' => 'Ubuntu 22.04', 'value' => 'Ubuntu 22.04'],
+                        ['label' => 'Ubuntu 24.04', 'value' => 'Ubuntu 24.04'],
+                    ],
+                ],
+                [
+                    'label' => 'Debian',
+                    'children' => [
+                        ['label' => 'Debian 11', 'value' => 'Debian 11'],
+                        ['label' => 'Debian 12', 'value' => 'Debian 12'],
+                    ],
+                ],
+                [
+                    'label' => 'Rocky Linux',
+                    'children' => [
+                        ['label' => 'Rocky Linux 8', 'value' => 'Rocky Linux 8'],
+                        ['label' => 'Rocky Linux 9', 'value' => 'Rocky Linux 9'],
+                    ],
+                ],
+                [
+                    'label' => 'AlmaLinux',
+                    'children' => [
+                        ['label' => 'AlmaLinux 8', 'value' => 'AlmaLinux 8'],
+                        ['label' => 'AlmaLinux 9', 'value' => 'AlmaLinux 9'],
+                    ],
+                ],
+                [
+                    'label' => 'Windows Server',
+                    'children' => [
+                        ['label' => 'Windows Server 2019', 'value' => 'Windows Server 2019'],
+                        ['label' => 'Windows Server 2022', 'value' => 'Windows Server 2022'],
+                        ['label' => 'Windows Server 2025', 'value' => 'Windows Server 2025'],
+                    ],
+                ],
+            ],
+        ]);
+    }
 }

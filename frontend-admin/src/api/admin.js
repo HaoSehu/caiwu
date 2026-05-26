@@ -5,6 +5,7 @@ export default {
   dashboard: () => request.get('/admin/dashboard'),
   dashboardStats: () => request.get('/admin/dashboard/stats'),
   dashboardRecentInvoices: () => request.get('/admin/dashboard/recent-invoices'),
+  dashboardMonthlyRevenue: () => request.get('/admin/dashboard/monthly-revenue'),
 
   // 账单（主实体）
   invoices: {

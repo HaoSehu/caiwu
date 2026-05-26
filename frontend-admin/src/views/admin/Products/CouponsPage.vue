@@ -24,48 +24,49 @@
       title="当前环境未启用优惠券功能，新增、编辑、启停和删除操作已禁用。"
     />
 
-    <section class="filter-panel">
-      <div class="search-bar coupons-search-bar">
-        <el-input
-          v-model="filters.keyword"
-          placeholder="搜索优惠券名称 / 描述"
-          clearable
-          style="width: 260px"
-          @keyup.enter="handleSearch"
-        >
-          <template #prefix><el-icon><Search /></el-icon></template>
-        </el-input>
+    <el-card shadow="never" class="panel-card filter-card">
+      <el-form :model="filters" class="filter-form coupons-filter-form" @submit.prevent>
+        <el-form-item class="coupons-filter-keyword">
+          <el-input
+            v-model="filters.keyword"
+            placeholder="搜索优惠券名称 / 描述"
+            clearable
+            @keyup.enter="handleSearch"
+            @clear="handleSearch"
+          >
+            <template #prefix><el-icon><Search /></el-icon></template>
+          </el-input>
+        </el-form-item>
 
-        <el-select v-model="filters.status" placeholder="状态" clearable style="width: 140px">
-          <el-option label="全部状态" value="" />
-          <el-option label="生效中" value="1" />
-          <el-option label="已停用" value="0" />
-          <el-option label="已过期" value="expired" />
-        </el-select>
+        <div class="coupons-filter-selects">
+          <el-select v-model="filters.status" placeholder="状态" clearable @change="handleSearch">
+            <el-option label="全部状态" value="" />
+            <el-option label="生效中" value="1" />
+            <el-option label="已停用" value="0" />
+            <el-option label="已过期" value="expired" />
+          </el-select>
 
-        <el-select v-model="filters.discount_type" placeholder="类型" clearable style="width: 140px">
-          <el-option label="全部类型" value="" />
-          <el-option label="满减券" value="fixed" />
-          <el-option label="折扣券" value="percentage" />
-        </el-select>
+          <el-select v-model="filters.discount_type" placeholder="类型" clearable @change="handleSearch">
+            <el-option label="全部类型" value="" />
+            <el-option label="满减券" value="fixed" />
+            <el-option label="折扣券" value="percentage" />
+          </el-select>
 
-        <el-select v-model="filters.discount_scope" placeholder="优惠阶段" clearable style="width: 140px">
-          <el-option label="全部阶段" value="" />
-          <el-option label="首月优惠" value="first_month" />
-          <el-option label="持续优惠" value="recurring" />
-          <el-option label="续费优惠" value="renew" />
-        </el-select>
+          <el-select v-model="filters.discount_scope" placeholder="优惠阶段" clearable @change="handleSearch">
+            <el-option label="全部阶段" value="" />
+            <el-option label="首月优惠" value="first_month" />
+            <el-option label="持续优惠" value="recurring" />
+            <el-option label="续费优惠" value="renew" />
+          </el-select>
 
-        <el-select v-model="filters.distribution_type" placeholder="发放方式" clearable style="width: 140px">
-          <el-option label="全部方式" value="" />
-          <el-option label="公开优惠券" value="public" />
-          <el-option label="私有优惠券" value="private" />
-        </el-select>
-
-        <el-button type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
-        <el-button :icon="Refresh" @click="resetFilters">重置</el-button>
-      </div>
-    </section>
+          <el-select v-model="filters.distribution_type" placeholder="发放方式" clearable @change="handleSearch">
+            <el-option label="全部方式" value="" />
+            <el-option label="公开优惠券" value="public" />
+            <el-option label="私有优惠券" value="private" />
+          </el-select>
+        </div>
+      </el-form>
+    </el-card>
 
     <el-card shadow="never" class="coupons-table-card">
       <el-table :data="list" stripe row-key="id">
@@ -355,19 +356,46 @@
                 <el-form-item label="适用商品" class="selection-panel">
                   <div class="product-tree-panel">
                     <div class="product-tree-toolbar">
-                      <span>留空表示全站商品可用。勾选分组时会自动包含该分组下的全部商品。</span>
+                      <span>留空表示全站商品可用。勾选商品纳入优惠范围。</span>
                       <el-button text type="primary" @click="clearProductSelection">清空选择</el-button>
                     </div>
+                    <!-- 一级分类下拉 -->
+                    <div class="product-group-selector">
+                      <el-select
+                        v-model="selectedGroupId"
+                        placeholder="请先选择产品分类"
+                        clearable
+                        class="product-group-select"
+                        @change="handleGroupChange"
+                      >
+                        <el-option
+                          v-for="g in productGroupOptions"
+                          :key="g.value"
+                          :label="g.label"
+                          :value="g.value"
+                        />
+                      </el-select>
+                    </div>
+                    <!-- 二级三级树状图 -->
                     <div class="product-tree-shell" v-loading="productTreeLoading">
                       <el-tree
+                        v-if="currentGroupChildren.length"
                         ref="productTreeRef"
-                        :data="productTreeData"
+                        :data="currentGroupChildren"
                         node-key="id"
                         show-checkbox
                         :expand-on-click-node="false"
                         class="coupon-product-tree"
-                        @node-click="handleProductTreeNodeClick"
                       />
+                      <el-empty
+                        v-else-if="!productTreeLoading"
+                        :description="selectedGroupId ? '该分组暂无商品' : '请先选择产品分组'"
+                        :image-size="48"
+                      />
+                    </div>
+                    <!-- 已选统计 -->
+                    <div v-if="productSelectedIds.size > 0" class="product-nav-selected-bar">
+                      已选 <strong>{{ productSelectedIds.size }}</strong> 个商品
                     </div>
                   </div>
                 </el-form-item>
@@ -531,7 +559,6 @@ const loading = ref(false)
 const saving = ref(false)
 const dialogVisible = ref(false)
 const formRef = ref(null)
-const productTreeRef = ref(null)
 const list = ref([])
 const total = ref(0)
 const page = ref(1)
@@ -539,6 +566,9 @@ const pageSize = ref(20)
 const couponFeatureEnabled = ref(false)
 const productTreeData = ref([])
 const productTreeLoading = ref(false)
+const productTreeRef = ref(null)
+const selectedGroupId = ref('')
+const productSelectedIds = ref(new Set())
 const userOptions = ref([])
 const userOptionsLoading = ref(false)
 const userSearchKeyword = ref('')
@@ -632,6 +662,8 @@ const selectedUsers = computed(() => {
 
 function resetForm() {
   Object.assign(form, createDefaultForm())
+  selectedGroupId.value = ''
+  productSelectedIds.value = new Set()
 }
 
 function resetValidate() {
@@ -659,6 +691,50 @@ async function loadProductTree() {
   } finally {
     productTreeLoading.value = false
   }
+}
+
+const PRODUCT_TYPE_LABELS = {
+  vps: '云服务器',
+  dedicated: '独立服务器',
+  hosting: '虚拟主机',
+  domain: '域名',
+  other: '其他',
+}
+
+const productGroupOptions = computed(() => {
+  const typeMap = new Map()
+  for (const group of productTreeData.value) {
+    const type = group.product_type || 'other'
+    if (!typeMap.has(type)) {
+      typeMap.set(type, {
+        value: type,
+        label: PRODUCT_TYPE_LABELS[type] || type,
+        groups: [],
+      })
+    }
+    typeMap.get(type).groups.push(group)
+  }
+  return [...typeMap.values()]
+})
+
+const currentGroupChildren = computed(() => {
+  if (!selectedGroupId.value) return []
+  const option = productGroupOptions.value.find((o) => o.value === selectedGroupId.value)
+  return option?.groups.map((g) => ({ ...g })) || []
+})
+
+function handleGroupChange() {
+  // 切换分组前先保存当前树的勾选状态
+  collectTreeChecked()
+  nextTick(() => {
+    syncCheckedToTree()
+  })
+}
+
+function syncCheckedToTree() {
+  const treeRef = productTreeRef.value
+  if (!treeRef?.setCheckedKeys) return
+  treeRef.setCheckedKeys([...productSelectedIds.value])
 }
 
 function mergeUserOptions(items = [], preserveSelectedOnly = false) {
@@ -738,28 +814,66 @@ async function ensureSelectedUsersLoaded(userIds = []) {
 }
 
 function getSelectedProductIds() {
-  const checkedKeys = productTreeRef.value?.getCheckedKeys?.(true) || []
-
-  return checkedKeys
-    .map((key) => Number(key))
-    .filter((id) => Number.isInteger(id) && id > 0)
+  // 同步当前树的勾选状态
+  collectTreeChecked()
+  return [...productSelectedIds.value].filter((id) => Number.isInteger(id) && id > 0)
 }
 
-async function applyCheckedProductIds(productIds = []) {
-  await nextTick()
+function collectTreeChecked() {
   const treeRef = productTreeRef.value
-  if (!treeRef?.setCheckedKeys) {
-    return
+  if (!treeRef?.getCheckedKeys) return
+  const checked = treeRef.getCheckedKeys(true).filter((id) => Number.isInteger(Number(id)) && Number(id) > 0)
+  // 保留非当前分组的已选，合并当前树的勾选
+  const currentGroupIds = new Set()
+  const walk = (nodes) => {
+    for (const n of nodes || []) {
+      if (n.node_type === 'product') currentGroupIds.add(n.id)
+      walk(n.children)
+    }
   }
+  walk(currentGroupChildren.value)
 
-  treeRef.setCheckedKeys([])
-  if (productIds.length) {
-    treeRef.setCheckedKeys(productIds)
+  const next = new Set()
+  for (const id of productSelectedIds.value) {
+    if (!currentGroupIds.has(id)) next.add(id)
   }
+  for (const id of checked) {
+    if (currentGroupIds.has(Number(id))) next.add(Number(id))
+  }
+  productSelectedIds.value = next
+}
+
+function applyCheckedProductIds(productIds = []) {
+  productSelectedIds.value = new Set((productIds || []).map(Number).filter((id) => id > 0))
+  nextTick(() => syncCheckedToTree())
 }
 
 function clearProductSelection() {
+  productSelectedIds.value = new Set()
   productTreeRef.value?.setCheckedKeys?.([])
+}
+
+function autoSelectGroupForProducts(productIds) {
+  const idSet = new Set(productIds.map(Number))
+  for (const option of productGroupOptions.value) {
+    for (const group of option.groups) {
+      const groupProductIds = new Set()
+      const walk = (nodes) => {
+        for (const n of nodes || []) {
+          if (n.node_type === 'product') groupProductIds.add(n.id)
+          walk(n.children)
+        }
+      }
+      walk(group.children || [])
+      for (const pid of idSet) {
+        if (groupProductIds.has(pid)) {
+          selectedGroupId.value = option.value
+          nextTick(() => syncCheckedToTree())
+          return
+        }
+      }
+    }
+  }
 }
 
 function validateSelectedUsers() {
@@ -793,24 +907,6 @@ function searchUsers() {
 function resetUserSearch() {
   userSearchKeyword.value = ''
   loadUserOptions('')
-}
-
-function handleProductTreeNodeClick(data) {
-  if (data?.node_type !== 'group') {
-    return
-  }
-
-  const treeNode = productTreeRef.value?.getNode?.(data.id)
-  if (!treeNode) {
-    return
-  }
-
-  if (treeNode.expanded) {
-    treeNode.collapse?.()
-    return
-  }
-
-  treeNode.expand?.()
 }
 
 async function loadList() {
@@ -934,6 +1030,10 @@ async function openEditDialog(row) {
     await ensureSelectedUsersLoaded(form.user_ids)
     await loadUserOptions('')
     await applyCheckedProductIds(form.product_ids)
+    // 自动选中包含已选商品的分组
+    if (form.product_ids.length) {
+      autoSelectGroupForProducts(form.product_ids)
+    }
   } catch (error) {
     dialogVisible.value = false
     if (!error?.response) {
@@ -1088,16 +1188,36 @@ onMounted(async () => {
   margin-bottom: 16px;
 }
 
-.filter-panel {
-  padding: 16px;
-  border: 1px solid $border-color;
-  border-radius: $base-border-radius;
-  background: $bg-color-card;
+.coupons-filter-form {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
 }
 
-.coupons-search-bar {
-  align-items: center;
-  margin: 0;
+.coupons-filter-keyword {
+  margin-bottom: 0;
+  width: 100%;
+
+  :deep(.el-input) {
+    width: 100%;
+  }
+}
+
+.coupons-filter-selects {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+
+  .el-select {
+    flex: 1 1 0;
+    min-width: 80px;
+  }
+}
+
+:deep(.coupons-filter-selects .el-select__wrapper) {
+  font-size: 13px;
+  padding: 4px 8px;
+  min-height: 28px;
 }
 
 .coupons-table-card {
@@ -1310,6 +1430,15 @@ onMounted(async () => {
   background: $bg-color-card;
 }
 
+.product-group-selector {
+  padding: 10px 12px;
+  border-bottom: 1px solid $divider-color;
+}
+
+.product-group-select {
+  width: 100%;
+}
+
 .coupon-product-tree :deep(.el-tree-node__content) {
   min-height: 34px;
   border-radius: 0;
@@ -1317,6 +1446,22 @@ onMounted(async () => {
 
 .coupon-product-tree :deep(.el-tree-node__content:hover) {
   background: $bg-color-hover;
+}
+
+.product-nav-selected-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 0 2px;
+  border-top: 1px solid $divider-color;
+  margin-top: 8px;
+  font-size: 12px;
+  color: $text-color-secondary;
+
+  strong {
+    color: $color-primary;
+    font-weight: 600;
+  }
 }
 
 .user-picker-panel {
@@ -1385,6 +1530,7 @@ onMounted(async () => {
   flex: 1;
   min-height: 0;
   background: $bg-color-card;
+  overflow-x: auto;
 }
 
 .user-picker-table {
@@ -1554,6 +1700,102 @@ onMounted(async () => {
 
   .drawer-body {
     padding-right: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .coupons-page :deep(.coupon-edit-drawer .el-drawer__header) {
+    padding: 16px 16px 14px;
+  }
+
+  .coupons-page :deep(.coupon-edit-drawer .el-drawer__body) {
+    padding: 14px 16px 10px;
+  }
+
+  .coupons-page :deep(.coupon-edit-drawer .el-drawer__footer) {
+    padding: 14px 16px 18px;
+  }
+
+  .drawer-header strong {
+    font-size: 18px;
+  }
+
+  .drawer-header span {
+    font-size: 12px;
+  }
+
+  .drawer-content {
+    width: 100%;
+  }
+
+  .dialog-grid {
+    gap: 10px 12px;
+  }
+
+  .dialog-intro {
+    padding: 10px 12px;
+    margin-bottom: 12px;
+  }
+
+  .dialog-intro--plain {
+    padding: 10px 12px;
+  }
+
+  .coupons-page :deep(.field-xs.el-input-number) {
+    width: 100% !important;
+  }
+
+  .coupons-page :deep(.field-sm.el-select),
+  .coupons-page :deep(.field-sm.el-input),
+  .coupons-page :deep(.field-sm.el-date-editor),
+  .coupons-page :deep(.field-sm.el-select .el-select__wrapper),
+  .coupons-page :deep(.field-sm .el-input__wrapper),
+  .coupons-page :deep(.field-md.el-input),
+  .coupons-page :deep(.field-md .el-input__wrapper),
+  .coupons-page :deep(.field-number-sm.el-input-number),
+  .coupons-page :deep(.field-number-md.el-input-number),
+  .coupons-page :deep(.field-cycle.el-select),
+  .coupons-page :deep(.field-cycle .el-select__wrapper),
+  .coupons-page :deep(.field-date-sm.el-date-editor),
+  .coupons-page :deep(.field-date-sm .el-input__wrapper) {
+    width: 100% !important;
+  }
+
+  .discount-input-wrap {
+    width: 100%;
+    grid-template-columns: 1fr auto;
+  }
+
+  .product-tree-panel,
+  .user-picker-panel,
+  .selection-placeholder {
+    min-height: 260px;
+  }
+
+  .user-picker-grid {
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .user-picker-column-head {
+    min-height: 38px;
+    padding: 8px 10px;
+  }
+
+  .product-tree-toolbar {
+    padding: 8px 10px;
+  }
+
+  .product-tree-shell {
+    padding: 6px 10px 10px;
+  }
+
+  .drawer-footer {
+    gap: 8px;
+  }
+
+  .drawer-footer .el-button {
+    flex: 1;
   }
 }
 

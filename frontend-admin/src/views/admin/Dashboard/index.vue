@@ -6,15 +6,15 @@
         <h2>运营总览</h2>
         <p>{{ refreshedAt }}</p>
       </div>
-      <div class="page-actions">
-        <el-button @click="loadDashboard">刷新</el-button>
-        <el-button type="primary" @click="router.push('/admin/orders')">查看账单</el-button>
-      </div>
     </section>
 
     <section class="dashboard-layout">
-      <div class="dashboard-layout__main">
         <HeadlineGrid :cards="headlineCards" />
+
+        <div class="chart-row">
+          <RevenuePieChart :chart-data="revenueByProduct" :month-label="monthLabel" />
+          <RevenueLineChart :chart-data="dailyRevenue" :month-label="monthLabel" />
+        </div>
 
         <RecentInvoicesPanel
           :invoices="recentInvoices"
@@ -23,11 +23,6 @@
           :format-currency="formatCurrency"
           @view-all="router.push('/admin/orders')"
         />
-      </div>
-
-      <aside class="dashboard-layout__side">
-        <InsightLower :status-distribution="statusDistribution" :progress-items="progressItems" />
-      </aside>
     </section>
   </div>
 </template>
@@ -37,8 +32,9 @@ import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDashboard } from './composables/useDashboard'
 import HeadlineGrid from './components/HeadlineGrid.vue'
-import InsightLower from './components/InsightLower.vue'
 import RecentInvoicesPanel from './components/RecentInvoicesPanel.vue'
+import RevenuePieChart from './components/RevenuePieChart.vue'
+import RevenueLineChart from './components/RevenueLineChart.vue'
 
 const router = useRouter()
 
@@ -46,9 +42,10 @@ const {
   loading,
   refreshedAt,
   headlineCards,
-  progressItems,
-  statusDistribution,
   recentInvoices,
+  revenueByProduct,
+  dailyRevenue,
+  monthLabel,
   statusText,
   statusType,
   formatCurrency,
@@ -65,39 +62,22 @@ onMounted(loadDashboard)
 }
 
 .dashboard-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(280px, 2fr);
-  align-items: start;
-  gap: 20px;
-}
-
-.dashboard-layout__main {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  min-width: 0;
 }
 
-.dashboard-layout__side {
-  position: sticky;
-  top: 12px;
-}
-
-@include desktop-lg-and-below {
-  .dashboard-layout {
-    grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
-    gap: 16px;
-  }
+.chart-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 20px;
+  align-items: start;
 }
 
 @include tablet-and-below {
-  .dashboard-layout {
+  .chart-row {
     grid-template-columns: minmax(0, 1fr);
     gap: 16px;
-  }
-
-  .dashboard-layout__side {
-    position: static;
   }
 }
 

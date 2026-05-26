@@ -5,10 +5,6 @@
         <h2>API 日志</h2>
         <p>审计后台与客户端接口访问情况，快速定位异常状态码与请求链路。</p>
       </div>
-
-      <div class="page-actions">
-        <el-button :icon="RefreshRight" @click="loadData">刷新</el-button>
-      </div>
     </section>
 
     <section class="summary-strip">

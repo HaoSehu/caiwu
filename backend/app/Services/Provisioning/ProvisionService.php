@@ -151,6 +151,26 @@ class ProvisionService
         return $this->submitUpstreamProvision($order, $service, true);
     }
 
+    /**
+     * 管理员主动发起的上游开通（不检查 auto_setup，直接走完整购物车流程）
+     */
+    public function adminInitiatedProvision(Order $order): Service
+    {
+        $order->loadMissing(['product.supplier', 'user', 'service']);
+
+        if (! $order->exists || ! $order->product) {
+            throw new BusinessException('订单未关联商品，无法发起上游开通');
+        }
+
+        if (! $order->product->supplier instanceof Supplier) {
+            throw new BusinessException('当前商品未配置供应商，无法发起上游开通');
+        }
+
+        $service = $this->ensureLocalService($order);
+
+        return $this->submitUpstreamProvision($order, $service, true);
+    }
+
     private function submitUpstreamProvision(Order $order, Service $service, bool $throwOnFailure = false): Service
     {
         $this->markPending($order, $service);

@@ -18,6 +18,7 @@ class FinanceLedgerListRequest extends AdminFormRequest
             'user_id' => ['nullable', 'integer', 'min:1'],
             'invoice_no' => ['nullable', 'string', 'max:50'],
             'payment_no' => ['nullable', 'string', 'max:50'],
+            'keyword' => ['nullable', 'string', 'max:100'],
             'date_range' => ['nullable', 'array', 'size:2'],
             'date_range.0' => ['required_with:date_range', 'date'],
             'date_range.1' => ['required_with:date_range', 'date'],
@@ -34,6 +35,7 @@ class FinanceLedgerListRequest extends AdminFormRequest
             'user_id',
             'invoice_no',
             'payment_no',
+            'keyword',
             'date_range',
         ]);
     }

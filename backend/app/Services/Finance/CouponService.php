@@ -281,6 +281,7 @@ class CouponService
                 'label' => (string) $group->name,
                 'node_type' => 'group',
                 'group_id' => $publicGroupId,
+                'product_type' => (string) $group->product_type,
                 'leaf' => false,
                 'disabled' => false,
                 'children' => [...$children, ...$productNodes],

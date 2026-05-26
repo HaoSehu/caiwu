@@ -245,15 +245,8 @@ function createDefaultAddServiceForm() {
     billing_cycle: '',
     status: 1,
     name: '',
-    domain: '',
     amount: null,
-    expires_at: '',
     auto_renew: 1,
-    dedicated_ip: '',
-    internal_ip: '',
-    port: 22,
-    username: '',
-    password: '',
     upstream_host_id: null,
     upstream_status: '',
     os: '',
@@ -319,7 +312,32 @@ export function useUserDetail() {
 
   const addServiceProductOptions = ref([])
   const addServiceProductDetail = ref(null)
+  const addServiceOsOptions = ref([])
+  const addServiceOsLoading = ref(false)
   const addServiceForm = reactive(createDefaultAddServiceForm())
+  const addServiceCategoryTree = ref([])
+  const addServiceCategoriesLoading = ref(false)
+  const addServiceCategoryOptions = ref([])
+  const addServiceSelectedCategory = ref(null)
+  const addServiceAllProducts = ref([])
+
+  const addServiceSubOptions = computed(() => {
+    if (!addServiceSelectedCategory.value) return []
+    const typeLabel = String(addServiceSelectedCategory.value)
+    const type = addServiceCategoryTree.value.find((c) => c.value === typeLabel)
+    if (!type || !type.children) return []
+    return type.children
+  })
+
+  function handleAddServiceCategoryChange() {
+    addServiceForm.product_id = null
+    addServiceProductDetail.value = null
+  }
+
+  function handleAddServiceSubChange(productId) {
+    addServiceForm.product_id = productId || null
+    handleAddServiceProductChange()
+  }
   const serviceUpstreamSupplierOptions = ref([])
   const serviceUpstreamForm = reactive({
     supplier_id: null,
@@ -448,10 +466,6 @@ export function useUserDetail() {
     { label: '最后登录 IP', value: userDetail.value.last_login_ip || '-' },
   ]))
 
-  const addServiceSelectedProduct = computed(() => (
-    addServiceProductOptions.value.find((item) => Number(item.id) === Number(addServiceForm.product_id)) || null
-  ))
-
   const addServiceCanLinkUpstream = computed(() => (
     Number(addServiceProductDetail.value?.supplier_id || 0) > 0
     && Number(addServiceProductDetail.value?.supplier_product_id || 0) > 0
@@ -469,7 +483,7 @@ export function useUserDetail() {
   })
 
   const addServiceUpstreamChannel = computed(() => (
-    addServiceProductDetail.value?.supplier_name || addServiceSelectedProduct.value?.supplier_name || '-'
+    addServiceProductDetail.value?.supplier_name || '-'
   ))
 
   const servicePricingEntries = computed(() => (
@@ -669,6 +683,7 @@ export function useUserDetail() {
   function resetAddServiceForm() {
     Object.assign(addServiceForm, createDefaultAddServiceForm())
     addServiceProductDetail.value = null
+    addServiceSelectedCategory.value = null
     addServiceFormRef.value?.clearValidate?.()
   }
 
@@ -1190,6 +1205,59 @@ export function useUserDetail() {
     }
   }
 
+  async function loadAddServiceCategoryTree() {
+    addServiceCategoriesLoading.value = true
+    try {
+      const [catRes, prodRes] = await Promise.all([
+        productApi.categories(),
+        productApi.list({ status: 1, page: 1, page_size: 200 }),
+      ])
+
+      const rawTree = (catRes?.data?.tree || [])
+      const productList = Array.isArray(prodRes?.data?.list) ? prodRes.data.list : []
+      addServiceAllProducts.value = productList
+
+      // 按 product_type_label 一级分组
+      const typeMap = new Map()
+      rawTree.forEach((l1) => {
+        if (!l1.children || !l1.children.length) return
+        const typeLabel = l1.product_type_label || l1.product_type || l1.name
+        if (!typeMap.has(typeLabel)) {
+          typeMap.set(typeLabel, [])
+        }
+        // 把 l1 下的 l2 children 按 type 归并
+        l1.children.forEach((l2) => {
+          const products = productList
+            .filter((p) => Number(p.product_group_id) === Number(l2.id))
+            .map((p) => ({ value: p.id, label: p.name }))
+          if (!products.length) return
+          typeMap.get(typeLabel).push({
+            value: l2.id,
+            label: l2.name,
+            children: products,
+          })
+        })
+      })
+
+      const tree = []
+      typeMap.forEach((children, typeLabel) => {
+        if (!children.length) return
+        tree.push({
+          value: typeLabel,
+          label: typeLabel,
+          children,
+        })
+      })
+
+      addServiceCategoryTree.value = tree
+      addServiceCategoryOptions.value = tree.map(({ value, label }) => ({ value, label }))
+    } catch (error) {
+      ElMessage.error(error?.response?.data?.message || '加载商品分类失败')
+    } finally {
+      addServiceCategoriesLoading.value = false
+    }
+  }
+
   function syncAddServiceAmountFromCycle() {
     const matchedCycle = addServiceBillingOptions.value.find((item) => item.value === addServiceForm.billing_cycle)
     addServiceForm.amount = matchedCycle ? matchedCycle.amount : null
@@ -1200,6 +1268,8 @@ export function useUserDetail() {
     addServiceForm.billing_cycle = ''
     addServiceForm.amount = null
     addServiceForm.upstream_host_id = null
+    addServiceForm.os = ''
+    addServiceOsOptions.value = []
     if (!addServiceForm.product_id) return
 
     addServiceProductDetailLoading.value = true
@@ -1210,6 +1280,9 @@ export function useUserDetail() {
       const firstCycle = addServiceBillingOptions.value[0]
       addServiceForm.billing_cycle = firstCycle?.value || ''
       syncAddServiceAmountFromCycle()
+      if (!addServiceBillingOptions.value.length) {
+        ElMessage.warning('当前商品未配置价格，请联系管理员配置')
+      }
       if (addServiceForm.source_type === 'upstream' && !addServiceCanLinkUpstream.value) {
         addServiceForm.source_type = 'manual'
       }
@@ -1217,6 +1290,20 @@ export function useUserDetail() {
       ElMessage.error(error?.response?.data?.message || '加载商品详情失败')
     } finally {
       addServiceProductDetailLoading.value = false
+    }
+
+    fetchAddServiceOsOptions()
+  }
+
+  async function fetchAddServiceOsOptions() {
+    addServiceOsLoading.value = true
+    try {
+      const res = await userApi.osOptions()
+      addServiceOsOptions.value = res?.data?.groups || []
+    } catch {
+      addServiceOsOptions.value = []
+    } finally {
+      addServiceOsLoading.value = false
     }
   }
 
@@ -1230,8 +1317,8 @@ export function useUserDetail() {
   async function openAddServiceDialog() {
     resetAddServiceForm()
     addServiceDialogVisible.value = true
-    if (!addServiceProductOptions.value.length) {
-      await loadAddServiceProducts()
+    if (!addServiceCategoryTree.value.length) {
+      await loadAddServiceCategoryTree()
     }
   }
 
@@ -1247,11 +1334,7 @@ export function useUserDetail() {
       product_id: Number(addServiceForm.product_id || 0),
       amount: toNumber(addServiceForm.amount),
       auto_renew: Number(addServiceForm.auto_renew ? 1 : 0),
-      port: addServiceForm.port ? Number(addServiceForm.port) : null,
-      expires_at: addServiceForm.expires_at || null,
-      upstream_host_id: addServiceForm.source_type === 'upstream'
-        ? Number(addServiceForm.upstream_host_id || 0)
-        : null,
+      upstream_host_id: null,
     }
 
     addServiceSubmitting.value = true
@@ -1630,6 +1713,9 @@ export function useUserDetail() {
     addServiceSubmitting,
     addServiceProductsLoading,
     addServiceProductDetailLoading,
+    addServiceCategoriesLoading,
+    addServiceOsOptions,
+    addServiceOsLoading,
     editFormRef,
     editForm,
     rechargeFormRef,
@@ -1637,6 +1723,10 @@ export function useUserDetail() {
     addServiceFormRef,
     addServiceForm,
     addServiceProductOptions,
+    addServiceCategoryTree,
+    addServiceCategoryOptions,
+    addServiceSelectedCategory,
+    addServiceSubOptions,
     servicesState,
     serviceConsoleState,
     invoicesState,
@@ -1681,6 +1771,8 @@ export function useUserDetail() {
     openEditDialog,
     openAddServiceDialog,
     handleAddServiceProductChange,
+    handleAddServiceCategoryChange,
+    handleAddServiceSubChange,
     handleAddServiceSourceChange,
     handleSubmitAddService,
     syncAddServiceAmountFromCycle,

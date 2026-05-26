@@ -32,4 +32,5 @@ export default {
   operationLogs:(id, params) => request.get(`/admin/users/${id}/operation-logs`, { params }),
   smsLogs:      (id, params) => request.get(`/admin/users/${id}/sms-logs`, { params }),
   emailLogs:    (id, params) => request.get(`/admin/users/${id}/email-logs`, { params }),
+  osOptions:    () => request.get('/admin/os-options'),
 }

@@ -23,11 +23,6 @@
             <strong>{{ meta.baseURL }}</strong>
           </article>
         </div>
-
-        <div class="page-actions">
-          <el-button @click="copyText('cmd /c npm run api:catalog', '刷新命令已复制')">复制刷新命令</el-button>
-          <el-button type="primary" @click="copyFilteredEndpoints(filteredItems)">复制当前结果</el-button>
-        </div>
       </div>
     </section>
 

@@ -6,8 +6,9 @@
         placeholder="搜索服务名、域名、账单号、配置名"
         clearable
         @keyup.enter="emit('search')"
+        @clear="emit('search')"
       />
-      <el-select v-model="state.filters.status" placeholder="状态" clearable>
+      <el-select v-model="state.filters.status" placeholder="状态" clearable @change="emit('search')">
         <el-option
           v-for="option in serviceStatusOptions"
           :key="option.value"
@@ -15,12 +16,14 @@
           :value="option.value"
         />
       </el-select>
-      <el-button type="primary" @click="emit('search')">查询</el-button>
-      <el-button @click="emit('reset')">重置</el-button>
       <div class="toolbar-actions">
         <el-button type="primary" @click="emit('add')">添加实例</el-button>
-        <el-button :loading="state.refreshing" @click="emit('reload')">刷新列表</el-button>
-        <el-button :loading="state.refreshingStatus" @click="emit('refresh-status')">刷新状态</el-button>
+        <el-button
+          :loading="state.refreshing || state.refreshingStatus"
+          :icon="Refresh"
+          class="refresh-btn"
+          @click="handleRefresh"
+        />
       </div>
     </div>
 
@@ -102,6 +105,7 @@
 </template>
 
 <script setup>
+import { Refresh } from '@element-plus/icons-vue'
 import { formatDateTime } from '@/utils/datetime'
 import { SERVICE_STATUS_MAP, toSelectOptions } from '@shared/statusConfig'
 import { useResponsive } from '@/composables/useResponsive'
@@ -115,6 +119,11 @@ function handleAction(command, row) {
   } else {
     emit(command, row)
   }
+}
+
+function handleRefresh() {
+  emit('reload')
+  emit('refresh-status')
 }
 
 const props = defineProps({
@@ -134,7 +143,6 @@ const props = defineProps({
 
 const emit = defineEmits([
   'search',
-  'reset',
   'add',
   'reload',
   'refresh-status',
@@ -173,6 +181,13 @@ function handlePageSizeChange(pageSize) {
   gap: 10px;
   margin-left: auto;
   flex-wrap: wrap;
+  align-items: center;
+}
+
+.refresh-btn {
+  width: 36px;
+  min-width: 36px;
+  padding: 0;
 }
 
 .toolbar :deep(.el-input) {
@@ -229,14 +244,35 @@ function handlePageSizeChange(pageSize) {
 }
 
 @media (max-width: 768px) {
-  .toolbar :deep(.el-input),
-  .toolbar :deep(.el-select),
-  .toolbar :deep(.el-button) {
+  .toolbar {
+    gap: 8px;
+  }
+
+  .toolbar :deep(.el-input) {
     width: 100%;
+    flex-basis: 100%;
+  }
+
+  .toolbar :deep(.el-select) {
+    width: auto;
+    min-width: 100px;
+    flex: 1;
   }
 
   .toolbar-actions {
-    width: 100%;
+    margin-left: 0;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .toolbar-actions :deep(.el-button) {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .toolbar .refresh-btn {
+    flex: 0 0 36px;
+    min-width: 36px;
   }
 }
 </style>

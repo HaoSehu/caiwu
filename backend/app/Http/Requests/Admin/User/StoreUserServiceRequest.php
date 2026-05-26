@@ -22,7 +22,7 @@ class StoreUserServiceRequest extends AdminFormRequest
             'internal_ip' => ['nullable', 'string', 'max:100'],
             'port' => ['nullable', 'integer', 'between:1,65535'],
             'username' => ['nullable', 'string', 'max:100'],
-            'password' => ['nullable', 'string', 'max:100'],
+            'password' => ['nullable', 'string', 'max:200'],
             'upstream_host_id' => ['nullable', 'required_if:source_type,upstream', 'integer', 'min:1'],
             'upstream_status' => ['nullable', 'string', 'max:50'],
             'os' => ['nullable', 'string', 'max:100'],

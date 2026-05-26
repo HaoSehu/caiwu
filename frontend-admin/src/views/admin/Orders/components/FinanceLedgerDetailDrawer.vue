@@ -45,72 +45,32 @@
         </div>
       </section>
 
-      <section class="ledger-grid">
-        <article class="ledger-card">
-          <div class="ledger-card__head">
-            <strong>基础摘要</strong>
-          </div>
-          <div class="kv-grid">
-            <div class="kv-item">
-              <span>收支方向</span>
-              <strong>{{ detail.direction === 'out' ? '支出' : '收入' }}</strong>
-            </div>
-            <div class="kv-item">
-              <span>变动金额</span>
-              <strong :class="Number(detail.change_amount || 0) >= 0 ? 'amount-in' : 'amount-out'">
-                {{ signedMoney(detail.change_amount) }}
-              </strong>
-            </div>
-            <div class="kv-item">
-              <span>变动后余额</span>
-              <strong>{{ formatMoney(detail.balance_after) }}</strong>
-            </div>
-            <div class="kv-item">
-              <span>操作人</span>
-              <strong>{{ detail.operator || '--' }}</strong>
-            </div>
-            <div class="kv-item">
-              <span>来源对象</span>
-              <strong>{{ resolveSourceMeta(detail) }}</strong>
-            </div>
-            <div class="kv-item">
-              <span>Trace ID</span>
-              <strong class="mono">{{ detail.trace_id || '--' }}</strong>
-            </div>
-          </div>
-        </article>
+      <section class="ledger-card">
+        <div class="ledger-card__head">
+          <strong>基础摘要</strong>
+        </div>
+        <el-table :data="summaryRows" size="small" :show-header="false" stripe>
+          <el-table-column prop="label" width="100" />
+          <el-table-column prop="value">
+            <template #default="{ row }">
+              <span :class="row.class || ''">{{ row.value }}</span>
+            </template>
+          </el-table-column>
+        </el-table>
+      </section>
 
-        <article class="ledger-card">
-          <div class="ledger-card__head">
-            <strong>关联对象</strong>
-          </div>
-          <div class="kv-grid">
-            <div class="kv-item">
-              <span>账单号</span>
-              <strong class="mono">{{ detail.invoice?.invoice_no || '--' }}</strong>
-            </div>
-            <div class="kv-item">
-              <span>账单状态</span>
-              <strong>{{ detail.invoice?.status_label || '--' }}</strong>
-            </div>
-            <div class="kv-item">
-              <span>支付号</span>
-              <strong class="mono">{{ detail.payment?.payment_no || '--' }}</strong>
-            </div>
-            <div class="kv-item">
-              <span>支付渠道</span>
-              <strong>{{ detail.payment?.gateway_label || '--' }}</strong>
-            </div>
-            <div class="kv-item">
-              <span>支付状态</span>
-              <strong>{{ detail.payment?.status_label || '--' }}</strong>
-            </div>
-            <div class="kv-item">
-              <span>渠道交易号</span>
-              <strong class="mono">{{ detail.payment?.trade_no || '--' }}</strong>
-            </div>
-          </div>
-        </article>
+      <section class="ledger-card">
+        <div class="ledger-card__head">
+          <strong>关联对象</strong>
+        </div>
+        <el-table :data="referenceRows" size="small" :show-header="false" stripe>
+          <el-table-column prop="label" width="100" />
+          <el-table-column prop="value">
+            <template #default="{ row }">
+              <span :class="row.mono ? 'mono' : ''">{{ row.value }}</span>
+            </template>
+          </el-table-column>
+        </el-table>
       </section>
 
       <section class="ledger-card">
@@ -262,6 +222,31 @@ const paymentCallbacks = computed(() => Array.isArray(props.detail?.audit?.payme
 const auditLogs = computed(() => Array.isArray(props.detail?.audit?.audit_logs) ? props.detail.audit.audit_logs : [])
 const traceLinks = computed(() => Array.isArray(props.detail?.audit?.trace_links) ? props.detail.audit.trace_links : [])
 const eventStatusFallback = computed(() => props.detail?.direction === 'out' ? '已支出' : '已入账')
+
+const summaryRows = computed(() => {
+  const d = props.detail || {}
+  const amountClass = Number(d.change_amount || 0) >= 0 ? 'amount-in' : 'amount-out'
+  return [
+    { label: '收支方向', value: d.direction === 'out' ? '支出' : '收入' },
+    { label: '变动金额', value: signedMoney(d.change_amount), class: amountClass },
+    { label: '变动后余额', value: formatMoney(d.balance_after) },
+    { label: '操作人', value: d.operator || '--' },
+    { label: '来源对象', value: resolveSourceMeta(d) },
+    { label: 'Trace ID', value: d.trace_id || '--', mono: true },
+  ]
+})
+
+const referenceRows = computed(() => {
+  const d = props.detail || {}
+  return [
+    { label: '账单号', value: d.invoice?.invoice_no || '--', mono: true },
+    { label: '账单状态', value: d.invoice?.status_label || '--' },
+    { label: '支付号', value: d.payment?.payment_no || '--', mono: true },
+    { label: '支付渠道', value: d.payment?.gateway_label || '--' },
+    { label: '支付状态', value: d.payment?.status_label || '--' },
+    { label: '渠道交易号', value: d.payment?.trade_no || '--', mono: true },
+  ]
+})
 
 function handleVisibleUpdate(value) {
   if (!value) {
@@ -438,12 +423,6 @@ function logTagType(tone) {
   font-size: 13px;
 }
 
-.ledger-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
-
 .ledger-grid--bottom {
   align-items: stretch;
 }
@@ -470,29 +449,17 @@ function logTagType(tone) {
   color: $text-color-placeholder;
 }
 
-.kv-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+.ledger-card :deep(.el-table) {
+  font-size: 13px;
 }
 
-.kv-item {
-  padding: 14px 16px;
-  border-radius: 16px;
-  background: #f8fafc;
-  border: 1px solid rgba(15, 23, 42, 0.06);
+.ledger-card :deep(.el-table__cell) {
+  padding: 8px 0;
 }
 
-.kv-item span {
-  display: block;
-  margin-bottom: 8px;
-  font-size: 12px;
+.ledger-card :deep(.el-table td:first-child .cell) {
   color: $text-color-secondary;
-}
-
-.kv-item strong {
-  color: $text-color-primary;
-  line-height: 1.5;
+  font-size: 12px;
 }
 
 .source-chain {
@@ -640,30 +607,125 @@ function logTagType(tone) {
 }
 
 @media (max-width: 1200px) {
-  .ledger-grid,
-  .kv-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .ledger-grid--bottom {
+    grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 768px) {
-  .ledger-drawer-header,
-  .ledger-summary-panel {
-    flex-direction: column;
+  .ledger-detail-drawer :deep(.el-drawer) {
+    width: 100% !important;
   }
 
-  .ledger-grid,
-  .kv-grid {
-    grid-template-columns: 1fr;
+  .ledger-drawer-shell {
+    padding: 14px;
+    gap: 12px;
+  }
+
+  .ledger-drawer-header {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .ledger-drawer-title h3 {
+    font-size: 17px;
+  }
+
+  .ledger-drawer-subtitle {
+    font-size: 13px;
+  }
+
+  .ledger-drawer-actions {
+    gap: 6px;
+  }
+
+  .ledger-summary-panel {
+    flex-direction: column;
+    padding: 14px;
+    border-radius: 14px;
+  }
+
+  .summary-number {
+    font-size: 24px;
+  }
+
+  .summary-meta {
+    gap: 8px;
+    font-size: 12px;
   }
 
   .summary-highlight {
     min-width: 0;
     width: 100%;
+    padding: 12px 14px;
+    border-radius: 12px;
+  }
+
+  .summary-highlight strong {
+    font-size: 18px;
+  }
+
+  .ledger-grid--bottom {
+    grid-template-columns: 1fr;
+  }
+
+  .ledger-summary-panel,
+  .ledger-card {
+    border-radius: 14px;
+  }
+
+  .ledger-card {
+    padding: 14px;
+  }
+
+  .ledger-card__head {
+    margin-bottom: 10px;
+  }
+
+  .ledger-card__head strong {
+    font-size: 14px;
+  }
+
+  .ledger-card :deep(.el-table) {
+    font-size: 12px;
+  }
+
+  .ledger-card :deep(.el-table__cell) {
+    padding: 6px 0;
   }
 
   .source-node {
     grid-template-columns: 1fr;
+    padding: 12px;
+    border-radius: 12px;
+    gap: 8px;
+  }
+
+  .source-node__icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    font-size: 12px;
+  }
+
+  .source-node__title strong {
+    font-size: 13px;
+  }
+
+  .timeline-card {
+    padding: 10px 12px;
+    border-radius: 10px;
+  }
+
+  .timeline-card__head strong {
+    font-size: 13px;
+  }
+
+  .line-item,
+  .trace-item,
+  .log-item {
+    padding: 12px;
+    border-radius: 12px;
   }
 }
 </style>

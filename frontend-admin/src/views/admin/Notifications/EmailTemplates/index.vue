@@ -12,12 +12,6 @@
             <p v-pre>正文支持 HTML 片段编辑，系统发送时会自动套用站点邮件外壳，并可直接实时预览。支持变量占位 `{{ key }}` 和条件区块 `{{#key}}...{{/key}}`。</p>
           </div>
         </div>
-
-        <div class="page-actions">
-          <el-button :icon="RefreshRight" @click="loadSettings">刷新</el-button>
-          <el-button @click="resetCurrentTemplate">恢复默认</el-button>
-          <el-button type="primary" :icon="Check" :loading="savingTemplates" @click="saveCurrentTemplate">保存模板</el-button>
-        </div>
       </div>
 
       <el-card shadow="never" class="templates-card" v-loading="loading">

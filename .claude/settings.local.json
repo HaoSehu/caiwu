@@ -1,0 +1,45 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "mcp__plugin_playwright_playwright__browser_resize",
+      "mcp__plugin_playwright_playwright__browser_navigate",
+      "mcp__plugin_playwright_playwright__browser_take_screenshot",
+      "mcp__plugin_playwright_playwright__browser_snapshot",
+      "mcp__plugin_playwright_playwright__browser_click",
+      "mcp__plugin_playwright_playwright__browser_evaluate",
+      "Bash(php artisan *)",
+      "Bash(npx skills *)",
+      "Bash(php *)",
+      "Bash(npx tsc *)",
+      "Bash(cat tsconfig.json)",
+      "Bash(find . -maxdepth 2 -name \"tsconfig*.json\" -not -path \"./node_modules/*\")",
+      "Bash(curl -s -X POST http://127.0.0.1:8000/api/client/login -H \"Content-Type: application/json\" -d '{\"email\":\"2908990438@qq.com\",\"password\":\"Cheng2008li#7111\"}')",
+      "Bash(curl -s \"http://127.0.0.1:8000/api/client/coupons/summary\" -H \"Authorization: Bearer $\\(curl -s -X POST http://127.0.0.1:8000/api/client/login -H \"Content-Type: application/json\" -d '{\"email\":\"2908990438@qq.com\",\"password\":\"Cheng2008li#7111\"}')",
+      "Bash(node *)",
+      "Bash(mkdir -p ~/.claude/skills)",
+      "Bash(cp -r /tmp/workflow-architect-repo/claude/skills/workflow-architect ~/.claude/skills/workflow-architect)",
+      "Bash(cp -r /tmp/workflow-architect-repo/claude/skills/project-surgeon ~/.claude/skills/project-surgeon)",
+      "Bash(rg protected \\\\$connection *)",
+      "Bash(rg \\\\$service-> *)",
+      "Bash(rg \\\\$service *)",
+      "Bash(grep -n 'connection\\\\|protected \\\\$table' /home/admin/Desktop/caiwu/backend/app/Models/User.php)",
+      "Bash(mysql *)",
+      "Bash(sudo mysql *)",
+      "Bash(grep *)",
+      "Bash(/d/BtSoft/php/82/php.exe -r ' *)",
+      "Bash(timeout 30 /d/BtSoft/php/82/php.exe *)",
+      "Bash(bash *)",
+      "Bash(# 移动2: backend 乱码路径的 test_output.txt → 文档/测试/原始输出/ \\(修正文件名\\) *)",
+      "Bash(npx vite *)",
+      "Bash(xargs ls -la)",
+      "Bash(curl -s 'http://127.0.0.1:5174/api/admin/invoices?page=1&page_size=3' -H 'Authorization: Bearer 9|PsCjBpVtVfZHFqp64n58jkCfLU3GygxOsULUnqq4416f52a0')",
+      "Bash(python -m json.tool)",
+      "Bash(curl -s http://127.0.0.1:5174/platform-config.json)",
+      "Bash(find *)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\USER125536\\Desktop\\caiwu\\backend"
+    ]
+  }
+}

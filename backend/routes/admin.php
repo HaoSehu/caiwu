@@ -52,6 +52,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->middleware('permission:'.AdminPermissions::DASHBOARD_VIEW);
     Route::get('/dashboard/stats', [DashboardController::class, 'stats'])->middleware('permission:'.AdminPermissions::DASHBOARD_VIEW);
     Route::get('/dashboard/recent-invoices', [DashboardController::class, 'recentInvoices'])->middleware('permission:'.AdminPermissions::DASHBOARD_VIEW);
+    Route::get('/dashboard/monthly-revenue', [DashboardController::class, 'monthlyRevenue'])->middleware('permission:'.AdminPermissions::DASHBOARD_VIEW);
 
     // 用户管理 - 读
     Route::middleware(['permission:'.AdminPermissions::USER_LIST])->group(function () {
@@ -103,6 +104,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function () {
         Route::put('/users/{user}/services/{serviceId}/reinstall', [UserController::class, 'serviceReinstall']);
         Route::post('/users/{user}/services/{serviceId}/refund', [UserController::class, 'refundService']);
         Route::post('/services/custom-hostnames/batch', [ServiceController::class, 'batchUpdateCustomHostnames']);
+        Route::get('/os-options', [UserController::class, 'osOptions']);
     });
 
     Route::middleware(['permission:'.AdminPermissions::USER_RECHARGE])->group(function () {

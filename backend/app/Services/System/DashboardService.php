@@ -139,4 +139,81 @@ class DashboardService
             ->values()
             ->all();
     }
+
+    public function monthlyRevenue(): array
+    {
+        return Cache::remember(
+            'dashboard:overview:monthly_revenue',
+            now()->addSeconds(self::OVERVIEW_STATS_CACHE_TTL_SECONDS),
+            fn () => $this->buildMonthlyRevenue()
+        );
+    }
+
+    private function buildMonthlyRevenue(): array
+    {
+        $month = now()->startOfMonth();
+        $today = now()->startOfDay();
+        $daysInMonth = (int) now()->format('t');
+
+        // 本月各产品营收占比（已付账单，Top 8 + 其他）
+        $allProducts = Invoice::query()
+            ->where('created_at', '>=', $month)
+            ->where('status', InvoiceStatus::PAID)
+            ->selectRaw('
+                COALESCE(NULLIF(product_spec_snapshot, ""), "未知产品") as product_name,
+                COALESCE(SUM(paid_amount), 0) as total_amount,
+                COUNT(*) as count
+            ')
+            ->groupByRaw('COALESCE(NULLIF(product_spec_snapshot, ""), "未知产品")')
+            ->orderByDesc('total_amount')
+            ->get();
+
+        $topProducts = $allProducts->take(8);
+        $otherAmount = $allProducts->skip(8)->sum('total_amount');
+
+        $revenueByProduct = $topProducts
+            ->map(function ($row) {
+                return [
+                    'label' => (string) ($row->product_name ?: '未知产品'),
+                    'amount' => (float) $row->total_amount,
+                    'count' => (int) $row->count,
+                ];
+            })
+            ->values()
+            ->all();
+
+        if ($otherAmount > 0) {
+            $revenueByProduct[] = [
+                'label' => '其他',
+                'amount' => (float) $otherAmount,
+                'count' => (int) $allProducts->skip(8)->sum('count'),
+            ];
+        }
+
+        // 本月每日已付金额趋势
+        $dailyPaid = Invoice::query()
+            ->where('status', InvoiceStatus::PAID)
+            ->where('paid_at', '>=', $month)
+            ->selectRaw('DATE(paid_at) as date, COALESCE(SUM(paid_amount), 0) as daily_amount, COUNT(*) as daily_count')
+            ->groupByRaw('DATE(paid_at)')
+            ->get()
+            ->keyBy('date');
+
+        $dailyRevenue = [];
+        for ($d = 1; $d <= $daysInMonth; $d++) {
+            $dateStr = $month->copy()->addDays($d - 1)->format('Y-m-d');
+            $dailyRevenue[] = [
+                'date' => $dateStr,
+                'day' => $d,
+                'amount' => (float) ($dailyPaid[$dateStr]->daily_amount ?? 0),
+                'count' => (int) ($dailyPaid[$dateStr]->daily_count ?? 0),
+            ];
+        }
+
+        return [
+            'revenue_by_product' => $revenueByProduct,
+            'daily_revenue' => $dailyRevenue,
+            'month_label' => now()->format('Y年n月'),
+        ];
+    }
 }

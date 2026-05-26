@@ -343,6 +343,36 @@ class FinanceLedgerQueryService
                 });
             });
         }
+
+        if (! empty($filters['keyword'])) {
+            $keyword = trim((string) $filters['keyword']);
+
+            // digital exact match → user_id
+            if (ctype_digit($keyword)) {
+                $query->where('user_id', (int) $keyword);
+            } else {
+                $invoiceIds = Invoice::query()
+                    ->where('invoice_no', 'like', '%'.$keyword.'%')
+                    ->pluck('id');
+                $paymentIdsFromInvoice = Payment::query()->whereIn('invoice_id', $invoiceIds)->pluck('id');
+
+                $paymentIds = Payment::query()
+                    ->where('payment_no', 'like', '%'.$keyword.'%')
+                    ->pluck('id');
+                $invoiceIdsFromPayment = Payment::query()->whereIn('id', $paymentIds)->whereNotNull('invoice_id')->pluck('invoice_id');
+
+                $allInvoiceIds = $invoiceIds->merge($invoiceIdsFromPayment)->unique();
+                $allPaymentIds = $paymentIds->merge($paymentIdsFromInvoice)->unique();
+
+                $query->where(function (Builder $builder) use ($allInvoiceIds, $allPaymentIds) {
+                    $builder->where(function (Builder $inner) use ($allInvoiceIds) {
+                        $inner->where('source_type', 'invoice')->whereIn('source_id', $allInvoiceIds);
+                    })->orWhere(function (Builder $inner) use ($allPaymentIds) {
+                        $inner->where('source_type', 'payment')->whereIn('source_id', $allPaymentIds);
+                    });
+                });
+            }
+        }
     }
 
     private function attachContextResolvers(Builder $query): void

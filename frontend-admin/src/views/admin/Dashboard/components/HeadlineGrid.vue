@@ -35,7 +35,6 @@ defineProps({
   align-items: center;
   padding: 18px 16px;
   border: 1px solid $border-color;
-  border-left: 3px solid transparent;
   border-radius: $sm-border-radius;
   background: $bg-color-card;
   box-shadow: $shadow-xs;
@@ -49,11 +48,6 @@ defineProps({
   }
 }
 
-.headline-card.blue { border-left-color: $color-primary; }
-.headline-card.green { border-left-color: $color-success; }
-.headline-card.orange { border-left-color: $color-warning; }
-.headline-card.slate { border-left-color: $color-info; }
-
 .headline-icon {
   display: grid;
   place-items: center;
@@ -64,10 +58,7 @@ defineProps({
   flex-shrink: 0;
 }
 
-.headline-card.blue .headline-icon { background: $color-primary-soft; color: $color-primary; }
-.headline-card.green .headline-icon { background: $color-success-soft; color: $color-success; }
-.headline-card.orange .headline-icon { background: $color-warning-soft; color: $color-warning; }
-.headline-card.slate .headline-icon { background: $color-info-soft; color: $color-info; }
+.headline-icon { background: $bg-color; color: $text-color-secondary; }
 
 .headline-copy { min-width: 0; }
 
@@ -115,8 +106,11 @@ defineProps({
 }
 
 @include mobile-sm-and-below {
-  .headline-grid { grid-template-columns: 1fr; }
-  .headline-card { flex-direction: row; align-items: center; gap: 10px; }
-  .headline-copy small { display: block; }
+  .headline-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .headline-card { flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px 8px; }
+  .headline-copy strong { font-size: 15px; }
+  .headline-copy span { font-size: 11px; }
+  .headline-copy small { display: none; }
+  .headline-icon { width: 28px; height: 28px; font-size: 14px; }
 }
 </style>

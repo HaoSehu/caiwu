@@ -29,9 +29,6 @@
           <small>{{ item.usage_count || 0 }}</small>
         </button>
 
-        <button type="button" class="catalog-kind-chip catalog-kind-chip--ghost" @click="openTypeManagerDialog('create')">
-          <span>新增种类</span>
-        </button>
       </div>
     </section>
 
@@ -4456,6 +4453,8 @@ onMounted(loadData)
   grid-template-columns: 300px minmax(0, 1fr);
   gap: 14px;
   align-items: start;
+  width: 100%;
+  min-width: 0;
 }
 
 .panel-header {
@@ -6171,6 +6170,7 @@ onMounted(loadData)
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  min-width: 0;
   margin-top: 14px;
 }
 
@@ -6179,6 +6179,7 @@ onMounted(loadData)
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  min-width: 0;
 }
 
 .product-table {

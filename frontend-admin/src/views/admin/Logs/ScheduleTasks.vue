@@ -5,10 +5,6 @@
         <h2>定时任务</h2>
         <p>管理系统调度任务的执行状态与手动触发</p>
       </div>
-
-      <div class="page-actions">
-        <el-button @click="loadOverview">刷新</el-button>
-      </div>
     </section>
 
     <el-card shadow="never">

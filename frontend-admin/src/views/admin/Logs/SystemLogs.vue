@@ -5,10 +5,6 @@
         <h2>系统日志</h2>
         <p>查看应用运行日志、警告与错误信息，辅助快速排查系统故障。</p>
       </div>
-
-      <div class="page-actions">
-        <el-button :icon="RefreshRight" @click="loadData">刷新</el-button>
-      </div>
     </section>
 
     <section class="summary-strip">
