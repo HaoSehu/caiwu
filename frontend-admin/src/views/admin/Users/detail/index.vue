@@ -1,13 +1,12 @@
 <template>
   <div class="page-container admin-page user-detail-page" v-loading="detailLoading">
     <section class="admin-page-head user-hero">
-      <div class="hero-main">
-        <el-button link class="back-link" @click="goBack">
-          <el-icon><ArrowLeft /></el-icon>
-          返回用户列表
-        </el-button>
-
-        <div class="hero-profile">
+      <button class="back-link" @click="goBack">
+        <el-icon><ArrowLeft /></el-icon>
+        返回用户列表
+      </button>
+      <div class="hero-body">
+        <div class="hero-main">
           <div class="hero-avatar">{{ avatarText }}</div>
           <div class="hero-copy">
             <div class="hero-title-row">
@@ -15,7 +14,7 @@
               <el-tag :type="statusTagType" effect="plain" round>{{ statusText }}</el-tag>
               <el-tag v-if="userDetail.is_verified" type="success" effect="plain" round>已实名</el-tag>
             </div>
-            <p>{{ userDetail.email || '-' }}</p>
+            <p v-if="heroSubtitle">{{ heroSubtitle }}</p>
             <div class="hero-meta">
               <span>用户 ID #{{ userDetail.id || '--' }}</span>
               <span>注册时间 {{ formatDateTime(userDetail.created_at) }}</span>
@@ -23,23 +22,22 @@
             </div>
           </div>
         </div>
-      </div>
-
-      <div class="hero-actions">
-        <el-button type="primary" :disabled="!userDetail.id" :loading="loginAsLoading" @click="handleLoginAs">
-          以该客户登录
-        </el-button>
-        <el-button :disabled="!userDetail.id" @click="openEditDialog">编辑资料</el-button>
-        <el-button :disabled="!userDetail.id" @click="openRechargeDialog">资金管理</el-button>
-        <el-button
-          :disabled="!userDetail.id"
-          :loading="actionLoading"
-          :type="userDetail.status === 1 ? 'danger' : 'success'"
-          plain
-          @click="handleToggleStatus"
-        >
-          {{ userDetail.status === 1 ? '禁用账号' : '启用账号' }}
-        </el-button>
+        <div class="hero-actions">
+          <el-button type="primary" :disabled="!userDetail.id" :loading="loginAsLoading" @click="handleLoginAs">
+            代登录
+          </el-button>
+          <el-button :disabled="!userDetail.id" @click="openEditDialog">编辑资料</el-button>
+          <el-button :disabled="!userDetail.id" @click="openRechargeDialog">资金管理</el-button>
+          <el-button
+            :disabled="!userDetail.id"
+            :loading="actionLoading"
+            :type="userDetail.status === 1 ? 'danger' : 'success'"
+            plain
+            @click="handleToggleStatus"
+          >
+            {{ userDetail.status === 1 ? '禁用账号' : '启用账号' }}
+          </el-button>
+        </div>
       </div>
     </section>
 
@@ -48,17 +46,14 @@
         <span class="quick-stat__label">在线工单</span>
         <span class="quick-stat__value quick-stat__value--warning">{{ stats.ticket_open || 0 }}</span>
       </div>
-      <div class="quick-stat__divider" />
       <div class="quick-stat">
         <span class="quick-stat__label">余额</span>
         <span class="quick-stat__value quick-stat__value--success">{{ formatMoney(userDetail.balance) }}</span>
       </div>
-      <div class="quick-stat__divider" />
       <div class="quick-stat">
         <span class="quick-stat__label">总消费</span>
         <span class="quick-stat__value">{{ formatMoney(stats.total_expense) }}</span>
       </div>
-      <div class="quick-stat__divider" />
       <div class="quick-stat quick-stat--note">
         <span class="quick-stat__label">管理员备注</span>
         <span class="quick-stat__value quick-stat__value--muted">{{ userDetail.admin_note || '暂无' }}</span>
@@ -282,14 +277,12 @@
     <el-dialog
       v-model="addServiceDialogVisible"
       title="添加实例"
-      width="760px"
+      width="840px"
       destroy-on-close
       class="add-service-dialog"
     >
-      <div class="service-source-banner" :class="{ success: addServiceForm.source_type === 'upstream' && addServiceCanLinkUpstream }">
-        <span v-if="addServiceForm.source_type === 'manual'">手动开通适合人工交付场景，可录入主机信息，但不会自动发起上游控制。</span>
-        <span v-else-if="addServiceCanLinkUpstream">对接上游主机后，当前服务会直接接入现有实例管理能力。</span>
-        <span v-else>该商品尚未绑定可控上游，当前只能手动开通。</span>
+      <div class="service-source-banner info">
+        <span>录入实例信息，创建本地服务记录，不会自动发起上游控制。如需对接上游，请在服务控制台绑定上游实例。</span>
       </div>
 
       <el-form
@@ -297,104 +290,94 @@
         :model="addServiceForm"
         :rules="addServiceRules"
         label-width="92px"
-        v-loading="addServiceProductsLoading || addServiceProductDetailLoading"
+        v-loading="addServiceProductsLoading || addServiceProductDetailLoading || addServiceCategoriesLoading"
       >
-        <el-form-item label="服务来源" prop="source_type">
-          <el-radio-group v-model="addServiceForm.source_type" @change="handleAddServiceSourceChange">
-            <el-radio-button value="manual">手动开通</el-radio-button>
-            <el-radio-button value="upstream" :disabled="!addServiceCanLinkUpstream">对接上游主机</el-radio-button>
-          </el-radio-group>
-        </el-form-item>
+        <div class="service-form-section">
+          <div class="service-form-section__title">商品信息</div>
+          <div class="service-form-grid">
+            <el-form-item label="产品大类" class="service-form-span-2">
+              <el-select
+                v-model="addServiceSelectedCategory"
+                filterable
+                placeholder="请选择产品大类"
+                :loading="addServiceCategoriesLoading"
+                @change="handleAddServiceCategoryChange"
+              >
+                <el-option v-for="item in addServiceCategoryOptions" :key="item.value" :label="item.label" :value="item.value" />
+              </el-select>
+            </el-form-item>
 
-        <div class="service-form-grid">
-          <el-form-item label="选择商品" prop="product_id" class="service-form-span-2">
-            <el-select
-              v-model="addServiceForm.product_id"
-              filterable
-              placeholder="搜索并选择要开通的商品"
-              @change="handleAddServiceProductChange"
-            >
-              <el-option v-for="item in addServiceProductOptions" :key="item.id" :label="item.name" :value="item.id">
-                <div class="service-product-option">
-                  <strong>{{ item.name }}</strong>
-                  <span>{{ item.group_full_name || item.type_label || '-' }}</span>
-                </div>
-              </el-option>
-            </el-select>
-          </el-form-item>
+            <el-form-item label="选择商品" prop="product_id" class="service-form-span-2">
+              <el-select
+                v-model="addServiceForm.product_id"
+                :disabled="!addServiceSelectedCategory"
+                placeholder="请选择二级分类与商品"
+                :loading="addServiceCategoriesLoading"
+                @change="handleAddServiceSubChange"
+              >
+                <el-option-group
+                  v-for="group in addServiceSubOptions"
+                  :key="group.value"
+                  :label="group.label"
+                >
+                  <el-option v-for="product in group.children" :key="product.value" :label="product.label" :value="product.value" />
+                </el-option-group>
+              </el-select>
+            </el-form-item>
 
-          <el-form-item label="计费周期" prop="billing_cycle">
-            <el-select v-model="addServiceForm.billing_cycle" placeholder="请选择计费周期" @change="syncAddServiceAmountFromCycle">
-              <el-option v-for="item in addServiceBillingOptions" :key="item.value" :label="item.label" :value="item.value" />
-            </el-select>
-          </el-form-item>
+            <el-form-item label="计费周期" prop="billing_cycle">
+              <el-select v-model="addServiceForm.billing_cycle" placeholder="请选择计费周期" @change="syncAddServiceAmountFromCycle">
+                <el-option v-for="item in addServiceBillingOptions" :key="item.value" :label="item.label" :value="item.value" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="系统类型">
+              <el-cascader
+                v-model="addServiceForm.os"
+                :options="addServiceOsOptions"
+                :props="{ value: 'value', label: 'label', children: 'children', emitPath: false }"
+                placeholder="请选择操作系统"
+                style="width: 100%;"
+                clearable
+                filterable
+                :loading="addServiceOsLoading"
+              />
+            </el-form-item>
+          </div>
+        </div>
 
-          <template v-if="addServiceForm.source_type === 'manual'">
+        <div class="service-form-section">
+          <div class="service-form-section__title">业务配置</div>
+          <div class="service-form-grid">
             <el-form-item label="服务状态" prop="status">
               <el-select v-model="addServiceForm.status" placeholder="请选择服务状态">
                 <el-option v-for="item in serviceStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
               </el-select>
             </el-form-item>
-            <el-form-item label="服务名称">
-              <el-input v-model="addServiceForm.name" placeholder="为空时默认使用配置名或主机名" />
-            </el-form-item>
-            <el-form-item label="主机名/域名">
-              <el-input v-model="addServiceForm.domain" placeholder="如 svr-1001 / vm.example.com" />
-            </el-form-item>
             <el-form-item label="服务金额" prop="amount">
               <el-input-number v-model="addServiceForm.amount" :min="0" :precision="2" style="width: 100%;" />
             </el-form-item>
-            <el-form-item label="到期时间">
-              <el-date-picker
-                v-model="addServiceForm.expires_at"
-                type="datetime"
-                value-format="YYYY-MM-DD HH:mm:ss"
-                placeholder="不填则按计费周期自动计算"
-                style="width: 100%;"
-              />
+            <el-form-item label="服务名称">
+              <el-input v-model="addServiceForm.name" placeholder="为空时默认使用配置名" />
             </el-form-item>
             <el-form-item label="自动续费">
               <el-switch v-model="addServiceForm.auto_renew" :active-value="1" :inactive-value="0" />
             </el-form-item>
-            <el-form-item label="公网 IP">
-              <el-input v-model="addServiceForm.dedicated_ip" placeholder="如 1.2.3.4" />
-            </el-form-item>
-            <el-form-item label="内网 IP">
-              <el-input v-model="addServiceForm.internal_ip" placeholder="如 10.0.0.8" />
-            </el-form-item>
-            <el-form-item label="登录端口">
-              <el-input-number v-model="addServiceForm.port" :min="1" :max="65535" style="width: 100%;" />
-            </el-form-item>
-            <el-form-item label="登录账号">
-              <el-input v-model="addServiceForm.username" placeholder="如 root / administrator" />
-            </el-form-item>
-            <el-form-item label="登录密码">
-              <el-input v-model="addServiceForm.password" type="password" show-password />
-            </el-form-item>
-            <el-form-item label="系统类型">
-              <el-input v-model="addServiceForm.os" placeholder="如 Ubuntu 22.04 / Windows Server 2022" />
-            </el-form-item>
-          </template>
+          </div>
+        </div>
 
-          <template v-else>
-            <el-form-item label="上游通道">
-              <el-input :model-value="addServiceUpstreamChannel" disabled />
+        <div class="service-form-section">
+          <div class="service-form-grid no-gap">
+            <el-form-item label="备注" class="service-form-span-2">
+              <el-input
+                v-model="addServiceForm.remark"
+                type="textarea"
+                :rows="3"
+                maxlength="200"
+                show-word-limit
+                placeholder="记录本次手工开通说明或交付信息"
+              />
             </el-form-item>
-            <el-form-item label="上游实例 ID" prop="upstream_host_id">
-              <el-input-number v-model="addServiceForm.upstream_host_id" :min="1" style="width: 100%;" />
-            </el-form-item>
-          </template>
-
-          <el-form-item label="备注" class="service-form-span-2">
-            <el-input
-              v-model="addServiceForm.remark"
-              type="textarea"
-              :rows="4"
-              maxlength="200"
-              show-word-limit
-              placeholder="记录本次人工开通说明、上游备注或交付信息"
-            />
-          </el-form-item>
+          </div>
         </div>
       </el-form>
 
@@ -554,6 +537,7 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import UserBasicInfo from './components/UserBasicInfo.vue'
 import UserServices from './components/UserServices.vue'
@@ -581,6 +565,9 @@ const {
   addServiceSubmitting,
   addServiceProductsLoading,
   addServiceProductDetailLoading,
+  addServiceCategoriesLoading,
+  addServiceOsOptions,
+  addServiceOsLoading,
   serviceUpstreamDialogVisible,
   serviceUpstreamSubmitting,
   serviceUpstreamSuppliersLoading,
@@ -597,6 +584,10 @@ const {
   serviceUpstreamFormRef,
   servicePricingFormRef,
   addServiceProductOptions,
+  addServiceCategoryTree,
+  addServiceCategoryOptions,
+  addServiceSelectedCategory,
+  addServiceSubOptions,
   servicesState,
   serviceConsoleState,
   invoicesState,
@@ -646,6 +637,8 @@ const {
   openEditDialog,
   openAddServiceDialog,
   handleAddServiceProductChange,
+  handleAddServiceCategoryChange,
+  handleAddServiceSubChange,
   handleAddServiceSourceChange,
   handleSubmitAddService,
   syncAddServiceAmountFromCycle,
@@ -681,6 +674,16 @@ const {
   noticeStatusLabel,
   noticeStatusTagType,
 } = useUserDetail()
+
+const heroSubtitle = computed(() => {
+  const detail = userDetail.value || {}
+  const title = pageTitle.value || ''
+  // 如果标题已是邮箱，不重复显示
+  if (title === detail.email) {
+    return detail.phone || ''
+  }
+  return detail.email || ''
+})
 </script>
 
 <style lang="scss" scoped>
@@ -698,30 +701,39 @@ const {
   padding: 18px 20px;
 }
 
-.hero-main {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-width: 0;
-  flex: 1;
-}
-
 .back-link {
   align-self: flex-start;
   padding: 0;
+  margin-bottom: 12px;
   height: auto;
+  font-size: 13px;
   color: $text-color-secondary;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: none;
 
   &:hover {
     color: $color-primary;
   }
 }
 
-.hero-profile {
+.hero-body {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+}
+
+.hero-main {
+  display: flex;
+  align-items: flex-start;
   gap: 14px;
   min-width: 0;
+  flex: 1;
 }
 
 .hero-avatar {
@@ -790,28 +802,43 @@ const {
   gap: 8px;
   flex-wrap: wrap;
   flex-shrink: 0;
+
+  :deep(.el-button) {
+    flex: 1;
+    min-width: 60px;
+  }
 }
 
 .quick-stats {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0;
-  padding: 10px 20px;
+  padding: 0;
   background: $bg-color-card;
   border: 1px solid $border-color;
   border-radius: $lg-border-radius;
+  overflow: hidden;
 }
 
 .quick-stat {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 0 20px;
+  gap: 4px;
+  padding: 14px 12px;
   white-space: nowrap;
+  text-align: center;
+
+  &:not(:first-child) {
+    border-left: 1px solid $divider-color;
+  }
 
   &--note {
-    flex: 1;
     min-width: 0;
+
+    .quick-stat__label {
+      flex-shrink: 0;
+    }
 
     .quick-stat__value {
       overflow: hidden;
@@ -837,13 +864,6 @@ const {
   &--muted   { color: $text-color-secondary; font-weight: 400; }
 }
 
-.quick-stat__divider {
-  width: 1px;
-  height: 20px;
-  background: $divider-color;
-  flex-shrink: 0;
-}
-
 .text-success { color: $color-success; }
 .text-danger  { color: $color-danger; }
 .text-warning { color: $color-warning; }
@@ -851,12 +871,14 @@ const {
 
 .tabs-card :deep(.el-tabs__header) {
   margin-bottom: 12px;
+  border-bottom: 1px solid $divider-color;
 }
 
 .tabs-card :deep(.el-tabs__item) {
   height: 36px;
   font-size: 14px;
   font-weight: 500;
+  padding: 0 14px;
 }
 
 .toolbar {
@@ -975,14 +997,20 @@ const {
 }
 
 .service-source-banner {
-  margin-bottom: 14px;
-  padding: 10px 14px;
+  margin-bottom: 18px;
+  padding: 12px 16px;
   border-radius: $base-border-radius;
   background: $bg-color-soft;
   color: $text-color-secondary;
   font-size: 12px;
   line-height: 1.7;
   border-left: 3px solid $border-color;
+
+  &.info {
+    background: rgba($color-primary, 0.06);
+    color: $text-color-secondary;
+    border-left-color: $color-primary;
+  }
 
   &.success {
     background: rgba($color-success, 0.08);
@@ -991,10 +1019,29 @@ const {
   }
 }
 
+.service-form-section {
+  padding: 14px 0;
+
+  & + & {
+    border-top: 1px solid $divider-color;
+  }
+
+  &__title {
+    font-size: 13px;
+    font-weight: 600;
+    color: $text-color-primary;
+    margin-bottom: 12px;
+  }
+}
+
 .service-form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 2px 14px;
+  gap: 6px 16px;
+
+  &.no-gap {
+    gap: 0;
+  }
 }
 
 .service-form-span-2 {
@@ -1061,29 +1108,87 @@ const {
 }
 
 @media (max-width: 1280px) {
-  .quick-stats,
-  .referral-strip {
-    flex-wrap: wrap;
-    gap: 8px;
+  .quick-stats {
+    grid-template-columns: repeat(2, 1fr);
   }
 
-  .quick-stat__divider,
-  .referral-strip__divider {
-    display: none;
+  .quick-stat {
+    &:not(:first-child) {
+      border-left: none;
+    }
+
+    &:nth-child(n+3) {
+      border-top: 1px solid $divider-color;
+    }
+
+    &:nth-child(2n+1):not(:first-child) {
+      border-left: 1px solid $divider-color;
+    }
   }
 }
 
 @media (max-width: 768px) {
-  .hero-profile {
+  .user-hero {
+    padding: 14px 16px;
+    gap: 14px;
+  }
+
+  .hero-body {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .hero-main {
     align-items: flex-start;
   }
 
+  .hero-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    font-size: 18px;
+  }
+
+  .hero-title-row h2 {
+    font-size: 16px;
+  }
+
+  .hero-meta {
+    gap: 8px;
+
+    > span + span {
+      padding-left: 8px;
+    }
+  }
+
   .hero-actions {
-    justify-content: stretch;
+    width: 100%;
   }
 
   .hero-actions :deep(.el-button) {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .quick-stats {
+    flex-wrap: wrap;
+    gap: 0;
+    padding: 8px 12px;
+    border-radius: $sm-border-radius;
+  }
+
+  .quick-stat {
+    padding: 6px 10px;
+    flex: 0 1 auto;
+
+    &--note {
+      flex: 1 1 100%;
+      min-width: 0;
+    }
+  }
+
+  .quick-stat__divider {
+    display: none;
   }
 
   .service-form-grid {
@@ -1092,6 +1197,10 @@ const {
 
   .service-form-span-2 {
     grid-column: span 1;
+  }
+
+  .service-form-section__title {
+    font-size: 12px;
   }
 
   .service-meta-pricing__row {
