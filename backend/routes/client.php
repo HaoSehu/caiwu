@@ -143,6 +143,7 @@ Route::middleware(['auth:sanctum', 'ensure.client'])->group(function () {
     Route::post('/tickets/upload-image', [ClientTicketController::class, 'uploadImage'])->middleware('throttle:12,1,client-ticket-upload-image');
     Route::get('/tickets/{id}', [ClientTicketController::class, 'show']);
     Route::post('/tickets/{id}/reply', [ClientTicketController::class, 'reply'])->middleware('throttle:10,1,client-ticket-reply');
+    Route::post('/tickets/{id}/replies/{replyId}/recall', [ClientTicketController::class, 'recall'])->middleware('throttle:10,1,client-ticket-recall');
     Route::post('/tickets/{id}/close', [ClientTicketController::class, 'close'])->middleware('throttle:10,1,client-ticket-close');
 
     // 管理工具

@@ -161,6 +161,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function () {
     Route::middleware(['permission:'.AdminPermissions::TICKET_REPLY])->group(function () {
         Route::post('/tickets/upload-image', [TicketController::class, 'uploadImage']);
         Route::post('/tickets/{ticket}/reply', [TicketController::class, 'reply']);
+        Route::post('/tickets/{ticket}/replies/{replyId}/recall', [TicketController::class, 'recall']);
     });
 
     Route::middleware(['permission:'.AdminPermissions::TICKET_MANAGE])->group(function () {

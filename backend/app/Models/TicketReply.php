@@ -17,13 +17,14 @@ class TicketReply extends Model
 
     public $timestamps = false;
 
-    protected $fillable = ['ticket_id', 'user_id', 'content', 'is_staff', 'attachments', 'created_at'];
+    protected $fillable = ['ticket_id', 'user_id', 'content', 'is_staff', 'attachments', 'quote_reply_id', 'recalled_at', 'created_at'];
 
     protected function casts(): array
     {
         return [
             'attachments' => 'array',
             'created_at' => 'datetime',
+            'recalled_at' => 'datetime',
         ];
     }
 
@@ -86,6 +87,13 @@ class TicketReply extends Model
         }
 
         DB::transaction(function (): void {
+            $quoteMessageId = null;
+            if (! empty($this->quote_reply_id)) {
+                $quoteMessageId = DB::table('ticket_messages')
+                    ->where('legacy_reply_id', (int) $this->quote_reply_id)
+                    ->value('id');
+            }
+
             DB::table('ticket_messages')->updateOrInsert(
                 ['legacy_reply_id' => (int) $this->id],
                 [
@@ -93,6 +101,8 @@ class TicketReply extends Model
                     'sender_type' => (int) ($this->is_staff ?? 0) === 1 ? 'admin' : 'user',
                     'sender_id' => (int) ($this->user_id ?? 0) ?: null,
                     'content' => (string) ($this->content ?? ''),
+                    'quote_message_id' => $quoteMessageId ? (int) $quoteMessageId : null,
+                    'recalled_at' => $this->recalled_at ? $this->recalled_at->format('Y-m-d H:i:s') : null,
                     'created_at' => $this->created_at ?? now(),
                     'updated_at' => $this->created_at ?? now(),
                 ]
