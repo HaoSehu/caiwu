@@ -8,6 +8,7 @@ backend/storage/logs/
 backend/storage/framework/cache/
 backend/storage/framework/sessions/
 backend/storage/framework/views/
+backend/phpunit.xml
 
 # Vue
 frontend-admin/node_modules/
@@ -26,16 +27,44 @@ frontend-client/public/novnc/
 # Composer
 backend/composer.phar
 backend/composer-setup.php
+backend/.php-cs-fixer.cache
+backend/.phpunit.result.cache
+backend/phpstan.neon
 
 # Python cache
 __pycache__/
 *.pyc
 *.pyo
+backend/scripts/__pycache__/
+
+# Local tools
+php.bat
+tools/
+ops/mysql-dual-backup/backup.env
 
 # Temp/draft files
 anget.md
 mcloud/
+*.sql
+*.pen
+*.zip
+pencil-preview/
+temp_rewrite*.py
+relayout_pen.py
+*_icon.js
+*_paths.json
+
+# Build artifacts
+_halo_build.bat
+_halo_status.txt
+_seo_build.bat
+_seo_status.txt
+frontend-admin/$null
+frontend-client/frontend-client/
 
 # OS
 Thumbs.db
 node_modules
+
+# Claude
+.claude/
