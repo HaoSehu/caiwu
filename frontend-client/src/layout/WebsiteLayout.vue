@@ -3,7 +3,13 @@
     <header class="site-header" :class="{ scrolled: headerScrolled }">
       <div class="container header-bar">
         <router-link to="/" class="logo" :aria-label="appStore.siteName">
-          <img :src="logoSrc" :alt="appStore.siteName" class="logo-image" />
+          <img
+            :src="logoSrc"
+            :alt="appStore.siteName"
+            class="logo-image"
+            @error="handleLogoError"
+          />
+          <span v-if="logoLoadFailed" class="logo-fallback">{{ appStore.siteName }}</span>
         </router-link>
 
         <nav
@@ -228,7 +234,13 @@
         <div class="footer-top">
           <div class="footer-brand">
             <div class="footer-logo">
-              <img :src="logoSrc" :alt="appStore.siteName" class="footer-logo-image" />
+              <img
+                :src="logoSrc"
+                :alt="appStore.siteName"
+                class="footer-logo-image"
+                @error="handleFooterLogoError"
+              />
+              <span v-if="footerLogoLoadFailed" class="footer-logo-fallback">{{ appStore.siteName }}</span>
             </div>
             <p class="footer-brand__desc">
               为企业与开发者提供稳定、安全、高性价比的云计算与 IDC 服务。
@@ -317,6 +329,8 @@ const { items: navHelpItems, loading: navHelpLoading, categories: navHelpCategor
 const mobileNavVisible = ref(false)
 const headerScrolled = ref(false)
 const isMobile = ref(typeof window === 'undefined' ? false : window.innerWidth <= 960)
+const logoLoadFailed = ref(false)
+const footerLogoLoadFailed = ref(false)
 
 const activeMenuId = ref(null)
 let megaMenuCloseTimer = null
@@ -397,6 +411,14 @@ const supportContacts = computed(() => buildSupportContacts({
 
 function isNavActive(item) {
   return item.match.includes(route.name)
+}
+
+function handleLogoError() {
+  logoLoadFailed.value = true
+}
+
+function handleFooterLogoError() {
+  footerLogoLoadFailed.value = true
 }
 
 function closeMobileMenu() {
@@ -489,6 +511,19 @@ onBeforeUnmount(() => {
   height: 32px;
   object-fit: contain;
   object-position: left center;
+}
+
+.logo-fallback {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 8px;
+  background: $color-primary;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 6px;
+  white-space: nowrap;
 }
 
 .main-nav {
@@ -892,6 +927,8 @@ onBeforeUnmount(() => {
 .footer-logo {
   display: flex;
   align-items: center;
+  min-height: 40px;
+  min-width: 148px;
 }
 
 .footer-logo-image {
@@ -901,6 +938,19 @@ onBeforeUnmount(() => {
   max-width: 100%;
   object-fit: contain;
   object-position: left center;
+}
+
+.footer-logo-fallback {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 10px;
+  background: $color-primary;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 8px;
+  white-space: nowrap;
 }
 
 .footer-contact {
@@ -1058,6 +1108,27 @@ onBeforeUnmount(() => {
   .logo-image {
     max-width: 138px;
     height: 30px;
+  }
+
+  .logo-fallback {
+    height: 30px;
+    font-size: 13px;
+    padding: 0 6px;
+  }
+
+  .footer-logo {
+    min-width: 120px;
+  }
+
+  .footer-logo-image {
+    width: 120px;
+    height: 32px;
+  }
+
+  .footer-logo-fallback {
+    height: 32px;
+    font-size: 14px;
+    padding: 0 8px;
   }
 
   .mobile-menu-panel {

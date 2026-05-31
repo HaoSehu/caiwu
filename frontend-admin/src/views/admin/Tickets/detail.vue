@@ -79,7 +79,14 @@
                       <span>{{ formatDateTime(reply.created_at) }}</span>
                     </div>
                     <div class="admin-message__bubble">
-                      <div class="reply-content">{{ reply.content || '无文字内容' }}</div>
+                      <div v-if="reply.recalled" class="reply-recalled">消息已撤回</div>
+                      <template v-else>
+                        <div v-if="reply.quote" class="reply-quote-preview">
+                          <span class="quote-sender">{{ reply.quote.sender_name }}:</span>
+                          <span class="quote-text">{{ reply.quote.recalled ? '消息已撤回' : reply.quote.content }}</span>
+                        </div>
+                        <div class="reply-content">{{ reply.content || '无文字内容' }}</div>
+                      </template>
                       <div v-if="hasAttachments(reply)" class="reply-attachments">
                         <button
                           v-for="att in parseAttachments(reply)"
@@ -87,7 +94,6 @@
                           type="button"
                           class="reply-attachment"
                           :class="{ 'reply-attachment--deleted': att.deleted || !att.url }"
-                          @click="att.url && handleAttachmentPreview(att)"
                         >
                           <template v-if="att.url">
                             <el-image
@@ -95,6 +101,7 @@
                               fit="cover"
                               :preview-src-list="getAttachmentUrls(reply)"
                               :initial-index="getAttachmentIndex(reply, att)"
+                              preview-teleported
                             />
                           </template>
                           <template v-else>
@@ -103,9 +110,72 @@
                         </button>
                       </div>
                     </div>
+                    <div class="admin-message__actions">
+                      <span v-if="!reply.recalled" class="msg-action-btn" @click="handleQuote(reply)">引用</span>
+                      <span v-if="canRecall(reply)" class="msg-action-btn msg-action-recall" @click="handleRecall(reply.id)">撤回</span>
+                    </div>
                   </div>
                 </div>
               </div>
+              <section v-if="!isClosed(detail.status)" class="reply-section">
+                <div v-if="quoteReply" class="quote-preview-bar">
+                  <div class="quote-preview-content">
+                    <span class="quote-preview-sender">回复 {{ quoteReply.sender_name }}</span>
+                    <span class="quote-preview-text">{{ quoteReply.content }}</span>
+                  </div>
+                  <button class="quote-preview-cancel" @click="cancelQuote">×</button>
+                </div>
+                <div v-if="replyAttachments.length" class="draft-attachments">
+                  <button
+                    v-for="attachment in replyAttachments"
+                    :key="attachment.id || attachment.uid"
+                    class="draft-attachment"
+                    type="button"
+                    @click="handleDraftAttachmentPreview(attachment)"
+                  >
+                    <img :src="attachment.url" alt="附件" />
+                    <span class="draft-remove" @click.stop="removeReplyAttachment(attachment.id)">×</span>
+                  </button>
+                </div>
+
+                <el-upload
+                  class="composer-upload"
+                  accept=".jpg,.jpeg,.png,.webp"
+                  multiple
+                  :show-file-list="false"
+                  :http-request="handleReplyUpload"
+                  :before-upload="beforeReplyUpload"
+                  :on-exceed="handleReplyUploadExceed"
+                  :limit="MAX_TICKET_IMAGES"
+                  :disabled="replyLoading"
+                >
+                  <button class="composer-plus" type="button" :disabled="replyUploadDisabled || replyLoading">
+                    <el-icon><Plus /></el-icon>
+                  </button>
+                </el-upload>
+                <el-input
+                  v-model="replyForm.content"
+                  type="textarea"
+                  :autosize="{ minRows: 1, maxRows: 4 }"
+                  maxlength="10000"
+                  placeholder=""
+                  class="reply-textarea"
+                  @keydown.enter.exact.prevent="handleReply"
+                />
+                <el-button
+                  class="send-button"
+                  :loading="replyLoading"
+                  :disabled="replySubmitDisabled"
+                  @click="handleReply"
+                >
+                  发送
+                </el-button>
+              </section>
+
+              <section v-else class="closed-notice">
+                <el-icon><CircleClose /></el-icon>
+                <span>此工单已关闭</span>
+              </section>
             </section>
 
             <aside class="ticket-side-panel">
@@ -154,67 +224,6 @@
                   <span class="meta-label">创建时间</span>
                   <strong class="meta-value">{{ formatDateTime(detail.created_at) }}</strong>
                 </div>
-              </section>
-
-              <section v-if="!isClosed(detail.status)" class="action-section">
-                <div class="action-header">
-                  <span class="action-title">处理操作</span>
-                  <span class="action-subtitle">写回复并上传图片</span>
-                </div>
-                <div class="action-body">
-                  <div class="reply-composer">
-                    <el-upload
-                      class="reply-upload"
-                      accept=".jpg,.jpeg,.png,.webp"
-                      multiple
-                      :show-file-list="false"
-                      :http-request="handleReplyUpload"
-                      :before-upload="beforeReplyUpload"
-                      :on-exceed="handleReplyUploadExceed"
-                      :limit="MAX_TICKET_IMAGES"
-                    >
-                      <button class="reply-image-button" type="button" :disabled="replyUploadDisabled">
-                        <el-icon><Plus /></el-icon>
-                      </button>
-                    </el-upload>
-                    <el-input
-                      v-model="replyForm.content"
-                      type="textarea"
-                      :autosize="{ minRows: 3, maxRows: 7 }"
-                      maxlength="10000"
-                      placeholder="输入处理回复内容..."
-                      class="reply-composer-input"
-                    />
-                    <el-button
-                      type="primary"
-                      class="reply-submit-button"
-                      :loading="replyLoading"
-                      :disabled="replySubmitDisabled"
-                      @click="handleReply"
-                    >
-                      <el-icon><Promotion /></el-icon>
-                      回复
-                    </el-button>
-                  </div>
-
-                  <div v-if="replyAttachments.length" class="reply-draft-list">
-                    <button
-                      v-for="attachment in replyAttachments"
-                      :key="attachment.id"
-                      type="button"
-                      class="reply-draft-thumb"
-                      @click="handleDraftAttachmentPreview({ ...attachment, uid: attachment.id })"
-                    >
-                      <img :src="attachment.url" alt="附件" />
-                      <span class="reply-draft-remove" @click.stop="removeReplyAttachment(attachment.id)">×</span>
-                    </button>
-                  </div>
-                </div>
-              </section>
-
-              <section v-else class="closed-notice">
-                <el-icon><CircleClose /></el-icon>
-                <span>此工单已关闭</span>
               </section>
 
               <section class="linked-service-panel">
@@ -317,7 +326,14 @@
                   <span>{{ formatDateTime(reply.created_at) }}</span>
                 </div>
                 <div class="mobile-message__bubble">
-                  <div class="content-text">{{ reply.content || '无文字内容' }}</div>
+                  <div v-if="reply.recalled" class="reply-recalled">消息已撤回</div>
+                  <template v-else>
+                    <div v-if="reply.quote" class="reply-quote-preview">
+                      <span class="quote-sender">{{ reply.quote.sender_name }}:</span>
+                      <span class="quote-text">{{ reply.quote.recalled ? '消息已撤回' : reply.quote.content }}</span>
+                    </div>
+                    <div class="content-text">{{ reply.content || '无文字内容' }}</div>
+                  </template>
                   <div v-if="hasAttachments(reply)" class="mobile-message__images">
                     <button
                       v-for="att in parseAttachments(reply)"
@@ -325,7 +341,6 @@
                       type="button"
                       class="mobile-message__img"
                       :class="{ 'is-deleted': att.deleted || !att.url }"
-                      @click="att.url && handleAttachmentPreview(att)"
                     >
                       <template v-if="att.url">
                         <el-image
@@ -333,6 +348,7 @@
                           fit="cover"
                           :preview-src-list="getAttachmentUrls(reply)"
                           :initial-index="getAttachmentIndex(reply, att)"
+                          preview-teleported
                         />
                       </template>
                       <template v-else>
@@ -341,6 +357,10 @@
                     </button>
                   </div>
                 </div>
+                <div class="admin-message__actions">
+                  <span v-if="!reply.recalled" class="msg-action-btn" @click="handleQuote(reply)">引用</span>
+                  <span v-if="canRecall(reply)" class="msg-action-btn msg-action-recall" @click="handleRecall(reply.id)">撤回</span>
+                </div>
               </div>
             </div>
           </div>
@@ -348,6 +368,13 @@
 
         <!-- 移动端底部输入区 -->
         <div v-if="!isClosed(detail.status)" class="mobile-composer-area">
+          <div v-if="quoteReply" class="quote-preview-bar">
+            <div class="quote-preview-content">
+              <span class="quote-preview-sender">回复 {{ quoteReply.sender_name }}</span>
+              <span class="quote-preview-text">{{ quoteReply.content }}</span>
+            </div>
+            <button class="quote-preview-cancel" @click="cancelQuote">×</button>
+          </div>
           <div v-if="replyAttachments.length" class="mobile-draft-images">
             <button
               v-for="attachment in replyAttachments"
@@ -360,36 +387,35 @@
               <span class="mobile-draft-remove" @click.stop="removeReplyAttachment(attachment.id)">×</span>
             </button>
           </div>
-          <div class="mobile-composer-bar">
-            <el-upload
-              class="mobile-composer-upload"
-              accept=".jpg,.jpeg,.png,.webp"
-              multiple
-              :show-file-list="false"
-              :http-request="handleReplyUpload"
-              :before-upload="beforeReplyUpload"
-              :on-exceed="handleReplyUploadExceed"
-              :limit="MAX_TICKET_IMAGES"
-            >
-              <button class="mobile-plus-btn" type="button" :disabled="replyUploadDisabled">+</button>
-            </el-upload>
-            <textarea
-              v-model="replyForm.content"
-              class="mobile-textarea"
-              rows="1"
-              placeholder="输入回复内容..."
-              maxlength="10000"
-              @input="updateSendDisabled"
-            ></textarea>
-            <button
-              class="mobile-send-btn"
-              :disabled="replySubmitDisabled"
-              :class="{ 'is-loading': replyLoading }"
-              @click="handleReply"
-            >
-              发送
-            </button>
-          </div>
+          <el-upload
+            class="mobile-composer-upload"
+            accept=".jpg,.jpeg,.png,.webp"
+            multiple
+            :show-file-list="false"
+            :http-request="handleReplyUpload"
+            :before-upload="beforeReplyUpload"
+            :on-exceed="handleReplyUploadExceed"
+            :limit="MAX_TICKET_IMAGES"
+          >
+            <button class="mobile-plus-btn" type="button" :disabled="replyUploadDisabled">+</button>
+          </el-upload>
+          <el-input
+            v-model="replyForm.content"
+            type="textarea"
+            :autosize="{ minRows: 1, maxRows: 4 }"
+            maxlength="10000"
+            placeholder=""
+            class="mobile-reply-textarea"
+            @keydown.enter.exact.prevent="handleReply"
+          />
+          <button
+            class="mobile-send-btn"
+            :disabled="replySubmitDisabled"
+            :class="{ 'is-loading': replyLoading }"
+            @click="handleReply"
+          >
+            发送
+          </button>
         </div>
         <div v-else class="mobile-composer-closed">
           <el-icon><CircleClose /></el-icon>
@@ -548,9 +574,9 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, CircleClose, Close, CopyDocument, Hide, Plus, Promotion, UserFilled, View } from '@element-plus/icons-vue'
+import { ArrowLeft, CircleClose, Close, CopyDocument, Hide, Plus, UserFilled, View } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import adminApi from '@/api/admin'
 import { formatDateTime } from '@/utils/datetime'
@@ -587,6 +613,7 @@ const replyPreviewUrl = ref('')
 const replyForm = reactive({ content: '' })
 const replyAttachments = ref([])
 const replyUploadingCount = ref(0)
+const quoteReply = ref(null)
 const assignForm = reactive({ assignee_id: null })
 const replyLoading = ref(false)
 const assignLoading = ref(false)
@@ -742,10 +769,7 @@ function handleAttachmentPreview(att) {
 function resetReplyDraft() {
   replyForm.content = ''
   replyAttachments.value = []
-}
-
-function updateSendDisabled() {
-  // 用于移动端 textarea 更新时触发 disabled 状态刷新
+  quoteReply.value = null
 }
 
 function goBack() {
@@ -850,10 +874,14 @@ async function handleReply() {
 
   replyLoading.value = true
   try {
-    await adminApi.tickets.reply(detail.value.id, {
+    const payload = {
       content: replyForm.content,
       attachments: normalizeAttachmentPayload(replyAttachments.value),
-    })
+    }
+    if (quoteReply.value?.id) {
+      payload.quote_reply_id = quoteReply.value.id
+    }
+    await adminApi.tickets.reply(detail.value.id, payload)
     resetReplyDraft()
     ElMessage.success('回复成功')
     await reloadCurrentDetail()
@@ -887,6 +915,39 @@ async function handleClose() {
   } finally {
     closeLoading.value = false
   }
+}
+
+function canRecall(reply) {
+  if (!reply || reply.recalled) return false
+  if (!reply.is_staff) return false
+  // 管理端：只允许撤回自己发的消息（admin 以 staff 身份发的消息，user_id 是 admin_users.id）
+  if (!reply.created_at) return false
+  const created = new Date(reply.created_at).getTime()
+  return Date.now() - created <= 120_000
+}
+
+async function handleRecall(replyId) {
+  if (!detail.value?.id) return
+  try {
+    await adminApi.tickets.recall(detail.value.id, replyId)
+    ElMessage.success('消息已撤回')
+    await reloadCurrentDetail()
+  } catch (error) {
+    ElMessage.error(error?.response?.data?.message || '撤回失败')
+  }
+}
+
+function handleQuote(reply) {
+  if (!reply || reply.recalled) return
+  quoteReply.value = {
+    id: reply.id,
+    sender_name: reply.sender_name || '用户',
+    content: reply.content || '',
+  }
+}
+
+function cancelQuote() {
+  quoteReply.value = null
 }
 
 onMounted(() => {
@@ -981,12 +1042,12 @@ onUnmounted(() => {
 }
 
 .ticket-side-panel {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .admin-ticket-meta {
@@ -1115,6 +1176,12 @@ onUnmounted(() => {
 
 .admin-message {
   display: flex;
+  width: 100%;
+  align-self: stretch;
+}
+
+.admin-message--client {
+  justify-content: flex-start;
 }
 
 .admin-message--staff {
@@ -1124,6 +1191,10 @@ onUnmounted(() => {
 .admin-message__body {
   max-width: 76%;
   min-width: 0;
+}
+
+.admin-message--staff .admin-message__body {
+  margin-left: auto;
 }
 
 .admin-message__meta {
@@ -1203,98 +1274,96 @@ onUnmounted(() => {
   color: $text-color-placeholder;
 }
 
-.action-section {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
-  border: 1px solid #dfe5ef;
-  border-radius: 8px;
-  background: #fff;
-  box-shadow: none;
-}
-
-.action-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 11px 16px;
-  background: #fbfcff;
-  border-bottom: 1px solid #e6ebf3;
-}
-
-.action-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: $text-color-primary;
-}
-
-.action-subtitle {
-  font-size: 12px;
-  color: $text-color-placeholder;
-}
-
-.action-body {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 10px;
-  min-height: 0;
-  padding: 12px 14px 14px;
-  background: #fff;
-  overflow: hidden;
-}
-
-.reply-composer {
+.reply-section {
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) 104px;
+  grid-template-columns: 48px minmax(0, 1fr) 112px;
   align-items: center;
   gap: 10px;
-  min-height: 54px;
-  padding: 6px;
-  border: 1px solid #d9e0ea;
-  border-radius: 10px;
-  background: #fff;
+  flex-shrink: 0;
+  padding-top: 4px;
 }
 
-.reply-upload {
+.draft-attachments {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 18px 10px;
+}
+
+.draft-attachment {
+  position: relative;
+  width: 54px;
+  height: 54px;
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  background: #fff;
+  border: 1px solid #d7dce5;
+  border-radius: 8px;
+}
+
+.draft-attachment img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.draft-remove {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 14px;
+  height: 14px;
+  background: rgba(31, 41, 55, 0.78);
+  color: #fff;
+  font-size: 10px;
+  line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 40px;
+  border-radius: 0 8px 0 8px;
+  border: none;
+  cursor: pointer;
+}
+
+.composer-upload {
+  display: flex;
+  justify-content: center;
 
   :deep(.el-upload) {
     display: inline-flex;
   }
 }
 
-.reply-image-button {
+.composer-plus {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 42px;
-  height: 42px;
+  width: 48px;
+  height: 48px;
   padding: 0;
   color: #637083;
   cursor: pointer;
-  background: #fbfdff;
-  border: 1px dashed #cfd8e6;
+  background: #fff;
+  border: 1px solid #ccd6e5;
   border-radius: 50%;
   transition:
-    transform 0.18s cubic-bezier(0.22, 1, 0.36, 1),
-    border-color 0.18s cubic-bezier(0.22, 1, 0.36, 1),
-    color 0.18s cubic-bezier(0.22, 1, 0.36, 1),
-    background 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+    transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    color 0.18s ease;
 
   .el-icon {
-    font-size: 22px;
-    transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+    font-size: 28px;
+    transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 
   &:not(:disabled):hover {
     color: #2563eb;
     border-color: #9fbcff;
-    background: #f8fbff;
+    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.16);
     transform: translateY(-1px) scale(1.04);
   }
 
@@ -1309,17 +1378,15 @@ onUnmounted(() => {
   }
 }
 
-.reply-composer-input {
-  min-height: 0;
-
+.reply-textarea {
   :deep(.el-textarea__inner) {
     min-height: 40px !important;
-    max-height: 140px;
     padding: 9px 4px;
     resize: none;
     border: none;
     box-shadow: none;
-    line-height: 1.45;
+    font-size: 16px;
+    line-height: 1.5;
   }
 
   :deep(.el-input__count) {
@@ -1327,51 +1394,63 @@ onUnmounted(() => {
   }
 }
 
-.reply-submit-button {
-  justify-self: stretch;
-  width: 104px;
-  height: 40px;
-  border-radius: 8px;
-}
-
-.reply-draft-list {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.reply-draft-thumb {
+.send-button {
   position: relative;
-  width: 46px;
-  height: 46px;
-  padding: 0;
   overflow: hidden;
-  cursor: pointer;
+  width: 96px;
+  height: 48px;
+  color: #405675;
+  font-size: 18px;
+  font-weight: 600;
+  border: none;
+  border-radius: 999px;
   background: #fff;
-  border: 1px solid #d7dce5;
-  border-radius: 7px;
-}
+  transition:
+    transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1),
+    color 0.18s ease,
+    background 0.18s ease;
 
-.reply-draft-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
+  &::after {
+    position: absolute;
+    inset: 0;
+    content: '';
+    background: linear-gradient(110deg, transparent 0%, rgba(37, 99, 235, 0.1) 45%, transparent 72%);
+    transform: translateX(-130%);
+    transition: transform 0.48s ease;
+  }
 
-.reply-draft-remove {
-  position: absolute;
-  top: -1px;
-  right: -1px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  color: #fff;
-  font-size: 12px;
-  line-height: 1;
-  background: rgba(17, 24, 39, 0.72);
-  border-radius: 0 7px 0 7px;
+  :deep(span) {
+    position: relative;
+    z-index: 1;
+  }
+
+  &:hover,
+  &:focus {
+    color: #2563eb;
+    background: #f8fbff;
+    transform: translateY(-1px);
+  }
+
+  &:hover::after,
+  &:focus::after {
+    transform: translateX(130%);
+  }
+
+  &:active {
+    transform: translateY(0) scale(0.98);
+  }
+
+  &.is-disabled,
+  &.is-disabled:hover,
+  &.is-disabled:focus {
+    color: #9aa6b8;
+    background: #eef2f7;
+    transform: none;
+  }
+
+  &.is-disabled::after {
+    display: none;
+  }
 }
 
 .closed-notice {
@@ -1594,12 +1673,12 @@ onUnmounted(() => {
 }
 
 .mobile-message--customer {
-  align-self: flex-end;
-  flex-direction: row-reverse;
+  align-self: flex-start;
 }
 
 .mobile-message--staff {
-  align-self: flex-start;
+  align-self: flex-end;
+  flex-direction: row-reverse;
 }
 
 .mobile-message__body {
@@ -1618,11 +1697,12 @@ onUnmounted(() => {
 }
 
 .mobile-message--staff .mobile-message__meta {
-  justify-content: flex-start;
+  justify-content: flex-end;
+  flex-direction: row-reverse;
 }
 
 .mobile-message--customer .mobile-message__meta {
-  flex-direction: row-reverse;
+  justify-content: flex-start;
 }
 
 .mobile-message__bubble {
@@ -1698,12 +1778,14 @@ onUnmounted(() => {
   background: #fff;
   border-top: 1px solid #eef2f7;
   flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 64px;
+  align-items: center;
   gap: 8px;
 }
 
 .mobile-draft-images {
+  grid-column: 1 / -1;
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
@@ -1744,17 +1826,6 @@ onUnmounted(() => {
   border-radius: 0 8px 0 8px;
 }
 
-.mobile-composer-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  border: 1px solid #d4dce8;
-  border-radius: 999px;
-  background: #fff;
-  box-shadow: 0 6px 24px rgba(15, 23, 42, 0.06);
-}
-
 .mobile-composer-upload {
   display: flex;
 
@@ -1792,22 +1863,25 @@ onUnmounted(() => {
   }
 }
 
-.mobile-textarea {
+.mobile-reply-textarea {
   flex: 1;
   min-width: 0;
-  border: none;
-  outline: none;
-  font-size: 15px;
-  line-height: 1.5;
-  color: $text-color-primary;
-  font-family: inherit;
-  resize: none;
-  padding: 4px 0;
-  max-height: 100px;
-  background: transparent;
 
-  &::placeholder {
-    color: $text-color-placeholder;
+  :deep(.el-textarea__inner) {
+    min-height: 38px !important;
+    padding: 8px 0;
+    color: $text-color-primary;
+    font-size: 15px;
+    line-height: 1.5;
+    font-family: inherit;
+    resize: none;
+    border: none;
+    box-shadow: none;
+    background: transparent;
+  }
+
+  :deep(.el-input__count) {
+    display: none;
   }
 }
 
@@ -2238,8 +2312,7 @@ onUnmounted(() => {
 
   .ticket-conversation-page:not(.is-mobile) .conversation-body,
   .ticket-conversation-page:not(.is-mobile) .conversation-workbench,
-  .ticket-conversation-page:not(.is-mobile) .ticket-side-panel,
-  .ticket-conversation-page:not(.is-mobile) .action-body {
+  .ticket-conversation-page:not(.is-mobile) .ticket-side-panel {
     overflow: visible;
   }
 
@@ -2279,21 +2352,136 @@ onUnmounted(() => {
     margin-left: 0;
   }
 
-  .ticket-conversation-page:not(.is-mobile) .reply-composer {
-    grid-template-columns: 42px minmax(0, 1fr) 82px;
-    min-height: 50px;
-  }
-
-  .ticket-conversation-page:not(.is-mobile) .reply-upload {
-    align-items: center;
-  }
-
-  .ticket-conversation-page:not(.is-mobile) .reply-composer-input :deep(.el-textarea__inner) {
-    min-height: 38px !important;
-  }
-
   .ticket-conversation-page:not(.is-mobile) .admin-message__body {
     max-width: 92%;
   }
 }
+
+.reply-recalled {
+  padding: 6px 12px;
+  font-size: 13px;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.reply-quote-preview {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  margin-bottom: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #6b7280;
+  background: rgba(0, 0, 0, 0.03);
+  border-left: 3px solid #d1d5db;
+  border-radius: 2px;
+  max-width: 280px;
+  overflow: hidden;
+}
+
+.quote-sender {
+  font-weight: 600;
+  color: #4b5563;
+  white-space: nowrap;
+}
+
+.quote-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-message__actions {
+  display: none;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 0 4px;
+}
+
+.admin-message:hover .admin-message__actions,
+.mobile-message:hover .admin-message__actions {
+  display: flex;
+}
+
+.msg-action-btn {
+  font-size: 12px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+}
+
+.msg-action-btn:hover {
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+.msg-action-recall:hover {
+  color: #dc2626;
+  background: #fef2f2;
+}
+
+.quote-preview-bar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  margin: 0 0 8px;
+  background: #f0f7ff;
+  border-left: 3px solid #2563eb;
+  border-radius: 4px;
+}
+
+.quote-preview-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+  flex: 1;
+}
+
+.quote-preview-sender {
+  font-size: 12px;
+  font-weight: 600;
+  color: #2563eb;
+}
+
+.quote-preview-text {
+  font-size: 12px;
+  color: #6b7280;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quote-preview-cancel {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  font-size: 18px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.quote-preview-cancel:hover {
+  color: #374151;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+
 </style>

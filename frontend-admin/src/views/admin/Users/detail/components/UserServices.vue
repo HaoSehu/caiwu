@@ -243,7 +243,7 @@ function handlePageSizeChange(pageSize) {
   &--danger  { color: $text-color-secondary; &:hover { color: $color-danger; } }
 }
 
-@media (max-width: 768px) {
+@include tablet-and-below {
   .toolbar {
     gap: 8px;
   }

@@ -240,7 +240,7 @@ const navItems = computed(() => [
   .profile-layout {
     flex-direction: column;
     padding: 20px 16px 32px;
-    gap: 20px;
+    gap: 16px;
   }
 
   .profile-sidebar {
@@ -251,20 +251,105 @@ const navItems = computed(() => [
     position: static;
   }
 
-  .nav-list {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
+  .sidebar-header {
+    padding: 16px 16px 14px;
+    gap: 12px;
   }
 
-  .nav-item.active::before {
-    display: none;
+  .sidebar-header__icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+
+    .el-icon { font-size: 17px; }
+  }
+
+  .sidebar-header__copy {
+    span { font-size: 14px; }
+    small { font-size: 11px; }
+  }
+
+  .nav-list {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 0;
+    padding: 0;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    &::-webkit-scrollbar { display: none; }
+  }
+
+  .nav-list li {
+    flex-shrink: 0;
+  }
+
+  .nav-item {
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 12px 16px;
+    border-radius: 0;
+    min-width: 72px;
+
+    &:hover {
+      transform: none;
+    }
+
+    &.active {
+      background: transparent;
+      box-shadow: none;
+      border-bottom: 2px solid $color-primary;
+      border-radius: 0;
+
+      &::before { display: none; }
+    }
+  }
+
+  .nav-item__icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+
+    .el-icon { font-size: 16px; }
+  }
+
+  .nav-item__copy {
+    align-items: center;
+    gap: 0;
+
+    strong { font-size: 12px; }
+    small { display: none; }
   }
 }
 
 @media (max-width: 640px) {
-  .nav-list {
-    grid-template-columns: 1fr;
+  .profile-layout {
+    padding: 12px 12px 24px;
+    gap: 12px;
   }
+
+  .sidebar-header {
+    display: none;
+  }
+
+  .sidebar-card {
+    border-radius: 10px;
+  }
+
+  .nav-item {
+    padding: 10px 14px;
+    min-width: 64px;
+  }
+
+  .nav-item__icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+
+    .el-icon { font-size: 14px; }
+  }
+
+  .nav-item__copy strong { font-size: 11px; }
 }
 </style>

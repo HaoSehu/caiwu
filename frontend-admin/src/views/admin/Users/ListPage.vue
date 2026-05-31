@@ -29,8 +29,6 @@
         <el-option label="正常" :value="1" />
         <el-option label="禁用" :value="0" />
       </el-select>
-      <el-button type="primary" :icon="Search" @click="loadList">搜索</el-button>
-      <el-button :icon="Refresh" @click="resetFilters">重置</el-button>
       </div>
     </section>
 
@@ -173,7 +171,7 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowDown, Plus, Refresh, Search, SuccessFilled } from '@element-plus/icons-vue'
+import { ArrowDown, Plus, Search, SuccessFilled } from '@element-plus/icons-vue'
 import userApi from '@/api/user'
 import { formatDateTime } from '@/utils/datetime'
 import { ElMessage, ElMessageBox } from 'element-plus'

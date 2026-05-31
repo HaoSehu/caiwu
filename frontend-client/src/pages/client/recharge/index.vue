@@ -71,9 +71,27 @@
                 @click="handleCreateOrder"
               >
                 <span class="pay-icon">支</span>
-                <span class="pay-text">{{ paymentButtonText }}</span>
+                <span class="pay-text">
+                  {{ isMobileScreen ? '打开支付宝 App 支付' : paymentButtonText }}
+                </span>
                 <span class="pay-arrow">›</span>
               </button>
+            </div>
+
+            <!-- 手机端专属引导说明 -->
+            <div v-if="isMobileScreen && qrCodeValue" class="mobile-pay-helper">
+              <p class="helper-tips">
+                若未能自动打开支付宝，请点击下方按钮复制支付链接，在手机浏览器中打开：
+              </p>
+              <el-button
+                size="small"
+                type="warning"
+                plain
+                class="copy-pay-btn"
+                @click="handleCopyPayUrl"
+              >
+                复制支付链接
+              </el-button>
             </div>
           </div>
 
@@ -116,10 +134,13 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Tickets } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import QrcodeVue from 'qrcode.vue'
 import { useRecharge } from '@/composables/useRecharge'
+import { useViewport } from '@/composables/useViewport'
 
 const presetAmounts = [10, 20, 50, 100, 200, 500]
+const { isMobileScreen } = useViewport()
 const inputAmount = ref(10)
 const activePreset = ref(10)
 const router = useRouter()
@@ -184,8 +205,51 @@ async function handleCreateOrder() {
 
   const result = await createRechargeOrder(normalizedValue)
   if (result?.qr_code) {
+    if (isMobileScreen.value) {
+      const payUrl = result.qr_code
+      const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent)
+      if (isIOS) {
+        // iOS：直接打开 HTTPS 支付链接，系统会弹出"在支付宝中打开"提示
+        window.location.href = payUrl
+      } else {
+        // Android：使用 alipays scheme 调起支付宝
+        const iframe = document.createElement('iframe')
+        iframe.style.display = 'none'
+        iframe.src = `alipays://platformapi/startapp?appId=20000067&url=${encodeURIComponent(payUrl)}`
+        document.body.appendChild(iframe)
+        setTimeout(() => document.body.removeChild(iframe), 3000)
+      }
+    }
     startAutoPolling()
   }
+}
+
+function handleCopyPayUrl() {
+  if (!qrCodeValue.value) return
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(qrCodeValue.value)
+      .then(() => ElMessage.success('支付链接已复制到剪贴板'))
+      .catch(() => fallbackCopyText(qrCodeValue.value))
+  } else {
+    fallbackCopyText(qrCodeValue.value)
+  }
+}
+
+function fallbackCopyText(text) {
+  const textArea = document.createElement('textarea')
+  textArea.value = text
+  textArea.style.position = 'fixed'
+  textArea.style.opacity = '0'
+  document.body.appendChild(textArea)
+  textArea.focus()
+  textArea.select()
+  try {
+    document.execCommand('copy')
+    ElMessage.success('支付链接已复制到剪贴板')
+  } catch (err) {
+    ElMessage.error('复制失败，请手动选择复制')
+  }
+  document.body.removeChild(textArea)
 }
 
 watch(inputAmount, (value) => {
@@ -210,6 +274,25 @@ onBeforeUnmount(() => {
 <style scoped lang="scss">
 .recharge-page {
   gap: 12px;
+}
+
+.mobile-pay-helper {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px dashed rgba(221, 122, 31, 0.28);
+  background: rgba(221, 122, 31, 0.05);
+
+  .helper-tips {
+    margin-bottom: 8px;
+    color: $color-accent-orange;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+
+  .copy-pay-btn {
+    border-radius: 10px !important;
+  }
 }
 
 .recharge-summary {
@@ -619,6 +702,10 @@ onBeforeUnmount(() => {
   .recharge-panel {
     padding: 16px 14px;
     border-radius: 14px;
+  }
+
+  .qrcode-panel {
+    display: none;
   }
 
   .summary-card {

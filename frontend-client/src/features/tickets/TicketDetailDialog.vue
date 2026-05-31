@@ -76,16 +76,21 @@
               <div class="message-bubble">
                 <div class="message-meta">
                   <span class="message-sender">{{ reply.sender_name || (reply.is_staff ? '客服' : '我') }}</span>
+                  <span class="sender-role-tag" :class="reply.is_staff ? 'sender-role-tag--staff' : 'sender-role-tag--user'">{{ reply.is_staff ? '管理员' : '用户' }} #{{ reply.user_id }}</span>
                   <span class="message-time">{{ reply.created_at }}</span>
                 </div>
-                <div class="message-content-wrapper">
+                <div v-if="reply.recalled" class="message-recalled">消息已撤回</div>
+                <div v-else class="message-content-wrapper">
+                  <div v-if="reply.quote" class="message-quote-preview">
+                    <span class="quote-sender">{{ reply.quote.sender_name }}:</span>
+                    <span class="quote-text">{{ reply.quote.recalled ? '消息已撤回' : reply.quote.content }}</span>
+                  </div>
                   <div class="message-content">{{ reply.content || '无文字内容' }}</div>
                   <div v-if="hasAttachments(reply)" class="message-attachments">
                     <div
                       v-for="att in parseAttachments(reply)"
                       :key="att.id"
                       class="attachment-thumb"
-                      @click="handleAttachmentPreview(att)"
                     >
                       <el-image
                         :src="att.url"
@@ -98,11 +103,22 @@
                   </div>
                 </div>
               </div>
+              <div class="message-actions">
+                <span v-if="!reply.recalled" class="msg-action-btn" @click="handleQuote(reply)">引用</span>
+                <span v-if="canRecall(reply)" class="msg-action-btn msg-action-recall" @click="handleRecall(reply)">撤回</span>
+              </div>
             </div>
           </div>
         </section>
 
         <section class="reply-section" v-if="detail?.status !== 3">
+          <div v-if="quoteReply" class="quote-preview-bar">
+            <div class="quote-preview-content">
+              <span class="quote-preview-sender">回复 {{ quoteReply.sender_name }}</span>
+              <span class="quote-preview-text">{{ quoteReply.content }}</span>
+            </div>
+            <button class="quote-preview-cancel" @click="cancelQuote">×</button>
+          </div>
           <div v-if="replyAttachments.length" class="draft-attachments">
             <button
               v-for="attachment in replyAttachments"
@@ -194,17 +210,23 @@
             >
               <div class="mobile-message__bubble-wrap">
                 <div class="mobile-message__meta">
-                  <span>{{ reply.sender_name || (reply.is_staff ? '客服' : '我') }}</span>
+                  <span>{{ reply.sender_name || (reply.is_staff ? '客服' : '我') }}
+                    <span class="sender-role-tag" :class="reply.is_staff ? 'sender-role-tag--staff' : 'sender-role-tag--user'">{{ reply.is_staff ? '管理员' : '用户' }} #{{ reply.user_id }}</span>
+                  </span>
                   <span>{{ reply.created_at }}</span>
                 </div>
                 <div class="mobile-message__bubble">
-                  <div class="mobile-message__content">{{ reply.content || '无文字内容' }}</div>
-                  <div v-if="hasAttachments(reply)" class="mobile-message__images">
+                  <div v-if="reply.recalled" class="mobile-message__recalled">消息已撤回</div>
+                  <div v-if="reply.quote && !reply.recalled" class="message-quote-preview">
+                    <span class="quote-sender">{{ reply.quote.sender_name }}:</span>
+                    <span class="quote-text">{{ reply.quote.recalled ? '消息已撤回' : reply.quote.content }}</span>
+                  </div>
+                  <div v-if="!reply.recalled" class="mobile-message__content">{{ reply.content || '无文字内容' }}</div>
+                  <div v-if="!reply.recalled && hasAttachments(reply)" class="mobile-message__images">
                     <div
                       v-for="att in parseAttachments(reply)"
                       :key="att.id"
                       class="mobile-message__img"
-                      @click="handleAttachmentPreview(att)"
                     >
                       <el-image
                         :src="att.url"
@@ -217,11 +239,22 @@
                   </div>
                 </div>
               </div>
+              <div class="message-actions">
+                <span v-if="!reply.recalled" class="msg-action-btn" @click="handleQuote(reply)">引用</span>
+                <span v-if="canRecall(reply)" class="msg-action-btn msg-action-recall" @click="handleRecall(reply)">撤回</span>
+              </div>
             </div>
           </div>
         </section>
 
         <section class="mobile-reply-section" v-if="detail?.status !== 3">
+          <div v-if="quoteReply" class="quote-preview-bar">
+            <div class="quote-preview-content">
+              <span class="quote-preview-sender">回复 {{ quoteReply.sender_name }}</span>
+              <span class="quote-preview-text">{{ quoteReply.content }}</span>
+            </div>
+            <button class="quote-preview-cancel" @click="cancelQuote">×</button>
+          </div>
           <div v-if="replyAttachments.length" class="mobile-draft-images">
             <button
               v-for="attachment in replyAttachments"
@@ -255,6 +288,7 @@
               rows="1"
               maxlength="5000"
               placeholder="输入回复内容..."
+              @input="adjustTextareaHeight"
               @keydown.enter.exact.prevent="handleReply"
             ></textarea>
             <button
@@ -413,16 +447,21 @@
               <div class="message-bubble">
                 <div class="message-meta">
                   <span class="message-sender">{{ reply.sender_name || (reply.is_staff ? '客服' : '我') }}</span>
+                  <span class="sender-role-tag" :class="reply.is_staff ? 'sender-role-tag--staff' : 'sender-role-tag--user'">{{ reply.is_staff ? '管理员' : '用户' }} #{{ reply.user_id }}</span>
                   <span class="message-time">{{ reply.created_at }}</span>
                 </div>
-                <div class="message-content-wrapper">
+                <div v-if="reply.recalled" class="message-recalled">消息已撤回</div>
+                <div v-else class="message-content-wrapper">
+                  <div v-if="reply.quote" class="message-quote-preview">
+                    <span class="quote-sender">{{ reply.quote.sender_name }}:</span>
+                    <span class="quote-text">{{ reply.quote.recalled ? '消息已撤回' : reply.quote.content }}</span>
+                  </div>
                   <div class="message-content">{{ reply.content || '无文字内容' }}</div>
                   <div v-if="hasAttachments(reply)" class="message-attachments">
                     <div
                       v-for="att in parseAttachments(reply)"
                       :key="att.id"
                       class="attachment-thumb"
-                      @click="handleAttachmentPreview(att)"
                     >
                       <el-image
                         :src="att.url"
@@ -435,11 +474,22 @@
                   </div>
                 </div>
               </div>
+              <div class="message-actions">
+                <span v-if="!reply.recalled" class="msg-action-btn" @click="handleQuote(reply)">引用</span>
+                <span v-if="canRecall(reply)" class="msg-action-btn msg-action-recall" @click="handleRecall(reply)">撤回</span>
+              </div>
             </div>
           </div>
         </section>
 
         <section class="reply-section" v-if="detail?.status !== 3">
+          <div v-if="quoteReply" class="quote-preview-bar">
+            <div class="quote-preview-content">
+              <span class="quote-preview-sender">回复 {{ quoteReply.sender_name }}</span>
+              <span class="quote-preview-text">{{ quoteReply.content }}</span>
+            </div>
+            <button class="quote-preview-cancel" @click="cancelQuote">×</button>
+          </div>
           <div v-if="replyAttachments.length" class="draft-attachments">
             <button
               v-for="attachment in replyAttachments"
@@ -531,17 +581,23 @@
             >
               <div class="mobile-message__bubble-wrap">
                 <div class="mobile-message__meta">
-                  <span>{{ reply.sender_name || (reply.is_staff ? '客服' : '我') }}</span>
+                  <span>{{ reply.sender_name || (reply.is_staff ? '客服' : '我') }}
+                    <span class="sender-role-tag" :class="reply.is_staff ? 'sender-role-tag--staff' : 'sender-role-tag--user'">{{ reply.is_staff ? '管理员' : '用户' }} #{{ reply.user_id }}</span>
+                  </span>
                   <span>{{ reply.created_at }}</span>
                 </div>
                 <div class="mobile-message__bubble">
-                  <div class="mobile-message__content">{{ reply.content || '无文字内容' }}</div>
-                  <div v-if="hasAttachments(reply)" class="mobile-message__images">
+                  <div v-if="reply.recalled" class="mobile-message__recalled">消息已撤回</div>
+                  <div v-if="reply.quote && !reply.recalled" class="message-quote-preview">
+                    <span class="quote-sender">{{ reply.quote.sender_name }}:</span>
+                    <span class="quote-text">{{ reply.quote.recalled ? '消息已撤回' : reply.quote.content }}</span>
+                  </div>
+                  <div v-if="!reply.recalled" class="mobile-message__content">{{ reply.content || '无文字内容' }}</div>
+                  <div v-if="!reply.recalled && hasAttachments(reply)" class="mobile-message__images">
                     <div
                       v-for="att in parseAttachments(reply)"
                       :key="att.id"
                       class="mobile-message__img"
-                      @click="handleAttachmentPreview(att)"
                     >
                       <el-image
                         :src="att.url"
@@ -554,11 +610,22 @@
                   </div>
                 </div>
               </div>
+              <div class="message-actions">
+                <span v-if="!reply.recalled" class="msg-action-btn" @click="handleQuote(reply)">引用</span>
+                <span v-if="canRecall(reply)" class="msg-action-btn msg-action-recall" @click="handleRecall(reply)">撤回</span>
+              </div>
             </div>
           </div>
         </section>
 
         <section class="mobile-reply-section" v-if="detail?.status !== 3">
+          <div v-if="quoteReply" class="quote-preview-bar">
+            <div class="quote-preview-content">
+              <span class="quote-preview-sender">回复 {{ quoteReply.sender_name }}</span>
+              <span class="quote-preview-text">{{ quoteReply.content }}</span>
+            </div>
+            <button class="quote-preview-cancel" @click="cancelQuote">×</button>
+          </div>
           <div v-if="replyAttachments.length" class="mobile-draft-images">
             <button
               v-for="attachment in replyAttachments"
@@ -592,6 +659,7 @@
               rows="1"
               maxlength="5000"
               placeholder="输入回复内容..."
+              @input="adjustTextareaHeight"
               @keydown.enter.exact.prevent="handleReply"
             ></textarea>
             <button
@@ -705,12 +773,13 @@ const props = defineProps({
   replying: Boolean,
   closing: Boolean,
   embedded: Boolean,
+  currentUserId: Number,
   resolveTicketStatusLabel: Function,
   resolveDepartmentLabel: Function,
   resolvePriorityLabel: Function,
 })
 
-const emit = defineEmits(['update:modelValue', 'reply', 'close'])
+const emit = defineEmits(['update:modelValue', 'reply', 'close', 'recall'])
 
 const visible = defineModel('modelValue')
 const replyContent = ref('')
@@ -721,6 +790,7 @@ const previewVisible = ref(false)
 const previewUrl = ref('')
 const isMobile = ref(false)
 const mobileTab = ref('chat')
+const quoteReply = ref(null)
 
 const userName = computed(() =>
   props.detail?.user?.display_name || props.detail?.user?.nickname || props.detail?.user?.email || '客户'
@@ -759,6 +829,21 @@ watch(() => props.detail?.replies, () => {
   nextTick(() => scrollToBottom())
 }, { deep: true })
 
+const adjustTextareaHeight = (e) => {
+  const el = e.target
+  el.style.height = 'auto'
+  el.style.height = `${Math.min(100, el.scrollHeight)}px`
+}
+
+watch(replyContent, (val) => {
+  if (!val) {
+    const el = document.querySelector('.mobile-textarea')
+    if (el) {
+      el.style.height = 'auto'
+    }
+  }
+})
+
 function scrollToBottom() {
   const el = messageListRef.value
   if (el) {
@@ -777,14 +862,45 @@ function handleReply() {
     return
   }
 
-  emit('reply', {
+  const payload = {
     content: replyContent.value,
     attachments: replyAttachments.value.map((item) => item.path).filter(Boolean),
-  })
+  }
+  if (quoteReply.value?.id) {
+    payload.quote_reply_id = quoteReply.value.id
+  }
+
+  emit('reply', payload)
 }
 
 function handleClose() {
   emit('close')
+}
+
+function canRecall(reply) {
+  if (!reply || reply.recalled) return false
+  if (reply.is_staff) return false
+  if (props.currentUserId && Number(reply.user_id) !== Number(props.currentUserId)) return false
+  if (!reply.created_at) return false
+  const created = new Date(reply.created_at).getTime()
+  return Date.now() - created <= 120_000
+}
+
+function handleRecall(reply) {
+  emit('recall', reply.id)
+}
+
+function handleQuote(reply) {
+  if (!reply || reply.recalled) return
+  quoteReply.value = {
+    id: reply.id,
+    sender_name: reply.sender_name || '用户',
+    content: reply.content || '',
+  }
+}
+
+function cancelQuote() {
+  quoteReply.value = null
 }
 
 function hasAttachments(item) {
@@ -796,6 +912,7 @@ function resetReplyDraft() {
   replyContent.value = ''
   replyAttachments.value = []
   replyUploadingCount.value = 0
+  quoteReply.value = null
 }
 
 function beforeReplyUpload(file) {
@@ -1461,13 +1578,13 @@ onUnmounted(() => {
   .mobile-message--staff & {
     background: #eaf2ff;
     border-color: #c9dcff;
-    border-radius: 14px 4px 14px 14px;
+    border-radius: 4px 14px 14px 14px;
   }
 
   .mobile-message--customer & {
     background: #fff;
     border-color: #dce5f2;
-    border-radius: 4px 14px 14px 14px;
+    border-radius: 14px 4px 14px 14px;
   }
 }
 
@@ -1884,4 +2001,164 @@ onUnmounted(() => {
     font-size: 18px;
   }
 }
+
+.message-recalled {
+  padding: 8px 14px;
+  font-size: 13px;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.message-quote-preview {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  margin-bottom: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #6b7280;
+  background: rgba(0, 0, 0, 0.03);
+  border-left: 3px solid #d1d5db;
+  border-radius: 2px;
+  max-width: 280px;
+  overflow: hidden;
+}
+
+.quote-sender {
+  font-weight: 600;
+  color: #4b5563;
+  white-space: nowrap;
+}
+
+.quote-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-actions {
+  display: none;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 0 4px;
+}
+
+.message-item:hover .message-actions {
+  display: flex;
+}
+
+.mobile-message:hover .message-actions {
+  display: flex;
+}
+
+.msg-action-btn {
+  font-size: 12px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+}
+
+.msg-action-btn:hover {
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+.msg-action-recall:hover {
+  color: #dc2626;
+  background: #fef2f2;
+}
+
+.quote-preview-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  margin: 0 0 8px;
+  background: #f0f7ff;
+  border-left: 3px solid #2563eb;
+  border-radius: 4px;
+}
+
+.quote-preview-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+  flex: 1;
+}
+
+.quote-preview-sender {
+  font-size: 12px;
+  font-weight: 600;
+  color: #2563eb;
+}
+
+.quote-preview-text {
+  font-size: 12px;
+  color: #6b7280;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quote-preview-cancel {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  font-size: 18px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.quote-preview-cancel:hover {
+  color: #374151;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.mobile-message__recalled {
+  padding: 6px 10px;
+  font-size: 13px;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+
+
+.sender-role-tag {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 5px;
+  font-size: 10px;
+  line-height: 16px;
+  border-radius: 3px;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.sender-role-tag--user {
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+.sender-role-tag--staff {
+  color: #7c3aed;
+  background: #f5f3ff;
+}
+
+
 </style>

@@ -8,7 +8,6 @@
         style="width: 180px"
         @keyup.enter="$emit('search')"
       />
-      <el-button type="primary" @click="$emit('search')">搜索</el-button>
       <div class="toolbar-spacer" />
       <span class="filter-label">状态筛选:</span>
       <el-select :model-value="quickStatus" placeholder="请选择" style="width: 160px" @change="$emit('status-change', $event)">

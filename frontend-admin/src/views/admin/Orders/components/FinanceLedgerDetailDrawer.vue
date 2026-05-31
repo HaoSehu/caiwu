@@ -606,13 +606,13 @@ function logTagType(tone) {
   color: $color-danger;
 }
 
-@media (max-width: 1200px) {
+@include desktop-lg-and-below {
   .ledger-grid--bottom {
     grid-template-columns: 1fr;
   }
 }
 
-@media (max-width: 768px) {
+@include tablet-and-below {
   .ledger-detail-drawer :deep(.el-drawer) {
     width: 100% !important;
   }

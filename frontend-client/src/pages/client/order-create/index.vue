@@ -21,10 +21,6 @@ const router = useRouter()
 </script>
 
 <style scoped lang="scss">
-.order-create-page {
-  gap: 20px;
-}
-
 .order-bridge-card {
   padding: 24px;
   border: 1px solid $border-color;

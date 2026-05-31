@@ -14,7 +14,7 @@
 
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import * as echarts from 'echarts'
+import { echarts } from './chartRuntime'
 
 const props = defineProps({
   chartData: { type: Array, required: true },
@@ -84,6 +84,8 @@ function renderChart() {
   chartInstance.setOption(buildOption(props.chartData), true)
 }
 
+let resizeObserver = null
+
 function handleResize() {
   chartInstance?.resize()
 }
@@ -91,10 +93,20 @@ function handleResize() {
 onMounted(() => {
   nextTick(renderChart)
   window.addEventListener('resize', handleResize)
+  if (typeof ResizeObserver !== 'undefined' && chartRef.value) {
+    resizeObserver = new ResizeObserver(() => {
+      handleResize()
+    })
+    resizeObserver.observe(chartRef.value)
+  }
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
   chartInstance?.dispose()
   chartInstance = null
 })

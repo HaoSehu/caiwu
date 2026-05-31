@@ -2,7 +2,7 @@
   <el-container class="admin-shell">
     <el-aside
       v-if="!isMobile"
-      :width="appStore.sidebarCollapsed ? '72px' : '200px'"
+      :width="appStore.sidebarCollapsed ? '44px' : '180px'"
       class="shell-sidebar"
     >
       <SidebarPanel

@@ -1,32 +1,12 @@
 <template>
   <div class="client-page balance-logs-page">
-    <section class="summary-grid">
-      <article class="summary-card">
-        <span>当前余额</span>
-        <strong>¥ {{ summary.balance || '0.00' }}</strong>
-      </article>
-      <article class="summary-card">
-        <span>累计入账</span>
-        <strong>¥ {{ summary.total_in || '0.00' }}</strong>
-      </article>
-      <article class="summary-card">
-        <span>累计支出</span>
-        <strong>¥ {{ summary.total_out || '0.00' }}</strong>
-      </article>
-    </section>
-
-    <section class="panel-card">
-      <div class="toolbar-grid">
-        <el-select v-model="eventType" placeholder="全部类型" clearable>
+    <div class="toolbar-grid">
+        <el-select v-model="eventType" placeholder="全部类型" clearable @change="loadData">
           <el-option label="充值" value="recharge" />
           <el-option label="消费" value="consume" />
           <el-option label="退款" value="refund" />
           <el-option label="调整" value="adjust" />
         </el-select>
-        <div class="toolbar-actions">
-          <el-button @click="resetFilters">重置</el-button>
-          <el-button type="primary" @click="loadData">筛选</el-button>
-        </div>
       </div>
 
       <el-table :data="list" v-loading="loading">
@@ -55,7 +35,6 @@
           @size-change="handlePageSizeChange"
         />
       </div>
-    </section>
   </div>
 </template>
 
@@ -70,18 +49,6 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = ref(10)
 const eventType = ref('')
-const summary = reactive({
-  balance: '0.00',
-  total_in: '0.00',
-  total_out: '0.00',
-})
-
-async function loadSummary() {
-  const response = await clientApi.balanceLogsSummary({
-    event_type: eventType.value || undefined,
-  })
-  Object.assign(summary, response.data || {})
-}
 
 async function loadList() {
   loading.value = true
@@ -101,7 +68,7 @@ async function loadList() {
 }
 
 async function loadData() {
-  await Promise.all([loadSummary(), loadList()])
+  await loadList()
 }
 
 function handlePageSizeChange() {
@@ -121,50 +88,10 @@ onMounted(() => {
 </script>
 
 <style scoped lang="scss">
-.balance-logs-page {
-  gap: 20px;
-}
-
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.summary-card,
-.panel-card {
-  border: 1px solid $border-color;
-  border-radius: $base-border-radius;
-  background: #fff;
-  box-shadow: $shadow-sm;
-}
-
-.summary-card {
-  padding: 18px 20px;
-
-  span {
-    display: block;
-    color: $text-color-secondary;
-    font-size: 13px;
-  }
-
-  strong {
-    display: block;
-    margin-top: 10px;
-    font-size: 28px;
-    font-weight: 700;
-  }
-}
-
-.panel-card {
-  padding: 20px;
-}
-
 .toolbar-grid {
   display: grid;
   grid-template-columns: 180px auto;
   gap: 16px;
-  margin-bottom: 18px;
 }
 
 .toolbar-actions,
@@ -187,7 +114,6 @@ onMounted(() => {
 }
 
 @media (max-width: 767px) {
-  .summary-grid,
   .toolbar-grid {
     grid-template-columns: 1fr;
   }

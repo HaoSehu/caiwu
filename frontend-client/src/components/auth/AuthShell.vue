@@ -276,7 +276,7 @@ const currentYear = computed(() => new Date().getFullYear())
 .form-card {
   width: 100%;
   max-width: 520px;
-  padding: 40px 44px;
+  padding: 44px 44px 40px;
   border-radius: $lg-border-radius;
   background: $bg-color-card;
   box-shadow: $shadow-lg;
@@ -287,25 +287,31 @@ const currentYear = computed(() => new Date().getFullYear())
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 28px;
+  margin-bottom: 32px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
 }
 
 .card-title {
   color: $text-color-primary;
-  font-size: 18px;
-  font-weight: 600;
-  line-height: 1.6;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
 }
 
 .card-nav {
   color: $text-color-secondary;
   font-size: 13px;
   line-height: 1.6;
+  white-space: nowrap;
 }
 
 .card-nav a {
   margin-left: 4px;
   color: $color-primary;
+  font-weight: 500;
+  transition: color 0.2s ease;
 }
 
 .auth-footer {
@@ -326,13 +332,14 @@ const currentYear = computed(() => new Date().getFullYear())
 }
 
 :deep(.field-block + .field-block) {
-  margin-top: 18px;
+  margin-top: 22px;
 }
 
 :deep(.field-label) {
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   color: $text-color-primary;
   font-size: 14px;
+  font-weight: 500;
   line-height: 1.6;
 }
 
@@ -351,10 +358,11 @@ const currentYear = computed(() => new Date().getFullYear())
 }
 
 :deep(.auth-form .el-input__wrapper) {
-  min-height: 44px;
+  min-height: 46px;
   border-radius: $sm-border-radius !important;
   background: $bg-color-card !important;
   box-shadow: 0 0 0 1px $border-color inset !important;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 :deep(.auth-form .el-input__wrapper:hover) {
@@ -362,7 +370,7 @@ const currentYear = computed(() => new Date().getFullYear())
 }
 
 :deep(.auth-form .el-input__wrapper.is-focus) {
-  box-shadow: 0 0 0 1px $color-primary inset !important;
+  box-shadow: 0 0 0 2px rgba($color-primary, 0.15), 0 0 0 1px $color-primary inset !important;
 }
 
 :deep(.auth-form .el-input__inner) {
@@ -380,13 +388,15 @@ const currentYear = computed(() => new Date().getFullYear())
 :deep(.inline-action-row) {
   display: flex;
   justify-content: flex-end;
-  margin-top: 12px;
+  margin-top: 14px;
 }
 
 :deep(.auth-link) {
   color: $color-primary;
   font-size: 14px;
+  font-weight: 500;
   line-height: 1.6;
+  transition: color 0.2s ease;
 }
 
 :deep(.code-row) {
@@ -401,9 +411,9 @@ const currentYear = computed(() => new Date().getFullYear())
 
 :deep(.send-code-btn) {
   width: 110px;
-  height: 44px;
+  height: 46px;
   padding: 0 14px;
-  border-radius: 4px !important;
+  border-radius: $sm-border-radius !important;
   font-size: 13px;
   font-weight: 500;
 }
@@ -411,10 +421,11 @@ const currentYear = computed(() => new Date().getFullYear())
 :deep(.auth-submit-btn) {
   width: 100%;
   height: 48px;
-  margin-top: 24px;
-  border-radius: 4px !important;
+  margin-top: 28px;
+  border-radius: 8px !important;
   font-size: 15px;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 :deep(.agreement-row) {
@@ -445,6 +456,7 @@ const currentYear = computed(() => new Date().getFullYear())
 
 :deep(.auth-form .el-form-item__error) {
   line-height: 1.5;
+  font-size: 12px;
 }
 
 @media (max-width: 1024px) {

@@ -11,10 +11,12 @@
       :detail-loading="detailLoading"
       :replying="replying"
       :closing="closing"
+      :current-user-id="detail?.user_id"
       :resolve-ticket-status-label="resolveTicketStatusLabel"
       :resolve-department-label="resolveDepartmentLabel"
       :resolve-priority-label="resolvePriorityLabel"
       @reply="handleReply"
+      @recall="handleRecall"
       @close="handleCloseTicket"
     />
   </div>
@@ -41,6 +43,7 @@ const {
   loadTicketDetail,
   submitReply,
   closeTicket,
+  recallReply,
 } = useTickets()
 
 function resolveTicketId() {
@@ -63,6 +66,10 @@ async function loadDetail() {
 
 async function handleReply(payload) {
   await submitReply(payload)
+}
+
+async function handleRecall(replyId) {
+  await recallReply(replyId)
 }
 
 async function handleCloseTicket() {

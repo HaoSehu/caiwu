@@ -1178,10 +1178,15 @@ export function useUserDetail() {
         redirectUrl: res.data?.redirect_url,
       })
       if (pendingWindow && !pendingWindow.closed) {
-        pendingWindow.location.replace(targetUrl)
-        pendingWindow.focus?.()
-        ElMessage.success('已打开客户端登录页')
-        return
+        try {
+          pendingWindow.location.replace(targetUrl)
+          pendingWindow.focus?.()
+          ElMessage.success('已打开客户端登录页')
+          return
+        } catch {
+          // 跨域导航被阻止时，回退到当前窗口跳转
+          pendingWindow.close()
+        }
       }
 
       window.location.href = targetUrl

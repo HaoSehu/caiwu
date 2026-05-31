@@ -37,10 +37,7 @@
             <el-option label="发送失败" value="failed" />
           </el-select>
         </el-form-item>
-        <div class="filter-actions">
-          <el-button type="primary" :icon="Search" @click="handleSearch">查询</el-button>
-          <el-button :icon="RefreshRight" @click="handleReset">重置</el-button>
-        </div>
+        <div class="filter-actions" />
       </el-form>
     </el-card>
 
@@ -188,7 +185,7 @@
 
 <script setup>
 import { onMounted, ref } from 'vue'
-import { RefreshRight, Search, View } from '@element-plus/icons-vue'
+import { RefreshRight, View } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { getSmsLogs, getSmsLogsSummary } from '@/api/admin'
 import { formatDateTime } from '@/utils/datetime'

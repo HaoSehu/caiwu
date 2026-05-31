@@ -902,8 +902,10 @@ const heroSubtitle = computed(() => {
 
 .referral-strip {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  padding: 10px 20px;
+  gap: 12px 18px;
+  padding: 14px 20px;
   background: $bg-color-card;
   border: 1px solid $border-color;
   border-radius: $lg-border-radius;
@@ -914,7 +916,7 @@ const heroSubtitle = computed(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 20px;
+  padding: 0;
   white-space: nowrap;
 
   span {
@@ -1107,7 +1109,7 @@ const heroSubtitle = computed(() => {
   font-size: 12px;
 }
 
-@media (max-width: 1280px) {
+@include desktop-lg-and-below {
   .quick-stats {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -1127,7 +1129,28 @@ const heroSubtitle = computed(() => {
   }
 }
 
-@media (max-width: 768px) {
+@include tablet-and-below {
+  .referral-strip__divider {
+    display: none;
+  }
+
+  .referral-strip {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 12px !important;
+    padding: 12px 14px !important;
+  }
+
+  .referral-strip__item {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 4px !important;
+
+    &:last-child {
+      grid-column: span 2;
+    }
+  }
+
   .user-hero {
     padding: 14px 16px;
     gap: 14px;
@@ -1163,11 +1186,16 @@ const heroSubtitle = computed(() => {
 
   .hero-actions {
     width: 100%;
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+    margin-top: 8px;
   }
 
   .hero-actions :deep(.el-button) {
-    flex: 1;
-    min-width: 0;
+    width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
   }
 
   .quick-stats {

@@ -172,9 +172,6 @@ defineEmits(['open-detail', 'open-remark', 'action', 'copy-ip'])
   width: 54px;
   min-width: 54px;
   height: 54px;
-  border-radius: 14px;
-  background: linear-gradient(145deg, #f5f8ff, #eaf0fb);
-  overflow: hidden;
 }
 
 .service-system-icon__image {

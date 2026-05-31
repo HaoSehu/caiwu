@@ -1,47 +1,23 @@
 <template>
   <div class="client-page invoices-page">
-    <section class="summary-grid">
-      <article class="summary-card">
-        <span>账单总数</span>
-        <strong>{{ summary.total || 0 }}</strong>
-      </article>
-      <article class="summary-card">
-        <span>待支付</span>
-        <strong>{{ summary.unpaid || 0 }}</strong>
-      </article>
-      <article class="summary-card">
-        <span>已支付</span>
-        <strong>{{ summary.paid || 0 }}</strong>
-      </article>
-      <article class="summary-card">
-        <span>待付金额</span>
-        <strong>¥ {{ summary.unpaid_amount || '0.00' }}</strong>
-      </article>
-    </section>
-
-    <section class="panel-card">
-      <div class="toolbar-grid">
+    <div class="toolbar-grid">
         <el-input v-model="filters.keyword" placeholder="搜索账单号或商品名" clearable @keyup.enter="handleSearch" />
-        <el-select v-model="filters.status" placeholder="全部状态" clearable>
+        <el-select v-model="filters.status" placeholder="全部状态" clearable @change="handleSearch">
           <el-option label="待支付" :value="0" />
           <el-option label="已支付" :value="1" />
           <el-option label="已取消" :value="2" />
           <el-option label="已过期" :value="3" />
           <el-option label="已退款" :value="5" />
         </el-select>
-        <el-select v-model="filters.type" placeholder="全部类型" clearable>
+        <el-select v-model="filters.type" placeholder="全部类型" clearable @change="handleSearch">
           <el-option label="新购账单" value="new" />
           <el-option label="续费账单" value="renew" />
           <el-option label="升级账单" value="upgrade" />
           <el-option label="流量包" value="traffic" />
         </el-select>
-        <div class="toolbar-actions">
-          <el-button @click="resetFilters">重置</el-button>
-          <el-button type="primary" @click="handleSearch">搜索</el-button>
-        </div>
       </div>
 
-      <el-table :data="list" v-loading="loading">
+      <el-table v-if="!isMobileScreen" :data="list" v-loading="loading">
         <el-table-column label="账单号" min-width="170">
           <template #default="{ row }">
             <button type="button" class="table-link-button" @click="openDetail(row.id)">
@@ -73,6 +49,38 @@
         <el-table-column label="创建时间" min-width="180" prop="created_at" />
       </el-table>
 
+      <!-- 手机移动端账单卡片流 -->
+      <div v-else class="mobile-invoice-list" v-loading="loading">
+        <div
+          v-for="row in list"
+          :key="row.id"
+          class="mobile-invoice-card"
+          @click="openDetail(row.id)"
+        >
+          <div class="card-row card-row--top">
+            <span class="invoice-no">{{ row.invoice_no || `#${row.id}` }}</span>
+            <el-tag :type="resolveInvoiceTagType(row.status)" size="small" effect="light">
+              {{ row.status_label || '--' }}
+            </el-tag>
+          </div>
+          <div class="invoice-product-title">
+            {{ row.combined_display_name || row.product_display_name || '--' }}
+          </div>
+          <div class="invoice-spec">
+            {{ row.product_spec_display || row.summary || row.type_label || '--' }}
+          </div>
+          <div class="card-row card-row--bottom">
+            <span class="invoice-amount-row">
+              账单：<strong>¥{{ row.amount || '0.00' }}</strong> 
+              <span v-if="row.payable_amount && Number(row.payable_amount) > 0" class="payable-sub">
+                （待付：<strong class="payable-orange">¥{{ row.payable_amount }}</strong>）
+              </span>
+            </span>
+            <span class="invoice-time">{{ row.created_at }}</span>
+          </div>
+        </div>
+      </div>
+
       <el-empty v-if="!loading && !list.length" description="暂无账单记录" />
 
       <div v-if="total > 0" class="pager-wrap">
@@ -86,7 +94,6 @@
           @size-change="handlePageSizeChange"
         />
       </div>
-    </section>
   </div>
 </template>
 
@@ -94,8 +101,10 @@
 import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useInvoices } from '@/composables/useInvoices'
+import { useViewport } from '@/composables/useViewport'
 
 const router = useRouter()
+const { isMobileScreen } = useViewport()
 const {
   loading,
   list,
@@ -126,49 +135,10 @@ onMounted(() => {
   gap: 20px;
 }
 
-.summary-grid,
 .toolbar-grid {
   display: grid;
   gap: 16px;
-}
-
-.summary-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.summary-card,
-.panel-card {
-  border: 1px solid $border-color;
-  border-radius: $base-border-radius;
-  background: #fff;
-  box-shadow: $shadow-sm;
-}
-
-.summary-card {
-  padding: 18px 20px;
-
-  span {
-    display: block;
-    color: $text-color-secondary;
-    font-size: 13px;
-  }
-
-  strong {
-    display: block;
-    margin-top: 10px;
-    color: $text-color-primary;
-    font-size: 28px;
-    font-weight: 700;
-  }
-}
-
-.panel-card {
-  padding: 20px;
-}
-
-.toolbar-grid {
   grid-template-columns: 1.3fr 180px 180px auto;
-  margin-bottom: 18px;
 }
 
 .toolbar-actions {
@@ -209,14 +179,12 @@ onMounted(() => {
 }
 
 @media (max-width: 960px) {
-  .summary-grid,
   .toolbar-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 767px) {
-  .summary-grid,
   .toolbar-grid {
     grid-template-columns: 1fr;
   }
@@ -224,6 +192,87 @@ onMounted(() => {
   .toolbar-actions,
   .pager-wrap {
     justify-content: flex-start;
+  }
+}
+
+/* ── 手机移动端账单卡片流 ── */
+.mobile-invoice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.mobile-invoice-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid $border-color;
+  border-radius: 12px;
+  background: $bg-color-card;
+  box-shadow: $shadow-sm;
+  cursor: pointer;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+
+  &:active {
+    transform: scale(0.99);
+    background: $bg-color-hover;
+  }
+
+  .card-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .invoice-no {
+    color: $text-color-placeholder;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .invoice-product-title {
+    color: $text-color-primary;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
+    text-align: left;
+  }
+
+  .invoice-spec {
+    color: $text-color-secondary;
+    font-size: 12px;
+    line-height: 1.4;
+    text-align: left;
+    word-break: break-all;
+  }
+
+  .invoice-amount-row {
+    color: $text-color-secondary;
+    font-size: 12px;
+    text-align: left;
+
+    strong {
+      color: $text-color-primary;
+      font-weight: 600;
+    }
+
+    .payable-sub {
+      color: $text-color-placeholder;
+      font-size: 11px;
+    }
+
+    .payable-orange {
+      color: $color-accent-orange;
+      font-weight: 600;
+    }
+  }
+
+  .invoice-time {
+    color: $text-color-placeholder;
+    font-size: 11px;
   }
 }
 </style>

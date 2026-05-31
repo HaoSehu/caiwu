@@ -48,86 +48,69 @@
             :value="option.value"
           />
         </el-select>
-
-        <el-button type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
-        <el-button :icon="Refresh" @click="resetFilters">重置</el-button>
       </div>
     </section>
 
-    <el-card shadow="never" class="tickets-table-card">
-      <el-table :data="list" v-loading="loading" stripe row-key="id">
-        <el-table-column prop="id" label="ID" width="80" />
+    <section class="ticket-card-list" v-loading="loading">
+      <div v-if="list.length" class="ticket-card-grid">
+        <article
+          v-for="row in list"
+          :key="row.id"
+          class="ticket-card"
+          @click="openDetail(row.id)"
+        >
+          <div class="ticket-card__head">
+            <span class="ticket-card__id">#{{ row.id }}</span>
+            <el-tag size="small" :type="statusType(row.status)" effect="light">
+              {{ statusLabel(row.status) }}
+            </el-tag>
+          </div>
 
-        <el-table-column label="工单标题" min-width="260">
-          <template #default="{ row }">
-            <button type="button" class="subject-link" @click="openDetail(row.id)">
-              {{ row.subject || '-' }}
-            </button>
-          </template>
-        </el-table-column>
+          <div class="ticket-card__title">{{ row.subject || '-' }}</div>
 
-        <el-table-column label="用户" min-width="180">
-          <template #default="{ row }">
-            <button type="button" class="user-link" @click="goUserDetail(row.user?.id)">
-              {{ row.user?.nickname || row.user?.email || `用户 #${row.user_id}` }}
-            </button>
-            <div class="sub-copy">{{ row.user?.email || '--' }}</div>
-          </template>
-        </el-table-column>
+          <div class="ticket-card__meta">
+            <span class="ticket-card__user">
+              <el-icon><User /></el-icon>
+              <button type="button" class="user-link" @click.stop="goUserDetail(row.user?.id)">
+                {{ row.user?.nickname || row.user?.email || `用户 #${row.user_id}` }}
+              </button>
+            </span>
+            <span class="ticket-card__assignee">
+              处理人：{{ row.assignee?.nickname || row.assignee?.username || '未指派' }}
+            </span>
+          </div>
 
-        <el-table-column label="分类" width="110">
-          <template #default="{ row }">
-            <el-tag size="small" effect="plain">{{ departmentLabel(row.department) }}</el-tag>
-          </template>
-        </el-table-column>
-
-        <el-table-column label="优先级" width="100">
-          <template #default="{ row }">
+          <div class="ticket-card__foot">
             <el-tag size="small" effect="plain" :type="priorityType(row.priority)">
               {{ priorityLabel(row.priority) }}
             </el-tag>
-          </template>
-        </el-table-column>
-
-        <el-table-column label="状态" width="130">
-          <template #default="{ row }">
-            <el-tag size="small" :type="statusType(row.status)">
-              {{ statusLabel(row.status) }}
-            </el-tag>
-            <div v-if="row.close_reason_label" class="close-reason-label">{{ row.close_reason_label }}</div>
-          </template>
-        </el-table-column>
-
-        <el-table-column label="处理人" min-width="140">
-          <template #default="{ row }">
-            {{ row.assignee?.nickname || row.assignee?.username || '未指派' }}
-          </template>
-        </el-table-column>
-
-        <el-table-column label="最后更新" min-width="160">
-          <template #default="{ row }">{{ formatDateTime(row.updated_at) }}</template>
-        </el-table-column>
-      </el-table>
-
-      <div class="table-pagination">
-        <el-pagination
-          v-model:current-page="page"
-          v-model:page-size="pageSize"
-          :total="total"
-          :page-sizes="[20, 50, 100]"
-          layout="total, sizes, prev, pager, next"
-          @size-change="loadList"
-          @current-change="loadList"
-        />
+            <el-tag size="small" effect="plain">{{ departmentLabel(row.department) }}</el-tag>
+            <span class="ticket-card__time">{{ formatDateTime(row.updated_at) }}</span>
+          </div>
+        </article>
       </div>
-    </el-card>
+
+      <el-empty v-if="!loading && !list.length" description="暂无工单记录" />
+    </section>
+
+    <div v-if="total > 0" class="ticket-pagination">
+      <el-pagination
+        v-model:current-page="page"
+        v-model:page-size="pageSize"
+        :total="total"
+        :page-sizes="[20, 50, 100]"
+        layout="total, sizes, prev, pager, next"
+        @size-change="loadList"
+        @current-change="loadList"
+      />
+    </div>
   </div>
 </template>
 
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Refresh, Search } from '@element-plus/icons-vue'
+import { Search, User } from '@element-plus/icons-vue'
 import adminApi from '@/api/admin'
 import { formatDateTime } from '@/utils/datetime'
 import { TICKET_STATUS_MAP, getStatusLabel, getStatusTagType, resolveElTagType, toSelectOptions } from '@shared/statusConfig'
@@ -250,13 +233,11 @@ onMounted(loadList)
   align-items: center;
   margin: 0;
 
-  // 搜索输入框占满可用宽度
   .tickets-search-input {
     flex: 1 1 220px;
     min-width: 160px;
   }
 
-  // 下拉选择器
   .tickets-search-select {
     flex: 0 1 140px;
     min-width: 110px;
@@ -267,43 +248,122 @@ onMounted(loadList)
     }
   }
 
-  // 按钮靠右对齐，不换行
   .el-button {
     flex-shrink: 0;
     white-space: nowrap;
   }
 }
 
-// 窄屏下优化
 @include tablet-and-below {
   .tickets-search-bar {
-    // 保持横向排列
-    flex-direction: row !important;
-    align-items: center !important;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    align-items: stretch;
 
-    // 搜索框独占第一行
     .tickets-search-input {
-      flex: 1 1 100%;
+      grid-column: 1 / -1;
       min-width: 0;
     }
-    // 下拉框自然换行，宽度自适应
+
     .tickets-search-select {
-      flex: 1 1 auto;
-      min-width: 100px;
-      width: auto !important;
+      min-width: 0;
     }
-    // 按钮紧跟最后
+
     .el-button {
-      flex-shrink: 0;
+      grid-column: span 1;
+      margin-left: 0 !important;
     }
   }
 }
 
-.tickets-table-card {
-  overflow: hidden;
+/* ── 卡片列表 ── */
+.ticket-card-list {
+  min-height: 240px;
 }
 
-.subject-link,
+.ticket-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 14px;
+}
+
+.ticket-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+  border: 1px solid $border-color;
+  border-radius: $base-border-radius;
+  background: $bg-color-card;
+  box-shadow: $shadow-sm;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+
+  &:hover {
+    border-color: rgba($color-primary, 0.24);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+    transform: translateY(-1px);
+  }
+}
+
+.ticket-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ticket-card__id {
+  color: $text-color-placeholder;
+  font-size: $font-size-sm;
+  font-weight: 600;
+}
+
+.ticket-card__title {
+  color: $text-color-primary;
+  font-size: $font-size-base;
+  font-weight: 600;
+  line-height: 1.4;
+  word-break: break-all;
+}
+
+.ticket-card__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ticket-card__user {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: $text-color-secondary;
+  font-size: $font-size-sm;
+
+  .el-icon {
+    flex-shrink: 0;
+  }
+}
+
+.ticket-card__assignee {
+  color: $text-color-secondary;
+  font-size: $font-size-sm;
+}
+
+.ticket-card__foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ticket-card__time {
+  margin-left: auto;
+  color: $text-color-placeholder;
+  font-size: $font-size-sm;
+}
+
 .user-link {
   border: none;
   padding: 0;
@@ -311,32 +371,21 @@ onMounted(loadList)
   color: $color-primary;
   font: inherit;
   cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
 }
 
-.subject-link {
-  text-align: left;
-  font-weight: 600;
-}
-
-.subject-link:hover,
-.user-link:hover {
-  text-decoration: underline;
-}
-
-.sub-copy {
-  margin-top: 4px;
-  color: $text-color-placeholder;
-  font-size: 12px;
-}
-
-.close-reason-label {
-  color: $text-color-secondary;
-  font-size: 12px;
-}
-
-.table-pagination {
+.ticket-pagination {
   display: flex;
   justify-content: flex-end;
   margin-top: 16px;
+}
+
+@media (max-width: 767px) {
+  .ticket-card-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 </style>

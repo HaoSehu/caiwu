@@ -8,7 +8,7 @@
     </div>
 
     <div class="route-loading-shell__grid">
-      <div v-for="index in 3" :key="index" class="route-loading-shell__card">
+      <div v-for="index in 3" :key="index" class="route-loading-shell__card" :style="{ animationDelay: `${index * 60}ms` }">
         <span class="route-loading-shell__line route-loading-shell__line--title"></span>
         <span class="route-loading-shell__line"></span>
         <span class="route-loading-shell__line route-loading-shell__line--short"></span>
@@ -24,6 +24,8 @@
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(248, 250, 252, 0.82)),
     radial-gradient(circle at top right, rgba($color-primary, 0.08), transparent 28%);
+  animation: route-loading-appear 0.3s ease-out both;
+  animation-delay: 120ms; /* 延迟出现，避免快速加载时闪烁 */
 }
 
 .route-loading-shell__hero,
@@ -39,6 +41,8 @@
   flex-direction: column;
   gap: 14px;
   padding: 26px 24px;
+  animation: route-loading-appear 0.3s ease-out both;
+  animation-delay: 180ms;
 }
 
 .route-loading-shell__grid {
@@ -54,6 +58,7 @@
   gap: 12px;
   min-height: 186px;
   padding: 22px 20px;
+  animation: route-loading-appear 0.35s ease-out both;
 }
 
 .route-loading-shell__pill,
@@ -64,7 +69,7 @@
   position: relative;
   overflow: hidden;
   border-radius: 999px;
-  background: rgba(148, 163, 184, 0.18);
+  background: rgba(148, 163, 184, 0.14);
 }
 
 .route-loading-shell__pill::after,
@@ -75,8 +80,16 @@
   position: absolute;
   inset: 0;
   transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.78), transparent);
-  animation: route-loading-shimmer 1.12s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.5) 40%,
+    rgba(255, 255, 255, 0.8) 50%,
+    rgba(255, 255, 255, 0.5) 60%,
+    transparent 100%
+  );
+  animation: route-loading-shimmer 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  animation-delay: 300ms;
 }
 
 .route-loading-shell__pill {
@@ -113,8 +126,24 @@
 }
 
 @keyframes route-loading-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+
   100% {
     transform: translateX(100%);
+  }
+}
+
+@keyframes route-loading-appear {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 

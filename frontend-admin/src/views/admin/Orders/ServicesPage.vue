@@ -378,7 +378,7 @@ onMounted(() => loadList())
   flex-wrap: wrap;
 }
 
-@media (max-width: 1024px) {
+@include tablet-and-below {
   .toolbar-card {
     flex-wrap: wrap;
   }

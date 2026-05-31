@@ -2,7 +2,7 @@
   <el-drawer
     :model-value="modelValue"
     direction="ltr"
-    size="min(280px, 80vw)"
+    size="min(200px, 80vw)"
     :with-header="false"
     class="admin-mobile-drawer"
     @update:model-value="emit('update:modelValue', $event)"
@@ -84,12 +84,12 @@ const sidebarLogo = '/branding/logo.svg'
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 16px;
+  padding: 12px 0;
   background: $bg-color-card;
 }
 
 .admin-mobile-drawer :deep(.el-drawer__body) {
-  padding: 0;
+  padding: 0 !important;
 }
 
 .brand-panel {
@@ -101,7 +101,7 @@ const sidebarLogo = '/branding/logo.svg'
 .brand-panel.mobile {
   justify-content: flex-start;
   min-height: auto;
-  padding: 0 0 16px;
+  padding: 0 0 8px;
 }
 
 .brand-lockup-wrap {
@@ -135,13 +135,13 @@ const sidebarLogo = '/branding/logo.svg'
 }
 
 .menu-section + .menu-section {
-  margin-top: 14px;
+  margin-top: 8px;
 }
 
 .menu-section-title {
-  padding: 0 10px 6px;
+  padding: 0 10px 4px;
   color: $text-color-placeholder;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
 }
 
@@ -157,13 +157,13 @@ const sidebarLogo = '/branding/logo.svg'
 
 .sidebar-menu :deep(.el-menu-item),
 .sidebar-menu :deep(.el-sub-menu__title) {
-  height: 44px;
+  height: 36px;
   margin-bottom: 0;
   padding: 0 12px;
-  border-radius: 8px;
+  border-radius: 6px;
   color: $text-color-secondary;
-  line-height: 44px;
-  font-size: 14px;
+  line-height: 36px;
+  font-size: 13px;
   font-weight: 500;
   transition:
     background-color $duration-fast $ease-standard,
@@ -184,19 +184,19 @@ const sidebarLogo = '/branding/logo.svg'
 }
 
 .sidebar-menu :deep(.el-sub-menu .el-menu) {
-  margin: 2px 0 6px;
-  padding: 4px;
+  margin: 2px 0 4px;
+  padding: 3px;
   border-radius: $base-border-radius;
   background: $bg-color-soft;
 }
 
 .sidebar-menu :deep(.el-sub-menu .el-menu-item) {
   min-width: auto;
-  height: 34px;
+  height: 30px;
   margin: 0;
   padding-left: 40px !important;
-  font-size: 12.5px;
-  line-height: 34px;
+  font-size: 12px;
+  line-height: 30px;
 }
 
 .sidebar-menu :deep(.el-sub-menu.is-opened > .el-sub-menu__title) {
@@ -206,8 +206,8 @@ const sidebarLogo = '/branding/logo.svg'
 
 .sidebar-menu :deep(.el-menu-item .el-icon),
 .sidebar-menu :deep(.el-sub-menu__title .el-icon) {
-  margin-right: 10px;
-  font-size: 18px;
+  margin-right: 8px;
+  font-size: 16px;
 }
 
 .sidebar-menu :deep(.el-sub-menu .el-menu-item.is-active) {

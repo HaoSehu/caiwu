@@ -1,14 +1,14 @@
 <template>
   <div>
     <div class="toolbar compact">
-      <el-select v-model="state.filters.status" placeholder="状态" clearable>
+      <el-select v-model="state.filters.status" placeholder="状态" clearable @change="emit('search')">
         <el-option label="待支付" :value="0" />
         <el-option label="已支付" :value="1" />
         <el-option label="已取消" :value="2" />
         <el-option label="已逾期" :value="3" />
         <el-option label="已退款" :value="5" />
       </el-select>
-      <el-select v-model="state.filters.type" placeholder="类型" clearable>
+      <el-select v-model="state.filters.type" placeholder="类型" clearable @change="emit('search')">
         <el-option label="新购" value="new" />
         <el-option label="续费" value="renew" />
         <el-option label="充值" value="recharge" />
@@ -16,8 +16,6 @@
         <el-option label="推荐奖励" value="referral_credit" />
         <el-option label="手工" value="manual" />
       </el-select>
-      <el-button type="primary" @click="emit('search')">查询</el-button>
-      <el-button @click="emit('reset')">重置</el-button>
     </div>
 
     <el-table :data="state.list" v-loading="state.loading" stripe :row-key="resolveRowKey">

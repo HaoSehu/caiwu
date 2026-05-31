@@ -230,10 +230,7 @@
                 :value="item.value"
               />
             </el-select>
-            <div class="search-actions">
-              <el-button type="primary" @click="handleSearch">搜索</el-button>
-              <el-button @click="resetFilters">重置</el-button>
-            </div>
+
           </div>
 
           <div v-if="selectedCategoryLabel || activeFilterTags.length" class="toolbar-foot">

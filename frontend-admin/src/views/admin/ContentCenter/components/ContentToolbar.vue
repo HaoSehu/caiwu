@@ -1,19 +1,6 @@
 <template>
   <section class="content-toolbar-card">
     <div class="content-toolbar-head">
-      <div class="content-tabs">
-        <button
-          v-for="tab in contentTabs"
-          :key="tab.type"
-          type="button"
-          class="content-tab"
-          :class="{ active: tab.type === currentContentType }"
-          @click="emit('switch-type', tab.type)"
-        >
-          {{ tab.label }}
-        </button>
-      </div>
-
       <div class="content-toolbar-actions">
         <el-button @click="emit('refresh')">刷新</el-button>
         <el-button @click="emit('open-category')">分类管理</el-button>
@@ -36,6 +23,7 @@
         filterable
         class="search-field"
         placeholder="全部分类"
+        @change="emit('search')"
       >
         <el-option
           v-for="item in categories"
@@ -50,6 +38,7 @@
         clearable
         class="search-field"
         placeholder="全部状态"
+        @change="emit('search')"
       >
         <el-option
           v-for="item in statusOptions"
@@ -62,8 +51,9 @@
       <el-select
         v-model="filters.is_pinned"
         clearable
-        class="search-field"
+        class="search-field search-field-last"
         placeholder="置顶状态"
+        @change="emit('search')"
       >
         <el-option
           v-for="item in pinOptions"
@@ -73,8 +63,6 @@
         />
       </el-select>
 
-      <el-button type="primary" @click="emit('search')">搜索</el-button>
-      <el-button @click="emit('reset-filters')">重置</el-button>
     </div>
 
     <div class="content-category-strip">
@@ -123,8 +111,6 @@
 
 <script setup>
 defineProps({
-  contentTabs: { type: Array, default: () => [] },
-  currentContentType: { type: String, default: 'notice' },
   currentArticleLabel: { type: String, default: '' },
   categories: { type: Array, default: () => [] },
   statusOptions: { type: Array, default: () => [] },
@@ -134,7 +120,6 @@ defineProps({
 })
 
 const emit = defineEmits([
-  'switch-type',
   'refresh',
   'open-category',
   'create',
@@ -208,11 +193,12 @@ const emit = defineEmits([
 }
 
 .search-field {
-  width: 180px;
+  flex: 1;
+  min-width: 0;
 }
 
 .search-field-wide {
-  width: 320px;
+  flex: 2;
 }
 
 .content-category-strip {
@@ -245,20 +231,73 @@ const emit = defineEmits([
 }
 
 @media (max-width: 900px) {
-  .content-toolbar-head,
-  .toolbar-foot {
+  .content-toolbar-card {
+    padding: 12px;
+  }
+
+  .content-toolbar-head {
+    gap: 8px;
+  }
+
+  .content-toolbar-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .content-search-bar {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .search-field-wide {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .search-field-last {
+    grid-column: auto;
+  }
+
+  .search-field {
+    width: 100%;
+  }
+
+  .content-category-strip {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+
+  .category-chip {
+    flex-shrink: 0;
+  }
+}
+
+@media (max-width: 380px) {
+  .content-search-bar {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+
+  .search-field-wide {
+    grid-column: 1 / -1;
+  }
+
+  .content-toolbar-head {
     flex-direction: column;
     align-items: flex-start;
   }
 
-  .content-toolbar-actions,
-  .content-search-bar {
-    width: 100%;
-  }
-
-  .search-field,
-  .search-field-wide {
-    width: 100%;
+  .content-toolbar-actions {
+    justify-content: flex-start;
   }
 }
 </style>

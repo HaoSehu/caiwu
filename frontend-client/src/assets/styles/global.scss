@@ -248,6 +248,18 @@ ol {
   color: var(--el-tag-text-color) !important;
 }
 
+// ========== 数字等宽排版（解决数值滚动抖动） ==========
+.hero-balance-num,
+.m-val,
+.summary-value,
+.donut-center-val {
+  font-variant-numeric: tabular-nums;
+  -moz-font-feature-settings: "tnum";
+  -webkit-font-feature-settings: "tnum";
+  font-feature-settings: "tnum";
+  letter-spacing: -0.5px;
+}
+
 // ========== 状态标签：呼吸动画（开通中等处理态） ==========
 .status-tag--pulse {
   animation: statusPulse 2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
@@ -278,8 +290,20 @@ ol {
 .client-page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
   padding: 0;
+}
+
+@media (max-width: 768px) {
+  .client-page {
+    gap: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .client-page {
+    gap: 12px;
+  }
 }
 
 .client-page-head {

@@ -155,10 +155,6 @@ const {
 </script>
 
 <style scoped lang="scss">
-.verification-page {
-  gap: 20px;
-}
-
 .verification-status-card,
 .verification-guide-card {
   border: 1px solid $border-color;

@@ -9,6 +9,7 @@
     @close="$emit('close')"
     @cancel="$emit('close')"
     @confirm="handleConfirm"
+    @opened="handleOpened"
   >
     <div class="mopt-picker">
       <div class="mopt-frame" aria-hidden="true"></div>
@@ -59,11 +60,15 @@ watch(() => props.visible, (v) => {
   nextTick(() => {
     updateSpacers()
     bindScroll()
-    init()
     resizeObs = new ResizeObserver(() => updateSpacers())
     resizeObs.observe(col.value)
   })
 })
+
+function handleOpened() {
+  updateSpacers()
+  init()
+}
 
 onBeforeUnmount(() => {
   cleanup()

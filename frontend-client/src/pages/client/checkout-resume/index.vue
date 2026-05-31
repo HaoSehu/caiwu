@@ -118,10 +118,6 @@ onMounted(() => {
 </script>
 
 <style scoped lang="scss">
-.checkout-resume-page {
-  gap: 20px;
-}
-
 .resume-card {
   padding: 24px;
   border: 1px solid $border-color;

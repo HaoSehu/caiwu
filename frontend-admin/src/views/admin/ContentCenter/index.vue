@@ -9,15 +9,12 @@
     </section>
 
     <ContentToolbar
-      :content-tabs="contentTabs"
-      :current-content-type="currentContentType"
       :current-article-label="currentArticleLabel"
       :categories="categories"
       :status-options="statusOptions"
       :pin-options="pinOptions"
       :active-filter-tags="activeFilterTags"
       :filters="filters"
-      @switch-type="switchContentType"
       @refresh="loadAll"
       @open-category="openCategoryDialog"
       @create="openCreateArticleDialog"
@@ -75,34 +72,23 @@
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
 import { useContentCenter } from './composables/useContentCenter'
 import ContentToolbar from './components/ContentToolbar.vue'
 import ContentList from './components/ContentList.vue'
 import ContentCategoryPanel from './components/ContentCategoryPanel.vue'
 import ContentEditor from './components/ContentEditor.vue'
 
-const router = useRouter()
-const route = useRoute()
-
 const {
-  contentTabs, statusOptions, pinOptions, categoryRules, articleRules,
+  statusOptions, pinOptions, categoryRules, articleRules,
   loading, categoryLoading, articleDetailLoading, categorySaving, articleSaving,
   categoryDialogVisible, articleDialogVisible, categoryFormRef, articleFormRef,
   list, categories, total, page, pageSize, filters, categoryForm, articleForm,
-  currentContentType, pageTitle, pageDescription, currentArticleLabel,
+  pageTitle, pageDescription, currentArticleLabel,
   articleDialogTitle, activeFilterTags,
-  loadArticles, switchContentType, handleSearch, resetFilters,
+  loadArticles, loadAll, handleSearch, resetFilters,
   clearFilter, applyCategoryFilter, openCategoryDialog, submitCategory, handleDeleteCategory,
   fillCategoryForm, openCreateArticleDialog, openEditArticleDialog, submitArticle,
   handleDeleteArticle, resetArticleValidate, resetCategoryForm,
 } = useContentCenter()
-
-onMounted(() => {
-  if (!route.meta.contentType) {
-    router.replace('/admin/content/notices')
-  }
-})
 </script>
 

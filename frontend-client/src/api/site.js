@@ -15,6 +15,7 @@ export default {
   config: (config) => request.get('/site/config', config),
   home: (config) => request.get('/site/home', config).then((response) => withNormalizedData(response, normalizeSiteHomePayload)),
   homeHero: (config) => request.get('/site/home-hero', config),
+  productsInit: (params, config = {}) => request.get('/site/products/init', { ...config, params }),
   productTypes: (config) => request.get('/site/product-types', config),
   productGroups: (params, config = {}) => request.get('/site/product-categories', { ...config, params }),
   productGroupChildren: (groupId, config) => request.get(`/site/product-categories/${groupId}/children`, config),

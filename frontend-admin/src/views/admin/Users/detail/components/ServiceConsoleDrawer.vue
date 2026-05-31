@@ -485,7 +485,7 @@ watch(() => props.state.visible, (next) => { if (!next) passwordVisible.value = 
 .text-muted { color: $text-color-placeholder; }
 .refund-hint { margin-top: 6px; color: $text-color-placeholder; font-size: 12px; }
 
-@media (max-width: 768px) {
+@include tablet-and-below {
   .console-shell {
     gap: 10px;
     padding: 12px 12px 16px;

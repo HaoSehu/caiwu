@@ -28,6 +28,7 @@ export default {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
     reply: (id, data) => request.post(`/admin/tickets/${id}/reply`, data),
+    recall: (id, replyId) => request.post(`/admin/tickets/${id}/replies/${replyId}/recall`),
     close: (id) => request.post(`/admin/tickets/${id}/close`),
     assign: (id, data) => request.post(`/admin/tickets/${id}/assign`, data),
     adminUsers: () => request.get('/admin/tickets/admin-users'),

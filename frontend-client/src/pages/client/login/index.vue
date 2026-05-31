@@ -7,7 +7,7 @@
   >
     <el-form ref="formRef" :model="form" :rules="rules" class="auth-form" @submit.prevent>
       <div class="field-block">
-        <div class="field-label">手机号 / 邮箱</div>
+        <div class="field-label is-required">手机号 / 邮箱</div>
         <el-form-item prop="account">
           <el-input
             v-model="form.account"
@@ -44,7 +44,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import AuthShell from '@/components/auth/AuthShell.vue'
@@ -146,10 +146,20 @@ const handleLogin = async () => {
     loading.value = false
   }
 }
+
+onMounted(() => {
+  formRef.value?.clearValidate()
+})
 </script>
 
 <style scoped lang="scss">
 .auth-form {
   margin-top: 0;
+
+  .field-block {
+    .el-form-item.is-error ~ .field-tip {
+      display: none;
+    }
+  }
 }
 </style>
