@@ -80,6 +80,10 @@ function resolveManualChunk(id) {
     return 'vendor-editor'
   }
 
+  if (normalized.includes('/echarts/') || normalized.includes('/zrender/')) {
+    return 'vendor-echarts'
+  }
+
   if (normalized.includes('/markdown-it/')) {
     return 'vendor-content'
   }
@@ -121,7 +125,7 @@ export default defineConfig(({ mode }) => {
       alias: {
         '@': path.resolve(__dirname, 'src'),
         '@shared': path.resolve(__dirname, '../shared'),
-        'element-plus': path.resolve(__dirname, 'node_modules/element-plus'),
+        'element-plus': path.resolve(__dirname, '../node_modules/element-plus'),
       },
     },
     server: {
