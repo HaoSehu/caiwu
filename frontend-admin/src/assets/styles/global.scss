@@ -849,14 +849,16 @@ html {
 }
 
 // ========== 统计条 ==========
-.summary-strip {
+.summary-strip,
+.admin-metric-strip {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: $spacing-md;
 }
 
 .summary-item,
-.stat-card {
+.stat-card,
+.admin-metric-card {
   display: flex;
   flex-direction: column;
   gap: 6px;

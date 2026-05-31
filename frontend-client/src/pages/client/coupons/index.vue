@@ -39,13 +39,12 @@
       </div>
     </section>
 
-    <section class="panel-card">
-      <el-tabs :model-value="activeTab" class="coupon-tabs" @tab-change="handleTabChange">
-        <el-tab-pane label="我拥有的优惠券" name="owned">
-          <div v-loading="ownedState.loading" class="coupon-list-shell">
-            <template v-if="ownedState.list.length">
-              <div v-show="viewMode === 'grid'" class="coupon-grid">
-                <article v-for="item in ownedState.list" :key="item.id" class="coupon-card">
+    <el-tabs :model-value="activeTab" class="coupon-tabs" @tab-change="handleTabChange">
+      <el-tab-pane label="我拥有的优惠券" name="owned">
+        <div v-loading="ownedState.loading" class="coupon-list-shell">
+          <template v-if="ownedState.list.length">
+            <div v-show="viewMode === 'grid'" class="coupon-grid">
+              <article v-for="item in ownedState.list" :key="item.id" class="coupon-card">
                   <button class="coupon-card__info" type="button" aria-label="查看优惠券详情" @click="openCouponDetail(item)">
                     <el-icon><InfoFilled /></el-icon>
                   </button>
@@ -285,7 +284,6 @@
           </div>
         </el-tab-pane>
       </el-tabs>
-    </section>
 
     <el-drawer
       v-model="couponDrawerVisible"
@@ -316,22 +314,24 @@
               正在加载产品层级...
             </div>
             <div v-else-if="couponProductHierarchy.length" class="coupon-hierarchy-sheet">
-              <div class="coupon-hierarchy-sheet__head">
-                <span>一级菜单</span>
-                <span>二级菜单</span>
-                <span>三级菜单</span>
-                <span>子产品</span>
-              </div>
-              <div
-                v-for="item in couponProductHierarchy"
-                :key="item.productId"
-                class="coupon-hierarchy-sheet__row"
-              >
-                <span>{{ item.level1 || '--' }}</span>
-                <span>{{ item.level2 || '--' }}</span>
-                <span>{{ item.level3 || '--' }}</span>
-                <span>{{ item.productName || '--' }}</span>
-              </div>
+              <table class="coupon-hierarchy-table">
+                <thead>
+                  <tr>
+                    <th>一级菜单</th>
+                    <th>二级菜单</th>
+                    <th>三级菜单</th>
+                    <th>子产品</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="item in mergedCouponProductHierarchy" :key="item.productId">
+                    <td v-if="item.level1Rowspan" :rowspan="item.level1Rowspan">{{ item.level1 || '--' }}</td>
+                    <td v-if="item.level2Rowspan" :rowspan="item.level2Rowspan">{{ item.level2 || '--' }}</td>
+                    <td v-if="item.level3Rowspan" :rowspan="item.level3Rowspan">{{ item.level3 || '--' }}</td>
+                    <td>{{ item.productName || '--' }}</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
             <span v-else>{{ selectedCoupon.product_scope_text || '全场通用' }}</span>
           </el-descriptions-item>
@@ -393,6 +393,69 @@ const nextViewMode = computed(() => (viewMode.value === 'grid' ? 'list' : 'grid'
 const toggleIcon = computed(() => (viewMode.value === 'grid' ? Tickets : Grid))
 const currentState = computed(() => (activeTab.value === 'plaza' ? plazaState : ownedState))
 const couponProductHierarchyCache = new Map()
+
+const mergedCouponProductHierarchy = computed(() => {
+  const data = couponProductHierarchy.value
+  if (!data.length) return []
+
+  // 先排序，确保同级内容相邻
+  const sorted = [...data].sort((a, b) => {
+    const l1 = (a.level1 || '').localeCompare(b.level1 || '', 'zh-CN')
+    if (l1 !== 0) return l1
+    const l2 = (a.level2 || '').localeCompare(b.level2 || '', 'zh-CN')
+    if (l2 !== 0) return l2
+    const l3 = (a.level3 || '').localeCompare(b.level3 || '', 'zh-CN')
+    if (l3 !== 0) return l3
+    return (a.productName || '').localeCompare(b.productName || '', 'zh-CN')
+  })
+
+  const result = sorted.map((item, index) => ({
+    ...item,
+    index,
+    level1Rowspan: 0,
+    level2Rowspan: 0,
+    level3Rowspan: 0,
+  }))
+
+  // 一级菜单：连续相同值合并
+  let i = 0
+  while (i < result.length) {
+    let j = i + 1
+    while (j < result.length && result[j].level1 === result[i].level1) j++
+    result[i].level1Rowspan = j - i
+    i = j
+  }
+
+  // 二级菜单：仅在同一级菜单内合并
+  i = 0
+  while (i < result.length) {
+    const l1End = i + result[i].level1Rowspan
+    let j = i
+    while (j < l1End) {
+      let k = j + 1
+      while (k < l1End && result[k].level2 === result[j].level2) k++
+      result[j].level2Rowspan = k - j
+      j = k
+    }
+    i = l1End
+  }
+
+  // 三级菜单：仅在同一二级菜单内合并
+  i = 0
+  while (i < result.length) {
+    const l2End = i + result[i].level2Rowspan
+    let j = i
+    while (j < l2End) {
+      let k = j + 1
+      while (k < l2End && result[k].level3 === result[j].level3) k++
+      result[j].level3Rowspan = k - j
+      j = k
+    }
+    i = l2End
+  }
+
+  return result
+})
 const currentStatusOptions = computed(() => {
   if (activeTab.value === 'plaza') {
     return [
@@ -471,6 +534,28 @@ function resolveDiscountAmountText(item) {
 }
 
 async function loadCouponProductHierarchy(coupon) {
+  // 优先使用后端直接返回的产品层级数据
+  const serverProducts = Array.isArray(coupon?.products) ? coupon.products : []
+
+  if (serverProducts.length) {
+    const hierarchy = serverProducts
+      .map((item) => {
+        if (!item || typeof item !== 'object') return null
+        return {
+          productId: Number(item.id || 0),
+          level1: String(item.type_label || '--').trim() || '--',
+          level2: String(item.parent_group_name || '--').trim() || '--',
+          level3: String(item.group_name || '--').trim() || '--',
+          productName: String(item.name || '--').trim() || '--',
+        }
+      })
+      .filter(Boolean)
+
+    couponProductHierarchy.value = hierarchy
+    return
+  }
+
+  // 回退：从 product_ids 逐个请求产品详情
   const productIds = Array.isArray(coupon?.product_ids)
     ? coupon.product_ids.map((id) => Number(id || 0)).filter((id) => id > 0)
     : []
@@ -537,8 +622,7 @@ onMounted(() => {
   gap: 20px;
 }
 
-.coupon-filter-card,
-.panel-card {
+.coupon-filter-card {
   border: 1px solid rgba(225, 231, 241, 0.9);
   border-radius: 18px;
   background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
@@ -581,10 +665,6 @@ onMounted(() => {
   }
 }
 
-.panel-card {
-  padding: 20px;
-}
-
 .coupon-tabs {
   :deep(.el-tabs__header) {
     margin-bottom: 20px;
@@ -601,28 +681,28 @@ onMounted(() => {
 
 .coupon-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(389px, 389px));
-  justify-content: start;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   gap: 16px;
 }
 
 .coupon-card {
   position: relative;
   width: 100%;
-  aspect-ratio: 389 / 187;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
-  padding: 16px 18px 14px;
+  padding: 18px 20px 16px;
   border: 1px solid rgba(225, 231, 241, 0.9);
   border-radius: 16px;
   background:
-    radial-gradient(circle at top left, rgba(76, 132, 255, 0.07), transparent 26%),
+    radial-gradient(circle at top left, rgba(76, 132, 255, 0.06), transparent 28%),
     linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
-  box-shadow: 0 10px 24px rgba(20, 47, 88, 0.05);
+  box-shadow: 0 8px 20px rgba(20, 47, 88, 0.04);
   transition: border-color $motion-fast ease, box-shadow $motion-fast ease, transform $motion-fast ease;
 
   &:hover {
-    border-color: rgba(76, 132, 255, 0.24);
-    box-shadow: 0 16px 32px rgba(20, 47, 88, 0.08);
+    border-color: rgba(76, 132, 255, 0.22);
+    box-shadow: 0 14px 28px rgba(20, 47, 88, 0.07);
     transform: translateY(-2px);
   }
 }
@@ -653,22 +733,18 @@ onMounted(() => {
   outline: none;
 }
 
-.coupon-card__head,
-.coupon-card__foot,
-.coupon-card__foot--action {
+.coupon-card__head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-}
-
-.coupon-card__head {
   padding-right: 28px;
 }
 
 .coupon-card__value {
-  display: grid;
-  gap: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
 }
 
@@ -676,23 +752,29 @@ onMounted(() => {
   color: #3978ff;
   font-size: 12px;
   font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .coupon-card__value strong {
   color: #19263d;
-  font-size: 30px;
+  font-size: 28px;
   font-weight: 800;
-  line-height: 1.05;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
 }
 
 .coupon-card__body {
-  display: grid;
-  gap: 12px;
-  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  margin-top: 14px;
+  min-height: 0;
 }
 
 .coupon-card__title {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 4px;
   min-width: 0;
 }
@@ -701,9 +783,9 @@ onMounted(() => {
   display: -webkit-box;
   overflow: hidden;
   color: #19263d;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.35;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 1;
 }
@@ -712,9 +794,9 @@ onMounted(() => {
   display: -webkit-box;
   overflow: hidden;
   margin: 0;
-  color: #7d8aa0;
-  font-size: 11px;
-  line-height: 1.4;
+  color: #8b96a9;
+  font-size: 12px;
+  line-height: 1.45;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 1;
 }
@@ -722,32 +804,45 @@ onMounted(() => {
 .coupon-card__amounts {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 10px;
+  gap: 6px 8px;
 }
 
 .coupon-card__amounts span {
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
-  padding: 0 9px;
-  border-radius: 999px;
-  background: #f4f7fb;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #f0f4fa;
   color: #5d6b83;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .coupon-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   margin-top: auto;
-  padding-top: 10px;
+  padding-top: 12px;
   border-top: 1px solid #edf1f7;
 }
 
-.coupon-card__foot span,
-.coupon-card__foot--action span {
+.coupon-card__foot span {
   color: #6f7d93;
   font-size: 11px;
   line-height: 1.4;
+}
+
+.coupon-card__foot--action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.coupon-card__foot--action span {
 }
 
 .coupon-card__foot--action {
@@ -924,43 +1019,41 @@ onMounted(() => {
   background: #fff;
 }
 
-.coupon-hierarchy-sheet__head,
-.coupon-hierarchy-sheet__row {
-  display: grid;
-  grid-template-columns: 96px 96px 96px minmax(160px, 1fr);
+.coupon-hierarchy-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
 }
 
-.coupon-hierarchy-sheet__head {
-  background: #f5f8fd;
-}
-
-.coupon-hierarchy-sheet__head span,
-.coupon-hierarchy-sheet__row span {
-  min-width: 0;
+.coupon-hierarchy-table th,
+.coupon-hierarchy-table td {
   padding: 10px 12px;
   border-right: 1px solid #dbe4f0;
   border-bottom: 1px solid #dbe4f0;
   font-size: 12px;
   line-height: 1.5;
   word-break: break-word;
+  text-align: left;
+  vertical-align: middle;
 }
 
-.coupon-hierarchy-sheet__head span {
+.coupon-hierarchy-table th {
   color: #6f7d93;
   font-weight: 700;
+  background: #f5f8fd;
 }
 
-.coupon-hierarchy-sheet__row span {
+.coupon-hierarchy-table td {
   color: #1f2a44;
   background: #fff;
 }
 
-.coupon-hierarchy-sheet__head span:last-child,
-.coupon-hierarchy-sheet__row span:last-child {
+.coupon-hierarchy-table th:last-child,
+.coupon-hierarchy-table td:last-child {
   border-right: none;
 }
 
-.coupon-hierarchy-sheet__row:last-child span {
+.coupon-hierarchy-table tbody tr:last-child td {
   border-bottom: none;
 }
 
@@ -969,8 +1062,7 @@ onMounted(() => {
     overflow-x: auto;
   }
 
-  .coupon-hierarchy-sheet__head,
-  .coupon-hierarchy-sheet__row {
+  .coupon-hierarchy-table {
     min-width: 460px;
   }
 }
@@ -1017,17 +1109,12 @@ onMounted(() => {
     border-radius: 14px;
   }
 
-  .panel-card {
-    padding: 16px;
-  }
-
   .coupon-card {
-    aspect-ratio: 389 / 187;
-    padding: 12px 14px;
+    padding: 14px 16px;
   }
 
   .coupon-card__value strong {
-    font-size: 26px;
+    font-size: 24px;
   }
 }
 </style>

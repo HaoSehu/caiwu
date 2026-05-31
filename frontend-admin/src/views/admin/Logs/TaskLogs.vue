@@ -7,21 +7,6 @@
       </div>
     </section>
 
-    <section class="summary-strip">
-      <article class="summary-item">
-        <strong>{{ summary.total }}</strong>
-        <span>日志总数</span>
-      </article>
-      <article class="summary-item">
-        <strong>{{ summary.tasks }}</strong>
-        <span>涉及任务</span>
-      </article>
-      <article class="summary-item">
-        <strong>{{ summary.errors }}</strong>
-        <span>错误日志</span>
-      </article>
-    </section>
-
     <el-card shadow="never" class="panel-card">
       <el-form :model="searchForm" class="filter-form" @submit.prevent>
         <el-form-item label="任务名称">
@@ -67,10 +52,7 @@
           />
         </el-form-item>
 
-        <div class="filter-actions">
-          <el-button type="primary" :icon="Search" @click="handleSearch">查询</el-button>
-          <el-button :icon="RefreshRight" @click="handleReset">重置</el-button>
-        </div>
+        <div class="filter-actions" />
       </el-form>
     </el-card>
 
@@ -184,7 +166,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { RefreshRight, Search, View } from '@element-plus/icons-vue'
+import { View } from '@element-plus/icons-vue'
 import { getTaskLogs, getTaskLogsSummary } from '@/api/admin'
 import {
   buildDateRangeParams,

@@ -8,6 +8,7 @@ import {
   DataLine,
   Document,
   Grid,
+  Help,
   Medal,
   Odometer,
   OfficeBuilding,
@@ -87,7 +88,8 @@ export function useAdminLayout() {
       key: 'content',
       label: '内容',
       items: [
-        { index: '/admin/content', title: '内容中心', icon: Reading },
+        { index: '/admin/content/notices', title: '系统公告', icon: Reading },
+        { index: '/admin/content/help', title: '帮助中心', icon: Help },
       ],
     },
     {
@@ -124,7 +126,10 @@ export function useAdminLayout() {
     if (path.startsWith('/admin/coupon-campaigns')) return '/admin/coupon-campaigns'
     if (path.startsWith('/admin/referral')) return '/admin/referral'
 
-    if (path.startsWith('/admin/content')) return '/admin/content'
+    if (path.startsWith('/admin/content')) {
+      if (path.startsWith('/admin/content/help')) return '/admin/content/help'
+      return '/admin/content/notices'
+    }
     if (path.startsWith('/admin/notifications')) return '/admin/notifications'
     if (
       path.startsWith('/admin/logs')
@@ -138,7 +143,9 @@ export function useAdminLayout() {
     return path
   })
 
-  const defaultOpeneds = computed(() => [])
+  const defaultOpeneds = computed(() => {
+    return []
+  })
 
   const adminDisplayName = computed(() => userStore.info?.nickname || userStore.info?.username || '管理员')
   const adminAccountSubtitle = computed(() => userStore.info?.email || '未绑定邮箱')

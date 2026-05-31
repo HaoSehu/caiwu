@@ -29,6 +29,7 @@
               :placeholder="item.placeholder"
               clearable
               :style="{ width: getSelectWidth(item.width) }"
+              @change="handleSearch"
             >
               <el-option
                 v-for="option in item.options"
@@ -44,6 +45,7 @@
               :placeholder="item.placeholder"
               clearable
               :style="{ width: getSelectWidth(item.width) }"
+              @change="handleSearch"
             />
             <el-input
               v-else
@@ -52,18 +54,13 @@
               clearable
               :prefix-icon="item.icon || Search"
               :style="{ width: getSelectWidth(item.width) }"
+              @keyup.enter="handleSearch"
             />
           </div>
         </slot>
       </div>
       <div class="filter-actions">
-        <slot name="filter-actions">
-          <el-button type="primary" @click="handleSearch">
-            <el-icon class="search-icon"><Search /></el-icon>
-            搜索
-          </el-button>
-          <el-button @click="handleReset">重置</el-button>
-        </slot>
+        <slot name="filter-actions"></slot>
       </div>
     </section>
 

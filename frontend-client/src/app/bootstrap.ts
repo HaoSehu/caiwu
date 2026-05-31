@@ -26,6 +26,15 @@ export function bootstrapClientApp() {
     canonicalBase: import.meta.env.VITE_SITE_CANONICAL_BASE,
   })
 
+  // 淡出初始加载动画后再挂载，避免白闪
+  const splash = document.getElementById('app-splash')
+  if (splash) {
+    splash.classList.add('fade-out')
+    splash.addEventListener('transitionend', () => splash.remove(), { once: true })
+    // 兜底：即使 transition 未触发也确保移除
+    setTimeout(() => splash.remove(), 400)
+  }
+
   app.mount('#app')
 
   const appStore = useAppStore(pinia)

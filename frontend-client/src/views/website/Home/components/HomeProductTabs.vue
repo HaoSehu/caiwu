@@ -358,7 +358,6 @@ watch(
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
-  min-height: 200px;
 }
 
 .product-card {
@@ -366,9 +365,9 @@ watch(
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 10px;
-  min-height: 140px;
-  padding: 18px 20px 16px;
+  gap: 8px;
+  min-height: 100px;
+  padding: 14px 20px 12px;
   border: 1px solid #e5eaf3;
   border-radius: 8px;
   background: #ffffff;

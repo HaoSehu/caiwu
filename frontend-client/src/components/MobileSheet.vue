@@ -7,6 +7,7 @@
     :close-on-press-modal="closeOnPressModal"
     class="ms-drawer"
     @update:model-value="handleVisibleChange"
+    @opened="$emit('opened')"
   >
     <div class="ms">
       <div class="ms-head">
@@ -69,7 +70,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['update:modelValue', 'update:visible', 'close', 'cancel', 'confirm'])
+const emit = defineEmits(['update:modelValue', 'update:visible', 'close', 'cancel', 'confirm', 'opened'])
 
 const visibleValue = computed(() => props.visible ?? props.modelValue)
 

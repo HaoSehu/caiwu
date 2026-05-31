@@ -1,5 +1,5 @@
 <template>
-  <el-dialog v-model="visible" title="提交工单" width="720px" destroy-on-close>
+  <el-dialog v-model="visible" title="提交工单" :width="dialogWidth" destroy-on-close>
     <el-form label-position="top">
       <el-form-item label="问题分类" required>
         <el-select v-model="createForm.department" style="width: 100%;">
@@ -98,6 +98,10 @@ import { Plus } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import clientApi from '@/api/client'
 import { formatTicketServiceOptionLabel, resolveTicketServiceStatusMeta } from './serviceOptionLabel'
+import { resolveDialogWidth, useViewport } from '@/composables/useViewport'
+
+const { viewportWidth } = useViewport()
+const dialogWidth = computed(() => resolveDialogWidth(viewportWidth.value, 720))
 
 const MAX_IMAGES = 9
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']

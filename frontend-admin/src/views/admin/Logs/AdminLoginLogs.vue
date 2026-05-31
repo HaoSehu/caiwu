@@ -7,21 +7,6 @@
       </div>
     </section>
 
-    <section class="summary-strip">
-      <article class="summary-item">
-        <strong>{{ pagination.total }}</strong>
-        <span>登录记录数</span>
-      </article>
-      <article class="summary-item">
-        <strong>{{ sourceModeLabel }}</strong>
-        <span>当前数据来源</span>
-      </article>
-      <article class="summary-item">
-        <strong>{{ tableData.length }}</strong>
-        <span>当前页记录</span>
-      </article>
-    </section>
-
     <el-card shadow="never" class="panel-card">
       <el-form :model="searchForm" class="filter-form" @submit.prevent>
         <el-form-item label="关键词">
@@ -45,10 +30,7 @@
           />
         </el-form-item>
 
-        <div class="filter-actions">
-          <el-button type="primary" :icon="Search" @click="handleSearch">查询</el-button>
-          <el-button :icon="RefreshRight" @click="handleReset">重置</el-button>
-        </div>
+        <div class="filter-actions" />
       </el-form>
     </el-card>
 
@@ -158,7 +140,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { RefreshRight, Search, View } from '@element-plus/icons-vue'
+import { View } from '@element-plus/icons-vue'
 import { getAdminLoginLogs } from '@/api/admin'
 import {
   buildDateRangeParams,

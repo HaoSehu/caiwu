@@ -13,13 +13,6 @@
       </div>
     </section>
 
-    <section class="specs-summary">
-      <article v-for="item in summaryCards" :key="item.label" class="specs-summary-card">
-        <span>{{ item.label }}</span>
-        <strong>{{ item.value }}</strong>
-        <small>{{ item.note }}</small>
-      </article>
-    </section>
 
     <el-alert class="specs-alert" type="info" :closable="false" show-icon>
       <template #title>
@@ -46,8 +39,7 @@
           <el-option label="已绑定" value="bound" />
           <el-option label="未绑定" value="unbound" />
         </el-select>
-        <el-button type="primary" :icon="Search" @click="loadCatalog">搜索</el-button>
-        <el-button :icon="RefreshLeft" @click="resetFilters">重置</el-button>
+
       </div>
     </section>
 
@@ -174,7 +166,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { Check, Plus, Refresh, RefreshLeft, Search } from '@element-plus/icons-vue'
+import { Check, Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import adminApi from '@/api/admin'
 import { useResponsive } from '@/composables/useResponsive'
@@ -216,24 +208,6 @@ const specRules = {
 }
 
 const bindingTreeProductMap = computed(() => buildProductBindingMap(bindingTreeData.value))
-
-const boundProductCount = computed(() => {
-  const ids = new Set()
-
-  specs.value.forEach((spec) => {
-    normalizeProductBindings(spec.bindings).forEach((binding) => {
-      ids.add(Number(binding.product_id || 0))
-    })
-  })
-
-  return ids.size
-})
-
-const summaryCards = computed(() => [
-  { label: '实例规格数', value: specs.value.length, note: '当前目录中的规格条目总数' },
-  { label: '已绑定规格', value: specs.value.filter((item) => normalizeProductBindings(item.bindings).length > 0).length, note: '至少绑定了一个配置的规格' },
-  { label: '绑定配置数', value: boundProductCount.value, note: '去重后的绑定配置数量' },
-])
 
 function createLocalId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
@@ -459,45 +433,6 @@ onMounted(() => {
   flex-direction: column;
 }
 
-.specs-summary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-.specs-summary-card {
-  padding: 16px 18px;
-  border: 1px solid $border-color;
-  border-radius: $base-border-radius;
-  background: $bg-color-card;
-  box-shadow: $shadow-xs;
-}
-
-.specs-summary-card span {
-  display: block;
-  color: $text-color-secondary;
-  font-size: 12px;
-  line-height: 1.2;
-}
-
-.specs-summary-card strong {
-  display: block;
-  margin-top: 8px;
-  color: $text-color-primary;
-  font-size: 28px;
-  font-weight: 600;
-  line-height: 1.1;
-}
-
-.specs-summary-card small {
-  display: block;
-  margin-top: 8px;
-  color: $text-color-placeholder;
-  font-size: 12px;
-  line-height: 1.6;
-}
-
 .specs-alert {
   margin-bottom: 16px;
 }
@@ -553,11 +488,5 @@ onMounted(() => {
 
 .binding-cascader--inline {
   width: 100%;
-}
-
-@media (max-width: 960px) {
-  .specs-summary {
-    grid-template-columns: 1fr;
-  }
 }
 </style>

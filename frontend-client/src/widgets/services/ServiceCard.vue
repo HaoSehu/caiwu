@@ -161,10 +161,6 @@ function isProvisioningService(item: any) {
   width: 44px;
   min-width: 44px;
   height: 44px;
-  border-radius: 14px;
-  background: linear-gradient(145deg, #f8faff, #eef3fb);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  overflow: hidden;
 }
 
 .service-system-icon__image {

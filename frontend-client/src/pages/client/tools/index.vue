@@ -70,10 +70,6 @@ const {
 </script>
 
 <style scoped lang="scss">
-.tools-page {
-  gap: 20px;
-}
-
 .panel-card {
   padding: 20px;
   border: 1px solid $border-color;

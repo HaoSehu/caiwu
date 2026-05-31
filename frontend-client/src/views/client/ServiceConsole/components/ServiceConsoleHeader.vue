@@ -86,7 +86,7 @@
     </div>
   </section>
 
-  <section v-if="detail.expires_at" class="console-expire-banner">
+  <section v-if="showExpireBanner" class="console-expire-banner">
     <div class="console-expire-banner__copy">
       <el-icon><WarningFilled /></el-icon>
       <span>实例将于 <strong>{{ detail.expires_at }}</strong> 到期，建议提前续费避免服务中断。</span>
@@ -135,4 +135,19 @@ const statusTagLabel = computed(() => (
 const statusTagTitle = computed(() => (
   hasUpstreamError.value ? String(props.detail?.upstream?.remote_error || '') : ''
 ))
+
+const showExpireBanner = computed(() => {
+  if (!props.detail?.expires_at) return false
+
+  // 兼容 iOS/Safari，将 "-" 替换为 "/"
+  const expireStr = String(props.detail.expires_at).replace(/-/g, '/')
+  const expireTime = new Date(expireStr).getTime()
+  if (isNaN(expireTime)) return false
+
+  const currentTime = Date.now()
+  const diffDays = (expireTime - currentTime) / (1000 * 60 * 60 * 24)
+
+  // 到期前 7 天以内
+  return diffDays <= 7
+})
 </script>

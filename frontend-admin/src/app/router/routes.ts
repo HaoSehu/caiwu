@@ -99,13 +99,18 @@ export const adminRoutes: RouteRecordRaw[] = [
         meta: { title: '会员等级' },
       },
       {
-        path: 'content',
-        name: 'AdminContent',
+        path: 'content/notices',
+        name: 'AdminContentNotices',
         component: lazyRouteView(() => import('@/views/admin/ContentCenter/index.vue')),
-        meta: { title: '内容中心', contentType: 'notice' },
+        meta: { title: '系统公告', contentType: 'notice' },
       },
-      { path: 'content/notices', redirect: '/admin/content' },
-      { path: 'content/help', redirect: '/admin/content?type=help' },
+      {
+        path: 'content/help',
+        name: 'AdminContentHelp',
+        component: lazyRouteView(() => import('@/views/admin/ContentCenter/index.vue')),
+        meta: { title: '帮助中心', contentType: 'help' },
+      },
+      { path: 'content', redirect: '/admin/content/notices' },
       {
         path: 'notifications',
         name: 'AdminNotifications',

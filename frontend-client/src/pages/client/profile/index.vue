@@ -496,16 +496,62 @@ const securityItems = computed(() => [
 }
 
 @media (max-width: 640px) {
-  .card-header,
-  .card-footer,
-  .security-item {
-    flex-direction: column;
-    align-items: flex-start;
+  .content-card {
+    border-radius: 10px;
   }
 
-  .card-header,
+  .card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 16px;
+    gap: 8px;
+  }
+
+  .card-header__meta {
+    display: none;
+  }
+
+  .header-title {
+    gap: 8px;
+
+    h3 { font-size: 15px; }
+  }
+
+  .title-bar {
+    width: 3px;
+    height: 16px;
+  }
+
+  .header-desc {
+    margin: 4px 0 0 11px;
+    font-size: 12px;
+  }
+
   .card-body {
-    padding: 20px;
+    padding: 16px;
+  }
+
+  .profile-form {
+    :deep(.el-form-item) {
+      margin-bottom: 14px;
+      flex-direction: column;
+    }
+
+    :deep(.el-form-item__label) {
+      font-size: 12px;
+      width: auto !important;
+      text-align: left;
+      padding-right: 0;
+      padding-bottom: 4px;
+    }
+
+    :deep(.el-form-item__content) {
+      margin-left: 0 !important;
+    }
+
+    :deep(.el-input__wrapper) {
+      min-height: 36px;
+    }
   }
 
   .input-with-btn {
@@ -517,12 +563,73 @@ const securityItems = computed(() => [
   }
 
   .card-footer {
-    justify-content: flex-start;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    margin-top: 20px;
+    padding-top: 16px;
+
+    .el-button { width: 100%; }
   }
 
-  .security-action,
-  .security-action :deep(.el-button) {
-    width: 100%;
+  .footer-tip {
+    font-size: 12px;
+    text-align: center;
+  }
+
+  /* Security items — compact card style */
+  .security-list {
+    gap: 10px;
+  }
+
+  .security-item {
+    gap: 10px;
+    padding: 12px;
+    border-radius: 10px;
+
+    &:hover {
+      transform: none;
+      box-shadow: none;
+    }
+  }
+
+  .item-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+
+    .el-icon { font-size: 15px; }
+  }
+
+  .item-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .item-info__top {
+    gap: 6px;
+  }
+
+  .item-name {
+    font-size: 13px;
+  }
+
+  .item-desc {
+    margin-top: 2px;
+    font-size: 12px;
+    line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .security-action {
+    flex-shrink: 0;
+
+    :deep(.el-button) {
+      font-size: 12px;
+      padding: 4px 10px;
+    }
   }
 }
 </style>

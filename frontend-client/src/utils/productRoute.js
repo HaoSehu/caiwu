@@ -4,9 +4,11 @@ function toPositiveInt(value) {
 }
 
 export function readWebsiteProductRouteParams(route) {
+  const typeId = toPositiveInt(route?.params?.typeId) || toPositiveInt(route?.query?.type)
+  const groupId = toPositiveInt(route?.params?.groupId) || toPositiveInt(route?.query?.group)
   return {
-    typeId: toPositiveInt(route?.params?.typeId),
-    groupId: toPositiveInt(route?.params?.groupId),
+    typeId,
+    groupId,
     childGroupId: toPositiveInt(route?.params?.childGroupId),
     productId: toPositiveInt(route?.params?.productId),
   }
@@ -14,6 +16,7 @@ export function readWebsiteProductRouteParams(route) {
 
 export function hasWebsiteProductRouteParams(payload = {}) {
   return toPositiveInt(payload.productId) > 0
+    || (toPositiveInt(payload.typeId) > 0 && toPositiveInt(payload.groupId) > 0)
 }
 
 export function buildWebsiteProductPath(payload = {}) {

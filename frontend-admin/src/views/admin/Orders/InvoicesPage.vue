@@ -409,7 +409,7 @@ onMounted(() => {
 }
 
 // ========== 窄屏 ==========
-@media (max-width: 768px) {
+@include tablet-and-below {
   .ledger-filter-top {
     .ledger-select--compact {
       flex: 1 1 auto;
@@ -449,7 +449,7 @@ onMounted(() => {
   display: none;
 }
 
-@media (max-width: 768px) {
+@include tablet-and-below {
   .filter-panel {
     padding: 12px;
   }
@@ -598,7 +598,7 @@ onMounted(() => {
   margin-top: 12px;
 }
 
-@media (max-width: 768px) {
+@include tablet-and-below {
   .table-pagination {
     margin-top: 8px;
     justify-content: center;
@@ -608,11 +608,15 @@ onMounted(() => {
 .amount-in {
   color: $color-success;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
 }
 
 .amount-out {
   color: $color-danger;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
 }
 
 </style>

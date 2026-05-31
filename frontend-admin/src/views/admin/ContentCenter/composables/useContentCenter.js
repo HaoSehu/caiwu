@@ -1,26 +1,10 @@
 import { computed, reactive, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import adminApi from '@/api/admin'
 
 export function useContentCenter() {
   const route = useRoute()
-  const router = useRouter()
-
-  const contentTabs = [
-    {
-      type: 'notice',
-      label: '系统公告',
-      path: '/admin/content/notices',
-      description: '维护平台公告、升级通知、风控提醒等系统级内容。',
-    },
-    {
-      type: 'help',
-      label: '帮助中心',
-      path: '/admin/content/help',
-      description: '维护新手指南、常见问题、操作教程等帮助文章。',
-    },
-  ]
 
   const statusOptions = [
     { label: '草稿', value: 0 },
@@ -96,18 +80,17 @@ export function useContentCenter() {
     content: [{ required: true, message: '请输入正文内容', trigger: 'blur' }],
   }
 
-  const currentContentType = computed(() => {
-    if (route.query.type === 'help') return 'help'
-    if (route.meta.contentType === 'help') return 'help'
-    return 'notice'
-  })
-
-  const currentTab = computed(() => (
-    contentTabs.find((item) => item.type === currentContentType.value) || contentTabs[0]
+  const currentContentType = computed(() => (
+    route.meta.contentType === 'help' ? 'help' : 'notice'
   ))
 
-  const pageTitle = computed(() => currentTab.value.label)
-  const pageDescription = computed(() => currentTab.value.description)
+  const contentMeta = {
+    notice: { label: '系统公告', description: '维护平台公告、升级通知、风控提醒等系统级内容。' },
+    help: { label: '帮助中心', description: '维护新手指南、常见问题、操作教程等帮助文章。' },
+  }
+
+  const pageTitle = computed(() => contentMeta[currentContentType.value]?.label || '系统公告')
+  const pageDescription = computed(() => contentMeta[currentContentType.value]?.description || '')
   const currentArticleLabel = computed(() => (currentContentType.value === 'notice' ? '公告' : '帮助文章'))
   const articleDialogTitle = computed(() => (
     articleForm.id ? `编辑${currentArticleLabel.value}` : `新增${currentArticleLabel.value}`
@@ -303,19 +286,6 @@ export function useContentCenter() {
     await Promise.allSettled([loadCategories(), loadArticles()])
   }
 
-  function switchContentType(type) {
-    const target = contentTabs.find((item) => item.type === type)
-    if (!target || target.type === currentContentType.value) {
-      return
-    }
-
-    if (type === 'help') {
-      router.replace({ path: '/admin/content', query: { type: 'help' } })
-    } else {
-      router.replace({ path: '/admin/content' })
-    }
-  }
-
   function handleSearch() {
     page.value = 1
     loadArticles()
@@ -482,7 +452,6 @@ export function useContentCenter() {
 
   return {
     // constants
-    contentTabs,
     statusOptions,
     pinOptions,
     categoryRules,
@@ -506,7 +475,6 @@ export function useContentCenter() {
     categoryForm,
     articleForm,
     // computed
-    currentContentType,
     pageTitle,
     pageDescription,
     currentArticleLabel,
@@ -518,7 +486,6 @@ export function useContentCenter() {
     statusTagType,
     loadArticles,
     loadAll,
-    switchContentType,
     handleSearch,
     resetFilters,
     clearFilter,

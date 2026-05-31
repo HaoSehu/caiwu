@@ -163,7 +163,7 @@
 
     <section v-if="detail?.payment_summary" class="detail-card">
       <h3>支付信息</h3>
-      <el-descriptions :column="2" border>
+      <el-descriptions :column="1" border>
         <el-descriptions-item label="支付方式">{{ detail.payment_summary.gateway_label || '--' }}</el-descriptions-item>
         <el-descriptions-item label="支付状态">{{ detail.payment_summary.status_label || '--' }}</el-descriptions-item>
         <el-descriptions-item label="支付单号">{{ detail.payment_summary.payment_no || '--' }}</el-descriptions-item>
@@ -487,14 +487,11 @@ onBeforeUnmount(() => {
 }
 
 .detail-card {
-  padding: 20px;
-  border: 1px solid $border-color;
-  border-radius: $base-border-radius;
-  background: #fff;
-  box-shadow: $shadow-sm;
+  padding: 0;
+  overflow: hidden;
 
   h3 {
-    margin: 0;
+    margin: 0 0 16px;
     color: $text-color-primary;
     font-size: 16px;
     font-weight: 600;

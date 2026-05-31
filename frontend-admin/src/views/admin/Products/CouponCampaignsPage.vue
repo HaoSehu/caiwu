@@ -33,8 +33,7 @@
           <el-option label="已停用" value="0" />
         </el-select>
 
-        <el-button type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
-        <el-button :icon="Refresh" @click="resetFilters">重置</el-button>
+
       </div>
     </section>
 
@@ -382,7 +381,7 @@
 <script setup>
 import { nextTick, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Refresh, Search } from '@element-plus/icons-vue'
+import { Search } from '@element-plus/icons-vue'
 import adminApi from '@/api/admin'
 import { formatDateTime } from '@/utils/datetime'
 import { useResponsive } from '@/composables/useResponsive'

@@ -12,13 +12,6 @@ export function useInvoices() {
   const total = ref(0)
   const page = ref(1)
   const pageSize = ref(10)
-  const summary = reactive({
-    total: 0,
-    unpaid: 0,
-    paid: 0,
-    overdue: 0,
-    unpaid_amount: '0.00',
-  })
   const filters = reactive({
     keyword: '',
     status: '',
@@ -30,11 +23,6 @@ export function useInvoices() {
     if (status === 0) return 'warning'
     if (status === 5) return 'info'
     return 'danger'
-  }
-
-  async function loadSummary() {
-    const response = await clientApi.invoicesSummary()
-    Object.assign(summary, response.data || {})
   }
 
   async function loadList() {
@@ -57,7 +45,7 @@ export function useInvoices() {
   }
 
   async function loadData() {
-    await Promise.all([loadSummary(), loadList()])
+    await loadList()
   }
 
   function handleSearch() {
@@ -84,10 +72,8 @@ export function useInvoices() {
     total,
     page,
     pageSize,
-    summary,
     filters,
     resolveInvoiceTagType,
-    loadSummary,
     loadList,
     loadData,
     handleSearch,

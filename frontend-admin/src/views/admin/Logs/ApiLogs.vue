@@ -7,21 +7,6 @@
       </div>
     </section>
 
-    <section class="summary-strip">
-      <article class="summary-item">
-        <strong>{{ summary.total }}</strong>
-        <span>命中请求数</span>
-      </article>
-      <article class="summary-item">
-        <strong>{{ summary.errors }}</strong>
-        <span>5xx 异常请求</span>
-      </article>
-      <article class="summary-item">
-        <strong>{{ summary.admin_count }}</strong>
-        <span>管理员请求数</span>
-      </article>
-    </section>
-
     <el-card shadow="never" class="panel-card">
       <el-form :model="searchForm" class="filter-form api-filter-form" @submit.prevent>
         <el-form-item label="关键词" class="keyword-form-item">
@@ -84,10 +69,7 @@
           />
         </el-form-item>
 
-        <div class="filter-actions">
-          <el-button type="primary" :icon="Search" @click="handleSearch">查询</el-button>
-          <el-button :icon="RefreshRight" @click="handleReset">重置</el-button>
-        </div>
+        <div class="filter-actions" />
       </el-form>
     </el-card>
 
@@ -224,7 +206,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { RefreshRight, Search, View } from '@element-plus/icons-vue'
+import { View } from '@element-plus/icons-vue'
 import { getApiLogs } from '@/api/admin'
 import {
   buildDateRangeParams,

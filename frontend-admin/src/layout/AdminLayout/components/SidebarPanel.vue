@@ -91,8 +91,8 @@ const sidebarCompactLogo = '/branding/logo1.svg'
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 64px;
-  padding: 14px 16px 10px;
+  min-height: 48px;
+  padding: 10px 16px 6px;
 }
 
 .brand-lockup-wrap {
@@ -128,7 +128,7 @@ const sidebarCompactLogo = '/branding/logo1.svg'
 
 .sidebar-scroll {
   flex: 1;
-  padding: 10px 10px 12px;
+  padding: 6px 10px 10px;
 
   :deep(.el-scrollbar__bar.is-vertical) {
     width: 4px;
@@ -136,13 +136,13 @@ const sidebarCompactLogo = '/branding/logo1.svg'
 }
 
 .menu-section + .menu-section {
-  margin-top: 14px;
+  margin-top: 8px;
 }
 
 .menu-section-title {
-  padding: 0 10px 6px;
+  padding: 0 10px 4px;
   color: $text-color-placeholder;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
 }
 
@@ -158,13 +158,13 @@ const sidebarCompactLogo = '/branding/logo1.svg'
 
 .sidebar-menu :deep(.el-menu-item),
 .sidebar-menu :deep(.el-sub-menu__title) {
-  height: 44px;
+  height: 36px;
   margin-bottom: 0;
   padding: 0 12px;
-  border-radius: 8px;
+  border-radius: 6px;
   color: $text-color-secondary;
-  line-height: 44px;
-  font-size: 14px;
+  line-height: 36px;
+  font-size: 13px;
   font-weight: 500;
   transition:
     background-color $duration-fast $ease-standard,
@@ -185,19 +185,19 @@ const sidebarCompactLogo = '/branding/logo1.svg'
 }
 
 .sidebar-menu :deep(.el-sub-menu .el-menu) {
-  margin: 2px 0 6px;
-  padding: 4px;
+  margin: 2px 0 4px;
+  padding: 3px;
   border-radius: $base-border-radius;
   background: $bg-color-soft;
 }
 
 .sidebar-menu :deep(.el-sub-menu .el-menu-item) {
   min-width: auto;
-  height: 34px;
+  height: 30px;
   margin: 0;
   padding-left: 40px !important;
-  font-size: 12.5px;
-  line-height: 34px;
+  font-size: 12px;
+  line-height: 30px;
 }
 
 .sidebar-menu :deep(.el-sub-menu.is-opened > .el-sub-menu__title) {
@@ -207,8 +207,8 @@ const sidebarCompactLogo = '/branding/logo1.svg'
 
 .sidebar-menu :deep(.el-menu-item .el-icon),
 .sidebar-menu :deep(.el-sub-menu__title .el-icon) {
-  margin-right: 10px;
-  font-size: 18px;
+  margin-right: 8px;
+  font-size: 16px;
 }
 
 .sidebar-menu :deep(.el-sub-menu .el-menu-item.is-active) {

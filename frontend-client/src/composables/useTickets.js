@@ -181,6 +181,22 @@ export function useTickets() {
     }
   }
 
+  // 撤回消息
+  async function recallReply(replyId) {
+    const id = Number(detail.value?.id || 0)
+    if (!id) return false
+
+    try {
+      await clientApi.recallTicketReply(id, replyId)
+      ElMessage.success('消息已撤回')
+      await loadTicketDetail(id)
+      return true
+    } catch (error) {
+      if (!error?.__handled) ElMessage.error(error?.message || '撤回失败')
+      return false
+    }
+  }
+
   return {
     // 状态
     loading,
@@ -213,5 +229,6 @@ export function useTickets() {
     loadTicketDetail,
     submitReply,
     closeTicket,
+    recallReply,
   }
 }

@@ -90,7 +90,4 @@ onMounted(() => {
 </script>
 
 <style scoped lang="scss">
-.tickets-page {
-  gap: 20px;
-}
 </style>

@@ -80,6 +80,7 @@ export default {
   ticketDetail: (id) => request.get(`/client/tickets/${id}`),
   createTicket: (data) => request.post('/client/tickets', data),
   replyTicket: (id, data) => request.post(`/client/tickets/${id}/reply`, data),
+  recallTicketReply: (id, replyId) => request.post(`/client/tickets/${id}/replies/${replyId}/recall`),
   closeTicket: (id) => request.post(`/client/tickets/${id}/close`),
   uploadTicketImage: (data) => request.post('/client/tickets/upload-image', data, {
     headers: { 'Content-Type': 'multipart/form-data' },

@@ -121,8 +121,6 @@
             />
           </el-select>
 
-          <el-button type="primary" @click="handleRewardSearch">搜索</el-button>
-          <el-button @click="resetRewardFilters">重置</el-button>
         </div>
       </section>
 
@@ -252,8 +250,6 @@
             />
           </el-select>
 
-          <el-button type="primary" @click="handleWithdrawalSearch">搜索</el-button>
-          <el-button @click="resetWithdrawalFilters">重置</el-button>
         </div>
       </section>
 

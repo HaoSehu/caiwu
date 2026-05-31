@@ -137,13 +137,13 @@ defineProps({
 .text-warning { color: $color-warning; }
 .text-primary { color: $color-primary; }
 
-@media (max-width: 1280px) {
+@include desktop-lg-and-below {
   .basic-grid {
     grid-template-columns: 1fr;
   }
 }
 
-@media (max-width: 768px) {
+@include tablet-and-below {
   .info-dl {
     grid-template-columns: 1fr;
   }

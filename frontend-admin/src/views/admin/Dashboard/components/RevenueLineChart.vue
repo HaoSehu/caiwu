@@ -14,7 +14,7 @@
 
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import * as echarts from 'echarts'
+import { echarts } from './chartRuntime'
 
 const props = defineProps({
   chartData: { type: Array, required: true },
@@ -71,7 +71,7 @@ function buildOption(data) {
       {
         type: 'bar',
         data: amounts,
-        barWidth: Math.max(10, Math.floor(400 / amounts.length)),
+        barWidth: Math.max(6, Math.min(24, Math.floor((chartRef.value?.clientWidth || 400) / (amounts.length * 1.8)))),
         itemStyle: {
           color: '#165DFF',
           borderRadius: [2, 2, 0, 0],
@@ -96,13 +96,25 @@ function handleResize() {
   chartInstance?.resize()
 }
 
+let resizeObserver = null
+
 onMounted(() => {
   nextTick(renderChart)
   window.addEventListener('resize', handleResize)
+  if (typeof ResizeObserver !== 'undefined' && chartRef.value) {
+    resizeObserver = new ResizeObserver(() => {
+      handleResize()
+    })
+    resizeObserver.observe(chartRef.value)
+  }
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
   chartInstance?.dispose()
   chartInstance = null
 })

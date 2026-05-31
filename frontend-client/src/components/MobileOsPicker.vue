@@ -9,6 +9,7 @@
     @close="$emit('close')"
     @cancel="$emit('close')"
     @confirm="handleConfirm"
+    @opened="handleOpened"
   >
     <div class="mop-picker">
       <div class="mop-frame" aria-hidden="true"></div>
@@ -87,11 +88,15 @@ watch(() => props.visible, (v) => {
   nextTick(() => {
     updateSpacers()
     bindScrolls()
-    init()
     resizeObs = new ResizeObserver(() => updateSpacers())
     resizeObs.observe(groupCol.value)
   })
 })
+
+function handleOpened() {
+  updateSpacers()
+  init()
+}
 
 watch(currentVersions, () => {
   if (!props.visible) return

@@ -142,7 +142,7 @@
     <el-drawer
       v-model="mobileNavVisible"
       direction="ltr"
-      size="240px"
+      size="200px"
       :with-header="false"
       class="client-mobile-drawer"
     >
@@ -248,7 +248,7 @@ const navigationSections = [
     label: '支持',
     items: [
       { index: '/client/tickets', title: '工单支持', icon: ChatDotRound },
-      { index: '/client/tools', title: '管理工具', icon: Tools },
+      // { index: '/client/tools', title: '管理工具', icon: Tools },
       { index: '/client/notices', title: '系统公告', icon: Bell },
       { index: '/client/help', title: '帮助中心', icon: QuestionFilled },
     ],
@@ -310,7 +310,7 @@ const balanceText = computed(() => `余额 ¥${Number(userStore.info?.balance ||
 const supportQqGroup = computed(() => appStore.serviceQqGroup)
 
 const effectiveSidebarCollapsed = computed(() => isTablet.value || appStore.sidebarCollapsed)
-const sidebarWidth = computed(() => (effectiveSidebarCollapsed.value ? '76px' : '200px'))
+const sidebarWidth = computed(() => (effectiveSidebarCollapsed.value ? '44px' : '148px'))
 
 function updateViewport() {
   if (typeof window === 'undefined') {
@@ -417,8 +417,8 @@ useSeo(() => ({
   align-items: center;
   justify-content: center;
   width: 100%;
-  min-height: 64px;
-  padding: 14px 16px 10px;
+  min-height: 48px;
+  padding: 10px 12px 6px;
   border: none;
   background: $bg-color-card;
   text-align: left;
@@ -428,7 +428,7 @@ useSeo(() => ({
 .brand-panel.mobile {
   justify-content: flex-start;
   min-height: auto;
-  padding: 0 0 16px;
+  padding: 0 0 8px;
 }
 
 .brand-lockup-wrap {
@@ -463,7 +463,7 @@ useSeo(() => ({
 }
 .sidebar-scroll {
   flex: 1;
-  padding: 10px 10px 12px;
+  padding: 6px 8px 10px;
 }
 
 .sidebar-scroll.mobile {
@@ -472,23 +472,24 @@ useSeo(() => ({
 }
 
 .menu-section + .menu-section {
-  margin-top: 14px;
+  margin-top: 8px;
 }
 
 .menu-section-title {
-  padding: 0 10px 6px;
+  padding: 0 8px 4px;
   color: $text-color-placeholder;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
 }
 
 .sidebar-menu :deep(.el-menu-item) {
-  height: 44px;
+  height: 36px;
   margin-bottom: 0;
-  border-radius: 8px;
+  padding: 0 10px;
+  border-radius: 6px;
   color: $text-color-secondary;
-  font-size: 14px;
-  line-height: 44px;
+  font-size: 13px;
+  line-height: 36px;
 }
 
 .sidebar-menu :deep(.el-menu-item:hover) {
@@ -502,8 +503,8 @@ useSeo(() => ({
 }
 
 .sidebar-menu :deep(.el-menu-item .el-icon) {
-  margin-right: 10px;
-  font-size: 18px;
+  margin-right: 8px;
+  font-size: 16px;
 }
 
 .client-main-shell {
@@ -703,12 +704,12 @@ useSeo(() => ({
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 16px;
+  padding: 12px 0;
   background: $bg-color-card;
 }
 
 .client-mobile-drawer :deep(.el-drawer__body) {
-  padding: 0;
+  padding: 0 !important;
 }
 
 .page-fade-enter-active,
@@ -775,11 +776,22 @@ useSeo(() => ({
   }
 }
 
+@media (max-width: 768px) {
+  .client-main {
+    padding: 16px;
+  }
+}
+
 @media (max-width: 640px) {
   .client-topbar,
   .client-main {
     padding-right: 14px;
     padding-left: 14px;
+  }
+
+  .client-main {
+    padding-top: 14px;
+    padding-bottom: 14px;
   }
 
   .page-context strong {

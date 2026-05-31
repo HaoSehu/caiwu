@@ -504,17 +504,62 @@ export function useWebsiteProductsCatalog({ onProductSelect, onResetSelection })
     pageLoading.value = true
 
     try {
-      const res = await siteApi.productTypes()
-      productTypes.value = res.data.list || []
-
-      const linked = await applyRouteSelection()
+      const linked = await initWithAggregatedApi()
 
       if (!linked && productTypes.value.length && !isMobile.value) {
-        activeTypeValue.value = productTypes.value[0].value
-        await loadRootGroups({ syncRoute: true })
+        if (!rootGroups.value.length) {
+          activeTypeValue.value = productTypes.value[0].value
+          await loadRootGroups({ syncRoute: true })
+        } else {
+          void syncSelectionRoute()
+        }
       }
     } finally {
       pageLoading.value = false
+    }
+  }
+
+  async function initWithAggregatedApi() {
+    const routePayload = readWebsiteProductRouteParams(route)
+    const hasRouteTarget = hasWebsiteProductRouteParams(routePayload)
+    const requestType = hasRouteTarget ? undefined : undefined
+
+    try {
+      const res = await siteApi.productsInit(
+        requestType ? { product_type: requestType } : undefined,
+      )
+      const data = res.data || {}
+      productTypes.value = data.types || []
+
+      if (!productTypes.value.length) {
+        return false
+      }
+
+      if (hasRouteTarget) {
+        const linked = await applyRouteSelection()
+        return linked
+      }
+
+      const types = productTypes.value
+      const firstTypeValue = types[0]?.value || ''
+      activeTypeValue.value = firstTypeValue
+      rootGroups.value = data.root_groups || []
+
+      if (rootGroups.value.length && data.catalog) {
+        const firstGroupId = rootGroups.value[0].id
+        activeGroupId.value = firstGroupId
+        setCachedCatalog(firstGroupId, data.catalog)
+        applyGroupPayload(data.catalog, { syncRoute: true })
+      } else if (rootGroups.value.length) {
+        activeGroupId.value = rootGroups.value[0].id
+        await loadGroupPayload(rootGroups.value[0].id, { syncRoute: true })
+      }
+
+      return true
+    } catch {
+      const res = await siteApi.productTypes()
+      productTypes.value = res.data.list || []
+      return false
     }
   }
 
@@ -548,6 +593,8 @@ export function useWebsiteProductsCatalog({ onProductSelect, onResetSelection })
       route.params.groupId,
       route.params.childGroupId,
       route.params.productId,
+      route.query.type,
+      route.query.group,
     ],
     async () => {
       if (!productTypes.value.length) {
@@ -555,17 +602,19 @@ export function useWebsiteProductsCatalog({ onProductSelect, onResetSelection })
       }
 
       const routePayload = readWebsiteProductRouteParams(route)
-      const currentPath = buildWebsiteProductPath({
-        typeId: activeTypeId.value,
-        groupId: activeGroupId.value,
-        childGroupId: activeChildId.value,
-        productId: selectedProductId.value,
-      })
 
       if (hasWebsiteProductRouteParams(routePayload)) {
-        const targetPath = buildWebsiteProductPath(routePayload)
+        const currentTypeId = activeTypeId.value
+        const currentGroupId = activeGroupId.value
+        const currentChildId = activeChildId.value
+        const currentProductId = selectedProductId.value
 
-        if (targetPath !== currentPath) {
+        const changed = routePayload.typeId !== currentTypeId
+          || routePayload.groupId !== currentGroupId
+          || routePayload.childGroupId !== currentChildId
+          || (routePayload.productId > 0 && routePayload.productId !== currentProductId)
+
+        if (changed) {
           await applyRouteSelection()
         }
 

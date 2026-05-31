@@ -1,16 +1,11 @@
 <template>
   <div class="client-page referral-page">
-    <section class="summary-grid" v-loading="loading">
-      <article
-        v-for="item in summaryCards"
-        :key="item.key"
-        class="summary-card"
-        :class="{ 'summary-card--primary': item.primary }"
-      >
-        <span>{{ item.label }}</span>
+    <div class="referral-stats-strip" v-loading="loading">
+      <span v-for="item in summaryCards" :key="item.key" class="referral-stat" :class="{ 'referral-stat--primary': item.primary }">
+        <em>{{ item.label }}</em>
         <strong>{{ item.value }}</strong>
-      </article>
-    </section>
+      </span>
+    </div>
 
     <section class="section-card referral-link-card">
       <header class="section-card__head">
@@ -514,13 +509,6 @@ onBeforeUnmount(() => {
   gap: 16px;
 }
 
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.summary-card,
 .section-card,
 .records-card {
   border: 1px solid $border-color;
@@ -528,35 +516,43 @@ onBeforeUnmount(() => {
   box-shadow: $shadow-sm;
 }
 
-.summary-card {
-  min-height: 96px;
-  padding: 20px;
-  border-radius: 2px;
-
-  span {
-    display: block;
-    color: $text-color-secondary;
-    font-size: 14px;
-  }
-
-  strong {
-    display: block;
-    margin-top: 10px;
-    color: $text-color-primary;
-    font-size: 24px;
-    font-weight: 700;
-    line-height: 1.2;
-    word-break: break-word;
-  }
-}
-
-.summary-card--primary strong {
-  color: $color-primary;
-}
-
 .section-card {
   border-radius: 14px;
   overflow: hidden;
+}
+
+.referral-stats-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  padding: 14px 18px;
+  border: 1px solid $border-color;
+  border-radius: $base-border-radius;
+  background: $bg-color-card;
+  box-shadow: $shadow-sm;
+}
+
+.referral-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+
+  em {
+    font-style: normal;
+    color: $text-color-secondary;
+    font-size: 13px;
+  }
+
+  strong {
+    color: $text-color-primary;
+    font-size: 14px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.referral-stat--primary strong {
+  color: $color-primary;
 }
 
 .section-card__head {
@@ -726,20 +722,7 @@ onBeforeUnmount(() => {
   }
 }
 
-@media (max-width: 1200px) {
-  .summary-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 960px) {
-  .summary-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 767px) {
-  .summary-grid,
   .link-row,
   .code-row {
     grid-template-columns: 1fr;
@@ -757,11 +740,6 @@ onBeforeUnmount(() => {
 
   .section-card__body,
   .withdraw-form-wrap {
-    padding: 16px;
-  }
-
-  .summary-card {
-    min-height: 88px;
     padding: 16px;
   }
 

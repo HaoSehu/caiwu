@@ -724,6 +724,7 @@
       encrypt: q('encrypt', location.protocol === 'https:' ? '1' : '0'),
       username: q('username'),
       target: q('target'),
+      password: q('password') || q('pass'),
     }
   }
 
