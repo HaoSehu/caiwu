@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Route;
 Route::get('/site/config', [SiteConfigController::class, 'index']);
 Route::get('/site/home', [SiteHomeController::class, 'index']);
 Route::get('/site/home-hero', [SiteHomeController::class, 'hero']);
+Route::get('/site/products/init', [SiteProductController::class, 'init']);
 Route::get('/site/product-types', [SiteProductController::class, 'productTypes']);
 Route::get('/site/product-groups', [SiteProductController::class, 'productGroups']);
 Route::get('/site/product-groups/{groupId}/children', [SiteProductController::class, 'childGroups']);

@@ -120,7 +120,7 @@ class TicketService
     /**
      * 客户回复
      */
-    public function clientReply(Ticket $ticket, int $userId, ?string $content, array $attachmentPaths = []): array
+    public function clientReply(Ticket $ticket, int $userId, ?string $content, array $attachmentPaths = [], ?int $quoteReplyId = null): array
     {
         throw_if($ticket->user_id !== $userId, new BusinessException('无权操作'));
         throw_if($ticket->status === self::STATUS_CLOSED, new BusinessException('工单已关闭'));
@@ -129,13 +129,20 @@ class TicketService
         $attachments = $this->normalizeAttachments($attachmentPaths, 'client', $userId);
         $this->ensureReplyPayload($content, $attachments);
 
-        $formattedReply = DB::transaction(function () use ($ticket, $userId, $content, $attachments) {
+        if ($quoteReplyId !== null) {
+            $quoted = TicketReply::where('ticket_id', $ticket->id)->find($quoteReplyId);
+            throw_if(! $quoted, new BusinessException('引用的消息不存在'));
+            throw_if($quoted->recalled_at !== null, new BusinessException('不能引用已撤回的消息'));
+        }
+
+        $formattedReply = DB::transaction(function () use ($ticket, $userId, $content, $attachments, $quoteReplyId) {
             $reply = TicketReply::create([
                 'ticket_id' => $ticket->id,
                 'user_id' => $userId,
                 'content' => $content,
                 'is_staff' => 0,
                 'attachments' => $attachments,
+                'quote_reply_id' => $quoteReplyId,
                 'created_at' => now(),
             ]);
             $ticket->update(['status' => self::STATUS_CLIENT_REPLY]);
@@ -163,7 +170,7 @@ class TicketService
     /**
      * 管理端回复
      */
-    public function staffReply(Ticket $ticket, int $staffId, ?string $content, array $attachmentPaths = []): array
+    public function staffReply(Ticket $ticket, int $staffId, ?string $content, array $attachmentPaths = [], ?int $quoteReplyId = null): array
     {
         throw_if($ticket->status === self::STATUS_CLOSED, new BusinessException('工单已关闭'));
 
@@ -173,13 +180,20 @@ class TicketService
         $staff = AdminUser::query()->find($staffId);
         $staffName = $staff?->nickname ?: $staff?->username ?: '员工';
 
-        $formattedReply = DB::transaction(function () use ($ticket, $staffId, $content, $attachments, $staffName) {
+        if ($quoteReplyId !== null) {
+            $quoted = TicketReply::where('ticket_id', $ticket->id)->find($quoteReplyId);
+            throw_if(! $quoted, new BusinessException('引用的消息不存在'));
+            throw_if($quoted->recalled_at !== null, new BusinessException('不能引用已撤回的消息'));
+        }
+
+        $formattedReply = DB::transaction(function () use ($ticket, $staffId, $content, $attachments, $staffName, $quoteReplyId) {
             $reply = TicketReply::create([
                 'ticket_id' => $ticket->id,
                 'user_id' => $staffId,
                 'content' => $content,
                 'is_staff' => 1,
                 'attachments' => $attachments,
+                'quote_reply_id' => $quoteReplyId,
                 'created_at' => now(),
             ]);
             $ticket->update(['status' => self::STATUS_STAFF_REPLY]);
@@ -208,6 +222,26 @@ class TicketService
         }
 
         $this->closeTicketAndReplaceAttachments($ticket, self::CLOSE_REASON_AUTO);
+    }
+
+    /**
+     * 撤回消息（两分钟内，仅发送者本人可操作）
+     */
+    public function recallReply(Ticket $ticket, int $replyId, int $operatorId, bool $isStaff = false): void
+    {
+        $reply = TicketReply::where('ticket_id', $ticket->id)->findOrFail($replyId);
+
+        throw_if((int) $reply->user_id !== $operatorId || (int) $reply->is_staff !== ($isStaff ? 1 : 0), new BusinessException('只能撤回自己发送的消息'));
+        throw_if($reply->recalled_at !== null, new BusinessException('该消息已撤回'));
+
+        $createdAt = $reply->created_at instanceof Carbon ? $reply->created_at : Carbon::parse((string) $reply->created_at);
+        throw_if($createdAt->diffInSeconds(now()) > 120, new BusinessException('超过两分钟，无法撤回'));
+
+        $reply->update([
+            'recalled_at' => now(),
+            'content' => '',
+            'attachments' => [],
+        ]);
     }
 
     /**
@@ -850,7 +884,9 @@ class TicketService
 
     private function formatReply(TicketReply $reply, string $senderName): array
     {
-        $attachments = collect($reply->attachments ?? [])->map(function ($item) use ($reply) {
+        $isRecalled = $reply->recalled_at !== null;
+
+        $attachments = $isRecalled ? [] : collect($reply->attachments ?? [])->map(function ($item) use ($reply) {
             if (! is_array($item)) {
                 return null;
             }
@@ -877,14 +913,39 @@ class TicketService
             }
         })->filter()->values()->all();
 
+        $quote = null;
+        if (! empty($reply->quote_reply_id)) {
+            $quoted = TicketReply::where('ticket_id', $reply->ticket_id)->find((int) $reply->quote_reply_id);
+            if ($quoted) {
+                $quoted->loadMissing('ticket.user:id,nickname,email');
+                $isQuotedStaff = (int) $quoted->is_staff === 1;
+                $quotedSenderName = '客户';
+                if ($isQuotedStaff) {
+                    $admin = AdminUser::query()->find((int) $quoted->user_id);
+                    $quotedSenderName = $admin?->nickname ?: $admin?->username ?: '员工';
+                } else {
+                    $quotedSenderName = $quoted->ticket?->user?->display_name ?: '客户';
+                }
+                $quote = [
+                    'id' => (int) $quoted->id,
+                    'sender_name' => $quotedSenderName,
+                    'content' => $quoted->recalled_at !== null ? '消息已撤回' : Str::limit(trim((string) ($quoted->content ?? '')), 100),
+                    'recalled' => $quoted->recalled_at !== null,
+                ];
+            }
+        }
+
         return [
             'id' => (int) $reply->id,
             'ticket_id' => (int) $reply->ticket_id,
             'user_id' => (int) $reply->user_id,
-            'content' => $reply->content,
+            'content' => $isRecalled ? '' : $reply->content,
             'is_staff' => (int) $reply->is_staff,
             'sender_name' => $senderName,
             'attachments' => $attachments,
+            'recalled' => $isRecalled,
+            'recalled_at' => $reply->recalled_at?->format('Y-m-d H:i:s'),
+            'quote' => $quote,
             'created_at' => $reply->created_at?->format('Y-m-d H:i:s'),
         ];
     }
@@ -956,8 +1017,10 @@ class TicketService
             ])
             ->all();
 
-        return $messages->map(function ($message) use ($attachmentsByMessage, $staffMap, $clientName) {
-            $attachments = collect($attachmentsByMessage->get($message->id, collect()))
+        return $messages->map(function ($message) use ($attachmentsByMessage, $staffMap, $clientName, $messages) {
+            $isRecalled = ! empty($message->recalled_at);
+
+            $attachments = $isRecalled ? [] : collect($attachmentsByMessage->get($message->id, collect()))
                 ->map(function ($attachment) {
                     try {
                         return $this->serializeAttachmentForClient($this->buildStoredAttachmentMeta(
@@ -975,14 +1038,33 @@ class TicketService
 
             $isStaff = (string) ($message->sender_type ?? '') === 'admin';
 
+            $quote = null;
+            if (! empty($message->quote_message_id)) {
+                $quotedMsg = $messages->firstWhere('id', (int) $message->quote_message_id);
+                if ($quotedMsg) {
+                    $isQuotedStaff = (string) ($quotedMsg->sender_type ?? '') === 'admin';
+                    $quote = [
+                        'id' => (int) ($quotedMsg->id ?? 0),
+                        'sender_name' => $isQuotedStaff ? ($staffMap[(int) ($quotedMsg->sender_id ?? 0)] ?? '员工') : $clientName,
+                        'content' => ! empty($quotedMsg->recalled_at) ? '消息已撤回' : Str::limit(trim((string) ($quotedMsg->content ?? '')), 100),
+                        'recalled' => ! empty($quotedMsg->recalled_at),
+                    ];
+                }
+            }
+
             return [
                 'id' => (int) ($message->id ?? 0),
                 'ticket_id' => (int) ($message->ticket_id ?? 0),
                 'user_id' => (int) ($message->sender_id ?? 0),
-                'content' => (string) ($message->content ?? ''),
+                'content' => $isRecalled ? '' : (string) ($message->content ?? ''),
                 'is_staff' => $isStaff ? 1 : 0,
                 'sender_name' => $isStaff ? ($staffMap[(int) ($message->sender_id ?? 0)] ?? '员工') : $clientName,
                 'attachments' => $attachments,
+                'recalled' => $isRecalled,
+                'recalled_at' => ! empty($message->recalled_at)
+                    ? Carbon::parse((string) $message->recalled_at)->format('Y-m-d H:i:s')
+                    : null,
+                'quote' => $quote,
                 'created_at' => ! empty($message->created_at)
                     ? Carbon::parse((string) $message->created_at)->format('Y-m-d H:i:s')
                     : null,

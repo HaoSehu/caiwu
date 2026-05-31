@@ -65,15 +65,24 @@ class TicketController extends Controller
             'content' => ['nullable', 'string', 'max:10000'],
             'attachments' => ['nullable', 'array', 'max:9'],
             'attachments.*' => ['required', 'string', 'max:255'],
+            'quote_reply_id' => ['nullable', 'integer', 'min:1'],
         ]);
         $reply = $this->ticketService->staffReply(
             $ticket,
             $request->user()->id,
             $data['content'] ?? null,
-            $data['attachments'] ?? []
+            $data['attachments'] ?? [],
+            $data['quote_reply_id'] ?? null,
         );
 
         return $this->success($reply, '回复成功');
+    }
+
+    public function recall(Request $request, Ticket $ticket, int $replyId)
+    {
+        $this->ticketService->recallReply($ticket, $replyId, $request->user()->id, true);
+
+        return $this->success(null, '消息已撤回');
     }
 
     public function close(Ticket $ticket)
