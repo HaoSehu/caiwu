@@ -12,9 +12,12 @@ class BusinessException extends Exception
 {
     protected int $errorCode;
 
+    protected int $httpStatus;
+
     public function __construct(string $message = '业务异常', int $errorCode = 42200, int $httpStatus = 422)
     {
         $this->errorCode = $errorCode;
+        $this->httpStatus = $httpStatus;
         parent::__construct($message, $httpStatus);
     }
 
@@ -25,6 +28,6 @@ class BusinessException extends Exception
 
     public function render(): JsonResponse
     {
-        return ApiResponseBuilder::error($this->errorCode, $this->getMessage());
+        return ApiResponseBuilder::error($this->errorCode, $this->getMessage(), null, $this->httpStatus);
     }
 }
