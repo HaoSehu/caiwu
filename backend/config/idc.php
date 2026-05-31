@@ -79,19 +79,6 @@ return [
         'ca_bundle' => env('GEETEST_CA_BUNDLE', ''),
     ],
 
-    'blackhole' => [
-        'timeout' => (int) env('BLACKHOLE_TIMEOUT', 12),
-        'cache_ttl_seconds' => (int) env('BLACKHOLE_CACHE_TTL_SECONDS', 60),
-        'user_agent' => env('BLACKHOLE_USER_AGENT', env('HOSTING_PANEL_API_USER_AGENT', 'mozilla/5.0 (compatible; msie 5.01; windows nt 5.0)')),
-        'ningbo_base_url' => env('BLACKHOLE_NINGBO_BASE_URL', 'http://160.202.238.2:81'),
-        'shiyan_base_url' => env('BLACKHOLE_SHIYAN_BASE_URL', 'http://160.202.238.2:90'),
-        'public_base_url' => env('BLACKHOLE_PUBLIC_BASE_URL', 'https://blackhole.jdidc.cn'),
-        'hongkong_api_url' => env('BLACKHOLE_HONGKONG_API_URL', 'https://mianban.288cloud.com/ddos/api/'),
-        'us1_traffic_base_url' => env('BLACKHOLE_US1_TRAFFIC_BASE_URL', 'https://do.yazzi.net/index/history'),
-        'ssl_verify' => env('BLACKHOLE_SSL_VERIFY', env('APP_ENV') !== 'local'),
-        'ca_bundle' => env('BLACKHOLE_CA_BUNDLE', ''),
-    ],
-
     'vnc_relay' => [
         'host' => env('VNC_RELAY_HOST', '127.0.0.1'),
         'port' => (int) env('VNC_RELAY_PORT', 8100),

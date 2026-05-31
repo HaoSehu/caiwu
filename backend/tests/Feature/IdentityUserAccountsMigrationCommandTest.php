@@ -21,11 +21,16 @@ class IdentityUserAccountsMigrationCommandTest extends TestCase
         $sourceDatabasePath = storage_path('framework/testing/identity-user-accounts-source.sqlite');
         $targetDatabasePath = storage_path('framework/testing/identity-user-accounts-target.sqlite');
 
-        $this->prepareSqliteDatabase('idc', $sourceDatabasePath);
-        $this->prepareSqliteDatabase('idc', $targetDatabasePath);
+        $sourceConnection = 'legacy_source';
+        $targetConnection = 'legacy_target';
 
-        $sourceSchema = Schema::connection('idc');
-        $targetSchema = Schema::connection('idc');
+        $this->prepareSqliteDatabase($sourceConnection, $sourceDatabasePath);
+        $this->prepareSqliteDatabase($targetConnection, $targetDatabasePath);
+        config()->set('identity_migration.source_connection', $sourceConnection);
+        config()->set('identity_migration.target_connection', $targetConnection);
+
+        $sourceSchema = Schema::connection($sourceConnection);
+        $targetSchema = Schema::connection($targetConnection);
 
         $sourceSchema->create('users', function (Blueprint $table): void {
             $table->id();
@@ -72,7 +77,7 @@ class IdentityUserAccountsMigrationCommandTest extends TestCase
             $table->timestamps();
         });
 
-        DB::connection('idc')->table('users')->insert([
+        DB::connection($sourceConnection)->table('users')->insert([
             [
                 'id' => 50,
                 'balance' => '188.80',
@@ -87,7 +92,7 @@ class IdentityUserAccountsMigrationCommandTest extends TestCase
             ],
         ]);
 
-        DB::connection('idc')->table('user_accounts')->insert([
+        DB::connection($sourceConnection)->table('user_accounts')->insert([
             [
                 'user_id' => 50,
                 'cash_balance' => '100.00',
@@ -102,12 +107,12 @@ class IdentityUserAccountsMigrationCommandTest extends TestCase
             ],
         ]);
 
-        DB::connection('idc')->table('users')->insert([
+        DB::connection($targetConnection)->table('users')->insert([
             ['id' => 50, 'created_at' => '2026-05-18 01:00:00', 'updated_at' => '2026-05-18 01:00:00'],
             ['id' => 51, 'created_at' => '2026-05-18 01:10:00', 'updated_at' => '2026-05-18 01:10:00'],
         ]);
 
-        DB::connection('idc')->table('identity_migration_checkpoints')->insert([
+        DB::connection($targetConnection)->table('identity_migration_checkpoints')->insert([
             'migration_name' => 'identity_users',
             'completed_at' => '2026-05-18 02:00:00',
             'row_count' => 2,
@@ -150,7 +155,7 @@ class IdentityUserAccountsMigrationCommandTest extends TestCase
 
         $this->assertSame(2, $migrated);
 
-        $rows = DB::connection('idc')
+        $rows = DB::connection($targetConnection)
             ->table('user_accounts')
             ->orderBy('user_id')
             ->get()

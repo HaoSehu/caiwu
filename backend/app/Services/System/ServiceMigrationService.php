@@ -27,8 +27,8 @@ class ServiceMigrationService
 
     public function __construct()
     {
-        $this->sourceConnection = (string) config('service_migration.source_connection', 'idc');
-        $this->targetConnection = (string) config('service_migration.target_connection', 'idc');
+        $this->sourceConnection = (string) config('service_migration.source_connection', 'mysql');
+        $this->targetConnection = (string) config('service_migration.target_connection', 'mysql');
         $this->legacyServiceDatabase = trim((string) env('SERVICE_MIGRATION_LEGACY_DB_DATABASE', ''));
         $this->legacyServiceTablePrefix = trim((string) env('SERVICE_MIGRATION_LEGACY_TABLE_PREFIX', ''));
     }

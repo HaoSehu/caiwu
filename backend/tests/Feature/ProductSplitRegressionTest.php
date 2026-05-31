@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\Role;
+use App\Models\Setting;
 use App\Models\Supplier;
 use App\Services\Provisioning\ProvisionService;
 use App\Services\System\SettingService;
@@ -191,6 +192,144 @@ class ProductSplitRegressionTest extends TestCase
             4,
             Product::query()->where('product_group_id', (int) $category->id)->count()
         );
+    }
+
+    public function test_split_inherits_alias_cpu_memory_fields_and_cpu_model_for_site_display(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+        $role = Role::query()->create([
+            'name' => 'product-split-alias-spec-'.$suffix,
+            'label' => 'Product Split Alias Spec',
+            'permissions' => [AdminPermissions::ALL],
+        ]);
+        $admin = AdminUser::query()->create([
+            'username' => 'product-split-alias-spec-'.$suffix,
+            'password' => 'Temp@123456',
+            'role_id' => (int) $role->id,
+            'nickname' => 'Product Split Alias Spec',
+            'email' => 'product-split-alias-spec-'.$suffix.'@example.com',
+            'status' => 1,
+        ]);
+        $category = ProductCategory::query()->create([
+            'parent_id' => null,
+            'product_type' => 'vps',
+            'name' => 'Split alias category '.$suffix,
+            'slug' => 'split-alias-category-'.$suffix,
+            'slogan' => '',
+            'is_visible' => 1,
+            'sort_order' => 0,
+        ]);
+        $source = Product::query()->create([
+            'product_group_id' => (int) $category->id,
+            'name' => 'Alias node 2H2G '.$suffix,
+            'product_type' => 'vps',
+            'pricing' => ['monthly' => '50.00'],
+            'setup_fee' => '0.00',
+            'purchase_requires' => [
+                'upstream_default_config' => [
+                    'cpu_num' => '2',
+                    'memory_size' => '2048',
+                ],
+            ],
+            'config_options' => [
+                [
+                    'id' => 66001,
+                    'config_id' => 66001,
+                    'field' => 'cpu_num',
+                    'name' => 'CPU cores',
+                    'option_type' => 6,
+                    'hidden' => 0,
+                    'sub' => [
+                        ['id' => 76001, 'option_name_first' => '2', 'option_name' => '2H', 'hidden' => 0, 'pricing' => ['monthly' => '0.00']],
+                        ['id' => 76002, 'option_name_first' => '4', 'option_name' => '4H', 'hidden' => 0, 'pricing' => ['monthly' => '20.00']],
+                    ],
+                ],
+                [
+                    'id' => 66002,
+                    'config_id' => 66002,
+                    'field' => 'memory_size',
+                    'name' => 'RAM size',
+                    'option_type' => 8,
+                    'hidden' => 0,
+                    'sub' => [
+                        ['id' => 76011, 'option_name_first' => '2048', 'option_name' => '2G', 'hidden' => 0, 'pricing' => ['monthly' => '0.00']],
+                        ['id' => 76012, 'option_name_first' => '4096', 'option_name' => '4G', 'hidden' => 0, 'pricing' => ['monthly' => '30.00']],
+                    ],
+                ],
+            ],
+            'stock' => -1,
+            'status' => 1,
+            'sort_order' => 0,
+            'provision_module' => 'hosting_panel_api',
+            'auto_setup' => 1,
+        ]);
+
+        Setting::setValue('product', 'cpu_model_catalog', json_encode([
+            [
+                'id' => 'group_alias_intel',
+                'value' => 'alias_intel',
+                'name' => 'Alias Intel',
+                'models' => [
+                    [
+                        'id' => 'model_alias_6338',
+                        'value' => 'intel_xeon_gold_6338',
+                        'name' => 'Intel Xeon Gold 6338',
+                        'base_frequency' => '2.00GHz',
+                        'turbo_frequency' => '3.20GHz',
+                        'bindings' => [
+                            [
+                                'product_id' => (int) $source->id,
+                                'category_full_name' => 'Cloud / Alias',
+                                'primary_price' => ['cycle' => 'monthly', 'amount' => '50.00'],
+                                'status' => 1,
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+
+        Sanctum::actingAs($admin);
+
+        $this->postJson('/api/admin/products/split-preview', [
+            'product_ids' => [(int) $source->id],
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.preview_count', 4)
+            ->assertJsonPath('data.items.0.variants.3.display_name', '4 vCPU 4G')
+            ->assertJsonPath('data.items.0.variants.3.cpu', '4')
+            ->assertJsonPath('data.items.0.variants.3.memory', '4096');
+
+        $this->postJson('/api/admin/products/split', [
+            'product_ids' => [(int) $source->id],
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.created_count', 3)
+            ->assertJsonPath('data.updated_count', 1)
+            ->assertJsonPath('data.skipped_count', 0);
+
+        $splitProduct = Product::query()
+            ->get()
+            ->first(fn (Product $product) => (int) (($product->purchase_requires['upstream_split'] ?? [])['source_product_id'] ?? 0) === (int) $source->id
+                && (string) (($product->purchase_requires['upstream_split'] ?? [])['variant_key'] ?? '') === 'cpu=4;memory=4096');
+
+        $this->assertInstanceOf(Product::class, $splitProduct);
+        $this->assertSame('4', (string) (($splitProduct->purchase_requires['upstream_default_config'] ?? [])['cpu'] ?? ''));
+        $this->assertSame('4096', (string) (($splitProduct->purchase_requires['upstream_default_config'] ?? [])['memory'] ?? ''));
+        $this->assertSame(['cpu_num', 'memory_size'], collect($splitProduct->config_options)->pluck('field')->values()->all());
+        $this->assertSame(1, count((array) ($splitProduct->config_options[0]['sub'] ?? [])));
+        $this->assertSame(1, count((array) ($splitProduct->config_options[1]['sub'] ?? [])));
+        $this->assertSame('4', (string) (($splitProduct->config_options[0]['sub'][0]['option_name_first'] ?? '')));
+        $this->assertSame('4096', (string) (($splitProduct->config_options[1]['sub'][0]['option_name_first'] ?? '')));
+
+        $this->getJson('/api/site/products/'.$splitProduct->id)
+            ->assertOk()
+            ->assertJsonPath('data.product.cpu_display', '4 vCPU')
+            ->assertJsonPath('data.product.memory_display', '4G')
+            ->assertJsonPath('data.product.cpu_memory_display', '4 vCPU 4G')
+            ->assertJsonPath('data.product.cpu_model_name', 'Intel Xeon Gold 6338')
+            ->assertJsonPath('data.product.cpu_base_frequency', '2.00GHz')
+            ->assertJsonPath('data.product.cpu_turbo_frequency', '3.20GHz');
     }
 
     public function test_split_is_idempotent_for_same_source_product(): void

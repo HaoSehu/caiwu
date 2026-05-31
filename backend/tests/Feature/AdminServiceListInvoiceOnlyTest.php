@@ -9,7 +9,7 @@ use App\Constants\ServiceStatus;
 use App\Models\Invoice;
 use App\Models\Product;
 use App\Models\ProductCategory;
-use App\Models\ServiceInstance;
+use App\Models\Service;
 use App\Models\User;
 use App\Services\Provisioning\AdminServiceListService;
 use Illuminate\Support\Facades\DB;
@@ -68,13 +68,13 @@ class AdminServiceListInvoiceOnlyTest extends TestCase
             'updated_at' => now(),
         ];
 
-        DB::connection('idc')->table('users')->updateOrInsert(['id' => (int) $user->id], $payload);
-        DB::connection('idc')->table('users')->updateOrInsert(['id' => (int) $user->id], $payload);
+        DB::connection()->table('users')->updateOrInsert(['id' => (int) $user->id], $payload);
+        DB::connection()->table('users')->updateOrInsert(['id' => (int) $user->id], $payload);
     }
 
     private function mirrorProductToIdc(Product $product, string $suffix): void
     {
-        DB::connection('idc')->table('products')->updateOrInsert(
+        DB::connection()->table('products')->updateOrInsert(
             ['id' => (int) $product->id],
             Product::buildIdcMirrorPayload($product, 'admin-service-'.$suffix.'-'.(int) $product->id)
         );
@@ -145,23 +145,21 @@ class AdminServiceListInvoiceOnlyTest extends TestCase
             'paid_at' => now()->subMinute(),
         ]);
 
-        $service = ServiceInstance::query()->create([
+        $service = Service::query()->create([
             'user_id' => (int) $user->id,
             'product_id' => (int) $product->id,
-            'source_invoice_id' => (int) $invoice->id,
-            'service_no' => 'ADMSVC-'.$suffix,
+            'invoice_id' => (int) $invoice->id,
             'name' => 'Invoice Only Service '.$suffix,
-            'instance_identifier' => 'invoice-only-'.$suffix.'.example.com',
+            'domain' => 'invoice-only-'.$suffix.'.example.com',
             'billing_cycle' => 'monthly',
-            'renewal_price' => '66.00',
-            'pricing_snapshot_json' => [],
+            'amount' => '66.00',
+            'locked_pricing' => [],
             'status' => ServiceStatus::ACTIVE,
-            'provision_snapshot_json' => [
+            'provision_data' => [
                 'source_invoice_id' => (int) $invoice->id,
                 'upstream_host_id' => 'host-'.$suffix,
                 'dedicated_ip' => '10.0.0.8',
             ],
-            'opened_at' => now(),
             'expires_at' => now()->addMonth(),
             'auto_renew' => 1,
         ]);
@@ -244,23 +242,21 @@ class AdminServiceListInvoiceOnlyTest extends TestCase
             'paid_at' => now()->subMinute(),
         ]);
 
-        $service = ServiceInstance::query()->create([
+        $service = Service::query()->create([
             'user_id' => (int) $user->id,
             'product_id' => (int) $product->id,
-            'source_invoice_id' => (int) $invoice->id,
-            'service_no' => 'ADMSNAP-'.$suffix,
+            'invoice_id' => (int) $invoice->id,
             'name' => 'Invoice Snapshot Service '.$suffix,
-            'instance_identifier' => 'invoice-snapshot-'.$suffix.'.example.com',
+            'domain' => 'invoice-snapshot-'.$suffix.'.example.com',
             'billing_cycle' => 'monthly',
-            'renewal_price' => '88.00',
-            'pricing_snapshot_json' => [],
+            'amount' => '88.00',
+            'locked_pricing' => [],
             'status' => ServiceStatus::ACTIVE,
-            'provision_snapshot_json' => [
+            'provision_data' => [
                 'source_invoice_id' => (int) $invoice->id,
                 'upstream_host_id' => 'snapshot-'.$suffix,
                 'dedicated_ip' => '10.0.0.18',
             ],
-            'opened_at' => now(),
             'expires_at' => now()->addMonth(),
             'auto_renew' => 1,
         ]);
@@ -359,21 +355,19 @@ class AdminServiceListInvoiceOnlyTest extends TestCase
             'paid_at' => now()->subMinute(),
         ]);
 
-        $service = ServiceInstance::query()->create([
+        $service = Service::query()->create([
             'user_id' => (int) $user->id,
             'product_id' => (int) $product->id,
-            'source_invoice_id' => (int) $invoice->id,
-            'service_no' => 'ADMFALL-'.$suffix,
+            'invoice_id' => (int) $invoice->id,
             'name' => 'Invoice Order Fallback Service '.$suffix,
-            'instance_identifier' => 'invoice-order-fallback-'.$suffix.'.example.com',
+            'domain' => 'invoice-order-fallback-'.$suffix.'.example.com',
             'billing_cycle' => 'monthly',
-            'renewal_price' => '99.00',
-            'pricing_snapshot_json' => [],
+            'amount' => '99.00',
+            'locked_pricing' => [],
             'status' => ServiceStatus::ACTIVE,
-            'provision_snapshot_json' => [
+            'provision_data' => [
                 'source_invoice_id' => (int) $invoice->id,
             ],
-            'opened_at' => now(),
             'expires_at' => now()->addMonth(),
             'auto_renew' => 1,
         ]);

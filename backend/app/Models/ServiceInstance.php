@@ -32,8 +32,6 @@ class ServiceInstance extends Model
 
     protected $table = 'service_instances';
 
-    protected $connection = 'idc';
-
     protected $fillable = [
         'user_id',
         'product_id',

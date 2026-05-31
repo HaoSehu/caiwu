@@ -14,8 +14,8 @@ class AccountMigrationService
 
     public function __construct()
     {
-        $this->sourceConnection = (string) config('account_migration.source_connection', 'idc');
-        $this->targetConnection = (string) config('account_migration.target_connection', 'idc');
+        $this->sourceConnection = (string) config('account_migration.source_connection', 'mysql');
+        $this->targetConnection = (string) config('account_migration.target_connection', 'mysql');
     }
 
     public function ensureConnections(): void

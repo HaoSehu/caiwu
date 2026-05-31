@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
+use App\Exceptions\BusinessException;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\Order;
@@ -39,6 +40,8 @@ class OrderQuantityCheckoutFlowTest extends TestCase
             'password' => 'secret123',
             'phone' => '139'.str_pad((string) random_int(0, 99999999), 8, '0', STR_PAD_LEFT),
             'status' => 1,
+            'is_verified' => 1,
+            'verification_status' => 2,
         ]);
 
         $product = Product::query()->create([
@@ -122,6 +125,8 @@ class OrderQuantityCheckoutFlowTest extends TestCase
             'password' => 'secret123',
             'phone' => '136'.str_pad((string) random_int(0, 99999999), 8, '0', STR_PAD_LEFT),
             'status' => 1,
+            'is_verified' => 1,
+            'verification_status' => 2,
         ]);
 
         $product = Product::query()->create([
@@ -428,5 +433,80 @@ class OrderQuantityCheckoutFlowTest extends TestCase
         );
 
         $paymentService->handlePaidInvoice($invoice, 'trace-renew-sync-'.$suffix);
+    }
+
+    public function test_checkout_service_requires_verified_user_for_new_purchase_even_without_product_flag(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+
+        $user = User::query()->create([
+            'email' => 'invoice-verify-'.$suffix.'@example.com',
+            'password' => 'Temp@123456',
+            'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
+            'status' => 1,
+            'nickname' => 'Invoice Verify',
+            'is_verified' => 0,
+            'verification_status' => 0,
+        ]);
+
+        $product = Product::query()->create([
+            'name' => 'Invoice Verify Product '.$suffix,
+            'product_type' => 'server',
+            'pricing' => ['monthly' => '66.00'],
+            'setup_fee' => '0.00',
+            'config_options' => [],
+            'purchase_requires' => [],
+            'stock' => 8,
+            'status' => 1,
+            'sort_order' => 0,
+            'provision_module' => null,
+            'auto_setup' => 0,
+        ]);
+
+        $checkoutSecurity = new CheckoutSecurityService;
+        $invoiceService = new InvoiceService;
+
+        $productCatalogService = $this->createMock(ProductCatalogService::class);
+        $productCatalogService->method('assertProductCanBeProvisioned');
+
+        $couponService = $this->createMock(CouponService::class);
+        $couponService->method('reserveOwnedCouponForInvoice')->willReturn([]);
+
+        $operationLogService = $this->createMock(OperationLogService::class);
+        $operationLogService->method('write');
+
+        $adminOrderNotificationService = $this->createMock(AdminOrderNotificationService::class);
+        $adminOrderNotificationService->method('notifyInvoicePaidAfterResponse');
+
+        $checkoutService = new \App\Services\Finance\CheckoutService(
+            $invoiceService,
+            $this->createMock(PaymentService::class),
+            $productCatalogService,
+            $checkoutSecurity,
+            $couponService,
+            $operationLogService,
+            $adminOrderNotificationService,
+        );
+
+        $quote = $checkoutService->quote($product, 'monthly', [], 1);
+        $tokenData = $checkoutSecurity->issueQuoteToken($product->id, 'monthly', [], $quote);
+
+        try {
+            $checkoutService->create($user->id, [
+                'product_id' => (int) $product->id,
+                'billing_cycle' => 'monthly',
+                'quantity' => 1,
+                'config' => [],
+                'quote_token' => (string) ($tokenData['quote_token'] ?? ''),
+            ], [
+                'idempotency_key' => 'invoice-verify-'.$suffix,
+                'trace_id' => 'trace-invoice-verify-'.$suffix,
+            ]);
+
+            $this->fail('Expected BusinessException was not thrown.');
+        } catch (BusinessException $exception) {
+            $this->assertSame(40301, $exception->getErrorCode());
+            $this->assertStringContainsString('实名认证', $exception->getMessage());
+        }
     }
 }

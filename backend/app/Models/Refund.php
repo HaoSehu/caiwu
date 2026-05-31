@@ -14,8 +14,6 @@ class Refund extends Model
 
     protected $table = 'refunds';
 
-    protected $connection = 'idc';
-
     protected $fillable = [
         'refund_no',
         'payment_id',

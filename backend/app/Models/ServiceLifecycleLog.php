@@ -14,8 +14,6 @@ class ServiceLifecycleLog extends Model
 
     protected $table = 'service_lifecycle_logs';
 
-    protected $connection = 'idc';
-
     protected $fillable = [
         'service_instance_id',
         'action',

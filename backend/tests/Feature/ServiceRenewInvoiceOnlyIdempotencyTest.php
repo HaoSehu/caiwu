@@ -10,7 +10,7 @@ use App\Constants\ServiceStatus;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Product;
-use App\Models\ServiceInstance;
+use App\Models\Service;
 use App\Models\User;
 use App\Services\Finance\CouponService;
 use App\Services\Finance\InvoiceService;
@@ -32,7 +32,7 @@ class ServiceRenewInvoiceOnlyIdempotencyTest extends TestCase
 {
     private function mirrorProductToIdc(Product $product, string $suffix): void
     {
-        DB::connection('idc')->table('products')->updateOrInsert(
+        DB::connection()->table('products')->updateOrInsert(
             ['id' => (int) $product->id],
             Product::buildIdcMirrorPayload($product, 'renew-idempotency-'.$suffix.'-'.(int) $product->id)
         );
@@ -68,8 +68,8 @@ class ServiceRenewInvoiceOnlyIdempotencyTest extends TestCase
             'updated_at' => now(),
         ];
 
-        DB::connection('idc')->table('users')->updateOrInsert(['id' => (int) $user->id], $payload);
-        DB::connection('idc')->table('users')->updateOrInsert(['id' => (int) $user->id], $payload);
+        DB::connection()->table('users')->updateOrInsert(['id' => (int) $user->id], $payload);
+        DB::connection()->table('users')->updateOrInsert(['id' => (int) $user->id], $payload);
     }
 
     #[Test]
@@ -110,18 +110,16 @@ class ServiceRenewInvoiceOnlyIdempotencyTest extends TestCase
 
         $originalExpiresAt = Carbon::parse('2026-06-01 00:00:00');
 
-        $service = ServiceInstance::query()->create([
+        $service = Service::query()->create([
             'user_id' => (int) $user->id,
             'product_id' => (int) $product->id,
-            'source_invoice_id' => null,
             'name' => 'Invoice Only Renew Service '.$suffix,
-            'service_no' => 'SVCRENEW'.$suffix,
-            'instance_identifier' => 'renew-'.$suffix.'.example.com',
+            'domain' => 'renew-'.$suffix.'.example.com',
             'billing_cycle' => 'monthly',
-            'renewal_price' => '30.00',
+            'amount' => '30.00',
             'status' => ServiceStatus::ACTIVE,
-            'pricing_snapshot_json' => ['monthly' => '30.00'],
-            'provision_snapshot_json' => [],
+            'locked_pricing' => ['monthly' => '30.00'],
+            'provision_data' => [],
             'expires_at' => $originalExpiresAt,
             'auto_renew' => 0,
         ]);
@@ -141,7 +139,7 @@ class ServiceRenewInvoiceOnlyIdempotencyTest extends TestCase
         ]);
 
         $service->forceFill([
-            'provision_snapshot_json' => [
+            'provision_data' => [
                 'last_renew_invoice_id' => (int) $invoice->id,
                 'last_renew_invoice_no' => (string) $invoice->invoice_no,
                 'last_renewed_at' => '2026-05-01 00:00:00',
@@ -222,18 +220,16 @@ class ServiceRenewInvoiceOnlyIdempotencyTest extends TestCase
         ]);
         $this->mirrorProductToIdc($product, $suffix);
 
-        $service = ServiceInstance::query()->create([
+        $service = Service::query()->create([
             'user_id' => (int) $user->id,
             'product_id' => (int) $product->id,
-            'source_invoice_id' => null,
             'name' => 'Renew Bind Service '.$suffix,
-            'service_no' => 'SVCRENEW'.$suffix,
-            'instance_identifier' => 'bind-'.$suffix.'.example.com',
+            'domain' => 'bind-'.$suffix.'.example.com',
             'billing_cycle' => 'monthly',
-            'renewal_price' => '45.00',
+            'amount' => '45.00',
             'status' => ServiceStatus::ACTIVE,
-            'pricing_snapshot_json' => ['monthly' => '45.00'],
-            'provision_snapshot_json' => [],
+            'locked_pricing' => ['monthly' => '45.00'],
+            'provision_data' => [],
             'expires_at' => Carbon::parse('2026-06-15 00:00:00'),
             'auto_renew' => 0,
         ]);
@@ -252,7 +248,7 @@ class ServiceRenewInvoiceOnlyIdempotencyTest extends TestCase
             'due_date' => now()->addDay(),
         ]);
 
-        DB::connection('idc')->table('invoices')->updateOrInsert(
+        DB::connection()->table('invoices')->updateOrInsert(
             ['id' => (int) $invoice->id],
             [
                 'user_id' => (int) $user->id,
@@ -336,18 +332,16 @@ class ServiceRenewInvoiceOnlyIdempotencyTest extends TestCase
         ]);
         $this->mirrorProductToIdc($product, $suffix);
 
-        $service = ServiceInstance::query()->create([
+        $service = Service::query()->create([
             'user_id' => (int) $user->id,
             'product_id' => (int) $product->id,
-            'source_invoice_id' => null,
             'name' => 'Renew Real Order Service '.$suffix,
-            'service_no' => 'SVCRENEW'.$suffix,
-            'instance_identifier' => 'renew-real-'.$suffix.'.example.com',
+            'domain' => 'renew-real-'.$suffix.'.example.com',
             'billing_cycle' => 'monthly',
-            'renewal_price' => '52.00',
+            'amount' => '52.00',
             'status' => ServiceStatus::ACTIVE,
-            'pricing_snapshot_json' => ['monthly' => '52.00'],
-            'provision_snapshot_json' => [],
+            'locked_pricing' => ['monthly' => '52.00'],
+            'provision_data' => [],
             'expires_at' => Carbon::parse('2026-06-20 00:00:00'),
             'auto_renew' => 0,
         ]);
@@ -384,7 +378,7 @@ class ServiceRenewInvoiceOnlyIdempotencyTest extends TestCase
             'due_date' => now()->addDay(),
         ]);
 
-        DB::connection('idc')->table('invoices')->updateOrInsert(
+        DB::connection()->table('invoices')->updateOrInsert(
             ['id' => (int) $invoice->id],
             [
                 'user_id' => (int) $user->id,
@@ -473,18 +467,16 @@ class ServiceRenewInvoiceOnlyIdempotencyTest extends TestCase
         ]);
         $this->mirrorProductToIdc($product, $suffix);
 
-        $service = ServiceInstance::query()->create([
+        $service = Service::query()->create([
             'user_id' => (int) $user->id,
             'product_id' => (int) $product->id,
-            'source_invoice_id' => null,
             'name' => 'Renew Order Delegate Service '.$suffix,
-            'service_no' => 'SVCRENEW'.$suffix,
-            'instance_identifier' => 'renew-order-'.$suffix.'.example.com',
+            'domain' => 'renew-order-'.$suffix.'.example.com',
             'billing_cycle' => 'monthly',
-            'renewal_price' => '61.00',
+            'amount' => '61.00',
             'status' => ServiceStatus::ACTIVE,
-            'pricing_snapshot_json' => ['monthly' => '61.00'],
-            'provision_snapshot_json' => [],
+            'locked_pricing' => ['monthly' => '61.00'],
+            'provision_data' => [],
             'expires_at' => Carbon::parse('2026-06-25 00:00:00'),
             'auto_renew' => 0,
         ]);
@@ -521,7 +513,7 @@ class ServiceRenewInvoiceOnlyIdempotencyTest extends TestCase
             'due_date' => now()->addDay(),
         ]);
 
-        DB::connection('idc')->table('invoices')->updateOrInsert(
+        DB::connection()->table('invoices')->updateOrInsert(
             ['id' => (int) $invoice->id],
             [
                 'user_id' => (int) $user->id,
@@ -610,18 +602,16 @@ class ServiceRenewInvoiceOnlyIdempotencyTest extends TestCase
         ]);
         $this->mirrorProductToIdc($product, $suffix);
 
-        $service = ServiceInstance::query()->create([
+        $service = Service::query()->create([
             'user_id' => (int) $user->id,
             'product_id' => (int) $product->id,
-            'source_invoice_id' => null,
             'name' => 'Renew Order No Invoice Service '.$suffix,
-            'service_no' => 'SVCRENEWNOINV'.$suffix,
-            'instance_identifier' => 'renew-no-invoice-'.$suffix.'.example.com',
+            'domain' => 'renew-no-invoice-'.$suffix.'.example.com',
             'billing_cycle' => 'monthly',
-            'renewal_price' => '61.00',
+            'amount' => '61.00',
             'status' => ServiceStatus::ACTIVE,
-            'pricing_snapshot_json' => ['monthly' => '61.00'],
-            'provision_snapshot_json' => [],
+            'locked_pricing' => ['monthly' => '61.00'],
+            'provision_data' => [],
             'expires_at' => Carbon::parse('2026-06-25 00:00:00'),
             'auto_renew' => 0,
             'invoice_id' => null,

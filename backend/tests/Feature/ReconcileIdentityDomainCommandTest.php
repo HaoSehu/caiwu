@@ -17,11 +17,16 @@ class ReconcileIdentityDomainCommandTest extends TestCase
         $sourceDatabasePath = storage_path('framework/testing/reconcile-identity-domain-source.sqlite');
         $targetDatabasePath = storage_path('framework/testing/reconcile-identity-domain-target.sqlite');
 
-        $this->prepareSqliteDatabase('idc', $sourceDatabasePath);
-        $this->prepareSqliteDatabase('idc', $targetDatabasePath);
+        $sourceConnection = 'legacy_source';
+        $targetConnection = 'legacy_target';
 
-        $sourceSchema = Schema::connection('idc');
-        $targetSchema = Schema::connection('idc');
+        $this->prepareSqliteDatabase($sourceConnection, $sourceDatabasePath);
+        $this->prepareSqliteDatabase($targetConnection, $targetDatabasePath);
+        config()->set('identity_migration.source_connection', $sourceConnection);
+        config()->set('identity_migration.target_connection', $targetConnection);
+
+        $sourceSchema = Schema::connection($sourceConnection);
+        $targetSchema = Schema::connection($targetConnection);
 
         $sourceSchema->create('member_levels', function (Blueprint $table): void {
             $table->id();
@@ -97,24 +102,24 @@ class ReconcileIdentityDomainCommandTest extends TestCase
             $table->unsignedBigInteger('role_id');
         });
 
-        DB::connection('idc')->table('users')->insert([
+        DB::connection($sourceConnection)->table('users')->insert([
             ['id' => 50, 'balance' => '188.80', 'email' => 'dup@example.com', 'phone' => '13800000000', 'referral_code' => 'REF-CODE', 'created_at' => '2026-05-18 01:00:00', 'updated_at' => '2026-05-18 01:00:00'],
             ['id' => 51, 'balance' => '20.00', 'email' => 'dup@example.com', 'phone' => '13800000000', 'referral_code' => 'REF-CODE', 'created_at' => '2026-05-18 01:10:00', 'updated_at' => '2026-05-18 01:10:00'],
         ]);
-        DB::connection('idc')->table('admin_users')->insert([
+        DB::connection($sourceConnection)->table('admin_users')->insert([
             ['id' => 1, 'username' => 'dup-admin'],
             ['id' => 2, 'username' => 'dup-admin'],
         ]);
-        DB::connection('idc')->table('roles')->insert([
+        DB::connection($sourceConnection)->table('roles')->insert([
             ['id' => 1, 'name' => 'dup-role'],
             ['id' => 2, 'name' => 'dup-role'],
         ]);
-        DB::connection('idc')->table('user_accounts')->insert([
+        DB::connection($sourceConnection)->table('user_accounts')->insert([
             ['user_id' => 50, 'cash_balance' => '100.00', 'created_at' => '2026-05-18 01:00:00', 'updated_at' => '2026-05-18 01:20:00'],
             ['user_id' => 51, 'cash_balance' => '20.00', 'created_at' => '2026-05-18 01:10:00', 'updated_at' => '2026-05-18 01:20:00'],
         ]);
 
-        DB::connection('idc')->table('users')->insert([
+        DB::connection($targetConnection)->table('users')->insert([
             [
                 'id' => 50,
                 'member_level_id' => 999,
@@ -136,19 +141,19 @@ class ReconcileIdentityDomainCommandTest extends TestCase
                 'updated_at' => '2026-05-18 01:10:00',
             ],
         ]);
-        DB::connection('idc')->table('admin_users')->insert([
+        DB::connection($targetConnection)->table('admin_users')->insert([
             ['id' => 1, 'username' => 'dup-admin'],
             ['id' => 2, 'username' => 'dup-admin'],
         ]);
-        DB::connection('idc')->table('roles')->insert([
+        DB::connection($targetConnection)->table('roles')->insert([
             ['id' => 1, 'name' => 'dup-role'],
             ['id' => 2, 'name' => 'dup-role'],
         ]);
-        DB::connection('idc')->table('user_profiles')->insert([
+        DB::connection($targetConnection)->table('user_profiles')->insert([
             ['id' => 1, 'user_id' => 50],
             ['id' => 2, 'user_id' => 51],
         ]);
-        DB::connection('idc')->table('user_accounts')->insert([
+        DB::connection($targetConnection)->table('user_accounts')->insert([
             [
                 'user_id' => 50,
                 'cash_balance' => '100.00',

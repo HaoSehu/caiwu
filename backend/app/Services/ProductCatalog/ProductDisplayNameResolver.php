@@ -49,11 +49,14 @@ class ProductDisplayNameResolver
      */
     public function resolveForProduct(Product $product, array $configSnapshot = []): array
     {
-        $mergedConfig = $this->buildCandidateConfig($product, $configSnapshot);
-        $instanceSpecText = $this->resolveInstanceSpecText((int) $product->id);
+        $optionContext = $this->buildConfigOptionContext($product);
+        $mergedConfig = $this->buildCandidateConfig($product, $configSnapshot, $optionContext);
+        $instanceSpecText = array_key_exists('instance_spec_text', $configSnapshot)
+            ? trim((string) $configSnapshot['instance_spec_text'])
+            : $this->resolveInstanceSpecText((int) $product->id);
 
-        $cpuDisplay = $this->resolveCpuDisplay($product, $mergedConfig);
-        $memoryDisplay = $this->resolveMemoryDisplay($product, $mergedConfig);
+        $cpuDisplay = $this->resolveCpuDisplay($product, $mergedConfig, $optionContext);
+        $memoryDisplay = $this->resolveMemoryDisplay($product, $mergedConfig, $optionContext);
 
         if ($cpuDisplay === '' || $memoryDisplay === '') {
             [$fallbackCpuDisplay, $fallbackMemoryDisplay] = $this->extractCpuMemoryFromProductName(
@@ -96,15 +99,18 @@ class ProductDisplayNameResolver
 
     /**
      * @param  array<string, mixed>  $configSnapshot
+     * @param  array<string, mixed>|null  $optionContext
      * @return array<string, string>
      */
-    private function buildCandidateConfig(Product $product, array $configSnapshot): array
+    private function buildCandidateConfig(Product $product, array $configSnapshot, ?array $optionContext = null): array
     {
         $normalized = $this->normalizeScalarConfig($configSnapshot);
         $defaultConfig = $this->normalizeScalarConfig(
             (array) (($product->purchase_requires ?? [])['upstream_default_config'] ?? [])
         );
-        $optionDefaults = $this->resolveOptionDefaults($product);
+        $optionDefaults = is_array($optionContext)
+            ? (array) ($optionContext['defaults'] ?? [])
+            : $this->resolveOptionDefaults($product);
         $fallbackConfig = [];
 
         foreach (['cpu', 'memory'] as $field) {
@@ -128,7 +134,9 @@ class ProductDisplayNameResolver
                 continue;
             }
 
-            $fallbackValue = $this->resolveFirstVisibleOptionValue($product, $field);
+            $fallbackValue = is_array($optionContext)
+                ? trim((string) (($optionContext['first_visible'] ?? [])[$field] ?? ''))
+                : $this->resolveFirstVisibleOptionValue($product, $field);
             if ($fallbackValue !== '') {
                 $fallbackConfig[$field] = $fallbackValue;
             }
@@ -166,7 +174,7 @@ class ProductDisplayNameResolver
                 continue;
             }
 
-            $key = Str::lower(trim((string) $field));
+            $key = $this->normalizeConfigField((string) $field);
             $text = trim((string) $value);
 
             if ($key === '' || $text === '') {
@@ -223,7 +231,7 @@ class ProductDisplayNameResolver
             return [];
         }
 
-        $config = $this->buildCandidateConfig($sourceProduct, []);
+        $config = $this->buildCandidateConfig($sourceProduct, [], $this->buildConfigOptionContext($sourceProduct));
         [$sourceCpuDisplay, $sourceMemoryDisplay] = $this->extractCpuMemoryFromProductName(
             $this->resolveLegacyProductNameText($sourceProduct, [])
         );
@@ -307,6 +315,87 @@ class ProductDisplayNameResolver
         return '';
     }
 
+    /**
+     * @return array{
+     *     defaults: array<string, string>,
+     *     first_visible: array<string, string>,
+     *     labels: array<string, array<string, string>>
+     * }
+     */
+    private function buildConfigOptionContext(Product $product): array
+    {
+        $context = [
+            'defaults' => [],
+            'first_visible' => [],
+            'labels' => [],
+        ];
+
+        foreach ((array) ($product->config_options ?? []) as $option) {
+            if (! is_array($option)) {
+                continue;
+            }
+
+            $field = $this->parseField($option);
+            if (! in_array($field, ['cpu', 'memory'], true)) {
+                continue;
+            }
+
+            if (! isset($context['defaults'][$field])) {
+                $defaultValue = $this->resolveConfiguredDefaultValue($option);
+                if ($defaultValue !== '') {
+                    $context['defaults'][$field] = $defaultValue;
+                }
+            }
+
+            foreach ((array) ($option['sub'] ?? []) as $sub) {
+                if (! is_array($sub) || (int) ($sub['hidden'] ?? 0) === 1) {
+                    continue;
+                }
+
+                $subValue = $this->resolveSubItemValue($sub);
+                if ($subValue !== '' && ! isset($context['first_visible'][$field])) {
+                    $context['first_visible'][$field] = $subValue;
+                }
+
+                $label = trim((string) ($sub['version'] ?? $sub['option_name'] ?? $sub['label'] ?? $sub['option_name_first'] ?? $sub['value'] ?? $sub['id'] ?? ''));
+                if ($label === '') {
+                    continue;
+                }
+
+                foreach ([
+                    $sub['id'] ?? '',
+                    $sub['option_name_first'] ?? $sub['value'] ?? $sub['id'] ?? '',
+                    $sub['option_name'] ?? $sub['version'] ?? $sub['label'] ?? '',
+                ] as $candidate) {
+                    $key = Str::lower(trim((string) $candidate));
+                    if ($key !== '' && ! isset($context['labels'][$field][$key])) {
+                        $context['labels'][$field][$key] = $label;
+                    }
+                }
+            }
+
+            foreach ($this->parseParameterOptions((string) ($option['parameter'] ?? '')) as $parameterOption) {
+                $label = trim((string) ($parameterOption['label'] ?? ''));
+                if ($label === '') {
+                    continue;
+                }
+
+                foreach ([
+                    $parameterOption['id'] ?? '',
+                    $parameterOption['value'] ?? '',
+                    $parameterOption['label'] ?? '',
+                ] as $candidate) {
+                    $key = Str::lower(trim((string) $candidate));
+                    if ($key !== '' && ! isset($context['labels'][$field][$key])) {
+                        $context['labels'][$field][$key] = $label;
+                    }
+                }
+            }
+        }
+
+        return $context;
+    }
+
     private function normalizeConfiguredDefaultValue(mixed $value): string
     {
         if (! is_scalar($value)) {
@@ -358,14 +447,14 @@ class ProductDisplayNameResolver
         return '';
     }
 
-    private function resolveCpuDisplay(Product $product, array $config): string
+    private function resolveCpuDisplay(Product $product, array $config, ?array $optionContext = null): string
     {
         $value = trim((string) ($config['cpu'] ?? ''));
         if ($value === '') {
             return '';
         }
 
-        $label = $this->resolveOptionLabel($product, 'cpu', $value);
+        $label = $this->resolveOptionLabel($product, 'cpu', $value, $optionContext);
         $number = $this->extractPrimaryNumber($label !== '' ? $label : $value);
 
         if ($number === '') {
@@ -375,14 +464,14 @@ class ProductDisplayNameResolver
         return $this->normalizeNumericString($number).' vCPU';
     }
 
-    private function resolveMemoryDisplay(Product $product, array $config): string
+    private function resolveMemoryDisplay(Product $product, array $config, ?array $optionContext = null): string
     {
         $value = trim((string) ($config['memory'] ?? ''));
         if ($value === '') {
             return '';
         }
 
-        $label = $this->resolveOptionLabel($product, 'memory', $value);
+        $label = $this->resolveOptionLabel($product, 'memory', $value, $optionContext);
 
         if ($label !== '') {
             $display = $this->normalizeMemoryDisplay($label, true);
@@ -394,11 +483,15 @@ class ProductDisplayNameResolver
         return $this->normalizeMemoryDisplay($value, false);
     }
 
-    private function resolveOptionLabel(Product $product, string $field, string $selectedValue): string
+    private function resolveOptionLabel(Product $product, string $field, string $selectedValue, ?array $optionContext = null): string
     {
         $normalizedSelectedValue = Str::lower(trim($selectedValue));
         if ($normalizedSelectedValue === '') {
             return '';
+        }
+
+        if (is_array($optionContext)) {
+            return trim((string) (($optionContext['labels'] ?? [])[$field][$normalizedSelectedValue] ?? ''));
         }
 
         foreach ((array) ($product->config_options ?? []) as $option) {
@@ -662,9 +755,9 @@ class ProductDisplayNameResolver
 
     private function parseField(array $item): string
     {
-        $field = trim((string) ($item['field'] ?? ''));
+        $field = $this->normalizeConfigField((string) ($item['field'] ?? ''));
         if ($field !== '') {
-            return Str::lower($field);
+            return $field;
         }
 
         $type = (int) ($item['option_type'] ?? -1);
@@ -675,7 +768,19 @@ class ProductDisplayNameResolver
         $source = (string) ($item['option_name'] ?? $item['spec_key'] ?? '');
         $parts = explode('|', $source);
 
-        return Str::lower(trim((string) ($parts[0] ?? '')));
+        return $this->normalizeConfigField((string) ($parts[0] ?? ''));
+    }
+
+    private function normalizeConfigField(string $field): string
+    {
+        $normalized = Str::lower(trim($field));
+        $normalized = str_replace(['-', ' '], '_', $normalized);
+
+        return match ($normalized) {
+            'cpu', 'vcpu', 'core', 'cores', 'cpu_core', 'cpu_cores', 'cpu_num', 'cpu_number', 'core_num', 'cores_num' => 'cpu',
+            'memory', 'ram', 'mem', 'memory_size', 'mem_size', 'ram_size', 'memory_num', 'ram_num' => 'memory',
+            default => $normalized,
+        };
     }
 
     private function extractPrimaryNumber(string $value): string

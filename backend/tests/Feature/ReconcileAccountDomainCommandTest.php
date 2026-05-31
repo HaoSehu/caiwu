@@ -17,11 +17,16 @@ class ReconcileAccountDomainCommandTest extends TestCase
         $sourceDatabasePath = storage_path('framework/testing/reconcile-account-domain-source.sqlite');
         $targetDatabasePath = storage_path('framework/testing/reconcile-account-domain-target.sqlite');
 
-        $this->prepareSqliteDatabase('idc', $sourceDatabasePath);
-        $this->prepareSqliteDatabase('idc', $targetDatabasePath);
+        $sourceConnection = 'legacy_source';
+        $targetConnection = 'legacy_target';
 
-        $sourceSchema = Schema::connection('idc');
-        $targetSchema = Schema::connection('idc');
+        $this->prepareSqliteDatabase($sourceConnection, $sourceDatabasePath);
+        $this->prepareSqliteDatabase($targetConnection, $targetDatabasePath);
+        config()->set('account_migration.source_connection', $sourceConnection);
+        config()->set('account_migration.target_connection', $targetConnection);
+
+        $sourceSchema = Schema::connection($sourceConnection);
+        $targetSchema = Schema::connection($targetConnection);
 
         $sourceSchema->create('users', function (Blueprint $table): void {
             $table->id();
@@ -158,7 +163,7 @@ class ReconcileAccountDomainCommandTest extends TestCase
             $table->timestamps();
         });
 
-        DB::connection('idc')->table('users')->insert([
+        DB::connection($sourceConnection)->table('users')->insert([
             [
                 'id' => 62,
                 'referrer_user_id' => null,
@@ -196,7 +201,7 @@ class ReconcileAccountDomainCommandTest extends TestCase
                 'deleted_at' => null,
             ],
         ]);
-        DB::connection('idc')->table('referral_rewards')->insert([
+        DB::connection($sourceConnection)->table('referral_rewards')->insert([
             [
                 'id' => 1,
                 'referrer_user_id' => 62,
@@ -232,7 +237,7 @@ class ReconcileAccountDomainCommandTest extends TestCase
                 'updated_at' => '2026-05-18 01:00:00',
             ],
         ]);
-        DB::connection('idc')->table('referral_withdrawals')->insert([
+        DB::connection($sourceConnection)->table('referral_withdrawals')->insert([
             [
                 'id' => 1,
                 'user_id' => 62,
@@ -263,13 +268,13 @@ class ReconcileAccountDomainCommandTest extends TestCase
             ],
         ]);
 
-        DB::connection('idc')->table('users')->insert([
+        DB::connection($targetConnection)->table('users')->insert([
             ['id' => 62, 'created_at' => '2026-05-18 00:00:00', 'updated_at' => '2026-05-18 00:00:00'],
             ['id' => 63, 'created_at' => '2026-05-18 00:00:00', 'updated_at' => '2026-05-18 00:00:00'],
             ['id' => 64, 'created_at' => '2026-05-18 00:00:00', 'updated_at' => '2026-05-18 00:00:00'],
         ]);
 
-        DB::connection('idc')->table('referral_relations')->insert([
+        DB::connection($targetConnection)->table('referral_relations')->insert([
             [
                 'id' => 1,
                 'referrer_user_id' => 62,
@@ -289,7 +294,7 @@ class ReconcileAccountDomainCommandTest extends TestCase
                 'updated_at' => '2026-05-18 01:50:01',
             ],
         ]);
-        DB::connection('idc')->table('referral_rewards')->insert([
+        DB::connection($targetConnection)->table('referral_rewards')->insert([
             [
                 'id' => 1,
                 'referrer_user_id' => 62,
@@ -307,7 +312,7 @@ class ReconcileAccountDomainCommandTest extends TestCase
                 'status' => 1,
             ],
         ]);
-        DB::connection('idc')->table('withdrawals')->insert([
+        DB::connection($targetConnection)->table('withdrawals')->insert([
             [
                 'id' => 1,
                 'withdrawal_no' => 'WD00000001',
@@ -323,7 +328,7 @@ class ReconcileAccountDomainCommandTest extends TestCase
                 'status' => 1,
             ],
         ]);
-        DB::connection('idc')->table('account_ledgers')->insert([
+        DB::connection($targetConnection)->table('account_ledgers')->insert([
             [
                 'id' => 1,
                 'user_id' => 62,
@@ -339,7 +344,7 @@ class ReconcileAccountDomainCommandTest extends TestCase
                 'amount' => '15.00',
             ],
         ]);
-        DB::connection('idc')->table('user_accounts')->insert([
+        DB::connection($targetConnection)->table('user_accounts')->insert([
             [
                 'user_id' => 62,
                 'cash_balance' => '20.00',

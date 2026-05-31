@@ -8,7 +8,7 @@ use App\Constants\InvoiceStatus;
 use App\Constants\ServiceStatus;
 use App\Models\Invoice;
 use App\Models\Product;
-use App\Models\ServiceInstance;
+use App\Models\Service;
 use App\Models\User;
 use App\Services\Automation\ServiceStatusSyncService;
 use App\Services\ClientServiceConsole\ClientServiceConsoleService;
@@ -77,13 +77,13 @@ class AdminUserManualProvisionInvoiceOnlyTest extends TestCase
             'updated_at' => now(),
         ];
 
-        DB::connection('idc')->table('users')->updateOrInsert(['id' => (int) $user->id], $payload);
-        DB::connection('idc')->table('users')->updateOrInsert(['id' => (int) $user->id], $payload);
+        DB::connection()->table('users')->updateOrInsert(['id' => (int) $user->id], $payload);
+        DB::connection()->table('users')->updateOrInsert(['id' => (int) $user->id], $payload);
     }
 
     private function mirrorProductToIdc(Product $product, string $suffix): void
     {
-        DB::connection('idc')->table('products')->updateOrInsert(
+        DB::connection()->table('products')->updateOrInsert(
             ['id' => (int) $product->id],
             Product::buildIdcMirrorPayload($product, 'manual-provision-'.$suffix.'-'.(int) $product->id)
         );
@@ -125,22 +125,20 @@ class AdminUserManualProvisionInvoiceOnlyTest extends TestCase
         ]);
         $this->mirrorProductToIdc($product, $suffix);
 
-        $service = ServiceInstance::query()->create([
+        $service = Service::query()->create([
             'user_id' => (int) $user->id,
             'product_id' => (int) $product->id,
-            'source_invoice_id' => null,
             'service_no' => 'MANUAL-'.$suffix,
             'name' => 'Manual Provision Invoice Only Service '.$suffix,
-            'instance_identifier' => 'manual-provision-'.$suffix.'.example.com',
+            'domain' => 'manual-provision-'.$suffix.'.example.com',
             'billing_cycle' => 'monthly',
-            'renewal_price' => '88.00',
+            'amount' => '88.00',
             'status' => ServiceStatus::PENDING,
-            'pricing_snapshot_json' => [],
-            'provision_snapshot_json' => [
+            'locked_pricing' => [],
+            'provision_data' => [
                 'source_invoice_id' => null,
                 'provision_error' => '上游接口超时',
             ],
-            'opened_at' => now(),
             'expires_at' => now()->addMonth(),
             'auto_renew' => 0,
         ]);
@@ -162,8 +160,8 @@ class AdminUserManualProvisionInvoiceOnlyTest extends TestCase
         ]);
 
         $service->forceFill([
-            'source_invoice_id' => (int) $invoice->id,
-            'provision_snapshot_json' => array_merge((array) $service->provision_snapshot_json, [
+            'invoice_id' => (int) $invoice->id,
+            'provision_data' => array_merge((array) $service->provision_data, [
                 'source_invoice_id' => (int) $invoice->id,
             ]),
         ])->save();

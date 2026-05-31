@@ -112,9 +112,15 @@ class ClientFinanceQueryService
     private function normalizeLedgerFilters(array $filters): array
     {
         $eventType = trim((string) ($filters['event_type'] ?? ''));
+        $tab = trim((string) ($filters['tab'] ?? ''));
+        $normalizedTab = match ($tab) {
+            'all' => null,
+            'invoices', 'balance', 'recharge', 'adjustment' => $tab,
+            default => null,
+        };
 
         return array_filter([
-            'tab' => match ($eventType) {
+            'tab' => $normalizedTab ?? match ($eventType) {
                 'recharge' => 'recharge',
                 'consume', 'refund' => 'invoices',
                 'adjust', 'admin_deduct' => 'adjustment',

@@ -237,6 +237,15 @@ class UserService
                 'invoices as invoice_paid' => fn ($query) => $query->where('status', 1),
             ])
             ->first();
+        $orderTotal = (int) ($countStats?->order_total ?? 0);
+        $orderPending = (int) ($countStats?->order_pending ?? 0);
+        $invoiceUnpaid = (int) ($countStats?->invoice_unpaid ?? 0);
+        $invoicePaid = (int) ($countStats?->invoice_paid ?? 0);
+
+        if ($orderTotal === 0 && ($invoiceUnpaid > 0 || $invoicePaid > 0)) {
+            $orderTotal = $invoiceUnpaid + $invoicePaid;
+            $orderPending = $invoiceUnpaid;
+        }
 
         $balanceSummary = $this->buildBalanceAggregateSummary($user);
         $invoiceSummary = Invoice::query()
@@ -261,16 +270,16 @@ class UserService
             'stats' => [
                 'service_active' => (int) ($countStats?->service_active ?? 0),
                 'service_total' => (int) ($countStats?->service_total ?? 0),
-                'order_total' => (int) ($countStats?->order_total ?? 0),
-                'order_pending' => (int) ($countStats?->order_pending ?? 0),
+                'order_total' => $orderTotal,
+                'order_pending' => $orderPending,
                 'total_income' => (float) ($balanceSummary->total_income ?? 0),
                 'total_expense' => (float) ($balanceSummary->total_expense ?? 0),
                 'unpaid_amount' => (float) ($invoiceSummary?->unpaid_amount ?? 0),
                 'ticket_open' => (int) ($countStats?->ticket_open ?? 0),
                 'ticket_closed' => (int) ($countStats?->ticket_closed ?? 0),
                 'ticket_total' => (int) ($countStats?->ticket_total ?? 0),
-                'invoice_unpaid' => (int) ($countStats?->invoice_unpaid ?? 0),
-                'invoice_paid' => (int) ($countStats?->invoice_paid ?? 0),
+                'invoice_unpaid' => $invoiceUnpaid,
+                'invoice_paid' => $invoicePaid,
                 'direct_referral_count' => $directReferralCount,
                 'rewarded_orders_count' => (int) ($referralSummary?->rewarded_orders_count ?? 0),
                 'total_referral_reward' => (float) ($referralSummary?->total_reward_amount ?? 0),

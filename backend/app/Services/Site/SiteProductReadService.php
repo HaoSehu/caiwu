@@ -10,6 +10,39 @@ class SiteProductReadService
         private ProductCatalogService $productCatalogService,
     ) {}
 
+    public function productsInit(?string $productType = null): array
+    {
+        $types = $this->productCatalogService->siteProductTypes();
+
+        if ($types === []) {
+            return [
+                'types' => [],
+                'root_groups' => [],
+                'catalog' => null,
+            ];
+        }
+
+        $resolvedType = $productType;
+        if ($resolvedType === null || $resolvedType === '') {
+            $resolvedType = (string) ($types[0]['value'] ?? '');
+        }
+
+        $rootGroups = $resolvedType !== ''
+            ? $this->productCatalogService->siteRootGroups($resolvedType)
+            : [];
+
+        $firstGroupId = (int) ($rootGroups[0]['id'] ?? 0);
+        $catalog = $firstGroupId > 0
+            ? $this->productCatalogService->siteGroupCatalog($firstGroupId)
+            : null;
+
+        return [
+            'types' => $types,
+            'root_groups' => $rootGroups,
+            'catalog' => $catalog,
+        ];
+    }
+
     public function productTypes(): array
     {
         return [

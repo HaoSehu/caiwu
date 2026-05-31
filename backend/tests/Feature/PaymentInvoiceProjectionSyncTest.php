@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Constants\PaymentStatus;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Models\User;
 use App\Services\Finance\InvoiceService;
 use App\Services\Finance\PaymentService;
 use Illuminate\Support\Facades\DB;
@@ -18,9 +19,17 @@ class PaymentInvoiceProjectionSyncTest extends TestCase
     public function test_invoice_service_create_from_order_still_materializes_invoice_items_without_model_hook(): void
     {
         $suffix = bin2hex(random_bytes(4));
+        $user = User::query()->create([
+            'email' => 'invoice-projection-'.$suffix.'@example.com',
+            'password' => 'Temp@123456',
+            'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
+            'status' => 1,
+            'nickname' => 'Invoice Projection',
+        ]);
+
         $order = Order::query()->create([
             'order_no' => 'INVPRJ'.strtoupper($suffix),
-            'user_id' => 1,
+            'user_id' => (int) $user->id,
             'product_id' => null,
             'product_spec_snapshot' => '投影测试配置',
             'product_type_snapshot' => 'server',
@@ -42,9 +51,18 @@ class PaymentInvoiceProjectionSyncTest extends TestCase
 
     public function test_payment_service_sync_projection_materializes_payment_callbacks_without_model_hook(): void
     {
+        $suffix = bin2hex(random_bytes(4));
+        $user = User::query()->create([
+            'email' => 'payment-projection-'.$suffix.'@example.com',
+            'password' => 'Temp@123456',
+            'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
+            'status' => 1,
+            'nickname' => 'Payment Projection',
+        ]);
+
         $payment = Payment::query()->create([
             'payment_no' => Payment::generatePaymentNo(),
-            'user_id' => 1,
+            'user_id' => (int) $user->id,
             'invoice_id' => null,
             'gateway' => 'alipay',
             'trade_no' => 'TRADE-'.bin2hex(random_bytes(4)),
@@ -71,9 +89,18 @@ class PaymentInvoiceProjectionSyncTest extends TestCase
 
     public function test_payment_service_sync_projection_gracefully_skips_callback_relation_when_projection_table_missing(): void
     {
+        $suffix = bin2hex(random_bytes(4));
+        $user = User::query()->create([
+            'email' => 'payment-projection-skip-'.$suffix.'@example.com',
+            'password' => 'Temp@123456',
+            'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
+            'status' => 1,
+            'nickname' => 'Payment Projection Skip',
+        ]);
+
         $payment = Payment::query()->create([
             'payment_no' => Payment::generatePaymentNo(),
-            'user_id' => 1,
+            'user_id' => (int) $user->id,
             'invoice_id' => null,
             'gateway' => 'alipay',
             'trade_no' => 'TRADE-'.bin2hex(random_bytes(4)),

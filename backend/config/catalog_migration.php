@@ -12,7 +12,7 @@ return [
     |
     */
 
-    'source_connection' => env('CATALOG_MIGRATION_SOURCE_DB', 'idc'),
-    'target_connection' => env('CATALOG_MIGRATION_TARGET_DB', 'idc'),
+    'source_connection' => env('CATALOG_MIGRATION_SOURCE_DB', 'mysql'),
+    'target_connection' => env('CATALOG_MIGRATION_TARGET_DB', 'mysql'),
 
 ];

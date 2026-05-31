@@ -124,6 +124,8 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
             $html = (string) ($fakeMailManager->messages[0]['html'] ?? '');
 
             $this->assertStringContainsString('<img class="mail-logo"', $html);
+            $this->assertMatchesRegularExpression('/<img class="mail-logo"[^>]*width="\d+"[^>]*height="44"[^>]*>/i', $html);
+            $this->assertStringNotContainsString('width="180"', $html);
             $this->assertStringContainsString('<span>自动通知邮件</span>', $html);
         } finally {
             $this->deleteEmailLogsByRecipient($to);

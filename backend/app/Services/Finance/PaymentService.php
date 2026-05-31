@@ -262,6 +262,8 @@ class PaymentService
      */
     public function rechargeByAlipay(User $user, float $amount): array
     {
+        $this->assertVerifiedUser($user);
+
         throw_if(
             ! $this->alipayService->isEnabled(),
             new BusinessException('支付宝支付未启用')
@@ -315,6 +317,14 @@ class PaymentService
             'qr_code' => $result['qr_code'],
             'amount' => number_format($normalizedAmount, 2, '.', ''),
         ];
+    }
+
+    private function assertVerifiedUser(User $user): void
+    {
+        throw_if(
+            (int) $user->is_verified !== 1,
+            new BusinessException('请先完成实名认证后再继续操作', 40301)
+        );
     }
 
     /**

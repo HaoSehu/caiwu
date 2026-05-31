@@ -11,8 +11,6 @@ class AccountBalanceSnapshot extends Model
 {
     protected $table = 'account_balance_snapshots';
 
-    protected $connection = 'idc';
-
     protected $fillable = [
         'user_id',
         'account_type',

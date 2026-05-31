@@ -11,8 +11,6 @@ class SupplierProduct extends Model
 {
     protected $table = 'supplier_products';
 
-    protected $connection = 'idc';
-
     protected $fillable = [
         'supplier_id',
         'product_id',

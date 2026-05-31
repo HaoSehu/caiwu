@@ -14,8 +14,6 @@ class AccountLedger extends Model
 
     protected $table = 'account_ledgers';
 
-    protected $connection = 'idc';
-
     protected $fillable = [
         'user_id',
         'account_type',

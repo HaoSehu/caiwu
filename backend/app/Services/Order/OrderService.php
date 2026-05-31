@@ -456,21 +456,15 @@ class OrderService
     {
         $requires = (array) ($product->purchase_requires ?? []);
 
-        if (empty($requires)) {
-            return;
-        }
-
         $user = User::find($userId);
         if (! $user) {
             return;
         }
 
-        if (! empty($requires['require_verification'])) {
-            throw_if(
-                (int) $user->is_verified !== 1,
-                new BusinessException('该商品需要实名认证后才能购买，请先完成实名认证', 40301)
-            );
-        }
+        throw_if(
+            (int) $user->is_verified !== 1,
+            new BusinessException('该商品需要实名认证后才能购买，请先完成实名认证', 40301)
+        );
 
         if (! empty($requires['require_phone'])) {
             throw_if(

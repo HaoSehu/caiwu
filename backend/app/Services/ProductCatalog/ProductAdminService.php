@@ -856,7 +856,7 @@ class ProductAdminService
 
         $purchaseDefaults = (array) (($source->purchase_requires ?? [])['upstream_default_config'] ?? []);
         foreach ($purchaseDefaults as $field => $value) {
-            $field = strtolower(trim((string) $field));
+            $field = $this->normalizeSplitConfigField((string) $field);
             $normalizedValue = $this->normalizeSplitComparableValue($field, $value);
             if ($field === '' || $normalizedValue === '') {
                 continue;
@@ -963,13 +963,9 @@ class ProductAdminService
 
     private function parseSplitOptionField(array $option): string
     {
-        $field = strtolower(trim((string) ($option['field'] ?? '')));
+        $field = $this->normalizeSplitConfigField((string) ($option['field'] ?? ''));
         if ($field !== '') {
-            return match ($field) {
-                'cpu', 'vcpu', 'core', 'cores' => 'cpu',
-                'memory', 'ram' => 'memory',
-                default => '',
-            };
+            return $field;
         }
 
         $label = strtolower(trim(implode('|', array_filter([
@@ -996,6 +992,18 @@ class ProductAdminService
         }
 
         return preg_match('/cpu|vcpu|核心|核数/u', $label) ? 'cpu' : '';
+    }
+
+    private function normalizeSplitConfigField(string $field): string
+    {
+        $normalized = strtolower(trim($field));
+        $normalized = str_replace(['-', ' '], '_', $normalized);
+
+        return match ($normalized) {
+            'cpu', 'vcpu', 'core', 'cores', 'cpu_core', 'cpu_cores', 'cpu_num', 'cpu_number', 'core_num', 'cores_num' => 'cpu',
+            'memory', 'ram', 'mem', 'memory_size', 'mem_size', 'ram_size', 'memory_num', 'ram_num' => 'memory',
+            default => '',
+        };
     }
 
     private function normalizeSplitSubItem(array $sub, string $field): ?array
@@ -1084,7 +1092,7 @@ class ProductAdminService
     {
         $normalizedDefaults = [];
         foreach ($variantDefaults as $field => $value) {
-            $normalizedField = strtolower(trim((string) $field));
+            $normalizedField = $this->normalizeSplitConfigField((string) $field);
             $normalizedValue = $this->normalizeSplitComparableValue($normalizedField, $value);
             if ($normalizedField === '' || $normalizedValue === '') {
                 continue;

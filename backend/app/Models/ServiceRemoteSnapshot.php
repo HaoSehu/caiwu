@@ -11,8 +11,6 @@ class ServiceRemoteSnapshot extends Model
 {
     protected $table = 'service_remote_snapshots';
 
-    protected $connection = 'idc';
-
     protected $fillable = [
         'service_instance_id',
         'snapshot_type',

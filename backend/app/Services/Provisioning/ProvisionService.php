@@ -151,6 +151,17 @@ class ProvisionService
         return $this->submitUpstreamProvision($order, $service, true);
     }
 
+    public function retryFailedProvisionByInvoice(Invoice $invoice): Service
+    {
+        $invoice->loadMissing(['order', 'service']);
+
+        if ($invoice->order instanceof Order) {
+            return $this->retryFailedProvision($invoice->order);
+        }
+
+        throw new BusinessException('账单未关联订单，暂不支持重新提交上游开通');
+    }
+
     /**
      * 管理员主动发起的上游开通（不检查 auto_setup，直接走完整购物车流程）
      */

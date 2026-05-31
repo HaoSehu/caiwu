@@ -44,6 +44,53 @@ class RechargeGatewayFailureTest extends TestCase
         ]]);
     }
 
+    public function test_ssl_certificate_problem_retries_without_verification_in_non_production(): void
+    {
+        config([
+            'alipay.gateway' => 'https://openapi.alipay.com/gateway.do',
+            'alipay.notify_url' => 'https://example.com/api/client/payment/alipay/notify',
+            'alipay.app_id' => 'test-app-id',
+            'alipay.private_key' => str_repeat('A', 200),
+            'alipay.ssl_verify' => true,
+            'alipay.ca_bundle' => '',
+        ]);
+
+        $attempts = 0;
+
+        Http::fake(function () use (&$attempts) {
+            $attempts++;
+
+            if ($attempts === 1) {
+                throw new ConnectionException('cURL error 60: SSL certificate problem: unable to get local issuer certificate');
+            }
+
+            return Http::response([
+                'alipay_trade_precreate_response' => [
+                    'code' => '10000',
+                    'out_trade_no' => 'PAY202605272200000001',
+                    'qr_code' => 'https://qr.example.com/pay',
+                ],
+            ]);
+        });
+
+        $service = new AlipayFaceToFaceService;
+
+        $result = $this->invokePrivateMethod($service, 'request', [[
+            'app_id' => 'test-app-id',
+            'method' => 'alipay.trade.precreate',
+            'format' => 'JSON',
+            'charset' => 'utf-8',
+            'sign_type' => 'RSA2',
+            'timestamp' => now()->format('Y-m-d H:i:s'),
+            'version' => '1.0',
+            'biz_content' => '{}',
+            'sign' => 'signature',
+        ]]);
+
+        $this->assertSame(2, $attempts);
+        $this->assertSame('10000', $result['alipay_trade_precreate_response']['code'] ?? null);
+    }
+
     public function test_precreate_notify_url_accepts_public_https_address(): void
     {
         config([

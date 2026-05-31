@@ -15,6 +15,7 @@ use App\Services\System\NotificationService;
 use App\Support\AdminPermissions;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class AdminOrderNotificationService
 {
@@ -54,11 +55,23 @@ class AdminOrderNotificationService
 
     public function notifyOrderCreated(Order $order): void
     {
+        $invoiceColumns = ['id', 'order_id', 'invoice_no', 'amount', 'status', 'product_spec_snapshot', 'config_snapshot'];
+        if (Schema::hasColumn((new Invoice)->getTable(), 'product_snapshot_json')) {
+            $invoiceColumns[] = 'product_snapshot_json';
+        }
+
         $order->loadMissing([
             'user:id,email,nickname',
             'product:id,product_type,product_group_id,config_options,purchase_requires',
-            'invoice:id,order_id,invoice_no,amount,status',
+            'invoice:'.implode(',', $invoiceColumns),
         ]);
+
+        $invoice = $order->invoice;
+        if ($invoice instanceof Invoice) {
+            $this->notifyInvoiceCreated($invoice, $order);
+
+            return;
+        }
 
         $this->sendToAdmins(
             $order,
@@ -166,6 +179,75 @@ class AdminOrderNotificationService
         }
     }
 
+    private function notifyInvoiceCreated(Invoice $invoice, Order $order): void
+    {
+        $invoice->loadMissing([
+            'user:id,email,nickname',
+        ]);
+
+        $snapshot = is_array($invoice->product_snapshot_json ?? null) ? $invoice->product_snapshot_json : [];
+        $orderNo = trim((string) ($snapshot['order_no'] ?? $order->order_no ?? $invoice->invoice_no ?? ''));
+        $productName = trim((string) ($snapshot['product_name'] ?? $snapshot['product_spec_snapshot'] ?? $invoice->display_product_name));
+
+        $recipients = $this->resolveRecipients();
+        if ($recipients->isEmpty()) {
+            return;
+        }
+
+        foreach ($recipients as $admin) {
+            $ruleKey = 'admin:'.(int) $admin->id;
+
+            if (AutomationLog::hasRecord(self::TASK_KEY, 'invoice_created', 'invoice', (int) $invoice->id, $ruleKey)) {
+                continue;
+            }
+
+            try {
+                $this->notificationService->sendTemplateEmail(
+                    (string) $admin->email,
+                    NotificationService::TEMPLATE_ADMIN_ORDER_CREATED,
+                    [
+                        'site_name' => $this->siteName(),
+                        'recipient_name' => $admin->display_name,
+                        'user_name' => $invoice->user?->display_name ?: $order->user?->display_name ?: '客户',
+                        'user_email' => (string) ($invoice->user?->email ?? $order->user?->email ?? '未绑定'),
+                        'order_no' => $orderNo,
+                        'invoice_no' => (string) ($invoice->invoice_no ?? ''),
+                        'product_name' => $productName,
+                        'billing_cycle_label' => $this->resolveBillingCycleLabel((string) ($invoice->billing_cycle ?: $order->billing_cycle)),
+                        'order_amount' => number_format((float) ($invoice->amount ?? $order->amount ?? 0), 2, '.', ''),
+                        'order_type_label' => $this->resolveOrderTypeLabel((string) ($order->type ?? $invoice->type ?? '')),
+                        'order_status_label' => InvoiceStatus::$labels[(int) ($invoice->status ?? InvoiceStatus::UNPAID)] ?? '未知状态',
+                        'created_at' => $invoice->created_at?->format('Y-m-d H:i:s')
+                            ?? $order->created_at?->format('Y-m-d H:i:s')
+                            ?? now()->format('Y-m-d H:i:s'),
+                    ]
+                );
+
+                AutomationLog::markExecuted(
+                    self::TASK_KEY,
+                    'invoice_created',
+                    'invoice',
+                    (int) $invoice->id,
+                    $ruleKey,
+                    [
+                        'admin_id' => (int) $admin->id,
+                        'email' => (string) $admin->email,
+                        'template_code' => NotificationService::TEMPLATE_ADMIN_ORDER_CREATED,
+                    ]
+                );
+            } catch (\Throwable $exception) {
+                Log::warning('[管理员账单通知] 邮件发送失败', [
+                    'action' => 'invoice_created',
+                    'invoice_id' => $invoice->id,
+                    'invoice_no' => $invoice->invoice_no,
+                    'admin_id' => $admin->id,
+                    'email' => (string) $admin->email,
+                    'message' => $exception->getMessage(),
+                ]);
+            }
+        }
+    }
+
     private function dispatchInvoiceNotificationNow(int $invoiceId): void
     {
         $invoice = Invoice::query()->with([
@@ -259,6 +341,9 @@ class AdminOrderNotificationService
                         $admin->hasPermission(AdminPermissions::ORDER_LIST)
                         || $admin->hasPermission(AdminPermissions::ORDER_DETAIL)
                         || $admin->hasPermission(AdminPermissions::ORDER_MANAGE)
+                        || $admin->hasPermission(AdminPermissions::INVOICE_LIST)
+                        || $admin->hasPermission(AdminPermissions::INVOICE_DETAIL)
+                        || $admin->hasPermission(AdminPermissions::INVOICE_MANAGE)
                     );
             })
             ->unique(fn (AdminUser $admin) => mb_strtolower(trim((string) $admin->email)))

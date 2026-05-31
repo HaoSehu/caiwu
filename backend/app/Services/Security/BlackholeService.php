@@ -33,21 +33,44 @@ class BlackholeService
 
     private string $us1TrafficBaseUrl;
 
+    private array $upstreams;
+
     public function __construct()
     {
-        $config = config('idc.blackhole', []);
+        $config = config('blackhole', config('idc.blackhole', []));
         $sslVerify = filter_var($config['ssl_verify'] ?? true, FILTER_VALIDATE_BOOL);
         $caBundle = trim((string) ($config['ca_bundle'] ?? ''));
+        $this->upstreams = is_array($config['upstreams'] ?? null) ? $config['upstreams'] : [];
 
         $this->verifyOption = $caBundle !== '' && is_file($caBundle) ? $caBundle : $sslVerify;
         $this->timeout = max(1, (int) ($config['timeout'] ?? self::DEFAULT_TIMEOUT_SECONDS));
         $this->cacheTtlSeconds = max(1, (int) ($config['cache_ttl_seconds'] ?? self::DEFAULT_CACHE_TTL_SECONDS));
         $this->userAgent = trim((string) ($config['user_agent'] ?? ''));
-        $this->ningboBaseUrl = rtrim((string) ($config['ningbo_base_url'] ?? 'http://160.202.238.2:81'), '/');
-        $this->shiyanBaseUrl = rtrim((string) ($config['shiyan_base_url'] ?? 'http://160.202.238.2:90'), '/');
-        $this->publicBaseUrl = rtrim((string) ($config['public_base_url'] ?? 'https://blackhole.jdidc.cn'), '/');
-        $this->hongkongApiUrl = (string) ($config['hongkong_api_url'] ?? 'https://mianban.288cloud.com/ddos/api/');
-        $this->us1TrafficBaseUrl = rtrim((string) ($config['us1_traffic_base_url'] ?? 'https://do.yazzi.net/index/history'), '/');
+        $this->ningboBaseUrl = $this->configuredBaseUrl('ningbo', (string) ($config['ningbo_base_url'] ?? 'http://160.202.238.2:81'));
+        $this->shiyanBaseUrl = $this->configuredBaseUrl('shiyan', (string) ($config['shiyan_base_url'] ?? 'http://160.202.238.2:90'));
+        $this->publicBaseUrl = $this->configuredBaseUrl('public', (string) ($config['public_base_url'] ?? 'https://blackhole.jdidc.cn'));
+        $this->hongkongApiUrl = $this->configuredValue('hongkong', 'api_url', (string) ($config['hongkong_api_url'] ?? 'https://mianban.288cloud.com/ddos/api/'));
+        $this->us1TrafficBaseUrl = rtrim($this->configuredValue('public', 'us1_traffic_base_url', (string) ($config['us1_traffic_base_url'] ?? 'https://do.yazzi.net/index/history')), '/');
+    }
+
+    private function configuredBaseUrl(string $upstream, string $fallback): string
+    {
+        return rtrim($this->configuredValue($upstream, 'base_url', $fallback), '/');
+    }
+
+    private function configuredValue(string $upstream, string $key, string $fallback): string
+    {
+        $config = is_array($this->upstreams[$upstream] ?? null) ? $this->upstreams[$upstream] : [];
+
+        return (string) ($config[$key] ?? $fallback);
+    }
+
+    private function upstreamUrl(string $upstream, string $pathKey, string $fallbackPath): string
+    {
+        $baseUrl = $this->configuredBaseUrl($upstream, '');
+        $path = $this->configuredValue($upstream, $pathKey, $fallbackPath);
+
+        return rtrim($baseUrl, '/').'/'.ltrim($path, '/');
     }
 
     public function query(string $ip): array
@@ -73,7 +96,7 @@ class BlackholeService
     {
         $response = $this->requestJson(
             '宁波域名过白',
-            $this->ningboBaseUrl.'/api/gb.php',
+            $this->upstreamUrl('ningbo', 'whitelist_path', '/api/gb.php'),
             ['ip' => trim($ip), 'name' => trim($domain)]
         );
 
@@ -102,7 +125,7 @@ class BlackholeService
     {
         $response = $this->requestJson(
             '十堰7层策略切换',
-            $this->shiyanBaseUrl.'/use/request.php',
+            $this->upstreamUrl('shiyan', 'layer7_toggle_path', '/use/request.php'),
             [
                 'ip' => trim($ip),
                 'id' => $ruleId,
@@ -137,7 +160,7 @@ class BlackholeService
     {
         $response = $this->requestHtml(
             '十堰4层策略新增',
-            $this->shiyanBaseUrl.'/through/through.php',
+            $this->upstreamUrl('shiyan', 'layer4_path', '/through/through.php'),
             'POST',
             [
                 'action' => 'add',
@@ -271,7 +294,7 @@ class BlackholeService
     {
         $response = $this->requestJson(
             '十堰黑洞查询',
-            $this->shiyanBaseUrl.'/blackhole/blackholeapi.php',
+            $this->upstreamUrl('shiyan', 'blackhole_path', '/blackhole/blackholeapi.php'),
             ['ip' => $ip]
         );
 
@@ -305,7 +328,7 @@ class BlackholeService
     {
         $response = $this->requestJson(
             '十堰 7 层策略',
-            $this->shiyanBaseUrl.'/use/find.php',
+            $this->upstreamUrl('shiyan', 'layer7_find_path', '/use/find.php'),
             ['ip' => $ip]
         );
 
@@ -351,7 +374,7 @@ class BlackholeService
     {
         $response = $this->requestHtml(
             '十堰 4 层策略',
-            $this->shiyanBaseUrl.'/through/through.php',
+            $this->upstreamUrl('shiyan', 'layer4_path', '/through/through.php'),
             'POST',
             ['action' => 'search', 'search_ip' => $ip]
         );
@@ -382,7 +405,7 @@ class BlackholeService
     {
         $response = $this->requestJson(
             '十堰攻击流量图表',
-            $this->shiyanBaseUrl.'/flow/flowapi.php',
+            $this->upstreamUrl('shiyan', 'flow_path', '/flow/flowapi.php'),
             ['ip' => $ip]
         );
 
@@ -423,7 +446,7 @@ class BlackholeService
     {
         $response = $this->requestJson(
             '宁波黑洞查询',
-            $this->ningboBaseUrl.'/api/blackhole.php',
+            $this->upstreamUrl('ningbo', 'blackhole_path', '/api/blackhole.php'),
             ['ip' => $ip]
         );
 
@@ -621,7 +644,7 @@ class BlackholeService
     {
         $response = $this->requestHtml(
             '十堰4层策略删除',
-            $this->shiyanBaseUrl.'/through/through.php',
+            $this->upstreamUrl('shiyan', 'layer4_path', '/through/through.php'),
             'POST',
             $payload
         );

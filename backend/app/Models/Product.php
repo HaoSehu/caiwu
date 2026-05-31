@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 
 class Product extends Model
 {
@@ -20,6 +21,8 @@ class Product extends Model
         'semiannually' => 6,
         'annually' => 12,
     ];
+
+    private static array $physicalColumnExistsCache = [];
 
     protected $fillable = [
         'product_group_id', 'category_id', 'name', 'product_type', 'type',
@@ -295,10 +298,65 @@ class Product extends Model
 
     private function hasPhysicalColumn(string $column): bool
     {
-        try {
-            return $this->getConnection()->getSchemaBuilder()->hasColumn($this->getTable(), $column);
-        } catch (\Throwable) {
-            return false;
+        $cacheKey = implode(':', [
+            $this->getConnectionName() ?: $this->getConnection()->getName(),
+            $this->getTable(),
+            $column,
+        ]);
+
+        if (array_key_exists($cacheKey, self::$physicalColumnExistsCache)) {
+            return self::$physicalColumnExistsCache[$cacheKey];
         }
+
+        try {
+            return self::$physicalColumnExistsCache[$cacheKey] = $this->getConnection()
+                ->getSchemaBuilder()
+                ->hasColumn($this->getTable(), $column);
+        } catch (\Throwable) {
+            return self::$physicalColumnExistsCache[$cacheKey] = false;
+        }
+    }
+
+    public static function buildIdcMirrorPayload(self $product, ?string $slug = null): array
+    {
+        $connection = $product->getConnection();
+        $schema = $connection->getSchemaBuilder();
+        $payload = [];
+
+        $encodeJson = static fn (array $value): string => json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $setIfColumnExists = static function (string $column, mixed $value) use (&$payload, $schema): void {
+            if ($schema->hasColumn('products', $column)) {
+                $payload[$column] = $value;
+            }
+        };
+
+        $setIfColumnExists('product_group_id', $product->getRawOriginal('product_group_id'));
+        $setIfColumnExists('category_id', $product->getRawOriginal('product_group_id'));
+        $setIfColumnExists('product_type', (string) ($product->product_type ?: 'other'));
+        $setIfColumnExists('name', (string) $product->name);
+        $setIfColumnExists('slug', $slug ?: 'test-product-'.(int) $product->id);
+        $setIfColumnExists('summary', null);
+        $setIfColumnExists('remark', $product->remark);
+        $setIfColumnExists('meta_title', null);
+        $setIfColumnExists('meta_description', null);
+        $setIfColumnExists('meta_keywords', null);
+        $setIfColumnExists('pricing', $encodeJson((array) ($product->pricing ?? [])));
+        $setIfColumnExists('setup_fee', number_format((float) ($product->setup_fee ?? 0), 2, '.', ''));
+        $setIfColumnExists('config_options', $encodeJson((array) ($product->config_options ?? [])));
+        $setIfColumnExists('purchase_requires', $encodeJson((array) ($product->purchase_requires ?? [])));
+        $setIfColumnExists('purchase_requires_json', $encodeJson((array) ($product->purchase_requires ?? [])));
+        $setIfColumnExists('stock', (int) ($product->stock ?? -1));
+        $setIfColumnExists('status', (int) ($product->status ?? 1));
+        $setIfColumnExists('sort_order', (int) ($product->sort_order ?? 0));
+        $setIfColumnExists('provision_module', $product->provision_module);
+        $setIfColumnExists('auto_setup', (int) ($product->auto_setup ?? 0));
+        $setIfColumnExists('supplier_id', $product->supplier_id);
+        $setIfColumnExists('supplier_product_id', $product->supplier_product_id);
+        $setIfColumnExists('supplier_product_name', $product->supplier_product_name);
+        $setIfColumnExists('deleted_at', null);
+        $setIfColumnExists('created_at', $product->created_at ?? now());
+        $setIfColumnExists('updated_at', $product->updated_at ?? now());
+
+        return $payload;
     }
 }

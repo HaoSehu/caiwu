@@ -11,7 +11,10 @@ use App\Models\User;
 use App\Services\Finance\CheckoutSecurityService;
 use App\Services\Finance\CheckoutService;
 use App\Services\Finance\CouponService;
+use App\Services\ProductCatalog\CpuModelCatalogService;
+use App\Services\ProductCatalog\InstanceSpecCatalogService;
 use App\Services\ProductCatalog\ProductCatalogService;
+use App\Services\ProductCatalog\ProductSiteService;
 use App\Services\Site\SiteProductQuoteService;
 use App\Services\Site\SiteProductReadService;
 use Illuminate\Database\Schema\Blueprint;
@@ -102,6 +105,179 @@ class SiteProductReadServiceTest extends TestCase
         $this->assertIsArray($matchedProduct);
         $this->assertSame('monthly', data_get($matchedProduct, 'pricing_entries.0.cycle'));
         $this->assertSame('20.00', data_get($matchedProduct, 'pricing_entries.0.amount'));
+    }
+
+    public function test_site_group_catalog_checks_product_columns_once_per_request(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+
+        $rootGroup = ProductCategory::query()->create([
+            'parent_id' => null,
+            'product_type' => 'vps',
+            'name' => 'Column Cache Root '.$suffix,
+            'slug' => 'column-cache-root-'.$suffix,
+            'slogan' => '',
+            'is_visible' => 1,
+            'sort_order' => 0,
+        ]);
+
+        $childGroup = ProductCategory::query()->create([
+            'parent_id' => (int) $rootGroup->id,
+            'product_type' => 'vps',
+            'name' => 'Column Cache Child '.$suffix,
+            'slug' => 'column-cache-child-'.$suffix,
+            'slogan' => '',
+            'is_visible' => 1,
+            'sort_order' => 0,
+        ]);
+
+        foreach (range(1, 5) as $index) {
+            Product::query()->create([
+                'product_group_id' => (int) $childGroup->id,
+                'name' => 'Column Cache Product '.$index.' '.$suffix,
+                'product_type' => 'vps',
+                'pricing' => ['monthly' => '20.00'],
+                'setup_fee' => '0.00',
+                'config_options' => [],
+                'purchase_requires' => [],
+                'stock' => 12,
+                'status' => 1,
+                'sort_order' => $index,
+                'provision_module' => null,
+                'auto_setup' => 0,
+            ]);
+        }
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $this->getJson('/api/site/product-categories/'.$rootGroup->id.'/catalog')
+            ->assertOk();
+
+        $productColumnLookups = collect(DB::getQueryLog())
+            ->filter(function (array $query): bool {
+                $sql = (string) ($query['query'] ?? '');
+
+                return str_contains($sql, 'pragma_table_xinfo')
+                    && str_contains($sql, 'products');
+            })
+            ->count();
+
+        $this->assertLessThanOrEqual(1, $productColumnLookups);
+    }
+
+    public function test_site_product_cards_read_cpu_model_catalog_once_per_batch(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+
+        $group = ProductCategory::query()->create([
+            'parent_id' => null,
+            'product_type' => 'vps',
+            'name' => 'CPU Catalog Cache '.$suffix,
+            'slug' => 'cpu-catalog-cache-'.$suffix,
+            'slogan' => '',
+            'is_visible' => 1,
+            'sort_order' => 0,
+        ]);
+
+        foreach (range(1, 4) as $index) {
+            Product::query()->create([
+                'product_group_id' => (int) $group->id,
+                'name' => 'CPU Catalog Cache Product '.$index.' '.$suffix,
+                'product_type' => 'vps',
+                'pricing' => ['monthly' => '20.00'],
+                'setup_fee' => '0.00',
+                'config_options' => [],
+                'purchase_requires' => [],
+                'stock' => 12,
+                'status' => 1,
+                'sort_order' => $index,
+                'provision_module' => null,
+                'auto_setup' => 0,
+            ]);
+        }
+
+        $cpuModelCatalogService = $this->getMockBuilder(CpuModelCatalogService::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['getCatalog'])
+            ->getMock();
+        $cpuModelCatalogService->expects($this->once())
+            ->method('getCatalog')
+            ->willReturn([]);
+
+        $service = new ProductSiteService(
+            $cpuModelCatalogService,
+            new InstanceSpecCatalogService
+        );
+
+        $payload = $service->siteProductsByGroupIds([(int) $group->id]);
+        $products = collect($payload)
+            ->flatMap(fn (array $item): array => (array) ($item['products'] ?? []))
+            ->values();
+
+        $this->assertCount(4, $products);
+    }
+
+    public function test_site_product_cards_reuse_batch_instance_spec_lookup(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+
+        $group = ProductCategory::query()->create([
+            'parent_id' => null,
+            'product_type' => 'vps',
+            'name' => 'Spec Batch Cache '.$suffix,
+            'slug' => 'spec-batch-cache-'.$suffix,
+            'slogan' => '',
+            'is_visible' => 1,
+            'sort_order' => 0,
+        ]);
+
+        $products = collect(range(1, 4))
+            ->map(fn (int $index): Product => Product::query()->create([
+                'product_group_id' => (int) $group->id,
+                'name' => 'Spec Batch Product '.$index.' '.$suffix,
+                'product_type' => 'vps',
+                'pricing' => ['monthly' => '20.00'],
+                'setup_fee' => '0.00',
+                'config_options' => [],
+                'purchase_requires' => [],
+                'stock' => 12,
+                'status' => 1,
+                'sort_order' => $index,
+                'provision_module' => null,
+                'auto_setup' => 0,
+            ]))
+            ->values();
+
+        $instanceSpecCatalogService = $this->getMockBuilder(InstanceSpecCatalogService::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['resolveProductSpecMap'])
+            ->getMock();
+        $instanceSpecCatalogService->expects($this->once())
+            ->method('resolveProductSpecMap')
+            ->willReturn([
+                (int) $products[0]->id => [
+                    'instance_spec_id' => 'spec_cached',
+                    'instance_spec_value' => 'spec_cached',
+                    'instance_spec_text' => 'ecs.cached.2c2g',
+                    'instance_spec_alias' => '2 核 2G',
+                    'instance_spec_note' => '',
+                    'instance_spec_status' => '展示中',
+                ],
+            ]);
+
+        $service = new ProductSiteService(
+            new CpuModelCatalogService,
+            $instanceSpecCatalogService
+        );
+
+        $payload = $service->siteProductsByGroupIds([(int) $group->id]);
+        $catalogProducts = collect($payload)
+            ->flatMap(fn (array $item): array => (array) ($item['products'] ?? []))
+            ->values();
+
+        $this->assertCount(4, $catalogProducts);
+        $this->assertSame('ecs.cached.2c2g', data_get($catalogProducts->first(), 'display_name'));
     }
 
     public function test_site_group_catalog_and_product_detail_include_bound_cpu_model_name(): void
@@ -644,6 +820,7 @@ class SiteProductReadServiceTest extends TestCase
     private function resetModelCaches(): void
     {
         $this->resetStaticProperty(Setting::class, 'groupValueCache', []);
+        $this->resetStaticProperty(Product::class, 'physicalColumnExistsCache', []);
         $this->resetStaticProperty(User::class, 'profileTableAvailable', null);
         $this->resetStaticProperty(User::class, 'accountTableAvailable', null);
     }
