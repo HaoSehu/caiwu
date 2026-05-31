@@ -24,4 +24,7 @@ return [
 
     // 订单超时时间
     'timeout' => '30m',
+
+    'ssl_verify' => filter_var(env('ALIPAY_SSL_VERIFY', true), FILTER_VALIDATE_BOOL),
+    'ca_bundle' => env('ALIPAY_CA_BUNDLE', ''),
 ];

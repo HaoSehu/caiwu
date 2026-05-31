@@ -5,6 +5,7 @@ namespace App\Services\PaymentGateway;
 use App\Exceptions\BusinessException;
 use App\Models\Setting;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -28,6 +29,10 @@ class AlipayFaceToFaceService
 
     private bool $enabled;
 
+    private bool $sslVerify;
+
+    private string $caBundle;
+
     public function __construct()
     {
         $this->appId = $this->setting('alipay_app_id', config('alipay.app_id', ''));
@@ -39,6 +44,8 @@ class AlipayFaceToFaceService
         $this->signType = 'RSA2';
         $this->charset = 'utf-8';
         $this->enabled = in_array($this->setting('alipay_enabled', '0'), ['1', 'true', true, 1], true);
+        $this->sslVerify = (bool) config('alipay.ssl_verify', true);
+        $this->caBundle = trim((string) config('alipay.ca_bundle', ''));
     }
 
     /**
@@ -230,19 +237,33 @@ class AlipayFaceToFaceService
         $url = $this->gateway.'?charset='.$this->charset;
 
         try {
-            $response = Http::asForm()
-                ->timeout(15)
-                ->retry(1, 200)
-                ->withoutVerifying()
-                ->post($url, $params);
+            $response = $this->buildHttpClient()->post($url, $params);
         } catch (ConnectionException $exception) {
-            Log::error('[支付宝当面付] 网关请求失败', [
-                'gateway' => $this->gateway,
-                'message' => $exception->getMessage(),
-                'exception' => $exception::class,
-            ]);
+            if (! app()->environment('production') && str_contains($exception->getMessage(), 'SSL certificate problem')) {
+                Log::warning('[支付宝当面付] SSL 证书错误，非生产环境降级重试', [
+                    'gateway' => $this->gateway,
+                    'message' => $exception->getMessage(),
+                ]);
 
-            throw new BusinessException('支付网关暂时不可用，请稍后重试', 42200, 422);
+                try {
+                    $response = $this->buildHttpClient(false)->post($url, $params);
+                } catch (ConnectionException $retryException) {
+                    Log::error('[支付宝当面付] 降级重试仍失败', [
+                        'gateway' => $this->gateway,
+                        'message' => $retryException->getMessage(),
+                    ]);
+
+                    throw new BusinessException('支付网关暂时不可用，请稍后重试', 42200, 422);
+                }
+            } else {
+                Log::error('[支付宝当面付] 网关请求失败', [
+                    'gateway' => $this->gateway,
+                    'message' => $exception->getMessage(),
+                    'exception' => $exception::class,
+                ]);
+
+                throw new BusinessException('支付网关暂时不可用，请稍后重试', 42200, 422);
+            }
         }
 
         $body = $response->body();
@@ -264,6 +285,23 @@ class AlipayFaceToFaceService
         }
 
         return $result;
+    }
+
+    private function buildHttpClient(?bool $overrideVerify = null): PendingRequest
+    {
+        $verify = $overrideVerify ?? $this->sslVerify;
+        if ($overrideVerify === null && $this->caBundle !== '' && is_file($this->caBundle)) {
+            $verify = $this->caBundle;
+        }
+
+        if (app()->environment('production') && $verify === false) {
+            $verify = true;
+        }
+
+        return Http::asForm()
+            ->timeout(15)
+            ->retry(1, 200)
+            ->withOptions(['verify' => $verify]);
     }
 
     /**
