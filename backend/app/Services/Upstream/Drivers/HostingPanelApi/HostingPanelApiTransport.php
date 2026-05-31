@@ -720,6 +720,8 @@ class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsole
             // 保留错误响应体，便于解析上游返回的 JSON 错误。
             'ignore_errors' => true,
             'timeout' => $this->serviceConfig['timeout'],
+            'follow_location' => 0,
+            'max_redirects' => 0,
         ];
 
         if ($headers !== []) {
@@ -774,6 +776,7 @@ class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsole
         }
 
         return [
+            'allow_redirects' => false,
             'verify' => $verify,
         ];
     }
@@ -784,10 +787,12 @@ class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsole
 
         $baseUrl = rtrim($baseUrl, '/');
         $uri = trim($uri);
+        $basePath = trim((string) parse_url($baseUrl, PHP_URL_PATH));
+        $normalizedBasePath = $basePath === '' ? '' : '/'.trim($basePath, '/');
 
         $url = preg_match('#^https?://#i', $uri)
             ? $uri
-            : $baseUrl.'/'.ltrim($uri, '/');
+            : $baseUrl.'/'.ltrim($this->normalizeRelativeUri($uri, $normalizedBasePath), '/');
 
         if ($query === []) {
             return $url;
@@ -796,6 +801,21 @@ class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsole
         $separator = str_contains($url, '?') ? '&' : '?';
 
         return $url.$separator.http_build_query($query);
+    }
+
+    private function normalizeRelativeUri(string $uri, string $normalizedBasePath): string
+    {
+        $normalizedUri = '/'.ltrim($uri, '/');
+
+        if ($normalizedBasePath === '' || $normalizedBasePath === '/') {
+            return $normalizedUri;
+        }
+
+        if ($normalizedUri === $normalizedBasePath || str_starts_with($normalizedUri, $normalizedBasePath.'/')) {
+            return substr($normalizedUri, strlen($normalizedBasePath)) ?: '/';
+        }
+
+        return $normalizedUri;
     }
 
     private function assertTrustedBaseUrl(string $baseUrl): void

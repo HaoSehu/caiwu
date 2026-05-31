@@ -7,6 +7,7 @@ namespace App\Services\Finance;
 use App\Constants\CouponStatus;
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
+use App\Constants\ProductType;
 use App\Exceptions\BusinessException;
 use App\Models\Coupon;
 use App\Models\Invoice;
@@ -15,6 +16,7 @@ use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\User;
 use App\Models\UserCoupon;
+use App\Services\ProductCatalog\InstanceSpecCatalogService;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
@@ -26,6 +28,7 @@ class CouponService
 {
     public function __construct(
         private readonly ?ProductDisplayNameResolver $productDisplayNameResolver = null,
+        private readonly ?InstanceSpecCatalogService $instanceSpecCatalogService = null,
     ) {}
 
     private const USED_INVOICE_STATUSES = [
@@ -1172,6 +1175,7 @@ class CouponService
                 $productIds
             ))),
             'product_scope_text' => $this->formatProductScopeText($productIds, $productNameMap),
+            'products' => $this->resolveProductHierarchyList($productIds),
             'billing_cycles' => $billingCycles,
             'billing_cycle_text' => $this->formatBillingCycleText($rawBillingCycles),
             'validity_text' => $this->formatValidityText($coupon),
@@ -1210,6 +1214,8 @@ class CouponService
                 ? max((int) $coupon->total_usage_limit - (int) ($coupon->user_coupons_count ?? 0), 0)
                 : null,
             'first_order_only' => (bool) $coupon->first_order_only,
+            'product_ids' => $productIds,
+            'products' => $this->resolveProductHierarchyList($productIds),
             'product_scope_text' => $this->formatProductScopeText($productIds, $productNameMap),
             'billing_cycle_text' => $this->formatBillingCycleText($rawBillingCycles),
             'validity_text' => $this->formatValidityText($coupon),
@@ -1321,7 +1327,7 @@ class CouponService
         );
 
         if ($coupon->total_usage_limit) {
-            $receivedCount = UserCoupon::query()->where('coupon_id', $coupon->id)->lockForUpdate()->count();
+            $receivedCount = UserCoupon::query()->where('coupon_id', $coupon->id)->count();
             throw_if($receivedCount >= (int) $coupon->total_usage_limit, new BusinessException('优惠券已被领完'));
         }
     }
@@ -1684,6 +1690,60 @@ class CouponService
                     (int) $product->id => $displayName !== '' ? $displayName : (string) $product->name,
                 ];
             })
+            ->all();
+    }
+
+    /**
+     * @param  array<int, int>  $productIds
+     * @return array<int, array{id: int, name: string, type_label: string, parent_group_name: string, group_name: string}>
+     */
+    private function resolveProductHierarchyList(array $productIds): array
+    {
+        if ($productIds === []) {
+            return [];
+        }
+
+        $products = Product::query()
+            ->select(['id', 'product_group_id', 'pricing', 'purchase_requires', 'config_options'])
+            ->whereIn('id', $productIds)
+            ->with(['categoryMapping.parent'])
+            ->get();
+
+        $specMap = $this->instanceSpecCatalogService
+            ? $this->instanceSpecCatalogService->resolveProductSpecMap($productIds)
+            : [];
+
+        return $products
+            ->map(function (Product $product) use ($specMap) {
+                $group = $product->categoryMapping;
+                $parentGroup = $group?->parent;
+                $typeCode = trim((string) ($group?->product_type ?? (string) $product->product_type ?? ''));
+                $instanceSpecText = (string) (($specMap[(int) $product->id] ?? [])['instance_spec_text'] ?? '');
+                $displayNamePayload = $this->resolveProductDisplayNameResolver()->resolveForProduct($product, [
+                    'instance_spec_text' => $instanceSpecText,
+                ]);
+                $combinedName = trim((string) ($displayNamePayload['combined_display_name'] ?? ''));
+                $productName = trim((string) ($displayNamePayload['product_display_name'] ?? ''));
+
+                return [
+                    'id' => (int) $product->id,
+                    'name' => $combinedName !== '' ? $combinedName : ($productName !== '' ? $productName : (string) $product->name),
+                    'type_label' => ProductType::labelOf($typeCode),
+                    'parent_group_name' => trim((string) ($parentGroup?->name ?? '')),
+                    'group_name' => trim((string) ($group?->name ?? '')),
+                    '_sort_type' => $typeCode,
+                    '_sort_parent' => trim((string) ($parentGroup?->name ?? '')),
+                    '_sort_group' => trim((string) ($group?->name ?? '')),
+                ];
+            })
+            ->sortBy([
+                ['_sort_type', 'asc'],
+                ['_sort_parent', 'asc'],
+                ['_sort_group', 'asc'],
+                ['name', 'asc'],
+            ])
+            ->map(fn (array $item) => array_diff_key($item, ['_sort_type' => 0, '_sort_parent' => 0, '_sort_group' => 0]))
+            ->values()
             ->all();
     }
 

@@ -17,6 +17,7 @@ class AdminUserListResource extends JsonResource
         return [
             'id' => (int) $this->id,
             'email' => (string) $this->email,
+            'phone' => $this->resolvePhone(),
             'nickname' => $nickname,
             'display_name' => $this->resolveDisplayName($nickname),
             'company' => trim((string) ($profile?->company ?? $this->resource->getRawOriginal('company') ?? '')),
@@ -50,6 +51,11 @@ class AdminUserListResource extends JsonResource
             return $email;
         }
 
+        return trim((string) ($this->phone ?? ''));
+    }
+
+    private function resolvePhone(): string
+    {
         return trim((string) ($this->phone ?? ''));
     }
 }

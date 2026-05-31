@@ -33,7 +33,7 @@ class ServiceVncTokenSecurityTest extends TestCase
         $this->assertSame('test-token', $payload['token']);
         $this->assertSame(12, $payload['service_id']);
         $this->assertSame('/ws/vnc', $payload['relay_path']);
-        $this->assertArrayNotHasKey('password', $payload);
+        $this->assertSame('secret-password', $payload['password']);
         $this->assertTrue(Cache::has('vnc_token:test-token'));
     }
 
@@ -78,7 +78,7 @@ class ServiceVncTokenSecurityTest extends TestCase
         $this->assertSame(34, $firstPayload['service_id']);
         $this->assertSame(34, $secondPayload['service_id']);
         $this->assertSame('/ws/vnc', $secondPayload['relay_path']);
-        $this->assertArrayNotHasKey('password', $secondPayload);
+        $this->assertSame('admin-secret', $secondPayload['password']);
     }
 
     public function test_admin_vnc_token_can_be_resolved_multiple_times_by_relay(): void

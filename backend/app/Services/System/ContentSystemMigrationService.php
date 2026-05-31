@@ -14,8 +14,8 @@ class ContentSystemMigrationService
 
     public function __construct()
     {
-        $this->sourceConnection = (string) config('content_system_migration.source_connection', 'idc');
-        $this->targetConnection = (string) config('content_system_migration.target_connection', 'idc');
+        $this->sourceConnection = (string) config('content_system_migration.source_connection', 'mysql');
+        $this->targetConnection = (string) config('content_system_migration.target_connection', 'mysql');
     }
 
     public function ensureConnections(): void

@@ -39,6 +39,45 @@ class AuthLoginRegressionTest extends TestCase
             ->assertJsonPath('data.user.balance', '0.00');
     }
 
+    public function test_client_login_returns_not_found_reason_for_unknown_account(): void
+    {
+        $this->postJson('/api/client/login', [
+            'account' => 'missing-'.bin2hex(random_bytes(4)).'@example.com',
+            'password' => 'Temp@123456',
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('code', 40100)
+            ->assertJsonPath('message', '未找到该账号');
+    }
+
+    public function test_client_login_returns_wrong_password_reason_for_existing_account(): void
+    {
+        $user = User::query()->create([
+            'email' => 'client-regression-'.bin2hex(random_bytes(4)).'@example.com',
+            'password' => 'Temp@123456',
+            'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
+            'status' => 1,
+            'nickname' => 'Client Regression',
+            'real_name' => '',
+            'id_card' => '',
+            'verification_status' => 0,
+            'verification_message' => '',
+            'verification_certify_id' => null,
+            'member_level_id' => null,
+            'total_sales_amount' => '0.00',
+            'referrer_user_id' => null,
+            'verified_at' => null,
+        ]);
+
+        $this->postJson('/api/client/login', [
+            'account' => $user->email,
+            'password' => 'Temp@123456-wrong',
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('code', 40100)
+            ->assertJsonPath('message', '密码错误');
+    }
+
     public function test_admin_login_success_does_not_require_admin_role_bridge_tables(): void
     {
         $role = Role::query()->create([

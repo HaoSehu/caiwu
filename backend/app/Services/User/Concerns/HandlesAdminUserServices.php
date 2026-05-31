@@ -719,8 +719,6 @@ trait HandlesAdminUserServices
         $provisionError = trim((string) ($currentProvisionData['provision_error'] ?? ''));
 
         throw_if($provisionError === '', new BusinessException('当前服务不存在上游开通失败记录，无需重新提交'));
-        throw_if(! $service->order, new BusinessException('服务未关联账单，无法重新提交上游开通'));
-
         $operatorId = (int) (($context['operator_id'] ?? 0) ?: 0);
         $operatorName = trim((string) ($context['operator_name'] ?? ''));
         $traceId = trim((string) ($context['trace_id'] ?? ''));
@@ -735,7 +733,24 @@ trait HandlesAdminUserServices
         ];
 
         try {
-            $service = $this->provisionService->retryFailedProvision($service->order);
+            $boundInvoice = Invoice::query()
+                ->where(function ($query) use ($service) {
+                    $query->where('service_id', (int) $service->id);
+
+                    if ((int) ($service->invoice_id ?? 0) > 0) {
+                        $query->orWhere('id', (int) $service->invoice_id);
+                    }
+                })
+                ->latest('id')
+                ->first();
+
+            if ($service->order instanceof Order) {
+                $service = $this->provisionService->retryFailedProvision($service->order);
+            } elseif ($boundInvoice instanceof Invoice) {
+                $service = $this->provisionService->retryFailedProvisionByInvoice($boundInvoice);
+            } else {
+                throw new BusinessException('服务未关联账单，无法重新提交上游开通');
+            }
         } catch (\Throwable $exception) {
             try {
                 $this->operationLogService->writeServiceConsoleLog($service->refresh()->loadMissing(['product', 'order']), 'service.console.manual_provision', [

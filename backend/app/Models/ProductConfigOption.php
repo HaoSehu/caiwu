@@ -11,8 +11,6 @@ class ProductConfigOption extends Model
 {
     protected $table = 'product_config_options';
 
-    protected $connection = 'idc';
-
     protected $fillable = [
         'product_id',
         'option_key',

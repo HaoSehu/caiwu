@@ -18,6 +18,11 @@ class ProductSiteService
 
     private const SITE_CATALOG_CACHE_TTL_SECONDS = 300;
 
+    /**
+     * @var array<int, array{cpu_model_name: string, cpu_base_frequency: string, cpu_turbo_frequency: string}>|null
+     */
+    private ?array $cpuModelPayloadByProductId = null;
+
     public function __construct(
         private readonly CpuModelCatalogService $cpuModelCatalogService,
         private readonly InstanceSpecCatalogService $instanceSpecCatalogService,
@@ -420,7 +425,9 @@ class ProductSiteService
         $pricing = (array) ($product->pricing ?? []);
         $primaryCycle = '';
         $primaryPrice = '0.00';
-        $displayNamePayload = $this->resolveProductDisplayNameResolver()->resolveForProduct($product);
+        $displayNamePayload = $this->resolveProductDisplayNameResolver()->resolveForProduct($product, [
+            'instance_spec_text' => (string) ($instanceSpec['instance_spec_text'] ?? ''),
+        ]);
         $displayName = trim((string) ($displayNamePayload['product_display_name'] ?? ''));
         $combinedDisplayName = trim((string) ($displayNamePayload['combined_display_name'] ?? ''));
         $cpuMemoryDisplay = trim((string) ($displayNamePayload['cpu_memory_display'] ?? ''));
@@ -452,7 +459,7 @@ class ProductSiteService
             'instance_spec_note' => (string) ($instanceSpec['instance_spec_note'] ?? ''),
             'cpu_display' => $cpuDisplay,
             'memory_display' => $memoryDisplay,
-            ...$this->resolveCpuModelPayload((int) $product->id),
+            ...$this->resolveCpuModelPayload($product),
             'product_type' => $productType,
             'type' => $productType,
             'type_label' => ProductType::labelOf($productType),
@@ -476,7 +483,11 @@ class ProductSiteService
         $parentGroup = $group?->parent;
         $productType = $group ? $this->resolveCategoryTypeCode($group) : (string) $product->product_type;
         $parentProductType = $parentGroup ? $this->resolveCategoryTypeCode($parentGroup) : '';
-        $displayNamePayload = $this->resolveProductDisplayNameResolver()->resolveForProduct($product);
+        $instanceSpec = $this->instanceSpecCatalogService->resolveProductSpecMap([(int) $product->id]);
+        $instanceSpecItem = $instanceSpec[(int) $product->id] ?? [];
+        $displayNamePayload = $this->resolveProductDisplayNameResolver()->resolveForProduct($product, [
+            'instance_spec_text' => (string) ($instanceSpecItem['instance_spec_text'] ?? ''),
+        ]);
         $displayName = trim((string) ($displayNamePayload['product_display_name'] ?? ''));
         $combinedDisplayName = trim((string) ($displayNamePayload['combined_display_name'] ?? ''));
         $cpuMemoryDisplay = trim((string) ($displayNamePayload['cpu_memory_display'] ?? ''));
@@ -502,8 +513,6 @@ class ProductSiteService
         $siblingsSpecMap = $this->instanceSpecCatalogService->resolveProductSpecMap(
             $siblings->pluck('id')->map(fn ($item) => (int) $item)->all()
         );
-        $instanceSpec = $this->instanceSpecCatalogService->resolveProductSpecMap([(int) $product->id]);
-        $instanceSpecItem = $instanceSpec[(int) $product->id] ?? [];
 
         return [
             'id' => (int) $product->id,
@@ -519,7 +528,7 @@ class ProductSiteService
             'instance_spec_note' => (string) ($instanceSpecItem['instance_spec_note'] ?? ''),
             'cpu_display' => $cpuDisplay,
             'memory_display' => $memoryDisplay,
-            ...$this->resolveCpuModelPayload((int) $product->id),
+            ...$this->resolveCpuModelPayload($product),
             'product_type' => $productType,
             'type' => $productType,
             'type_label' => ProductType::labelOf($productType),
@@ -558,7 +567,9 @@ class ProductSiteService
             'siblings' => $siblings
                 ->map(function (Product $item) use ($siblingsSpecMap) {
                     $itemSpecItem = $siblingsSpecMap[(int) $item->id] ?? [];
-                    $resolved = $this->resolveProductDisplayNameResolver()->resolveForProduct($item);
+                    $resolved = $this->resolveProductDisplayNameResolver()->resolveForProduct($item, [
+                        'instance_spec_text' => (string) ($itemSpecItem['instance_spec_text'] ?? ''),
+                    ]);
                     $displayName = trim((string) ($resolved['product_display_name'] ?? ''));
                     $combinedDisplayName = trim((string) ($resolved['combined_display_name'] ?? ''));
                     $instanceSpecText = trim((string) ($resolved['instance_spec_text'] ?? ''));
@@ -762,8 +773,9 @@ class ProductSiteService
     /**
      * @return array{cpu_model_name: string, cpu_base_frequency: string, cpu_turbo_frequency: string}
      */
-    private function resolveCpuModelPayload(int $productId): array
+    private function resolveCpuModelPayload(Product $product): array
     {
+        $productId = (int) $product->id;
         if ($productId <= 0) {
             return [
                 'cpu_model_name' => '',
@@ -772,31 +784,15 @@ class ProductSiteService
             ];
         }
 
-        foreach ($this->cpuModelCatalogService->getCatalog() as $group) {
-            $models = is_array($group['models'] ?? null) ? $group['models'] : [];
+        $lookupIds = array_values(array_unique(array_filter([
+            $productId,
+            $this->resolveSplitSourceProductId($product),
+        ], static fn (int $id): bool => $id > 0)));
 
-            foreach ($models as $model) {
-                if (! is_array($model)) {
-                    continue;
-                }
-
-                $bindings = is_array($model['bindings'] ?? null) ? $model['bindings'] : [];
-
-                foreach ($bindings as $binding) {
-                    if (! is_array($binding)) {
-                        continue;
-                    }
-
-                    if ((int) ($binding['product_id'] ?? 0) !== $productId) {
-                        continue;
-                    }
-
-                    return [
-                        'cpu_model_name' => trim((string) ($model['name'] ?? '')),
-                        'cpu_base_frequency' => trim((string) ($model['base_frequency'] ?? '')),
-                        'cpu_turbo_frequency' => trim((string) ($model['turbo_frequency'] ?? '')),
-                    ];
-                }
+        $cpuModelPayloads = $this->cpuModelPayloadByProductId();
+        foreach ($lookupIds as $lookupId) {
+            if (isset($cpuModelPayloads[$lookupId])) {
+                return $cpuModelPayloads[$lookupId];
             }
         }
 
@@ -805,6 +801,57 @@ class ProductSiteService
             'cpu_base_frequency' => '',
             'cpu_turbo_frequency' => '',
         ];
+    }
+
+    private function resolveSplitSourceProductId(Product $product): int
+    {
+        $split = (array) (($product->purchase_requires ?? [])['upstream_split'] ?? []);
+        $sourceProductId = (int) ($split['source_product_id'] ?? 0);
+
+        return $sourceProductId !== (int) $product->id ? $sourceProductId : 0;
+    }
+
+    /**
+     * @return array<int, array{cpu_model_name: string, cpu_base_frequency: string, cpu_turbo_frequency: string}>
+     */
+    private function cpuModelPayloadByProductId(): array
+    {
+        if ($this->cpuModelPayloadByProductId !== null) {
+            return $this->cpuModelPayloadByProductId;
+        }
+
+        $payloads = [];
+        foreach ($this->cpuModelCatalogService->getCatalog() as $group) {
+            $models = is_array($group['models'] ?? null) ? $group['models'] : [];
+
+            foreach ($models as $model) {
+                if (! is_array($model)) {
+                    continue;
+                }
+
+                $payload = [
+                    'cpu_model_name' => trim((string) ($model['name'] ?? '')),
+                    'cpu_base_frequency' => trim((string) ($model['base_frequency'] ?? '')),
+                    'cpu_turbo_frequency' => trim((string) ($model['turbo_frequency'] ?? '')),
+                ];
+                $bindings = is_array($model['bindings'] ?? null) ? $model['bindings'] : [];
+
+                foreach ($bindings as $binding) {
+                    if (! is_array($binding)) {
+                        continue;
+                    }
+
+                    $productId = (int) ($binding['product_id'] ?? 0);
+                    if ($productId <= 0 || isset($payloads[$productId])) {
+                        continue;
+                    }
+
+                    $payloads[$productId] = $payload;
+                }
+            }
+        }
+
+        return $this->cpuModelPayloadByProductId = $payloads;
     }
 
     private function rememberSitePayload(string $cacheSuffix, int $ttlSeconds, callable $resolver): array

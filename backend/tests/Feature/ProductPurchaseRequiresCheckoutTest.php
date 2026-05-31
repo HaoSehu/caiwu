@@ -120,6 +120,57 @@ class ProductPurchaseRequiresCheckoutTest extends TestCase
         }
     }
 
+    public function test_order_creation_requires_verified_user_even_when_product_does_not_explicitly_demand_verification(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+        $user = User::query()->create([
+            'email' => "purchase-global-verify-{$suffix}@example.com",
+            'password' => 'secret123',
+            'phone' => '139'.str_pad((string) random_int(0, 99999999), 8, '0', STR_PAD_LEFT),
+            'status' => 1,
+            'is_verified' => 0,
+            'verification_status' => 0,
+        ]);
+
+        $product = Product::query()->create([
+            'name' => '普通商品也需实名',
+            'product_type' => 'server',
+            'pricing' => ['monthly' => '99.00'],
+            'setup_fee' => '0.00',
+            'config_options' => [],
+            'purchase_requires' => [],
+            'stock' => 10,
+            'status' => 1,
+            'auto_setup' => 0,
+        ]);
+
+        $orderService = $this->makeOrderService($product, 1);
+        $checkoutSecurity = new CheckoutSecurityService;
+        $quote = $orderService->quote($product, 'monthly', [], 1);
+        $quotePayload = array_merge($quote, [
+            'subtotal_amount' => $quote['total_amount'],
+        ]);
+        $tokenData = $checkoutSecurity->issueQuoteToken($product->id, 'monthly', [], $quotePayload);
+
+        try {
+            $orderService->create($user->id, [
+                'product_id' => (int) $product->id,
+                'billing_cycle' => 'monthly',
+                'quantity' => 1,
+                'config' => [],
+                'quote_token' => (string) ($tokenData['quote_token'] ?? ''),
+            ], [
+                'idempotency_key' => 'purchase-global-verify-'.$suffix,
+                'trace_id' => 'trace-purchase-global-verify-'.$suffix,
+            ]);
+
+            $this->fail('Expected BusinessException was not thrown.');
+        } catch (BusinessException $exception) {
+            $this->assertSame(40301, $exception->getErrorCode());
+            $this->assertStringContainsString('实名认证', $exception->getMessage());
+        }
+    }
+
     private function makeOrderService(Product $product, int $expectedQuantity): OrderService
     {
         $invoiceService = new InvoiceService;

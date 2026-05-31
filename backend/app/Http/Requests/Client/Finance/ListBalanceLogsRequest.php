@@ -8,7 +8,7 @@ class ListBalanceLogsRequest extends ClientFormRequest
 {
     public function rules(): array
     {
-        return array_merge($this->paginationRules(), [
+        return array_merge($this->paginationRules(200), [
             'event_type' => ['nullable', 'in:recharge,consume,refund,adjust,admin_deduct,manual_recharge,manual_deduction,invoice_payment,invoice_refund,system_adjustment,referral_withdraw_approved,referral_credit_cash'],
             'type' => ['nullable', 'in:recharge,consume,refund,adjust,admin_deduct,manual_recharge,manual_deduction,invoice_payment,invoice_refund,system_adjustment,referral_withdraw_approved,referral_credit_cash'],
             'date_range' => ['nullable', 'array', 'size:2'],

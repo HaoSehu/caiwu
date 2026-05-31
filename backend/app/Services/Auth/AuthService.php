@@ -26,6 +26,8 @@ class AuthService
 {
     private const ADMIN_LOGIN_AS_CODE_TTL_SECONDS = 120;
 
+    private const PASSWORD_TIMING_GUARD_HASH = '$2y$10$9i4SuhzLa07GghDFTutcTeB5w1sRFYJhPguXpXxeSElBVdggfyff2';
+
     private const CLIENT_LOGIN_COLUMNS = [
         'id',
         'email',
@@ -64,10 +66,16 @@ class AuthService
         $normalizedAccount = AccountIdentifier::normalizeAccount($account);
         $user = $this->findClientByAccount($accountType, $normalizedAccount);
         $needsPasswordRehash = false;
+        $passwordValid = $user
+            ? $this->verifyPassword($password, $user->password ?? '', $needsPasswordRehash)
+            : Hash::check($password, self::PASSWORD_TIMING_GUARD_HASH);
 
-        // 防止时序攻击：即使用户不存在也执行验证
-        if (! $user || ! $this->verifyPassword($password, $user->password ?? '', $needsPasswordRehash)) {
-            throw new BusinessException('邮箱/手机号或密码错误', 40100, 401);
+        if (! $user) {
+            throw new BusinessException('未找到该账号', 40100, 422);
+        }
+
+        if (! $passwordValid) {
+            throw new BusinessException('密码错误', 40100, 422);
         }
 
         if ($user->status !== 1) {

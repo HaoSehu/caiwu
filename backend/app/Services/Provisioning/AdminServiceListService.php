@@ -31,6 +31,7 @@ class AdminServiceListService
                 'user_id',
                 'product_id',
                 'order_id',
+                'invoice_id',
                 'name',
                 'domain',
                 'billing_cycle',
@@ -46,6 +47,8 @@ class AdminServiceListService
                 'product:id,product_group_id,product_type,config_options,purchase_requires',
                 'product.categoryMapping:id,parent_group_id,product_type,name',
                 'order:id,order_no,status,paid_at',
+                'invoice:id,invoice_no,service_id,order_id,product_spec_snapshot,status,paid_at',
+                'invoices:id,invoice_no,service_id,order_id,product_spec_snapshot,status,paid_at',
             ]);
 
         // 关键词搜索：服务名、域名、主机ID、IP、产品名、订单号
@@ -62,6 +65,14 @@ class AdminServiceListService
                     })
                     ->orWhereHas('order', function (Builder $orderQuery) use ($keyword) {
                         $orderQuery->where('order_no', 'like', '%'.$keyword.'%');
+                    })
+                    ->orWhereHas('invoice', function (Builder $invoiceQuery) use ($keyword) {
+                        $invoiceQuery->where('invoice_no', 'like', '%'.$keyword.'%')
+                            ->orWhere('product_spec_snapshot', 'like', '%'.$keyword.'%');
+                    })
+                    ->orWhereHas('invoices', function (Builder $invoiceQuery) use ($keyword) {
+                        $invoiceQuery->where('invoice_no', 'like', '%'.$keyword.'%')
+                            ->orWhere('product_spec_snapshot', 'like', '%'.$keyword.'%');
                     })
                     ->orWhereHas('user', function (Builder $userQuery) use ($keyword) {
                         $userQuery->where('nickname', 'like', '%'.$keyword.'%')
@@ -94,6 +105,8 @@ class AdminServiceListService
     {
         $provisionData = (array) ($service->provision_data ?? []);
         $statusLabels = ServiceStatus::$labels ?? [];
+        $invoice = $this->resolvePrimaryInvoice($service);
+        $order = $invoice ? null : $service->order;
 
         return [
             'id' => $service->id,
@@ -125,14 +138,25 @@ class AdminServiceListService
                 'type' => (string) ($service->product?->product_type ?? ''),
             ],
             'order' => [
-                'id' => (int) ($service->order?->id ?? 0),
-                'order_no' => (string) ($service->order?->order_no ?? ''),
+                'id' => (int) ($order?->id ?? 0),
+                'order_no' => (string) ($order?->order_no ?? ''),
+            ],
+            'invoice' => [
+                'id' => (int) ($invoice?->id ?? 0),
+                'invoice_no' => (string) ($invoice?->invoice_no ?? ''),
+                'status' => (int) ($invoice?->status ?? 0),
+                'paid_at' => $invoice?->paid_at?->format('Y-m-d H:i:s'),
             ],
         ];
     }
 
     private function resolveProductDisplayName(Service $service): string
     {
+        $invoiceDisplayName = trim((string) ($this->resolvePrimaryInvoice($service)?->product_spec_snapshot ?? ''));
+        if ($invoiceDisplayName !== '') {
+            return $invoiceDisplayName;
+        }
+
         $orderDisplayName = trim((string) ($service->order?->display_product_name ?? ''));
         if ($orderDisplayName !== '') {
             return $orderDisplayName;
@@ -153,5 +177,16 @@ class AdminServiceListService
     private function resolveProductDisplayNameResolver(): ProductDisplayNameResolver
     {
         return $this->productDisplayNameResolver ?? new ProductDisplayNameResolver;
+    }
+
+    private function resolvePrimaryInvoice(Service $service): ?\App\Models\Invoice
+    {
+        if ($service->invoice) {
+            return $service->invoice;
+        }
+
+        return $service->invoices
+            ->sortByDesc('id')
+            ->first();
     }
 }

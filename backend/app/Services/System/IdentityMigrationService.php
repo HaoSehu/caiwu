@@ -20,8 +20,8 @@ class IdentityMigrationService
 
     public function __construct()
     {
-        $this->sourceConnection = (string) config('identity_migration.source_connection', 'idc');
-        $this->targetConnection = (string) config('identity_migration.target_connection', 'idc');
+        $this->sourceConnection = (string) config('identity_migration.source_connection', 'mysql');
+        $this->targetConnection = (string) config('identity_migration.target_connection', 'mysql');
     }
 
     public function ensureConnections(): void

@@ -535,28 +535,31 @@ class NotificationService
 
     private function buildEmbeddedLogoSvgMarkup(): string
     {
-        // 优先使用 URL 引用 PNG logo，避免内联大体积 SVG 导致邮件内容超出数据库列限制
-        $pngCandidates = ['branding/logo1.png', 'branding/logo.png'];
-        $baseUrl = rtrim((string) config('app.url', ''), '/');
+        // 使用 FRONTEND_URL，uploads/ 目录通过 nginx 伪静态已代理到后端
+        $baseUrl = rtrim((string) (config('app.frontend_url') ?: config('app.url', '')), '/');
 
-        foreach ($pngCandidates as $candidate) {
+        // 优先使用 SVG logo，矢量格式在任何尺寸下都清晰
+        $svgCandidates = ['uploads/logo/logo1.svg', 'uploads/logo/logo.svg'];
+        foreach ($svgCandidates as $candidate) {
             if (is_file(public_path($candidate))) {
                 $logoUrl = $baseUrl.'/'.$candidate;
 
-                return '<img class="mail-logo" src="'.htmlspecialchars($logoUrl, ENT_QUOTES, 'UTF-8').'" alt="Logo" style="display:block;height:32px;width:auto;max-width:180px;">';
+                return '<img class="mail-logo" src="'.htmlspecialchars($logoUrl, ENT_QUOTES, 'UTF-8').'" alt="Logo" width="63" height="44" style="display:block;width:63px;height:44px;max-width:63px;">';
             }
         }
 
-        // 仅当 SVG 体积在合理范围内（<20KB）才内联
-        $svg = @file_get_contents(public_path('branding/logo1.svg'));
-        if (! is_string($svg) || trim($svg) === '' || strlen($svg) > 20480) {
-            return '';
+        // 回退：内联小体积 SVG（<20KB）
+        foreach (['uploads/logo/logo1.svg', 'uploads/logo/logo.svg'] as $candidate) {
+            $svg = @file_get_contents(public_path($candidate));
+            if (is_string($svg) && trim($svg) !== '' && strlen($svg) <= 20480) {
+                $svg = preg_replace('/<\?xml[\s\S]*?\?>\s*/i', '', $svg) ?? $svg;
+                $svg = preg_replace('/<svg\b([^>]*)>/i', '<svg class="mail-logo" aria-hidden="true"$1>', $svg, 1) ?? $svg;
+
+                return trim($svg);
+            }
         }
 
-        $svg = preg_replace('/<\?xml[\s\S]*?\?>\s*/i', '', $svg) ?? $svg;
-        $svg = preg_replace('/<svg\b([^>]*)>/i', '<svg class="mail-logo" aria-hidden="true"$1>', $svg, 1) ?? $svg;
-
-        return trim($svg);
+        return '';
     }
 
     private function renderTemplateText(string $template, array $params): string
@@ -695,8 +698,8 @@ class NotificationService
       display: block;
       flex: 0 0 auto;
       width: auto;
-      height: 32px;
-      max-width: 180px;
+      height: 44px;
+      max-width: 63px;
     }
     .mail-brand {
       min-width: 0;
@@ -832,8 +835,8 @@ class NotificationService
         gap: 12px;
       }
       .mail-logo {
-        height: 28px;
-        max-width: 140px;
+        height: 38px;
+        max-width: 54px;
       }
       .mail-content .mail-kv {
         display: block;

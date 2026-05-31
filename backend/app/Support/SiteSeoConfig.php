@@ -58,6 +58,10 @@ class SiteSeoConfig
             ['service_qq_group', 'service_phone'],
             self::DEFAULT_SERVICE_QQ_GROUP
         );
+        $serviceEmail = self::read(self::SETTING_GROUP_BASIC, 'service_email', '');
+        $serviceHours = self::read(self::SETTING_GROUP_BASIC, 'service_hours', '');
+        $supportGroupTitle = self::read(self::SETTING_GROUP_BASIC, 'support_group_title', '');
+        $supportGroupText = self::read(self::SETTING_GROUP_BASIC, 'support_group_text', '');
         $supportGroupQr = self::read(self::SETTING_GROUP_BASIC, 'support_group_qr', self::DEFAULT_SUPPORT_GROUP_QR);
         $supportGroupLink = self::read(self::SETTING_GROUP_BASIC, 'support_group_link', self::DEFAULT_SUPPORT_GROUP_LINK);
         $termsUrl = self::read(self::SETTING_GROUP_BASIC, 'terms_url', '');
@@ -84,6 +88,10 @@ class SiteSeoConfig
             'site_favicon' => $siteFavicon !== '' ? $siteFavicon : self::DEFAULT_SITE_FAVICON,
             'service_qq_group' => $serviceQqGroup !== '' ? $serviceQqGroup : self::DEFAULT_SERVICE_QQ_GROUP,
             'service_phone' => $serviceQqGroup !== '' ? $serviceQqGroup : self::DEFAULT_SERVICE_QQ_GROUP,
+            'service_email' => $serviceEmail,
+            'service_hours' => $serviceHours,
+            'support_group_title' => $supportGroupTitle,
+            'support_group_text' => $supportGroupText,
             'support_group_qr' => $supportGroupQr,
             'support_group_link' => $supportGroupLink,
             'terms_url' => $termsUrl,

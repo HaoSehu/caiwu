@@ -11,8 +11,6 @@ class ReferralRelation extends Model
 {
     protected $table = 'referral_relations';
 
-    protected $connection = 'idc';
-
     protected $fillable = [
         'referrer_user_id',
         'referred_user_id',

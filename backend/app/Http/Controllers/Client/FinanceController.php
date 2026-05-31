@@ -21,7 +21,7 @@ class FinanceController extends Controller
             $this->financeQueryService->paginateBalanceLogs(
                 $request->user(),
                 $request->filters(),
-                $request->perPage()
+                $request->perPage(15, 200)
             )
         );
     }

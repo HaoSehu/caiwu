@@ -7,7 +7,7 @@ namespace Tests\Feature;
 use App\Constants\ServiceStatus;
 use App\Models\Product;
 use App\Models\ProductCategory;
-use App\Models\ServiceInstance;
+use App\Models\Service;
 use App\Models\User;
 use App\Services\ProductCatalog\ProductAdminService;
 use App\Services\System\DashboardService;
@@ -61,16 +61,15 @@ class IdcServiceInstanceOnlyReadRegressionTest extends TestCase
             'auto_setup' => 0,
         ]);
 
-        ServiceInstance::query()->create([
+        Service::query()->create([
             'user_id' => (int) $user->id,
             'product_id' => (int) $product->id,
-            'service_no' => 'DASH-'.$suffix,
             'name' => 'Dashboard Active Service '.$suffix,
-            'instance_identifier' => 'dashboard-'.$suffix.'.example.com',
+            'domain' => 'dashboard-'.$suffix.'.example.com',
             'billing_cycle' => 'monthly',
-            'renewal_price' => '12.00',
+            'amount' => '12.00',
             'status' => ServiceStatus::ACTIVE,
-            'provision_snapshot_json' => [],
+            'provision_data' => [],
             'expires_at' => now()->addMonth(),
         ]);
 
@@ -100,7 +99,7 @@ class IdcServiceInstanceOnlyReadRegressionTest extends TestCase
             'verified_at' => null,
         ]);
 
-        DB::connection('idc')->table('users')->updateOrInsert(
+        DB::connection()->table('users')->updateOrInsert(
             ['id' => (int) $user->id],
             [
                 'email' => $user->email,
@@ -145,16 +144,15 @@ class IdcServiceInstanceOnlyReadRegressionTest extends TestCase
             'auto_setup' => 0,
         ]);
 
-        ServiceInstance::query()->create([
+        Service::query()->create([
             'user_id' => (int) $user->id,
             'product_id' => (int) $product->id,
-            'service_no' => 'OWN-'.$suffix,
             'name' => 'Owner Service '.$suffix,
-            'instance_identifier' => 'owner-'.$suffix.'.example.com',
+            'domain' => 'owner-'.$suffix.'.example.com',
             'billing_cycle' => 'monthly',
-            'renewal_price' => '23.00',
+            'amount' => '23.00',
             'status' => ServiceStatus::ACTIVE,
-            'provision_snapshot_json' => [],
+            'provision_data' => [],
             'expires_at' => now()->addMonth(),
         ]);
 

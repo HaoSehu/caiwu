@@ -312,7 +312,14 @@ class ServiceRenewService
 
     public function processPaidRenewOrder(Order $order): ?Service
     {
-        $order->loadMissing(['service.product.supplier', 'product.supplier']);
+        $order->loadMissing(['invoice', 'service.product.supplier', 'product.supplier']);
+
+        if ($order->invoice instanceof Invoice) {
+            return $this->processPaidRenewInvoice($order->invoice);
+        }
+
+        return null;
+
         $service = $order->service;
 
         if (! $service instanceof Service) {
@@ -420,13 +427,13 @@ class ServiceRenewService
      */
     public function processPaidRenewInvoice(Invoice $invoice): ?Service
     {
-        $invoice->loadMissing(['order.service.product.supplier', 'order.product.supplier']);
-
-        if ($invoice->order) {
-            return $this->processPaidRenewOrder($invoice->order);
-        }
+        $invoice->loadMissing(['service.product.supplier', 'order.service.product.supplier', 'order.product.supplier']);
 
         $serviceId = (int) ($invoice->service_id ?? 0);
+        if ($serviceId <= 0 && $invoice->order?->service) {
+            $serviceId = (int) $invoice->order->service->id;
+        }
+
         if ($serviceId <= 0) {
             Log::warning('[服务续费] 账单无关联服务，无法续费', ['invoice_id' => $invoice->id]);
 
@@ -436,6 +443,11 @@ class ServiceRenewService
         $service = Service::with(['product.supplier'])->find($serviceId);
         if (! $service instanceof Service) {
             return null;
+        }
+
+        $provisionData = is_array($service->provision_data ?? null) ? $service->provision_data : [];
+        if ((int) ($provisionData['last_renew_invoice_id'] ?? 0) === (int) $invoice->id) {
+            return $service->fresh(['product.supplier']) ?? $service;
         }
 
         $service = $this->healServiceProductMapping($service);
@@ -544,6 +556,7 @@ class ServiceRenewService
         DB::transaction(function () use ($service, $invoice, $provisionData, $nextExpiresAt, $resolvedStatus, $previousStatus) {
             $service->forceFill([
                 'product_id' => (int) ($invoice->product_id ?: $service->product_id),
+                'invoice_id' => (int) $invoice->id,
                 'billing_cycle' => (string) ($invoice->billing_cycle ?? $service->billing_cycle),
                 'amount' => (float) $invoice->amount,
                 'expires_at' => $nextExpiresAt,

@@ -14,8 +14,6 @@ class ServiceOperationLog extends Model
 
     protected $table = 'service_operation_logs';
 
-    protected $connection = 'idc';
-
     protected $fillable = [
         'service_instance_id',
         'operation_type',

@@ -81,8 +81,13 @@ class ReadControllerQueryServiceBoundaryTest extends TestCase
 
         $service = app(ClientFinanceQueryService::class);
 
-        $balancePage = $service->paginateBalanceLogs($user, ['date_range' => [now()->subDays(2)->toDateString(), now()->toDateString()]], 15);
-        $balanceSummary = $service->balanceLogSummary($user, ['date_range' => [now()->subDays(2)->toDateString(), now()->toDateString()]]);
+        $filters = [
+            'tab' => 'recharge',
+            'date_range' => [now()->subDays(2)->toDateString(), now()->toDateString()],
+        ];
+
+        $balancePage = $service->paginateBalanceLogs($user, $filters, 15);
+        $balanceSummary = $service->balanceLogSummary($user, $filters);
 
         $this->assertSame(1, $balancePage['total']);
         $this->assertSame('recharge', $balancePage['list'][0]['event_type']);

@@ -11,8 +11,6 @@ class ProductPricingPlan extends Model
 {
     protected $table = 'product_pricing_plans';
 
-    protected $connection = 'idc';
-
     protected $fillable = [
         'product_id',
         'billing_cycle',

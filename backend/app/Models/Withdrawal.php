@@ -14,8 +14,6 @@ class Withdrawal extends Model
 
     protected $table = 'withdrawals';
 
-    protected $connection = 'idc';
-
     protected $fillable = [
         'withdrawal_no',
         'user_id',

@@ -10,7 +10,7 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Models\ProductCategory;
-use App\Models\ServiceInstance;
+use App\Models\Service;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -26,7 +26,7 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
 
     private function mirrorUserToIdc(User $user, string $suffix): void
     {
-        DB::connection('idc')->table('users')->updateOrInsert(
+        DB::connection()->table('users')->updateOrInsert(
             ['id' => (int) $user->id],
             [
                 'email' => $user->email,
@@ -60,7 +60,7 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
 
     private function mirrorProductToIdc(Product $product, string $suffix): void
     {
-        DB::connection('idc')->table('products')->updateOrInsert(
+        DB::connection()->table('products')->updateOrInsert(
             ['id' => (int) $product->id],
             [
                 'product_group_id' => (int) ($product->product_group_id ?: 0) ?: null,
@@ -87,7 +87,7 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
         );
     }
 
-    private function mirrorServiceInstanceToIdc(ServiceInstance $service, string $suffix): void
+    private function mirrorServiceInstanceToIdc(Service $service, string $suffix): void
     {
         $this->mirrorServiceCompatToIdc([
             'id' => (int) $service->id,
@@ -233,16 +233,16 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
             'due_date' => now()->addDay(),
         ]);
 
-        $service = ServiceInstance::query()->create([
+        $service = Service::query()->create([
             'user_id' => (int) $user->id,
             'product_id' => (int) $product->id,
-            'source_invoice_id' => null,
             'name' => 'Client Invoice Service '.$suffix,
-            'instance_identifier' => 'client-invoice-'.$suffix.'.example.com',
-            'service_no' => 'CLI-SVC-'.strtoupper($suffix),
+            'domain' => 'client-invoice-'.$suffix.'.example.com',
             'billing_cycle' => 'monthly',
-            'renewal_price' => '66.00',
+            'amount' => '66.00',
             'status' => 0,
+            'locked_pricing' => [],
+            'provision_data' => [],
             'expires_at' => now()->addMonth(),
             'auto_renew' => 0,
         ]);

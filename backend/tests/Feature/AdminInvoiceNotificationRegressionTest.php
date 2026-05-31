@@ -24,7 +24,7 @@ class AdminInvoiceNotificationRegressionTest extends TestCase
 {
     private function mirrorUserToIdc(User $user, string $suffix): void
     {
-        DB::connection('idc')->table('users')->updateOrInsert(
+        DB::connection()->table('users')->updateOrInsert(
             ['id' => (int) $user->id],
             [
                 'email' => $user->email,

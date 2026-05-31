@@ -163,6 +163,7 @@ class ServiceVncService
             'relay_path' => $this->resolveVncRelayPath(),
             'username' => (string) ($params['username'] ?? ''),
             'target' => (string) ($params['target'] ?? ''),
+            'password' => (string) ($params['password'] ?? ''),
         ];
     }
 

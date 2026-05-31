@@ -23,6 +23,7 @@ class Invoice extends Model
         'coupon_id', 'user_coupon_id', 'coupon_code',
         'amount', 'discount', 'paid_amount',
         'billing_cycle', 'quantity',
+        'product_snapshot_json',
         'config_snapshot', 'config_pricing_snapshot', 'coupon_snapshot',
         'status', 'due_date', 'paid_at',
     ];
@@ -35,6 +36,7 @@ class Invoice extends Model
             'paid_amount' => 'decimal:2',
             'due_date' => 'date',
             'paid_at' => 'datetime',
+            'product_snapshot_json' => 'array',
             'config_snapshot' => 'array',
             'config_pricing_snapshot' => 'array',
             'coupon_snapshot' => 'array',
@@ -127,12 +129,48 @@ class Invoice extends Model
 
     public function getDisplayProductNameAttribute(): string
     {
+        $snapshotPayload = $this->product_snapshot_json;
+        $snapshotDisplayName = trim((string) ($snapshotPayload['product_name'] ?? $snapshotPayload['product_spec_snapshot'] ?? ''));
+        if ($snapshotDisplayName !== '') {
+            return $snapshotDisplayName;
+        }
+
         $snapshot = (string) ($this->product_spec_snapshot ?? '');
         if ($snapshot !== '') {
             return $snapshot;
         }
 
         return '';
+    }
+
+    public function getProductSnapshotJsonAttribute(mixed $value): ?array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+
+        if (is_string($value) && trim($value) !== '') {
+            $decoded = json_decode($value, true);
+
+            return is_array($decoded) ? $decoded : null;
+        }
+
+        $configSnapshot = $this->config_snapshot;
+
+        return is_array($configSnapshot) && $configSnapshot !== [] ? $configSnapshot : null;
+    }
+
+    public function setProductSnapshotJsonAttribute(mixed $value): void
+    {
+        $payload = is_array($value) ? $value : [];
+
+        if ($this->hasPhysicalColumn('product_snapshot_json')) {
+            $this->attributes['product_snapshot_json'] = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+            return;
+        }
+
+        $this->attributes['config_snapshot'] = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     public static function generateInvoiceNo(?CarbonInterface $time = null, ?string $suffix = null): string

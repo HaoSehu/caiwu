@@ -17,6 +17,17 @@ class SiteProductController extends Controller
         private SiteProductQuoteService $siteProductQuoteService,
     ) {}
 
+    public function init(Request $request)
+    {
+        $validated = $request->validate([
+            'product_type' => ['nullable', Rule::in(ProductType::allowedValues())],
+        ]);
+
+        return $this->success(
+            $this->siteProductReadService->productsInit($validated['product_type'] ?? null)
+        );
+    }
+
     public function productTypes()
     {
         return $this->success($this->siteProductReadService->productTypes());
