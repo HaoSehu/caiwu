@@ -27,7 +27,7 @@
 
       <el-input
         v-model="keyword"
-        placeholder="搜索主机名 / 主机ID / IP / 用户 / 账单号"
+        placeholder="搜索主机ID / 主机IP / 实例ID / 用户名 / 账单号"
         clearable
         style="flex: 1; min-width: 200px"
         @keyup.enter="handleSearch"
@@ -38,7 +38,6 @@
         </template>
       </el-input>
 
-      <el-button type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
       <el-button :disabled="!selectedRows.length" @click="openBatchHostnameDialog">
         批量主机名<span v-if="selectedRows.length">({{ selectedRows.length }})</span>
       </el-button>
@@ -54,48 +53,58 @@
         row-key="id"
         style="width: 100%"
         :header-cell-style="{ background: '#f7f8fa', color: '#1d2129', fontWeight: '600' }"
+        :cell-style="{ padding: '14px 0', verticalAlign: 'middle' }"
         :row-style="{ background: '#ffffff' }"
         @selection-change="handleSelectionChange"
       >
         <el-table-column type="selection" width="48" />
 
         <!-- 服务 -->
-        <el-table-column label="服务" min-width="240">
+        <el-table-column label="服务" min-width="320">
           <template #default="{ row }">
             <div class="service-cell">
-              <div class="service-name-row">
-                <span class="service-name">{{ row.name || '—' }}</span>
-                <el-tag v-if="row.has_custom_hostname" size="small" type="warning" effect="plain">自定义</el-tag>
+              <div class="service-primary">
+                <span class="service-id">服务/实例 #{{ row.service_id || row.id || '—' }}</span>
+                <span v-if="row.invoice?.id" class="service-pill">账单 #{{ row.invoice.id }}</span>
               </div>
-              <span v-if="row.domain" class="service-domain">{{ row.domain }}</span>
+              <span v-if="row.invoice?.invoice_no" class="service-secondary">账单号 {{ row.invoice.invoice_no }}</span>
             </div>
           </template>
         </el-table-column>
 
         <!-- 主机信息 -->
-        <el-table-column label="主机信息" min-width="160">
+        <el-table-column label="主机信息" min-width="220">
           <template #default="{ row }">
             <div class="host-cell">
-              <span v-if="row.upstream_host_id" class="host-id">ID: {{ row.upstream_host_id }}</span>
-              <span v-if="row.dedicated_ip" class="host-ip">{{ row.dedicated_ip }}</span>
-              <span v-if="row.os" class="host-os">{{ row.os }}</span>
-              <span v-if="!row.upstream_host_id && !row.dedicated_ip && !row.os" class="text-muted">—</span>
+              <span v-if="row.upstream_host_id_text || row.upstream_host_id" class="host-line host-id">
+                <span class="meta-label">上游</span>{{ row.upstream_host_id_text || row.upstream_host_id }}
+              </span>
+              <span v-if="row.host_ips?.length" class="host-line host-ip">
+                <span class="meta-label">IP</span>{{ row.host_ips.join(' / ') }}
+              </span>
+              <span v-if="row.host_username || row.connection?.username" class="host-line">
+                <span class="meta-label">登录</span>{{ row.host_username || row.connection.username }}
+              </span>
+              <span v-if="!hasHostInfo(row)" class="text-muted">—</span>
             </div>
           </template>
         </el-table-column>
 
         <!-- 用户 -->
-        <el-table-column label="用户" min-width="150">
+        <el-table-column label="用户" min-width="170">
           <template #default="{ row }">
             <div class="user-cell" :class="{ 'user-cell--link': row.user?.id }" @click="goUserDetail(row)">
-              <span class="user-name">{{ row.user?.username || '—' }}</span>
+              <div class="user-primary">
+                <span class="user-name">{{ row.user?.username || '—' }}</span>
+                <span v-if="row.user?.id" class="user-id">#{{ row.user.id }}</span>
+              </div>
               <span v-if="row.user?.email" class="user-email">{{ row.user.email }}</span>
             </div>
           </template>
         </el-table-column>
 
         <!-- 配置 -->
-        <el-table-column label="配置" min-width="140">
+        <el-table-column label="配置" min-width="160" show-overflow-tooltip>
           <template #default="{ row }">
             <span class="product-name">{{ row.product_display_name || row.product?.display_name || (row.product_id ? `未配置规格 #${row.product_id}` : '—') }}</span>
           </template>
@@ -114,8 +123,8 @@
         <el-table-column label="计费/金额" width="120">
           <template #default="{ row }">
             <div class="billing-cell">
-              <span class="billing-cycle">{{ billingCycleLabel(row.billing_cycle) }}</span>
               <span class="billing-amount">¥{{ row.amount }}</span>
+              <span class="billing-cycle">{{ billingCycleLabel(row.billing_cycle) }}</span>
             </div>
           </template>
         </el-table-column>
@@ -358,6 +367,16 @@ function isExpiringSoon(expiresAt) {
   return diff > 0 && diff < 7 * 24 * 3600 * 1000
 }
 
+function hasHostInfo(row) {
+  return Boolean(
+    row.upstream_host_id_text ||
+    row.upstream_host_id ||
+    row.host_ips?.length ||
+    row.host_username ||
+    row.connection?.username
+  )
+}
+
 onMounted(() => loadList())
 </script>
 
@@ -403,25 +422,42 @@ onMounted(() => loadList())
 .service-cell {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
+  min-width: 0;
 }
 
-.service-name-row {
-  display: inline-flex;
+.service-primary {
+  display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 22px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
-.service-name {
+.service-id {
+  color: #1d2129;
   font-size: 13px;
   font-weight: 600;
-  color: #1d2129;
+  line-height: 1.35;
 }
 
-.service-domain {
+.service-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #f2f3f5;
+  color: #4e5969;
   font-size: 12px;
-  color: #86909c;
+  line-height: 22px;
+}
+
+.service-secondary {
+  color: #4e5969;
+  font-size: 12px;
+  line-height: 1.4;
+  word-break: break-all;
 }
 
 .row-actions {
@@ -460,9 +496,28 @@ onMounted(() => loadList())
 
 .host-cell {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
   font-size: 12px;
+  min-width: 0;
+}
+
+.host-line {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  color: #1d2129;
+  line-height: 1.4;
+  word-break: break-all;
+}
+
+.meta-label {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-right: 5px;
+  color: #86909c;
 }
 
 .host-id {
@@ -475,14 +530,11 @@ onMounted(() => loadList())
   font-family: monospace;
 }
 
-.host-os {
-  color: #86909c;
-}
-
 .user-cell {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 5px;
+  min-width: 0;
 }
 
 .user-cell--link {
@@ -500,20 +552,41 @@ onMounted(() => loadList())
   transition: color 0.15s ease-out;
 }
 
+.user-primary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .user-email {
+  font-size: 12px;
+  color: #86909c;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-id {
   font-size: 12px;
   color: #86909c;
 }
 
 .product-name {
+  display: inline-flex;
+  max-width: 100%;
   font-size: 13px;
+  font-weight: 500;
   color: #1d2129;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .billing-cell {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
 .billing-cycle {
@@ -525,6 +598,7 @@ onMounted(() => loadList())
   font-size: 13px;
   font-weight: 600;
   color: #1d2129;
+  line-height: 1.25;
 }
 
 .expiring-soon {

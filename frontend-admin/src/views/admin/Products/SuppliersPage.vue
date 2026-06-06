@@ -150,7 +150,7 @@
               :rows="3"
               maxlength="4000"
               show-word-limit
-              placeholder="API 登录不可用时可填：web_session_cookie=ZJMF_xxx=..."
+              placeholder="API 登录不可用时可填：web_session_cookie=SESSION=..."
             />
           </el-form-item>
           <el-form-item label="状态" prop="status">
@@ -430,6 +430,7 @@ import { ElMessage } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
 import {
   PROVIDER_KEYS,
+  configureProviderTypes,
   providerTypeLabel,
   providerTypeOptions,
 } from '@/constants/providerTypes'
@@ -902,8 +903,18 @@ async function loadSummary() {
   summary.inactive = res.data.inactive
 }
 
+async function loadProviderTypes() {
+  try {
+    const res = await supplierApi.providerTypes()
+    configureProviderTypes(res.data?.list || [])
+  } catch {
+    configureProviderTypes([])
+  }
+}
+
 async function loadData() {
   try {
+    await loadProviderTypes()
     await Promise.all([loadList(), loadSummary()])
   } catch {
     balanceBatchId += 1

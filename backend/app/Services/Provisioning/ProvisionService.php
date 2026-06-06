@@ -185,6 +185,7 @@ class ProvisionService
     private function submitUpstreamProvision(Order $order, Service $service, bool $throwOnFailure = false): Service
     {
         $this->markPending($order, $service);
+        $providerKey = $this->resolveProviderKeyForProduct($order->product);
 
         try {
             $result = $this->provisionViaUpstream($order);
@@ -198,7 +199,7 @@ class ProvisionService
                 'expires_at' => $this->resolveServiceExpiry($hostDetail, $order),
                 'suspended_reason' => null,
                 'provision_data' => array_merge((array) ($service->provision_data ?? []), [
-                    'provider' => ProviderKey::HOSTING_PANEL_API,
+                    'provider' => $providerKey,
                     'supplier_id' => $order->product->supplier_id,
                     'supplier_product_id' => $order->product->supplier_product_id,
                     'requested_host' => $result['requested_host'],
@@ -240,7 +241,7 @@ class ProvisionService
                 'status' => ServiceStatus::PENDING,
                 'suspended_reason' => mb_substr($message, 0, 200),
                 'provision_data' => array_merge((array) ($service->provision_data ?? []), [
-                    'provider' => ProviderKey::HOSTING_PANEL_API,
+                    'provider' => $providerKey,
                     'supplier_id' => $order->product->supplier_id,
                     'supplier_product_id' => $order->product->supplier_product_id,
                     'last_provision_attempt_at' => now()->format('Y-m-d H:i:s'),
@@ -340,6 +341,18 @@ class ProvisionService
             && (int) ($product->supplier_id ?? 0) > 0
             && (int) ($product->supplier_product_id ?? 0) > 0
             && $this->providerResolver->resolveForProduct($product)->supports(ProvidesProvisioning::class);
+    }
+
+    private function resolveProviderKeyForProduct(?Product $product): string
+    {
+        if ($product instanceof Product) {
+            $resolved = $this->providerResolver->resolveForProduct($product);
+            if ($resolved->key() !== null && trim($resolved->key()) !== '') {
+                return (string) $resolved->key();
+            }
+        }
+
+        return ProviderKey::HOSTING_PANEL_API;
     }
 
     private function provisionViaUpstream(Order $order): array

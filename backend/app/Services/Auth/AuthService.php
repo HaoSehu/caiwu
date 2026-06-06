@@ -51,6 +51,7 @@ class AuthService
         private OperationLogService $operationLogService,
         private AdminRoleBridgeService $adminRoleBridgeService,
         private LoginRiskControlService $loginRiskControlService,
+        private LegacyPasswordVerifier $legacyPasswordVerifier,
     ) {}
 
     /**
@@ -741,22 +742,11 @@ class AuthService
         ];
     }
 
-    /**
-     * 验证密码，兼容魔方迁移的 MD5 格式（###{md5hash}）
-     * 验证通过后若为旧格式，自动升级为 bcrypt
-     */
     private function verifyPassword(string $plaintext, string $stored, bool &$needsPasswordRehash = false): bool
     {
-        // 魔方 MD5 格式：###开头 + 32位十六进制
-        if (str_starts_with($stored, '###') && strlen($stored) === 35) {
-            $md5hash = substr($stored, 3);
-            if (! hash_equals($md5hash, md5($plaintext))) {
-                return false;
-            }
-
-            $needsPasswordRehash = true;
-
-            return true;
+        $legacyMatched = $this->legacyPasswordVerifier->verify($plaintext, $stored, $needsPasswordRehash);
+        if ($legacyMatched !== null) {
+            return $legacyMatched;
         }
 
         return Hash::check($plaintext, $stored);

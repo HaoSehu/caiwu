@@ -20,7 +20,7 @@ final class HostingPanelApiDriver implements UpstreamDriver
 
     public function label(): string
     {
-        return ProviderKey::label($this->key());
+        return '主机面板接口';
     }
 
     public function supports(string $capability): bool

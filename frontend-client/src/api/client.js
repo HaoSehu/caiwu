@@ -69,6 +69,12 @@ export default {
   payInvoiceByAlipay: (id, data) => request.post(`/client/invoices/${id}/pay/alipay`, data),
   queryInvoiceAlipayStatus: (id, params) => request.get(`/client/invoices/${id}/pay/alipay/status`, { params }),
 
+  orders: (params) => request.get('/client/orders', { params }),
+  ordersSummary: (params) => request.get('/client/orders/summary', { params }),
+
+  payments: (params) => request.get('/client/payments', { params }),
+  paymentsSummary: (params) => request.get('/client/payments/summary', { params }),
+
   referralOverview: () => request.get('/client/referral/overview'),
   referralRewards: (params) => request.get('/client/referral/rewards', { params }),
   referralAccountLogs: (params) => request.get('/client/referral/account-logs', { params }),

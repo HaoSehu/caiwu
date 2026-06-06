@@ -86,7 +86,7 @@ trait HandlesCatalogNormalization
     private function resolveCatalogProductTypeLabel(string $type): string
     {
         return match (trim($type)) {
-            'dcimcloud', 'cloud', 'vps' => '云服务器',
+            'cloud', 'vps' => '云服务器',
             'server', 'dedicated' => '独立服务器',
             'hosting', 'virtualhosting' => '虚拟主机',
             'domain' => '域名',

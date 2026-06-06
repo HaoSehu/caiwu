@@ -20,9 +20,6 @@
             @keyup.enter="loadLibrary(1)"
             @clear="loadLibrary(1)"
           >
-            <template #append>
-              <el-button @click="loadLibrary(1)">搜索</el-button>
-            </template>
           </el-input>
         </div>
 

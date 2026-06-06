@@ -21,12 +21,7 @@ class TicketController extends Controller
         $perPage = max(1, min((int) $request->input('page_size', 15), 50));
         $paginator = $this->ticketService->clientList($request->user()->id, $filters, $perPage);
 
-        return $this->success([
-            'list' => $paginator->items(),
-            'total' => $paginator->total(),
-            'page' => $paginator->currentPage(),
-            'page_size' => $paginator->perPage(),
-        ]);
+        return $this->paginate($paginator);
     }
 
     public function store(Request $request)

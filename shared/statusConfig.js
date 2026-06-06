@@ -76,6 +76,7 @@ export const INVOICE_TYPE_MAP = {
   normal:          '新购',
   renew:           '续费',
   recharge:        '充值',
+  upgrade:         '附加配置',
   deduction:       '扣款',
   referral_credit: '推荐奖励账单',
   manual:          '手工账单',

@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\CouponCampaignController;
 use App\Http\Controllers\Admin\CouponController;
 use App\Http\Controllers\Admin\CpuModelCatalogController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\FinanceMenuController;
 use App\Http\Controllers\Admin\FinanceLedgerController;
 use App\Http\Controllers\Admin\HomeHeroController;
 use App\Http\Controllers\Admin\InstanceSpecCatalogController;
@@ -14,6 +15,7 @@ use App\Http\Controllers\Admin\InvoiceController;
 use App\Http\Controllers\Admin\LogController;
 use App\Http\Controllers\Admin\MediaFileController;
 use App\Http\Controllers\Admin\MemberLevelController;
+use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\ProductCategoryController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\ProductTypeController;
@@ -117,9 +119,17 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function () {
         Route::post('/users/{user}/invoices/{invoice}/refund', [UserController::class, 'refundInvoice']);
     });
 
+    // 订单管理（内部履约订单）
+    Route::middleware(['permission:'.AdminPermissions::ORDER_LIST])->group(function () {
+        Route::get('/orders', [OrderController::class, 'index']);
+    });
+
     // 账单管理（主实体）
     Route::middleware(['permission:'.AdminPermissions::INVOICE_LIST])->group(function () {
         Route::get('/invoices', [InvoiceController::class, 'index']);
+        Route::get('/finance/recharges', [FinanceMenuController::class, 'recharges']);
+        Route::get('/finance/renewal-orders', [FinanceMenuController::class, 'renewalOrders']);
+        Route::get('/finance/addon-orders', [FinanceMenuController::class, 'addonOrders']);
         Route::get('/finance/ledger', [FinanceLedgerController::class, 'index']);
         Route::get('/finance/ledger/summary', [FinanceLedgerController::class, 'summary']);
     });
@@ -129,6 +139,11 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function () {
     });
     Route::middleware(['permission:'.AdminPermissions::INVOICE_MANAGE])->group(function () {
         Route::post('/invoices/{id}/cancel', [InvoiceController::class, 'cancel']);
+    });
+
+    Route::middleware(['permission:'.AdminPermissions::FINANCE_REPORT])->group(function () {
+        Route::get('/finance/new-customer-daily-summary', [FinanceMenuController::class, 'newCustomerDailySummary']);
+        Route::get('/finance/product-income-summary', [FinanceMenuController::class, 'productIncomeSummary']);
     });
 
     // 工单管理
@@ -206,6 +221,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function () {
         Route::put('/product-categories/{productCategory}', [ProductCategoryController::class, 'update']);
         Route::delete('/product-categories/{productCategory}', [ProductCategoryController::class, 'destroy']);
         Route::get('/suppliers/summary', [SupplierController::class, 'summary']);
+        Route::get('/suppliers/provider-types', [SupplierController::class, 'providerTypes']);
         Route::get('/suppliers', [SupplierController::class, 'index']);
         Route::get('/suppliers/{supplier}/balance', [SupplierController::class, 'balance']);
         Route::get('/suppliers/{supplier}/products', [SupplierController::class, 'products']);

@@ -42,14 +42,14 @@ class PaymentService
     ) {}
 
     /**
-     * 余额支付
+     * 余额支付（不产生 Payment 记录）
      */
-    public function payByBalance(Invoice $invoice, User $user, array $context = []): Payment
+    public function payByBalance(Invoice $invoice, User $user, array $context = []): Invoice
     {
         $traceId = trim((string) ($context['trace_id'] ?? ''));
         $lockKey = "lock:pay:invoice:{$invoice->id}";
 
-        $payment = $this->withLock($lockKey, 30, function () use ($invoice, $user, $traceId) {
+        $paidInvoice = $this->withLock($lockKey, 30, function () use ($invoice, $user, $traceId) {
             return DB::transaction(function () use ($invoice, $user, $traceId) {
                 $lockedInvoice = Invoice::query()
                     ->lockForUpdate()
@@ -79,52 +79,35 @@ class PaymentService
                     '支付账单 '.(string) $lockedInvoice->invoice_no
                 );
 
-                $payment = Payment::query()->create([
-                    'payment_no' => Payment::generatePaymentNo(),
-                    'user_id' => $lockedUser->id,
-                    'order_id' => (int) ($lockedInvoice->order?->id ?? 0) ?: null,
-                    'invoice_id' => $lockedInvoice->id,
-                    'gateway' => 'balance',
-                    'amount' => $amount,
-                    'status' => PaymentStatus::SUCCESS,
-                    'callback_raw' => [
-                        'source' => 'balance',
-                        'trace_id' => $traceId,
-                    ],
-                    'paid_at' => now(),
-                ]);
-                $this->syncProjection($payment);
-
                 $lockedInvoice->forceFill([
                     'status' => InvoiceStatus::PAID,
                     'paid_amount' => $lockedInvoice->amount,
                     'paid_at' => now(),
                 ])->save();
 
-                // 保持 order 状态同步（orders 作为内部基础设施仍存在）
                 $lockedInvoice->order?->forceFill([
                     'status' => OrderStatus::PAID,
                     'paid_amount' => $amount,
                     'paid_at' => now(),
                 ])->save();
 
-                $this->closeOtherPendingPayments($lockedInvoice, (int) $payment->id, 'invoice_paid_by_balance');
+                $this->closeOtherPendingPayments($lockedInvoice, 0, 'invoice_paid_by_balance');
 
-                return $payment;
+                return $lockedInvoice;
             });
         }, '支付请求处理中，请勿重复提交');
 
         $this->handlePaidInvoice($invoice, $traceId !== '' ? 'balance:'.$traceId : 'balance:'.$invoice->id);
 
-        return $payment->fresh() ?? $payment;
+        return $paidInvoice->fresh() ?? $paidInvoice;
     }
 
-    public function payOrderByBalance(Order $order, User $user, array $context = []): Payment
+    public function payOrderByBalance(Order $order, User $user, array $context = []): Invoice
     {
         $traceId = trim((string) ($context['trace_id'] ?? ''));
         $lockKey = "lock:pay:order:{$order->id}";
 
-        $payment = $this->withLock($lockKey, 30, function () use ($order, $user, $traceId) {
+        $paidInvoice = $this->withLock($lockKey, 30, function () use ($order, $user, $traceId) {
             return DB::transaction(function () use ($order, $user, $traceId) {
                 $lockedOrder = Order::query()
                     ->lockForUpdate()
@@ -155,22 +138,6 @@ class PaymentService
                     );
                 }
 
-                $payment = Payment::query()->create([
-                    'payment_no' => Payment::generatePaymentNo(),
-                    'user_id' => $lockedUser->id,
-                    'order_id' => (int) $lockedOrder->id,
-                    'invoice_id' => (int) ($lockedOrder->invoice?->id ?? 0) ?: null,
-                    'gateway' => $amount > 0 ? 'balance' : 'free',
-                    'amount' => $amount,
-                    'status' => PaymentStatus::SUCCESS,
-                    'callback_raw' => [
-                        'source' => $amount > 0 ? 'balance' : 'free_confirm',
-                        'trace_id' => $traceId,
-                    ],
-                    'paid_at' => now(),
-                ]);
-                $this->syncProjection($payment);
-
                 $lockedOrder->forceFill([
                     'status' => OrderStatus::PAID,
                     'paid_amount' => $amount,
@@ -185,9 +152,9 @@ class PaymentService
                     ])->save();
                 }
 
-                $this->closeOtherPendingPaymentsForOrder($lockedOrder, (int) $payment->id, 'order_paid_by_balance');
+                $this->closeOtherPendingPaymentsForOrder($lockedOrder, 0, 'order_paid_by_balance');
 
-                return $payment;
+                return $lockedOrder->invoice;
             });
         }, '支付请求处理中，请勿重复提交');
 
@@ -196,7 +163,7 @@ class PaymentService
             $this->handlePaidInvoice($order->invoice, $traceId !== '' ? 'balance:'.$traceId : 'balance:'.$order->id);
         }
 
-        return $payment->fresh() ?? $payment;
+        return $paidInvoice?->fresh() ?? $paidInvoice ?? $order->invoice;
     }
 
     /**
@@ -232,21 +199,13 @@ class PaymentService
                     'trace_id' => trim((string) ($context['trace_id'] ?? '')),
                 ]
             );
-        });
 
-        try {
             if ($amount > 0) {
-                $this->invoiceService->createForRecharge($user, abs($amount));
+                $this->invoiceService->createForRecharge($lockedUser, abs($amount), null, $remark);
             } else {
-                $this->invoiceService->createForDeduction($user, abs($amount), $remark);
+                $this->invoiceService->createForDeduction($lockedUser, abs($amount), $remark);
             }
-        } catch (\Throwable $e) {
-            Log::warning('[资金调整] 创建账单失败', [
-                'user_id' => $user->id,
-                'amount' => $amount,
-                'message' => $e->getMessage(),
-            ]);
-        }
+        });
     }
 
     /**
@@ -332,7 +291,9 @@ class PaymentService
      */
     public function queryRechargeStatus(Payment $payment): array
     {
-        if ($payment->status === PaymentStatus::SUCCESS) {
+        if ((int) $payment->status === PaymentStatus::SUCCESS) {
+            $this->ensureRechargeInvoiceProjection($payment);
+
             return ['paid' => true, 'trade_no' => $payment->trade_no];
         }
 
@@ -355,48 +316,42 @@ class PaymentService
         $lockKey = "lock:recharge:payment:{$payment->id}";
 
         Cache::lock($lockKey, 30)->block(5, function () use ($payment, $tradeNo, $raw) {
-            $payment->refresh();
-            if ($payment->status === PaymentStatus::SUCCESS) {
-                return;
-            }
+            DB::transaction(function () use ($payment, $tradeNo, $raw) {
+                $lockedPayment = Payment::query()
+                    ->lockForUpdate()
+                    ->findOrFail($payment->id);
 
-            $completedUser = null;
+                if ((int) $lockedPayment->status === PaymentStatus::SUCCESS) {
+                    if (! $lockedPayment->invoice_id) {
+                        $user = User::query()->lockForUpdate()->findOrFail($lockedPayment->user_id);
+                        $this->invoiceService->createForRecharge($user, (float) $lockedPayment->amount, $lockedPayment);
+                    }
 
-            DB::transaction(function () use ($payment, $tradeNo, $raw, &$completedUser) {
-                $payment->update([
+                    return;
+                }
+
+                $lockedPayment->forceFill([
                     'trade_no' => $tradeNo,
                     'status' => PaymentStatus::SUCCESS,
                     'callback_raw' => $raw,
                     'paid_at' => now(),
-                ]);
-                $this->syncProjection($payment);
+                ])->save();
+                $this->syncProjection($lockedPayment);
 
-                $user = User::query()->lockForUpdate()->findOrFail($payment->user_id);
-                $balanceAfter = $this->setUserBalance($user, $this->getUserBalance($user) + (float) $payment->amount);
+                $user = User::query()->lockForUpdate()->findOrFail($lockedPayment->user_id);
+                $balanceAfter = $this->setUserBalance($user, $this->getUserBalance($user) + (float) $lockedPayment->amount);
 
                 $this->createBalanceLog(
                     (int) $user->id,
                     FinanceLedgerEventType::RECHARGE,
-                    (float) $payment->amount,
+                    (float) $lockedPayment->amount,
                     $balanceAfter,
-                    (int) $payment->id,
-                    '支付宝充值 '.(string) $payment->payment_no
+                    (int) $lockedPayment->id,
+                    '支付宝充值 '.(string) $lockedPayment->payment_no
                 );
 
-                $completedUser = $user;
+                $this->invoiceService->createForRecharge($user, (float) $lockedPayment->amount, $lockedPayment);
             });
-
-            if ($completedUser) {
-                try {
-                    $this->invoiceService->createForRecharge($completedUser, (float) $payment->amount, $payment);
-                } catch (\Throwable $e) {
-                    Log::warning('[充值] 创建充值账单失败', [
-                        'payment_id' => $payment->id,
-                        'user_id' => $completedUser->id,
-                        'message' => $e->getMessage(),
-                    ]);
-                }
-            }
         });
     }
 
@@ -521,23 +476,6 @@ class PaymentService
                     '账单余额支付 '.(string) $lockedInvoice->invoice_no
                 );
 
-                $payment = Payment::query()->create([
-                    'payment_no' => Payment::generatePaymentNo(),
-                    'user_id' => $lockedUser->id,
-                    'order_id' => (int) ($lockedInvoice->order?->id ?? 0) ?: null,
-                    'invoice_id' => $lockedInvoice->id,
-                    'gateway' => 'balance',
-                    'amount' => $normalizedBalanceAmount,
-                    'status' => PaymentStatus::SUCCESS,
-                    'callback_raw' => [
-                        'source' => 'balance_part',
-                        'trace_id' => $traceId,
-                        'mix_payment' => true,
-                    ],
-                    'paid_at' => now(),
-                ]);
-                $this->syncProjection($payment);
-
                 $nextPaidAmount = round((float) ($lockedInvoice->paid_amount ?? 0) + $normalizedBalanceAmount, 2);
                 $lockedInvoice->forceFill([
                     'paid_amount' => $nextPaidAmount,
@@ -545,7 +483,6 @@ class PaymentService
 
                 return [
                     'invoice' => $lockedInvoice,
-                    'payment' => $payment,
                     'remaining_amount' => round(max((float) $lockedInvoice->amount - $nextPaidAmount, 0), 2),
                 ];
             });
@@ -553,13 +490,11 @@ class PaymentService
 
         /** @var Invoice $lockedInvoice */
         $lockedInvoice = $payload['invoice'];
-        /** @var Payment $balancePayment */
-        $balancePayment = $payload['payment'];
         $remainingAmount = (float) ($payload['remaining_amount'] ?? 0);
 
         throw_if($remainingAmount <= 0, new BusinessException('当前账单无需继续发起支付宝支付'));
 
-        $alipayPayment = DB::transaction(function () use ($lockedInvoice, $user, $remainingAmount, $traceId, $balancePayment) {
+        $alipayPayment = DB::transaction(function () use ($lockedInvoice, $user, $remainingAmount, $traceId, $normalizedBalanceAmount) {
             $existingPayment = Payment::query()
                 ->where('invoice_id', $lockedInvoice->id)
                 ->where('gateway', 'alipay')
@@ -584,7 +519,7 @@ class PaymentService
                     'source' => 'alipay_precreate_mix',
                     'trace_id' => $traceId,
                     'mix_payment' => true,
-                    'balance_payment_no' => (string) $balancePayment->payment_no,
+                    'balance_amount' => $normalizedBalanceAmount,
                 ],
             ]);
             $this->syncProjection($payment);
@@ -593,11 +528,20 @@ class PaymentService
         });
 
         $subject = config('app.name', 'IDC').' - 账单 '.$lockedInvoice->invoice_no;
-        $result = $this->alipayService->precreate($alipayPayment->payment_no, $remainingAmount, $subject);
+        try {
+            $result = $this->alipayService->precreate($alipayPayment->payment_no, $remainingAmount, $subject);
+        } catch (\Throwable $exception) {
+            $this->restoreReservedMixBalance($alipayPayment, [
+                'trace_id' => $traceId,
+                'closed_reason' => 'alipay_precreate_failed',
+                'suppress_logs' => true,
+            ]);
+
+            throw $exception;
+        }
 
         return [
-            'balance_payment_no' => $balancePayment->payment_no,
-            'balance_amount' => number_format((float) $balancePayment->amount, 2, '.', ''),
+            'balance_amount' => number_format($normalizedBalanceAmount, 2, '.', ''),
             'payment_no' => $alipayPayment->payment_no,
             'qr_code' => $result['qr_code'],
             'amount' => number_format($remainingAmount, 2, '.', ''),
@@ -732,7 +676,9 @@ class PaymentService
         }
 
         // 幂等：已处理过
-        if ($payment->status === PaymentStatus::SUCCESS) {
+        if ((int) $payment->status === PaymentStatus::SUCCESS) {
+            $this->ensureRechargeInvoiceProjection($payment);
+
             return true;
         }
 
@@ -851,7 +797,7 @@ class PaymentService
 
                     $invoice->order?->forceFill([
                         'status' => OrderStatus::PAID,
-                        'paid_amount' => $lockedPayment->amount,
+                        'paid_amount' => $invoice->amount,
                         'paid_at' => now(),
                     ])->save();
 
@@ -1042,7 +988,7 @@ class PaymentService
 
                     $invoice->order?->forceFill([
                         'status' => OrderStatus::PAID,
-                        'paid_amount' => $lockedPayment->amount,
+                        'paid_amount' => $invoice->amount,
                         'paid_at' => now(),
                     ])->save();
 
@@ -1140,10 +1086,10 @@ class PaymentService
                     ];
                 }
 
-                $refundAmount = round((float) ($payload['amount'] ?? $payment->amount), 2);
-                $paymentAmount = round((float) $payment->amount, 2);
+                $refundableAmount = $this->resolveBalanceRefundableAmount($lockedInvoice, $payment);
+                $refundAmount = round((float) ($payload['amount'] ?? $refundableAmount), 2);
                 throw_if($refundAmount <= 0, new BusinessException('退款金额不正确'));
-                throw_if(abs($refundAmount - $paymentAmount) > 0.00001, new BusinessException('当前仅支持按原支付金额全额退款'));
+                throw_if(abs($refundAmount - $refundableAmount) > 0.00001, new BusinessException('当前仅支持按原支付金额全额退款'));
 
                 $refundReason = trim((string) ($payload['remark'] ?? ''));
                 if ($refundReason === '') {
@@ -1291,10 +1237,10 @@ class PaymentService
                     ];
                 }
 
-                $refundAmount = round((float) ($payload['amount'] ?? $payment->amount), 2);
-                $paymentAmount = round((float) $payment->amount, 2);
+                $refundableAmount = $this->resolveBalanceRefundableAmount($lockedInvoice, $payment);
+                $refundAmount = round((float) ($payload['amount'] ?? $refundableAmount), 2);
                 throw_if($refundAmount <= 0, new BusinessException('退款金额不正确'));
-                throw_if(abs($refundAmount - $paymentAmount) > 0.00001, new BusinessException('当前仅支持按原支付金额全额退款'));
+                throw_if(abs($refundAmount - $refundableAmount) > 0.00001, new BusinessException('当前仅支持按原支付金额全额退款'));
 
                 $refundReason = trim((string) ($payload['remark'] ?? ''));
                 if ($refundReason === '') {
@@ -1341,7 +1287,9 @@ class PaymentService
                 ])->save();
                 $this->syncProjection($payment);
 
-                if ($order) {
+                $scope = (array) ($payload['scope'] ?? ['order', 'payment']);
+
+                if ($order && in_array('order', $scope, true)) {
                     $order->forceFill([
                         'status' => OrderStatus::REFUNDED,
                     ])->save();
@@ -1403,7 +1351,7 @@ class PaymentService
             'business_flow_dispatch_ms' => 0,
         ];
 
-        // 开通 / 履约：优先走 Order 路径（包含完整上游 Mofang 链路），降级走 Invoice-only
+        // 开通 / 履约：优先走 Order 路径（包含完整上游开通链路），降级走 Invoice-only
         $stepStartedAt = microtime(true);
         if (in_array($invoiceType, ['renew', 'upgrade'], true)) {
             if ($orderId > 0) {
@@ -1626,12 +1574,15 @@ class PaymentService
 
     private function closeOtherPendingPayments(Invoice $invoice, int $excludePaymentId, string $reason): void
     {
-        $pendingPayments = Payment::query()
+        $query = Payment::query()
             ->where('invoice_id', $invoice->id)
-            ->where('status', PaymentStatus::PENDING)
-            ->where('id', '!=', $excludePaymentId)
-            ->lockForUpdate()
-            ->get();
+            ->where('status', PaymentStatus::PENDING);
+
+        if ($excludePaymentId > 0) {
+            $query->where('id', '!=', $excludePaymentId);
+        }
+
+        $pendingPayments = $query->lockForUpdate()->get();
 
         foreach ($pendingPayments as $pendingPayment) {
             $callbackRaw = (array) ($pendingPayment->callback_raw ?? []);
@@ -1649,18 +1600,21 @@ class PaymentService
     {
         $invoiceId = (int) ($order->invoice?->id ?? 0);
 
-        $pendingPayments = Payment::query()
+        $query = Payment::query()
             ->where('status', PaymentStatus::PENDING)
-            ->where('id', '!=', $excludePaymentId)
             ->where(function ($query) use ($order, $invoiceId) {
                 $query->where('order_id', $order->id);
 
                 if ($invoiceId > 0) {
                     $query->orWhere('invoice_id', $invoiceId);
                 }
-            })
-            ->lockForUpdate()
-            ->get();
+            });
+
+        if ($excludePaymentId > 0) {
+            $query->where('id', '!=', $excludePaymentId);
+        }
+
+        $pendingPayments = $query->lockForUpdate()->get();
 
         foreach ($pendingPayments as $pendingPayment) {
             $callbackRaw = (array) ($pendingPayment->callback_raw ?? []);
@@ -1720,6 +1674,133 @@ class PaymentService
             ->first(fn (Payment $payment) => ! (bool) data_get((array) ($payment->callback_raw ?? []), 'duplicate_paid', false)
                 && in_array((int) $payment->status, [PaymentStatus::SUCCESS, PaymentStatus::REFUNDED], true))
             ?? $payments->first(fn (Payment $payment) => in_array((int) $payment->status, [PaymentStatus::SUCCESS, PaymentStatus::REFUNDED], true));
+    }
+
+    public function restoreReservedMixBalance(Payment $payment, array $context = []): bool
+    {
+        return DB::transaction(function () use ($payment, $context) {
+            $lockedPayment = Payment::query()
+                ->lockForUpdate()
+                ->find((int) $payment->id);
+
+            if (! $lockedPayment instanceof Payment) {
+                return false;
+            }
+
+            $balanceAmount = $this->resolveMixBalanceAmount($lockedPayment);
+            if ($balanceAmount <= 0 || (int) $lockedPayment->status !== PaymentStatus::PENDING) {
+                return false;
+            }
+
+            $invoice = $lockedPayment->invoice_id
+                ? Invoice::query()->lockForUpdate()->with('order')->find((int) $lockedPayment->invoice_id)
+                : null;
+            $lockedUser = User::query()
+                ->lockForUpdate()
+                ->find((int) $lockedPayment->user_id);
+
+            if (! $invoice instanceof Invoice || ! $lockedUser instanceof User) {
+                return false;
+            }
+
+            $balanceAfter = $this->setUserBalance($lockedUser, $this->getUserBalance($lockedUser) + $balanceAmount);
+            $suppressLogs = (bool) ($context['suppress_logs'] ?? false);
+            if (! $suppressLogs) {
+                $this->createBalanceLog(
+                    (int) $lockedUser->id,
+                    FinanceLedgerEventType::INVOICE_REFUND,
+                    $balanceAmount,
+                    $balanceAfter,
+                    (int) $invoice->id,
+                    '组合支付取消退回余额 '.(string) $invoice->invoice_no,
+                    [
+                        'trace_id' => (string) ($context['trace_id'] ?? ''),
+                    ],
+                );
+            } else {
+                BalanceLog::query()
+                    ->where('user_id', (int) $lockedUser->id)
+                    ->where('reference_id', (int) $invoice->id)
+                    ->where('event_type', FinanceLedgerEventType::INVOICE_PAYMENT)
+                    ->where('change_amount', number_format(-$balanceAmount, 2, '.', ''))
+                    ->latest('id')
+                    ->limit(1)
+                    ->delete();
+            }
+
+            $nextInvoicePaidAmount = number_format(
+                max(round((float) ($invoice->paid_amount ?? 0) - $balanceAmount, 2), 0),
+                2,
+                '.',
+                ''
+            );
+            $invoice->forceFill([
+                'paid_amount' => $nextInvoicePaidAmount,
+            ])->save();
+
+            if ($invoice->order instanceof Order) {
+                $nextOrderPaidAmount = number_format(
+                    max(round((float) ($invoice->order->paid_amount ?? 0) - $balanceAmount, 2), 0),
+                    2,
+                    '.',
+                    ''
+                );
+                $invoice->order->forceFill([
+                    'paid_amount' => $nextOrderPaidAmount,
+                ])->save();
+            }
+
+            $callbackRaw = (array) ($lockedPayment->callback_raw ?? []);
+            $callbackRaw['balance_restored'] = true;
+            $callbackRaw['balance_restored_amount'] = number_format($balanceAmount, 2, '.', '');
+            $callbackRaw['closed_reason'] = (string) ($context['closed_reason'] ?? 'mix_balance_restored');
+            $callbackRaw['trace_id'] = (string) ($context['trace_id'] ?? ($callbackRaw['trace_id'] ?? ''));
+
+            $lockedPayment->forceFill([
+                'status' => PaymentStatus::FAILED,
+                'callback_raw' => $callbackRaw,
+            ])->save();
+            $this->syncProjection($lockedPayment);
+
+            return true;
+        });
+    }
+
+    private function resolveMixBalanceAmount(Payment $payment): float
+    {
+        $callbackRaw = $this->resolvePaymentRawCallback($payment);
+        if (! (bool) data_get($callbackRaw, 'mix_payment', false)) {
+            return 0.0;
+        }
+
+        return round(max((float) data_get($callbackRaw, 'balance_amount', 0), 0), 2);
+    }
+
+    private function resolvePaymentRawCallback(Payment $payment): array
+    {
+        $raw = $payment->getRawOriginal('callback_raw');
+        if (is_string($raw) && $raw !== '') {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+        }
+
+        if (is_array($raw)) {
+            return $raw;
+        }
+
+        return (array) ($payment->callback_raw ?? []);
+    }
+
+    private function resolveBalanceRefundableAmount(Invoice $invoice, Payment $payment): float
+    {
+        $mixBalanceAmount = $this->resolveMixBalanceAmount($payment);
+        if ($mixBalanceAmount > 0) {
+            return round(max((float) ($invoice->paid_amount ?? 0), (float) ($invoice->amount ?? 0)), 2);
+        }
+
+        return round((float) $payment->amount, 2);
     }
 
     private function detectPrimaryPaymentGateway(Order $order): string
@@ -1806,6 +1887,39 @@ class PaymentService
                     'trace_id' => trim((string) ($context['trace_id'] ?? '')) ?: null,
                 ]);
         }
+    }
+
+    private function ensureRechargeInvoiceProjection(Payment $payment): ?Invoice
+    {
+        if ((int) ($payment->invoice_id ?? 0) > 0) {
+            return Invoice::query()->find((int) $payment->invoice_id);
+        }
+
+        if ((int) $payment->status !== PaymentStatus::SUCCESS || (string) $payment->gateway !== 'alipay') {
+            return null;
+        }
+
+        $lockKey = "lock:recharge:payment:{$payment->id}";
+
+        return Cache::lock($lockKey, 30)->block(5, function () use ($payment) {
+            return DB::transaction(function () use ($payment) {
+                $lockedPayment = Payment::query()
+                    ->lockForUpdate()
+                    ->findOrFail($payment->id);
+
+                if ((int) ($lockedPayment->invoice_id ?? 0) > 0) {
+                    return Invoice::query()->find((int) $lockedPayment->invoice_id);
+                }
+
+                if ((int) $lockedPayment->status !== PaymentStatus::SUCCESS || (string) $lockedPayment->gateway !== 'alipay') {
+                    return null;
+                }
+
+                $user = User::query()->lockForUpdate()->findOrFail($lockedPayment->user_id);
+
+                return $this->invoiceService->createForRecharge($user, (float) $lockedPayment->amount, $lockedPayment);
+            });
+        });
     }
 
     private function withLock(string $lockKey, int $seconds, callable $callback, string $timeoutMessage): mixed

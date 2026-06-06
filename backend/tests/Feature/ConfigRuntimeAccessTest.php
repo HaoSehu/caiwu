@@ -22,7 +22,7 @@ class ConfigRuntimeAccessTest extends TestCase
             'app.url' => 'https://backend.example.com',
         ]);
 
-        $service = new VerificationService;
+        $service = app(VerificationService::class);
 
         $callbackUrl = $this->invokePrivateMethod($service, 'resolveCallbackUrl');
         $proxyUrl = $this->invokePrivateMethod($service, 'buildQrCodeProxyUrl', ['cert-123']);
@@ -44,7 +44,7 @@ class ConfigRuntimeAccessTest extends TestCase
             'app.url' => 'https://backend.example.com',
         ]);
 
-        $service = new VerificationService;
+        $service = app(VerificationService::class);
 
         $callbackUrl = $this->invokePrivateMethod($service, 'resolveCallbackUrl');
         $proxyUrl = $this->invokePrivateMethod($service, 'buildQrCodeProxyUrl', ['cert-456']);

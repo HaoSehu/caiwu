@@ -12,6 +12,8 @@ class RefundUserInvoiceRequest extends AdminFormRequest
             'refund_method' => ['required', 'string', 'in:balance,original'],
             'amount' => ['nullable', 'numeric', 'min:0.01', 'max:99999999'],
             'remark' => ['required', 'string', 'min:2', 'max:200'],
+            'scope' => ['nullable', 'array'],
+            'scope.*' => ['string', 'in:order,payment'],
         ];
     }
 
@@ -21,6 +23,7 @@ class RefundUserInvoiceRequest extends AdminFormRequest
             'refund_method',
             'amount',
             'remark',
+            'scope',
         ]);
     }
 }

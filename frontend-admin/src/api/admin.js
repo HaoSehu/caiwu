@@ -8,10 +8,20 @@ export default {
   dashboardMonthlyRevenue: () => request.get('/admin/dashboard/monthly-revenue'),
 
   // 账单（主实体）
+  orders: {
+    list: (params) => request.get('/admin/orders', { params }),
+  },
   invoices: {
     list:   (params) => request.get('/admin/invoices', { params }),
     detail: (id)     => request.get(`/admin/invoices/${id}`),
     cancel: (id)     => request.post(`/admin/invoices/${id}/cancel`),
+  },
+  financeMenu: {
+    recharges: (params) => request.get('/admin/finance/recharges', { params }),
+    newCustomerDailySummary: (params) => request.get('/admin/finance/new-customer-daily-summary', { params }),
+    productIncomeSummary: (params) => request.get('/admin/finance/product-income-summary', { params }),
+    renewalOrders: (params) => request.get('/admin/finance/renewal-orders', { params }),
+    addonOrders: (params) => request.get('/admin/finance/addon-orders', { params }),
   },
   financeLedger: {
     list: (params) => request.get('/admin/finance/ledger', { params }),

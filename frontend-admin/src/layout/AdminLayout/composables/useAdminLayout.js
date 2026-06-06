@@ -64,7 +64,13 @@ export function useAdminLayout() {
       key: 'finance',
       label: '财务',
       items: [
-        { index: '/admin/orders', title: '账单与服务', icon: Document },
+        { index: '/admin/finance/orders', title: '订单管理', icon: Tickets },
+        { index: '/admin/finance/invoices', title: '账单管理', icon: Document },
+        { index: '/admin/finance/recharges', title: '充值管理', icon: DataLine },
+        { index: '/admin/finance/new-customers', title: '新客户', icon: User },
+        { index: '/admin/services', title: '服务列表', icon: Box },
+        { index: '/admin/finance/renewals', title: '续费订单', icon: Promotion },
+        { index: '/admin/finance/addons', title: '附加配置订单', icon: Setting },
       ],
     },
     {
@@ -111,8 +117,9 @@ export function useAdminLayout() {
     if (path.startsWith('/admin/tickets') || path.startsWith('/admin/ticket-conversations')) return '/admin/tickets'
     if (
       path.startsWith('/admin/orders')
-      || path.startsWith('/admin/services')
-    ) return '/admin/orders'
+    ) return '/admin/finance/invoices'
+    if (path.startsWith('/admin/services')) return '/admin/services'
+    if (path.startsWith('/admin/finance')) return path
 
     if (path.startsWith('/admin/products')) {
       if (tab === 'traffic-packages') return '/admin/products/traffic-packages'

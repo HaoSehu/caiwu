@@ -11,9 +11,14 @@
               : '完成实名后，可继续购买受实名限制的商品并提升账户安全性。' }}
           </p>
         </div>
-        <el-tag :type="form.is_verified ? 'success' : 'warning'" effect="light" round>
-          {{ form.is_verified ? '已认证' : '待认证' }}
-        </el-tag>
+        <div class="verification-status-card__actions">
+          <el-tag :type="form.is_verified ? 'success' : 'warning'" effect="light" round>
+            {{ form.is_verified ? '已认证' : '待认证' }}
+          </el-tag>
+          <el-button type="primary" @click="openVerificationEntry">
+            {{ form.is_verified ? '查看实名信息' : '立即认证' }}
+          </el-button>
+        </div>
       </div>
 
       <div class="verification-meta-grid">
@@ -100,12 +105,14 @@
 </template>
 
 <script setup lang="ts">
-import { useRouter } from 'vue-router'
+import { onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import SecurityDialogs from '@/views/client/Profile/components/SecurityDialogs.vue'
 import { useProfileForm } from '@/views/client/Profile/composables/useProfileForm'
 import { useSecurityDialogs } from '@/views/client/Profile/composables/useSecurityDialogs'
 
 const router = useRouter()
+const route = useRoute()
 const {
   form,
   postCodeWithFallback,
@@ -142,6 +149,7 @@ const {
   verificationLoading,
   checkingStatus,
   verificationUrl,
+  certifyId,
   canRestartVerification,
   verificationFormRef,
   verificationForm,
@@ -152,6 +160,40 @@ const {
   handleRestartVerification,
   handleChangePassword,
 } = useSecurityDialogs(form, postCodeWithFallback, runWithCaptcha, userStore)
+
+function openVerificationEntry() {
+  if (form.is_verified) {
+    showVerifiedInfoDialog.value = true
+    return
+  }
+
+  showVerificationDialog.value = true
+}
+
+onMounted(async () => {
+  if (route.query.verification_callback !== '1') {
+    return
+  }
+
+  const callbackCertifyId = typeof route.query.certify_id === 'string' ? route.query.certify_id : ''
+  if (callbackCertifyId) {
+    certifyId.value = callbackCertifyId
+  }
+
+  if (!form.is_verified) {
+    showVerificationDialog.value = true
+  }
+
+  await checkVerificationStatus(false)
+
+  const query = { ...route.query }
+  delete query.verification_callback
+  delete query.certify_id
+  delete query.result_status
+  delete query.result_message
+  delete query.t
+  await router.replace({ path: route.path, query })
+})
 </script>
 
 <style scoped lang="scss">
@@ -186,6 +228,13 @@ const {
     font-size: 13px;
     line-height: 1.8;
   }
+}
+
+.verification-status-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
 }
 
 .verification-status-card__label {
@@ -256,6 +305,15 @@ const {
   .verification-guide-grid {
     grid-template-columns: 1fr;
     display: grid;
+  }
+
+  .verification-status-card__actions {
+    align-items: stretch;
+    flex-direction: column;
+
+    .el-button {
+      width: 100%;
+    }
   }
 }
 </style>

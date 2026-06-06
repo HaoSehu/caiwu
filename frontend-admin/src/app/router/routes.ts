@@ -68,11 +68,49 @@ export const adminRoutes: RouteRecordRaw[] = [
       { path: 'products/suppliers', redirect: '/admin/products?tab=suppliers' },
       {
         path: 'orders',
-        name: 'AdminOrders',
-        component: lazyRouteView(() => import('@/pages/admin/orders/index.vue')),
+        redirect: '/admin/finance/invoices',
+      },
+      {
+        path: 'finance/orders',
+        name: 'AdminFinanceOrders',
+        component: lazyRouteView(() => import('@/views/admin/Finance/OrderListPage.vue')),
+        meta: { title: '订单管理', financeOrderMode: 'orders' },
+      },
+      {
+        path: 'finance/invoices',
+        name: 'AdminFinanceInvoices',
+        component: lazyRouteView(() => import('@/views/admin/Finance/InvoiceListPage.vue')),
         meta: { title: '账单管理' },
       },
-      { path: 'services', redirect: '/admin/orders?tab=services' },
+      {
+        path: 'finance/recharges',
+        name: 'AdminFinanceRecharges',
+        component: lazyRouteView(() => import('@/views/admin/Finance/RechargesPage.vue')),
+        meta: { title: '充值管理' },
+      },
+      {
+        path: 'finance/new-customers',
+        name: 'AdminFinanceNewCustomers',
+        component: lazyRouteView(() => import('@/views/admin/Finance/NewCustomersPage.vue')),
+        meta: { title: '新客户' },
+      },
+      {
+        path: 'finance/product-income',
+        redirect: '/admin/services',
+      },
+      {
+        path: 'finance/renewals',
+        name: 'AdminFinanceRenewals',
+        component: lazyRouteView(() => import('@/views/admin/Finance/OrderListPage.vue')),
+        meta: { title: '续费订单', financeOrderMode: 'renewals' },
+      },
+      {
+        path: 'finance/addons',
+        name: 'AdminFinanceAddons',
+        component: lazyRouteView(() => import('@/views/admin/Finance/OrderListPage.vue')),
+        meta: { title: '附加配置订单', financeOrderMode: 'addons' },
+      },
+      { path: 'services', component: lazyRouteView(() => import('@/views/admin/Orders/ServicesPage.vue')), meta: { title: '服务列表' } },
       {
         path: 'coupons',
         name: 'AdminCoupons',

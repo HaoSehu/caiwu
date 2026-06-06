@@ -29,8 +29,8 @@ class ServiceMigrationService
     {
         $this->sourceConnection = (string) config('service_migration.source_connection', 'mysql');
         $this->targetConnection = (string) config('service_migration.target_connection', 'mysql');
-        $this->legacyServiceDatabase = trim((string) env('SERVICE_MIGRATION_LEGACY_DB_DATABASE', ''));
-        $this->legacyServiceTablePrefix = trim((string) env('SERVICE_MIGRATION_LEGACY_TABLE_PREFIX', ''));
+        $this->legacyServiceDatabase = trim((string) config('service_migration.legacy_db_database', ''));
+        $this->legacyServiceTablePrefix = trim((string) config('service_migration.legacy_table_prefix', ''));
     }
 
     public function ensureConnections(): void

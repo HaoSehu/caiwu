@@ -6,6 +6,26 @@
 |--------------------------------------------------------------------------
 */
 
+$mofangFinanceConfig = static function (): array {
+    static $config = null;
+
+    if (is_array($config)) {
+        return $config;
+    }
+
+    $configured = config('mofang.finance_api');
+    if (is_array($configured) && $configured !== []) {
+        return $config = $configured;
+    }
+
+    $loaded = is_file(__DIR__.'/mofang.php') ? require __DIR__.'/mofang.php' : [];
+    $financeApi = is_array($loaded) ? ($loaded['finance_api'] ?? []) : [];
+
+    return $config = is_array($financeApi) ? $financeApi : [];
+};
+
+$mofangFinanceFallback = static fn (string $key, mixed $default = null): mixed => $mofangFinanceConfig()[$key] ?? $default;
+
 return [
     // 站点名称
     'site_name' => env('IDC_SITE_NAME', '创欧云'),
@@ -54,12 +74,12 @@ return [
     'hosting_panel_api' => [
         // 部分上游会基于 User-Agent 对既有面板流量做兼容放行，这里保留旧版请求头作为默认值。
         'user_agent' => 'mozilla/5.0 (compatible; msie 5.01; windows nt 5.0)',
-        'ssl_verify' => env('HOSTING_PANEL_API_SSL_VERIFY', env('MOFANG_FINANCE_SSL_VERIFY', env('APP_ENV') !== 'local')),
-        'ca_bundle' => env('HOSTING_PANEL_API_CA_BUNDLE', env('MOFANG_FINANCE_CA_BUNDLE', '')),
-        'allowed_hosts' => env('HOSTING_PANEL_API_ALLOWED_HOSTS', env('MOFANG_FINANCE_ALLOWED_HOSTS', '')),
-        'jwt_cache_store' => env('HOSTING_PANEL_API_JWT_CACHE_STORE', env('MOFANG_FINANCE_JWT_CACHE_STORE', 'redis')),
-        'dns_resolver_timeout' => (int) env('HOSTING_PANEL_API_DNS_TIMEOUT', env('MOFANG_FINANCE_DNS_TIMEOUT', 3)),
-        'connect_timeout' => (int) env('HOSTING_PANEL_API_CONNECT_TIMEOUT', env('MOFANG_FINANCE_CONNECT_TIMEOUT', 15)), // 从10加到15秒，增加生产容错
+        'ssl_verify' => env('HOSTING_PANEL_API_SSL_VERIFY', $mofangFinanceFallback('ssl_verify', env('APP_ENV') !== 'local')),
+        'ca_bundle' => env('HOSTING_PANEL_API_CA_BUNDLE', $mofangFinanceFallback('ca_bundle', '')),
+        'allowed_hosts' => env('HOSTING_PANEL_API_ALLOWED_HOSTS', $mofangFinanceFallback('allowed_hosts', '')),
+        'jwt_cache_store' => env('HOSTING_PANEL_API_JWT_CACHE_STORE', $mofangFinanceFallback('jwt_cache_store', 'redis')),
+        'dns_resolver_timeout' => (int) env('HOSTING_PANEL_API_DNS_TIMEOUT', $mofangFinanceFallback('dns_resolver_timeout', 3)),
+        'connect_timeout' => (int) env('HOSTING_PANEL_API_CONNECT_TIMEOUT', $mofangFinanceFallback('connect_timeout', 15)), // 从10加到15秒，增加生产容错
         'timeout' => 900,
     ],
 

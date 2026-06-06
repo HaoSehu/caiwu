@@ -10,6 +10,8 @@ class InvoiceType
 
     const RECHARGE = 'recharge';  // 充值
 
+    const UPGRADE = 'upgrade'; // 附加配置
+
     const DEDUCTION = 'deduction'; // 扣款
 
     const REFERRAL_CREDIT = 'referral_credit'; // 推荐奖励
@@ -20,6 +22,7 @@ class InvoiceType
         self::NEW_PURCHASE => '新购',
         self::RENEW => '续费',
         self::RECHARGE => '充值',
+        self::UPGRADE => '附加配置',
         self::DEDUCTION => '扣款',
         self::REFERRAL_CREDIT => '推荐奖励账单',
         self::MANUAL => '手工账单',

@@ -14,5 +14,7 @@ return [
 
     'source_connection' => env('SERVICE_MIGRATION_SOURCE_DB', 'mysql'),
     'target_connection' => env('SERVICE_MIGRATION_TARGET_DB', 'mysql'),
+    'legacy_db_database' => env('SERVICE_MIGRATION_LEGACY_DB_DATABASE', ''),
+    'legacy_table_prefix' => env('SERVICE_MIGRATION_LEGACY_TABLE_PREFIX', ''),
 
 ];

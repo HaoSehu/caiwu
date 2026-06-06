@@ -152,13 +152,17 @@ export const clientRoutes: RouteRecordRaw[] = [
         component: lazyRouteView(() => import('@/pages/client/service-console/index.vue')),
         meta: { title: '实例控制台' },
       },
-      { path: 'orders', redirect: '/client/invoices' },
-      { path: 'orders/:id', redirect: (to) => `/client/invoices/${to.params.id}` },
+      {
+        path: 'orders',
+        name: 'ClientOrders',
+        component: lazyRouteView(() => import('@/pages/client/orders/index.vue')),
+        meta: { title: '订单记录' },
+      },
       {
         path: 'invoices',
         name: 'ClientInvoices',
         component: lazyRouteView(() => import('@/pages/client/invoices/index.vue')),
-        meta: { title: '资金中心' },
+        meta: { title: '账单记录' },
       },
       {
         path: 'invoices/:id',
@@ -177,6 +181,12 @@ export const clientRoutes: RouteRecordRaw[] = [
         name: 'ClientRecharge',
         component: lazyRouteView(() => import('@/pages/client/recharge/index.vue')),
         meta: { title: '账户充值' },
+      },
+      {
+        path: 'payments',
+        name: 'ClientPayments',
+        component: lazyRouteView(() => import('@/pages/client/payments/index.vue')),
+        meta: { title: '充值记录' },
       },
       {
         path: 'balance-logs',

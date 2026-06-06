@@ -85,8 +85,18 @@ class InvoiceService
     /**
      * 充值到账 → 创建充值类型账单
      */
-    public function createForRecharge(User $user, float $amount, ?Payment $payment = null): Invoice
+    public function createForRecharge(User $user, float $amount, ?Payment $payment = null, ?string $remark = null): Invoice
     {
+        if ($payment instanceof Payment && (int) ($payment->invoice_id ?? 0) > 0) {
+            $existing = Invoice::query()
+                ->where('user_id', (int) $user->id)
+                ->find((int) $payment->invoice_id);
+
+            if ($existing instanceof Invoice) {
+                return $existing;
+            }
+        }
+
         $invoice = Invoice::create([
             'invoice_no' => Invoice::generateInvoiceNo(),
             'user_id' => $user->id,
@@ -96,13 +106,17 @@ class InvoiceService
             'status' => InvoiceStatus::PAID,
             'paid_at' => now(),
             'due_date' => now(),
+            'config_snapshot' => array_filter([
+                'remark' => $remark,
+                'payment_no' => $payment?->payment_no,
+            ], static fn ($value) => $value !== null && $value !== ''),
         ]);
 
         if ($payment) {
             $payment->forceFill(['invoice_id' => $invoice->id])->save();
         }
 
-        return $invoice;
+        return $this->syncProjection($invoice);
     }
 
     /**
@@ -147,10 +161,10 @@ class InvoiceService
     public function adminList(array $filters, int $perPage = 20)
     {
         $query = Invoice::with([
-            'user:id,email,nickname',
+            'user:id,email,nickname,phone',
             'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle',
-            'order.product:id,product_type,product_group_id,config_options,purchase_requires',
-            'product:id,product_type,product_group_id,config_options,purchase_requires',
+            'order.product:id,product_type,product_group_id,remark,config_options,purchase_requires',
+            'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
             'service:id,name,status,expires_at',
             'payments',
             'items',
@@ -158,6 +172,21 @@ class InvoiceService
 
         if (! empty($filters['invoice_no'])) {
             $query->where('invoice_no', $filters['invoice_no']);
+        }
+        if (! empty($filters['keyword'])) {
+            $keyword = trim((string) $filters['keyword']);
+            $query->where(function ($query) use ($keyword) {
+                $query->where('invoice_no', 'like', "%{$keyword}%")
+                    ->orWhere('id', $keyword)
+                    ->orWhereHas('user', function ($userQuery) use ($keyword) {
+                        $userQuery->where('email', 'like', "%{$keyword}%")
+                            ->orWhere('nickname', 'like', "%{$keyword}%")
+                            ->orWhere('phone', 'like', "%{$keyword}%");
+                    })
+                    ->orWhereHas('order', function ($orderQuery) use ($keyword) {
+                        $orderQuery->where('order_no', 'like', "%{$keyword}%");
+                    });
+            });
         }
         if (! empty($filters['user_id'])) {
             $query->where('user_id', $filters['user_id']);
@@ -176,6 +205,16 @@ class InvoiceService
         if (! empty($filters['product_id'])) {
             $query->where('product_id', $filters['product_id']);
         }
+        if (! empty($filters['date_range']) && is_array($filters['date_range']) && count($filters['date_range']) >= 2) {
+            $start = trim((string) ($filters['date_range'][0] ?? ''));
+            $end = trim((string) ($filters['date_range'][1] ?? ''));
+            if ($start !== '' && $end !== '') {
+                $query->whereBetween('created_at', [
+                    \Carbon\CarbonImmutable::parse($start)->startOfDay(),
+                    \Carbon\CarbonImmutable::parse($end)->endOfDay(),
+                ]);
+            }
+        }
 
         $paginator = $query->orderByDesc('id')->paginate($perPage);
         $paginator->setCollection(
@@ -190,8 +229,8 @@ class InvoiceService
         $invoice = Invoice::with([
             'user:id,email,nickname',
             'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle',
-            'order.product:id,product_type,product_group_id,config_options,purchase_requires',
-            'product:id,product_type,product_group_id,config_options,purchase_requires',
+            'order.product:id,product_type,product_group_id,remark,config_options,purchase_requires',
+            'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
             'service:id,name,status,expires_at',
             'payments',
             'items',
@@ -200,15 +239,18 @@ class InvoiceService
         $scene = $this->resolveInvoiceScene($invoice);
         $paymentSummary = $this->resolveInvoicePaymentSummary($invoice);
         $displayStatus = $this->resolveInvoiceDisplayStatus($invoice, $paymentSummary);
+        $productDisplayName = $this->resolveInvoiceProductDisplayName($invoice);
+        $productSpecDisplay = $this->resolveInvoiceProductSpecDisplay($invoice, $scene, $productDisplayName);
+        $combinedDisplayName = $this->resolveInvoiceCombinedDisplayName($invoice, $productDisplayName);
 
         return [
             'id' => (int) $invoice->id,
             'invoice_no' => (string) $invoice->invoice_no,
             'user_id' => (int) $invoice->user_id,
             'product_spec_snapshot' => (string) ($invoice->product_spec_snapshot ?? ''),
-            'product_spec_display' => $this->resolveInvoiceProductDisplayName($invoice),
-            'product_display_name' => $this->resolveInvoiceProductDisplayName($invoice),
-            'combined_display_name' => $this->resolveInvoiceCombinedDisplayName($invoice),
+            'product_spec_display' => $productSpecDisplay,
+            'product_display_name' => $productDisplayName,
+            'combined_display_name' => $combinedDisplayName,
             'user' => $invoice->user ? [
                 'id' => (int) $invoice->user->id,
                 'email' => (string) $invoice->user->email,
@@ -288,8 +330,8 @@ class InvoiceService
         $invoice->loadMissing([
             'user:id,email,nickname',
             'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle',
-            'order.product:id,product_type,product_group_id,config_options,purchase_requires',
-            'product:id,product_type,product_group_id,config_options,purchase_requires',
+            'order.product:id,product_type,product_group_id,remark,config_options,purchase_requires',
+            'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
             'service:id,name,status,expires_at',
             'payments',
             'items',
@@ -303,14 +345,17 @@ class InvoiceService
         $paymentSummary = $this->resolveInvoicePaymentSummary($invoice);
         $displayStatus = $this->resolveInvoiceDisplayStatus($invoice, $paymentSummary);
         $scene = $this->resolveInvoiceScene($invoice);
+        $productDisplayName = $this->resolveInvoiceProductDisplayName($invoice);
+        $productSpecDisplay = $this->resolveInvoiceProductSpecDisplay($invoice, $scene, $productDisplayName);
+        $combinedDisplayName = $this->resolveInvoiceCombinedDisplayName($invoice, $productDisplayName);
 
         return [
             'id' => (int) $invoice->id,
             'invoice_no' => (string) $invoice->invoice_no,
             'product_spec_snapshot' => (string) ($invoice->product_spec_snapshot ?? ''),
-            'product_spec_display' => $this->resolveInvoiceProductDisplayName($invoice),
-            'product_display_name' => $this->resolveInvoiceProductDisplayName($invoice),
-            'combined_display_name' => $this->resolveInvoiceCombinedDisplayName($invoice),
+            'product_spec_display' => $productSpecDisplay,
+            'product_display_name' => $productDisplayName,
+            'combined_display_name' => $combinedDisplayName,
             'user' => $invoice->user ? [
                 'id' => (int) $invoice->user->id,
                 'email' => (string) $invoice->user->email,
@@ -737,6 +782,7 @@ class InvoiceService
             InvoiceType::NEW_PURCHASE => '新购账单',
             InvoiceType::RENEW => '续费账单',
             InvoiceType::RECHARGE => '充值账单',
+            InvoiceType::UPGRADE => '附加配置账单',
             InvoiceType::DEDUCTION => '扣款账单',
             InvoiceType::REFERRAL_CREDIT => '推荐奖励账单',
             InvoiceType::MANUAL => '手工账单',
@@ -784,7 +830,7 @@ class InvoiceService
         return $invoice->fresh([
             'items',
             'order',
-            'product:id,product_type,product_group_id,config_options,purchase_requires',
+            'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
         ]) ?? $invoice;
     }
 
@@ -811,16 +857,54 @@ class InvoiceService
             }
         }
 
-        return '';
+        return $this->resolveInvoiceTypeLabel((string) $invoice->type, $invoice);
     }
 
-    private function resolveInvoiceCombinedDisplayName(Invoice $invoice): string
+    private function resolveInvoiceProductSpecDisplay(Invoice $invoice, array $scene, string $productDisplayName): string
+    {
+        $standaloneSpecText = $this->resolveStandaloneInvoiceSpecText((string) $invoice->type);
+        if ($standaloneSpecText !== '') {
+            return $standaloneSpecText;
+        }
+
+        $snapshot = trim((string) ($invoice->product_spec_snapshot ?? ''));
+        if ($snapshot !== '') {
+            return $snapshot;
+        }
+
+        if ($productDisplayName !== '') {
+            return $productDisplayName;
+        }
+
+        $subheadline = trim((string) ($scene['subheadline'] ?? ''));
+        if ($subheadline !== '') {
+            return $subheadline;
+        }
+
+        return $this->resolveInvoiceTypeLabel((string) $invoice->type, $invoice);
+    }
+
+    private function resolveStandaloneInvoiceSpecText(string $type): string
+    {
+        return match (InvoiceType::normalize($type)) {
+            InvoiceType::RECHARGE => '余额充值',
+            InvoiceType::UPGRADE => '附加配置',
+            InvoiceType::DEDUCTION => '余额扣减',
+            InvoiceType::REFERRAL_CREDIT => '推荐返利',
+            InvoiceType::MANUAL => '后台人工',
+            default => '',
+        };
+    }
+
+    private function resolveInvoiceCombinedDisplayName(Invoice $invoice, string $fallbackDisplayName = ''): string
     {
         $product = $invoice->product instanceof Product
             ? $invoice->product
             : ($invoice->order?->product instanceof Product ? $invoice->order->product : null);
         if (! $product instanceof Product) {
-            return '';
+            return $fallbackDisplayName !== ''
+                ? $fallbackDisplayName
+                : $this->resolveInvoiceTypeLabel((string) $invoice->type, $invoice);
         }
 
         $resolved = $this->resolveProductDisplayNameResolver()->resolveForProduct(
@@ -828,7 +912,9 @@ class InvoiceService
             (array) ($invoice->config_snapshot ?? [])
         );
 
-        return trim((string) ($resolved['combined_display_name'] ?? ''));
+        $combinedDisplayName = trim((string) ($resolved['combined_display_name'] ?? ''));
+
+        return $combinedDisplayName !== '' ? $combinedDisplayName : $fallbackDisplayName;
     }
 
     private function resolveProductDisplayNameResolver(): ProductDisplayNameResolver

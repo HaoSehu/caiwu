@@ -59,6 +59,13 @@ class SupplierController extends Controller
         ]);
     }
 
+    public function providerTypes(ProviderRegistry $providerRegistry)
+    {
+        return $this->success([
+            'list' => $providerRegistry->options(),
+        ]);
+    }
+
     public function store(Request $request)
     {
         $payload = $this->validatedPayload($request);

@@ -71,7 +71,15 @@ class Payment extends Model
 
     public static function generatePaymentNo(): string
     {
-        return 'PAY'.now()->format('YmdHisv').Str::upper(Str::random(8));
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $no = 'PAY'.now()->format('YmdHisv').Str::upper(Str::random(8));
+
+            if (! static::query()->where('payment_no', $no)->exists()) {
+                return $no;
+            }
+        }
+
+        return 'PAY'.now()->format('YmdHisv').Str::upper(Str::random(12));
     }
 
     public function syncPaymentCallbackProjection(): void

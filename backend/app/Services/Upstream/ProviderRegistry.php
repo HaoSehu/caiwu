@@ -28,7 +28,27 @@ final class ProviderRegistry
      */
     public function keys(): array
     {
-        return ProviderKey::all();
+        $keys = array_keys($this->drivers);
+        sort($keys);
+
+        return $keys;
+    }
+
+    /**
+     * @return array<int, array{value:string,label:string}>
+     */
+    public function options(): array
+    {
+        $drivers = $this->drivers;
+        ksort($drivers);
+
+        return array_map(
+            fn (UpstreamDriver $driver): array => [
+                'value' => $driver->key(),
+                'label' => $driver->label(),
+            ],
+            array_values($drivers)
+        );
     }
 
     /**
@@ -46,11 +66,6 @@ final class ProviderRegistry
             return null;
         }
 
-        $driverKey = match ($normalizedKey) {
-            ProviderKey::MOFANG_FINANCE_API => ProviderKey::HOSTING_PANEL_API,
-            default => $normalizedKey,
-        };
-
-        return $this->drivers[$driverKey] ?? null;
+        return $this->drivers[$normalizedKey] ?? null;
     }
 }

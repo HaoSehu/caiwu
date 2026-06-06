@@ -44,7 +44,7 @@ class VerificationCertifyIdLookupRegressionTest extends TestCase
                 };
             });
 
-        $service = new VerificationService;
+        $service = app(VerificationService::class);
         $found = $service->findUserByCertifyId('CERT-'.$suffix);
 
         $this->assertNotNull($found);

@@ -336,4 +336,182 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
             ->assertJsonPath('data.list.0.invoice_no', (string) $refundedInvoice->invoice_no)
             ->assertJsonPath('data.list.0.status', InvoiceStatus::REFUNDED);
     }
+
+    public function test_client_invoice_list_uses_bill_display_text_without_json_or_missing_spec_placeholder(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+
+        $user = User::query()->forceCreate([
+            'id' => $this->makeLegacyUserId($suffix.'-display'),
+            'email' => 'client-invoice-display-'.$suffix.'@example.com',
+            'password' => 'Temp@123456',
+            'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
+            'status' => 1,
+            'nickname' => 'Client Invoice Display',
+            'real_name' => '',
+            'id_card' => '',
+            'verification_status' => 0,
+            'verification_message' => '',
+            'verification_certify_id' => null,
+            'member_level_id' => null,
+            'total_sales_amount' => '0.00',
+            'referrer_user_id' => null,
+            'verified_at' => null,
+        ]);
+        $this->mirrorUserToIdc($user, $suffix);
+
+        $group = ProductCategory::query()->create([
+            'parent_id' => null,
+            'product_type' => 'server',
+            'name' => 'Client Invoice Display Group '.$suffix,
+            'slug' => 'client-invoice-display-group-'.$suffix,
+            'slogan' => '',
+            'is_visible' => 1,
+            'sort_order' => 0,
+        ]);
+
+        $product = Product::query()->create([
+            'product_group_id' => (int) $group->id,
+            'name' => 'Name Attribute Is Not Persisted '.$suffix,
+            'product_type' => 'server',
+            'description' => '',
+            'pricing' => ['monthly' => '88.00'],
+            'setup_fee' => '0.00',
+            'config_options' => [],
+            'purchase_requires' => [],
+            'stock' => 8,
+            'status' => 1,
+            'sort_order' => 0,
+            'provision_module' => null,
+            'auto_setup' => 0,
+        ]);
+        $this->mirrorProductToIdc($product, $suffix);
+        DB::connection()->table('products')
+            ->where('id', (int) $product->id)
+            ->update(['remark' => '演示云服务器 '.$suffix]);
+
+        Invoice::query()->create([
+            'invoice_no' => 'CLIRECH'.strtoupper($suffix),
+            'user_id' => (int) $user->id,
+            'type' => 'recharge',
+            'amount' => '20.00',
+            'paid_amount' => '20.00',
+            'status' => InvoiceStatus::PAID,
+            'billing_cycle' => '',
+            'due_date' => now()->addDay(),
+            'paid_at' => now()->subMinute(),
+        ]);
+
+        Invoice::query()->create([
+            'invoice_no' => 'CLIPROD'.strtoupper($suffix),
+            'user_id' => (int) $user->id,
+            'product_id' => (int) $product->id,
+            'type' => 'new',
+            'amount' => '88.00',
+            'paid_amount' => '0.00',
+            'status' => InvoiceStatus::UNPAID,
+            'billing_cycle' => 'monthly',
+            'due_date' => now()->addDay(),
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $response = $this->getJson('/api/client/invoices?page_size=20')
+            ->assertOk()
+            ->assertJsonPath('data.total', 2);
+
+        $rows = collect($response->json('data.list'));
+        $rechargeRow = $rows->firstWhere('invoice_no', 'CLIRECH'.strtoupper($suffix));
+        $productRow = $rows->firstWhere('invoice_no', 'CLIPROD'.strtoupper($suffix));
+
+        $this->assertIsArray($rechargeRow);
+        $this->assertSame('充值账单', $rechargeRow['product_display_name']);
+        $this->assertSame('充值账单', $rechargeRow['combined_display_name']);
+        $this->assertSame('余额充值', $rechargeRow['product_spec_display']);
+        $this->assertSame('充值账单', $rechargeRow['summary']['headline']);
+
+        $this->assertIsArray($productRow);
+        $this->assertSame('演示云服务器 '.$suffix, $productRow['product_display_name']);
+        $this->assertSame('演示云服务器 '.$suffix, $productRow['combined_display_name']);
+        $this->assertSame('演示云服务器 '.$suffix, $productRow['product_spec_display']);
+        $this->assertStringNotContainsString('未配置规格', $productRow['product_display_name']);
+    }
+
+    public function test_client_invoice_list_accepts_comma_separated_type_filters_for_shared_panels(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+
+        $user = User::query()->forceCreate([
+            'id' => $this->makeLegacyUserId($suffix.'-type-filter'),
+            'email' => 'client-invoice-filter-'.$suffix.'@example.com',
+            'password' => 'Temp@123456',
+            'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
+            'status' => 1,
+            'nickname' => 'Client Invoice Type Filter',
+            'real_name' => '',
+            'id_card' => '',
+            'verification_status' => 0,
+            'verification_message' => '',
+            'verification_certify_id' => null,
+            'member_level_id' => null,
+            'total_sales_amount' => '0.00',
+            'referrer_user_id' => null,
+            'verified_at' => null,
+        ]);
+        $this->mirrorUserToIdc($user, $suffix);
+
+        $normalInvoice = Invoice::query()->create([
+            'invoice_no' => 'CLITFNOR'.strtoupper($suffix),
+            'user_id' => (int) $user->id,
+            'type' => 'normal',
+            'amount' => '30.00',
+            'paid_amount' => '0.00',
+            'status' => InvoiceStatus::UNPAID,
+            'billing_cycle' => 'monthly',
+            'product_spec_snapshot' => '普通新购账单',
+            'due_date' => now()->addDay(),
+        ]);
+
+        $renewInvoice = Invoice::query()->create([
+            'invoice_no' => 'CLITFREN'.strtoupper($suffix),
+            'user_id' => (int) $user->id,
+            'type' => 'renew',
+            'amount' => '40.00',
+            'paid_amount' => '0.00',
+            'status' => InvoiceStatus::UNPAID,
+            'billing_cycle' => 'monthly',
+            'product_spec_snapshot' => '续费账单',
+            'due_date' => now()->addDay(),
+        ]);
+
+        $rechargeInvoice = Invoice::query()->create([
+            'invoice_no' => 'CLITFREC'.strtoupper($suffix),
+            'user_id' => (int) $user->id,
+            'type' => 'recharge',
+            'amount' => '50.00',
+            'paid_amount' => '50.00',
+            'status' => InvoiceStatus::PAID,
+            'billing_cycle' => '',
+            'product_spec_snapshot' => '余额充值',
+            'due_date' => now()->addDay(),
+            'paid_at' => now()->subMinute(),
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $orderPanelResponse = $this->getJson('/api/client/invoices?type=new,normal,renew,upgrade,traffic&page_size=20')
+            ->assertOk()
+            ->assertJsonPath('data.total', 2);
+
+        $orderPanelInvoiceNos = collect($orderPanelResponse->json('data.list'))->pluck('invoice_no')->all();
+        $this->assertContains((string) $normalInvoice->invoice_no, $orderPanelInvoiceNos);
+        $this->assertContains((string) $renewInvoice->invoice_no, $orderPanelInvoiceNos);
+        $this->assertNotContains((string) $rechargeInvoice->invoice_no, $orderPanelInvoiceNos);
+
+        $rechargePanelResponse = $this->getJson('/api/client/invoices?type=recharge&page_size=20')
+            ->assertOk()
+            ->assertJsonPath('data.total', 1);
+
+        $this->assertSame((string) $rechargeInvoice->invoice_no, $rechargePanelResponse->json('data.list.0.invoice_no'));
+    }
 }

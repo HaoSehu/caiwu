@@ -412,8 +412,6 @@
                       >
                         <template #prefix><el-icon><Search /></el-icon></template>
                       </el-input>
-                      <el-button type="primary" :loading="userOptionsLoading" @click="searchUsers">搜索</el-button>
-                      <el-button @click="resetUserSearch">重置</el-button>
                     </div>
 
                     <div class="user-picker-grid">
@@ -1477,7 +1475,7 @@ onMounted(async () => {
 
 .user-picker-toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   padding: 10px 12px;
   border-bottom: 1px solid $divider-color;

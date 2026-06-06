@@ -8,6 +8,7 @@ use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiDriver;
 use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiTransport;
 use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
+use App\Services\Upstream\Support\WebSessionCookieParser;
 use Illuminate\Support\ServiceProvider;
 
 class UpstreamServiceProvider extends ServiceProvider
@@ -16,11 +17,16 @@ class UpstreamServiceProvider extends ServiceProvider
     {
         $this->app->singleton(HostingPanelApiTransport::class);
         $this->app->singleton(HostingPanelApiDriver::class);
+        $this->app->singleton(
+            WebSessionCookieParser::class,
+            fn (): WebSessionCookieParser => new WebSessionCookieParser(
+                $this->app->tagged('upstream.web_session_credential_parsers')
+            )
+        );
+        $this->app->tag([HostingPanelApiDriver::class], 'upstream.drivers');
 
         $this->app->singleton(ProviderRegistry::class, function ($app): ProviderRegistry {
-            return new ProviderRegistry([
-                $app->make(HostingPanelApiDriver::class),
-            ]);
+            return new ProviderRegistry($app->tagged('upstream.drivers'));
         });
 
         $this->app->singleton(ProviderResolver::class);

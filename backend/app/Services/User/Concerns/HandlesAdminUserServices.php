@@ -6,12 +6,12 @@ namespace App\Services\User\Concerns;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
-use App\Constants\PaymentStatus;
+
 use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
 use App\Models\Invoice;
 use App\Models\Order;
-use App\Models\Payment;
+
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\Supplier;
@@ -102,6 +102,7 @@ trait HandlesAdminUserServices
         $previousCustomHostname = ServiceHostname::custom($currentProvisionData);
         $previousAmount = round((float) ($service->amount ?? 0), 2);
         $previousSupplierId = (int) (($currentProvisionData['supplier_id'] ?? ($service->product?->supplier_id ?? 0)) ?: 0);
+        $previousSupplierProductId = (int) (($currentProvisionData['supplier_product_id'] ?? ($service->product?->supplier_product_id ?? 0)) ?: 0);
         $previousUpstreamHostId = (int) (($currentProvisionData['upstream_host_id'] ?? 0) ?: 0);
         $supportsUpstream = $this->supportsManagedUpstream($service->product);
         $hasUpstreamBinding = (int) (($currentProvisionData['supplier_id'] ?? ($service->product?->supplier_id ?? 0)) ?: 0) > 0;
@@ -109,6 +110,8 @@ trait HandlesAdminUserServices
         $newAmount = $rawAmount === null ? null : round((float) $rawAmount, 2);
         $rawSupplierId = $data['supplier_id'] ?? null;
         $supplierId = $rawSupplierId === null ? null : (int) $rawSupplierId;
+        $rawSupplierProductId = $data['supplier_product_id'] ?? null;
+        $supplierProductId = $rawSupplierProductId === null ? null : (int) $rawSupplierProductId;
         $rawUpstreamHostId = $data['upstream_host_id'] ?? null;
         $upstreamHostId = $rawUpstreamHostId === null ? null : (int) $rawUpstreamHostId;
         $selectedSupplier = null;
@@ -124,14 +127,21 @@ trait HandlesAdminUserServices
 
             throw_if(! $selectedSupplier instanceof Supplier, new BusinessException('请选择有效的上游接口'));
             throw_if(
-                trim((string) $selectedSupplier->interface_type) !== ProviderKey::HOSTING_PANEL_API,
-                new BusinessException('当前仅支持绑定 hosting_panel_api 上游接口')
-            );
-            throw_if(
                 ! app(ProviderResolver::class)->resolveForSupplier($selectedSupplier)->supports(ProvidesConsoleRuntime::class),
                 new BusinessException('当前上游接口不支持实例控制')
             );
-            throw_if($upstreamHostId === null, new BusinessException('重新绑定上游接口时必须填写新的上游实例 ID'));
+            throw_if(
+                $upstreamHostId === null && $supplierProductId === null,
+                new BusinessException('重新绑定上游接口时必须填写新的上游产品 ID 或上游实例 ID')
+            );
+        }
+
+        if ($supplierProductId !== null) {
+            throw_if($supplierProductId <= 0, new BusinessException('请输入有效的上游产品 ID'));
+            throw_if(
+                $supplierId === null && $upstreamHostId === null,
+                new BusinessException('更换上游产品 ID 时必须同时绑定上游接口或上游实例 ID')
+            );
         }
 
         if ($upstreamHostId !== null) {
@@ -187,10 +197,10 @@ trait HandlesAdminUserServices
                     'manual_amount' => null,
                 ];
 
-                $baseAmount = $this->normalizeRenewPricingBaseAmount($currentCycleConfig['base_amount'] ?? null);
+                $baseAmount = $this->normalizePositiveAmount($currentCycleConfig['base_amount'] ?? null);
                 $manualAmount = array_key_exists('manual_amount', $incoming)
-                    ? $this->normalizeRenewPricingManualAmount($incoming['manual_amount'])
-                    : $this->normalizeRenewPricingManualAmount($currentCycleConfig['manual_amount'] ?? null);
+                    ? $this->normalizePositiveAmount($incoming['manual_amount'])
+                    : $this->normalizePositiveAmount($currentCycleConfig['manual_amount'] ?? null);
                 $enabled = array_key_exists('enabled', $incoming)
                     ? filter_var($incoming['enabled'], FILTER_VALIDATE_BOOLEAN)
                     : (bool) ($currentCycleConfig['enabled'] ?? false);
@@ -209,6 +219,7 @@ trait HandlesAdminUserServices
         }
 
         $supplierChanged = false;
+        $supplierProductChanged = false;
         $amountChanged = false;
         $upstreamHostChanged = false;
 
@@ -217,6 +228,7 @@ trait HandlesAdminUserServices
             $newAmount,
             $selectedSupplier,
             $upstreamHostId,
+            $supplierProductId,
             $currentProvisionData,
             $traceId,
             $operatorId,
@@ -225,10 +237,12 @@ trait HandlesAdminUserServices
             $newServiceName,
             $newCustomHostname,
             &$supplierChanged,
+            &$supplierProductChanged,
             &$amountChanged,
             &$upstreamHostChanged,
             $previousAmount,
             $previousSupplierId,
+            $previousSupplierProductId,
             $previousUpstreamHostId
         ) {
             $provisionData = $currentProvisionData;
@@ -240,24 +254,30 @@ trait HandlesAdminUserServices
             }
 
             if ($selectedSupplier instanceof Supplier) {
-                $provisionData['source_type'] = (string) ($provisionData['source_type'] ?? 'upstream');
-                $provisionData['provider'] = ProviderKey::HOSTING_PANEL_API;
+                $provisionData['source_type'] = 'upstream';
+                $provisionData['provider'] = trim((string) $selectedSupplier->interface_type) ?: ProviderKey::HOSTING_PANEL_API;
                 $provisionData['supplier_id'] = (int) $selectedSupplier->id;
-                $provisionData['supplier_product_id'] = (int) ($service->product?->supplier_product_id ?? 0);
+                $provisionData['supplier_product_id'] = $supplierProductId ?? (int) ($service->product?->supplier_product_id ?? 0);
                 $supplierChanged = (int) $selectedSupplier->id !== $previousSupplierId;
+                $supplierProductChanged = (int) $provisionData['supplier_product_id'] !== $previousSupplierProductId;
             }
 
             if ($upstreamHostId !== null) {
-                $provisionData['source_type'] = (string) ($provisionData['source_type'] ?? 'upstream');
-                $provisionData['provider'] = (string) ($provisionData['provider'] ?? ProviderKey::HOSTING_PANEL_API);
+                $provisionData['source_type'] = 'upstream';
+                $existingProvider = trim((string) ($provisionData['provider'] ?? ''));
+                if ($existingProvider === '') {
+                    $existingProvider = trim((string) ($service->product?->supplier?->interface_type ?? ''));
+                }
+                $provisionData['provider'] = $existingProvider !== '' ? $existingProvider : ProviderKey::HOSTING_PANEL_API;
                 $provisionData['supplier_id'] = (int) (($provisionData['supplier_id'] ?? ($service->product?->supplier_id ?? 0)) ?: 0);
-                $provisionData['supplier_product_id'] = (int) (($provisionData['supplier_product_id'] ?? ($service->product?->supplier_product_id ?? 0)) ?: 0);
+                $provisionData['supplier_product_id'] = $supplierProductId ?? (int) (($provisionData['supplier_product_id'] ?? ($service->product?->supplier_product_id ?? 0)) ?: 0);
+                $supplierProductChanged = (int) $provisionData['supplier_product_id'] !== $previousSupplierProductId;
                 $provisionData['upstream_host_id'] = $upstreamHostId;
                 $provisionData['last_manual_linked_at'] = now()->format('Y-m-d H:i:s');
                 $upstreamHostChanged = $upstreamHostId !== $previousUpstreamHostId;
             }
 
-            if ($supplierChanged || $upstreamHostChanged) {
+            if ($supplierChanged || $supplierProductChanged || $upstreamHostChanged) {
                 unset(
                     $provisionData['connection_secret'],
                     $provisionData['connection_cached_at'],
@@ -370,7 +390,7 @@ trait HandlesAdminUserServices
             }
         }
 
-        if ($amountChanged || $supplierChanged || $upstreamHostChanged || $newLockedPricing !== 'skip') {
+        if ($amountChanged || $supplierChanged || $supplierProductChanged || $upstreamHostChanged || $newLockedPricing !== 'skip') {
             try {
                 $renewPricingChanges = [];
                 if ($newLockedPricing !== 'skip') {
@@ -393,6 +413,8 @@ trait HandlesAdminUserServices
                     'previous_supplier_id' => $previousSupplierId > 0 ? $previousSupplierId : null,
                     'supplier_id' => (int) (($service->provision_data['supplier_id'] ?? 0) ?: 0),
                     'supplier_name' => $selectedSupplier?->name,
+                    'previous_supplier_product_id' => $previousSupplierProductId > 0 ? $previousSupplierProductId : null,
+                    'supplier_product_id' => (int) (($service->provision_data['supplier_product_id'] ?? 0) ?: 0),
                     'previous_upstream_host_id' => $previousUpstreamHostId > 0 ? $previousUpstreamHostId : null,
                     'upstream_host_id' => (int) (($service->provision_data['upstream_host_id'] ?? 0) ?: 0),
                     'clear_locked_pricing' => ! empty($data['clear_locked_pricing']),
@@ -466,9 +488,10 @@ trait HandlesAdminUserServices
         $product = Product::query()
             ->with('supplier')
             ->findOrFail((int) $data['product_id']);
+        $sourceType = trim((string) ($data['source_type'] ?? 'manual'));
 
         throw_if((int) $product->status !== 1, new BusinessException('商品已下架，无法开通'));
-        throw_if((int) $product->stock === 0, new BusinessException('该商品库存不足，无法继续开通'));
+        throw_if($sourceType === 'upstream' && (int) $product->stock === 0, new BusinessException('该商品库存不足，无法继续开通'));
 
         $billingCycle = trim((string) ($data['billing_cycle'] ?? ''));
         $cyclePrice = $product->getPriceByBillingCycle($billingCycle);
@@ -479,7 +502,6 @@ trait HandlesAdminUserServices
         );
 
         $status = (int) ($data['status'] ?? ServiceStatus::ACTIVE);
-        $sourceType = trim((string) ($data['source_type'] ?? 'manual'));
         $domain = trim((string) ($data['domain'] ?? ''));
         $amount = isset($data['amount'])
             ? round((float) $data['amount'], 2)
@@ -577,7 +599,9 @@ trait HandlesAdminUserServices
 
             $provisionData = array_filter([
                 'source_type' => $sourceType,
-                'provider' => $sourceType === 'upstream' ? ProviderKey::HOSTING_PANEL_API : '',
+                'provider' => $sourceType === 'upstream'
+                    ? (trim((string) ($product->supplier?->interface_type ?? '')) ?: ProviderKey::HOSTING_PANEL_API)
+                    : '',
                 'supplier_id' => $sourceType === 'upstream' ? (int) ($product->supplier_id ?? 0) : 0,
                 'supplier_product_id' => $sourceType === 'upstream' ? (int) ($product->supplier_product_id ?? 0) : 0,
                 'upstream_host_id' => $sourceType === 'upstream' ? $upstreamHostId : 0,
@@ -637,7 +661,7 @@ trait HandlesAdminUserServices
                 'service_id' => $service->id,
             ])->save();
 
-            if ((int) $product->stock > 0) {
+            if ($sourceType === 'upstream' && (int) $product->stock > 0) {
                 $product->decrement('stock');
             }
 
@@ -680,18 +704,7 @@ trait HandlesAdminUserServices
         return $this->clientServiceConsoleService->getDetailForUser($user, (int) $service->id, false);
     }
 
-    private function normalizeRenewPricingManualAmount(mixed $value): ?float
-    {
-        if ($value === null || $value === '' || ! is_numeric($value)) {
-            return null;
-        }
-
-        $amount = round((float) $value, 2);
-
-        return $amount > 0 ? $amount : null;
-    }
-
-    private function normalizeRenewPricingBaseAmount(mixed $value): ?float
+    private function normalizePositiveAmount(mixed $value): ?float
     {
         if ($value === null || $value === '' || ! is_numeric($value)) {
             return null;
@@ -935,7 +948,6 @@ trait HandlesAdminUserServices
         string $traceId,
     ): Invoice {
         $invoiceAmount = round(max((float) $order->amount - (float) $order->discount, 0), 2);
-        $paymentNo = Payment::generatePaymentNo();
 
         $invoice = Invoice::query()->create([
             'invoice_no' => Invoice::generateInvoiceNoFromOrderNo((string) $order->order_no),
@@ -949,28 +961,6 @@ trait HandlesAdminUserServices
             'paid_at' => $paidAt,
         ]);
         app(InvoiceService::class)->syncProjection($invoice);
-
-        $payment = Payment::query()->create([
-            'payment_no' => $paymentNo,
-            'user_id' => $order->user_id,
-            'invoice_id' => $invoice->id,
-            'gateway' => 'manual',
-            'trade_no' => 'ADMIN-'.$paymentNo,
-            'amount' => $invoiceAmount,
-            'status' => PaymentStatus::SUCCESS,
-            'callback_raw' => [
-                'source' => 'admin_manual_service_create',
-                'action' => 'create_paid_service',
-                'payment_gateway' => 'manual',
-                'source_type' => $sourceType,
-                'remark' => $remark,
-                'operator_id' => $operatorId,
-                'operator_name' => $operatorName,
-                'trace_id' => $traceId,
-            ],
-            'paid_at' => $paidAt,
-        ]);
-        $this->paymentService->syncProjection($payment);
 
         return $invoice;
     }

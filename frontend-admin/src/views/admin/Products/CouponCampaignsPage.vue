@@ -23,11 +23,12 @@
           clearable
           style="width: 280px"
           @keyup.enter="handleSearch"
+          @clear="handleSearch"
         >
           <template #prefix><el-icon><Search /></el-icon></template>
         </el-input>
 
-        <el-select v-model="filters.status" placeholder="状态" clearable style="width: 140px">
+        <el-select v-model="filters.status" placeholder="状态" clearable style="width: 140px" @change="handleSearch">
           <el-option label="全部状态" value="" />
           <el-option label="运行中" value="1" />
           <el-option label="已停用" value="0" />

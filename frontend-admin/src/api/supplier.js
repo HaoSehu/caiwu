@@ -3,6 +3,7 @@ import request from '@/utils/request'
 export default {
   list: (params) => request.get('/admin/suppliers', { params }),
   summary: () => request.get('/admin/suppliers/summary'),
+  providerTypes: () => request.get('/admin/suppliers/provider-types'),
   balance: (id, config = {}) => request.get(`/admin/suppliers/${id}/balance`, config),
   products: (id, config = {}) => request.get(`/admin/suppliers/${id}/products`, config),
   batchConnectProducts: (id, data) => request.post(`/admin/suppliers/${id}/products/batch-connect`, data),

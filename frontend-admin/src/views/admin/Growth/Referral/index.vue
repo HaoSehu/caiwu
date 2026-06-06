@@ -105,6 +105,7 @@
             class="search-field search-field-wide"
             placeholder="搜索推荐人、被推荐人、账单号或配置"
             @keyup.enter="handleRewardSearch"
+            @clear="handleRewardSearch"
           />
 
           <el-select
@@ -112,6 +113,7 @@
             clearable
             class="search-field"
             placeholder="全部状态"
+            @change="handleRewardSearch"
           >
             <el-option
               v-for="item in rewardStatusOptions"
@@ -234,6 +236,7 @@
             class="search-field search-field-wide"
             placeholder="搜索用户、邮箱、账号或备注"
             @keyup.enter="handleWithdrawalSearch"
+            @clear="handleWithdrawalSearch"
           />
 
           <el-select
@@ -241,6 +244,7 @@
             clearable
             class="search-field"
             placeholder="全部状态"
+            @change="handleWithdrawalSearch"
           >
             <el-option
               v-for="item in withdrawalStatusOptions"

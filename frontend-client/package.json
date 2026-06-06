@@ -15,7 +15,7 @@
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
     "check:source-health": "node ./scripts/check-source-health.mjs",
     "test:verification": "node ./tests/verification-client-contract.test.mjs",
-    "test": "node ./tests/verification-client-contract.test.mjs && node ./tests/machineSpecOptions.test.mjs && node ./tests/ticketServiceOptionLabel.test.mjs",
+    "test": "node ./tests/verification-client-contract.test.mjs && node ./tests/machineSpecOptions.test.mjs && node ./tests/ticketServiceOptionLabel.test.mjs && node ./tests/invoiceDisplayContract.test.mjs",
     "verify:refactor": "node ./scripts/verify-refactor.mjs"
   },
   "dependencies": {

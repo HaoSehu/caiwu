@@ -7,7 +7,9 @@ use App\Http\Controllers\Client\CouponController;
 use App\Http\Controllers\Client\FinanceController;
 use App\Http\Controllers\Client\FinanceLedgerController;
 use App\Http\Controllers\Client\InvoiceController;
+use App\Http\Controllers\Client\OrderController;
 use App\Http\Controllers\Client\PaymentCallbackController;
+use App\Http\Controllers\Client\PaymentController;
 use App\Http\Controllers\Client\RechargeController;
 use App\Http\Controllers\Client\ReferralController;
 use App\Http\Controllers\Client\ServiceController;
@@ -97,6 +99,14 @@ Route::middleware(['auth:sanctum', 'ensure.client'])->group(function () {
     Route::post('/invoices/{id}/pay/mix', [InvoiceController::class, 'payByBalanceAndAlipay'])->middleware('throttle:10,1,client-invoices-pay-mix');
     Route::post('/invoices/{id}/pay/alipay', [InvoiceController::class, 'payByAlipay'])->middleware('throttle:12,1,client-invoices-pay-alipay');
     Route::get('/invoices/{id}/pay/alipay/status', [InvoiceController::class, 'queryAlipayStatus'])->middleware('throttle:30,1,client-invoices-pay-alipay-status');
+
+    // 订单
+    Route::get('/orders', [OrderController::class, 'index']);
+    Route::get('/orders/summary', [OrderController::class, 'summary']);
+
+    // 支付记录
+    Route::get('/payments', [PaymentController::class, 'index']);
+    Route::get('/payments/summary', [PaymentController::class, 'summary']);
 
     // 充值
     Route::post('/recharge', [RechargeController::class, 'store'])->middleware('throttle:6,1,client-recharge-store');

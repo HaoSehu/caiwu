@@ -434,6 +434,7 @@ class UserService
         $paymentSummary = $this->buildInvoicePaymentSummary($invoice);
         $refundActions = $this->resolveInvoiceRefundActions($invoice, $paymentSummary);
         $refundMethod = trim((string) ($data['refund_method'] ?? 'balance'));
+        $scope = (array) ($data['scope'] ?? ['order', 'payment']);
 
         throw_if(
             ! ($refundActions['can_balance'] ?? false) && ! ($refundActions['can_original'] ?? false),
@@ -444,6 +445,7 @@ class UserService
             'balance' => $this->paymentService->refundInvoiceToBalance($user, $invoice, [
                 'amount' => $data['amount'] ?? null,
                 'remark' => $data['remark'] ?? '',
+                'scope' => $scope,
             ], $context),
             'original' => $this->refundInvoiceByOriginalRoute($user, $invoice, $paymentSummary, $refundActions, $data, $context),
             default => throw new BusinessException('不支持的退款方式'),

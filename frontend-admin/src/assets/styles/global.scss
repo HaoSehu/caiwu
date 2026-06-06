@@ -769,14 +769,21 @@ html {
 
 // ========== 搜索 / 筛选栏 ==========
 .search-bar {
-  display: flex;
-  gap: 10px 14px;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+  gap: 10px 12px;
   align-items: center;
 
+  > * {
+    min-width: 0;
+  }
+
   .el-input,
-  .el-select {
-    flex-shrink: 0;
+  .el-select,
+  .el-date-editor,
+  .el-cascader {
+    width: 100% !important;
+    min-width: 0;
   }
 }
 
@@ -852,17 +859,20 @@ html {
 .summary-strip,
 .admin-metric-strip {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: $spacing-md;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
 }
 
 .summary-item,
 .stat-card,
+.metric-card,
 .admin-metric-card {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 16px 18px;
+  justify-content: center;
+  gap: 8px;
+  min-height: 76px;
+  padding: 14px 16px;
   border: 1px solid $border-color;
   border-radius: $base-border-radius;
   background: $bg-color-card;
@@ -870,22 +880,26 @@ html {
   transition: box-shadow $duration-base $ease-standard, border-color $duration-base $ease-standard;
 
   strong,
+  .metric-value,
   .stat-value {
     color: $text-color-primary;
-    font-size: 24px;
+    font-size: 22px;
     font-weight: 600;
     line-height: 1.1;
     font-variant-numeric: tabular-nums;
   }
 
   span,
+  .metric-label,
   .stat-label {
     color: $text-color-secondary;
     font-size: 12px;
+    line-height: 1.35;
   }
 }
 
 .summary-item:hover,
+.metric-card:hover,
 .stat-card:hover {
   border-color: $color-primary-border;
   box-shadow: $shadow-sm;
@@ -944,7 +958,8 @@ html {
     font-size: 18px;
   }
 
-  .summary-strip {
+  .summary-strip,
+  .admin-metric-strip {
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   }
 
@@ -963,16 +978,14 @@ html {
     }
   }
 
-  // 搜索栏输入控件 100% 宽度
   .search-bar {
-    flex-direction: column;
-    align-items: stretch;
+    grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
 
     .el-input,
     .el-select,
-    .el-date-editor {
+    .el-date-editor,
+    .el-cascader {
       width: 100% !important;
-      flex: 1 1 auto;
     }
   }
 
@@ -1059,16 +1072,21 @@ html {
     justify-content: center;
   }
 
-  .summary-strip {
+  .summary-strip,
+  .admin-metric-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
   }
 
   .summary-item,
+  .metric-card,
+  .admin-metric-card,
   .stat-card {
+    min-height: 68px;
     padding: 12px 14px;
 
     strong,
+    .metric-value,
     .stat-value {
       font-size: 20px;
     }
@@ -1076,7 +1094,8 @@ html {
 }
 
 @include mobile-sm-and-below {
-  .summary-strip {
+  .summary-strip,
+  .admin-metric-strip {
     grid-template-columns: 1fr;
   }
 }

@@ -36,7 +36,16 @@
       "Bash(curl -s 'http://127.0.0.1:5174/api/admin/invoices?page=1&page_size=3' -H 'Authorization: Bearer 9|PsCjBpVtVfZHFqp64n58jkCfLU3GygxOsULUnqq4416f52a0')",
       "Bash(python -m json.tool)",
       "Bash(curl -s http://127.0.0.1:5174/platform-config.json)",
-      "Bash(find *)"
+      "Bash(find *)",
+      "Bash(taskkill //F //IM php.exe)",
+      "Bash(taskkill //F //IM node.exe)",
+      "Bash(start 后端服务 *)",
+      "Bash(cmd.exe *)",
+      "Skill(superpowers:brainstorming)",
+      "Skill(superpowers:brainstorming:*)",
+      "Bash(python)",
+      "Skill(caiwu)",
+      "Skill(caiwu:*)"
     ],
     "additionalDirectories": [
       "c:\\Users\\USER125536\\Desktop\\caiwu\\backend"
