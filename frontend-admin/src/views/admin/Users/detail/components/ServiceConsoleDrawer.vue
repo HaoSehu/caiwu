@@ -60,8 +60,8 @@
         <section class="console-block">
           <div class="block-title">
             <span>连接信息</span>
-            <div v-if="state.detail.upstream?.provider" class="block-meta">
-              上游：{{ state.detail.upstream.provider }}<template v-if="state.detail.upstream.host_id">（host #{{ state.detail.upstream.host_id }}）</template>
+            <div class="block-meta">
+              上游：{{ state.detail.upstream?.provider || '未绑定' }}<template v-if="state.detail.upstream?.host_id">（host #{{ state.detail.upstream.host_id }}）</template>
               <el-button link type="primary" size="small" :disabled="isAnyActionLoading" @click="emit('edit-upstream')">更换id</el-button>
             </div>
           </div>
@@ -183,7 +183,7 @@ const passwordVisible = ref(false)
 // --- drawer size ---
 const drawerSize = computed(() => {
   if (typeof window === 'undefined') return '540px'
-  return window.innerWidth <= 768 ? '92%' : '540px'
+  return window.innerWidth <= 900 ? '92%' : '540px'
 })
 
 // --- detail accessors ---

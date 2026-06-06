@@ -224,7 +224,7 @@ const DEFAULT_SLIDES = freezeConfigList([
     key: 'support',
     railTitle: '企业客服',
     title: '企业客服 · 一对一专属服务',
-    desc: '7×24 小时工单、官方QQ群与一对一商务对接，覆盖选型、部署、迁移、运维与结算；支持对公开票、批量采购、子账号协作与统一对账。',
+    desc: '7×24 小时工单、官方QQ群与一对一商务对接，覆盖选型、部署、迁移、运维与结算；支持对公结算、批量采购、子账号协作与统一对账。',
     primaryText: '联系客服',
     primaryPath: '/help',
     secondaryText: '企业采购',
@@ -254,7 +254,7 @@ const DEFAULT_FEATURES = freezeConfigList([
     key: 'enterprise',
     kicker: '企业专区',
     title: 'IDC 企业采购通道',
-    desc: '统一账单、多子账号协作与对公开票能力同步上线。',
+    desc: '统一账单、多子账号协作与对公结算能力同步上线。',
     path: '/about',
   },
   {

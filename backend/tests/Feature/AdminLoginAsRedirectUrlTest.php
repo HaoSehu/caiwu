@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Exceptions\BusinessException;
 use App\Models\User;
 use App\Services\Auth\AuthService;
+use App\Services\Auth\LegacyPasswordVerifier;
 use App\Services\Auth\LoginRiskControlService;
 use App\Services\Referral\ReferralService;
 use App\Services\System\NotificationService;
@@ -88,6 +89,7 @@ class AdminLoginAsRedirectUrlTest extends TestCase
             $operationLogService,
             $this->createMock(AdminRoleBridgeService::class),
             $this->createMock(LoginRiskControlService::class),
+            new LegacyPasswordVerifier(),
         );
     }
 }

@@ -20,6 +20,8 @@
 
 - 能自行判断的直接执行，不要中途停下来等用户确认。
 - 多个子任务按依赖顺序依次完成，全部完成后输出总结。
+- 多步骤改造先形成执行计划，按当前代码和文档自动审查计划，修正明显遗漏或冲突后再动手。
+- 每完成一个子任务都执行受影响范围的小测试；全部任务完成后执行本次改动涉及层的完整验证。测试失败先修复，再进入下一任务。
 - 修改以最小必要范围为原则，不做无关重构。
 - 仓库可能处于脏工作区，禁止回滚不是自己造成的改动。
 
@@ -88,8 +90,12 @@
 - 分页结构：`list`、`total`、`page`、`page_size`。
 - 业务逻辑放 `app/Services`，常量/枚举放 `app/Constants`。
 - 支付、账单、订单等流程必须考虑事务、幂等和审计字段。
+- Payment 记录（payments 表）只允许修改状态，禁止物理删除任何行（包括 gateway=balance/manual/free 的历史记录）。
+- Payment 仅记录第三方支付网关真实资金流入（如支付宝充值、支付宝付商品）；余额支付、管理员手动开服、免费订单不产生 Payment。
 - 操作来源沿用 `operator_*`、`actor_*`、`trace_id`、`ip_address`。
 - 调用上游/第三方必须走 `app/Services` 下的专用客户端，**不要**在 Controller 里直接 `Http::*`。
+- 上游 provider key 以真实 `suppliers.interface_type` 或服务绑定值为准，禁止把 `mofang_finance_api` 归一化或别名成 `hosting_panel_api`。
+- 魔方财务/魔方云差异必须收敛在 `Services/Upstream/Drivers/Mofang` 或 `Integrations/Mofang` 中间层；通用主机面板协议只能保留共享传输与协议能力。
 - 回调接口必须走签名中间件，业务处理必须幂等，必须落日志。
 - 敏感配置走 `settings` 或 `.env`，不要硬编码。
 
@@ -130,6 +136,7 @@
 - 改 `frontend-admin`：执行 `npm run build`。
 - 改 `frontend-client`：执行 `npm run build`；涉及重构收口范围再执行 `npm run verify:refactor`。
 - 改 `backend`：执行 `php artisan test`，必要时缩小到受影响测试文件。
+- 多步骤开发：子任务完成后先跑最小相关测试，最后再跑完整受影响验证；失败必须修复后继续。
 - 无法运行验证时，在总结中说明原因。
 
 ## 11. 本地启动

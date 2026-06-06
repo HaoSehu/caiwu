@@ -16,13 +16,14 @@
           clearable
           class="tickets-search-input"
           @keyup.enter="handleSearch"
+          @clear="handleSearch"
         >
           <template #prefix>
             <el-icon><Search /></el-icon>
           </template>
         </el-input>
 
-        <el-select v-model="filters.status" placeholder="工单状态" clearable class="tickets-search-select">
+        <el-select v-model="filters.status" placeholder="工单状态" clearable class="tickets-search-select" @change="handleSearch">
           <el-option
             v-for="option in statusOptions"
             :key="option.value"
@@ -31,7 +32,7 @@
           />
         </el-select>
 
-        <el-select v-model="filters.priority" placeholder="优先级" clearable class="tickets-search-select tickets-search-select--sm">
+        <el-select v-model="filters.priority" placeholder="优先级" clearable class="tickets-search-select tickets-search-select--sm" @change="handleSearch">
           <el-option
             v-for="option in priorityOptions"
             :key="option.value"
@@ -40,7 +41,7 @@
           />
         </el-select>
 
-        <el-select v-model="filters.department" placeholder="工单分类" clearable class="tickets-search-select">
+        <el-select v-model="filters.department" placeholder="工单分类" clearable class="tickets-search-select" @change="handleSearch">
           <el-option
             v-for="option in departmentOptions"
             :key="option.value"

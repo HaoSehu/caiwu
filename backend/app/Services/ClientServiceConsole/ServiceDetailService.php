@@ -15,6 +15,7 @@ use App\Services\System\OperationLogService;
 use App\Services\Upstream\Contracts\ProvidesConsoleRuntime;
 use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderResolver;
+use App\Services\Upstream\Support\WebSessionCookieParser;
 use App\Support\ServiceHostname;
 use App\Support\TextSanitizer;
 use Carbon\Carbon;
@@ -47,6 +48,7 @@ class ServiceDetailService
         private readonly OperationLogService $operationLogService,
         private readonly ServiceResolverService $resolverService,
         private readonly ServiceTransformService $transformService,
+        private readonly ?WebSessionCookieParser $webSessionCookieParser = null,
     ) {}
 
     // ── Public API ─────────────────────────────────────────────────────────
@@ -875,39 +877,12 @@ class ServiceDetailService
 
     private function resolveSupplierWebSessionCookie(Supplier $supplier): string
     {
-        $notes = trim((string) ($supplier->notes ?? ''));
-        if ($notes === '') {
-            return '';
-        }
-
-        $decoded = json_decode($notes, true);
-        if (is_array($decoded)) {
-            foreach (['web_session_cookie', 'upstream_cookie', 'cookie'] as $key) {
-                $value = trim((string) ($decoded[$key] ?? ''));
-                if ($value !== '') {
-                    return $this->normalizeCookieHeaderValue($value);
-                }
-            }
-        }
-
-        if (preg_match('/(?:web_session_cookie|upstream_cookie|cookie)\s*[=:]\s*(.+)$/imu', $notes, $match) === 1) {
-            return $this->normalizeCookieHeaderValue((string) $match[1]);
-        }
-
-        if (preg_match('/\bZJMF_[A-Z0-9_]+\s*=/i', $notes) === 1) {
-            return $this->normalizeCookieHeaderValue($notes);
-        }
-
-        return '';
+        return $this->webSessionCookieParser()->parse((string) ($supplier->notes ?? ''));
     }
 
-    private function normalizeCookieHeaderValue(string $value): string
+    private function webSessionCookieParser(): WebSessionCookieParser
     {
-        $value = trim($value);
-        $value = preg_replace('/^Cookie\s*:\s*/i', '', $value) ?? $value;
-        $value = strtok($value, "\r\n") ?: '';
-
-        return trim($value);
+        return $this->webSessionCookieParser ?? new WebSessionCookieParser;
     }
 
     private function parseFlowPacketPage(string $html): array

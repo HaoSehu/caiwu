@@ -120,16 +120,16 @@ class OrderZeroAmountPaymentFlowTest extends TestCase
             new InvoiceService,
         );
 
-        $payment = $service->payOrderByBalance($order, $user, ['trace_id' => 'order-zero-regression']);
+        $paidInvoice = $service->payOrderByBalance($order, $user, ['trace_id' => 'order-zero-regression']);
 
-        $this->assertDatabaseHas('payments', [
-            'id' => (int) $payment->id,
+        $this->assertDatabaseMissing('payments', [
             'order_id' => (int) $order->id,
-            'invoice_id' => (int) $invoice->id,
-            'status' => PaymentStatus::SUCCESS,
             'gateway' => 'free',
         ]);
-        $this->assertSame('0.00', number_format((float) $payment->amount, 2, '.', ''));
+        $this->assertDatabaseMissing('payments', [
+            'order_id' => (int) $order->id,
+            'gateway' => 'balance',
+        ]);
 
         $this->assertDatabaseHas('orders', [
             'id' => (int) $order->id,

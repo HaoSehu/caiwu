@@ -217,12 +217,13 @@
               placeholder="搜索配置名称 / 描述 / 开通模块"
               clearable
               @keyup.enter="handleSearch"
+              @clear="handleSearch"
             >
               <template #prefix>
                 <el-icon><Search /></el-icon>
               </template>
             </el-input>
-            <el-select v-model="filters.status" class="search-field" clearable placeholder="商品状态">
+            <el-select v-model="filters.status" class="search-field" clearable placeholder="商品状态" @change="handleSearch">
               <el-option
                 v-for="item in statusOptions"
                 :key="item.value"
@@ -1507,7 +1508,6 @@
           >
             <template #prefix><el-icon><Search /></el-icon></template>
           </el-input>
-          <el-button type="primary" @click="loadOwners(1)">搜索</el-button>
         </div>
 
         <el-table
@@ -4884,7 +4884,7 @@ onMounted(loadData)
 
 .search-grid {
   display: grid;
-  grid-template-columns: minmax(260px, 1.8fr) minmax(150px, 0.9fr) auto;
+  grid-template-columns: minmax(260px, 1.8fr) minmax(150px, 0.9fr);
   align-items: center;
   gap: 10px;
 }

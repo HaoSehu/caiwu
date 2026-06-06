@@ -6,12 +6,12 @@ import clientApi from '@/api/client'
  * 账单模块 composable
  * 封装账单相关的 API 调用和状态管理
  */
-export function useInvoices() {
+export function useInvoices(options = {}) {
   const loading = ref(false)
   const list = ref([])
   const total = ref(0)
   const page = ref(1)
-  const pageSize = ref(10)
+  const pageSize = ref(Number(options.pageSize || 10))
   const filters = reactive({
     keyword: '',
     status: '',
@@ -25,14 +25,31 @@ export function useInvoices() {
     return 'danger'
   }
 
+  function resolveOptionValue(value) {
+    return typeof value === 'function' ? value() : value
+  }
+
+  function normalizeTypeFilter(value) {
+    const resolvedValue = resolveOptionValue(value)
+    if (Array.isArray(resolvedValue)) {
+      return resolvedValue
+        .map((item) => String(item || '').trim())
+        .filter(Boolean)
+        .join(',')
+    }
+
+    return String(resolvedValue || '').trim()
+  }
+
   async function loadList() {
     loading.value = true
     try {
+      const fixedType = normalizeTypeFilter(options.fixedTypes)
       const response = await clientApi.invoices({
         page: page.value,
         page_size: pageSize.value,
         status: filters.status === '' ? undefined : filters.status,
-        type: filters.type || undefined,
+        type: fixedType || filters.type || undefined,
         keyword: filters.keyword || undefined,
       })
       list.value = Array.isArray(response.data?.list) ? response.data.list : []

@@ -35,13 +35,13 @@ class InvoiceController extends Controller
         ]);
 
         $query = Invoice::with([
-                'product:id,product_type,product_group_id,config_options,purchase_requires',
+                'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
                 'user:id,email,nickname',
                 'service:id,name,status,expires_at',
                 'payments',
                 'items',
                 'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle',
-                'order.product:id,product_type,product_group_id,config_options,purchase_requires',
+                'order.product:id,product_type,product_group_id,remark,config_options,purchase_requires',
             ])
             ->where('user_id', $request->user()->id)
             ->orderByDesc('id');
@@ -54,13 +54,9 @@ class InvoiceController extends Controller
         } elseif (array_key_exists('status', $filters) && $filters['status'] !== null) {
             $query->where('status', (int) $filters['status']);
         }
-        if (! empty($filters['type'])) {
-            $type = (string) $filters['type'];
-            if (in_array($type, ['new', 'normal'], true)) {
-                $query->whereIn('type', ['new', 'normal']);
-            } else {
-                $query->where('type', $type);
-            }
+        $types = $this->normalizeInvoiceTypeFilters((string) ($filters['type'] ?? ''));
+        if ($types !== []) {
+            $query->whereIn('type', $types);
         }
 
         $perPage = (int) ($filters['page_size'] ?? $filters['per_page'] ?? 15);
@@ -76,7 +72,6 @@ class InvoiceController extends Controller
             'total' => $list->total(),
             'page' => $list->currentPage(),
             'page_size' => $list->perPage(),
-            'per_page' => $list->perPage(),
         ]);
     }
 
@@ -123,8 +118,8 @@ class InvoiceController extends Controller
 
         $invoice = $this->checkoutService->create($request->user()->id, $data, $context);
         $invoice->loadMissing([
-            'product:id,product_type,product_group_id,config_options,purchase_requires',
-            'order.product:id,product_type,product_group_id,config_options,purchase_requires',
+            'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
+            'order.product:id,product_type,product_group_id,remark,config_options,purchase_requires',
             'service',
             'payments',
         ]);
@@ -135,8 +130,8 @@ class InvoiceController extends Controller
     public function show(Request $request, int $id)
     {
         $invoice = Invoice::with([
-            'product:id,product_type,product_group_id,config_options,purchase_requires',
-            'order.product:id,product_type,product_group_id,config_options,purchase_requires',
+            'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
+            'order.product:id,product_type,product_group_id,remark,config_options,purchase_requires',
             'service',
             'payments',
         ])
@@ -149,8 +144,8 @@ class InvoiceController extends Controller
     public function cancel(Request $request, int $id)
     {
         $invoice = Invoice::with([
-            'product:id,product_type,product_group_id,config_options,purchase_requires',
-            'order.product:id,product_type,product_group_id,config_options,purchase_requires',
+            'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
+            'order.product:id,product_type,product_group_id,remark,config_options,purchase_requires',
             'service',
             'payments',
         ])
@@ -164,8 +159,8 @@ class InvoiceController extends Controller
             ])
         );
         $updated->loadMissing([
-            'product:id,product_type,product_group_id,config_options,purchase_requires',
-            'order.product:id,product_type,product_group_id,config_options,purchase_requires',
+            'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
+            'order.product:id,product_type,product_group_id,remark,config_options,purchase_requires',
             'service',
             'payments',
         ]);
@@ -181,8 +176,8 @@ class InvoiceController extends Controller
 
         $user = $request->user();
         $invoice = Invoice::with([
-            'product:id,product_type,product_group_id,config_options,purchase_requires',
-            'order.product:id,product_type,product_group_id,config_options,purchase_requires',
+            'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
+            'order.product:id,product_type,product_group_id,remark,config_options,purchase_requires',
             'service',
             'payments',
         ])
@@ -195,20 +190,19 @@ class InvoiceController extends Controller
             (int) $user->id
         );
 
-        $payment = $this->paymentService->payByBalance(
+        $paidInvoice = $this->paymentService->payByBalance(
             $invoice,
             $user,
             $this->buildOperationContext($request)
         );
 
-        $invoice->refresh()->load(['product:id,product_type,product_group_id,config_options,purchase_requires', 'service', 'payments']);
+        $invoice->refresh()->load(['product:id,product_type,product_group_id,remark,config_options,purchase_requires', 'service', 'payments']);
         $user->refresh();
 
         return $this->success([
-            'payment_no' => (string) $payment->payment_no,
-            'gateway' => (string) $payment->gateway,
-            'amount' => number_format((float) $payment->amount, 2, '.', ''),
-            'paid_at' => $payment->paid_at?->format('Y-m-d H:i:s'),
+            'gateway' => 'balance',
+            'amount' => number_format((float) $paidInvoice->paid_amount, 2, '.', ''),
+            'paid_at' => $paidInvoice->paid_at?->format('Y-m-d H:i:s'),
             'balance' => number_format((float) $user->balance, 2, '.', ''),
             'invoice' => $this->transformInvoice($invoice, $user),
         ], '支付成功');
@@ -223,8 +217,8 @@ class InvoiceController extends Controller
 
         $user = $request->user();
         $invoice = Invoice::with([
-            'product:id,product_type,product_group_id,config_options,purchase_requires',
-            'order.product:id,product_type,product_group_id,config_options,purchase_requires',
+            'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
+            'order.product:id,product_type,product_group_id,remark,config_options,purchase_requires',
             'service',
             'payments',
         ])
@@ -244,7 +238,7 @@ class InvoiceController extends Controller
             $this->buildOperationContext($request)
         );
 
-        $invoice->refresh()->load(['product:id,product_type,product_group_id,config_options,purchase_requires', 'service', 'payments']);
+        $invoice->refresh()->load(['product:id,product_type,product_group_id,remark,config_options,purchase_requires', 'service', 'payments']);
         $payment = Payment::query()
             ->where('payment_no', (string) ($result['payment_no'] ?? ''))
             ->where('invoice_id', $invoice->id)
@@ -272,7 +266,7 @@ class InvoiceController extends Controller
         ]);
 
         $user = $request->user();
-        $invoice = Invoice::with(['product:id,product_type,product_group_id,config_options,purchase_requires', 'payments'])
+        $invoice = Invoice::with(['product:id,product_type,product_group_id,remark,config_options,purchase_requires', 'payments'])
             ->where('user_id', $user->id)
             ->findOrFail($id);
 
@@ -313,8 +307,8 @@ class InvoiceController extends Controller
 
         $user = $request->user();
         $invoice = Invoice::with([
-            'product:id,product_type,product_group_id,config_options,purchase_requires',
-            'order.product:id,product_type,product_group_id,config_options,purchase_requires',
+            'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
+            'order.product:id,product_type,product_group_id,remark,config_options,purchase_requires',
             'service',
             'payments',
         ])
@@ -343,7 +337,7 @@ class InvoiceController extends Controller
         $responseData = $result;
 
         if (($result['paid'] ?? false) === true) {
-            $invoice->refresh()->load(['product:id,product_type,product_group_id,config_options,purchase_requires', 'service', 'payments']);
+            $invoice->refresh()->load(['product:id,product_type,product_group_id,remark,config_options,purchase_requires', 'service', 'payments']);
             $responseData['invoice'] = $this->transformInvoice($invoice, $user);
         }
 
@@ -427,6 +421,29 @@ class InvoiceController extends Controller
             'created_at' => $detail['created_at'],
             'paid_at' => $detail['paid_at'],
         ];
+    }
+
+    private function normalizeInvoiceTypeFilters(string $typeFilter): array
+    {
+        $types = [];
+
+        foreach (explode(',', $typeFilter) as $type) {
+            $normalized = trim($type);
+            if ($normalized === '') {
+                continue;
+            }
+
+            if (in_array($normalized, ['new', 'normal'], true)) {
+                $types[] = 'new';
+                $types[] = 'normal';
+
+                continue;
+            }
+
+            $types[] = $normalized;
+        }
+
+        return array_values(array_unique($types));
     }
 
     private function buildOperationContext(Request $request, string $actorType = 'client'): array

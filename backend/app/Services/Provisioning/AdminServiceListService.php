@@ -10,6 +10,7 @@ use App\Models\Service;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Support\ServiceHostname;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Crypt;
 
 class AdminServiceListService
 {
@@ -51,35 +52,10 @@ class AdminServiceListService
                 'invoices:id,invoice_no,service_id,order_id,product_spec_snapshot,status,paid_at',
             ]);
 
-        // 关键词搜索：服务名、域名、主机ID、IP、产品名、订单号
+        // 关键词搜索：服务名、主机名、主机 ID、IP、用户、账单等服务相关信息
         $keyword = trim((string) ($filters['keyword'] ?? ''));
         if ($keyword !== '') {
-            $query->where(function (Builder $builder) use ($keyword) {
-                $builder->where('name', 'like', '%'.$keyword.'%')
-                    ->orWhere('domain', 'like', '%'.$keyword.'%')
-                    ->orWhere('provision_data->requested_host', 'like', '%'.$keyword.'%')
-                    ->orWhere('provision_data->upstream_host_id', $keyword)
-                    ->orWhere('provision_data->dedicated_ip', 'like', '%'.$keyword.'%')
-                    ->orWhereHas('product', function (Builder $productQuery) use ($keyword) {
-                        $productQuery->where('name', 'like', '%'.$keyword.'%');
-                    })
-                    ->orWhereHas('order', function (Builder $orderQuery) use ($keyword) {
-                        $orderQuery->where('order_no', 'like', '%'.$keyword.'%');
-                    })
-                    ->orWhereHas('invoice', function (Builder $invoiceQuery) use ($keyword) {
-                        $invoiceQuery->where('invoice_no', 'like', '%'.$keyword.'%')
-                            ->orWhere('product_spec_snapshot', 'like', '%'.$keyword.'%');
-                    })
-                    ->orWhereHas('invoices', function (Builder $invoiceQuery) use ($keyword) {
-                        $invoiceQuery->where('invoice_no', 'like', '%'.$keyword.'%')
-                            ->orWhere('product_spec_snapshot', 'like', '%'.$keyword.'%');
-                    })
-                    ->orWhereHas('user', function (Builder $userQuery) use ($keyword) {
-                        $userQuery->where('nickname', 'like', '%'.$keyword.'%')
-                            ->orWhere('email', 'like', '%'.$keyword.'%')
-                            ->orWhere('phone', 'like', '%'.$keyword.'%');
-                    });
-            });
+            $this->applyKeywordSearch($query, $keyword);
         }
 
         // 状态筛选
@@ -104,15 +80,20 @@ class AdminServiceListService
     private function transform(Service $service): array
     {
         $provisionData = (array) ($service->provision_data ?? []);
+        $connection = $this->resolveConnection($provisionData);
+        $hostIps = $this->resolveHostIps($provisionData, $connection);
         $statusLabels = ServiceStatus::$labels ?? [];
         $invoice = $this->resolvePrimaryInvoice($service);
         $order = $invoice ? null : $service->order;
 
         return [
             'id' => $service->id,
+            'service_id' => (int) $service->id,
+            'instance_id' => (int) $service->id,
             'name' => (string) $service->name,
             'product_display_name' => $this->resolveProductDisplayName($service),
             'domain' => ServiceHostname::resolveDisplayDomain($service, $provisionData),
+            'requested_hostname' => (string) ($provisionData['requested_host'] ?? ''),
             'custom_hostname' => ServiceHostname::custom($provisionData),
             'has_custom_hostname' => ServiceHostname::hasCustom($provisionData),
             'status' => (int) $service->status,
@@ -123,7 +104,18 @@ class AdminServiceListService
             'created_at' => $service->created_at?->format('Y-m-d H:i:s'),
             'auto_renew' => (bool) $service->auto_renew,
             'upstream_host_id' => (int) (($provisionData['upstream_host_id'] ?? 0) ?: 0),
+            'upstream_host_id_text' => (string) ($provisionData['upstream_host_id'] ?? ''),
+            'upstream_host_ids' => $this->normalizeStringList($provisionData['upstream_host_ids'] ?? []),
             'dedicated_ip' => (string) ($provisionData['dedicated_ip'] ?? ''),
+            'host_ips' => $hostIps,
+            'internal_ip' => (string) ($provisionData['internal_ip'] ?? ''),
+            'host_username' => (string) ($provisionData['username'] ?? ($connection['username'] ?? '')),
+            'connection' => [
+                'hostname' => (string) ($connection['hostname'] ?? ''),
+                'username' => (string) ($connection['username'] ?? ''),
+                'internal_ip' => (string) ($connection['internal_ip'] ?? ''),
+                'port' => (int) (($connection['port'] ?? 0) ?: 0),
+            ],
             'os' => (string) ($provisionData['os'] ?? ''),
             'user' => [
                 'id' => (int) ($service->user?->id ?? 0),
@@ -148,6 +140,206 @@ class AdminServiceListService
                 'paid_at' => $invoice?->paid_at?->format('Y-m-d H:i:s'),
             ],
         ];
+    }
+
+    private function resolveConnection(array $provisionData): array
+    {
+        $plainConnection = is_array($provisionData['connection'] ?? null)
+            ? (array) $provisionData['connection']
+            : [];
+        $secretConnection = $this->readConnectionSecret($provisionData);
+        $connection = array_merge($secretConnection, $plainConnection);
+
+        return [
+            'hostname' => trim((string) ($connection['hostname'] ?? '')),
+            'username' => trim((string) ($connection['username'] ?? '')),
+            'internal_ip' => trim((string) ($connection['internal_ip'] ?? '')),
+            'port' => (int) (($connection['port'] ?? 0) ?: 0),
+        ];
+    }
+
+    private function resolveHostIps(array $provisionData, array $connection): array
+    {
+        return collect([
+            $provisionData['dedicated_ip'] ?? '',
+            $provisionData['internal_ip'] ?? '',
+            $connection['internal_ip'] ?? '',
+            ...(array) ($provisionData['assigned_ips'] ?? []),
+        ])
+            ->map(fn ($value) => trim((string) $value))
+            ->filter(fn (string $value) => $value !== '')
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function normalizeStringList(mixed $value): array
+    {
+        if (! is_array($value)) {
+            $value = $value === null || $value === '' ? [] : [$value];
+        }
+
+        return collect($value)
+            ->map(fn ($item) => trim((string) $item))
+            ->filter(fn (string $item) => $item !== '')
+            ->values()
+            ->all();
+    }
+
+    private function applyKeywordSearch(Builder $query, string $keyword): void
+    {
+        $likeKeyword = '%'.$keyword.'%';
+        $numericKeyword = $this->extractNumericKeyword($keyword);
+        $provisionDataFields = [
+            'provision_data->requested_host',
+            'provision_data->custom_hostname',
+            'provision_data->default_service_name',
+            'provision_data->custom_service_name',
+            'provision_data->upstream_host_id',
+            'provision_data->upstream_host_ids',
+            'provision_data->dedicated_ip',
+            'provision_data->assigned_ips',
+            'provision_data->internal_ip',
+            'provision_data->nat_remote_address',
+            'provision_data->nat_remote_host',
+            'provision_data->username',
+            'provision_data->os',
+            'provision_data->connection->hostname',
+            'provision_data->connection->username',
+            'provision_data->connection->internal_ip',
+        ];
+
+        $query->where(function (Builder $builder) use ($keyword, $likeKeyword, $numericKeyword, $provisionDataFields) {
+            $builder->where('name', 'like', $likeKeyword)
+                ->orWhere('domain', 'like', $likeKeyword);
+
+            $connectionMatchedServiceIds = $this->resolveConnectionMatchedServiceIds($keyword);
+            if ($connectionMatchedServiceIds !== []) {
+                $builder->orWhereIn('id', $connectionMatchedServiceIds);
+            }
+
+            if ($numericKeyword !== null) {
+                $builder->orWhere('id', $numericKeyword)
+                    ->orWhere('user_id', $numericKeyword)
+                    ->orWhere('order_id', $numericKeyword)
+                    ->orWhere('invoice_id', $numericKeyword);
+            }
+
+            foreach ($provisionDataFields as $field) {
+                $builder->orWhere($field, 'like', $likeKeyword);
+            }
+
+            $builder
+                ->orWhereHas('product', function (Builder $productQuery) use ($likeKeyword) {
+                    $productQuery->where('name', 'like', $likeKeyword);
+                })
+                ->orWhereHas('order', function (Builder $orderQuery) use ($likeKeyword, $numericKeyword) {
+                    $orderQuery->where(function (Builder $innerQuery) use ($likeKeyword, $numericKeyword) {
+                        if ($numericKeyword !== null) {
+                            $innerQuery->where('id', $numericKeyword)
+                                ->orWhere('service_id', $numericKeyword);
+                        }
+
+                        $this->orWhereKeyword($innerQuery, 'order_no', $likeKeyword, $numericKeyword !== null);
+                    });
+                })
+                ->orWhereHas('invoice', function (Builder $invoiceQuery) use ($likeKeyword, $numericKeyword) {
+                    $this->applyInvoiceKeywordSearch($invoiceQuery, $likeKeyword, $numericKeyword);
+                })
+                ->orWhereHas('invoices', function (Builder $invoiceQuery) use ($likeKeyword, $numericKeyword) {
+                    $this->applyInvoiceKeywordSearch($invoiceQuery, $likeKeyword, $numericKeyword);
+                })
+                ->orWhereHas('user', function (Builder $userQuery) use ($likeKeyword, $numericKeyword) {
+                    $userQuery->where(function (Builder $innerQuery) use ($likeKeyword, $numericKeyword) {
+                        if ($numericKeyword !== null) {
+                            $innerQuery->where('id', $numericKeyword);
+                        }
+
+                        $this->orWhereKeyword($innerQuery, 'nickname', $likeKeyword, $numericKeyword !== null);
+                        $innerQuery->orWhere('email', 'like', $likeKeyword)
+                            ->orWhere('phone', 'like', $likeKeyword)
+                            ->orWhere('real_name', 'like', $likeKeyword);
+                    });
+                });
+        });
+    }
+
+    private function applyInvoiceKeywordSearch(Builder $query, string $likeKeyword, ?int $numericKeyword): void
+    {
+        $query->where(function (Builder $innerQuery) use ($likeKeyword, $numericKeyword) {
+            if ($numericKeyword !== null) {
+                $innerQuery->where('id', $numericKeyword)
+                    ->orWhere('service_id', $numericKeyword)
+                    ->orWhere('order_id', $numericKeyword);
+            }
+
+            $this->orWhereKeyword($innerQuery, 'invoice_no', $likeKeyword, $numericKeyword !== null);
+            $innerQuery->orWhere('product_spec_snapshot', 'like', $likeKeyword);
+        });
+    }
+
+    private function orWhereKeyword(Builder $query, string $column, string $likeKeyword, bool $hasPreviousCondition): void
+    {
+        if ($hasPreviousCondition) {
+            $query->orWhere($column, 'like', $likeKeyword);
+
+            return;
+        }
+
+        $query->where($column, 'like', $likeKeyword);
+    }
+
+    private function extractNumericKeyword(string $keyword): ?int
+    {
+        $normalized = trim($keyword);
+        if (preg_match('/^(?:id[:：#]?\s*)?(\d+)$/i', $normalized, $matches) !== 1) {
+            return null;
+        }
+
+        return (int) $matches[1];
+    }
+
+    private function resolveConnectionMatchedServiceIds(string $keyword): array
+    {
+        return Service::query()
+            ->select(['id', 'provision_data'])
+            ->whereNotNull('provision_data')
+            ->where('provision_data->connection_secret', '!=', '')
+            ->latest('id')
+            ->limit(500)
+            ->get()
+            ->filter(function (Service $service) use ($keyword): bool {
+                $connection = $this->readConnectionSecret((array) ($service->provision_data ?? []));
+                if ($connection === []) {
+                    return false;
+                }
+
+                return collect([
+                    $connection['hostname'] ?? '',
+                    $connection['username'] ?? '',
+                    $connection['internal_ip'] ?? '',
+                    $connection['port'] ?? '',
+                ])->contains(fn ($value) => stripos((string) $value, $keyword) !== false);
+            })
+            ->map(fn (Service $service) => (int) $service->id)
+            ->values()
+            ->all();
+    }
+
+    private function readConnectionSecret(array $provisionData): array
+    {
+        $payload = trim((string) ($provisionData['connection_secret'] ?? ''));
+        if ($payload === '') {
+            return [];
+        }
+
+        try {
+            $decoded = json_decode(Crypt::decryptString($payload), true);
+        } catch (\Throwable) {
+            return [];
+        }
+
+        return is_array($decoded) ? $decoded : [];
     }
 
     private function resolveProductDisplayName(Service $service): string

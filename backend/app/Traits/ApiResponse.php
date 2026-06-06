@@ -10,9 +10,9 @@ use Illuminate\Http\JsonResponse;
 
 trait ApiResponse
 {
-    protected function success(mixed $data = null, string $message = '操作成功'): JsonResponse
+    protected function success(mixed $data = null, string $message = '操作成功', int $status = 200): JsonResponse
     {
-        return ApiResponseBuilder::success($data, $message);
+        return ApiResponseBuilder::success($data, $message, $status);
     }
 
     protected function error(int $code = 50000, string $message = '操作失败', mixed $data = null): JsonResponse

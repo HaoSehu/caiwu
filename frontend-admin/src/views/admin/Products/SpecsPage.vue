@@ -34,7 +34,7 @@
             <el-icon><Search /></el-icon>
           </template>
         </el-input>
-        <el-select v-model="filters.binding_status" placeholder="绑定状态" clearable style="width: 140px">
+        <el-select v-model="filters.binding_status" placeholder="绑定状态" clearable style="width: 140px" @change="loadCatalog">
           <el-option label="全部" value="" />
           <el-option label="已绑定" value="bound" />
           <el-option label="未绑定" value="unbound" />

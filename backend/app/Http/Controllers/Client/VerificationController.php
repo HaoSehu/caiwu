@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Client;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Client\Verification\InitVerificationRequest;
 use App\Services\Auth\VerificationService;
 use Illuminate\Http\Request;
 
@@ -13,20 +14,8 @@ class VerificationController extends Controller
     /**
      * 初始化实名认证
      */
-    public function init(Request $request)
+    public function init(InitVerificationRequest $request)
     {
-        // cert_type 对齐 mcloud collectionInfo() 支持的证件类型
-        $allowedCertTypes = [
-            'IDENTITY_CARD', 'HOME_VISIT_PERMIT_HK_MC', 'HOME_VISIT_PERMIT_TAIWAN',
-            'RESIDENCE_PERMIT_HK_MC', 'RESIDENCE_PERMIT_TAIWAN',
-        ];
-
-        $request->validate([
-            'realname' => 'required|string|max:50',
-            'idcard' => 'required|string|min:15|max:18',
-            'cert_type' => 'nullable|string|in:'.implode(',', $allowedCertTypes),
-        ]);
-
         $user = $request->user();
 
         if ($user->is_verified) {
@@ -52,7 +41,13 @@ class VerificationController extends Controller
     {
         $request->validate(['certify_id' => 'required|string']);
 
+        $user = $request->user();
         $certifyId = (string) $request->input('certify_id');
+
+        $userCertifyId = trim((string) ($user->verification_certify_id ?? ''));
+        if ($userCertifyId === '' || ! hash_equals($userCertifyId, $certifyId)) {
+            return $this->error(40300, '认证会话与当前账户不匹配');
+        }
 
         $result = $this->verificationService->generateQrCode(
             $certifyId

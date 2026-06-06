@@ -313,7 +313,7 @@
               </router-link>
               <router-link to="/client/invoices" class="q-item">
                 <el-icon><Tickets /></el-icon>
-                <span>订单管理</span>
+                <span>订单记录</span>
               </router-link>
               <router-link to="/client/balance-logs" class="q-item">
                 <el-icon><Wallet /></el-icon>
@@ -827,7 +827,7 @@ function resolveProductCardTheme(key: string, item: GenericRecord) {
 const todoItems = computed(() => [
   {
     key: 'invoice',
-    label: '待支付订单',
+    label: '待支付账单',
     count: Number(financeSummary.value.unpaid_count || 0),
     path: '/client/invoices',
     icon: Tickets,

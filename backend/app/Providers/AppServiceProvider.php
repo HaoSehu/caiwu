@@ -2,7 +2,10 @@
 
 namespace App\Providers;
 
+use App\Services\Auth\LegacyPasswordVerifier;
+use App\Services\Sms\SmsDriverManager;
 use App\Services\System\UploadedAssetReferenceService;
+use App\Services\Verification\VerificationDriverManager;
 use Carbon\CarbonInterface;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Sanctum\PersonalAccessToken;
@@ -22,6 +25,12 @@ class AppServiceProvider extends ServiceProvider
         ]);
 
         $this->app->singleton(UploadedAssetReferenceService::class);
+        $this->app->singleton(SmsDriverManager::class);
+        $this->app->singleton(VerificationDriverManager::class);
+        $this->app->singleton(
+            LegacyPasswordVerifier::class,
+            fn (): LegacyPasswordVerifier => new LegacyPasswordVerifier($this->app->tagged('auth.legacy_password_verifiers'))
+        );
     }
 
     public function boot(): void

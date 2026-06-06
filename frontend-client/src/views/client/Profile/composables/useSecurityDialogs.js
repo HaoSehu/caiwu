@@ -1,6 +1,14 @@
 import { onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { IDENTITY_CARD_PATTERN, resolveVerificationQrUrl } from '@/utils/verification'
+import {
+  getEmailBindingFormError,
+  getPhoneBindingFormError,
+  getVerificationFormError,
+  IDENTITY_CARD_PATTERN,
+  normalizeEmail,
+  normalizePhone,
+  resolveVerificationQrUrl,
+} from '@/utils/verification'
 
 export function useSecurityDialogs(form, postCodeWithFallback, runWithCaptcha, userStore) {
   // --- 密码 ---
@@ -153,12 +161,17 @@ export function useSecurityDialogs(form, postCodeWithFallback, runWithCaptcha, u
   }
 
   async function handleSendPhoneCode() {
-    if (!phoneForm.phone) { ElMessage.warning('请先输入手机号'); return }
-    try { await phoneFormRef.value?.validateField('phone') } catch { return }
+    const formError = getPhoneBindingFormError(phoneForm, { requireCode: false })
+    if (formError) {
+      ElMessage.warning(formError)
+      return
+    }
+
     phoneCodeSending.value = true
     try {
+      const phone = normalizePhone(phoneForm.phone)
       await runWithCaptcha(async (captcha) => {
-        await postCodeWithFallback('/client/auth/phone-code', { phone: phoneForm.phone, captcha })
+        await postCodeWithFallback('/client/auth/phone-code', { phone, captcha })
       })
       ElMessage.success('短信验证码已发送')
       codeCountdown.value = 60
@@ -175,13 +188,21 @@ export function useSecurityDialogs(form, postCodeWithFallback, runWithCaptcha, u
   }
 
   async function handleChangePhone() {
-    if (!phoneFormRef.value) return
-    await phoneFormRef.value.validate()
+    const formError = getPhoneBindingFormError(phoneForm)
+    if (formError) {
+      ElMessage.warning(formError)
+      return
+    }
+
     phoneLoading.value = true
     try {
       const request = (await import('@/utils/request')).default
-      await request.put('/client/auth/phone', phoneForm)
-      form.phone = phoneForm.phone
+      const payload = {
+        phone: normalizePhone(phoneForm.phone),
+        code: String(phoneForm.code ?? '').trim(),
+      }
+      await request.put('/client/auth/phone', payload)
+      form.phone = payload.phone
       showPhoneDialog.value = false
       ElMessage.success('手机号修改成功')
       await userStore.fetchUserInfo('client')
@@ -193,12 +214,17 @@ export function useSecurityDialogs(form, postCodeWithFallback, runWithCaptcha, u
   }
 
   async function handleSendEmailCode() {
-    if (!emailForm.email) { ElMessage.warning('请先输入邮箱'); return }
-    try { await emailFormRef.value?.validateField('email') } catch { return }
+    const formError = getEmailBindingFormError(emailForm, { requireCode: false })
+    if (formError) {
+      ElMessage.warning(formError)
+      return
+    }
+
     emailCodeSending.value = true
     try {
+      const email = normalizeEmail(emailForm.email)
       await runWithCaptcha(async (captcha) => {
-        await postCodeWithFallback('/client/auth/email-code', { email: emailForm.email, captcha })
+        await postCodeWithFallback('/client/auth/email-code', { email, captcha })
       })
       ElMessage.success('邮箱验证码已发送')
       emailCodeCountdown.value = 60
@@ -215,13 +241,21 @@ export function useSecurityDialogs(form, postCodeWithFallback, runWithCaptcha, u
   }
 
   async function handleChangeEmail() {
-    if (!emailFormRef.value) return
-    await emailFormRef.value.validate()
+    const formError = getEmailBindingFormError(emailForm)
+    if (formError) {
+      ElMessage.warning(formError)
+      return
+    }
+
     emailLoading.value = true
     try {
       const request = (await import('@/utils/request')).default
-      await request.put('/client/auth/email', emailForm)
-      form.email = emailForm.email
+      const payload = {
+        email: normalizeEmail(emailForm.email),
+        code: String(emailForm.code ?? '').trim(),
+      }
+      await request.put('/client/auth/email', payload)
+      form.email = payload.email
       showEmailDialog.value = false
       ElMessage.success('邮箱修改成功')
       await userStore.fetchUserInfo('client')
@@ -233,14 +267,18 @@ export function useSecurityDialogs(form, postCodeWithFallback, runWithCaptcha, u
   }
 
   async function handleVerification() {
-    if (!verificationFormRef.value) return
-    await verificationFormRef.value.validate()
+    const formError = getVerificationFormError(verificationForm)
+    if (formError) {
+      ElMessage.warning(formError)
+      return
+    }
+
     verificationLoading.value = true
     try {
       const request = (await import('@/utils/request')).default
       const res = await request.post('/client/verification/init', {
-        realname: verificationForm.realName,
-        idcard: verificationForm.idCard,
+        realname: verificationForm.realName.trim(),
+        idcard: verificationForm.idCard.trim(),
       })
       certifyId.value = res.data.certify_id || ''
       verificationUrl.value = resolveVerificationQrUrl(res.data)

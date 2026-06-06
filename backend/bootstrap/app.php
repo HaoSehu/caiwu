@@ -84,6 +84,22 @@ return Application::configure(basePath: dirname(__DIR__))
             return null;
         });
 
+        $exceptions->render(function (\Illuminate\Database\Eloquent\ModelNotFoundException $exception, Request $request) {
+            if ($request->is('api/*')) {
+                return ApiResponseBuilder::error(40400, '请求的资源不存在', null, 404);
+            }
+
+            return null;
+        });
+
+        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\NotFoundHttpException $exception, Request $request) {
+            if ($request->is('api/*')) {
+                return ApiResponseBuilder::error(40400, '请求的接口不存在', null, 404);
+            }
+
+            return null;
+        });
+
         // 首次部署时允许执行生成密钥和 Composer 发现命令，其余场景仍强制要求 APP_KEY 已配置。
         if (empty(config('app.key'))) {
             $currentCommand = PHP_SAPI === 'cli'

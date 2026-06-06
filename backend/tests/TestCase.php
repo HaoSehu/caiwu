@@ -9,6 +9,28 @@ use Illuminate\Support\Facades\DB;
 
 abstract class TestCase extends BaseTestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->guardAgainstProductionDatabaseForTests();
+    }
+
+    private function guardAgainstProductionDatabaseForTests(): void
+    {
+        if (! app()->environment('testing')) {
+            return;
+        }
+
+        $database = (string) DB::connection()->getDatabaseName();
+        if (in_array($database, ['idc', 'caiwu'], true)) {
+            throw new \RuntimeException(
+                "Refusing to run tests against database [{$database}]. ".
+                'Set DB_DATABASE to a disposable test database such as idc_test.'
+            );
+        }
+    }
+
     protected function mirrorServiceCompatToIdc(array $payload): void
     {
         $connection = DB::connection();

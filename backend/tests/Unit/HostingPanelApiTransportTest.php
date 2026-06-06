@@ -12,7 +12,7 @@ class HostingPanelApiTransportTest extends TestCase
 {
     public function test_it_disables_automatic_redirects_in_stream_context(): void
     {
-        $transport = new HostingPanelApiTransport();
+        $transport = new HostingPanelApiTransport;
 
         $options = $this->invokePrivateMethod($transport, 'buildContextOptions', [
             'GET',
@@ -26,7 +26,7 @@ class HostingPanelApiTransportTest extends TestCase
 
     public function test_it_disables_automatic_redirects_in_http_client_options(): void
     {
-        $transport = new HostingPanelApiTransport();
+        $transport = new HostingPanelApiTransport;
 
         $options = $this->invokePrivateMethod($transport, 'buildHttpClientOptions');
 
@@ -35,7 +35,7 @@ class HostingPanelApiTransportTest extends TestCase
 
     public function test_it_normalizes_base_url_without_duplicate_v1_prefix(): void
     {
-        $transport = new HostingPanelApiTransport();
+        $transport = new HostingPanelApiTransport;
 
         $url = $this->invokePrivateMethod($transport, 'buildUrl', [
             'https://panel.example.test/v1/',
@@ -44,6 +44,15 @@ class HostingPanelApiTransportTest extends TestCase
         ]);
 
         $this->assertSame('https://panel.example.test/v1/login_api?account=demo', $url);
+    }
+
+    public function test_generic_hosting_panel_driver_does_not_claim_mofang_cloud_config_template_types(): void
+    {
+        $transport = new HostingPanelApiTransport;
+
+        $this->assertFalse($this->invokePrivateMethod($transport, 'supportsConfigTemplate', [[
+            'type' => 'dcimcloud',
+        ]]));
     }
 
     private function invokePrivateMethod(object $object, string $method, array $arguments = []): mixed

@@ -7,6 +7,9 @@ namespace Tests\Feature;
 use App\Constants\OrderStatus;
 use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
+use App\Integrations\Mofang\Adapters\MofangFinanceAdapter;
+use App\Integrations\Mofang\Drivers\MofangFinanceDriver;
+use App\Integrations\Mofang\Support\MofangCloudConfigTemplate;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\Service;
@@ -16,6 +19,7 @@ use App\Services\Provisioning\ProvisionService;
 use App\Services\System\SettingService;
 use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiDriver;
 use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiTransport;
+use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
 use App\Support\ProductProvisionHostname;
@@ -166,6 +170,125 @@ class ProvisionServiceHostnameTest extends TestCase
         $this->assertSame(15, mb_strlen($hostname));
         $this->assertNotSame('snapshot-host', $hostname);
         $this->assertSame($hostname, (string) (($order->config_snapshot ?? [])['hostname'] ?? ''));
+    }
+
+    #[Test]
+    public function it_preserves_mofang_provider_key_after_successful_upstream_provisioning(): void
+    {
+        $transport = new class extends HostingPanelApiTransport
+        {
+            public function __construct() {}
+
+            public function login(Supplier $supplier): string
+            {
+                return 'jwt-test-token';
+            }
+
+            public function request(
+                Supplier $supplier,
+                string $method,
+                string $uri,
+                array|string $payload = [],
+                ?string $jwt = null,
+                array $headers = [],
+                array $query = []
+            ): array {
+                return ['status' => 200, 'code' => 200, 'data' => []];
+            }
+
+            public function post(
+                Supplier $supplier,
+                string $uri,
+                array|string $payload = [],
+                ?string $jwt = null,
+                array $headers = [],
+                array $query = []
+            ): array {
+                if ($uri === '/v1/cart/checkout') {
+                    return [
+                        'status' => 200,
+                        'code' => 200,
+                        'data' => [
+                            'invoiceid' => 8899,
+                            'hostid' => [7788],
+                        ],
+                    ];
+                }
+
+                return ['status' => 200, 'code' => 200, 'data' => []];
+            }
+
+            public function get(
+                Supplier $supplier,
+                string $uri,
+                ?string $jwt = null,
+                array $query = [],
+                array $headers = []
+            ): array {
+                if ($uri === '/v1/cart') {
+                    return [
+                        'status' => 200,
+                        'code' => 200,
+                        'data' => [
+                            'gateway_list' => [
+                                ['name' => 'credit'],
+                            ],
+                        ],
+                    ];
+                }
+
+                if ($uri === '/v1/hosts/7788') {
+                    return [
+                        'status' => 200,
+                        'code' => 200,
+                        'data' => [
+                            'host' => [
+                                'domain' => 'srv7788.example.test',
+                                'domainstatus' => 'Active',
+                                'product_id' => 9001,
+                                'product_name' => '魔方云服务器',
+                            ],
+                        ],
+                    ];
+                }
+
+                return ['status' => 200, 'code' => 200, 'data' => []];
+            }
+        };
+
+        $service = new ProvisionService(
+            $this->makeProviderResolver($transport, true),
+            new class extends SettingService
+            {
+                public function getProvisionHostnameConfig(): array
+                {
+                    return [
+                        'prefix' => 'srv',
+                        'length' => 12,
+                        'pool' => '0123456789',
+                    ];
+                }
+            }
+        );
+
+        $order = $this->makeOrder('srv7788', 505);
+        $order->exists = true;
+        $order->forceFill([
+            'type' => 'new',
+            'status' => OrderStatus::PAID,
+        ]);
+        $order->product->forceFill([
+            'provision_module' => ProviderKey::MOFANG_FINANCE_API,
+        ]);
+        $order->product->supplier->forceFill([
+            'interface_type' => ProviderKey::MOFANG_FINANCE_API,
+        ]);
+
+        $createdService = $service->processPaidOrder($order);
+
+        $this->assertSame(ProviderKey::MOFANG_FINANCE_API, $createdService->provision_data['provider'] ?? null);
+        $this->assertSame(7788, $createdService->provision_data['upstream_host_id'] ?? null);
+        $this->assertSame(ServiceStatus::ACTIVE, (int) $createdService->status);
     }
 
     #[Test]
@@ -743,11 +866,17 @@ class ProvisionServiceHostnameTest extends TestCase
         return $method->invoke($service, $order);
     }
 
-    private function makeProviderResolver(HostingPanelApiTransport $transport): ProviderResolver
+    private function makeProviderResolver(HostingPanelApiTransport $transport, bool $includeMofang = false): ProviderResolver
     {
-        return new ProviderResolver(new ProviderRegistry([
+        $drivers = [
             new HostingPanelApiDriver($transport),
-        ]));
+        ];
+
+        if ($includeMofang) {
+            $drivers[] = new MofangFinanceDriver(new MofangFinanceAdapter($transport, new MofangCloudConfigTemplate));
+        }
+
+        return new ProviderResolver(new ProviderRegistry($drivers));
     }
 
     private function buildUpstreamProductConfigResponse(): array

@@ -21,10 +21,7 @@ final class ProviderResolver
             return null;
         }
 
-        return match ($normalized) {
-            ProviderKey::MOFANG_FINANCE_API => ProviderKey::HOSTING_PANEL_API,
-            default => $normalized,
-        };
+        return $normalized;
     }
 
     public function resolveForSupplier(Supplier $supplier): ResolvedProvider

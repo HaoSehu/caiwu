@@ -17,7 +17,7 @@ class InvoiceController extends Controller
 
     public function index(Request $request)
     {
-        $filters = $request->only(['invoice_no', 'user_id', 'status', 'type', 'product_id']);
+        $filters = $request->only(['keyword', 'invoice_no', 'user_id', 'status', 'type', 'product_id', 'date_range']);
         $perPage = max(1, min((int) $request->input('page_size', 20), 100));
 
         return $this->paginate($this->invoiceService->adminList($filters, $perPage));

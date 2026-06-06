@@ -13,6 +13,7 @@ use App\Models\Service;
 use App\Models\User;
 use App\Services\Provisioning\AdminServiceListService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
@@ -384,5 +385,152 @@ class AdminServiceListInvoiceOnlyTest extends TestCase
         $this->assertSame(0, (int) ($matched['order']['id'] ?? -1));
         $this->assertSame('', $matched['order']['order_no'] ?? null);
         $this->assertSame((string) $invoice->invoice_no, $matched['invoice']['invoice_no'] ?? null);
+    }
+
+    public function test_paginate_supports_service_identity_and_host_runtime_keywords(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+
+        $user = User::query()->forceCreate([
+            'id' => $this->makeLegacyUserId($suffix.'-runtime'),
+            'email' => 'admin-service-runtime-'.$suffix.'@example.com',
+            'password' => 'Temp@123456',
+            'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
+            'status' => 1,
+            'nickname' => 'Runtime User '.$suffix,
+            'real_name' => '',
+            'id_card' => '',
+            'verification_status' => 0,
+            'verification_message' => '',
+            'verification_certify_id' => null,
+            'member_level_id' => null,
+            'total_sales_amount' => '0.00',
+            'referrer_user_id' => null,
+            'verified_at' => null,
+        ]);
+        $this->mirrorUserToIdc($user, $suffix.'-runtime');
+
+        $group = ProductCategory::query()->create([
+            'parent_id' => null,
+            'product_type' => 'server',
+            'name' => 'Admin Runtime Group '.$suffix,
+            'slug' => 'admin-runtime-group-'.$suffix,
+            'slogan' => '',
+            'is_visible' => 1,
+            'sort_order' => 0,
+        ]);
+
+        $product = Product::query()->create([
+            'product_group_id' => (int) $group->id,
+            'name' => '运行态搜索产品 '.$suffix,
+            'product_type' => 'server',
+            'description' => '',
+            'pricing' => ['monthly' => '55.00'],
+            'setup_fee' => '0.00',
+            'config_options' => [],
+            'purchase_requires' => [],
+            'stock' => 10,
+            'status' => 1,
+            'sort_order' => 0,
+            'provision_module' => null,
+            'auto_setup' => 0,
+        ]);
+        $this->mirrorProductToIdc($product, $suffix.'-runtime');
+
+        $invoice = Invoice::query()->create([
+            'invoice_no' => 'ADMRUNTIME'.strtoupper($suffix),
+            'user_id' => (int) $user->id,
+            'product_id' => (int) $product->id,
+            'type' => 'normal',
+            'amount' => '55.00',
+            'paid_amount' => '55.00',
+            'status' => InvoiceStatus::PAID,
+            'billing_cycle' => 'monthly',
+            'product_spec_snapshot' => '运行态云主机 '.$suffix,
+            'config_snapshot' => ['region' => 'ap-southeast-1'],
+            'due_date' => now()->addDay(),
+            'paid_at' => now()->subMinute(),
+        ]);
+
+        $service = Service::query()->create([
+            'user_id' => (int) $user->id,
+            'product_id' => (int) $product->id,
+            'invoice_id' => (int) $invoice->id,
+            'name' => 'Runtime Search Service '.$suffix,
+            'domain' => 'runtime-search-'.$suffix.'.example.com',
+            'billing_cycle' => 'monthly',
+            'amount' => '55.00',
+            'locked_pricing' => [],
+            'status' => ServiceStatus::ACTIVE,
+            'provision_data' => [
+                'source_invoice_id' => (int) $invoice->id,
+                'custom_hostname' => 'custom-host-'.$suffix.'.example.net',
+                'requested_host' => 'requested-host-'.$suffix.'.example.net',
+                'upstream_host_id' => 'runtime-host-'.$suffix,
+                'upstream_host_ids' => ['runtime-array-'.$suffix],
+                'dedicated_ip' => '198.51.100.61',
+                'assigned_ips' => ['203.0.113.77', '2001:db8::77'],
+                'internal_ip' => '10.55.77.4',
+                'username' => 'runtime-user-'.$suffix,
+                'connection_secret' => Crypt::encryptString((string) json_encode([
+                    'hostname' => 'console-host-'.$suffix.'.example.net',
+                    'username' => 'console-user-'.$suffix,
+                    'password' => 'secret',
+                    'port' => 22,
+                    'internal_ip' => '10.55.88.9',
+                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)),
+                'os' => 'Debian-12-x64',
+            ],
+            'expires_at' => now()->addMonth(),
+            'auto_renew' => 1,
+        ]);
+
+        $invoice->forceFill(['service_id' => (int) $service->id])->save();
+
+        $keywords = [
+            'service id' => (string) $service->id,
+            'user id' => (string) $user->id,
+            'invoice id' => (string) $invoice->id,
+            'custom hostname' => 'custom-host-'.$suffix.'.example.net',
+            'assigned ip' => '203.0.113.77',
+            'internal ip' => '10.55.77.4',
+            'host username' => 'runtime-user-'.$suffix,
+            'connection hostname' => 'console-host-'.$suffix.'.example.net',
+            'connection username' => 'console-user-'.$suffix,
+            'upstream host id list' => 'runtime-array-'.$suffix,
+        ];
+
+        foreach ($keywords as $label => $keyword) {
+            $result = app(AdminServiceListService::class)->paginate([
+                'keyword' => $keyword,
+                'page_size' => 20,
+            ]);
+
+            $matched = collect($result['list'] ?? [])->firstWhere('id', (int) $service->id);
+            $this->assertIsArray($matched, "Service list keyword [{$label}] did not match the target service.");
+        }
+
+        $result = app(AdminServiceListService::class)->paginate([
+            'keyword' => (string) $service->id,
+            'page_size' => 20,
+        ]);
+        $matched = collect($result['list'] ?? [])->firstWhere('id', (int) $service->id);
+
+        $this->assertSame((int) $service->id, (int) ($matched['service_id'] ?? 0));
+        $this->assertSame((int) $service->id, (int) ($matched['instance_id'] ?? 0));
+        $this->assertSame('requested-host-'.$suffix.'.example.net', $matched['requested_hostname'] ?? null);
+        $this->assertSame('custom-host-'.$suffix.'.example.net', $matched['custom_hostname'] ?? null);
+        $this->assertSame('runtime-host-'.$suffix, $matched['upstream_host_id_text'] ?? null);
+        $this->assertSame(['runtime-array-'.$suffix], $matched['upstream_host_ids'] ?? null);
+        $this->assertSame('runtime-user-'.$suffix, $matched['host_username'] ?? null);
+        $this->assertSame('console-host-'.$suffix.'.example.net', $matched['connection']['hostname'] ?? null);
+        $this->assertSame('console-user-'.$suffix, $matched['connection']['username'] ?? null);
+        $this->assertSame('10.55.88.9', $matched['connection']['internal_ip'] ?? null);
+        $this->assertContains('198.51.100.61', $matched['host_ips'] ?? []);
+        $this->assertContains('203.0.113.77', $matched['host_ips'] ?? []);
+        $this->assertContains('10.55.77.4', $matched['host_ips'] ?? []);
+        $this->assertSame((int) $invoice->id, (int) ($matched['invoice']['id'] ?? 0));
+        $this->assertSame((string) $invoice->invoice_no, $matched['invoice']['invoice_no'] ?? null);
+        $this->assertSame((int) $user->id, (int) ($matched['user']['id'] ?? 0));
     }
 }

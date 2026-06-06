@@ -508,28 +508,30 @@ class OrderService
                     'status' => PaymentStatus::FAILED,
                 ]);
 
-            $payment = Payment::query()->create([
-                'payment_no' => Payment::generatePaymentNo(),
-                'user_id' => $order->user_id,
-                'order_id' => (int) $order->id,
-                'invoice_id' => $invoice->id,
-                'gateway' => $paymentGateway,
-                'trade_no' => $tradeNo !== '' ? $tradeNo : $this->generateManualTradeNo($order),
-                'amount' => $paidAmount,
-                'status' => PaymentStatus::SUCCESS,
-                'callback_raw' => [
-                    'source' => 'admin_manual',
-                    'action' => 'mark_paid',
-                    'payment_gateway' => $paymentGateway,
-                    'remark' => $remark,
-                    'send_email' => $sendEmail,
-                    'operator_id' => (int) ($context['operator_id'] ?? 0),
-                    'operator_name' => (string) ($context['operator_name'] ?? ''),
-                    'trace_id' => (string) ($context['trace_id'] ?? ''),
-                ],
-                'paid_at' => $paidAt,
-            ]);
-            $this->paymentService->syncProjection($payment);
+            if ($this->shouldCreateManualPaymentRecord($paymentGateway)) {
+                $payment = Payment::query()->create([
+                    'payment_no' => Payment::generatePaymentNo(),
+                    'user_id' => $order->user_id,
+                    'order_id' => (int) $order->id,
+                    'invoice_id' => $invoice->id,
+                    'gateway' => $paymentGateway,
+                    'trade_no' => $tradeNo !== '' ? $tradeNo : $this->generateManualTradeNo($order),
+                    'amount' => $paidAmount,
+                    'status' => PaymentStatus::SUCCESS,
+                    'callback_raw' => [
+                        'source' => 'admin_manual',
+                        'action' => 'mark_paid',
+                        'payment_gateway' => $paymentGateway,
+                        'remark' => $remark,
+                        'send_email' => $sendEmail,
+                        'operator_id' => (int) ($context['operator_id'] ?? 0),
+                        'operator_name' => (string) ($context['operator_name'] ?? ''),
+                        'trace_id' => (string) ($context['trace_id'] ?? ''),
+                    ],
+                    'paid_at' => $paidAt,
+                ]);
+                $this->paymentService->syncProjection($payment);
+            }
 
             $invoice->forceFill([
                 'status' => InvoiceStatus::PAID,
@@ -592,7 +594,7 @@ class OrderService
                     ->orWhere('invoice_id', $invoice->id);
             })
             ->where('status', PaymentStatus::SUCCESS)
-            ->where('gateway', '!=', 'manual')
+            ->whereIn('gateway', ['alipay', 'wechat'])
             ->exists();
 
         throw_if($hasRealSuccessPayment, new BusinessException('存在真实支付记录，不能直接恢复为未支付'));
@@ -605,7 +607,15 @@ class OrderService
             ->where('gateway', 'manual')
             ->where('status', PaymentStatus::SUCCESS);
 
-        throw_if(! $manualSuccessPayments->exists(), new BusinessException('仅支持回退后台手动设为已支付的订单'));
+        throw_if(
+            ! $manualSuccessPayments->exists()
+            && ! (
+                (int) $order->status === OrderStatus::PAID
+                && (int) $invoice->status === InvoiceStatus::PAID
+                && round((float) ($invoice->paid_amount ?? 0), 2) > 0
+            ),
+            new BusinessException('仅支持回退后台手动设为已支付的订单')
+        );
 
         $remark = trim((string) ($payload['remark'] ?? ''));
 
@@ -739,6 +749,11 @@ class OrderService
     private function generateManualTradeNo(Order $order): string
     {
         return 'MANUAL-'.$order->id.'-'.Str::upper(Str::random(12));
+    }
+
+    private function shouldCreateManualPaymentRecord(string $gateway): bool
+    {
+        return in_array($gateway, ['alipay', 'wechat'], true);
     }
 
     private function sendManualPaymentEmail(Order $order, string $remark, string $paymentGateway, ?string $tradeNo = null): void

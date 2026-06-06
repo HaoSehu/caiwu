@@ -20,6 +20,7 @@
           <el-button v-if="canCancel" :loading="state.cancelLoading" type="danger" plain @click="emit('cancel')">
             取消账单
           </el-button>
+          <el-button v-if="canRefund" type="danger" size="small" @click="refundVisible = true">退款</el-button>
           <el-tag effect="plain" :type="statusTagType(invoice.status)">{{ invoice.status_label || '--' }}</el-tag>
           <el-tag effect="plain" type="info">{{ invoice.summary?.badge || invoice.type_label || '--' }}</el-tag>
           <el-button circle :icon="Close" @click="emit('close')" />
@@ -194,13 +195,28 @@
         <el-empty :image-size="80" description="当前账单暂无支付记录或日志" />
       </section>
     </div>
+
+    <RefundDialog
+      v-model="refundVisible"
+      :user-id="invoice.user?.id || invoice.user_id"
+      :invoice-id="invoice.id"
+      :invoice-no="invoice.invoice_no || '--'"
+      :amount="invoice.paid_amount || invoice.amount || 0"
+      :order-no="invoice.order?.order_no || ''"
+      :payment-no="primaryPayment?.payment_no || ''"
+      :has-order="!!invoice.order"
+      :has-payment="!!primaryPayment"
+      :can-original-refund="primaryPayment?.gateway === 'alipay'"
+      @success="handleRefundSuccess"
+    />
   </el-drawer>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { Close } from '@element-plus/icons-vue'
 import { INVOICE_STATUS_MAP, resolveElTagType } from '@shared/statusConfig'
+import RefundDialog from '@/components/RefundDialog.vue'
 
 const props = defineProps({
   state: {
@@ -213,7 +229,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['close', 'reload', 'cancel'])
+const emit = defineEmits(['close', 'reload', 'cancel', 'refund-success'])
 
 const rawDetail = computed(() => props.state?.detail || {})
 const invoice = computed(() => {
@@ -246,6 +262,15 @@ const canCancel = computed(() => {
   const orderStatus = Number(invoice.value?.order?.status ?? 0)
   return orderStatus === 0 && [0, 3].includes(rawStatus)
 })
+
+const refundVisible = ref(false)
+const canRefund = computed(() => Number(invoice.value?.status) === 1)
+const primaryPayment = computed(() => paymentList.value.find(p => Number(p.status) === 1) || null)
+
+function handleRefundSuccess() {
+  emit('refund-success')
+  emit('reload')
+}
 
 function handleVisibleUpdate(visible) {
   if (!visible) {

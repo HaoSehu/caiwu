@@ -186,7 +186,7 @@ class CheckoutService
                     ]);
                     $this->invoiceService->syncProjection($invoice);
 
-                    // 创建 shadow Order 记录：不对用户展示，仅供上游 Mofang 开通链路使用。
+                    // 创建 shadow Order 记录：不对用户展示，仅供上游开通链路使用。
                     // Invoice 是用户侧唯一业务凭证；Order 是内部基础设施。
                     $this->createShadowOrderForInvoice(
                         $invoice,
@@ -277,6 +277,13 @@ class CheckoutService
                 ->get();
 
             foreach ($pendingPayments as $pending) {
+                if ($this->paymentService->restoreReservedMixBalance($pending, [
+                    'trace_id' => (string) ($context['trace_id'] ?? ''),
+                    'closed_reason' => 'invoice_cancelled',
+                ])) {
+                    continue;
+                }
+
                 $callbackRaw = (array) ($pending->callback_raw ?? []);
                 $callbackRaw['closed_reason'] = 'invoice_cancelled';
                 $callbackRaw['closed_by'] = (string) ($context['actor_type'] ?? 'system');
@@ -332,7 +339,7 @@ class CheckoutService
 
     /**
      * 为账单创建影子 Order 记录：仅内部使用，不对用户展示。
-     * 目的是让原本依赖 Order 的上游 Mofang 开通链路、优惠券统计、退款等逻辑继续工作。
+     * 目的是让原本依赖 Order 的上游开通链路、优惠券统计、退款等逻辑继续工作。
      *
      * @param  array<string,mixed>  $couponPayload
      * @param  array<string,mixed>  $configSnapshot

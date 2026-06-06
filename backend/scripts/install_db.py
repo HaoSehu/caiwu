@@ -88,6 +88,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="只打印将要执行的步骤，不真正写入数据库。",
     )
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="先删除并重建目标数据库，再执行初始化。会清空目标库所有数据。",
+    )
     return parser.parse_args()
 
 
@@ -282,6 +287,16 @@ def main() -> int:
         log(f"数据库密码：{mask_secret(db_password)}")
         if db_socket:
             log("检测到 DB_SOCKET，将优先使用 Unix Socket 连接")
+
+        if args.reset:
+            drop_database_sql = f"DROP DATABASE IF EXISTS `{escaped_database_name}`;"
+            log(f"重置目标数据库：{db_database}")
+            run_mysql_sql(
+                mysql_base_args,
+                db_password,
+                drop_database_sql,
+                dry_run=args.dry_run,
+            )
 
         run_mysql_sql(
             mysql_base_args,

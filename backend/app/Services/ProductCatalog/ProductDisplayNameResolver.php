@@ -51,6 +51,7 @@ class ProductDisplayNameResolver
     {
         $optionContext = $this->buildConfigOptionContext($product);
         $mergedConfig = $this->buildCandidateConfig($product, $configSnapshot, $optionContext);
+        $legacyProductName = $this->resolveLegacyProductNameText($product, $configSnapshot);
         $instanceSpecText = array_key_exists('instance_spec_text', $configSnapshot)
             ? trim((string) $configSnapshot['instance_spec_text'])
             : $this->resolveInstanceSpecText((int) $product->id);
@@ -60,7 +61,7 @@ class ProductDisplayNameResolver
 
         if ($cpuDisplay === '' || $memoryDisplay === '') {
             [$fallbackCpuDisplay, $fallbackMemoryDisplay] = $this->extractCpuMemoryFromProductName(
-                $this->resolveLegacyProductNameText($product, $configSnapshot)
+                $legacyProductName
             );
             if ($cpuDisplay === '') {
                 $cpuDisplay = $fallbackCpuDisplay;
@@ -79,7 +80,7 @@ class ProductDisplayNameResolver
             : '';
         $productSpecDisplay = $instanceSpecText !== ''
             ? $instanceSpecText
-            : ($cpuMemoryDisplay !== '' ? $cpuMemoryDisplay : '未配置规格 #'.(int) $product->id);
+            : ($cpuMemoryDisplay !== '' ? $cpuMemoryDisplay : ($legacyProductName !== '' ? $legacyProductName : '未配置规格 #'.(int) $product->id));
         $combinedDisplayName = $this->buildCombinedDisplayName($productSpecDisplay, $cpuDisplay, $memoryDisplay);
 
         return [
@@ -704,6 +705,9 @@ class ProductDisplayNameResolver
     private function resolveLegacyProductNameText(Product $product, array $configSnapshot = []): string
     {
         $candidates = [
+            $configSnapshot['combined_display_name'] ?? '',
+            $configSnapshot['product_spec_display'] ?? '',
+            $configSnapshot['product_display_name'] ?? '',
             $configSnapshot['legacy_product_name'] ?? '',
         ];
 
@@ -711,8 +715,16 @@ class ProductDisplayNameResolver
         if (array_key_exists('name', $rawAttributes)) {
             $candidates[] = $rawAttributes['name'] ?? '';
         }
+        if (array_key_exists('remark', $rawAttributes)) {
+            $candidates[] = $rawAttributes['remark'] ?? '';
+        }
+        if (array_key_exists('supplier_product_name', $rawAttributes)) {
+            $candidates[] = $rawAttributes['supplier_product_name'] ?? '';
+        }
 
         $candidates[] = $product->getRawOriginal('name');
+        $candidates[] = $product->getRawOriginal('remark');
+        $candidates[] = $product->getRawOriginal('supplier_product_name');
         $candidates[] = ((array) (($product->purchase_requires ?? [])['upstream_split'] ?? []))['source_product_name'] ?? '';
 
         $segments = collect($candidates)

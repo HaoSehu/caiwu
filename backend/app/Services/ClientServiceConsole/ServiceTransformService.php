@@ -30,6 +30,7 @@ class ServiceTransformService
 {
     private const CONSOLE_MODE_NAT = 'nat';
 
+    // 上游面板 config_options 中属于"范围/滑块"类型的 option_type，这些类型不从 sub_options 推断规格值
     private const SPEC_RANGE_OPTION_TYPES = [4, 7, 9, 11, 14, 15, 16, 17, 18, 19];
 
     private const POWER_ACTIONS = [
@@ -247,6 +248,7 @@ class ServiceTransformService
             'upstream' => [
                 'provider' => (string) ($provisionData['provider'] ?? ''),
                 'supplier_id' => (int) (($provisionData['supplier_id'] ?? ($service->product?->supplier_id ?? 0)) ?: 0),
+                'supplier_product_id' => (int) (($provisionData['supplier_product_id'] ?? ($service->product?->supplier_product_id ?? 0)) ?: 0),
                 'host_id' => (int) (($provisionData['upstream_host_id'] ?? 0) ?: 0),
                 'invoice_id' => (int) (($provisionData['upstream_invoice_id'] ?? 0) ?: 0),
                 'status' => $serviceStatus,

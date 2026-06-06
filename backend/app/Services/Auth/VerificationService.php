@@ -8,6 +8,8 @@ use App\Models\Setting;
 use App\Models\User;
 use App\Models\UserVerification;
 use App\Models\VerificationHistory;
+use App\Services\Verification\Contracts\VerificationDriver;
+use App\Services\Verification\VerificationDriverManager;
 use App\Support\SensitiveDataSanitizer;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -34,33 +36,24 @@ class VerificationService
 
     private const VERIFICATION_TYPE_PERSONAL = 'personal';
 
-    private const DEFAULT_API_ENDPOINT = 'https://idc.stay33.cn/realname/certapi.php';
-
     private const QR_CODE_URL_CACHE_PREFIX = 'verification:qrcode_url:';
 
     private const QR_CODE_URL_CACHE_TTL_SECONDS = 7200;
 
-    private array $config;
+    private VerificationDriverManager $driverManager;
 
     private ?bool $userVerificationTableAvailable = null;
 
     private ?bool $verificationHistoryTableAvailable = null;
 
-    private ?array $lastRequestFailure = null;
-
-    public function __construct()
+    public function __construct(VerificationDriverManager $driverManager)
     {
-        $defaultConfig = (array) config('idc.verification', []);
+        $this->driverManager = $driverManager;
+    }
 
-        $this->config = [
-            'api' => (string) Setting::getValue('verification', 'verification_api', $defaultConfig['api'] ?? ''),
-            'key' => (string) Setting::getValue('verification', 'verification_key', $defaultConfig['key'] ?? ''),
-            'biz_code' => (string) Setting::getValue('verification', 'verification_biz_code', $defaultConfig['biz_code'] ?? 'FACE'),
-            'api_endpoint' => (string) ($defaultConfig['api_endpoint'] ?? self::DEFAULT_API_ENDPOINT),
-            'ssl_verify' => $this->normalizeBoolean($defaultConfig['ssl_verify'] ?? true),
-            'ca_bundle' => (string) ($defaultConfig['ca_bundle'] ?? ''),
-            'return_url' => $this->resolveCallbackUrl(),
-        ];
+    public function getDriverManager(): VerificationDriverManager
+    {
+        return $this->driverManager;
     }
 
     public function initVerification(User $user, string $realname, string $idcard, string $certType = 'IDENTITY_CARD'): array
@@ -225,10 +218,14 @@ class VerificationService
 
     public function getConfigSummary(): array
     {
+        $defaultConfig = (array) config('idc.verification', []);
+        $api = (string) Setting::getValue('verification', 'verification_api', $defaultConfig['api'] ?? '');
+        $key = (string) Setting::getValue('verification', 'verification_key', $defaultConfig['key'] ?? '');
+
         return [
-            'verification_api_masked' => $this->maskConfigValue((string) $this->config['api']),
-            'verification_biz_code' => (string) $this->config['biz_code'],
-            'configured' => trim((string) $this->config['api']) !== '' && trim((string) $this->config['key']) !== '',
+            'verification_api_masked' => $this->maskConfigValue($api),
+            'verification_biz_code' => $this->resolvedBizCode(),
+            'configured' => trim($api) !== '' && trim($key) !== '',
         ];
     }
 
@@ -265,7 +262,7 @@ class VerificationService
                     'verification_status' => self::RESULT_STATUS_UNBOUND,
                     'verification_message' => $rejectMessage,
                     'verification_certify_id' => $certifyId,
-                    'verification_biz_code' => (string) $this->config['biz_code'],
+                    'verification_biz_code' => $this->resolvedBizCode(),
                     'verification_type' => self::VERIFICATION_TYPE_PERSONAL,
                     'submitted_at' => now(),
                     'completed_at' => now(),
@@ -324,239 +321,24 @@ class VerificationService
 
     private function getCertifyId(string $realname, string $idcard, string $certType): array
     {
-        $this->assertConfigReady();
+        $returnUrl = $this->resolveCallbackUrl();
 
-        $params = [
-            'outer_order_no' => $this->buildOuterOrderNo(),
-            'biz_code' => (string) $this->config['biz_code'],
-            'cert_type' => $certType,
-            'cert_name' => $realname,
-            'cert_no' => $idcard,
-            'return_url' => (string) $this->config['return_url'],
-        ];
-
-        $this->writeLog('getCertifyId-请求参数', [
-            'realname' => $this->maskName($realname),
-            'idcard' => $this->maskIdCard($idcard),
-            'cert_type' => $certType,
-        ]);
-
-        $result = $this->apiHttpRequestCurl('initialize', $params);
-
-        if ($result === null) {
-            return [
-                'status' => self::API_STATUS_NETWORK_ERROR,
-                'msg' => $this->getLastRequestFailureMessage(),
-            ];
-        }
-
-        if ((int) ($result['status'] ?? 0) === self::API_STATUS_SUCCESS && trim((string) ($result['certify_id'] ?? '')) !== '') {
-            return [
-                'status' => self::API_STATUS_SUCCESS,
-                'msg' => (string) ($result['msg'] ?? '请求成功'),
-                'certify_id' => (string) $result['certify_id'],
-            ];
-        }
-
-        return [
-            'status' => self::API_STATUS_FAILED,
-            'msg' => (string) ($result['msg'] ?? '实名认证接口配置错误,请联系管理员'),
-        ];
+        return $this->driver()->initialize($realname, $idcard, $certType, $returnUrl);
     }
 
     private function generateScanForm(string $certifyId): array
     {
-        $this->assertConfigReady();
-        $this->writeLog('generateScanForm-请求参数', ['certify_id' => $certifyId]);
-
-        $result = $this->apiHttpRequestCurl('certify', ['certify_id' => $certifyId]);
-
-        if ($result === null) {
-            return [
-                'status' => self::API_STATUS_NETWORK_ERROR,
-                'msg' => $this->getLastRequestFailureMessage(),
-            ];
-        }
-
-        $url = trim((string) ($result['url'] ?? ''));
-        if ($url === '') {
-            return [
-                'status' => self::API_STATUS_FAILED,
-                'msg' => (string) ($result['msg'] ?? '获取认证链接失败,请联系管理员'),
-            ];
-        }
-
-        return [
-            'status' => self::API_STATUS_SUCCESS,
-            'msg' => (string) ($result['msg'] ?? '请打开实名认证链接继续认证'),
-            'url' => $url,
-        ];
+        return $this->driver()->generateScanUrl($certifyId);
     }
 
     private function getAliyunAuthStatus(string $certifyId): array
     {
-        $this->assertConfigReady();
-        $this->writeLog('getAliyunAuthStatus-请求参数', ['certify_id' => $certifyId]);
-
-        $result = $this->apiHttpRequestCurl('query', ['certify_id' => $certifyId]);
-
-        if ($result === null) {
-            return [
-                'status' => self::RESULT_STATUS_NETWORK_ERROR,
-                'msg' => $this->getLastRequestFailureMessage(),
-            ];
-        }
-
-        if ((int) ($result['status'] ?? 0) === self::API_STATUS_SUCCESS) {
-            return [
-                'status' => self::RESULT_STATUS_SUCCESS,
-                'msg' => '审核通过',
-            ];
-        }
-
-        $msg = (string) ($result['msg'] ?? '未知错误');
-        $waitingKeywords = ['等待', '认证中', '待认证', '处理中', '审核中'];
-
-        foreach ($waitingKeywords as $keyword) {
-            if (str_contains($msg, $keyword)) {
-                return [
-                    'status' => self::RESULT_STATUS_PENDING,
-                    'msg' => $msg,
-                ];
-            }
-        }
-
-        return [
-            'status' => self::RESULT_STATUS_FAILED,
-            'msg' => $msg,
-        ];
+        return $this->driver()->queryStatus($certifyId);
     }
 
-    private function apiHttpRequestCurl(string $action, array $params, string $method = 'POST'): ?array
+    private function driver(): VerificationDriver
     {
-        $this->lastRequestFailure = null;
-        $responseHeaders = [];
-
-        $api = rtrim((string) $this->config['api_endpoint'], '?').'?action='.$action;
-        $headers = [
-            'api:'.(string) $this->config['api'],
-            'key:'.(string) $this->config['key'],
-            'Content-Type: application/x-www-form-urlencoded',
-        ];
-        $postfields = http_build_query($params);
-
-        $this->writeLog('APIHttpRequestCURL-发送请求', [
-            'action' => $action,
-            'api_url' => $api,
-            'params' => $params,
-        ]);
-
-        $ch = curl_init();
-
-        if (strtoupper($method) !== 'GET') {
-            curl_setopt_array($ch, [
-                CURLOPT_URL => $api,
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_POSTFIELDS => $postfields,
-                CURLOPT_CUSTOMREQUEST => strtoupper($method),
-                CURLOPT_HTTPHEADER => $headers,
-            ]);
-        } else {
-            curl_setopt_array($ch, [
-                CURLOPT_URL => $api.'&'.$postfields,
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_HTTPHEADER => $headers,
-                CURLOPT_BINARYTRANSFER => true,
-            ]);
-        }
-
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
-        curl_setopt($ch, CURLOPT_HEADERFUNCTION, static function ($curl, string $headerLine) use (&$responseHeaders): int {
-            $trimmedLine = trim($headerLine);
-            if ($trimmedLine === '' || ! str_contains($trimmedLine, ':')) {
-                return strlen($headerLine);
-            }
-
-            [$name, $value] = explode(':', $trimmedLine, 2);
-            $responseHeaders[strtolower(trim($name))] = trim($value);
-
-            return strlen($headerLine);
-        });
-
-        if (str_starts_with($api, 'https://')) {
-            $sslVerify = (bool) $this->config['ssl_verify'];
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $sslVerify);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, $sslVerify ? 2 : 0);
-
-            $caBundle = (string) $this->config['ca_bundle'];
-            if ($caBundle !== '' && is_file($caBundle)) {
-                curl_setopt($ch, CURLOPT_CAINFO, $caBundle);
-            }
-        }
-
-        $output = curl_exec($ch);
-        $curlErrno = curl_errno($ch);
-        $curlError = curl_error($ch);
-        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
-        $this->writeLog('APIHttpRequestCURL-执行状态', [
-            'http_code' => $httpCode,
-            'curl_errno' => $curlErrno,
-            'curl_error' => $curlError,
-            'server' => $responseHeaders['server'] ?? '',
-            'eo_log_uuid' => $responseHeaders['eo-log-uuid'] ?? '',
-        ]);
-
-        curl_close($ch);
-
-        if ($output === false) {
-            $this->lastRequestFailure = [
-                'type' => 'curl',
-                'action' => $action,
-                'http_code' => $httpCode,
-                'curl_errno' => $curlErrno,
-                'curl_error' => $curlError,
-                'server' => $responseHeaders['server'] ?? '',
-                'eo_log_uuid' => $responseHeaders['eo-log-uuid'] ?? '',
-            ];
-
-            $this->writeLog('APIHttpRequestCURL-请求失败', $this->lastRequestFailure);
-
-            if ($this->isSslCertificateError($curlError)) {
-                $message = (bool) $this->config['ssl_verify']
-                    ? '实名认证接口 SSL 证书校验失败，请配置 CA 证书，或将 VERIFICATION_SSL_VERIFY=false'
-                    : '实名认证接口连接失败，请检查服务器网络或上游证书链配置';
-
-                throw new BusinessException($message, 42200);
-            }
-
-            return null;
-        }
-
-        $output = trim($output, "\xEF\xBB\xBF");
-        $decoded = json_decode($output, true);
-
-        $this->writeLog('APIHttpRequestCURL-响应内容', [
-            'raw' => $output,
-            'decoded' => $decoded,
-            'server' => $responseHeaders['server'] ?? '',
-            'eo_log_uuid' => $responseHeaders['eo-log-uuid'] ?? '',
-        ]);
-
-        if (! is_array($decoded)) {
-            $this->lastRequestFailure = $this->buildInvalidResponseFailure($action, $httpCode, $output, $responseHeaders);
-            $this->writeLog('APIHttpRequestCURL-响应异常', [
-                'raw' => $output,
-                'json_error' => json_last_error_msg(),
-                'server' => $responseHeaders['server'] ?? '',
-                'eo_log_uuid' => $responseHeaders['eo-log-uuid'] ?? '',
-            ]);
-
-            return null;
-        }
-
-        return $decoded;
+        return $this->driverManager->resolve();
     }
 
     private function assertSourceResponseSuccess(array $response, string $fallbackMessage): void
@@ -586,7 +368,7 @@ class VerificationService
                 'verification_status' => self::RESULT_STATUS_PENDING,
                 'verification_message' => (string) $user->verification_message,
                 'verification_certify_id' => $certifyId,
-                'verification_biz_code' => (string) $this->config['biz_code'],
+                'verification_biz_code' => $this->resolvedBizCode(),
                 'verification_type' => self::VERIFICATION_TYPE_PERSONAL,
                 'submitted_at' => now(),
             ]);
@@ -625,7 +407,7 @@ class VerificationService
                     'verification_status' => (int) $user->verification_status,
                     'verification_message' => (string) $user->verification_message,
                     'verification_certify_id' => $certifyId ?: $user->verification_certify_id,
-                    'verification_biz_code' => (string) $this->config['biz_code'],
+                    'verification_biz_code' => $this->resolvedBizCode(),
                     'verification_type' => self::VERIFICATION_TYPE_PERSONAL,
                     'submitted_at' => now(),
                 ]);
@@ -639,7 +421,7 @@ class VerificationService
                 'verification_status' => $status,
                 'verification_message' => (string) $user->verification_message,
                 'verification_certify_id' => $certifyId ?: $history->verification_certify_id,
-                'verification_biz_code' => (string) $this->config['biz_code'],
+                'verification_biz_code' => $this->resolvedBizCode(),
                 'verification_type' => self::VERIFICATION_TYPE_PERSONAL,
                 'completed_at' => in_array($status, [2, 3, self::RESULT_STATUS_UNBOUND], true) ? ($user->verified_at ?? now()) : null,
             ])->save();
@@ -681,13 +463,6 @@ class VerificationService
         ])));
     }
 
-    private function assertConfigReady(): void
-    {
-        if (trim((string) $this->config['api']) === '' || trim((string) $this->config['key']) === '') {
-            throw new BusinessException('实名认证接口未配置，请先在管理端填写 API 信息', 42200);
-        }
-    }
-
     private function resolveCallbackUrl(): string
     {
         $frontendUrl = trim((string) config('app.frontend_url', ''));
@@ -696,11 +471,6 @@ class VerificationService
         }
 
         return rtrim((string) config('app.url', ''), '/').'/api/client/verification/callback';
-    }
-
-    private function buildOuterOrderNo(): string
-    {
-        return 'ZGYD'.now()->format('YmdHis').random_int(1000, 9999);
     }
 
     private function cacheQrCodeUrl(string $certifyId, string $remoteUrl): void
@@ -727,6 +497,13 @@ class VerificationService
         return rtrim((string) config('app.url', ''), '/').'/api/client/verification/scan?certify_id='.rawurlencode($certifyId);
     }
 
+    private function resolvedBizCode(): string
+    {
+        $defaultConfig = (array) config('idc.verification', []);
+
+        return (string) Setting::getValue('verification', 'verification_biz_code', $defaultConfig['biz_code'] ?? 'FACE');
+    }
+
     private function buildQrCodeUrlCacheKey(string $certifyId): string
     {
         return self::QR_CODE_URL_CACHE_PREFIX.md5($certifyId);
@@ -739,131 +516,6 @@ class VerificationService
         }
 
         return str_starts_with($url, 'http://') || str_starts_with($url, 'https://');
-    }
-
-    private function buildInvalidResponseFailure(string $action, int $httpCode, string $output, array $responseHeaders = []): array
-    {
-        $failure = [
-            'type' => 'invalid_json',
-            'action' => $action,
-            'http_code' => $httpCode,
-            'json_error' => json_last_error_msg(),
-            'raw' => mb_substr($output, 0, 500),
-            'server' => (string) ($responseHeaders['server'] ?? ''),
-            'eo_log_uuid' => (string) ($responseHeaders['eo-log-uuid'] ?? ''),
-        ];
-
-        if ($httpCode === 520 && trim($output) === '') {
-            $failure['type'] = 'empty_http_response';
-        }
-
-        if ($this->isEdgeOneBlockResponse($output)) {
-            $failure['type'] = 'edgeone_block';
-            $failure['status_code'] = $this->extractEdgeOneStatusCode($output);
-            $failure['request_id'] = $this->extractEdgeOneRequestId($output);
-        }
-
-        return $failure;
-    }
-
-    private function getLastRequestFailureMessage(): string
-    {
-        if (! is_array($this->lastRequestFailure)) {
-            return '网络请求失败，请稍后重试';
-        }
-
-        if (($this->lastRequestFailure['type'] ?? '') === 'curl') {
-            $curlError = trim((string) ($this->lastRequestFailure['curl_error'] ?? ''));
-            $curlErrno = (int) ($this->lastRequestFailure['curl_errno'] ?? 0);
-
-            if ($curlError !== '') {
-                return "实名认证接口请求失败(cURL {$curlErrno})：{$curlError}";
-            }
-
-            return '实名认证接口请求失败，请检查服务器网络连通性';
-        }
-
-        if (($this->lastRequestFailure['type'] ?? '') === 'edgeone_block') {
-            $requestId = trim((string) ($this->lastRequestFailure['request_id'] ?? ''));
-            $statusCode = trim((string) ($this->lastRequestFailure['status_code'] ?? '567'));
-
-            return $requestId !== ''
-                ? "实名认证上游接口被安全策略拦截(状态码 {$statusCode}，Request ID: {$requestId})，请联系上游在 EdgeOne 放行当前服务器 IP"
-                : "实名认证上游接口被安全策略拦截(状态码 {$statusCode})，请联系上游在 EdgeOne 放行当前服务器 IP";
-        }
-
-        if (($this->lastRequestFailure['type'] ?? '') === 'invalid_json') {
-            return '实名认证接口返回异常，未解析到有效 JSON';
-        }
-
-        if (($this->lastRequestFailure['type'] ?? '') === 'empty_http_response') {
-            $httpCode = (int) ($this->lastRequestFailure['http_code'] ?? 0);
-            $server = trim((string) ($this->lastRequestFailure['server'] ?? ''));
-            $eoLogUuid = trim((string) ($this->lastRequestFailure['eo_log_uuid'] ?? ''));
-
-            if ($server !== '' || $eoLogUuid !== '') {
-                return $eoLogUuid !== ''
-                    ? "实名认证上游接口返回 HTTP {$httpCode} 空响应(server: {$server}, eo-log-uuid: {$eoLogUuid})，请联系上游排查网关或 EdgeOne 规则"
-                    : "实名认证上游接口返回 HTTP {$httpCode} 空响应(server: {$server})，请联系上游排查网关或安全策略";
-            }
-
-            return "实名认证上游接口返回 HTTP {$httpCode} 空响应，请联系上游排查接口网关";
-        }
-
-        return '网络请求失败，请稍后重试';
-    }
-
-    private function isEdgeOneBlockResponse(string $output): bool
-    {
-        return str_contains($output, 'EdgeOne')
-            && str_contains($output, '请求已被站点的安全策略拦截');
-    }
-
-    private function extractEdgeOneRequestId(string $output): string
-    {
-        if (preg_match('/id=requestId>(\d+)</', $output, $matches) === 1) {
-            return $matches[1];
-        }
-
-        return '';
-    }
-
-    private function extractEdgeOneStatusCode(string $output): string
-    {
-        if (preg_match('/id=statusCode>(\d+)</', $output, $matches) === 1) {
-            return $matches[1];
-        }
-
-        return '567';
-    }
-
-    private function writeLog(string $method, mixed $data): void
-    {
-        $payload = is_array($data) ? $data : ['message' => $data];
-
-        Log::channel('stack')->info('[实名认证] '.$method, SensitiveDataSanitizer::sanitize($payload));
-    }
-
-    private function normalizeBoolean(mixed $value): bool
-    {
-        if (is_bool($value)) {
-            return $value;
-        }
-
-        if (is_string($value)) {
-            return filter_var($value, FILTER_VALIDATE_BOOL);
-        }
-
-        return (bool) $value;
-    }
-
-    private function isSslCertificateError(string $curlError): bool
-    {
-        $message = strtolower($curlError);
-
-        return str_contains($message, 'ssl certificate problem')
-            || str_contains($message, 'certificate verify failed')
-            || str_contains($message, 'self-signed certificate');
     }
 
     private function maskConfigValue(string $value): string

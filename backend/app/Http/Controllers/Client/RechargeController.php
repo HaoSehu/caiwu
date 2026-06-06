@@ -58,7 +58,6 @@ class RechargeController extends Controller
         $payment = Payment::where('payment_no', $paymentNo)
             ->where('user_id', $request->user()->id)
             ->where('gateway', 'alipay')
-            ->whereNull('invoice_id')
             ->firstOrFail();
 
         $this->checkoutSecurityService->assertRechargePollToken(

@@ -21,11 +21,12 @@
         placeholder="搜索邮箱/昵称/手机号"
         clearable
         class="users-search-input"
-        @keyup.enter="loadList"
+        @keyup.enter="handleSearch"
+        @clear="handleSearch"
       >
         <template #prefix><el-icon><Search /></el-icon></template>
       </el-input>
-      <el-select v-model="filters.status" placeholder="状态" clearable class="users-search-select">
+      <el-select v-model="filters.status" placeholder="状态" clearable class="users-search-select" @change="handleSearch">
         <el-option label="正常" :value="1" />
         <el-option label="禁用" :value="0" />
       </el-select>
@@ -195,6 +196,11 @@ async function loadList() {
   } catch {
     // 请求层已统一提示，这里只消费异常，避免页面事件出现未处理 Promise。
   } finally { loading.value = false }
+}
+
+function handleSearch() {
+  page.value = 1
+  loadList()
 }
 
 function resetFilters() {

@@ -17,7 +17,13 @@
           </p>
         </div>
 
-        <div class="ledger-drawer-actions">
+      <div class="ledger-drawer-actions">
+          <el-button
+            v-if="canRefund"
+            type="danger"
+            size="small"
+            @click="refundVisible = true"
+          >退款</el-button>
           <el-tag effect="plain" :type="resolveEventTagType(detail)">
             {{ detail.event_type_label || '--' }}
           </el-tag>
@@ -191,13 +197,28 @@
         <el-empty v-else :image-size="72" description="暂无关联日志" />
       </section>
     </div>
+
+    <RefundDialog
+      v-model="refundVisible"
+      :user-id="detail.user?.id"
+      :invoice-id="detail.invoice?.id"
+      :invoice-no="detail.invoice?.invoice_no || '--'"
+      :amount="detail.invoice?.paid_amount || detail.invoice?.amount || 0"
+      :order-no="detail.invoice?.order?.order_no || ''"
+      :payment-no="detail.payment?.payment_no || ''"
+      :has-order="!!detail.invoice?.order"
+      :has-payment="!!detail.payment?.id"
+      :can-original-refund="detail.payment?.gateway === 'alipay'"
+      @success="handleRefundSuccess"
+    />
   </el-drawer>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { Close } from '@element-plus/icons-vue'
 import { FINANCE_LEDGER_EVENT_MAP } from '@shared/statusConfig'
+import RefundDialog from '@/components/RefundDialog.vue'
 
 const props = defineProps({
   visible: {
@@ -214,7 +235,18 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'refund-success'])
+
+const refundVisible = ref(false)
+
+const canRefund = computed(() => {
+  const invoiceStatus = Number(props.detail?.invoice?.status ?? -1)
+  return invoiceStatus === 1 && !!props.detail?.user?.id && !!props.detail?.invoice?.id
+})
+
+function handleRefundSuccess() {
+  emit('refund-success')
+}
 
 const sourceChain = computed(() => Array.isArray(props.detail?.audit?.source_chain) ? props.detail.audit.source_chain : [])
 const statusTimeline = computed(() => Array.isArray(props.detail?.audit?.status_timeline) ? props.detail.audit.status_timeline : [])

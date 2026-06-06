@@ -237,9 +237,10 @@ const navigationSections = [
   {
     label: '财务',
     items: [
-      { index: '/client/invoices', title: '资金中心', icon: Document },
+      { index: '/client/orders', title: '订单记录', icon: Document },
+      { index: '/client/invoices', title: '账单记录', icon: List },
+      { index: '/client/payments', title: '充值记录', icon: Wallet },
       { index: '/client/recharge', title: '账户充值', icon: Wallet },
-      { index: '/client/balance-logs', title: '余额变动', icon: List },
       { index: '/client/coupons', title: '优惠券中心', icon: Tickets },
       { index: '/client/referral', title: '推荐奖励', icon: Share },
     ],
@@ -267,7 +268,7 @@ const activeMenu = computed(() => {
     return '/products'
   }
 
-  if (route.path.startsWith('/client/invoices') || route.path.startsWith('/client/orders')) {
+  if (route.path.startsWith('/client/invoices')) {
     return '/client/invoices'
   }
 

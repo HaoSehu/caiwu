@@ -290,7 +290,7 @@
         :model="addServiceForm"
         :rules="addServiceRules"
         label-width="92px"
-        v-loading="addServiceProductsLoading || addServiceProductDetailLoading || addServiceCategoriesLoading"
+        v-loading="addServiceProductDetailLoading || addServiceCategoriesLoading"
       >
         <div class="service-form-section">
           <div class="service-form-section__title">商品信息</div>
@@ -308,21 +308,18 @@
             </el-form-item>
 
             <el-form-item label="选择商品" prop="product_id" class="service-form-span-2">
-              <el-select
+              <el-tree-select
                 v-model="addServiceForm.product_id"
+                :data="addServiceSubOptions"
                 :disabled="!addServiceSelectedCategory"
-                placeholder="请选择二级分类与商品"
+                placeholder="请选择二级分类、三级分类与商品"
                 :loading="addServiceCategoriesLoading"
+                filterable
+                clearable
+                :render-after-expand="false"
+                :props="{ value: 'value', label: 'label', children: 'children', disabled: 'disabled' }"
                 @change="handleAddServiceSubChange"
-              >
-                <el-option-group
-                  v-for="group in addServiceSubOptions"
-                  :key="group.value"
-                  :label="group.label"
-                >
-                  <el-option v-for="product in group.children" :key="product.value" :label="product.label" :value="product.value" />
-                </el-option-group>
-              </el-select>
+              />
             </el-form-item>
 
             <el-form-item label="计费周期" prop="billing_cycle">
@@ -420,7 +417,7 @@
             filterable
             clearable
             :loading="serviceUpstreamSuppliersLoading"
-            placeholder="请选择 hosting_panel_api 上游接口"
+            placeholder="请选择上游接口"
             style="width: 100%;"
           >
             <el-option
@@ -563,7 +560,6 @@ const {
   rechargeVisible,
   addServiceDialogVisible,
   addServiceSubmitting,
-  addServiceProductsLoading,
   addServiceProductDetailLoading,
   addServiceCategoriesLoading,
   addServiceOsOptions,
@@ -583,7 +579,6 @@ const {
   addServiceForm,
   serviceUpstreamFormRef,
   servicePricingFormRef,
-  addServiceProductOptions,
   addServiceCategoryTree,
   addServiceCategoryOptions,
   addServiceSelectedCategory,
@@ -1119,12 +1114,12 @@ const heroSubtitle = computed(() => {
       border-left: none;
     }
 
-    &:nth-child(n+3) {
-      border-top: 1px solid $divider-color;
+    &:nth-child(even) {
+      border-left: 1px solid $divider-color;
     }
 
-    &:nth-child(2n+1):not(:first-child) {
-      border-left: 1px solid $divider-color;
+    &:nth-child(n+3) {
+      border-top: 1px solid $divider-color;
     }
   }
 }
@@ -1199,7 +1194,7 @@ const heroSubtitle = computed(() => {
   }
 
   .quick-stats {
-    flex-wrap: wrap;
+    grid-template-columns: 1fr;
     gap: 0;
     padding: 8px 12px;
     border-radius: $sm-border-radius;
@@ -1207,10 +1202,12 @@ const heroSubtitle = computed(() => {
 
   .quick-stat {
     padding: 6px 10px;
-    flex: 0 1 auto;
+
+    &:nth-child(even) {
+      border-left: none;
+    }
 
     &--note {
-      flex: 1 1 100%;
       min-width: 0;
     }
   }

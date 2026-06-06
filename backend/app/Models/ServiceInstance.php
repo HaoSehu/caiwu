@@ -104,10 +104,6 @@ class ServiceInstance extends Model
         return $this->belongsTo(Supplier::class);
     }
 
-    public function supplierProduct(): BelongsTo
-    {
-        return $this->belongsTo(SupplierProduct::class);
-    }
 
     public function server(): BelongsTo
     {

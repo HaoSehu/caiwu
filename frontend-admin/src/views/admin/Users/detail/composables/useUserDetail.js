@@ -5,9 +5,17 @@ import { INVOICE_TYPE_MAP, SERVICE_STATUS_MAP, toSelectOptions } from '@shared/s
 import productApi from '@/api/product'
 import supplierApi from '@/api/supplier'
 import userApi from '@/api/user'
-import { PROVIDER_KEYS, providerTypeLabel } from '@/constants/providerTypes'
 import { formatDateTime, parseDateTime } from '@/utils/datetime'
+import { buildAddServiceProductTree } from './addServiceProductTree.js'
+import {
+  applyAddServiceProductDetailToForm,
+  canAddServiceProductLinkUpstream,
+  normalizeAddServiceProductId,
+  resolveAddServiceBillingOptions,
+} from './addServiceProductSelection.js'
+import { fetchAllAddServiceProducts } from './addServiceProducts.js'
 import { buildClientLoginAsUrl } from './loginAsUrl.js'
+import { buildServiceUpstreamSupplierOptions } from './serviceUpstreamSuppliers.js'
 
 const INVOICE_STATUS_LABELS = {
   0: '待支付',
@@ -163,7 +171,7 @@ function createEmptyServiceConsoleDetail() {
     product: { id: 0, name: '', type: '', type_label: '', group_name: '' },
     order: { id: 0, order_no: '', invoice_id: 0, invoice_no: '', status: 0, status_label: '', paid_at: '' },
     invoice: { id: 0, invoice_no: '', status: 0, paid_at: '' },
-    upstream: { provider: '', supplier_id: 0, host_id: 0, status: '', status_label: '', remote_error: '', dedicated_ip: '' },
+    upstream: { provider: '', supplier_id: 0, supplier_product_id: 0, host_id: 0, status: '', status_label: '', remote_error: '', dedicated_ip: '' },
     runtime: { power_state: '', power_label: '', description: '' },
     connection: {
       hostname: '',
@@ -274,7 +282,6 @@ export function useUserDetail() {
 
   const addServiceDialogVisible = ref(false)
   const addServiceSubmitting = ref(false)
-  const addServiceProductsLoading = ref(false)
   const addServiceProductDetailLoading = ref(false)
   const addServiceFormRef = ref()
 
@@ -310,12 +317,12 @@ export function useUserDetail() {
     email: '',
   })
 
-  const addServiceProductOptions = ref([])
   const addServiceProductDetail = ref(null)
   const addServiceOsOptions = ref([])
   const addServiceOsLoading = ref(false)
   const addServiceForm = reactive(createDefaultAddServiceForm())
   const addServiceCategoryTree = ref([])
+  const addServiceCategoryTreeLoaded = ref(false)
   const addServiceCategoriesLoading = ref(false)
   const addServiceCategoryOptions = ref([])
   const addServiceSelectedCategory = ref(null)
@@ -334,8 +341,10 @@ export function useUserDetail() {
     addServiceProductDetail.value = null
   }
 
+  let addServiceProductChangeToken = 0
+
   function handleAddServiceSubChange(productId) {
-    addServiceForm.product_id = productId || null
+    addServiceForm.product_id = normalizeAddServiceProductId(productId)
     handleAddServiceProductChange()
   }
   const serviceUpstreamSupplierOptions = ref([])
@@ -466,21 +475,11 @@ export function useUserDetail() {
     { label: '最后登录 IP', value: userDetail.value.last_login_ip || '-' },
   ]))
 
-  const addServiceCanLinkUpstream = computed(() => (
-    Number(addServiceProductDetail.value?.supplier_id || 0) > 0
-    && Number(addServiceProductDetail.value?.supplier_product_id || 0) > 0
-  ))
+  const addServiceCanLinkUpstream = computed(() => canAddServiceProductLinkUpstream(addServiceProductDetail.value))
 
-  const addServiceBillingOptions = computed(() => {
-    const pricing = addServiceProductDetail.value?.pricing || {}
-    return Object.entries(pricing)
-      .filter(([, amount]) => Number(amount) > 0)
-      .map(([value, amount]) => ({
-        value,
-        label: `${resolveBillingCycleLabel(value)} · ¥${toNumber(amount).toFixed(2)}`,
-        amount: toNumber(amount),
-      }))
-  })
+  const addServiceBillingOptions = computed(() => (
+    resolveAddServiceBillingOptions(addServiceProductDetail.value, resolveBillingCycleLabel)
+  ))
 
   const addServiceUpstreamChannel = computed(() => (
     addServiceProductDetail.value?.supplier_name || '-'
@@ -710,14 +709,7 @@ export function useUserDetail() {
         page: 1,
         page_size: 100,
       })
-      serviceUpstreamSupplierOptions.value = (Array.isArray(res.data?.list) ? res.data.list : [])
-        .filter((item) => String(item?.interface_type || '') === PROVIDER_KEYS.HOSTING_PANEL_API)
-        .map((item) => ({
-          id: Number(item.id),
-          name: item.name || `接口 #${item.id}`,
-          interface_type: String(item.interface_type || ''),
-          label: `${item.name || `接口 #${item.id}`} · ${providerTypeLabel(item.interface_type)}`,
-        }))
+      serviceUpstreamSupplierOptions.value = buildServiceUpstreamSupplierOptions(res.data?.list)
     } catch (error) {
       ElMessage.error(error?.response?.data?.message || '加载上游接口失败')
     } finally {
@@ -1198,64 +1190,23 @@ export function useUserDetail() {
     }
   }
 
-  async function loadAddServiceProducts() {
-    addServiceProductsLoading.value = true
-    try {
-      const res = await productApi.list({ status: 1, page: 1, page_size: 200 })
-      addServiceProductOptions.value = Array.isArray(res.data?.list) ? res.data.list : []
-    } catch (error) {
-      ElMessage.error(error?.response?.data?.message || '加载商品列表失败')
-    } finally {
-      addServiceProductsLoading.value = false
-    }
-  }
-
   async function loadAddServiceCategoryTree() {
     addServiceCategoriesLoading.value = true
     try {
       const [catRes, prodRes] = await Promise.all([
         productApi.categories(),
-        productApi.list({ status: 1, page: 1, page_size: 200 }),
+        fetchAllAddServiceProducts(productApi, { status: 1 }),
       ])
 
       const rawTree = (catRes?.data?.tree || [])
-      const productList = Array.isArray(prodRes?.data?.list) ? prodRes.data.list : []
+      const productList = Array.isArray(prodRes) ? prodRes : []
       addServiceAllProducts.value = productList
 
-      // 按 product_type_label 一级分组
-      const typeMap = new Map()
-      rawTree.forEach((l1) => {
-        if (!l1.children || !l1.children.length) return
-        const typeLabel = l1.product_type_label || l1.product_type || l1.name
-        if (!typeMap.has(typeLabel)) {
-          typeMap.set(typeLabel, [])
-        }
-        // 把 l1 下的 l2 children 按 type 归并
-        l1.children.forEach((l2) => {
-          const products = productList
-            .filter((p) => Number(p.product_group_id) === Number(l2.id))
-            .map((p) => ({ value: p.id, label: p.name }))
-          if (!products.length) return
-          typeMap.get(typeLabel).push({
-            value: l2.id,
-            label: l2.name,
-            children: products,
-          })
-        })
-      })
-
-      const tree = []
-      typeMap.forEach((children, typeLabel) => {
-        if (!children.length) return
-        tree.push({
-          value: typeLabel,
-          label: typeLabel,
-          children,
-        })
-      })
+      const tree = buildAddServiceProductTree(rawTree, productList)
 
       addServiceCategoryTree.value = tree
       addServiceCategoryOptions.value = tree.map(({ value, label }) => ({ value, label }))
+      addServiceCategoryTreeLoaded.value = true
     } catch (error) {
       ElMessage.error(error?.response?.data?.message || '加载商品分类失败')
     } finally {
@@ -1272,29 +1223,37 @@ export function useUserDetail() {
     addServiceProductDetail.value = null
     addServiceForm.billing_cycle = ''
     addServiceForm.amount = null
+    addServiceForm.name = ''
     addServiceForm.upstream_host_id = null
     addServiceForm.os = ''
     addServiceOsOptions.value = []
     if (!addServiceForm.product_id) return
 
+    addServiceProductChangeToken += 1
+    const token = addServiceProductChangeToken
+
     addServiceProductDetailLoading.value = true
+    let productDetail = null
     try {
       const res = await productApi.detail(addServiceForm.product_id)
-      addServiceProductDetail.value = res.data || null
-      addServiceForm.name = addServiceForm.name || addServiceProductDetail.value?.name || ''
-      const firstCycle = addServiceBillingOptions.value[0]
-      addServiceForm.billing_cycle = firstCycle?.value || ''
-      syncAddServiceAmountFromCycle()
-      if (!addServiceBillingOptions.value.length) {
-        ElMessage.warning('当前商品未配置价格，请联系管理员配置')
-      }
-      if (addServiceForm.source_type === 'upstream' && !addServiceCanLinkUpstream.value) {
-        addServiceForm.source_type = 'manual'
-      }
+      productDetail = res.data || null
     } catch (error) {
       ElMessage.error(error?.response?.data?.message || '加载商品详情失败')
+      return
     } finally {
       addServiceProductDetailLoading.value = false
+    }
+
+    if (token !== addServiceProductChangeToken) return
+
+    addServiceProductDetail.value = productDetail
+    applyAddServiceProductDetailToForm(
+      addServiceForm,
+      addServiceProductDetail.value,
+      resolveBillingCycleLabel
+    )
+    if (!addServiceBillingOptions.value.length) {
+      ElMessage.warning('当前商品未配置价格，请联系管理员配置')
     }
 
     fetchAddServiceOsOptions()
@@ -1322,7 +1281,7 @@ export function useUserDetail() {
   async function openAddServiceDialog() {
     resetAddServiceForm()
     addServiceDialogVisible.value = true
-    if (!addServiceCategoryTree.value.length) {
+    if (!addServiceCategoryTreeLoaded.value) {
       await loadAddServiceCategoryTree()
     }
   }
@@ -1339,7 +1298,9 @@ export function useUserDetail() {
       product_id: Number(addServiceForm.product_id || 0),
       amount: toNumber(addServiceForm.amount),
       auto_renew: Number(addServiceForm.auto_renew ? 1 : 0),
-      upstream_host_id: null,
+      upstream_host_id: addServiceForm.source_type === 'upstream'
+        ? (Number(addServiceForm.upstream_host_id) || null)
+        : null,
     }
 
     addServiceSubmitting.value = true
@@ -1716,7 +1677,6 @@ export function useUserDetail() {
     rechargeVisible,
     addServiceDialogVisible,
     addServiceSubmitting,
-    addServiceProductsLoading,
     addServiceProductDetailLoading,
     addServiceCategoriesLoading,
     addServiceOsOptions,
@@ -1727,7 +1687,6 @@ export function useUserDetail() {
     rechargeForm,
     addServiceFormRef,
     addServiceForm,
-    addServiceProductOptions,
     addServiceCategoryTree,
     addServiceCategoryOptions,
     addServiceSelectedCategory,

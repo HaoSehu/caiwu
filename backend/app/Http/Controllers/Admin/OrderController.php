@@ -1,4 +1,26 @@
 <?php
 
-// 订单概念已抛弃：请改用 App\Http\Controllers\Admin\InvoiceController。
-// 此文件仅保留空壳以避免 composer 自动加载缓存中的陈旧引用报错，可由运维手动删除。
+declare(strict_types=1);
+
+namespace App\Http\Controllers\Admin;
+
+use App\Http\Controllers\Controller;
+use App\Services\Finance\AdminFinanceQueryService;
+use Illuminate\Http\Request;
+
+class OrderController extends Controller
+{
+    public function __construct(
+        private readonly AdminFinanceQueryService $financeQueryService,
+    ) {}
+
+    public function index(Request $request)
+    {
+        $filters = $request->only(['keyword', 'status', 'type', 'date_range']);
+        $perPage = max(1, min((int) $request->input('page_size', 20), 100));
+
+        return $this->paginate(
+            $this->financeQueryService->paginateOrders($filters, $perPage)
+        );
+    }
+}
