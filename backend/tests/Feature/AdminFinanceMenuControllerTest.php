@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Constants\PaymentStatus;
 use App\Models\AdminUser;
 use App\Models\Invoice;
 use App\Models\Order;
+use App\Models\Payment;
 use App\Models\Product;
 use App\Models\Role;
 use App\Models\Ticket;
@@ -84,12 +86,30 @@ class AdminFinanceMenuControllerTest extends TestCase
             'paid_at' => now()->subHours(3),
         ]);
 
-        $this->createInvoice($user, $product, [
+        $rechargeInvoice = $this->createInvoice($user, $product, [
             'invoice_no' => 'INVRECHARGE'.strtoupper($suffix),
             'type' => 'recharge',
             'status' => 1,
             'amount' => '200.00',
             'paid_amount' => '200.00',
+            'paid_at' => now()->subHours(2),
+        ]);
+        $this->createInvoice($user, $product, [
+            'invoice_no' => 'INVRECHARGEONLY'.strtoupper($suffix),
+            'type' => 'recharge',
+            'status' => 1,
+            'amount' => '300.00',
+            'paid_amount' => '300.00',
+            'paid_at' => now()->subHour(),
+        ]);
+        Payment::query()->create([
+            'payment_no' => 'PAYRECHARGE'.strtoupper($suffix),
+            'user_id' => (int) $user->id,
+            'invoice_id' => (int) $rechargeInvoice->id,
+            'gateway' => 'alipay',
+            'trade_no' => 'ALI'.strtoupper($suffix),
+            'amount' => '200.00',
+            'status' => 1,
             'paid_at' => now()->subHours(2),
         ]);
 
@@ -100,9 +120,11 @@ class AdminFinanceMenuControllerTest extends TestCase
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.order_no', 'ORDNEW'.strtoupper($suffix));
 
-        $this->getJson('/api/admin/finance/recharges?keyword=INVRECHARGE'.strtoupper($suffix))
+        $this->getJson('/api/admin/finance/recharges?keyword=PAYRECHARGE'.strtoupper($suffix))
             ->assertOk()
             ->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.list.0.payment_no', 'PAYRECHARGE'.strtoupper($suffix))
+            ->assertJsonPath('data.list.0.invoice_no', 'INVRECHARGE'.strtoupper($suffix))
             ->assertJsonPath('data.list.0.amount', '200.00');
 
         $this->getJson('/api/admin/finance/renewal-orders?keyword=ORDREN'.strtoupper($suffix))
@@ -204,6 +226,31 @@ class AdminFinanceMenuControllerTest extends TestCase
             'paid_amount' => '999.00',
             'quantity' => 1,
             'paid_at' => '2037-05-04 16:00:00',
+        ]);
+        $refundedPaidInvoice = $this->createInvoice($user, $product, [
+            'invoice_no' => 'INVINCREFUND'.strtoupper($suffix),
+            'type' => 'normal',
+            'status' => 1,
+            'amount' => '120.00',
+            'paid_amount' => '120.00',
+            'quantity' => 1,
+            'paid_at' => '2037-05-04 17:00:00',
+        ]);
+        Payment::query()->create([
+            'payment_no' => 'PAYREFUND'.strtoupper($suffix),
+            'user_id' => (int) $user->id,
+            'invoice_id' => (int) $refundedPaidInvoice->id,
+            'gateway' => 'alipay',
+            'amount' => '120.00',
+            'status' => PaymentStatus::REFUNDED,
+            'paid_at' => '2037-05-04 17:00:00',
+            'callback_raw' => [
+                'refund' => [
+                    'refund_amount' => '120.00',
+                    'refund_method' => 'alipay',
+                    'refunded_at' => '2037-05-04 17:10:00',
+                ],
+            ],
         ]);
 
         Sanctum::actingAs($admin);

@@ -200,7 +200,7 @@ class User extends Authenticatable
     public function getDisplayNameAttribute(): string
     {
         $realName = trim((string) $this->real_name);
-        if ($realName !== '' && ((int) $this->verification_status === 2 || (int) $this->is_verified === 1)) {
+        if ($realName !== '' && $this->hasCompletedVerification()) {
             return $realName;
         }
 
@@ -216,6 +216,11 @@ class User extends Authenticatable
         }
 
         return trim((string) $this->phone);
+    }
+
+    public function hasCompletedVerification(): bool
+    {
+        return (int) $this->is_verified === 1 || (int) $this->verification_status === 2;
     }
 
     // -------- 关联 --------

@@ -19,7 +19,6 @@ class SupplierResource extends JsonResource
             'api_url' => '',
             'has_api_url' => trim((string) $this->api_url) !== '',
             'api_username' => (string) $this->api_username,
-            'api_key' => (string) $this->api_key,
             'has_api_key' => trim((string) $this->api_key) !== '',
             'contact_name' => $this->contact_name,
             'contact_phone' => $this->contact_phone,

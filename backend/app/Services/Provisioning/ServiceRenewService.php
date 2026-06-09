@@ -16,11 +16,14 @@ use App\Services\Finance\CheckoutService;
 use App\Services\Finance\CouponService;
 use App\Services\Finance\InvoiceService;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
+use App\Services\Integrations\Support\ProviderErrorMapper;
 use App\Services\System\NotificationService;
 use App\Services\System\OperationLogService;
 use App\Services\System\SettingService;
 use App\Services\Upstream\Contracts\ProvidesRenewal;
+use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderResolver;
+use App\Support\SensitiveDataSanitizer;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -794,7 +797,13 @@ class ServiceRenewService
         }
 
         $message = trim((string) ($response['msg'] ?? $response['message'] ?? ''));
-        throw new BusinessException($message !== '' ? "{$action}失败：{$message}" : "{$action}失败");
+        Log::warning('[上游续费] 返回失败', [
+            'action' => $action,
+            'status' => $status,
+            'message' => SensitiveDataSanitizer::sanitizeText($message),
+        ]);
+
+        throw new BusinessException(app(ProviderErrorMapper::class)->toUserMessage(ProviderKey::HOSTING_PANEL_API, $action, $message));
     }
 
     private function resolveRenewalCapability(Service $service, ?Product $product = null): object

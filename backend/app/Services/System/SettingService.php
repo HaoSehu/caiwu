@@ -6,10 +6,7 @@ use App\Models\ProductCategory;
 use App\Models\Setting;
 use App\Models\SystemSetting;
 use App\Support\AutomationScheduleExpression;
-use App\Support\IndexNowKeyFileSyncer;
-use App\Support\SiteVerificationHtmlSyncer;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Log;
 
 class SettingService
 {
@@ -66,11 +63,6 @@ class SettingService
         $fallbackSettingMap = $this->getGroupFallbackSettings($group);
         $storedSettings = $this->getStoredSettings($group);
 
-        if ($fallbackSettingMap !== []) {
-            $this->syncFallbackSettingsToDatabase($group, $fallbackSettingMap, $storedSettings);
-            $storedSettings = $this->getStoredSettings($group);
-        }
-
         $fallbackSettings = collect($fallbackSettingMap)
             ->map(fn (mixed $fallbackValue, string $key) => $this->formatSettingPayload(
                 $group,
@@ -93,10 +85,7 @@ class SettingService
 
     public function saveGroupSettings(string $group, array $settings): void
     {
-        Setting::setValues($group, $settings);
-
-        $this->syncSiteVerificationMetaIfNeeded($group, $settings);
-        $this->syncIndexNowKeyFileIfNeeded($group, $settings);
+        Setting::setValues($group, $this->prepareSettingsForSave($settings));
     }
 
     public function getProvisionHostnameConfig(): array
@@ -427,14 +416,44 @@ class SettingService
      */
     private function formatSettingPayload(string $group, string $key, mixed $value): array
     {
+        $isSecret = Setting::isSensitiveKey($key);
+
         return [
             'group' => $group,
             'key' => $key,
-            'value' => $value,
-            'is_secret' => Setting::isSensitiveKey($key),
+            'value' => $isSecret ? '' : $value,
+            'is_secret' => $isSecret,
             'has_value' => $this->hasSettingValue($value),
-            'masked_value' => is_string($value) ? trim($value) : (string) $value,
+            'masked_value' => $isSecret
+                ? $this->maskSecretValue($value)
+                : (is_string($value) ? trim($value) : (string) $value),
         ];
+    }
+
+    /**
+     * 敏感配置空值表示保留旧值，避免后台读取掩码后误覆盖真实密钥。
+     *
+     * @param  array<string, mixed>  $settings
+     * @return array<string, mixed>
+     */
+    private function prepareSettingsForSave(array $settings): array
+    {
+        foreach ($settings as $key => $value) {
+            if (! Setting::isSensitiveKey((string) $key)) {
+                continue;
+            }
+
+            if (is_string($value) && trim($value) === '') {
+                unset($settings[$key]);
+            }
+        }
+
+        return $settings;
+    }
+
+    private function maskSecretValue(mixed $value): string
+    {
+        return $this->hasSettingValue($value) ? '******' : '';
     }
 
     private function hasSettingValue(mixed $value): bool
@@ -448,40 +467,6 @@ class SettingService
         }
 
         return true;
-    }
-
-    private function syncSiteVerificationMetaIfNeeded(string $group, array $settings): void
-    {
-        if ($group !== 'seo') {
-            return;
-        }
-
-        try {
-            app(SiteVerificationHtmlSyncer::class)->sync($settings);
-        } catch (\Throwable $exception) {
-            Log::warning('同步站点验证 meta 标签失败', [
-                'group' => $group,
-                'exception' => $exception::class,
-                'message' => $exception->getMessage(),
-            ]);
-        }
-    }
-
-    private function syncIndexNowKeyFileIfNeeded(string $group, array $settings): void
-    {
-        if ($group !== 'seo' || ! array_key_exists('indexnow_key', $settings)) {
-            return;
-        }
-
-        try {
-            app(IndexNowKeyFileSyncer::class)->sync($settings);
-        } catch (\Throwable $exception) {
-            Log::warning('同步 IndexNow 密钥验证文件失败', [
-                'group' => $group,
-                'exception' => $exception::class,
-                'message' => $exception->getMessage(),
-            ]);
-        }
     }
 
     private function getInt(string $group, string $key, int $default, int $min, int $max): int

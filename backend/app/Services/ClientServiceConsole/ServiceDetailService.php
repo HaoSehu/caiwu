@@ -11,12 +11,14 @@ use App\Models\OperationLog;
 use App\Models\Service;
 use App\Models\Supplier;
 use App\Models\User;
+use App\Services\Integrations\Support\ProviderErrorMapper;
 use App\Services\System\OperationLogService;
 use App\Services\Upstream\Contracts\ProvidesConsoleRuntime;
 use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderResolver;
 use App\Services\Upstream\Support\WebSessionCookieParser;
 use App\Support\ServiceHostname;
+use App\Support\SensitiveDataSanitizer;
 use App\Support\TextSanitizer;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -554,9 +556,20 @@ class ServiceDetailService
     public function fetchSupportedModules(Supplier $supplier, int $hostId, string $jwt): array
     {
         $cacheKey = $this->buildMonitorModuleCacheKey($supplier, $hostId);
-        $cachedModules = Cache::get($cacheKey);
+        $legacyCacheKey = $this->buildLegacyMonitorModuleCacheKey($supplier, $hostId);
+        $cacheKeys = array_values(array_unique([$cacheKey, $legacyCacheKey]));
+        $cachedValues = Cache::many($cacheKeys);
 
-        if (is_array($cachedModules)) {
+        foreach ($cacheKeys as $lookupKey) {
+            $cachedModules = $cachedValues[$lookupKey] ?? null;
+            if (! is_array($cachedModules)) {
+                continue;
+            }
+
+            if ($lookupKey !== $cacheKey) {
+                Cache::put($cacheKey, $cachedModules, now()->addSeconds(self::MONITOR_MODULE_CACHE_TTL_SECONDS));
+            }
+
             return $cachedModules;
         }
 
@@ -672,7 +685,13 @@ class ServiceDetailService
         }
 
         $message = trim((string) ($response['msg'] ?? $response['message'] ?? ''));
-        throw new BusinessException($message !== '' ? "{$action}失败：{$message}" : "{$action}失败", 42200);
+        Log::warning('[服务控制台] 上游返回失败', [
+            'action' => $action,
+            'status' => $status,
+            'message' => SensitiveDataSanitizer::sanitizeText($message),
+        ]);
+
+        throw new BusinessException(app(ProviderErrorMapper::class)->toUserMessage(ProviderKey::HOSTING_PANEL_API, $action, $message), 42200);
     }
 
     public function extractPayload(array $response): array
@@ -773,6 +792,13 @@ class ServiceDetailService
     }
 
     public function buildMonitorModuleCacheKey(Supplier $supplier, int $hostId): string
+    {
+        $providerKey = trim((string) ($supplier->interface_type ?? '')) ?: ProviderKey::HOSTING_PANEL_API;
+
+        return "upstream:{$providerKey}:host_modules:{$supplier->id}:{$hostId}";
+    }
+
+    private function buildLegacyMonitorModuleCacheKey(Supplier $supplier, int $hostId): string
     {
         return 'upstream:'.ProviderKey::HOSTING_PANEL_API.":host_modules:{$supplier->id}:{$hostId}";
     }

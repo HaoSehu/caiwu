@@ -89,7 +89,6 @@ class SupplierController extends Controller
             'api_url' => (string) $supplier->api_url,
             'has_api_url' => trim((string) $supplier->api_url) !== '',
             'api_username' => (string) $supplier->api_username,
-            'api_key' => (string) $supplier->api_key,
             'has_api_key' => trim((string) $supplier->api_key) !== '',
             'status' => (int) $supplier->status,
             'sort_order' => (int) $supplier->sort_order,

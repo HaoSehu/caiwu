@@ -311,7 +311,7 @@ class OrderQuantityCheckoutFlowTest extends TestCase
 
         $paymentService = new PaymentService(
             $provisionService,
-            $this->createMock(AlipayFaceToFaceService::class),
+            $this->makePaymentGatewayManagerForTest($this->createMock(AlipayFaceToFaceService::class)),
             $this->createMock(ServiceRenewService::class),
             $this->createMock(ReferralService::class),
             $this->createMock(PaidOrderBusinessFlowDispatcher::class),
@@ -423,7 +423,7 @@ class OrderQuantityCheckoutFlowTest extends TestCase
 
         $paymentService = new PaymentService(
             $this->createMock(ProvisionService::class),
-            $this->createMock(AlipayFaceToFaceService::class),
+            $this->makePaymentGatewayManagerForTest($this->createMock(AlipayFaceToFaceService::class)),
             $serviceRenewService,
             $this->createMock(ReferralService::class),
             $dispatcher,

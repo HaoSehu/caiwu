@@ -7,6 +7,10 @@ namespace App\Services\Verification\Drivers;
 use App\Exceptions\BusinessException;
 use App\Models\Setting;
 use App\Services\Verification\Contracts\VerificationDriver;
+use App\Services\Verification\Data\VerificationInitializeRequest;
+use App\Services\Verification\Data\VerificationInitializeResult;
+use App\Services\Verification\Data\VerificationScanUrlResult;
+use App\Services\Verification\Data\VerificationStatusResult;
 use App\Support\SensitiveDataSanitizer;
 use Illuminate\Support\Facades\Log;
 
@@ -26,75 +30,89 @@ class Stay33Driver implements VerificationDriver
         return 'Stay33 实名认证';
     }
 
-    public function initialize(string $realname, string $idcard, string $certType, string $returnUrl): array
+    public function initialize(VerificationInitializeRequest $request): VerificationInitializeResult
     {
         $config = $this->resolveConfig();
         $params = [
             'outer_order_no' => 'ZGYD'.now()->format('YmdHis').random_int(1000, 9999),
             'biz_code' => $config['biz_code'],
-            'cert_type' => $certType,
-            'cert_name' => $realname,
-            'cert_no' => $idcard,
-            'return_url' => $returnUrl,
+            'cert_type' => $request->certType,
+            'cert_name' => $request->realName,
+            'cert_no' => $request->idCard,
+            'return_url' => $request->returnUrl,
         ];
 
         $result = $this->apiRequest('initialize', $params, $config);
 
         if ($result === null) {
-            return ['status' => 500, 'msg' => $this->getLastFailureMessage()];
+            return new VerificationInitializeResult(500, $this->getLastFailureMessage());
         }
 
         if ((int) ($result['status'] ?? 0) === 200 && trim((string) ($result['certify_id'] ?? '')) !== '') {
-            return [
-                'status' => 200,
-                'msg' => (string) ($result['msg'] ?? '请求成功'),
-                'certify_id' => (string) $result['certify_id'],
-            ];
+            return new VerificationInitializeResult(
+                status: 200,
+                message: $this->safeProviderMessage($result['msg'] ?? '', '请求成功'),
+                certifyId: (string) $result['certify_id'],
+                raw: $result,
+            );
         }
 
-        return ['status' => 400, 'msg' => (string) ($result['msg'] ?? '实名认证接口配置错误,请联系管理员')];
+        return new VerificationInitializeResult(
+            status: 400,
+            message: $this->safeProviderMessage($result['msg'] ?? '', '实名认证接口配置错误，请联系管理员'),
+            raw: $result,
+        );
     }
 
-    public function generateScanUrl(string $certifyId): array
+    public function generateScanUrl(string $certifyId): VerificationScanUrlResult
     {
         $config = $this->resolveConfig();
         $result = $this->apiRequest('certify', ['certify_id' => $certifyId], $config);
 
         if ($result === null) {
-            return ['status' => 500, 'msg' => $this->getLastFailureMessage()];
+            return new VerificationScanUrlResult(500, $this->getLastFailureMessage());
         }
 
         $url = trim((string) ($result['url'] ?? ''));
         if ($url === '') {
-            return ['status' => 400, 'msg' => (string) ($result['msg'] ?? '获取认证链接失败,请联系管理员')];
+            return new VerificationScanUrlResult(
+                status: 400,
+                message: $this->safeProviderMessage($result['msg'] ?? '', '获取认证链接失败，请联系管理员'),
+                raw: $result,
+            );
         }
 
-        return ['status' => 200, 'msg' => (string) ($result['msg'] ?? '请打开实名认证链接继续认证'), 'url' => $url];
+        return new VerificationScanUrlResult(
+            status: 200,
+            message: $this->safeProviderMessage($result['msg'] ?? '', '请打开实名认证链接继续认证'),
+            url: $url,
+            raw: $result,
+        );
     }
 
-    public function queryStatus(string $certifyId): array
+    public function queryStatus(string $certifyId): VerificationStatusResult
     {
         $config = $this->resolveConfig();
         $result = $this->apiRequest('query', ['certify_id' => $certifyId], $config);
 
         if ($result === null) {
-            return ['status' => 3, 'msg' => $this->getLastFailureMessage()];
+            return new VerificationStatusResult(3, $this->getLastFailureMessage());
         }
 
         if ((int) ($result['status'] ?? 0) === 200) {
-            return ['status' => 1, 'msg' => '审核通过'];
+            return new VerificationStatusResult(1, '审核通过', $result);
         }
 
-        $msg = (string) ($result['msg'] ?? '未知错误');
+        $msg = $this->safeProviderMessage($result['msg'] ?? '', '实名认证未通过，请核对后重试');
         $waitingKeywords = ['等待', '认证中', '待认证', '处理中', '审核中'];
 
         foreach ($waitingKeywords as $keyword) {
             if (str_contains($msg, $keyword)) {
-                return ['status' => 4, 'msg' => $msg];
+                return new VerificationStatusResult(4, $msg, $result);
             }
         }
 
-        return ['status' => 2, 'msg' => $msg];
+        return new VerificationStatusResult(2, $msg, $result);
     }
 
     private function resolveConfig(): array
@@ -192,12 +210,24 @@ class Stay33Driver implements VerificationDriver
         }
 
         if (($this->lastRequestFailure['type'] ?? '') === 'curl') {
-            $error = trim((string) ($this->lastRequestFailure['error'] ?? ''));
-
-            return $error !== '' ? "实名认证接口请求失败：{$error}" : '实名认证接口请求失败，请检查服务器网络';
+            return '实名认证接口请求失败，请稍后重试';
         }
 
         return '实名认证接口返回异常';
+    }
+
+    private function safeProviderMessage(mixed $message, string $fallback): string
+    {
+        $text = trim((string) $message);
+        if ($text === '') {
+            return $fallback;
+        }
+
+        if (preg_match('/[a-z]{3,}|error|failed|exception|timeout|curl|http/i', $text) === 1) {
+            return $fallback;
+        }
+
+        return $text;
     }
 
     private function isSslCertificateError(string $curlError): bool
@@ -208,4 +238,3 @@ class Stay33Driver implements VerificationDriver
             || str_contains($message, 'certificate verify failed');
     }
 }
-

@@ -48,7 +48,7 @@ class ServicePowerService
         try {
             $this->applyPendingPowerSnapshot($service, $action);
         } catch (\Throwable $exception) {
-            $refreshError = $exception->getMessage();
+            $refreshError = \App\Support\SensitiveDataSanitizer::sanitizeText($exception->getMessage());
         }
 
         $actionLabel = ClientServiceConsoleService::POWER_ACTIONS[$action];

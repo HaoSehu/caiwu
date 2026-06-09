@@ -26,6 +26,8 @@ class ApiSmokeTest extends TestCase
     {
         parent::setUp();
 
+        config()->set('idc.verification.key', 'api-smoke-callback-key');
+
         $suffix = bin2hex(random_bytes(4));
         $role = Role::query()->create([
             'name' => 'smoke-super-admin-'.$suffix,
@@ -167,12 +169,50 @@ class ApiSmokeTest extends TestCase
         }
 
         if ($uri === 'api/client/verification/callback') {
-            return [
+            return $this->signVerificationCallbackPayload([
                 'certify_id' => 'smoke-certify-id',
-            ];
+            ]);
         }
 
         return $method === 'GET' ? [] : [];
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function signVerificationCallbackPayload(array $payload): array
+    {
+        $payload['timestamp'] = (string) now()->timestamp;
+        $payload['nonce'] = 'api-smoke-'.Str::random(12);
+        $payload['sign'] = hash_hmac('sha256', $this->canonicalVerificationPayload($payload), 'api-smoke-callback-key');
+
+        return $payload;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function canonicalVerificationPayload(array $payload): string
+    {
+        unset($payload['sign'], $payload['signature']);
+        $this->ksortRecursive($payload);
+
+        return json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}';
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function ksortRecursive(array &$payload): void
+    {
+        ksort($payload);
+
+        foreach ($payload as &$value) {
+            if (is_array($value)) {
+                $this->ksortRecursive($value);
+            }
+        }
     }
 
     private function routeRequiresAdmin(Route $route): bool

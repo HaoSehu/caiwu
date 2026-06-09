@@ -141,10 +141,16 @@ trait HandlesClientServiceConsoleMonitoring
 
             return $response;
         } catch (\Throwable $exception) {
+            Log::warning('[客户端监控] 单图监控失败', [
+                'service_id' => $service->id,
+                'requested_type' => $selectedType,
+                'message' => \App\Support\SensitiveDataSanitizer::sanitizeText($exception->getMessage()),
+            ]);
+
             return [
                 'supported' => true,
                 'message' => '',
-                'error' => $exception->getMessage(),
+                'error' => '获取监控数据失败，请稍后重试',
                 'options' => [],
                 'selected_type' => $selectedType,
                 'selected_label' => '',
@@ -335,10 +341,16 @@ trait HandlesClientServiceConsoleMonitoring
 
             return $response;
         } catch (\Throwable $exception) {
+            Log::warning('[客户端监控] 批量监控失败', [
+                'service_id' => $service->id,
+                'requested_types' => $requestedTypes,
+                'message' => \App\Support\SensitiveDataSanitizer::sanitizeText($exception->getMessage()),
+            ]);
+
             return [
                 'supported' => true,
                 'message' => '',
-                'error' => $exception->getMessage(),
+                'error' => '获取监控数据失败，请稍后重试',
                 'options' => [],
                 'range' => $range,
                 'charts' => [],
@@ -1367,8 +1379,16 @@ trait HandlesClientServiceConsoleMonitoring
     private function buildMonitorChartCacheKey(Supplier $supplier, int $hostId, string $type, int $start, int $end): string
     {
         $normalizedRange = $this->normalizeMonitorCacheRange($start, $end);
+        $providerKey = trim((string) ($supplier->interface_type ?? '')) ?: \App\Services\Upstream\ProviderKey::HOSTING_PANEL_API;
 
-        return 'upstream:hosting_panel_api:host_chart:'.self::MONITOR_CACHE_SCHEMA_VERSION.":{$supplier->id}:{$hostId}:{$type}:{$normalizedRange['start']}:{$normalizedRange['end']}";
+        return "upstream:{$providerKey}:host_chart:".self::MONITOR_CACHE_SCHEMA_VERSION.":{$supplier->id}:{$hostId}:{$type}:{$normalizedRange['start']}:{$normalizedRange['end']}";
+    }
+
+    private function buildLegacyMonitorChartCacheKey(Supplier $supplier, int $hostId, string $type, int $start, int $end): string
+    {
+        $normalizedRange = $this->normalizeMonitorCacheRange($start, $end);
+
+        return 'upstream:'.\App\Services\Upstream\ProviderKey::HOSTING_PANEL_API.':host_chart:'.self::MONITOR_CACHE_SCHEMA_VERSION.":{$supplier->id}:{$hostId}:{$type}:{$normalizedRange['start']}:{$normalizedRange['end']}";
     }
 
     private function normalizeMonitorResponseCachePayload(array $payload): array
@@ -1407,6 +1427,7 @@ trait HandlesClientServiceConsoleMonitoring
 
     private function getCachedMonitorChart(Supplier $supplier, int $hostId, string $type, int $start, int $end): ?array
     {
+        $primaryCacheKey = $this->buildMonitorChartCacheKey($supplier, $hostId, $type, $start, $end);
         $cacheKeys = $this->buildMonitorChartCacheLookupKeys($supplier, $hostId, $type, $start, $end);
         $cachedValues = Cache::many($cacheKeys);
 
@@ -1415,6 +1436,10 @@ trait HandlesClientServiceConsoleMonitoring
 
             if (! is_array($cached) || ! is_array($cached['chart'] ?? null)) {
                 continue;
+            }
+
+            if ($cacheKey !== $primaryCacheKey) {
+                Cache::put($primaryCacheKey, $cached, now()->addSeconds(self::MONITOR_CHART_CACHE_TTL_SECONDS));
             }
 
             return [
@@ -1433,10 +1458,12 @@ trait HandlesClientServiceConsoleMonitoring
         }
 
         $keyMap = [];
+        $primaryKeyMap = [];
         $allCacheKeys = [];
         foreach ($types as $type) {
             $lookupKeys = $this->buildMonitorChartCacheLookupKeys($supplier, $hostId, (string) $type, $start, $end);
             $keyMap[(string) $type] = $lookupKeys;
+            $primaryKeyMap[(string) $type] = $this->buildMonitorChartCacheKey($supplier, $hostId, (string) $type, $start, $end);
             $allCacheKeys = array_merge($allCacheKeys, $lookupKeys);
         }
 
@@ -1448,6 +1475,11 @@ trait HandlesClientServiceConsoleMonitoring
                 $cached = $cachedValues[$cacheKey] ?? null;
                 if (! is_array($cached) || ! is_array($cached['chart'] ?? null)) {
                     continue;
+                }
+
+                $primaryCacheKey = $primaryKeyMap[$type] ?? '';
+                if ($primaryCacheKey !== '' && $cacheKey !== $primaryCacheKey) {
+                    Cache::put($primaryCacheKey, $cached, now()->addSeconds(self::MONITOR_CHART_CACHE_TTL_SECONDS));
                 }
 
                 $result[$type] = [
@@ -1476,9 +1508,13 @@ trait HandlesClientServiceConsoleMonitoring
 
         $keys = [];
         foreach ($ranges as $range) {
-            $cacheKey = $this->buildMonitorChartCacheKey($supplier, $hostId, $type, $range['start'], $range['end']);
-            if (! in_array($cacheKey, $keys, true)) {
-                $keys[] = $cacheKey;
+            foreach ([
+                $this->buildMonitorChartCacheKey($supplier, $hostId, $type, $range['start'], $range['end']),
+                $this->buildLegacyMonitorChartCacheKey($supplier, $hostId, $type, $range['start'], $range['end']),
+            ] as $cacheKey) {
+                if (! in_array($cacheKey, $keys, true)) {
+                    $keys[] = $cacheKey;
+                }
             }
         }
 

@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Support\SiteSeoConfig;
+use App\Support\SiteConfigPayload;
 
 class SiteConfigController extends Controller
 {
     public function index()
     {
-        return $this->success(SiteSeoConfig::payload());
+        return $this->success(SiteConfigPayload::payload());
     }
 }

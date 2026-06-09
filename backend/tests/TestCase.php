@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Tests;
 
+use App\Services\Integrations\Payments\Drivers\AlipayFaceToFaceGateway;
+use App\Services\Integrations\Payments\PaymentGatewayManager;
+use App\Services\Integrations\Payments\PaymentGatewayRegistry;
+use App\Services\PaymentGateway\AlipayFaceToFaceService;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Support\Facades\DB;
 
@@ -22,13 +26,21 @@ abstract class TestCase extends BaseTestCase
             return;
         }
 
-        $database = (string) DB::connection()->getDatabaseName();
-        if (in_array($database, ['idc', 'caiwu'], true)) {
-            throw new \RuntimeException(
-                "Refusing to run tests against database [{$database}]. ".
-                'Set DB_DATABASE to a disposable test database such as idc_test.'
-            );
+        $connection = DB::connection();
+        $driver = (string) $connection->getDriverName();
+        $database = (string) $connection->getDatabaseName();
+
+        if ($driver === 'sqlite') {
+            return;
         }
+
+        if ($database !== '' && str_contains(strtolower($database), 'test')) {
+            return;
+        }
+
+        throw new \RuntimeException(
+            "拒绝在非测试数据库 [{$database}] 上运行测试，请使用独立测试库或 SQLite。"
+        );
     }
 
     protected function mirrorServiceCompatToIdc(array $payload): void
@@ -77,5 +89,14 @@ abstract class TestCase extends BaseTestCase
             ['id' => (int) ($payload['id'] ?? 0)],
             $filteredPayload
         );
+    }
+
+    protected function makePaymentGatewayManagerForTest(?AlipayFaceToFaceService $alipayService = null): PaymentGatewayManager
+    {
+        $alipayService ??= $this->createMock(AlipayFaceToFaceService::class);
+
+        return new PaymentGatewayManager(new PaymentGatewayRegistry([
+            new AlipayFaceToFaceGateway($alipayService),
+        ]));
     }
 }

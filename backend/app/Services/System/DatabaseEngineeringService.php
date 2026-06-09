@@ -64,7 +64,7 @@ class DatabaseEngineeringService
             'services_deleted_orphan_user_or_product' => 0,
             'services_cleared_orphan_invoice_id' => 0,
             'invoices_deleted_orphan_user_or_product' => 0,
-            'payments_deleted_orphan_user_or_invoice' => 0,
+            'payments_orphan_user_or_invoice_reported' => 0,
             'trace_ids_backfilled' => 0,
         ];
 
@@ -114,9 +114,9 @@ class DatabaseEngineeringService
             $summary['invoices_deleted_orphan_user_or_product'] =
                 $this->deleteOrphans('invoices', 'user_id', 'users', 'id')
                 + $this->deleteOrphans('invoices', 'product_id', 'products', 'id');
-            $summary['payments_deleted_orphan_user_or_invoice'] =
-                $this->deleteOrphans('payments', 'user_id', 'users', 'id')
-                + $this->deleteOrphans('payments', 'invoice_id', 'invoices', 'id');
+            $summary['payments_orphan_user_or_invoice_reported'] =
+                $this->countOrphans('payments', 'user_id', 'users', 'id')
+                + $this->countOrphans('payments', 'invoice_id', 'invoices', 'id');
 
             $summary['trace_ids_backfilled'] =
                 $this->backfillTraceIds('invoices') +

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Upstream;
 
 use App\Services\Upstream\Contracts\UpstreamDriver;
+use App\Services\Upstream\Data\UpstreamProviderDescriptor;
 
 final class ProviderRegistry
 {
@@ -39,14 +40,22 @@ final class ProviderRegistry
      */
     public function options(): array
     {
+        return array_map(
+            fn (UpstreamProviderDescriptor $descriptor): array => $descriptor->toOption(),
+            $this->descriptors()
+        );
+    }
+
+    /**
+     * @return array<int, UpstreamProviderDescriptor>
+     */
+    public function descriptors(): array
+    {
         $drivers = $this->drivers;
         ksort($drivers);
 
         return array_map(
-            fn (UpstreamDriver $driver): array => [
-                'value' => $driver->key(),
-                'label' => $driver->label(),
-            ],
+            fn (UpstreamDriver $driver): UpstreamProviderDescriptor => UpstreamProviderDescriptor::fromDriver($driver),
             array_values($drivers)
         );
     }

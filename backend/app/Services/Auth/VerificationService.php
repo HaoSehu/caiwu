@@ -9,6 +9,10 @@ use App\Models\User;
 use App\Models\UserVerification;
 use App\Models\VerificationHistory;
 use App\Services\Verification\Contracts\VerificationDriver;
+use App\Services\Verification\Data\VerificationInitializeRequest;
+use App\Services\Verification\Data\VerificationInitializeResult;
+use App\Services\Verification\Data\VerificationScanUrlResult;
+use App\Services\Verification\Data\VerificationStatusResult;
 use App\Services\Verification\VerificationDriverManager;
 use App\Support\SensitiveDataSanitizer;
 use Illuminate\Support\Facades\Cache;
@@ -64,7 +68,7 @@ class VerificationService
         $response = $this->getCertifyId($realname, $idcard, $certType);
         $this->assertSourceResponseSuccess($response, '认证初始化失败');
 
-        $certifyId = (string) ($response['certify_id'] ?? '');
+        $certifyId = $response->certifyId;
 
         DB::transaction(function () use ($user, $realname, $idcard, $certifyId): void {
             $updatedUser = $this->persistVerificationState($user, [
@@ -104,7 +108,7 @@ class VerificationService
         $response = $this->generateScanForm($certifyId);
         $this->assertSourceResponseSuccess($response, '获取认证链接失败');
 
-        $remoteUrl = trim((string) ($response['url'] ?? ''));
+        $remoteUrl = trim($response->url);
         if (! $this->isValidRemoteUrl($remoteUrl)) {
             throw new BusinessException('生成认证链接失败', 42200);
         }
@@ -113,7 +117,6 @@ class VerificationService
 
         return [
             'url' => $remoteUrl,
-            'proxy_url' => $this->buildQrCodeProxyUrl($certifyId),
         ];
     }
 
@@ -132,7 +135,7 @@ class VerificationService
         $response = $this->generateScanForm($certifyId);
         $this->assertSourceResponseSuccess($response, '获取认证链接失败');
 
-        $remoteUrl = trim((string) ($response['url'] ?? ''));
+        $remoteUrl = trim($response->url);
         if (! $this->isValidRemoteUrl($remoteUrl)) {
             throw new BusinessException('生成认证链接失败', 42200);
         }
@@ -149,8 +152,8 @@ class VerificationService
         for ($attempt = 0; $attempt < $maxRetries; $attempt++) {
             $result = $this->getAliyunAuthStatus($certifyId);
 
-            if ($result['status'] !== self::RESULT_STATUS_NETWORK_ERROR) {
-                return $result;
+            if ($result->status !== self::RESULT_STATUS_NETWORK_ERROR) {
+                return $result->toArray();
             }
 
             if ($attempt < $maxRetries - 1) {
@@ -319,19 +322,19 @@ class VerificationService
         }
     }
 
-    private function getCertifyId(string $realname, string $idcard, string $certType): array
+    private function getCertifyId(string $realname, string $idcard, string $certType): VerificationInitializeResult
     {
         $returnUrl = $this->resolveCallbackUrl();
 
-        return $this->driver()->initialize($realname, $idcard, $certType, $returnUrl);
+        return $this->driver()->initialize(new VerificationInitializeRequest($realname, $idcard, $certType, $returnUrl));
     }
 
-    private function generateScanForm(string $certifyId): array
+    private function generateScanForm(string $certifyId): VerificationScanUrlResult
     {
         return $this->driver()->generateScanUrl($certifyId);
     }
 
-    private function getAliyunAuthStatus(string $certifyId): array
+    private function getAliyunAuthStatus(string $certifyId): VerificationStatusResult
     {
         return $this->driver()->queryStatus($certifyId);
     }
@@ -341,14 +344,17 @@ class VerificationService
         return $this->driverManager->resolve();
     }
 
-    private function assertSourceResponseSuccess(array $response, string $fallbackMessage): void
+    private function assertSourceResponseSuccess(
+        VerificationInitializeResult|VerificationScanUrlResult $response,
+        string $fallbackMessage,
+    ): void
     {
-        $status = (int) ($response['status'] ?? 0);
+        $status = $response->status;
         if ($status === self::API_STATUS_SUCCESS) {
             return;
         }
 
-        $message = trim((string) ($response['msg'] ?? '')) ?: $fallbackMessage;
+        $message = trim($response->message) ?: $fallbackMessage;
         $errorCode = $status === self::API_STATUS_NETWORK_ERROR ? 50000 : 42200;
 
         throw new BusinessException($message, $errorCode);

@@ -49,8 +49,6 @@ class ContentArticle extends Model
         'category_name',
         'category',
         'keywords',
-        'meta_title',
-        'meta_description',
         'cover_image',
         'status',
         'is_pinned',

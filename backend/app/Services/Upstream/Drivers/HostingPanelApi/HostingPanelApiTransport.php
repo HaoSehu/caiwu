@@ -124,12 +124,27 @@ class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsole
             return $cachedJwt;
         }
 
+        $legacyCacheKey = $this->legacyJwtCacheKey($supplier);
+        if ($legacyCacheKey !== $cacheKey) {
+            $cachedJwt = trim((string) $this->jwtCache()->get($legacyCacheKey, ''));
+            if ($cachedJwt !== '') {
+                $this->jwtCache()->put($cacheKey, $cachedJwt, now()->addSeconds(self::DEFAULT_JWT_CACHE_TTL_SECONDS));
+
+                return $cachedJwt;
+            }
+        }
+
         $startedAt = microtime(true);
         $response = $this->loginResponse($supplier);
         $jwt = trim((string) ($response['jwt'] ?? ''));
 
         if ($jwt === '') {
-            throw new BusinessException((string) ($response['msg'] ?? '获取jwt会话失败!'), 42200);
+            $this->safeLog('warning', '[主机面板接口] JWT响应缺少会话', [
+                'supplier_id' => $supplier->id,
+                'response' => $this->summarizeLogResponse($response),
+            ]);
+
+            throw new BusinessException('供应商接口认证失败，请检查接口配置', 42200);
         }
 
         $ttlSeconds = $this->resolveJwtCacheTtlSeconds($jwt);
@@ -152,13 +167,19 @@ class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsole
     {
         $cacheKey = $this->jwtCacheKey($supplier);
         $this->jwtCache()->forget($cacheKey);
+        $this->jwtCache()->forget($this->legacyJwtCacheKey($supplier));
 
         $startedAt = microtime(true);
         $response = $this->loginResponse($supplier);
         $jwt = trim((string) ($response['jwt'] ?? ''));
 
         if ($jwt === '') {
-            throw new BusinessException((string) ($response['msg'] ?? '刷新JWT失败'), 42200);
+            $this->safeLog('warning', '[主机面板接口] JWT刷新响应缺少会话', [
+                'supplier_id' => $supplier->id,
+                'response' => $this->summarizeLogResponse($response),
+            ]);
+
+            throw new BusinessException('供应商接口认证刷新失败，请稍后重试', 42200);
         }
 
         $ttlSeconds = $this->resolveJwtCacheTtlSeconds($jwt);
@@ -523,7 +544,7 @@ class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsole
                 'error' => $lastError['message'] ?? 'unknown error',
             ]);
 
-            throw new BusinessException('主机面板接口请求失败：'.($lastError['message'] ?? 'unknown error'), 50000);
+            throw new BusinessException('供应商接口请求失败，请稍后重试或联系管理员', 50000);
         }
 
         if ($httpCode === 401 && $jwt !== null && trim($jwt) !== '') {
@@ -591,7 +612,7 @@ class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsole
                 'error' => $lastError['message'] ?? 'unknown error',
             ]);
 
-            throw new BusinessException('主机面板接口请求失败：'.($lastError['message'] ?? 'unknown error'), 50000);
+            throw new BusinessException('供应商接口请求失败，请稍后重试或联系管理员', 50000);
         }
 
         $output = trim($output, "\xEF\xBB\xBF");
@@ -1059,32 +1080,26 @@ PHP;
 
     private function buildInvalidJsonMessage(int $httpCode, string $contentType, string $body): string
     {
-        $body = trim($body);
         $contentType = trim($contentType);
-        $bodyPreview = str_replace(["\r", "\n", "\t"], ' ', $body);
-        $bodyPreview = trim(preg_replace('/\s+/u', ' ', $bodyPreview) ?? $bodyPreview);
-        $bodyPreview = mb_substr($bodyPreview, 0, 120);
+        $body = trim($body);
 
         if ($body === '') {
             return $httpCode > 0
-                ? "主机面板接口返回空响应（HTTP {$httpCode}）"
-                : '主机面板接口返回空响应';
+                ? "供应商接口返回空响应（HTTP {$httpCode}）"
+                : '供应商接口返回空响应';
         }
 
         if ($this->looksLikeHtmlResponse($body, $contentType)) {
-            $suffix = $bodyPreview !== '' ? "，响应片段：{$bodyPreview}" : '';
-
             return $httpCode > 0
-                ? "主机面板接口返回 HTML 页面而不是 JSON（HTTP {$httpCode}）{$suffix}"
-                : "主机面板接口返回 HTML 页面而不是 JSON{$suffix}";
+                ? "供应商接口返回异常页面，未解析到有效数据（HTTP {$httpCode}）"
+                : '供应商接口返回异常页面，未解析到有效数据';
         }
 
-        $suffix = $bodyPreview !== '' ? "，响应片段：{$bodyPreview}" : '';
         $contentTypeSuffix = $contentType !== '' ? "，Content-Type: {$contentType}" : '';
 
         return $httpCode > 0
-            ? "主机面板接口返回异常，未解析到有效 JSON（HTTP {$httpCode}{$contentTypeSuffix}）{$suffix}"
-            : "主机面板接口返回异常，未解析到有效 JSON{$contentTypeSuffix}{$suffix}";
+            ? "供应商接口返回异常，未解析到有效数据（HTTP {$httpCode}{$contentTypeSuffix}）"
+            : "供应商接口返回异常，未解析到有效数据{$contentTypeSuffix}";
     }
 
     private function looksLikeHtmlResponse(string $body, string $contentType = ''): bool
@@ -1236,6 +1251,13 @@ PHP;
 
     private function jwtCacheKey(Supplier $supplier): string
     {
+        $providerKey = trim((string) ($supplier->interface_type ?? '')) ?: \App\Services\Upstream\ProviderKey::HOSTING_PANEL_API;
+
+        return "upstream:{$providerKey}:jwt:".$supplier->id;
+    }
+
+    private function legacyJwtCacheKey(Supplier $supplier): string
+    {
         return 'upstream:hosting_panel_api:jwt:'.$supplier->id;
     }
 
@@ -1267,6 +1289,7 @@ PHP;
     private function forgetJwtCache(Supplier $supplier): void
     {
         $this->jwtCache()->forget($this->jwtCacheKey($supplier));
+        $this->jwtCache()->forget($this->legacyJwtCacheKey($supplier));
     }
 
     private function resolveRequestJwt(Supplier $supplier, ?string $jwt, string $uri, array $headers = []): ?string

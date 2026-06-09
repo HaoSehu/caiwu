@@ -7,6 +7,7 @@ namespace App\Services\User;
 use App\Constants\InvoiceStatus;
 use App\Constants\InvoiceType;
 use App\Constants\OrderStatus;
+use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
@@ -929,7 +930,7 @@ class UserService
             ], $context);
         }
 
-        throw_if($gateway !== 'alipay', new BusinessException('当前支付方式不支持原路退款'));
+        throw_if($gateway !== PaymentGatewayCode::ALIPAY, new BusinessException('当前支付方式不支持原路退款'));
 
         return $this->invoiceService->refundByPaymentMethod($invoice, [
             'amount' => $data['amount'] ?? ($paymentSummary['amount'] ?? null),
@@ -940,7 +941,7 @@ class UserService
     private function resolvePaymentGatewayLabel(string $gateway): string
     {
         return match ($gateway) {
-            'alipay' => '支付宝支付',
+            PaymentGatewayCode::ALIPAY => PaymentGatewayCode::label(PaymentGatewayCode::ALIPAY),
             'wechat' => '微信支付',
             'balance' => '余额支付',
             'bank_transfer' => '银行转账',
@@ -1041,7 +1042,7 @@ class UserService
             $blockedReason = '账单已开通服务，请先在服务控制台处理资源后再退款';
         } else {
             $canBalance = true;
-            $canOriginal = in_array($paymentGateway, ['alipay', 'balance'], true);
+            $canOriginal = in_array($paymentGateway, [PaymentGatewayCode::ALIPAY, PaymentGatewayCode::BALANCE], true);
 
             if (! $canOriginal) {
                 $originalBlockedReason = '当前支付方式不支持原路退款';

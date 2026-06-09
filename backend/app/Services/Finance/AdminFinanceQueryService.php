@@ -6,8 +6,12 @@ namespace App\Services\Finance;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
+use App\Constants\PaymentGatewayCode;
+use App\Constants\PaymentStatus;
+use App\Constants\ProductType;
 use App\Models\Invoice;
 use App\Models\Order;
+use App\Models\Payment;
 use App\Models\Product;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use Carbon\CarbonImmutable;
@@ -33,6 +37,8 @@ class AdminFinanceQueryService
                 'user:id,email,nickname,phone',
                 'invoice:id,invoice_no,order_id,type,status,amount,paid_amount,paid_at,due_date,created_at',
                 'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
+                'product.categoryMapping:id,name,parent_group_id,product_type',
+                'product.categoryMapping.parent:id,name,parent_group_id,product_type',
                 'service:id,name,domain,status,expires_at',
             ]);
 
@@ -58,12 +64,14 @@ class AdminFinanceQueryService
 
     public function paginateRecharges(array $filters, int $perPage = 20): LengthAwarePaginator
     {
-        $query = Invoice::query()
+        $query = Payment::query()
             ->with([
                 'user:id,email,nickname,phone',
-                'payments:id,invoice_id,payment_no,gateway,trade_no,amount,status,paid_at',
+                'invoice:id,invoice_no,order_id,user_id,type,status,amount,paid_amount,paid_at,due_date,created_at',
+                'invoice.order:id,order_no,type,status',
+                'order:id,order_no,type,status',
             ])
-            ->where('type', 'recharge');
+            ->where('gateway', PaymentGatewayCode::ALIPAY);
 
         if (isset($filters['status']) && $filters['status'] !== '') {
             $query->where('status', (int) $filters['status']);
@@ -72,16 +80,19 @@ class AdminFinanceQueryService
         $keyword = trim((string) ($filters['keyword'] ?? ''));
         if ($keyword !== '') {
             $query->where(function (Builder $query) use ($keyword): void {
-                $query->where('invoice_no', 'like', "%{$keyword}%")
+                $query->where('payment_no', 'like', "%{$keyword}%")
+                    ->orWhere('trade_no', 'like', "%{$keyword}%")
                     ->orWhere('id', $keyword)
                     ->orWhereHas('user', function (Builder $userQuery) use ($keyword): void {
                         $userQuery->where('email', 'like', "%{$keyword}%")
                             ->orWhere('nickname', 'like', "%{$keyword}%")
                             ->orWhere('phone', 'like', "%{$keyword}%");
                     })
-                    ->orWhereHas('payments', function (Builder $paymentQuery) use ($keyword): void {
-                        $paymentQuery->where('payment_no', 'like', "%{$keyword}%")
-                            ->orWhere('trade_no', 'like', "%{$keyword}%");
+                    ->orWhereHas('invoice', function (Builder $invoiceQuery) use ($keyword): void {
+                        $invoiceQuery->where('invoice_no', 'like', "%{$keyword}%");
+                    })
+                    ->orWhereHas('order', function (Builder $orderQuery) use ($keyword): void {
+                        $orderQuery->where('order_no', 'like', "%{$keyword}%");
                     });
             });
         }
@@ -90,7 +101,7 @@ class AdminFinanceQueryService
 
         $paginator = $query->orderByDesc('id')->paginate($perPage);
         $paginator->setCollection(
-            $paginator->getCollection()->map(fn (Invoice $invoice) => $this->transformRechargeInvoice($invoice))
+            $paginator->getCollection()->map(fn (Payment $payment) => $this->transformRechargePayment($payment))
         );
 
         return $paginator;
@@ -138,6 +149,7 @@ class AdminFinanceQueryService
                 DB::raw('SUM(COALESCE(quantity, 1)) as quantity_total'),
             ])
             ->where('status', InvoiceStatus::PAID)
+            ->whereDoesntHave('payments', fn ($query) => $query->where('status', PaymentStatus::REFUNDED))
             ->whereNotNull('product_id')
             ->whereBetween('paid_at', [$start, $end])
             ->whereIn('type', ['new', 'normal', 'renew'])
@@ -359,6 +371,45 @@ class AdminFinanceQueryService
         ]);
     }
 
+    public function getOrderDetail(int $id): array
+    {
+        $order = Order::query()
+            ->with([
+                'user:id,email,nickname,phone',
+                'invoice:id,invoice_no,order_id,type,status,amount,paid_amount,paid_at,due_date,created_at',
+                'invoice.payments:id,invoice_id,payment_no,gateway,trade_no,amount,status,paid_at',
+                'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
+                'product.categoryMapping:id,name,parent_group_id,product_type',
+                'product.categoryMapping.parent:id,name,parent_group_id,product_type',
+                'service:id,name,domain,status,expires_at',
+                'coupon:id,code,name,type,value',
+            ])
+            ->findOrFail($id);
+
+        $data = $this->transformOrder($order);
+        $data['coupon'] = $order->coupon ? [
+            'id' => (int) $order->coupon->id,
+            'code' => (string) $order->coupon->code,
+            'name' => (string) ($order->coupon->name ?? ''),
+            'type' => (string) ($order->coupon->type ?? ''),
+            'value' => (string) ($order->coupon->value ?? ''),
+        ] : null;
+        $data['coupon_code'] = (string) ($order->coupon_code ?? '');
+        $data['coupon_snapshot'] = (array) ($order->coupon_snapshot ?? []);
+        $data['remark'] = (string) ($order->remark ?? '');
+        $data['payments'] = $order->invoice?->payments?->map(fn ($payment) => [
+            'id' => (int) $payment->id,
+            'payment_no' => (string) $payment->payment_no,
+            'gateway' => (string) $payment->gateway,
+            'trade_no' => (string) ($payment->trade_no ?? ''),
+            'amount' => $this->money($payment->amount),
+            'status' => (int) $payment->status,
+            'paid_at' => $payment->paid_at?->format('Y-m-d H:i:s'),
+        ])?->values()?->toArray() ?? [];
+
+        return $data;
+    }
+
     private function transformOrder(Order $order): array
     {
         return [
@@ -381,6 +432,7 @@ class AdminFinanceQueryService
             ] : null,
             'product_id' => (int) ($order->product_id ?? 0),
             'product_name' => $this->resolveOrderProductName($order),
+            'product_full_path' => $this->resolveOrderProductPath($order),
             'product_type' => (string) ($order->product_type_snapshot ?? $order->product?->product_type ?? ''),
             'service' => $order->service ? [
                 'id' => (int) $order->service->id,
@@ -406,34 +458,57 @@ class AdminFinanceQueryService
         ];
     }
 
-    private function transformRechargeInvoice(Invoice $invoice): array
+    private function transformRechargePayment(Payment $payment): array
     {
-        $payment = $invoice->payments->sortByDesc('id')->first();
+        $invoice = $payment->invoice;
+        $order = $payment->order ?? $invoice?->order;
 
         return [
-            'id' => (int) $invoice->id,
-            'invoice_no' => (string) $invoice->invoice_no,
-            'user' => $invoice->user ? [
-                'id' => (int) $invoice->user->id,
-                'email' => (string) $invoice->user->email,
-                'nickname' => (string) ($invoice->user->nickname ?? ''),
-                'phone' => (string) ($invoice->user->phone ?? ''),
+            'id' => (int) $payment->id,
+            'payment_no' => (string) $payment->payment_no,
+            'gateway' => (string) $payment->gateway,
+            'gateway_label' => $this->paymentGatewayLabel((string) $payment->gateway),
+            'trade_no' => (string) ($payment->trade_no ?? ''),
+            'user' => $payment->user ? [
+                'id' => (int) $payment->user->id,
+                'email' => (string) $payment->user->email,
+                'nickname' => (string) ($payment->user->nickname ?? ''),
+                'phone' => (string) ($payment->user->phone ?? ''),
             ] : null,
-            'amount' => $this->money($invoice->amount),
-            'paid_amount' => $this->money($invoice->paid_amount),
-            'status' => (int) $invoice->status,
-            'status_label' => $this->invoiceStatusLabel((int) $invoice->status),
-            'payment' => $payment ? [
+            'invoice_id' => $invoice ? (int) $invoice->id : null,
+            'invoice_no' => $invoice ? (string) $invoice->invoice_no : '',
+            'invoice' => $invoice ? [
+                'id' => (int) $invoice->id,
+                'invoice_no' => (string) $invoice->invoice_no,
+                'type' => (string) $invoice->type,
+                'status' => (int) $invoice->status,
+                'status_label' => $this->invoiceStatusLabel((int) $invoice->status),
+                'amount' => $this->money($invoice->amount),
+                'paid_amount' => $this->money($invoice->paid_amount),
+                'paid_at' => $invoice->paid_at?->format('Y-m-d H:i:s'),
+            ] : null,
+            'order' => $order ? [
+                'id' => (int) $order->id,
+                'order_no' => (string) $order->order_no,
+                'type' => (string) $order->type,
+                'status' => (int) $order->status,
+            ] : null,
+            'amount' => $this->money($payment->amount),
+            'paid_amount' => (int) $payment->status === PaymentStatus::SUCCESS ? $this->money($payment->amount) : '0.00',
+            'status' => (int) $payment->status,
+            'status_label' => $this->paymentStatusLabel((int) $payment->status),
+            'payment' => [
                 'id' => (int) $payment->id,
                 'payment_no' => (string) $payment->payment_no,
                 'gateway' => (string) $payment->gateway,
+                'gateway_label' => $this->paymentGatewayLabel((string) $payment->gateway),
                 'trade_no' => (string) ($payment->trade_no ?? ''),
                 'amount' => $this->money($payment->amount),
                 'status' => (int) $payment->status,
                 'paid_at' => $payment->paid_at?->format('Y-m-d H:i:s'),
-            ] : null,
-            'paid_at' => $invoice->paid_at?->format('Y-m-d H:i:s'),
-            'created_at' => $invoice->created_at?->format('Y-m-d H:i:s'),
+            ],
+            'paid_at' => $payment->paid_at?->format('Y-m-d H:i:s'),
+            'created_at' => $payment->created_at?->format('Y-m-d H:i:s'),
         ];
     }
 
@@ -445,6 +520,34 @@ class AdminFinanceQueryService
         }
 
         return $this->resolveProductName($order->product, (int) ($order->product_id ?? 0));
+    }
+
+    private function resolveOrderProductPath(Order $order): string
+    {
+        $product = $order->product;
+        $productType = trim((string) ($order->product_type_snapshot ?? $product?->product_type ?? ''));
+        $category = $product instanceof Product && $product->relationLoaded('categoryMapping')
+            ? $product->categoryMapping
+            : null;
+        $parentCategory = $category && $category->relationLoaded('parent') ? $category->parent : null;
+
+        $segments = [
+            ProductType::labelOf($productType),
+            trim((string) ($parentCategory?->name ?? '')),
+            trim((string) ($category?->name ?? '')),
+            $this->resolveOrderProductName($order),
+        ];
+
+        $clean = [];
+        foreach ($segments as $segment) {
+            $segment = trim((string) $segment);
+            if ($segment === '' || $segment === '-' || in_array($segment, $clean, true)) {
+                continue;
+            }
+            $clean[] = $segment;
+        }
+
+        return $clean !== [] ? implode('/', $clean) : $this->resolveOrderProductName($order);
     }
 
     private function resolveProductName(?Product $product, int $productId): string
@@ -497,6 +600,25 @@ class AdminFinanceQueryService
             InvoiceStatus::OVERDUE => '已逾期',
             InvoiceStatus::REFUNDED => '已退款',
             default => (string) $status,
+        };
+    }
+
+    private function paymentStatusLabel(int $status): string
+    {
+        return match ($status) {
+            PaymentStatus::PENDING => '待支付',
+            PaymentStatus::SUCCESS => '已支付',
+            PaymentStatus::FAILED => '已失败',
+            PaymentStatus::REFUNDED => '已退款',
+            default => (string) $status,
+        };
+    }
+
+    private function paymentGatewayLabel(string $gateway): string
+    {
+        return match ($gateway) {
+            PaymentGatewayCode::ALIPAY => '支付宝',
+            default => $gateway !== '' ? $gateway : '-',
         };
     }
 

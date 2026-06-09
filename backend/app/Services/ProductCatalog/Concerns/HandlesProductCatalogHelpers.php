@@ -135,7 +135,9 @@ trait HandlesProductCatalogHelpers
         if ($monthly !== null && $monthly > 0) {
             $importPricingMonths = ['monthly' => 1, 'quarterly' => 3, 'semiannually' => 6, 'annually' => 12];
             foreach ($importPricingMonths as $cycle => $months) {
-                $normalized[$cycle] = number_format($monthly * $months, 2, '.', '');
+                if (! array_key_exists($cycle, $normalized)) {
+                    $normalized[$cycle] = number_format($monthly * $months, 2, '.', '');
+                }
             }
         }
 

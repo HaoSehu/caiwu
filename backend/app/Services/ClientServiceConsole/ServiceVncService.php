@@ -20,6 +20,8 @@ class ServiceVncService
 {
     private const VNC_TOKEN_TTL_SECONDS = 600;
 
+    private const VNC_RELAY_TOKEN_TTL_SECONDS = 120;
+
     public function __construct(
         private readonly OperationLogService $operationLogService,
         private readonly ServiceDetailService $detailService,
@@ -63,6 +65,7 @@ class ServiceVncService
 
         $message = trim((string) ($response['msg'] ?? '')) ?: '获取VNC链接成功';
         $vncUrl = $upstreamVncUrl;
+        $noVncCredentials = [];
 
         if ($novncBaseUrl !== '') {
             $vncParams = $this->extractVncParams($upstreamVncUrl);
@@ -78,12 +81,14 @@ class ServiceVncService
 
             if (! empty($vncParams)) {
                 $vncParams = $this->withCachedVncCredentials($service, $vncParams);
+                $noVncCredentials = $this->buildNoVncCredentialPayload($vncParams);
 
                 $token = bin2hex(random_bytes(24));
                 Cache::put('vnc_token:'.$token, array_merge($vncParams, [
                     'service_id' => $serviceId,
                     'allowed_origin' => $this->resolveAllowedVncOrigin($context),
                     'single_use' => ($context['actor_type'] ?? 'client') !== 'admin',
+                    'token_scope' => 'public',
                 ]), now()->addSeconds(self::VNC_TOKEN_TTL_SECONDS));
 
                 $viewerUrl = $this->resolveNoVncViewerUrl($novncBaseUrl);
@@ -117,11 +122,19 @@ class ServiceVncService
             'message' => $message,
         ], $context);
 
-        return [
+        $result = [
             'message' => $message,
             'url' => $vncUrl,
             'detail' => $this->transformService->transformDetail($service),
         ];
+
+        if ($noVncCredentials !== []) {
+            // 仅认证后的取链接接口返回给当前用户端页面，用于本地自动认证；
+            // 公开 token 换取接口仍不得返回 VNC 密码或完整上游地址。
+            $result['vnc_credentials'] = $noVncCredentials;
+        }
+
+        return $result;
     }
 
     public function previewVncToken(string $token): array
@@ -155,15 +168,28 @@ class ServiceVncService
 
     public function resolvePublicVncTokenPayload(string $token): array
     {
-        $params = $this->loadVncTokenParams($token, false);
+        $params = $this->consumeVncLaunchToken($token);
+        $relayToken = bin2hex(random_bytes(24));
+
+        Cache::put('vnc_token:'.$relayToken, array_merge($params, [
+            'token_scope' => 'relay',
+            'public_token_hash' => hash('sha256', $token),
+        ]), now()->addSeconds(self::VNC_RELAY_TOKEN_TTL_SECONDS));
+
+        $this->safeLog('info', '[VNC] 公开 token 已换取 relay token', [
+            'service_id' => (int) ($params['service_id'] ?? 0),
+            'token_hash' => hash('sha256', $token),
+            'relay_token_hash' => hash('sha256', $relayToken),
+            'has_password' => trim((string) ($params['password'] ?? '')) !== '',
+        ]);
 
         return [
-            'token' => $token,
+            'token' => $relayToken,
             'service_id' => (int) ($params['service_id'] ?? 0),
             'relay_path' => $this->resolveVncRelayPath(),
             'username' => (string) ($params['username'] ?? ''),
             'target' => (string) ($params['target'] ?? ''),
-            'password' => (string) ($params['password'] ?? ''),
+            'expires_in' => self::VNC_RELAY_TOKEN_TTL_SECONDS,
         ];
     }
 
@@ -189,6 +215,28 @@ class ServiceVncService
         return $vncParams;
     }
 
+    private function buildNoVncCredentialPayload(array $vncParams): array
+    {
+        $credentials = [];
+
+        $username = trim((string) ($vncParams['username'] ?? ''));
+        if ($username !== '') {
+            $credentials['username'] = $username;
+        }
+
+        $target = trim((string) ($vncParams['target'] ?? ''));
+        if ($target !== '') {
+            $credentials['target'] = $target;
+        }
+
+        $password = trim((string) ($vncParams['password'] ?? ''));
+        if ($password !== '') {
+            $credentials['password'] = $password;
+        }
+
+        return $credentials;
+    }
+
     private function safeLog(string $level, string $message, array $context = []): void
     {
         try {
@@ -202,17 +250,41 @@ class ServiceVncService
         $cacheKey = 'vnc_token:'.$token;
         $params = Cache::get($cacheKey);
 
+        if (! is_array($params) || empty($params)) {
+            throw new BusinessException('VNC 链接已过期或无效，请重新获取', 40400, 404);
+        }
+
         throw_if(! is_array($params) || empty($params), new BusinessException('VNC 链接已过期或无效，请重新获取', 40400, 404));
 
         if ($consumeSingleUse && (bool) ($params['single_use'] ?? true)) {
             $params = Cache::pull($cacheKey);
+            if (! is_array($params) || empty($params)) {
+                throw new BusinessException('VNC 链接已过期或无效，请重新获取', 40400, 404);
+            }
             throw_if(! is_array($params) || empty($params), new BusinessException('VNC 链接已过期或无效，请重新获取', 40400, 404));
         }
 
         return $params;
     }
 
-    // ── Private VNC URL parsing helpers ───────────────────────────────────
+    // VNC URL 解析辅助方法
+
+    private function consumeVncLaunchToken(string $token): array
+    {
+        $cacheKey = 'vnc_token:'.$token;
+        $params = Cache::get($cacheKey);
+
+        if (! is_array($params) || empty($params) || ($params['token_scope'] ?? 'public') !== 'public') {
+            throw new BusinessException('VNC 链接已过期或无效，请重新获取', 40400, 404);
+        }
+
+        $params = Cache::pull($cacheKey);
+        if (! is_array($params) || empty($params)) {
+            throw new BusinessException('VNC 链接已过期或无效，请重新获取', 40400, 404);
+        }
+
+        return $params;
+    }
 
     private function resolveVncRelayPath(): string
     {

@@ -17,10 +17,11 @@ use Tests\TestCase;
 
 class AdminLoginAsRedirectUrlTest extends TestCase
 {
-    public function test_issue_admin_login_as_code_uses_frontend_url_for_redirect(): void
+    public function test_issue_admin_login_as_code_uses_client_console_url_for_redirect(): void
     {
         config([
             'app.frontend_url' => 'https://www.sw7111.top',
+            'app.client_console_url' => 'https://console.sw7111.top',
             'app.admin_url' => 'https://admin.sw7111.top',
         ]);
 
@@ -30,14 +31,18 @@ class AdminLoginAsRedirectUrlTest extends TestCase
         $result = $this->makeAuthService($operationLogService)
             ->issueAdminLoginAsCode($this->makeClientUser());
 
-        $this->assertSame('https://www.sw7111.top/client/dashboard', $result['redirect_url']);
         $this->assertNotEmpty($result['login_code']);
+        $this->assertSame(
+            'https://console.sw7111.top/client/login-as?code='.$result['login_code'],
+            $result['redirect_url']
+        );
     }
 
-    public function test_issue_admin_login_as_code_rejects_missing_frontend_url(): void
+    public function test_issue_admin_login_as_code_rejects_missing_client_console_url(): void
     {
         config([
             'app.frontend_url' => '',
+            'app.client_console_url' => '',
             'app.admin_url' => 'https://admin.sw7111.top',
         ]);
 
@@ -45,16 +50,17 @@ class AdminLoginAsRedirectUrlTest extends TestCase
         $operationLogService->expects($this->never())->method('write');
 
         $this->expectException(BusinessException::class);
-        $this->expectExceptionMessage('FRONTEND_URL');
+        $this->expectExceptionMessage('CLIENT_CONSOLE_URL');
 
         $this->makeAuthService($operationLogService)
             ->issueAdminLoginAsCode($this->makeClientUser());
     }
 
-    public function test_issue_admin_login_as_code_rejects_admin_url_as_frontend_url(): void
+    public function test_issue_admin_login_as_code_rejects_admin_url_as_client_console_url(): void
     {
         config([
             'app.frontend_url' => 'https://admin.sw7111.top',
+            'app.client_console_url' => 'https://admin.sw7111.top',
             'app.admin_url' => 'https://admin.sw7111.top',
         ]);
 
@@ -62,7 +68,7 @@ class AdminLoginAsRedirectUrlTest extends TestCase
         $operationLogService->expects($this->never())->method('write');
 
         $this->expectException(BusinessException::class);
-        $this->expectExceptionMessage('FRONTEND_URL');
+        $this->expectExceptionMessage('CLIENT_CONSOLE_URL');
 
         $this->makeAuthService($operationLogService)
             ->issueAdminLoginAsCode($this->makeClientUser());

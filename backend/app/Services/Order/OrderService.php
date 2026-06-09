@@ -462,7 +462,7 @@ class OrderService
         }
 
         throw_if(
-            (int) $user->is_verified !== 1,
+            ! $user->hasCompletedVerification(),
             new BusinessException('该商品需要实名认证后才能购买，请先完成实名认证', 40301)
         );
 
@@ -753,7 +753,7 @@ class OrderService
 
     private function shouldCreateManualPaymentRecord(string $gateway): bool
     {
-        return in_array($gateway, ['alipay', 'wechat'], true);
+        return false;
     }
 
     private function sendManualPaymentEmail(Order $order, string $remark, string $paymentGateway, ?string $tradeNo = null): void

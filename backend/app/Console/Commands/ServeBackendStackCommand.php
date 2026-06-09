@@ -180,9 +180,10 @@ class ServeBackendStackCommand extends Command
                 $phpBinary,
                 $artisan,
                 'queue:work',
-                '--queue=provision,referral,default',
+                '--queue='.(string) config('queue.caiwu_worker_queues', 'provision,referral,notification,coupon,default'),
                 '--sleep=1',
-                '--tries=3',
+                '--tries='.(string) config('queue.caiwu_worker_tries', 3),
+                '--timeout='.(string) config('queue.caiwu_worker_timeout', 1200),
             ], base_path());
         }
 

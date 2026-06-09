@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace App\Services\Sms\Drivers;
 
+use App\Exceptions\BusinessException;
 use App\Models\Setting;
 use App\Services\Sms\Contracts\SmsDriver;
+use App\Services\Sms\Data\SmsSendRequest;
+use App\Services\Sms\Data\SmsSendResult;
 use Illuminate\Support\Facades\Log;
 
 class AliyunSmsDriver implements SmsDriver
@@ -20,11 +23,11 @@ class AliyunSmsDriver implements SmsDriver
         return '阿里云短信';
     }
 
-    public function sendVerifyCode(string $phone, string $code, array $options = []): array
+    public function sendVerifyCode(SmsSendRequest $request): SmsSendResult
     {
-        $signName = $options['sign_name'] ?? (string) Setting::getValue('notification', 'sms_sign_name', '速通互联验证码');
-        $templateCode = $options['template_code'] ?? (string) Setting::getValue('notification', 'sms_template_code', '100001');
-        $templateParams = ['code' => $code, 'min' => '5'];
+        $signName = $request->option('sign_name', (string) Setting::getValue('notification', 'sms_sign_name', '速通互联验证码'));
+        $templateCode = $request->option('template_code', (string) Setting::getValue('notification', 'sms_template_code', '100001'));
+        $templateParams = ['code' => $request->code, 'min' => '5'];
 
         $config = [
             'AccessKeyId' => (string) Setting::getValue('notification', 'sms_access_key', ''),
@@ -32,14 +35,14 @@ class AliyunSmsDriver implements SmsDriver
         ];
 
         if ($config['AccessKeyId'] === '' || $config['AccessKeySecret'] === '') {
-            throw new \RuntimeException('短信接口配置不完整');
+            throw new BusinessException('短信接口配置不完整');
         }
 
         $params = [
             'Action' => 'SendSmsVerifyCode',
             'SchemeName' => '默认方案',
             'CountryCode' => '86',
-            'PhoneNumber' => trim($phone),
+            'PhoneNumber' => trim($request->phone),
             'SignName' => $signName !== '' ? $signName : '速通互联验证码',
             'TemplateCode' => $templateCode !== '' ? $templateCode : '100001',
             'TemplateParam' => json_encode($templateParams, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
@@ -52,19 +55,25 @@ class AliyunSmsDriver implements SmsDriver
         $result = $this->request($apiEndpoint, $params, $config);
 
         if (! is_array($result)) {
-            throw new \RuntimeException('短信接口请求失败');
+            throw new BusinessException('短信接口请求失败，请稍后重试');
         }
 
         if (($result['Code'] ?? '') !== 'OK' || ($result['Success'] ?? false) !== true) {
-            throw new \RuntimeException((string) ($result['Message'] ?? '短信发送失败'));
+            Log::warning('[短信] 阿里云短信发送失败', [
+                'code' => (string) ($result['Code'] ?? ''),
+                'message' => $this->resolveFailureMessage($result['Message'] ?? ''),
+            ]);
+
+            throw new BusinessException($this->resolveFailureMessage($result['Message'] ?? ''));
         }
 
-        return [
-            'status' => 'success',
-            'request_id' => $result['RequestId'] ?? null,
-            'template_code' => $templateCode,
-            'template_params' => $templateParams,
-        ];
+        return new SmsSendResult(
+            status: 'success',
+            requestId: isset($result['RequestId']) ? (string) $result['RequestId'] : null,
+            templateCode: (string) $templateCode,
+            templateParams: $templateParams,
+            raw: $result,
+        );
     }
 
     private function request(string $url, array $params, array $config, string $method = 'POST'): array|false
@@ -154,5 +163,19 @@ class AliyunSmsDriver implements SmsDriver
         }
 
         return mb_substr($phone, 0, 3).'****'.mb_substr($phone, -4);
+    }
+
+    private function resolveFailureMessage(mixed $message): string
+    {
+        $text = trim((string) $message);
+        if ($text === '') {
+            return '短信发送失败，请稍后重试';
+        }
+
+        if (preg_match('/[a-z]{3,}|error|failed|exception|timeout|denied|invalid/i', $text) === 1) {
+            return '短信发送失败，请稍后重试';
+        }
+
+        return $text;
     }
 }

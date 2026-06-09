@@ -33,7 +33,14 @@ class ProviderResolverTest extends TestCase
         $this->assertSame(ProviderKey::MOFANG_FINANCE_API, $resolved->rawKey());
         $this->assertSame(ProviderKey::MOFANG_FINANCE_API, $resolved->key());
         $this->assertSame('魔方财务接口', $resolved->label());
+        $this->assertContains(ProvidesProvisioning::class, $resolved->capabilities());
+        $this->assertContains(ProvidesConsoleCatalog::class, $resolved->capabilities());
         $this->assertTrue($resolved->supports(ProvidesProvisioning::class));
+        $this->assertSame([
+            'key' => ProviderKey::MOFANG_FINANCE_API,
+            'label' => '魔方财务接口',
+            'capabilities' => $resolved->capabilities(),
+        ], $resolved->descriptor()->toArray());
     }
 
     public function test_mofang_capabilities_resolve_to_mofang_adapter_instead_of_shared_transport(): void

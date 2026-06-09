@@ -38,6 +38,12 @@ PRESERVE_TABLES = {
     "migrations",
 }
 
+ALLOW_MISSING_SOURCE_TABLES = {
+    "activity_logs",
+    "gateway_logs",
+    "schedule_run_logs",
+}
+
 FILTER_CODEX_SETTINGS_SQL = "`group_key` NOT REGEXP '^codex_(runtime|service)_'"
 
 CORE_SCHEMA_COLUMNS = {
@@ -491,6 +497,9 @@ def print_plan(
             log(f"  - {table}: 清空并重置自增，不导入旧数据")
             continue
         if table not in staging_columns:
+            if table in ALLOW_MISSING_SOURCE_TABLES:
+                log(f"  - {table}: 旧库缺少同名表，保留空表")
+                continue
             errors.append(f"{table}: 旧库缺少同名表")
             log(f"  - {table}: 旧库缺少同名表，无法迁移")
             continue
@@ -566,6 +575,54 @@ def rewrite_dump_line_for_prefix(line: str, table_names: set[str], prefix: str) 
     return rewritten
 
 
+def strip_foreign_key_constraints(create_table_lines: list[str]) -> list[str]:
+    stripped_lines = [
+        line
+        for line in create_table_lines
+        if not (
+            line.lstrip().startswith("CONSTRAINT ")
+            and " FOREIGN KEY " in line.upper()
+        )
+    ]
+
+    for index in range(len(stripped_lines) - 1, -1, -1):
+        if stripped_lines[index].lstrip().startswith(") ENGINE="):
+            continue
+
+        if stripped_lines[index].rstrip().endswith(","):
+            stripped_lines[index] = stripped_lines[index].rstrip().rstrip(",") + "\n"
+        break
+
+    return stripped_lines
+
+
+def rewrite_dump_lines_for_prefix(
+    dump_file: Any,
+    table_names: set[str],
+    prefix: str,
+) -> Any:
+    create_table_buffer: list[str] = []
+
+    for line in dump_file:
+        if create_table_buffer:
+            create_table_buffer.append(line)
+            if line.lstrip().startswith(") ENGINE="):
+                for buffered_line in strip_foreign_key_constraints(create_table_buffer):
+                    yield rewrite_dump_line_for_prefix(buffered_line, table_names, prefix)
+                create_table_buffer = []
+            continue
+
+        if line.startswith("CREATE TABLE "):
+            create_table_buffer.append(line)
+            continue
+
+        yield rewrite_dump_line_for_prefix(line, table_names, prefix)
+
+    if create_table_buffer:
+        for buffered_line in strip_foreign_key_constraints(create_table_buffer):
+            yield rewrite_dump_line_for_prefix(buffered_line, table_names, prefix)
+
+
 def import_dump_to_prefixed_staging(
     config: DbConfig,
     target_db: str,
@@ -590,13 +647,13 @@ def import_dump_to_prefixed_staging(
 
     try:
         with dump_path.open("r", encoding="utf-8", errors="replace") as dump_file:
-            for line in dump_file:
-                process.stdin.write(rewrite_dump_line_for_prefix(line, table_names, prefix))
+            for line in rewrite_dump_lines_for_prefix(dump_file, table_names, prefix):
+                process.stdin.write(line)
         process.stdin.close()
         stdout = process.stdout.read() if process.stdout is not None else ""
         stderr = process.stderr.read() if process.stderr is not None else ""
         returncode = process.wait()
-    except BrokenPipeError:
+    except (BrokenPipeError, OSError):
         stdout = process.stdout.read() if process.stdout is not None else ""
         stderr = process.stderr.read() if process.stderr is not None else ""
         returncode = process.wait()
@@ -617,15 +674,24 @@ def clear_target_tables(
         if table in PRESERVE_TABLES:
             continue
 
-        statements = [
-            "SET FOREIGN_KEY_CHECKS=0",
-            f"DELETE FROM {quote_identifier(table)}",
-        ]
-        if table in auto_increment_tables:
-            statements.append(f"ALTER TABLE {quote_identifier(table)} AUTO_INCREMENT = 1")
-        statements.append("SET FOREIGN_KEY_CHECKS=1")
+        clear_target_table(config, target_db, table, auto_increment_tables)
 
-        run_sql(config, "; ".join(statements) + ";", target_db)
+
+def clear_target_table(
+    config: DbConfig,
+    target_db: str,
+    table: str,
+    auto_increment_tables: set[str],
+) -> None:
+    statements = [
+        "SET FOREIGN_KEY_CHECKS=0",
+        f"DELETE FROM {quote_identifier(table)}",
+    ]
+    if table in auto_increment_tables:
+        statements.append(f"ALTER TABLE {quote_identifier(table)} AUTO_INCREMENT = 1")
+    statements.append("SET FOREIGN_KEY_CHECKS=1")
+
+    run_sql(config, "; ".join(statements) + ";", target_db)
 
 
 def count_rows(config: DbConfig, database: str, table: str, where_sql: str = "") -> int:
@@ -649,6 +715,7 @@ def migrate_table(
     table: str,
     target_columns: dict[str, ColumnInfo],
     staging_columns: dict[str, ColumnInfo],
+    auto_increment_tables: set[str],
 ) -> tuple[int, int]:
     insert_columns, select_expressions, omitted_required = build_table_plan(
         table,
@@ -660,6 +727,7 @@ def migrate_table(
 
     where_sql = FILTER_CODEX_SETTINGS_SQL if table == "settings" else ""
     source_count = count_staging_rows(config, staging, table, where_sql)
+    clear_target_table(config, target_db, table, auto_increment_tables)
     if not insert_columns:
         return source_count, 0
 
@@ -686,6 +754,7 @@ def migrate_all_tables(
     tables: list[str],
     target_columns: dict[str, dict[str, ColumnInfo]],
     staging_columns: dict[str, dict[str, ColumnInfo]],
+    auto_increment_tables: set[str],
 ) -> None:
     log("开始复制旧数据")
     for table in tables:
@@ -693,9 +762,14 @@ def migrate_all_tables(
             log(f"  - {table}: 保留目标库现有数据")
             continue
         if table in SKIP_IMPORT_TABLES:
+            clear_target_table(config, target_db, table, auto_increment_tables)
             log(f"  - {table}: 不导入旧数据，保持空表")
             continue
         if table not in staging_columns:
+            if table in ALLOW_MISSING_SOURCE_TABLES:
+                clear_target_table(config, target_db, table, auto_increment_tables)
+                log(f"  - {table}: 旧库缺少同名表，保持空表")
+                continue
             fail(f"旧库缺少目标表：{table}")
 
         source_count, target_count = migrate_table(
@@ -705,6 +779,7 @@ def migrate_all_tables(
             table,
             target_columns[table],
             staging_columns[table],
+            auto_increment_tables,
         )
         log(f"  - {table}: 旧库 {source_count} 行，目标库 {target_count} 行")
 
@@ -869,6 +944,7 @@ def run_migration(config: DbConfig, dump_path: Path, staging_db: str, keep_stagi
         tables,
         target_columns,
         staging_columns,
+        auto_increment_tables,
     )
     run_integrity_checks(config, config.database, target_columns)
 

@@ -8,7 +8,7 @@ use App\Models\ContentArticle;
 use App\Services\Content\ContentArticleService;
 use App\Services\Content\HomeHeroService;
 use App\Support\ContentPublishedCacheVersion;
-use App\Support\SiteSeoConfig;
+use App\Support\SiteConfigPayload;
 use App\Support\UploadUrl;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -132,6 +132,6 @@ class SiteHomeService
      */
     private function resolveSiteConfig(): array
     {
-        return SiteSeoConfig::payload();
+        return SiteConfigPayload::payload();
     }
 }

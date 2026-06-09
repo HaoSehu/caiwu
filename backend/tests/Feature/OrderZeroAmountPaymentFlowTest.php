@@ -111,7 +111,7 @@ class OrderZeroAmountPaymentFlowTest extends TestCase
 
         $service = new PaymentService(
             $this->createMock(ProvisionService::class),
-            $this->createMock(AlipayFaceToFaceService::class),
+            $this->makePaymentGatewayManagerForTest($this->createMock(AlipayFaceToFaceService::class)),
             $this->createMock(ServiceRenewService::class),
             $this->createMock(ReferralService::class),
             $this->createMock(PaidOrderBusinessFlowDispatcher::class),

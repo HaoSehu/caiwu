@@ -14,6 +14,7 @@ use App\Models\Supplier;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\System\SettingService;
 use App\Services\Upstream\Contracts\ProvidesConsoleRuntime;
+use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderResolver;
 use App\Support\ServiceHostname;
 use Carbon\Carbon;
@@ -309,10 +310,10 @@ class ServiceTransformService
         }
 
         if (str_contains($lowerMessage, '401') || str_contains($lowerMessage, 'jwt') || str_contains($lowerMessage, 'auth')) {
-            return '上游接口认证失败，请联系管理员检查供应商配置';
+            return '上游认证状态异常，请联系管理员检查接口配置';
         }
 
-        return '上游状态暂不可用，请稍后重试';
+        return '上游状态同步失败，请稍后重试';
     }
 
     // ── Operation log transform ────────────────────────────────────────────
@@ -551,8 +552,7 @@ class ServiceTransformService
             return $localConfigOptions;
         }
 
-        $cacheKey = $this->buildProductConfigOptionsCacheKey($supplier, $upstreamProductId);
-        $cached = Cache::get($cacheKey);
+        $cached = $this->getCachedProductConfigOptions($supplier, $upstreamProductId);
         if (is_array($cached) && $cached !== []) {
             return $cached;
         }
@@ -865,7 +865,37 @@ class ServiceTransformService
 
     public function buildProductConfigOptionsCacheKey(Supplier $supplier, int $productId): string
     {
-        return "upstream:hosting_panel_api:product_config_options:{$supplier->id}:{$productId}";
+        $providerKey = trim((string) ($supplier->interface_type ?? '')) ?: ProviderKey::HOSTING_PANEL_API;
+
+        return "upstream:{$providerKey}:product_config_options:{$supplier->id}:{$productId}";
+    }
+
+    private function getCachedProductConfigOptions(Supplier $supplier, int $productId): array
+    {
+        $cacheKey = $this->buildProductConfigOptionsCacheKey($supplier, $productId);
+        $legacyCacheKey = $this->buildLegacyProductConfigOptionsCacheKey($supplier, $productId);
+        $cacheKeys = array_values(array_unique([$cacheKey, $legacyCacheKey]));
+        $cachedValues = Cache::many($cacheKeys);
+
+        foreach ($cacheKeys as $lookupKey) {
+            $cached = $cachedValues[$lookupKey] ?? null;
+            if (! is_array($cached) || $cached === []) {
+                continue;
+            }
+
+            if ($lookupKey !== $cacheKey) {
+                Cache::put($cacheKey, $cached, now()->addMinutes(30));
+            }
+
+            return $cached;
+        }
+
+        return [];
+    }
+
+    private function buildLegacyProductConfigOptionsCacheKey(Supplier $supplier, int $productId): string
+    {
+        return 'upstream:'.ProviderKey::HOSTING_PANEL_API.":product_config_options:{$supplier->id}:{$productId}";
     }
 
     // ── Private spec helpers ───────────────────────────────────────────────

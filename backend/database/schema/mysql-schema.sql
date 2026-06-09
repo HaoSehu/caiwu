@@ -1020,6 +1020,75 @@ CREATE TABLE `verification_histories` (
   KEY `verification_histories_user_id_id_idx` (`user_id`,`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `activity_logs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `activity_logs` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `actor_type` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'system' COMMENT '操作者类型: admin, client, system, sub_account',
+  `actor_id` bigint unsigned DEFAULT NULL COMMENT '操作者ID',
+  `actor_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '操作者名称快照',
+  `module` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '模块: invoice, order, service, user, product, ticket, coupon, system',
+  `action` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '动作描述: create, pay, refund, suspend, terminate 等',
+  `description` text COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '可读描述',
+  `subject_type` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '关联对象类型: invoice, service, order, user, ticket',
+  `subject_id` bigint unsigned DEFAULT NULL COMMENT '关联对象ID',
+  `context` json DEFAULT NULL COMMENT '附加结构化上下文',
+  `ip_address` varchar(45) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `activity_logs_module_action_index` (`module`,`action`),
+  KEY `activity_logs_subject_type_subject_id_index` (`subject_type`,`subject_id`),
+  KEY `activity_logs_created_at_index` (`created_at`),
+  KEY `activity_logs_actor_id_index` (`actor_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `gateway_logs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `gateway_logs` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `gateway` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '网关标识: alipay_f2f, wechat_native 等',
+  `action` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '操作: precreate, notify, query, refund',
+  `out_trade_no` varchar(128) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '商户订单号',
+  `trade_no` varchar(128) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '第三方交易号',
+  `invoice_id` bigint unsigned DEFAULT NULL COMMENT '关联账单ID',
+  `request_data` json DEFAULT NULL COMMENT '请求数据(脱敏后)',
+  `response_data` json DEFAULT NULL COMMENT '响应数据',
+  `result_status` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'unknown' COMMENT '结果: success, failed, pending, unknown',
+  `error_msg` text COLLATE utf8mb4_unicode_ci COMMENT '错误信息',
+  `ip_address` varchar(45) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `gateway_logs_gateway_action_index` (`gateway`,`action`),
+  KEY `gateway_logs_created_at_index` (`created_at`),
+  KEY `gateway_logs_out_trade_no_index` (`out_trade_no`),
+  KEY `gateway_logs_invoice_id_index` (`invoice_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `schedule_run_logs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `schedule_run_logs` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `task_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '任务名称',
+  `status` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'success' COMMENT '执行状态: success, failed, skipped',
+  `duration_ms` int unsigned NOT NULL DEFAULT '0' COMMENT '执行耗时(毫秒)',
+  `summary` json DEFAULT NULL COMMENT '执行摘要数据',
+  `error_msg` text COLLATE utf8mb4_unicode_ci COMMENT '错误信息',
+  `started_at` timestamp NULL DEFAULT NULL COMMENT '开始时间',
+  `finished_at` timestamp NULL DEFAULT NULL COMMENT '结束时间',
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `schedule_run_logs_task_name_index` (`task_name`),
+  KEY `schedule_run_logs_status_index` (`status`),
+  KEY `schedule_run_logs_created_at_index` (`created_at`),
+  KEY `schedule_run_logs_task_name_created_at_index` (`task_name`,`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
@@ -1121,3 +1190,6 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (91,'2026_05_10_000
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (92,'2026_05_12_000001_add_remark_to_products',34);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (93,'2026_05_15_210000_normalize_core_relation_columns',35);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (94,'2026_05_15_210100_enforce_database_engineering_foreign_keys',35);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (95,'2026_06_07_000001_create_gateway_logs_table',36);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (96,'2026_06_07_000002_create_activity_logs_table',36);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (97,'2026_06_07_000003_create_schedule_run_logs_table',36);

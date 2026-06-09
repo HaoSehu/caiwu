@@ -251,6 +251,16 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
         $invoice->service_id = (int) $service->id;
         $invoice->save();
 
+        Payment::query()->create([
+            'payment_no' => 'CLISHOWPAY'.strtoupper($suffix),
+            'user_id' => (int) $user->id,
+            'invoice_id' => (int) $invoice->id,
+            'gateway' => 'alipay',
+            'trade_no' => 'TRADE-SHOULD-NOT-LEAK-'.$suffix,
+            'amount' => '66.00',
+            'status' => PaymentStatus::PENDING,
+        ]);
+
         $this->mirrorServiceInstanceToIdc($service, $suffix);
 
         Sanctum::actingAs($user);
@@ -260,7 +270,9 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
             ->assertJsonPath('data.product.id', (int) $product->id)
             ->assertJsonPath('data.product.config_options.0.field', 'cpu')
             ->assertJsonPath('data.service.id', (int) $service->id)
-            ->assertJsonPath('data.product_display_name', '客户端云主机 2核4G');
+            ->assertJsonPath('data.product_display_name', '客户端云主机 2核4G')
+            ->assertJsonMissingPath('data.raw_status')
+            ->assertJsonMissingPath('data.payments.0.trade_no');
     }
 
     public function test_client_invoice_list_filters_refunded_invoice_without_order_binding(): void

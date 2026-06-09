@@ -23,4 +23,9 @@ class OrderController extends Controller
             $this->financeQueryService->paginateOrders($filters, $perPage)
         );
     }
+
+    public function show(int $id)
+    {
+        return $this->success($this->financeQueryService->getOrderDetail($id));
+    }
 }

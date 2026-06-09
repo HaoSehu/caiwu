@@ -58,6 +58,16 @@ class AdminPermissions
 
     public const CONTENT_MANAGE = 'content.manage';
 
+    public const STAFF_LIST = 'staff.list';
+
+    public const STAFF_MANAGE = 'staff.manage';
+
+    public const ROLE_LIST = 'role.list';
+
+    public const ROLE_MANAGE = 'role.manage';
+
+    public const PERMISSION_LIST = 'permission.list';
+
     /**
      * @return array<string, string[]>
      */
@@ -130,6 +140,8 @@ class AdminPermissions
             self::TICKET_MANAGE => [self::TICKET_LIST, self::TICKET_REPLY],
             self::PRODUCT_MANAGE => [self::PRODUCT_LIST],
             self::CONTENT_MANAGE => [self::CONTENT_LIST],
+            self::STAFF_MANAGE => [self::STAFF_LIST],
+            self::ROLE_MANAGE => [self::ROLE_LIST, self::PERMISSION_LIST],
             default => [],
         };
     }

@@ -471,4 +471,5 @@ class AdminCatalogRegressionTest extends TestCase
         $this->assertArrayNotHasKey('description', $response->json('data'));
         $this->assertArrayHasKey('remark', $response->json('data'));
     }
+
 }

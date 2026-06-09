@@ -11,6 +11,7 @@ use App\Integrations\Mofang\Drivers\MofangFinanceDriver;
 use App\Services\Auth\LegacyPasswordVerifier;
 use App\Services\Upstream\Contracts\ProvidesConsoleCatalog;
 use App\Services\Upstream\Contracts\UpstreamBillingRestoreProfile;
+use App\Services\Upstream\Data\UpstreamProviderDescriptor;
 use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderRegistry;
 use Tests\TestCase;
@@ -40,6 +41,17 @@ class MofangServiceProviderTest extends TestCase
             'value' => ProviderKey::MOFANG_FINANCE_API,
             'label' => '魔方财务接口',
         ], $registry->options());
+
+        $descriptor = collect($registry->descriptors())
+            ->first(fn (UpstreamProviderDescriptor $item): bool => $item->key === ProviderKey::MOFANG_FINANCE_API);
+
+        $this->assertInstanceOf(UpstreamProviderDescriptor::class, $descriptor);
+        $this->assertSame([
+            'key' => ProviderKey::MOFANG_FINANCE_API,
+            'label' => '魔方财务接口',
+            'capabilities' => $descriptor->capabilities,
+        ], $descriptor->toArray());
+        $this->assertContains(ProvidesConsoleCatalog::class, $descriptor->capabilities);
     }
 
     public function test_it_registers_mofang_legacy_password_verifier_in_chain(): void

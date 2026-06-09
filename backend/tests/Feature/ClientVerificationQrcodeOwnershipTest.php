@@ -28,7 +28,6 @@ class ClientVerificationQrcodeOwnershipTest extends TestCase
 
                 return [
                     'url' => 'https://realname.example.com/certify',
-                    'proxy_url' => 'https://www.example.com/api/client/verification/scan?certify_id='.$certifyId,
                 ];
             }
         };

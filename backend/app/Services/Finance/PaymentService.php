@@ -7,6 +7,7 @@ namespace App\Services\Finance;
 use App\Constants\FinanceLedgerEventType;
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
+use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Exceptions\BusinessException;
 use App\Models\BalanceLog;
@@ -16,9 +17,12 @@ use App\Models\Payment;
 use App\Models\Product;
 use App\Models\User;
 use App\Models\UserAccount;
+use App\Contracts\Integrations\Payments\PaymentGatewayInterface;
 use App\Services\ClientServiceConsole\ServiceTrafficPackageService;
+use App\Services\Integrations\Payments\Data\PaymentPrecreateRequest;
+use App\Services\Integrations\Payments\Data\PaymentRefundRequest;
+use App\Services\Integrations\Payments\PaymentGatewayManager;
 use App\Services\Order\PaidOrderBusinessFlowDispatcher;
-use App\Services\PaymentGateway\AlipayFaceToFaceService;
 use App\Services\Provisioning\ProvisionService;
 use App\Services\Provisioning\ServiceRenewService;
 use App\Services\Referral\ReferralService;
@@ -32,7 +36,7 @@ class PaymentService
 {
     public function __construct(
         private ProvisionService $provisionService,
-        private AlipayFaceToFaceService $alipayService,
+        private PaymentGatewayManager $paymentGatewayManager,
         private ServiceRenewService $serviceRenewService,
         private ReferralService $referralService,
         private PaidOrderBusinessFlowDispatcher $paidOrderBusinessFlowDispatcher,
@@ -224,7 +228,7 @@ class PaymentService
         $this->assertVerifiedUser($user);
 
         throw_if(
-            ! $this->alipayService->isEnabled(),
+            ! $this->alipayGateway()->isEnabled(),
             new BusinessException('支付宝支付未启用')
         );
         throw_if($amount < 1, new BusinessException('充值金额不能小于 1 元'));
@@ -238,7 +242,7 @@ class PaymentService
                 $payment = Payment::query()
                     ->where('user_id', $user->id)
                     ->whereNull('invoice_id')
-                    ->where('gateway', 'alipay')
+                    ->where('gateway', PaymentGatewayCode::ALIPAY)
                     ->where('status', PaymentStatus::PENDING)
                     ->where('amount', $normalizedAmount)
                     ->where('created_at', '>=', now()->subMinutes(15))
@@ -254,7 +258,7 @@ class PaymentService
                     'payment_no' => Payment::generatePaymentNo(),
                     'user_id' => $user->id,
                     'invoice_id' => null,
-                    'gateway' => 'alipay',
+                    'gateway' => PaymentGatewayCode::ALIPAY,
                     'amount' => $normalizedAmount,
                     'status' => PaymentStatus::PENDING,
                 ]);
@@ -262,7 +266,7 @@ class PaymentService
         }, '充值请求处理中，请勿重复提交');
 
         $subject = config('app.name', 'IDC').' - 账户充值 ¥'.number_format($normalizedAmount, 2, '.', '');
-        $result = $this->alipayService->precreate($payment->payment_no, $normalizedAmount, $subject);
+        $result = $this->precreateAlipayPayment($payment->payment_no, $normalizedAmount, $subject);
 
         $payment->forceFill([
             'callback_raw' => array_merge((array) ($payment->callback_raw ?? []), [
@@ -281,7 +285,7 @@ class PaymentService
     private function assertVerifiedUser(User $user): void
     {
         throw_if(
-            (int) $user->is_verified !== 1,
+            ! $user->hasCompletedVerification(),
             new BusinessException('请先完成实名认证后再继续操作', 40301)
         );
     }
@@ -297,7 +301,7 @@ class PaymentService
             return ['paid' => true, 'trade_no' => $payment->trade_no];
         }
 
-        $result = $this->alipayService->query($payment->payment_no);
+        $result = $this->queryAlipayPayment($payment->payment_no);
 
         if (in_array($result['trade_status'], ['TRADE_SUCCESS', 'TRADE_FINISHED'])) {
             $this->completeRechargePayment($payment, $result['trade_no'], $result['raw']);
@@ -361,7 +365,7 @@ class PaymentService
     public function payByAlipay(Invoice $invoice, User $user, array $context = []): array
     {
         throw_if(
-            ! $this->alipayService->isEnabled(),
+            ! $this->alipayGateway()->isEnabled(),
             new BusinessException('支付宝支付未启用')
         );
 
@@ -385,7 +389,7 @@ class PaymentService
 
                 $payment = Payment::query()
                     ->where('invoice_id', $lockedInvoice->id)
-                    ->where('gateway', 'alipay')
+                    ->where('gateway', PaymentGatewayCode::ALIPAY)
                     ->where('status', PaymentStatus::PENDING)
                     ->latest('id')
                     ->first();
@@ -396,7 +400,7 @@ class PaymentService
                         'user_id' => $user->id,
                         'order_id' => (int) ($lockedInvoice->order?->id ?? 0) ?: null,
                         'invoice_id' => $lockedInvoice->id,
-                        'gateway' => 'alipay',
+                        'gateway' => PaymentGatewayCode::ALIPAY,
                         'amount' => $amount,
                         'status' => PaymentStatus::PENDING,
                         'callback_raw' => [
@@ -420,7 +424,7 @@ class PaymentService
         $payment = $payload['payment'];
 
         $subject = config('app.name', 'IDC').' - 账单 '.$lockedInvoice->invoice_no;
-        $result = $this->alipayService->precreate($payment->payment_no, (float) $payment->amount, $subject);
+        $result = $this->precreateAlipayPayment($payment->payment_no, (float) $payment->amount, $subject);
 
         return [
             'payment_no' => $payment->payment_no,
@@ -435,7 +439,7 @@ class PaymentService
     public function payByBalanceAndAlipay(Invoice $invoice, User $user, float $balanceAmount, array $context = []): array
     {
         throw_if(
-            ! $this->alipayService->isEnabled(),
+            ! $this->alipayGateway()->isEnabled(),
             new BusinessException('支付宝支付未启用')
         );
 
@@ -497,7 +501,7 @@ class PaymentService
         $alipayPayment = DB::transaction(function () use ($lockedInvoice, $user, $remainingAmount, $traceId, $normalizedBalanceAmount) {
             $existingPayment = Payment::query()
                 ->where('invoice_id', $lockedInvoice->id)
-                ->where('gateway', 'alipay')
+                ->where('gateway', PaymentGatewayCode::ALIPAY)
                 ->where('status', PaymentStatus::PENDING)
                 ->where('amount', $remainingAmount)
                 ->latest('id')
@@ -512,7 +516,7 @@ class PaymentService
                 'user_id' => $user->id,
                 'order_id' => (int) ($lockedInvoice->order?->id ?? 0) ?: null,
                 'invoice_id' => $lockedInvoice->id,
-                'gateway' => 'alipay',
+                'gateway' => PaymentGatewayCode::ALIPAY,
                 'amount' => $remainingAmount,
                 'status' => PaymentStatus::PENDING,
                 'callback_raw' => [
@@ -529,7 +533,7 @@ class PaymentService
 
         $subject = config('app.name', 'IDC').' - 账单 '.$lockedInvoice->invoice_no;
         try {
-            $result = $this->alipayService->precreate($alipayPayment->payment_no, $remainingAmount, $subject);
+            $result = $this->precreateAlipayPayment($alipayPayment->payment_no, $remainingAmount, $subject);
         } catch (\Throwable $exception) {
             $this->restoreReservedMixBalance($alipayPayment, [
                 'trace_id' => $traceId,
@@ -553,7 +557,7 @@ class PaymentService
     public function payOrderByAlipay(Order $order, User $user, array $context = []): array
     {
         throw_if(
-            ! $this->alipayService->isEnabled(),
+            ! $this->alipayGateway()->isEnabled(),
             new BusinessException('支付宝支付未启用')
         );
 
@@ -577,7 +581,7 @@ class PaymentService
 
                 $payment = Payment::query()
                     ->where('order_id', $lockedOrder->id)
-                    ->where('gateway', 'alipay')
+                    ->where('gateway', PaymentGatewayCode::ALIPAY)
                     ->where('status', PaymentStatus::PENDING)
                     ->latest('id')
                     ->first();
@@ -588,7 +592,7 @@ class PaymentService
                         'user_id' => $user->id,
                         'order_id' => (int) $lockedOrder->id,
                         'invoice_id' => (int) ($lockedOrder->invoice?->id ?? 0) ?: null,
-                        'gateway' => 'alipay',
+                        'gateway' => PaymentGatewayCode::ALIPAY,
                         'amount' => $amount,
                         'status' => PaymentStatus::PENDING,
                         'callback_raw' => [
@@ -612,7 +616,7 @@ class PaymentService
         $payment = $payload['payment'];
 
         $subject = config('app.name', 'IDC').' - 订单 '.$lockedOrder->order_no;
-        $result = $this->alipayService->precreate($payment->payment_no, (float) $payment->amount, $subject);
+        $result = $this->precreateAlipayPayment($payment->payment_no, (float) $payment->amount, $subject);
 
         return [
             'payment_no' => $payment->payment_no,
@@ -626,7 +630,7 @@ class PaymentService
      */
     public function handleAlipayNotify(array $params): bool
     {
-        if (! $this->alipayService->verifyNotify($params)) {
+        if (! $this->alipayGateway()->verifyNotify($params)) {
             Log::warning('[支付宝回调] 签名验证失败', [
                 'payment_no' => (string) ($params['out_trade_no'] ?? ''),
                 'trade_no' => (string) ($params['trade_no'] ?? ''),
@@ -654,7 +658,7 @@ class PaymentService
             return false;
         }
 
-        if (! $this->alipayService->matchesAppId($params['app_id'] ?? '')) {
+        if (! $this->alipayGateway()->matchesMerchantId($params['app_id'] ?? '')) {
             Log::warning('[支付宝回调] app_id 不匹配', [
                 'payment_no' => $paymentNo,
                 'app_id' => (string) ($params['app_id'] ?? ''),
@@ -849,7 +853,7 @@ class PaymentService
             return ['paid' => true, 'trade_no' => $payment->trade_no];
         }
 
-        $result = $this->alipayService->query($payment->payment_no);
+        $result = $this->queryAlipayPayment($payment->payment_no);
 
         if (in_array($result['trade_status'], ['TRADE_SUCCESS', 'TRADE_FINISHED'])) {
             // 主动查询确认已支付，直接走入账流程（不经过签名验证）
@@ -1030,7 +1034,7 @@ class PaymentService
         $result = match ($refundMethod) {
             'balance' => $this->refundOrderToBalance($order, $payload, $context, 'balance', '退回余额'),
             'original' => match ($paymentGateway) {
-                'alipay' => $this->refundOrderByAlipay($order, $payload, $context),
+                PaymentGatewayCode::ALIPAY => $this->refundOrderByAlipay($order, $payload, $context),
                 'balance' => $this->refundOrderToBalance($order, $payload, $context, 'original', '原路退款'),
                 default => throw new BusinessException('当前支付方式不支持原路退款'),
             },
@@ -1086,7 +1090,7 @@ class PaymentService
                     ];
                 }
 
-                $refundableAmount = $this->resolveBalanceRefundableAmount($lockedInvoice, $payment);
+                $refundableAmount = $this->resolveBalanceRefundableAmount($invoice, $payment);
                 $refundAmount = round((float) ($payload['amount'] ?? $refundableAmount), 2);
                 throw_if($refundAmount <= 0, new BusinessException('退款金额不正确'));
                 throw_if(abs($refundAmount - $refundableAmount) > 0.00001, new BusinessException('当前仅支持按原支付金额全额退款'));
@@ -1112,7 +1116,7 @@ class PaymentService
                 return $snapshot;
             }
 
-            $refundResult = $this->alipayService->refund(
+            $refundResult = $this->refundAlipayPayment(
                 outTradeNo: (string) $snapshot['payment_no'],
                 refundAmount: (float) $snapshot['refund_amount'],
                 refundReason: (string) $snapshot['refund_reason'],
@@ -1130,6 +1134,17 @@ class PaymentService
                     ->findOrFail((int) $snapshot['payment_id']);
 
                 if ((int) $lockedOrder->status === OrderStatus::REFUNDED || (int) $payment->status === PaymentStatus::REFUNDED) {
+                    $refund = (array) data_get((array) ($payment->callback_raw ?? []), 'refund', []);
+                    if ($lockedOrder->invoice instanceof Invoice && (int) $lockedOrder->invoice->status !== InvoiceStatus::REFUNDED) {
+                        $this->markInvoiceRefunded(
+                            $lockedOrder->invoice,
+                            $refund,
+                            'alipay',
+                            (float) ($refund['refund_amount'] ?? $refund['refund_fee'] ?? 0),
+                            $context
+                        );
+                    }
+
                     if ((int) $lockedOrder->status !== OrderStatus::REFUNDED) {
                         $lockedOrder->forceFill(['status' => OrderStatus::REFUNDED])->save();
                     }
@@ -1138,7 +1153,7 @@ class PaymentService
                         'already_refunded' => true,
                         'order_id' => (int) $lockedOrder->id,
                         'payment_id' => (int) $payment->id,
-                        'refund' => (array) data_get((array) ($payment->callback_raw ?? []), 'refund', []),
+                        'refund' => $refund,
                     ];
                 }
 
@@ -1165,6 +1180,16 @@ class PaymentService
                     'callback_raw' => $callbackRaw,
                 ])->save();
                 $this->syncProjection($payment);
+
+                if ($lockedOrder->invoice instanceof Invoice) {
+                    $this->markInvoiceRefunded(
+                        $lockedOrder->invoice,
+                        $refundRecord,
+                        'alipay',
+                        (float) $snapshot['refund_amount'],
+                        $context
+                    );
+                }
 
                 $lockedOrder->forceFill([
                     'status' => OrderStatus::REFUNDED,
@@ -1229,11 +1254,22 @@ class PaymentService
                 throw_if(! $payment instanceof Payment, new BusinessException('未找到可退款的支付记录'));
 
                 if ((int) $payment->status === PaymentStatus::REFUNDED) {
+                    $refund = (array) data_get((array) ($payment->callback_raw ?? []), 'refund', []);
+                    if ((int) $lockedInvoice->status !== InvoiceStatus::REFUNDED) {
+                        $this->markInvoiceRefunded(
+                            $lockedInvoice,
+                            $refund,
+                            (string) ($refund['refund_method'] ?? 'balance'),
+                            (float) ($refund['refund_amount'] ?? $refund['refund_fee'] ?? 0),
+                            $context
+                        );
+                    }
+
                     return [
                         'already_refunded' => true,
                         'invoice_id' => (int) $lockedInvoice->id,
                         'payment_id' => (int) $payment->id,
-                        'refund' => (array) data_get((array) ($payment->callback_raw ?? []), 'refund', []),
+                        'refund' => $refund,
                     ];
                 }
 
@@ -1286,6 +1322,8 @@ class PaymentService
                     'callback_raw' => $callbackRaw,
                 ])->save();
                 $this->syncProjection($payment);
+
+                $this->markInvoiceRefunded($lockedInvoice, $refundRecord, $refundMethod, $refundAmount, $context);
 
                 $scope = (array) ($payload['scope'] ?? ['order', 'payment']);
 
@@ -1492,6 +1530,8 @@ class PaymentService
                 'message' => $exception->getMessage(),
                 'exception' => $exception::class,
             ]);
+
+            throw $exception;
         }
     }
 
@@ -1504,6 +1544,28 @@ class PaymentService
         }
 
         $this->provisionPaidOrder($order->invoice);
+    }
+
+    public function processPaidInvoiceAdminNotifyById(int $invoiceId): void
+    {
+        $invoice = Invoice::query()->find($invoiceId);
+
+        if (! $invoice instanceof Invoice || (int) $invoice->status !== InvoiceStatus::PAID) {
+            return;
+        }
+
+        $this->adminOrderNotificationService->notifyInvoicePaidAfterResponse($invoice);
+    }
+
+    public function processPaidInvoiceCouponSyncById(int $invoiceId): void
+    {
+        $invoice = Invoice::query()->find($invoiceId);
+
+        if (! $invoice instanceof Invoice || (int) $invoice->status !== InvoiceStatus::PAID) {
+            return;
+        }
+
+        $this->couponService->syncInvoiceCouponUsage($invoice);
     }
 
     private function provisionPaidOrder(?Invoice $invoice): void
@@ -1536,6 +1598,8 @@ class PaymentService
                 'message' => $exception->getMessage(),
                 'exception' => $exception::class,
             ]);
+
+            throw $exception;
         }
     }
 
@@ -1643,7 +1707,7 @@ class PaymentService
 
     private function resolveRefundableAlipayPayment(Invoice $invoice): ?Payment
     {
-        return $this->resolvePrimaryRefundablePayment($invoice, ['alipay']);
+        return $this->resolvePrimaryRefundablePayment($invoice, [PaymentGatewayCode::ALIPAY]);
     }
 
     /**
@@ -1652,6 +1716,50 @@ class PaymentService
     private function buildAlipayRefundRequestNo(Payment $payment): string
     {
         return 'RFD'.$payment->payment_no;
+    }
+
+    private function alipayGateway(): PaymentGatewayInterface
+    {
+        return $this->paymentGatewayManager->alipay();
+    }
+
+    private function precreateAlipayPayment(string $outTradeNo, float $amount, string $subject): array
+    {
+        return $this->alipayGateway()
+            ->precreate(new PaymentPrecreateRequest(
+                outTradeNo: $outTradeNo,
+                amount: $amount,
+                subject: $subject,
+            ))
+            ->toArray();
+    }
+
+    private function queryAlipayPayment(string $outTradeNo): array
+    {
+        return $this->alipayGateway()
+            ->query($outTradeNo)
+            ->toArray();
+    }
+
+    /**
+     * 支付业务仍保留旧数组结构，网关层只负责 provider 请求和响应归一化。
+     */
+    private function refundAlipayPayment(
+        string $outTradeNo,
+        float $refundAmount,
+        string $refundReason,
+        ?string $tradeNo,
+        string $outRequestNo,
+    ): array {
+        return $this->alipayGateway()
+            ->refund(new PaymentRefundRequest(
+                outTradeNo: $outTradeNo,
+                refundAmount: $refundAmount,
+                refundReason: $refundReason,
+                tradeNo: $tradeNo,
+                outRequestNo: $outRequestNo,
+            ))
+            ->toArray();
     }
 
     private function resolvePrimaryRefundablePayment(Invoice $invoice, ?array $gateways = null): ?Payment
@@ -1705,28 +1813,19 @@ class PaymentService
 
             $balanceAfter = $this->setUserBalance($lockedUser, $this->getUserBalance($lockedUser) + $balanceAmount);
             $suppressLogs = (bool) ($context['suppress_logs'] ?? false);
-            if (! $suppressLogs) {
-                $this->createBalanceLog(
-                    (int) $lockedUser->id,
-                    FinanceLedgerEventType::INVOICE_REFUND,
-                    $balanceAmount,
-                    $balanceAfter,
-                    (int) $invoice->id,
-                    '组合支付取消退回余额 '.(string) $invoice->invoice_no,
-                    [
-                        'trace_id' => (string) ($context['trace_id'] ?? ''),
-                    ],
-                );
-            } else {
-                BalanceLog::query()
-                    ->where('user_id', (int) $lockedUser->id)
-                    ->where('reference_id', (int) $invoice->id)
-                    ->where('event_type', FinanceLedgerEventType::INVOICE_PAYMENT)
-                    ->where('change_amount', number_format(-$balanceAmount, 2, '.', ''))
-                    ->latest('id')
-                    ->limit(1)
-                    ->delete();
-            }
+            $this->createBalanceLog(
+                (int) $lockedUser->id,
+                FinanceLedgerEventType::INVOICE_REFUND,
+                $balanceAmount,
+                $balanceAfter,
+                (int) $invoice->id,
+                $suppressLogs
+                    ? '组合支付预下单失败恢复余额 '.(string) $invoice->invoice_no
+                    : '组合支付取消退回余额 '.(string) $invoice->invoice_no,
+                [
+                    'trace_id' => (string) ($context['trace_id'] ?? ''),
+                ],
+            );
 
             $nextInvoicePaidAmount = number_format(
                 max(round((float) ($invoice->paid_amount ?? 0) - $balanceAmount, 2), 0),
@@ -1831,7 +1930,7 @@ class PaymentService
     private function resolvePaymentGatewayLabel(string $gateway): string
     {
         return match ($gateway) {
-            'alipay' => '支付宝支付',
+            PaymentGatewayCode::ALIPAY => PaymentGatewayCode::label(PaymentGatewayCode::ALIPAY),
             'wechat' => '微信支付',
             'balance' => '余额支付',
             'bank_transfer' => '银行转账',
@@ -1858,6 +1957,45 @@ class PaymentService
         }
 
         return $normalized;
+    }
+
+    private function markInvoiceRefunded(
+        Invoice $invoice,
+        array $refundRecord,
+        string $refundMethod,
+        float $refundAmount,
+        array $context = [],
+    ): void {
+        $traceId = trim((string) ($refundRecord['trace_id'] ?? $context['trace_id'] ?? ''));
+        $refundedAt = trim((string) ($refundRecord['refunded_at'] ?? $refundRecord['gmt_refund_pay'] ?? ''));
+        $normalizedRefundAmount = number_format(round(max(
+            $refundAmount,
+            (float) ($refundRecord['refund_amount'] ?? $refundRecord['refund_fee'] ?? 0)
+        ), 2), 2, '.', '');
+
+        $payload = [
+            'status' => InvoiceStatus::REFUNDED,
+        ];
+
+        if (Schema::hasColumn('invoices', 'refunded_at')) {
+            $payload['refunded_at'] = $refundedAt !== '' ? $refundedAt : now();
+        }
+
+        if (Schema::hasColumn('invoices', 'refund_amount')) {
+            $payload['refund_amount'] = $normalizedRefundAmount;
+        }
+
+        if (Schema::hasColumn('invoices', 'refund_method')) {
+            $payload['refund_method'] = trim($refundMethod) !== '' ? trim($refundMethod) : 'balance';
+        }
+
+        if (Schema::hasColumn('invoices', 'refund_trace_id')) {
+            $payload['refund_trace_id'] = $traceId !== '' ? $traceId : null;
+        } elseif ($traceId !== '' && Schema::hasColumn('invoices', 'trace_id')) {
+            $payload['trace_id'] = $traceId;
+        }
+
+        $invoice->forceFill($payload)->save();
     }
 
     private function createBalanceLog(
@@ -1895,7 +2033,7 @@ class PaymentService
             return Invoice::query()->find((int) $payment->invoice_id);
         }
 
-        if ((int) $payment->status !== PaymentStatus::SUCCESS || (string) $payment->gateway !== 'alipay') {
+        if ((int) $payment->status !== PaymentStatus::SUCCESS || (string) $payment->gateway !== PaymentGatewayCode::ALIPAY) {
             return null;
         }
 
@@ -1911,7 +2049,7 @@ class PaymentService
                     return Invoice::query()->find((int) $lockedPayment->invoice_id);
                 }
 
-                if ((int) $lockedPayment->status !== PaymentStatus::SUCCESS || (string) $lockedPayment->gateway !== 'alipay') {
+                if ((int) $lockedPayment->status !== PaymentStatus::SUCCESS || (string) $lockedPayment->gateway !== PaymentGatewayCode::ALIPAY) {
                     return null;
                 }
 

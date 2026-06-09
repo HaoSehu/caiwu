@@ -2,8 +2,11 @@
 
 namespace App\Services\PaymentGateway;
 
+use App\Constants\PaymentGatewayCode;
 use App\Exceptions\BusinessException;
 use App\Models\Setting;
+use App\Services\System\GatewayLogService;
+use App\Support\SensitiveDataSanitizer;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
@@ -117,14 +120,33 @@ class AlipayFaceToFaceService
             ]);
         }
 
-        Log::info('[支付宝当面付] precreate 响应', ['out_trade_no' => $outTradeNo, 'response' => $result]);
+        Log::info('[支付宝当面付] precreate 响应', SensitiveDataSanitizer::sanitize([
+            'out_trade_no' => $outTradeNo,
+            'response' => $result,
+        ]));
 
         $data = $result['alipay_trade_precreate_response'] ?? [];
 
         if (($data['code'] ?? '') !== '10000') {
-            Log::error('[支付宝当面付] 预下单失败', ['data' => $data]);
-            throw new BusinessException($data['sub_msg'] ?? $data['msg'] ?? '支付宝预下单失败');
+            Log::error('[支付宝当面付] 预下单失败', SensitiveDataSanitizer::sanitize(['data' => $data]));
+            app(GatewayLogService::class)->recordFailure(
+                gateway: PaymentGatewayCode::ALIPAY_F2F_PLUGIN,
+                action: 'precreate',
+                errorMsg: $data['sub_msg'] ?? $data['msg'] ?? '预下单失败',
+                outTradeNo: $outTradeNo,
+                requestData: $bizContent,
+                responseData: $data,
+            );
+            throw new BusinessException('支付宝预下单失败，请稍后重试');
         }
+
+        app(GatewayLogService::class)->recordSuccess(
+            gateway: PaymentGatewayCode::ALIPAY_F2F_PLUGIN,
+            action: 'precreate',
+            outTradeNo: $outTradeNo,
+            requestData: $bizContent,
+            responseData: $data,
+        );
 
         return [
             'qr_code' => $data['qr_code'] ?? '',
@@ -182,19 +204,36 @@ class AlipayFaceToFaceService
         $params = $this->buildRequestParams('alipay.trade.refund', $bizContent);
         $result = $this->request($params);
 
-        Log::info('[支付宝当面付] refund 响应', [
+        Log::info('[支付宝当面付] refund 响应', SensitiveDataSanitizer::sanitize([
             'out_trade_no' => $outTradeNo,
             'trade_no' => $tradeNo,
             'out_request_no' => $outRequestNo,
             'response' => $result,
-        ]);
+        ]));
 
         $data = $result['alipay_trade_refund_response'] ?? [];
 
         if (($data['code'] ?? '') !== '10000') {
-            Log::error('[支付宝当面付] 退款失败', ['data' => $data]);
-            throw new BusinessException($data['sub_msg'] ?? $data['msg'] ?? '支付宝退款失败');
+            Log::error('[支付宝当面付] 退款失败', SensitiveDataSanitizer::sanitize(['data' => $data]));
+            app(GatewayLogService::class)->recordFailure(
+                gateway: PaymentGatewayCode::ALIPAY_F2F_PLUGIN,
+                action: 'refund',
+                errorMsg: $data['sub_msg'] ?? $data['msg'] ?? '退款失败',
+                outTradeNo: $outTradeNo,
+                requestData: $bizContent,
+                responseData: $data,
+            );
+            throw new BusinessException('支付宝退款失败，请稍后重试');
         }
+
+        app(GatewayLogService::class)->recordSuccess(
+            gateway: PaymentGatewayCode::ALIPAY_F2F_PLUGIN,
+            action: 'refund',
+            outTradeNo: $outTradeNo,
+            tradeNo: $data['trade_no'] ?? $tradeNo,
+            requestData: $bizContent,
+            responseData: $data,
+        );
 
         return [
             'trade_no' => $data['trade_no'] ?? ($tradeNo ?? ''),
