@@ -294,7 +294,7 @@ class VncRelayCommand extends Command
             [$upstream, $upstreamExtra] = $this->connectUpstream($params);
         } catch (Throwable $e) {
             Log::warning('[VNC Relay] 上游连接失败', [
-                'token' => $token,
+                'token' => $this->maskToken($token),
                 'message' => $e->getMessage(),
                 'exception' => $e::class,
                 'params' => [

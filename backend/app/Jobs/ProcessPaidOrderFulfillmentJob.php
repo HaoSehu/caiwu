@@ -9,6 +9,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 
 class ProcessPaidOrderFulfillmentJob implements ShouldQueue
 {
@@ -18,6 +19,8 @@ class ProcessPaidOrderFulfillmentJob implements ShouldQueue
     use SerializesModels;
 
     public int $tries = 3;
+
+    public int $timeout = 1200;
 
     public array $backoff = [30, 120, 300];
 
@@ -32,12 +35,21 @@ class ProcessPaidOrderFulfillmentJob implements ShouldQueue
         return [
             (new WithoutOverlapping("job:paid-order-fulfillment:{$this->orderId}"))
                 ->releaseAfter(10)
-                ->expireAfter(300),
+                ->expireAfter(1500),
         ];
     }
 
     public function handle(PaymentService $paymentService): void
     {
         $paymentService->processPaidOrderFulfillmentById($this->orderId);
+    }
+
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('[支付后自动开通] 队列任务失败', [
+            'order_id' => $this->orderId,
+            'message' => $exception->getMessage(),
+            'exception' => $exception::class,
+        ]);
     }
 }

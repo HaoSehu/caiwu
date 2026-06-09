@@ -1,6 +1,9 @@
 <?php
 
+use App\Http\Controllers\Admin\AdminStaffController;
 use App\Http\Controllers\Admin\AuthController;
+use App\Http\Controllers\Admin\AdminPermissionCatalogController;
+use App\Http\Controllers\Admin\AdminRoleController;
 use App\Http\Controllers\Admin\ContentArticleController;
 use App\Http\Controllers\Admin\ContentCategoryController;
 use App\Http\Controllers\Admin\CouponCampaignController;
@@ -122,6 +125,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function () {
     // 订单管理（内部履约订单）
     Route::middleware(['permission:'.AdminPermissions::ORDER_LIST])->group(function () {
         Route::get('/orders', [OrderController::class, 'index']);
+        Route::get('/orders/{id}', [OrderController::class, 'show']);
     });
 
     // 账单管理（主实体）
@@ -244,6 +248,37 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function () {
         Route::post('/site/home-hero', [HomeHeroController::class, 'update']);
     });
 
+    // 员工管理
+    Route::middleware(['permission:'.AdminPermissions::STAFF_LIST])->group(function () {
+        Route::get('/staff', [AdminStaffController::class, 'index']);
+        Route::get('/staff/roles', [AdminStaffController::class, 'roles']);
+        Route::get('/staff/{staff}', [AdminStaffController::class, 'show']);
+    });
+
+    Route::middleware(['permission:'.AdminPermissions::STAFF_MANAGE])->group(function () {
+        Route::post('/staff', [AdminStaffController::class, 'store']);
+        Route::put('/staff/{staff}', [AdminStaffController::class, 'update']);
+        Route::post('/staff/{staff}/toggle-status', [AdminStaffController::class, 'toggleStatus']);
+        Route::post('/staff/{staff}/reset-password', [AdminStaffController::class, 'resetPassword']);
+    });
+
+    // 角色与权限管理
+    Route::middleware(['permission:'.AdminPermissions::PERMISSION_LIST])->group(function () {
+        Route::get('/permissions', [AdminPermissionCatalogController::class, 'index']);
+    });
+
+    Route::middleware(['permission:'.AdminPermissions::ROLE_LIST])->group(function () {
+        Route::get('/roles', [AdminRoleController::class, 'index']);
+        Route::get('/roles/{role}', [AdminRoleController::class, 'show']);
+    });
+
+    Route::middleware(['permission:'.AdminPermissions::ROLE_MANAGE])->group(function () {
+        Route::post('/roles', [AdminRoleController::class, 'store']);
+        Route::put('/roles/{role}', [AdminRoleController::class, 'update']);
+        Route::delete('/roles/{role}', [AdminRoleController::class, 'destroy']);
+        Route::post('/roles/{role}/copy', [AdminRoleController::class, 'copy']);
+    });
+
     // 日志管理
     Route::middleware(['permission:'.AdminPermissions::LOG_LIST])->group(function () {
         Route::get('/logs/sms', [LogController::class, 'smsLogs']);
@@ -256,6 +291,10 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function () {
         Route::get('/logs/system', [LogController::class, 'systemLogs']);
         Route::get('/logs/system/summary', [LogController::class, 'systemLogsSummary']);
         Route::get('/logs/admin-logins', [LogController::class, 'adminLoginLogs']);
+        Route::get('/logs/gateway', [LogController::class, 'gatewayLogs']);
+        Route::get('/logs/activity', [LogController::class, 'activityLogs']);
+        Route::get('/logs/schedule', [LogController::class, 'scheduleLogs']);
+        Route::get('/logs/schedule/health', [LogController::class, 'scheduleHealth']);
         Route::get('/logs/cleanup/overview', [LogController::class, 'cleanupOverview']);
         Route::post('/logs/cleanup', [LogController::class, 'cleanup']);
     });

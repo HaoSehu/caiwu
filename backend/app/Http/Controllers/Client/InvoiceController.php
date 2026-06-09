@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Client;
 
 use App\Constants\InvoiceStatus;
+use App\Constants\PaymentGatewayCode;
 use App\Http\Controllers\Controller;
 use App\Models\Invoice;
 use App\Models\Payment;
@@ -11,7 +12,7 @@ use App\Services\Finance\CheckoutSecurityService;
 use App\Services\Finance\CheckoutService;
 use App\Services\Finance\InvoiceService;
 use App\Services\Finance\PaymentService;
-use App\Services\PaymentGateway\AlipayFaceToFaceService;
+use App\Services\Integrations\Payments\PaymentGatewayManager;
 use Illuminate\Http\Request;
 
 class InvoiceController extends Controller
@@ -19,7 +20,7 @@ class InvoiceController extends Controller
     public function __construct(
         private InvoiceService $invoiceService,
         private PaymentService $paymentService,
-        private AlipayFaceToFaceService $alipayService,
+        private PaymentGatewayManager $paymentGatewayManager,
         private CheckoutSecurityService $checkoutSecurityService,
         private CheckoutService $checkoutService,
     ) {}
@@ -243,7 +244,7 @@ class InvoiceController extends Controller
             ->where('payment_no', (string) ($result['payment_no'] ?? ''))
             ->where('invoice_id', $invoice->id)
             ->where('user_id', $user->id)
-            ->where('gateway', 'alipay')
+            ->where('gateway', PaymentGatewayCode::ALIPAY)
             ->first();
 
         if (! $payment) {
@@ -286,7 +287,7 @@ class InvoiceController extends Controller
             ->where('payment_no', (string) ($result['payment_no'] ?? ''))
             ->where('invoice_id', $invoice->id)
             ->where('user_id', $user->id)
-            ->where('gateway', 'alipay')
+            ->where('gateway', PaymentGatewayCode::ALIPAY)
             ->first();
 
         if (! $payment) {
@@ -319,7 +320,7 @@ class InvoiceController extends Controller
             ->where('payment_no', (string) $data['payment_no'])
             ->where('invoice_id', $invoice->id)
             ->where('user_id', $user->id)
-            ->where('gateway', 'alipay')
+            ->where('gateway', PaymentGatewayCode::ALIPAY)
             ->first();
 
         if (! $payment) {
@@ -346,7 +347,7 @@ class InvoiceController extends Controller
 
     private function transformInvoice(Invoice $invoice, ?\App\Models\User $viewer = null): array
     {
-        $invoiceDetail = $this->invoiceService->adminDetail((int) $invoice->id);
+        $invoiceDetail = $this->invoiceService->clientDetail($invoice);
         $payableAmount = (string) ($invoiceDetail['payable_amount'] ?? number_format($this->resolveInvoicePayableAmount($invoice), 2, '.', ''));
         $paymentSecurity = $this->checkoutSecurityService->issueInvoicePaymentSession($invoice, (int) $invoice->user_id);
         $canCancel = in_array((int) $invoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE], true);
@@ -355,9 +356,9 @@ class InvoiceController extends Controller
         $payMethods = [['key' => 'balance', 'name' => '余额支付']];
         if ((float) $payableAmount <= 0) {
             $payMethods = [['key' => 'free', 'name' => '确认支付']];
-        } elseif ($this->alipayService->isEnabled()) {
+        } elseif ($this->paymentGatewayManager->alipay()->isEnabled()) {
             $alipayName = Setting::getValue('payment', 'alipay_name') ?: '支付宝支付';
-            $payMethods[] = ['key' => 'alipay', 'name' => $alipayName];
+            $payMethods[] = ['key' => PaymentGatewayCode::ALIPAY, 'name' => $alipayName];
         }
 
         $configPricingSnapshot = is_array($invoice->config_pricing_snapshot) && $invoice->config_pricing_snapshot !== []

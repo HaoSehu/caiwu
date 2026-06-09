@@ -143,20 +143,6 @@ class SettingsSeeder
             'items' => '[]',
         ]);
 
-        static::seedGroup('seo', [
-            'site_description' => '',
-            'site_keywords' => '',
-            'canonical_base' => '',
-            'og_image' => '',
-            'twitter_handle' => '',
-            'robots_directive' => 'index,follow',
-            'verify_google' => '',
-            'verify_baidu' => '',
-            'verify_bing' => '',
-            'verify_360' => '',
-            'verify_sogou' => '',
-        ]);
-
         static::seedGroup('home_hero', [
             'slides' => '[]',
             'features' => '[]',

@@ -242,7 +242,7 @@ class CouponService
             ->get();
 
         $productsByGroup = Product::query()
-            ->select(['id', 'product_group_id', 'pricing', 'status', 'sort_order', 'purchase_requires', 'config_options'])
+            ->select(['id', 'product_group_id', 'product_type', 'pricing', 'status', 'sort_order', 'purchase_requires', 'config_options'])
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get()
@@ -260,16 +260,32 @@ class CouponService
 
             $productNodes = collect($productsByGroup->get((int) $group->id, collect()))
                 ->map(function (Product $product) use ($categoryFullName) {
-                    $displayName = (string) ($this->resolveProductDisplayNameResolver()->resolveForProduct($product)['product_display_name'] ?? '');
+                    $displayPayload = $this->resolveProductDisplayNameResolver()->resolveForProduct($product);
+                    $customDisplayName = trim((string) ($displayPayload['custom_display_name'] ?? ''));
+                    $cpuMemorySlugDisplay = trim((string) ($displayPayload['cpu_memory_slug_display'] ?? ''));
+                    $productSpecDisplay = trim((string) ($displayPayload['product_spec_display'] ?? ''));
+                    $cpuMemoryDisplay = trim((string) ($displayPayload['cpu_memory_display'] ?? ''));
+                    $combinedDisplayName = trim((string) ($displayPayload['combined_display_name'] ?? ''));
+                    $fallbackDisplayName = trim((string) $product->name) !== ''
+                        ? trim((string) $product->name)
+                        : '未配置规格 #'.(int) $product->id;
+                    $displayName = $customDisplayName
+                        ?: ($cpuMemorySlugDisplay ?: ($productSpecDisplay ?: ($cpuMemoryDisplay ?: ($combinedDisplayName ?: $fallbackDisplayName))));
 
                     return [
                         'id' => (int) $product->id,
-                        'label' => $displayName !== '' ? $displayName : (string) $product->name,
+                        'label' => $displayName,
                         'node_type' => 'product',
                         'leaf' => true,
                         'disabled' => false,
-                        'product_name' => (string) $product->name,
-                        'display_name' => $displayName !== '' ? $displayName : '未配置规格 #'.(int) $product->id,
+                        'product_name' => $displayName,
+                        'display_name' => $displayName,
+                        'product_display_name' => $displayName,
+                        'custom_display_name' => $customDisplayName,
+                        'cpu_memory_display' => $cpuMemoryDisplay,
+                        'cpu_memory_slug_display' => $cpuMemorySlugDisplay,
+                        'product_spec_display' => $productSpecDisplay,
+                        'combined_display_name' => $combinedDisplayName,
                         'category_full_name' => $categoryFullName,
                         'primary_price' => $this->resolvePrimaryPrice((array) $product->pricing),
                         'status' => (int) ($product->status ?? 0),
@@ -285,6 +301,7 @@ class CouponService
                 'node_type' => 'group',
                 'group_id' => $publicGroupId,
                 'product_type' => (string) $group->product_type,
+                'product_type_label' => ProductType::labelOf((string) $group->product_type),
                 'leaf' => false,
                 'disabled' => false,
                 'children' => [...$children, ...$productNodes],

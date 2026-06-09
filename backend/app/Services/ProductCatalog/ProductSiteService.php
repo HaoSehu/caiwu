@@ -229,6 +229,7 @@ class ProductSiteService
                 'id',
                 'product_group_id',
                 'product_type',
+                ...Product::optionalSelectColumns(['custom_display_name']),
                 'purchase_requires',
                 'config_options',
                 'pricing',
@@ -359,9 +360,7 @@ class ProductSiteService
                 'product_group_id',
                 'supplier_id',
                 'product_type',
-                'meta_title',
-                'meta_description',
-                'meta_keywords',
+                ...Product::optionalSelectColumns(['custom_display_name']),
                 'pricing',
                 'setup_fee',
                 'config_options',
@@ -508,7 +507,13 @@ class ProductSiteService
             ->where('product_group_id', (int) (($product->product_group_id ?? 0) ?: ($product->category_id ?? 0)))
             ->orderBy('sort_order')
             ->orderBy('id')
-            ->get(['id', 'product_type', 'purchase_requires', 'config_options']);
+            ->get([
+                'id',
+                'product_type',
+                ...Product::optionalSelectColumns(['custom_display_name']),
+                'purchase_requires',
+                'config_options',
+            ]);
 
         $siblingsSpecMap = $this->instanceSpecCatalogService->resolveProductSpecMap(
             $siblings->pluck('id')->map(fn ($item) => (int) $item)->all()
@@ -532,9 +537,6 @@ class ProductSiteService
             'product_type' => $productType,
             'type' => $productType,
             'type_label' => ProductType::labelOf($productType),
-            'meta_title' => $this->normalizeNullableString($product->meta_title ?? null),
-            'meta_description' => $this->normalizeNullableString($product->meta_description ?? null),
-            'meta_keywords' => $this->normalizeNullableString($product->meta_keywords ?? null),
             'pricing' => $pricing,
             'pricing_entries' => $this->buildPricingEntries($pricing, $setupFee),
             'primary_cycle' => $primaryCycle,

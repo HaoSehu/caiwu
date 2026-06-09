@@ -26,7 +26,7 @@ class Product extends Model
 
     protected $fillable = [
         'product_group_id', 'category_id', 'name', 'product_type', 'type',
-        'meta_title', 'meta_description', 'meta_keywords', 'remark',
+        'custom_display_name', 'remark',
         'pricing',
         'setup_fee', 'config_options', 'purchase_requires', 'stock', 'status',
         'sort_order', 'provision_module', 'auto_setup',
@@ -113,6 +113,17 @@ class Product extends Model
         return $normalized === '' ? null : $normalized;
     }
 
+    public function getCustomDisplayNameAttribute(mixed $value): ?string
+    {
+        if (! $this->hasPhysicalColumn('custom_display_name')) {
+            return null;
+        }
+
+        $normalized = trim((string) $value);
+
+        return $normalized === '' ? null : $normalized;
+    }
+
     public function setNameAttribute(mixed $value): void
     {
         if (! $this->hasPhysicalColumn('name')) {
@@ -136,6 +147,18 @@ class Product extends Model
         $this->attributes['supplier_product_name'] = $normalized !== '' ? $normalized : null;
     }
 
+    public function setCustomDisplayNameAttribute(mixed $value): void
+    {
+        if (! $this->hasPhysicalColumn('custom_display_name')) {
+            unset($this->attributes['custom_display_name']);
+
+            return;
+        }
+
+        $normalized = trim((string) $value);
+        $this->attributes['custom_display_name'] = $normalized !== '' ? $normalized : null;
+    }
+
     public function setRemarkAttribute(mixed $value): void
     {
         if (! $this->hasPhysicalColumn('remark')) {
@@ -150,6 +173,11 @@ class Product extends Model
 
     public function getNameAttribute(mixed $value): string
     {
+        $customDisplayName = $this->getCustomDisplayNameAttribute($this->attributes['custom_display_name'] ?? null);
+        if ($customDisplayName !== null) {
+            return $customDisplayName;
+        }
+
         if ($this->hasPhysicalColumn('name')) {
             $normalized = trim((string) $value);
             if ($normalized !== '') {
@@ -160,7 +188,7 @@ class Product extends Model
         try {
             $display = (new ProductDisplayNameResolver)->resolveForProduct($this);
 
-            return trim((string) ($display['product_spec_display'] ?? ''));
+            return trim((string) ($display['product_display_name'] ?? ''));
         } catch (\Throwable) {
             return '';
         }
@@ -296,6 +324,16 @@ class Product extends Model
         return [];
     }
 
+    public static function optionalSelectColumns(array $columns): array
+    {
+        $model = new self;
+
+        return array_values(array_filter(
+            $columns,
+            static fn (string $column): bool => $model->hasPhysicalColumn($column)
+        ));
+    }
+
     private function hasPhysicalColumn(string $column): bool
     {
         $cacheKey = implode(':', [
@@ -334,12 +372,10 @@ class Product extends Model
         $setIfColumnExists('category_id', $product->getRawOriginal('product_group_id'));
         $setIfColumnExists('product_type', (string) ($product->product_type ?: 'other'));
         $setIfColumnExists('name', (string) $product->name);
+        $setIfColumnExists('custom_display_name', $product->custom_display_name);
         $setIfColumnExists('slug', $slug ?: 'test-product-'.(int) $product->id);
         $setIfColumnExists('summary', null);
         $setIfColumnExists('remark', $product->remark);
-        $setIfColumnExists('meta_title', null);
-        $setIfColumnExists('meta_description', null);
-        $setIfColumnExists('meta_keywords', null);
         $setIfColumnExists('pricing', $encodeJson((array) ($product->pricing ?? [])));
         $setIfColumnExists('setup_fee', number_format((float) ($product->setup_fee ?? 0), 2, '.', ''));
         $setIfColumnExists('config_options', $encodeJson((array) ($product->config_options ?? [])));

@@ -30,8 +30,6 @@ class UpdateContentArticleRequest extends AdminFormRequest
             'summary' => ['nullable', 'string', 'max:500'],
             'content' => ['required', 'string'],
             'keywords' => ['nullable', 'string', 'max:255'],
-            'meta_title' => ['nullable', 'string', 'max:200'],
-            'meta_description' => ['nullable', 'string', 'max:500'],
             'status' => ['nullable', 'integer', Rule::in([
                 ContentArticle::STATUS_DRAFT,
                 ContentArticle::STATUS_PUBLISHED,

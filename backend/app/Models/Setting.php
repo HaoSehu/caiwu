@@ -96,7 +96,20 @@ class Setting extends Model
 
     private static function encodeValue(string $key, mixed $value): mixed
     {
-        return $value;
+        if (! static::isSensitiveKey($key)) {
+            return $value;
+        }
+
+        $raw = (string) $value;
+        if ($raw === '') {
+            return '';
+        }
+
+        if (str_starts_with($raw, self::ENCRYPTED_PREFIX)) {
+            return $raw;
+        }
+
+        return self::ENCRYPTED_PREFIX.Crypt::encryptString($raw);
     }
 
     private static function decodeValue(string $key, mixed $value): mixed

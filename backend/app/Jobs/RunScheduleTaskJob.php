@@ -32,9 +32,11 @@ class RunScheduleTaskJob implements ShouldQueue
     use Queueable;
     use SerializesModels;
 
-    public int $tries = 1;
+    public int $tries = 3;
 
-    public int $timeout = 1800;
+    public int $timeout = 900;
+
+    public int $backoff = 60;
 
     public function __construct(
         public string $taskKey,
@@ -48,8 +50,8 @@ class RunScheduleTaskJob implements ShouldQueue
     {
         return [
             (new WithoutOverlapping("job:schedule-task:{$this->taskKey}"))
-                ->releaseAfter(10)
-                ->expireAfter(1800),
+                ->releaseAfter(30)
+                ->expireAfter(1200),
         ];
     }
 
@@ -148,9 +150,10 @@ class RunScheduleTaskJob implements ShouldQueue
     private function drainQueueBacklog(): array
     {
         $exitCode = Artisan::call('queue:work', [
-            '--queue' => 'referral,provision,default',
+            '--queue' => (string) config('queue.caiwu_worker_queues', 'provision,referral,notification,coupon,default'),
             '--sleep' => 1,
-            '--tries' => 3,
+            '--tries' => (int) config('queue.caiwu_worker_tries', 3),
+            '--timeout' => (int) config('queue.caiwu_worker_timeout', 1200),
             '--stop-when-empty' => true,
             '--max-time' => 50,
         ]);
@@ -162,5 +165,15 @@ class RunScheduleTaskJob implements ShouldQueue
         return [
             'exit_code' => $exitCode,
         ];
+    }
+
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('[手动任务触发] 执行失败，已交由队列失败机制记录', [
+            'task' => $this->taskKey,
+            'admin_user_id' => $this->adminUserId,
+            'message' => $exception->getMessage(),
+            'exception' => $exception::class,
+        ]);
     }
 }

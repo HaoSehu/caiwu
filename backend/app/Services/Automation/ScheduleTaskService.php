@@ -191,6 +191,9 @@ class ScheduleTaskService
     {
         $quotedPhp = $this->quoteShellArgument($phpBinary);
         $quotedArtisan = $this->quoteShellArgument($artisanPath);
+        $queueWorkerQueues = (string) config('queue.caiwu_worker_queues', 'provision,referral,notification,coupon,default');
+        $queueWorkerTries = (int) config('queue.caiwu_worker_tries', 3);
+        $queueWorkerTimeout = (int) config('queue.caiwu_worker_timeout', 1200);
 
         return [
             [
@@ -209,7 +212,7 @@ class ScheduleTaskService
                 'key' => 'queue_work',
                 'title' => '队列 Worker（可选）',
                 'description' => '仅在你需要更低延迟时再单独常驻运行；宝塔单计划任务方案下不是必需。',
-                'command' => "{$quotedPhp} {$quotedArtisan} queue:work --queue=provision,referral,default --sleep=1 --tries=3",
+                'command' => "{$quotedPhp} {$quotedArtisan} queue:work --queue={$queueWorkerQueues} --sleep=1 --tries={$queueWorkerTries} --timeout={$queueWorkerTimeout}",
             ],
         ];
     }

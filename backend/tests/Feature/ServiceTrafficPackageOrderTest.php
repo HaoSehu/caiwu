@@ -392,7 +392,7 @@ class ServiceTrafficPackageOrderTest extends TestCase
 
             $paymentService = new PaymentService(
                 $this->createMock(ProvisionService::class),
-                $this->createMock(AlipayFaceToFaceService::class),
+                $this->makePaymentGatewayManagerForTest($this->createMock(AlipayFaceToFaceService::class)),
                 $this->createMock(ServiceRenewService::class),
                 $this->createMock(ReferralService::class),
                 $dispatcher,

@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Services\System;
 
+use App\Models\ActivityLog;
 use App\Models\AdminUser;
 use App\Models\EmailLog;
+use App\Models\GatewayLog;
 use App\Models\NotificationLog;
 use App\Models\OperationLog;
 use App\Models\Role;
@@ -864,5 +866,96 @@ class AdminLogService
         }
 
         return true;
+    }
+
+    public function getGatewayLogs(array $filters, int $page, int $perPage): array
+    {
+        if (! Schema::hasTable('gateway_logs')) {
+            return $this->buildPaginatorPayload($this->emptyPaginator($perPage));
+        }
+
+        $query = GatewayLog::query();
+
+        if (! empty($filters['keyword'])) {
+            $keyword = trim((string) $filters['keyword']);
+            $query->where(function ($builder) use ($keyword) {
+                $builder->where('out_trade_no', 'like', "%{$keyword}%")
+                    ->orWhere('trade_no', 'like', "%{$keyword}%")
+                    ->orWhere('gateway', 'like', "%{$keyword}%")
+                    ->orWhere('error_msg', 'like', "%{$keyword}%");
+            });
+        }
+
+        if (! empty($filters['gateway'])) {
+            $query->where('gateway', trim((string) $filters['gateway']));
+        }
+
+        if (! empty($filters['action'])) {
+            $query->where('action', trim((string) $filters['action']));
+        }
+
+        if (! empty($filters['result_status'])) {
+            $query->where('result_status', trim((string) $filters['result_status']));
+        }
+
+        $this->applyDateFilter($query, $filters);
+
+        $logs = (clone $query)->orderByDesc('created_at')->paginate($perPage, ['*'], 'page', $page);
+
+        $summary = (clone $query)
+            ->selectRaw('COUNT(*) as total')
+            ->selectRaw("COALESCE(SUM(CASE WHEN result_status = 'success' THEN 1 ELSE 0 END), 0) as success")
+            ->selectRaw("COALESCE(SUM(CASE WHEN result_status = 'failed' THEN 1 ELSE 0 END), 0) as failed")
+            ->first();
+
+        return $this->buildPaginatorPayload($logs, [
+            'total' => (int) ($summary?->total ?? 0),
+            'success' => (int) ($summary?->success ?? 0),
+            'failed' => (int) ($summary?->failed ?? 0),
+        ]);
+    }
+
+    public function getActivityLogs(array $filters, int $page, int $perPage): array
+    {
+        if (! Schema::hasTable('activity_logs')) {
+            return $this->buildPaginatorPayload($this->emptyPaginator($perPage));
+        }
+
+        $query = ActivityLog::query();
+
+        if (! empty($filters['keyword'])) {
+            $keyword = trim((string) $filters['keyword']);
+            $query->where(function ($builder) use ($keyword) {
+                $builder->where('description', 'like', "%{$keyword}%")
+                    ->orWhere('actor_name', 'like', "%{$keyword}%")
+                    ->orWhere('module', 'like', "%{$keyword}%");
+            });
+        }
+
+        if (! empty($filters['module'])) {
+            $query->where('module', trim((string) $filters['module']));
+        }
+
+        if (! empty($filters['actor_type'])) {
+            $query->where('actor_type', trim((string) $filters['actor_type']));
+        }
+
+        if (! empty($filters['subject_type'])) {
+            $query->where('subject_type', trim((string) $filters['subject_type']));
+        }
+
+        $this->applyDateFilter($query, $filters);
+
+        $logs = (clone $query)->orderByDesc('created_at')->paginate($perPage, ['*'], 'page', $page);
+
+        $summary = (clone $query)
+            ->selectRaw('COUNT(*) as total')
+            ->selectRaw("COUNT(DISTINCT module) as modules")
+            ->first();
+
+        return $this->buildPaginatorPayload($logs, [
+            'total' => (int) ($summary?->total ?? 0),
+            'modules' => (int) ($summary?->modules ?? 0),
+        ]);
     }
 }

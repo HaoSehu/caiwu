@@ -150,11 +150,10 @@ export function primeConnectionHints({ urls = [], origins = [] }: { urls?: Array
   })
 }
 
-export function initRuntimeConnectionHints(options: { apiBaseUrl?: string, canonicalBase?: string, urls?: Array<string | undefined | null> } = {}) {
+export function initRuntimeConnectionHints(options: { apiBaseUrl?: string, urls?: Array<string | undefined | null> } = {}) {
   primeConnectionHints({
     urls: [
       options.apiBaseUrl,
-      options.canonicalBase,
       ...DEFAULT_HINT_URLS,
       ...(Array.isArray(options.urls) ? options.urls : []),
     ],

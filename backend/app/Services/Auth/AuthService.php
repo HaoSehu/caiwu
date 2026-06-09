@@ -591,8 +591,8 @@ class AuthService
     {
         $this->ensureClientAvailable($user);
 
-        $redirectUrl = $this->resolveAdminLoginAsRedirectUrl();
         $code = Str::random(64);
+        $redirectUrl = $this->resolveAdminLoginAsRedirectUrl($code);
         $cacheKey = $this->buildAdminLoginAsCacheKey($code);
         $adminId = (int) ($context['admin_id'] ?? 0);
         $ipAddress = trim((string) ($context['ip_address'] ?? ''));
@@ -631,19 +631,19 @@ class AuthService
         ];
     }
 
-    private function resolveAdminLoginAsRedirectUrl(): string
+    private function resolveAdminLoginAsRedirectUrl(string $code): string
     {
-        $frontendUrl = $this->normalizeConfiguredUrl((string) config('app.frontend_url', ''));
-        if ($frontendUrl === '') {
-            throw new BusinessException('FRONTEND_URL 未配置，无法生成客户端代登录链接', 50000, 500);
+        $consoleUrl = $this->normalizeConfiguredUrl((string) config('app.client_console_url', ''));
+        if ($consoleUrl === '') {
+            throw new BusinessException('CLIENT_CONSOLE_URL 未配置，无法生成客户端代登录链接', 50000, 500);
         }
 
         $adminUrl = $this->normalizeConfiguredUrl((string) config('app.admin_url', ''));
-        if ($adminUrl !== '' && $this->sameUrlOrigin($frontendUrl, $adminUrl)) {
-            throw new BusinessException('FRONTEND_URL 不能与 ADMIN_URL 相同，无法生成客户端代登录链接', 50000, 500);
+        if ($adminUrl !== '' && $this->sameUrlOrigin($consoleUrl, $adminUrl)) {
+            throw new BusinessException('CLIENT_CONSOLE_URL 不能与 ADMIN_URL 相同，无法生成客户端代登录链接', 50000, 500);
         }
 
-        return $frontendUrl.'/client/dashboard';
+        return $consoleUrl.'/client/login-as?code='.rawurlencode($code);
     }
 
     private function normalizeConfiguredUrl(string $url): string

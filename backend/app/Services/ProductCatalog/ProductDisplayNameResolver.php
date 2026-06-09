@@ -32,6 +32,11 @@ class ProductDisplayNameResolver
      */
     private array $instanceSpecTextCache = [];
 
+    /**
+     * @var array<int, string>
+     */
+    private array $customDisplayNameCache = [];
+
     public function __construct(
         private readonly ?InstanceSpecCatalogService $instanceSpecCatalogService = null,
     ) {}
@@ -40,7 +45,9 @@ class ProductDisplayNameResolver
      * @return array{
      *     product_display_name: string,
      *     product_spec_display: string,
+     *     custom_display_name: string,
      *     cpu_memory_display: string,
+     *     cpu_memory_slug_display: string,
      *     combined_display_name: string,
      *     instance_spec_text: string,
      *     cpu_display: string,
@@ -78,17 +85,28 @@ class ProductDisplayNameResolver
         $cpuMemoryDisplay = $cpuMemorySegments !== []
             ? implode(' ', $cpuMemorySegments)
             : '';
+        $cpuMemorySlugDisplay = $this->buildCpuMemorySlugDisplay($cpuDisplay, $memoryDisplay);
         $productSpecDisplay = $instanceSpecText !== ''
             ? $instanceSpecText
             : ($cpuMemoryDisplay !== '' ? $cpuMemoryDisplay : ($legacyProductName !== '' ? $legacyProductName : '未配置规格 #'.(int) $product->id));
-        $combinedDisplayName = $this->buildCombinedDisplayName($productSpecDisplay, $cpuDisplay, $memoryDisplay);
+        $customDisplayName = $this->resolveCustomDisplayNameText($product, $configSnapshot, [
+            $cpuMemorySlugDisplay,
+            $cpuMemoryDisplay,
+            $productSpecDisplay,
+        ]);
+        $productDisplayName = $customDisplayName !== '' ? $customDisplayName : $productSpecDisplay;
+        $combinedDisplayName = $customDisplayName !== ''
+            ? $customDisplayName
+            : $this->buildCombinedDisplayName($productSpecDisplay, $cpuDisplay, $memoryDisplay);
 
         return [
-            'product_display_name' => $productSpecDisplay,
+            'product_display_name' => $productDisplayName,
             'product_spec_display' => $productSpecDisplay,
+            'custom_display_name' => $customDisplayName,
             'cpu_memory_display' => $cpuMemoryDisplay !== ''
                 ? $cpuMemoryDisplay
                 : ($instanceSpecText !== '' ? $instanceSpecText : '未配置规格 #'.(int) $product->id),
+            'cpu_memory_slug_display' => $cpuMemorySlugDisplay,
             'combined_display_name' => $combinedDisplayName !== ''
                 ? $combinedDisplayName
                 : ($productSpecDisplay !== '' ? $productSpecDisplay : '未配置规格 #'.(int) $product->id),
@@ -741,6 +759,52 @@ class ProductDisplayNameResolver
         return '';
     }
 
+    /**
+     * @param  array<string, mixed>  $configSnapshot
+     * @param  array<int, string>  $defaultCandidates
+     */
+    private function resolveCustomDisplayNameText(Product $product, array $configSnapshot = [], array $defaultCandidates = []): string
+    {
+        $candidates = [
+            $configSnapshot['custom_display_name'] ?? '',
+        ];
+
+        $rawAttributes = $product->getAttributes();
+        if (array_key_exists('custom_display_name', $rawAttributes)) {
+            $candidates[] = $rawAttributes['custom_display_name'] ?? '';
+        }
+
+        $candidates[] = $product->getRawOriginal('custom_display_name');
+
+        foreach ($candidates as $candidate) {
+            $normalized = trim((string) $candidate);
+            if ($normalized !== '') {
+                $squished = Str::squish($normalized);
+                if (! $this->isDefaultCustomDisplayName($squished, $defaultCandidates)) {
+                    return $squished;
+                }
+            }
+        }
+
+        $productId = (int) $product->id;
+        if ($productId > 0 && Product::optionalSelectColumns(['custom_display_name']) !== []) {
+            if (! array_key_exists($productId, $this->customDisplayNameCache)) {
+                $this->customDisplayNameCache[$productId] = trim((string) Product::query()
+                    ->whereKey($productId)
+                    ->value('custom_display_name'));
+            }
+
+            $cachedCustomDisplayName = trim($this->customDisplayNameCache[$productId]);
+            $squished = $cachedCustomDisplayName !== '' ? Str::squish($cachedCustomDisplayName) : '';
+
+            return $squished !== '' && ! $this->isDefaultCustomDisplayName($squished, $defaultCandidates)
+                ? $squished
+                : '';
+        }
+
+        return '';
+    }
+
     private function resolveInstanceSpecText(int $productId): string
     {
         if ($productId <= 0) {
@@ -830,6 +894,14 @@ class ProductDisplayNameResolver
         return implode('-', $segments);
     }
 
+    private function buildCpuMemorySlugDisplay(string $cpuDisplay, string $memoryDisplay): string
+    {
+        return implode('-', array_values(array_filter([
+            $this->normalizeCpuSlug($cpuDisplay),
+            $this->normalizeMemorySlug($memoryDisplay),
+        ], static fn (string $segment): bool => trim($segment) !== '')));
+    }
+
     private function normalizeCpuSlug(string $value): string
     {
         $text = trim($value);
@@ -874,9 +946,28 @@ class ProductDisplayNameResolver
         return $normalizedHaystack !== '' && $normalizedNeedle !== '' && str_contains($normalizedHaystack, $normalizedNeedle);
     }
 
+    /**
+     * @param  array<int, string>  $defaultCandidates
+     */
+    private function isDefaultCustomDisplayName(string $customDisplayName, array $defaultCandidates): bool
+    {
+        $customComparable = $this->normalizeSlugComparable($customDisplayName);
+        if ($customComparable === '') {
+            return false;
+        }
+
+        foreach ($defaultCandidates as $candidate) {
+            if ($customComparable === $this->normalizeSlugComparable((string) $candidate)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function normalizeSlugComparable(string $value): string
     {
-        $normalized = Str::lower(preg_replace('/\s+/u', '', trim($value)) ?? trim($value));
+        $normalized = Str::lower(preg_replace('/[\s_-]+/u', '', trim($value)) ?? trim($value));
         $normalized = preg_replace('/(\d+(?:\.\d+)?)v?cpu/u', '$1vcpu', $normalized) ?? $normalized;
         $normalized = preg_replace('/(\d+(?:\.\d+)?)(?:gb|g)(?![a-z])/u', '$1gib', $normalized) ?? $normalized;
         $normalized = preg_replace('/(\d+(?:\.\d+)?)(?:mb|m)(?![a-z])/u', '$1mib', $normalized) ?? $normalized;

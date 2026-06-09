@@ -26,6 +26,7 @@ class Invoice extends Model
         'product_snapshot_json',
         'config_snapshot', 'config_pricing_snapshot', 'coupon_snapshot',
         'status', 'due_date', 'paid_at',
+        'refunded_at', 'refund_amount', 'refund_method', 'refund_trace_id',
     ];
 
     protected function casts(): array
@@ -36,6 +37,8 @@ class Invoice extends Model
             'paid_amount' => 'decimal:2',
             'due_date' => 'date',
             'paid_at' => 'datetime',
+            'refunded_at' => 'datetime',
+            'refund_amount' => 'decimal:2',
             'product_snapshot_json' => 'array',
             'config_snapshot' => 'array',
             'config_pricing_snapshot' => 'array',

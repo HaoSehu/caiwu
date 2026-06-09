@@ -5,6 +5,7 @@ namespace App\Services\System;
 use App\Models\NotificationLog;
 use App\Models\Setting;
 use App\Models\SmsLog;
+use App\Services\Sms\Data\SmsSendRequest;
 use App\Services\Sms\SmsDriverManager;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -30,11 +31,11 @@ class SmsService
             }
 
             $driver = $this->driverManager->resolve();
-            $result = $driver->sendVerifyCode($phone, $code);
+            $result = $driver->sendVerifyCode(new SmsSendRequest($phone, $code));
 
             $this->updateSmsLog($logContext, [
                 'status' => 'success',
-                'request_id' => $result['request_id'] ?? null,
+                'request_id' => $result->requestId,
                 'sent_at' => now(),
             ]);
         } catch (\Exception $e) {

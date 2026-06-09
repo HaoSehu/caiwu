@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\System\Concerns;
 
 use App\Models\NotificationLog;
+use App\Models\ScheduleRunLog;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -32,6 +33,7 @@ trait HandlesAdminLogCleanup
                         'email' => NotificationLog::query()->where('channel', 'email')->count(),
                         'api' => $this->baseApiLogQuery()->count(),
                         'admin_login' => $this->baseAdminLoginLogQuery()->count(),
+                        'schedule_run' => ScheduleRunLog::query()->count(),
                     ],
                     'file' => [
                         'path' => $logPath,
@@ -46,6 +48,7 @@ trait HandlesAdminLogCleanup
                         ['value' => 'email', 'label' => '邮件日志'],
                         ['value' => 'api', 'label' => 'API日志'],
                         ['value' => 'admin_login', 'label' => '管理员登录日志'],
+                        ['value' => 'schedule_run', 'label' => '调度执行日志'],
                         ['value' => 'task', 'label' => '定时任务日志'],
                         ['value' => 'system', 'label' => '系统日志'],
                         ['value' => 'all_db', 'label' => '全部数据库日志'],
@@ -74,6 +77,7 @@ trait HandlesAdminLogCleanup
                 $affected['admin_login'] = $this->baseAdminLoginLogQuery()
                     ->where('created_at', '<', $cutoff)
                     ->delete();
+                $affected['schedule_run'] = ScheduleRunLog::query()->where('created_at', '<', $cutoff)->delete();
             });
         } else {
             DB::transaction(function () use ($type, $cutoff, &$affected) {
@@ -95,6 +99,10 @@ trait HandlesAdminLogCleanup
                     $affected['admin_login'] = $this->baseAdminLoginLogQuery()
                         ->where('created_at', '<', $cutoff)
                         ->delete();
+                }
+
+                if ($type === 'schedule_run') {
+                    $affected['schedule_run'] = ScheduleRunLog::query()->where('created_at', '<', $cutoff)->delete();
                 }
             });
         }

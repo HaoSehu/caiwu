@@ -82,7 +82,7 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
     {
         return new PaymentService(
             $this->createMock(ProvisionService::class),
-            $alipayService,
+            $this->makePaymentGatewayManagerForTest($alipayService),
             $this->createMock(ServiceRenewService::class),
             $this->createMock(ReferralService::class),
             $this->createMock(PaidOrderBusinessFlowDispatcher::class),
@@ -157,7 +157,7 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
 
         $service = new PaymentService(
             $this->createMock(ProvisionService::class),
-            $this->createMock(AlipayFaceToFaceService::class),
+            $this->makePaymentGatewayManagerForTest($this->createMock(AlipayFaceToFaceService::class)),
             $this->createMock(ServiceRenewService::class),
             $this->createMock(ReferralService::class),
             $this->createMock(PaidOrderBusinessFlowDispatcher::class),
@@ -241,7 +241,7 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
 
         $service = new PaymentService(
             $this->createMock(ProvisionService::class),
-            $alipayService,
+            $this->makePaymentGatewayManagerForTest($alipayService),
             $this->createMock(ServiceRenewService::class),
             $this->createMock(ReferralService::class),
             $this->createMock(PaidOrderBusinessFlowDispatcher::class),
@@ -298,7 +298,19 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
             'paid_amount' => '0.00',
             'status' => OrderStatus::PENDING,
         ]);
-        $this->assertSame(0, BalanceLog::query()
+        $this->assertDatabaseHas('balance_logs', [
+            'user_id' => (int) $user->id,
+            'reference_id' => (int) $invoice->id,
+            'event_type' => \App\Constants\FinanceLedgerEventType::INVOICE_PAYMENT,
+            'change_amount' => '-20.00',
+        ]);
+        $this->assertDatabaseHas('balance_logs', [
+            'user_id' => (int) $user->id,
+            'reference_id' => (int) $invoice->id,
+            'event_type' => \App\Constants\FinanceLedgerEventType::INVOICE_REFUND,
+            'change_amount' => '20.00',
+        ]);
+        $this->assertSame(2, BalanceLog::query()
             ->where('user_id', (int) $user->id)
             ->where('reference_id', (int) $invoice->id)
             ->count());
@@ -422,6 +434,10 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
             'id' => (int) $order->id,
             'status' => OrderStatus::REFUNDED,
         ]);
+        $this->assertDatabaseHas('invoices', [
+            'id' => (int) $invoice->id,
+            'status' => InvoiceStatus::REFUNDED,
+        ]);
     }
 
     public function test_admin_manual_invoice_entry_does_not_create_payment_for_manual_gateway(): void
@@ -475,6 +491,39 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
         $this->assertDatabaseMissing('payments', [
             'invoice_id' => (int) $invoice->id,
             'gateway' => 'offline',
+        ]);
+        $this->assertDatabaseHas('invoices', [
+            'id' => (int) $invoice->id,
+            'status' => InvoiceStatus::PAID,
+            'paid_amount' => '50.00',
+        ]);
+        $this->assertDatabaseHas('orders', [
+            'id' => (int) $order->id,
+            'status' => OrderStatus::PAID,
+            'paid_amount' => '50.00',
+        ]);
+    }
+
+    public function test_admin_manual_invoice_entry_does_not_create_real_gateway_payment(): void
+    {
+        [$user, $order, $invoice] = $this->createUserOrderInvoice('manualalipay');
+
+        app(OrderService::class)->updateManualPaymentStatus($order, [
+            'action' => 'mark_paid',
+            'amount' => '50.00',
+            'payment_gateway' => 'alipay',
+            'trade_no' => 'ALI-MANUAL-ENTRY-'.strtoupper(bin2hex(random_bytes(4))),
+            'remark' => '后台确认支付宝入账',
+        ], [
+            'operator_id' => 1,
+            'operator_name' => 'tester',
+            'trace_id' => 'manual-alipay-entry-regression',
+        ]);
+
+        $this->assertDatabaseMissing('payments', [
+            'invoice_id' => (int) $invoice->id,
+            'gateway' => 'alipay',
+            'status' => PaymentStatus::SUCCESS,
         ]);
         $this->assertDatabaseHas('invoices', [
             'id' => (int) $invoice->id,

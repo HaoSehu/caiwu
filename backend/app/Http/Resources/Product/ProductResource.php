@@ -22,6 +22,9 @@ class ProductResource extends JsonResource
         $primaryPrice = $this->resolvePrimaryPrice((array) $this->pricing);
         $provisionHostname = ProductProvisionHostname::fromPurchaseRequires((array) ($this->purchase_requires ?? []));
         $displayName = (new ProductDisplayNameResolver)->resolveForProduct($this->resource);
+        $adminSpecDisplay = $this->resolveAdminProductSpecDisplayName($displayName);
+        $adminCustomDisplayName = $this->resolveAdminCustomDisplayName($displayName, $adminSpecDisplay);
+        $adminDisplayName = $this->resolveAdminProductDisplayName($displayName, $adminSpecDisplay, $adminCustomDisplayName);
 
         return [
             'id' => $this->id,
@@ -36,18 +39,17 @@ class ProductResource extends JsonResource
             'group_name' => $category?->name,
             'group_parent_name' => $parentCategory?->name,
             'group_full_name' => $parentCategory ? $parentCategory->name.' / '.($category?->name ?? '') : ($category?->name ?? ''),
-            'name' => $this->name,
-            'display_name' => (string) ($displayName['product_spec_display'] ?? ''),
-            'product_spec_display' => (string) ($displayName['product_spec_display'] ?? ''),
+            'name' => $adminDisplayName,
+            'display_name' => $adminDisplayName,
+            'custom_display_name' => $adminCustomDisplayName,
+            'product_spec_display' => $adminSpecDisplay,
+            'product_display_name' => $adminDisplayName,
             'cpu_memory_display' => (string) ($displayName['cpu_memory_display'] ?? ''),
             'combined_display_name' => (string) ($displayName['combined_display_name'] ?? ''),
             'product_type' => $productType,
             'type' => $productType,
             'type_label' => ProductType::labelOf($productType),
             'remark' => (string) ($this->remark ?? ''),
-            'meta_title' => $this->meta_title,
-            'meta_description' => $this->meta_description,
-            'meta_keywords' => $this->meta_keywords,
             'pricing' => (array) $this->pricing,
             'product_prices' => (array) $this->pricing,
             'primary_price' => $primaryPrice,
@@ -74,6 +76,77 @@ class ProductResource extends JsonResource
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at?->format('Y-m-d H:i:s'),
         ];
+    }
+
+    private function resolveAdminProductDisplayName(array $displayName, string $specDisplay, string $customDisplayName): string
+    {
+        foreach ([
+            $customDisplayName,
+            $specDisplay,
+            $displayName['product_display_name'] ?? '',
+        ] as $candidate) {
+            $normalized = trim((string) $candidate);
+            if ($normalized !== '') {
+                return $normalized;
+            }
+        }
+
+        return '未配置规格 #'.(int) $this->id;
+    }
+
+    private function resolveAdminProductSpecDisplayName(array $displayName): string
+    {
+        foreach ([
+            $displayName['cpu_memory_slug_display'] ?? '',
+            $displayName['cpu_memory_display'] ?? '',
+            $displayName['product_spec_display'] ?? '',
+            $displayName['product_display_name'] ?? '',
+        ] as $candidate) {
+            $normalized = trim((string) $candidate);
+            if ($this->isMeaningfulProductDisplaySegment($normalized)) {
+                return $normalized;
+            }
+        }
+
+        return '未配置规格 #'.(int) $this->id;
+    }
+
+    private function resolveAdminCustomDisplayName(array $displayName, string $specDisplay): string
+    {
+        $customDisplayName = trim((string) ($displayName['custom_display_name'] ?? ''));
+        if ($customDisplayName === '') {
+            return '';
+        }
+
+        $defaultCandidates = [
+            $specDisplay,
+            $displayName['cpu_memory_slug_display'] ?? '',
+            $displayName['cpu_memory_display'] ?? '',
+            $displayName['product_spec_display'] ?? '',
+        ];
+
+        $customComparable = $this->normalizeDisplayComparable($customDisplayName);
+        foreach ($defaultCandidates as $candidate) {
+            if ($customComparable !== '' && $customComparable === $this->normalizeDisplayComparable((string) $candidate)) {
+                return '';
+            }
+        }
+
+        return $customDisplayName;
+    }
+
+    private function normalizeDisplayComparable(string $value): string
+    {
+        $normalized = strtolower((string) preg_replace('/[\s_-]+/u', '', trim($value)));
+        $normalized = (string) preg_replace('/(\d+(?:\.\d+)?)gb/i', '$1gib', $normalized);
+        $normalized = (string) preg_replace('/(\d+(?:\.\d+)?)g(?![a-z])/i', '$1gib', $normalized);
+
+        return $normalized;
+    }
+
+    private function isMeaningfulProductDisplaySegment(string $value): bool
+    {
+        return $value !== '' && ! str_starts_with($value, '未配置规格 #');
     }
 
     private function resolvePrimaryPrice(array $pricing): array

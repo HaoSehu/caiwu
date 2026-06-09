@@ -40,7 +40,7 @@ class RechargeRequiresVerificationTest extends TestCase
 
         $service = new PaymentService(
             $this->createMock(ProvisionService::class),
-            $alipayService,
+            $this->makePaymentGatewayManagerForTest($alipayService),
             $this->createMock(ServiceRenewService::class),
             $this->createMock(ReferralService::class),
             $this->createMock(PaidOrderBusinessFlowDispatcher::class),

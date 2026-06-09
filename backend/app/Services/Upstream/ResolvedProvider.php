@@ -6,6 +6,7 @@ namespace App\Services\Upstream;
 
 use App\Exceptions\BusinessException;
 use App\Services\Upstream\Contracts\UpstreamDriver;
+use App\Services\Upstream\Data\UpstreamProviderDescriptor;
 
 final class ResolvedProvider
 {
@@ -41,10 +42,34 @@ final class ResolvedProvider
         return $this->driver instanceof UpstreamDriver;
     }
 
+    /**
+     * 返回当前已解析 provider 的能力接口列表。
+     *
+     * @return array<int, class-string>
+     */
+    public function capabilities(): array
+    {
+        return $this->driver instanceof UpstreamDriver
+            ? $this->driver->capabilities()
+            : [];
+    }
+
     public function supports(string $capability): bool
     {
         return $this->driver instanceof UpstreamDriver
             && $this->driver->supports($capability);
+    }
+
+    public function descriptor(): UpstreamProviderDescriptor
+    {
+        if ($this->driver instanceof UpstreamDriver) {
+            return UpstreamProviderDescriptor::fromDriver($this->driver);
+        }
+
+        return new UpstreamProviderDescriptor(
+            key: trim((string) ($this->normalizedKey ?? $this->rawKey ?? '')),
+            label: $this->label(),
+        );
     }
 
     public function maybe(string $capability): ?object

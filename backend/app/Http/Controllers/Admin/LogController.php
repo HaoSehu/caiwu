@@ -8,6 +8,7 @@ use App\Http\Requests\Admin\Log\EmailLogListRequest;
 use App\Http\Requests\Admin\Log\GeneralLogListRequest;
 use App\Http\Requests\Admin\Log\SmsLogListRequest;
 use App\Services\System\AdminLogService;
+use App\Services\System\ScheduleRunLogService;
 
 class LogController extends Controller
 {
@@ -95,6 +96,34 @@ class LogController extends Controller
         return $this->success(
             $this->adminLogService->cleanup($request->payload()),
             '日志清理完成'
+        );
+    }
+
+    public function gatewayLogs(GeneralLogListRequest $request)
+    {
+        return $this->success(
+            $this->adminLogService->getGatewayLogs($request->filters(), $request->pageNumber(), $request->perPage(20, 100))
+        );
+    }
+
+    public function activityLogs(GeneralLogListRequest $request)
+    {
+        return $this->success(
+            $this->adminLogService->getActivityLogs($request->filters(), $request->pageNumber(), $request->perPage(20, 100))
+        );
+    }
+
+    public function scheduleLogs(GeneralLogListRequest $request)
+    {
+        return $this->success(
+            app(ScheduleRunLogService::class)->getScheduleStatus($request->pageNumber(), $request->perPage(20, 100), $request->filters())
+        );
+    }
+
+    public function scheduleHealth()
+    {
+        return $this->success(
+            app(ScheduleRunLogService::class)->getHealthOverview()
         );
     }
 }

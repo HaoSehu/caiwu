@@ -1,0 +1,9 @@
+本地 idc 数据迁移流程
+时间：2026-06-09 00:09:05
+后端目录：C:\Users\USER125536\Desktop\caiwu\backend
+dump 文件：C:\Users\USER125536\Desktop\caiwu\idc_2026-06-07_15-31-26_mysql_data_R5FN2.sql
+env 文件：C:\Users\USER125536\Desktop\caiwu\backend\.env
+dry-run：是
+
+== 1. 清空并初始化本地数据库 ==
+C:\Program Files\python\python.exe C:\Users\USER125536\Desktop\caiwu\backend\scripts\install_db.py --reset --dry-run

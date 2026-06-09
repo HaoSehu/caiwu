@@ -4,6 +4,7 @@ namespace App\Services\Finance;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\InvoiceType;
+use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Exceptions\BusinessException;
 use App\Models\Invoice;
@@ -322,6 +323,93 @@ class InvoiceService
             'items' => $this->buildInvoiceItems($invoice, $scene),
             'logs' => $this->buildInvoiceLogs($invoice, $scene),
             'can_cancel' => in_array((int) $invoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE], true),
+        ];
+    }
+
+    public function clientDetail(Invoice $invoice): array
+    {
+        $invoice->loadMissing([
+            'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle',
+            'order.product:id,product_type,product_group_id,remark,config_options,purchase_requires',
+            'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
+            'service:id,name,status,expires_at',
+            'payments',
+            'items',
+        ]);
+
+        $scene = $this->resolveInvoiceScene($invoice);
+        $paymentSummary = $this->resolveInvoicePaymentSummary($invoice);
+        $displayStatus = $this->resolveInvoiceDisplayStatus($invoice, $paymentSummary);
+        $productDisplayName = $this->resolveInvoiceProductDisplayName($invoice);
+        $productSpecDisplay = $this->resolveInvoiceProductSpecDisplay($invoice, $scene, $productDisplayName);
+        $combinedDisplayName = $this->resolveInvoiceCombinedDisplayName($invoice, $productDisplayName);
+
+        if (is_array($paymentSummary)) {
+            unset($paymentSummary['trade_no']);
+        }
+
+        return [
+            'id' => (int) $invoice->id,
+            'invoice_no' => (string) $invoice->invoice_no,
+            'product_spec_snapshot' => (string) ($invoice->product_spec_snapshot ?? ''),
+            'product_spec_display' => $productSpecDisplay,
+            'product_display_name' => $productDisplayName,
+            'combined_display_name' => $combinedDisplayName,
+            'order_id' => (int) ($invoice->order_id ?? 0),
+            'order' => $invoice->order ? [
+                'id' => (int) $invoice->order->id,
+                'order_no' => (string) $invoice->order->order_no,
+                'status' => (int) $invoice->order->status,
+                'type' => (string) $invoice->order->type,
+                'service_id' => (int) ($invoice->order->service_id ?? 0),
+                'paid_at' => $invoice->order->paid_at?->format('Y-m-d H:i:s'),
+                'billing_cycle' => (string) ($invoice->order->billing_cycle ?? ''),
+            ] : null,
+            'product_id' => (int) ($invoice->product_id ?? 0),
+            'product' => $invoice->product ? [
+                'id' => (int) $invoice->product->id,
+                'name' => (string) $invoice->product->name,
+                'product_type' => (string) ($invoice->product->product_type ?? ''),
+            ] : null,
+            'service' => $invoice->service ? [
+                'id' => (int) $invoice->service->id,
+                'name' => (string) $invoice->service->name,
+                'status' => (int) $invoice->service->status,
+                'expires_at' => $invoice->service->expires_at?->format('Y-m-d H:i:s'),
+            ] : null,
+            'type' => (string) $invoice->type,
+            'type_label' => $this->resolveInvoiceTypeLabel((string) $invoice->type, $invoice),
+            'scene' => $scene,
+            'amount' => number_format((float) $invoice->amount, 2, '.', ''),
+            'discount' => number_format((float) ($invoice->discount ?? 0), 2, '.', ''),
+            'paid_amount' => number_format((float) ($invoice->paid_amount ?? 0), 2, '.', ''),
+            'payable_amount' => number_format(max((float) $invoice->amount - (float) ($invoice->paid_amount ?? 0), 0), 2, '.', ''),
+            'status' => (int) $displayStatus['status'],
+            'status_label' => (string) $displayStatus['status_label'],
+            'billing_cycle' => (string) ($invoice->billing_cycle ?? ''),
+            'quantity' => (int) ($invoice->quantity ?? 1),
+            'summary' => $this->buildInvoiceSummary($invoice, $scene),
+            'due_date' => $invoice->due_date?->format('Y-m-d'),
+            'paid_at' => $invoice->paid_at?->format('Y-m-d H:i:s'),
+            'created_at' => $invoice->created_at?->format('Y-m-d H:i:s'),
+            'updated_at' => $invoice->updated_at?->format('Y-m-d H:i:s'),
+            'payment_summary' => $paymentSummary,
+            'payments' => $invoice->payments->map(fn ($p) => [
+                'id' => (int) $p->id,
+                'payment_no' => (string) $p->payment_no,
+                'gateway' => (string) $p->gateway,
+                'gateway_label' => $this->resolvePaymentGatewayLabel((string) $p->gateway),
+                'amount' => number_format((float) $p->amount, 2, '.', ''),
+                'status' => (int) $p->status,
+                'status_label' => $this->resolvePaymentStatusLabel((int) $p->status),
+                'paid_at' => $p->paid_at?->format('Y-m-d H:i:s'),
+                'refund_method' => (string) data_get((array) ($p->callback_raw ?? []), 'refund.refund_method', ''),
+                'refund_method_label' => (string) data_get((array) ($p->callback_raw ?? []), 'refund.refund_method_label', ''),
+                'refund_reason' => (string) data_get((array) ($p->callback_raw ?? []), 'refund.refund_reason', ''),
+                'refunded_at' => (string) data_get((array) ($p->callback_raw ?? []), 'refund.refunded_at', ''),
+            ])->values()->all(),
+            'items' => $this->buildInvoiceItems($invoice, $scene),
+            'logs' => $this->buildInvoiceLogs($invoice, $scene),
         ];
     }
 
@@ -793,7 +881,7 @@ class InvoiceService
     private function resolvePaymentGatewayLabel(string $gateway): string
     {
         return match ($gateway) {
-            'alipay' => '支付宝支付',
+            PaymentGatewayCode::ALIPAY => PaymentGatewayCode::label(PaymentGatewayCode::ALIPAY),
             'wechat' => '微信支付',
             'balance' => '余额支付',
             'free' => '免支付',

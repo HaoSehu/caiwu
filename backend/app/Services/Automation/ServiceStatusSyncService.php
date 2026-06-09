@@ -9,9 +9,12 @@ use App\Exceptions\BusinessException;
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\Supplier;
+use App\Services\Integrations\Support\ProviderErrorMapper;
 use App\Services\Upstream\Contracts\ProvidesStatusSync;
+use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderResolver;
 use App\Support\ServiceHostname;
+use App\Support\SensitiveDataSanitizer;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
@@ -474,8 +477,13 @@ class ServiceStatusSyncService
         }
 
         $message = trim((string) ($response['msg'] ?? $response['message'] ?? ''));
+        Log::warning('[上游状态同步] 返回失败', [
+            'action' => $action,
+            'status' => $status,
+            'message' => SensitiveDataSanitizer::sanitizeText($message),
+        ]);
 
-        throw new BusinessException($message !== '' ? "{$action}失败：{$message}" : "{$action}失败", 42200);
+        throw new BusinessException(app(ProviderErrorMapper::class)->toUserMessage(ProviderKey::HOSTING_PANEL_API, $action, $message), 42200);
     }
 
     private function extractPayload(array $response): array

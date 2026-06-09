@@ -65,6 +65,28 @@ class UserVerificationSnapshotTest extends TestCase
         $this->assertSame('verified-name', $user->display_name);
     }
 
+    public function test_it_treats_successful_verification_status_as_completed(): void
+    {
+        $user = new User;
+        $user->setRawAttributes([
+            'is_verified' => 0,
+            'verification_status' => 2,
+        ], true);
+
+        $this->assertTrue($user->hasCompletedVerification());
+    }
+
+    public function test_it_treats_legacy_verified_flag_as_completed(): void
+    {
+        $user = new User;
+        $user->setRawAttributes([
+            'is_verified' => 1,
+            'verification_status' => 0,
+        ], true);
+
+        $this->assertTrue($user->hasCompletedVerification());
+    }
+
     public function test_it_falls_back_to_email_or_phone_for_display_name_when_nickname_missing(): void
     {
         $emailUser = new User;

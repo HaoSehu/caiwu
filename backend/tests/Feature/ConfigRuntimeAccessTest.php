@@ -15,6 +15,15 @@ use Tests\TestCase;
 
 class ConfigRuntimeAccessTest extends TestCase
 {
+    public function test_verification_qrcode_payload_returns_provider_url_without_proxy_url(): void
+    {
+        $content = file_get_contents(base_path('app/Services/Auth/VerificationService.php'));
+
+        $this->assertIsString($content);
+        $this->assertStringContainsString("'url' => \$remoteUrl", $content);
+        $this->assertStringNotContainsString("'proxy_url' =>", $content);
+    }
+
     public function test_verification_service_builds_urls_from_config_frontend_url(): void
     {
         config([

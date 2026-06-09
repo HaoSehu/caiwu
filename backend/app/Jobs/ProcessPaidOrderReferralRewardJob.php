@@ -9,6 +9,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 
 class ProcessPaidOrderReferralRewardJob implements ShouldQueue
 {
@@ -18,6 +19,8 @@ class ProcessPaidOrderReferralRewardJob implements ShouldQueue
     use SerializesModels;
 
     public int $tries = 3;
+
+    public int $timeout = 300;
 
     public array $backoff = [30, 120, 300];
 
@@ -34,12 +37,22 @@ class ProcessPaidOrderReferralRewardJob implements ShouldQueue
         return [
             (new WithoutOverlapping("job:paid-order-referral:{$this->orderId}"))
                 ->releaseAfter(10)
-                ->expireAfter(180),
+                ->expireAfter(600),
         ];
     }
 
     public function handle(PaymentService $paymentService): void
     {
         $paymentService->processPaidOrderReferralRewardById($this->orderId, $this->traceId);
+    }
+
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('[支付后推荐奖励] 队列任务失败', [
+            'order_id' => $this->orderId,
+            'trace_id' => $this->traceId,
+            'message' => $exception->getMessage(),
+            'exception' => $exception::class,
+        ]);
     }
 }

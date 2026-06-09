@@ -11,11 +11,13 @@ use App\Models\Product;
 use App\Models\Service;
 use App\Models\Supplier;
 use App\Services\System\SettingService;
+use App\Services\Integrations\Support\ProviderErrorMapper;
 use App\Services\Upstream\Contracts\ProvidesProvisioning;
 use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderResolver;
 use App\Support\ProductProvisionHostname;
 use App\Support\ServiceHostname;
+use App\Support\SensitiveDataSanitizer;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
@@ -709,7 +711,13 @@ class ProvisionService
         }
 
         $message = trim((string) ($response['msg'] ?? $response['message'] ?? ''));
-        throw new BusinessException($message !== '' ? "{$action}失败：{$message}" : "{$action}失败");
+        Log::warning('[上游开通] 返回失败', [
+            'action' => $action,
+            'status' => $status,
+            'message' => SensitiveDataSanitizer::sanitizeText($message),
+        ]);
+
+        throw new BusinessException(app(ProviderErrorMapper::class)->toUserMessage(ProviderKey::HOSTING_PANEL_API, $action, $message));
     }
 
     private function addProductToUpstreamCart(object $provisioning, Supplier $supplier, string $jwt, array $payload): array

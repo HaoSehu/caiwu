@@ -1,8 +1,8 @@
 # 后端 API 清单
 
-- 生成时间: `2026-04-22 23:56:04`
-- API 总数: `268`
-- 分组统计: `admin=154, client=93, site/public=21`
+- 生成时间: `2026-06-08 21:21:41`
+- API 总数: `308`
+- 分组统计: `admin=178, client=108, site/public=22`
 
 > **自动生成**，由 `backend/scripts/export_api_inventory.php` 扫描 Laravel 路由表导出，**不要手工编辑**。
 >
@@ -39,19 +39,36 @@
 | admin | `DELETE` | `/api/admin/coupons/{coupon}` | `App\Http\Controllers\Admin\CouponController@destroy` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.manage` |
 | admin | `PUT` | `/api/admin/coupons/{coupon}` | `App\Http\Controllers\Admin\CouponController@update` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.manage` |
 | admin | `POST` | `/api/admin/coupons/{coupon}/toggle-status` | `App\Http\Controllers\Admin\CouponController@toggleStatus` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.manage` |
+| admin | `GET` | `/api/admin/cpu-model-catalog` | `App\Http\Controllers\Admin\CpuModelCatalogController@index` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.list` |
+| admin | `POST` | `/api/admin/cpu-model-catalog` | `App\Http\Controllers\Admin\CpuModelCatalogController@update` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.manage` |
 | admin | `GET` | `/api/admin/dashboard` | `App\Http\Controllers\Admin\DashboardController@index` | `admin` | `api, auth:sanctum, ensure.admin, permission:dashboard.view` |
+| admin | `GET` | `/api/admin/dashboard/monthly-revenue` | `App\Http\Controllers\Admin\DashboardController@monthlyRevenue` | `admin` | `api, auth:sanctum, ensure.admin, permission:dashboard.view` |
 | admin | `GET` | `/api/admin/dashboard/recent-invoices` | `App\Http\Controllers\Admin\DashboardController@recentInvoices` | `admin` | `api, auth:sanctum, ensure.admin, permission:dashboard.view` |
 | admin | `GET` | `/api/admin/dashboard/stats` | `App\Http\Controllers\Admin\DashboardController@stats` | `admin` | `api, auth:sanctum, ensure.admin, permission:dashboard.view` |
+| admin | `GET` | `/api/admin/finance/addon-orders` | `App\Http\Controllers\Admin\FinanceMenuController@addonOrders` | `admin` | `api, auth:sanctum, ensure.admin, permission:invoice.list` |
+| admin | `GET` | `/api/admin/finance/ledger` | `App\Http\Controllers\Admin\FinanceLedgerController@index` | `admin` | `api, auth:sanctum, ensure.admin, permission:invoice.list` |
+| admin | `GET` | `/api/admin/finance/ledger/summary` | `App\Http\Controllers\Admin\FinanceLedgerController@summary` | `admin` | `api, auth:sanctum, ensure.admin, permission:invoice.list` |
+| admin | `GET` | `/api/admin/finance/ledger/{id}` | `App\Http\Controllers\Admin\FinanceLedgerController@show` | `admin` | `api, auth:sanctum, ensure.admin, permission:invoice.detail` |
+| admin | `GET` | `/api/admin/finance/new-customer-daily-summary` | `App\Http\Controllers\Admin\FinanceMenuController@newCustomerDailySummary` | `admin` | `api, auth:sanctum, ensure.admin, permission:finance.report` |
+| admin | `GET` | `/api/admin/finance/product-income-summary` | `App\Http\Controllers\Admin\FinanceMenuController@productIncomeSummary` | `admin` | `api, auth:sanctum, ensure.admin, permission:finance.report` |
+| admin | `GET` | `/api/admin/finance/recharges` | `App\Http\Controllers\Admin\FinanceMenuController@recharges` | `admin` | `api, auth:sanctum, ensure.admin, permission:invoice.list` |
+| admin | `GET` | `/api/admin/finance/renewal-orders` | `App\Http\Controllers\Admin\FinanceMenuController@renewalOrders` | `admin` | `api, auth:sanctum, ensure.admin, permission:invoice.list` |
+| admin | `GET` | `/api/admin/instance-spec-catalog` | `App\Http\Controllers\Admin\InstanceSpecCatalogController@index` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.list` |
+| admin | `POST` | `/api/admin/instance-spec-catalog` | `App\Http\Controllers\Admin\InstanceSpecCatalogController@update` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.manage` |
 | admin | `GET` | `/api/admin/invoices` | `App\Http\Controllers\Admin\InvoiceController@index` | `admin` | `api, auth:sanctum, ensure.admin, permission:invoice.list` |
 | admin | `GET` | `/api/admin/invoices/{id}` | `App\Http\Controllers\Admin\InvoiceController@show` | `admin` | `api, auth:sanctum, ensure.admin, permission:invoice.detail` |
 | admin | `POST` | `/api/admin/invoices/{id}/cancel` | `App\Http\Controllers\Admin\InvoiceController@cancel` | `admin` | `api, auth:sanctum, ensure.admin, permission:invoice.manage` |
 | admin | `POST` | `/api/admin/login` | `App\Http\Controllers\Admin\AuthController@login` | `public` | `api, throttle:5,1` |
+| admin | `GET` | `/api/admin/logs/activity` | `App\Http\Controllers\Admin\LogController@activityLogs` | `admin` | `api, auth:sanctum, ensure.admin, permission:log.list` |
 | admin | `GET` | `/api/admin/logs/admin-logins` | `App\Http\Controllers\Admin\LogController@adminLoginLogs` | `admin` | `api, auth:sanctum, ensure.admin, permission:log.list` |
 | admin | `GET` | `/api/admin/logs/api` | `App\Http\Controllers\Admin\LogController@apiLogs` | `admin` | `api, auth:sanctum, ensure.admin, permission:log.list` |
 | admin | `POST` | `/api/admin/logs/cleanup` | `App\Http\Controllers\Admin\LogController@cleanup` | `admin` | `api, auth:sanctum, ensure.admin, permission:log.list` |
 | admin | `GET` | `/api/admin/logs/cleanup/overview` | `App\Http\Controllers\Admin\LogController@cleanupOverview` | `admin` | `api, auth:sanctum, ensure.admin, permission:log.list` |
 | admin | `GET` | `/api/admin/logs/email` | `App\Http\Controllers\Admin\LogController@emailLogs` | `admin` | `api, auth:sanctum, ensure.admin, permission:log.list` |
 | admin | `GET` | `/api/admin/logs/email/summary` | `App\Http\Controllers\Admin\LogController@emailLogsSummary` | `admin` | `api, auth:sanctum, ensure.admin, permission:log.list` |
+| admin | `GET` | `/api/admin/logs/gateway` | `App\Http\Controllers\Admin\LogController@gatewayLogs` | `admin` | `api, auth:sanctum, ensure.admin, permission:log.list` |
+| admin | `GET` | `/api/admin/logs/schedule` | `App\Http\Controllers\Admin\LogController@scheduleLogs` | `admin` | `api, auth:sanctum, ensure.admin, permission:log.list` |
+| admin | `GET` | `/api/admin/logs/schedule/health` | `App\Http\Controllers\Admin\LogController@scheduleHealth` | `admin` | `api, auth:sanctum, ensure.admin, permission:log.list` |
 | admin | `GET` | `/api/admin/logs/sms` | `App\Http\Controllers\Admin\LogController@smsLogs` | `admin` | `api, auth:sanctum, ensure.admin, permission:log.list` |
 | admin | `GET` | `/api/admin/logs/sms/summary` | `App\Http\Controllers\Admin\LogController@smsLogsSummary` | `admin` | `api, auth:sanctum, ensure.admin, permission:log.list` |
 | admin | `GET` | `/api/admin/logs/system` | `App\Http\Controllers\Admin\LogController@systemLogs` | `admin` | `api, auth:sanctum, ensure.admin, permission:log.list` |
@@ -65,6 +82,9 @@
 | admin | `POST` | `/api/admin/member-levels` | `App\Http\Controllers\Admin\MemberLevelController@store` | `admin` | `api, auth:sanctum, ensure.admin, permission:member_level.manage` |
 | admin | `DELETE` | `/api/admin/member-levels/{memberLevel}` | `App\Http\Controllers\Admin\MemberLevelController@destroy` | `admin` | `api, auth:sanctum, ensure.admin, permission:member_level.manage` |
 | admin | `PUT` | `/api/admin/member-levels/{memberLevel}` | `App\Http\Controllers\Admin\MemberLevelController@update` | `admin` | `api, auth:sanctum, ensure.admin, permission:member_level.manage` |
+| admin | `GET` | `/api/admin/orders` | `App\Http\Controllers\Admin\OrderController@index` | `admin` | `api, auth:sanctum, ensure.admin, permission:order.list` |
+| admin | `GET` | `/api/admin/orders/{id}` | `App\Http\Controllers\Admin\OrderController@show` | `admin` | `api, auth:sanctum, ensure.admin, permission:order.list` |
+| admin | `GET` | `/api/admin/os-options` | `App\Http\Controllers\Admin\UserController@osOptions` | `admin` | `api, auth:sanctum, ensure.admin, permission:user.manage` |
 | admin | `GET` | `/api/admin/product-categories` | `App\Http\Controllers\Admin\ProductCategoryController@index` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.list` |
 | admin | `POST` | `/api/admin/product-categories` | `App\Http\Controllers\Admin\ProductCategoryController@store` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.manage` |
 | admin | `POST` | `/api/admin/product-categories/reorder` | `App\Http\Controllers\Admin\ProductCategoryController@reorder` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.manage` |
@@ -86,6 +106,8 @@
 | admin | `POST` | `/api/admin/products/category/batch` | `App\Http\Controllers\Admin\ProductController@batchUpdateCategory` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.manage` |
 | admin | `POST` | `/api/admin/products/provision-hostname/batch` | `App\Http\Controllers\Admin\ProductController@batchUpdateProvisionHostname` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.manage` |
 | admin | `POST` | `/api/admin/products/reorder` | `App\Http\Controllers\Admin\ProductController@reorder` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.manage` |
+| admin | `POST` | `/api/admin/products/split` | `App\Http\Controllers\Admin\ProductController@split` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.manage` |
+| admin | `POST` | `/api/admin/products/split-preview` | `App\Http\Controllers\Admin\ProductController@splitPreview` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.manage` |
 | admin | `GET` | `/api/admin/products/summary` | `App\Http\Controllers\Admin\ProductController@summary` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.list` |
 | admin | `POST` | `/api/admin/products/traffic-packages/pull` | `App\Http\Controllers\Admin\ProductController@pullTrafficPackageCatalog` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.list` |
 | admin | `DELETE` | `/api/admin/products/{product}` | `App\Http\Controllers\Admin\ProductController@destroy` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.manage` |
@@ -110,6 +132,7 @@
 | admin | `POST` | `/api/admin/site/home-hero` | `App\Http\Controllers\Admin\HomeHeroController@update` | `admin` | `api, auth:sanctum, ensure.admin, permission:settings.manage` |
 | admin | `GET` | `/api/admin/suppliers` | `App\Http\Controllers\Admin\SupplierController@index` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.manage` |
 | admin | `POST` | `/api/admin/suppliers` | `App\Http\Controllers\Admin\SupplierController@store` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.manage` |
+| admin | `GET` | `/api/admin/suppliers/provider-types` | `App\Http\Controllers\Admin\SupplierController@providerTypes` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.manage` |
 | admin | `GET` | `/api/admin/suppliers/summary` | `App\Http\Controllers\Admin\SupplierController@summary` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.manage` |
 | admin | `DELETE` | `/api/admin/suppliers/{supplier}` | `App\Http\Controllers\Admin\SupplierController@destroy` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.manage` |
 | admin | `GET` | `/api/admin/suppliers/{supplier}` | `App\Http\Controllers\Admin\SupplierController@show` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.manage` |
@@ -126,6 +149,7 @@
 | admin | `GET` | `/api/admin/tickets/{ticket}` | `App\Http\Controllers\Admin\TicketController@show` | `admin` | `api, auth:sanctum, ensure.admin, permission:ticket.list` |
 | admin | `POST` | `/api/admin/tickets/{ticket}/assign` | `App\Http\Controllers\Admin\TicketController@assign` | `admin` | `api, auth:sanctum, ensure.admin, permission:ticket.manage` |
 | admin | `POST` | `/api/admin/tickets/{ticket}/close` | `App\Http\Controllers\Admin\TicketController@close` | `admin` | `api, auth:sanctum, ensure.admin, permission:ticket.manage` |
+| admin | `POST` | `/api/admin/tickets/{ticket}/replies/{replyId}/recall` | `App\Http\Controllers\Admin\TicketController@recall` | `admin` | `api, auth:sanctum, ensure.admin, permission:ticket.reply` |
 | admin | `POST` | `/api/admin/tickets/{ticket}/reply` | `App\Http\Controllers\Admin\TicketController@reply` | `admin` | `api, auth:sanctum, ensure.admin, permission:ticket.reply` |
 | admin | `GET` | `/api/admin/users` | `App\Http\Controllers\Admin\UserController@index` | `admin` | `api, auth:sanctum, ensure.admin, permission:user.list` |
 | admin | `POST` | `/api/admin/users` | `App\Http\Controllers\Admin\UserController@store` | `admin` | `api, auth:sanctum, ensure.admin, permission:user.manage` |
@@ -174,6 +198,7 @@
 | client | `GET` | `/api/client/auth/info` | `App\Http\Controllers\Client\AuthController@info` | `client` | `api, auth:sanctum, ensure.client` |
 | client | `POST` | `/api/client/auth/login-as/exchange` | `App\Http\Controllers\Client\AuthController@exchangeLoginAsCode` | `public` | `api, throttle:10,1,client-auth-login-as` |
 | client | `POST` | `/api/client/auth/logout` | `App\Http\Controllers\Client\AuthController@logout` | `client` | `api, auth:sanctum, ensure.client` |
+| client | `GET` | `/api/client/auth/notification-preferences` | `App\Http\Controllers\Client\AuthController@notificationPreferences` | `client` | `api, auth:sanctum, ensure.client` |
 | client | `PUT` | `/api/client/auth/notification-preferences` | `App\Http\Controllers\Client\AuthController@updateNotificationPreferences` | `client` | `api, auth:sanctum, ensure.client` |
 | client | `PUT` | `/api/client/auth/phone` | `App\Http\Controllers\Client\AuthController@updatePhone` | `client` | `api, auth:sanctum, ensure.client` |
 | client | `POST` | `/api/client/auth/phone-code` | `App\Http\Controllers\Client\AuthController@sendPhoneCode` | `public` | `api, throttle:6,1,client-auth-phone-code` |
@@ -181,13 +206,20 @@
 | client | `POST` | `/api/client/auth/reset-password` | `App\Http\Controllers\Client\AuthController@resetPassword` | `public` | `api, throttle:5,1,client-auth-reset-password` |
 | client | `GET` | `/api/client/balance-logs` | `App\Http\Controllers\Client\FinanceController@balanceLogs` | `client` | `api, auth:sanctum, ensure.client` |
 | client | `GET` | `/api/client/balance-logs/summary` | `App\Http\Controllers\Client\FinanceController@balanceLogsSummary` | `client` | `api, auth:sanctum, ensure.client` |
+| client | `POST` | `/api/client/blackhole/ningbo/whitelist` | `App\Http\Controllers\Client\BlackholeController@addNingboWhitelist` | `client` | `api, auth:sanctum, ensure.client, throttle:6,1,client-blackhole-write` |
 | client | `POST` | `/api/client/blackhole/query` | `App\Http\Controllers\Client\BlackholeController@query` | `client` | `api, auth:sanctum, ensure.client` |
+| client | `POST` | `/api/client/blackhole/shiyan/layer4/add` | `App\Http\Controllers\Client\BlackholeController@addShiyanLayer4Rule` | `client` | `api, auth:sanctum, ensure.client, throttle:6,1,client-blackhole-write` |
+| client | `POST` | `/api/client/blackhole/shiyan/layer4/delete` | `App\Http\Controllers\Client\BlackholeController@deleteShiyanLayer4Rule` | `client` | `api, auth:sanctum, ensure.client, throttle:6,1,client-blackhole-write` |
+| client | `POST` | `/api/client/blackhole/shiyan/layer7/toggle` | `App\Http\Controllers\Client\BlackholeController@setShiyanLayer7Rule` | `client` | `api, auth:sanctum, ensure.client, throttle:6,1,client-blackhole-write` |
 | client | `GET` | `/api/client/content/overview` | `App\Http\Controllers\Client\ContentController@overview` | `client` | `api, auth:sanctum, ensure.client` |
 | client | `GET` | `/api/client/coupons` | `App\Http\Controllers\Client\CouponController@index` | `client` | `api, auth:sanctum, ensure.client` |
 | client | `GET` | `/api/client/coupons/public` | `App\Http\Controllers\Client\CouponController@publicIndex` | `client` | `api, auth:sanctum, ensure.client` |
 | client | `GET` | `/api/client/coupons/public/summary` | `App\Http\Controllers\Client\CouponController@publicSummary` | `client` | `api, auth:sanctum, ensure.client` |
 | client | `GET` | `/api/client/coupons/summary` | `App\Http\Controllers\Client\CouponController@summary` | `client` | `api, auth:sanctum, ensure.client` |
 | client | `POST` | `/api/client/coupons/{couponId}/claim` | `App\Http\Controllers\Client\CouponController@claim` | `client` | `api, auth:sanctum, ensure.client, throttle:6,1,client-coupons-claim` |
+| client | `GET` | `/api/client/finance/ledger` | `App\Http\Controllers\Client\FinanceLedgerController@index` | `client` | `api, auth:sanctum, ensure.client` |
+| client | `GET` | `/api/client/finance/ledger/summary` | `App\Http\Controllers\Client\FinanceLedgerController@summary` | `client` | `api, auth:sanctum, ensure.client` |
+| client | `GET` | `/api/client/finance/ledger/{id}` | `App\Http\Controllers\Client\FinanceLedgerController@show` | `client` | `api, auth:sanctum, ensure.client` |
 | client | `GET` | `/api/client/help-articles` | `App\Http\Controllers\Client\ContentController@helpArticles` | `client` | `api, auth:sanctum, ensure.client` |
 | client | `GET` | `/api/client/help-articles/{articleId}` | `App\Http\Controllers\Client\ContentController@helpDetail` | `client` | `api, auth:sanctum, ensure.client` |
 | client | `GET` | `/api/client/invoices` | `App\Http\Controllers\Client\InvoiceController@index` | `client` | `api, auth:sanctum, ensure.client` |
@@ -198,11 +230,16 @@
 | client | `POST` | `/api/client/invoices/{id}/pay/alipay` | `App\Http\Controllers\Client\InvoiceController@payByAlipay` | `client` | `api, auth:sanctum, ensure.client, throttle:12,1,client-invoices-pay-alipay` |
 | client | `GET` | `/api/client/invoices/{id}/pay/alipay/status` | `App\Http\Controllers\Client\InvoiceController@queryAlipayStatus` | `client` | `api, auth:sanctum, ensure.client, throttle:30,1,client-invoices-pay-alipay-status` |
 | client | `POST` | `/api/client/invoices/{id}/pay/balance` | `App\Http\Controllers\Client\InvoiceController@payByBalance` | `client` | `api, auth:sanctum, ensure.client, throttle:10,1,client-invoices-pay-balance` |
+| client | `POST` | `/api/client/invoices/{id}/pay/mix` | `App\Http\Controllers\Client\InvoiceController@payByBalanceAndAlipay` | `client` | `api, auth:sanctum, ensure.client, throttle:10,1,client-invoices-pay-mix` |
 | client | `POST` | `/api/client/login` | `App\Http\Controllers\Client\AuthController@login` | `public` | `api, throttle:5,1,client-auth-login` |
 | client | `GET` | `/api/client/notices` | `App\Http\Controllers\Client\ContentController@notices` | `client` | `api, auth:sanctum, ensure.client` |
 | client | `GET` | `/api/client/notices/{articleId}` | `App\Http\Controllers\Client\ContentController@noticeDetail` | `client` | `api, auth:sanctum, ensure.client` |
+| client | `GET` | `/api/client/orders` | `App\Http\Controllers\Client\OrderController@index` | `client` | `api, auth:sanctum, ensure.client` |
+| client | `GET` | `/api/client/orders/summary` | `App\Http\Controllers\Client\OrderController@summary` | `client` | `api, auth:sanctum, ensure.client` |
 | client | `PUT` | `/api/client/password` | `App\Http\Controllers\Client\AuthController@updatePassword` | `client` | `api, auth:sanctum, ensure.client` |
-| client | `POST` | `/api/client/payment/alipay/notify` | `App\Http\Controllers\Client\PaymentCallbackController@alipayNotify` | `public` | `api` |
+| client | `POST` | `/api/client/payment/alipay/notify` | `App\Http\Controllers\Client\PaymentCallbackController@alipayNotify` | `public` | `api, verify.alipay.callback` |
+| client | `GET` | `/api/client/payments` | `App\Http\Controllers\Client\PaymentController@index` | `client` | `api, auth:sanctum, ensure.client` |
+| client | `GET` | `/api/client/payments/summary` | `App\Http\Controllers\Client\PaymentController@summary` | `client` | `api, auth:sanctum, ensure.client` |
 | client | `POST` | `/api/client/recharge` | `App\Http\Controllers\Client\RechargeController@store` | `client` | `api, auth:sanctum, ensure.client, throttle:6,1,client-recharge-store` |
 | client | `GET` | `/api/client/recharge/{paymentNo}/status` | `App\Http\Controllers\Client\RechargeController@status` | `client` | `api, auth:sanctum, ensure.client, throttle:30,1,client-recharge-status` |
 | client | `GET` | `/api/client/referral/account-logs` | `App\Http\Controllers\Client\ReferralController@accountLogs` | `client` | `api, auth:sanctum, ensure.client` |
@@ -219,6 +256,7 @@
 | client | `GET` | `/api/client/services/{id}/module-status` | `App\Http\Controllers\Client\ServiceController@moduleStatus` | `client` | `api, auth:sanctum, ensure.client` |
 | client | `GET` | `/api/client/services/{id}/monitor` | `App\Http\Controllers\Client\ServiceController@monitor` | `client` | `api, auth:sanctum, ensure.client` |
 | client | `GET` | `/api/client/services/{id}/monitor/batch` | `App\Http\Controllers\Client\ServiceController@monitorBatch` | `client` | `api, auth:sanctum, ensure.client` |
+| client | `PUT` | `/api/client/services/{id}/name` | `App\Http\Controllers\Client\ServiceController@updateName` | `client` | `api, auth:sanctum, ensure.client` |
 | client | `GET` | `/api/client/services/{id}/nat-forwardings` | `App\Http\Controllers\Client\ServiceController@natForwardings` | `client` | `api, auth:sanctum, ensure.client` |
 | client | `POST` | `/api/client/services/{id}/nat-forwardings` | `App\Http\Controllers\Client\ServiceController@createNatForwarding` | `client` | `api, auth:sanctum, ensure.client, throttle:10,1,client-service-nat-create` |
 | client | `DELETE` | `/api/client/services/{id}/nat-forwardings/{forwardingId}` | `App\Http\Controllers\Client\ServiceController@deleteNatForwarding` | `client` | `api, auth:sanctum, ensure.client, throttle:10,1,client-service-nat-delete` |
@@ -249,8 +287,9 @@
 | client | `POST` | `/api/client/tickets/upload-image` | `App\Http\Controllers\Client\TicketController@uploadImage` | `client` | `api, auth:sanctum, ensure.client, throttle:12,1,client-ticket-upload-image` |
 | client | `GET` | `/api/client/tickets/{id}` | `App\Http\Controllers\Client\TicketController@show` | `client` | `api, auth:sanctum, ensure.client` |
 | client | `POST` | `/api/client/tickets/{id}/close` | `App\Http\Controllers\Client\TicketController@close` | `client` | `api, auth:sanctum, ensure.client, throttle:10,1,client-ticket-close` |
+| client | `POST` | `/api/client/tickets/{id}/replies/{replyId}/recall` | `App\Http\Controllers\Client\TicketController@recall` | `client` | `api, auth:sanctum, ensure.client, throttle:10,1,client-ticket-recall` |
 | client | `POST` | `/api/client/tickets/{id}/reply` | `App\Http\Controllers\Client\TicketController@reply` | `client` | `api, auth:sanctum, ensure.client, throttle:10,1,client-ticket-reply` |
-| client | `GET|POST` | `/api/client/verification/callback` | `App\Http\Controllers\Client\VerificationController@callback` | `public` | `api, verify.callback` |
+| client | `GET&#124;POST` | `/api/client/verification/callback` | `App\Http\Controllers\Client\VerificationController@callback` | `public` | `api, verify.callback` |
 | client | `GET` | `/api/client/verification/fee-config` | `App\Http\Controllers\Client\VerificationController@feeConfig` | `client` | `api, auth:sanctum, ensure.client` |
 | client | `POST` | `/api/client/verification/init` | `App\Http\Controllers\Client\VerificationController@init` | `client` | `api, auth:sanctum, ensure.client` |
 | client | `POST` | `/api/client/verification/qrcode` | `App\Http\Controllers\Client\VerificationController@qrcode` | `client` | `api, auth:sanctum, ensure.client` |
@@ -276,6 +315,7 @@
 | site/public | `GET` | `/api/site/product-groups/{groupId}/children` | `App\Http\Controllers\SiteProductController@childGroups` | `public` | `api` |
 | site/public | `GET` | `/api/site/product-types` | `App\Http\Controllers\SiteProductController@productTypes` | `public` | `api` |
 | site/public | `GET` | `/api/site/products` | `App\Http\Controllers\SiteProductController@index` | `public` | `api` |
+| site/public | `GET` | `/api/site/products/init` | `App\Http\Controllers\SiteProductController@init` | `public` | `api` |
 | site/public | `GET` | `/api/site/products/{productId}` | `App\Http\Controllers\SiteProductController@show` | `public` | `api` |
 | site/public | `POST` | `/api/site/products/{productId}/quote` | `App\Http\Controllers\SiteProductController@quote` | `public` | `api, throttle:60,1` |
 | site/public | `GET` | `/api/site/products/{productId}/stock` | `App\Http\Controllers\SiteProductController@stock` | `public` | `api` |

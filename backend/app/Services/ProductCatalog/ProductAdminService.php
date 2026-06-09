@@ -48,10 +48,19 @@ class ProductAdminService
                     'auto_setup',
                     'supplier_id',
                     'supplier_product_id',
+                    ...Product::optionalSelectColumns(['custom_display_name']),
                     'updated_at',
                 ])
                 ->with(['categoryMapping.parent'])
-                ->withCount(['orders', 'services']),
+                ->withCount([
+                    'orders',
+                    'services as total_services_count',
+                    'services as services_count' => fn (Builder $query) => $query
+                        ->where('status', ServiceStatus::ACTIVE)
+                        ->where(fn (Builder $query) => $query
+                            ->whereNull('expires_at')
+                            ->orWhere('expires_at', '>', now())),
+                ]),
             $filters
         );
 
@@ -259,7 +268,9 @@ class ProductAdminService
     public function updateProduct(Product $product, array $data): Product
     {
         $updatedProduct = DB::transaction(function () use ($product, $data) {
-            $prepared = $this->prepareProductPayload($data);
+            $prepared = $this->prepareProductPayload(array_replace($data, [
+                'id' => (int) $product->id,
+            ]));
             Product::withoutEvents(fn () => $product->update($prepared['base']));
 
             return $this->loadProductSnapshot($product);
@@ -784,9 +795,6 @@ class ProductAdminService
             'name' => (string) $variant['name'],
             'product_type' => (string) ($source->product_type ?? ''),
             'remark' => $source->remark,
-            'meta_title' => $source->meta_title,
-            'meta_description' => $source->meta_description,
-            'meta_keywords' => $source->meta_keywords,
             'pricing' => (array) ($variant['pricing'] ?? []),
             'setup_fee' => (float) ($source->setup_fee ?? 0),
             'config_options' => (array) ($variant['config_options'] ?? []),
@@ -1421,16 +1429,15 @@ class ProductAdminService
         }
 
         $derivedDisplayName = $this->deriveInternalProductName($data);
+        $customDisplayName = $this->resolveSubmittedCustomDisplayName($data, $derivedDisplayName);
 
         return [
             'base' => [
                 'category_id' => (int) $category->id,
                 'name' => $derivedDisplayName,
+                'custom_display_name' => $customDisplayName,
                 'product_type' => $productTypeCode,
                 'remark' => $this->normalizeNullableString($data['remark'] ?? null),
-                'meta_title' => $this->normalizeNullableString($data['meta_title'] ?? null),
-                'meta_description' => $this->normalizeNullableString($data['meta_description'] ?? null),
-                'meta_keywords' => $this->normalizeNullableString($data['meta_keywords'] ?? null),
                 'pricing' => $pricing,
                 'setup_fee' => max((float) ($data['setup_fee'] ?? 0), 0),
                 'config_options' => $this->normalizeConfigOptions($data['config_options'] ?? []),
@@ -1464,7 +1471,37 @@ class ProductAdminService
         ]);
         $resolved = $this->resolveProductDisplayNameResolver()->resolveForProduct($temporaryProduct, $upstreamDefaults);
 
-        return trim((string) ($resolved['product_spec_display'] ?? '')) ?: ('未配置规格 #'.(int) ($data['id'] ?? 0));
+        foreach ([
+            $resolved['cpu_memory_slug_display'] ?? '',
+            $resolved['product_spec_display'] ?? '',
+        ] as $candidate) {
+            $normalized = trim((string) $candidate);
+            if ($normalized !== '') {
+                return $normalized;
+            }
+        }
+
+        return '未配置规格 #'.(int) ($data['id'] ?? 0);
+    }
+
+    private function resolveSubmittedCustomDisplayName(array $data, string $derivedDisplayName): ?string
+    {
+        $rawValue = null;
+
+        if (array_key_exists('custom_display_name', $data)) {
+            $rawValue = $data['custom_display_name'];
+        } elseif (array_key_exists('display_name', $data)) {
+            $rawValue = $data['display_name'];
+        } elseif (array_key_exists('name', $data)) {
+            $rawValue = $data['name'];
+        }
+
+        $customDisplayName = $this->normalizeNullableString($rawValue);
+        if ($customDisplayName === null) {
+            return null;
+        }
+
+        return $customDisplayName === trim($derivedDisplayName) ? null : $customDisplayName;
     }
 
     private function resolveTargetCategory(array $data): ProductCategory

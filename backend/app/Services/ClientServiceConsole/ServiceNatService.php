@@ -68,10 +68,15 @@ class ServiceNatService
                 'summary' => ['total' => count($natContext['list'])],
             ];
         } catch (\Throwable $exception) {
+            \Illuminate\Support\Facades\Log::warning('[服务控制台] 读取 NAT 转发失败', [
+                'service_id' => $service->id,
+                'message' => \App\Support\SensitiveDataSanitizer::sanitizeText($exception->getMessage()),
+            ]);
+
             return [
                 'supported' => true,
                 'message' => '',
-                'error' => $exception->getMessage(),
+                'error' => '读取 NAT 转发失败，请稍后重试',
                 'module_key' => 'nat_acl',
                 'module_name' => 'NAT 转发',
                 'endpoint' => '',

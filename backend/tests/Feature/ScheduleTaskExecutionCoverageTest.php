@@ -181,9 +181,10 @@ class ScheduleTaskExecutionCoverageTest extends TestCase
             ->once()
             ->withArgs(function (string $command, array $parameters = []): bool {
                 return $command === 'queue:work'
-                    && ($parameters['--queue'] ?? null) === 'referral,provision,default'
+                    && ($parameters['--queue'] ?? null) === 'provision,referral,notification,coupon,default'
                     && ($parameters['--sleep'] ?? null) === 1
                     && ($parameters['--tries'] ?? null) === 3
+                    && ($parameters['--timeout'] ?? null) === 1200
                     && ($parameters['--stop-when-empty'] ?? null) === true
                     && ($parameters['--max-time'] ?? null) === 50;
             })
@@ -242,9 +243,10 @@ class ScheduleTaskExecutionCoverageTest extends TestCase
         config()->set('queue.connections.database.queue', 'default');
 
         $this->artisan('queue:work', [
-            '--queue' => 'referral,provision,default',
+            '--queue' => 'provision,referral,notification,coupon,default',
             '--sleep' => 1,
             '--tries' => 3,
+            '--timeout' => 1200,
             '--stop-when-empty' => true,
             '--max-time' => 50,
         ])->assertExitCode(0);

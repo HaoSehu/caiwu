@@ -6,6 +6,7 @@ use App\Http\Middleware\EnsureClientAuthenticated;
 use App\Http\Middleware\EnsureEmailIsVerified;
 use App\Http\Middleware\LogOperation;
 use App\Http\Middleware\SetJsonEncodingOptions;
+use App\Http\Middleware\VerifyAlipayCallbackSignature;
 use App\Http\Middleware\VerifyCallbackSignature;
 use App\Support\ApiResponseBuilder;
 use Illuminate\Auth\AuthenticationException;
@@ -62,6 +63,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'ensure.admin' => EnsureAdminAuthenticated::class,
             'ensure.client' => EnsureClientAuthenticated::class,
             'log.operation' => LogOperation::class,
+            'verify.alipay.callback' => VerifyAlipayCallbackSignature::class,
             'verify.callback' => VerifyCallbackSignature::class,
         ]);
     })

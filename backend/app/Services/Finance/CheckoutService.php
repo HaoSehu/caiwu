@@ -414,7 +414,7 @@ class CheckoutService
         }
 
         throw_if(
-            (int) $user->is_verified !== 1,
+            ! $user->hasCompletedVerification(),
             new BusinessException('该商品需要实名认证后才能购买，请先完成实名认证', 40301)
         );
 

@@ -4,23 +4,41 @@ declare(strict_types=1);
 
 namespace App\Services\Sms;
 
+use App\Exceptions\BusinessException;
 use App\Models\Setting;
 use App\Services\Sms\Contracts\SmsDriver;
-use App\Services\Sms\Drivers\AliyunSmsDriver;
+use InvalidArgumentException;
 
 final class SmsDriverManager
 {
     /** @var array<string, SmsDriver> */
     private array $drivers = [];
 
-    public function __construct()
+    /**
+     * 注册由容器 tag 提供的短信驱动。
+     *
+     * @param  iterable<int, SmsDriver>  $drivers
+     */
+    public function __construct(iterable $drivers = [])
     {
-        $this->register(new AliyunSmsDriver);
+        foreach ($drivers as $driver) {
+            $this->register($driver);
+        }
     }
 
     public function register(SmsDriver $driver): void
     {
-        $this->drivers[$driver->key()] = $driver;
+        $key = trim($driver->key());
+
+        if ($key === '') {
+            throw new InvalidArgumentException('短信驱动 key 不能为空');
+        }
+
+        if (isset($this->drivers[$key])) {
+            throw new InvalidArgumentException("短信驱动 [{$key}] 重复注册");
+        }
+
+        $this->drivers[$key] = $driver;
     }
 
     public function resolve(?string $key = null): SmsDriver
@@ -31,7 +49,7 @@ final class SmsDriverManager
             return $this->drivers[$resolvedKey];
         }
 
-        throw new \RuntimeException("短信驱动 [{$resolvedKey}] 未注册");
+        throw new BusinessException("短信驱动 [{$resolvedKey}] 未注册");
     }
 
     /** @return array<int, array{value: string, label: string}> */
@@ -49,6 +67,12 @@ final class SmsDriverManager
     {
         $key = trim((string) Setting::getValue('notification', 'sms_driver', ''));
 
-        return $key !== '' ? $key : 'aliyun';
+        if ($key !== '') {
+            return $key;
+        }
+
+        $default = trim((string) config('integrations.sms.default', 'aliyun'));
+
+        return $default !== '' ? $default : 'aliyun';
     }
 }

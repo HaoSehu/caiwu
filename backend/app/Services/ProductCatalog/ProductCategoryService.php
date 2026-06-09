@@ -120,8 +120,13 @@ class ProductCategoryService
             $originalType = trim((string) ($category->product_type ?? ''));
             $originalParentId = $category->parent_id === null ? null : (int) $category->parent_id;
             $payload = $this->prepareCategoryPayload($data, $category);
+            $shouldCascadeVisibility = array_key_exists('is_visible', $data);
             $category->update($payload);
             $category->refresh()->load(['parent']);
+
+            if ($shouldCascadeVisibility) {
+                $this->cascadeCategoryVisibility($category, (int) $payload['is_visible']);
+            }
 
             if (
                 $originalType !== trim((string) ($category->product_type ?? ''))
@@ -138,6 +143,48 @@ class ProductCategoryService
         $this->forgetSiteCatalogCache();
 
         return $updatedCategory;
+    }
+
+    private function cascadeCategoryVisibility(ProductCategory $category, int $isVisible): void
+    {
+        $categoryId = (int) $category->id;
+        $childCategoryIds = $this->descendantCategoryIds($categoryId);
+        $targetCategoryIds = array_values(array_unique(array_merge([$categoryId], $childCategoryIds)));
+
+        if ($childCategoryIds !== []) {
+            ProductCategory::query()
+                ->whereIn('id', $childCategoryIds)
+                ->update(['is_visible' => $isVisible]);
+        }
+
+        Product::query()
+            ->whereIn('product_group_id', $targetCategoryIds)
+            ->update(['status' => $isVisible]);
+    }
+
+    private function descendantCategoryIds(int $categoryId): array
+    {
+        $ids = [];
+        $pendingIds = [$categoryId];
+
+        while ($pendingIds !== []) {
+            $children = ProductCategory::query()
+                ->whereIn('parent_group_id', $pendingIds)
+                ->pluck('id')
+                ->map(fn ($id): int => (int) $id)
+                ->filter(fn (int $id): bool => $id > 0 && ! in_array($id, $ids, true))
+                ->values()
+                ->all();
+
+            if ($children === []) {
+                break;
+            }
+
+            $ids = array_values(array_unique(array_merge($ids, $children)));
+            $pendingIds = $children;
+        }
+
+        return $ids;
     }
 
     public function deleteCategory(ProductCategory $category): void

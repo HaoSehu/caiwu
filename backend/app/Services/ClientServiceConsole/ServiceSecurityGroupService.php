@@ -66,10 +66,15 @@ class ServiceSecurityGroupService
                 'groups' => $context['groups'],
             ];
         } catch (\Throwable $exception) {
+            \Illuminate\Support\Facades\Log::warning('[服务控制台] 读取安全组失败', [
+                'service_id' => $service->id,
+                'message' => \App\Support\SensitiveDataSanitizer::sanitizeText($exception->getMessage()),
+            ]);
+
             return [
                 'supported' => false,
                 'message' => '',
-                'error' => $exception->getMessage(),
+                'error' => '读取安全组失败，请稍后重试',
                 'module_key' => '',
                 'module_name' => '',
                 'host_type' => '',

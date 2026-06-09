@@ -340,9 +340,6 @@ class CatalogMigrationService
             'slug' => $slug,
             'summary' => $this->resolveProductSummary($legacyProduct, $name),
             'remark' => $this->normalizeNullableString($legacyProduct['remark'] ?? null),
-            'meta_title' => $this->normalizeNullableString($legacyProduct['meta_title'] ?? null),
-            'meta_description' => $this->normalizeNullableString($legacyProduct['meta_description'] ?? null),
-            'meta_keywords' => $this->normalizeNullableString($legacyProduct['meta_keywords'] ?? null),
             'purchase_requires_json' => $this->normalizeJsonString($legacyProduct['purchase_requires'] ?? null),
             'status' => (int) (($legacyProduct['status'] ?? 1) ? 1 : 0),
             'sort_order' => (int) ($legacyProduct['sort_order'] ?? 0),
@@ -600,11 +597,6 @@ class CatalogMigrationService
             return $remark;
         }
 
-        $metaTitle = $this->normalizeNullableString($legacyProduct['meta_title'] ?? null);
-        if ($metaTitle !== null) {
-            return $metaTitle;
-        }
-
         return '商品 #' . $productId;
     }
 
@@ -613,9 +605,7 @@ class CatalogMigrationService
      */
     private function resolveProductSummary(array $legacyProduct, string $name): ?string
     {
-        $summary = $this->normalizeNullableString($legacyProduct['remark'] ?? null)
-            ?? $this->normalizeNullableString($legacyProduct['meta_title'] ?? null)
-            ?? $this->normalizeNullableString($legacyProduct['meta_description'] ?? null);
+        $summary = $this->normalizeNullableString($legacyProduct['remark'] ?? null);
 
         if ($summary === null || $summary === $name) {
             return null;

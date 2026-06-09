@@ -2,20 +2,22 @@
 
 namespace App\Http\Controllers\Client;
 
+use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Payment;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class PaymentController extends Controller
 {
-    private const RECHARGE_GATEWAYS = ['alipay', 'wechat'];
+    private const RECHARGE_GATEWAYS = [PaymentGatewayCode::ALIPAY, PaymentGatewayCode::WECHAT];
 
     public function index(Request $request)
     {
         $filters = $request->validate([
             'status' => ['nullable', 'integer'],
-            'gateway' => ['nullable', 'string', 'in:alipay,wechat'],
+            'gateway' => ['nullable', 'string', Rule::in(self::RECHARGE_GATEWAYS)],
             'keyword' => ['nullable', 'string', 'max:80'],
             'page' => ['nullable', 'integer', 'min:1'],
             'page_size' => ['nullable', 'integer', 'min:1', 'max:100'],
@@ -104,8 +106,8 @@ class PaymentController extends Controller
     private function gatewayLabel(string $gateway): string
     {
         return match ($gateway) {
-            'alipay' => '支付宝',
-            'wechat' => '微信支付',
+            PaymentGatewayCode::ALIPAY => '支付宝',
+            PaymentGatewayCode::WECHAT => PaymentGatewayCode::label(PaymentGatewayCode::WECHAT),
             default => $gateway,
         };
     }
