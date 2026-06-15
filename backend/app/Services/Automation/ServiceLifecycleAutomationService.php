@@ -3,8 +3,10 @@
 namespace App\Services\Automation;
 
 use App\Constants\ServiceStatus;
+use App\Constants\UserNotificationType;
 use App\Models\AutomationLog;
 use App\Models\Service;
+use App\Services\Notification\UserNotificationService;
 use App\Services\System\NotificationService;
 use App\Services\System\SettingService;
 use Carbon\Carbon;
@@ -17,6 +19,7 @@ class ServiceLifecycleAutomationService
     public function __construct(
         private SettingService $settingService,
         private NotificationService $notificationService,
+        private UserNotificationService $userNotificationService,
     ) {}
 
     public function handle(): array
@@ -110,6 +113,14 @@ class ServiceLifecycleAutomationService
                     'service_name' => (string) $service->name,
                     'expires_at' => $expiryStr,
                 ]);
+                $this->userNotificationService->create(
+                    (int) $service->user_id,
+                    UserNotificationType::SERVICE_EXPIRE_REMINDER,
+                    '服务已到期暂停',
+                    "您的服务「{$service->name}」已于 {$expiryStr} 到期并暂停，请尽快续费恢复使用。",
+                    '/client/services/'.$service->id,
+                    ['service_id' => (int) $service->id, 'expires_at' => $expiryStr]
+                );
                 AutomationLog::markExecuted(
                     'service-lifecycle-maintenance',
                     'service_suspend_notify',

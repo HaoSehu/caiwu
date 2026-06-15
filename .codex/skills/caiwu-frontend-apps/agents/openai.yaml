@@ -1,0 +1,4 @@
+interface:
+  display_name: "Caiwu Frontend Apps"
+  short_description: "Build and maintain Caiwu Vue frontends."
+  default_prompt: "Use $caiwu-frontend-apps to update a Caiwu frontend page."

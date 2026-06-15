@@ -72,6 +72,7 @@ class TicketService
         private UploadedAssetReferenceService $uploadedAssetReferenceService,
         private NotificationService $notificationService,
         private ServiceTransformService $serviceTransformService,
+        private \App\Services\Notification\UserNotificationService $userNotificationService,
     ) {}
 
     /**
@@ -523,6 +524,15 @@ class TicketService
             'ticket_id' => (int) $ticket->id,
             'recipient_user_id' => (int) ($ticket->user?->id ?? 0),
         ]);
+
+        $this->userNotificationService->create(
+            (int) ($ticket->user?->id ?? 0),
+            \App\Constants\UserNotificationType::TICKET_STAFF_REPLY,
+            '工单收到回复',
+            "工单「{$ticket->subject}」{$staffName} 回复：{$preview}",
+            '/client/tickets/'.$ticket->id,
+            ['ticket_id' => (int) $ticket->id]
+        );
     }
 
     private function resolveTicketAdminRecipients(Ticket $ticket)

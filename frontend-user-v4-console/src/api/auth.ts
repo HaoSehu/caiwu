@@ -1,0 +1,26 @@
+import request from '@/utils/request';
+
+export const clientAuthApi = {
+  login: (data: Record<string, unknown>) => request.post('/client/login', data),
+  register: (data: Record<string, unknown>) => request.post('/client/register', data),
+  exchangeLoginAsCode: (data: Record<string, unknown>) => request.post('/client/auth/login-as/exchange', data),
+  captchaConfig: () => request.get('/client/auth/captcha-config'),
+  info: () => request.get('/client/auth/info'),
+  updateProfile: (data: Record<string, unknown>) => request.put('/client/auth/profile', data),
+  changePassword: (data: Record<string, unknown>) => request.put('/client/password', data),
+  updatePhone: (data: Record<string, unknown>) => request.put('/client/auth/phone', data),
+  updateEmail: (data: Record<string, unknown>) => request.put('/client/auth/email', data),
+  alipayAccount: () => request.get('/client/auth/alipay-account'),
+  updateAlipayAccount: (data: Record<string, unknown>) => request.put('/client/auth/alipay-account', data),
+  initVerification: (data: Record<string, unknown>) => request.post('/client/verification/init', data),
+  verificationQrcode: (data: Record<string, unknown>) => request.post('/client/verification/qrcode', data),
+  verificationStatus: (params?: Record<string, unknown>) => request.get('/client/verification/status', { params }),
+  restartVerification: () => request.post('/client/verification/restart'),
+  verificationFeeConfig: () => request.get('/client/verification/fee-config'),
+  notificationPreferences: () => request.get('/client/auth/notification-preferences'),
+  updateNotificationPreferences: (data: Record<string, unknown>) => request.put('/client/auth/notification-preferences', data),
+  sendPhoneCode: (data: Record<string, unknown>) => request.post('/client/auth/phone-code', data),
+  sendEmailCode: (data: Record<string, unknown>) => request.post('/client/auth/email-code', data),
+  resetPassword: (data: Record<string, unknown>) => request.post('/client/auth/reset-password', data),
+  logout: () => request.post('/client/auth/logout'),
+};

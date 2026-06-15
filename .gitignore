@@ -1,4 +1,4 @@
-# Laravel - 包含数据库密码和 APP_KEY 等敏感信息
+# Laravel
 backend/.env
 backend/vendor/
 backend/taskkill
@@ -10,18 +10,23 @@ backend/storage/framework/sessions/
 backend/storage/framework/views/
 backend/phpunit.xml
 
-# Vue
-frontend-admin/node_modules/
-frontend-admin/dist/
-frontend-admin-v2/node_modules/
-frontend-admin-v2/dist/
-frontend-admin-v2/dev-server.log
-frontend-admin-v2/playwright-report/
-frontend-admin-v2/test-results/
-frontend-admin-v2/.auth/
-frontend-client/node_modules/
-frontend-client/dist/
-frontend-client/public/novnc/
+# Frontend dependencies and generated output
+frontend-admin-v3/node_modules/
+frontend-admin-v3/dist/
+frontend-admin-v3/dev-server.log
+frontend-admin-v3/playwright-report/
+frontend-admin-v3/test-results/
+frontend-admin-v3/.auth/
+frontend-user-v3-www/node_modules/
+frontend-user-v3-www/dist/
+frontend-user-v3-www/public/novnc/
+frontend-user-v4-console/node_modules/
+frontend-user-v4-console/dist/
+frontend-user-v4-console/dev-server.log
+frontend-user-v4-console/playwright-report/
+frontend-user-v4-console/test-results/
+frontend-user-v4-console/.auth/
+shared/node_modules/
 
 # IDE
 .vscode/
@@ -46,7 +51,7 @@ backend/scripts/__pycache__/
 
 # Local tools
 php.bat
-tools/
+/tools/
 ops/mysql-dual-backup/backup.env
 
 # Temp/draft files
@@ -69,15 +74,22 @@ _seo_status.txt
 frontend-admin/$null
 frontend-client/frontend-client/
 
+# Local run/test artifacts
+.runlogs/
+*.log
+backend/storage/framework/testing/*.sqlite
+frontend-user-v4-console/*.png
+
 # OS
 Thumbs.db
-node_modules
+node_modules/
 
-# 本地参考副本（不纳入版本控制）
+# Local reference copies
 frontend-user-v3-console/
-frontend-user-v3-www/
-frontend-admin-v3/
-shared/user-v3/
+frontend-admin/
+frontend-client/
+frontend-www-v2/
+frontend-console-v2/
 zjmf-manger-decoded-main/
 
 # Claude

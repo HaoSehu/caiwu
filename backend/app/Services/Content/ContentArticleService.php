@@ -104,11 +104,18 @@ class ContentArticleService
 
     public function update(ContentArticle $article, array $data, int $adminId, ?string $traceId = null): ContentArticle
     {
-        $updatedArticle = DB::transaction(function () use ($article, $data, $adminId, $traceId) {
+        $requireReread = (bool) ($data['require_reread'] ?? false);
+        unset($data['require_reread']);
+
+        $updatedArticle = DB::transaction(function () use ($article, $data, $adminId, $traceId, $requireReread) {
             $payload = $this->preparePayload($data, $article);
             $payload['updated_by'] = $adminId;
             $payload['operator'] = $payload['operator'] ?: 'admin#'.$adminId;
             $payload['trace_id'] = $traceId ?: $payload['trace_id'];
+
+            if ($requireReread) {
+                $payload['require_reread_at'] = now();
+            }
 
             $article->update($payload);
 

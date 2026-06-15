@@ -42,6 +42,7 @@ class UpdateContentArticleRequest extends AdminFormRequest
             'publish_at' => ['nullable', 'date'],
             'remark' => ['nullable', 'string', 'max:255'],
             'operator' => ['nullable', 'string', 'max:50'],
+            'require_reread' => ['nullable', 'boolean'],
         ];
     }
 

@@ -45,6 +45,7 @@ final readonly class AlipayFaceToFaceGateway implements PaymentGatewayInterface
             $request->outTradeNo,
             $request->amount,
             $request->subject,
+            $request->timeoutExpress,
         );
 
         return new PaymentPrecreateResult(

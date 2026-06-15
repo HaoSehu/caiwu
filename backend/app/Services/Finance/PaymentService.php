@@ -6,6 +6,7 @@ namespace App\Services\Finance;
 
 use App\Constants\FinanceLedgerEventType;
 use App\Constants\InvoiceStatus;
+use App\Constants\InvoiceType;
 use App\Constants\OrderStatus;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
@@ -26,6 +27,7 @@ use App\Services\Order\PaidOrderBusinessFlowDispatcher;
 use App\Services\Provisioning\ProvisionService;
 use App\Services\Provisioning\ServiceRenewService;
 use App\Services\Referral\ReferralService;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -53,8 +55,8 @@ class PaymentService
         $traceId = trim((string) ($context['trace_id'] ?? ''));
         $lockKey = "lock:pay:invoice:{$invoice->id}";
 
-        $paidInvoice = $this->withLock($lockKey, 30, function () use ($invoice, $user, $traceId) {
-            return DB::transaction(function () use ($invoice, $user, $traceId) {
+        $paidInvoice = $this->withLock($lockKey, 30, function () use ($invoice, $user, $traceId, $context) {
+            return DB::transaction(function () use ($invoice, $user, $traceId, $context) {
                 $lockedInvoice = Invoice::query()
                     ->lockForUpdate()
                     ->with('order')
@@ -80,7 +82,11 @@ class PaymentService
                     -$amount,
                     $balanceAfter,
                     (int) $lockedInvoice->id,
-                    '支付账单 '.(string) $lockedInvoice->invoice_no
+                    '支付账单 '.(string) $lockedInvoice->invoice_no,
+                    [
+                        'operator' => trim((string) ($context['operator'] ?? $context['operator_name'] ?? '')),
+                        'trace_id' => $traceId,
+                    ]
                 );
 
                 $lockedInvoice->forceFill([
@@ -424,7 +430,12 @@ class PaymentService
         $payment = $payload['payment'];
 
         $subject = config('app.name', 'IDC').' - 账单 '.$lockedInvoice->invoice_no;
-        $result = $this->precreateAlipayPayment($payment->payment_no, (float) $payment->amount, $subject);
+        $result = $this->precreateAlipayPayment(
+            $payment->payment_no,
+            (float) $payment->amount,
+            $subject,
+            $this->resolveInvoicePaymentTimeoutExpress($lockedInvoice)
+        );
 
         return [
             'payment_no' => $payment->payment_no,
@@ -533,7 +544,12 @@ class PaymentService
 
         $subject = config('app.name', 'IDC').' - 账单 '.$lockedInvoice->invoice_no;
         try {
-            $result = $this->precreateAlipayPayment($alipayPayment->payment_no, $remainingAmount, $subject);
+            $result = $this->precreateAlipayPayment(
+                $alipayPayment->payment_no,
+                $remainingAmount,
+                $subject,
+                $this->resolveInvoicePaymentTimeoutExpress($lockedInvoice)
+            );
         } catch (\Throwable $exception) {
             $this->restoreReservedMixBalance($alipayPayment, [
                 'trace_id' => $traceId,
@@ -780,6 +796,22 @@ class PaymentService
                         ];
                     }
 
+                    if ($this->invoicePaymentWindowExpired($invoice)) {
+                        $this->markExpiredInvoicePaymentFailed($invoice, $lockedPayment, $tradeNo, $params);
+
+                        Log::warning('[支付宝回调] 账单支付窗口已过期，已取消账单并拦截入账', [
+                            'payment_no' => $lockedPayment->payment_no,
+                            'invoice_id' => $invoice->id,
+                            'order_id' => $invoice->order?->id,
+                        ]);
+
+                        return [
+                            'dispatch' => false,
+                            'invoice' => $invoice,
+                            'payment_no' => (string) $lockedPayment->payment_no,
+                        ];
+                    }
+
                     throw_if(
                         ! in_array((int) $invoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE], true),
                         new BusinessException('账单状态异常，无法处理支付回调')
@@ -963,6 +995,20 @@ class PaymentService
                             ]),
                         ])->save();
                         $this->syncProjection($lockedPayment);
+
+                        return ['dispatch' => false, 'invoice' => $invoice, 'payment_no' => (string) $lockedPayment->payment_no];
+                    }
+
+                    if ($this->invoicePaymentWindowExpired($invoice)) {
+                        $this->markExpiredInvoicePaymentFailed($invoice, $lockedPayment, $tradeNo, array_merge($queryResult['raw'] ?? [], [
+                            'source' => 'active_query',
+                            'trade_status' => $tradeStatus,
+                        ]));
+
+                        Log::warning('[支付宝主动查询] 账单支付窗口已过期，已取消账单并拦截入账', [
+                            'payment_no' => $lockedPayment->payment_no,
+                            'invoice_id' => $invoice->id,
+                        ]);
 
                         return ['dispatch' => false, 'invoice' => $invoice, 'payment_no' => (string) $lockedPayment->payment_no];
                     }
@@ -1579,6 +1625,7 @@ class PaymentService
         try {
             if ($order->type === 'renew') {
                 $this->serviceRenewService->processPaidRenewOrder($order);
+                $this->notifyOrderPaid($invoice, 'renew');
 
                 return;
             }
@@ -1586,11 +1633,13 @@ class PaymentService
             if ($order->type === 'upgrade') {
                 app(ServiceTrafficPackageService::class)
                     ->processPaidTrafficPackageOrder($order);
+                $this->notifyOrderPaid($invoice, 'upgrade');
 
                 return;
             }
 
             $this->provisionService->processPaidOrder($order);
+            $this->notifyOrderPaid($invoice, 'new');
         } catch (\Throwable $exception) {
             Log::error('[支付后自动开通] 调用开通服务失败', [
                 'invoice_id' => $invoice->id,
@@ -1601,6 +1650,40 @@ class PaymentService
 
             throw $exception;
         }
+    }
+
+    /**
+     * 开通成功后写一条「订购提醒」站内信。不影响主流程，异常已在服务内吞掉。
+     */
+    private function notifyOrderPaid(Invoice $invoice, string $orderType): void
+    {
+        $userId = (int) ($invoice->user_id ?? $invoice->order?->user_id ?? 0);
+        if ($userId <= 0) {
+            return;
+        }
+
+        $productName = (string) ($invoice->order?->display_product_name ?? '您的服务');
+        $title = match ($orderType) {
+            'renew' => '续费成功',
+            'upgrade' => '升级/加购成功',
+            default => '开通成功',
+        };
+
+        $serviceId = (int) ($invoice->order?->service_id ?? $invoice->service?->id ?? 0);
+        $link = $serviceId > 0 ? '/client/services/'.$serviceId : '/client/services';
+
+        app(\App\Services\Notification\UserNotificationService::class)->create(
+            $userId,
+            \App\Constants\UserNotificationType::ORDER_PAID,
+            $title,
+            "「{$productName}」已处理完成，账单号 {$invoice->invoice_no}。",
+            $link,
+            [
+                'invoice_id' => (int) $invoice->id,
+                'order_id' => (int) ($invoice->order?->id ?? 0),
+                'order_type' => $orderType,
+            ]
+        );
     }
 
     private function loadPayableOrderForBusinessFlow(int $orderId): ?Order
@@ -1657,6 +1740,41 @@ class PaymentService
                 'callback_raw' => $callbackRaw,
             ])->save();
             $this->syncProjection($pendingPayment);
+        }
+    }
+
+    private function markExpiredInvoicePaymentFailed(Invoice $invoice, Payment $payment, string $tradeNo, array $raw): void
+    {
+        if (! $this->restoreReservedMixBalance($payment, [
+            'closed_reason' => 'payment_window_expired',
+            'suppress_logs' => true,
+        ])) {
+            $payment->forceFill([
+                'trade_no' => $tradeNo,
+                'status' => PaymentStatus::FAILED,
+                'callback_raw' => array_merge($raw, [
+                    'payment_window_expired' => true,
+                    'ignored_business_update' => true,
+                ]),
+            ])->save();
+            $this->syncProjection($payment);
+        }
+
+        $invoice->forceFill(['status' => InvoiceStatus::CANCELLED])->save();
+        $this->couponService->releaseInvoiceCoupon($invoice);
+        $this->restoreStockForCancelledInvoice($invoice);
+        $this->closeOtherPendingPayments($invoice, (int) $payment->id, 'payment_window_expired');
+    }
+
+    private function restoreStockForCancelledInvoice(Invoice $invoice): void
+    {
+        if (! in_array((string) $invoice->type, [InvoiceType::NEW_PURCHASE, 'normal'], true) || ! $invoice->product_id) {
+            return;
+        }
+
+        $product = Product::query()->lockForUpdate()->find((int) $invoice->product_id);
+        if ($product instanceof Product && (int) $product->stock >= 0) {
+            $product->increment('stock', max((int) ($invoice->quantity ?? 1), 1));
         }
     }
 
@@ -1723,15 +1841,40 @@ class PaymentService
         return $this->paymentGatewayManager->alipay();
     }
 
-    private function precreateAlipayPayment(string $outTradeNo, float $amount, string $subject): array
+    private function precreateAlipayPayment(string $outTradeNo, float $amount, string $subject, ?string $timeoutExpress = null): array
     {
         return $this->alipayGateway()
             ->precreate(new PaymentPrecreateRequest(
                 outTradeNo: $outTradeNo,
                 amount: $amount,
                 subject: $subject,
+                timeoutExpress: $timeoutExpress,
             ))
             ->toArray();
+    }
+
+    private function resolveInvoicePaymentTimeoutExpress(Invoice $invoice): string
+    {
+        $remainingSeconds = $this->invoicePaymentDeadline($invoice)->diffInSeconds(CarbonImmutable::now(), true);
+
+        throw_if($this->invoicePaymentWindowExpired($invoice), new BusinessException('账单支付时间已过期，请重新创建账单'));
+
+        return max(1, (int) ceil($remainingSeconds / 60)).'m';
+    }
+
+    private function invoicePaymentWindowExpired(Invoice $invoice): bool
+    {
+        return $this->invoicePaymentDeadline($invoice)->lessThanOrEqualTo(CarbonImmutable::now());
+    }
+
+    private function invoicePaymentDeadline(Invoice $invoice): CarbonImmutable
+    {
+        $createdAt = $invoice->created_at;
+        $base = $createdAt instanceof \DateTimeInterface
+            ? CarbonImmutable::instance($createdAt)
+            : ($createdAt ? CarbonImmutable::parse((string) $createdAt) : CarbonImmutable::now());
+
+        return $base->addSeconds(CheckoutSecurityService::paymentSessionTtlSeconds());
     }
 
     private function queryAlipayPayment(string $outTradeNo): array

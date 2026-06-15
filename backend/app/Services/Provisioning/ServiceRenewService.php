@@ -208,7 +208,7 @@ class ServiceRenewService
             ]));
         }
 
-        $invoice = DB::transaction(function () use ($user, $service, $cycle, $amount, $renewConfig, $cycleOption, $effectiveProduct, $userCouponId) {
+        $invoice = DB::transaction(function () use ($user, $service, $cycle, $amount, $renewConfig, $cycleOption, $effectiveProduct, $userCouponId, $context) {
             $displayPayload = (new ProductDisplayNameResolver)->resolveForProduct($effectiveProduct);
             $productSpecDisplay = (string) ($displayPayload['product_spec_display'] ?? '');
             $couponPayload = $this->couponService->reserveOwnedCouponForInvoice(
@@ -241,6 +241,9 @@ class ServiceRenewService
                     'renew_service_id' => (int) $service->id,
                     'renew_service_name' => (string) $service->name,
                     'source_type' => (string) (($service->provision_data['source_type'] ?? '') ?: 'manual'),
+                    'created_by' => (string) ($context['source'] ?? $context['operator'] ?? ''),
+                    'auto_renew' => ! empty($context['auto_renew']) ? 1 : null,
+                    'auto_renew_trace_id' => ! empty($context['auto_renew']) ? (string) ($context['trace_id'] ?? '') : null,
                     'upstream_host_id' => $renewConfig['host_id'],
                     'supports_upstream' => $renewConfig['supports_upstream'],
                     'local_renew_amount' => number_format($amount, 2, '.', ''),

@@ -22,7 +22,7 @@ class CheckoutSecurityService
 
     private const ORDER_FINGERPRINT_TTL_SECONDS = 180;
 
-    private const PAYMENT_SESSION_TTL_SECONDS = 1800;
+    private const PAYMENT_SESSION_TTL_SECONDS = 300;
 
     private const PAYMENT_POLL_TTL_SECONDS = 1800;
 
@@ -168,6 +168,26 @@ class CheckoutSecurityService
         return $orderId > 0 ? $orderId : null;
     }
 
+    public static function paymentSessionTtlSeconds(): int
+    {
+        return self::PAYMENT_SESSION_TTL_SECONDS;
+    }
+
+    public function paymentSessionExpiresAt(Invoice|Order $record): CarbonImmutable
+    {
+        $createdAt = $record->created_at;
+        $base = $createdAt instanceof \DateTimeInterface
+            ? CarbonImmutable::instance($createdAt)
+            : ($createdAt ? CarbonImmutable::parse((string) $createdAt) : CarbonImmutable::now());
+
+        return $base->addSeconds(self::PAYMENT_SESSION_TTL_SECONDS);
+    }
+
+    public function isPaymentSessionExpired(Invoice|Order $record): bool
+    {
+        return $this->paymentSessionExpiresAt($record)->lessThanOrEqualTo(CarbonImmutable::now());
+    }
+
     public function issuePaymentSession(Order $order, int $userId): array
     {
         if (! in_array((int) $order->status, [OrderStatus::PENDING], true)) {
@@ -183,7 +203,13 @@ class CheckoutSecurityService
         }
 
         $now = CarbonImmutable::now();
-        $expiresAt = $now->addSeconds(self::PAYMENT_SESSION_TTL_SECONDS);
+        $expiresAt = $this->paymentSessionExpiresAt($order);
+        if ($expiresAt->lessThanOrEqualTo($now)) {
+            return [
+                'session_token' => '',
+                'expires_at' => $expiresAt->toIso8601String(),
+            ];
+        }
         $token = $this->generateToken('ord_session');
 
         Cache::put($this->orderPaymentSessionCacheKey($token), [
@@ -207,6 +233,8 @@ class CheckoutSecurityService
         if ($order->invoice instanceof Invoice) {
             return $this->assertInvoicePaymentSessionToken($token, $order->invoice, $userId);
         }
+
+        $this->assertPaymentSessionWindowOpen($order);
 
         $payload = Cache::get($this->orderPaymentSessionCacheKey($token));
 
@@ -235,7 +263,13 @@ class CheckoutSecurityService
         }
 
         $now = CarbonImmutable::now();
-        $expiresAt = $now->addSeconds(self::PAYMENT_SESSION_TTL_SECONDS);
+        $expiresAt = $this->paymentSessionExpiresAt($invoice);
+        if ($expiresAt->lessThanOrEqualTo($now)) {
+            return [
+                'session_token' => '',
+                'expires_at' => $expiresAt->toIso8601String(),
+            ];
+        }
         $token = $this->generateToken('inv_session');
 
         Cache::put($this->invoicePaymentSessionCacheKey($token), [
@@ -255,6 +289,8 @@ class CheckoutSecurityService
 
     public function assertInvoicePaymentSessionToken(string $token, Invoice $invoice, int $userId): array
     {
+        $this->assertPaymentSessionWindowOpen($invoice);
+
         $payload = Cache::get($this->invoicePaymentSessionCacheKey($token));
 
         throw_if(! is_array($payload), new BusinessException('支付会话已失效，请刷新页面后重试'));
@@ -449,6 +485,14 @@ class CheckoutSecurityService
     private function generateToken(string $prefix): string
     {
         return $prefix.'_'.Str::lower(Str::random(48));
+    }
+
+    private function assertPaymentSessionWindowOpen(Invoice|Order $record): void
+    {
+        throw_if(
+            $this->isPaymentSessionExpired($record),
+            new BusinessException('支付会话已失效，请重新创建账单后支付')
+        );
     }
 
     private function hashPayload(array $payload): string

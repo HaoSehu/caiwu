@@ -54,10 +54,21 @@ class AutoRenewService
                         }
 
                         try {
+                            $traceId = 'auto_renew:service:'.$service->id.':'.now()->format('YmdHi');
+                            $autoRenewContext = [
+                                'auto_renew' => true,
+                                'source' => 'auto_renew',
+                                'operator' => 'auto_renew',
+                                'actor_type' => 'system',
+                                'actor_name' => '自动续费',
+                                'trace_id' => $traceId,
+                            ];
                             $invoice = $this->serviceRenewService->createRenewInvoiceForUser(
                                 $service->user,
                                 (int) $service->id,
-                                (string) $service->billing_cycle
+                                (string) $service->billing_cycle,
+                                0,
+                                $autoRenewContext
                             );
 
                             $invoice->loadMissing(['product.supplier', 'service']);
@@ -77,7 +88,7 @@ class AutoRenewService
                                 return true;
                             }
 
-                            $this->paymentService->payByBalance($invoice->fresh(['product.supplier', 'service']), $service->user);
+                            $this->paymentService->payByBalance($invoice->fresh(['product.supplier', 'service']), $service->user, $autoRenewContext);
                             $summary['paid']++;
 
                             return true;

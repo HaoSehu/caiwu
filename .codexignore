@@ -1,0 +1,29 @@
+# Codex 文件监视器排除 —— 这些目录有上万个文件，不能让它扫描
+node_modules/
+backend/vendor/
+**/node_modules/
+**/dist/
+**/.git/
+migration-output/
+**/*.lock
+package-lock.json
+*.log
+
+# 图片/字体等二进制文件不需要索引
+**/*.png
+**/*.jpg
+**/*.jpeg
+**/*.gif
+**/*.svg
+**/*.ico
+**/*.woff
+**/*.woff2
+**/*.ttf
+**/*.eot
+
+# 缓存和临时文件
+**/.cache/
+**/.tmp/
+**/storage/framework/cache/
+**/storage/framework/views/
+**/storage/logs/

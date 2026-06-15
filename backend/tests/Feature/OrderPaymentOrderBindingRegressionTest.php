@@ -15,15 +15,19 @@ use App\Models\Payment;
 use App\Models\User;
 use App\Services\Finance\AdminOrderNotificationService;
 use App\Services\Finance\CheckoutSecurityService;
+use App\Services\Finance\CheckoutService;
 use App\Services\Finance\CouponService;
 use App\Services\Finance\InvoiceService;
 use App\Services\Finance\PaymentService;
+use App\Services\Automation\InvoiceCleanupAutomationService;
 use App\Services\Order\OrderService;
 use App\Services\Order\PaidOrderBusinessFlowDispatcher;
 use App\Services\PaymentGateway\AlipayFaceToFaceService;
 use App\Services\Provisioning\ProvisionService;
 use App\Services\Provisioning\ServiceRenewService;
 use App\Services\Referral\ReferralService;
+use App\Services\System\SettingService;
+use Carbon\CarbonImmutable;
 use Tests\TestCase;
 
 class OrderPaymentOrderBindingRegressionTest extends TestCase
@@ -76,6 +80,106 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
         ]);
 
         return [$user, $order, $invoice];
+    }
+
+    public function test_invoice_payment_session_deadline_is_fixed_from_invoice_created_at(): void
+    {
+        [$user, , $invoice] = $this->createUserOrderInvoice('fixedwindow');
+        $createdAt = now()->subMinutes(2)->startOfSecond();
+        $invoice->forceFill([
+            'created_at' => $createdAt,
+            'updated_at' => $createdAt,
+        ])->save();
+
+        $firstPayload = app(CheckoutSecurityService::class)->issueInvoicePaymentSession($invoice->refresh(), (int) $user->id);
+        $secondPayload = app(CheckoutSecurityService::class)->issueInvoicePaymentSession($invoice->refresh(), (int) $user->id);
+
+        $this->assertNotSame('', (string) ($firstPayload['session_token'] ?? ''));
+        $this->assertNotSame('', (string) ($secondPayload['session_token'] ?? ''));
+        $this->assertSame($createdAt->copy()->addMinutes(5)->toIso8601String(), $firstPayload['expires_at'] ?? null);
+        $this->assertSame($firstPayload['expires_at'] ?? null, $secondPayload['expires_at'] ?? null);
+    }
+
+    public function test_invoice_payment_session_is_not_reissued_after_fixed_deadline(): void
+    {
+        [$user, , $invoice] = $this->createUserOrderInvoice('expiredwindow');
+        $createdAt = now()->subMinutes(6)->startOfSecond();
+        $invoice->forceFill([
+            'created_at' => $createdAt,
+            'updated_at' => $createdAt,
+        ])->save();
+
+        $payload = app(CheckoutSecurityService::class)->issueInvoicePaymentSession($invoice->refresh(), (int) $user->id);
+
+        $this->assertSame('', (string) ($payload['session_token'] ?? ''));
+        $this->assertSame($createdAt->copy()->addMinutes(5)->toIso8601String(), $payload['expires_at'] ?? null);
+    }
+
+    public function test_cached_invoice_payment_session_cannot_be_used_after_fixed_deadline(): void
+    {
+        [$user, , $invoice] = $this->createUserOrderInvoice('stalesession');
+        $createdAt = now()->subMinute()->startOfSecond();
+        $invoice->forceFill([
+            'created_at' => $createdAt,
+            'updated_at' => $createdAt,
+        ])->save();
+
+        $security = app(CheckoutSecurityService::class);
+        $payload = $security->issueInvoicePaymentSession($invoice->refresh(), (int) $user->id);
+
+        CarbonImmutable::setTestNow($createdAt->copy()->addMinutes(6));
+
+        try {
+            $this->expectException(BusinessException::class);
+            $this->expectExceptionMessage('支付会话已失效，请重新创建账单后支付');
+            $security->assertInvoicePaymentSessionToken((string) $payload['session_token'], $invoice->refresh(), (int) $user->id);
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_checkout_service_cancels_expired_unpaid_invoice(): void
+    {
+        [, , $invoice] = $this->createUserOrderInvoice('autocancel');
+        $createdAt = now()->subMinutes(6)->startOfSecond();
+        $invoice->forceFill([
+            'created_at' => $createdAt,
+            'updated_at' => $createdAt,
+        ])->save();
+
+        $updated = app(CheckoutService::class)->cancelExpiredUnpaidInvoice($invoice, [
+            'actor_type' => 'system',
+            'actor_name' => 'test',
+            'reason' => 'payment_window_expired',
+        ]);
+
+        $this->assertSame(InvoiceStatus::CANCELLED, (int) $updated->status);
+        $this->assertSame(InvoiceStatus::CANCELLED, (int) $invoice->refresh()->status);
+    }
+
+    public function test_invoice_cleanup_task_cancels_invoices_after_payment_window(): void
+    {
+        [, , $invoice] = $this->createUserOrderInvoice('taskcancel');
+        $createdAt = now()->subMinutes(6)->startOfSecond();
+        $invoice->forceFill([
+            'created_at' => $createdAt,
+            'updated_at' => $createdAt,
+        ])->save();
+
+        $settingService = $this->createMock(SettingService::class);
+        $settingService->expects($this->once())
+            ->method('getAutomationConfig')
+            ->willReturn([
+                'pending_order_cleanup_enabled' => true,
+                'pending_order_cleanup_after_hours' => 1,
+                'pending_recharge_cleanup_enabled' => false,
+                'pending_recharge_cleanup_after_days' => 0,
+            ]);
+
+        $summary = (new InvoiceCleanupAutomationService($settingService, app(CheckoutService::class)))->handle();
+
+        $this->assertGreaterThanOrEqual(1, $summary['invoices_cancelled']);
+        $this->assertSame(InvoiceStatus::CANCELLED, (int) $invoice->refresh()->status);
     }
 
     private function makePaymentService(AlipayFaceToFaceService $alipayService): PaymentService
