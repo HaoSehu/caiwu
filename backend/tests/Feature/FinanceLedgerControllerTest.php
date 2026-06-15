@@ -95,6 +95,80 @@ class FinanceLedgerControllerTest extends TestCase
             ->assertJsonPath('data.manual_adjust_out', '8.00');
     }
 
+    public function test_client_finance_ledger_hides_internal_payment_identifiers(): void
+    {
+        $suffix = strtoupper(bin2hex(random_bytes(4)));
+        $user = $this->createClientUser('ledger-safe-'.$suffix, ['balance' => '76.00']);
+
+        $order = Order::query()->create([
+            'order_no' => 'ORDSAFE'.$suffix,
+            'user_id' => (int) $user->id,
+            'type' => 'new',
+            'amount' => '80.00',
+            'discount' => '0.00',
+            'paid_amount' => '80.00',
+            'billing_cycle' => 'monthly',
+            'status' => 1,
+            'paid_at' => now(),
+        ]);
+
+        $invoice = Invoice::query()->create([
+            'invoice_no' => 'INVSAFE'.$suffix,
+            'user_id' => (int) $user->id,
+            'order_id' => (int) $order->id,
+            'type' => 'new',
+            'amount' => '80.00',
+            'paid_amount' => '80.00',
+            'status' => 1,
+            'due_date' => now()->addDay(),
+            'paid_at' => now(),
+        ]);
+
+        $payment = Payment::query()->create([
+            'payment_no' => 'PAYSAFE'.$suffix,
+            'user_id' => (int) $user->id,
+            'order_id' => (int) $order->id,
+            'invoice_id' => (int) $invoice->id,
+            'gateway' => 'alipay',
+            'trade_no' => 'TRADESAFE'.$suffix,
+            'amount' => '80.00',
+            'status' => 1,
+            'paid_at' => now(),
+        ]);
+
+        $ledger = AccountTransaction::query()->create([
+            'user_id' => (int) $user->id,
+            'account_type' => 'cash',
+            'event_type' => 'consume',
+            'change_amount' => '-80.00',
+            'balance_after' => '76.00',
+            'source_type' => 'invoice',
+            'source_id' => (int) $invoice->id,
+            'origin_type' => 'payment',
+            'origin_id' => (int) $payment->id,
+            'remark' => '客户端资金明细脱敏测试',
+            'operator' => 'system',
+            'trace_id' => 'ledger-safe-trace-'.$suffix,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->getJson('/api/client/finance/ledger?page_size=20')
+            ->assertOk()
+            ->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.list.0.payment.payment_no', (string) $payment->payment_no)
+            ->assertJsonMissingPath('data.list.0.trace_id')
+            ->assertJsonMissingPath('data.list.0.payment.trade_no');
+
+        $this->getJson('/api/client/finance/ledger/'.$ledger->id)
+            ->assertOk()
+            ->assertJsonPath('data.payment.payment_no', (string) $payment->payment_no)
+            ->assertJsonMissingPath('data.trace_id')
+            ->assertJsonMissingPath('data.payment.trade_no');
+    }
+
     public function test_admin_finance_ledger_returns_all_records_and_supports_filters(): void
     {
         $suffix = bin2hex(random_bytes(4));

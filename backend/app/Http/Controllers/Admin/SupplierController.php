@@ -18,6 +18,8 @@ use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
 class SupplierController extends Controller
@@ -116,6 +118,13 @@ class SupplierController extends Controller
     {
         if (! $supplier->exists) {
             return $this->error(40400, '接口不存在');
+        }
+
+        $usage = $this->supplierUsageSummary($supplier);
+        if (($usage['total'] ?? 0) > 0) {
+            return $this->error(40900, '供应商已被商品或服务引用，请先解绑或停用', [
+                'usage' => $usage,
+            ]);
         }
 
         $supplier->delete();
@@ -474,5 +483,48 @@ class SupplierController extends Controller
             ->all();
 
         return $catalog;
+    }
+
+    private function supplierUsageSummary(Supplier $supplier): array
+    {
+        $supplierId = (int) $supplier->id;
+        $productCount = Product::withTrashed()
+            ->where('supplier_id', $supplierId)
+            ->count();
+        $serviceCount = $this->countBoundServices($supplierId);
+        $serviceInstanceCount = $this->countBoundServiceInstances($supplierId);
+
+        return [
+            'products' => $productCount,
+            'services' => $serviceCount,
+            'service_instances' => $serviceInstanceCount,
+            'total' => $productCount + $serviceCount + $serviceInstanceCount,
+        ];
+    }
+
+    private function countBoundServices(int $supplierId): int
+    {
+        if (! Schema::hasTable('services') || ! Schema::hasColumn('services', 'provision_data')) {
+            return 0;
+        }
+
+        return (int) DB::table('services')
+            ->where(function ($query) use ($supplierId) {
+                $query
+                    ->where('provision_data->supplier_id', $supplierId)
+                    ->orWhere('provision_data->supplier_id', (string) $supplierId);
+            })
+            ->count();
+    }
+
+    private function countBoundServiceInstances(int $supplierId): int
+    {
+        if (! Schema::hasTable('service_instances') || ! Schema::hasColumn('service_instances', 'supplier_id')) {
+            return 0;
+        }
+
+        return (int) DB::table('service_instances')
+            ->where('supplier_id', $supplierId)
+            ->count();
     }
 }

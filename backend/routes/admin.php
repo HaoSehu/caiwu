@@ -125,6 +125,8 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function () {
     // 订单管理（内部履约订单）
     Route::middleware(['permission:'.AdminPermissions::ORDER_LIST])->group(function () {
         Route::get('/orders', [OrderController::class, 'index']);
+    });
+    Route::middleware(['permission:'.AdminPermissions::ORDER_DETAIL])->group(function () {
         Route::get('/orders/{id}', [OrderController::class, 'show']);
     });
 
@@ -296,6 +298,8 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function () {
         Route::get('/logs/schedule', [LogController::class, 'scheduleLogs']);
         Route::get('/logs/schedule/health', [LogController::class, 'scheduleHealth']);
         Route::get('/logs/cleanup/overview', [LogController::class, 'cleanupOverview']);
+    });
+    Route::middleware(['permission:'.AdminPermissions::LOG_MANAGE])->group(function () {
         Route::post('/logs/cleanup', [LogController::class, 'cleanup']);
     });
 

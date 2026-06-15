@@ -10,13 +10,14 @@ use App\Constants\PaymentStatus;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Models\Service;
 use App\Models\User;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class ClientRecordResponsibilityBoundaryTest extends TestCase
 {
-    public function test_client_recharge_records_only_include_external_recharge_payments(): void
+    public function test_client_payment_records_include_third_party_recharge_and_purchase_payments(): void
     {
         $suffix = strtoupper(bin2hex(random_bytes(4)));
         $user = $this->createClientUser('record-boundary-'.$suffix);
@@ -89,7 +90,7 @@ class ClientRecordResponsibilityBoundaryTest extends TestCase
             'status' => PaymentStatus::PENDING,
         ]);
 
-        Payment::query()->create([
+        $manualPayment = Payment::query()->create([
             'payment_no' => 'PAYMAN'.$suffix,
             'user_id' => (int) $user->id,
             'invoice_id' => (int) $rechargeInvoice->id,
@@ -103,20 +104,32 @@ class ClientRecordResponsibilityBoundaryTest extends TestCase
 
         $response = $this->getJson('/api/client/payments?page_size=20')
             ->assertOk()
-            ->assertJsonPath('data.total', 2)
+            ->assertJsonPath('data.total', 3)
             ->assertJsonPath('data.list.0.gateway', 'wechat')
-            ->assertJsonPath('data.list.1.gateway', 'alipay');
+            ->assertJsonPath('data.list.1.payment_no', (string) $alipayRecharge->payment_no)
+            ->assertJsonPath('data.list.1.invoice_type', 'recharge')
+            ->assertJsonPath('data.list.2.payment_no', (string) $purchasePayment->payment_no)
+            ->assertJsonPath('data.list.2.invoice_type', 'new')
+            ->assertJsonPath('data.list.2.order_no', (string) $order->order_no)
+            ->assertJsonPath('data.list.2.order.id', (int) $order->id)
+            ->assertJsonMissingPath('data.list.1.trade_no')
+            ->assertJsonMissingPath('data.list.2.trade_no');
 
         $paymentNos = collect($response->json('data.list'))->pluck('payment_no')->all();
+        $this->assertContains((string) $purchasePayment->payment_no, $paymentNos);
         $this->assertContains((string) $alipayRecharge->payment_no, $paymentNos);
         $this->assertContains((string) $wechatPendingRecharge->payment_no, $paymentNos);
-        $this->assertNotContains((string) $purchasePayment->payment_no, $paymentNos);
+        $this->assertNotContains((string) $manualPayment->payment_no, $paymentNos);
 
         $this->getJson('/api/client/payments/summary')
             ->assertOk()
-            ->assertJsonPath('data.total', 2)
+            ->assertJsonPath('data.total', 3)
             ->assertJsonPath('data.pending', 1)
-            ->assertJsonPath('data.success', 1);
+            ->assertJsonPath('data.success', 2);
+
+        $this->getJson('/api/client/payments?keyword='.$purchasePayment->trade_no.'&page_size=20')
+            ->assertOk()
+            ->assertJsonPath('data.total', 0);
     }
 
     public function test_client_order_records_are_purchase_service_orders_not_recharge_invoices(): void
@@ -133,6 +146,19 @@ class ClientRecordResponsibilityBoundaryTest extends TestCase
             'discount' => '0.00',
             'paid_amount' => '0.00',
             'billing_cycle' => 'monthly',
+            'config_snapshot' => [
+                'region' => '美国',
+                'node' => '三网精品',
+                'cpu' => '2 vCPU',
+                'memory' => '2 GiB',
+            ],
+            'config_pricing_snapshot' => [
+                'items' => [
+                    ['label' => 'CPU', 'value' => '2 vCPU', 'amount' => '20.00'],
+                    ['label' => '内存', 'value' => '2 GiB', 'amount' => '18.00'],
+                ],
+                'total_amount' => '88.00',
+            ],
             'status' => OrderStatus::PENDING,
         ]);
 
@@ -145,6 +171,29 @@ class ClientRecordResponsibilityBoundaryTest extends TestCase
             'paid_amount' => '0.00',
             'status' => InvoiceStatus::UNPAID,
             'due_date' => now()->addDay(),
+        ]);
+
+        $service = Service::query()->create([
+            'user_id' => (int) $user->id,
+            'order_id' => (int) $order->id,
+            'invoice_id' => (int) $invoice->id,
+            'name' => 'boundary-service',
+            'domain' => 'boundary.example.com',
+            'billing_cycle' => 'monthly',
+            'amount' => '88.00',
+            'status' => 1,
+        ]);
+        $order->forceFill(['service_id' => (int) $service->id])->save();
+
+        $payment = Payment::query()->create([
+            'payment_no' => 'PAYORD'.$suffix,
+            'user_id' => (int) $user->id,
+            'order_id' => (int) $order->id,
+            'invoice_id' => (int) $invoice->id,
+            'gateway' => 'alipay',
+            'trade_no' => 'TRADEORD'.$suffix,
+            'amount' => '88.00',
+            'status' => PaymentStatus::PENDING,
         ]);
 
         Invoice::query()->create([
@@ -165,7 +214,20 @@ class ClientRecordResponsibilityBoundaryTest extends TestCase
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.order_no', (string) $order->order_no)
             ->assertJsonPath('data.list.0.invoice_id', (int) $invoice->id)
-            ->assertJsonPath('data.list.0.product_name', '边界测试云服务器');
+            ->assertJsonPath('data.list.0.product_name', '边界测试云服务器')
+            ->assertJsonPath('data.list.0.product_full_path', '边界测试云服务器')
+            ->assertJsonPath('data.list.0.service.id', (int) $service->id)
+            ->assertJsonPath('data.list.0.config_snapshot.region', '美国')
+            ->assertJsonPath('data.list.0.config_pricing_snapshot.items.0.label', 'CPU')
+            ->assertJsonPath('data.list.0.payments.0.payment_no', (string) $payment->payment_no)
+            ->assertJsonMissingPath('data.list.0.payments.0.trade_no');
+
+        $this->getJson('/api/client/orders/'.$order->id)
+            ->assertOk()
+            ->assertJsonPath('data.id', (int) $order->id)
+            ->assertJsonPath('data.service.id', (int) $service->id)
+            ->assertJsonPath('data.payments.0.payment_no', (string) $payment->payment_no)
+            ->assertJsonMissingPath('data.payments.0.trade_no');
 
         $this->getJson('/api/client/orders?keyword='.$invoice->invoice_no.'&page_size=20')
             ->assertOk()
