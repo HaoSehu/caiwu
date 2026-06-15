@@ -46,6 +46,8 @@ class AdminPermissions
 
     public const LOG_LIST = 'log.list';
 
+    public const LOG_MANAGE = 'log.manage';
+
     public const REFERRAL_LIST = 'referral.list';
 
     public const FINANCE_REPORT = 'finance.report';
@@ -139,6 +141,7 @@ class AdminPermissions
             self::INVOICE_MANAGE => [self::INVOICE_LIST, self::INVOICE_DETAIL],
             self::TICKET_MANAGE => [self::TICKET_LIST, self::TICKET_REPLY],
             self::PRODUCT_MANAGE => [self::PRODUCT_LIST],
+            self::LOG_MANAGE => [self::LOG_LIST],
             self::CONTENT_MANAGE => [self::CONTENT_LIST],
             self::STAFF_MANAGE => [self::STAFF_LIST],
             self::ROLE_MANAGE => [self::ROLE_LIST, self::PERMISSION_LIST],

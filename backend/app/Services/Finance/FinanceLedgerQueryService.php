@@ -29,7 +29,10 @@ class FinanceLedgerQueryService
         $paginator = $this->buildQuery(array_merge($filters, ['user_id' => (int) $user->id]))->paginate($perPage);
 
         return [
-            'list' => FinanceLedgerResource::collection($paginator->items())->resolve(),
+            'list' => collect(FinanceLedgerResource::collection($paginator->items())->resolve())
+                ->map(fn (array $item) => $this->sanitizeClientLedgerPayload($item))
+                ->values()
+                ->all(),
             'total' => $paginator->total(),
             'page' => $paginator->currentPage(),
             'page_size' => $paginator->perPage(),
@@ -251,6 +254,10 @@ class FinanceLedgerQueryService
             ]);
         }
 
+        if (! empty($filters['service_id'])) {
+            $this->applyServiceFilter($query, (int) $filters['service_id']);
+        }
+
         if (! empty($filters['tab'])) {
             match ($filters['tab']) {
                 'invoices' => $query->whereRaw(
@@ -375,6 +382,32 @@ class FinanceLedgerQueryService
         }
     }
 
+    private function applyServiceFilter(Builder $query, int $serviceId): void
+    {
+        if ($serviceId <= 0) {
+            return;
+        }
+
+        $invoiceIds = Invoice::query()
+            ->where('service_id', $serviceId)
+            ->pluck('id');
+        $orderInvoiceIds = Invoice::query()
+            ->whereHas('order', fn (Builder $builder) => $builder->where('service_id', $serviceId))
+            ->pluck('id');
+        $invoiceIds = $invoiceIds->merge($orderInvoiceIds)->unique()->values();
+        $paymentIds = Payment::query()
+            ->whereIn('invoice_id', $invoiceIds)
+            ->pluck('id');
+
+        $query->where(function (Builder $builder) use ($invoiceIds, $paymentIds) {
+            $builder->where(function (Builder $inner) use ($invoiceIds) {
+                $inner->where('source_type', 'invoice')->whereIn('source_id', $invoiceIds);
+            })->orWhere(function (Builder $inner) use ($paymentIds) {
+                $inner->where('source_type', 'payment')->whereIn('source_id', $paymentIds);
+            });
+        });
+    }
+
     private function attachContextResolvers(Builder $query): void
     {
         $query->withCasts(['normalized_event_type' => 'string']);
@@ -405,6 +438,7 @@ class FinanceLedgerQueryService
                 ->with([
                     'payments' => fn ($relation) => $relation->orderByDesc('id'),
                     'service:id,name,domain,status,expires_at,provision_data',
+                    'order:id,order_no,type,service_id,billing_cycle,quantity,remark,operator,trace_id,product_spec_snapshot',
                 ])
                 ->whereIn('id', array_unique($invoiceIds))
                 ->get()
@@ -434,6 +468,7 @@ class FinanceLedgerQueryService
                         $invoice = Invoice::query()->with([
                             'payments' => fn ($relation) => $relation->orderByDesc('id'),
                             'service:id,name,domain,status,expires_at,provision_data',
+                            'order:id,order_no,type,service_id,billing_cycle,quantity,remark,operator,trace_id,product_spec_snapshot',
                         ])->find((int) $payment->invoice_id);
                     }
                 }
@@ -468,13 +503,24 @@ class FinanceLedgerQueryService
 
     private function buildClientDetailPayload(AccountTransaction $record): array
     {
-        $base = FinanceLedgerResource::make($record)->resolve();
+        $base = $this->sanitizeClientLedgerPayload(FinanceLedgerResource::make($record)->resolve());
         $invoice = $record->getRelationValue('invoice');
         $order = $invoice?->order_id ? Order::query()->find((int) $invoice->order_id) : null;
 
         return array_merge($base, [
             'related_service' => $this->buildRelatedServicePayload($invoice, $order),
         ]);
+    }
+
+    private function sanitizeClientLedgerPayload(array $payload): array
+    {
+        unset($payload['trace_id']);
+
+        if (isset($payload['payment']) && is_array($payload['payment'])) {
+            unset($payload['payment']['trade_no']);
+        }
+
+        return $payload;
     }
 
     private function buildRelatedServicePayload(?Invoice $invoice, ?Order $order): ?array

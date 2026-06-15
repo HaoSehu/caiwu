@@ -99,7 +99,7 @@ class PermissionCatalogService
             AdminPermissions::CONTENT_LIST, AdminPermissions::CONTENT_MANAGE => 'content_ops',
             AdminPermissions::REFERRAL_LIST, AdminPermissions::MEMBER_LEVEL_MANAGE => 'marketing_growth',
             AdminPermissions::SETTINGS_MANAGE => 'system_config',
-            AdminPermissions::LOG_LIST => 'system_audit',
+            AdminPermissions::LOG_LIST, AdminPermissions::LOG_MANAGE => 'system_audit',
             default => $this->detectModule($permission),
         };
     }
@@ -248,6 +248,7 @@ class PermissionCatalogService
             AdminPermissions::PRODUCT_MANAGE => '管理商品',
             AdminPermissions::SETTINGS_MANAGE => '管理系统设置',
             AdminPermissions::LOG_LIST => '查看日志',
+            AdminPermissions::LOG_MANAGE => '管理日志',
             AdminPermissions::REFERRAL_LIST => '查看推广返利',
             AdminPermissions::FINANCE_REPORT => '查看财务报表',
             AdminPermissions::FINANCE_WITHDRAW => '处理提现',

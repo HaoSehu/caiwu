@@ -27,9 +27,15 @@ class InvoiceController extends Controller
 
     public function index(Request $request)
     {
+        $this->checkoutService->cancelExpiredUnpaidInvoicesForUser(
+            (int) $request->user()->id,
+            $this->buildPaymentWindowExpiredContext($request)
+        );
+
         $filters = $request->validate([
             'status' => ['nullable', 'integer'],
             'type' => ['nullable', 'string'],
+            'keyword' => ['nullable', 'string', 'max:80'],
             'page' => ['nullable', 'integer', 'min:1'],
             'page_size' => ['nullable', 'integer', 'min:1', 'max:100'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
@@ -59,6 +65,15 @@ class InvoiceController extends Controller
         if ($types !== []) {
             $query->whereIn('type', $types);
         }
+        if (! empty($filters['keyword'])) {
+            $keyword = trim((string) $filters['keyword']);
+            $query->where(function ($builder) use ($keyword) {
+                $builder->where('invoice_no', 'like', '%'.$keyword.'%')
+                    ->orWhereHas('payments', function ($paymentQuery) use ($keyword) {
+                        $paymentQuery->where('payment_no', 'like', '%'.$keyword.'%');
+                    });
+            });
+        }
 
         $perPage = (int) ($filters['page_size'] ?? $filters['per_page'] ?? 15);
         $list = $query->paginate($perPage);
@@ -79,6 +94,7 @@ class InvoiceController extends Controller
     public function summary(Request $request)
     {
         $userId = (int) $request->user()->id;
+        $this->checkoutService->cancelExpiredUnpaidInvoicesForUser($userId, $this->buildPaymentWindowExpiredContext($request));
 
         $row = Invoice::query()
             ->where('user_id', $userId)
@@ -139,6 +155,14 @@ class InvoiceController extends Controller
             ->where('user_id', $request->user()->id)
             ->findOrFail($id);
 
+        $invoice = $this->checkoutService->cancelExpiredUnpaidInvoice($invoice, $this->buildPaymentWindowExpiredContext($request));
+        $invoice->loadMissing([
+            'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
+            'order.product:id,product_type,product_group_id,remark,config_options,purchase_requires',
+            'service',
+            'payments',
+        ]);
+
         return $this->success($this->transformInvoice($invoice, $request->user()));
     }
 
@@ -152,6 +176,10 @@ class InvoiceController extends Controller
         ])
             ->where('user_id', $request->user()->id)
             ->findOrFail($id);
+
+        if ((int) $invoice->status === InvoiceStatus::CANCELLED) {
+            return $this->success($this->transformInvoice($invoice, $request->user()), '账单已取消');
+        }
 
         $updated = $this->checkoutService->cancel(
             $invoice,
@@ -184,6 +212,8 @@ class InvoiceController extends Controller
         ])
             ->where('user_id', $user->id)
             ->findOrFail($id);
+
+        $invoice = $this->checkoutService->cancelExpiredUnpaidInvoice($invoice, $this->buildPaymentWindowExpiredContext($request));
 
         $this->checkoutSecurityService->assertInvoicePaymentSessionToken(
             (string) $data['payment_session_token'],
@@ -225,6 +255,8 @@ class InvoiceController extends Controller
         ])
             ->where('user_id', $user->id)
             ->findOrFail($id);
+
+        $invoice = $this->checkoutService->cancelExpiredUnpaidInvoice($invoice, $this->buildPaymentWindowExpiredContext($request));
 
         $this->checkoutSecurityService->assertInvoicePaymentSessionToken(
             (string) $data['payment_session_token'],
@@ -270,6 +302,8 @@ class InvoiceController extends Controller
         $invoice = Invoice::with(['product:id,product_type,product_group_id,remark,config_options,purchase_requires', 'payments'])
             ->where('user_id', $user->id)
             ->findOrFail($id);
+
+        $invoice = $this->checkoutService->cancelExpiredUnpaidInvoice($invoice, $this->buildPaymentWindowExpiredContext($request));
 
         $this->checkoutSecurityService->assertInvoicePaymentSessionToken(
             (string) $data['payment_session_token'],
@@ -350,8 +384,9 @@ class InvoiceController extends Controller
         $invoiceDetail = $this->invoiceService->clientDetail($invoice);
         $payableAmount = (string) ($invoiceDetail['payable_amount'] ?? number_format($this->resolveInvoicePayableAmount($invoice), 2, '.', ''));
         $paymentSecurity = $this->checkoutSecurityService->issueInvoicePaymentSession($invoice, (int) $invoice->user_id);
+        $paymentSessionToken = (string) ($paymentSecurity['session_token'] ?? '');
         $canCancel = in_array((int) $invoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE], true);
-        $canPay = $canCancel;
+        $canPay = $canCancel && $paymentSessionToken !== '';
 
         $payMethods = [['key' => 'balance', 'name' => '余额支付']];
         if ((float) $payableAmount <= 0) {
@@ -385,7 +420,7 @@ class InvoiceController extends Controller
             ] : null,
             'payment_security' => [
                 'can_pay' => (bool) $canPay,
-                'session_token' => (string) ($paymentSecurity['session_token'] ?? ''),
+                'session_token' => $paymentSessionToken,
                 'expires_at' => $paymentSecurity['expires_at'] ?? null,
             ],
         ];
@@ -458,5 +493,14 @@ class InvoiceController extends Controller
             'ip_address' => (string) $request->ip(),
             'trace_id' => (string) $request->header('X-Request-Id', ''),
         ];
+    }
+
+    private function buildPaymentWindowExpiredContext(Request $request): array
+    {
+        return array_merge($this->buildOperationContext($request, 'system'), [
+            'actor_user_id' => 0,
+            'actor_name' => 'payment-window-expired',
+            'reason' => 'payment_window_expired',
+        ]);
     }
 }

@@ -273,6 +273,10 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
             ->assertJsonPath('data.product_display_name', '客户端云主机 2核4G')
             ->assertJsonMissingPath('data.raw_status')
             ->assertJsonMissingPath('data.payments.0.trade_no');
+
+        $this->getJson('/api/client/invoices?keyword=TRADE-SHOULD-NOT-LEAK-'.$suffix.'&page_size=20')
+            ->assertOk()
+            ->assertJsonPath('data.total', 0);
     }
 
     public function test_client_invoice_list_filters_refunded_invoice_without_order_binding(): void
