@@ -108,10 +108,12 @@ class ServiceVncService
 
                 $vncUrl = $viewerUrl.(str_contains($viewerUrl, '?') ? '&' : '?').http_build_query($queryParams);
             } else {
-                $this->safeLog('warning', '[VNC] noVNC地址已配置但上游链接解析失败，已回退使用上游链接', [
+                $this->safeLog('warning', '[VNC] noVNC地址已配置但上游链接解析失败，已拒绝返回上游链接', [
                     'service_id' => $serviceId,
                     'novnc_base_url' => $novncBaseUrl,
                 ]);
+
+                throw new BusinessException('VNC 中转参数解析失败，请联系管理员检查上游 VNC 地址格式', 50000);
             }
         }
 

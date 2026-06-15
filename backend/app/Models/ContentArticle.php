@@ -62,6 +62,7 @@ class ContentArticle extends Model
         'operator',
         'remark',
         'trace_id',
+        'require_reread_at',
     ];
 
     protected function casts(): array
@@ -76,6 +77,7 @@ class ContentArticle extends Model
             'node_type' => 'string',
             'publish_at' => 'datetime',
             'last_published_at' => 'datetime',
+            'require_reread_at' => 'datetime',
             'created_by' => 'integer',
             'updated_by' => 'integer',
         ];

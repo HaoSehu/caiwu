@@ -28,24 +28,24 @@
 ## 3. 项目结构
 
 - `backend`：Laravel 12 后端（PHP 8.2+），承载认证、支付、订单、账单、工单、服务实例、内容、优惠券等。
-- `frontend-admin`：管理端，Vue 3 + Vite + Element Plus。
-- `frontend-admin-v3`：新版管理端，Vue 3 + Vite + TDesign（TDesign Starter for Vue Next 基底），逐步替代 `frontend-admin`。
-- `frontend-client`：用户端与官网，Vue 3 + Vite + Element Plus。
+- `frontend-admin-v3`：当前管理端，Vue 3 + Vite + TypeScript + TDesign Vue Next（TDesign Starter for Vue Next 基底）。
+- `frontend-user-v3-www`：当前官网与用户端入口，Vue 3 + Vite + Element Plus，承载官网、登录注册、用户中心与站点公开页面。
+- `frontend-user-v4-console`：新版用户控制台，Vue 3 + Vite + TypeScript + TDesign Vue Next，承载 `/client/*` 控制台体验并逐步替代旧 Element Plus 控制台来源。
 - `shared`：跨端共享状态映射、展示组件与通用配置。前端通过 `@shared` / `@caiwu/shared` 别名引用。
 - `文档`：项目文档库，入口看 `文档/README.md` 与 `文档/目录说明.md`。
 - `backend/scripts/`：维护脚本（`export_api_inventory.php` 等），不要放长期业务代码。
 - `migration-output`：历史旧数据快照的临时输出目录。
 
-不存在的目录不要引用：根目录无 `scripts/`、无 `.kiro/specs`。
+不存在的目录不要引用：根目录无 `scripts/`、无 `.kiro/specs`、无 `frontend-admin`、无 `frontend-client`、无 `frontend-user-v3-console`。
 
 ## 4. 技术基线
 
 - 后端：PHP 8.2、**Laravel 12**（`composer.json` 为准）、Sanctum 4、MySQL 8。
 - 前端：Vue 3、Composition API、Vite 6、Pinia、axios、Sass。
 - 前端 UI 框架：
-  - `frontend-admin`：Element Plus
-  - `frontend-admin-v3`：TDesign Vue Next + TDesign Icons Vue Next（基于 TDesign Starter for Vue Next）
-  - `frontend-client`：Element Plus
+  - `frontend-admin-v3`：TDesign Vue Next + TDesign Icons Vue Next
+  - `frontend-user-v3-www`：Element Plus + `@element-plus/icons-vue`
+  - `frontend-user-v4-console`：TDesign Vue Next + TDesign Icons Vue Next
 - 图标：
   - Element Plus 端：`@element-plus/icons-vue`
   - TDesign 端：`tdesign-icons-vue-next`
@@ -71,18 +71,7 @@
 - 认证存取走 `src/utils/auth.js`（或等价模块），不要直接操作 localStorage 键。
 - 领域请求收敛到 `src/api/*`，视图层只消费明确的 API 方法。
 
-### 管理端 `frontend-admin`
-
-- UI 框架：Element Plus，不引入第二套 UI 库。
-- 视觉基线：亮色企业控制台，不是深色后台。
-- 样式入口：`src/assets/styles/variables.scss`、`global.scss`、`element/index.scss`。
-- 管理端页面禁止新增独立的"头部说明卡片"（例如 `admin-page-head`、`*-hero`、`*-head` 这类只放模块名、标题、说明文案和少量按钮的顶部大卡片）。列表页直接从筛选区、指标区或表格卡片开始；详情页的返回、保存、刷新等必要操作使用紧凑工具栏，不做说明型页头。
-- 列表页默认结构：页头 → 筛选区 → 表格卡片 → 分页。
-- 表单页必须 `el-form` 校验，提交按钮有 loading/禁用态。
-- 非必要不要散落 `:deep(.el-*)` 和硬编码颜色，走主题 token 或全局样式。
-- 配置页不做"敏感信息掩码后保持原值"的伪编辑体验。
-
-### 新版管理端 `frontend-admin-v3`
+### 管理端 `frontend-admin-v3`
 
 - UI 框架：TDesign Vue Next + TDesign Icons Vue Next，**禁止**混用 Element Plus。
 - 工程基底：TDesign Starter for Vue Next（`Tencent/tdesign-vue-next-starter`）。
@@ -93,14 +82,22 @@
 - 权限控制：`src/permission.ts`（路由守卫）+ `src/store/modules/permission.ts`，权限码与旧管理端一致。
 - 页面模板：`src/pages/` 下按领域组织，复用 Starter 的列表页、表单页、详情页模板模式。
 - 图标统一使用 `tdesign-icons-vue-next`，禁止混用 `@element-plus/icons-vue`。
-- 所有 v3 页面必须与旧管理端功能一致、路由覆盖一致、权限控制一致、API 对接一致。
+- 管理端页面禁止新增独立的"头部说明卡片"（例如 `admin-page-head`、`*-hero`、`*-head` 这类只放模块名、标题、说明文案和少量按钮的顶部大卡片）。列表页直接从筛选区、指标区或表格卡片开始；详情页的返回、保存、刷新等必要操作使用紧凑工具栏。
 - 禁止在 v3 中硬编码 Element Plus 组件或样式。
 
-### 用户端与官网 `frontend-client`
+### 官网与用户入口 `frontend-user-v3-www`
 
+- UI 框架：Element Plus，不引入第二套 UI 库。
 - 可以比管理端更有视觉表现，但沿用现有 token、圆角、阴影和蓝色品牌体系。
 - 样式复用 `src/assets/styles/variables.scss`、`global.scss` 和既有布局组件。
-- 购买/结算/恢复流程复用 `src/utils/websiteCheckout.js`、`websiteCoupon.js`。
+- 购买/结算/恢复流程优先复用 `src/domains/products/*`、`src/composables/*` 和现有 API 封装，不在页面模板里重写流程。
+
+### 用户控制台 `frontend-user-v4-console`
+
+- UI 框架：TDesign Vue Next + TDesign Icons Vue Next，禁止混用 Element Plus。
+- 页面放在 `src/pages/client/`，业务逻辑优先收敛到 `src/domains/`、`src/composables/`、`src/api/`。
+- 复用 `shared/user-v3` 的控制台基础组件（如 `PageScaffold`、`DataState`、`StatusTag`）和 `@caiwu/shared` 状态/运行时能力。
+- 控制台是高频业务界面，保持浅色、克制、信息密度合理，不做官网式 Hero 或装饰优先布局。
 
 ## 7. 后端规则
 
@@ -154,9 +151,9 @@
 ## 10. 验证要求
 
 - 只改文档：自检内容与仓库现状一致。
-- 改 `frontend-admin`：执行 `npm run build`。
 - 改 `frontend-admin-v3`：执行 `npm run build`（含 `vue-tsc --noEmit`）。
-- 改 `frontend-client`：执行 `npm run build`；涉及重构收口范围再执行 `npm run verify:refactor`。
+- 改 `frontend-user-v3-www`：执行 `npm run build`；涉及重构收口范围再执行 `npm run verify:refactor`。
+- 改 `frontend-user-v4-console`：执行 `npm run build`；涉及重构收口范围再执行 `npm run verify:refactor`。
 - 改 `backend`：执行 `php artisan test`，必要时缩小到受影响测试文件。
 - 多步骤开发：子任务完成后先跑最小相关测试，最后再跑完整受影响验证；失败必须修复后继续。
 - 无法运行验证时，在总结中说明原因。
@@ -177,14 +174,14 @@ php artisan app:serve --with-schedule
 ### 前端
 
 ```bash
-# 用户端（127.0.0.1:5173）
-cd frontend-client && npm run dev
-
-# 管理端（127.0.0.1:5174）
-cd frontend-admin && npm run dev
-
-# 新版管理端（127.0.0.1:5175）
+# 管理端（127.0.0.1:5175）
 cd frontend-admin-v3 && npm run dev
+
+# 官网/用户入口（端口以 vite 配置为准）
+cd frontend-user-v3-www && npm run dev
+
+# 用户控制台（端口以 vite 配置为准）
+cd frontend-user-v4-console && npm run dev
 ```
 
 联调时统一 `127.0.0.1`，不要混用 `localhost`。
@@ -223,7 +220,7 @@ cd frontend-admin-v3 && npm run dev
 
 ## 15. 前端构建产物
 
-- `frontend-admin`、`frontend-admin-v3` 和 `frontend-client` 的 build 都会自动生成 `.gz` / `.br` 预压缩文件。
-- `frontend-client` 的 `npm run build` 还会自动注入站点验证 meta。
-- `frontend-client` 额外脚本：`verify:refactor`（源码健康检查+构建）、`check:source-health`（单独源码检查）。
-- `frontend-admin` 额外脚本：`api:catalog`（生成 API 目录）。
+- `frontend-admin-v3`、`frontend-user-v3-www` 和 `frontend-user-v4-console` 的 build 都可能生成 `.gz` / `.br` 预压缩文件。
+- `frontend-user-v3-www` 的 `npm run build` 会生成 sitemap/prerender 相关产物。
+- `frontend-user-v3-www` 额外脚本：`verify:refactor`、`check:source-health`。
+- `frontend-user-v4-console` 额外脚本：`verify:refactor`。

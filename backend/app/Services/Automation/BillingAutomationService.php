@@ -4,9 +4,11 @@ namespace App\Services\Automation;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\ServiceStatus;
+use App\Constants\UserNotificationType;
 use App\Models\AutomationLog;
 use App\Models\Invoice;
 use App\Models\Service;
+use App\Services\Notification\UserNotificationService;
 use App\Services\Provisioning\ServiceRenewService;
 use App\Services\System\NotificationService;
 use App\Services\System\SettingService;
@@ -19,6 +21,7 @@ class BillingAutomationService
         private SettingService $settingService,
         private NotificationService $notificationService,
         private ServiceRenewService $serviceRenewService,
+        private UserNotificationService $userNotificationService,
     ) {}
 
     public function handle(): array
@@ -108,6 +111,14 @@ class BillingAutomationService
                     'billing_cycle_label' => $this->resolveCycleLabel((string) $service->billing_cycle),
                     'urgency_message' => $urgencyLine,
                 ]);
+                $this->userNotificationService->create(
+                    (int) $service->user_id,
+                    UserNotificationType::SERVICE_RENEW_REMINDER,
+                    '服务续费提醒',
+                    $urgencyLine,
+                    '/client/services/'.$service->id,
+                    ['service_id' => (int) $service->id, 'days_left' => $days, 'expires_at' => $expiryStr]
+                );
                 AutomationLog::markExecuted(
                     'billing-maintenance',
                     'renew_notice',
@@ -390,6 +401,19 @@ class BillingAutomationService
                 'due_date' => $dueDate,
                 'notice_message' => $tailText,
             ]);
+
+            $userId = (int) ($invoice->user_id ?? $invoice->user?->id ?? 0);
+            if ($userId > 0) {
+                $isOverdue = $templateCode === NotificationService::TEMPLATE_INVOICE_OVERDUE_REMINDER;
+                $this->userNotificationService->create(
+                    $userId,
+                    $isOverdue ? UserNotificationType::INVOICE_OVERDUE_REMINDER : UserNotificationType::INVOICE_PAYMENT_REMINDER,
+                    $isOverdue ? '账单逾期提醒' : '账单待支付提醒',
+                    $tailText,
+                    '/client/invoices/'.$invoice->id,
+                    ['invoice_id' => (int) $invoice->id, 'amount' => (float) $invoice->amount, 'due_date' => $dueDate]
+                );
+            }
 
             return true;
         } catch (\Throwable $exception) {

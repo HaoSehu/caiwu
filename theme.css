@@ -263,6 +263,12 @@
   font-size: 16px;
 }
 
+#app .t-default-menu .t-menu__item .t-icon,
+#app .t-default-menu .t-submenu__title .t-icon {
+  flex-shrink: 0;
+  color: currentColor;
+}
+
 #app *,
 #app *::before,
 #app *::after {
@@ -377,8 +383,27 @@
 
 #app .tdesign-starter-side-nav-logo-wrapper {
   height: 56px;
-  padding: 0 20px;
+  padding: 0 16px 0 5px;
   justify-content: flex-start;
+}
+
+#app .tdesign-starter-sidebar-compact .tdesign-starter-side-nav-logo-wrapper {
+  width: 64px;
+  margin-left: 0 !important;
+  padding: 0;
+  justify-content: center;
+}
+
+#app .tdesign-starter-sidebar-compact .tdesign-starter-side-nav .t-menu__logo {
+  display: flex;
+  width: 64px;
+  padding: 0;
+  justify-content: center;
+}
+
+#app .tdesign-starter-sidebar-compact .client-side-brand {
+  width: 64px;
+  justify-content: center;
 }
 
 #app .tdesign-starter-side-nav-logo-tdesign-logo {
@@ -414,6 +439,10 @@
 #app .t-default-menu .t-menu__item.t-is-active:not(.t-is-opened) {
   position: relative;
   background: var(--td-brand-color);
+  color: var(--td-text-color-anti);
+}
+
+#app .t-default-menu .t-menu__item.t-is-active:not(.t-is-opened) .t-icon {
   color: var(--td-text-color-anti);
 }
 
@@ -479,6 +508,76 @@
   background: var(--td-bg-color-page);
 }
 
+#app .record-page .record-table,
+#app .client-invoices .invoice-table-card,
+#app .client-services .service-table-card,
+#app .client-tickets .ticket-table-shell,
+#app .referral-page .t-table {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+#app .record-page .record-table .t-table,
+#app .client-invoices .invoice-table-card .t-table,
+#app .client-services .service-table-card .t-table,
+#app .client-tickets .ticket-table-shell .t-table,
+#app .referral-page .t-table {
+  background: transparent;
+}
+
+#app .record-page .record-table table,
+#app .client-invoices .invoice-table-card table,
+#app .client-services .service-table-card table,
+#app .client-tickets .ticket-table-shell table,
+#app .referral-page .t-table table {
+  border-collapse: collapse;
+}
+
+#app .record-page .record-table th,
+#app .record-page .record-table td,
+#app .client-invoices .invoice-table-card th,
+#app .client-invoices .invoice-table-card td,
+#app .client-services .service-table-card th,
+#app .client-services .service-table-card td,
+#app .client-tickets .ticket-table-shell th,
+#app .client-tickets .ticket-table-shell td,
+#app .referral-page .t-table th,
+#app .referral-page .t-table td {
+  height: 42px;
+  padding: 10px 18px;
+  background: var(--td-bg-color-container) !important;
+  border-bottom: 1px solid #d8e1ee;
+}
+
+#app .record-page .record-table th,
+#app .client-invoices .invoice-table-card th,
+#app .client-services .service-table-card th,
+#app .client-tickets .ticket-table-shell th,
+#app .referral-page .t-table th {
+  color: #7b8494;
+  font: var(--td-font-body-small);
+  font-weight: 400;
+}
+
+#app .record-page .record-table td,
+#app .client-invoices .invoice-table-card td,
+#app .client-services .service-table-card td,
+#app .client-tickets .ticket-table-shell td,
+#app .referral-page .t-table td {
+  color: var(--td-text-color-primary);
+  font: var(--td-font-body-small);
+}
+
+#app .record-page .record-table tr:hover td,
+#app .client-invoices .invoice-table-card tr:hover td,
+#app .client-services .service-table-card tr:hover td,
+#app .client-tickets .ticket-table-shell tr:hover td,
+#app .referral-page .t-table tr:hover td {
+  background: #f8fbff !important;
+}
+
 #app .tdesign-starter-layout-tabs-nav {
   border-bottom: 1px solid var(--td-component-stroke);
   background: var(--td-bg-color-container);
@@ -512,6 +611,7 @@
   #app .t-layout.t-layout--with-sider > .t-layout__sider {
     width: 0;
     flex: 0 0 0;
+    min-width: 0;
     overflow: visible;
   }
 
@@ -528,42 +628,45 @@
   #app .tdesign-starter-side-nav-mask {
     position: fixed;
     inset: 0;
-    z-index: 199;
+    z-index: 1998;
     display: block;
-    background: rgb(15 23 42 / 38%);
+    background: rgb(0 0 0 / 42%);
   }
 
-  #app .tdesign-starter-sidebar-layout.tdesign-starter-sidebar-mobile {
+  #app .tdesign-starter-sidebar-mobile {
     position: fixed;
-    inset: 0 auto 0 0;
-    z-index: 220;
-    width: 0;
-    height: 100vh;
-    pointer-events: none;
-  }
-
-  #app .tdesign-starter-sidebar-layout.tdesign-starter-sidebar-mobile .tdesign-starter-side-nav {
-    width: min(280px, calc(100vw - 48px));
-    border-right: 1px solid var(--td-component-stroke);
-    box-shadow: 16px 0 32px rgb(15 23 42 / 16%);
-    pointer-events: auto;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 1999;
+    width: min(84vw, 288px);
+    max-width: 288px;
     transform: translateX(-100%);
-    transition: transform 0.22s cubic-bezier(0, 0, 0.15, 1);
+    transition: transform 0.24s cubic-bezier(0, 0, 0.15, 1);
   }
 
-  #app .tdesign-starter-sidebar-layout.tdesign-starter-sidebar-mobile-open .tdesign-starter-side-nav {
+  #app .tdesign-starter-sidebar-mobile-open {
     transform: translateX(0);
   }
 
-  #app .tdesign-starter-sidebar-layout.tdesign-starter-sidebar-mobile .tdesign-starter-side-nav-placeholder,
-  #app .tdesign-starter-sidebar-layout.tdesign-starter-sidebar-mobile .tdesign-starter-side-nav-placeholder-hidden {
-    display: none;
+  #app .tdesign-starter-sidebar-mobile .tdesign-starter-side-nav {
+    position: relative;
+    top: 0;
+    width: 100%;
     min-width: 0;
-    flex-basis: 0;
+    height: 100dvh;
+    min-height: 0;
+    overflow-y: auto;
+    box-shadow: var(--td-shadow-3);
   }
 
-  #app .tdesign-starter-sidebar-layout.tdesign-starter-sidebar-mobile .tdesign-starter-side-nav-logo-wrapper {
-    padding: 0 18px;
+  #app .tdesign-starter-sidebar-mobile .tdesign-starter-side-nav-placeholder,
+  #app .tdesign-starter-sidebar-mobile .tdesign-starter-side-nav-placeholder-hidden {
+    display: none;
+  }
+
+  #app .tdesign-starter-sidebar-mobile .t-menu {
+    width: 100%;
   }
 
   #app .t-dialog__ctx .t-dialog__position,
@@ -735,6 +838,12 @@
   }
 
   #app .t-card__body {
-    padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
+    padding: 12px;
+  }
+
+  #app .tdesign-starter-content-layout > div > [class^='client-'],
+  #app .tdesign-starter-content-layout > div > [class*=' client-'],
+  #app .tdesign-starter-content-layout > div > .record-page {
+    padding: 0;
   }
 }

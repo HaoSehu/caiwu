@@ -6,6 +6,7 @@ use App\Constants\InvoiceStatus;
 use App\Constants\PaymentStatus;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Services\Finance\CheckoutSecurityService;
 use App\Services\Finance\CheckoutService;
 use App\Services\System\SettingService;
 use Illuminate\Support\Facades\Log;
@@ -37,12 +38,12 @@ class InvoiceCleanupAutomationService
             return 0;
         }
 
-        $hours = max(1, (int) ($config['pending_order_cleanup_after_hours'] ?? 1));
-        $threshold = now()->subHours($hours);
+        $ttlSeconds = CheckoutSecurityService::paymentSessionTtlSeconds();
+        $threshold = now()->subSeconds($ttlSeconds);
 
         $invoices = Invoice::query()
             ->with(['product'])
-            ->where('status', InvoiceStatus::UNPAID)
+            ->whereIn('status', [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE])
             ->where('created_at', '<=', $threshold)
             ->get();
 
@@ -50,16 +51,20 @@ class InvoiceCleanupAutomationService
 
         foreach ($invoices as $invoice) {
             try {
-                $this->checkoutService->cancel($invoice, [
+                $updated = $this->checkoutService->cancelExpiredUnpaidInvoice($invoice, [
                     'actor_type' => 'system',
                     'actor_name' => 'schedule:invoice-cleanup',
-                    'reason' => 'auto_close_unpaid_after_timeout',
+                    'reason' => 'payment_window_expired',
                 ]);
+
+                if ((int) $updated->status !== InvoiceStatus::CANCELLED) {
+                    continue;
+                }
 
                 Log::info('[定时任务] 超时未支付账单自动关闭', [
                     'invoice_id' => $invoice->id,
                     'invoice_no' => $invoice->invoice_no,
-                    'expire_after_hours' => $hours,
+                    'expire_after_seconds' => $ttlSeconds,
                     'age_minutes' => $invoice->created_at ? $invoice->created_at->diffInMinutes(now()) : null,
                 ]);
                 $count++;

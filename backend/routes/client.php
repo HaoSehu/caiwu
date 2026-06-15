@@ -7,6 +7,7 @@ use App\Http\Controllers\Client\CouponController;
 use App\Http\Controllers\Client\FinanceController;
 use App\Http\Controllers\Client\FinanceLedgerController;
 use App\Http\Controllers\Client\InvoiceController;
+use App\Http\Controllers\Client\NotificationController;
 use App\Http\Controllers\Client\OrderController;
 use App\Http\Controllers\Client\PaymentCallbackController;
 use App\Http\Controllers\Client\PaymentController;
@@ -79,9 +80,19 @@ Route::middleware(['auth:sanctum', 'ensure.client'])->group(function () {
     // 内容中心
     Route::get('/content/overview', [ContentController::class, 'overview']);
     Route::get('/notices', [ContentController::class, 'notices']);
+    Route::get('/notices/unread-count', [ContentController::class, 'noticeUnreadCount']);
+    Route::post('/notices/mark-all-read', [ContentController::class, 'markAllNoticesRead']);
     Route::get('/notices/{articleId}', [ContentController::class, 'noticeDetail']);
+    Route::post('/notices/{articleId}/mark-read', [ContentController::class, 'markNoticeRead']);
     Route::get('/help-articles', [ContentController::class, 'helpArticles']);
     Route::get('/help-articles/{articleId}', [ContentController::class, 'helpDetail']);
+
+    // 站内信（铃铛：公告 + 个性化通知聚合）
+    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
+    Route::get('/notifications/feed', [NotificationController::class, 'feed']);
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllRead']);
+    Route::post('/notifications/{id}/mark-read', [NotificationController::class, 'markRead']);
 
     // 推荐奖励
     Route::get('/referral/overview', [ReferralController::class, 'overview']);
@@ -104,6 +115,7 @@ Route::middleware(['auth:sanctum', 'ensure.client'])->group(function () {
     // 订单
     Route::get('/orders', [OrderController::class, 'index']);
     Route::get('/orders/summary', [OrderController::class, 'summary']);
+    Route::get('/orders/{id}', [OrderController::class, 'show']);
 
     // 支付记录
     Route::get('/payments', [PaymentController::class, 'index']);

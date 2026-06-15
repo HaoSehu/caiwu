@@ -6,6 +6,7 @@ use App\Constants\InvoiceStatus;
 use App\Constants\InvoiceType;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
+use App\Constants\ProductType;
 use App\Exceptions\BusinessException;
 use App\Models\Invoice;
 use App\Models\OperationLog;
@@ -329,9 +330,13 @@ class InvoiceService
     public function clientDetail(Invoice $invoice): array
     {
         $invoice->loadMissing([
-            'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle',
+            'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle,amount,discount,paid_amount,quantity,product_spec_snapshot,product_type_snapshot,display_product_name,config_snapshot,config_pricing_snapshot',
             'order.product:id,product_type,product_group_id,remark,config_options,purchase_requires',
+            'order.product.categoryMapping:id,name,parent_group_id,product_type',
+            'order.product.categoryMapping.parent:id,name,parent_group_id,product_type',
             'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
+            'product.categoryMapping:id,name,parent_group_id,product_type',
+            'product.categoryMapping.parent:id,name,parent_group_id,product_type',
             'service:id,name,status,expires_at',
             'payments',
             'items',
@@ -364,6 +369,15 @@ class InvoiceService
                 'service_id' => (int) ($invoice->order->service_id ?? 0),
                 'paid_at' => $invoice->order->paid_at?->format('Y-m-d H:i:s'),
                 'billing_cycle' => (string) ($invoice->order->billing_cycle ?? ''),
+                'amount' => number_format((float) ($invoice->order->amount ?? 0), 2, '.', ''),
+                'discount' => number_format((float) ($invoice->order->discount ?? 0), 2, '.', ''),
+                'paid_amount' => number_format((float) ($invoice->order->paid_amount ?? 0), 2, '.', ''),
+                'quantity' => (int) ($invoice->order->quantity ?? 1),
+                'product_id' => (int) ($invoice->order->product_id ?? 0),
+                'product_name' => $this->resolveOrderProductName($invoice->order),
+                'product_full_path' => $this->resolveOrderProductPath($invoice->order),
+                'config_snapshot' => (array) ($invoice->order->config_snapshot ?? []),
+                'config_pricing_snapshot' => (array) ($invoice->order->config_pricing_snapshot ?? []),
             ] : null,
             'product_id' => (int) ($invoice->product_id ?? 0),
             'product' => $invoice->product ? [
@@ -946,6 +960,57 @@ class InvoiceService
         }
 
         return $this->resolveInvoiceTypeLabel((string) $invoice->type, $invoice);
+    }
+
+    private function resolveOrderProductName(Order $order): string
+    {
+        $snapshot = trim((string) ($order->display_product_name ?? $order->product_spec_snapshot ?? ''));
+        if ($snapshot !== '' && $snapshot !== '未配置规格') {
+            return $snapshot;
+        }
+
+        if ($order->product instanceof Product) {
+            $resolved = $this->resolveProductDisplayNameResolver()->resolveForProduct(
+                $order->product,
+                (array) ($order->config_snapshot ?? [])
+            );
+            $name = trim((string) ($resolved['combined_display_name'] ?? $resolved['product_spec_display'] ?? $resolved['product_display_name'] ?? ''));
+            if ($name !== '') {
+                return $name;
+            }
+        }
+
+        $productId = (int) ($order->product_id ?? 0);
+
+        return $productId > 0 ? "产品 #{$productId}" : '未配置产品';
+    }
+
+    private function resolveOrderProductPath(Order $order): string
+    {
+        $product = $order->product;
+        $productType = trim((string) ($order->product_type_snapshot ?? $product?->product_type ?? ''));
+        $category = $product instanceof Product && $product->relationLoaded('categoryMapping')
+            ? $product->categoryMapping
+            : null;
+        $parentCategory = $category && $category->relationLoaded('parent') ? $category->parent : null;
+
+        $segments = [
+            ProductType::labelOf($productType),
+            trim((string) ($parentCategory?->name ?? '')),
+            trim((string) ($category?->name ?? '')),
+            $this->resolveOrderProductName($order),
+        ];
+
+        $clean = [];
+        foreach ($segments as $segment) {
+            $segment = trim((string) $segment);
+            if ($segment === '' || $segment === '-' || in_array($segment, $clean, true)) {
+                continue;
+            }
+            $clean[] = $segment;
+        }
+
+        return $clean !== [] ? implode('/', $clean) : $this->resolveOrderProductName($order);
     }
 
     private function resolveInvoiceProductSpecDisplay(Invoice $invoice, array $scene, string $productDisplayName): string

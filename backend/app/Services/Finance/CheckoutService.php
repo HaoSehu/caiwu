@@ -337,6 +337,46 @@ class CheckoutService
         return $updatedInvoice;
     }
 
+    public function cancelExpiredUnpaidInvoice(Invoice $invoice, array $context = []): Invoice
+    {
+        $freshInvoice = $invoice->fresh() ?? $invoice;
+
+        if (! in_array((int) $freshInvoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE], true)) {
+            return $freshInvoice;
+        }
+
+        if (! $this->checkoutSecurityService->isPaymentSessionExpired($freshInvoice)) {
+            return $freshInvoice;
+        }
+
+        return $this->cancel($freshInvoice, array_merge([
+            'actor_type' => 'system',
+            'actor_name' => 'payment-window-expired',
+            'reason' => 'payment_window_expired',
+        ], $context));
+    }
+
+    public function cancelExpiredUnpaidInvoicesForUser(int $userId, array $context = []): int
+    {
+        $threshold = now()->subSeconds(CheckoutSecurityService::paymentSessionTtlSeconds());
+        $invoices = Invoice::query()
+            ->where('user_id', $userId)
+            ->whereIn('status', [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE])
+            ->where('created_at', '<=', $threshold)
+            ->get();
+
+        $count = 0;
+
+        foreach ($invoices as $invoice) {
+            $updated = $this->cancelExpiredUnpaidInvoice($invoice, $context);
+            if ((int) $updated->status === InvoiceStatus::CANCELLED) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
     /**
      * 为账单创建影子 Order 记录：仅内部使用，不对用户展示。
      * 目的是让原本依赖 Order 的上游开通链路、优惠券统计、退款等逻辑继续工作。

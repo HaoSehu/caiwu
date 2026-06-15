@@ -10,5 +10,6 @@ final readonly class PaymentPrecreateRequest
         public string $outTradeNo,
         public float $amount,
         public string $subject,
+        public ?string $timeoutExpress = null,
     ) {}
 }

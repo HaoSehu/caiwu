@@ -99,13 +99,13 @@ class AlipayFaceToFaceService
     /**
      * 预下单（生成二维码链接）
      */
-    public function precreate(string $outTradeNo, float $amount, string $subject): array
+    public function precreate(string $outTradeNo, float $amount, string $subject, ?string $timeoutExpress = null): array
     {
         $bizContent = [
             'out_trade_no' => $outTradeNo,
             'total_amount' => number_format($amount, 2, '.', ''),
             'subject' => $subject,
-            'timeout_express' => $this->timeout,
+            'timeout_express' => $timeoutExpress ?: $this->timeout,
         ];
 
         $notifyUrlMeta = $this->describePrecreateNotifyUrl();

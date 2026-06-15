@@ -158,17 +158,20 @@ class ServeBackendStackCommand extends Command
     {
         $phpBinary = PHP_BINARY;
         $artisan = base_path('artisan');
+        $phpIniFile = $this->resolveLoadedPhpIniFile();
+        $phpProcessArgs = $this->buildPhpProcessArgs($phpBinary, $phpIniFile);
 
         $this->httpProcess = new Process([
-            $phpBinary,
-            $artisan,
-            'serve',
-            '--host='.$httpHost,
-            '--port='.$httpPort,
-        ], base_path());
+            ...$phpProcessArgs,
+            '-S',
+            sprintf('%s:%d', $httpHost, $httpPort),
+            '-t',
+            base_path('public'),
+            base_path('vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php'),
+        ], base_path('public'));
 
         $this->relayProcess = new Process([
-            $phpBinary,
+            ...$phpProcessArgs,
             $artisan,
             'vnc:relay',
             '--host='.$relayHost,
@@ -177,7 +180,7 @@ class ServeBackendStackCommand extends Command
 
         if (! (bool) $this->option('without-queue')) {
             $this->queueProcess = new Process([
-                $phpBinary,
+                ...$phpProcessArgs,
                 $artisan,
                 'queue:work',
                 '--queue='.(string) config('queue.caiwu_worker_queues', 'provision,referral,notification,coupon,default'),
@@ -189,7 +192,7 @@ class ServeBackendStackCommand extends Command
 
         if ((bool) $this->option('with-schedule')) {
             $this->scheduleProcess = new Process([
-                $phpBinary,
+                ...$phpProcessArgs,
                 $artisan,
                 'schedule:work',
             ], base_path());
@@ -653,5 +656,30 @@ class ServeBackendStackCommand extends Command
             $this->queueProcess,
             $this->scheduleProcess,
         ], static fn ($process) => $process instanceof Process));
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function buildPhpProcessArgs(string $phpBinary, string $phpIniFile): array
+    {
+        $args = [$phpBinary];
+
+        if ($phpIniFile !== '' && is_file($phpIniFile)) {
+            $args[] = '-c';
+            $args[] = $phpIniFile;
+        }
+
+        return $args;
+    }
+
+    private function resolveLoadedPhpIniFile(): string
+    {
+        $loadedFile = php_ini_loaded_file();
+        if (is_string($loadedFile) && $loadedFile !== '') {
+            return $loadedFile;
+        }
+
+        return '';
     }
 }

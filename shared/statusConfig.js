@@ -2,8 +2,8 @@
  * ============================================================
  *  IDC 财务系统 —— 全局状态颜色 & 映射配置
  * ============================================================
- *  两个前端（frontend-admin / frontend-client）共用此文件
- *  引入方式：import { ORDER_STATUS, ... } from '@shared/statusConfig'
+ *  多个前端共用此文件
+ *  引入方式：import { ORDER_STATUS, ... } from '@caiwu/shared/statusConfig'
  *
  *  颜色体系说明：
  *  ┌──────────┬────────────┬───────────────────────────────┐
@@ -17,6 +17,10 @@
  *  │ danger   │ #F56C6C    │ 已退款 — 资金逆向              │
  *  │ purple   │ #8B5CF6    │ 已冻结/已暂停 — 异常锁定        │
  *  └──────────┴────────────┴───────────────────────────────┘
+ *
+ *  tagType 字段为 UI 框架无关的语义值，各前端自行映射到组件属性：
+ *  - TDesign 端：通过 toTagTypeMap() 直接用作 t-tag theme
+ *  - Element Plus 端：通过 resolveElTagType() 转换后用作 el-tag type
  * ============================================================
  */
 
@@ -31,17 +35,16 @@ export const STATUS_COLORS = {
   purple:  '#8B5CF6',   // 已冻结 / 已暂停
 }
 
-// Element Plus Tag 对应的 type（purple 需自定义 class）
+// tagType 语义值（UI 框架无关）
+// 各前端按需映射到组件属性
 export const STATUS_TAG_TYPES = {
   warning: 'warning',
-  blue:    '',          // 默认 primary
+  blue:    '',          // 默认/primary
   success: 'success',
   info:    'info',
   danger:  'danger',
-  purple:  'purple',    // 需要配合 global.scss 自定义样式
+  purple:  'purple',    // 需要配合自定义样式
 }
-
-const VALID_EL_TAG_TYPES = new Set(['primary', 'success', 'info', 'warning', 'danger'])
 
 // ===================== 订单状态 =====================
 
@@ -203,14 +206,29 @@ export function getStatusLabel(statusMap, status) {
 }
 
 /**
- * 获取 el-tag 的 type
+ * 获取 tagType 语义值
  */
 export function getStatusTagType(statusMap, status) {
   return getStatusConfig(statusMap, status).tagType
 }
 
 /**
- * 将共享状态 tagType 转为 Element Plus 可接受的类型
+ * 获取状态颜色
+ */
+export function getStatusColor(statusMap, status) {
+  return getStatusConfig(statusMap, status).color
+}
+
+// ===================== Element Plus 适配函数 =====================
+// 以下函数仅供 Element Plus 端使用，TDesign 端无需调用
+
+const VALID_TAG_TYPES = new Set(['primary', 'success', 'info', 'warning', 'danger'])
+
+/**
+ * 将通用 tagType 转为 Element Plus el-tag 可接受的 type
+ * - 空字符串 → 'primary'
+ * - 'purple' → 'info'（配合 resolveElTagClass 附加自定义样式）
+ * - 其余值若在 Element Plus 合法范围内则原样返回，否则降级为 'info'
  */
 export function resolveElTagType(tagType) {
   if (tagType === '') {
@@ -221,25 +239,20 @@ export function resolveElTagType(tagType) {
     return 'info'
   }
 
-  return VALID_EL_TAG_TYPES.has(tagType) ? tagType : 'info'
+  return VALID_TAG_TYPES.has(tagType) ? tagType : 'info'
 }
 
 /**
- * 返回 el-tag 需要附加的自定义 class
+ * 返回 Element Plus el-tag 需要附加的自定义 class（仅 purple 需要）
  */
 export function resolveElTagClass(tagType) {
   return tagType === 'purple' ? 'el-tag--purple' : ''
 }
 
-/**
- * 获取状态颜色
- */
-export function getStatusColor(statusMap, status) {
-  return getStatusConfig(statusMap, status).color
-}
+// ===================== 通用转换函数 =====================
 
 /**
- * 将状态映射转换为 el-select / el-option 数组
+ * 将状态映射转换为选择器选项数组
  * @param {object} statusMap - 状态映射对象
  * @param {boolean} includeAll - 是否包含"全部"选项
  * @returns {Array<{ label: string, value: number|string }>}
@@ -256,7 +269,7 @@ export function toSelectOptions(statusMap, includeAll = true) {
 }
 
 /**
- * 兼容旧格式：生成 { 0: '待付款', 1: '已付款', ... } 扁平映射
+ * 生成 { 0: '待付款', 1: '已付款', ... } 扁平映射
  */
 export function toLabelMap(statusMap) {
   const map = {}
@@ -267,7 +280,7 @@ export function toLabelMap(statusMap) {
 }
 
 /**
- * 兼容旧格式：生成 { 0: 'warning', 1: 'success', ... } 的 tagType 映射
+ * 生成 { 0: 'warning', 1: 'success', ... } 的 tagType 映射
  */
 export function toTagTypeMap(statusMap) {
   const map = {}

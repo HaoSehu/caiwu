@@ -7,12 +7,16 @@ use App\Http\Resources\Content\ContentArticleResource;
 use App\Http\Resources\Content\ContentCategoryResource;
 use App\Models\ContentArticle;
 use App\Services\Content\ContentArticleService;
+use App\Services\Content\NoticeReadService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class ContentController extends Controller
 {
-    public function __construct(private ContentArticleService $contentArticleService) {}
+    public function __construct(
+        private ContentArticleService $contentArticleService,
+        private NoticeReadService $noticeReadService,
+    ) {}
 
     public function overview()
     {
@@ -31,9 +35,36 @@ class ContentController extends Controller
         return $this->publishedList($request, ContentArticle::TYPE_NOTICE);
     }
 
-    public function noticeDetail(int $articleId)
+    public function noticeDetail(Request $request, int $articleId)
     {
-        return $this->publishedDetail($articleId, ContentArticle::TYPE_NOTICE);
+        $article = $this->contentArticleService->publishedDetail(ContentArticle::TYPE_NOTICE, $articleId);
+
+        if ($request->user()) {
+            $this->noticeReadService->markRead($request->user()->id, $articleId);
+        }
+
+        return $this->success(new ContentArticleResource($article));
+    }
+
+    public function noticeUnreadCount(Request $request)
+    {
+        $count = $this->noticeReadService->unreadCount($request->user()->id);
+
+        return $this->success(['count' => $count]);
+    }
+
+    public function markNoticeRead(Request $request, int $articleId)
+    {
+        $this->noticeReadService->markRead($request->user()->id, $articleId);
+
+        return $this->success();
+    }
+
+    public function markAllNoticesRead(Request $request)
+    {
+        $this->noticeReadService->markAllRead($request->user()->id);
+
+        return $this->success();
     }
 
     public function helpArticles(Request $request)
