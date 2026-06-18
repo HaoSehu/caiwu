@@ -50,7 +50,7 @@ import { LineChart, PieChart } from 'echarts/charts';
 import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components';
 import * as echarts from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
+import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, shallowRef, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { adminApi, type DashboardStats, type MonthlyRevenue, type RecentInvoice } from '@/api/admin';
@@ -198,10 +198,25 @@ onMounted(() => {
   window.addEventListener('resize', resizeCharts);
 });
 
+onActivated(() => {
+  // keep-alive 命中时(若后续放开保活)重新拉取并渲染
+  loadDashboard();
+});
+
+onDeactivated(() => {
+  // 切走时释放 echarts 实例，避免常驻内存
+  productChart?.dispose();
+  productChart = null;
+  dailyChart?.dispose();
+  dailyChart = null;
+});
+
 onBeforeUnmount(() => {
   window.removeEventListener('resize', resizeCharts);
   productChart?.dispose();
+  productChart = null;
   dailyChart?.dispose();
+  dailyChart = null;
 });
 </script>
 

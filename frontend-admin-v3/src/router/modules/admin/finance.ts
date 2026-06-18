@@ -26,6 +26,7 @@ export const financeRoutes: RouteRecordRaw[] = [
       icon: shallowRef(ComponentGridIcon),
       financeOrderMode: 'orders',
       permission: 'order.list',
+      keepAlive: false,
     },
   },
   {
@@ -64,6 +65,7 @@ export const financeRoutes: RouteRecordRaw[] = [
       },
       icon: shallowRef(ComponentGridIcon),
       permission: 'invoice.list',
+      keepAlive: false,
     },
   },
   {
