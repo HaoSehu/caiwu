@@ -129,51 +129,56 @@
 
           <article v-for="(slide, index) in heroForm.slides" :key="`slide-${index}`" class="slide-card">
             <div class="slide-card-head">
-              <div>
-                <span>{{ index + 1 }}</span>
-                <strong>{{ slide.rail_title || '未命名轮播' }}</strong>
-              </div>
-              <t-space>
-                <t-button variant="text" :disabled="index === 0" @click="moveSlide(index, -1)">
+              <span class="slide-card-head__index">{{ index + 1 }}</span>
+              <strong class="slide-card-head__name">{{ slide.rail_title || '未命名轮播' }}</strong>
+              <div class="slide-card-head__actions">
+                <t-button variant="text" size="small" :disabled="index === 0" @click="moveSlide(index, -1)">
                   <template #icon><arrow-up-icon /></template>
-                  上移
                 </t-button>
-                <t-button variant="text" :disabled="index === heroForm.slides.length - 1" @click="moveSlide(index, 1)">
+                <t-button variant="text" size="small" :disabled="index === heroForm.slides.length - 1" @click="moveSlide(index, 1)">
                   <template #icon><arrow-down-icon /></template>
-                  下移
                 </t-button>
-                <t-button theme="danger" variant="text" :disabled="heroForm.slides.length <= 1" @click="removeSlide(index)">
+                <t-button theme="danger" variant="text" size="small" :disabled="heroForm.slides.length <= 1" @click="removeSlide(index)">
                   <template #icon><delete-icon /></template>
-                  删除
                 </t-button>
-              </t-space>
+              </div>
             </div>
-            <div class="slide-form-grid">
-              <t-form label-align="top" :data="slide">
-                <t-form-item label="导航名称">
-                  <t-input v-model="slide.rail_title" maxlength="20" placeholder="例如：官网换新" />
-                </t-form-item>
-                <t-form-item label="主标题">
-                  <t-input v-model="slide.title" maxlength="80" placeholder="例如：官网焕新 · 云上新体验" />
-                </t-form-item>
-                <t-form-item label="描述文案">
-                  <t-textarea v-model="slide.desc" :autosize="{ minRows: 4, maxRows: 6 }" maxlength="300" />
-                </t-form-item>
-              </t-form>
-              <t-form label-align="top" :data="slide">
-                <t-form-item label="主按钮文案">
-                  <t-input v-model="slide.primary_text" maxlength="20" />
-                </t-form-item>
-                <t-form-item label="主按钮跳转">
-                  <t-input v-model="slide.primary_path" maxlength="255" />
-                </t-form-item>
-                <t-form-item label="次按钮文案">
-                  <t-input v-model="slide.secondary_text" maxlength="20" />
-                </t-form-item>
-                <t-form-item label="次按钮跳转">
-                  <t-input v-model="slide.secondary_path" maxlength="255" />
-                </t-form-item>
-              </t-form>
+
+            <div class="slide-body">
+              <div class="slide-row">
+                <label class="slide-label">标题</label>
+                <t-input v-model="slide.rail_title" maxlength="20" placeholder="导航名" class="slide-field--sm" />
+                <t-input v-model="slide.title" maxlength="80" placeholder="主标题，例如：官网焕新 · 云上新体验" class="slide-field--lg" />
+              </div>
+
+              <div class="slide-row">
+                <label class="slide-label">按钮</label>
+                <div class="slide-btn-group">
+                  <span class="slide-btn-group__tag">主</span>
+                  <t-input v-model="slide.primary_text" maxlength="20" placeholder="按钮文案" class="slide-field--sm" />
+                  <t-input v-model="slide.primary_path" maxlength="255" placeholder="跳转路径" class="slide-field--lg" />
+                </div>
+                <div class="slide-btn-group">
+                  <span class="slide-btn-group__tag">次</span>
+                  <t-input v-model="slide.secondary_text" maxlength="20" placeholder="按钮文案" class="slide-field--sm" />
+                  <t-input v-model="slide.secondary_path" maxlength="255" placeholder="跳转路径" class="slide-field--lg" />
+                </div>
+              </div>
+
+              <div class="slide-row">
+                <label class="slide-label">描述</label>
+                <t-textarea v-model="slide.desc" :autosize="{ minRows: 2, maxRows: 4 }" maxlength="300" placeholder="轮播描述文案" class="slide-field--full" />
+              </div>
+
+              <div class="slide-row">
+                <label class="slide-label">视频</label>
+                <div class="slide-video-selector" @click="openVideoDrawer(index)">
+                  <video-icon />
+                  <span v-if="slide.video" class="slide-video-selector__name">{{ videoDisplayName(slide.video) }}</span>
+                  <span v-else class="slide-video-selector__placeholder">点击选择背景视频</span>
+                  <chevron-right-icon />
+                </div>
+              </div>
             </div>
           </article>
         </section>
@@ -218,6 +223,44 @@
     </template>
 
     <input ref="fileInputRef" class="hidden-file-input" type="file" accept="image/*" @change="handleImageFileChange" />
+
+    <t-drawer
+      :visible="videoDrawerVisible"
+      header="选择背景视频"
+      :size="560"
+      placement="right"
+      :footer="null"
+      @close="closeVideoDrawer"
+    >
+      <div class="video-drawer-grid">
+        <div
+          v-for="opt in heroVideoOptions"
+          :key="opt.value"
+          class="video-drawer-card"
+          :class="{ 'is-selected': videoDrawerCurrentSrc === opt.value }"
+          @click="selectVideoFromDrawer(opt.value)"
+          @mouseenter="onVideoCardEnter($event)"
+          @mouseleave="onVideoCardLeave($event)"
+        >
+          <video
+            class="video-drawer-card__video"
+            :src="opt.value"
+            muted
+            loop
+            playsinline
+            preload="metadata"
+          ></video>
+          <div class="video-drawer-card__overlay">
+            <check-circle-filled-icon v-if="videoDrawerCurrentSrc === opt.value" class="video-drawer-card__check" />
+            <span class="video-drawer-card__name">{{ opt.filename || opt.value.split('/').pop() }}</span>
+            <span v-if="opt.size" class="video-drawer-card__size">{{ formatFileSize(opt.size) }}</span>
+          </div>
+        </div>
+        <div v-if="!heroVideoOptions.length" class="video-drawer-empty">
+          后端 uploads/hero-videos 目录暂无视频
+        </div>
+      </div>
+    </t-drawer>
   </div>
 </template>
 
@@ -228,15 +271,19 @@ import {
   AddIcon,
   ArrowDownIcon,
   ArrowUpIcon,
+  CheckCircleFilledIcon,
   CheckIcon,
+  ChevronRightIcon,
   DeleteIcon,
   RefreshIcon,
   UploadIcon,
+  VideoIcon,
 } from 'tdesign-icons-vue-next';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import type { TableRowData } from 'tdesign-vue-next';
 
 import { adminApi, type HomeHeroFeature, type HomeHeroPayload, type HomeHeroSlide, type SettingItem } from '@/api/admin';
+import { errorMessage } from '@/utils/userMessage';
 
 import './index.less';
 
@@ -305,7 +352,11 @@ const maxSlides = 5;
 const maxFeatures = 5;
 const heroDefaults = reactive<{ slides: HomeHeroSlide[]; features: HomeHeroFeature[] }>({ slides: [], features: [] });
 const heroForm = reactive<{ slides: HomeHeroSlide[]; features: HomeHeroFeature[] }>({ slides: [], features: [] });
+const heroVideoOptions = ref<Array<{ label: string; value: string; filename?: string; size?: number }>>([]);
 const heroSnapshot = ref('');
+const videoDrawerVisible = ref(false);
+const videoDrawerSlideIndex = ref(-1);
+const videoDrawerCurrentSrc = ref('');
 
 const automationScheduleModeOptions: FieldOption[] = [
   { label: '每 5 分钟', value: 'every_five_minutes' },
@@ -637,6 +688,7 @@ async function loadHero() {
 function applyHeroPayload(payload: HomeHeroPayload = {}) {
   heroDefaults.slides = cloneList(payload.defaults?.slides);
   heroDefaults.features = cloneList(payload.defaults?.features);
+  heroVideoOptions.value = normalizeHeroVideoOptions(payload.options?.videos);
   heroForm.slides = cloneList(payload.slides).length ? cloneList(payload.slides) : cloneList(heroDefaults.slides);
   heroForm.features = cloneList(payload.features).length ? cloneList(payload.features) : cloneList(heroDefaults.features);
   heroSnapshot.value = JSON.stringify(heroForm);
@@ -701,6 +753,7 @@ function buildBlankSlide(): HomeHeroSlide {
     primary_path: '/products',
     secondary_text: '查看详情',
     secondary_path: '/about',
+    video: heroVideoOptions.value[0]?.value || '',
   };
 }
 
@@ -758,6 +811,77 @@ function resetFeaturesToDefault() {
   });
 }
 
+function normalizeHeroVideoOptions(list: unknown) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .map((item) => {
+      const record = toRecord(item);
+      const value = String(record.path || record.url || '').trim();
+      if (!value) return null;
+      const filename = String(record.filename || value.split('/').pop() || value);
+      const size = Number(record.size || 0);
+      return {
+        label: size > 0 ? `${filename} · ${formatFileSize(size)}` : filename,
+        value,
+        filename,
+        size,
+      };
+    })
+    .filter(Boolean) as Array<{ label: string; value: string; filename?: string; size?: number }>;
+}
+
+function formatFileSize(size: number) {
+  if (!Number.isFinite(size) || size <= 0) return '';
+  if (size >= 1024 * 1024) return `${(size / 1024 / 1024).toFixed(1)} MB`;
+  if (size >= 1024) return `${Math.round(size / 1024)} KB`;
+  return `${size} B`;
+}
+
+function onVideoCardEnter(event: MouseEvent) {
+  const el = event.currentTarget as HTMLElement
+  const video = el.querySelector('video') as HTMLVideoElement | null
+  if (video) {
+    video.currentTime = 0
+    video.play().catch(() => {})
+  }
+}
+
+function onVideoCardLeave(event: MouseEvent) {
+  const el = event.currentTarget as HTMLElement
+  const video = el.querySelector('video') as HTMLVideoElement | null
+  if (video) {
+    video.pause()
+    video.currentTime = 0
+  }
+}
+
+function openVideoDrawer(slideIndex: number) {
+  videoDrawerSlideIndex.value = slideIndex
+  videoDrawerCurrentSrc.value = String(heroForm.slides[slideIndex]?.video || '')
+  videoDrawerVisible.value = true
+}
+
+function closeVideoDrawer() {
+  videoDrawerVisible.value = false
+  videoDrawerSlideIndex.value = -1
+}
+
+function selectVideoFromDrawer(value: string) {
+  const idx = videoDrawerSlideIndex.value
+  if (idx >= 0 && idx < heroForm.slides.length) {
+    heroForm.slides[idx].video = heroForm.slides[idx].video === value ? '' : value
+  }
+  closeVideoDrawer()
+}
+
+function videoDisplayName(src: string) {
+  if (!src) return ''
+  const filename = src.split('/').pop() || src
+  const opt = heroVideoOptions.value.find((item) => item.value === src)
+  if (opt?.size) return `${filename} · ${formatFileSize(opt.size)}`
+  return filename
+}
+
 function moveItem<T>(list: T[], index: number, offset: number) {
   const target = index + offset;
   if (target < 0 || target >= list.length) return;
@@ -773,12 +897,6 @@ function toRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
 
-function errorMessage(error: unknown, fallback: string) {
-  const record = toRecord(error);
-  const response = toRecord(record.response);
-  const data = toRecord(response.data);
-  return String(data.message || record.message || fallback);
-}
 
 watch(
   () => route.query.tab,

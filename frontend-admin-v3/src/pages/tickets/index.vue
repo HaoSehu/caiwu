@@ -74,7 +74,7 @@ import { useRouter } from 'vue-router';
 
 import { adminApi, type TicketRecord } from '@/api/admin';
 import { formatDateTime } from '@/utils/format';
-import { toUserMessage } from '@/utils/userMessage';
+import { errorMessage } from '@/utils/userMessage';
 
 import './index.less';
 
@@ -206,11 +206,6 @@ function statusTheme(value: unknown): 'default' | 'success' | 'warning' | 'dange
   if (number === 1) return 'danger';
   if (number === 2) return 'success';
   return 'default';
-}
-
-function errorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) return toUserMessage(error.message, fallback);
-  return fallback;
 }
 
 onMounted(loadList);

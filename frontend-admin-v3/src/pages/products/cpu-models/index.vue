@@ -154,7 +154,7 @@ import {
 } from '@/api/admin';
 import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
 import { normalizeProductBindings as normalizeBindings } from '@/hooks/useProductBindingTree';
-import { toUserMessage } from '@/utils/userMessage';
+import { errorMessage } from '@/utils/userMessage';
 
 import './index.less';
 
@@ -502,10 +502,6 @@ function toPlainRecord(value: unknown) {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
 
-function errorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) return toUserMessage(error.message, fallback);
-  return fallback;
-}
 
 onMounted(() => {
   void loadCatalog();

@@ -283,6 +283,7 @@ import type { FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-v
 
 import { adminApi, type CouponCampaignPayload, type CouponCampaignRecord } from '@/api/admin';
 import { formatDateTime } from '@/utils/format';
+import { errorMessage } from '@/utils/userMessage';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
 
@@ -404,9 +405,6 @@ function closeCampaignDrawer() {
   handleDialogClosed();
 }
 
-function toRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-}
 
 async function loadList() {
   loading.value = true;
@@ -664,12 +662,6 @@ function scheduleText(row: CouponCampaignRecord) {
   return `${dayText} ${row.trigger_time || '未配置时间'}`;
 }
 
-function errorMessage(error: unknown, fallback: string) {
-  const record = toRecord(error);
-  const response = toRecord(record.response);
-  const data = toRecord(response.data);
-  return String(data.message || record.message || fallback);
-}
 
 onMounted(async () => {
   await loadData();
