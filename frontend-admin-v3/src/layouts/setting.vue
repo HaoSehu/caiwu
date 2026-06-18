@@ -108,7 +108,7 @@
 import { useClipboard } from '@vueuse/core';
 import type { PopupVisibleChangeContext } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
-import { computed, onMounted, ref, watchEffect } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watchEffect } from 'vue';
 
 import SettingAutoIcon from '@/assets/assets-setting-auto.svg';
 import SettingDarkIcon from '@/assets/assets-setting-dark.svg';
@@ -163,10 +163,16 @@ const changeColor = (hex: string) => {
   formData.value.brandTheme = hex;
 };
 
+const handleDynamicColorClick = () => {
+  isColoPickerDisplay.value = true;
+};
+
 onMounted(() => {
-  document.querySelector('.dynamic-color-btn').addEventListener('click', () => {
-    isColoPickerDisplay.value = true;
-  });
+  document.querySelector('.dynamic-color-btn')?.addEventListener('click', handleDynamicColorClick);
+});
+
+onBeforeUnmount(() => {
+  document.querySelector('.dynamic-color-btn')?.removeEventListener('click', handleDynamicColorClick);
 });
 
 const onPopupVisibleChange = (visible: boolean, context: PopupVisibleChangeContext) => {
