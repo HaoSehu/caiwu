@@ -1,6 +1,6 @@
 import type { AxiosRequestConfig, Canceler } from 'axios';
 import axios from 'axios';
-import { isFunction } from 'lodash';
+import { isFunction } from 'lodash-es';
 
 // 存储请求与取消令牌的键值对列表
 let pendingMap = new Map<string, Canceler>();
