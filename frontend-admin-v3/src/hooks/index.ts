@@ -16,17 +16,18 @@ export const useChart = (domId: string): ShallowRef<echarts.ECharts> => {
     });
   };
 
+  const handleResize = () => updateContainer();
+
   onMounted(() => {
     if (!chartContainer) {
       chartContainer = document.getElementById(domId) as HTMLCanvasElement;
     }
     selfChart.value = echarts.init(chartContainer);
+    window.addEventListener('resize', handleResize, false);
   });
 
-  window.addEventListener('resize', updateContainer, false);
-
   onUnmounted(() => {
-    window.removeEventListener('resize', updateContainer);
+    window.removeEventListener('resize', handleResize);
   });
 
   return selfChart;
