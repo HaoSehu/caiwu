@@ -61,7 +61,7 @@
           </span>
         </template>
         <template #balance="{ row }">
-          <span class="users-balance">{{ formatMoney(row.balance) }}</span>
+          <span class="users-balance">{{ formatMoney(row.cash_balance) }}</span>
         </template>
         <template #openedServices="{ row }">
           <span :class="{ 'users-empty-count': !Number(row.opened_product_count || 0) }">
@@ -99,7 +99,7 @@
               <dl class="users-mobile-card__meta">
                 <div>
                   <dt>余额</dt>
-                  <dd class="users-balance">{{ formatMoney(row.balance) }}</dd>
+                  <dd class="users-balance">{{ formatMoney(row.cash_balance) }}</dd>
                 </div>
                 <div>
                   <dt>服务</dt>
@@ -158,6 +158,7 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { userApi, type AdminUser } from '@/api/user';
+import { formatDateTime, formatMoney } from '@/utils/format';
 
 import './index.less';
 
@@ -179,7 +180,7 @@ const columns: PrimaryTableCol<TableRowData>[] = [
   { title: 'ID', colKey: 'id', width: 80 },
   { title: '手机号 / 邮箱', colKey: 'account', width: 220 },
   { title: '昵称', colKey: 'nickname', width: 180 },
-  { title: '余额', colKey: 'balance', width: 120 },
+  { title: '余额', colKey: 'cash_balance', width: 120 },
   { title: '已开通服务', colKey: 'openedServices', width: 130, align: 'center' },
   { title: '状态', colKey: 'status', width: 100 },
   { title: '注册时间', colKey: 'createdAt', width: 180 },
@@ -263,20 +264,6 @@ async function handleCreate() {
 
 function openDetail(id: number | string) {
   router.push(`/admin/users/${id}`);
-}
-
-function formatDateTime(value?: string) {
-  if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  const pad = (item: number) => String(item).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(
-    date.getMinutes(),
-  )}:${pad(date.getSeconds())}`;
-}
-
-function formatMoney(value?: number | string) {
-  return `¥${Number(value || 0).toFixed(2)}`;
 }
 
 onMounted(() => loadList());

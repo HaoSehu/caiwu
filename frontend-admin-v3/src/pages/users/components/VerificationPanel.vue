@@ -208,6 +208,7 @@ import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref } from 'vue';
 
 import { adminApi, type SettingItem, type VerificationRecord } from '@/api/admin';
+import { formatDateTime } from '@/utils/format';
 import { useUserStore } from '@/store';
 
 const userStore = useUserStore();
@@ -500,16 +501,6 @@ async function saveFeeSettings() {
 function formatDetailValue(value?: string | number | null) {
   if (value === undefined || value === null || value === '') return '-';
   return value;
-}
-
-function formatDateTime(value?: string) {
-  if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  const pad = (item: number) => String(item).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(
-    date.getMinutes(),
-  )}:${pad(date.getSeconds())}`;
 }
 
 onMounted(() => {

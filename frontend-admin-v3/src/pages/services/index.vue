@@ -71,7 +71,7 @@
           </template>
           <template #status="{ row }">
             <t-tag :theme="serviceStatusTheme(row.status)" variant="light">
-              {{ row.status_label || serviceStatusLabel(row.status) }}
+              {{ serviceStatusLabel(row.status) }}
             </t-tag>
           </template>
           <template #billing="{ row }">
@@ -99,7 +99,7 @@
               :description="fieldValue(row.product_display_name || row.product?.display_name || row.domain)"
               highlight-label="服务金额"
               :highlight-value="formatMoney(row.amount)"
-              :status-label="row.status_label || serviceStatusLabel(row.status)"
+              :status-label="serviceStatusLabel(row.status)"
               :status-theme="serviceStatusTheme(row.status)"
               :rows="serviceMobileRows(row)"
               :action-options="mobileActionOptions(row)"
@@ -164,6 +164,7 @@ import type { PageInfo, PrimaryTableCol } from 'tdesign-vue-next';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { serviceApi, type ServiceRecord } from '@/api/service';
+import { fieldValue, formatMoney } from '@/utils/format';
 import { SERVICE_STATUS_MAP, toLabelMap, toSelectOptions, toTagTypeMap } from '@shared/statusConfig';
 
 import './index.less';
@@ -389,15 +390,6 @@ function isExpiringSoon(value: unknown) {
 function shortDate(value: unknown) {
   if (!value) return '-';
   return String(value).slice(0, 10);
-}
-
-function formatMoney(value: unknown) {
-  return `¥${Number(value || 0).toFixed(2)}`;
-}
-
-function fieldValue(value: unknown) {
-  if (value === null || value === undefined || value === '') return '-';
-  return String(value);
 }
 
 function toRecord(value: unknown): Record<string, unknown> {

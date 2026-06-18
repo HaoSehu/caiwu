@@ -73,6 +73,7 @@ import { onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { adminApi, type TicketRecord } from '@/api/admin';
+import { formatDateTime } from '@/utils/format';
 import { toUserMessage } from '@/utils/userMessage';
 
 import './index.less';
@@ -205,14 +206,6 @@ function statusTheme(value: unknown): 'default' | 'success' | 'warning' | 'dange
   if (number === 1) return 'danger';
   if (number === 2) return 'success';
   return 'default';
-}
-
-function formatDateTime(value: unknown) {
-  if (!value) return '-';
-  const date = new Date(String(value).replace(/-/g, '/'));
-  if (Number.isNaN(date.getTime())) return String(value);
-  const pad = (item: number) => String(item).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
 function errorMessage(error: unknown, fallback: string) {

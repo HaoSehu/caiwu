@@ -1,6 +1,8 @@
 <template>
   <t-loading :loading="loading" show-overlay>
     <div class="dashboard-page">
+      <TopPanel :stats="dashboardStats" />
+
       <section class="chart-grid">
         <t-card :bordered="false" title="商品收入占比" :subtitle="monthLabel || '本月'">
           <div ref="productChartRef" class="chart-box" />
@@ -51,8 +53,11 @@ import { CanvasRenderer } from 'echarts/renderers';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { adminApi, type MonthlyRevenue, type RecentInvoice } from '@/api/admin';
+import { adminApi, type DashboardStats, type MonthlyRevenue, type RecentInvoice } from '@/api/admin';
 import { INVOICE_STATUS_MAP, toLabelMap, toTagTypeMap } from '@shared/statusConfig';
+import { formatDateTime } from '@/utils/format';
+
+import TopPanel from './components/TopPanel.vue';
 
 defineOptions({
   name: 'DashboardBase',
@@ -64,6 +69,7 @@ const router = useRouter();
 const loading = ref(false);
 const recentInvoices = ref<RecentInvoice[]>([]);
 const monthlyRevenue = shallowRef<MonthlyRevenue>({});
+const dashboardStats = shallowRef<DashboardStats>({});
 const productChartRef = ref<HTMLDivElement>();
 const dailyChartRef = ref<HTMLDivElement>();
 let productChart: echarts.ECharts | null = null;
@@ -97,13 +103,6 @@ const productChartData = computed(() => {
 
 function formatCurrency(value: unknown) {
   return `¥${Number(value || 0).toFixed(2)}`;
-}
-
-function formatDateTime(value?: string) {
-  if (!value) return '--';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString('zh-CN', { hour12: false });
 }
 
 function statusText(status: unknown) {
@@ -171,15 +170,18 @@ function resizeCharts() {
 async function loadDashboard() {
   loading.value = true;
   try {
-    const [recentInvoicesRes, monthlyRevenueRes] = await Promise.all([
+    const [recentInvoicesRes, monthlyRevenueRes, statsRes] = await Promise.all([
       adminApi.dashboardRecentInvoices(),
       adminApi.dashboardMonthlyRevenue(),
+      adminApi.dashboardStats(),
     ]);
     recentInvoices.value = recentInvoicesRes?.recent_invoices || [];
     monthlyRevenue.value = monthlyRevenueRes || {};
+    dashboardStats.value = statsRes || {};
   } catch {
     recentInvoices.value = [];
     monthlyRevenue.value = {};
+    dashboardStats.value = {};
   } finally {
     loading.value = false;
     await nextTick();

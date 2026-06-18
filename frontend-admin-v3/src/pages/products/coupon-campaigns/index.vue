@@ -282,6 +282,7 @@ import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import type { FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
 
 import { adminApi, type CouponCampaignPayload, type CouponCampaignRecord } from '@/api/admin';
+import { formatDateTime } from '@/utils/format';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
 
@@ -661,14 +662,6 @@ function scheduleText(row: CouponCampaignRecord) {
   const map = new Map(weekdayOptions.map((item) => [item.value, item.label]));
   const dayText = weekdays.length ? weekdays.map((item) => map.get(Number(item)) || item).join('、') : '未配置星期';
   return `${dayText} ${row.trigger_time || '未配置时间'}`;
-}
-
-function formatDateTime(value: unknown) {
-  if (!value) return '-';
-  const date = new Date(String(value).replace(/-/g, '/'));
-  if (Number.isNaN(date.getTime())) return String(value);
-  const pad = (num: number) => String(num).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function errorMessage(error: unknown, fallback: string) {

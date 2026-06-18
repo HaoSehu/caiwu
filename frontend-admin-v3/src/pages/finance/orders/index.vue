@@ -81,7 +81,7 @@
           <template #quantity="{ row }">{{ row.quantity || 1 }}</template>
           <template #status="{ row }">
             <t-tag :theme="orderStatusTheme(row.status)" variant="light">
-              {{ row.status_label || orderStatusLabel(row.status) }}
+              {{ orderStatusLabel(row.status) }}
             </t-tag>
           </template>
           <template #invoice="{ row }">
@@ -109,7 +109,7 @@
               :description="fieldValue(row.product_name)"
               highlight-label="订单金额"
               :highlight-value="formatMoney(row.amount)"
-              :status-label="row.status_label || orderStatusLabel(row.status)"
+              :status-label="orderStatusLabel(row.status)"
               :status-theme="orderStatusTheme(row.status)"
               :rows="orderMobileRows(row)"
               :action-options="[{ content: '详情', value: 'detail' }]"
@@ -142,6 +142,7 @@ import { MessagePlugin } from 'tdesign-vue-next';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
 
 import { adminApi, type OrderRecord } from '@/api/admin';
+import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { ORDER_STATUS_MAP, toLabelMap, toSelectOptions, toTagTypeMap } from '@shared/statusConfig';
@@ -308,23 +309,6 @@ function orderStatusLabel(status: unknown) {
 function orderStatusTheme(status: unknown) {
   const value = statusTypeMap[String(status ?? '')] || 'default';
   return value === 'info' ? 'default' : value;
-}
-
-function fieldValue(value: unknown) {
-  if (value === null || value === undefined || value === '') return '-';
-  return String(value);
-}
-
-function formatMoney(value: unknown) {
-  return `¥${Number(value || 0).toFixed(2)}`;
-}
-
-function formatDateTime(value: unknown) {
-  if (!value) return '-';
-  const date = new Date(String(value).replace(/-/g, '/'));
-  if (Number.isNaN(date.getTime())) return String(value);
-  const pad = (num: number) => String(num).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function toRecord(value: unknown): Record<string, unknown> {

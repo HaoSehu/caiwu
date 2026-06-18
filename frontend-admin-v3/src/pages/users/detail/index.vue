@@ -110,7 +110,7 @@
             </template>
             <template #serviceAmount="{ row }">{{ formatMoney(row.amount) }}</template>
             <template #serviceStatus="{ row }">
-              <t-tag :theme="serviceTone(row.status_tone)" variant="light">{{ row.status_label || '-' }}</t-tag>
+              <t-tag :theme="serviceStatusTheme(row.status)" variant="light">{{ serviceStatusLabel(row.status) }}</t-tag>
             </template>
             <template #serviceCreated="{ row }">{{ formatDateTime(row.created_at) }}</template>
             <template #serviceExpires="{ row }">{{ formatDateTime(row.expires_at) }}</template>
@@ -146,7 +146,7 @@
           >
             <template #invoiceAmount="{ row }">{{ formatMoney(row.amount) }}</template>
             <template #invoiceStatus="{ row }">
-              <t-tag :theme="invoiceStatusTheme(row.status)" variant="light">{{ row.status_label || invoiceStatusLabel(row.status) }}</t-tag>
+              <t-tag :theme="invoiceStatusTheme(row.status)" variant="light">{{ invoiceStatusLabel(row.status) }}</t-tag>
             </template>
             <template #invoiceType="{ row }">{{ row.type_label || invoiceTypeLabel(row.type) }}</template>
             <template #invoiceCreated="{ row }">{{ formatDateTime(row.created_at) }}</template>
@@ -361,7 +361,7 @@
       <t-loading :loading="serviceDrawer.loading" size="small">
         <t-descriptions :column="1" bordered>
           <t-descriptions-item label="服务名称">{{ fieldValue(serviceDrawer.detail.name || serviceDrawer.detail.domain) }}</t-descriptions-item>
-          <t-descriptions-item label="状态">{{ fieldValue(serviceDrawer.detail.status_label) }}</t-descriptions-item>
+          <t-descriptions-item label="状态">{{ serviceStatusLabel(serviceDrawer.detail.status) }}</t-descriptions-item>
           <t-descriptions-item label="计费周期">{{ fieldValue(serviceDrawer.detail.billing_cycle_label) }}</t-descriptions-item>
           <t-descriptions-item label="金额">{{ formatMoney(serviceDrawer.detail.amount) }}</t-descriptions-item>
           <t-descriptions-item label="账单号">{{ fieldValue(serviceDrawer.detail.invoice?.invoice_no || serviceDrawer.detail.order?.invoice_no) }}</t-descriptions-item>
@@ -530,7 +530,7 @@
             </div>
             <div>
               <span>状态</span>
-              <t-tag :theme="invoiceStatusTheme(currentInvoice.status)" variant="light">{{ currentInvoice.status_label || invoiceStatusLabel(currentInvoice.status) }}</t-tag>
+              <t-tag :theme="invoiceStatusTheme(currentInvoice.status)" variant="light">{{ invoiceStatusLabel(currentInvoice.status) }}</t-tag>
             </div>
             <div>
               <span>金额</span>
@@ -538,7 +538,7 @@
             </div>
             <div>
               <span>支付方式</span>
-              <strong>{{ fieldValue(currentInvoice.payment_summary?.gateway_label) }}</strong>
+              <strong>{{ fieldValue(currentInvoice.payment_summary?.gateway) }}</strong>
             </div>
           </section>
 
@@ -589,7 +589,7 @@
             <div class="line-list">
               <div v-for="payment in invoicePayments" :key="payment.id || payment.payment_no" class="line-item stacked">
                 <strong>{{ fieldValue(payment.payment_no) }}</strong>
-                <span>{{ fieldValue(payment.gateway_label || payment.gateway) }} / {{ formatMoney(payment.amount) }}</span>
+                <span>{{ fieldValue(payment.gateway) }} / {{ formatMoney(payment.amount) }}</span>
                 <span>{{ formatDateTime(payment.paid_at || payment.created_at) }}</span>
               </div>
             </div>
@@ -652,7 +652,9 @@ import { productApi, type ProductRecord } from '@/api/product';
 import { supplierApi } from '@/api/supplier';
 import { userApi, type AdminUser, type PageParams } from '@/api/user';
 import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
+import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
 import { toUserMessage } from '@/utils/userMessage';
+import { INVOICE_STATUS_MAP, SERVICE_STATUS_MAP, toLabelMap, toSelectOptions, toTagTypeMap } from '@shared/statusConfig';
 
 import './index.less';
 
@@ -793,20 +795,12 @@ const refundRules: Record<string, FormRule[]> = {
   remark: [{ required: true, message: '请填写退款原因', type: 'error' }],
 };
 
-const serviceStatusOptions = [
-  { label: '待开通', value: 0 },
-  { label: '运行中', value: 1 },
-  { label: '已暂停', value: 2 },
-  { label: '已取消', value: 3 },
-  { label: '已过期', value: 4 },
-];
-const invoiceStatusOptions = [
-  { label: '待支付', value: 0 },
-  { label: '已支付', value: 1 },
-  { label: '已取消', value: 2 },
-  { label: '已逾期', value: 3 },
-  { label: '已退款', value: 5 },
-];
+const serviceStatusLabelMap = toLabelMap(SERVICE_STATUS_MAP);
+const serviceStatusTypeMap = toTagTypeMap(SERVICE_STATUS_MAP);
+const invoiceStatusLabelMap = toLabelMap(INVOICE_STATUS_MAP);
+const invoiceStatusTypeMap = toTagTypeMap(INVOICE_STATUS_MAP);
+const serviceStatusOptions = toSelectOptions(SERVICE_STATUS_MAP, false);
+const invoiceStatusOptions = toSelectOptions(INVOICE_STATUS_MAP, false);
 const invoiceTypeOptions = [
   { label: '新购', value: 'new' },
   { label: '续费', value: 'renew' },
@@ -838,7 +832,7 @@ const invoiceColumns: PrimaryTableCol<TableRowData>[] = [
   { title: '到期时间', colKey: 'due_date', width: 140 },
   { title: '支付时间', colKey: 'invoicePaid', width: 180 },
   { title: '金额', colKey: 'invoiceAmount', width: 120 },
-  { title: '支付方式', colKey: 'payment_summary.gateway_label', width: 140 },
+  { title: '支付方式', colKey: 'payment_summary.gateway', width: 140 },
   { title: '状态', colKey: 'invoiceStatus', width: 120 },
   { title: '账单类型', colKey: 'invoiceType', width: 140 },
   { title: '操作', colKey: 'invoiceOperation', width: 140 },
@@ -928,7 +922,7 @@ const primaryPayment = computed(() => invoicePayments.value.find((item: Row) => 
 const canOriginalInvoiceRefund = computed(() => primaryPayment.value?.gateway === 'alipay');
 const statCards = computed(() => [
   { key: 'ticket_open', label: '在线工单', value: stats.value.ticket_open || 0, tone: 'warning' },
-  { key: 'balance', label: '余额', value: formatMoney(user.value.balance), tone: 'success' },
+  { key: 'cash_balance', label: '余额', value: formatMoney(user.value.cash_balance), tone: 'success' },
   { key: 'total_expense', label: '总消费', value: formatMoney(stats.value.total_expense), tone: 'primary' },
   { key: 'admin_note', label: '管理员备注', value: user.value.admin_note || '暂无', tone: 'muted' },
 ]);
@@ -944,7 +938,7 @@ const infoItems = computed(() => [
   { label: '手机号', value: fieldValue(user.value.phone) },
   { label: '公司', value: fieldValue(user.value.company) },
   { label: 'QQ', value: fieldValue(user.value.qq) },
-  { label: '账户余额', value: formatMoney(user.value.balance), tone: 'success' },
+  { label: '账户余额', value: formatMoney(user.value.cash_balance), tone: 'success' },
   { label: '会员等级', value: user.value.member_level?.name || '未分级' },
   { label: '实名认证', value: verificationText(), tone: isVerified.value ? 'success' : 'warning' },
   { label: '证件号', value: fieldValue(user.value.id_card_masked) },
@@ -1602,7 +1596,7 @@ async function reloadInvoiceDrawer() {
 function isCancelableInvoice(row: Row) {
   const orderId = Number(row?.order?.id || row?.order_id || 0);
   const orderStatus = Number(row?.order?.status ?? 0);
-  const invoiceStatus = Number(row?.raw_status ?? row?.status ?? -1);
+  const invoiceStatus = Number(row?.status ?? -1);
   return orderId > 0 && orderStatus === 0 && [0, 3].includes(invoiceStatus);
 }
 
@@ -1684,7 +1678,6 @@ function normalizeServiceDetail(payload: Row = {}) {
     name: '',
     domain: '',
     status: 0,
-    status_label: '',
     status_tone: 'default',
     billing_cycle: '',
     billing_cycle_label: '',
@@ -1736,7 +1729,6 @@ function patchServiceListItem(detail: Row = {}) {
     name: normalized.name,
     domain: normalized.domain,
     status: normalized.status,
-    status_label: normalized.status_label,
     status_tone: normalized.status_tone,
     amount: normalized.amount,
     created_at: normalized.created_at,
@@ -1846,6 +1838,13 @@ function serviceTone(tone: unknown): 'default' | 'success' | 'primary' | 'warnin
   if (['success', 'primary', 'warning', 'danger'].includes(normalized)) return normalized as 'success' | 'primary' | 'warning' | 'danger';
   return 'default';
 }
+function serviceStatusLabel(status: unknown) {
+  return serviceStatusLabelMap[String(status ?? '')] || '-';
+}
+function serviceStatusTheme(status: unknown): 'default' | 'success' | 'primary' | 'warning' | 'danger' {
+  const value = serviceStatusTypeMap[String(status ?? '')] || 'default';
+  return value === 'info' || value === 'purple' ? 'default' : serviceTone(value);
+}
 function verificationText() {
   if (isVerified.value) return user.value.real_name ? `已实名认证 / ${user.value.real_name}` : '已实名认证';
   if (Number(user.value.verification_status) === 3) return '实名认证失败';
@@ -1853,16 +1852,14 @@ function verificationText() {
   return '未实名认证';
 }
 function invoiceStatusLabel(status: unknown) {
-  return ({ 0: '待支付', 1: '已支付', 2: '已取消', 3: '已逾期', 5: '已退款' } as Record<number, string>)[Number(status)] || '-';
+  return invoiceStatusLabelMap[String(status ?? '')] || '-';
 }
 function invoiceTypeLabel(type: unknown) {
   return ({ new: '新购', renew: '续费', recharge: '充值', deduction: '扣款', referral_credit: '推荐奖励', manual: '手工', upgrade: '升降级账单' } as Record<string, string>)[String(type)] || '-';
 }
 function invoiceStatusTheme(status: unknown): 'default' | 'success' | 'warning' | 'danger' {
-  const value = Number(status);
-  if (value === 1) return 'success';
-  if (value === 0) return 'warning';
-  if ([3, 5].includes(value)) return 'danger';
+  const value = invoiceStatusTypeMap[String(status ?? '')] || 'default';
+  if (value === 'success' || value === 'warning' || value === 'danger') return value;
   return 'default';
 }
 function balanceTypeLabel(type: unknown) {
@@ -1925,28 +1922,9 @@ function signedMoney(value: unknown) {
   const number = toNumber(value);
   return `${number > 0 ? '+' : ''}${formatMoney(number)}`;
 }
-function formatMoney(value: unknown) {
-  return `¥${toNumber(value).toFixed(2)}`;
-}
 function toNumber(value: unknown) {
   const number = Number.parseFloat(String(value ?? 0));
   return Number.isFinite(number) ? number : 0;
-}
-function fieldValue(value: unknown) {
-  if (value === undefined || value === null || value === '') return '-';
-  return String(value);
-}
-function formatDateTime(value: unknown) {
-  if (!value) return '-';
-  const date = parseDate(value);
-  if (!date) return String(value);
-  const pad = (item: number) => String(item).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
-}
-function parseDate(value: unknown) {
-  if (!value) return null;
-  const date = new Date(String(value).replace(/-/g, '/'));
-  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 onMounted(loadDetail);

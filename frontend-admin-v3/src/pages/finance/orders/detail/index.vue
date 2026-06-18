@@ -7,7 +7,7 @@
       eyebrow="订单详情"
       :title="fieldValue(order.order_no || order.id)"
       :description="`服务ID：${serviceIdLabel(order.service)}`"
-      :status-label="order.status_label || orderStatusLabel(order.status)"
+      :status-label="orderStatusLabel(order.status)"
       :status-theme="orderStatusTheme(order.status)"
       :metrics="summaryMetrics"
       :tabs="tabs"
@@ -18,7 +18,7 @@
       @update:active-tab="(value) => (activeTab = value)"
     >
       <template #relations>
-        <t-button v-if="order.invoice?.id || order.invoice_id" variant="outline" size="small" @click="openInvoiceDetail(order.invoice?.id || order.invoice_id)">
+        <t-button v-if="order.invoice_id" variant="outline" size="small" @click="openInvoiceDetail(order.invoice_id)">
           查看账单详情
         </t-button>
         <t-button v-if="order.user_id" variant="outline" size="small" @click="router.push(`/admin/users/${order.user_id}`)">
@@ -41,7 +41,7 @@
             <div class="detail-kv-item">
               <span>状态</span>
               <t-tag :theme="orderStatusTheme(order.status)" variant="light">
-                {{ order.status_label || orderStatusLabel(order.status) }}
+                {{ orderStatusLabel(order.status) }}
               </t-tag>
             </div>
             <div class="detail-kv-item">
@@ -76,6 +76,10 @@
               <span>更新时间</span>
               <strong>{{ formatDateTime(order.updated_at) }}</strong>
             </div>
+            <div class="detail-kv-item detail-kv-item--span-2">
+              <span>链路追踪</span>
+              <strong>{{ fieldValue(order.trace_id) }}</strong>
+            </div>
             <div v-if="order.remark" class="detail-kv-item detail-kv-item--span-2">
               <span>备注</span>
               <strong>{{ order.remark }}</strong>
@@ -98,7 +102,7 @@
               <span>账单号</span>
               <div class="detail-inline-action">
                 <strong>{{ fieldValue(order.invoice?.invoice_no) }}</strong>
-                <t-button v-if="order.invoice?.id || order.invoice_id" size="small" variant="text" theme="primary" @click="openInvoiceDetail(order.invoice?.id || order.invoice_id)">
+                <t-button v-if="order.invoice_id" size="small" variant="text" theme="primary" @click="openInvoiceDetail(order.invoice_id)">
                   查看
                 </t-button>
               </div>
@@ -110,6 +114,10 @@
             <div class="detail-kv-item">
               <span>账单支付时间</span>
               <strong>{{ formatDateTime(order.invoice?.paid_at) }}</strong>
+            </div>
+            <div class="detail-kv-item detail-kv-item--span-2">
+              <span>账单链路追踪</span>
+              <strong>{{ fieldValue(order.invoice?.trace_id) }}</strong>
             </div>
             <div class="detail-kv-item detail-kv-item--span-2">
               <span>服务 ID</span>
@@ -185,14 +193,14 @@
               <div class="payment-item__head">
                 <div>
                   <span>支付单号</span>
-                  <strong>{{ fieldValue(payment.payment_no || payment.id) }}</strong>
+                  <strong>{{ fieldValue(payment.payment_no) }}</strong>
                 </div>
                 <t-tag :theme="paymentStatusTheme(payment)" variant="light">{{ paymentStatusLabel(payment) }}</t-tag>
               </div>
               <div class="detail-kv-grid detail-kv-grid--two">
                 <div class="detail-kv-item">
                   <span>支付方式</span>
-                  <strong>{{ fieldValue(payment.gateway_label || payment.gateway) }}</strong>
+                  <strong>{{ fieldValue(payment.gateway) }}</strong>
                 </div>
                 <div class="detail-kv-item detail-kv-item--span-2">
                   <span>第三方单号</span>
@@ -205,6 +213,10 @@
                 <div class="detail-kv-item">
                   <span>支付时间</span>
                   <strong>{{ formatDateTime(payment.paid_at || payment.created_at) }}</strong>
+                </div>
+                <div class="detail-kv-item detail-kv-item--span-2">
+                  <span>链路追踪</span>
+                  <strong>{{ fieldValue(payment.trace_id) }}</strong>
                 </div>
               </div>
             </div>
@@ -220,8 +232,8 @@
       :payments="invoicePayments"
       :items="invoiceItems"
       :logs="invoiceLogs"
-      :status-label="invoiceStatusLabel(currentInvoice.raw_status ?? currentInvoice.status)"
-      :status-theme="invoiceStatusTheme(currentInvoice.raw_status ?? currentInvoice.status)"
+      :status-label="invoiceStatusLabel(currentInvoice.status)"
+      :status-theme="invoiceStatusTheme(currentInvoice.status)"
       @close="closeInvoiceDetail"
       @refresh="reloadInvoiceDetail"
       @view-order="(id) => id && router.push(`/admin/finance/orders/${id}`)"
@@ -236,9 +248,10 @@ import { useRoute, useRouter } from 'vue-router';
 import { MessagePlugin } from 'tdesign-vue-next';
 
 import { adminApi, type InvoiceRecord, type OrderRecord } from '@/api/admin';
+import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
 import InvoiceDetailDrawer from '@/components/finance-record-detail/InvoiceDetailDrawer.vue';
 import RecordDetailPage, { type RecordDetailMetric, type RecordDetailTab } from '@/components/finance-record-detail/RecordDetailPage.vue';
-import { INVOICE_STATUS_MAP, ORDER_STATUS_MAP, toLabelMap, toTagTypeMap } from '@shared/statusConfig';
+import { INVOICE_STATUS_MAP, ORDER_STATUS_MAP, PAYMENT_STATUS_MAP, getStatusLabel, getStatusTagType, toLabelMap, toTagTypeMap } from '@shared/statusConfig';
 
 import './index.less';
 
@@ -557,21 +570,12 @@ function invoiceStatusTheme(status: unknown) {
 }
 
 function paymentStatusLabel(payment: Record<string, unknown>) {
-  if (payment.status_label) return String(payment.status_label);
-  const status = Number(payment.status);
-  if (status === 0) return '待支付';
-  if (status === 1) return '已支付';
-  if (status === 2) return '已失败';
-  if (status === 3) return '已退款';
-  return fieldValue(payment.status);
+  return getStatusLabel(PAYMENT_STATUS_MAP, Number(payment.status));
 }
 
 function paymentStatusTheme(payment: Record<string, unknown>) {
-  const status = Number(payment.status);
-  if (status === 0) return 'warning';
-  if (status === 1) return 'success';
-  if (status === 2) return 'danger';
-  return 'default';
+  const value = getStatusTagType(PAYMENT_STATUS_MAP, Number(payment.status));
+  return value === 'info' || value === 'purple' ? 'default' : value;
 }
 
 function userName(user: unknown) {
@@ -582,23 +586,6 @@ function userName(user: unknown) {
 function serviceIdLabel(service: unknown) {
   const record = toRecord(service);
   return fieldValue(record.service_id || record.id);
-}
-
-function fieldValue(value: unknown) {
-  if (value === null || value === undefined || value === '') return '-';
-  return String(value);
-}
-
-function formatMoney(value: unknown) {
-  return `¥${Number(value || 0).toFixed(2)}`;
-}
-
-function formatDateTime(value: unknown) {
-  if (!value) return '-';
-  const date = new Date(String(value).replace(/-/g, '/'));
-  if (Number.isNaN(date.getTime())) return String(value);
-  const pad = (num: number) => String(num).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function toRecord(value: unknown): Record<string, unknown> {
