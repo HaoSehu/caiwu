@@ -13,7 +13,7 @@
   <t-loading v-else />
 </template>
 <script setup lang="ts">
-import { isBoolean, isUndefined } from 'lodash';
+import { isBoolean, isUndefined } from 'lodash-es';
 import type { ComputedRef } from 'vue';
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';

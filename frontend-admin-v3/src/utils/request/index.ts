@@ -1,6 +1,6 @@
 // axios配置  可自行根据项目进行更改，只需更改该文件即可，其他文件可以不动
 import type { AxiosInstance } from 'axios';
-import { isString, merge } from 'lodash';
+import { isString, merge } from 'lodash-es';
 
 import { ContentTypeEnum } from '@/constants';
 import router from '@/router';
@@ -88,7 +88,7 @@ const transform: AxiosTransform = {
         // 给 get 请求加上时间戳参数，避免从缓存中拿数据。
         config.params = Object.assign(params || {}, joinTimestamp(joinTime, false));
       } else {
-        // 兼容restful风格
+        // RESTful 路径片段参数。
         config.url = `${config.url + params}${joinTimestamp(joinTime, true)}`;
         config.params = undefined;
       }
@@ -112,7 +112,7 @@ const transform: AxiosTransform = {
         config.url = setObjToUrlParams(config.url as string, { ...config.params, ...config.data });
       }
     } else {
-      // 兼容restful风格
+      // RESTful 路径片段参数。
       config.url += params;
       config.params = undefined;
     }

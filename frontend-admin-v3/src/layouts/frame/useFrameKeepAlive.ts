@@ -1,4 +1,4 @@
-import { uniqBy } from 'lodash';
+import { uniqBy } from 'lodash-es';
 import { computed, toRaw, unref } from 'vue';
 import { useRouter } from 'vue-router';
 

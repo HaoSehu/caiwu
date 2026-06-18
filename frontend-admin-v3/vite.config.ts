@@ -80,6 +80,10 @@ function resolveManualChunk(id: string) {
     return 'vendor-i18n';
   }
 
+  if (normalized.includes('/lodash-es/')) {
+    return 'vendor-lodash';
+  }
+
   return undefined;
 }
 
@@ -281,7 +285,7 @@ export default ({ mode }: ConfigEnv): UserConfig => {
         'echarts',
         'vue-i18n',
         'dayjs',
-        'lodash',
+        'lodash-es',
         'nprogress',
         'qs',
         // tvision-color 依赖旧版 @babel/runtime-corejs3@7.18.9，其内部混用 ESM/CJS
