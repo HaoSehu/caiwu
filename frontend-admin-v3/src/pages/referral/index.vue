@@ -271,6 +271,7 @@ import {
   type ReferralWithdrawalRecord,
 } from '@/api/admin';
 import { REWARD_STATUS_MAP, toLabelMap, toSelectOptions, toTagTypeMap } from '@shared/statusConfig';
+import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
 
 import './index.less';
 
@@ -574,25 +575,8 @@ function userName(user: unknown) {
   return fieldValue(record.display_name || record.nickname || record.email || (record.id ? `用户 #${record.id}` : ''));
 }
 
-function fieldValue(value: unknown) {
-  if (value === null || value === undefined || value === '') return '-';
-  return String(value);
-}
-
-function formatMoney(value: unknown) {
-  return `¥${Number(value || 0).toFixed(2)}`;
-}
-
 function formatPercent(value: unknown) {
   return `${Number(value || 0).toFixed(2)}%`;
-}
-
-function formatDateTime(value: unknown) {
-  if (!value) return '-';
-  const date = new Date(String(value).replace(/-/g, '/'));
-  if (Number.isNaN(date.getTime())) return String(value);
-  const pad = (num: number) => String(num).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function toRecord(value: unknown): Record<string, unknown> {

@@ -59,7 +59,7 @@
           </template>
           <template #payment="{ row }">
             <div class="stack-cell">
-              <strong>{{ fieldValue(row.payment?.payment_no || row.payment_no) }}</strong>
+              <strong>{{ fieldValue(row.payment_no) }}</strong>
               <span>{{ paymentSummary(row.payment || paymentRecord(row)) }}</span>
             </div>
           </template>
@@ -67,7 +67,7 @@
           <template #paid="{ row }">{{ formatMoney(row.paid_amount) }}</template>
           <template #status="{ row }">
             <t-tag :theme="invoiceStatusTheme(row.status)" variant="light">
-              {{ row.status_label || invoiceStatusLabel(row.status) }}
+              {{ invoiceStatusLabel(row.status) }}
             </t-tag>
           </template>
           <template #createdAt="{ row }">{{ formatDateTime(row.created_at) }}</template>
@@ -84,13 +84,13 @@
             <MobileRecordCard
               v-for="row in recharges"
               :key="row.id"
-              :title="fieldValue(row.payment_no || row.payment?.payment_no || row.id)"
+              :title="fieldValue(row.payment_no)"
               eyebrow="充值管理"
-              :subtitle="fieldValue(row.gateway_label || row.gateway || '第三方支付')"
+              :subtitle="fieldValue(row.gateway || '第三方支付')"
               :description="paymentSummary(row.payment || paymentRecord(row))"
               highlight-label="充值金额"
               :highlight-value="formatMoney(row.amount)"
-              :status-label="row.status_label || invoiceStatusLabel(row.status)"
+              :status-label="invoiceStatusLabel(row.status)"
               :status-theme="invoiceStatusTheme(row.status)"
               :rows="rechargeMobileRows(row)"
               :action-options="mobileActionOptions(row)"
@@ -120,8 +120,8 @@
       :payments="invoicePayments"
       :items="invoiceItems"
       :logs="invoiceLogs"
-      :status-label="currentInvoice.status_label || invoiceStatusLabel(currentInvoice.raw_status ?? currentInvoice.status)"
-      :status-theme="invoiceStatusTheme(currentInvoice.raw_status ?? currentInvoice.status)"
+      :status-label="invoiceStatusLabel(currentInvoice.status)"
+      :status-theme="invoiceStatusTheme(currentInvoice.status)"
       @close="closeDetail"
       @refresh="reloadDetail"
       @view-order="(id) => id && router.push(`/admin/finance/orders/${id}`)"
@@ -138,10 +138,11 @@ import { MessagePlugin } from 'tdesign-vue-next';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
 
 import { adminApi, type InvoiceRecord, type RechargeRecord } from '@/api/admin';
+import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
 import InvoiceDetailDrawer from '@/components/finance-record-detail/InvoiceDetailDrawer.vue';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { toLabelMap, toTagTypeMap } from '@shared/statusConfig';
+import { PAYMENT_STATUS_MAP, toLabelMap, toTagTypeMap } from '@shared/statusConfig';
 
 import './index.less';
 
@@ -173,13 +174,6 @@ const pagination = reactive({
   page: 1,
   page_size: 20,
 });
-
-const PAYMENT_STATUS_MAP = {
-  0: { label: '待支付', tagType: 'warning' },
-  1: { label: '已支付', tagType: 'success' },
-  2: { label: '已失败', tagType: 'danger' },
-  3: { label: '已退款', tagType: 'default' },
-};
 
 const statusLabelMap = toLabelMap(PAYMENT_STATUS_MAP);
 const statusTypeMap = toTagTypeMap(PAYMENT_STATUS_MAP);
@@ -255,7 +249,7 @@ function handlePageChange(data: { current: number; pageSize: number }) {
 }
 
 async function openDetail(row: RechargeRecord) {
-  const invoiceId = row.invoice_id || row.invoice?.id;
+  const invoiceId = row.invoice_id;
   detailState.visible = true;
   detailState.currentId = Number(invoiceId || 0);
   detailState.detail = {
@@ -308,14 +302,13 @@ function normalizeRechargeInvoice(row: RechargeRecord): InvoiceRecord {
   const invoice = toRecord(row.invoice);
   return {
     ...(invoice as InvoiceRecord),
-    id: (row.invoice_id || invoice.id) as string | number | undefined,
-    invoice_no: row.invoice_no || String(invoice.invoice_no || ''),
+    id: row.invoice_id as string | number | undefined,
+    invoice_no: row.invoice_no,
     type: String(invoice.type || 'recharge'),
     user: row.user,
     amount: row.amount,
     paid_amount: row.paid_amount,
     status: row.status,
-    status_label: row.status_label,
     paid_at: row.paid_at,
     created_at: row.created_at,
   };
@@ -326,11 +319,9 @@ function paymentRecord(row: RechargeRecord): Record<string, unknown> {
     id: row.id,
     payment_no: row.payment_no,
     gateway: row.gateway,
-    gateway_label: row.gateway_label,
     trade_no: row.trade_no,
     amount: row.amount,
     status: row.status,
-    status_label: row.status_label,
     paid_at: row.paid_at,
     created_at: row.created_at,
     invoice_id: row.invoice_id,
@@ -353,7 +344,7 @@ function rechargeMobileRows(row: RechargeRecord) {
     { label: '用户', value: userName(row.user) },
     { label: '到账', value: formatMoney(row.paid_amount), strong: true },
     { label: '账单', value: fieldValue(row.invoice_no), show: Boolean(row.invoice_no) },
-    { label: '三方单', value: fieldValue(row.trade_no || row.payment?.trade_no), show: Boolean(row.trade_no || row.payment?.trade_no) },
+    { label: '三方单', value: fieldValue(row.trade_no), show: Boolean(row.trade_no) },
     { label: '创建', value: formatDateTime(row.created_at) },
     { label: '支付时', value: formatDateTime(row.paid_at), show: Boolean(row.paid_at) },
   ];
@@ -376,23 +367,6 @@ function invoiceStatusLabel(status: unknown) {
 function invoiceStatusTheme(status: unknown) {
   const value = statusTypeMap[String(status ?? '')] || 'default';
   return value === 'info' ? 'default' : value;
-}
-
-function fieldValue(value: unknown) {
-  if (value === null || value === undefined || value === '') return '-';
-  return String(value);
-}
-
-function formatMoney(value: unknown) {
-  return `¥${Number(value || 0).toFixed(2)}`;
-}
-
-function formatDateTime(value: unknown) {
-  if (!value) return '-';
-  const date = new Date(String(value).replace(/-/g, '/'));
-  if (Number.isNaN(date.getTime())) return String(value);
-  const pad = (num: number) => String(num).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function toRecord(value: unknown): Record<string, unknown> {

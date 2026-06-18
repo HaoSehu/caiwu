@@ -244,6 +244,7 @@ import {
   type TicketReply,
 } from '@/api/admin';
 import { toUserMessage } from '@/utils/userMessage';
+import { formatDateTime } from '@/utils/format';
 
 import './index.less';
 
@@ -428,14 +429,6 @@ function normalizeAttachmentPayload() {
   return replyAttachments.value
     .map((item) => item.path)
     .filter((path): path is string => typeof path === 'string' && path.trim() !== '');
-}
-
-function formatDateTime(value: unknown) {
-  if (!value) return '-';
-  const date = new Date(String(value).replace(/-/g, '/'));
-  if (Number.isNaN(date.getTime())) return String(value);
-  const pad = (item: number) => String(item).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
 function errorMessage(error: unknown, fallback: string) {

@@ -310,6 +310,7 @@ import { MessagePlugin } from 'tdesign-vue-next';
 import type { PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 
 import { adminApi, type LaravelPagination, type LogListParams } from '@/api/admin';
+import { fieldValue } from '@/utils/format';
 import { AdminPermissions } from '@/constants/permissions';
 import { useUserStore } from '@/store';
 
@@ -902,11 +903,6 @@ function sourceLabel(value: unknown) {
 function hasPermission(permission: string) {
   const permissions = userStore.userInfo?.permissions || [];
   return permissions.includes(AdminPermissions.ALL) || permissions.includes(permission);
-}
-
-function fieldValue(value: unknown) {
-  if (value === null || value === undefined || value === '') return '-';
-  return String(value);
 }
 
 function formatDate(value: unknown) {

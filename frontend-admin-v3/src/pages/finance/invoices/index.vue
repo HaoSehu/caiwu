@@ -70,8 +70,8 @@
           <template #amount="{ row }">{{ formatMoney(row.amount) }}</template>
           <template #paid="{ row }">{{ formatMoney(row.paid_amount) }}</template>
           <template #status="{ row }">
-            <t-tag :theme="invoiceStatusTheme(row.raw_status ?? row.status)" variant="light">
-              {{ row.status_label || invoiceStatusLabel(row.raw_status ?? row.status) }}
+            <t-tag :theme="invoiceStatusTheme(row.status)" variant="light">
+              {{ invoiceStatusLabel(row.status) }}
             </t-tag>
           </template>
           <template #createdAt="{ row }">{{ formatDateTime(row.created_at) }}</template>
@@ -109,8 +109,8 @@
               :description="invoiceTitle(row)"
               highlight-label="账单金额"
               :highlight-value="formatMoney(row.amount)"
-              :status-label="row.status_label || invoiceStatusLabel(row.raw_status ?? row.status)"
-              :status-theme="invoiceStatusTheme(row.raw_status ?? row.status)"
+              :status-label="invoiceStatusLabel(row.status)"
+              :status-theme="invoiceStatusTheme(row.status)"
               :rows="invoiceMobileRows(row)"
               :action-options="mobileActionOptions(row)"
               @action="(value) => handleMobileAction(value, row)"
@@ -139,8 +139,8 @@
       :payments="invoicePayments"
       :items="invoiceItems"
       :logs="invoiceLogs"
-      :status-label="currentInvoice.status_label || invoiceStatusLabel(currentInvoice.raw_status ?? currentInvoice.status)"
-      :status-theme="invoiceStatusTheme(currentInvoice.raw_status ?? currentInvoice.status)"
+      :status-label="invoiceStatusLabel(currentInvoice.status)"
+      :status-theme="invoiceStatusTheme(currentInvoice.status)"
       :cancelable="canCancel(currentInvoice)"
       :cancel-loading="detailState.cancelLoading"
       @close="closeDetail"
@@ -160,6 +160,7 @@ import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
 
 import { adminApi, type InvoiceRecord } from '@/api/admin';
+import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
 import InvoiceDetailDrawer from '@/components/finance-record-detail/InvoiceDetailDrawer.vue';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import { AdminPermissions } from '@/constants/permissions';
@@ -348,7 +349,7 @@ function closeDetail() {
 }
 
 function canCancel(row: InvoiceRecord) {
-  const status = Number(row.raw_status ?? row.status ?? -1);
+  const status = Number(row.status ?? -1);
   return hasPermission(AdminPermissions.INVOICE_MANAGE) && [0, 3].includes(status);
 }
 
@@ -425,23 +426,6 @@ function invoiceStatusTheme(status: unknown) {
 function userName(user: unknown) {
   const record = toRecord(user);
   return fieldValue(record.nickname || record.display_name || record.email);
-}
-
-function fieldValue(value: unknown) {
-  if (value === null || value === undefined || value === '') return '-';
-  return String(value);
-}
-
-function formatMoney(value: unknown) {
-  return `¥${Number(value || 0).toFixed(2)}`;
-}
-
-function formatDateTime(value: unknown) {
-  if (!value) return '-';
-  const date = new Date(String(value).replace(/-/g, '/'));
-  if (Number.isNaN(date.getTime())) return String(value);
-  const pad = (num: number) => String(num).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function toRecord(value: unknown): Record<string, unknown> {

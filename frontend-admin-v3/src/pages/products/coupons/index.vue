@@ -352,6 +352,7 @@ import type { FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-v
 
 import { adminApi, type CouponPayload, type CouponRecord } from '@/api/admin';
 import { userApi, type AdminUser } from '@/api/user';
+import { formatDateTime } from '@/utils/format';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
 
@@ -836,14 +837,6 @@ function formatLimitText(limit: unknown, remain: unknown, label: string) {
 function validityText(row: CouponRecord) {
   if (!row.starts_at && !row.expires_at) return '长期有效';
   return `${row.starts_at || '立即'} 至 ${row.expires_at || '长期'}`;
-}
-
-function formatDateTime(value: unknown) {
-  if (!value) return '-';
-  const date = new Date(String(value).replace(/-/g, '/'));
-  if (Number.isNaN(date.getTime())) return String(value);
-  const pad = (num: number) => String(num).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function errorMessage(error: unknown, fallback: string) {
