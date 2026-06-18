@@ -123,6 +123,7 @@ import type { DropdownOption, FormInstanceFunctions, FormRule, PrimaryTableCol }
 
 import { adminApi, type MemberLevelPayload, type MemberLevelRecord } from '@/api/admin';
 import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
+import { errorMessage } from '@/utils/userMessage';
 
 import './index.less';
 
@@ -288,16 +289,7 @@ function formatPercent(value: unknown) {
   return `${Number(value || 0).toFixed(2)}%`;
 }
 
-function toRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-}
 
-function errorMessage(error: unknown, fallback: string) {
-  const record = toRecord(error);
-  const response = toRecord(record.response);
-  const data = toRecord(response.data);
-  return String(data.message || record.message || fallback);
-}
 
 onMounted(loadLevels);
 </script>

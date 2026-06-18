@@ -353,6 +353,7 @@ import type { FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-v
 import { adminApi, type CouponPayload, type CouponRecord } from '@/api/admin';
 import { userApi, type AdminUser } from '@/api/user';
 import { formatDateTime } from '@/utils/format';
+import { errorMessage } from '@/utils/userMessage';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
 
@@ -488,9 +489,6 @@ function closeCouponDrawer() {
   handleDialogClosed();
 }
 
-function toRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-}
 
 function normalizeUserOption(row: AdminUser): UserOption {
   const id = Number(row.id);
@@ -839,12 +837,6 @@ function validityText(row: CouponRecord) {
   return `${row.starts_at || '立即'} 至 ${row.expires_at || '长期'}`;
 }
 
-function errorMessage(error: unknown, fallback: string) {
-  const record = toRecord(error);
-  const response = toRecord(record.response);
-  const data = toRecord(response.data);
-  return String(data.message || record.message || fallback);
-}
 
 onMounted(async () => {
   await Promise.all([loadData(), loadUserOptions('')]);

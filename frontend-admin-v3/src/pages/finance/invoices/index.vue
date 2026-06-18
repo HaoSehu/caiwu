@@ -161,6 +161,7 @@ import type { PrimaryTableCol } from 'tdesign-vue-next';
 
 import { adminApi, type InvoiceRecord } from '@/api/admin';
 import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
+import { errorMessage } from '@/utils/userMessage';
 import InvoiceDetailDrawer from '@/components/finance-record-detail/InvoiceDetailDrawer.vue';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import { AdminPermissions } from '@/constants/permissions';
@@ -432,12 +433,6 @@ function toRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
 
-function errorMessage(error: unknown, fallback: string) {
-  const record = toRecord(error);
-  const response = toRecord(record.response);
-  const data = toRecord(response.data);
-  return String(data.message || record.message || fallback);
-}
 
 onMounted(() => loadList());
 </script>

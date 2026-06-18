@@ -207,6 +207,7 @@ import {
 } from '@/api/admin';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { fieldValue, formatDateTime } from '@/utils/format';
+import { errorMessage } from '@/utils/userMessage';
 
 import './index.less';
 
@@ -475,16 +476,6 @@ function contentStatusTheme(status: unknown) {
   return themes[String(status ?? '')] || 'default';
 }
 
-function toRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-}
-
-function errorMessage(error: unknown, fallback: string) {
-  const record = toRecord(error);
-  const response = toRecord(record.response);
-  const data = toRecord(response.data);
-  return String(data.message || record.message || fallback);
-}
 
 onMounted(() => {
   loadAll();

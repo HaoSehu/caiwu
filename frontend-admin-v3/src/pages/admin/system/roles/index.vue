@@ -142,6 +142,7 @@ import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import type { FormInstanceFunctions, FormRule, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 
 import { adminRoleApi, type PermissionItem, type RolePayload, type RoleRecord } from '@/api/admin-roles';
+import { errorMessage } from '@/utils/userMessage';
 import { AdminPermissions } from '@/constants/permissions';
 import { useUserStore } from '@/store';
 
@@ -489,7 +490,4 @@ function hasPermission(permission: string) {
   return userPermissions.includes(AdminPermissions.ALL) || userPermissions.includes(permission);
 }
 
-function errorMessage(error: unknown, fallback: string) {
-  return error instanceof Error && error.message ? error.message : fallback;
-}
 </script>

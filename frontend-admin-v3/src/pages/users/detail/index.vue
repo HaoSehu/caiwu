@@ -653,7 +653,7 @@ import { supplierApi } from '@/api/supplier';
 import { userApi, type AdminUser, type PageParams } from '@/api/user';
 import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
 import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
-import { toUserMessage } from '@/utils/userMessage';
+import { toUserMessage, errorMessage } from '@/utils/userMessage';
 import { INVOICE_STATUS_MAP, SERVICE_STATUS_MAP, toLabelMap, toSelectOptions, toTagTypeMap } from '@shared/statusConfig';
 
 import './index.less';
@@ -1827,11 +1827,6 @@ function validateUpstreamPair() {
 }
 function isValidationPass(result: unknown) {
   return result === true || result === undefined;
-}
-function errorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) return toUserMessage(error.message, fallback);
-  if (typeof error === 'object' && error && 'message' in error) return toUserMessage((error as { message?: unknown }).message, fallback);
-  return fallback;
 }
 function serviceTone(tone: unknown): 'default' | 'success' | 'primary' | 'warning' | 'danger' {
   const normalized = String(tone || '').toLowerCase();

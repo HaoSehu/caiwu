@@ -311,6 +311,7 @@ import type { PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 
 import { adminApi, type LaravelPagination, type LogListParams } from '@/api/admin';
 import { fieldValue } from '@/utils/format';
+import { errorMessage } from '@/utils/userMessage';
 import { AdminPermissions } from '@/constants/permissions';
 import { useUserStore } from '@/store';
 
@@ -994,12 +995,6 @@ function formatScheduleCycle(row: RecordRow) {
   return '自定义周期';
 }
 
-function errorMessage(error: unknown, fallback: string) {
-  const record = toRecord(error);
-  const response = toRecord(record.response);
-  const data = toRecord(response.data);
-  return String(data.message || record.message || fallback);
-}
 
 watch(
   () => route.query.tab,

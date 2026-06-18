@@ -186,8 +186,9 @@
               </t-select>
               <t-select v-model="apiFilters.source" placeholder="前端来源">
                 <t-option label="全部来源" value="all" />
-                <t-option label="管理端前端" value="frontend-admin" />
-                <t-option label="客户端前端" value="frontend-client" />
+                <t-option label="管理端前端" value="frontend-admin-v3" />
+                <t-option label="官网/用户入口" value="frontend-user-v3-www" />
+                <t-option label="用户控制台" value="frontend-user-v4-console" />
                 <t-option label="未发现前端调用" value="untracked" />
               </t-select>
             </div>
@@ -252,6 +253,7 @@ import { MessagePlugin } from 'tdesign-vue-next';
 import type { FormInstanceFunctions, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 
 import { adminApi, type SettingItem } from '@/api/admin';
+import { errorMessage } from '@/utils/userMessage';
 import apiCatalogData from '@/data/apiCatalog.generated.json';
 
 import './index.less';
@@ -673,12 +675,6 @@ function toRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
 
-function errorMessage(error: unknown, fallback: string) {
-  const record = toRecord(error);
-  const response = toRecord(record.response);
-  const data = toRecord(response.data);
-  return String(data.message || record.message || fallback);
-}
 
 watch(
   () => route.query.tab,

@@ -243,7 +243,7 @@ import {
   type TicketDetail,
   type TicketReply,
 } from '@/api/admin';
-import { toUserMessage } from '@/utils/userMessage';
+import { errorMessage } from '@/utils/userMessage';
 import { formatDateTime } from '@/utils/format';
 
 import './index.less';
@@ -429,11 +429,6 @@ function normalizeAttachmentPayload() {
   return replyAttachments.value
     .map((item) => item.path)
     .filter((path): path is string => typeof path === 'string' && path.trim() !== '');
-}
-
-function errorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) return toUserMessage(error.message, fallback);
-  return fallback;
 }
 
 async function loadAdmins() {
