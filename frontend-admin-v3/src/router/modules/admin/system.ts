@@ -15,6 +15,7 @@ export const systemRoutes: RouteRecordRaw[] = [
       },
       icon: shallowRef(ComponentGridIcon),
       permission: 'log.list',
+      keepAlive: false,
     },
   },
   {

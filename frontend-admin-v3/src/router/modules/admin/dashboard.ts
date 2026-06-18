@@ -12,6 +12,7 @@ export const dashboardRoutes: RouteRecordRaw[] = [
         en_US: 'Dashboard',
       },
       permission: 'dashboard.view',
+      keepAlive: false,
     },
   },
 ];

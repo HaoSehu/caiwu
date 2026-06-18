@@ -15,6 +15,7 @@ export const usersRoutes: RouteRecordRaw[] = [
       },
       icon: shallowRef(UserIcon),
       permission: 'user.list',
+      keepAlive: false,
     },
   },
   {
