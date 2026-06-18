@@ -80,7 +80,23 @@ export const useTabsRouterStore = defineStore('tabsRouter', {
       newRoutes?.forEach((route: TRouterInfo) => this.appendTabRouterList(route));
     },
   },
-  persist: true,
+  persist: {
+    pick: ['tabRouterList'],
+    serializer: {
+      serialize: (state) => {
+        const list = (state.tabRouterList || []).map((route: TRouterInfo) => ({
+          path: route.path,
+          name: route.name,
+          title: route.title,
+          isAlive: route.isAlive,
+          isHome: route.isHome,
+          routeIdx: route.routeIdx,
+        }));
+        return JSON.stringify({ tabRouterList: list });
+      },
+      deserialize: (raw) => JSON.parse(raw),
+    },
+  },
 });
 
 export function getTabsRouterStore() {
