@@ -263,6 +263,7 @@ export default ({ mode }: ConfigEnv): UserConfig => {
       cssCodeSplit: true,
       reportCompressedSize: false,
       chunkSizeWarningLimit: 1200,
+      assetsInlineLimit: 4096,
       rollupOptions: {
         output: {
           entryFileNames: 'assets/js/[name]-[hash].js',
