@@ -122,6 +122,7 @@ import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import type { DropdownOption, FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
 
 import { adminApi, type MemberLevelPayload, type MemberLevelRecord } from '@/api/admin';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
 import { required } from '@/utils/formRules';
 import { errorMessage } from '@/utils/userMessage';
@@ -145,7 +146,7 @@ const saving = ref(false);
 const dialogVisible = ref(false);
 const formRef = ref<FormInstanceFunctions>();
 const levels = ref<MemberLevelRecord[]>([]);
-const isMobile = computed(() => window.matchMedia?.('(max-width: 768px)').matches || false);
+const isMobile = useMediaQuery('(max-width: 768px)');
 
 const form = reactive<MemberLevelForm>(createDefaultForm());
 

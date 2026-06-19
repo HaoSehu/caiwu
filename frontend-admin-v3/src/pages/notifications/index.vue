@@ -253,6 +253,7 @@ import { MessagePlugin } from 'tdesign-vue-next';
 import type { FormInstanceFunctions, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 
 import { adminApi, type SettingItem } from '@/api/admin';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { errorMessage } from '@/utils/userMessage';
 import apiCatalogData from '@/data/apiCatalog.generated.json';
 
@@ -386,7 +387,7 @@ const apiItems = (apiCatalog.items || []).map((item) => ({
   sourceFiles: item.sourceFiles || [],
 }));
 
-const isMobile = computed(() => window.matchMedia?.('(max-width: 768px)').matches || false);
+const isMobile = useMediaQuery('(max-width: 768px)');
 const currentLoading = computed(() => {
   if (activeTab.value === 'interfaces') return settingsLoading.value || savingEmail.value || savingSms.value;
   if (activeTab.value === 'email-templates') return templatesLoading.value;

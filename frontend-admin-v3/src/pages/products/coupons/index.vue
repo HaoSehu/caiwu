@@ -351,6 +351,7 @@ import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import type { FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
 
 import { adminApi, type CouponPayload, type CouponRecord } from '@/api/admin';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { userApi, type AdminUser } from '@/api/user';
 import { formatDateTime } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
@@ -410,7 +411,7 @@ const userOptions = ref<UserOption[]>([]);
 const userSearchResults = ref<UserOption[]>([]);
 const userSearchKeyword = ref('');
 const userOptionsLoading = ref(false);
-const isMobile = computed(() => window.matchMedia?.('(max-width: 768px)').matches || false);
+const isMobile = useMediaQuery('(max-width: 768px)');
 
 const filters = reactive({
   keyword: '',

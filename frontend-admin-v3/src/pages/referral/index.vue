@@ -271,6 +271,7 @@ import {
   type ReferralWithdrawalRecord,
 } from '@/api/admin';
 import { REWARD_STATUS_MAP, toLabelMap, toSelectOptions, toTagTypeMap } from '@shared/statusConfig';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
 
@@ -322,7 +323,7 @@ const withdrawalDialog = reactive<{
   remark: '',
 });
 
-const isMobile = computed(() => window.matchMedia?.('(max-width: 768px)').matches || false);
+const isMobile = useMediaQuery('(max-width: 768px)');
 const currentLoading = computed(() => {
   if (activeTab.value === 'overview') return overviewLoading.value;
   if (activeTab.value === 'rewards') return rewardsLoading.value;
