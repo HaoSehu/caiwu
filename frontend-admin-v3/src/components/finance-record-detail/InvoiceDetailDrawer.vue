@@ -14,7 +14,7 @@
       eyebrow="账单详情"
       :title="fieldValue(invoice.invoice_no || invoice.id)"
       :description="invoiceTitle(invoice)"
-      :status-label="fieldValue(invoice.status_label || statusLabel)"
+      :status-label="fieldValue(statusLabel)"
       :status-theme="statusTheme"
       :metrics="summaryMetrics"
       :tabs="tabs"
@@ -67,6 +67,14 @@
               <span>支付时间</span>
               <strong>{{ formatDateTime(invoice.paid_at) }}</strong>
             </div>
+            <div>
+              <span>链路追踪</span>
+              <strong>{{ fieldValue(invoice.trace_id) }}</strong>
+            </div>
+            <div v-if="invoice.refund_trace_id">
+              <span>退款追踪</span>
+              <strong>{{ fieldValue(invoice.refund_trace_id) }}</strong>
+            </div>
           </div>
         </section>
 
@@ -87,11 +95,12 @@
           <div class="finance-line-list">
             <div v-for="payment in payments" :key="String(payment.id || payment.payment_no)" class="finance-line-item finance-line-item--stacked">
               <div class="finance-line-item__head">
-                <strong>{{ fieldValue(payment.payment_no || payment.id) }}</strong>
+                <strong>{{ fieldValue(payment.payment_no) }}</strong>
                 <t-tag :theme="paymentStatusTheme(payment)" variant="light">{{ paymentStatusLabel(payment) }}</t-tag>
               </div>
               <span>第三方单号：{{ fieldValue(payment.trade_no) }}</span>
-              <span>{{ fieldValue(payment.gateway_label || payment.gateway) }} / {{ formatMoney(payment.amount) }}</span>
+              <span>链路追踪：{{ fieldValue(payment.trace_id) }}</span>
+              <span>{{ fieldValue(payment.gateway) }} / {{ formatMoney(payment.amount) }}</span>
               <span>{{ formatDateTime(payment.paid_at || payment.created_at) }}</span>
             </div>
           </div>
@@ -117,8 +126,9 @@
 import { computed, ref } from 'vue';
 
 import type { InvoiceRecord } from '@/api/admin';
-import RecordDetailPage, { type RecordDetailMetric, type RecordDetailTab } from '@/components/finance-record-detail/RecordDetailPage.vue';
+import RecordDetailPage, { type RecordDetailMetric, type RecordDetailTab } from '@/components/record-detail-page/index.vue';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { PAYMENT_STATUS_MAP, getStatusLabel, getStatusTagType } from '@shared/statusConfig';
 
 const INVOICE_TYPE_MAP: Record<string, string> = {
   new: '新购',
@@ -204,21 +214,12 @@ function userName(user: unknown) {
 }
 
 function paymentStatusLabel(payment: Record<string, unknown>) {
-  if (payment.status_label) return String(payment.status_label);
-  const status = Number(payment.status);
-  if (status === 0) return '待支付';
-  if (status === 1) return '已支付';
-  if (status === 2) return '已失败';
-  if (status === 3) return '已退款';
-  return fieldValue(payment.status);
+  return getStatusLabel(PAYMENT_STATUS_MAP, Number(payment.status));
 }
 
 function paymentStatusTheme(payment: Record<string, unknown>) {
-  const status = Number(payment.status);
-  if (status === 0) return 'warning';
-  if (status === 1) return 'success';
-  if (status === 2) return 'danger';
-  return 'default';
+  const value = getStatusTagType(PAYMENT_STATUS_MAP, Number(payment.status));
+  return value === 'info' || value === 'purple' ? 'default' : value;
 }
 
 function fieldValue(value: unknown) {
@@ -259,7 +260,7 @@ function toRecord(value: unknown): Record<string, unknown> {
   margin: 0;
   padding-left: 10px;
   color: var(--td-text-color-primary);
-  font-size: 14px;
+  font-size: var(--td-font-size-size-3, 14px);
   font-weight: 650;
   line-height: 22px;
 }
@@ -305,14 +306,14 @@ function toRecord(value: unknown): Record<string, unknown> {
 .finance-detail-grid span,
 .finance-line-item span {
   color: var(--td-text-color-secondary);
-  font-size: 12px;
+  font-size: var(--td-font-size-size-1, 12px);
   line-height: 1.5;
 }
 
 .finance-detail-grid strong,
 .finance-line-item strong {
   color: var(--td-text-color-primary);
-  font-size: 13px;
+  font-size: var(--td-font-size-size-2, 13px);
   font-weight: 600;
   line-height: 1.5;
   overflow-wrap: anywhere;
