@@ -70,9 +70,7 @@
           <template #amount="{ row }">{{ formatMoney(row.amount) }}</template>
           <template #paid="{ row }">{{ formatMoney(row.paid_amount) }}</template>
           <template #status="{ row }">
-            <t-tag :theme="invoiceStatusTheme(row.status)" variant="light">
-              {{ invoiceStatusLabel(row.status) }}
-            </t-tag>
+            <StatusTag :status-map="INVOICE_STATUS_MAP" :status="row.status" />
           </template>
           <template #createdAt="{ row }">{{ formatDateTime(row.created_at) }}</template>
           <template #paidAt="{ row }">{{ formatDateTime(row.paid_at) }}</template>
@@ -109,8 +107,8 @@
               :description="invoiceTitle(row)"
               highlight-label="账单金额"
               :highlight-value="formatMoney(row.amount)"
-              :status-label="invoiceStatusLabel(row.status)"
-              :status-theme="invoiceStatusTheme(row.status)"
+              :status-map="INVOICE_STATUS_MAP"
+              :status="row.status"
               :rows="invoiceMobileRows(row)"
               :action-options="mobileActionOptions(row)"
               @action="(value) => handleMobileAction(value, row)"
@@ -164,6 +162,7 @@ import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
 import InvoiceDetailDrawer from '@/components/finance-record-detail/InvoiceDetailDrawer.vue';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
+import StatusTag from '@/components/status-tag/index.vue';
 import { AdminPermissions } from '@/constants/permissions';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserStore } from '@/store';
