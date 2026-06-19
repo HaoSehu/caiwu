@@ -146,7 +146,7 @@ function displayValue(value: string | number | null | undefined) {
   grid-template-columns: minmax(0, 1.8fr) minmax(120px, 0.7fr) repeat(3, minmax(120px, 1fr));
   overflow: hidden;
   border: 1px solid var(--td-component-border);
-  border-radius: 8px;
+  border-radius: var(--td-radius-large, 8px);
   background:
     linear-gradient(135deg, rgba(0, 82, 217, 0.07), transparent 42%),
     var(--td-bg-color-container);
@@ -211,7 +211,7 @@ function displayValue(value: string | number | null | undefined) {
 .record-detail-body {
   overflow: hidden;
   border: 1px solid var(--td-component-border);
-  border-radius: 8px;
+  border-radius: var(--td-radius-large, 8px);
   background: var(--td-bg-color-container);
 }
 

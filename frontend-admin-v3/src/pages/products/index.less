@@ -115,7 +115,7 @@
   display: none;
   width: 100%;
   border: 1px solid var(--td-component-border);
-  border-radius: 4px;
+  border-radius: var(--td-radius-default, 4px);
   padding: 10px 12px;
   background: var(--td-bg-color-container);
   color: var(--td-text-color-primary);
@@ -222,7 +222,7 @@
   width: 100%;
   min-height: 38px;
   border: 1px solid var(--td-component-border);
-  border-radius: 4px;
+  border-radius: var(--td-radius-default, 4px);
   padding: 6px;
   background: var(--td-bg-color-container);
   color: var(--td-text-color-primary);
@@ -688,7 +688,7 @@
   gap: 4px;
   width: 100%;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--td-radius-default, 4px);
   padding: 10px 12px;
   background: transparent;
   color: var(--td-text-color-primary);
@@ -729,7 +729,7 @@
 .product-drawer-section {
   position: relative;
   border: 1px solid var(--td-component-border);
-  border-radius: 4px;
+  border-radius: var(--td-radius-default, 4px);
   padding: 56px 20px 18px;
   background: var(--td-bg-color-container);
   box-shadow: 0 4px 12px rgb(6 75 179 / 4%);
@@ -744,7 +744,7 @@
   display: flex;
   align-items: center;
   height: 40px;
-  border-radius: 4px 4px 0 0;
+  border-radius: var(--td-radius-default, 4px) 4px 0 0;
   padding: 0 20px;
   background: #eef2fd;
   color: var(--td-text-color-primary);
@@ -882,7 +882,7 @@
 .config-subitem-table {
   overflow: hidden;
   border: 1px solid var(--td-component-border);
-  border-radius: 8px;
+  border-radius: var(--td-radius-large, 8px);
   background: var(--td-bg-color-container);
 }
 
@@ -950,7 +950,7 @@
   gap: 12px;
   align-items: center;
   border: 1px solid var(--td-component-border);
-  border-radius: 4px;
+  border-radius: var(--td-radius-default, 4px);
   padding: 12px 14px;
   background: var(--td-bg-color-container);
 }
@@ -1106,7 +1106,7 @@
 .supplier-card {
   overflow: hidden;
   border: 1px solid var(--td-component-border);
-  border-radius: 4px;
+  border-radius: var(--td-radius-default, 4px);
   padding: 0;
   background: var(--td-bg-color-container);
 }
