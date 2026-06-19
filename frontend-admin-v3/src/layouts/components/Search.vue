@@ -99,7 +99,7 @@ const changeSearchFocus = (value: boolean) => {
   transition: opacity @anim-duration-base @anim-time-fn-easing;
 
   .t-icon {
-    font-size: 20px;
+    font-size: var(--td-font-size-size-6, 20px);
 
     &.general {
       margin-right: 16px;

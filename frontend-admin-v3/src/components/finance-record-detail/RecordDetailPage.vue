@@ -169,7 +169,7 @@ function displayValue(value: string | number | null | undefined) {
 
 .record-detail-summary span {
   color: var(--td-text-color-placeholder);
-  font-size: 12px;
+  font-size: var(--td-font-size-size-1, 12px);
   line-height: 1;
 }
 
@@ -188,7 +188,7 @@ function displayValue(value: string | number | null | undefined) {
 }
 
 .record-detail-summary__identity strong {
-  font-size: 20px;
+  font-size: var(--td-font-size-size-6, 20px);
   letter-spacing: 0;
 }
 
@@ -196,7 +196,7 @@ function displayValue(value: string | number | null | undefined) {
   overflow: hidden;
   margin: 0;
   color: var(--td-text-color-secondary);
-  font-size: 13px;
+  font-size: var(--td-font-size-size-2, 13px);
   line-height: 1.55;
   text-overflow: ellipsis;
   white-space: nowrap;

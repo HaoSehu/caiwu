@@ -236,7 +236,7 @@ watchEffect(() => {
   }
 
   .tdesign-setting-text {
-    font-size: 12px;
+    font-size: var(--td-font-size-size-1, 12px);
     display: none;
   }
 
@@ -269,7 +269,7 @@ watchEffect(() => {
 }
 
 .setting-group-title {
-  font-size: 14px;
+  font-size: var(--td-font-size-size-3, 14px);
   line-height: 22px;
   margin: 32px 0 24px;
   text-align: left;
@@ -291,7 +291,7 @@ watchEffect(() => {
   bottom: 0;
   left: 0;
   line-height: 20px;
-  font-size: 12px;
+  font-size: var(--td-font-size-size-1, 12px);
   text-align: center;
   color: var(--td-text-color-placeholder);
   width: 100%;
