@@ -70,9 +70,7 @@
             {{ fieldValue(row.product_display_name || row.product?.display_name || (row.product_id ? `未配置规格 #${row.product_id}` : '')) }}
           </template>
           <template #status="{ row }">
-            <t-tag :theme="serviceStatusTheme(row.status)" variant="light">
-              {{ serviceStatusLabel(row.status) }}
-            </t-tag>
+            <StatusTag :status-map="SERVICE_STATUS_MAP" :status="row.status" />
           </template>
           <template #billing="{ row }">
             <div class="billing-cell">
@@ -99,8 +97,8 @@
               :description="fieldValue(row.product_display_name || row.product?.display_name || row.domain)"
               highlight-label="服务金额"
               :highlight-value="formatMoney(row.amount)"
-              :status-label="serviceStatusLabel(row.status)"
-              :status-theme="serviceStatusTheme(row.status)"
+              :status-map="SERVICE_STATUS_MAP"
+              :status="row.status"
               :rows="serviceMobileRows(row)"
               :action-options="mobileActionOptions(row)"
               @action="(value) => handleMobileAction(value, row)"
@@ -162,11 +160,12 @@ import { MessagePlugin } from 'tdesign-vue-next';
 import type { PageInfo, PrimaryTableCol } from 'tdesign-vue-next';
 
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
+import StatusTag from '@/components/status-tag/index.vue';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { serviceApi, type ServiceRecord } from '@/api/service';
 import { fieldValue, formatMoney } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
-import { SERVICE_STATUS_MAP, toLabelMap, toSelectOptions, toTagTypeMap } from '@shared/statusConfig';
+import { SERVICE_STATUS_MAP, toSelectOptions } from '@shared/statusConfig';
 
 import './index.less';
 
@@ -200,8 +199,6 @@ const pagination = reactive({
   page_size: 20,
 });
 
-const statusLabelMap = toLabelMap(SERVICE_STATUS_MAP);
-const statusTypeMap = toTagTypeMap(SERVICE_STATUS_MAP);
 const statusOptions = computed(() => toSelectOptions(SERVICE_STATUS_MAP, false).map((item) => ({ ...item, value: String(item.value) })));
 
 const columns: PrimaryTableCol<ServiceRecord>[] = [
@@ -348,15 +345,6 @@ function hostSummary(row: ServiceRecord) {
 function userName(user: unknown) {
   const record = toRecord(user);
   return fieldValue(record.username || record.nickname || record.display_name || record.email);
-}
-
-function serviceStatusLabel(status: unknown) {
-  return statusLabelMap[String(status ?? '')] || fieldValue(status);
-}
-
-function serviceStatusTheme(status: unknown) {
-  const value = statusTypeMap[String(status ?? '')] || 'default';
-  return value === 'info' || value === 'purple' ? 'default' : value;
 }
 
 function hasHostInfo(row: ServiceRecord) {
