@@ -38,6 +38,7 @@
       </div>
 
       <t-table
+        v-if="!isMobile"
         row-key="id"
         :data="list"
         :columns="columns"
@@ -86,6 +87,39 @@
           </t-space>
         </template>
       </t-table>
+
+      <div v-else class="staff-mobile-list">
+        <t-loading :loading="loading" size="small">
+          <div v-if="list.length" class="staff-mobile-stack">
+            <MobileRecordCard
+              v-for="row in list"
+              :key="row.id"
+              :title="fieldValue(row.username)"
+              :subtitle="fieldValue(row.role_label || row.role?.label || row.role?.name)"
+              :description="fieldValue(row.email)"
+              :status-label="Number(row.status) === 1 ? '启用' : '停用'"
+              :status-theme="Number(row.status) === 1 ? 'success' : 'danger'"
+              :rows="[
+                { label: '昵称', value: fieldValue(row.nickname) },
+                { label: '权限', value: row.permissions?.includes('*') ? '全部权限' : `${row.permissions?.length || 0} 项` },
+                { label: '最近登录', value: fieldValue(row.last_login_at) },
+                { label: '登录IP', value: fieldValue(row.last_login_ip) },
+              ]"
+              :action-options="staffMobileActions(row)"
+              @action="(value) => handleStaffMobileAction(value, row)"
+            />
+          </div>
+          <t-empty v-else />
+        </t-loading>
+        <t-pagination
+          v-if="total > 0"
+          v-model:current="page"
+          v-model:page-size="pageSize"
+          class="staff-mobile-pagination"
+          :total="total"
+          @change="handlePageChange"
+        />
+      </div>
     </t-card>
 
     <t-dialog
@@ -149,6 +183,8 @@ import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 
 import { adminStaffApi, type CreateStaffPayload, type StaffPayload, type StaffRecord, type StaffRoleOption } from '@/api/admin-staff';
+import MobileRecordCard from '@/components/mobile-record-card/index.vue';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { errorMessage } from '@/utils/userMessage';
 import { required } from '@/utils/formRules';
 import { AdminPermissions } from '@/constants/permissions';
@@ -194,6 +230,7 @@ const form = reactive<StaffForm>(createDefaultForm());
 const resetForm = reactive({ password: '', password_confirmation: '' });
 
 const canManage = computed(() => hasPermission(AdminPermissions.STAFF_MANAGE));
+const isMobile = useMediaQuery('(max-width: 768px)');
 const pagination = computed(() => ({
   current: page.value,
   pageSize: pageSize.value,
@@ -293,6 +330,21 @@ function handlePageChange(pageInfo: PageInfo) {
   page.value = pageInfo.current;
   pageSize.value = pageInfo.pageSize;
   loadList();
+}
+
+function staffMobileActions(row: StaffRecord) {
+  if (!canManage.value) return [];
+  return [
+    { content: '编辑', value: 'edit' },
+    { content: '重置密码', value: 'reset' },
+    { content: Number(row.status) === 1 ? '停用' : '启用', value: 'toggle' },
+  ];
+}
+
+function handleStaffMobileAction(value: unknown, row: StaffRecord) {
+  if (value === 'edit') openEditDialog(row);
+  else if (value === 'reset') openResetDialog(row);
+  else if (value === 'toggle') handleToggleStatus(row);
 }
 
 function openCreateDialog() {
