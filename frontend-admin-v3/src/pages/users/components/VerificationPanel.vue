@@ -209,6 +209,7 @@ import { computed, onMounted, reactive, ref } from 'vue';
 
 import { adminApi, type SettingItem, type VerificationRecord } from '@/api/admin';
 import { formatDateTime } from '@/utils/format';
+import { required } from '@/utils/formRules';
 import { useUserStore } from '@/store';
 
 const userStore = useUserStore();
@@ -276,12 +277,12 @@ const pagination = computed(() => ({
 }));
 
 const apiRules: Record<string, FormRule[]> = {
-  verification_biz_code: [{ required: true, message: '请选择认证方式', type: 'error' }],
+  verification_biz_code: [required('请选择认证方式')],
 };
 
 const feeRules: Record<string, FormRule[]> = {
-  free_attempts: [{ required: true, message: '请输入免费认证次数', type: 'error' }],
-  retry_fee: [{ required: true, message: '请输入再次认证费用', type: 'error' }],
+  free_attempts: [required('请输入免费认证次数')],
+  retry_fee: [required('请输入再次认证费用')],
 };
 
 function setActivePane(value: string | number) {

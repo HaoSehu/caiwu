@@ -207,6 +207,7 @@ import {
 } from '@/api/admin';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { fieldValue, formatDateTime } from '@/utils/format';
+import { required } from '@/utils/formRules';
 import { errorMessage } from '@/utils/userMessage';
 
 import './index.less';
@@ -249,7 +250,7 @@ const statusOptions = [
   { label: '已下线', value: 2 },
 ];
 const categoryRules: Record<string, FormRule[]> = {
-  name: [{ required: true, message: '请输入分类名称', type: 'error' }],
+  name: [required('请输入分类名称')],
 };
 
 const contentType = computed<ContentType>(() => (route.meta.contentType === 'help' ? 'help' : 'notice'));

@@ -653,6 +653,7 @@ import { supplierApi } from '@/api/supplier';
 import { userApi, type AdminUser, type PageParams } from '@/api/user';
 import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
 import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
+import { required } from '@/utils/formRules';
 import { toUserMessage, errorMessage } from '@/utils/userMessage';
 import { INVOICE_STATUS_MAP, SERVICE_STATUS_MAP, toLabelMap, toSelectOptions, toTagTypeMap } from '@shared/statusConfig';
 
@@ -768,31 +769,31 @@ const editRules: Record<string, FormRule[]> = {
   password: [{ validator: (val) => !val || String(val).length >= 6, message: '密码至少需要 6 位', type: 'warning' }],
 };
 const rechargeRules: Record<string, FormRule[]> = {
-  amount: [{ required: true, message: '请输入金额', type: 'error' }],
-  remark: [{ required: true, message: '请填写操作备注', type: 'error' }],
+  amount: [required('请输入金额')],
+  remark: [required('请填写操作备注')],
 };
 const addServiceRules: Record<string, FormRule[]> = {
-  product_id: [{ required: true, message: '请选择商品', type: 'error' }],
-  billing_cycle: [{ required: true, message: '请选择计费周期', type: 'error' }],
-  status: [{ required: true, message: '请选择服务状态', type: 'error' }],
-  amount: [{ required: true, message: '请输入服务金额', type: 'error' }],
+  product_id: [required('请选择商品')],
+  billing_cycle: [required('请选择计费周期')],
+  status: [required('请选择服务状态')],
+  amount: [required('请输入服务金额')],
 };
 const serviceUpstreamRules: Record<string, FormRule[]> = {
   supplier_id: [{ validator: validateUpstreamPair, message: '选择上游接口时必须填写上游实例 ID', type: 'error' }],
   upstream_host_id: [{ validator: validateUpstreamPair, message: '填写上游实例 ID 时必须选择上游接口', type: 'error' }],
 };
 const servicePricingRules: Record<string, FormRule[]> = {
-  amount: [{ required: true, message: '请输入购买价格', type: 'error' }],
+  amount: [required('请输入购买价格')],
 };
 const resetPasswordRules: Record<string, FormRule[]> = {
   password: [{ validator: (val) => String(val || '').length >= 8, message: '密码长度至少 8 位', type: 'error' }],
 };
 const manualProvisionRules: Record<string, FormRule[]> = {
-  upstream_host_id: [{ required: true, message: '请输入上游实例 ID', type: 'error' }],
+  upstream_host_id: [required('请输入上游实例 ID')],
 };
 const refundRules: Record<string, FormRule[]> = {
-  refund_method: [{ required: true, message: '请选择退款方式', type: 'error' }],
-  remark: [{ required: true, message: '请填写退款原因', type: 'error' }],
+  refund_method: [required('请选择退款方式')],
+  remark: [required('请填写退款原因')],
 };
 
 const serviceStatusLabelMap = toLabelMap(SERVICE_STATUS_MAP);

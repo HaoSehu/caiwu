@@ -159,6 +159,7 @@ import { useRouter } from 'vue-router';
 
 import { userApi, type AdminUser } from '@/api/user';
 import { formatDateTime, formatMoney } from '@/utils/format';
+import { required } from '@/utils/formRules';
 
 import './index.less';
 
@@ -199,10 +200,10 @@ const createFormRef = ref<FormInstanceFunctions>();
 const createForm = reactive({ email: '', nickname: '', phone: '', password: '' });
 const createRules: Record<string, FormRule[]> = {
   email: [
-    { required: true, message: '请输入有效邮箱', type: 'error' },
+    required('请输入有效邮箱'),
     { email: true, message: '请输入有效邮箱', type: 'warning' },
   ],
-  password: [{ required: true, message: '请输入密码', type: 'error' }],
+  password: [required('请输入密码')],
 };
 
 async function loadList() {

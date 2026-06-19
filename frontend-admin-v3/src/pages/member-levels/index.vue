@@ -123,6 +123,7 @@ import type { DropdownOption, FormInstanceFunctions, FormRule, PrimaryTableCol }
 
 import { adminApi, type MemberLevelPayload, type MemberLevelRecord } from '@/api/admin';
 import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
+import { required } from '@/utils/formRules';
 import { errorMessage } from '@/utils/userMessage';
 
 import './index.less';
@@ -149,9 +150,9 @@ const isMobile = computed(() => window.matchMedia?.('(max-width: 768px)').matche
 const form = reactive<MemberLevelForm>(createDefaultForm());
 
 const rules: Record<string, FormRule[]> = {
-  name: [{ required: true, message: '请输入等级名称', type: 'error' }],
-  sales_amount_min: [{ required: true, message: '请输入累计销售额下限', type: 'error' }],
-  reward_rate: [{ required: true, message: '请输入返利比例', type: 'error' }],
+  name: [required('请输入等级名称')],
+  sales_amount_min: [required('请输入累计销售额下限')],
+  reward_rate: [required('请输入返利比例')],
 };
 
 const columns: PrimaryTableCol<MemberLevelRecord>[] = [
