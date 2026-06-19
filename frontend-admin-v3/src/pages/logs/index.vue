@@ -311,6 +311,7 @@ import type { PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 
 import { adminApi, type LaravelPagination, type LogListParams } from '@/api/admin';
 import { fieldValue } from '@/utils/format';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { errorMessage } from '@/utils/userMessage';
 import { AdminPermissions } from '@/constants/permissions';
 import { useUserStore } from '@/store';
@@ -509,7 +510,8 @@ const logTableColumns = computed(() => (isLogTab(activeTab.value) ? baseLogColum
 const keywordPlaceholder = computed(() => currentLogMeta.value.keyword);
 const statusPlaceholder = computed(() => (activeTab.value === 'api' ? '全部状态码' : '全部发送状态'));
 const statusOptions = computed(() => (activeTab.value === 'api' ? httpStatusOptions : notifyStatusOptions));
-const drawerSize = computed(() => (window.matchMedia?.('(max-width: 768px)').matches ? '100%' : '700px'));
+const isMobile = useMediaQuery('(max-width: 768px)');
+const drawerSize = computed(() => (isMobile.value ? '100%' : '700px'));
 const detailTitle = computed(() => `${currentLogMeta.value.title}详情`);
 const scheduleTasks = computed(() => asArray(scheduleOverview.value.tasks));
 const scheduleLogs = computed(() => asArray(scheduleOverview.value.recent_logs));

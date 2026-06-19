@@ -282,6 +282,7 @@ import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import type { FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
 
 import { adminApi, type CouponCampaignPayload, type CouponCampaignRecord } from '@/api/admin';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { formatDateTime } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
@@ -337,7 +338,7 @@ const total = ref(0);
 const page = ref(1);
 const pageSize = ref(20);
 const rowActionState = reactive<Record<string, string>>({});
-const isMobile = computed(() => window.matchMedia?.('(max-width: 768px)').matches || false);
+const isMobile = useMediaQuery('(max-width: 768px)');
 
 const filters = reactive({
   keyword: '',
