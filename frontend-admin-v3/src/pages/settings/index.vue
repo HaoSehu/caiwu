@@ -105,15 +105,15 @@
     </template>
 
     <template v-else>
-      <t-card :bordered="false" :loading="heroLoading" class="hero-card">
+      <t-card :bordered="false" :loading="heroLoading" class="slides-config-card">
         <t-alert
           v-if="heroDirty"
           theme="warning"
           message="当前存在未保存修改。保存后官网首页最长约 2 分钟同步。"
         />
 
-        <section class="hero-section">
-          <div class="hero-section-head">
+        <section class="slides-section">
+          <div class="slides-section-head">
             <div>
               <h2>轮播项（{{ heroForm.slides.length }} / {{ maxSlides }}）</h2>
               <p>每个轮播项包含导航名称、主标题、描述和两个按钮。</p>
@@ -183,8 +183,8 @@
           </article>
         </section>
 
-        <section class="hero-section">
-          <div class="hero-section-head">
+        <section class="slides-section">
+          <div class="slides-section-head">
             <div>
               <h2>底部特色卡片（{{ heroForm.features.length }} / {{ maxFeatures }}）</h2>
               <p>用于官网首页轮播下方的横向卡片组。</p>

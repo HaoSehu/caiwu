@@ -1,4 +1,6 @@
 // ─── Dashboard ────────────────────────────────────────────────
+import type { PagedListParams } from '../types';
+
 export interface DashboardStats {
   today?: {
     income?: number | string;
@@ -45,13 +47,10 @@ export interface MonthlyRevenue {
 }
 
 // ─── Invoice ──────────────────────────────────────────────────
-export interface InvoiceListParams {
-  keyword?: string;
+export interface InvoiceListParams extends PagedListParams {
   type?: string;
   status?: string | number;
   date_range?: string[] | null;
-  page?: number;
-  page_size?: number;
 }
 
 export interface InvoiceRecord {
@@ -63,8 +62,6 @@ export interface InvoiceRecord {
   amount?: number | string;
   paid_amount?: number | string;
   status?: number | string;
-  raw_status?: number | string;
-  status_label?: string;
   created_at?: string;
   paid_at?: string | null;
   due_date?: string | null;
@@ -91,14 +88,11 @@ export interface InvoiceDetailResponse extends InvoiceRecord {
 }
 
 // ─── Order ────────────────────────────────────────────────────
-export interface OrderListParams {
-  keyword?: string;
+export interface OrderListParams extends PagedListParams {
   type?: string;
   kind?: string;
   status?: string | number;
   date_range?: string[] | null;
-  page?: number;
-  page_size?: number;
 }
 
 export interface OrderRecord {
@@ -117,19 +111,15 @@ export interface OrderRecord {
   amount?: number | string;
   quantity?: number | string;
   status?: number | string;
-  status_label?: string;
   invoice?: Record<string, unknown> | null;
   created_at?: string;
   [key: string]: unknown;
 }
 
 // ─── Finance Menu ─────────────────────────────────────────────
-export interface RechargeListParams {
-  keyword?: string;
+export interface RechargeListParams extends PagedListParams {
   status?: string | number;
   date_range?: string[] | null;
-  page?: number;
-  page_size?: number;
 }
 
 export interface RechargeRecord {
@@ -138,7 +128,6 @@ export interface RechargeRecord {
   invoice_no?: string;
   invoice_id?: number | string | null;
   gateway?: string;
-  gateway_label?: string;
   trade_no?: string;
   user?: Record<string, unknown>;
   payment?: Record<string, unknown> | null;
@@ -147,7 +136,6 @@ export interface RechargeRecord {
   amount?: number | string;
   paid_amount?: number | string;
   status?: number | string;
-  status_label?: string;
   created_at?: string;
   paid_at?: string | null;
   [key: string]: unknown;
@@ -298,6 +286,10 @@ export interface MediaFileRecord {
   filename?: string;
   url?: string;
   path?: string;
+  mime_type?: string;
+  size?: number;
+  group?: string;
+  created_at?: string;
   width?: number;
   height?: number;
   [key: string]: unknown;
@@ -312,6 +304,7 @@ export interface HomeHeroSlide {
   primary_path?: string;
   secondary_text?: string;
   secondary_path?: string;
+  video?: string;
   [key: string]: unknown;
 }
 
@@ -329,6 +322,11 @@ export interface HomeHeroPayload {
   defaults?: {
     slides?: HomeHeroSlide[];
     features?: HomeHeroFeature[];
+  };
+  options?: {
+    shape?: string[];
+    ribbon_type?: string[];
+    videos?: MediaFileRecord[];
   };
   [key: string]: unknown;
 }

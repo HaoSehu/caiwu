@@ -41,6 +41,11 @@ export const contentApi = {
 };
 
 export const mediaApi = {
+  list: (params?: { group?: string; keyword?: string; page?: number; page_size?: number }) =>
+    request.get<{ list?: MediaFileRecord[]; total?: number; page?: number; page_size?: number }>({
+      url: '/admin/media-files',
+      params,
+    }),
   upload: (data: FormData) =>
     request.post<MediaFileRecord>({
       url: '/admin/media-files',

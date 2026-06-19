@@ -11,8 +11,8 @@
       "system": "系统"
     },
     "sourceAppLabels": {
-      "frontend-admin": "管理端前端",
-      "frontend-client": "客户端前端"
+      "frontend-admin-v3": "管理端前端",
+      "frontend-user-v3-www": "官网/用户入口"
     },
     "accessLabels": {
       "public": "公开",
@@ -53,16 +53,16 @@
       "guards": [],
       "handler": "AuthController@info",
       "sourceApps": [
-        "frontend-admin",
-        "frontend-client"
+        "frontend-admin-v3",
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
         "管理端前端",
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/auth.js",
-        "frontend-client/src/api/auth.js"
+        "frontend-admin-v3/src/api/auth.js",
+        "frontend-user-v3-www/src/api/auth.js"
       ]
     },
     {
@@ -85,16 +85,16 @@
       "guards": [],
       "handler": "AuthController@logout",
       "sourceApps": [
-        "frontend-admin",
-        "frontend-client"
+        "frontend-admin-v3",
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
         "管理端前端",
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/auth.js",
-        "frontend-client/src/api/auth.js"
+        "frontend-admin-v3/src/api/auth.js",
+        "frontend-user-v3-www/src/api/auth.js"
       ]
     },
     {
@@ -117,13 +117,13 @@
       "guards": [],
       "handler": "AuthController@updateProfile",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/auth.js"
+        "frontend-admin-v3/src/api/auth.js"
       ]
     },
     {
@@ -148,16 +148,16 @@
       ],
       "handler": "AuthController@login",
       "sourceApps": [
-        "frontend-admin",
-        "frontend-client"
+        "frontend-admin-v3",
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
         "管理端前端",
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/auth.js",
-        "frontend-client/src/api/auth.js"
+        "frontend-admin-v3/src/api/auth.js",
+        "frontend-user-v3-www/src/api/auth.js"
       ]
     },
     {
@@ -180,13 +180,13 @@
       "guards": [],
       "handler": "ContentArticleController@index",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -209,13 +209,13 @@
       "guards": [],
       "handler": "ContentArticleController@store",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -238,13 +238,13 @@
       "guards": [],
       "handler": "ContentArticleController@show",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -267,13 +267,13 @@
       "guards": [],
       "handler": "ContentArticleController@update",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -296,13 +296,13 @@
       "guards": [],
       "handler": "ContentArticleController@destroy",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -325,13 +325,13 @@
       "guards": [],
       "handler": "ContentCategoryController@index",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -354,13 +354,13 @@
       "guards": [],
       "handler": "ContentCategoryController@store",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -383,13 +383,13 @@
       "guards": [],
       "handler": "ContentCategoryController@update",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -412,13 +412,13 @@
       "guards": [],
       "handler": "ContentCategoryController@destroy",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -441,13 +441,13 @@
       "guards": [],
       "handler": "ContentArticleController@summary",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -470,13 +470,13 @@
       "guards": [],
       "handler": "CouponCampaignController@index",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -499,13 +499,13 @@
       "guards": [],
       "handler": "CouponCampaignController@store",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -528,13 +528,13 @@
       "guards": [],
       "handler": "CouponCampaignController@update",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -557,13 +557,13 @@
       "guards": [],
       "handler": "CouponCampaignController@destroy",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -586,13 +586,13 @@
       "guards": [],
       "handler": "CouponCampaignController@toggleStatus",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -615,13 +615,13 @@
       "guards": [],
       "handler": "CouponCampaignController@trigger",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -644,13 +644,13 @@
       "guards": [],
       "handler": "CouponCampaignController@summary",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -673,13 +673,13 @@
       "guards": [],
       "handler": "CouponController@index",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -702,13 +702,13 @@
       "guards": [],
       "handler": "CouponController@store",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -731,13 +731,13 @@
       "guards": [],
       "handler": "CouponController@update",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -760,13 +760,13 @@
       "guards": [],
       "handler": "CouponController@destroy",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -789,13 +789,13 @@
       "guards": [],
       "handler": "CouponController@toggleStatus",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -818,13 +818,13 @@
       "guards": [],
       "handler": "CouponController@productTree",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -847,13 +847,13 @@
       "guards": [],
       "handler": "CouponController@summary",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -876,16 +876,16 @@
       "guards": [],
       "handler": "DashboardController@index",
       "sourceApps": [
-        "frontend-admin",
-        "frontend-client"
+        "frontend-admin-v3",
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
         "管理端前端",
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js",
-        "frontend-client/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js",
+        "frontend-user-v3-www/src/api/admin.js"
       ]
     },
     {
@@ -908,13 +908,13 @@
       "guards": [],
       "handler": "DashboardController@recentOrders",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -937,13 +937,13 @@
       "guards": [],
       "handler": "DashboardController@stats",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -966,13 +966,13 @@
       "guards": [],
       "handler": "LogController@adminLoginLogs",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -995,13 +995,13 @@
       "guards": [],
       "handler": "LogController@apiLogs",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -1024,13 +1024,13 @@
       "guards": [],
       "handler": "LogController@cleanup",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -1053,13 +1053,13 @@
       "guards": [],
       "handler": "LogController@cleanupOverview",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -1082,13 +1082,13 @@
       "guards": [],
       "handler": "LogController@emailLogs",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -1111,13 +1111,13 @@
       "guards": [],
       "handler": "LogController@emailLogsSummary",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -1140,13 +1140,13 @@
       "guards": [],
       "handler": "LogController@smsLogs",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -1169,13 +1169,13 @@
       "guards": [],
       "handler": "LogController@smsLogsSummary",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -1198,13 +1198,13 @@
       "guards": [],
       "handler": "LogController@systemLogs",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -1227,13 +1227,13 @@
       "guards": [],
       "handler": "LogController@systemLogsSummary",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -1256,13 +1256,13 @@
       "guards": [],
       "handler": "LogController@taskLogs",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -1285,13 +1285,13 @@
       "guards": [],
       "handler": "LogController@taskLogsSummary",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -1314,13 +1314,13 @@
       "guards": [],
       "handler": "MemberLevelController@index",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -1343,13 +1343,13 @@
       "guards": [],
       "handler": "MemberLevelController@store",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -1372,13 +1372,13 @@
       "guards": [],
       "handler": "MemberLevelController@update",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -1401,13 +1401,13 @@
       "guards": [],
       "handler": "MemberLevelController@destroy",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -1430,16 +1430,16 @@
       "guards": [],
       "handler": "OrderController@index",
       "sourceApps": [
-        "frontend-admin",
-        "frontend-client"
+        "frontend-admin-v3",
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
         "管理端前端",
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js",
-        "frontend-client/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js",
+        "frontend-user-v3-www/src/api/admin.js"
       ]
     },
     {
@@ -1462,16 +1462,16 @@
       "guards": [],
       "handler": "OrderController@show",
       "sourceApps": [
-        "frontend-admin",
-        "frontend-client"
+        "frontend-admin-v3",
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
         "管理端前端",
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js",
-        "frontend-client/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js",
+        "frontend-user-v3-www/src/api/admin.js"
       ]
     },
     {
@@ -1494,16 +1494,16 @@
       "guards": [],
       "handler": "OrderController@cancel",
       "sourceApps": [
-        "frontend-admin",
-        "frontend-client"
+        "frontend-admin-v3",
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
         "管理端前端",
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js",
-        "frontend-client/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js",
+        "frontend-user-v3-www/src/api/admin.js"
       ]
     },
     {
@@ -1526,13 +1526,13 @@
       "guards": [],
       "handler": "OrderController@updatePaymentStatus",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -1555,13 +1555,13 @@
       "guards": [],
       "handler": "ProductCategoryController@index",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/product.js"
+        "frontend-admin-v3/src/api/product.js"
       ]
     },
     {
@@ -1584,13 +1584,13 @@
       "guards": [],
       "handler": "ProductCategoryController@store",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/product.js"
+        "frontend-admin-v3/src/api/product.js"
       ]
     },
     {
@@ -1613,13 +1613,13 @@
       "guards": [],
       "handler": "ProductCategoryController@update",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/product.js"
+        "frontend-admin-v3/src/api/product.js"
       ]
     },
     {
@@ -1642,13 +1642,13 @@
       "guards": [],
       "handler": "ProductCategoryController@destroy",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/product.js"
+        "frontend-admin-v3/src/api/product.js"
       ]
     },
     {
@@ -1671,13 +1671,13 @@
       "guards": [],
       "handler": "ProductCategoryController@reorder",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/product.js"
+        "frontend-admin-v3/src/api/product.js"
       ]
     },
     {
@@ -1815,13 +1815,13 @@
       "guards": [],
       "handler": "ProductTypeController@index",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/product.js"
+        "frontend-admin-v3/src/api/product.js"
       ]
     },
     {
@@ -1844,13 +1844,13 @@
       "guards": [],
       "handler": "ProductTypeController@store",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/product.js"
+        "frontend-admin-v3/src/api/product.js"
       ]
     },
     {
@@ -1873,13 +1873,13 @@
       "guards": [],
       "handler": "ProductTypeController@update",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/product.js"
+        "frontend-admin-v3/src/api/product.js"
       ]
     },
     {
@@ -1902,13 +1902,13 @@
       "guards": [],
       "handler": "ProductTypeController@destroy",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/product.js"
+        "frontend-admin-v3/src/api/product.js"
       ]
     },
     {
@@ -1931,13 +1931,13 @@
       "guards": [],
       "handler": "ProductTypeController@reorder",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/product.js"
+        "frontend-admin-v3/src/api/product.js"
       ]
     },
     {
@@ -1960,13 +1960,13 @@
       "guards": [],
       "handler": "ProductController@index",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/product.js"
+        "frontend-admin-v3/src/api/product.js"
       ]
     },
     {
@@ -1989,13 +1989,13 @@
       "guards": [],
       "handler": "ProductController@store",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/product.js"
+        "frontend-admin-v3/src/api/product.js"
       ]
     },
     {
@@ -2018,13 +2018,13 @@
       "guards": [],
       "handler": "ProductController@show",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/product.js"
+        "frontend-admin-v3/src/api/product.js"
       ]
     },
     {
@@ -2047,13 +2047,13 @@
       "guards": [],
       "handler": "ProductController@update",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/product.js"
+        "frontend-admin-v3/src/api/product.js"
       ]
     },
     {
@@ -2076,13 +2076,13 @@
       "guards": [],
       "handler": "ProductController@destroy",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/product.js"
+        "frontend-admin-v3/src/api/product.js"
       ]
     },
     {
@@ -2105,13 +2105,13 @@
       "guards": [],
       "handler": "ProductController@owners",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/product.js"
+        "frontend-admin-v3/src/api/product.js"
       ]
     },
     {
@@ -2157,13 +2157,13 @@
       "guards": [],
       "handler": "ProductController@toggleStatus",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/product.js"
+        "frontend-admin-v3/src/api/product.js"
       ]
     },
     {
@@ -2209,13 +2209,13 @@
       "guards": [],
       "handler": "ProductController@batchUpdateProvisionHostname",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/product.js"
+        "frontend-admin-v3/src/api/product.js"
       ]
     },
     {
@@ -2238,13 +2238,13 @@
       "guards": [],
       "handler": "ProductController@reorder",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/product.js"
+        "frontend-admin-v3/src/api/product.js"
       ]
     },
     {
@@ -2267,13 +2267,13 @@
       "guards": [],
       "handler": "ProductController@summary",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/product.js"
+        "frontend-admin-v3/src/api/product.js"
       ]
     },
     {
@@ -2319,13 +2319,13 @@
       "guards": [],
       "handler": "ReferralController@overview",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -2348,13 +2348,13 @@
       "guards": [],
       "handler": "ReferralRewardController@index",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -2377,13 +2377,13 @@
       "guards": [],
       "handler": "ReferralWithdrawalController@index",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -2406,13 +2406,13 @@
       "guards": [],
       "handler": "ReferralWithdrawalController@approve",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -2435,13 +2435,13 @@
       "guards": [],
       "handler": "ReferralWithdrawalController@reject",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -2464,13 +2464,13 @@
       "guards": [],
       "handler": "ScheduleTaskController@overview",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -2493,13 +2493,13 @@
       "guards": [],
       "handler": "ScheduleTaskController@trigger",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -2522,13 +2522,13 @@
       "guards": [],
       "handler": "ServiceController@index",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/service.js"
+        "frontend-admin-v3/src/api/service.js"
       ]
     },
     {
@@ -2551,13 +2551,13 @@
       "guards": [],
       "handler": "ServiceController@batchUpdateCustomHostnames",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/service.js"
+        "frontend-admin-v3/src/api/service.js"
       ]
     },
     {
@@ -2580,13 +2580,13 @@
       "guards": [],
       "handler": "SettingController@index",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -2609,13 +2609,13 @@
       "guards": [],
       "handler": "SettingController@update",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -2638,13 +2638,13 @@
       "guards": [],
       "handler": "SupplierController@index",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/supplier.js"
+        "frontend-admin-v3/src/api/supplier.js"
       ]
     },
     {
@@ -2667,13 +2667,13 @@
       "guards": [],
       "handler": "SupplierController@store",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/supplier.js"
+        "frontend-admin-v3/src/api/supplier.js"
       ]
     },
     {
@@ -2696,13 +2696,13 @@
       "guards": [],
       "handler": "SupplierController@show",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/supplier.js"
+        "frontend-admin-v3/src/api/supplier.js"
       ]
     },
     {
@@ -2725,13 +2725,13 @@
       "guards": [],
       "handler": "SupplierController@update",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/supplier.js"
+        "frontend-admin-v3/src/api/supplier.js"
       ]
     },
     {
@@ -2754,13 +2754,13 @@
       "guards": [],
       "handler": "SupplierController@destroy",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/supplier.js"
+        "frontend-admin-v3/src/api/supplier.js"
       ]
     },
     {
@@ -2783,13 +2783,13 @@
       "guards": [],
       "handler": "SupplierController@balance",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/supplier.js"
+        "frontend-admin-v3/src/api/supplier.js"
       ]
     },
     {
@@ -2812,13 +2812,13 @@
       "guards": [],
       "handler": "SupplierController@products",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/supplier.js"
+        "frontend-admin-v3/src/api/supplier.js"
       ]
     },
     {
@@ -2841,13 +2841,13 @@
       "guards": [],
       "handler": "SupplierController@productConfigTemplate",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/supplier.js"
+        "frontend-admin-v3/src/api/supplier.js"
       ]
     },
     {
@@ -2893,13 +2893,13 @@
       "guards": [],
       "handler": "SupplierController@toggleStatus",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/supplier.js"
+        "frontend-admin-v3/src/api/supplier.js"
       ]
     },
     {
@@ -2922,13 +2922,13 @@
       "guards": [],
       "handler": "SupplierController@summary",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/supplier.js"
+        "frontend-admin-v3/src/api/supplier.js"
       ]
     },
     {
@@ -2951,13 +2951,13 @@
       "guards": [],
       "handler": "TicketController@index",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -2980,13 +2980,13 @@
       "guards": [],
       "handler": "TicketController@show",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -3009,13 +3009,13 @@
       "guards": [],
       "handler": "TicketController@assign",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -3038,13 +3038,13 @@
       "guards": [],
       "handler": "TicketController@close",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -3067,13 +3067,13 @@
       "guards": [],
       "handler": "TicketController@reply",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -3096,13 +3096,13 @@
       "guards": [],
       "handler": "TicketController@adminUsers",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -3125,13 +3125,13 @@
       "guards": [],
       "handler": "TicketController@summary",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -3154,13 +3154,13 @@
       "guards": [],
       "handler": "TicketController@uploadImage",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -3183,16 +3183,16 @@
       "guards": [],
       "handler": "UserController@index",
       "sourceApps": [
-        "frontend-admin",
-        "frontend-client"
+        "frontend-admin-v3",
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
         "管理端前端",
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/user.js",
-        "frontend-client/src/api/user.js"
+        "frontend-admin-v3/src/api/user.js",
+        "frontend-user-v3-www/src/api/user.js"
       ]
     },
     {
@@ -3215,16 +3215,16 @@
       "guards": [],
       "handler": "UserController@store",
       "sourceApps": [
-        "frontend-admin",
-        "frontend-client"
+        "frontend-admin-v3",
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
         "管理端前端",
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/user.js",
-        "frontend-client/src/api/user.js"
+        "frontend-admin-v3/src/api/user.js",
+        "frontend-user-v3-www/src/api/user.js"
       ]
     },
     {
@@ -3247,16 +3247,16 @@
       "guards": [],
       "handler": "UserController@show",
       "sourceApps": [
-        "frontend-admin",
-        "frontend-client"
+        "frontend-admin-v3",
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
         "管理端前端",
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/user.js",
-        "frontend-client/src/api/user.js"
+        "frontend-admin-v3/src/api/user.js",
+        "frontend-user-v3-www/src/api/user.js"
       ]
     },
     {
@@ -3279,16 +3279,16 @@
       "guards": [],
       "handler": "UserController@update",
       "sourceApps": [
-        "frontend-admin",
-        "frontend-client"
+        "frontend-admin-v3",
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
         "管理端前端",
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/user.js",
-        "frontend-client/src/api/user.js"
+        "frontend-admin-v3/src/api/user.js",
+        "frontend-user-v3-www/src/api/user.js"
       ]
     },
     {
@@ -3311,16 +3311,16 @@
       "guards": [],
       "handler": "UserController@destroy",
       "sourceApps": [
-        "frontend-admin",
-        "frontend-client"
+        "frontend-admin-v3",
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
         "管理端前端",
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/user.js",
-        "frontend-client/src/api/user.js"
+        "frontend-admin-v3/src/api/user.js",
+        "frontend-user-v3-www/src/api/user.js"
       ]
     },
     {
@@ -3343,13 +3343,13 @@
       "guards": [],
       "handler": "UserController@balanceLogs",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/user.js"
+        "frontend-admin-v3/src/api/user.js"
       ]
     },
     {
@@ -3372,13 +3372,13 @@
       "guards": [],
       "handler": "UserController@emailLogs",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/user.js"
+        "frontend-admin-v3/src/api/user.js"
       ]
     },
     {
@@ -3401,13 +3401,13 @@
       "guards": [],
       "handler": "UserController@invoices",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/user.js"
+        "frontend-admin-v3/src/api/user.js"
       ]
     },
     {
@@ -3430,13 +3430,13 @@
       "guards": [],
       "handler": "UserController@invoiceDetail",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/user.js"
+        "frontend-admin-v3/src/api/user.js"
       ]
     },
     {
@@ -3482,13 +3482,13 @@
       "guards": [],
       "handler": "UserController@refundInvoice",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/user.js"
+        "frontend-admin-v3/src/api/user.js"
       ]
     },
     {
@@ -3534,13 +3534,13 @@
       "guards": [],
       "handler": "UserController@loginAs",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/user.js"
+        "frontend-admin-v3/src/api/user.js"
       ]
     },
     {
@@ -3563,13 +3563,13 @@
       "guards": [],
       "handler": "UserController@operationLogs",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/user.js"
+        "frontend-admin-v3/src/api/user.js"
       ]
     },
     {
@@ -3592,16 +3592,16 @@
       "guards": [],
       "handler": "UserController@recharge",
       "sourceApps": [
-        "frontend-admin",
-        "frontend-client"
+        "frontend-admin-v3",
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
         "管理端前端",
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/user.js",
-        "frontend-client/src/api/user.js"
+        "frontend-admin-v3/src/api/user.js",
+        "frontend-user-v3-www/src/api/user.js"
       ]
     },
     {
@@ -3624,13 +3624,13 @@
       "guards": [],
       "handler": "UserController@services",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/user.js"
+        "frontend-admin-v3/src/api/user.js"
       ]
     },
     {
@@ -3653,13 +3653,13 @@
       "guards": [],
       "handler": "UserController@storeService",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/user.js"
+        "frontend-admin-v3/src/api/user.js"
       ]
     },
     {
@@ -3682,13 +3682,13 @@
       "guards": [],
       "handler": "UserController@serviceDetail",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/user.js"
+        "frontend-admin-v3/src/api/user.js"
       ]
     },
     {
@@ -3711,13 +3711,13 @@
       "guards": [],
       "handler": "UserController@destroyService",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/user.js"
+        "frontend-admin-v3/src/api/user.js"
       ]
     },
     {
@@ -3740,13 +3740,13 @@
       "guards": [],
       "handler": "UserController@serviceBaseDetail",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/user.js"
+        "frontend-admin-v3/src/api/user.js"
       ]
     },
     {
@@ -3769,13 +3769,13 @@
       "guards": [],
       "handler": "UserController@manualProvisionService",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/user.js"
+        "frontend-admin-v3/src/api/user.js"
       ]
     },
     {
@@ -3798,13 +3798,13 @@
       "guards": [],
       "handler": "UserController@updateServiceMeta",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/user.js"
+        "frontend-admin-v3/src/api/user.js"
       ]
     },
     {
@@ -3827,13 +3827,13 @@
       "guards": [],
       "handler": "UserController@serviceModuleStatus",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/user.js"
+        "frontend-admin-v3/src/api/user.js"
       ]
     },
     {
@@ -3856,13 +3856,13 @@
       "guards": [],
       "handler": "UserController@serviceResetPassword",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/user.js"
+        "frontend-admin-v3/src/api/user.js"
       ]
     },
     {
@@ -3885,13 +3885,13 @@
       "guards": [],
       "handler": "UserController@servicePower",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/user.js"
+        "frontend-admin-v3/src/api/user.js"
       ]
     },
     {
@@ -3914,13 +3914,13 @@
       "guards": [],
       "handler": "UserController@serviceReinstall",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/user.js"
+        "frontend-admin-v3/src/api/user.js"
       ]
     },
     {
@@ -3943,13 +3943,13 @@
       "guards": [],
       "handler": "UserController@serviceReinstallOptions",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/user.js"
+        "frontend-admin-v3/src/api/user.js"
       ]
     },
     {
@@ -3972,13 +3972,13 @@
       "guards": [],
       "handler": "UserController@serviceRemoteStatus",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/user.js"
+        "frontend-admin-v3/src/api/user.js"
       ]
     },
     {
@@ -4001,13 +4001,13 @@
       "guards": [],
       "handler": "UserController@serviceVnc",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/user.js"
+        "frontend-admin-v3/src/api/user.js"
       ]
     },
     {
@@ -4030,13 +4030,13 @@
       "guards": [],
       "handler": "UserController@refreshServiceStatuses",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/user.js"
+        "frontend-admin-v3/src/api/user.js"
       ]
     },
     {
@@ -4059,13 +4059,13 @@
       "guards": [],
       "handler": "UserController@smsLogs",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/user.js"
+        "frontend-admin-v3/src/api/user.js"
       ]
     },
     {
@@ -4088,13 +4088,13 @@
       "guards": [],
       "handler": "UserController@tickets",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/user.js"
+        "frontend-admin-v3/src/api/user.js"
       ]
     },
     {
@@ -4117,16 +4117,16 @@
       "guards": [],
       "handler": "UserController@toggleStatus",
       "sourceApps": [
-        "frontend-admin",
-        "frontend-client"
+        "frontend-admin-v3",
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
         "管理端前端",
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/user.js",
-        "frontend-client/src/api/user.js"
+        "frontend-admin-v3/src/api/user.js",
+        "frontend-user-v3-www/src/api/user.js"
       ]
     },
     {
@@ -4149,13 +4149,13 @@
       "guards": [],
       "handler": "VerificationController@index",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -4178,13 +4178,13 @@
       "guards": [],
       "handler": "VerificationController@show",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -4207,13 +4207,13 @@
       "guards": [],
       "handler": "VerificationController@history",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -4236,13 +4236,13 @@
       "guards": [],
       "handler": "VerificationController@unbind",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -4265,13 +4265,13 @@
       "guards": [],
       "handler": "VerificationController@summary",
       "sourceApps": [
-        "frontend-admin"
+        "frontend-admin-v3"
       ],
       "sourceAppLabels": [
         "管理端前端"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/admin.js"
+        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -4294,13 +4294,13 @@
       "guards": [],
       "handler": "AuthController@alipayAccount",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/auth.js"
+        "frontend-user-v3-www/src/api/auth.js"
       ]
     },
     {
@@ -4323,13 +4323,13 @@
       "guards": [],
       "handler": "AuthController@updateAlipayAccount",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/auth.js"
+        "frontend-user-v3-www/src/api/auth.js"
       ]
     },
     {
@@ -4352,13 +4352,13 @@
       "guards": [],
       "handler": "AuthController@captchaConfig",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/auth.js"
+        "frontend-user-v3-www/src/api/auth.js"
       ]
     },
     {
@@ -4404,13 +4404,13 @@
       "guards": [],
       "handler": "AuthController@updateEmail",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/views/client/Profile/composables/useSecurityDialogs.js"
+        "frontend-user-v3-www/src/views/client/Profile/composables/useSecurityDialogs.js"
       ]
     },
     {
@@ -4435,13 +4435,13 @@
       ],
       "handler": "AuthController@sendEmailCode",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/auth.js"
+        "frontend-user-v3-www/src/api/auth.js"
       ]
     },
     {
@@ -4464,16 +4464,16 @@
       "guards": [],
       "handler": "AuthController@info",
       "sourceApps": [
-        "frontend-admin",
-        "frontend-client"
+        "frontend-admin-v3",
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
         "管理端前端",
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/auth.js",
-        "frontend-client/src/api/auth.js"
+        "frontend-admin-v3/src/api/auth.js",
+        "frontend-user-v3-www/src/api/auth.js"
       ]
     },
     {
@@ -4498,13 +4498,13 @@
       ],
       "handler": "AuthController@exchangeLoginAsCode",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/auth.js"
+        "frontend-user-v3-www/src/api/auth.js"
       ]
     },
     {
@@ -4527,16 +4527,16 @@
       "guards": [],
       "handler": "AuthController@logout",
       "sourceApps": [
-        "frontend-admin",
-        "frontend-client"
+        "frontend-admin-v3",
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
         "管理端前端",
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/auth.js",
-        "frontend-client/src/api/auth.js"
+        "frontend-admin-v3/src/api/auth.js",
+        "frontend-user-v3-www/src/api/auth.js"
       ]
     },
     {
@@ -4582,13 +4582,13 @@
       "guards": [],
       "handler": "AuthController@updatePhone",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/views/client/Profile/composables/useSecurityDialogs.js"
+        "frontend-user-v3-www/src/views/client/Profile/composables/useSecurityDialogs.js"
       ]
     },
     {
@@ -4613,13 +4613,13 @@
       ],
       "handler": "AuthController@sendPhoneCode",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/auth.js"
+        "frontend-user-v3-www/src/api/auth.js"
       ]
     },
     {
@@ -4642,13 +4642,13 @@
       "guards": [],
       "handler": "AuthController@updateProfile",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/views/client/Profile/composables/useProfileForm.js"
+        "frontend-user-v3-www/src/views/client/Profile/composables/useProfileForm.js"
       ]
     },
     {
@@ -4673,13 +4673,13 @@
       ],
       "handler": "AuthController@resetPassword",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/auth.js"
+        "frontend-user-v3-www/src/api/auth.js"
       ]
     },
     {
@@ -4704,16 +4704,16 @@
       ],
       "handler": "AuthController@login",
       "sourceApps": [
-        "frontend-admin",
-        "frontend-client"
+        "frontend-admin-v3",
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
         "管理端前端",
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/auth.js",
-        "frontend-client/src/api/auth.js"
+        "frontend-admin-v3/src/api/auth.js",
+        "frontend-user-v3-www/src/api/auth.js"
       ]
     },
     {
@@ -4738,16 +4738,16 @@
       ],
       "handler": "AuthController@register",
       "sourceApps": [
-        "frontend-admin",
-        "frontend-client"
+        "frontend-admin-v3",
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
         "管理端前端",
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/auth.js",
-        "frontend-client/src/api/auth.js"
+        "frontend-admin-v3/src/api/auth.js",
+        "frontend-user-v3-www/src/api/auth.js"
       ]
     },
     {
@@ -4770,13 +4770,13 @@
       "guards": [],
       "handler": "FinanceController@balanceLogs",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -4799,13 +4799,13 @@
       "guards": [],
       "handler": "FinanceController@balanceLogsSummary",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -4828,13 +4828,13 @@
       "guards": [],
       "handler": "BlackholeController@query",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -4857,13 +4857,13 @@
       "guards": [],
       "handler": "ContentController@overview",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -4886,13 +4886,13 @@
       "guards": [],
       "handler": "CouponController@index",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -4917,13 +4917,13 @@
       ],
       "handler": "CouponController@claim",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -4946,13 +4946,13 @@
       "guards": [],
       "handler": "CouponController@publicIndex",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -4975,13 +4975,13 @@
       "guards": [],
       "handler": "CouponController@publicSummary",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -5004,13 +5004,13 @@
       "guards": [],
       "handler": "CouponController@summary",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -5033,13 +5033,13 @@
       "guards": [],
       "handler": "ContentController@helpArticles",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -5062,13 +5062,13 @@
       "guards": [],
       "handler": "ContentController@helpDetail",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -5091,13 +5091,13 @@
       "guards": [],
       "handler": "FinanceController@invoices",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -5120,13 +5120,13 @@
       "guards": [],
       "handler": "FinanceController@invoicesSummary",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -5149,13 +5149,13 @@
       "guards": [],
       "handler": "ContentController@notices",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -5178,13 +5178,13 @@
       "guards": [],
       "handler": "ContentController@noticeDetail",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -5207,13 +5207,13 @@
       "guards": [],
       "handler": "OrderController@index",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -5238,13 +5238,13 @@
       ],
       "handler": "OrderController@store",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -5267,13 +5267,13 @@
       "guards": [],
       "handler": "OrderController@show",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -5298,13 +5298,13 @@
       ],
       "handler": "OrderController@cancel",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -5329,13 +5329,13 @@
       ],
       "handler": "OrderController@payByAlipay",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -5360,13 +5360,13 @@
       ],
       "handler": "OrderController@queryAlipayStatus",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -5391,13 +5391,13 @@
       ],
       "handler": "OrderController@payByBalance",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -5420,13 +5420,13 @@
       "guards": [],
       "handler": "OrderController@summary",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -5449,13 +5449,13 @@
       "guards": [],
       "handler": "AuthController@updatePassword",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/views/client/Profile/composables/useSecurityDialogs.js"
+        "frontend-user-v3-www/src/views/client/Profile/composables/useSecurityDialogs.js"
       ]
     },
     {
@@ -5503,13 +5503,13 @@
       ],
       "handler": "RechargeController@store",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -5534,13 +5534,13 @@
       ],
       "handler": "RechargeController@status",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -5563,13 +5563,13 @@
       "guards": [],
       "handler": "ReferralController@accountLogs",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -5592,13 +5592,13 @@
       "guards": [],
       "handler": "ReferralController@overview",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -5621,13 +5621,13 @@
       "guards": [],
       "handler": "ReferralController@rewards",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -5650,13 +5650,13 @@
       "guards": [],
       "handler": "ReferralController@withdrawals",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -5681,13 +5681,13 @@
       ],
       "handler": "ReferralController@applyWithdrawal",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -5710,13 +5710,13 @@
       "guards": [],
       "handler": "ServiceController@index",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -5739,13 +5739,13 @@
       "guards": [],
       "handler": "ServiceController@show",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -5768,13 +5768,13 @@
       "guards": [],
       "handler": "ServiceController@baseDetail",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -5797,13 +5797,13 @@
       "guards": [],
       "handler": "ServiceController@config",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -5826,13 +5826,13 @@
       "guards": [],
       "handler": "ServiceController@moduleStatus",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -5855,13 +5855,13 @@
       "guards": [],
       "handler": "ServiceController@monitor",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -5884,13 +5884,13 @@
       "guards": [],
       "handler": "ServiceController@monitorBatch",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -5913,13 +5913,13 @@
       "guards": [],
       "handler": "ServiceController@natForwardings",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -5944,13 +5944,13 @@
       ],
       "handler": "ServiceController@createNatForwarding",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -5975,13 +5975,13 @@
       ],
       "handler": "ServiceController@deleteNatForwarding",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -6004,13 +6004,13 @@
       "guards": [],
       "handler": "ServiceController@operationLogs",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -6035,13 +6035,13 @@
       ],
       "handler": "ServiceController@resetPassword",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -6066,13 +6066,13 @@
       ],
       "handler": "ServiceController@power",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -6097,13 +6097,13 @@
       ],
       "handler": "ServiceController@reinstall",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -6126,13 +6126,13 @@
       "guards": [],
       "handler": "ServiceController@reinstallOptions",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -6155,13 +6155,13 @@
       "guards": [],
       "handler": "ServiceController@updateRemark",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -6184,13 +6184,13 @@
       "guards": [],
       "handler": "ServiceController@remoteStatus",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -6213,13 +6213,13 @@
       "guards": [],
       "handler": "ServiceController@renewPreview",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -6244,13 +6244,13 @@
       ],
       "handler": "ServiceController@createRenewOrder",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -6275,13 +6275,13 @@
       ],
       "handler": "ServiceController@updateAutoRenew",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -6304,13 +6304,13 @@
       "guards": [],
       "handler": "ServiceController@securityGroups",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -6335,13 +6335,13 @@
       ],
       "handler": "ServiceController@createSecurityGroup",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -6366,13 +6366,13 @@
       ],
       "handler": "ServiceController@deleteSecurityGroup",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -6397,13 +6397,13 @@
       ],
       "handler": "ServiceController@applySecurityGroup",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -6426,13 +6426,13 @@
       "guards": [],
       "handler": "ServiceController@securityGroupRules",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -6457,13 +6457,13 @@
       ],
       "handler": "ServiceController@createSecurityRule",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -6488,13 +6488,13 @@
       ],
       "handler": "ServiceController@deleteSecurityRule",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -6517,13 +6517,13 @@
       "guards": [],
       "handler": "ServiceController@vnc",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -6546,13 +6546,13 @@
       "guards": [],
       "handler": "ServiceController@groupedOverview",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -6575,13 +6575,13 @@
       "guards": [],
       "handler": "TicketController@index",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -6606,13 +6606,13 @@
       ],
       "handler": "TicketController@store",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -6635,13 +6635,13 @@
       "guards": [],
       "handler": "TicketController@show",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -6666,13 +6666,13 @@
       ],
       "handler": "TicketController@close",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -6697,13 +6697,13 @@
       ],
       "handler": "TicketController@reply",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -6726,13 +6726,13 @@
       "guards": [],
       "handler": "TicketController@serviceOptions",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -6757,13 +6757,13 @@
       ],
       "handler": "TicketController@uploadImage",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -6812,13 +6812,13 @@
       "guards": [],
       "handler": "VerificationController@feeConfig",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/views/client/Verification.vue"
+        "frontend-user-v3-www/src/views/client/Verification.vue"
       ]
     },
     {
@@ -6841,14 +6841,14 @@
       "guards": [],
       "handler": "VerificationController@init",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/views/client/Profile/composables/useSecurityDialogs.js",
-        "frontend-client/src/views/client/Verification.vue"
+        "frontend-user-v3-www/src/views/client/Profile/composables/useSecurityDialogs.js",
+        "frontend-user-v3-www/src/views/client/Verification.vue"
       ]
     },
     {
@@ -6871,14 +6871,14 @@
       "guards": [],
       "handler": "VerificationController@qrcode",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/views/client/Profile/composables/useSecurityDialogs.js",
-        "frontend-client/src/views/client/Verification.vue"
+        "frontend-user-v3-www/src/views/client/Profile/composables/useSecurityDialogs.js",
+        "frontend-user-v3-www/src/views/client/Verification.vue"
       ]
     },
     {
@@ -6924,14 +6924,14 @@
       "guards": [],
       "handler": "VerificationController@status",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/views/client/Profile/composables/useSecurityDialogs.js",
-        "frontend-client/src/views/client/Verification.vue"
+        "frontend-user-v3-www/src/views/client/Profile/composables/useSecurityDialogs.js",
+        "frontend-user-v3-www/src/views/client/Verification.vue"
       ]
     },
     {
@@ -6956,13 +6956,13 @@
       ],
       "handler": "ServiceController@vncToken",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/client.js"
+        "frontend-user-v3-www/src/api/client.js"
       ]
     },
     {
@@ -6985,16 +6985,16 @@
       "guards": [],
       "handler": "SiteConfigController@index",
       "sourceApps": [
-        "frontend-admin",
-        "frontend-client"
+        "frontend-admin-v3",
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
         "管理端前端",
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-admin/src/api/site.js",
-        "frontend-client/src/api/site.js"
+        "frontend-admin-v3/src/api/site.js",
+        "frontend-user-v3-www/src/api/site.js"
       ]
     },
     {
@@ -7017,13 +7017,13 @@
       "guards": [],
       "handler": "SiteContentController@overview",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/site.js"
+        "frontend-user-v3-www/src/api/site.js"
       ]
     },
     {
@@ -7046,13 +7046,13 @@
       "guards": [],
       "handler": "SiteContentController@helpArticles",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/site.js"
+        "frontend-user-v3-www/src/api/site.js"
       ]
     },
     {
@@ -7075,13 +7075,13 @@
       "guards": [],
       "handler": "SiteContentController@helpDetail",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/site.js"
+        "frontend-user-v3-www/src/api/site.js"
       ]
     },
     {
@@ -7104,13 +7104,13 @@
       "guards": [],
       "handler": "SiteContentController@notices",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/site.js"
+        "frontend-user-v3-www/src/api/site.js"
       ]
     },
     {
@@ -7133,13 +7133,13 @@
       "guards": [],
       "handler": "SiteContentController@noticeDetail",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/site.js"
+        "frontend-user-v3-www/src/api/site.js"
       ]
     },
     {
@@ -7162,13 +7162,13 @@
       "guards": [],
       "handler": "SiteProductController@productGroups",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/site.js"
+        "frontend-user-v3-www/src/api/site.js"
       ]
     },
     {
@@ -7191,13 +7191,13 @@
       "guards": [],
       "handler": "SiteProductController@groupCatalog",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/site.js"
+        "frontend-user-v3-www/src/api/site.js"
       ]
     },
     {
@@ -7220,13 +7220,13 @@
       "guards": [],
       "handler": "SiteProductController@childGroups",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/site.js"
+        "frontend-user-v3-www/src/api/site.js"
       ]
     },
     {
@@ -7318,13 +7318,13 @@
       "guards": [],
       "handler": "SiteProductController@productTypes",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/site.js"
+        "frontend-user-v3-www/src/api/site.js"
       ]
     },
     {
@@ -7347,13 +7347,13 @@
       "guards": [],
       "handler": "SiteProductController@index",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/site.js"
+        "frontend-user-v3-www/src/api/site.js"
       ]
     },
     {
@@ -7376,13 +7376,13 @@
       "guards": [],
       "handler": "SiteProductController@show",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/site.js"
+        "frontend-user-v3-www/src/api/site.js"
       ]
     },
     {
@@ -7407,13 +7407,13 @@
       ],
       "handler": "SiteProductController@quote",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/site.js"
+        "frontend-user-v3-www/src/api/site.js"
       ]
     },
     {
@@ -7436,13 +7436,13 @@
       "guards": [],
       "handler": "SiteProductController@stock",
       "sourceApps": [
-        "frontend-client"
+        "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "客户端前端"
+        "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-client/src/api/site.js"
+        "frontend-user-v3-www/src/api/site.js"
       ]
     },
     {

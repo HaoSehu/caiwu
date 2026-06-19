@@ -49,6 +49,74 @@ export function normalizeProductIds(value: unknown): number[] {
   return value.map((item) => Number(item || 0)).filter((item) => Number.isFinite(item) && item > 0);
 }
 
+export interface ProductGroupLike {
+  id: string | number;
+  label?: string;
+  name?: string;
+  first_product_group_id?: number | string | null;
+  first_product_group_name?: string | null;
+  second_product_group_id?: number | string | null;
+  second_product_group_name?: string | null;
+  third_product_group_id?: number | string | null;
+  third_product_group_name?: string | null;
+  effective_product_group_id?: number | string | null;
+  effective_product_group_level?: number | string | null;
+  children?: ProductGroupLike[];
+  children_count?: number | string;
+}
+
+export function productGroupLevel(row: ProductGroupLike | null | undefined): number {
+  const explicit = Number(row?.effective_product_group_level || 0);
+  if ([1, 2, 3].includes(explicit)) return explicit;
+  if (Number(row?.third_product_group_id || 0) > 0) return 3;
+  if (Number(row?.second_product_group_id || 0) > 0) return 2;
+  return 1;
+}
+
+export function productGroupEffectiveId(row: ProductGroupLike | null | undefined): number {
+  const explicit = Number(row?.effective_product_group_id || 0);
+  if (explicit > 0) return explicit;
+  const level = productGroupLevel(row);
+  if (level === 3) return Number(row?.third_product_group_id || row?.id || 0);
+  if (level === 2) return Number(row?.second_product_group_id || row?.id || 0);
+  return Number(row?.first_product_group_id || row?.id || 0);
+}
+
+export function productGroupOptionKey(row: ProductGroupLike | null | undefined): string {
+  const id = productGroupEffectiveId(row);
+  return id > 0 ? `${productGroupLevel(row)}:${id}` : '';
+}
+
+export function findProductGroupByKey<T extends ProductGroupLike>(options: T[], key: unknown): T | null {
+  const normalized = String(key || '');
+  if (!normalized) return null;
+  return options.find((item) => productGroupOptionKey(item) === normalized) || null;
+}
+
+export function productGroupOptionLabel(row: ProductGroupLike): string {
+  return String(row.label || row.name || `分类 #${productGroupEffectiveId(row)}`).trim();
+}
+
+export function isSelectableProductGroup(row: ProductGroupLike): boolean {
+  const level = productGroupLevel(row);
+  if (level === 3) return true;
+  if (level !== 2) return false;
+  const childCount = Array.isArray(row.children) ? row.children.length : Number(row.children_count || 0);
+  return childCount <= 0;
+}
+
+export function productGroupPayload(row: ProductGroupLike | null | undefined, prefix = ''): Record<string, number | null> {
+  if (!row) return {};
+  const firstId = Number(row.first_product_group_id || 0) || null;
+  const secondId = Number(row.second_product_group_id || (productGroupLevel(row) === 2 ? row.id : 0) || 0) || null;
+  const thirdId = Number(row.third_product_group_id || (productGroupLevel(row) === 3 ? row.id : 0) || 0) || null;
+  return {
+    [`${prefix}first_product_group_id`]: firstId,
+    [`${prefix}second_product_group_id`]: secondId,
+    [`${prefix}third_product_group_id`]: thirdId,
+  };
+}
+
 /**
  * Format date/time string
  */

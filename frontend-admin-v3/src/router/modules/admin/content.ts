@@ -19,6 +19,34 @@ export const contentRoutes: RouteRecordRaw[] = [
     },
   },
   {
+    path: 'content/notices/create',
+    name: 'AdminContentNoticesCreate',
+    component: () => import('@/pages/content/edit.vue'),
+    meta: {
+      title: {
+        zh_CN: '新增公告',
+        en_US: 'Create Notice',
+      },
+      contentType: 'notice',
+      permission: 'content.list',
+      hidden: true,
+    },
+  },
+  {
+    path: 'content/notices/:id',
+    name: 'AdminContentNoticesEdit',
+    component: () => import('@/pages/content/edit.vue'),
+    meta: {
+      title: {
+        zh_CN: '编辑公告',
+        en_US: 'Edit Notice',
+      },
+      contentType: 'notice',
+      permission: 'content.list',
+      hidden: true,
+    },
+  },
+  {
     path: 'content/help',
     name: 'AdminContentHelp',
     component: () => import('@/pages/content/index.vue'),
@@ -30,6 +58,34 @@ export const contentRoutes: RouteRecordRaw[] = [
       icon: shallowRef(ComponentGridIcon),
       contentType: 'help',
       permission: 'content.list',
+    },
+  },
+  {
+    path: 'content/help/create',
+    name: 'AdminContentHelpCreate',
+    component: () => import('@/pages/content/edit.vue'),
+    meta: {
+      title: {
+        zh_CN: '新增帮助文章',
+        en_US: 'Create Help Article',
+      },
+      contentType: 'help',
+      permission: 'content.list',
+      hidden: true,
+    },
+  },
+  {
+    path: 'content/help/:id',
+    name: 'AdminContentHelpEdit',
+    component: () => import('@/pages/content/edit.vue'),
+    meta: {
+      title: {
+        zh_CN: '编辑帮助文章',
+        en_US: 'Edit Help Article',
+      },
+      contentType: 'help',
+      permission: 'content.list',
+      hidden: true,
     },
   },
   {

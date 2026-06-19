@@ -1,10 +1,9 @@
 import { request } from '@/utils/request';
 
-export interface ServiceListParams {
-  keyword?: string;
+import type { PagedListParams } from './types';
+
+export interface ServiceListParams extends PagedListParams {
   status?: string | number;
-  page?: number;
-  page_size?: number;
 }
 
 export interface ServiceRecord {
@@ -24,7 +23,6 @@ export interface ServiceRecord {
   host_username?: string;
   connection?: Record<string, unknown> | null;
   status?: number | string;
-  status_label?: string;
   amount?: number | string;
   billing_cycle?: string;
   expires_at?: string | null;

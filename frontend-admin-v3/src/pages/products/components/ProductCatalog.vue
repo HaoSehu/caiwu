@@ -12,8 +12,8 @@
           {{ item.label }}
           <span class="type-count">{{ item.usage_count || 0 }}</span>
         </t-button>
-        <t-button variant="outline" :loading="typeLoading" @click="loadProductTypes">刷新种类</t-button>
-        <t-button variant="outline" @click="openTypeManagerDialog()">管理种类</t-button>
+        <t-button variant="outline" :loading="typeLoading" @click="loadProductTypes">刷新一级分类</t-button>
+        <t-button variant="outline" @click="openTypeManagerDialog()">管理一级分类</t-button>
       </div>
     </t-card>
 
@@ -230,8 +230,8 @@
             <strong>{{ item.label }}</strong>
             <span>{{ item.usage_count || 0 }}</span>
           </button>
-          <button type="button" class="mobile-type-tool" :disabled="typeLoading" @click="loadProductTypes">刷新种类</button>
-          <button type="button" class="mobile-type-tool" @click="openTypeManagerDialog()">管理种类</button>
+          <button type="button" class="mobile-type-tool" :disabled="typeLoading" @click="loadProductTypes">刷新一级分类</button>
+          <button type="button" class="mobile-type-tool" @click="openTypeManagerDialog()">管理一级分类</button>
         </aside>
 
         <section class="mobile-category-sidebar">
@@ -327,9 +327,14 @@
                   <t-form-item label="商品名称" name="display_name">
                     <t-input v-model="productForm.display_name" />
                   </t-form-item>
-                  <t-form-item label="所属分类" name="category_id">
-                    <t-select v-model="productForm.category_id" filterable clearable>
-                      <t-option v-for="item in categoryOptions" :key="item.id" :label="item.label || item.name" :value="item.id" />
+                  <t-form-item label="所属分类" name="selected_product_group_key">
+                    <t-select v-model="productForm.selected_product_group_key" filterable clearable>
+                      <t-option
+                        v-for="item in selectableProductGroupOptions"
+                        :key="productGroupOptionKey(item)"
+                        :label="productGroupOptionLabel(item)"
+                        :value="productGroupOptionKey(item)"
+                      />
                     </t-select>
                   </t-form-item>
                   <t-form-item label="状态" name="status"><t-switch v-model="productForm.status" :custom-value="[1, 0]" /></t-form-item>
@@ -549,9 +554,14 @@
     >
       <div class="batch-dialog-summary">将 {{ batchCategoryTargetKeys.length }} 个商品移动到目标分类。</div>
       <t-form :data="batchCategoryForm" label-width="110px">
-        <t-form-item label="目标分类" name="target_category_id">
-          <t-select v-model="batchCategoryForm.target_category_id" filterable clearable placeholder="请选择目标分类">
-            <t-option v-for="item in categoryOptions" :key="item.id" :label="item.label || item.name" :value="item.id" />
+        <t-form-item label="目标分类" name="target_product_group_key">
+          <t-select v-model="batchCategoryForm.target_product_group_key" filterable clearable placeholder="请选择目标分类">
+            <t-option
+              v-for="item in selectableProductGroupOptions"
+              :key="productGroupOptionKey(item)"
+              :label="productGroupOptionLabel(item)"
+              :value="productGroupOptionKey(item)"
+            />
           </t-select>
         </t-form-item>
       </t-form>
@@ -655,9 +665,25 @@
     >
       <t-form ref="categoryFormRef" :data="categoryForm" :rules="categoryRules" label-width="110px">
         <t-form-item label="分类名称" name="name"><t-input v-model="categoryForm.name" /></t-form-item>
-        <t-form-item label="父级分类" name="parent_id">
-          <t-select v-model="categoryForm.parent_id" clearable filterable>
-            <t-option v-for="item in categoryOptions" :key="item.id" :label="item.label || item.name" :value="item.id" />
+        <t-form-item label="二级分类父级" name="product_type">
+          <t-select v-model="categoryForm.product_type" filterable placeholder="请选择一级分类" @change="handleCategoryProductTypeChange">
+            <t-option v-for="item in categoryProductTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </t-select>
+        </t-form-item>
+        <t-form-item label="三级分类父级" name="parent_id">
+          <t-select
+            v-model="categoryForm.parent_id"
+            clearable
+            filterable
+            placeholder="不选择则作为二级分类"
+            :disabled="editingCategoryHasChildren || !categoryParentCategoryOptions.length"
+          >
+            <t-option
+              v-for="item in categoryParentCategoryOptions"
+              :key="item.id"
+              :label="item.label || item.name"
+              :value="item.id"
+            />
           </t-select>
         </t-form-item>
         <t-form-item label="一句话说明" name="slogan"><t-input v-model="categoryForm.slogan" /></t-form-item>
@@ -666,15 +692,15 @@
       </t-form>
     </t-dialog>
 
-    <t-dialog v-model:visible="typeManagerDialogVisible" header="管理种类" width="760px" :footer="false">
+    <t-dialog v-model:visible="typeManagerDialogVisible" header="管理一级分类" width="760px" :footer="false">
       <div class="type-manager">
         <t-form :data="typeForm" label-width="88px" class="type-form">
-          <t-form-item label="种类名称" name="label"><t-input v-model="typeForm.label" /></t-form-item>
+          <t-form-item label="一级分类名称" name="label"><t-input v-model="typeForm.label" /></t-form-item>
           <t-form-item label="图标名称" name="icon"><t-input v-model="typeForm.icon" /></t-form-item>
           <t-form-item>
             <t-space>
               <t-button theme="primary" :loading="typeSubmitting" @click="submitType">
-                {{ editingTypeValue ? '保存种类' : '新增种类' }}
+                {{ editingTypeValue ? '保存一级分类' : '新增一级分类' }}
               </t-button>
               <t-button variant="outline" @click="resetTypeForm">重置</t-button>
             </t-space>
@@ -705,7 +731,7 @@
               <t-button size="small" variant="text" theme="danger" @click="deleteType(item)">删除</t-button>
             </t-space>
           </article>
-          <t-empty v-if="productTypes.length === 0" description="暂无商品种类" />
+          <t-empty v-if="productTypes.length === 0" description="暂无一级分类" />
         </div>
         <div class="type-manager-footer">
           <t-button variant="outline" @click="typeManagerDialogVisible = false">关闭</t-button>
@@ -730,9 +756,16 @@ import {
   formatCount,
   formatMonthlyPrice,
   formatStock,
+  findProductGroupByKey,
+  isSelectableProductGroup,
   mergeProviderTypeOptions,
   normalizeProductIds,
   normalizeProviderTypeOptions,
+  productGroupEffectiveId,
+  productGroupLevel,
+  productGroupOptionKey,
+  productGroupOptionLabel,
+  productGroupPayload,
   providerTypeFallbackLabels,
   providerTypeLabel,
   toPlainRecord,
@@ -829,7 +862,7 @@ const typeForm = reactive({
 const catalogFilters = reactive({
   keyword: '',
   product_type: '',
-  category_id: '' as number | string,
+  product_group_key: '' as string,
   status: '' as number | string,
 });
 
@@ -841,7 +874,7 @@ const batchCategoryDialogVisible = ref(false);
 const batchCategorySubmitting = ref(false);
 const batchCategoryTargetKeys = ref<Array<string | number>>([]);
 const batchCategoryForm = reactive({
-  target_category_id: '' as number | string,
+  target_product_group_key: '' as string,
 });
 const splitProductDialogVisible = ref(false);
 const splitProductPreviewLoading = ref(false);
@@ -861,7 +894,7 @@ const productForm = reactive({
   display_name: '',
   custom_display_name: '',
   product_spec_display: '',
-  category_id: '' as number | string,
+  selected_product_group_key: '' as string,
   monthly_price: 0,
   quarterly_price: 0,
   semiannually_price: 0,
@@ -897,6 +930,7 @@ const categorySubmitting = ref(false);
 const categorySortLoadingId = ref('');
 const categoryForm = reactive({
   name: '',
+  product_type: '' as string,
   parent_id: '' as number | string,
   slogan: '',
   sort_order: 0,
@@ -923,7 +957,7 @@ const productColumns: PrimaryTableCol<ProductRecord>[] = [
   { colKey: 'row-select', type: 'multiple', width: 54, fixed: 'left' },
   { colKey: 'id', title: 'ID', width: 80 },
   { colKey: 'name', title: '商品', minWidth: 220 },
-  { colKey: 'category_name', title: '分类', width: 160 },
+  { colKey: 'effective_product_group_full_name', title: '分类', width: 180 },
   { colKey: 'price', title: '月价格', width: 120 },
   { colKey: 'stock', title: '库存', width: 100 },
   { colKey: 'services_count', title: '现存', width: 100 },
@@ -933,10 +967,11 @@ const productColumns: PrimaryTableCol<ProductRecord>[] = [
 
 const productRules = {
   display_name: [{ required: true, message: '请输入商品名称', trigger: 'blur' }],
-  category_id: [{ required: true, message: '请选择所属分类', trigger: 'change' }],
+  selected_product_group_key: [{ required: true, message: '请选择所属分类', trigger: 'change' }],
 };
 const categoryRules = {
   name: [{ required: true, message: '请输入分类名称', trigger: 'blur' }],
+  product_type: [{ required: true, message: '请选择二级分类父级', trigger: 'change' }],
 };
 
 // --- Computeds ---
@@ -948,14 +983,37 @@ const selectedProductTypeLabel = computed(() => {
   const current = productTypeOptions.value.find((item) => String(item.value) === String(catalogFilters.product_type));
   return current?.label || '全部商品';
 });
+const categoryProductTypeOptions = computed(() => {
+  const options = productTypeOptions.value.filter((item) => String(item.value || '').trim());
+  if (options.length) return options;
+  return catalogFilters.product_type ? [{ value: catalogFilters.product_type, label: selectedProductTypeLabel.value }] : [];
+});
 const categoryTree = computed(() => buildCategoryTree(categoryOptions.value));
 const filteredCategoryTree = computed(() => filterCategoryTree(categoryTree.value, categoryKeyword.value.trim().toLowerCase()));
 const categoryTreeRows = computed(() => flattenCategoryTreeRows(filteredCategoryTree.value));
+const selectableProductGroupOptions = computed(() => categoryOptions.value.filter((item) => isSelectableProductGroup(item)));
 const visibleCategoryCount = computed(() => categoryTreeRows.value.length);
+const editingCategoryHasChildren = computed(() => {
+  const current = editingCategory.value;
+  if (!current) return false;
+  if (Array.isArray(current.children) && current.children.length > 0) return true;
+  return Number(current.children_count || 0) > 0;
+});
+const categoryParentCategoryOptions = computed(() => {
+  const editingCategoryKey = editingCategory.value ? productGroupOptionKey(editingCategory.value) : '';
+  const selectedProductType = String(categoryForm.product_type || catalogFilters.product_type || '');
+
+  return categoryOptions.value.filter((item) => {
+    if (editingCategoryKey && productGroupOptionKey(item) === editingCategoryKey) return false;
+    if (productGroupLevel(item) !== 2) return false;
+    if (selectedProductType && String(item.product_type || '') && String(item.product_type) !== selectedProductType) return false;
+    return true;
+  });
+});
 const selectedCategoryLabel = computed(() => {
-  const selectedId = String(catalogFilters.category_id || '');
-  if (!selectedId) return '全部分类';
-  const category = categoryOptions.value.find((item) => String(item.id) === selectedId);
+  const selectedKey = String(catalogFilters.product_group_key || '');
+  if (!selectedKey) return '全部分类';
+  const category = findProductGroupByKey(categoryOptions.value, selectedKey);
   return category ? categoryDisplayName(category) : '全部分类';
 });
 const splitProductPreviewItems = computed(() => {
@@ -1023,7 +1081,7 @@ const supplierProductCascaderOptions = computed(() => {
 
 // --- Category tree helpers ---
 function categoryIdKey(row: ProductCategoryRecord) {
-  return String(row.id);
+  return productGroupOptionKey(row);
 }
 
 function categoryDisplayName(row: ProductCategoryRecord) {
@@ -1114,36 +1172,41 @@ function syncCategoryExpandedKeys(nodes: CategoryTreeNode[]) {
   categoryExpandedKeys.value = new Set(preserved.length ? preserved : Array.from(defaultKeys));
 }
 
-function findCategoryTreeNode(nodes: CategoryTreeNode[], id: number | string): CategoryTreeNode | null {
-  const targetId = String(id);
+function findCategoryTreeNode(nodes: CategoryTreeNode[], key: number | string): CategoryTreeNode | null {
+  const targetKey = String(key);
   for (const node of nodes) {
-    if (categoryIdKey(node.item) === targetId) return node;
-    const matchedChild = findCategoryTreeNode(node.children, targetId);
+    if (categoryIdKey(node.item) === targetKey) return node;
+    const matchedChild = findCategoryTreeNode(node.children, targetKey);
     if (matchedChild) return matchedChild;
   }
   return null;
 }
 
 function firstDisplayCategoryNode(node: CategoryTreeNode): ProductCategoryRecord {
-  return node.children[0]?.item || node.item;
+  if (isSelectableProductGroup(node.item)) return node.item;
+  for (const child of node.children) {
+    const matched = firstDisplayCategoryNode(child);
+    if (isSelectableProductGroup(matched)) return matched;
+  }
+  return node.item;
 }
 
 function syncDefaultCatalogCategory(nodes = categoryTree.value) {
   if (!nodes.length) {
-    catalogFilters.category_id = '';
+    catalogFilters.product_group_key = '';
     return;
   }
 
-  const selectedId = String(catalogFilters.category_id || '');
-  if (selectedId) {
-    const selectedNode = findCategoryTreeNode(nodes, selectedId);
+  const selectedKey = String(catalogFilters.product_group_key || '');
+  if (selectedKey) {
+    const selectedNode = findCategoryTreeNode(nodes, selectedKey);
     if (selectedNode) {
-      catalogFilters.category_id = firstDisplayCategoryNode(selectedNode).id;
+      catalogFilters.product_group_key = categoryIdKey(firstDisplayCategoryNode(selectedNode));
       return;
     }
   }
 
-  catalogFilters.category_id = firstDisplayCategoryNode(nodes[0]).id;
+  catalogFilters.product_group_key = categoryIdKey(firstDisplayCategoryNode(nodes[0]));
 }
 
 function isCategoryExpanded(row: ProductCategoryRecord) {
@@ -1151,11 +1214,11 @@ function isCategoryExpanded(row: ProductCategoryRecord) {
 }
 
 function isCategoryRowActive(row: ProductCategoryRecord) {
-  const selectedId = String(catalogFilters.category_id || '');
-  if (!selectedId) return false;
-  if (categoryIdKey(row) === selectedId) return true;
-  const node = findCategoryTreeNode(categoryTree.value, row.id);
-  return Boolean(node?.children.length && categoryIdKey(firstDisplayCategoryNode(node)) === selectedId);
+  const selectedKey = String(catalogFilters.product_group_key || '');
+  if (!selectedKey) return false;
+  if (categoryIdKey(row) === selectedKey) return true;
+  const node = findCategoryTreeNode(categoryTree.value, categoryIdKey(row));
+  return Boolean(node?.children.length && categoryIdKey(firstDisplayCategoryNode(node)) === selectedKey);
 }
 
 function toggleCategoryExpanded(row: ProductCategoryRecord) {
@@ -1192,7 +1255,7 @@ function productSpecDisplayName(row: ProductRecord) {
 function productSubtitle(row: ProductRecord) {
   const specName = productSpecDisplayName(row);
   return (
-    [row.name, row.product_type_label, row.product_type, row.category_name]
+    [row.name, row.product_type_label, row.product_type, row.effective_product_group_full_name]
       .map(textValue)
       .find((item) => item && item !== specName) || '-'
   );
@@ -1250,6 +1313,24 @@ function handleCategoryMenuClick(row: ProductCategoryRecord, option: DropdownOpt
   }
 }
 
+function handleCategoryProductTypeChange(value: unknown) {
+  const selectedParent = categoryOptions.value.find((item) => String(item.id) === String(categoryForm.parent_id));
+  if (selectedParent && String(selectedParent.product_type || '') !== String(value || '')) {
+    categoryForm.parent_id = '';
+  }
+}
+
+function resolveFirstProductGroupId(productType: string) {
+  const selectedType = categoryProductTypeOptions.value.find((item) => String(item.value) === String(productType));
+  return selectedType?.first_product_group_id || null;
+}
+
+function resolveSelectedParentCategory() {
+  const parentId = String(categoryForm.parent_id || '');
+  if (!parentId) return null;
+  return categoryOptions.value.find((item) => String(item.id) === parentId) || null;
+}
+
 // --- Data loading ---
 async function loadProductSummary() {
   summaryLoading.value = true;
@@ -1269,7 +1350,7 @@ async function loadProductTypes() {
       catalogFilters.product_type = productTypes.value[0].value;
     }
   } catch (error) {
-    MessagePlugin.error(errorMessage(error, '加载商品种类失败'));
+    MessagePlugin.error(errorMessage(error, '加载一级分类失败'));
   } finally {
     typeLoading.value = false;
   }
@@ -1300,7 +1381,7 @@ function editType(type: ProductTypeRecord) {
 async function submitType() {
   const label = typeForm.label.trim();
   if (!label) {
-    MessagePlugin.warning('请输入种类名称');
+    MessagePlugin.warning('请输入一级分类名称');
     return;
   }
 
@@ -1308,15 +1389,15 @@ async function submitType() {
   try {
     if (editingTypeValue.value) {
       await productApi.updateType(editingTypeValue.value, { label, icon: typeForm.icon || '' });
-      MessagePlugin.success('种类已更新');
+      MessagePlugin.success('一级分类已更新');
     } else {
       await productApi.createType({ label, icon: typeForm.icon || '' });
-      MessagePlugin.success('种类已创建');
+      MessagePlugin.success('一级分类已创建');
     }
     resetTypeForm();
     await refreshTypeCatalog();
   } catch (error) {
-    MessagePlugin.error(errorMessage(error, '保存种类失败'));
+    MessagePlugin.error(errorMessage(error, '保存一级分类失败'));
   } finally {
     typeSubmitting.value = false;
   }
@@ -1330,10 +1411,10 @@ async function toggleTypeHidden(type: ProductTypeRecord) {
       icon: type.icon || '',
       is_hidden: !type.is_hidden,
     });
-    MessagePlugin.success(type.is_hidden ? '种类已显示' : '种类已隐藏');
+    MessagePlugin.success(type.is_hidden ? '一级分类已显示' : '一级分类已隐藏');
     await refreshTypeCatalog();
   } catch (error) {
-    MessagePlugin.error(errorMessage(error, '更新种类失败'));
+    MessagePlugin.error(errorMessage(error, '更新一级分类失败'));
   } finally {
     typeSubmitting.value = false;
   }
@@ -1351,9 +1432,9 @@ async function moveType(value: string, direction: -1 | 1) {
   try {
     await productApi.reorderTypes({ values: nextTypes.map((item) => item.value) });
     productTypes.value = nextTypes;
-    MessagePlugin.success('种类排序已更新');
+    MessagePlugin.success('一级分类排序已更新');
   } catch (error) {
-    MessagePlugin.error(errorMessage(error, '更新种类排序失败'));
+    MessagePlugin.error(errorMessage(error, '更新一级分类排序失败'));
     await loadProductTypes();
   } finally {
     typeSubmitting.value = false;
@@ -1362,7 +1443,7 @@ async function moveType(value: string, direction: -1 | 1) {
 
 function deleteType(type: ProductTypeRecord) {
   const dialog = DialogPlugin.confirm({
-    header: '删除种类',
+    header: '删除一级分类',
     body: `确认删除「${type.label || type.value}」吗？`,
     theme: 'warning',
     confirmBtn: '确认删除',
@@ -1371,16 +1452,16 @@ function deleteType(type: ProductTypeRecord) {
       typeSubmitting.value = true;
       try {
         await productApi.deleteType(type.value);
-        MessagePlugin.success('种类已删除');
+        MessagePlugin.success('一级分类已删除');
         dialog.hide();
         if (catalogFilters.product_type === type.value) {
           catalogFilters.product_type = '';
-          catalogFilters.category_id = '';
+          catalogFilters.product_group_key = '';
         }
         resetTypeForm();
         await refreshTypeCatalog();
       } catch (error) {
-        MessagePlugin.error(errorMessage(error, '删除种类失败'));
+        MessagePlugin.error(errorMessage(error, '删除一级分类失败'));
       } finally {
         typeSubmitting.value = false;
       }
@@ -1413,15 +1494,21 @@ async function handleMoveCategory(row: ProductCategoryRecord, direction: 'up' | 
   const reference = siblings[direction === 'up' ? currentIndex - 1 : currentIndex + 1];
   if (!reference) return;
 
+  const nextSiblings = [...siblings];
+  const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+  [nextSiblings[currentIndex], nextSiblings[targetIndex]] = [nextSiblings[targetIndex], nextSiblings[currentIndex]];
+  const level = productGroupLevel(row);
   const payload: Record<string, unknown> = {
-    category_id: row.id,
-    reference_category_id: reference.id,
-    position: direction === 'up' ? 'before' : 'after',
+    effective_product_group_level: level,
   };
-  const productType = row.product_type || catalogFilters.product_type;
-  if (productType) payload.target_product_type = productType;
-  if (row.parent_id !== undefined && row.parent_id !== null && row.parent_id !== '') {
-    payload.target_parent_id = row.parent_id;
+  if (level === 1) {
+    payload.first_product_group_ids = nextSiblings.map(productGroupEffectiveId);
+  } else if (level === 2) {
+    payload.first_product_group_id = row.first_product_group_id;
+    payload.second_product_group_ids = nextSiblings.map(productGroupEffectiveId);
+  } else {
+    payload.second_product_group_id = row.second_product_group_id;
+    payload.third_product_group_ids = nextSiblings.map(productGroupEffectiveId);
   }
 
   categorySortLoadingId.value = `${row.id}:${direction}`;
@@ -1439,8 +1526,12 @@ async function handleMoveCategory(row: ProductCategoryRecord, direction: 'up' | 
 async function loadProducts() {
   productLoading.value = true;
   try {
+    const selectedGroup = findProductGroupByKey(categoryOptions.value, catalogFilters.product_group_key);
     const response = await productApi.list({
-      ...catalogFilters,
+      keyword: catalogFilters.keyword,
+      product_type: catalogFilters.product_type,
+      status: catalogFilters.status,
+      ...productGroupPayload(selectedGroup),
       page: productPage.value,
       page_size: productPageSize.value,
     });
@@ -1471,7 +1562,7 @@ async function loadProviderTypes() {
 // --- Event handlers ---
 function handleProductTypeChange(value: string) {
   catalogFilters.product_type = value;
-  catalogFilters.category_id = '';
+  catalogFilters.product_group_key = '';
   categoryExpandedKeys.value = new Set();
   productPage.value = 1;
   void loadCategories().then(loadProducts);
@@ -1482,12 +1573,12 @@ function handleMobileProductTypeChange(value: string) {
 }
 
 function handleCategorySelect(row: ProductCategoryRecord) {
-  const node = findCategoryTreeNode(categoryTree.value, row.id);
+  const node = findCategoryTreeNode(categoryTree.value, categoryIdKey(row));
   const target = node ? firstDisplayCategoryNode(node) : row;
   if (node?.children.length) {
     toggleCategoryExpanded(row);
   }
-  catalogFilters.category_id = target.id;
+  catalogFilters.product_group_key = categoryIdKey(target);
   productPage.value = 1;
   void loadProducts();
 }
@@ -1504,7 +1595,7 @@ function handleCatalogSearch() {
 
 function resetCatalogFilters() {
   catalogFilters.keyword = '';
-  catalogFilters.category_id = '';
+  catalogFilters.product_group_key = '';
   catalogFilters.status = '';
   syncDefaultCatalogCategory();
   productPage.value = 1;
@@ -1535,7 +1626,7 @@ function openBatchCategoryDialog() {
   }
 
   batchCategoryTargetKeys.value = targetRows.map((row) => row.id);
-  batchCategoryForm.target_category_id = '';
+  batchCategoryForm.target_product_group_key = '';
   batchCategoryDialogVisible.value = true;
 }
 
@@ -1599,19 +1690,20 @@ function openProvisionHostnameDialog() {
   provisionHostnameDialogVisible.value = true;
 }
 
-function resolveCategoryLabel(id: number | string) {
-  return categoryOptions.value.find((item) => String(item.id) === String(id))?.label || '目标分类';
+function resolveProductGroupLabel(key: string) {
+  const group = findProductGroupByKey(categoryOptions.value, key);
+  return group ? productGroupOptionLabel(group) : '目标分类';
 }
 
 async function submitBatchCategory() {
   const productIds = selectedProductIdsFromKeys(batchCategoryTargetKeys.value);
-  const targetCategoryId = Number(batchCategoryForm.target_category_id);
+  const targetGroup = findProductGroupByKey(categoryOptions.value, batchCategoryForm.target_product_group_key);
 
   if (!productIds.length) {
     MessagePlugin.warning('请先选择商品');
     return;
   }
-  if (!Number.isFinite(targetCategoryId) || targetCategoryId <= 0) {
+  if (!targetGroup) {
     MessagePlugin.warning('请选择目标分类');
     return;
   }
@@ -1620,12 +1712,14 @@ async function submitBatchCategory() {
   try {
     const response = await productApi.batchUpdateCategory({
       product_ids: productIds,
-      target_category_id: targetCategoryId,
+      ...productGroupPayload(targetGroup, 'target_'),
     });
     const responseRecord = response && typeof response === 'object' ? (response as Record<string, unknown>) : {};
     const updatedCount = Number(responseRecord.updated_count ?? productIds.length);
     const targetLabel = String(
-      responseRecord.target_category_full_name || responseRecord.target_category_name || resolveCategoryLabel(targetCategoryId),
+      responseRecord.target_effective_product_group_full_name
+        || responseRecord.target_effective_product_group_name
+        || resolveProductGroupLabel(batchCategoryForm.target_product_group_key),
     );
 
     if (updatedCount > 0) {
@@ -1726,7 +1820,7 @@ async function openProductDialog(row?: ProductRecord) {
     display_name: resolveProductFormDisplayName(source),
     custom_display_name: source?.custom_display_name || '',
     product_spec_display: source?.product_spec_display || source?.cpu_memory_display || '',
-    category_id: source?.category_id || source?.product_group_id || catalogFilters.category_id || '',
+    selected_product_group_key: source ? productGroupOptionKey(source) : catalogFilters.product_group_key,
     monthly_price: productPricingValue(source, 'monthly', source?.monthly_price),
     quarterly_price: productPricingValue(source, 'quarterly'),
     semiannually_price: productPricingValue(source, 'semiannually'),
@@ -1817,7 +1911,7 @@ async function submitProduct() {
       display_name: productForm.display_name,
       name: productForm.display_name,
       custom_display_name: resolveProductCustomDisplayNamePayload(),
-      category_id: productForm.category_id,
+      ...productGroupPayload(findProductGroupByKey(categoryOptions.value, productForm.selected_product_group_key)),
       pricing: {
         monthly: productForm.monthly_price,
         quarterly: productForm.quarterly_price,
@@ -2166,9 +2260,11 @@ function handleDeleteProduct(row: ProductRecord) {
 
 function openCategoryDialog(row?: ProductCategoryRecord) {
   editingCategory.value = row || null;
+  const level = row ? productGroupLevel(row) : 2;
   Object.assign(categoryForm, {
     name: row?.name || row?.label || '',
-    parent_id: row?.parent_id || '',
+    product_type: String(row?.product_type || row?.first_product_group_code || catalogFilters.product_type || categoryProductTypeOptions.value[0]?.value || ''),
+    parent_id: level === 3 ? row?.second_product_group_id || '' : '',
     slogan: String(row?.slogan || ''),
     sort_order: Number(row?.sort_order || 0),
     is_visible: Number(row?.is_visible ?? 1),
@@ -2181,16 +2277,23 @@ async function submitCategory() {
   if (validateResult !== true) return;
   categorySubmitting.value = true;
   try {
+    const productType = categoryForm.product_type || catalogFilters.product_type || '';
+    const firstProductGroupId = resolveFirstProductGroupId(productType);
+    const selectedParent = resolveSelectedParentCategory();
+    const targetLevel = editingCategory.value ? productGroupLevel(editingCategory.value) : (selectedParent ? 3 : 2);
     const payload: Record<string, unknown> = {
       name: categoryForm.name,
-      parent_id: categoryForm.parent_id || undefined,
-      product_type: catalogFilters.product_type || undefined,
+      service_type_code: productType || undefined,
+      effective_product_group_level: targetLevel,
+      first_product_group_id: targetLevel === 2 ? firstProductGroupId || undefined : undefined,
+      first_product_group_code: targetLevel === 1 ? productType || undefined : undefined,
+      second_product_group_id: targetLevel === 3 ? productGroupEffectiveId(selectedParent) || undefined : undefined,
       slogan: categoryForm.slogan,
       sort_order: categoryForm.sort_order,
       is_visible: categoryForm.is_visible,
     };
     if (editingCategory.value?.id) {
-      await productApi.updateCategory(editingCategory.value.id, payload);
+      await productApi.updateCategory(productGroupEffectiveId(editingCategory.value), payload);
       MessagePlugin.success('分类已更新');
     } else {
       await productApi.createCategory(payload);
@@ -2217,11 +2320,13 @@ function handleDeleteCategory(row: ProductCategoryRecord) {
     async onConfirm() {
       categorySubmitting.value = true;
       try {
-        await productApi.deleteCategory(row.id);
+        await productApi.deleteCategory(productGroupEffectiveId(row), {
+          effective_product_group_level: productGroupLevel(row),
+        });
         MessagePlugin.success('分类已删除');
         dialog.hide();
-        if (String(catalogFilters.category_id) === String(row.id)) {
-          catalogFilters.category_id = '';
+        if (catalogFilters.product_group_key === categoryIdKey(row)) {
+          catalogFilters.product_group_key = '';
         }
         await Promise.all([loadCategories(), loadProducts()]);
       } catch (error) {

@@ -27,7 +27,7 @@
         >
           <button type="button" @click="handleTrafficGroupChange(group.id)">
             <strong>{{ group.name || '未命名分组' }}</strong>
-            <span>{{ group.category_label || `分类 #${group.category_id || '--'}` }}</span>
+            <span>{{ group.product_group_label || `分类 #${group.effective_product_group_id || '--'}` }}</span>
             <small>已绑定 {{ group.product_ids.length }} 个配置 · {{ trafficGroupPackageCount(group.id) }} 个档位</small>
           </button>
           <t-space size="small">
@@ -43,7 +43,7 @@
           <div class="traffic-package-head">
             <div>
               <strong>{{ selectedTrafficGroup.name }}</strong>
-              <span>{{ selectedTrafficGroup.category_label || `分类 #${selectedTrafficGroup.category_id}` }}</span>
+              <span>{{ selectedTrafficGroup.product_group_label || `分类 #${selectedTrafficGroup.effective_product_group_id}` }}</span>
               <small>绑定配置：{{ trafficBoundProductSummary(selectedTrafficGroup) }}</small>
             </div>
             <t-space size="small">
@@ -89,21 +89,26 @@
           <t-option v-for="item in trafficGroupTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
         </t-select>
       </t-form-item>
-      <t-form-item label="关联分类" name="category_id">
+      <t-form-item label="关联分类" name="product_group_key">
         <t-select
-          v-model="trafficGroupForm.category_id"
+          v-model="trafficGroupForm.product_group_key"
           :loading="trafficGroupCategoriesLoading"
           filterable
           @change="handleTrafficGroupCategoryChange"
         >
-          <t-option v-for="item in trafficGroupCategoryOptions" :key="item.id" :label="item.label || item.name" :value="item.id" />
+          <t-option
+            v-for="item in trafficGroupCategoryOptions"
+            :key="productGroupOptionKey(item)"
+            :label="productGroupOptionLabel(item)"
+            :value="productGroupOptionKey(item)"
+          />
         </t-select>
       </t-form-item>
       <t-form-item label="绑定配置" name="product_ids">
         <t-select
           v-model="trafficGroupForm.product_ids"
           :loading="trafficGroupProductsLoading"
-          :disabled="!trafficGroupForm.category_id"
+          :disabled="!trafficGroupForm.product_group_key"
           multiple
           filterable
           clearable
@@ -131,23 +136,38 @@ import { adminApi } from '@/api/admin';
 import { productApi, type ProductCategoryRecord, type ProductRecord, type ProductTypeRecord } from '@/api/product';
 
 import { errorMessage, normalizeProductIds, toPlainRecord } from '../composables/useProductShared';
+import {
+  findProductGroupByKey,
+  isSelectableProductGroup,
+  productGroupEffectiveId,
+  productGroupOptionKey,
+  productGroupOptionLabel,
+  productGroupPayload,
+} from '../composables/useProductShared';
 
 interface TrafficPackageGroup {
   id: string;
   name: string;
   product_type: string;
-  category_id: number;
-  category_label: string;
+  product_group_key: string;
+  first_product_group_id: number | null;
+  second_product_group_id: number | null;
+  third_product_group_id: number | null;
+  effective_product_group_id: number;
+  product_group_label: string;
   product_ids: number[];
   sort_order: number;
 }
 
 interface TrafficPackageItem {
   _rowKey: string;
-  group_id: string;
+  traffic_group_id: string;
   group_name: string;
-  category_id: number;
-  category_label: string;
+  first_product_group_id: number | null;
+  second_product_group_id: number | null;
+  third_product_group_id: number | null;
+  effective_product_group_id: number;
+  product_group_label: string;
   product_type: string;
   product_ids: number[];
   label: string;
@@ -173,7 +193,7 @@ const trafficGroupProductOptions = ref<ProductRecord[]>([]);
 const trafficGroupForm = reactive({
   name: '',
   product_type: '',
-  category_id: '' as number | string,
+  product_group_key: '' as string,
   product_ids: [] as number[],
 });
 
@@ -197,7 +217,7 @@ function resetTrafficGroupForm() {
   Object.assign(trafficGroupForm, {
     name: '',
     product_type: '',
-    category_id: '',
+    product_group_key: '',
     product_ids: [],
   });
 }
@@ -221,14 +241,15 @@ async function loadTrafficGroupCategories() {
   trafficGroupCategoriesLoading.value = true;
   try {
     const response = await productApi.categories({ product_type: trafficGroupForm.product_type });
-    trafficGroupCategoryOptions.value = flattenCategories(response.tree || response.list || []);
+    trafficGroupCategoryOptions.value = flattenCategories(response.tree || response.list || []).filter((item) => isSelectableProductGroup(item));
   } finally {
     trafficGroupCategoriesLoading.value = false;
   }
 }
 
 async function loadTrafficGroupProducts() {
-  if (!trafficGroupForm.product_type || !trafficGroupForm.category_id) {
+  const selectedGroup = findProductGroupByKey(trafficGroupCategoryOptions.value, trafficGroupForm.product_group_key);
+  if (!trafficGroupForm.product_type || !selectedGroup) {
     trafficGroupProductOptions.value = [];
     return;
   }
@@ -236,7 +257,7 @@ async function loadTrafficGroupProducts() {
   try {
     const response = await productApi.list({
       product_type: trafficGroupForm.product_type,
-      category_id: trafficGroupForm.category_id,
+      ...productGroupPayload(selectedGroup),
       page: 1,
       page_size: 200,
     });
@@ -256,7 +277,7 @@ async function openTrafficGroupDialog(group?: TrafficPackageGroup | null) {
     Object.assign(trafficGroupForm, {
       name: group?.name || '',
       product_type: group?.product_type || trafficGroupTypeOptions.value[0]?.value || '',
-      category_id: group?.category_id || '',
+      product_group_key: group?.product_group_key || '',
       product_ids: normalizeProductIds(group?.product_ids || []),
     });
     await loadTrafficGroupCategories();
@@ -269,14 +290,14 @@ async function openTrafficGroupDialog(group?: TrafficPackageGroup | null) {
 
 async function handleTrafficGroupTypeChange(value: string | number) {
   trafficGroupForm.product_type = String(value || '');
-  trafficGroupForm.category_id = '';
+  trafficGroupForm.product_group_key = '';
   trafficGroupForm.product_ids = [];
   trafficGroupProductOptions.value = [];
   await loadTrafficGroupCategories();
 }
 
 async function handleTrafficGroupCategoryChange(value: string | number) {
-  trafficGroupForm.category_id = value || '';
+  trafficGroupForm.product_group_key = String(value || '');
   trafficGroupForm.product_ids = [];
   await loadTrafficGroupProducts();
 }
@@ -284,7 +305,9 @@ async function handleTrafficGroupCategoryChange(value: string | number) {
 async function submitTrafficGroup() {
   const name = trafficGroupForm.name.trim();
   const productType = String(trafficGroupForm.product_type || '').trim();
-  const categoryId = Number(trafficGroupForm.category_id || 0);
+  const selectedGroup = findProductGroupByKey(trafficGroupCategoryOptions.value, trafficGroupForm.product_group_key);
+  const groupPayload = productGroupPayload(selectedGroup);
+  const categoryId = productGroupEffectiveId(selectedGroup);
   const productIds = normalizeProductIds(trafficGroupForm.product_ids);
   if (!name) {
     MessagePlugin.warning('请填写分组名称');
@@ -294,7 +317,7 @@ async function submitTrafficGroup() {
     MessagePlugin.warning('请选择商品种类');
     return;
   }
-  if (categoryId <= 0) {
+  if (!selectedGroup || categoryId <= 0) {
     MessagePlugin.warning('请选择关联分类');
     return;
   }
@@ -315,16 +338,19 @@ async function submitTrafficGroup() {
 
   trafficGroupSubmitting.value = true;
   try {
-    const categoryLabel =
-      trafficGroupCategoryOptions.value.find((item) => Number(item.id) === categoryId)?.label || `分类 #${categoryId}`;
+    const categoryLabel = productGroupOptionLabel(selectedGroup) || `分类 #${categoryId}`;
     const groupId = trafficGroupEditingId.value || generateTrafficGroupId(productType, categoryId);
     const previous = trafficGroupItems.value.find((group) => group.id === groupId);
     const nextGroup: TrafficPackageGroup = {
       id: groupId,
       name,
       product_type: productType,
-      category_id: categoryId,
-      category_label: String(categoryLabel).trim(),
+      product_group_key: trafficGroupForm.product_group_key,
+      first_product_group_id: Number(groupPayload.first_product_group_id || 0) || null,
+      second_product_group_id: Number(groupPayload.second_product_group_id || 0) || null,
+      third_product_group_id: Number(groupPayload.third_product_group_id || 0) || null,
+      effective_product_group_id: categoryId,
+      product_group_label: String(categoryLabel).trim(),
       product_ids: productIds,
       sort_order: Number(previous?.sort_order || trafficGroupItems.value.length + 1),
     };
@@ -336,11 +362,14 @@ async function submitTrafficGroup() {
         ? createTrafficRow(
             {
               ...item,
-              group_id: nextGroup.id,
+              traffic_group_id: nextGroup.id,
               group_name: nextGroup.name,
               product_type: nextGroup.product_type,
-              category_id: nextGroup.category_id,
-              category_label: nextGroup.category_label,
+              first_product_group_id: nextGroup.first_product_group_id,
+              second_product_group_id: nextGroup.second_product_group_id,
+              third_product_group_id: nextGroup.third_product_group_id,
+              effective_product_group_id: nextGroup.effective_product_group_id,
+              product_group_label: nextGroup.product_group_label,
               product_ids: nextGroup.product_ids,
             },
             nextGroup,
@@ -421,10 +450,13 @@ async function saveTrafficPackages() {
         createTrafficRow(
           {
             ...row,
-            group_id: group.id,
+            traffic_group_id: group.id,
             group_name: group.name,
-            category_id: group.category_id,
-            category_label: group.category_label,
+            first_product_group_id: group.first_product_group_id,
+            second_product_group_id: group.second_product_group_id,
+            third_product_group_id: group.third_product_group_id,
+            effective_product_group_id: group.effective_product_group_id,
+            product_group_label: group.product_group_label,
             product_type: group.product_type,
             product_ids: group.product_ids,
             sort_order: index + 1,
@@ -454,7 +486,8 @@ async function pullTrafficPackages() {
   trafficPulling.value = true;
   try {
     const response = (await productApi.pullTrafficPackages({
-      category_id: group.category_id,
+      second_product_group_id: group.second_product_group_id,
+      third_product_group_id: group.third_product_group_id || undefined,
       product_type: group.product_type,
     })) as Record<string, unknown>;
     const packages = Array.isArray(response.packages) ? response.packages : [];
@@ -526,10 +559,13 @@ function getSettingValue(response: unknown, key: string) {
 function createTrafficRow(item: Record<string, unknown> = {}, group = selectedTrafficGroup.value): TrafficPackageItem {
   return {
     _rowKey: String(item._rowKey || `traffic-package-${Date.now()}-${Math.random().toString(36).slice(2)}`),
-    group_id: String(item.group_id || group?.id || ''),
+    traffic_group_id: String(item.traffic_group_id || group?.id || ''),
     group_name: String(item.group_name || group?.name || ''),
-    category_id: Number(item.category_id || group?.category_id || 0),
-    category_label: String(item.category_label || group?.category_label || ''),
+    first_product_group_id: Number(item.first_product_group_id || group?.first_product_group_id || 0) || null,
+    second_product_group_id: Number(item.second_product_group_id || group?.second_product_group_id || 0) || null,
+    third_product_group_id: Number(item.third_product_group_id || group?.third_product_group_id || 0) || null,
+    effective_product_group_id: Number(item.effective_product_group_id || group?.effective_product_group_id || 0),
+    product_group_label: String(item.product_group_label || group?.product_group_label || ''),
     product_type: String(item.product_type || group?.product_type || ''),
     product_ids: normalizeProductIds(item.product_ids || group?.product_ids || []),
     label: String(item.label || ''),
@@ -544,7 +580,7 @@ function normalizeTrafficPackageItems(items: unknown[]): TrafficPackageItem[] {
   return items
     .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
     .map((item) => createTrafficRow(item))
-    .filter((item) => item.category_id > 0 && item.target_value > 0)
+    .filter((item) => item.effective_product_group_id > 0 && item.target_value > 0)
     .sort((a, b) => a.sort_order - b.sort_order || a.target_value - b.target_value);
 }
 
@@ -555,12 +591,16 @@ function normalizeTrafficPackageGroups(groups: unknown[]): TrafficPackageGroup[]
       id: String(item.id || '').trim(),
       name: String(item.name || '').trim(),
       product_type: String(item.product_type || '').trim(),
-      category_id: Number(item.category_id || 0),
-      category_label: String(item.category_label || '').trim(),
+      product_group_key: String(item.product_group_key || '').trim(),
+      first_product_group_id: Number(item.first_product_group_id || 0) || null,
+      second_product_group_id: Number(item.second_product_group_id || 0) || null,
+      third_product_group_id: Number(item.third_product_group_id || 0) || null,
+      effective_product_group_id: Number(item.effective_product_group_id || 0),
+      product_group_label: String(item.product_group_label || '').trim(),
       product_ids: normalizeProductIds(item.product_ids || []),
       sort_order: Number(item.sort_order || 0),
     }))
-    .filter((item) => item.id && item.name && item.category_id > 0)
+    .filter((item) => item.id && item.name && item.effective_product_group_id > 0)
     .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
 }
 
@@ -571,10 +611,14 @@ function createTrafficGroupsFromItems(items: TrafficPackageItem[]): TrafficPacka
     if (!id || map.has(id)) return;
     map.set(id, {
       id,
-      name: item.group_name || item.category_label || `分类 #${item.category_id}`,
+      name: item.group_name || item.product_group_label || `分类 #${item.effective_product_group_id}`,
       product_type: item.product_type,
-      category_id: item.category_id,
-      category_label: item.category_label,
+      product_group_key: '',
+      first_product_group_id: item.first_product_group_id,
+      second_product_group_id: item.second_product_group_id,
+      third_product_group_id: item.third_product_group_id,
+      effective_product_group_id: item.effective_product_group_id,
+      product_group_label: item.product_group_label,
       product_ids: item.product_ids,
       sort_order: map.size + 1,
     });
@@ -582,8 +626,8 @@ function createTrafficGroupsFromItems(items: TrafficPackageItem[]): TrafficPacka
   return Array.from(map.values());
 }
 
-function resolveTrafficGroupKey(item: Pick<TrafficPackageItem, 'group_id' | 'product_type' | 'category_id'>) {
-  return String(item.group_id || `${item.product_type || 'default'}:${item.category_id || 0}`);
+function resolveTrafficGroupKey(item: Pick<TrafficPackageItem, 'traffic_group_id' | 'product_type' | 'effective_product_group_id'>) {
+  return String(item.traffic_group_id || `${item.product_type || 'default'}:${item.effective_product_group_id || 0}`);
 }
 
 function generateTrafficGroupId(productType: string, categoryId: number) {
@@ -618,10 +662,13 @@ function validateTrafficRows() {
 
 function serializeTrafficItems(items: TrafficPackageItem[]) {
   return items.map((item) => ({
-    group_id: item.group_id,
+    traffic_group_id: item.traffic_group_id,
     group_name: item.group_name,
-    category_id: Number(item.category_id || 0),
-    category_label: item.category_label,
+    first_product_group_id: item.first_product_group_id,
+    second_product_group_id: item.second_product_group_id,
+    third_product_group_id: item.third_product_group_id,
+    effective_product_group_id: Number(item.effective_product_group_id || 0),
+    product_group_label: item.product_group_label,
     product_type: item.product_type,
     product_ids: normalizeProductIds(item.product_ids),
     label: String(item.label || '').trim(),
@@ -637,8 +684,12 @@ function serializeTrafficGroups(groups: TrafficPackageGroup[]) {
     id: group.id,
     name: group.name,
     product_type: group.product_type,
-    category_id: Number(group.category_id || 0),
-    category_label: group.category_label,
+    product_group_key: group.product_group_key,
+    first_product_group_id: group.first_product_group_id,
+    second_product_group_id: group.second_product_group_id,
+    third_product_group_id: group.third_product_group_id,
+    effective_product_group_id: Number(group.effective_product_group_id || 0),
+    product_group_label: group.product_group_label,
     product_ids: normalizeProductIds(group.product_ids),
     sort_order: Number(group.sort_order || 0),
   }));
