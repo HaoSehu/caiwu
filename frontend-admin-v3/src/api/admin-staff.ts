@@ -1,11 +1,10 @@
 import { request } from '@/utils/request';
 
-export interface StaffListParams {
-  keyword?: string;
+import type { PagedListParams } from './types';
+
+export interface StaffListParams extends PagedListParams {
   status?: number | string;
   role_id?: number | string;
-  page?: number;
-  page_size?: number;
 }
 
 export interface StaffRoleOption {

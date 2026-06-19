@@ -1,9 +1,9 @@
 import { request } from '@/utils/request';
 
-export interface SupplierListParams {
+import type { PagedListParams } from './types';
+
+export interface SupplierListParams extends PagedListParams {
   status?: number | string;
-  page?: number;
-  page_size?: number;
   [key: string]: unknown;
 }
 
