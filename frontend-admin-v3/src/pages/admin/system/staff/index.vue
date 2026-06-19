@@ -150,6 +150,7 @@ import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol, TableR
 
 import { adminStaffApi, type CreateStaffPayload, type StaffPayload, type StaffRecord, type StaffRoleOption } from '@/api/admin-staff';
 import { errorMessage } from '@/utils/userMessage';
+import { required } from '@/utils/formRules';
 import { AdminPermissions } from '@/constants/permissions';
 import { useUserStore } from '@/store';
 
@@ -202,21 +203,21 @@ const pagination = computed(() => ({
 }));
 
 const formRules = computed<Record<string, FormRule[]>>(() => ({
-  username: [{ required: true, message: '请输入登录账号', type: 'error' }],
-  role_id: [{ required: true, message: '请选择角色', type: 'error' }],
+  username: [required('请输入登录账号')],
+  role_id: [required('请选择角色')],
   password: form.id
     ? []
     : [
-        { required: true, message: '请输入初始密码', type: 'error' },
+        required('请输入初始密码'),
         { min: 8, message: '初始密码至少 8 位', type: 'error' },
       ],
 }));
 const resetRules: Record<string, FormRule[]> = {
   password: [
-    { required: true, message: '请输入新密码', type: 'error' },
+    required('请输入新密码'),
     { min: 8, message: '新密码至少 8 位', type: 'error' },
   ],
-  password_confirmation: [{ required: true, message: '请再次输入新密码', type: 'error' }],
+  password_confirmation: [required('请再次输入新密码')],
 };
 const columns: PrimaryTableCol<TableRowData>[] = [
   { title: 'ID', colKey: 'id', width: 80 },
