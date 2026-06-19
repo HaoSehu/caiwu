@@ -251,7 +251,7 @@ import { adminApi, type InvoiceRecord, type OrderRecord } from '@/api/admin';
 import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
 import InvoiceDetailDrawer from '@/components/finance-record-detail/InvoiceDetailDrawer.vue';
-import RecordDetailPage, { type RecordDetailMetric, type RecordDetailTab } from '@/components/finance-record-detail/RecordDetailPage.vue';
+import RecordDetailPage, { type RecordDetailMetric, type RecordDetailTab } from '@/components/record-detail-page/index.vue';
 import { INVOICE_STATUS_MAP, ORDER_STATUS_MAP, PAYMENT_STATUS_MAP, getStatusLabel, getStatusTagType, toLabelMap, toTagTypeMap } from '@shared/statusConfig';
 
 import './index.less';
