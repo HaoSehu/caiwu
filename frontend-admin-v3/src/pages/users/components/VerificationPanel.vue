@@ -544,7 +544,7 @@ onMounted(() => {
 .verification-help {
   margin: var(--td-comp-margin-s) 0 0;
   color: var(--td-text-color-secondary);
-  font-size: 13px;
+  font-size: var(--td-font-size-size-2, 13px);
 }
 
 .verification-mobile-list {
@@ -577,7 +577,7 @@ onMounted(() => {
 .verification-mobile-card__head strong {
   overflow: hidden;
   color: var(--td-text-color-primary);
-  font-size: 14px;
+  font-size: var(--td-font-size-size-3, 14px);
   font-weight: 600;
   line-height: 20px;
   text-overflow: ellipsis;
@@ -625,7 +625,7 @@ onMounted(() => {
 
 .verification-mobile-card__meta dt {
   color: var(--td-text-color-placeholder);
-  font-size: 12px;
+  font-size: var(--td-font-size-size-1, 12px);
   line-height: 20px;
 }
 
@@ -637,7 +637,7 @@ onMounted(() => {
   margin: 0;
   overflow: hidden;
   color: var(--td-text-color-primary);
-  font-size: 13px;
+  font-size: var(--td-font-size-size-2, 13px);
   line-height: 20px;
   text-align: right;
   text-overflow: ellipsis;

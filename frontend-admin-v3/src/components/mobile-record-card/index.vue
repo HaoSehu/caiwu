@@ -159,7 +159,7 @@ function handleAction(option: DropdownOption) {
   max-width: 100%;
   overflow: hidden;
   color: var(--td-text-color-primary);
-  font-size: 14px;
+  font-size: var(--td-font-size-size-3, 14px);
   font-weight: 600;
   line-height: 20px;
   text-overflow: ellipsis;
@@ -191,7 +191,7 @@ function handleAction(option: DropdownOption) {
   border-bottom: 1px solid var(--td-component-border);
   padding: 8px 12px;
   color: var(--td-text-color-secondary);
-  font-size: 12px;
+  font-size: var(--td-font-size-size-1, 12px);
   line-height: 20px;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -208,12 +208,12 @@ function handleAction(option: DropdownOption) {
 
 .mobile-record-card__highlight span {
   color: var(--td-text-color-placeholder);
-  font-size: 12px;
+  font-size: var(--td-font-size-size-1, 12px);
 }
 
 .mobile-record-card__highlight strong {
   color: var(--td-brand-color);
-  font-size: 18px;
+  font-size: var(--td-font-size-size-5, 18px);
   font-weight: 700;
   line-height: 1.2;
 }
@@ -236,7 +236,7 @@ function handleAction(option: DropdownOption) {
 
 .mobile-record-card__rows dt {
   color: var(--td-text-color-placeholder);
-  font-size: 12px;
+  font-size: var(--td-font-size-size-1, 12px);
   line-height: 20px;
 }
 
@@ -248,7 +248,7 @@ function handleAction(option: DropdownOption) {
   margin: 0;
   overflow: hidden;
   color: var(--td-text-color-primary);
-  font-size: 13px;
+  font-size: var(--td-font-size-size-2, 13px);
   font-weight: 500;
   line-height: 20px;
   text-align: right;
