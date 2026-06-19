@@ -174,7 +174,7 @@ async function loadDashboard() {
   }
 }
 
-watch([productChartData, dailyRevenue], () => {
+watch(monthlyRevenue, () => {
   nextTick(renderCharts);
 });
 
