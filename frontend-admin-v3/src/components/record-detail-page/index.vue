@@ -219,7 +219,7 @@ function displayValue(value: string | number | null | undefined) {
   padding: 16px;
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1024px) {
   .record-detail-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
