@@ -80,9 +80,7 @@
           <template #amount="{ row }">{{ formatMoney(row.amount) }}</template>
           <template #quantity="{ row }">{{ row.quantity || 1 }}</template>
           <template #status="{ row }">
-            <t-tag :theme="orderStatusTheme(row.status)" variant="light">
-              {{ orderStatusLabel(row.status) }}
-            </t-tag>
+            <StatusTag :status-map="ORDER_STATUS_MAP" :status="row.status" />
           </template>
           <template #invoice="{ row }">
             <div class="stack-cell">
@@ -109,8 +107,8 @@
               :description="fieldValue(row.product_name)"
               highlight-label="订单金额"
               :highlight-value="formatMoney(row.amount)"
-              :status-label="orderStatusLabel(row.status)"
-              :status-theme="orderStatusTheme(row.status)"
+              :status-map="ORDER_STATUS_MAP"
+              :status="row.status"
               :rows="orderMobileRows(row)"
               :action-options="[{ content: '详情', value: 'detail' }]"
               @action="(value) => handleMobileAction(value, row)"
@@ -145,8 +143,9 @@ import { adminApi, type OrderRecord } from '@/api/admin';
 import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
+import StatusTag from '@/components/status-tag/index.vue';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { ORDER_STATUS_MAP, toLabelMap, toSelectOptions, toTagTypeMap } from '@shared/statusConfig';
+import { ORDER_STATUS_MAP, toSelectOptions } from '@shared/statusConfig';
 
 import './index.less';
 
@@ -180,8 +179,6 @@ const pagination = reactive({
   page_size: 20,
 });
 
-const statusLabelMap = toLabelMap(ORDER_STATUS_MAP);
-const statusTypeMap = toTagTypeMap(ORDER_STATUS_MAP);
 const orderTypeOptions = Object.entries(ORDER_TYPE_MAP).map(([value, label]) => ({ value, label }));
 const orderStatusOptions = computed(() => toSelectOptions(ORDER_STATUS_MAP, false));
 const mode = computed<FinanceOrderMode>(() => {
@@ -301,15 +298,6 @@ function serviceIdLabel(service: unknown) {
 
 function orderTypeLabel(type: unknown) {
   return ORDER_TYPE_MAP[String(type || '')] || fieldValue(type);
-}
-
-function orderStatusLabel(status: unknown) {
-  return statusLabelMap[String(status ?? '')] || fieldValue(status);
-}
-
-function orderStatusTheme(status: unknown) {
-  const value = statusTypeMap[String(status ?? '')] || 'default';
-  return value === 'info' ? 'default' : value;
 }
 
 function toRecord(value: unknown): Record<string, unknown> {
