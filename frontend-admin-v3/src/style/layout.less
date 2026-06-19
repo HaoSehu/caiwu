@@ -145,7 +145,7 @@
   }
 
   .t-card {
-    border-radius: 4px;
+    border-radius: var(--td-radius-default, 4px);
   }
 
   .t-card__body {
@@ -384,7 +384,7 @@
     }
 
     &::-webkit-scrollbar-thumb {
-      border-radius: 6px;
+      border-radius: var(--td-radius-medium, 6px);
       border: 2px solid transparent;
       background-clip: content-box;
       background-color: var(--td-scrollbar-color);

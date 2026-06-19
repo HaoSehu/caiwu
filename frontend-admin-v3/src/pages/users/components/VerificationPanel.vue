@@ -560,7 +560,7 @@ onMounted(() => {
 .verification-mobile-card {
   overflow: hidden;
   border: 1px solid var(--td-component-border);
-  border-radius: 4px;
+  border-radius: var(--td-radius-default, 4px);
   background: var(--td-bg-color-container);
 }
 

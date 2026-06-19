@@ -103,7 +103,7 @@ function handleAction(option: DropdownOption) {
   position: relative;
   overflow: hidden;
   border: 1px solid var(--td-component-border);
-  border-radius: 8px;
+  border-radius: var(--td-radius-large, 8px);
   background: var(--td-bg-color-container);
   box-shadow: 0 4px 14px rgba(28, 45, 84, 0.06);
 }

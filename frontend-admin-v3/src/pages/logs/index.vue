@@ -959,7 +959,7 @@ function buildContentPreviewDoc(value: unknown) {
   }
   if (/<!doctype\s+html|<html\b|<body\b/i.test(normalized)) return normalized;
   if (/<([a-z][a-z0-9]*)(\s|>)/i.test(normalized)) {
-    return `<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><style>body{margin:0;padding:24px;background:#f5f7fa;font-family:Arial,sans-serif;color:#1f2329}.mail-preview{max-width:680px;margin:0 auto;padding:24px;border:1px solid #dce7ff;border-radius:12px;background:#fff}</style></head><body><div class="mail-preview">${normalized}</div></body></html>`;
+    return `<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><style>body{margin:0;padding:24px;background:#f5f7fa;font-family:Arial,sans-serif;color:#1f2329}.mail-preview{max-width:680px;margin:0 auto;padding:24px;border:1px solid #dce7ff;border-radius: var(--td-radius-extraLarge, 12px);background:#fff}</style></head><body><div class="mail-preview">${normalized}</div></body></html>`;
   }
   return `<!doctype html><html lang="zh-CN"><body style="margin:0;padding:24px;font-family:Arial,sans-serif;background:#f8fafc;color:#1f2329;"><pre style="margin:0;white-space:pre-wrap;line-height:1.75;">${escapeHtml(normalized)}</pre></body></html>`;
 }

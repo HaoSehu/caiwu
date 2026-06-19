@@ -271,7 +271,7 @@ function toRecord(value: unknown): Record<string, unknown> {
   bottom: 4px;
   left: 0;
   width: 3px;
-  border-radius: 2px;
+  border-radius: var(--td-radius-small, 2px);
   background: var(--td-brand-color);
   content: '';
 }
@@ -280,7 +280,7 @@ function toRecord(value: unknown): Record<string, unknown> {
 .finance-line-list {
   overflow: hidden;
   border: 1px solid var(--td-component-border);
-  border-radius: 6px;
+  border-radius: var(--td-radius-medium, 6px);
   background: var(--td-component-stroke);
 }
 
