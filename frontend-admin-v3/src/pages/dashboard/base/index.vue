@@ -31,7 +31,7 @@
             <strong>{{ formatCurrency(row.amount) }}</strong>
           </template>
           <template #status="{ row }">
-            <t-tag :theme="statusTheme(row.status)" variant="light">{{ statusText(row.status) }}</t-tag>
+            <StatusTag :status-map="INVOICE_STATUS_MAP" :status="row.status" />
           </template>
           <template #created_at="{ row }">
             <span class="muted">{{ formatDateTime(row.created_at) }}</span>
@@ -54,7 +54,8 @@ import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMoun
 import { useRouter } from 'vue-router';
 
 import { adminApi, type DashboardStats, type MonthlyRevenue, type RecentInvoice } from '@/api/admin';
-import { INVOICE_STATUS_MAP, toLabelMap, toTagTypeMap } from '@shared/statusConfig';
+import StatusTag from '@/components/status-tag/index.vue';
+import { INVOICE_STATUS_MAP } from '@shared/statusConfig';
 import { formatDateTime } from '@/utils/format';
 
 import TopPanel from './components/TopPanel.vue';
@@ -74,9 +75,6 @@ const productChartRef = ref<HTMLDivElement>();
 const dailyChartRef = ref<HTMLDivElement>();
 let productChart: echarts.ECharts | null = null;
 let dailyChart: echarts.ECharts | null = null;
-
-const statusLabelMap = toLabelMap(INVOICE_STATUS_MAP);
-const statusTypeMap = toTagTypeMap(INVOICE_STATUS_MAP);
 
 const invoiceColumns = [
   { colKey: 'invoice_no', title: '账单号', minWidth: 180 },
@@ -103,19 +101,6 @@ const productChartData = computed(() => {
 
 function formatCurrency(value: unknown) {
   return `¥${Number(value || 0).toFixed(2)}`;
-}
-
-function statusText(status: unknown) {
-  return statusLabelMap[String(status)] || '未知';
-}
-
-function statusTheme(status: unknown) {
-  const tagType = statusTypeMap[String(status)] || 'default';
-  if (tagType === 'success') return 'success';
-  if (tagType === 'warning') return 'warning';
-  if (tagType === 'danger') return 'danger';
-  if (tagType === 'primary' || tagType === '') return 'primary';
-  return 'default';
 }
 
 function ensureCharts() {
