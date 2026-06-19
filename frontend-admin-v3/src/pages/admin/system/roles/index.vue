@@ -26,6 +26,7 @@
       </div>
 
       <t-table
+        v-if="!isMobile"
         row-key="id"
         :data="roles"
         :columns="columns"
@@ -57,6 +58,28 @@
           </t-space>
         </template>
       </t-table>
+
+      <div v-else class="roles-mobile-list">
+        <t-loading :loading="loading" size="small">
+          <div v-if="roles.length" class="roles-mobile-stack">
+            <MobileRecordCard
+              v-for="row in roles"
+              :key="row.id"
+              :title="row.label || row.name || '-'"
+              :subtitle="row.name"
+              :eyebrow="`管理员 ${Number(row.admin_count || 0)} 人`"
+              :rows="[
+                { label: '权限', value: permissionSummary(row) },
+                { label: '高危', value: riskPermissionCount(row) > 0 ? `${riskPermissionCount(row)} 项` : '无' },
+                { label: '更新时间', value: row.updated_at || '-' },
+              ]"
+              :action-options="rolesMobileActions(row)"
+              @action="(value) => handleRolesMobileAction(value, row)"
+            />
+          </div>
+          <t-empty v-else />
+        </t-loading>
+      </div>
     </t-card>
 
     <t-dialog
@@ -142,6 +165,8 @@ import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import type { FormInstanceFunctions, FormRule, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 
 import { adminRoleApi, type PermissionItem, type RolePayload, type RoleRecord } from '@/api/admin-roles';
+import MobileRecordCard from '@/components/mobile-record-card/index.vue';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { errorMessage } from '@/utils/userMessage';
 import { required } from '@/utils/formRules';
 import { AdminPermissions } from '@/constants/permissions';
@@ -181,6 +206,7 @@ const permissions = ref<PermissionItem[]>([]);
 const form = reactive<RoleForm>(createDefaultForm());
 
 const canManage = computed(() => hasPermission(AdminPermissions.ROLE_MANAGE));
+const isMobile = useMediaQuery('(max-width: 768px)');
 const hasAllPermissionSelected = computed(() => form.permissions.includes(AdminPermissions.ALL));
 const isReadonlySuperRole = computed(() => hasAllPermissionSelected.value);
 const selectedPermissionCount = computed(() => (hasAllPermissionSelected.value ? permissions.value.length : form.permissions.length));
@@ -281,6 +307,21 @@ function openCreateDialog() {
   showDangerousOnly.value = false;
   Object.assign(form, createDefaultForm());
   dialogVisible.value = true;
+}
+
+function rolesMobileActions(row: RoleRecord) {
+  const actions = [{ content: canManage.value ? '权限' : '查看', value: 'edit' }];
+  if (canManage.value) {
+    actions.push({ content: '复制', value: 'copy' });
+    actions.push({ content: '删除', value: 'delete' });
+  }
+  return actions;
+}
+
+function handleRolesMobileAction(value: unknown, row: RoleRecord) {
+  if (value === 'edit') openEditDialog(row);
+  else if (value === 'copy') handleCopy(row);
+  else if (value === 'delete') handleDelete(row);
 }
 
 function openEditDialog(row: RoleRecord) {
