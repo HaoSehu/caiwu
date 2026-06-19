@@ -108,9 +108,14 @@
             <t-option v-for="item in supplierBatchProductTypes" :key="item.value" :label="item.label" :value="item.value" />
           </t-select>
         </t-form-item>
-        <t-form-item label="导入分类" name="category_id">
-          <t-select v-model="supplierBatchForm.category_id" filterable clearable placeholder="请选择目标分类">
-            <t-option v-for="item in supplierBatchCategories" :key="item.id" :label="item.label || item.name" :value="item.id" />
+        <t-form-item label="导入分类" name="product_group_key">
+          <t-select v-model="supplierBatchForm.product_group_key" filterable clearable placeholder="请选择目标分类">
+            <t-option
+              v-for="item in supplierBatchCategories"
+              :key="productGroupOptionKey(item)"
+              :label="productGroupOptionLabel(item)"
+              :value="productGroupOptionKey(item)"
+            />
           </t-select>
         </t-form-item>
         <t-form-item label="默认上架">
@@ -200,10 +205,15 @@ import { supplierApi, type ProviderTypeRecord, type SupplierRecord } from '@/api
 
 import {
   errorMessage,
+  findProductGroupByKey,
   flattenCategories,
   formatDateTime,
+  isSelectableProductGroup,
   mergeProviderTypeOptions,
   normalizeProductIds,
+  productGroupOptionKey,
+  productGroupOptionLabel,
+  productGroupPayload,
   providerTypeFallbackLabels,
   providerTypeLabel,
   toPlainRecord,
@@ -251,7 +261,7 @@ const supplierBatchSelectedKeys = ref<Array<string | number>>([]);
 const supplierBatchResult = ref<Record<string, unknown> | null>(null);
 const supplierBatchForm = reactive({
   product_type: '',
-  category_id: '' as number | string,
+  product_group_key: '' as string,
   default_status: 1,
   default_auto_setup: 1,
   sync_config_options: 1,
@@ -421,7 +431,7 @@ function resetSupplierBatchState() {
   supplierBatchResult.value = null;
   Object.assign(supplierBatchForm, {
     product_type: '',
-    category_id: '',
+    product_group_key: '',
     default_status: 1,
     default_auto_setup: 1,
     sync_config_options: 1,
@@ -442,7 +452,7 @@ async function loadSupplierBatchCategories() {
     return;
   }
   const response = await productApi.categories({ product_type: supplierBatchForm.product_type });
-  supplierBatchCategories.value = flattenCategories(response.tree || response.list || []);
+  supplierBatchCategories.value = flattenCategories(response.tree || response.list || []).filter((item) => isSelectableProductGroup(item));
 }
 
 function normalizeSupplierBatchProduct(itemValue: unknown): SupplierBatchProduct {
@@ -509,7 +519,7 @@ async function openSupplierBatchDialog(row: SupplierRecord) {
 
 function handleSupplierBatchTypeChange(value: string | number) {
   supplierBatchForm.product_type = String(value || '');
-  supplierBatchForm.category_id = '';
+  supplierBatchForm.product_group_key = '';
   void loadSupplierBatchCategories();
 }
 
@@ -526,13 +536,7 @@ function reloadSupplierBatchProducts() {
 }
 
 function resolveSupplierBatchCategoryPayload() {
-  const category = supplierBatchCategories.value.find((item) => String(item.id) === String(supplierBatchForm.category_id));
-  const categoryId = Number(supplierBatchForm.category_id || 0);
-  if (!category || categoryId <= 0) return {};
-  const parentId = Number(category.parent_id || 0);
-  return parentId > 0
-    ? { root_category_id: parentId, child_category_id: categoryId }
-    : { root_category_id: categoryId, child_category_id: null };
+  return productGroupPayload(findProductGroupByKey(supplierBatchCategories.value, supplierBatchForm.product_group_key));
 }
 
 async function submitSupplierBatchConnect() {
@@ -541,7 +545,7 @@ async function submitSupplierBatchConnect() {
     MessagePlugin.warning('请选择商品种类');
     return;
   }
-  if (!supplierBatchForm.category_id) {
+  if (!supplierBatchForm.product_group_key) {
     MessagePlugin.warning('请选择导入分类');
     return;
   }

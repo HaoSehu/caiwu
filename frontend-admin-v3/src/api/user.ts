@@ -1,11 +1,10 @@
 import { request } from '@/utils/request';
 
-export interface UserListParams {
-  keyword?: string;
+import type { PagedListParams } from './types';
+
+export interface UserListParams extends PagedListParams {
   user_id?: number | string;
   status?: number | string;
-  page?: number;
-  page_size?: number;
 }
 
 export interface PageParams {
@@ -29,7 +28,9 @@ export interface AdminUser {
   referrer_user_id?: number | string | null;
   last_login_at?: string;
   last_login_ip?: string;
-  balance?: number | string;
+  cash_balance?: number | string;
+  credit_limit?: number | string;
+  referral_withdrawn_balance?: number | string;
   opened_product_count?: number | string;
   status?: number | string;
   verification_status?: number | string;

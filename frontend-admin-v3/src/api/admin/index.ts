@@ -10,7 +10,7 @@ import { verificationsApi } from './verification';
 import { memberLevelsApi } from './memberLevel';
 import { instanceSpecCatalogApi, cpuModelCatalogApi } from './spec';
 
-// Re-export types for backward compatibility
+// Shared admin API types.
 export * from './types';
 
 // Combine all domain APIs into a single adminApi object (matching original structure)

@@ -16,6 +16,7 @@
           <t-input
             v-model="formData.account"
             placeholder="请输入管理员账号"
+            size="large"
             clearable
           />
         </t-form-item>
@@ -24,15 +25,19 @@
             v-model="formData.password"
             type="password"
             placeholder="请输入密码"
+            size="large"
             clearable
           />
         </t-form-item>
         <t-form-item>
-          <t-button block theme="primary" type="submit" :loading="loading">
+          <t-button block theme="primary" size="large" type="submit" :loading="loading">
             登录
           </t-button>
         </t-form-item>
       </t-form>
+      <div class="login-footer">
+        <span>© {{ currentYear }} Caiwu 管理后台</span>
+      </div>
     </div>
   </div>
 </template>
@@ -40,7 +45,7 @@
 <script setup lang="ts">
 import type { FormInstanceFunctions, FormRule } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { useUserStore } from '@/store';
@@ -49,6 +54,7 @@ const router = useRouter();
 const userStore = useUserStore();
 const formRef = ref<FormInstanceFunctions>();
 const loading = ref(false);
+const currentYear = computed(() => new Date().getFullYear());
 
 const formData = ref({
   account: '',
@@ -87,35 +93,114 @@ async function handleLogin() {
 
 <style lang="less" scoped>
 .login-container {
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 40px 20px;
+  position: relative;
+  overflow: hidden;
+  background: var(--td-bg-color-page, #f5f7fb);
+
+  /* brand-tinted radial glow spots */
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  &::before {
+    top: -180px;
+    right: -120px;
+    width: 520px;
+    height: 520px;
+    background: radial-gradient(circle, rgba(22, 93, 255, 0.10), rgba(22, 93, 255, 0) 70%);
+  }
+
+  &::after {
+    bottom: -140px;
+    left: -100px;
+    width: 440px;
+    height: 440px;
+    background: radial-gradient(circle, rgba(22, 93, 255, 0.07), rgba(22, 93, 255, 0) 70%);
+  }
 }
 
 .login-card {
-  width: 400px;
-  padding: 40px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  width: 100%;
+  max-width: 420px;
+  padding: 48px 40px 36px;
+  background: var(--td-bg-color-container, #fff);
+  border-radius: var(--td-radius-extraLarge, 12px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06), 0 1px 4px rgba(0, 0, 0, 0.04);
+  position: relative;
+  z-index: 1;
 }
 
 .login-header {
   text-align: center;
-  margin-bottom: 32px;
+  margin-bottom: 36px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--td-component-stroke, #eef2f7);
 
   h1 {
-    font-size: 24px;
+    font-size: var(--td-font-size-size-7, 22px);
     font-weight: 600;
-    color: #333;
-    margin-bottom: 8px;
+    color: var(--td-text-color-primary, #1f2937);
+    margin-bottom: 6px;
+    letter-spacing: -0.01em;
   }
 
   p {
-    font-size: 14px;
-    color: #666;
+    font-size: var(--td-font-size-size-3, 14px);
+    color: var(--td-text-color-secondary, #5b6b82);
+  }
+}
+
+.login-footer {
+  margin-top: 28px;
+  text-align: center;
+  font-size: var(--td-font-size-size-1, 12px);
+  color: var(--td-text-color-placeholder, #94a0b2);
+  line-height: 1.6;
+}
+
+/* responsive: remove decorative glow on small screens */
+@media (max-width: 640px) {
+  .login-container {
+    padding: 24px 16px;
+
+    &::before,
+    &::after {
+      display: none;
+    }
+  }
+
+  .login-card {
+    padding: 36px 24px 28px;
+    border-radius: 10px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+  }
+
+  .login-header {
+    margin-bottom: 28px;
+    padding-bottom: 22px;
+
+    h1 {
+      font-size: var(--td-font-size-size-6, 20px);
+    }
+
+    p {
+      font-size: var(--td-font-size-size-2, 13px);
+    }
+  }
+
+  .login-footer {
+    margin-top: 20px;
+    font-size: 11px;
   }
 }
 </style>
