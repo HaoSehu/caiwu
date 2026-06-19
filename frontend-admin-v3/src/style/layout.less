@@ -46,6 +46,15 @@
   }
 }
 
+// 平板断点：解除 760px 强制宽度，避免 769-1024 区间横向滚动
+@media (max-width: 1024px) {
+  .t-layout.t-layout--with-sider {
+    > .t-layout {
+      min-width: 0;
+    }
+  }
+}
+
 @media (max-width: 768px) {
   html,
   body,
