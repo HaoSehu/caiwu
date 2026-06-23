@@ -2,6 +2,32 @@
 
 仓库级指令文件。目标：让代理避免常见错误、快速对齐现有约定。
 
+## 速查索引
+
+| 场景 | 去查 |
+| --- | --- |
+| 入项路线 | §13 文档查阅路径 |
+| 本地启动命令 | §11 本地启动 / `启动指南.md` |
+| 查接口 / 接口格式 | §13 + `文档/开发文档/后端/后端API清单.md` |
+| 查表结构 | §8 / `文档/开发文档/数据库/当前数据库结构.md` |
+| 前端规范 | §6 前端规则 / `文档/开发文档/前端/前端项目规范.md` |
+| 后端规范 | §7 后端规则 / `文档/开发文档/后端/API格式规范.md` |
+| 视觉与页面结构 | §9 视觉与交互 / `页面风格.md` |
+| 验证命令 | §10 验证要求 |
+| 禁止项速览 | §12 禁止项 |
+| 测试账号 | §14 测试账号 |
+
+## 全局工作规范（必须遵守）
+
+以瞎猜接口为耻，以认真查询为荣。
+以模糊执行为耻，以寻求确认为荣。
+以臆想业务为耻，以人类确认为荣。
+以创造接口为耻，以复用现有为荣。
+以跳过验证为耻，以主动测试为荣。
+以破坏架构为耻，以遵循规范为荣。
+以假装理解为耻，以诚实无知为荣。
+以盲目修改为耻，以谨慎重构为荣。
+
 ## 1. 文档优先级
 
 冲突时按以下顺序执行：
@@ -11,7 +37,7 @@
 3. `页面风格.md`（视觉与页面结构）
 4. `启动指南.md`（本地启动命令）
 5. 当前代码中的既有实现
-6. `文档/架构/架构现状说明.md`（架构真源）
+6. `文档/开发文档/架构/架构现状说明.md`（架构真源）
 7. `开发规范.md` 与 `CLAUDE.md` 中不冲突的补充说明
 
 规则与稳定运行中的现有代码冲突时，先以现有代码行为为准。
@@ -42,13 +68,10 @@
 
 - 后端：PHP 8.2、**Laravel 12**（`composer.json` 为准）、Sanctum 4、MySQL 8。
 - 前端：Vue 3、Composition API、Vite 6、Pinia、axios、Sass。
-- 前端 UI 框架：
-  - `frontend-admin-v3`：TDesign Vue Next + TDesign Icons Vue Next
-  - `frontend-user-v3-www`：Element Plus + `@element-plus/icons-vue`
-  - `frontend-user-v4-console`：TDesign Vue Next + TDesign Icons Vue Next
-- 图标：
-  - Element Plus 端：`@element-plus/icons-vue`
-  - TDesign 端：`tdesign-icons-vue-next`
+- 前端 UI 框架与图标：
+  - `frontend-admin-v3`：TDesign Vue Next + `tdesign-icons-vue-next`，禁止混用 Element Plus
+  - `frontend-user-v3-www`：Element Plus + `@element-plus/icons-vue`，不引入第二套 UI 库
+  - `frontend-user-v4-console`：TDesign Vue Next + `tdesign-icons-vue-next`，禁止混用 Element Plus
 - 本地地址统一 `127.0.0.1`，不要混用 `localhost`。
 - 鉴权：管理端与用户端都走 Sanctum Token，Token 按 `admin_token` / `client_token` 分端存储，权限码走 `permission:{code}` 中间件。
 - 缓存：Redis；队列：`database` 驱动，并入 `schedule:run` 消费；会话：`file`。
@@ -98,6 +121,9 @@
 - 页面放在 `src/pages/client/`，业务逻辑优先收敛到 `src/domains/`、`src/composables/`、`src/api/`。
 - 复用 `shared/user-v3` 的控制台基础组件（如 `PageScaffold`、`DataState`、`StatusTag`）和 `@caiwu/shared` 状态/运行时能力。
 - 控制台是高频业务界面，保持浅色、克制、信息密度合理，不做官网式 Hero 或装饰优先布局。
+- 用户控制台财务记录页面（账单列表、订单列表、充值记录列表及各自详情页）**禁止使用统计/指标卡片**（即顶部横向排列的数字汇总卡片行）。列表页直接从筛选区或快捷标签开始；详情页直接进入信息展示区。
+- 控制台页面间距：页面根元素使用 `padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l)`（均为 12px），叠加 Starter 布局层的 12px，卡片边缘距屏幕 24px、卡片内容距屏幕 36px。新增页面沿用此结构，不要自造间距值。
+- 手机端（`max-width: @screen-sm-max`）所有页面 padding 必须统一为 12px，禁止使用 `paddingLR-s`（8px）或 `paddingTB-m`（10px）。
 
 ## 7. 后端规则
 
@@ -123,10 +149,9 @@
 - 迁移必须新增文件，不改历史迁移。
 - 财务/审计表变更必须考虑索引、回填、兼容旧数据和回滚。
 - 仓库里存在早期激进合并方向的历史迁移文件，**不要补跑**。
-- 真实表结构以实库 `information_schema` 为准；`文档/数据库/当前数据库结构.md` 是当前结构摘要，`文档/数据库/数据库结构说明-idc-2026-04-17.md` 是带日期的历史快照。
-- 数据库重构方向见 `文档/架构/架构现状说明.md`。
-初始化新库：backend\scripts\install_db.py
-迁移旧库：backend/scripts/migrate_legacy_dump.py
+- 真实表结构以实库 `information_schema` 为准；`文档/开发文档/数据库/当前数据库结构.md` 是当前结构摘要，`文档/开发记录/数据库/数据库结构说明-idc-2026-04-17.md` 是带日期的历史快照。
+- 数据库重构方向见 `文档/开发文档/架构/架构现状说明.md`。
+- 初始化新库：`backend/scripts/install_db.py`；迁移旧库：`backend/scripts/migrate_legacy_dump.py`。
 
 ## 9. 视觉与交互
 
@@ -188,29 +213,33 @@ cd frontend-user-v4-console && npm run dev
 
 ## 12. 禁止项
 
+本节为速览，详细规则见对应章节。
+
 - 禁止无关文件顺手格式化或大面积重排。
-- 禁止引入与现有体系重复的 UI 库、请求层、状态层。
-- 禁止把管理端改成深色大屏风格。
-- 禁止硬编码后端地址、token 键名、权限码和状态文案。
-- 禁止删除已有可复用能力后再重写一遍。
+- 禁止引入与现有体系重复的 UI 库、请求层、状态层（详见 §4、§6）。
+- 禁止把管理端改成深色大屏风格（详见 §9）。
+- 禁止硬编码后端地址、token 键名、权限码和状态文案（详见 §4、§6、§7）。
+- 禁止删除已有可复用能力后再重写一遍（详见 §5）。
 - 禁止未说明影响面就修改接口响应结构或公共样式入口。
-- 禁止手工编辑 `文档/后端/后端API清单.md`（自动生成）；改业务分组导航请改 `文档/后端/API清单导航.md`，重生成跑 `php backend/scripts/export_api_inventory.php`。
-- 禁止用 `php artisan serve` 替代 `php artisan app:serve`。
-- 禁止在 Controller 里直接 `Http::*` 调上游或第三方。
-- 禁止在生产常驻 `queue:work`（队列已并入 `schedule:run`）。
-- 禁止补跑历史激进迁移文件。
+- 禁止手工编辑 `文档/开发文档/后端/后端API清单.md`（自动生成）；改业务分组导航请改 `文档/开发文档/后端/API清单导航.md`，重生成跑 `php backend/scripts/export_api_inventory.php`。
+- 禁止用 `php artisan serve` 替代 `php artisan app:serve`（详见 §11）。
+- 禁止在 Controller 里直接 `Http::*` 调上游或第三方（详见 §7）。
+- 禁止在生产常驻 `queue:work`（队列已并入 `schedule:run`，详见 §4）。
+- 禁止补跑历史激进迁移文件（详见 §8）。
+- 禁止物理删除 Payment 记录、禁止把 `mofang_finance_api` 别名为 `hosting_panel_api`（详见 §7）。
+- 禁止管理端页面新增独立"头部说明卡片"；禁止用户控制台财务记录页使用统计/指标卡片（详见 §6）。
 - 禁止随手在仓库根新建文档；规则类以外放 `文档/` 下对应子目录。
 
 ## 13. 文档查阅路径
 
-- **新人入项**：`AGENTS.md` → `启动指南.md` → `开发规范.md` → `文档/README.md` → `文档/产品/产品总览.md` → `文档/架构/架构现状说明.md` → `文档/目录说明.md`。
-- **查接口**：`文档/后端/后端API清单.md`（精确）+ `文档/后端/API清单导航.md`（业务分组）。
-- **查接口格式**：`文档/后端/API格式规范.md`。
-- **查表结构**：先看 `文档/数据库/当前数据库结构.md`，历史对照再看 `文档/数据库/数据库结构说明-idc-2026-04-17.md`；疑难以实库 `information_schema` 与 `文档/架构/架构现状说明.md` 为准。
-- **后端规范**：`文档/后端/API格式规范.md`、`文档/后端/后端目录分类规范.md`。
-- **前端规范**：`文档/前端/前端项目规范.md`。
-- **上游对接**：`文档/集成/本地对接说明.md`。
-- **部署与调度**：`文档/部署与调度指南.md`。
+- **新人入项**：`AGENTS.md` → `启动指南.md` → `开发规范.md` → `文档/README.md` → `文档/开发文档/产品/产品总览.md` → `文档/开发文档/架构/架构现状说明.md` → `文档/目录说明.md`。
+- **查接口**：`文档/开发文档/后端/后端API清单.md`（精确）+ `文档/开发文档/后端/API清单导航.md`（业务分组）。
+- **查接口格式**：`文档/开发文档/后端/API格式规范.md`。
+- **查表结构**：先看 `文档/开发文档/数据库/当前数据库结构.md`，历史对照再看 `文档/开发记录/数据库/数据库结构说明-idc-2026-04-17.md`；疑难以实库 `information_schema` 与 `文档/开发文档/架构/架构现状说明.md` 为准。
+- **后端规范**：`文档/开发文档/后端/API格式规范.md`、`文档/开发文档/后端/后端目录分类规范.md`。
+- **前端规范**：`文档/开发文档/前端/前端项目规范.md`。
+- **上游对接**：`文档/开发文档/集成/本地对接说明.md`。
+- **部署与调度**：`文档/开发文档/部署与调度指南.md`。
 - **回溯旧方案**：直接查 `git` 历史，`文档/` 目录不保留历史副本。
 
 ## 14. 测试账号
