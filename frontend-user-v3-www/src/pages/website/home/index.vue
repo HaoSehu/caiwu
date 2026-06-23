@@ -76,9 +76,9 @@ async function loadHomePage() {
   loading.value = true
 
   try {
-    const [homeRes, heroRes, typeRes] = await Promise.allSettled([
+    // 优化：移除 home-hero 请求，hero 数据已包含在 home 响应中
+    const [homeRes, typeRes] = await Promise.allSettled([
       siteApi.home(),
-      siteApi.homeHero(),
       siteApi.productTypes(),
     ])
 
@@ -90,13 +90,12 @@ async function loadHomePage() {
         ? data.group_catalog_map
         : {}
 
+      // 从 home 响应中提取 hero 数据
+      homeHero.value = data.hero || {}
+
       if (data.site_config) {
         appStore.hydrateSiteConfig(data.site_config)
       }
-    }
-
-    if (heroRes.status === 'fulfilled') {
-      homeHero.value = heroRes.value.data || {}
     }
 
     if (typeRes.status === 'fulfilled') {

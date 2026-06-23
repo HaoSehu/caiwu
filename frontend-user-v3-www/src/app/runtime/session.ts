@@ -1,20 +1,31 @@
+import { createSessionDriver, initSessionActivityTracking } from '@caiwu/shared/runtime'
+
+const driver = createSessionDriver({
+  tokenKey: 'client_token',
+  lastActiveKey: 'client_last_active_at',
+  cookieDomain: (import.meta.env.VITE_SESSION_COOKIE_DOMAIN as string | undefined) || undefined,
+})
+
 export function getClientToken() {
-  return null
+  return driver.getToken()
 }
 
-export function setClientToken(_token) {
+export function setClientToken(token: string) {
+  driver.setToken(token)
 }
 
 export function removeClientToken() {
+  driver.removeToken()
 }
 
 export function isClientLoggedIn() {
-  return false
+  return driver.isLoggedIn()
 }
 
 export function isClientSessionExpired() {
-  return false
+  return driver.isSessionExpired()
 }
 
 export function initClientSessionActivityTracking() {
+  initSessionActivityTracking('client', () => driver.touchSessionActivity())
 }

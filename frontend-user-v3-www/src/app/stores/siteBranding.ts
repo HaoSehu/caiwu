@@ -33,6 +33,8 @@ export const useSiteBrandingStore = defineStore('site-branding', () => {
   const supportGroupLink = ref('')
   const termsUrl = ref('')
   const privacyUrl = ref('')
+  const icpRecord = ref(String(import.meta.env.VITE_ICP_RECORD || ''))
+  const valueAddedLicense = ref(String(import.meta.env.VITE_VALUE_ADDED_LICENSE || ''))
   const brandInitials = computed(() => deriveInitials(siteName.value))
 
   let fetchPromise = null
@@ -61,6 +63,8 @@ export const useSiteBrandingStore = defineStore('site-branding', () => {
     supportGroupLink.value = pick(data, ['support_group_link', 'supportGroupLink'], supportGroupLink.value || '')
     termsUrl.value = pick(data, ['terms_url'], termsUrl.value || '')
     privacyUrl.value = pick(data, ['privacy_url'], privacyUrl.value || '')
+    icpRecord.value = pick(data, ['icp_record', 'icpRecord'], icpRecord.value || '')
+    valueAddedLicense.value = pick(data, ['value_added_license', 'valueAddedLicense', 'value_added_telecom_license'], valueAddedLicense.value || '')
     syncDocumentTitle(browserTitle.value || siteName.value || DEFAULT_SITE_NAME, previousBaseTitle, DEFAULT_SITE_NAME)
     updateFavicon(siteFavicon.value || DEFAULT_FAVICON, DEFAULT_FAVICON)
   }
@@ -101,6 +105,8 @@ export const useSiteBrandingStore = defineStore('site-branding', () => {
     supportGroupLink,
     termsUrl,
     privacyUrl,
+    icpRecord,
+    valueAddedLicense,
     brandInitials,
     toggleSidebar,
     applyPageTitle,

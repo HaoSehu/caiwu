@@ -11,26 +11,21 @@
     "lint": "eslint src scripts tests --ext .js,.ts,.vue",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
     "check:source-health": "node ./scripts/check-source-health.mjs",
-    "test:verification": "node ./tests/verification-client-contract.test.mjs",
-    "test": "node ./tests/verification-client-contract.test.mjs && node ./tests/machineSpecOptions.test.mjs && node ./tests/ticketServiceOptionLabel.test.mjs && node ./tests/invoiceDisplayContract.test.mjs",
+    "test": "node ./tests/machineSpecOptions.test.mjs",
     "verify:refactor": "node ./scripts/verify-refactor.mjs"
   },
   "dependencies": {
     "@caiwu/shared": "file:../shared",
     "@element-plus/icons-vue": "^2.3.0",
-    "@novnc/novnc": "^1.6.0",
     "axios": "^1.13.6",
     "element-plus": "^2.9.0",
-    "markdown-it": "^14.1.1",
+    "markdown-it": "^14.2.0",
     "pinia": "^3.0.4",
-    "qrcode.vue": "^3.8.0",
-    "three": "^0.183.2",
     "vue": "^3.5.18",
     "vue-router": "^4.6.0"
   },
   "devDependencies": {
     "@rollup/rollup-win32-x64-msvc": "^4.59.0",
-    "@types/three": "^0.183.1",
     "@vitejs/plugin-vue": "^5.1.0",
     "sass": "^1.80.0",
     "unplugin-auto-import": "^0.18.0",

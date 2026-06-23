@@ -226,7 +226,7 @@
               </div>
               <div v-else-if="productStockLoading" class="stock-main">当前库存&nbsp;&nbsp;<strong>同步中...</strong></div>
               <div v-else-if="productStockError" class="stock-main">当前库存&nbsp;&nbsp;<strong>同步失败</strong></div>
-              <div v-else class="stock-main">当前库存&nbsp;&nbsp;<strong>可直接下单</strong></div>
+              <div v-else class="stock-main">当前库存&nbsp;&nbsp;<strong>可直接购买</strong></div>
               <div class="stock-hint">{{ stockHint }}</div>
             </div>
 
@@ -373,7 +373,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index.mjs'
 import siteApi from '@/api/site'
 import {
   resolvePurchaseRequirementList,
@@ -725,7 +725,7 @@ const stockHint = computed(() => {
   const stock = resolvedStock.value
   if (stock === null) return '正在同步实时库存，请稍候。'
   if (stock === -1 || stock > 10) return '当前库存充足，可直接提交账单。'
-  if (stock > 0) return `剩余 ${stock} 台，请尽快下单。`
+  if (stock > 0) return `剩余 ${stock} 台，请尽快购买。`
   return '当前库存不足，请联系客服。'
 })
 const soldOut = computed(() => (

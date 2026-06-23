@@ -178,8 +178,13 @@
         </transition>
 
         <div class="header-actions">
-          <a :href="consoleUrl('/client/login')" class="header-link">登录</a>
-          <a :href="consoleUrl('/client/register')" class="header-register">免费注册</a>
+          <template v-if="userStore.isLoggedIn">
+            <a :href="consoleUrl('/client/dashboard')" class="header-register">控制台</a>
+          </template>
+          <template v-else>
+            <a :href="consoleUrl('/client/login')" class="header-link">登录</a>
+            <a :href="consoleUrl('/client/register')" class="header-register">免费注册</a>
+          </template>
         </div>
 
         <button
@@ -216,8 +221,13 @@
         </nav>
 
         <div class="mobile-action-group">
-          <a :href="consoleUrl('/client/login')" class="mobile-action-btn">登录</a>
-          <a :href="consoleUrl('/client/register')" class="mobile-action-btn primary">免费注册</a>
+          <template v-if="userStore.isLoggedIn">
+            <a :href="consoleUrl('/client/dashboard')" class="mobile-action-btn primary">控制台</a>
+          </template>
+          <template v-else>
+            <a :href="consoleUrl('/client/login')" class="mobile-action-btn">登录</a>
+            <a :href="consoleUrl('/client/register')" class="mobile-action-btn primary">免费注册</a>
+          </template>
         </div>
       </div>
     </transition>
@@ -290,10 +300,10 @@
         </div>
 
         <div class="footer-bottom">
-          <p>&copy; 2026 {{ appStore.siteName }}. All rights reserved.</p>
-          <p class="footer-bottom__meta">
-            <span>增值电信业务经营许可证：待补</span>
-            <span>ICP 备案号：待补</span>
+          <p>&copy; {{ new Date().getFullYear() }} {{ appStore.siteName }}. All rights reserved.</p>
+          <p v-if="appStore.valueAddedLicense || appStore.icpRecord" class="footer-bottom__meta">
+            <span v-if="appStore.valueAddedLicense">增值电信业务经营许可证：{{ appStore.valueAddedLicense }}</span>
+            <span v-if="appStore.icpRecord">ICP 备案号：{{ appStore.icpRecord }}</span>
           </p>
         </div>
       </div>
@@ -303,20 +313,43 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { ElIcon } from 'element-plus/es/components/icon/index.mjs'
 import {
   ArrowDown,
   Close,
   Menu,
 } from '@element-plus/icons-vue'
 import { useAppStore } from '@/stores/app'
+import { useUserStore } from '@/stores/user'
+import { getToken } from '@/utils/auth'
 import { buildSupportContacts } from '@/data/supportContacts'
 import { buildConsoleUrl, isConsolePath } from '@/utils/consoleUrl'
 import { useNavProductMenu } from './useNavProductMenu'
 import { useNavContentMenu } from './useNavContentMenu'
 
 const route = useRoute()
+const router = useRouter()
 const appStore = useAppStore()
+const userStore = useUserStore()
+
+// 登录态恢复放到 onMounted，避免 setup 顶层产生路由跳转副作用
+// 跨端口登录传递仍走 query _token（与控制台 v4-console 约定保持一致），收到后立即持久化并从 URL 剥离
+onMounted(() => {
+  const urlToken = route.query._token
+  if (urlToken && typeof urlToken === 'string') {
+    userStore
+      .hydrateUserFromToken(urlToken)
+      .catch(() => {})
+      .finally(() => {
+        const { _token, ...restQuery } = route.query
+        router.replace({ query: restQuery })
+      })
+  } else if (getToken()) {
+    // 仅在本地已有 token 时才拉取用户信息，避免未登录时触发 401
+    userStore.fetchUserInfo().catch(() => {})
+  }
+})
 
 const navProductMenu = useNavProductMenu()
 const { productTypes: navProductTypes, activeTypeValue: navActiveTypeValue, activeGroups: navActiveGroups, loading: navLoading, activateType: navActivateType, init: navProductInit } = navProductMenu
@@ -333,9 +366,12 @@ const footerLogoLoadFailed = ref(false)
 
 const activeMenuId = ref(null)
 let megaMenuCloseTimer = null
+let megaMenuOpenTimer = null
+const MEGA_MENU_OPEN_DELAY = 120
 
 function openMegaMenu(menuId) {
   clearTimeout(megaMenuCloseTimer)
+  clearTimeout(megaMenuOpenTimer)
   activeMenuId.value = menuId
   if (menuId === 'products') {
     navProductInit()
@@ -353,7 +389,11 @@ function handleNavHover(item) {
       scheduleCloseMegaMenu()
       return
     }
-    openMegaMenu(item.menuId)
+    // 延迟打开，避免鼠标快速滑过导航时触发菜单与接口拉取
+    clearTimeout(megaMenuOpenTimer)
+    megaMenuOpenTimer = setTimeout(() => {
+      openMegaMenu(item.menuId)
+    }, MEGA_MENU_OPEN_DELAY)
   } else {
     scheduleCloseMegaMenu()
   }
@@ -361,10 +401,12 @@ function handleNavHover(item) {
 
 function keepMegaMenu() {
   clearTimeout(megaMenuCloseTimer)
+  clearTimeout(megaMenuOpenTimer)
 }
 
 function scheduleCloseMegaMenu() {
   clearTimeout(megaMenuCloseTimer)
+  clearTimeout(megaMenuOpenTimer)
   megaMenuCloseTimer = setTimeout(() => {
     activeMenuId.value = null
   }, 180)
@@ -456,6 +498,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('scroll', handleScroll)
   window.removeEventListener('resize', handleResize)
   clearTimeout(megaMenuCloseTimer)
+  clearTimeout(megaMenuOpenTimer)
 })
 </script>
 

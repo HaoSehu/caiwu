@@ -14,7 +14,7 @@
       <div class="container about-grid">
         <article class="about-card">
           <h2>服务能力</h2>
-          <p>覆盖产品展示、在线下单、统一账单、自动开通、售后支持与服务控制台。</p>
+          <p>覆盖产品展示、在线购买、统一账单、自动开通、售后支持与服务控制台。</p>
         </article>
         <article class="about-card">
           <h2>联系方式</h2>

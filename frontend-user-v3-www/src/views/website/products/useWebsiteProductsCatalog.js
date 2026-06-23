@@ -75,10 +75,10 @@ export function useWebsiteProductsCatalog({ onProductSelect, onResetSelection })
   })
   const activeCatalogCategoryId = computed(() => {
     if (activeChildId.value > 0) {
-      return Number(childGroups.value.find((group) => group.id === activeChildId.value)?.category_id || 0)
+      return Number(childGroups.value.find((group) => group.id === activeChildId.value)?.effective_product_group_id || 0)
     }
 
-    return Number(activeGroup.value?.category_id || 0)
+    return Number(activeGroup.value?.effective_product_group_id || 0)
   })
   const showMobileTypePicker = computed(() => isMobile.value && !mobileTypeEntered.value)
   const shouldAutoSelectProduct = computed(() => getPendingWebsiteCouponId() <= 0)
@@ -88,7 +88,7 @@ export function useWebsiteProductsCatalog({ onProductSelect, onResetSelection })
   })
 
   function getChildCategoryId(childId) {
-    return Number(childGroups.value.find((group) => group.id === childId)?.category_id || 0)
+    return Number(childGroups.value.find((group) => group.id === childId)?.effective_product_group_id || 0)
   }
 
   function hasDisplayPrice(product) {
@@ -408,9 +408,9 @@ export function useWebsiteProductsCatalog({ onProductSelect, onResetSelection })
 
     const map = {}
     ;(data.items_by_group || []).forEach((item) => {
-      const categoryId = Number(item.category_id || 0)
-      if (categoryId > 0) {
-        map[categoryId] = item.products || []
+      const groupId = Number(item.effective_product_group_id || 0)
+      if (groupId > 0) {
+        map[groupId] = item.products || []
       }
     })
     productsByGroup.value = map
@@ -421,13 +421,13 @@ export function useWebsiteProductsCatalog({ onProductSelect, onResetSelection })
       const nextChildId = matchedChild?.id || children[0].id
       activeChildId.value = nextChildId
       const activeChildCategoryId = Number(
-        (matchedChild?.category_id || children[0]?.category_id || 0),
+        (matchedChild?.effective_product_group_id || children[0]?.effective_product_group_id || 0),
       )
       const products = map[activeChildCategoryId] || []
       syncDefaultProduct(products, options)
     } else {
       activeChildId.value = 0
-      const rootCategoryId = Number(data.category_id || activeGroup.value?.category_id || 0)
+      const rootCategoryId = Number(data.effective_product_group_id || activeGroup.value?.effective_product_group_id || 0)
       const products = map[rootCategoryId] || []
       syncDefaultProduct(products, options)
     }

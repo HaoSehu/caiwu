@@ -93,6 +93,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElIcon } from 'element-plus/es/components/icon/index.mjs'
 import { ArrowRight, Calendar } from '@element-plus/icons-vue'
 
 const props = defineProps({
