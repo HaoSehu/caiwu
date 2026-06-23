@@ -1,6 +1,7 @@
 import type { PrimaryTableCol } from 'tdesign-vue-next';
+import { ACCOUNT_TRANSACTION_EVENT_MAP, getStatusLabel } from '@shared/statusConfig';
 
-type AnyRecord = Record<string, any>;
+import type { FinanceLedgerRecord } from '@/types/client';
 
 export const securityColumns: PrimaryTableCol[] = [
   { colKey: 'direction_label', title: '方向' },
@@ -34,7 +35,7 @@ export const financeColumns: PrimaryTableCol[] = [
   { colKey: 'invoice_no', title: '关联账单', minWidth: '10rem' },
 ];
 
-export function resolveFinanceTagTheme(row: AnyRecord) {
+export function resolveFinanceTagTheme(row: FinanceLedgerRecord) {
   const sceneKey = resolveFinanceBusinessKey(row);
   if (sceneKey.includes('refund') || String(row?.event_type || '').includes('refund')) return 'danger';
   if (sceneKey === 'auto_renew') return 'success';
@@ -50,7 +51,7 @@ export function resolveFinanceTagTheme(row: AnyRecord) {
   return 'default';
 }
 
-export function resolveFinanceBusinessLabel(row: AnyRecord) {
+export function resolveFinanceBusinessLabel(row: FinanceLedgerRecord) {
   const sceneKey = resolveFinanceBusinessKey(row);
   if (sceneKey.includes('refund') || String(row?.event_type || '').includes('refund')) return '已退款';
   if (sceneKey === 'auto_renew') return '自动续费';
@@ -62,7 +63,7 @@ export function resolveFinanceBusinessLabel(row: AnyRecord) {
     row?.invoice?.business_scene_label ||
     row?.display?.business_scene_label ||
     row?.invoice?.type_label ||
-    row?.event_type_label ||
+    resolveFinanceEventLabel(row?.event_type) ||
     '--',
   );
   if (label.includes('退款')) return '已退款';
@@ -71,10 +72,11 @@ export function resolveFinanceBusinessLabel(row: AnyRecord) {
   return label;
 }
 
-function resolveFinanceBusinessKey(row: AnyRecord) {
-  return String(
-    row?.business_scene ||
-    row?.invoice?.business_scene ||
-    '',
-  ).trim();
+export function resolveFinanceEventLabel(eventType: unknown) {
+  const normalized = String(eventType || '').trim();
+  return normalized ? getStatusLabel(ACCOUNT_TRANSACTION_EVENT_MAP, normalized) : '';
+}
+
+function resolveFinanceBusinessKey(row: FinanceLedgerRecord) {
+  return String(row?.business_scene || row?.invoice?.business_scene || '').trim();
 }

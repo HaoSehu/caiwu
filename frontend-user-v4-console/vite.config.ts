@@ -8,6 +8,8 @@ import vueJsx from '@vitejs/plugin-vue-jsx';
 import type { ConfigEnv, UserConfig } from 'vite';
 import { loadEnv } from 'vite';
 import { viteMockServe } from 'vite-plugin-mock';
+import Components from 'unplugin-vue-components/vite';
+import { TDesignResolver } from 'unplugin-vue-components/resolvers';
 import svgLoader from 'vite-svg-loader';
 
 const CWD = process.cwd();
@@ -71,17 +73,12 @@ function resolveManualChunk(id: string) {
     return 'vendor-tdesign';
   }
 
-  if (normalized.includes('/three/') || normalized.includes('/@types/three/')) {
-    return 'vendor-three';
-  }
-
-  if (normalized.includes('/@novnc/novnc/')) {
-    return 'vendor-vnc';
+  if (normalized.includes('/qrcode.vue/')) {
+    return 'vendor-qrcode';
   }
 
   if (
-    normalized.includes('/qrcode.vue/')
-    || normalized.includes('/markdown-it/')
+    normalized.includes('/markdown-it/')
     || normalized.includes('/entities/')
     || normalized.includes('/linkify-it/')
     || normalized.includes('/mdurl/')
@@ -223,6 +220,19 @@ export default ({ mode }: ConfigEnv): UserConfig => {
     plugins: [
       vue(),
       vueJsx(),
+      Components({
+        // 仅按需解析 TDesign 组件（含其样式），替代 main.ts 的全量 app.use(TDesign)。
+        // 图标仍由各页面显式 import（tdesign-icons-vue-next），故关闭 resolveIcons。
+        // esm: true → 从 tdesign-vue-next/esm 引入，支持 rollup 静态 tree-shaking 且自动注入样式。
+        dts: false,
+        resolvers: [
+          TDesignResolver({
+            library: 'vue-next',
+            resolveIcons: false,
+            esm: true,
+          }),
+        ],
+      }),
       ...(mode === 'mock'
         ? [
             viteMockServe({
@@ -237,12 +247,14 @@ export default ({ mode }: ConfigEnv): UserConfig => {
     ],
 
     server: {
+      headers: {
+        'X-Content-Type-Options': 'nosniff',
+      },
       fs: {
         allow: [path.resolve(__dirname, '..')],
       },
       port: 5173,
       host: '127.0.0.1',
-      allowedHosts: true,
       proxy: {
         '/api': {
           target: backendProxyTarget,
@@ -285,11 +297,10 @@ export default ({ mode }: ConfigEnv): UserConfig => {
         'pinia',
         'axios',
         'tdesign-vue-next',
+        'tdesign-vue-next/esm',
         'tdesign-icons-vue-next',
-        'echarts',
         'vue-i18n',
         'dayjs',
-        'lodash',
         'nprogress',
         'qs',
         // tvision-color 依赖旧版 @babel/runtime-corejs3@7.18.9，其内部混用 ESM/CJS

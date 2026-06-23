@@ -2,19 +2,18 @@ import { reactive, ref } from 'vue';
 import { MessagePlugin } from 'tdesign-vue-next';
 
 import clientApi from '@/api/client';
-import { normalizeConsoleDetail, mergeConsoleDetail, resolveErrorMessage } from './useConsoleCore';
-
-type AnyRecord = Record<string, any>;
+import type { ConsoleServiceDetail } from '@/types/client';
+import { normalizeConsoleDetail, resolveErrorMessage } from './useConsoleCore';
 
 export interface UseConsoleDialogsOptions {
   serviceId: { value: number };
-  detail: { value: AnyRecord };
+  detail: { value: ConsoleServiceDetail };
   actionLoading: { value: boolean };
   setOperationStatus: (type: string, label: string) => void;
   loadRemoteStatus: (silent: boolean) => Promise<void>;
   clearStatusSyncTimer: () => void;
   scheduleStatusSync: (callback: () => void, delay: number) => void;
-  mergeDetail: (patch: AnyRecord) => void;
+  mergeDetail: (patch: Partial<ConsoleServiceDetail>) => void;
 }
 
 export function useConsoleDialogs(options: UseConsoleDialogsOptions) {
@@ -29,7 +28,6 @@ export function useConsoleDialogs(options: UseConsoleDialogsOptions) {
     mergeDetail,
   } = options;
 
-  // --- Name dialog ---
   const nameVisible = ref(false);
   const nameSubmitting = ref(false);
   const nameForm = reactive({ name: '' });
@@ -43,21 +41,20 @@ export function useConsoleDialogs(options: UseConsoleDialogsOptions) {
     nameSubmitting.value = true;
     try {
       const res = await clientApi.updateServiceName(serviceId.value, { name: nameForm.name });
-      const payload = (res as AnyRecord).data || {};
+      const payload = res.data || {};
       mergeDetail({
         name: payload.name || nameForm.name,
         custom_service_name: payload.custom_service_name || nameForm.name,
       });
       nameVisible.value = false;
       MessagePlugin.success('实例名称已保存');
-    } catch (error: any) {
+    } catch (error: unknown) {
       MessagePlugin.error(resolveErrorMessage(error, '实例名称保存失败'));
     } finally {
       nameSubmitting.value = false;
     }
   }
 
-  // --- Remark dialog ---
   const remarkVisible = ref(false);
   const remarkSubmitting = ref(false);
   const remarkForm = reactive({ remark: '' });
@@ -71,17 +68,16 @@ export function useConsoleDialogs(options: UseConsoleDialogsOptions) {
     remarkSubmitting.value = true;
     try {
       const res = await clientApi.updateServiceRemark(serviceId.value, { remark: remarkForm.remark });
-      mergeDetail({ remark: String((res as AnyRecord).data?.remark || remarkForm.remark).trim() });
+      mergeDetail({ remark: String(res.data?.remark || remarkForm.remark).trim() });
       remarkVisible.value = false;
       MessagePlugin.success('备注已保存');
-    } catch (error: any) {
+    } catch (error: unknown) {
       MessagePlugin.error(resolveErrorMessage(error, '备注保存失败'));
     } finally {
       remarkSubmitting.value = false;
     }
   }
 
-  // --- Password dialog ---
   const passwordVisible = ref(false);
   const passwordForm = reactive({ password: '', password_confirmation: '' });
 
@@ -139,7 +135,7 @@ export function useConsoleDialogs(options: UseConsoleDialogsOptions) {
         password: passwordForm.password,
         password_confirmation: passwordForm.password_confirmation,
       });
-      const payload = (res as AnyRecord).data || {};
+      const payload = res.data || {};
       if (payload.detail) detail.value = normalizeConsoleDetail(payload.detail);
       setOperationStatus('repassword', '重置密码中');
       passwordVisible.value = false;
@@ -148,7 +144,7 @@ export function useConsoleDialogs(options: UseConsoleDialogsOptions) {
       MessagePlugin.success(String(payload.message || '重置密码指令已提交'));
       clearStatusSyncTimer();
       scheduleStatusSync(() => loadRemoteStatus(true), 1500);
-    } catch (error: any) {
+    } catch (error: unknown) {
       MessagePlugin.error(resolveErrorMessage(error, '重置密码失败'));
     } finally {
       actionLoading.value = false;

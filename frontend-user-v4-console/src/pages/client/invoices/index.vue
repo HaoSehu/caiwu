@@ -1,11 +1,25 @@
 <template>
   <section class="record-page client-invoices">
+    <!-- 快捷筛选标签 -->
+    <div class="quick-filter-tags">
+      <t-tag
+        v-for="item in quickFilters"
+        :key="item.key"
+        :variant="filters.quickFilter === item.key ? 'outline' : 'light'"
+        :theme="filters.quickFilter === item.key ? 'primary' : 'default'"
+        class="quick-filter-tag"
+        @click="applyQuickFilter(item.key)"
+      >
+        {{ item.label }}
+      </t-tag>
+    </div>
+
     <t-card class="record-card" :bordered="false">
       <div class="record-toolbar">
         <t-input
           v-model="filters.keyword"
           clearable
-          placeholder="搜索账单号或支付号"
+          placeholder="搜索账单号、商家订单号或第三方订单号"
           @enter="handleSearch"
           @clear="handleSearch"
         >
@@ -33,9 +47,8 @@
     </t-card>
 
     <section class="record-list-card">
-      <t-loading :loading="loading" text="正在加载账单记录">
-        <template v-if="list.length">
-          <t-table class="record-table" row-key="id" :data="list" :columns="columns" :pagination="null" hover>
+      <DataState :loading="loading" :empty="!list.length" description="暂无账单记录">
+        <t-table class="record-table" row-key="id" :data="list" :columns="columns" :pagination="null" hover>
               <template #invoice="{ row }">
                 <div class="stack-cell">
                   <strong>{{ resolveInvoiceNo(row) }}</strong>
@@ -50,18 +63,17 @@
               </template>
               <template #payment="{ row }">
                 <div class="stack-cell">
-                  <strong>{{ paymentRecordNo(row) }}</strong>
+                  <strong>商家：{{ paymentRecordNo(row) }}</strong>
+                  <span>第三方：{{ paymentTradeNo(row) }}</span>
                   <span>{{ paymentRecordSummary(row) }}</span>
                 </div>
               </template>
               <template #status="{ row }">
-                <t-tag :theme="resolveInvoiceTagTheme(row.status)" variant="light">
-                  {{ resolveInvoiceStatusLabel(row) }}
-                </t-tag>
+                <StatusTag :status-map="INVOICE_STATUS_MAP" :status="Number(row.status)" />
               </template>
               <template #operation="{ row }">
                 <t-space>
-                  <t-button size="small" theme="primary" variant="text" @click="openDetail(row)">查看</t-button>
+                  <t-button size="small" theme="primary" variant="text" @click="goToDetail(row)">查看</t-button>
                   <t-button
                     v-if="isPayableInvoice(row)"
                     size="small"
@@ -79,9 +91,7 @@
             <article v-for="row in list" :key="row.id" class="record-mobile-card">
               <div class="record-mobile-card__head">
                 <strong>{{ resolveInvoiceNo(row) }}</strong>
-                <t-tag :theme="resolveInvoiceTagTheme(row.status)" variant="light">
-                  {{ resolveInvoiceStatusLabel(row) }}
-                </t-tag>
+                <StatusTag :status-map="INVOICE_STATUS_MAP" :status="Number(row.status)" />
               </div>
 
               <div class="stack-cell">
@@ -91,22 +101,20 @@
               </div>
 
               <div class="record-mobile-card__meta">
-                <span>支付：{{ paymentRecordNo(row) }}</span>
+                <span>商家：{{ paymentRecordNo(row) }}</span>
+                <span>第三方：{{ paymentTradeNo(row) }}</span>
                 <span>{{ row.created_at || '--' }}</span>
               </div>
 
               <div class="record-mobile-card__actions">
-                <t-button size="small" theme="primary" variant="text" @click="openDetail(row)">查看</t-button>
+                <t-button size="small" theme="primary" variant="text" @click="goToDetail(row)">查看</t-button>
                 <t-button v-if="isPayableInvoice(row)" size="small" theme="primary" variant="outline" @click="goToPay(row)">
                   去支付
                 </t-button>
               </div>
             </article>
           </div>
-        </template>
-
-        <t-empty v-else description="暂无账单记录" />
-      </t-loading>
+      </DataState>
     </section>
 
     <div v-if="total > 0" class="record-pagination">
@@ -121,77 +129,53 @@
       />
     </div>
 
-    <t-drawer
-      v-model:visible="detailVisible"
-      header="账单详情"
-      size="min(32rem, calc(100vw - 2rem))"
-      destroy-on-close
-      :close-btn="true"
-      @close="closeDetail"
-    >
-      <div v-if="currentRow" class="invoice-drawer-body">
-        <t-descriptions :column="1" bordered>
-          <t-descriptions-item label="账单号">{{ resolveInvoiceNo(currentRow) }}</t-descriptions-item>
-          <t-descriptions-item label="账单类型">{{ currentRow.type_label || '--' }}</t-descriptions-item>
-          <t-descriptions-item label="状态">
-            <t-tag :theme="resolveInvoiceTagTheme(currentRow.status)" variant="light">
-              {{ resolveInvoiceStatusLabel(currentRow) }}
-            </t-tag>
-          </t-descriptions-item>
-          <t-descriptions-item label="账单金额">¥{{ formatMoney(currentRow.amount) }}</t-descriptions-item>
-          <t-descriptions-item label="已付金额">¥{{ formatMoney(currentRow.paid_amount) }}</t-descriptions-item>
-          <t-descriptions-item label="待付金额">¥{{ formatMoney(currentRow.payable_amount) }}</t-descriptions-item>
-          <t-descriptions-item label="关联支付">{{ paymentRecordNo(currentRow) }}</t-descriptions-item>
-          <t-descriptions-item label="支付渠道">{{ paymentRecordSummary(currentRow) }}</t-descriptions-item>
-          <t-descriptions-item label="创建时间">{{ currentRow.created_at || '--' }}</t-descriptions-item>
-          <t-descriptions-item label="截止时间">{{ currentRow.due_date || '--' }}</t-descriptions-item>
-          <t-descriptions-item v-if="currentRow.paid_at" label="支付时间">{{ currentRow.paid_at }}</t-descriptions-item>
-        </t-descriptions>
-
-        <div v-if="isPayableInvoice(currentRow)" class="invoice-drawer-actions">
-          <t-button theme="primary" @click="goToPay(currentRow)">去支付</t-button>
-          <t-button theme="danger" variant="outline" :loading="canceling" @click="cancelInvoice(currentRow)">
-            取消账单
-          </t-button>
-        </div>
-      </div>
-    </t-drawer>
   </section>
 </template>
 
 <script setup lang="ts">
 import type { PrimaryTableCol } from 'tdesign-vue-next';
 import { SearchIcon } from 'tdesign-icons-vue-next';
+import { useRouter } from 'vue-router';
 
+import DataState from '@shared/user-v3/components/DataState.vue';
+import StatusTag from '@shared/user-v3/components/StatusTag.vue';
+import { INVOICE_STATUS_MAP } from '@shared/statusConfig';
 import {
   formatMoney,
   INVOICE_STATUS_OPTIONS,
   INVOICE_TYPE_OPTIONS,
   isPayableInvoice,
   resolveInvoiceNo,
-  resolveInvoiceStatusLabel,
-  resolveInvoiceTagTheme,
   useInvoiceList,
 } from '@/domains/finance/useInvoices';
+import type { InvoiceRecord } from '@/types/client';
+
+const router = useRouter();
 
 const {
   loading,
-  canceling,
   list,
   total,
   filters,
-  detailVisible,
-  currentRow,
-  showTypeSelector,
   loadList,
   handleSearch,
   handlePageSizeChange,
   resetFilters,
-  openDetail,
-  closeDetail,
+  applyQuickFilter,
   goToPay,
-  cancelInvoice,
+  showTypeSelector,
 } = useInvoiceList();
+
+const quickFilters = [
+  { key: '', label: '全部' },
+  { key: 'week', label: '最近7天' },
+  { key: 'month', label: '本月' },
+  { key: 'pending', label: '待支付' },
+];
+
+function goToDetail(row: InvoiceRecord) {
+  router.push(`/client/invoices/${row.id}`);
+}
 
 const columns: PrimaryTableCol[] = [
   { colKey: 'invoice', title: '账单号', minWidth: '12rem' },
@@ -212,9 +196,14 @@ function paymentRecordNo(row: Record<string, any>) {
   return payment.payment_no || '--';
 }
 
+function paymentTradeNo(row: Record<string, any>) {
+  const payment = paymentRecord(row);
+  return payment.trade_no || '--';
+}
+
 function paymentRecordSummary(row: Record<string, any>) {
   const payment = paymentRecord(row);
-  const parts = [payment.gateway_label || payment.gateway, payment.status_label].filter(Boolean);
+  const parts = [payment.gateway].filter(Boolean);
   return parts.length ? parts.join(' / ') : '--';
 }
 </script>
@@ -222,27 +211,21 @@ function paymentRecordSummary(row: Record<string, any>) {
 <style scoped lang="less">
 @import '../record-page.less';
 
+.quick-filter-tags {
+  display: flex;
+  gap: var(--td-comp-margin-s);
+  margin-bottom: var(--td-comp-margin-m);
+  flex-wrap: wrap;
+}
+
+.quick-filter-tag {
+  cursor: pointer;
+  user-select: none;
+}
+
 .invoice-money {
   color: var(--td-text-color-primary);
   font: var(--td-font-body-medium);
   font-weight: 600;
-}
-
-.invoice-drawer-body {
-  display: grid;
-  gap: var(--td-comp-margin-m);
-}
-
-.invoice-drawer-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--td-comp-margin-s);
-  justify-content: flex-end;
-}
-
-@media (max-width: 48rem) {
-  .invoice-drawer-actions {
-    justify-content: flex-start;
-  }
 }
 </style>

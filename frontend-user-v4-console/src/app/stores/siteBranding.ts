@@ -6,8 +6,37 @@ import siteApi from '@/api/site';
 import { DEFAULT_SUPPORT_CONTACTS } from '@/data/supportContacts';
 
 const DEFAULT_SITE_NAME = import.meta.env.VITE_APP_TITLE || '创欧云';
-const DEFAULT_SITE_LOGO = '/branding/logo.svg';
-const DEFAULT_FAVICON = '/branding/logo1.svg';
+const DEFAULT_SITE_LOGO = '/uploads/logo/logo.svg';
+const DEFAULT_FAVICON = '/uploads/logo/logo1.svg';
+
+function normalizeBrandAsset(raw: unknown, fallback: string) {
+  const value = String(raw ?? '').trim();
+
+  if (!value) {
+    return fallback;
+  }
+
+  const normalized = value.replace(/\\/g, '/');
+
+  if (/^https?:\/\//i.test(normalized) || normalized.startsWith('//') || normalized.startsWith('data:')) {
+    return normalized;
+  }
+
+  if (/(^|\/)branding\/logo\.svg(?:[?#].*)?$/i.test(normalized)) {
+    return DEFAULT_SITE_LOGO;
+  }
+
+  if (/(^|\/)branding\/logo1\.svg(?:[?#].*)?$/i.test(normalized)) {
+    return DEFAULT_FAVICON;
+  }
+
+  const uploadsMatch = normalized.match(/(\/uploads\/.+)$/i);
+  if (uploadsMatch?.[1]) {
+    return uploadsMatch[1];
+  }
+
+  return normalized.startsWith('/') ? normalized : `/${normalized.replace(/^\/+/, '')}`;
+}
 
 function pick(raw: Record<string, unknown> | undefined, keys: string[], fallback: string) {
   for (const key of keys) {
@@ -51,8 +80,11 @@ export const useSiteBrandingStore = defineStore('site-branding', () => {
     const previousBaseTitle = browserTitle.value || siteName.value || DEFAULT_SITE_NAME;
     siteName.value = pick(data, ['site_name'], siteName.value || DEFAULT_SITE_NAME);
     browserTitle.value = pick(data, ['browser_title'], siteName.value || DEFAULT_SITE_NAME);
-    siteLogo.value = pick(data, ['site_logo'], siteLogo.value || DEFAULT_SITE_LOGO);
-    siteFavicon.value = pick(data, ['site_favicon'], siteFavicon.value || DEFAULT_FAVICON);
+    siteLogo.value = normalizeBrandAsset(pick(data, ['site_logo'], siteLogo.value || DEFAULT_SITE_LOGO), DEFAULT_SITE_LOGO);
+    siteFavicon.value = normalizeBrandAsset(
+      pick(data, ['site_favicon'], siteFavicon.value || DEFAULT_FAVICON),
+      DEFAULT_FAVICON,
+    );
     serviceQqGroup.value = pick(
       data,
       ['service_qq_group', 'serviceQqGroup', 'service_phone', 'servicePhone'],
@@ -80,8 +112,8 @@ export const useSiteBrandingStore = defineStore('site-branding', () => {
         hydrateSiteConfig(res.data || {});
       })
       .catch(() => {
-        siteLogo.value = siteLogo.value || DEFAULT_SITE_LOGO;
-        siteFavicon.value = siteFavicon.value || DEFAULT_FAVICON;
+        siteLogo.value = normalizeBrandAsset(siteLogo.value || DEFAULT_SITE_LOGO, DEFAULT_SITE_LOGO);
+        siteFavicon.value = normalizeBrandAsset(siteFavicon.value || DEFAULT_FAVICON, DEFAULT_FAVICON);
       })
       .finally(() => {
         updateFavicon(siteFavicon.value || DEFAULT_FAVICON, DEFAULT_FAVICON);

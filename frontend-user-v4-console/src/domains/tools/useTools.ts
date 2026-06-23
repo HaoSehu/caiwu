@@ -3,6 +3,10 @@ import { MessagePlugin } from 'tdesign-vue-next';
 
 import clientApi from '@/api/client';
 
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
 export function useTools() {
   const querying = ref(false);
   const submitting = ref(false);
@@ -25,9 +29,9 @@ export function useTools() {
     querying.value = true;
     try {
       const response = await clientApi.blackholeQuery({ ip: queryForm.ip.trim() });
-      queryResult.value = JSON.stringify((response as any).data || {}, null, 2);
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || '黑洞查询失败');
+      queryResult.value = JSON.stringify(response.data || {}, null, 2);
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '黑洞查询失败'));
     } finally {
       querying.value = false;
     }
@@ -42,8 +46,8 @@ export function useTools() {
     try {
       await clientApi.blackholeAddNingboWhitelist({ ip: ningboForm.ip.trim(), domain: ningboForm.domain.trim() });
       MessagePlugin.success('宁波白名单提交成功');
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || '宁波白名单提交失败');
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '宁波白名单提交失败'));
     } finally {
       submitting.value = false;
     }
@@ -55,8 +59,8 @@ export function useTools() {
     try {
       await clientApi.blackholeAddShiyanLayer4Rule({ ip: layer4Form.ip.trim(), mode: layer4Form.mode });
       MessagePlugin.success('十堰四层规则已提交');
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || '十堰四层规则提交失败');
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '十堰四层规则提交失败'));
     } finally {
       submitting.value = false;
     }
@@ -72,8 +76,8 @@ export function useTools() {
         enabled: layer7Form.enabled,
       });
       MessagePlugin.success('十堰七层规则已更新');
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || '十堰七层规则提交失败');
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '十堰七层规则提交失败'));
     } finally {
       submitting.value = false;
     }

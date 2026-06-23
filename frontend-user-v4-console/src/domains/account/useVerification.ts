@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 
 import { clientAuthApi } from '@/api/auth';
 import { useUserStore } from '@/store';
+import type { ClientUserInfo, ClientVerificationPayload } from '@/types/client';
 
 const IDENTITY_CARD_PATTERN = /(^\d{15}$)|(^\d{17}[\dXx]$)/;
 
@@ -11,8 +12,8 @@ function pickQrUrl(payload: Record<string, unknown>) {
   return String(payload.qrcode_url || payload.qr_code_url || payload.scan_url || payload.url || '').trim();
 }
 
-function resolveMessage(error: any, fallback: string) {
-  return error?.message || fallback;
+function resolveMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
 }
 
 export function useVerification() {
@@ -58,7 +59,7 @@ export function useVerification() {
   );
   const canSubmit = computed(() => verificationForm.realName.trim().length > 0 && verificationForm.idCard.trim().length > 0);
 
-  function syncFromUserInfo(info: Record<string, unknown> = {}) {
+  function syncFromUserInfo(info: ClientUserInfo = {}) {
     form.id = String(info.id || '');
     form.email = String(info.email || '');
     form.nickname = String(info.nickname || info.name || '');
@@ -73,7 +74,7 @@ export function useVerification() {
 
   async function refreshUserInfo() {
     const info = await userStore.getUserInfo();
-    syncFromUserInfo(info as any);
+    syncFromUserInfo(info);
   }
 
   async function loadProfile() {
@@ -82,9 +83,9 @@ export function useVerification() {
       if (!userStore.info?.name) {
         await refreshUserInfo();
       } else {
-        syncFromUserInfo(userStore.info as any);
+        syncFromUserInfo(userStore.info);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       MessagePlugin.error(resolveMessage(error, '实名信息加载失败'));
     } finally {
       loading.value = false;
@@ -119,9 +120,10 @@ export function useVerification() {
     return true;
   }
 
-  function applyVerificationPayload(payload: Record<string, unknown>) {
-    certifyId.value = String(payload.certify_id || certifyId.value || '');
-    verificationUrl.value = pickQrUrl(payload);
+  function applyVerificationPayload(payload: ClientVerificationPayload | null | undefined) {
+    const data = payload || {};
+    certifyId.value = String(data.certify_id || certifyId.value || '');
+    verificationUrl.value = pickQrUrl(data);
   }
 
   async function submitVerification() {
@@ -132,11 +134,11 @@ export function useVerification() {
         realname: verificationForm.realName.trim(),
         idcard: verificationForm.idCard.trim(),
       });
-      applyVerificationPayload((res as any).data || {});
+      applyVerificationPayload(res.data);
       if (!verificationUrl.value) await refreshVerificationLink();
       if (verificationUrl.value) MessagePlugin.success('二维码已生成，请扫码继续认证');
       startPolling();
-    } catch (error: any) {
+    } catch (error: unknown) {
       MessagePlugin.error(resolveMessage(error, '提交失败'));
     } finally {
       verificationLoading.value = false;
@@ -151,10 +153,10 @@ export function useVerification() {
     verificationLoading.value = true;
     try {
       const res = await clientAuthApi.verificationQrcode({ certify_id: certifyId.value });
-      applyVerificationPayload((res as any).data || {});
+      applyVerificationPayload(res.data);
       if (!verificationUrl.value) throw new Error('未获取到实名服务商链接');
       startPolling();
-    } catch (error: any) {
+    } catch (error: unknown) {
       MessagePlugin.error(resolveMessage(error, '获取认证链接失败'));
     } finally {
       verificationLoading.value = false;
@@ -181,7 +183,7 @@ export function useVerification() {
     checkingStatus.value = true;
     try {
       const res = await clientAuthApi.verificationStatus({ certify_id: certifyId.value });
-      const payload = (res as any).data || {};
+      const payload = res.data || {};
       verificationMessage.value = String(payload.msg || payload.message || '');
       if (Number(payload.status) === 1) {
         MessagePlugin.success('认证成功');
@@ -197,7 +199,7 @@ export function useVerification() {
         canRestartVerification.value = Boolean(payload.can_restart);
         if (!silent) MessagePlugin.warning(verificationMessage.value || '认证未完成');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (!silent) MessagePlugin.error(resolveMessage(error, '查询失败'));
     } finally {
       checkingStatus.value = false;
@@ -210,11 +212,11 @@ export function useVerification() {
     stopPolling();
     try {
       const res = await clientAuthApi.restartVerification();
-      applyVerificationPayload((res as any).data || {});
+      applyVerificationPayload(res.data);
       if (!verificationUrl.value) await refreshVerificationLink();
       if (verificationUrl.value) MessagePlugin.success('已重新生成二维码，请重新扫码');
       startPolling();
-    } catch (error: any) {
+    } catch (error: unknown) {
       canRestartVerification.value = true;
       MessagePlugin.error(resolveMessage(error, '重新认证失败'));
     } finally {

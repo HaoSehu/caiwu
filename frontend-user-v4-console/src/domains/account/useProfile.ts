@@ -3,13 +3,25 @@ import { MessagePlugin } from 'tdesign-vue-next';
 import { useRouter } from 'vue-router';
 
 import { clientAuthApi } from '@/api/auth';
+import { copyText as copyShared } from '@/utils/format';
 import { useUserStore } from '@/store';
+import type { ClientNotificationPreferences, ClientUserInfo } from '@/types/client';
 
-type AnyRecord = Record<string, any>;
 type TagTheme = 'default' | 'success' | 'warning' | 'primary' | 'danger';
 type ProfileTab = 'profile' | 'security' | 'agent' | 'notification';
+type NotificationKey = keyof ClientNotificationPreferences;
+type NotificationItem = {
+  key: NotificationKey;
+  name: string;
+  desc: string;
+  enabled: boolean;
+};
 
 const PROFILE_TABS = new Set<ProfileTab>(['profile', 'security', 'agent', 'notification']);
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
 
 export function useProfile() {
   const router = useRouter();
@@ -23,14 +35,14 @@ export function useProfile() {
     email: '',
     nickname: '',
     phone: '',
-    balance: '0.00',
+    cash_balance: '0.00',
     createdAt: '',
     is_verified: 0,
     real_name: '',
     id_card_masked: '',
   });
   const passwordForm = reactive({ oldPassword: '', newPassword: '', confirmPassword: '' });
-  const notificationList = reactive([
+  const notificationList = reactive<NotificationItem[]>([
     { key: 'login_notify', name: '账号登录提醒', desc: '每次账户成功登录后，向绑定邮箱发送登录安全提醒。', enabled: false },
     { key: 'login_location_alert', name: '异地登录提醒', desc: '检测到新的登录 IP 环境时，额外发送一次异地登录风险提醒。', enabled: false },
     { key: 'password_change_alert', name: '更改密码提醒', desc: '账户密码修改成功后，立即发送安全提醒邮件。', enabled: false },
@@ -39,7 +51,7 @@ export function useProfile() {
     { key: 'marketing_alert', name: '营销提醒接收', desc: '接收产品更新、活动优惠和运营消息。', enabled: false },
   ]);
 
-  const balanceText = computed(() => `¥${profileForm.balance || '0.00'}`);
+  const balanceText = computed(() => `¥${profileForm.cash_balance || '0.00'}`);
   const enabledNotificationCount = computed(() => notificationList.filter((item) => item.enabled).length);
   const securityItems = computed(() => [
     {
@@ -84,12 +96,12 @@ export function useProfile() {
     },
   ]);
 
-  function hydrateProfile(info: AnyRecord = {}) {
+  function hydrateProfile(info: ClientUserInfo = {}) {
     profileForm.id = String(info.id || '');
     profileForm.email = String(info.email || '');
     profileForm.nickname = String(info.nickname || info.name || '');
     profileForm.phone = String(info.phone || '');
-    profileForm.balance = String(info.balance || '0.00');
+    profileForm.cash_balance = String(info.cash_balance || '0.00');
     profileForm.createdAt = String(info.created_at || '');
     profileForm.is_verified = Number(info.is_verified || 0);
     profileForm.real_name = String(info.real_name || '');
@@ -98,16 +110,11 @@ export function useProfile() {
 
   async function loadProfile() {
     const info = await userStore.getUserInfo();
-    hydrateProfile(info as AnyRecord);
+    hydrateProfile(info);
   }
 
   async function copyText(text: string) {
-    try {
-      await navigator.clipboard.writeText(text);
-      MessagePlugin.success('复制成功');
-    } catch {
-      MessagePlugin.warning('复制失败，请手动复制');
-    }
+    await copyShared(text, { successMsg: '复制成功' });
   }
 
   function handleProfileTabChange(value: unknown) {
@@ -122,8 +129,8 @@ export function useProfile() {
       await clientAuthApi.updateProfile({ nickname: profileForm.nickname });
       await loadProfile();
       MessagePlugin.success('用户名修改成功');
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || '资料保存失败');
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '资料保存失败'));
     } finally {
       profileLoading.value = false;
     }
@@ -149,8 +156,8 @@ export function useProfile() {
       passwordDialogVisible.value = false;
       await userStore.logout();
       router.push('/client/login');
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || '修改失败');
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '修改失败'));
     } finally {
       profileLoading.value = false;
     }
@@ -159,7 +166,7 @@ export function useProfile() {
   async function loadNotificationPreferences() {
     try {
       const response = await clientAuthApi.notificationPreferences();
-      const data = (response as AnyRecord).data || {};
+      const data = response.data || {};
       notificationList.forEach((item) => {
         item.enabled = Boolean(data[item.key]);
       });
@@ -174,8 +181,8 @@ export function useProfile() {
       const settings = Object.fromEntries(notificationList.map((item) => [item.key, item.enabled]));
       await clientAuthApi.updateNotificationPreferences(settings);
       MessagePlugin.success('设置保存成功');
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || '保存失败');
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '保存失败'));
     } finally {
       notificationLoading.value = false;
     }

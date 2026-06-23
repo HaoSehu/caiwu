@@ -1,11 +1,14 @@
 import { computed, ref } from 'vue';
 
-type AnyRecord = Record<string, any>;
-type MonitorPoint = { time: string; timestamp: number; value: number; displayValue: string };
+import type { MonitorChartData, MonitorChartPoint, MonitorChartRecord, MonitorSummaryItem } from '@/types/client';
+
 type MonitorSeries = { key: string; name: string; rawPoints: MonitorPoint[] };
+type MonitorPoint = { time: string; timestamp: number; value: number; displayValue: string };
 type MonitorRenderPoint = MonitorPoint & { key: string; index: number; x: number; y: number };
 type MonitorRenderSeries = { key: string; name: string; color: string; lineWidth: number; points: MonitorRenderPoint[]; path: string };
 type MonitorAxisTick = { key: string; label: string; y: number; top: number };
+type ActiveMonitorSeriesPoint = { key: string; name: string; color: string; x: number; y: number; valueText: string };
+type ActiveMonitorPoint = { x: number; y: number; time: string; seriesPoints: ActiveMonitorSeriesPoint[] };
 type MonitorChartView = {
   key: string;
   label: string;
@@ -28,12 +31,12 @@ export const MONITOR_AXIS_SEGMENTS = 3;
 
 const monitorPalette = ['#0052d9', '#00a870', '#e37318', '#7b61ff'];
 
-export function useConsoleMonitor(monitorState: { charts: AnyRecord[] }) {
-  const monitorChartViews = computed(() => monitorState.charts.map((chart: AnyRecord, index: number) => buildMonitorChartView(chart, index)));
+export function useConsoleMonitor(monitorState: { charts: MonitorChartRecord[] }) {
+  const monitorChartViews = computed(() => monitorState.charts.map((chart, index) => buildMonitorChartView(chart, index)));
   const activeMonitorPoint = ref<{ chartKey: string; index: number } | null>(null);
 
-  function buildMonitorChartView(chart: AnyRecord, index: number): MonitorChartView {
-    const summary = chart.summary && typeof chart.summary === 'object' ? chart.summary : {};
+  function buildMonitorChartView(chart: MonitorChartRecord, index: number): MonitorChartView {
+    const summary = chart.summary || {};
     const series = normalizeMonitorSeries(chart);
     const range = resolveMonitorValueRange(series);
     const latestPoint = series[0]?.rawPoints[series[0].rawPoints.length - 1];
@@ -43,15 +46,15 @@ export function useConsoleMonitor(monitorState: { charts: AnyRecord[] }) {
       key: String(chart.type || chart.label || index),
       label: String(chart.label || chart.type || `指标 ${index + 1}`),
       message: String(chart.error || chart.message || ''),
-      latestText: resolveMonitorSummaryText(summary.latest, series, 'latest') || '--',
+      latestText: resolveMonitorSummaryText(summary.latest || null, series, 'latest') || '--',
       latestTime: String(summary.latest?.time || latestPoint?.time || ''),
-      averageText: resolveMonitorSummaryText(summary.average, series, 'average') || '--',
-      peakText: resolveMonitorSummaryText(summary.peak, series, 'peak') || '--',
-      lowestText: resolveMonitorSummaryText(summary.lowest, series, 'lowest') || '--',
+      averageText: resolveMonitorSummaryText(summary.average || null, series, 'average') || '--',
+      peakText: resolveMonitorSummaryText(summary.peak || null, series, 'peak') || '--',
+      lowestText: resolveMonitorSummaryText(summary.lowest || null, series, 'lowest') || '--',
       yAxisTicks: buildMonitorYAxisTicks(range, resolveMonitorUnit(chart)),
       xAxisLabels: buildMonitorXAxisLabels(firstSeriesPoints),
       series: series
-        .map((item: MonitorSeries, seriesIndex: number) => {
+        .map((item, seriesIndex) => {
           const points = buildMonitorRenderPoints(item.rawPoints, range, item.key);
           return {
             key: item.key || `${index}-${seriesIndex}`,
@@ -62,27 +65,27 @@ export function useConsoleMonitor(monitorState: { charts: AnyRecord[] }) {
             path: buildMonitorSmoothPath(points),
           };
         })
-        .filter((item: MonitorRenderSeries) => item.path),
+        .filter((item) => item.path),
     };
   }
 
-  function normalizeMonitorSeries(chart: AnyRecord): MonitorSeries[] {
-    const chartData = chart.chart && typeof chart.chart === 'object' ? chart.chart : {};
+  function normalizeMonitorSeries(chart: MonitorChartRecord): MonitorSeries[] {
+    const chartData = chart.chart || {};
     const sourceSeries = Array.isArray(chartData.series) && chartData.series.length
       ? chartData.series
       : [{ key: chart.type || 'series', name: chart.label || chart.type || '', list: Array.isArray(chartData.list) ? chartData.list : [] }];
 
     return sourceSeries
-      .map((series: AnyRecord, index: number) => {
+      .map((series, index) => {
         const rawPoints = Array.isArray(series.list)
           ? series.list
-              .map((point: AnyRecord) => ({
+              .map((point) => ({
                 time: String(point?.time || ''),
                 timestamp: normalizeMonitorTimestamp(point?.timestamp),
                 value: Number(point?.value),
                 displayValue: String(point?.display_value || point?.text || point?.value || '--'),
               }))
-              .filter((point: MonitorPoint) => Number.isFinite(point.value))
+              .filter((point) => Number.isFinite(point.value))
           : [];
 
         return {
@@ -91,11 +94,11 @@ export function useConsoleMonitor(monitorState: { charts: AnyRecord[] }) {
           rawPoints,
         };
       })
-      .filter((series: MonitorSeries) => series.rawPoints.length > 0);
+      .filter((series) => series.rawPoints.length > 0);
   }
 
   function resolveMonitorValueRange(series: MonitorSeries[]) {
-    const values = series.flatMap((item: MonitorSeries) => item.rawPoints.map((point: MonitorPoint) => point.value)).filter((value: number) => Number.isFinite(value));
+    const values = series.flatMap((item) => item.rawPoints.map((point) => point.value)).filter((value) => Number.isFinite(value));
     if (!values.length) return { min: 0, max: 1, range: 1 };
     const dataMin = Math.min(...values);
     const dataMax = Math.max(...values);
@@ -109,19 +112,18 @@ export function useConsoleMonitor(monitorState: { charts: AnyRecord[] }) {
     const height = MONITOR_CHART_BOTTOM - MONITOR_CHART_TOP;
     const denominator = Math.max(points.length - 1, 1);
 
-    return points
-      .map((point: MonitorPoint, index: number) => {
-        const x = points.length === 1 ? MONITOR_CHART_WIDTH / 2 : (index / denominator) * MONITOR_CHART_WIDTH;
-        const normalized = (point.value - range.min) / range.range;
-        const y = MONITOR_CHART_BOTTOM - normalized * height;
-        return {
-          ...point,
-          key: `${seriesKey}-${point.timestamp || point.time}-${index}`,
-          index,
-          x: Number(x.toFixed(2)),
-          y: Number(Math.min(Math.max(y, MONITOR_CHART_TOP), MONITOR_CHART_BOTTOM).toFixed(2)),
-        };
-      });
+    return points.map((point, index) => {
+      const x = points.length === 1 ? MONITOR_CHART_WIDTH / 2 : (index / denominator) * MONITOR_CHART_WIDTH;
+      const normalized = (point.value - range.min) / range.range;
+      const y = MONITOR_CHART_BOTTOM - normalized * height;
+      return {
+        ...point,
+        key: `${seriesKey}-${point.timestamp || point.time}-${index}`,
+        index,
+        x: Number(x.toFixed(2)),
+        y: Number(Math.min(Math.max(y, MONITOR_CHART_TOP), MONITOR_CHART_BOTTOM).toFixed(2)),
+      };
+    });
   }
 
   function buildMonitorYAxisTicks(range: { min: number; max: number; range: number }, unit: string): MonitorAxisTick[] {
@@ -168,24 +170,30 @@ export function useConsoleMonitor(monitorState: { charts: AnyRecord[] }) {
         x: clampMonitorNumber(next.x - (afterNext.x - current.x) / 6, current.x, next.x),
         y: clampMonitorNumber(next.y - (afterNext.y - current.y) / 6, MONITOR_CHART_TOP, MONITOR_CHART_BOTTOM),
       };
-      segments.push(`C ${formatMonitorChartNumber(controlOne.x)},${formatMonitorChartNumber(controlOne.y)} ${formatMonitorChartNumber(controlTwo.x)},${formatMonitorChartNumber(controlTwo.y)} ${next.x},${next.y}`);
+      segments.push(
+        `C ${formatMonitorChartNumber(controlOne.x)},${formatMonitorChartNumber(controlOne.y)} ${formatMonitorChartNumber(controlTwo.x)},${formatMonitorChartNumber(controlTwo.y)} ${next.x},${next.y}`,
+      );
     }
     return segments.join(' ');
   }
 
-  function resolveMonitorSummaryText(summaryItem: AnyRecord | undefined, series: MonitorSeries[], mode: 'latest' | 'average' | 'peak' | 'lowest') {
+  function resolveMonitorSummaryText(
+    summaryItem: MonitorSummaryItem | null,
+    series: MonitorSeries[],
+    mode: 'latest' | 'average' | 'peak' | 'lowest',
+  ) {
     if (summaryItem && typeof summaryItem === 'object' && summaryItem.text) {
       return String(summaryItem.text);
     }
 
-    const values = series.flatMap((item: MonitorSeries) => item.rawPoints.map((point: MonitorPoint) => point.value)).filter((value: number) => Number.isFinite(value));
+    const values = series.flatMap((item) => item.rawPoints.map((point) => point.value)).filter((value) => Number.isFinite(value));
     if (!values.length) return '';
     if (mode === 'latest') {
       const latestPoint = series[0]?.rawPoints[series[0].rawPoints.length - 1];
       return latestPoint?.displayValue || '';
     }
     const value = mode === 'average'
-      ? values.reduce((sum: number, item: number) => sum + item, 0) / values.length
+      ? values.reduce((sum, item) => sum + item, 0) / values.length
       : mode === 'peak'
         ? Math.max(...values)
         : Math.min(...values);
@@ -200,7 +208,7 @@ export function useConsoleMonitor(monitorState: { charts: AnyRecord[] }) {
     const pointerX = ((event.clientX - bounds.left) / bounds.width) * MONITOR_CHART_WIDTH;
     let nearestIndex = 0;
     let nearestDistance = Number.POSITIVE_INFINITY;
-    points.forEach((point: MonitorRenderPoint, index: number) => {
+    points.forEach((point, index) => {
       const distance = Math.abs(point.x - pointerX);
       if (distance < nearestDistance) {
         nearestDistance = distance;
@@ -214,12 +222,12 @@ export function useConsoleMonitor(monitorState: { charts: AnyRecord[] }) {
     activeMonitorPoint.value = null;
   }
 
-  function resolveActiveMonitorPoint(chart: MonitorChartView) {
+  function resolveActiveMonitorPoint(chart: MonitorChartView): ActiveMonitorPoint | null {
     if (!activeMonitorPoint.value || activeMonitorPoint.value.chartKey !== chart.key) return null;
     const firstPoint = chart.series[0]?.points[activeMonitorPoint.value.index];
     if (!firstPoint) return null;
     const seriesPoints = chart.series
-      .map((series: MonitorRenderSeries) => {
+      .map((series) => {
         const point = series.points[Math.min(activeMonitorPoint.value?.index || 0, series.points.length - 1)];
         if (!point) return null;
         return {
@@ -231,7 +239,7 @@ export function useConsoleMonitor(monitorState: { charts: AnyRecord[] }) {
           valueText: point.displayValue || formatMonitorAxisValue(point.value, ''),
         };
       })
-      .filter(Boolean);
+      .filter((item): item is ActiveMonitorSeriesPoint => item !== null);
 
     return {
       x: firstPoint.x,
@@ -244,7 +252,10 @@ export function useConsoleMonitor(monitorState: { charts: AnyRecord[] }) {
   function resolveMonitorTooltipStyle(chart: MonitorChartView) {
     const activePoint = resolveActiveMonitorPoint(chart);
     if (!activePoint) return { display: 'none' };
-    const minY = Math.min(...activePoint.seriesPoints.map((point: AnyRecord) => Number(point.y)).filter((value: number) => Number.isFinite(value)), activePoint.y);
+    const minY = Math.min(
+      ...activePoint.seriesPoints.map((point) => Number(point.y)).filter((value) => Number.isFinite(value)),
+      activePoint.y,
+    );
     return {
       left: `${(activePoint.x / MONITOR_CHART_WIDTH) * 100}%`,
       top: `${(minY / MONITOR_CHART_HEIGHT) * 100}%`,
@@ -273,9 +284,9 @@ function buildNiceMonitorAxisMax(max: number, min: number) {
   return niceNormalized * magnitude;
 }
 
-function resolveMonitorUnit(chart: AnyRecord) {
-  const chartData = chart.chart && typeof chart.chart === 'object' ? chart.chart : {};
-  return String(chartData.unit || chart.unit || '').trim();
+function resolveMonitorUnit(chart: MonitorChartRecord) {
+  const chartData = chart.chart || {};
+  return String(chartData.unit || chart.type || '').trim();
 }
 
 function formatMonitorAxisValue(value: number, unit: string) {

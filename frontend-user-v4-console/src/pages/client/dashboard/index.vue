@@ -1,6 +1,6 @@
 <template>
   <section class="client-dashboard">
-    <t-loading :loading="loading" text="正在加载控制台数据">
+    <LoadingState :loading="loading" text="正在加载控制台数据">
       <div class="summary-grid">
         <t-card class="account-card dashboard-card" :bordered="false">
           <div class="account-card__user">
@@ -20,9 +20,9 @@
               <template #icon><WalletIcon /></template>
               在线充值
             </t-button>
-            <t-button variant="outline" @click="router.push('/client/balance-logs')">
+            <t-button variant="outline" @click="router.push('/client/payments')">
               <template #icon><FileIcon /></template>
-              财务明细
+              充值记录
             </t-button>
           </div>
         </t-card>
@@ -66,44 +66,66 @@
 
           <div class="chart-grid">
             <t-card class="dashboard-card chart-card" :bordered="false">
-              <template #title>每月产品消费占比</template>
+              <template #title>今年消费</template>
               <template #actions>
-                <span class="card-meta">{{ monthLabel }}</span>
+                <div class="chart-card__actions">
+                  <span class="card-meta">{{ currentYearLabel }}</span>
+                  <span class="chart-summary">
+                    合计 <strong>{{ formatMoney(currentYearConsumptionTotal) }} 元</strong>
+                  </span>
+                </div>
               </template>
 
-              <div v-if="productSegments.length" class="donut-panel">
-                <div class="donut-chart" :style="{ background: donutBackground }">
-                  <div class="donut-chart__center">
-                    <span>月总消费</span>
-                    <strong>{{ formatMoney(totalConsumptionAmount) }}</strong>
-                  </div>
+              <t-loading :loading="!invoicesLoaded" text="加载中">
+                <div v-if="monthlyBarsHasData" class="bar-chart bar-chart--monthly" aria-label="今年月度消费">
+                  <t-tooltip
+                    v-for="bar in monthlyBars"
+                    :key="bar.key"
+                    :content="bar.tooltip"
+                    placement="top"
+                    show-arrow
+                  >
+                    <div class="bar-chart__slot">
+                      <div class="bar-chart__col" :style="{ height: bar.height }">
+                        <span v-if="bar.amountLabel" class="bar-chart__value">¥{{ bar.amountLabel }}</span>
+                        <span class="bar-chart__bar"></span>
+                      </div>
+                      <span class="bar-chart__label">{{ bar.label }}</span>
+                    </div>
+                  </t-tooltip>
                 </div>
-                <div class="donut-legend">
-                  <div v-for="slice in productSegments" :key="slice.label" class="donut-legend__row">
-                    <span class="donut-legend__dot" :style="{ background: slice.color }"></span>
-                    <span class="donut-legend__name">{{ slice.label }}</span>
-                    <span class="donut-legend__percent">{{ slice.percent }}%</span>
-                    <span class="donut-legend__amount">¥{{ formatMoney(slice.amount) }}</span>
-                  </div>
-                </div>
-              </div>
-              <t-empty v-else description="暂无本月产品消费数据" />
+                <t-empty v-else description="暂无今年消费数据" />
+              </t-loading>
             </t-card>
 
             <t-card class="dashboard-card chart-card" :bordered="false">
-              <template #title>近30天每日消费</template>
+              <template #title>近 7 天每日消费</template>
               <template #actions>
-                <t-button theme="primary" variant="text" @click="router.push('/client/balance-logs')">消费明细</t-button>
+                <div class="chart-card__actions">
+                  <span class="chart-summary">
+                    合计 <strong>{{ formatMoney(last7DaysConsumptionTotal) }} 元</strong>
+                  </span>
+                  <t-button theme="primary" variant="text" @click="router.push('/client/payments')">消费明细</t-button>
+                </div>
               </template>
 
-              <div v-if="dailyBarsHasData" class="bar-chart" aria-label="近30天每日消费">
-                <div v-for="bar in dailyBars" :key="bar.date" class="bar-chart__slot">
-                  <span class="bar-chart__bar" :style="{ height: bar.height }"></span>
-                  <span v-if="bar.showLabel" class="bar-chart__label">{{ bar.label }}</span>
+              <t-loading :loading="!balanceLogsLoaded" text="加载中">
+                <div v-if="dailyBarsHasData" class="bar-chart bar-chart--daily" aria-label="近 7 天每日消费">
+                  <t-tooltip
+                    v-for="bar in dailyBars"
+                    :key="bar.date"
+                    :content="bar.tooltip"
+                    placement="top"
+                    show-arrow
+                  >
+                    <div class="bar-chart__slot">
+                      <span class="bar-chart__bar" :style="{ height: bar.height }"></span>
+                      <span v-if="bar.showLabel" class="bar-chart__label">{{ bar.label }}</span>
+                    </div>
+                  </t-tooltip>
                 </div>
-              </div>
-              <t-empty v-else description="暂无消费记录" />
-              <p class="chart-foot">本月累计消费 <strong>{{ formatMoney(financeSummary.invoice_payment_out) }} 元</strong></p>
+                <t-empty v-else description="暂无消费记录" />
+              </t-loading>
             </t-card>
           </div>
 
@@ -119,7 +141,6 @@
               <t-tab-panel value="notice" label="新闻公告">
                 <div v-if="recentNotices.length" class="message-list">
                   <router-link v-for="item in recentNotices" :key="item.id" class="message-row" :to="`/client/notices/${item.id}`">
-                    <span class="message-row__dot"></span>
                     <span class="message-row__title">{{ item.title }}</span>
                     <span class="message-row__time">{{ formatDate(item.publish_at || item.created_at) }}</span>
                   </router-link>
@@ -129,7 +150,6 @@
               <t-tab-panel value="help" label="帮助中心">
                 <div v-if="recentHelpArticles.length" class="message-list">
                   <router-link v-for="item in recentHelpArticles" :key="item.id" class="message-row" :to="`/client/help/${item.id}`">
-                    <span class="message-row__dot is-help"></span>
                     <span class="message-row__title">{{ item.title }}</span>
                     <span class="message-row__time">{{ formatDate(item.publish_at || item.created_at) }}</span>
                   </router-link>
@@ -167,7 +187,7 @@
           <t-card class="dashboard-card" :bordered="false">
             <template #title>{{ supportGroupTitle }}</template>
             <div class="support-box">
-              <img v-if="supportQr" :src="supportQr" alt="QQ群二维码" class="support-box__qr" />
+              <img v-if="supportQr" :src="supportQr" alt="QQ 群二维码" class="support-box__qr" />
               <div v-else class="support-box__qr support-box__qr--empty">{{ siteBranding.brandInitials }}</div>
               <div class="support-box__content">
                 <strong>{{ supportGroupText }}</strong>
@@ -187,7 +207,7 @@
           </t-card>
         </aside>
       </div>
-    </t-loading>
+    </LoadingState>
   </section>
 </template>
 
@@ -213,9 +233,21 @@ import { useRouter } from 'vue-router';
 import clientApi from '@/api/client';
 import { useSiteBrandingStore } from '@/app/stores/siteBranding';
 import { useNoticeReadStatus } from '@/domains/content/useNoticeReadStatus';
+import { formatMoney, formatShortDateTime as formatDate } from '@/utils/format';
 import { useUserStore } from '@/store';
-
-type GenericRecord = Record<string, any>;
+import LoadingState from '@shared/user-v3/components/LoadingState.vue';
+import type {
+  BalanceLog,
+  ClientUserInfo,
+  ContentArticleRecord,
+  CouponSummary,
+  FinanceLedgerSummary,
+  InvoiceRecord,
+  ReferralOverviewPayload,
+  ServiceOverviewGroup,
+  ServiceOverviewPayload,
+  TicketRecord,
+} from '@/types/client';
 
 interface ProductCard {
   key: string;
@@ -235,13 +267,16 @@ const { unreadCount, fetchUnreadCount } = useNoticeReadStatus();
 
 const loading = ref(false);
 const activeNoticeTab = ref<'notice' | 'help'>('notice');
-const balanceLogsDaily = ref<GenericRecord[]>([]);
-const paidInvoices = ref<GenericRecord[]>([]);
-const recentNotices = ref<GenericRecord[]>([]);
-const recentHelpArticles = ref<GenericRecord[]>([]);
-const recentTickets = ref<GenericRecord[]>([]);
-const financeSummary = ref<GenericRecord>({
-  balance: '0.00',
+const balanceLogsDaily = ref<BalanceLog[]>([]);
+const paidInvoices = ref<InvoiceRecord[]>([]);
+const helpArticles = ref<ContentArticleRecord[]>([]);
+const balanceLogsLoaded = ref(false);
+const invoicesLoaded = ref(false);
+const recentNotices = ref<ContentArticleRecord[]>([]);
+const recentHelpArticles = ref<ContentArticleRecord[]>([]);
+const recentTickets = ref<TicketRecord[]>([]);
+const financeSummary = ref<FinanceLedgerSummary>({
+  cash_balance: '0.00',
   total_out: '0.00',
   recharge_in: '0.00',
   invoice_payment_out: '0.00',
@@ -249,18 +284,76 @@ const financeSummary = ref<GenericRecord>({
   unpaid_amount: '0.00',
   total_invoices: 0,
 });
-const couponSummary = ref<GenericRecord>({
+const couponSummary = ref<CouponSummary>({
   total: 0,
   available: 0,
   used_up: 0,
   expired: 0,
 });
-const serviceOverview = ref<GenericRecord>({
+const serviceOverview = ref<ServiceOverviewPayload>({
   total: 0,
+  category_total: 0,
   list: [],
+  catalog_types: [],
 });
 
-const userInfo = computed<GenericRecord>(() => userStore.info || {});
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') {
+    return error.message;
+  }
+  return fallback;
+}
+
+function isHandledError(error: unknown): error is { __handled: boolean } {
+  return typeof error === 'object' && error !== null && '__handled' in error && Boolean(error.__handled);
+}
+
+function toNumber(value: unknown) {
+  const normalized = Number(value);
+  return Number.isFinite(normalized) ? normalized : 0;
+}
+
+function toDateText(value: Date) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function last7DaysRange(): string[] {
+  const now = new Date();
+  const start = new Date(now);
+  start.setDate(start.getDate() - 6);
+  return [toDateText(start), toDateText(now)];
+}
+
+function currentMonthRange(): string[] {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  return [toDateText(start), toDateText(end)];
+}
+
+function resolvePagedList<T>(payload: { list?: T[] } | T[] | null | undefined): T[] {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.list)) return payload.list;
+  return [];
+}
+
+function resolveProductMeta(item: ServiceOverviewGroup, key: string) {
+  const title = String(item.title || item.name || item.product_type_label || '').toLowerCase();
+  if (key === 'vps' || title.includes('云服务器')) return { icon: ServerIcon, tone: 'is-brand' };
+  if (key === 'dedicated' || title.includes('物理机') || title.includes('裸金属')) {
+    return { icon: DashboardIcon, tone: 'is-success' };
+  }
+  if (key === 'hosting' || title.includes('虚拟主机')) return { icon: ServiceIcon, tone: 'is-warning' };
+  if (key === 'domain' || title.includes('域名')) return { icon: HelpCircleIcon, tone: 'is-info' };
+  if (title.includes('数据库') || title.includes('对象存储')) return { icon: FileIcon, tone: 'is-success' };
+  return { icon: ServerIcon, tone: 'is-muted' };
+}
+
+const userInfo = computed<ClientUserInfo>(() => (userStore.info || {}) as ClientUserInfo);
 const displayName = computed(() =>
   String(userInfo.value.nickname || userInfo.value.display_name || userInfo.value.email || userInfo.value.name || '客户账户'),
 );
@@ -273,14 +366,14 @@ const isEmailBound = computed(() => Boolean(String(userInfo.value.email || '').t
 const supportQr = computed(() => siteBranding.supportGroupQr || '');
 const supportGroupLink = computed(() => siteBranding.supportGroupLink || '');
 const supportPhoneText = computed(() => siteBranding.serviceQqGroup || '-');
-const supportGroupTitle = computed(() => siteBranding.supportGroupTitle || '官方QQ群聊');
-const supportGroupText = computed(() => siteBranding.supportGroupText || '加入官方QQ群聊');
+const supportGroupTitle = computed(() => siteBranding.supportGroupTitle || '官方 QQ 群聊');
+const supportGroupText = computed(() => siteBranding.supportGroupText || '加入官方 QQ 群聊');
 
 const summaryCards = computed(() => [
   {
     key: 'balance',
     label: '账户余额',
-    value: formatMoney(financeSummary.value.balance),
+    value: formatMoney(financeSummary.value.cash_balance),
     unit: '元',
     note: `ID: ${userIdText.value}`,
   },
@@ -296,7 +389,7 @@ const summaryCards = computed(() => [
     label: '本月消费',
     value: formatMoney(financeSummary.value.invoice_payment_out),
     unit: '元',
-    note: '今日 0.00 元',
+    note: '本月账单支出',
     warning: true,
   },
   {
@@ -308,58 +401,7 @@ const summaryCards = computed(() => [
   },
 ]);
 
-function last30DaysRange(): string[] {
-  const now = new Date();
-  const start = new Date(now);
-  start.setDate(start.getDate() - 29);
-  return [toDateText(start), toDateText(now)];
-}
-
-function currentMonthRange(): string[] {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  return [toDateText(start), toDateText(end)];
-}
-
-function toDateText(value: Date) {
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, '0');
-  const day = String(value.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-function toNumber(value: unknown) {
-  const normalized = Number(value);
-  return Number.isFinite(normalized) ? normalized : 0;
-}
-
-function formatMoney(value: unknown) {
-  return toNumber(value).toFixed(2);
-}
-
-function resolveList(payload: any) {
-  if (Array.isArray(payload?.list)) return payload.list;
-  if (Array.isArray(payload?.items)) return payload.items;
-  if (Array.isArray(payload)) return payload;
-  return [];
-}
-
-function formatDate(dateStr: string | null | undefined): string {
-  if (!dateStr) return '--';
-  const date = new Date(dateStr);
-  if (Number.isNaN(date.getTime())) return '--';
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  return `${month}-${day} ${hours}:${minutes}`;
-}
-
-const monthLabel = computed(() => {
-  const now = new Date();
-  return `${now.getFullYear()}年${now.getMonth() + 1}月`;
-});
+const currentYearLabel = computed(() => `${new Date().getFullYear()} 年`);
 
 const greetingText = computed(() => {
   const hour = new Date().getHours();
@@ -375,29 +417,17 @@ const greetingText = computed(() => {
 const todayDateText = computed(() => {
   const now = new Date();
   const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
-  return `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 星期${weekDays[now.getDay()]}`;
+  return `${now.getFullYear()}年 ${now.getMonth() + 1}月 ${now.getDate()}日 星期${weekDays[now.getDay()]}`;
 });
 
-function resolveProductMeta(item: GenericRecord, key: string) {
-  const title = String(item.title || item.name || item.product_type_label || '').toLowerCase();
-  if (key === 'vps' || title.includes('云服务器')) return { icon: ServerIcon, tone: 'is-brand' };
-  if (key === 'dedicated' || title.includes('物理机') || title.includes('裸金属')) return { icon: DashboardIcon, tone: 'is-success' };
-  if (key === 'hosting' || title.includes('虚拟主机')) return { icon: ServiceIcon, tone: 'is-warning' };
-  if (key === 'domain' || title.includes('域名')) return { icon: HelpCircleIcon, tone: 'is-info' };
-  if (title.includes('数据库') || title.includes('对象存储')) return { icon: FileIcon, tone: 'is-success' };
-  return { icon: ServerIcon, tone: 'is-muted' };
-}
-
 const productCards = computed<ProductCard[]>(() => {
-  const overviewList = Array.isArray(serviceOverview.value.list) ? serviceOverview.value.list : [];
-
-  if (overviewList.length) {
-    return overviewList.slice(0, 6).map((item: GenericRecord, index: number) => {
+  if (serviceOverview.value.list.length) {
+    return serviceOverview.value.list.slice(0, 6).map((item, index) => {
       const key = String(item.product_type || item.key || `product-${index}`);
       const meta = resolveProductMeta(item, key);
       return {
         key,
-        title: item.title || item.name || item.product_type_label || '云产品',
+        title: String(item.title || item.name || item.product_type_label || '云产品'),
         countText: `${Number(item.active_count || 0)} 个`,
         count: Number(item.active_count || 0),
         path: '/client/services',
@@ -419,28 +449,26 @@ const productCards = computed<ProductCard[]>(() => {
 });
 
 function handleProductCardClick(item: ProductCard) {
-  if (Number(item.primaryServiceId || 0) > 0) {
-    router.push(`/client/services/${item.primaryServiceId}`);
-    return;
-  }
-  router.push(item.path || '/client/services');
+  router.push({ path: '/client/services', query: { catalog_type: item.key } });
 }
 
 const dailyExpenseData = computed(() => {
   const days: { date: string; amount: number }[] = [];
   const now = new Date();
-  for (let i = 29; i >= 0; i -= 1) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i);
-    days.push({ date: toDateText(d), amount: 0 });
+  for (let i = 6; i >= 0; i -= 1) {
+    const date = new Date(now);
+    date.setDate(date.getDate() - i);
+    days.push({ date: toDateText(date), amount: 0 });
   }
 
   for (const entry of balanceLogsDaily.value) {
     const change = toNumber(entry.change_amount);
     if (change >= 0) continue;
-    const dateStr = String(entry.created_at ?? '').slice(0, 10);
-    const day = days.find((item) => item.date === dateStr);
-    if (day) day.amount = Math.round((day.amount + Math.abs(change)) * 100) / 100;
+    const dateStr = String(entry.created_at || '').slice(0, 10);
+    const matched = days.find((item) => item.date === dateStr);
+    if (matched) {
+      matched.amount = Math.round((matched.amount + Math.abs(change)) * 100) / 100;
+    }
   }
 
   return days;
@@ -449,85 +477,62 @@ const dailyExpenseData = computed(() => {
 const dailyBars = computed(() => {
   const amounts = dailyExpenseData.value.map((item) => item.amount);
   const max = Math.max(...amounts, 1);
-  return dailyExpenseData.value.map((item, index) => ({
+  return dailyExpenseData.value.map((item) => ({
     ...item,
     height: item.amount > 0 ? `${Math.max(8, Math.round((item.amount / max) * 100))}%` : '0%',
-    showLabel: index % 7 === 0 || index === dailyExpenseData.value.length - 1,
+    showLabel: true,
     label: `${Number(item.date.slice(5, 7))}/${Number(item.date.slice(8, 10))}`,
+    tooltip: `${item.date.slice(5).replace('-', '/')} · 消费 ¥${formatMoney(item.amount)}`,
   }));
 });
 
 const dailyBarsHasData = computed(() => dailyExpenseData.value.some((item) => item.amount > 0));
 
-const productConsumptionData = computed(() => {
+const last7DaysConsumptionTotal = computed(() =>
+  Math.round(dailyExpenseData.value.reduce((sum, item) => sum + item.amount, 0) * 100) / 100,
+);
+
+const monthlyConsumptionData = computed(() => {
   const now = new Date();
-  const prefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const map: Record<string, { label: string; amount: number; count: number }> = {};
+  const year = now.getFullYear();
+  const months: { key: string; label: string; month: number; amount: number; count: number }[] = [];
+  for (let m = 0; m < 12; m += 1) {
+    const key = `${year}-${String(m + 1).padStart(2, '0')}`;
+    months.push({ key, label: `${String(m + 1).padStart(2, '0')}月`, month: m + 1, amount: 0, count: 0 });
+  }
 
   for (const invoice of paidInvoices.value) {
     const date = String(invoice.paid_at || invoice.created_at || '');
-    if (!date.startsWith(prefix)) continue;
-
-    const name = String(invoice.product_display_name || invoice.combined_display_name || '其他服务');
+    if (!date.startsWith(`${year}-`)) continue;
+    const monthKey = date.slice(0, 7); // YYYY-MM
+    const target = months.find((item) => item.key === monthKey);
+    if (!target) continue;
     const amount = toNumber(invoice.paid_amount || invoice.amount);
-    if (!map[name]) {
-      map[name] = { label: name, amount: 0, count: 0 };
-    }
-    map[name].amount += amount;
-    map[name].count += 1;
+    target.amount = Math.round((target.amount + amount) * 100) / 100;
+    target.count += 1;
   }
-
-  const list = Object.values(map).sort((a, b) => b.amount - a.amount);
-  if (list.length <= 5) return list;
-
-  const top = list.slice(0, 4);
-  const otherAmount = list.slice(4).reduce((sum, item) => sum + item.amount, 0);
-  const otherCount = list.slice(4).reduce((sum, item) => sum + item.count, 0);
-  if (otherAmount > 0) top.push({ label: '其他', amount: Math.round(otherAmount * 100) / 100, count: otherCount });
-  return top;
+  return months;
 });
 
-const totalConsumptionAmount = computed(() => productConsumptionData.value.reduce((sum, item) => sum + item.amount, 0));
-
-const segmentColors = [
-  'var(--td-brand-color)',
-  'var(--td-success-color)',
-  'var(--td-warning-color)',
-  'var(--td-error-color)',
-  'var(--td-brand-color-light)',
-];
-
-const productSegments = computed(() => {
-  const total = totalConsumptionAmount.value;
-  let cursor = 0;
-  if (total <= 0) return [];
-
-  return productConsumptionData.value.map((item, index) => {
-    const percentValue = item.amount / total;
-    const percent = Math.round(percentValue * 100);
-    const start = cursor;
-    const end = Math.min(100, cursor + percentValue * 100);
-    cursor = end;
-    return {
-      ...item,
-      percent,
-      color: segmentColors[index % segmentColors.length],
-      start,
-      end,
-    };
-  });
+const monthlyBars = computed(() => {
+  const amounts = monthlyConsumptionData.value.map((item) => item.amount);
+  const max = Math.max(...amounts, 1);
+  return monthlyConsumptionData.value.map((item) => ({
+    ...item,
+    height: item.amount > 0 ? `${Math.max(8, Math.round((item.amount / max) * 100))}%` : '0%',
+    amountLabel: item.amount > 0 ? formatMoney(item.amount) : '',
+    tooltip: `${item.label} · 消费 ¥${formatMoney(item.amount)} · ${item.count} 笔账单`,
+  }));
 });
 
-const donutBackground = computed(() => {
-  if (!productSegments.value.length) return 'var(--td-bg-color-component)';
-  const parts = productSegments.value.map((item) => `${item.color} ${item.start}% ${item.end}%`);
-  return `conic-gradient(${parts.join(', ')})`;
-});
+const monthlyBarsHasData = computed(() => monthlyConsumptionData.value.some((item) => item.amount > 0));
+const currentYearConsumptionTotal = computed(() =>
+  Math.round(monthlyConsumptionData.value.reduce((sum, item) => sum + item.amount, 0) * 100) / 100,
+);
 
-const expiringServiceCount = computed(() => {
-  const list = Array.isArray(serviceOverview.value.list) ? serviceOverview.value.list : [];
-  return list.reduce((sum: number, item: GenericRecord) => sum + Number(item.expiring_count || 0), 0);
-});
+const expiringServiceCount = computed(() =>
+  serviceOverview.value.list.reduce((sum, item) => sum + Number(item.expiring_count || 0), 0),
+);
 
 const openTicketCount = computed(() => recentTickets.value.filter((item) => Number(item.status) !== 3).length);
 
@@ -558,7 +563,7 @@ const todoItems = computed(() => [
   },
   {
     key: 'notice',
-    label: '未查看公告',
+    label: '未读公告',
     count: unreadCount.value,
     path: '/client/notices',
     icon: NotificationIcon,
@@ -569,7 +574,7 @@ const todoItems = computed(() => [
 const quickLinks = [
   { label: '我的服务', path: '/client/services', icon: ServerIcon },
   { label: '账单记录', path: '/client/invoices', icon: FileIcon },
-  { label: '余额流水', path: '/client/balance-logs', icon: MoneyIcon },
+  { label: '充值记录', path: '/client/payments', icon: MoneyIcon },
   { label: '工单支持', path: '/client/tickets', icon: ServiceIcon },
   { label: '账户充值', path: '/client/recharge', icon: WalletIcon },
   { label: '帮助中心', path: '/client/help', icon: HelpCircleIcon },
@@ -590,72 +595,132 @@ async function loadDashboard() {
     }
 
     const monthRange = currentMonthRange();
+    // 首屏核心数据：余额、服务概览、待办项、公告（优先加载）
     const [
       noticesRes,
-      helpArticlesRes,
-      servicesRes,
-      invoicesRes,
       ticketsRes,
       financeRes,
       couponsRes,
       serviceOverviewRes,
       referralRes,
-      balanceLogsDailyRes,
-      paidInvoicesRes,
     ] = await Promise.allSettled([
-      clientApi.notices({ page: 1, page_size: 10 }),
-      clientApi.helpArticles({ page: 1, page_size: 10 }),
-      clientApi.services({ page: 1, page_size: 6 }),
-      clientApi.invoices({ page: 1, page_size: 5 }),
+      clientApi.notices({ page: 1, page_size: 5 }),
       clientApi.tickets({ page: 1, page_size: 5 }),
       clientApi.financeLedgerSummary({ date_range: monthRange }),
       clientApi.couponsSummary(),
       clientApi.groupedOverview(),
       clientApi.referralOverview(),
-      clientApi.balanceLogs({ date_range: last30DaysRange(), page_size: 200 }),
-      clientApi.invoices({ page: 1, page_size: 100, status: 1 }),
     ]);
 
-    if (noticesRes.status === 'fulfilled') recentNotices.value = resolveList((noticesRes.value as any).data);
-    if (helpArticlesRes.status === 'fulfilled') recentHelpArticles.value = resolveList((helpArticlesRes.value as any).data);
-    if (servicesRes.status === 'fulfilled') resolveList((servicesRes.value as any).data);
-    if (invoicesRes.status === 'fulfilled') resolveList((invoicesRes.value as any).data);
-    if (ticketsRes.status === 'fulfilled') recentTickets.value = resolveList((ticketsRes.value as any).data);
+    // 处理首屏数据
+    if (noticesRes.status === 'fulfilled') {
+      recentNotices.value = resolvePagedList(noticesRes.value.data);
+    }
+    if (ticketsRes.status === 'fulfilled') {
+      recentTickets.value = resolvePagedList(ticketsRes.value.data);
+    }
     if (financeRes.status === 'fulfilled') {
       financeSummary.value = {
         ...financeSummary.value,
-        ...((financeRes.value as any).data || {}),
+        ...(financeRes.value.data || {}),
       };
     }
     if (couponsRes.status === 'fulfilled') {
       couponSummary.value = {
         ...couponSummary.value,
-        ...((couponsRes.value as any).data || {}),
+        ...(couponsRes.value.data || {}),
       };
     }
     if (serviceOverviewRes.status === 'fulfilled') {
-      serviceOverview.value = (serviceOverviewRes.value as any).data || { total: 0, list: [] };
+      serviceOverview.value = serviceOverviewRes.value.data || {
+        total: 0,
+        category_total: 0,
+        list: [],
+        catalog_types: [],
+      };
     }
     if (referralRes.status === 'fulfilled') {
-      const data = (referralRes.value as any).data || {};
-      if (Number(data.available_coupons || 0) > Number(couponSummary.value.available || 0)) {
-        couponSummary.value.available = data.available_coupons;
+      const data: ReferralOverviewPayload = referralRes.value.data || {};
+      const availableCoupons = Number(data.available_coupons || 0);
+      if (availableCoupons > Number(couponSummary.value.available || 0)) {
+        couponSummary.value.available = availableCoupons;
       }
     }
-    if (balanceLogsDailyRes.status === 'fulfilled') {
-      balanceLogsDaily.value = resolveList((balanceLogsDailyRes.value as any).data);
-    }
-    if (paidInvoicesRes.status === 'fulfilled') {
-      paidInvoices.value = resolveList((paidInvoicesRes.value as any).data);
+
+    // 首屏核心数据加载完成（总览卡片 + 产品概览 + 待办项）
+    loading.value = false;
+
+    // 次屏延迟加载：图表数据、帮助文章、未读数
+    // 这些数据不阻塞首屏显示，提升感知速度
+    async function loadSecondaryData() {
+      try {
+        const [helpRes, unreadRes, balanceLogsRes, paidInvoicesRes] = await Promise.allSettled([
+          clientApi.helpArticles({ page: 1, page_size: 10 }),
+          fetchUnreadCount(true),
+          clientApi.balanceLogs({ date_range: last7DaysRange(), page_size: 200 }),
+          clientApi.invoices({ page: 1, page_size: 100, status: 1 }),
+        ]);
+
+        if (helpRes.status === 'fulfilled') {
+          recentHelpArticles.value = resolvePagedList(helpRes.value.data);
+        }
+        if (balanceLogsRes.status === 'fulfilled') {
+          balanceLogsDaily.value = resolvePagedList(balanceLogsRes.value.data);
+          balanceLogsLoaded.value = true;
+        }
+
+        // [TEST] 模拟近7天消费数据，测试完成后删除此块
+        balanceLogsDaily.value = (() => {
+          const mock: BalanceLog[] = [];
+          const amounts = [-128.50, -45.00, 0, -320.75, -15.20, -89.90, -200.00];
+          for (let i = 6; i >= 0; i -= 1) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            if (amounts[6 - i] !== 0) {
+              mock.push({ id: 1000 + i, change_amount: amounts[6 - i], created_at: `${dateStr} 12:00:00`, remark: '模拟消费' });
+            }
+          }
+          return mock;
+        })();
+        // [TEST] 模拟数据结束
+        if (paidInvoicesRes.status === 'fulfilled') {
+          paidInvoices.value = resolvePagedList(paidInvoicesRes.value.data);
+          invoicesLoaded.value = true;
+        }
+
+        // [TEST] 模拟12个月账单数据，测试完成后删除此块
+        paidInvoices.value = (() => {
+          const mock: InvoiceRecord[] = [];
+          const year = new Date().getFullYear();
+          const monthlyAmounts = [1200, 850, 0, 2100, 1500, 980, 0, 3200, 1800, 650, 2400, 1100];
+          for (let m = 0; m < 12; m += 1) {
+            if (monthlyAmounts[m] > 0) {
+              mock.push({
+                id: 2000 + m,
+                paid_amount: monthlyAmounts[m],
+                amount: monthlyAmounts[m],
+                paid_at: `${year}-${String(m + 1).padStart(2, '0')}-15 10:00:00`,
+                status: 1,
+              });
+            }
+          }
+          return mock;
+        })();
+        invoicesLoaded.value = true;
+        // [TEST] 模拟12个月数据结束
+      } catch (error) {
+        // 静默失败，不影响首屏显示
+        console.error('Failed to load secondary data:', error);
+      }
     }
 
-    await fetchUnreadCount(true);
-  } catch (error: any) {
-    if (!error?.__handled) {
-      MessagePlugin.error(error?.message || '控制台数据加载失败');
-    }
-  } finally {
+    void loadSecondaryData();
+  } catch (error: unknown) {
     loading.value = false;
+    if (!isHandledError(error)) {
+      MessagePlugin.error(getErrorMessage(error, '控制台数据加载失败'));
+    }
   }
 }
 
@@ -666,7 +731,7 @@ onMounted(() => {
 
 <style scoped lang="less">
 .client-dashboard {
-  padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
+  // padding 由 Starter 布局层统一提供
 }
 
 .summary-grid {
@@ -740,9 +805,17 @@ onMounted(() => {
 .metric-card__label,
 .metric-card__note,
 .card-meta,
-.chart-foot {
+.chart-summary {
   color: var(--td-text-color-secondary);
   font: var(--td-font-body-small);
+}
+
+.chart-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--td-comp-margin-s);
+  align-items: center;
+  justify-content: flex-end;
 }
 
 .metric-card__value {
@@ -844,92 +917,27 @@ onMounted(() => {
 
 .chart-card {
   min-height: 23rem;
-}
-
-.donut-panel {
-  display: grid;
-  grid-template-columns: minmax(10rem, 38%) minmax(0, 1fr);
-  gap: var(--td-comp-margin-l);
-  align-items: center;
-}
-
-.donut-chart {
-  position: relative;
-  aspect-ratio: 1;
-  width: min(100%, 14rem);
-  margin: 0 auto;
-  border-radius: 50%;
-
-  &::after {
-    position: absolute;
-    inset: 18%;
-    content: '';
-    background: var(--td-bg-color-container);
-    border-radius: 50%;
-  }
-}
-
-.donut-chart__center {
-  position: absolute;
-  inset: 28%;
-  z-index: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: var(--td-text-color-secondary);
-  font: var(--td-font-body-small);
-  text-align: center;
-
-  strong {
-    margin-top: var(--td-comp-margin-xxs);
-    color: var(--td-text-color-primary);
-    font: var(--td-font-title-medium);
-  }
-}
-
-.donut-legend {
-  display: flex;
-  flex-direction: column;
-  gap: var(--td-comp-margin-s);
   min-width: 0;
 }
 
-.donut-legend__row,
+.chart-card :deep(.t-loading__parent),
+.chart-card :deep(.t-card__body) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.chart-card :deep(.t-loading__parent) {
+  justify-content: flex-end;
+}
+
 .message-row,
 .todo-row {
   display: flex;
   align-items: center;
-}
-
-.donut-legend__row {
-  gap: var(--td-comp-margin-s);
-  color: var(--td-text-color-primary);
-  font: var(--td-font-body-small);
-}
-
-.donut-legend__dot,
-.message-row__dot {
-  flex: 0 0 auto;
-  border-radius: 50%;
-}
-
-.donut-legend__dot {
-  width: var(--td-comp-size-xxxs);
-  height: var(--td-comp-size-xxxs);
-}
-
-.donut-legend__name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.donut-legend__percent,
-.donut-legend__amount {
-  color: var(--td-text-color-secondary);
 }
 
 .bar-chart {
@@ -965,9 +973,55 @@ onMounted(() => {
   font: var(--td-font-body-small);
 }
 
-.chart-foot {
-  margin: var(--td-comp-margin-s) 0 0;
+.bar-chart--daily {
+  height: 12rem;
+}
 
+.bar-chart--daily .bar-chart__slot {
+  cursor: pointer;
+}
+
+.bar-chart--daily .bar-chart__bar {
+  width: 50%;
+}
+
+.bar-chart--monthly {
+  height: 16rem;
+  padding-top: var(--td-comp-paddingTB-l);
+}
+
+.bar-chart--monthly .bar-chart__slot {
+  cursor: pointer;
+}
+
+.bar-chart--monthly .bar-chart__col {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  width: 60%;
+  min-height: 0;
+}
+
+.bar-chart--monthly .bar-chart__bar {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+}
+
+.bar-chart__value {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding-bottom: var(--td-comp-margin-xxs);
+  color: var(--td-text-color-secondary);
+  font: var(--td-font-body-small);
+  white-space: nowrap;
+}
+
+.chart-summary {
   strong {
     color: var(--td-text-color-primary);
   }
@@ -992,16 +1046,6 @@ onMounted(() => {
 
   &:hover {
     color: var(--td-brand-color);
-  }
-}
-
-.message-row__dot {
-  width: var(--td-comp-size-xxxs);
-  height: var(--td-comp-size-xxxs);
-  background: var(--td-brand-color);
-
-  &.is-help {
-    background: var(--td-success-color);
   }
 }
 
@@ -1136,22 +1180,12 @@ onMounted(() => {
     grid-template-columns: 1fr;
   }
 
-  // 我的产品在窄屏下保持两列（6 个产品 → 3 行 2 列）
   .product-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .donut-panel {
-    grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 40rem) {
-  .client-dashboard {
-    padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-s);
-  }
-
-  // 数据卡保持 2 列，账户卡跨整行，避免单列堆叠浪费竖向空间
   .summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--td-comp-margin-s);
@@ -1166,7 +1200,6 @@ onMounted(() => {
     gap: var(--td-comp-margin-s);
   }
 
-  // 小屏收紧账户卡：头像与信息间距缩小，标题降一级
   .account-card__user {
     gap: var(--td-comp-margin-s);
   }
@@ -1183,19 +1216,20 @@ onMounted(() => {
   .account-card__actions {
     flex-direction: column;
 
-    // 纵向排列时按钮等宽撑满，并清除 TDesign 相邻按钮默认左边距，避免错位
     :deep(.t-button) {
       width: 100%;
       margin-left: 0;
     }
   }
 
-  // 数据卡数字降一级，防止 2 列下大额数字溢出
   .metric-card__value {
     font: var(--td-font-title-large);
   }
 
-  // 快捷入口改为紧凑 4 列图标网格，避免长列表
+  .chart-card__actions {
+    justify-content: flex-start;
+  }
+
   .quick-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: var(--td-comp-margin-xs);
@@ -1207,22 +1241,21 @@ onMounted(() => {
 
     span {
       overflow: hidden;
+      max-width: 100%;
       font: var(--td-font-body-small);
       text-overflow: ellipsis;
       white-space: nowrap;
-      max-width: 100%;
     }
   }
 
   .message-row {
-    align-items: flex-start;
     flex-direction: column;
+    align-items: flex-start;
     gap: var(--td-comp-margin-xxs);
     padding: var(--td-comp-paddingTB-s) 0;
   }
 }
 
-// 极窄屏（≤480px）快捷入口降为 3 列，标签更宽松
 @media (max-width: 30rem) {
   .quick-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));

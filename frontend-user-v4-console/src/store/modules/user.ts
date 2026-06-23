@@ -3,16 +3,7 @@ import { defineStore } from 'pinia';
 import { clientAuthApi } from '@/api/auth';
 import { getClientToken, removeClientToken, setClientToken } from '@/app/runtime/session';
 import { store } from '@/store';
-
-interface ClientUserInfo {
-  id?: number | string;
-  name: string;
-  nickname?: string;
-  email?: string;
-  balance?: string | number;
-  roles: string[];
-  [key: string]: unknown;
-}
+import type { ClientAuthSessionPayload, ClientUserInfo } from '@/types/client';
 
 const initUserInfo: ClientUserInfo = {
   name: '',
@@ -44,12 +35,13 @@ export const useUserStore = defineStore('user', {
     },
     async clientLogin(loginData: Record<string, unknown>) {
       const res = await clientAuthApi.login(loginData);
-      const token = String((res as any).data?.token || '');
+      const payload = res.data as ClientAuthSessionPayload | undefined;
+      const token = String(payload?.token || '');
       if (token) {
         setClientToken(token);
         this.token = token;
       }
-      this.userInfo = normalizeUserInfo((res as any).data?.user || {});
+      this.userInfo = normalizeUserInfo(payload?.user || {});
       return res;
     },
     async login(loginData: Record<string, unknown>) {
@@ -57,17 +49,18 @@ export const useUserStore = defineStore('user', {
     },
     async clientRegister(data: Record<string, unknown>) {
       const res = await clientAuthApi.register(data);
-      const token = String((res as any).data?.token || '');
+      const payload = res.data as ClientAuthSessionPayload | undefined;
+      const token = String(payload?.token || '');
       if (token) {
         setClientToken(token);
         this.token = token;
       }
-      this.userInfo = normalizeUserInfo((res as any).data?.user || {});
+      this.userInfo = normalizeUserInfo(payload?.user || {});
       return res;
     },
     async exchangeLoginAsCode(code: string) {
       const res = await clientAuthApi.exchangeLoginAsCode({ code });
-      const token = String((res as any).data?.token || '');
+      const token = String(res.data?.token || '');
       if (token) {
         setClientToken(token);
         this.token = token;
@@ -77,7 +70,7 @@ export const useUserStore = defineStore('user', {
     },
     async getUserInfo() {
       const res = await clientAuthApi.info();
-      this.userInfo = normalizeUserInfo((res as any).data || {});
+      this.userInfo = normalizeUserInfo(res.data || {});
       this.syncTokenFromSession();
       return this.userInfo;
     },

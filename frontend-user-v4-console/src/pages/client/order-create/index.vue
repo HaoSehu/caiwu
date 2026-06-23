@@ -3,7 +3,7 @@
     <t-card class="order-create-card" :bordered="false">
       <div class="order-create-state">
         <t-tag theme="warning" variant="light">购买链路</t-tag>
-        <h1>下单入口已重定向到统一购买链路</h1>
+        <h1>购买入口已重定向到统一购买链路</h1>
         <p>新的购买、登录续接与账单创建均在 /products 与 /client/checkout-resume 中完成。</p>
         <div class="order-create-actions">
           <t-button theme="primary" @click="openProducts">打开购买页</t-button>
@@ -29,7 +29,7 @@ function openProducts() {
   align-items: center;
   justify-content: center;
   min-height: calc(100vh - var(--td-comp-size-xxxxxl));
-  padding: var(--td-comp-paddingTB-xl) var(--td-comp-paddingLR-l);
+  // padding 由 Starter 布局层统一提供
 }
 
 .order-create-card {
@@ -70,11 +70,10 @@ function openProducts() {
   justify-content: center;
 }
 
-@media (max-width: 48rem) {
+@media (max-width: @screen-sm-rem) {
   .client-order-create {
     align-items: stretch;
     min-height: auto;
-    padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-s);
   }
 
   .order-create-state {

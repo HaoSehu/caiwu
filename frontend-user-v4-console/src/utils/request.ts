@@ -1,4 +1,4 @@
-import axios, { type InternalAxiosRequestConfig } from 'axios';
+import axios, { type AxiosRequestConfig, type InternalAxiosRequestConfig } from 'axios';
 import { MessagePlugin } from 'tdesign-vue-next';
 
 import router from '@/router';
@@ -18,7 +18,7 @@ const DEFAULT_TIMEOUT = 18000;
 const SAFE_TIMEOUT = 16000;
 const WEAK_NETWORK_TIMEOUT_BOOST = 9000;
 
-interface ClientRuntimeRequestConfig extends InternalAxiosRequestConfig {
+interface ClientConfigExtras {
   safeRetryCount?: number;
   dedupeSafeRequest?: boolean;
   retrySafeRequest?: boolean;
@@ -29,6 +29,11 @@ interface ClientRuntimeRequestConfig extends InternalAxiosRequestConfig {
   __safeRetryCount?: number;
   __skipSafeDedupe?: boolean;
 }
+
+type ClientRequestConfig = AxiosRequestConfig & ClientConfigExtras;
+type ClientRuntimeRequestConfig = InternalAxiosRequestConfig & ClientConfigExtras;
+
+type SharedSafeRequestConfig = ClientRuntimeRequestConfig & Record<string, unknown>;
 
 interface RuntimeHandledError extends Error {
   __handled?: boolean;
@@ -124,8 +129,9 @@ httpClient.interceptors.request.use(
     }
 
     if (canDedupeSafeRequest(runtimeConfig, safeRequest)) {
-      runtimeConfig.__safeRequestKey = buildSafeRequestKey(runtimeConfig as any);
-      attachSafeRequestDedupe(runtimeConfig as any, httpClient.defaults.adapter as any);
+      const sharedConfig = runtimeConfig as SharedSafeRequestConfig;
+      sharedConfig.__safeRequestKey = buildSafeRequestKey(sharedConfig);
+      attachSafeRequestDedupe(sharedConfig, httpClient.defaults.adapter);
     }
 
     return runtimeConfig;
@@ -166,7 +172,7 @@ httpClient.interceptors.response.use(
     }
 
     try {
-      return await retrySafeRequest((config) => httpClient(config as any), error);
+      return await retrySafeRequest((config) => httpClient(config), error);
     } catch (retryError) {
       if (retryError !== error) {
         return Promise.reject(retryError);
@@ -219,9 +225,11 @@ interface StarterRequestCompat {
 
 export const request: StarterRequestCompat = {
   get<T = unknown>(config: { url: string; params?: unknown }) {
-    return httpClient.get<T>(config.url, { params: config.params, silentError: true } as any) as Promise<T>;
+    const requestConfig: ClientRequestConfig = { params: config.params, silentError: true };
+    return httpClient.get<T>(config.url, requestConfig) as Promise<T>;
   },
   post<T = unknown>(config: { url: string; data?: unknown }) {
-    return httpClient.post<T>(config.url, config.data, { silentError: true } as any) as Promise<T>;
+    const requestConfig: ClientRequestConfig = { silentError: true };
+    return httpClient.post<T>(config.url, config.data, requestConfig) as Promise<T>;
   },
 };

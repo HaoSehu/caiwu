@@ -4,8 +4,10 @@
     nav-text="已经有账户？"
     nav-link-text="立即登录"
     :nav-to="loginLink"
-    cta-text="返回官网查看产品目录 >"
+    cta-text="查看产品目录"
     cta-to="/products"
+    hero-title="注册后即可进入控制台开始购买"
+    hero-description="完成开户注册后，可以继续创建账单、管理服务，并处理实名认证与账户安全设置。"
   >
     <t-form ref="formRef" class="client-auth-form" :data="form" :rules="rules" label-width="0" @submit="handleRegister">
       <t-form-item name="account">
@@ -82,14 +84,16 @@
         </div>
       </t-form-item>
 
-      <t-button block size="large" theme="primary" :loading="loading" @click="submitForm">注册并进入控制台</t-button>
+      <t-button class="client-auth-submit" block size="large" theme="primary" :loading="loading" @click="submitForm">
+        注册并进入控制台
+      </t-button>
     </t-form>
   </auth-shell>
 </template>
 
 <script setup lang="ts">
 import { BrowseIcon, BrowseOffIcon, LockOnIcon } from 'tdesign-icons-vue-next';
-import type { FormInstanceFunctions, FormRule, SubmitContext } from 'tdesign-vue-next';
+import type { FormInstanceFunctions, FormRule, FormValidateMessage, SubmitContext } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onBeforeUnmount, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -107,6 +111,11 @@ interface RegisterForm {
   referral_code: string;
   password: string;
   password_confirmation: string;
+}
+
+interface RuntimeHandledError {
+  __handled?: boolean;
+  message?: string;
 }
 
 const route = useRoute();
@@ -212,9 +221,10 @@ async function handleSendCode() {
 
     MessagePlugin.success(`${accountPayload.accountType === 'phone' ? '短信' : '邮箱'}验证码已发送`);
     startCountdown();
-  } catch (error: any) {
-    if (!error?.__handled) {
-      MessagePlugin.error(error?.message || '验证码发送失败');
+  } catch (error: unknown) {
+    const runtimeError = error as RuntimeHandledError;
+    if (!runtimeError.__handled) {
+      MessagePlugin.error(runtimeError.message || '验证码发送失败');
     }
   } finally {
     sendingCode.value = false;
@@ -234,11 +244,15 @@ async function handleRegister(ctx: SubmitContext) {
 }
 
 function setFormErrors(errors: Partial<Record<keyof RegisterForm, string>>) {
-  formRef.value?.setValidateMessage(
-    Object.fromEntries(
-      Object.entries(errors).map(([field, message]) => [field, [{ type: 'error', message }]]),
-    ) as any,
-  );
+  const validateMessage: FormValidateMessage<RegisterForm> = {
+    account: errors.account ? [{ type: 'error', message: errors.account }] : [],
+    code: errors.code ? [{ type: 'error', message: errors.code }] : [],
+    nickname: errors.nickname ? [{ type: 'error', message: errors.nickname }] : [],
+    referral_code: errors.referral_code ? [{ type: 'error', message: errors.referral_code }] : [],
+    password: errors.password ? [{ type: 'error', message: errors.password }] : [],
+    password_confirmation: errors.password_confirmation ? [{ type: 'error', message: errors.password_confirmation }] : [],
+  };
+  formRef.value?.setValidateMessage(validateMessage);
 }
 
 function validateForm() {
@@ -290,9 +304,10 @@ async function runRegister() {
     });
     MessagePlugin.success('注册成功');
     await router.push(redirectPath.value);
-  } catch (error: any) {
-    if (!error?.__handled) {
-      MessagePlugin.error(error?.message || '注册失败');
+  } catch (error: unknown) {
+    const runtimeError = error as RuntimeHandledError;
+    if (!runtimeError.__handled) {
+      MessagePlugin.error(runtimeError.message || '注册失败');
     }
   } finally {
     loading.value = false;

@@ -100,6 +100,7 @@ import type { InboxItem } from '@/domains/content/useInbox';
 import { useInbox } from '@/domains/content/useInbox';
 import { getActive } from '@/router';
 import { useSettingStore, useUserStore } from '@/store';
+import { useDeviceLayout } from '@/composables/useDeviceLayout';
 import type { MenuRoute, ModeType } from '@/types/interface';
 
 import MenuContent from './MenuContent.vue';
@@ -140,7 +141,7 @@ const settingStore = useSettingStore();
 const user = useUserStore();
 const siteBranding = useSiteBrandingStore();
 const { unreadCount: inboxUnread, feedItems, feedLoading, fetchUnreadCount, fetchFeed, markRead, markAllRead } = useInbox();
-const MOBILE_POINT = 768;
+const { isMobile } = useDeviceLayout();
 
 const active = computed(() => getActive());
 const accountName = computed(() => user.userInfo.name || '创欧云用户');
@@ -149,7 +150,7 @@ const userInitials = computed(() => {
   return name.slice(0, 1) || siteBranding.brandInitials || '创';
 });
 const formattedBalance = computed(() => {
-  const value = user.userInfo.balance;
+  const value = user.userInfo.cash_balance;
   const amount = Number(value);
   if (!Number.isFinite(amount)) {
     return '--';
@@ -170,11 +171,10 @@ const menuCls = computed(() => {
   ];
 });
 const menuTheme = computed(() => theme as ModeType);
-const isMobileViewport = () => window.innerWidth <= MOBILE_POINT;
 const sidebarButtonTitle = computed(() => (settingStore.isMobileSidebarVisible ? '关闭菜单' : '打开菜单'));
 
 const changeCollapsed = () => {
-  if (isMobileViewport()) {
+  if (isMobile.value) {
     settingStore.updateConfig({
       isMobileSidebarVisible: !settingStore.isMobileSidebarVisible,
     });

@@ -1,11 +1,18 @@
-import { computed, reactive, ref } from 'vue';
+import { computed, reactive, ref, shallowRef } from 'vue';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { useRoute } from 'vue-router';
 
 import clientApi from '@/api/client';
-import { normalizeConsoleDetail, mergeConsoleDetail, isNatConsole, resolveErrorMessage, NAT_TABS, CLOUD_TABS, DEFAULT_TAB } from './useConsoleCore';
-
-type AnyRecord = Record<string, any>;
+import type { ConsoleServiceDetail } from '@/types/client';
+import {
+  CLOUD_TABS,
+  DEFAULT_TAB,
+  NAT_TABS,
+  isNatConsole,
+  mergeConsoleDetail,
+  normalizeConsoleDetail,
+  resolveErrorMessage,
+} from './useConsoleCore';
 
 export interface UseConsoleDetailOptions {
   //
@@ -14,7 +21,8 @@ export interface UseConsoleDetailOptions {
 export function useConsoleDetail(_options?: UseConsoleDetailOptions) {
   const route = useRoute();
 
-  const detail = ref(normalizeConsoleDetail());
+  // detail 始终整对象替换（normalize/merge 返回新对象），用 shallowRef 省去深响应式代理开销
+  const detail = shallowRef<ConsoleServiceDetail>(normalizeConsoleDetail());
   const detailLoading = ref(false);
   const statusSyncing = ref(false);
   const actionLoading = ref(false);
@@ -57,7 +65,7 @@ export function useConsoleDetail(_options?: UseConsoleDetailOptions) {
     operationStatus.label = '';
   }
 
-  function mergeDetail(patch: AnyRecord) {
+  function mergeDetail(patch: Partial<ConsoleServiceDetail>) {
     detail.value = mergeConsoleDetail(detail.value, patch);
   }
 
@@ -66,8 +74,8 @@ export function useConsoleDetail(_options?: UseConsoleDetailOptions) {
     detailLoading.value = true;
     try {
       const res = await clientApi.serviceBaseDetail(serviceId.value);
-      detail.value = normalizeConsoleDetail((res as AnyRecord).data || {});
-    } catch (error: any) {
+      detail.value = normalizeConsoleDetail(res.data || {});
+    } catch (error: unknown) {
       MessagePlugin.error(resolveErrorMessage(error, '加载实例信息失败'));
     } finally {
       detailLoading.value = false;
@@ -78,9 +86,9 @@ export function useConsoleDetail(_options?: UseConsoleDetailOptions) {
     if (!serviceId.value) return;
     try {
       const res = await clientApi.serviceRemoteStatus(serviceId.value);
-      detail.value = mergeConsoleDetail(detail.value, (res as AnyRecord).data || {});
+      detail.value = mergeConsoleDetail(detail.value, res.data || {});
       if (!silent) MessagePlugin.success('实例状态已刷新');
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (!silent) MessagePlugin.error(resolveErrorMessage(error, '刷新实例状态失败'));
     }
   }

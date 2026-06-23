@@ -1,4 +1,3 @@
-import { isObject, uniq } from 'lodash';
 import type { RouteRecordRaw } from 'vue-router';
 import { createRouter, createWebHistory } from 'vue-router';
 
@@ -28,7 +27,7 @@ export function mapModuleRouterList(modules: Record<string, unknown>): Array<Rou
   const routerList: Array<RouteRecordRaw> = [];
   Object.keys(modules).forEach((key) => {
     const routeModule = modules[key];
-    if (isObject(routeModule) && 'default' in routeModule) {
+    if (isRecord(routeModule) && 'default' in routeModule) {
       const route = routeModule.default;
       const routes = Array.isArray(route) ? [...route] : [route];
       routerList.push(...routes);
@@ -57,8 +56,12 @@ export const getRoutesExpanded = () => {
         });
     }
   });
-  return uniq(expandedRoutes);
+  return Array.from(new Set(expandedRoutes));
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
 
 export const getActive = (maxLevel = 3): string => {
   // 非组件内调用必须通过Router实例获取当前路由

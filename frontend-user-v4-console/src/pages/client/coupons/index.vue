@@ -28,8 +28,8 @@
 
     <template v-if="activeTab === 'owned'">
         <div class="coupon-list-shell">
-          <t-loading :loading="ownedState.loading" text="正在加载优惠券">
-            <div v-if="ownedState.list.length" class="coupon-grid">
+          <DataState :loading="ownedState.loading" :empty="!ownedState.list.length" description="你还没有优惠券">
+            <div class="coupon-grid">
               <article v-for="item in ownedState.list" :key="item.id" class="coupon-item">
                 <button class="coupon-item__detail" type="button" @click="openCouponDetail(item)">详情</button>
                 <div class="coupon-item__head">
@@ -54,8 +54,7 @@
                 </div>
               </article>
             </div>
-            <t-empty v-else description="你还没有优惠券" />
-          </t-loading>
+          </DataState>
         </div>
         <div v-if="ownedState.total > 0" class="coupon-pagination">
           <t-pagination
@@ -72,8 +71,8 @@
 
     <template v-else>
         <div class="coupon-list-shell">
-          <t-loading :loading="plazaState.loading" text="正在加载优惠券">
-            <div v-if="plazaState.list.length" class="coupon-grid">
+          <DataState :loading="plazaState.loading" :empty="!plazaState.list.length" description="当前暂无可领取的优惠券">
+            <div class="coupon-grid">
               <article v-for="item in plazaState.list" :key="item.id" class="coupon-item">
                 <button class="coupon-item__detail" type="button" @click="openCouponDetail(item)">详情</button>
                 <div class="coupon-item__head">
@@ -107,8 +106,7 @@
                 </div>
               </article>
             </div>
-            <t-empty v-else description="当前暂无可领取的优惠券" />
-          </t-loading>
+          </DataState>
         </div>
         <div v-if="plazaState.total > 0" class="coupon-pagination">
           <t-pagination
@@ -157,6 +155,8 @@
 import { computed } from 'vue';
 import { SearchIcon } from 'tdesign-icons-vue-next';
 
+import DataState from '@shared/user-v3/components/DataState.vue';
+import type { CouponProductScopeItem } from '@/types/client';
 import {
   resolveDiscountAmountText,
   resolveDiscountTypeLabel,
@@ -202,12 +202,12 @@ const couponProductHierarchy = computed(() => {
   const products = Array.isArray(selectedCoupon.value?.products) ? selectedCoupon.value.products : [];
 
   return products
-    .map((item: Record<string, any>): CouponHierarchyItem => ({
+    .map((item: CouponProductScopeItem): CouponHierarchyItem => ({
       productId: Number(item?.id || 0),
-      level1: String(item?.type_label || '--').trim() || '--',
-      level2: String(item?.parent_group_name || '--').trim() || '--',
-      level3: String(item?.group_name || '--').trim() || '--',
-      productName: String(item?.name || '--').trim() || '--',
+      level1: String(item?.type_label || item?.service_type_label || '--').trim() || '--',
+      level2: String(item?.parent_group_name || item?.second_product_group_name || '--').trim() || '--',
+      level3: String(item?.group_name || item?.third_product_group_name || '--').trim() || '--',
+      productName: String(item?.name || item?.product_name || '--').trim() || '--',
     }))
     .filter((item: CouponHierarchyItem) => item.productId > 0 || item.productName !== '--');
 });
@@ -278,7 +278,7 @@ function mergeCouponProductHierarchy(data: CouponHierarchyItem[]): MergedCouponH
   display: flex;
   flex-direction: column;
   gap: var(--td-comp-margin-m);
-  padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
+  // padding 由 Starter 布局层统一提供
 }
 
 .coupon-card-shell {
@@ -468,7 +468,7 @@ function mergeCouponProductHierarchy(data: CouponHierarchyItem[]): MergedCouponH
   grid-template-columns: minmax(7rem, 9rem) minmax(0, 1fr);
   overflow: hidden;
   min-height: 3rem;
-  border: 1px solid #000;
+  border: 0.0625rem solid var(--td-component-border);
   border-radius: var(--td-radius-medium);
 
   span,
@@ -483,7 +483,7 @@ function mergeCouponProductHierarchy(data: CouponHierarchyItem[]): MergedCouponH
   span {
     color: var(--td-text-color-secondary);
     background: var(--td-bg-color-component);
-    border-right: 1px solid #000;
+    border-right: 0.0625rem solid var(--td-component-border);
   }
 
   strong {
@@ -494,7 +494,7 @@ function mergeCouponProductHierarchy(data: CouponHierarchyItem[]): MergedCouponH
 
 .coupon-hierarchy-sheet {
   overflow: hidden;
-  border: 1px solid #000;
+  border: 0.0625rem solid var(--td-component-border);
   border-radius: var(--td-radius-medium);
   background: var(--td-bg-color-container);
 }
@@ -506,8 +506,8 @@ function mergeCouponProductHierarchy(data: CouponHierarchyItem[]): MergedCouponH
 
   td {
     padding: var(--td-comp-paddingTB-s) var(--td-comp-paddingLR-m);
-    border-right: 1px solid #000;
-    border-bottom: 1px solid #000;
+    border-right: 0.0625rem solid var(--td-component-border);
+    border-bottom: 0.0625rem solid var(--td-component-border);
     color: var(--td-text-color-primary);
     font: var(--td-font-body-small);
     line-height: 1.5;
@@ -517,12 +517,12 @@ function mergeCouponProductHierarchy(data: CouponHierarchyItem[]): MergedCouponH
   }
 
   td {
-    background: #fff;
+    background: var(--td-bg-color-container);
   }
 
   td[rowspan] {
     font-weight: 600;
-    background: #fff;
+    background: var(--td-bg-color-container);
   }
 
   td:last-child {
@@ -534,11 +534,7 @@ function mergeCouponProductHierarchy(data: CouponHierarchyItem[]): MergedCouponH
   }
 }
 
-@media (max-width: 48rem) {
-  .coupon-page {
-    padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-s);
-  }
-
+@media (max-width: @screen-sm-rem) {
   .coupon-filter-bar,
   .coupon-grid {
     grid-template-columns: 1fr;

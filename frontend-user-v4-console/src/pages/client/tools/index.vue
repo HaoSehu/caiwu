@@ -76,7 +76,7 @@ const {
   display: flex;
   flex-direction: column;
   gap: var(--td-comp-margin-m);
-  padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
+  // padding 由 Starter 布局层统一提供
 }
 
 .client-page-heading {
@@ -127,11 +127,7 @@ const {
   border-radius: var(--td-radius-medium);
 }
 
-@media (max-width: 48rem) {
-  .tools-page {
-    padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-s);
-  }
-
+@media (max-width: @screen-sm-rem) {
   .tool-form-grid,
   .tool-form-grid.two,
   .tool-form-grid.three {

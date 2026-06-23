@@ -17,7 +17,7 @@
       <template v-if="detail">
         <section class="pay-shell">
           <main class="pay-main-column">
-            <t-card v-if="isRenewInvoice(detail)" class="renew-info-card" :bordered="false">
+            <t-card v-if="isRenewInvoiceView" class="renew-info-card" :bordered="false">
               <template #title>续费信息</template>
 
               <div class="renew-service-panel">
@@ -37,7 +37,7 @@
               </div>
 
               <div class="renew-kv-grid">
-                <div v-for="item in renewInfoItems(detail)" :key="item.label" class="renew-kv-item">
+                <div v-for="item in renewInfoItemsView" :key="item.label" class="renew-kv-item">
                   <span>{{ item.label }}</span>
                   <strong>{{ item.value }}</strong>
                 </div>
@@ -58,19 +58,19 @@
             </t-card>
 
             <t-card v-if="isNewPurchaseInvoice(detail)" class="order-info-card" :bordered="false">
-              <template #title>订单信息</template>
+              <template #title>账单信息</template>
               <div class="order-summary-grid">
                 <div class="order-kv-item">
-                  <span>订单号</span>
-                  <strong>{{ orderRecord(detail).order_no || '--' }}</strong>
+                  <span>账单号</span>
+                  <strong>{{ detail.invoice_no || '--' }}</strong>
                 </div>
                 <div class="order-kv-item">
-                  <span>订单类型</span>
-                  <strong>{{ orderRecord(detail).type === 'renew' ? '续费' : '新购' }}</strong>
+                  <span>账单类型</span>
+                  <strong>{{ detail.type_label || (detail.type === 'renew' ? '续费' : '新购') }}</strong>
                 </div>
                 <div class="order-kv-item">
-                  <span>订单金额</span>
-                  <strong>¥{{ formatMoney(orderRecord(detail).amount || detail.amount) }}</strong>
+                  <span>账单金额</span>
+                  <strong>¥{{ formatMoney(detail.amount) }}</strong>
                 </div>
                 <div class="order-kv-item">
                   <span>计费周期</span>
@@ -78,15 +78,15 @@
                 </div>
                 <div class="order-kv-item order-summary-grid__wide">
                   <span>产品链路</span>
-                  <strong>{{ productPath(detail) }}</strong>
+                  <strong>{{ productPathView }}</strong>
                 </div>
               </div>
 
-              <div v-if="pricingItems(detail).length" class="order-pricing-block">
+              <div v-if="pricingItemsView.length" class="order-pricing-block">
                 <section class="order-section">
                   <h4>配置定价</h4>
                   <div class="snapshot-line-list">
-                    <div v-for="item in pricingItems(detail)" :key="`pricing-${item.label}`" class="snapshot-line-item">
+                    <div v-for="item in pricingItemsView" :key="`pricing-${item.label}`" class="snapshot-line-item">
                       <span>{{ item.label }}</span>
                       <strong>{{ item.value }}</strong>
                     </div>
@@ -100,15 +100,19 @@
               <div class="payment-record-grid">
                 <div>
                   <span>支付方式</span>
-                  <strong>{{ detail.payment_summary.gateway_label || '--' }}</strong>
+                  <strong>{{ detail.payment_summary.gateway || '--' }}</strong>
                 </div>
                 <div>
                   <span>支付状态</span>
-                  <strong>{{ detail.payment_summary.status_label || '--' }}</strong>
+                  <strong>{{ resolvePaymentStatusLabel(detail.payment_summary.status) }}</strong>
                 </div>
                 <div>
-                  <span>支付单号</span>
+                  <span>商家订单号</span>
                   <strong>{{ detail.payment_summary.payment_no || '--' }}</strong>
+                </div>
+                <div>
+                  <span>第三方订单号</span>
+                  <strong>{{ detail.payment_summary.trade_no || '--' }}</strong>
                 </div>
                 <div>
                   <span>支付金额</span>
@@ -146,9 +150,7 @@
                 </div>
                 <div class="summary-status-row">
                   <span>状态</span>
-                  <t-tag class="summary-status-tag" :theme="resolveInvoiceTagTheme(detail.status)" variant="light">
-                    {{ resolveInvoiceStatusLabel(detail) }}
-                  </t-tag>
+                  <StatusTag class="summary-status-tag" :status-map="INVOICE_STATUS_MAP" :status="Number(detail.status)" />
                 </div>
                 <div>
                   <span>账单金额</span>
@@ -265,7 +267,7 @@
       </div>
       <div class="dialog-meta">
         <p>金额 ¥{{ alipayPayableAmount }}</p>
-        <p>支付单号 {{ alipayPaymentNo || '--' }}</p>
+        <p>商家订单号 {{ alipayPaymentNo || '--' }}</p>
       </div>
       <template #footer>
         <t-button
@@ -282,18 +284,21 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import QrcodeVue from 'qrcode.vue';
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { CheckCircleIcon, LogoAlipayFilledIcon, RefreshIcon, WalletIcon } from 'tdesign-icons-vue-next';
 
-import { flattenSnapshot, formatBillingCycle, toRecord } from '@/domains/finance/useRecords';
+const QrcodeVue = defineAsyncComponent(() => import('qrcode.vue'));
+
+import StatusTag from '@shared/user-v3/components/StatusTag.vue';
+import { INVOICE_STATUS_MAP } from '@shared/statusConfig';
+import { flattenSnapshot, formatBillingCycle } from '@/domains/finance/useRecords';
 import {
   formatMoney,
   resolveInvoiceNo,
-  resolveInvoiceStatusLabel,
-  resolveInvoiceTagTheme,
   useInvoiceDetail,
 } from '@/domains/finance/useInvoices';
+import { resolvePaymentStatusLabel } from '@/domains/finance/useRecords';
+import type { InvoiceRecord } from '@/types/client';
 
 const {
   router,
@@ -336,6 +341,12 @@ let sessionCountdownTimer: number | null = null;
 
 const sessionExpiresAt = computed(() => String(detail.value?.payment_security?.expires_at || '').trim());
 const sessionExpiresTime = computed(() => parseSessionExpiresTime(sessionExpiresAt.value));
+
+// 记忆化模板函数：避免每秒倒计时 tick（now 变更）触发整模板重算这些纯函数
+const isRenewInvoiceView = computed(() => isRenewInvoice(detail.value));
+const renewInfoItemsView = computed(() => renewInfoItems(detail.value));
+const pricingItemsView = computed(() => pricingItems(detail.value));
+const productPathView = computed(() => productPath(detail.value));
 const formattedSessionExpiresAt = computed(() => formatSessionExpiresAt(sessionExpiresTime.value, sessionExpiresAt.value));
 const sessionRemainingMs = computed(() => (sessionExpiresTime.value ? sessionExpiresTime.value - now.value : 0));
 const sessionExpired = computed(() => Boolean(sessionExpiresTime.value) && sessionRemainingMs.value <= 0);
@@ -362,56 +373,50 @@ const renewFlowItems = [
   },
 ];
 
-function orderRecord(row: Record<string, any> | null | undefined) {
-  return toRecord(row?.order);
+function serviceRecord(row: InvoiceRecord | null | undefined) {
+  return row?.service || null;
 }
 
-function serviceRecord(row: Record<string, any> | null | undefined) {
-  return toRecord(row?.service);
+function isNewPurchaseInvoice(row: InvoiceRecord | null | undefined) {
+  const type = String(row?.type || '').toLowerCase();
+  return ['new', 'normal'].includes(type);
 }
 
-function isNewPurchaseInvoice(row: Record<string, any> | null | undefined) {
-  const type = String(row?.type || orderRecord(row).type || '').toLowerCase();
-  return Boolean(orderRecord(row).id) && ['new', 'normal'].includes(type);
-}
-
-function isRenewInvoice(row: Record<string, any> | null | undefined) {
-  const type = String(row?.type || orderRecord(row).type || '').toLowerCase();
+function isRenewInvoice(row: InvoiceRecord | null | undefined) {
+  const type = String(row?.type || '').toLowerCase();
   return type === 'renew';
 }
 
-function productPath(row: Record<string, any> | null | undefined) {
-  const order = orderRecord(row);
-  return order.product_full_path || order.product_name || row?.combined_display_name || row?.product_spec_display || '--';
+function productPath(row: InvoiceRecord | null | undefined) {
+  return row?.combined_display_name || row?.product_display_name || row?.product_spec_display || '--';
 }
 
-function orderBillingCycle(row: Record<string, any> | null | undefined) {
-  return formatBillingCycle(orderRecord(row).billing_cycle || row?.billing_cycle);
+function orderBillingCycle(row: InvoiceRecord | null | undefined) {
+  return formatBillingCycle(row?.billing_cycle);
 }
 
-function renewServiceId(row: Record<string, any> | null | undefined) {
-  return Number(serviceRecord(row).id || orderRecord(row).service_id || row?.service_id || 0);
+function renewServiceId(row: InvoiceRecord | null | undefined) {
+  return Number(serviceRecord(row)?.id || row?.service_id || 0);
 }
 
-function renewServiceName(row: Record<string, any> | null | undefined) {
+function renewServiceName(row: InvoiceRecord | null | undefined) {
   const service = serviceRecord(row);
   const serviceId = renewServiceId(row);
   const productName = productPath(row);
-  return service.name || (productName !== '--' ? productName : '') || (serviceId > 0 ? `服务 #${serviceId}` : '--');
+  return service?.name || (productName !== '--' ? productName : '') || (serviceId > 0 ? `服务 #${serviceId}` : '--');
 }
 
-function currentExpiresAt(row: Record<string, any> | null | undefined) {
+function currentExpiresAt(row: InvoiceRecord | null | undefined) {
   const service = serviceRecord(row);
-  const orderService = toRecord(orderRecord(row).service);
-  return service.expires_at || orderService.expires_at || '--';
+  return service?.expires_at || '--';
 }
 
-function renewedExpiresAt(row: Record<string, any> | null | undefined) {
+function renewedExpiresAt(row: InvoiceRecord | null | undefined) {
   const current = currentExpiresAt(row);
   const currentTime = current === '--' ? 0 : parseSessionExpiresTime(String(current));
   const baseTime = currentTime > Date.now() ? currentTime : Date.now();
   const date = new Date(baseTime);
-  const cycle = String(orderRecord(row).billing_cycle || row?.billing_cycle || '').trim().toLowerCase();
+  const cycle = String(row?.billing_cycle || '').trim().toLowerCase();
 
   if (cycle === 'monthly') date.setMonth(date.getMonth() + 1);
   else if (cycle === 'quarterly') date.setMonth(date.getMonth() + 3);
@@ -424,31 +429,20 @@ function renewedExpiresAt(row: Record<string, any> | null | undefined) {
   return formatSessionExpiresAt(date.getTime(), '--');
 }
 
-function renewInfoItems(row: Record<string, any> | null | undefined) {
-  const order = orderRecord(row);
+function renewInfoItems(row: InvoiceRecord | null | undefined) {
   const serviceId = renewServiceId(row);
   return [
     { label: '服务 ID', value: serviceId > 0 ? `#${serviceId}` : '--' },
     { label: '当前到期', value: currentExpiresAt(row) },
     { label: '续费周期', value: orderBillingCycle(row) },
-    { label: '续费金额', value: `¥${formatMoney(order.amount || row?.amount)}` },
+    { label: '续费金额', value: `¥${formatMoney(row?.amount)}` },
     { label: '续费后到期', value: renewedExpiresAt(row) },
     { label: '本次应付', value: `¥${formatMoney(row?.payable_amount)}` },
   ];
 }
 
-function snapshotSource(row: Record<string, any> | null | undefined) {
-  const order = orderRecord(row);
-  return {
-    config_snapshot: Object.keys(toRecord(order.config_snapshot)).length ? order.config_snapshot : row?.config_snapshot,
-    config_pricing_snapshot: Object.keys(toRecord(order.config_pricing_snapshot)).length
-      ? order.config_pricing_snapshot
-      : row?.config_pricing_snapshot,
-  };
-}
-
-function pricingItems(row: Record<string, any> | null | undefined) {
-  return flattenSnapshot(snapshotSource(row).config_pricing_snapshot);
+function pricingItems(row: InvoiceRecord | null | undefined) {
+  return flattenSnapshot(row?.config_pricing_snapshot);
 }
 
 function parseSessionExpiresTime(value: string) {
@@ -519,7 +513,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: var(--td-comp-margin-m);
-  padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
+  // padding 由 Starter 布局层统一提供
 }
 
 .pay-toolbar {
@@ -592,7 +586,7 @@ onBeforeUnmount(() => {
   min-width: 4rem;
   justify-content: center;
   font-weight: 600;
-  border-radius: 999px;
+  border-radius: 62.4375rem;
 }
 
 .overview-session {
@@ -614,7 +608,7 @@ onBeforeUnmount(() => {
     font-variant-numeric: tabular-nums;
     background: var(--td-warning-color-light);
     border: thin solid var(--td-warning-color-3);
-    border-radius: 999px;
+    border-radius: 62.4375rem;
 
     &.is-expired {
       color: var(--td-error-color);
@@ -815,12 +809,12 @@ onBeforeUnmount(() => {
   &:hover:not(:disabled),
   &:focus-visible {
     border-color: var(--td-brand-color);
-    box-shadow: 0 0 0 3px var(--td-brand-color-light);
+    box-shadow: 0 0 0 0.1875rem var(--td-brand-color-light);
     outline: 0;
   }
 
   &:hover:not(:disabled) {
-    transform: translateY(-1px);
+    transform: translateY(-0.0625rem);
   }
 
   &:disabled {
@@ -832,7 +826,7 @@ onBeforeUnmount(() => {
   &.is-active {
     background: var(--td-brand-color-light);
     border-color: var(--td-brand-color);
-    box-shadow: inset 0 0 0 1px var(--td-brand-color);
+    box-shadow: inset 0 0 0 0.0625rem var(--td-brand-color);
   }
 }
 
@@ -891,7 +885,7 @@ onBeforeUnmount(() => {
 .pay-method-card.is-active .pay-method-card__check {
   background: var(--td-brand-color);
   border-color: var(--td-brand-color);
-  box-shadow: inset 0 0 0 3px var(--td-bg-color-container);
+  box-shadow: inset 0 0 0 0.1875rem var(--td-bg-color-container);
 }
 
 .deduction-panel {
@@ -1016,7 +1010,7 @@ onBeforeUnmount(() => {
 .renew-kv-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1px;
+  gap: 0.0625rem;
   overflow: hidden;
   background: var(--td-bg-color-component);
   border: thin solid var(--td-border-color);
@@ -1121,7 +1115,7 @@ onBeforeUnmount(() => {
 .order-summary-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1px;
+  gap: 0.0625rem;
   overflow: hidden;
   background: var(--td-bg-color-component);
   border: thin solid var(--td-border-color);
@@ -1217,7 +1211,7 @@ onBeforeUnmount(() => {
 .snapshot-line-list {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 0.0625rem;
   overflow: hidden;
   background: var(--td-bg-color-component);
   border: thin solid var(--td-border-color);
@@ -1249,7 +1243,7 @@ onBeforeUnmount(() => {
 .payment-record-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1px;
+  gap: 0.0625rem;
   overflow: hidden;
   background: var(--td-bg-color-component);
   border: thin solid var(--td-border-color);
@@ -1371,7 +1365,7 @@ onBeforeUnmount(() => {
   font-weight: 600;
   line-height: 1;
   text-align: center;
-  border-radius: 999px;
+  border-radius: 62.4375rem;
 }
 
 .dialog-qrcode {
@@ -1416,11 +1410,7 @@ onBeforeUnmount(() => {
   }
 }
 
-@media (max-width: 48rem) {
-  .invoice-pay-page {
-    padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-s);
-  }
-
+@media (max-width: @screen-sm-rem) {
   .pay-toolbar {
     align-items: flex-start;
     flex-direction: column;

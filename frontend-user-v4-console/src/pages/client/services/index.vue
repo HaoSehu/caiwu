@@ -35,7 +35,11 @@
             搜索
           </t-button>
           <t-button variant="outline" @click="resetFilters">重置</t-button>
-          <t-button variant="outline" @click="setViewMode(viewMode === 'grid' ? 'list' : 'grid')">
+          <t-button
+            variant="outline"
+            class="service-view-toggle"
+            @click="setViewMode(viewMode === 'grid' ? 'list' : 'grid')"
+          >
             <template #icon>
               <CatalogIcon v-if="viewMode === 'grid'" />
               <DashboardIcon v-else />
@@ -48,10 +52,20 @@
     </t-card>
 
     <section class="service-list-section">
-      <t-loading :loading="loading" text="正在加载服务实例">
-        <template v-if="list.length">
+      <DataState :loading="loading" :empty="!list.length" description="当前还没有任何服务实例">
+        <template #default>
           <div v-if="viewMode === 'grid'" class="service-card-grid">
             <article v-for="item in list" :key="item.id" class="service-row-card">
+              <div class="service-row-actions service-row-actions--corner">
+                <button type="button" class="service-action-console" @click="openDetail(item.id)">控制台</button>
+                <t-dropdown
+                  trigger="click"
+                  :options="actionOptions(item)"
+                  @click="({ value }: { value: string | number }) => handleServiceAction(String(value), item)"
+                >
+                  <button type="button" class="service-action-more">更多</button>
+                </t-dropdown>
+              </div>
               <div class="service-row-head">
                 <div class="service-system-icon" :class="{ 'is-provisioning': isProvisioningService(item) }">
                   <span v-if="isProvisioningService(item)" class="service-system-loader" aria-hidden="true">
@@ -93,17 +107,6 @@
                           </button>
                         </div>
                       </div>
-
-                      <div class="service-row-actions">
-                        <button type="button" class="service-action-console" @click="openDetail(item.id)">控制台</button>
-                        <t-dropdown
-                          trigger="click"
-                          :options="actionOptions(item)"
-                          @click="({ value }) => handleServiceAction(String(value), item)"
-                        >
-                          <button type="button" class="service-action-more">更多</button>
-                        </t-dropdown>
-                      </div>
                     </div>
 
                     <div class="service-spec-line">
@@ -118,15 +121,9 @@
                   </div>
 
                   <div class="service-row-foot">
-                    <div
-                      class="service-status-line"
-                      :class="[`is-${item.status_tone || 'info'}`, { 'is-provisioning': isProvisioningService(item) }]"
-                    >
-                      <i class="service-status-dot"></i>
-                      <span class="service-status-text" :class="{ 'is-provisioning': isProvisioningService(item) }">
-                        {{ resolveRuntimeStatusLabel(item) }}
-                      </span>
-                    </div>
+                    <t-tag :theme="resolveTdesignStatusTheme(item)" variant="light" class="service-status-tag">
+                      {{ resolveRuntimeStatusLabel(item) }}
+                    </t-tag>
 
                     <div class="service-ip-line">
                       <span class="service-ip-label">公网 IP</span>
@@ -210,7 +207,7 @@
                   <t-dropdown
                     trigger="click"
                     :options="actionOptions(row)"
-                    @click="({ value }) => handleServiceAction(String(value), row)"
+                    @click="({ value }: { value: string | number }) => handleServiceAction(String(value), row)"
                   >
                     <t-button size="small" variant="outline">更多</t-button>
                   </t-dropdown>
@@ -219,11 +216,11 @@
             </t-table>
           </div>
         </template>
+      </DataState>
 
-        <t-empty v-else description="当前还没有任何服务实例">
-          <t-button theme="primary" @click="router.push('/products')">去选购产品</t-button>
-        </t-empty>
-      </t-loading>
+      <div v-if="!loading && !list.length" class="service-empty-action">
+        <t-button theme="primary" @click="router.push('/products')">去选购产品</t-button>
+      </div>
     </section>
 
     <div v-if="total > 0" class="service-pagination">
@@ -239,7 +236,7 @@
     </div>
 
     <t-dialog v-model:visible="renewVisible" header="服务续费" width="min(34rem, calc(100vw - 2rem))" destroy-on-close>
-      <t-loading :loading="renewPreviewLoading" text="正在加载续费信息">
+      <LoadingState :loading="renewPreviewLoading" text="正在加载续费信息" compact>
         <template v-if="renewData">
           <div class="renew-summary-card">
             <div class="renew-summary-row">
@@ -294,7 +291,7 @@
         </template>
 
         <t-empty v-else description="未获取到可续费周期" />
-      </t-loading>
+      </LoadingState>
 
       <template #footer>
         <t-button variant="outline" @click="renewVisible = false">取消</t-button>
@@ -320,10 +317,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { shallowRef, triggerRef } from 'vue';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
 import { CatalogIcon, DashboardIcon, EditIcon, SearchIcon } from 'tdesign-icons-vue-next';
 
+import DataState from '@shared/user-v3/components/DataState.vue';
+import LoadingState from '@shared/user-v3/components/LoadingState.vue';
 import {
   findListSpecValue,
   formatMoney,
@@ -376,7 +375,7 @@ const {
   router,
 } = useServiceCenter();
 
-const failedServiceOsIconKeys = ref(new Set<string>());
+const failedServiceOsIconKeys = shallowRef(new Set<string>());
 
 function resolveServiceIconKey(item: Record<string, any>) {
   return `${item?.id || ''}:${resolveServiceOsText(item)}`;
@@ -387,7 +386,9 @@ function shouldShowServiceOsIcon(item: Record<string, any>) {
 }
 
 function markServiceOsIconFailed(item: Record<string, any>) {
-  failedServiceOsIconKeys.value = new Set([...failedServiceOsIconKeys.value, resolveServiceIconKey(item)]);
+  // 原地 add + triggerRef，避免每次失败都克隆整个 Set 触发所有卡片重渲染
+  failedServiceOsIconKeys.value.add(resolveServiceIconKey(item));
+  triggerRef(failedServiceOsIconKeys);
 }
 
 const columns: PrimaryTableCol[] = [
@@ -401,7 +402,7 @@ const columns: PrimaryTableCol[] = [
 
 function actionOptions(item: Record<string, any>) {
   const options = [{ content: '立即续费', value: 'renew' }];
-  if (item.invoice?.id || item.order?.invoice_id) {
+  if (item.invoice?.id) {
     options.push({ content: '账单详情', value: 'invoice' });
   }
   return options;
@@ -413,7 +414,7 @@ function actionOptions(item: Record<string, any>) {
   display: flex;
   flex-direction: column;
   gap: var(--td-comp-margin-m);
-  padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
+  // padding 由 Starter 布局层统一提供
 }
 
 .service-filter-card {
@@ -449,29 +450,27 @@ function actionOptions(item: Record<string, any>) {
 }
 
 .service-row-card {
+  position: relative;
   width: 100%;
   aspect-ratio: 389 / 187;
-  padding: 16px 18px 14px;
-  border: 1px solid rgba(225, 231, 241, 0.9);
-  border-radius: 16px;
-  background:
-    radial-gradient(circle at top left, rgba(76, 132, 255, 0.05), transparent 24%),
-    linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
-  box-shadow: 0 10px 24px rgba(20, 47, 88, 0.05);
+  padding: 1rem 1.125rem 0.875rem;
+  border: 0.0625rem solid var(--td-component-stroke);
+  border-radius: var(--td-radius-large);
+  background: var(--td-bg-color-container);
+  box-shadow: var(--td-shadow-1);
   overflow: hidden;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 
   &:hover {
-    border-color: rgba(76, 132, 255, 0.24);
-    box-shadow: 0 16px 32px rgba(20, 47, 88, 0.08);
-    transform: translateY(-2px);
+    border-color: var(--td-brand-color-focus);
+    box-shadow: var(--td-shadow-2);
   }
 }
 
 .service-row-head {
   display: flex;
   align-items: stretch;
-  gap: 12px;
+  gap: 0.75rem;
   height: 100%;
 }
 
@@ -480,10 +479,10 @@ function actionOptions(item: Record<string, any>) {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  min-width: 48px;
-  height: 48px;
-  border-radius: 12px;
+  width: 3rem;
+  min-width: 3rem;
+  height: 3rem;
+  border-radius: 0.75rem;
   overflow: hidden;
 }
 
@@ -494,15 +493,15 @@ function actionOptions(item: Record<string, any>) {
 }
 
 .service-system-icon__fallback {
-  color: #3978ff;
-  font-size: 18px;
+  color: var(--td-brand-color);
+  font-size: 1.125rem;
   font-weight: 700;
 }
 
 .service-system-loader {
   position: relative;
-  width: 28px;
-  height: 28px;
+  width: 1.75rem;
+  height: 1.75rem;
 }
 
 .service-system-loader__ring,
@@ -513,14 +512,14 @@ function actionOptions(item: Record<string, any>) {
 }
 
 .service-system-loader__ring {
-  border: 3px solid rgba(235, 19, 92, 0.1);
-  border-top-color: #eb135c;
+  border: 0.1875rem solid var(--td-error-color-1);
+  border-top-color: var(--td-error-color);
   animation: service-loader-spin 1.2s linear infinite;
 }
 
 .service-system-loader__core {
-  inset: 7px;
-  background: radial-gradient(circle, rgba(235, 19, 92, 0.18), rgba(235, 19, 92, 0.02));
+  inset: 0.4375rem;
+  background: radial-gradient(circle, var(--td-error-color-2), transparent);
 }
 
 .service-row-body {
@@ -548,8 +547,7 @@ function actionOptions(item: Record<string, any>) {
 
 .service-row-topline {
   align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 0.75rem;
 }
 
 .service-row-titleblock {
@@ -560,7 +558,7 @@ function actionOptions(item: Record<string, any>) {
 .service-title-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
   flex-wrap: wrap;
   min-width: 0;
 }
@@ -580,8 +578,8 @@ function actionOptions(item: Record<string, any>) {
 .service-name-button {
   display: block;
   max-width: 100%;
-  color: #19263d;
-  font-size: 14px;
+  color: var(--td-text-color-primary);
+  font-size: 0.875rem;
   font-weight: 700;
   line-height: 1.3;
   text-align: left;
@@ -593,12 +591,12 @@ function actionOptions(item: Record<string, any>) {
 .service-row-id {
   display: inline-flex;
   align-items: center;
-  min-height: 20px;
-  padding: 0 7px;
-  border-radius: 999px;
-  background: #f4f7fb;
-  color: #91a0b6;
-  font-size: 11px;
+  min-height: 1.25rem;
+  padding: 0 0.4375rem;
+  border-radius: 62.4375rem;
+  background: var(--td-bg-color-component);
+  color: var(--td-text-color-placeholder);
+  font-size: 0.6875rem;
   font-weight: 600;
 }
 
@@ -607,23 +605,23 @@ function actionOptions(item: Record<string, any>) {
 .service-table-meta {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
 }
 
 .service-remark-line {
-  margin-top: 4px;
+  margin-top: 0.25rem;
 }
 
 .service-remark-text {
-  color: #7d8aa0;
-  font-size: 11px;
+  color: var(--td-text-color-secondary);
+  font-size: 0.6875rem;
   line-height: 1.4;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 
   &.empty {
-    color: #a1adbe;
+    color: var(--td-text-color-placeholder);
   }
 }
 
@@ -631,68 +629,75 @@ function actionOptions(item: Record<string, any>) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 8px;
-  color: #7c8aa1;
-  font-size: 13px;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 0.5rem;
+  color: var(--td-text-color-secondary);
+  font-size: 0.8125rem;
   transition: background-color 0.2s ease, color 0.2s ease;
 
   &:hover {
-    background: rgba(76, 132, 255, 0.08);
-    color: #3978ff;
+    background: var(--td-brand-color-light);
+    color: var(--td-brand-color);
   }
 }
 
 .service-row-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
   flex-shrink: 0;
+
+  &--corner {
+    position: absolute;
+    top: 0.875rem;
+    right: 1rem;
+    z-index: 1;
+  }
 }
 
 .service-action-console {
-  color: #256dff;
-  font-size: 12px;
+  color: var(--td-brand-color);
+  font-size: 0.75rem;
   font-weight: 600;
-  padding: 0 11px;
-  height: 30px;
-  border-radius: 10px;
+  padding: 0 0.6875rem;
+  height: 1.875rem;
+  border-radius: 0.625rem;
 }
 
 .service-action-more {
-  border: 1px solid #dbe3f0;
-  background: #fff;
-  color: #4b5a74;
-  font-size: 12px;
+  border: 0.0625rem solid var(--td-component-border);
+  background: var(--td-bg-color-container);
+  color: var(--td-text-color-secondary);
+  font-size: 0.75rem;
   font-weight: 600;
-  min-width: 52px;
-  height: 30px;
-  padding: 0 11px;
-  border-radius: 10px;
+  min-width: 3.25rem;
+  height: 1.875rem;
+  padding: 0 0.6875rem;
+  border-radius: 0.625rem;
 }
 
 .service-spec-line {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 14px;
-  margin-top: 14px;
+  gap: 0.375rem 0.875rem;
+  margin-top: 0.875rem;
 
   span {
     display: inline-block;
-    color: #5d6b83;
-    font-size: 12px;
+    color: var(--td-text-color-secondary);
+    font-size: 0.75rem;
     font-weight: 600;
   }
 }
 
 .service-expire-line {
-  margin-top: 8px;
-  color: #6f7d93;
-  font-size: 12px;
+  margin-top: 0.5rem;
+  color: var(--td-text-color-secondary);
+  font-size: 0.75rem;
 
   &.warning {
-    color: #ff8a00;
+    color: var(--td-warning-color);
     font-weight: 600;
   }
 }
@@ -701,86 +706,43 @@ function actionOptions(item: Record<string, any>) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 0.875rem;
   margin-top: auto;
-  padding-top: 10px;
-  border-top: 1px solid #edf1f7;
+  padding-top: 0.625rem;
+  border-top: 0.0625rem solid var(--td-component-stroke);
   flex-wrap: wrap;
 }
 
-.service-status-line {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 24px;
-  font-size: 11px;
-  font-weight: 700;
-
-  &.is-success {
-    color: #22945f;
-  }
-
-  &.is-warning {
-    color: #ff8a00;
-  }
-
-  &.is-danger {
-    color: #d71457;
-  }
-
-  &.is-info {
-    color: #3978ff;
-  }
-
-  &.is-provisioning {
-    color: #eb135c;
-  }
-}
-
-.service-status-dot {
-  display: inline-block;
+.service-status-tag {
   flex-shrink: 0;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-.service-status-text {
-  font-size: 11px;
-  font-weight: 700;
-
-  &.is-provisioning {
-    color: #eb135c;
-  }
 }
 
 .service-ip-line {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
   flex-wrap: wrap;
 }
 
 .service-ip-label {
-  color: #8e9bb0;
-  font-size: 11px;
+  color: var(--td-text-color-placeholder);
+  font-size: 0.6875rem;
 }
 
 .service-ip-button {
   display: inline-flex;
   align-items: center;
-  min-height: 28px;
+  min-height: 1.75rem;
   padding: 0;
   border: none;
   background: transparent;
-  color: #21314c;
-  font-size: 12px;
+  color: var(--td-text-color-primary);
+  font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
 
   &.disabled {
-    color: #97a3b6;
+    color: var(--td-text-color-placeholder);
     cursor: default;
   }
 }
@@ -799,14 +761,14 @@ function actionOptions(item: Record<string, any>) {
   align-items: flex-start;
 
   .service-system-icon {
-    width: 40px;
-    min-width: 40px;
-    height: 40px;
-    border-radius: 10px;
+    width: 2.5rem;
+    min-width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 0.625rem;
   }
 
   .service-system-icon__fallback {
-    font-size: 16px;
+    font-size: 1rem;
   }
 }
 
@@ -823,24 +785,24 @@ function actionOptions(item: Record<string, any>) {
 }
 
 .service-table-meta {
-  margin-top: 4px;
-  gap: 6px;
+  margin-top: 0.25rem;
+  gap: 0.375rem;
   color: var(--td-text-color-secondary);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .service-table-meta__dot {
-  width: 4px;
-  height: 4px;
+  width: 0.25rem;
+  height: 0.25rem;
   background: var(--td-border-color);
   border-radius: 50%;
 }
 
 .service-table-specs {
   display: grid;
-  gap: 4px;
+  gap: 0.25rem;
   color: var(--td-text-color-secondary);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .service-pagination {
@@ -905,7 +867,7 @@ function actionOptions(item: Record<string, any>) {
 
 }
 
-@media (max-width: 960px) {
+@media (max-width: 60rem) {
   .service-card-grid {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -915,67 +877,69 @@ function actionOptions(item: Record<string, any>) {
   }
 }
 
-@media (max-width: 767px) {
+@media (max-width: @screen-sm-rem) {
   .service-filter-bar {
     grid-template-columns: 1fr;
+  }
+
+  .service-view-toggle {
+    display: none;
   }
 
   .service-row-card {
     aspect-ratio: auto;
     min-height: 12rem;
-    padding: 12px 14px;
+    padding: 0.75rem 0.875rem;
   }
 
   .service-system-icon {
-    width: 40px;
-    min-width: 40px;
-    height: 40px;
-    border-radius: 10px;
+    width: 2.5rem;
+    min-width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 0.625rem;
   }
 
   .service-row-head {
-    gap: 10px;
+    gap: 0.625rem;
   }
 
   .service-row-topline {
-    gap: 8px;
+    gap: 0.5rem;
   }
 
   .service-name-button {
-    font-size: 13px;
+    font-size: 0.8125rem;
   }
 
   .service-action-console,
   .service-action-more {
-    min-width: 48px;
-    height: 28px;
-    padding: 0 9px;
-    font-size: 11px;
+    min-width: 3rem;
+    height: 1.75rem;
+    padding: 0 0.5625rem;
+    font-size: 0.6875rem;
   }
 
   .service-spec-line {
-    gap: 4px 10px;
-    margin-top: 12px;
+    gap: 0.25rem 0.625rem;
+    margin-top: 0.75rem;
 
     span {
-      font-size: 11px;
+      font-size: 0.6875rem;
     }
   }
 
   .service-expire-line,
   .service-ip-button {
-    font-size: 11px;
+    font-size: 0.6875rem;
   }
 
   .service-row-foot {
-    gap: 10px;
-    padding-top: 8px;
+    gap: 0.625rem;
+    padding-top: 0.5rem;
   }
 
-  .service-status-line,
-  .service-status-text,
   .service-ip-label {
-    font-size: 10px;
+    font-size: 0.625rem;
   }
 
   .service-filter-actions {

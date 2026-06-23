@@ -27,7 +27,7 @@ export const InfoCell = defineComponent({
                   'aria-label': `复制${props.label}`,
                   onClick: () => emit('copy', props.value),
                 },
-                [h(CopyIcon, { size: '18px' })],
+                [h(CopyIcon, { size: '1.125rem' })],
               )
             : null,
         ]),

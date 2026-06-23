@@ -53,7 +53,7 @@
           <t-tab-panel value="rewards" label="奖励明细">
             <t-table row-key="id" :data="rewards" :columns="rewardColumns" :pagination="null">
               <template #user="{ row }">{{ row.referred_user?.display_name || row.referred_user?.nickname || row.referred_user?.email || '--' }}</template>
-              <template #product="{ row }">{{ row.order?.product_display_name || row.product?.display_name || row.product?.name || '--' }}</template>
+              <template #product="{ row }">{{ row.invoice?.product_display_name || row.product?.display_name || row.product?.name || '--' }}</template>
               <template #amount="{ row }">¥{{ money(row.reward_amount) }}</template>
               <template #status="{ row }">
                 <t-tag :theme="rewardStatus(row.status).theme" variant="light">{{ rewardStatus(row.status).label }}</t-tag>
@@ -72,6 +72,7 @@
           </t-tab-panel>
           <t-tab-panel value="logs" label="账户流水">
             <t-table row-key="id" :data="accountLogs" :columns="logColumns" :pagination="null">
+              <template #event_type="{ row }">{{ accountEventLabel(row.event_type) }}</template>
               <template #amount="{ row }">¥{{ money(row.amount) }}</template>
             </t-table>
           </t-tab-panel>
@@ -97,7 +98,7 @@
 import type { PrimaryTableCol } from 'tdesign-vue-next';
 import { LinkIcon } from 'tdesign-icons-vue-next';
 
-import { money, rewardStatus, useReferral, withdrawStatus } from '@/domains/marketing/useReferral';
+import { accountEventLabel, money, rewardStatus, useReferral, withdrawStatus } from '@/domains/marketing/useReferral';
 
 const {
   loading,
@@ -151,7 +152,7 @@ const logColumns: PrimaryTableCol[] = [
   display: flex;
   flex-direction: column;
   gap: var(--td-comp-margin-m);
-  padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
+  // padding 由 Starter 布局层统一提供
 }
 
 .referral-stats {
@@ -220,11 +221,7 @@ const logColumns: PrimaryTableCol[] = [
   }
 }
 
-@media (max-width: 48rem) {
-  .referral-page {
-    padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-s);
-  }
-
+@media (max-width: @screen-sm-rem) {
   .referral-stats,
   .referral-link-row {
     grid-template-columns: 1fr;

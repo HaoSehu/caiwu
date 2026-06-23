@@ -118,7 +118,7 @@ const getPath = (item: ListItemType) => {
 };
 
 const openHref = (url: string) => {
-  window.open(url);
+  window.open(url, '_blank', 'noopener,noreferrer');
 };
 
 const { unreadCount } = useNoticeReadStatus();

@@ -2,9 +2,8 @@ import { ref } from 'vue';
 import { MessagePlugin } from 'tdesign-vue-next';
 
 import clientApi from '@/api/client';
+import type { ServiceVncCredentials } from '@/types/client';
 import { VNC_CREDENTIAL_STORAGE_PREFIX, resolveErrorMessage } from './useConsoleCore';
-
-type AnyRecord = Record<string, any>;
 
 export interface UseConsoleVncOptions {
   serviceId: { value: number };
@@ -37,10 +36,10 @@ export function useConsoleVnc(options: UseConsoleVncOptions) {
     }
   }
 
-  function normalizeVncCredentials(payload: unknown): AnyRecord | null {
+  function normalizeVncCredentials(payload: unknown): ServiceVncCredentials | null {
     if (!payload || typeof payload !== 'object') return null;
-    const source = payload as AnyRecord;
-    const credentials: AnyRecord = {};
+    const source = payload as ServiceVncCredentials;
+    const credentials: ServiceVncCredentials = {};
     const username = String(source.username || '').trim();
     const target = String(source.target || '').trim();
     const password = String(source.password || '').trim();
@@ -67,10 +66,10 @@ export function useConsoleVnc(options: UseConsoleVncOptions) {
 
   async function requestVncUrl(targetWindow: Window | null = null): Promise<string> {
     const res = await clientApi.serviceVnc(serviceId.value, { silentError: true });
-    const url = String((res as AnyRecord).data?.url || '').trim();
+    const url = String(res.data?.url || '').trim();
     if (!url) throw new Error('未获取到可用的 VNC 地址');
     const decoratedUrl = decorateVncUrl(url);
-    const credentials = (res as AnyRecord).data?.vnc_credentials;
+    const credentials = res.data?.vnc_credentials;
     storeVncCredentialsForUrl(decoratedUrl, credentials);
     if (targetWindow) storeVncCredentialsForUrl(decoratedUrl, credentials, targetWindow);
     return decoratedUrl;
@@ -83,19 +82,22 @@ export function useConsoleVnc(options: UseConsoleVncOptions) {
       return;
     }
 
+    if (popup) {
+      popup.opener = null;
+    }
+
     actionLoading.value = true;
     try {
       const url = await requestVncUrl(popup);
       activeTab.value = 'vnc';
       if (mode === 'window' && popup) {
-        popup.opener = null;
         popup.location.replace(url);
         MessagePlugin.success('VNC 新窗口已打开');
       } else {
         vncUrl.value = url;
         MessagePlugin.success('VNC 控制台已载入');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (popup) popup.close();
       MessagePlugin.error(resolveErrorMessage(error, '获取 VNC 地址失败'));
     } finally {

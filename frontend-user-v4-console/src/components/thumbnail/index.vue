@@ -1,13 +1,21 @@
 <template>
-  <img :class="className" :src="url" />
+  <img :class="className" :src="imageUrl" :alt="altText" loading="lazy" decoding="async" />
 </template>
 <script setup lang="ts">
 import { computed } from 'vue';
 
-const { type } = defineProps({
+const props = defineProps({
+  src: {
+    type: String,
+    default: '',
+  },
   url: {
     type: String,
     default: '',
+  },
+  alt: {
+    type: String,
+    default: '布局缩略图',
   },
   type: {
     type: String,
@@ -15,12 +23,14 @@ const { type } = defineProps({
   },
 });
 
+const imageUrl = computed(() => props.url || props.src);
+const altText = computed(() => props.alt || '布局缩略图');
 const className = computed(() => {
   return [
     'thumbnail-container',
     {
-      'thumbnail-circle': type === 'circle',
-      'thumbnail-layout': type === 'layout',
+      'thumbnail-circle': props.type === 'circle',
+      'thumbnail-layout': props.type === 'layout',
     },
   ];
 });

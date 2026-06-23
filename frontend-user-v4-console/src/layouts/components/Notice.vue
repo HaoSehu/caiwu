@@ -29,7 +29,7 @@
         </t-list>
 
         <div v-else class="empty-list">
-          <img src="https://tdesign.gtimg.com/pro-template/personal/nothing.png" alt="空" />
+          <img :src="emptyImage" alt="空" loading="lazy" decoding="async" />
           <p>{{ t('layout.notice.empty') }}</p>
         </div>
         <div v-if="unreadMsg.length > 0" class="header-msg-bottom">
@@ -50,6 +50,7 @@
 import { storeToRefs } from 'pinia';
 import { useRouter } from 'vue-router';
 
+import emptyImage from '@/assets/assets-empty.svg';
 import { t } from '@/locales';
 import { useNotificationStore } from '@/store';
 import type { NotificationItem } from '@/types/interface';

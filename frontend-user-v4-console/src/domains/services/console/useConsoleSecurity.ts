@@ -2,9 +2,8 @@ import { computed, reactive, ref } from 'vue';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 
 import clientApi from '@/api/client';
+import type { ConsoleSelectOption, SecurityGroupRecord, SecurityRuleRecord } from '@/types/client';
 import { resolveErrorMessage } from './useConsoleCore';
-
-type AnyRecord = Record<string, any>;
 
 export interface UseConsoleSecurityOptions {
   serviceId: { value: number };
@@ -20,10 +19,10 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
     supported: true,
     message: '',
     error: '',
-    directions: [] as AnyRecord[],
-    protocols: [] as AnyRecord[],
-    groups: [] as AnyRecord[],
-    rules: [] as AnyRecord[],
+    directions: [] as ConsoleSelectOption[],
+    protocols: [] as ConsoleSelectOption[],
+    groups: [] as SecurityGroupRecord[],
+    rules: [] as SecurityRuleRecord[],
   });
 
   const activeSecurityGroupId = ref(0);
@@ -32,30 +31,34 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
   const ruleVisible = ref(false);
   const ruleForm = reactive({ direction: '', protocol: '', port: '', ip: '', description: '' });
 
-  const activeSecurityGroup = computed(() =>
-    securityState.groups.find((item: AnyRecord) => Number(item?.id || 0) === activeSecurityGroupId.value) || null,
+  const activeSecurityGroup = computed(
+    () => securityState.groups.find((item) => Number(item.id || 0) === activeSecurityGroupId.value) || null,
   );
+
+  function resolveActionMessage(payload: { message?: string } | null | undefined, fallback: string) {
+    return String(payload?.message || '').trim() || fallback;
+  }
 
   async function loadSecurityGroups() {
     securityState.loading = true;
     try {
       const res = await clientApi.serviceSecurityGroups(serviceId.value);
-      const payload = (res as AnyRecord).data || {};
+      const payload = res.data || {};
       securityState.supported = payload.supported !== false;
       securityState.message = String(payload.message || '');
       securityState.error = String(payload.error || '');
       securityState.directions = Array.isArray(payload.directions) ? payload.directions : [];
       securityState.protocols = Array.isArray(payload.protocols) ? payload.protocols : [];
       securityState.groups = Array.isArray(payload.groups) ? payload.groups : [];
-      const current = securityState.groups.find((item: AnyRecord) => Number(item?.id || 0) === activeSecurityGroupId.value);
-      const active = current || securityState.groups.find((item: AnyRecord) => item.is_applied) || securityState.groups[0];
+      const current = securityState.groups.find((item) => Number(item.id || 0) === activeSecurityGroupId.value);
+      const active = current || securityState.groups.find((item) => item.is_applied) || securityState.groups[0];
       if (active?.id) {
         await selectSecurityGroup(active, true);
       } else {
         activeSecurityGroupId.value = 0;
         securityState.rules = [];
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       securityState.error = resolveErrorMessage(error, '加载安全组失败');
     } finally {
       securityState.loading = false;
@@ -66,16 +69,16 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
     securityState.rulesLoading = true;
     try {
       const res = await clientApi.serviceSecurityGroupRules(serviceId.value, groupId);
-      securityState.rules = Array.isArray((res as AnyRecord).data?.list) ? (res as AnyRecord).data.list : [];
-    } catch (error: any) {
+      securityState.rules = Array.isArray(res.data?.list) ? res.data.list : [];
+    } catch (error: unknown) {
       MessagePlugin.error(resolveErrorMessage(error, '加载安全组规则失败'));
     } finally {
       securityState.rulesLoading = false;
     }
   }
 
-  async function selectSecurityGroup(group: AnyRecord, silent = false) {
-    const groupId = Number(group?.id || 0);
+  async function selectSecurityGroup(group: SecurityGroupRecord, silent = false) {
+    const groupId = Number(group.id || 0);
     activeSecurityGroupId.value = groupId;
     if (!groupId) {
       securityState.rules = [];
@@ -112,34 +115,34 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
         description: groupForm.description.trim(),
       });
       groupVisible.value = false;
-      MessagePlugin.success(String((res as AnyRecord).data?.message || '安全组创建成功'));
+      MessagePlugin.success(resolveActionMessage(res.data, '安全组创建成功'));
       await loadSecurityGroups();
-    } catch (error: any) {
+    } catch (error: unknown) {
       MessagePlugin.error(resolveErrorMessage(error, '创建安全组失败'));
     } finally {
       securityState.submitting = false;
     }
   }
 
-  async function applySecurityGroup(group: AnyRecord) {
-    if (!group?.id) return;
+  async function applySecurityGroup(group: SecurityGroupRecord) {
+    if (!group.id) return;
     securityState.submitting = true;
     try {
       const res = await clientApi.applySecurityGroup(serviceId.value, group.id);
-      MessagePlugin.success(String((res as AnyRecord).data?.message || '安全组已应用'));
+      MessagePlugin.success(resolveActionMessage(res.data, '安全组已应用'));
       await loadSecurityGroups();
-    } catch (error: any) {
+    } catch (error: unknown) {
       MessagePlugin.error(resolveErrorMessage(error, '应用安全组失败'));
     } finally {
       securityState.submitting = false;
     }
   }
 
-  async function deleteSecurityGroup(group: AnyRecord) {
-    if (!group?.id) return;
+  async function deleteSecurityGroup(group: SecurityGroupRecord) {
+    if (!group.id) return;
     const dialog = DialogPlugin.confirm({
       header: '删除安全组',
-      body: `确认删除安全组"${group.name || group.id}"吗？`,
+      body: `确认删除安全组“${group.name || group.id}”吗？`,
       theme: 'warning',
       confirmBtn: '确认删除',
       cancelBtn: '取消',
@@ -148,10 +151,10 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
         securityState.submitting = true;
         try {
           const res = await clientApi.deleteSecurityGroup(serviceId.value, group.id);
-          MessagePlugin.success(String((res as AnyRecord).data?.message || '安全组已删除'));
+          MessagePlugin.success(resolveActionMessage(res.data, '安全组已删除'));
           await loadSecurityGroups();
           dialog.hide();
-        } catch (error: any) {
+        } catch (error: unknown) {
           MessagePlugin.error(resolveErrorMessage(error, '删除安全组失败'));
         } finally {
           securityState.submitting = false;
@@ -180,17 +183,17 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
         description: ruleForm.description.trim(),
       });
       ruleVisible.value = false;
-      MessagePlugin.success(String((res as AnyRecord).data?.message || '安全组规则创建成功'));
+      MessagePlugin.success(resolveActionMessage(res.data, '安全组规则创建成功'));
       await loadSecurityGroupRules(activeSecurityGroupId.value);
-    } catch (error: any) {
+    } catch (error: unknown) {
       MessagePlugin.error(resolveErrorMessage(error, '创建安全组规则失败'));
     } finally {
       securityState.submitting = false;
     }
   }
 
-  async function deleteSecurityRule(rule: AnyRecord) {
-    if (!rule?.id || !activeSecurityGroupId.value) return;
+  async function deleteSecurityRule(rule: SecurityRuleRecord) {
+    if (!rule.id || !activeSecurityGroupId.value) return;
     const dialog = DialogPlugin.confirm({
       header: '删除规则',
       body: '确认删除该安全组规则吗？',
@@ -202,10 +205,10 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
         securityState.submitting = true;
         try {
           const res = await clientApi.deleteSecurityRule(serviceId.value, activeSecurityGroupId.value, rule.id);
-          MessagePlugin.success(String((res as AnyRecord).data?.message || '安全组规则已删除'));
+          MessagePlugin.success(resolveActionMessage(res.data, '安全组规则已删除'));
           await loadSecurityGroupRules(activeSecurityGroupId.value);
           dialog.hide();
-        } catch (error: any) {
+        } catch (error: unknown) {
           MessagePlugin.error(resolveErrorMessage(error, '删除安全组规则失败'));
         } finally {
           securityState.submitting = false;

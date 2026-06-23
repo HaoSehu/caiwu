@@ -17,6 +17,14 @@
 @screen-md-max: calc(@screen-lg-min - 1px);
 @screen-lg-max: calc(@screen-xl-min - 1px);
 
+// rem 版本断点（业务页 @media 统一引用，根字号 16px）
+// @screen-sm-rem: 手机 → 平板（≤ 48rem 为手机）
+// @screen-md-rem: 平板 → PC（≤ 64rem 为平板）
+// @screen-lg-rem: PC → 宽屏（≥ 75rem 为宽屏）
+@screen-sm-rem: 48rem;
+@screen-md-rem: 64rem;
+@screen-lg-rem: 75rem;
+
 // 动画
 @anim-time-fn-easing: cubic-bezier(0.38, 0, 0.24, 1);
 @anim-time-fn-ease-out: cubic-bezier(0, 0, 0.15, 1);
