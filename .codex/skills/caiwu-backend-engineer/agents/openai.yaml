@@ -1,0 +1,4 @@
+interface:
+  display_name: "Caiwu Backend Engineer"
+  short_description: "Implement and review Caiwu Laravel backend APIs."
+  default_prompt: "Use $caiwu-backend-engineer to work on Caiwu backend APIs, services, migrations, or reviews."

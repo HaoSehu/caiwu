@@ -8,18 +8,18 @@ description: Work on Caiwu frontend apps and shared UI code. Use for Vue pages, 
 Read first:
 
 - `AGENTS.md`
-- `文档/前端/前端项目规范.md`
+- `文档/开发文档/前端/前端项目规范.md`
 - `页面风格.md`
-- For backend contracts: `文档/后端/API格式规范.md`
+- For backend contracts: `文档/开发文档/后端/API格式规范.md`
 
 ## App Selection
 
-- `frontend-admin-v3`: admin console, TDesign Vue Next, TypeScript.
-- `frontend-user-v3-www`: website/login/user entry, Element Plus.
-- `frontend-user-v4-console`: user console, TDesign Vue Next, TypeScript.
+- `frontend-admin-v3`: admin console, TDesign Vue Next, TypeScript, Starter layout, `src/pages/`, `src/router/modules/`, `src/style/`.
+- `frontend-user-v3-www`: website/login/user entry, Element Plus, `src/assets/styles/`, `src/domains/products/`, sitemap/prerender build output.
+- `frontend-user-v4-console`: user console, TDesign Vue Next, TypeScript, `/client/*`, `src/pages/client/`, `src/domains/`, `src/composables/`, `src/api/`.
 - `shared`: cross-app status/runtime/content/user-console components.
 
-Do not target missing old paths: `frontend-admin`, `frontend-client`, `frontend-user-v3-console`.
+Do not target missing old paths: `frontend-admin`, `frontend-client`, `frontend-user-v3-console`, `frontend-www-v2`, or `frontend-console-v2`.
 
 ## Implementation Rules
 
@@ -30,6 +30,8 @@ Do not target missing old paths: `frontend-admin`, `frontend-client`, `frontend-
 - User-visible text must be Simplified Chinese.
 - Show loading, empty, error, and disabled/submitting states for real workflows.
 - Status labels and mappings should come from `@caiwu/shared` or `shared/user-v3`.
+- Use `127.0.0.1` for local URLs; do not hardcode backend hosts or token keys.
+- If PowerShell blocks `npm.ps1`, use `npm.cmd`.
 
 ## UI Boundaries
 
@@ -37,6 +39,8 @@ Do not target missing old paths: `frontend-admin`, `frontend-client`, `frontend-
 - Element Plus app (`frontend-user-v3-www`): use Element Plus and `@element-plus/icons-vue`; do not add TDesign for normal pages.
 - Admin and console pages stay light, work-focused, and dense enough for repeated use.
 - Website and login pages may be more expressive, but should not leak Hero-style decoration into ordinary business pages.
+- Admin pages must not add standalone explanatory page-head or hero cards.
+- User console pages must not use website-style hero or decoration-first layouts.
 
 ## Validation
 

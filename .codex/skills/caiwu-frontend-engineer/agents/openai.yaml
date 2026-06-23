@@ -1,0 +1,4 @@
+interface:
+  display_name: "Caiwu Frontend Engineer"
+  short_description: "Implement and review Caiwu frontend apps."
+  default_prompt: "Use $caiwu-frontend-engineer to work on Caiwu frontend pages, shared UI, or frontend reviews."
