@@ -10,6 +10,7 @@ use App\Models\AutomationLog;
 use App\Models\Service;
 use App\Models\User;
 use App\Services\Automation\BillingAutomationService;
+use App\Services\Notification\UserNotificationService;
 use App\Services\Provisioning\ServiceRenewService;
 use App\Services\System\NotificationService;
 use App\Services\System\SettingService;
@@ -128,6 +129,7 @@ class BillingAutomationServiceTest extends TestCase
             ]),
             $notificationService,
             $renewService,
+            $this->createMock(UserNotificationService::class),
         );
 
         $firstSummary = $serviceInstance->handle();
@@ -181,6 +183,7 @@ class BillingAutomationServiceTest extends TestCase
             ]),
             $notificationService,
             $renewService,
+            $this->createMock(UserNotificationService::class),
         );
 
         $firstSummary = $serviceInstance->handle();
@@ -228,6 +231,7 @@ class BillingAutomationServiceTest extends TestCase
             ]),
             $notificationService,
             $renewService,
+            $this->createMock(UserNotificationService::class),
         );
 
         $summary = $serviceInstance->handle();

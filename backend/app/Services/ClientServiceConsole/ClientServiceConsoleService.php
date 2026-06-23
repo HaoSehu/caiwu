@@ -139,6 +139,21 @@ class ClientServiceConsoleService
         return app(ServiceTrafficPackageService::class)->createInvoiceForUser($user, $serviceId, $data, $context);
     }
 
+    public function getHostUpgradePreviewForUser(User $user, int $serviceId): array
+    {
+        return app(ServiceUpgradeService::class)->previewForUser($user, $serviceId);
+    }
+
+    public function quoteHostUpgradeForUser(User $user, int $serviceId, array $data): array
+    {
+        return app(ServiceUpgradeService::class)->quoteForUser($user, $serviceId, $data);
+    }
+
+    public function createHostUpgradeInvoiceForUser(User $user, int $serviceId, array $data, array $context = []): Invoice
+    {
+        return app(ServiceUpgradeService::class)->createInvoiceForUser($user, $serviceId, $data, $context);
+    }
+
     // ══════════════════════════════════════════════════════════════════════
     // 电源 / 重装 / 密码
     // ══════════════════════════════════════════════════════════════════════

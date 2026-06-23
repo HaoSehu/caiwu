@@ -57,14 +57,12 @@ class AdminReferralOverviewService
                 ->orderByDesc('total_sales_amount');
         }
 
-        if (User::accountTableAvailable()) {
-            $topReferrersQuery->orderByDesc(
-                UserAccount::query()
-                    ->select('referral_withdrawn_balance')
-                    ->whereColumn('user_accounts.user_id', 'users.id')
-                    ->limit(1)
-            );
-        }
+        $topReferrersQuery->orderByDesc(
+            UserAccount::query()
+                ->select('referral_withdrawn_balance')
+                ->whereColumn('user_accounts.user_id', 'users.id')
+                ->limit(1)
+        );
 
         $topReferrers = $topReferrersQuery
             ->limit(10)

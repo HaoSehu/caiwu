@@ -6,16 +6,17 @@ namespace App\Services\Finance;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
+use App\Constants\PaymentGatewayCode;
 use App\Models\AdminUser;
 use App\Models\AutomationLog;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Services\System\NotificationService;
 use App\Support\AdminPermissions;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 
 class AdminOrderNotificationService
 {
@@ -23,6 +24,7 @@ class AdminOrderNotificationService
 
     public function __construct(
         private NotificationService $notificationService,
+        private ?ProductFullPathResolver $productFullPathResolver = null,
     ) {}
 
     public function notifyOrderCreatedAfterResponse(Order $order): void
@@ -56,13 +58,13 @@ class AdminOrderNotificationService
     public function notifyOrderCreated(Order $order): void
     {
         $invoiceColumns = ['id', 'order_id', 'invoice_no', 'amount', 'status', 'product_spec_snapshot', 'config_snapshot'];
-        if (Schema::hasColumn((new Invoice)->getTable(), 'product_snapshot_json')) {
-            $invoiceColumns[] = 'product_snapshot_json';
-        }
 
         $order->loadMissing([
             'user:id,email,nickname',
-            'product:id,product_type,product_group_id,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
+            'product.firstProductGroup:id,code,name',
+            'product.secondProductGroup:id,first_product_group_id,name',
+            'product.thirdProductGroup:id,second_product_group_id,name',
             'invoice:'.implode(',', $invoiceColumns),
         ]);
 
@@ -85,7 +87,7 @@ class AdminOrderNotificationService
                     'user_email' => (string) ($order->user?->email ?? '未绑定'),
                     'order_no' => (string) $order->order_no,
                     'invoice_no' => (string) ($order->invoice?->invoice_no ?? ''),
-                    'product_name' => (string) $order->display_product_name,
+                    'product_name' => $this->resolveOrderProductDisplayText($order),
                     'billing_cycle_label' => $this->resolveBillingCycleLabel((string) $order->billing_cycle),
                     'order_amount' => number_format((float) ($order->amount ?? 0), 2, '.', ''),
                     'order_type_label' => $this->resolveOrderTypeLabel((string) $order->type),
@@ -100,7 +102,10 @@ class AdminOrderNotificationService
     {
         $order->loadMissing([
             'user:id,email,nickname',
-            'product:id,product_type,product_group_id,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
+            'product.firstProductGroup:id,code,name',
+            'product.secondProductGroup:id,first_product_group_id,name',
+            'product.thirdProductGroup:id,second_product_group_id,name',
             'invoice:id,order_id,invoice_no,amount,status,paid_at',
         ]);
 
@@ -118,7 +123,7 @@ class AdminOrderNotificationService
                     'user_email' => (string) ($order->user?->email ?? '未绑定'),
                     'order_no' => (string) $order->order_no,
                     'invoice_no' => (string) ($order->invoice?->invoice_no ?? ''),
-                    'product_name' => (string) $order->display_product_name,
+                    'product_name' => $this->resolveOrderProductDisplayText($order),
                     'billing_cycle_label' => $this->resolveBillingCycleLabel((string) $order->billing_cycle),
                     'paid_amount' => number_format((float) ($order->paid_amount ?? $order->amount ?? 0), 2, '.', ''),
                     'payment_method' => $this->resolvePaymentGatewayLabel((string) ($payment?->gateway ?? '')),
@@ -187,7 +192,7 @@ class AdminOrderNotificationService
 
         $snapshot = is_array($invoice->product_snapshot_json ?? null) ? $invoice->product_snapshot_json : [];
         $orderNo = trim((string) ($snapshot['order_no'] ?? $order->order_no ?? $invoice->invoice_no ?? ''));
-        $productName = trim((string) ($snapshot['product_name'] ?? $snapshot['product_spec_snapshot'] ?? $invoice->display_product_name));
+        $productName = $this->resolveInvoiceProductDisplayText($invoice, $order);
 
         $recipients = $this->resolveRecipients();
         if ($recipients->isEmpty()) {
@@ -252,7 +257,15 @@ class AdminOrderNotificationService
     {
         $invoice = Invoice::query()->with([
             'user:id,email,nickname',
-            'product:id,product_type,product_group_id,config_options,purchase_requires',
+            'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle,product_spec_snapshot,product_type_snapshot,config_snapshot',
+            'order.product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
+            'order.product.firstProductGroup:id,code,name',
+            'order.product.secondProductGroup:id,first_product_group_id,name',
+            'order.product.thirdProductGroup:id,second_product_group_id,name',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
+            'product.firstProductGroup:id,code,name',
+            'product.secondProductGroup:id,first_product_group_id,name',
+            'product.thirdProductGroup:id,second_product_group_id,name',
         ])->find($invoiceId);
 
         if (! $invoice instanceof Invoice || (int) $invoice->status !== InvoiceStatus::PAID) {
@@ -261,6 +274,7 @@ class AdminOrderNotificationService
 
         $payment = Payment::query()
             ->where('invoice_id', $invoice->id)
+            ->whereIn('gateway', PaymentGatewayCode::thirdPartyGateways())
             ->where('status', 1)
             ->orderByDesc('paid_at')
             ->orderByDesc('id')
@@ -289,7 +303,7 @@ class AdminOrderNotificationService
                         'user_email' => (string) ($invoice->user?->email ?? '未绑定'),
                         'order_no' => (string) ($invoice->invoice_no ?? ''),
                         'invoice_no' => (string) ($invoice->invoice_no ?? ''),
-                        'product_name' => (string) ($invoice->order?->display_product_name ?: $invoice->display_product_name),
+                        'product_name' => $this->resolveInvoiceProductDisplayText($invoice, $invoice->order),
                         'billing_cycle_label' => $this->resolveBillingCycleLabel((string) ($invoice->billing_cycle ?? '')),
                         'paid_amount' => number_format((float) ($invoice->paid_amount ?? $invoice->amount ?? 0), 2, '.', ''),
                         'payment_method' => $this->resolvePaymentGatewayLabel((string) ($payment?->gateway ?? '')),
@@ -361,6 +375,7 @@ class AdminOrderNotificationService
                     $query->orWhere('invoice_id', $invoiceId);
                 }
             })
+            ->whereIn('gateway', PaymentGatewayCode::thirdPartyGateways())
             ->where('status', 1)
             ->orderByDesc('paid_at')
             ->orderByDesc('id')
@@ -437,5 +452,44 @@ class AdminOrderNotificationService
     private function siteName(): string
     {
         return (string) config('idc.site_name', config('app.name', '创欧云'));
+    }
+
+    private function resolveOrderProductDisplayText(Order $order): string
+    {
+        $path = $this->productFullPathResolver()->pathForOrder($order);
+
+        return $path !== '' ? $path : (string) $order->display_product_name;
+    }
+
+    private function resolveInvoiceProductDisplayText(Invoice $invoice, ?Order $order = null): string
+    {
+        $snapshot = is_array($invoice->product_snapshot_json ?? null) ? $invoice->product_snapshot_json : [];
+        $snapshotPath = $this->productFullPathResolver()->pathFromSnapshot($snapshot);
+        if ($snapshotPath !== '') {
+            return $snapshotPath;
+        }
+
+        foreach (['product_name', 'product_spec_snapshot'] as $key) {
+            $value = trim((string) ($snapshot[$key] ?? ''));
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        $path = $this->productFullPathResolver()->pathForInvoice($invoice);
+        if ($path !== '') {
+            return $path;
+        }
+
+        if ($order instanceof Order) {
+            return $this->resolveOrderProductDisplayText($order);
+        }
+
+        return (string) $invoice->display_product_name;
+    }
+
+    private function productFullPathResolver(): ProductFullPathResolver
+    {
+        return $this->productFullPathResolver ??= app(ProductFullPathResolver::class);
     }
 }

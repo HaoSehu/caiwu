@@ -8,6 +8,7 @@ use App\Models\NoticeRead;
 use App\Models\UserNotification;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * 站内信聚合服务。
@@ -234,7 +235,7 @@ class InboxService
             'created_at' => $now,
         ])->all();
 
-        \Illuminate\Support\Facades\DB::table('notice_reads')->upsert(
+        DB::table('notice_reads')->upsert(
             $records,
             ['user_id', 'article_id'],
             ['read_at']

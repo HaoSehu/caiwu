@@ -51,19 +51,24 @@ trait HandlesApiConfigOptions
     }
 
     /**
-     * 从 /v1/productsconfig 拉取真实配置项。
+     * 从官方 /v1/productsconfig 拉取真实配置项；若上游缺失或返回空，再回退到前台页面接口。
      */
     public function fetchRealConfigOptions(Supplier $supplier, int $productId): array
     {
+        $jwt = $this->login($supplier);
+        $response = $this->get($supplier, '/v1/productsconfig', $jwt, ['product_id' => $productId]);
+        $officialConfigOptions = $this->normalizeRemoteConfigOptions($this->extractApiConfigOptions($response, $productId));
+
+        if ($officialConfigOptions !== []) {
+            return $officialConfigOptions;
+        }
+
         $storefrontConfigOptions = $this->fetchStorefrontConfigOptions($supplier, $productId);
         if ($storefrontConfigOptions !== []) {
             return $this->normalizeRemoteConfigOptions($storefrontConfigOptions);
         }
 
-        $jwt = $this->login($supplier);
-        $response = $this->get($supplier, '/v1/productsconfig', $jwt, ['product_id' => $productId]);
-
-        return $this->normalizeRemoteConfigOptions($this->extractApiConfigOptions($response, $productId));
+        return [];
     }
 
     public function fetchBatchProductConfigOptions(Supplier $supplier, array $productIds, int $chunkSize = 8): array

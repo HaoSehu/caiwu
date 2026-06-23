@@ -4,18 +4,16 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Models\AccountTransaction;
 use App\Models\AdminUser;
-use App\Models\BalanceLog;
 use App\Models\Role;
 use App\Models\User;
 use App\Support\AdminPermissions;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class AdminUserDetailRegressionTest extends TestCase
 {
-    public function test_admin_user_detail_and_balance_logs_work_without_account_transactions_table(): void
+    public function test_admin_user_detail_and_balance_logs_use_account_transactions(): void
     {
         $suffix = bin2hex(random_bytes(4));
 
@@ -51,25 +49,20 @@ class AdminUserDetailRegressionTest extends TestCase
             'verified_at' => null,
         ]);
 
-        BalanceLog::query()->create([
+        AccountTransaction::query()->create([
             'user_id' => (int) $user->id,
+            'account_type' => 'cash',
             'event_type' => 'recharge',
             'change_amount' => '88.00',
             'balance_after' => '88.00',
-            'reference_id' => 1001,
+            'source_type' => 'payment',
+            'source_id' => 1001,
+            'origin_type' => 'payment',
+            'origin_id' => 1001,
             'remark' => 'admin user detail regression',
+            'operator' => 'system',
+            'trace_id' => 'admin-user-detail-'.$suffix,
         ]);
-
-        $actualSchema = DB::connection()->getSchemaBuilder();
-        $this->resetUserAggregateTableAvailabilityCache();
-
-        Schema::shouldReceive('hasTable')
-            ->andReturnUsing(static function (string $table) use ($actualSchema): bool {
-                return match ($table) {
-                    'account_transactions', 'user_accounts' => false,
-                    default => $actualSchema->hasTable($table),
-                };
-            });
 
         $token = $admin->createToken('admin-user-detail-regression')->plainTextToken;
 
@@ -86,18 +79,5 @@ class AdminUserDetailRegressionTest extends TestCase
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.event_type', 'recharge')
             ->assertJsonPath('data.summary.total_income', 88);
-
-        $this->resetUserAggregateTableAvailabilityCache();
-    }
-
-    private function resetUserAggregateTableAvailabilityCache(): void
-    {
-        $reflection = new \ReflectionClass(User::class);
-
-        foreach (['profileTableAvailable', 'accountTableAvailable'] as $propertyName) {
-            $property = $reflection->getProperty($propertyName);
-            $property->setAccessible(true);
-            $property->setValue(null, null);
-        }
     }
 }

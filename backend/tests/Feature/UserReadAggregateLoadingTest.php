@@ -8,7 +8,6 @@ use App\Http\Resources\Admin\AdminUserListResource;
 use App\Http\Resources\User\UserResource;
 use App\Models\User;
 use App\Models\UserAccount;
-use App\Models\UserProfile;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -26,16 +25,6 @@ class UserReadAggregateLoadingTest extends TestCase
             'real_name' => '寮犱笁',
             'verification_status' => 2,
         ]);
-
-        if (User::profileTableAvailable()) {
-            UserProfile::query()->create([
-                'user_id' => (int) $user->id,
-                'nickname' => '娴嬭瘯鏄电О',
-                'company' => '娴嬭瘯鍏徃',
-                'qq' => '123456',
-                'admin_note' => '娴嬭瘯澶囨敞',
-            ]);
-        }
 
         UserAccount::query()->create([
             'user_id' => (int) $user->id,
@@ -62,9 +51,11 @@ class UserReadAggregateLoadingTest extends TestCase
 
         $this->assertCount(0, $queries);
         $this->assertSame('娴嬭瘯鏄电О', $detailPayload['nickname'] ?? null);
-        $this->assertSame('88.80', $detailPayload['balance'] ?? null);
+        $this->assertSame('88.80', $detailPayload['cash_balance'] ?? null);
+        $this->assertArrayNotHasKey('balance', $detailPayload);
         $this->assertSame('娴嬭瘯鏄电О', $listPayload[0]['nickname'] ?? null);
-        $this->assertSame(88.8, (float) ($listPayload[0]['balance'] ?? 0));
+        $this->assertSame(88.8, (float) ($listPayload[0]['cash_balance'] ?? 0));
+        $this->assertArrayNotHasKey('balance', $listPayload[0]);
     }
 
     public function test_user_model_with_read_aggregates_source_no_longer_uses_schema_probe(): void
@@ -73,6 +64,7 @@ class UserReadAggregateLoadingTest extends TestCase
 
         $this->assertIsString($content);
         $this->assertStringNotContainsString("loadMissing('profile')", $content);
-        $this->assertStringNotContainsString("loadMissing('account')", $content);
+        $this->assertStringNotContainsString('profileTableAvailable', $content);
+        $this->assertStringNotContainsString('accountTableAvailable', $content);
     }
 }

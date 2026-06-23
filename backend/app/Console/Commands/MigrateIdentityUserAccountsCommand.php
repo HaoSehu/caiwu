@@ -202,7 +202,7 @@ class MigrateIdentityUserAccountsCommand extends IdentityMigrateBaseCommand
                 $zeroRows
             );
 
-            $this->line('  已为缺失账户用户补齐零余额账户：' . count($zeroRows) . ' 行');
+            $this->line('  已为缺失账户用户补齐零余额账户：'.count($zeroRows).' 行');
         }
 
         if (in_array('migrated_balance_diff', $targetColumns, true)) {

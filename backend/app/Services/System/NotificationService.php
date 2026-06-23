@@ -325,6 +325,8 @@ class NotificationService
      */
     private function createEmailLog(string $to, string $subject, string $content, ?string $templateCode): array
     {
+        $logContent = $this->buildEmailLogContent($content, $templateCode);
+
         try {
             if (Schema::hasTable('notification_logs')) {
                 $log = NotificationLog::create([
@@ -332,7 +334,7 @@ class NotificationService
                     'recipient' => $to,
                     'template_code' => $templateCode,
                     'subject' => $subject,
-                    'content' => $content,
+                    'content' => $logContent,
                     'status' => 'pending',
                     'origin_type' => 'email_send',
                     'origin_id' => 0,
@@ -349,7 +351,7 @@ class NotificationService
                     'template_code' => $templateCode,
                     'to_email' => $to,
                     'subject' => $subject,
-                    'content' => $content,
+                    'content' => $logContent,
                     'status' => 'pending',
                     'error_msg' => null,
                     'sent_at' => null,
@@ -372,6 +374,15 @@ class NotificationService
             'table' => null,
             'id' => null,
         ];
+    }
+
+    private function buildEmailLogContent(string $content, ?string $templateCode): string
+    {
+        if (trim((string) $templateCode) === self::TEMPLATE_EMAIL_CODE) {
+            return '邮件验证码已发送（内容已脱敏）';
+        }
+
+        return $content;
     }
 
     /**

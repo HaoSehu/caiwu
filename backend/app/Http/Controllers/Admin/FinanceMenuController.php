@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\FinanceMenu\NewCustomerDailySummaryRequest;
+use App\Http\Requests\Admin\FinanceMenu\ProductIncomeSummaryRequest;
 use App\Services\Finance\AdminFinanceQueryService;
 use Illuminate\Http\Request;
 
@@ -24,13 +26,9 @@ class FinanceMenuController extends Controller
         );
     }
 
-    public function newCustomerDailySummary(Request $request)
+    public function newCustomerDailySummary(NewCustomerDailySummaryRequest $request)
     {
-        $data = $request->validate([
-            'month' => ['nullable', 'date_format:Y-m', 'required_without:start_date'],
-            'start_date' => ['nullable', 'date_format:Y-m-d', 'required_with:end_date'],
-            'end_date' => ['nullable', 'date_format:Y-m-d', 'required_with:start_date', 'after_or_equal:start_date'],
-        ]);
+        $data = $request->validated();
 
         return $this->success(
             $this->financeQueryService->dailyCustomerSummary(
@@ -40,13 +38,9 @@ class FinanceMenuController extends Controller
         );
     }
 
-    public function productIncomeSummary(Request $request)
+    public function productIncomeSummary(ProductIncomeSummaryRequest $request)
     {
-        $data = $request->validate([
-            'month' => ['nullable', 'date_format:Y-m', 'required_without:start_date'],
-            'start_date' => ['nullable', 'date_format:Y-m-d', 'required_with:end_date'],
-            'end_date' => ['nullable', 'date_format:Y-m-d', 'required_with:start_date', 'after_or_equal:start_date'],
-        ]);
+        $data = $request->validated();
 
         return $this->success(
             $this->financeQueryService->productIncomeSummary(

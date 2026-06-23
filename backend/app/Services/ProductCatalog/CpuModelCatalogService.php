@@ -5,6 +5,7 @@ namespace App\Services\ProductCatalog;
 use App\Exceptions\BusinessException;
 use App\Models\Product;
 use App\Models\Setting;
+use App\Support\CacheKey;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -14,10 +15,6 @@ class CpuModelCatalogService
     public const SETTING_GROUP = 'product';
 
     public const SETTING_KEY = 'cpu_model_catalog';
-
-    private const SITE_CATALOG_CACHE_KEY = 'catalog:site:v1';
-
-    private const SITE_SPLIT_CACHE_VERSION_KEY = 'catalog:site:split:version';
 
     public function __construct(
         private readonly ?ProductDisplayNameResolver $productDisplayNameResolver = null,
@@ -285,13 +282,13 @@ class CpuModelCatalogService
 
     private function forgetSiteCatalogCache(): void
     {
-        Cache::forget(self::SITE_CATALOG_CACHE_KEY);
-        Cache::forever(self::SITE_SPLIT_CACHE_VERSION_KEY, $this->siteCacheVersion() + 1);
+        Cache::forget(CacheKey::siteCatalog());
+        Cache::put(CacheKey::siteCatalogSplitVersion(), $this->siteCacheVersion() + 1, now()->addYear());
     }
 
     private function siteCacheVersion(): int
     {
-        return max(1, (int) Cache::get(self::SITE_SPLIT_CACHE_VERSION_KEY, 1));
+        return max(1, (int) Cache::get(CacheKey::siteCatalogSplitVersion(), 1));
     }
 
     private function normalizeId(mixed $id, string $prefix, int $primaryIndex, ?int $secondaryIndex): string
@@ -371,7 +368,7 @@ class CpuModelCatalogService
         return [
             'display_name' => $fallback,
             'custom_display_name' => '',
-            'cpu_memory_display' => '',
+            'cpu_memory_display' => $fallback,
             'cpu_memory_slug_display' => '',
             'product_spec_display' => '',
             'combined_display_name' => '',

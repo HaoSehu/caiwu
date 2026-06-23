@@ -10,7 +10,6 @@ use App\Jobs\ProcessPaidOrderFulfillmentJob;
 use App\Jobs\ProcessPaidOrderReferralRewardJob;
 use App\Jobs\SendPaidInvoiceAdminNotificationJob;
 use App\Jobs\SyncPaidInvoiceCouponUsageJob;
-use App\Models\Setting;
 use App\Models\Supplier;
 use App\Services\ClientServiceConsole\ServiceDetailService;
 use App\Services\ClientServiceConsole\ServiceTransformService;
@@ -25,7 +24,7 @@ class BackendHealthFixRegressionTest extends TestCase
 {
     public function test_setting_payload_masks_sensitive_value(): void
     {
-        $service = new SettingService();
+        $service = new SettingService;
         $method = (new ReflectionClass($service))->getMethod('formatSettingPayload');
         $method->setAccessible(true);
 
@@ -39,7 +38,7 @@ class BackendHealthFixRegressionTest extends TestCase
 
     public function test_empty_sensitive_setting_is_not_saved_as_replacement(): void
     {
-        $service = new SettingService();
+        $service = new SettingService;
         $method = (new ReflectionClass($service))->getMethod('prepareSettingsForSave');
         $method->setAccessible(true);
 
@@ -85,7 +84,7 @@ class BackendHealthFixRegressionTest extends TestCase
         ]);
         $supplier->exists = true;
 
-        $response = (new SupplierController())->show($supplier);
+        $response = (new SupplierController)->show($supplier);
         $payload = $response->getData(true);
 
         $this->assertArrayNotHasKey('api_key', $payload['data']);
@@ -137,7 +136,7 @@ class BackendHealthFixRegressionTest extends TestCase
                 ->delete();
             Cache::flush();
 
-            (new SettingService())->getGroupSettings('payment');
+            (new SettingService)->getGroupSettings('payment');
 
             $this->assertDatabaseMissing('settings', [
                 'group_key' => 'payment',

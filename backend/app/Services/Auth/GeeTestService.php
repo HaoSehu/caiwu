@@ -3,6 +3,7 @@
 namespace App\Services\Auth;
 
 use App\Models\Setting;
+use App\Support\CacheKey;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -14,8 +15,6 @@ class GeeTestService
     private const SCRIPT_PROXY_PATH = '/api/client/auth/captcha-script';
 
     private const SCRIPT_UPSTREAM_URL = 'https://static.geetest.com/v4/gt4.js';
-
-    private const SCRIPT_CACHE_KEY = 'geetest:gt4:script';
 
     private const SCRIPT_CACHE_TTL_SECONDS = 43200;
 
@@ -49,14 +48,14 @@ class GeeTestService
 
     public function getScriptContent(): string
     {
-        $cachedScript = Cache::get(self::SCRIPT_CACHE_KEY);
+        $cachedScript = Cache::get(CacheKey::geeTestScript());
         if (is_string($cachedScript) && $cachedScript !== '') {
             return $cachedScript;
         }
 
         $scriptContent = $this->fetchScriptContent();
         Cache::put(
-            self::SCRIPT_CACHE_KEY,
+            CacheKey::geeTestScript(),
             $scriptContent,
             now()->addSeconds(self::SCRIPT_CACHE_TTL_SECONDS)
         );

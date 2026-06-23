@@ -7,11 +7,11 @@ namespace Tests\Feature;
 use App\Console\Commands\MigrateIdentityUserAccountsCommand;
 use App\Services\System\IdentityMigrationService;
 use Illuminate\Console\OutputStyle;
-use Symfony\Component\Console\Input\ArrayInput;
-use Symfony\Component\Console\Output\BufferedOutput;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Output\BufferedOutput;
 use Tests\TestCase;
 
 class IdentityUserAccountsMigrationCommandTest extends TestCase
@@ -187,7 +187,7 @@ class IdentityUserAccountsMigrationCommandTest extends TestCase
 
         touch($databasePath);
 
-        config()->set('database.connections.' . $connectionName, [
+        config()->set('database.connections.'.$connectionName, [
             'driver' => 'sqlite',
             'database' => $databasePath,
             'prefix' => '',

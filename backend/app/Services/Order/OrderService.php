@@ -6,6 +6,7 @@ namespace App\Services\Order;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
+use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Exceptions\BusinessException;
 use App\Models\Invoice;
@@ -21,6 +22,7 @@ use App\Services\Finance\PaymentService;
 use App\Services\Order\Concerns\HandlesOrderCalculation;
 use App\Services\ProductCatalog\ProductCatalogService;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
+use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Services\System\NotificationService;
 use App\Services\System\OperationLogService;
 use Carbon\Carbon;
@@ -28,7 +30,6 @@ use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 
 class OrderService
 {
@@ -105,7 +106,7 @@ class OrderService
         $lockKey = 'lock:order:create:'.$userId.':'.sha1($idempotencyKey);
 
         try {
-            $order = Cache::lock($lockKey, 15)->block(5, function () use (
+            $order = Cache::lock($lockKey, 20)->block(5, function () use (
                 $userId,
                 $productId,
                 $billingCycle,
@@ -184,6 +185,7 @@ class OrderService
                     $configPricingSnapshot = $this->buildConfigPricingSnapshot($product, $billingCycle, $normalizedConfig, $quantity);
                     $displayNamePayload = $this->resolveProductDisplayNameResolver()->resolveForProduct($product, $normalizedConfig);
                     $productDisplayName = $this->resolveCheckoutProductDisplayName($displayNamePayload);
+                    $orderConfigSnapshot = $this->withProductDisplaySnapshot($product, $normalizedConfig, $productDisplayName);
                     throw_if($amount <= 0, new BusinessException('无效的计费周期'));
                     $stepStartedAt = microtime(true);
                     $couponPayload = $this->couponService->reserveOwnedCouponForOrder($userCouponId, $userId, $product, $billingCycle, $amount, 'new');
@@ -206,6 +208,7 @@ class OrderService
 
                     $order = Order::query()->create([
                         'order_no' => Order::generateOrderNo(),
+                        'projection_type' => Order::PROJECTION_TYPE_PROVISIONING,
                         'user_id' => $userId,
                         'product_id' => $product->id,
                         'product_spec_snapshot' => $productDisplayName,
@@ -218,7 +221,7 @@ class OrderService
                         'discount' => $discountAmount,
                         'billing_cycle' => $billingCycle,
                         'quantity' => $quantity,
-                        'config_snapshot' => $normalizedConfig,
+                        'config_snapshot' => $orderConfigSnapshot,
                         'config_pricing_snapshot' => $configPricingSnapshot,
                         'coupon_snapshot' => $couponPayload,
                         'status' => OrderStatus::PENDING,
@@ -247,6 +250,7 @@ class OrderService
                             'order_no' => (string) $order->order_no,
                             'product_id' => (int) $product->id,
                             'product_name' => $productDisplayName,
+                            'product_full_path' => (string) ($orderConfigSnapshot['product_full_path'] ?? ''),
                             'billing_cycle' => $billingCycle,
                             'quantity' => $quantity,
                             'amount' => $this->formatAmount($amount),
@@ -417,7 +421,7 @@ class OrderService
      */
     public function adminList(array $filters, int $perPage = 20)
     {
-        $query = Order::with(['user:id,email,nickname', 'product:id,product_type,product_group_id,config_options,purchase_requires']);
+        $query = Order::with(['user:id,email,nickname', 'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires']);
 
         if (! empty($filters['order_no'])) {
             $query->where('order_no', $filters['order_no']);
@@ -500,38 +504,13 @@ class OrderService
         throw_if($payableAmount <= 0, new BusinessException('当前账单无需再入账'));
         throw_if(abs($requestedAmount - $payableAmount) > 0.00001, new BusinessException('当前仅支持按账单应付金额全额入账'));
 
-        DB::transaction(function () use ($order, $invoice, $paidAt, $paidAmount, $paymentGateway, $tradeNo, $remark, $context, $sendEmail) {
+        DB::transaction(function () use ($order, $invoice, $paidAt, $paidAmount) {
             Payment::query()
                 ->where('invoice_id', $invoice->id)
                 ->where('status', PaymentStatus::PENDING)
                 ->update([
                     'status' => PaymentStatus::FAILED,
                 ]);
-
-            if ($this->shouldCreateManualPaymentRecord($paymentGateway)) {
-                $payment = Payment::query()->create([
-                    'payment_no' => Payment::generatePaymentNo(),
-                    'user_id' => $order->user_id,
-                    'order_id' => (int) $order->id,
-                    'invoice_id' => $invoice->id,
-                    'gateway' => $paymentGateway,
-                    'trade_no' => $tradeNo !== '' ? $tradeNo : $this->generateManualTradeNo($order),
-                    'amount' => $paidAmount,
-                    'status' => PaymentStatus::SUCCESS,
-                    'callback_raw' => [
-                        'source' => 'admin_manual',
-                        'action' => 'mark_paid',
-                        'payment_gateway' => $paymentGateway,
-                        'remark' => $remark,
-                        'send_email' => $sendEmail,
-                        'operator_id' => (int) ($context['operator_id'] ?? 0),
-                        'operator_name' => (string) ($context['operator_name'] ?? ''),
-                        'trace_id' => (string) ($context['trace_id'] ?? ''),
-                    ],
-                    'paid_at' => $paidAt,
-                ]);
-                $this->paymentService->syncProjection($payment);
-            }
 
             $invoice->forceFill([
                 'status' => InvoiceStatus::PAID,
@@ -594,7 +573,7 @@ class OrderService
                     ->orWhere('invoice_id', $invoice->id);
             })
             ->where('status', PaymentStatus::SUCCESS)
-            ->whereIn('gateway', ['alipay', 'wechat'])
+            ->whereIn('gateway', PaymentGatewayCode::thirdPartyGateways())
             ->exists();
 
         throw_if($hasRealSuccessPayment, new BusinessException('存在真实支付记录，不能直接恢复为未支付'));
@@ -706,7 +685,7 @@ class OrderService
     private function freshCheckoutOrder(int $orderId): ?Order
     {
         return Order::query()
-            ->with(['product:id,product_type,product_group_id,config_options,purchase_requires', 'invoice', 'service'])
+            ->with(['product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires', 'invoice', 'service'])
             ->where('status', '!=', OrderStatus::CANCELLED)
             ->find($orderId);
     }
@@ -744,16 +723,6 @@ class OrderService
             Log::log($level, $message, $context);
         } catch (\Throwable) {
         }
-    }
-
-    private function generateManualTradeNo(Order $order): string
-    {
-        return 'MANUAL-'.$order->id.'-'.Str::upper(Str::random(12));
-    }
-
-    private function shouldCreateManualPaymentRecord(string $gateway): bool
-    {
-        return false;
     }
 
     private function sendManualPaymentEmail(Order $order, string $remark, string $paymentGateway, ?string $tradeNo = null): void
@@ -828,6 +797,10 @@ class OrderService
             $payments = $order->invoice->payments;
         }
 
+        $payments = collect($payments)
+            ->filter(fn (Payment $payment) => PaymentGatewayCode::isThirdParty((string) $payment->gateway))
+            ->values();
+
         $payment = $payments
             ->first(fn (Payment $item) => ! (bool) data_get((array) ($item->callback_raw ?? []), 'duplicate_paid', false)
                 && in_array((int) $item->status, [PaymentStatus::SUCCESS, PaymentStatus::REFUNDED], true))
@@ -860,6 +833,15 @@ class OrderService
     private function resolveProductDisplayNameResolver(): ProductDisplayNameResolver
     {
         return $this->productDisplayNameResolver ??= new ProductDisplayNameResolver;
+    }
+
+    private function withProductDisplaySnapshot(Product $product, array $configSnapshot, string $productDisplayName): array
+    {
+        return array_merge(
+            $configSnapshot,
+            (new ProductFullPathResolver($this->resolveProductDisplayNameResolver()))
+                ->snapshotForProduct($product, $productDisplayName, $configSnapshot)
+        );
     }
 
     /**

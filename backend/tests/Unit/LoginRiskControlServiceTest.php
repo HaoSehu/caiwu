@@ -17,6 +17,7 @@ class LoginRiskControlServiceTest extends TestCase
         parent::setUp();
 
         Cache::flush();
+        Cache::store('redis_volatile')->flush();
     }
 
     #[Test]

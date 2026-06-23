@@ -10,14 +10,14 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\Supplier;
-use App\Services\System\SettingService;
 use App\Services\Integrations\Support\ProviderErrorMapper;
+use App\Services\System\SettingService;
 use App\Services\Upstream\Contracts\ProvidesProvisioning;
 use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderResolver;
 use App\Support\ProductProvisionHostname;
-use App\Support\ServiceHostname;
 use App\Support\SensitiveDataSanitizer;
+use App\Support\ServiceHostname;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
@@ -364,6 +364,41 @@ class ProvisionService
 
         if (! $supplier instanceof Supplier) {
             throw new BusinessException('供应商信息不存在，无法自动开通');
+        }
+
+        // 幂等键回查：如果 service 已有 upstream_host_id，先查上游确认 host 存在且 Active，
+        // 直接返回而不重新走购物车流程，避免重复开通。
+        $existingService = $order->service;
+        if ($existingService && ! empty($existingService->provision_data['upstream_host_id'])) {
+            $existingHostId = (int) $existingService->provision_data['upstream_host_id'];
+            try {
+                $provisioning = $this->resolveProvisioningCapability($product);
+                $jwt = $provisioning->login($supplier);
+                $detailResponse = $provisioning->get($supplier, "/v1/hosts/{$existingHostId}", $jwt);
+                if (($detailResponse['status'] ?? 0) === 200) {
+                    $detailPayload = $this->extractPayload($detailResponse);
+                    $hostDetail = is_array($detailPayload['host'] ?? null) ? $detailPayload['host'] : [];
+                    Log::info('[幂等回查] 上游 host 已存在，跳过重复开通', [
+                        'order_id' => $order->id,
+                        'upstream_host_id' => $existingHostId,
+                    ]);
+
+                    return [
+                        'requested_host' => (string) ($existingService->provision_data['requested_host'] ?? ''),
+                        'upstream_invoice_id' => (int) ($existingService->provision_data['upstream_invoice_id'] ?? 0),
+                        'upstream_host_ids' => $existingService->provision_data['upstream_host_ids'] ?? [$existingHostId],
+                        'upstream_host_id' => $existingHostId,
+                        'host_detail' => $hostDetail,
+                    ];
+                }
+            } catch (\Throwable $e) {
+                // 回查失败（404/鉴权过期等）不阻断，继续走正常开通流程
+                Log::warning('[幂等回查] 上游 host 查询失败，继续正常开通', [
+                    'order_id' => $order->id,
+                    'upstream_host_id' => $existingHostId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
 
         $cartLockKey = "lock:supplier:cart:{$supplier->id}";

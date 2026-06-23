@@ -17,7 +17,8 @@ class ClientVerificationQrcodeOwnershipTest extends TestCase
         $owner = $this->createClientUserForVerification('owner-'.$suffix, 'CERT-OWNER-'.$suffix);
         $attacker = $this->createClientUserForVerification('attacker-'.$suffix, 'CERT-ATTACKER-'.$suffix);
 
-        $fakeService = new class extends VerificationService {
+        $fakeService = new class extends VerificationService
+        {
             public bool $called = false;
 
             public function __construct() {}

@@ -6,7 +6,6 @@ use App\Casts\LegacyEncrypted;
 use App\Exceptions\BusinessException;
 use App\Models\Setting;
 use App\Models\User;
-use App\Models\UserVerification;
 use App\Models\VerificationHistory;
 use App\Services\Verification\Contracts\VerificationDriver;
 use App\Services\Verification\Data\VerificationInitializeRequest;
@@ -45,8 +44,6 @@ class VerificationService
     private const QR_CODE_URL_CACHE_TTL_SECONDS = 7200;
 
     private VerificationDriverManager $driverManager;
-
-    private ?bool $userVerificationTableAvailable = null;
 
     private ?bool $verificationHistoryTableAvailable = null;
 
@@ -302,24 +299,7 @@ class VerificationService
             return $user;
         }
 
-        if (! $this->canUseLegacyVerificationTable()) {
-            return null;
-        }
-
-        try {
-            $verification = UserVerification::query()
-                ->with('user')
-                ->where('certify_id', $certifyId)
-                ->first();
-
-            return $verification?->user;
-        } catch (\Throwable $exception) {
-            $this->handleLegacyVerificationFailure('find_user_by_certify_id', $exception, [
-                'verification_certify_id' => $certifyId,
-            ]);
-
-            return null;
-        }
+        return null;
     }
 
     private function getCertifyId(string $realname, string $idcard, string $certType): VerificationInitializeResult
@@ -347,8 +327,7 @@ class VerificationService
     private function assertSourceResponseSuccess(
         VerificationInitializeResult|VerificationScanUrlResult $response,
         string $fallbackMessage,
-    ): void
-    {
+    ): void {
         $status = $response->status;
         if ($status === self::API_STATUS_SUCCESS) {
             return;
@@ -566,50 +545,17 @@ class VerificationService
     private function getVerificationSnapshot(User $user): array
     {
         $freshUser = $user->exists ? ($user->fresh() ?? $user) : $user;
-        $profile = null;
-
-        if ($freshUser->exists && $this->canUseLegacyVerificationTable()) {
-            try {
-                $profile = UserVerification::query()->find($freshUser->id);
-            } catch (\Throwable $exception) {
-                $this->handleLegacyVerificationFailure('snapshot', $exception, [
-                    'user_id' => $freshUser->id,
-                ]);
-            }
-        }
 
         $realName = trim((string) $freshUser->real_name);
-        if ($realName === '' && $profile) {
-            $realName = trim((string) $profile->real_name);
-        }
-
         $idCard = trim((string) $freshUser->id_card);
-        if ($idCard === '' && $profile) {
-            $idCard = trim((string) $profile->id_card_encrypted);
-        }
-
         $certifyId = trim((string) ($freshUser->verification_certify_id ?? ''));
-        if ($certifyId === '' && $profile) {
-            $certifyId = trim((string) $profile->certify_id);
-        }
-
         $verificationStatus = (int) $freshUser->verification_status;
         if ($verificationStatus === 0 && (int) $freshUser->is_verified === 1) {
             $verificationStatus = 2;
         }
-        if ($verificationStatus === 0 && $profile) {
-            $verificationStatus = (int) $profile->verification_status;
-        }
 
         $verificationMessage = trim((string) $freshUser->verification_message);
-        if ($verificationMessage === '' && $profile) {
-            $verificationMessage = trim((string) $profile->verification_message);
-        }
-
         $verifiedAt = $freshUser->verified_at;
-        if ($verifiedAt === null && $profile?->verified_at) {
-            $verifiedAt = $profile->verified_at;
-        }
 
         return [
             'real_name' => $realName,
@@ -656,94 +602,7 @@ class VerificationService
             $lockedUser->forceFill($userPayload)->save();
         }
 
-        $lockedUser->unsetRelation('verificationProfile');
-        $this->syncLegacyVerificationProfile($lockedUser, $payload);
-
         return $lockedUser->fresh() ?? $lockedUser;
-    }
-
-    private function syncLegacyVerificationProfile(User $user, array $payload): void
-    {
-        if (! $this->canUseLegacyVerificationTable()) {
-            return;
-        }
-
-        try {
-            $profile = UserVerification::query()->lockForUpdate()->find($user->id);
-
-            if (! $profile) {
-                $profile = new UserVerification;
-                $profile->user_id = $user->id;
-            }
-
-            $profilePayload = [
-                'verification_type' => self::VERIFICATION_TYPE_PERSONAL,
-            ];
-
-            if (array_key_exists('verification_status', $payload)) {
-                $profilePayload['verification_status'] = (int) $payload['verification_status'];
-            }
-
-            if (array_key_exists('real_name', $payload)) {
-                $profilePayload['real_name'] = $this->nullableString($payload['real_name']);
-            }
-
-            if (array_key_exists('id_card', $payload)) {
-                $profilePayload['id_card_encrypted'] = $payload['id_card'];
-            }
-
-            if (array_key_exists('certify_id', $payload)) {
-                $profilePayload['certify_id'] = $this->nullableString($payload['certify_id']);
-            }
-
-            if (array_key_exists('verification_message', $payload)) {
-                $profilePayload['verification_message'] = (string) ($payload['verification_message'] ?? '');
-            }
-
-            if (array_key_exists('last_submitted_at', $payload)) {
-                $profilePayload['last_submitted_at'] = $payload['last_submitted_at'];
-            }
-
-            if (array_key_exists('verified_at', $payload)) {
-                $profilePayload['verified_at'] = $payload['verified_at'];
-            }
-
-            $profile->forceFill($profilePayload)->save();
-        } catch (\Throwable $exception) {
-            $this->handleLegacyVerificationFailure('sync', $exception, [
-                'user_id' => $user->id,
-            ]);
-        }
-    }
-
-    private function canUseLegacyVerificationTable(): bool
-    {
-        if ($this->userVerificationTableAvailable !== null) {
-            return $this->userVerificationTableAvailable;
-        }
-
-        try {
-            return $this->userVerificationTableAvailable = Schema::hasTable('user_verifications');
-        } catch (\Throwable $exception) {
-            $this->userVerificationTableAvailable = false;
-
-            Log::warning('[瀹炲悕璁よ瘉] userVerificationProfile-table-check-failed', [
-                'error' => $exception->getMessage(),
-            ]);
-
-            return false;
-        }
-    }
-
-    private function handleLegacyVerificationFailure(string $action, \Throwable $exception, array $context = []): void
-    {
-        if (str_contains(strtolower($exception->getMessage()), 'user_verifications')) {
-            $this->userVerificationTableAvailable = false;
-        }
-
-        Log::warning('[瀹炲悕璁よ瘉] userVerificationProfile-'.$action.'-failed', SensitiveDataSanitizer::sanitize(array_merge($context, [
-            'error' => $exception->getMessage(),
-        ])));
     }
 
     private function encodeUserIdCard(User $user, mixed $value): string

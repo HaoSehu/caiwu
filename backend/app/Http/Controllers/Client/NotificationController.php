@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Client;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Client\Notification\IndexRequest;
 use App\Services\Notification\InboxService;
 use App\Services\Notification\UserNotificationService;
 use Illuminate\Http\Request;
@@ -34,13 +35,9 @@ class NotificationController extends Controller
     }
 
     /** 站内信中心：完整列表（可只看未读，分页） */
-    public function index(Request $request)
+    public function index(IndexRequest $request)
     {
-        $validated = $request->validate([
-            'unread_only' => ['nullable', 'boolean'],
-            'page' => ['nullable', 'integer', 'min:1'],
-            'page_size' => ['nullable', 'integer', 'min:1', 'max:50'],
-        ]);
+        $validated = $request->validated();
 
         $page = (int) ($validated['page'] ?? 1);
         $pageSize = (int) ($validated['page_size'] ?? 15);

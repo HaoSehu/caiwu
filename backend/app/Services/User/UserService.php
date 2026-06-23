@@ -11,10 +11,7 @@ use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
-use App\Http\Resources\Finance\BalanceLogResource;
 use App\Http\Resources\Finance\FinanceLedgerResource;
-use App\Models\AccountTransaction;
-use App\Models\BalanceLog;
 use App\Models\EmailLog;
 use App\Models\Invoice;
 use App\Models\NotificationLog;
@@ -26,7 +23,6 @@ use App\Models\Service;
 use App\Models\SmsLog;
 use App\Models\Ticket;
 use App\Models\User;
-use App\Models\UserAccount;
 use App\Services\Automation\ServiceStatusSyncService;
 use App\Services\ClientServiceConsole\ClientServiceConsoleService;
 use App\Services\Finance\FinanceLedgerQueryService;
@@ -40,10 +36,8 @@ use App\Services\System\SettingService;
 use App\Services\User\Concerns\HandlesAdminUserServices;
 use App\Support\AccountIdentifier;
 use App\Support\TextSanitizer;
-use App\Support\UserBalanceCache;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -62,6 +56,7 @@ class UserService
         private ProvisionService $provisionService,
         private ServiceStatusSyncService $serviceStatusSyncService,
         private SettingService $settingService,
+        private ?AccountService $accountService = null,
     ) {}
 
     /**
@@ -130,16 +125,12 @@ class UserService
                 'phone' => $phone,
                 'status' => $data['status'] ?? 1,
                 'nickname' => TextSanitizer::clean((string) ($data['nickname'] ?? '')),
-                'balance' => $initialBalance,
             ]);
 
-            UserAccount::query()->updateOrCreate(
-                ['user_id' => $user->id],
-                [
-                    'cash_balance' => $initialBalance,
-                    'credit_limit' => number_format((float) ($data['credit_limit'] ?? 0), 2, '.', ''),
-                ]
-            );
+            $this->accounts()->updateAccount($user, [
+                'cash_balance' => $initialBalance,
+                'credit_limit' => number_format((float) ($data['credit_limit'] ?? 0), 2, '.', ''),
+            ]);
 
             $this->referralService->ensureReferralCode($user);
 
@@ -188,10 +179,7 @@ class UserService
             }
 
             if ($accountUpdateData !== []) {
-                UserAccount::query()->updateOrCreate(
-                    ['user_id' => $user->id],
-                    $accountUpdateData
-                );
+                $this->accounts()->updateAccount($user, $accountUpdateData);
                 $user->unsetRelation('account');
             }
         });
@@ -216,13 +204,8 @@ class UserService
     {
         $user->loadMissing([
             'memberLevel',
+            'account',
         ]);
-        if (User::accountTableAvailable()) {
-            $user->loadMissing('account');
-        }
-        if (User::profileTableAvailable()) {
-            $user->loadMissing('profile');
-        }
         $memberLevel = $user->memberLevel;
         $countStats = User::query()
             ->whereKey($user->id)
@@ -248,7 +231,7 @@ class UserService
             $orderPending = $invoiceUnpaid;
         }
 
-        $balanceSummary = $this->buildBalanceAggregateSummary($user);
+        $balanceSummary = $this->financeLedgerQueryService->summaryForClient($user, []);
         $invoiceSummary = Invoice::query()
             ->where('user_id', $user->id)
             ->selectRaw('COALESCE(SUM(CASE WHEN status = 0 THEN amount ELSE 0 END), 0) as unpaid_amount')
@@ -273,8 +256,8 @@ class UserService
                 'service_total' => (int) ($countStats?->service_total ?? 0),
                 'order_total' => $orderTotal,
                 'order_pending' => $orderPending,
-                'total_income' => (float) ($balanceSummary->total_income ?? 0),
-                'total_expense' => (float) ($balanceSummary->total_expense ?? 0),
+                'total_income' => (float) ($balanceSummary['total_in'] ?? 0),
+                'total_expense' => (float) ($balanceSummary['total_out'] ?? 0),
                 'unpaid_amount' => (float) ($invoiceSummary?->unpaid_amount ?? 0),
                 'ticket_open' => (int) ($countStats?->ticket_open ?? 0),
                 'ticket_closed' => (int) ($countStats?->ticket_closed ?? 0),
@@ -318,8 +301,8 @@ class UserService
     {
         $query = $user->invoices()->with([
             'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle',
-            'order.product:id,product_type,product_group_id,config_options,purchase_requires',
-            'product:id,product_type,product_group_id,config_options,purchase_requires',
+            'order.product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
             'service:id,name,status,expires_at',
             'payments',
             'items',
@@ -327,7 +310,9 @@ class UserService
 
         if (($filters['status'] ?? '') === '5') {
             $query->where(function ($builder) {
-                $builder->whereHas('payments', fn ($paymentQuery) => $paymentQuery->where('status', PaymentStatus::REFUNDED))
+                $builder->whereHas('payments', fn ($paymentQuery) => $paymentQuery
+                    ->whereIn('gateway', PaymentGatewayCode::thirdPartyGateways())
+                    ->where('status', PaymentStatus::REFUNDED))
                     ->orWhereHas('order', fn ($orderQuery) => $orderQuery->where('status', OrderStatus::REFUNDED));
             });
         } elseif (isset($filters['status']) && $filters['status'] !== '') {
@@ -378,15 +363,18 @@ class UserService
     {
         $invoice = $this->findUserInvoice($user, $invoiceId);
         $invoice->loadMissing([
-            'order.product:id,product_type,product_group_id,config_options,purchase_requires',
+            'order.product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
             'payments.callbacks',
             'items',
         ]);
 
         throw_if(trim((string) $user->email) === '', new BusinessException('用户未绑定邮箱，无法发送账单邮件'));
 
-        $latestPayment = $invoice->payments->first(fn (Payment $payment) => (int) $payment->status === PaymentStatus::SUCCESS)
-            ?? $invoice->payments->first();
+        $thirdPartyPayments = $invoice->payments
+            ->filter(fn (Payment $payment) => PaymentGatewayCode::isThirdParty((string) $payment->gateway))
+            ->values();
+        $latestPayment = $thirdPartyPayments->first(fn (Payment $payment) => (int) $payment->status === PaymentStatus::SUCCESS)
+            ?? $thirdPartyPayments->first();
         $this->notificationService->sendTemplateEmail((string) $user->email, NotificationService::TEMPLATE_INVOICE_NOTICE, [
             'site_name' => (string) config('idc.site_name', config('app.name', '创欧云')),
             'display_name' => (string) $user->display_name,
@@ -540,34 +528,18 @@ class UserService
      */
     public function balanceLogs(User $user, array $filters, int $perPage = 20): array
     {
-        if (Schema::hasTable('account_transactions')) {
-            $normalizedFilters = $this->normalizeBalanceLogFiltersToLedger($filters);
-            $paginator = $this->financeLedgerQueryService->paginatorForUser($user, $normalizedFilters, $perPage);
-            $summary = $this->financeLedgerQueryService->summaryForClient($user, $normalizedFilters);
-
-            return [
-                'paginator' => $paginator,
-                'resource_class' => FinanceLedgerResource::class,
-                'summary' => [
-                    'total_income' => (float) ($summary['total_in'] ?? 0),
-                    'total_expense' => (float) ($summary['total_out'] ?? 0),
-                    'balance' => (float) ($summary['balance'] ?? 0),
-                    'total_count' => (int) ($summary['total_count'] ?? 0),
-                ],
-            ];
-        }
-
-        $paginator = $this->buildAdminBalanceLogQuery($user, $filters)->paginate($perPage);
-        $summary = $this->buildBalanceAggregateSummary($user);
+        $normalizedFilters = $this->normalizeBalanceLogFiltersToLedger($filters);
+        $paginator = $this->financeLedgerQueryService->paginatorForUser($user, $normalizedFilters, $perPage);
+        $summary = $this->financeLedgerQueryService->summaryForClient($user, $normalizedFilters);
 
         return [
             'paginator' => $paginator,
-            'resource_class' => BalanceLogResource::class,
+            'resource_class' => FinanceLedgerResource::class,
             'summary' => [
-                'total_income' => (float) ($summary->total_income ?? 0),
-                'total_expense' => (float) ($summary->total_expense ?? 0),
-                'balance' => (float) $user->balance,
-                'total_count' => (int) ($summary->total_count ?? 0),
+                'total_income' => (float) ($summary['total_in'] ?? 0),
+                'total_expense' => (float) ($summary['total_out'] ?? 0),
+                'cash_balance' => (float) $user->balance,
+                'total_count' => (int) ($summary['total_count'] ?? 0),
             ],
         ];
     }
@@ -688,73 +660,6 @@ class UserService
             ->paginate($perPage);
     }
 
-    private function buildAdminBalanceLogQuery(User $user, array $filters): Builder
-    {
-        $query = Schema::hasTable('account_transactions')
-            ? AccountTransaction::query()->where('user_id', $user->id)->where('account_type', 'cash')
-            : BalanceLog::query()->where('user_id', $user->id);
-
-        if (! empty($filters['event_type'])) {
-            $query->where('event_type', $filters['event_type']);
-        }
-
-        return $query->orderByDesc('created_at');
-    }
-
-    private function buildBalanceAggregateSummary(User $user): ?object
-    {
-        $userId = (int) $user->id;
-        if ($userId <= 0) {
-            return $this->queryBalanceAggregateSummary($userId);
-        }
-
-        // 短 TTL 缓存 + 余额流水写入时失效：读频繁、写较少，缓存命中率高，
-        // 用户支付/退款后由模型 saved 钩子即时清理，不会显示过期总额。
-        $cached = Cache::remember(
-            UserBalanceCache::summaryKey($userId),
-            UserBalanceCache::SUMMARY_TTL_SECONDS,
-            function () use ($userId) {
-                $row = $this->queryBalanceAggregateSummary($userId);
-
-                if (! $row) {
-                    return null;
-                }
-
-                return [
-                    'total_income' => (string) ($row->total_income ?? '0'),
-                    'total_expense' => (string) ($row->total_expense ?? '0'),
-                    'total_count' => (int) ($row->total_count ?? 0),
-                ];
-            }
-        );
-
-        if ($cached === null) {
-            return null;
-        }
-
-        return (object) $cached;
-    }
-
-    private function queryBalanceAggregateSummary(int $userId): ?object
-    {
-        if (! Schema::hasTable('account_transactions')) {
-            return BalanceLog::query()
-                ->where('user_id', $userId)
-                ->selectRaw('COALESCE(SUM(CASE WHEN change_amount > 0 THEN change_amount ELSE 0 END), 0) as total_income')
-                ->selectRaw('COALESCE(SUM(CASE WHEN change_amount < 0 THEN ABS(change_amount) ELSE 0 END), 0) as total_expense')
-                ->selectRaw('COUNT(*) as total_count')
-                ->first();
-        }
-
-        return AccountTransaction::query()
-            ->where('user_id', $userId)
-            ->where('account_type', 'cash')
-            ->selectRaw('COALESCE(SUM(CASE WHEN change_amount > 0 THEN change_amount ELSE 0 END), 0) as total_income')
-            ->selectRaw('COALESCE(SUM(CASE WHEN change_amount < 0 THEN ABS(change_amount) ELSE 0 END), 0) as total_expense')
-            ->selectRaw('COUNT(*) as total_count')
-            ->first();
-    }
-
     private function normalizeBalanceLogFiltersToLedger(array $filters): array
     {
         $eventType = trim((string) ($filters['event_type'] ?? ''));
@@ -795,21 +700,14 @@ class UserService
 
     private function reloadUserReadRelations(User $user): User
     {
-        $relations = [];
-
-        if (User::accountTableAvailable()) {
-            $relations[] = 'account';
-        }
-
-        if (User::profileTableAvailable()) {
-            $relations[] = 'profile';
-        }
-
-        if ($relations === []) {
-            return $user->fresh() ?? $user;
-        }
+        $relations = ['account'];
 
         return $user->fresh($relations) ?? $user->loadMissing($relations);
+    }
+
+    private function accounts(): AccountService
+    {
+        return $this->accountService ??= app(AccountService::class);
     }
 
     private function buildUserSmsLogQuery(string $phone): ?Builder
@@ -999,7 +897,9 @@ class UserService
 
     private function resolvePrimaryInvoicePayment(iterable $payments): ?Payment
     {
-        $collection = collect($payments);
+        $collection = collect($payments)
+            ->filter(fn (Payment $payment) => PaymentGatewayCode::isThirdParty((string) $payment->gateway))
+            ->values();
 
         return $collection
             ->first(fn (Payment $payment) => ! (bool) data_get((array) ($payment->callback_raw ?? []), 'duplicate_paid', false)
@@ -1165,6 +1065,7 @@ class UserService
         $payment = null;
         if ($invoice->relationLoaded('payments')) {
             $payment = collect($invoice->payments)
+                ->filter(fn (Payment $item) => PaymentGatewayCode::isThirdParty((string) $item->gateway))
                 ->first(fn (Payment $item) => (int) $item->status === PaymentStatus::REFUNDED
                     || is_array(data_get((array) ($item->callback_raw ?? []), 'refund')));
         }

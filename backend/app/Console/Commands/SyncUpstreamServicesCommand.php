@@ -25,7 +25,7 @@ class SyncUpstreamServicesCommand extends Command
         $idsRaw = trim((string) $this->option('service-ids'));
 
         $query = Service::query()
-            ->with(['product:id,product_type,product_group_id,supplier_id,config_options,purchase_requires', 'product.supplier'])
+            ->with(['product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,config_options,purchase_requires', 'product.supplier'])
             ->whereNotNull('provision_data->upstream_host_id')
             ->where('provision_data->upstream_host_id', '<>', '');
 

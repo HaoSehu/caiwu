@@ -47,7 +47,7 @@ class IntegrationDriverManagerTest extends TestCase
         $this->expectException(BusinessException::class);
         $this->expectExceptionMessage('实名认证驱动 [missing] 未注册');
 
-        (new VerificationDriverManager())->resolve('missing');
+        (new VerificationDriverManager)->resolve('missing');
     }
 
     public function test_sms_manager_resolves_registered_driver(): void
@@ -77,7 +77,7 @@ class IntegrationDriverManagerTest extends TestCase
         $this->expectException(BusinessException::class);
         $this->expectExceptionMessage('短信驱动 [missing] 未注册');
 
-        (new SmsDriverManager())->resolve('missing');
+        (new SmsDriverManager)->resolve('missing');
     }
 }
 

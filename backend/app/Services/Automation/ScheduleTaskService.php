@@ -90,6 +90,30 @@ class ScheduleTaskService
             'category' => '异步队列',
             'log_keywords' => ['队列积压消费', 'queue:work'],
         ],
+        'schedule-hook-every-minute' => [
+            'title' => '调度扩展 Hook（每分钟）',
+            'description' => '仅在配置了 tick.every_minute 监听器时注册，用于承载不应直接写进 routes/console.php 的轻量扩展逻辑。',
+            'category' => '调度扩展',
+            'log_keywords' => ['调度扩展 Hook（每分钟）', 'schedule-hook-every-minute'],
+        ],
+        'schedule-hook-every-five-minutes' => [
+            'title' => '调度扩展 Hook（每五分钟）',
+            'description' => '仅在配置了 tick.every_five_minutes 监听器时注册，用于旧系统 FiveMinuteCron 类职责的增量承接。',
+            'category' => '调度扩展',
+            'log_keywords' => ['调度扩展 Hook（每五分钟）', 'schedule-hook-every-five-minutes'],
+        ],
+        'schedule-hook-hourly' => [
+            'title' => '调度扩展 Hook（每小时）',
+            'description' => '仅在配置了 tick.hourly 监听器时注册，用于小时级扩展任务。',
+            'category' => '调度扩展',
+            'log_keywords' => ['调度扩展 Hook（每小时）', 'schedule-hook-hourly'],
+        ],
+        'schedule-hook-daily' => [
+            'title' => '调度扩展 Hook（每日）',
+            'description' => '仅在配置了 tick.daily 监听器时注册，用于日级维护和旧系统 DailyCron 类职责的增量承接。',
+            'category' => '调度扩展',
+            'log_keywords' => ['调度扩展 Hook（每日）', 'schedule-hook-daily'],
+        ],
     ];
 
     public function overview(): array

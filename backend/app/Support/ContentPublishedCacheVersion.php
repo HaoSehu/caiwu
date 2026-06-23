@@ -9,17 +9,20 @@ use Illuminate\Support\Facades\DB;
 
 class ContentPublishedCacheVersion
 {
-    private const CACHE_KEY = 'content:published:version';
-
     private const SETTINGS_GROUP = 'content';
 
     private const SETTINGS_ITEM = 'published_cache_version';
 
     private const DEFAULT_VERSION = 1;
 
+    private static function cacheKey(): string
+    {
+        return CacheKey::contentPublishedVersion();
+    }
+
     public static function current(): int
     {
-        $cached = Cache::get(self::CACHE_KEY);
+        $cached = Cache::get(self::cacheKey());
         if (is_numeric($cached) && (int) $cached >= self::DEFAULT_VERSION) {
             return (int) $cached;
         }
@@ -32,7 +35,7 @@ class ContentPublishedCacheVersion
                 ->value('item_value')
         );
 
-        Cache::forever(self::CACHE_KEY, $persisted);
+        Cache::put(self::cacheKey(), $persisted, now()->addYear());
 
         return $persisted;
     }
@@ -64,7 +67,7 @@ class ContentPublishedCacheVersion
             return $nextVersion;
         });
 
-        Cache::forever(self::CACHE_KEY, $nextVersion);
+        Cache::put(self::cacheKey(), $nextVersion, now()->addYear());
 
         return $nextVersion;
     }

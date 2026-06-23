@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Constants\ServiceStatus;
 use App\Models\Service;
 use App\Services\Automation\ServiceLifecycleAutomationService;
+use App\Services\Notification\UserNotificationService;
 use App\Services\System\NotificationService;
 use App\Services\System\SettingService;
 use Illuminate\Database\Schema\Blueprint;
@@ -76,6 +77,7 @@ class ServiceLifecycleAutomationServiceTest extends TestCase
                 'expire_terminate_after_days' => 0,
             ]),
             $this->createMock(NotificationService::class),
+            $this->createMock(UserNotificationService::class),
         );
 
         $summary = $automationService->handle();
@@ -109,6 +111,7 @@ class ServiceLifecycleAutomationServiceTest extends TestCase
                 'expire_terminate_after_days' => 1,
             ]),
             $this->createMock(NotificationService::class),
+            $this->createMock(UserNotificationService::class),
         );
 
         $summary = $automationService->handle();

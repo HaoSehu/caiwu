@@ -16,7 +16,7 @@ use Illuminate\Support\Str;
 
 class SiteHomeService
 {
-    private const HOME_CACHE_TTL_SECONDS = 120;
+    private const HOME_CACHE_TTL_SECONDS = 600; // 10分钟：首页聚合数据可适当延长
 
     public function __construct(
         private readonly ContentArticleService $contentArticleService,
@@ -24,20 +24,30 @@ class SiteHomeService
         private readonly HomeHeroService $homeHeroService,
     ) {}
 
-    public function overview(int $groupLimit = 4, int $noticeLimit = 50, int $helpLimit = 4): array
+    public function overview(int $groupLimit = 0, int $noticeLimit = 50, int $helpLimit = 4): array
     {
+        $groupLimit = max(0, $groupLimit);
         $contentVersion = ContentPublishedCacheVersion::current();
-        $cacheKey = sprintf('site:home:%d:%d:%d:v%d', $groupLimit, $noticeLimit, $helpLimit, $contentVersion);
+        $cacheKey = sprintf(
+            'site:home:%s:%d:%d:v%d',
+            $groupLimit > 0 ? (string) $groupLimit : 'all',
+            $noticeLimit,
+            $helpLimit,
+            $contentVersion
+        );
 
         return Cache::remember(
             $cacheKey,
             now()->addSeconds(self::HOME_CACHE_TTL_SECONDS),
             function () use ($groupLimit, $noticeLimit, $helpLimit): array {
                 $contentOverview = $this->contentArticleService->publishedOverview($noticeLimit, $helpLimit);
-                $rootGroups = collect($this->siteProductReadService->productGroups()['list'] ?? [])
-                    ->slice(0, $groupLimit)
-                    ->values()
-                    ->all();
+                $rootGroups = collect($this->siteProductReadService->productGroups()['list'] ?? []);
+
+                if ($groupLimit > 0) {
+                    $rootGroups = $rootGroups->take($groupLimit);
+                }
+
+                $rootGroups = $rootGroups->values()->all();
 
                 $groupCatalogMap = $this->siteProductReadService->groupCatalogMap(
                     array_map(

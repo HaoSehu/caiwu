@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
+use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Exceptions\BusinessException;
 use App\Models\Invoice;
@@ -202,20 +203,24 @@ class ReferralRewardLifecycleRegressionTest extends TestCase
             'due_date' => now()->addDay(),
         ]);
 
-        $payment = Payment::query()->create([
-            'payment_no' => Payment::generatePaymentNo(),
+        $paymentNo = Payment::generatePaymentNo();
+        Payment::query()->create([
+            'payment_no' => $paymentNo,
             'user_id' => (int) $buyer->id,
             'order_id' => (int) $order->id,
             'invoice_id' => (int) $invoice->id,
-            'gateway' => 'balance',
+            'gateway' => PaymentGatewayCode::ALIPAY,
             'amount' => '100.00',
             'status' => PaymentStatus::SUCCESS,
             'callback_raw' => [
-                'source' => 'balance',
+                'source' => 'alipay_test',
+                'trade_no' => 'ALIPAY_TEST_'.$suffix,
                 'trace_id' => 'refund-payment-'.$suffix,
             ],
+            'trade_no' => 'ALIPAY_TEST_'.$suffix,
             'paid_at' => now(),
         ]);
+        $payment = Payment::query()->where('payment_no', $paymentNo)->firstOrFail();
 
         $reward = $referralService->rewardForPaidOrder($order, 'reward-refund-'.$suffix);
 
@@ -286,9 +291,5 @@ class ReferralRewardLifecycleRegressionTest extends TestCase
                 $table->timestamps();
             });
         }
-
-        $accountTableAvailable = new \ReflectionProperty(User::class, 'accountTableAvailable');
-        $accountTableAvailable->setAccessible(true);
-        $accountTableAvailable->setValue(null, null);
     }
 }

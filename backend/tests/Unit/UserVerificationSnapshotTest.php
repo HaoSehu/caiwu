@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\Unit;
 
 use App\Models\User;
-use App\Models\UserProfile;
 use Illuminate\Support\Facades\Crypt;
 use Tests\TestCase;
 
@@ -35,19 +34,21 @@ class UserVerificationSnapshotTest extends TestCase
         $this->assertSame($plainIdCard, $user->id_card);
     }
 
-    public function test_it_falls_back_to_user_profile_nickname(): void
+    public function test_it_uses_users_table_nickname_for_display_name(): void
     {
         $user = new User;
         $user->exists = true;
         $user->setRawAttributes([
-            'nickname' => '',
+            'nickname' => 'user-nickname',
+            'email' => 'demo@example.com',
+            'phone' => '',
+            'real_name' => '',
+            'verification_status' => 0,
+            'is_verified' => 0,
         ], true);
-        $user->setRelation('profile', new UserProfile([
-            'nickname' => 'profile-nickname',
-        ]));
 
-        $this->assertSame('profile-nickname', $user->nickname);
-        $this->assertSame('profile-nickname', $user->display_name);
+        $this->assertSame('user-nickname', $user->nickname);
+        $this->assertSame('user-nickname', $user->display_name);
     }
 
     public function test_it_prefers_real_name_for_display_name_after_verification(): void

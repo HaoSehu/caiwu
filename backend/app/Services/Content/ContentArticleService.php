@@ -15,9 +15,9 @@ use Illuminate\Support\Str;
 
 class ContentArticleService
 {
-    private const PUBLISHED_OVERVIEW_CACHE_TTL_SECONDS = 120;
+    private const PUBLISHED_OVERVIEW_CACHE_TTL_SECONDS = 300; // 5分钟：文章列表不频繁变化
 
-    private const PUBLISHED_CATEGORIES_CACHE_TTL_SECONDS = 300;
+    private const PUBLISHED_CATEGORIES_CACHE_TTL_SECONDS = 600; // 10分钟：分类信息更稳定
 
     /**
      * @return array<string, int>

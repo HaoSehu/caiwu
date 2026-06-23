@@ -243,7 +243,7 @@ class BillingAutomationService
         $targetDays = $config['invoice_unpaid_before_due_days'];
 
         $invoices = Invoice::query()
-            ->with(['user:id,email,nickname', 'order.product:id,product_type,product_group_id,config_options,purchase_requires'])
+            ->with(['user:id,email,nickname', 'order.product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires'])
             ->where('status', InvoiceStatus::UNPAID)
             ->whereNotNull('due_date')
             ->get();
@@ -310,7 +310,7 @@ class BillingAutomationService
         $siteName = (string) config('idc.site_name', config('app.name', '服务商'));
 
         $invoices = Invoice::query()
-            ->with(['user:id,email,nickname', 'order.product:id,product_type,product_group_id,config_options,purchase_requires'])
+            ->with(['user:id,email,nickname', 'order.product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires'])
             ->whereIn('status', [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE])
             ->whereNotNull('due_date')
             ->get();

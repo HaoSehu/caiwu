@@ -71,13 +71,14 @@ class ServiceTrafficPackageService
     }
 
     public function pullCatalogTemplateForAdmin(
-        int $categoryId,
+        int $secondProductGroupId,
+        ?int $thirdProductGroupId = null,
         string $productType = '',
         int $supplierId = 0,
         int $supplierProductId = 0,
         int $sourceProductId = 0,
     ): array {
-        throw_if($categoryId <= 0, new BusinessException('请选择有效的商品分类'));
+        throw_if($secondProductGroupId <= 0, new BusinessException('请选择有效的商品分类'));
 
         if ($sourceProductId > 0) {
             return $this->pullCatalogTemplateFromLocalProduct($sourceProductId);
@@ -88,7 +89,7 @@ class ServiceTrafficPackageService
         }
 
         try {
-            [$service, $supplier, $hostId, $jwt] = $this->resolveAdminImportSource($categoryId, $productType);
+            [$service, $supplier, $hostId, $jwt] = $this->resolveAdminImportSource($secondProductGroupId, $thirdProductGroupId, $productType);
             $catalog = $this->resolveCatalogCapability($supplier);
 
             $host = [];
@@ -151,7 +152,7 @@ class ServiceTrafficPackageService
                 'packages' => $packages,
             ];
         } catch (BusinessException $exception) {
-            return $this->pullCatalogTemplateFromProduct($categoryId, $productType, $exception->getMessage());
+            return $this->pullCatalogTemplateFromProduct($secondProductGroupId, $thirdProductGroupId, $productType, $exception->getMessage());
         }
     }
 
@@ -177,7 +178,7 @@ class ServiceTrafficPackageService
             $sameAmount = round((float) ($existingInvoice->amount ?? 0), 2) === round((float) $quote['pricing']['amount'], 2);
 
             if ($sameKind && $sameConfigOption && $sameAmount) {
-                $existingInvoice->loadMissing(['product:id,product_type,product_group_id,config_options,purchase_requires', 'service']);
+                $existingInvoice->loadMissing(['product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,config_options,purchase_requires', 'service']);
 
                 $this->operationLogService->writeServiceConsoleLog($service, 'service.console.traffic_package.invoice.create', [
                     'category' => 'upgrade',
@@ -200,7 +201,7 @@ class ServiceTrafficPackageService
             ]));
         }
 
-        $invoice = DB::transaction(function () use ($service, $product, $quote) {
+        $invoice = DB::transaction(function () use ($service, $product, $quote, $context) {
             $displayPayload = (new ProductDisplayNameResolver)->resolveForProduct($product);
             $productSpecDisplay = (string) ($displayPayload['product_spec_display'] ?? '');
             $invoice = Invoice::query()->create([
@@ -245,11 +246,12 @@ class ServiceTrafficPackageService
                 ],
                 'status' => InvoiceStatus::UNPAID,
                 'due_date' => now()->addDays(7),
+                'trace_id' => (string) ($context['trace_id'] ?? ''),
             ]);
 
             $this->invoiceService->syncProjection($invoice);
 
-            return $invoice->load(['product:id,product_type,product_group_id,config_options,purchase_requires', 'service']);
+            return $invoice->load(['product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,config_options,purchase_requires', 'service']);
         });
 
         $this->operationLogService->writeServiceConsoleLog($service, 'service.console.traffic_package.invoice.create', [
@@ -463,7 +465,7 @@ class ServiceTrafficPackageService
             ]);
         }
 
-        $productCategoryId = (int) ($service->product?->category_id ?? $service->product?->product_group_id ?? 0);
+        $productCategoryId = $this->effectiveProductGroupId($service);
         $configuredPackages = $this->settingService->getTrafficPackageCatalogForCategory(
             $productCategoryId,
             (string) ($service->product?->product_type ?? ''),
@@ -521,7 +523,7 @@ class ServiceTrafficPackageService
     private function findManagedService(User $user, int $serviceId): Service
     {
         return $this->detailService->findUserService($user, $serviceId, [
-            'product:id,product_type,product_group_id,supplier_id,config_options,purchase_requires',
+            'product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,supplier_id,config_options,purchase_requires',
             'product.supplier',
             'order:id,order_no,status,paid_at,created_at',
         ]);
@@ -570,17 +572,13 @@ class ServiceTrafficPackageService
         return null;
     }
 
-    private function resolveAdminImportSource(int $categoryId, string $productType = ''): array
+    private function resolveAdminImportSource(int $secondProductGroupId, ?int $thirdProductGroupId, string $productType = ''): array
     {
         $services = Service::query()
             ->with(['product.supplier'])
             ->whereIn('status', [ServiceStatus::ACTIVE, ServiceStatus::PENDING, ServiceStatus::SUSPENDED])
-            ->whereHas('product', function ($query) use ($categoryId, $productType) {
-                $query->where(function ($categoryQuery) use ($categoryId) {
-                    $categoryQuery
-                        ->where('product_group_id', $categoryId)
-                        ->orWhereHas('categoryMapping', fn ($groupQuery) => $groupQuery->where('parent_group_id', $categoryId));
-                });
+            ->whereHas('product', function ($query) use ($secondProductGroupId, $thirdProductGroupId, $productType) {
+                $this->applyProductGroupScope($query, $secondProductGroupId, $thirdProductGroupId);
 
                 if (trim($productType) !== '') {
                     $query->where('product_type', trim($productType));
@@ -616,11 +614,15 @@ class ServiceTrafficPackageService
         throw new BusinessException('该分类下暂无已接入上游控制台的服务实例，正在尝试回退到商品上游模板');
     }
 
-    private function pullCatalogTemplateFromProduct(int $categoryId, string $productType = '', string $fallbackReason = ''): array
-    {
+    private function pullCatalogTemplateFromProduct(
+        int $secondProductGroupId,
+        ?int $thirdProductGroupId,
+        string $productType = '',
+        string $fallbackReason = ''
+    ): array {
         $product = Product::query()
             ->with('supplier')
-            ->where('product_group_id', $categoryId)
+            ->tap(fn ($query) => $this->applyProductGroupScope($query, $secondProductGroupId, $thirdProductGroupId))
             ->when(trim($productType) !== '', fn ($query) => $query->where('product_type', trim($productType)))
             ->where('status', 1)
             ->whereNotNull('supplier_id')
@@ -779,8 +781,13 @@ class ServiceTrafficPackageService
         $services = Service::query()
             ->with(['product.supplier'])
             ->whereHas('product', function ($query) use ($product, $supplier) {
+                $this->applyProductGroupScope(
+                    $query,
+                    (int) ($product->second_product_group_id ?? 0),
+                    ((int) ($product->third_product_group_id ?? 0)) ?: null
+                );
+
                 $query
-                    ->where('product_group_id', (int) $product->product_group_id)
                     ->where('product_type', (string) $product->product_type)
                     ->where('supplier_id', (int) $supplier->id);
             })
@@ -884,6 +891,19 @@ class ServiceTrafficPackageService
         }
 
         return null;
+    }
+
+    private function applyProductGroupScope($query, int $secondProductGroupId, ?int $thirdProductGroupId): void
+    {
+        $query->where('second_product_group_id', $secondProductGroupId);
+
+        if ($thirdProductGroupId !== null && $thirdProductGroupId > 0) {
+            $query->where('third_product_group_id', $thirdProductGroupId);
+
+            return;
+        }
+
+        $query->whereNull('third_product_group_id');
     }
 
     private function pullPackagesFromUpstreamOption(Supplier $supplier, int $hostId, string $jwt, array $option, array $host): array
@@ -1276,6 +1296,16 @@ class ServiceTrafficPackageService
      * 尝试从上游 /servicedetail?action=flowpacket HTML 页面抓取流量包档位。
      * 抓取失败或解析为空时返回空数组，不抛异常，以便上层回退到其他数据源。
      */
+    private function effectiveProductGroupId(Service $service): int
+    {
+        $thirdGroupId = (int) ($service->product?->third_product_group_id ?? 0);
+        if ($thirdGroupId > 0) {
+            return $thirdGroupId;
+        }
+
+        return (int) ($service->product?->second_product_group_id ?? 0);
+    }
+
     private function tryPullFlowPacketFromHtml(Supplier $supplier, int $hostId, string $jwt): array
     {
         try {

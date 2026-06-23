@@ -17,8 +17,8 @@ use App\Services\Upstream\Contracts\ProvidesConsoleRuntime;
 use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderResolver;
 use App\Services\Upstream\Support\WebSessionCookieParser;
-use App\Support\ServiceHostname;
 use App\Support\SensitiveDataSanitizer;
+use App\Support\ServiceHostname;
 use App\Support\TextSanitizer;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -33,17 +33,12 @@ use Illuminate\Support\Facades\Log;
  */
 class ServiceDetailService
 {
-    private const DETAIL_REMOTE_SNAPSHOT_TTL_SECONDS = 120;
-
-    private const DETAIL_RESPONSE_CACHE_TTL_SECONDS = 20;
-
-    private const REMOTE_STATUS_CACHE_TTL_SECONDS = 15;
-
-    private const SERVICE_CONFIG_CACHE_TTL_SECONDS = 60;
-
-    private const PRODUCT_CONFIG_OPTIONS_CACHE_TTL_SECONDS = 604800;
-
-    private const MONITOR_MODULE_CACHE_TTL_SECONDS = 600;
+    private const DETAIL_REMOTE_SNAPSHOT_TTL_SECONDS = 120; // 2分钟：远程快照
+    private const DETAIL_RESPONSE_CACHE_TTL_SECONDS = 30; // 30秒：服务详情请求频繁，降低后端压力
+    private const REMOTE_STATUS_CACHE_TTL_SECONDS = 30; // 30秒：远程状态
+    private const SERVICE_CONFIG_CACHE_TTL_SECONDS = 120; // 2分钟：服务配置
+    private const PRODUCT_CONFIG_OPTIONS_CACHE_TTL_SECONDS = 604800; // 1周：产品配置选项 rarely change
+    private const MONITOR_MODULE_CACHE_TTL_SECONDS = 600; // 10分钟：监控模块
 
     public function __construct(
         private readonly ProviderResolver $providerResolver,
@@ -58,9 +53,10 @@ class ServiceDetailService
     public function getServiceConfigForUser(User $user, int $serviceId): array
     {
         $service = $this->findUserService($user, $serviceId, [
-            'product:id,product_type,product_group_id,config_options,purchase_requires',
-            'product.categoryMapping:id,parent_group_id,product_type,name,slogan,slug',
-            'product.categoryMapping.parent:id,parent_group_id,product_type,name,slogan,slug',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
+            'product.firstProductGroup:id,code,name,description,slug',
+            'product.secondProductGroup:id,first_product_group_id,name,description,slug',
+            'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
         ]);
 
         $cacheKey = $this->buildServiceConfigCacheKey($service);
@@ -94,7 +90,10 @@ class ServiceDetailService
     public function getDetailForUser(User $user, int $serviceId, bool $refreshRemote = false): array
     {
         $service = $this->findUserService($user, $serviceId, [
-            'product:id,product_type,product_group_id,supplier_id,provision_module,config_options,pricing,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,pricing,purchase_requires',
+            'product.firstProductGroup:id,code,name,description,slug',
+            'product.secondProductGroup:id,first_product_group_id,name,description,slug',
+            'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
             'product.supplier',
             'order:id,order_no,status,paid_at,created_at',
             'order.invoice:id,order_id,invoice_no',
@@ -124,9 +123,10 @@ class ServiceDetailService
                 if (! empty($remote['host']) || ! empty($remote['runtime']) || ! empty($remote['nat'])) {
                     $this->syncServiceFromRemote($service, $remote['host'] ?? [], $remote['runtime'] ?? [], $remote['nat'] ?? []);
                     $service->refresh()->loadMissing([
-                        'product:id,product_type,product_group_id,supplier_id,provision_module,config_options,pricing,purchase_requires',
-                        'product.categoryMapping:id,parent_group_id,product_type,name,slogan,slug',
-                        'product.categoryMapping.parent:id,parent_group_id,product_type,name,slogan,slug',
+                        'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,pricing,purchase_requires',
+                        'product.firstProductGroup:id,code,name,description,slug',
+                        'product.secondProductGroup:id,first_product_group_id,name,description,slug',
+                        'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
                         'product.supplier',
                         'order:id,order_no,status,paid_at,created_at',
                         'order.invoice:id,order_id,invoice_no',
@@ -158,7 +158,10 @@ class ServiceDetailService
     public function getBaseDetailForUser(User $user, int $serviceId): array
     {
         $service = $this->findUserService($user, $serviceId, [
-            'product:id,product_type,product_group_id,supplier_id,provision_module,config_options,pricing,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,pricing,purchase_requires',
+            'product.firstProductGroup:id,code,name,description,slug',
+            'product.secondProductGroup:id,first_product_group_id,name,description,slug',
+            'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
             'product.supplier',
             'order:id,order_no,status,paid_at,created_at',
             'order.invoice:id,order_id,invoice_no',
@@ -180,7 +183,10 @@ class ServiceDetailService
     public function getRemoteStatusPatchForUser(User $user, int $serviceId): array
     {
         $service = $this->findUserService($user, $serviceId, [
-            'product:id,product_type,product_group_id,supplier_id,provision_module,config_options,pricing,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,pricing,purchase_requires',
+            'product.firstProductGroup:id,code,name,description,slug',
+            'product.secondProductGroup:id,first_product_group_id,name,description,slug',
+            'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
             'product.supplier',
             'order:id,order_no,status,paid_at,created_at',
             'order.invoice:id,order_id,invoice_no',
@@ -202,9 +208,10 @@ class ServiceDetailService
                 if (! empty($remote['host']) || ! empty($remote['runtime']) || ! empty($remote['nat'])) {
                     $this->syncServiceFromRemote($service, $remote['host'] ?? [], $remote['runtime'] ?? [], $remote['nat'] ?? []);
                     $service->refresh()->loadMissing([
-                        'product:id,product_type,product_group_id,supplier_id,provision_module,config_options,pricing,purchase_requires',
-                        'product.categoryMapping:id,parent_group_id,product_type,name,slogan,slug',
-                        'product.categoryMapping.parent:id,parent_group_id,product_type,name,slogan,slug',
+                        'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,pricing,purchase_requires',
+                        'product.firstProductGroup:id,code,name,description,slug',
+                        'product.secondProductGroup:id,first_product_group_id,name,description,slug',
+                        'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
                         'product.supplier',
                         'order:id,order_no,status,paid_at,created_at',
                         'order.invoice:id,order_id,invoice_no',
@@ -306,9 +313,10 @@ class ServiceDetailService
     public function updateRemarkForUser(User $user, int $serviceId, ?string $remark, array $context = []): array
     {
         $service = $this->findUserService($user, $serviceId, [
-            'product:id,product_type,product_group_id,config_options,purchase_requires',
-            'product.categoryMapping:id,parent_group_id,product_type,name,slogan,slug',
-            'product.categoryMapping.parent:id,parent_group_id,product_type,name,slogan,slug',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
+            'product.firstProductGroup:id,code,name,description,slug',
+            'product.secondProductGroup:id,first_product_group_id,name,description,slug',
+            'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
             'order:id,order_no,status,paid_at',
             'invoice:id,invoice_no,status,paid_at',
         ]);
@@ -331,9 +339,10 @@ class ServiceDetailService
     public function updateServiceNameForUser(User $user, int $serviceId, ?string $serviceName, array $context = []): array
     {
         $service = $this->findUserService($user, $serviceId, [
-            'product:id,product_type,product_group_id,config_options,purchase_requires',
-            'product.categoryMapping:id,parent_group_id,product_type,name,slogan,slug',
-            'product.categoryMapping.parent:id,parent_group_id,product_type,name,slogan,slug',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
+            'product.firstProductGroup:id,code,name,description,slug',
+            'product.secondProductGroup:id,first_product_group_id,name,description,slug',
+            'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
             'order:id,order_no,status,paid_at',
             'invoice:id,invoice_no,status,paid_at',
         ]);
@@ -357,9 +366,10 @@ class ServiceDetailService
         ], $context);
 
         return $this->transformService->transformListItem($service->fresh([
-            'product:id,product_type,product_group_id,config_options,purchase_requires',
-            'product.categoryMapping:id,parent_group_id,product_type,name,slogan,slug',
-            'product.categoryMapping.parent:id,parent_group_id,product_type,name,slogan,slug',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
+            'product.firstProductGroup:id,code,name,description,slug',
+            'product.secondProductGroup:id,first_product_group_id,name,description,slug',
+            'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
             'order:id,order_no,status,paid_at',
             'invoice:id,invoice_no,status,paid_at',
         ]));

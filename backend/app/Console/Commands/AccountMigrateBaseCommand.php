@@ -16,7 +16,7 @@ abstract class AccountMigrateBaseCommand extends Command
     abstract protected function migrationName(): string;
 
     /**
-     * @param  list<string> $commonColumns
+     * @param  list<string>  $commonColumns
      */
     abstract protected function migrateRows(array $commonColumns, int $batchSize): int;
 
@@ -64,11 +64,11 @@ abstract class AccountMigrateBaseCommand extends Command
         }
 
         if ($stats['missing_in_target'] !== []) {
-            $this->warn('以下列在旧库存在但新库缺失，将被跳过：' . implode(', ', $stats['missing_in_target']));
+            $this->warn('以下列在旧库存在但新库缺失，将被跳过：'.implode(', ', $stats['missing_in_target']));
         }
 
         $this->info("开始迁移 `{$this->sourceTable()}` → `{$this->targetTable()}` ...");
-        $this->info('公共列：' . $this->formatColumns($stats['common_columns']));
+        $this->info('公共列：'.$this->formatColumns($stats['common_columns']));
 
         $startTime = microtime(true);
         $migrated = $this->migrateRows($stats['common_columns'], $batchSize);
@@ -118,23 +118,23 @@ abstract class AccountMigrateBaseCommand extends Command
         $this->info('目标表（新库）');
         $this->line("  表名：{$stats['target_table']}");
         $this->line("  行数：{$stats['target_row_count']}");
-        $this->line('  已有数据：' . ($stats['target_populated'] ? '是（需 --force）' : '否'));
-        $this->line('  已完成迁移：' . ($stats['migration_completed'] ? '是' : '否'));
+        $this->line('  已有数据：'.($stats['target_populated'] ? '是（需 --force）' : '否'));
+        $this->line('  已完成迁移：'.($stats['migration_completed'] ? '是' : '否'));
         $this->newLine();
 
         $this->info('公共列（将被迁移）');
-        $this->line('  ' . $this->formatColumns($stats['common_columns']));
+        $this->line('  '.$this->formatColumns($stats['common_columns']));
         $this->newLine();
 
         if ($stats['missing_in_target'] !== []) {
             $this->warn('旧库独有列（将被跳过）');
-            $this->line('  ' . $this->formatColumns($stats['missing_in_target']));
+            $this->line('  '.$this->formatColumns($stats['missing_in_target']));
             $this->newLine();
         }
 
         if ($stats['extra_in_target'] !== []) {
             $this->info('新库独有列（需默认值或后续填充）');
-            $this->line('  ' . $this->formatColumns($stats['extra_in_target']));
+            $this->line('  '.$this->formatColumns($stats['extra_in_target']));
             $this->newLine();
         }
 
@@ -147,7 +147,7 @@ abstract class AccountMigrateBaseCommand extends Command
             } elseif ($stats['target_populated']) {
                 $this->warn('  目标表已有数据，需要 --force 才能继续。');
             } else {
-                $this->line("  预计迁移 {$stats['source_row_count']} 行，使用公共列 " . count($stats['common_columns']) . ' 个。');
+                $this->line("  预计迁移 {$stats['source_row_count']} 行，使用公共列 ".count($stats['common_columns']).' 个。');
             }
 
             if ($preCheck !== null) {
@@ -163,7 +163,7 @@ abstract class AccountMigrateBaseCommand extends Command
     }
 
     /**
-     * @param  list<string> $columns
+     * @param  list<string>  $columns
      */
     private function formatColumns(array $columns): string
     {

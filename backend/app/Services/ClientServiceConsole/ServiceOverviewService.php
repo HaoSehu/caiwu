@@ -6,8 +6,10 @@ namespace App\Services\ClientServiceConsole;
 
 use App\Constants\ProductType;
 use App\Constants\ServiceStatus;
-use App\Models\ProductCategory;
+use App\Models\FirstProductGroup;
+use App\Models\SecondProductGroup;
 use App\Models\Service;
+use App\Models\ThirdProductGroup;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -18,9 +20,9 @@ use Illuminate\Support\Facades\Cache;
  */
 class ServiceOverviewService
 {
-    private const GROUPED_OVERVIEW_CACHE_TTL_SECONDS = 60;
+    private const GROUPED_OVERVIEW_CACHE_TTL_SECONDS = 120; // 2分钟：服务概览需要一定实时性
 
-    private const SUMMARY_CACHE_TTL_SECONDS = 60;
+    private const SUMMARY_CACHE_TTL_SECONDS = 120; // 2分钟：与概览保持一致
 
     private const STATUS_SCOPE_ACTIVE_PENDING = 'active_pending';
 
@@ -45,11 +47,11 @@ class ServiceOverviewService
                 'created_at', 'auto_renew',
             ])
             ->with([
-                'product:id,product_type,product_group_id,config_options,purchase_requires',
-                'product.categoryMapping:id,parent_group_id,product_type,name,slogan,slug',
-                'product.categoryMapping.parent:id,parent_group_id,product_type,name,slogan,slug',
+                'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
+                'product.firstProductGroup:id,code,name,description,slug',
+                'product.secondProductGroup:id,first_product_group_id,name,description,slug',
+                'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
                 'order:id,order_no,status,paid_at',
-                'order.invoice:id,order_id,invoice_no',
                 'invoice:id,invoice_no',
             ])
             ->where('user_id', $user->id);
@@ -60,9 +62,7 @@ class ServiceOverviewService
                 $builder->where('name', 'like', '%'.$keyword.'%')
                     ->orWhere('domain', 'like', '%'.$keyword.'%')
                     ->orWhere('provision_data->custom_hostname', 'like', '%'.$keyword.'%')
-                    ->orWhereHas('order', fn ($q) => $q->where('order_no', 'like', '%'.$keyword.'%'))
-                    ->orWhereHas('invoice', fn ($q) => $q->where('invoice_no', 'like', '%'.$keyword.'%'))
-                    ->orWhereHas('order.invoice', fn ($q) => $q->where('invoice_no', 'like', '%'.$keyword.'%'));
+                    ->orWhereHas('invoice', fn ($q) => $q->where('invoice_no', 'like', '%'.$keyword.'%'));
             });
         }
 
@@ -76,8 +76,8 @@ class ServiceOverviewService
         $catalogType = trim((string) ($filters['catalog_type'] ?? ''));
         if ($catalogType !== '') {
             $query->where(function ($builder) use ($catalogType) {
-                $builder->whereHas('product.categoryMapping', fn ($q) => $q->where('product_type', $catalogType))
-                    ->orWhereHas('product.categoryMapping.parent', fn ($q) => $q->where('product_type', $catalogType))
+                $builder->whereHas('product.firstProductGroup', fn ($q) => $q->where('code', $catalogType))
+                    ->orWhereHas('product', fn ($q) => $q->where('service_type_code', $catalogType))
                     ->orWhereHas('product', fn ($q) => $q->where('product_type', $catalogType));
             });
         }
@@ -147,9 +147,10 @@ class ServiceOverviewService
     {
         $services = Service::query()
             ->with([
-                'product:id,product_type,product_group_id,config_options,purchase_requires',
-                'product.categoryMapping:id,parent_group_id,product_type,name,slogan,slug',
-                'product.categoryMapping.parent:id,parent_group_id,product_type,name,slogan,slug',
+                'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
+                'product.firstProductGroup:id,code,name,description,slug',
+                'product.secondProductGroup:id,first_product_group_id,name,description,slug',
+                'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
             ])
             ->where('user_id', $user->id)
             ->orderByDesc('id')
@@ -274,7 +275,7 @@ class ServiceOverviewService
         $typeValue = trim((string) ($typeItem['value'] ?? ''));
         $typeLabel = trim((string) ($typeItem['label'] ?? '')) ?: '其他服务';
         $children = $groupServices
-            ->groupBy(fn (Service $service) => $this->resolveGroupedOverviewGroupKey($this->resolverService->resolveServiceRootGroup($service)))
+            ->groupBy(fn (Service $service) => $this->resolveGroupedOverviewGroupKey($this->resolveServiceLeafGroup($service)))
             ->map(function ($childItems, string $childKey) use ($expiringDeadline) {
                 $childServices = collect($childItems)->values();
                 /** @var Service|null $childFirstService */
@@ -324,7 +325,7 @@ class ServiceOverviewService
             'is_nat_console' => $consoleMode === 'nat',
             'sort_order' => $sortOrder,
             'items' => $groupServices->take(6)->map(function (Service $service) {
-                $group = $service->product?->group;
+                $group = $this->resolveServiceLeafGroup($service);
                 $rootGroup = $this->resolverService->resolveServiceRootGroup($service);
                 $serviceName = trim((string) $service->name);
                 $consoleMode = $this->resolverService->resolveConsoleMode($service);
@@ -348,14 +349,14 @@ class ServiceOverviewService
         ];
     }
 
-    private function buildGroupedOverviewCategoryCard($services, ?ProductCategory $rootGroup, string $fallbackKey, Carbon $expiringDeadline): array
+    private function buildGroupedOverviewCategoryCard($services, ?FirstProductGroup $rootGroup, string $fallbackKey, Carbon $expiringDeadline): array
     {
         /** @var Service|null $firstService */
         $firstService = $services->first();
         $leafGroup = $firstService ? $this->resolveServiceLeafGroup($firstService) : null;
         $groupName = trim((string) ($leafGroup?->name ?? '')) ?: (trim((string) ($rootGroup?->name ?? '')) ?: '未分类');
-        $groupTitle = trim((string) ($leafGroup?->title ?? '')) ?: $groupName;
-        $groupDescription = trim((string) ($leafGroup?->slogan ?? ''));
+        $groupTitle = $groupName;
+        $groupDescription = trim((string) ($leafGroup?->description ?? $rootGroup?->description ?? ''));
         $activeCount = $services->where('status', ServiceStatus::ACTIVE)->count();
         $pendingCount = $services->filter(
             fn (Service $service) => in_array((int) $service->status, [ServiceStatus::PENDING, ServiceStatus::SUSPENDED], true)
@@ -393,14 +394,19 @@ class ServiceOverviewService
         ];
     }
 
-    private function resolveServiceLeafGroup(Service $service): ?ProductCategory
+    private function resolveServiceLeafGroup(Service $service): SecondProductGroup|ThirdProductGroup|null
     {
-        return $service->product?->categoryMapping;
+        $service->loadMissing([
+            'product.secondProductGroup',
+            'product.thirdProductGroup',
+        ]);
+
+        return $service->product?->thirdProductGroup ?: $service->product?->secondProductGroup;
     }
 
-    private function resolveGroupedOverviewGroupKey(?ProductCategory $group, string $fallback = 'ungrouped'): string
+    private function resolveGroupedOverviewGroupKey(SecondProductGroup|ThirdProductGroup|null $group, string $fallback = 'ungrouped'): string
     {
-        return $group?->id ? ('group_'.(($group->legacy_group_id ?? 0) ?: $group->id)) : $fallback;
+        return $group?->id ? ('effective_product_group_'.$group->id) : $fallback;
     }
 
     private function buildGroupedOverviewCacheKey(int $userId): string

@@ -3,8 +3,9 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\Setting\IndexSettingRequest;
+use App\Http\Requests\Admin\Setting\UpdateSettingRequest;
 use App\Services\System\SettingService;
-use Illuminate\Http\Request;
 
 class SettingController extends Controller
 {
@@ -15,11 +16,9 @@ class SettingController extends Controller
     /**
      * 获取配置
      */
-    public function index(Request $request)
+    public function index(IndexSettingRequest $request)
     {
-        $data = $request->validate([
-            'group' => ['nullable', 'string', 'max:50'],
-        ]);
+        $data = $request->validated();
 
         $group = trim((string) ($data['group'] ?? 'system'));
 
@@ -29,12 +28,9 @@ class SettingController extends Controller
     /**
      * 更新配置
      */
-    public function update(Request $request)
+    public function update(UpdateSettingRequest $request)
     {
-        $data = $request->validate([
-            'group' => ['nullable', 'string', 'max:50'],
-            'settings' => ['required', 'array'],
-        ]);
+        $data = $request->validated();
 
         $group = trim((string) ($data['group'] ?? 'system'));
         $this->settingService->saveGroupSettings($group, (array) $data['settings']);

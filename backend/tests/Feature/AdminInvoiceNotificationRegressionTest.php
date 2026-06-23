@@ -112,7 +112,7 @@ class AdminInvoiceNotificationRegressionTest extends TestCase
             'user_id' => (int) $user->id,
             'order_id' => null,
             'invoice_id' => (int) $invoice->id,
-            'gateway' => 'balance',
+            'gateway' => 'alipay',
             'trade_no' => 'TRADENOTICE'.$suffix,
             'amount' => '18.00',
             'status' => PaymentStatus::SUCCESS,
@@ -143,7 +143,7 @@ class AdminInvoiceNotificationRegressionTest extends TestCase
                     return;
                 }
 
-                if (($payload['payment_method'] ?? '') !== '余额支付') {
+                if (($payload['payment_method'] ?? '') !== '支付宝') {
                     return;
                 }
 
@@ -251,7 +251,7 @@ class AdminInvoiceNotificationRegressionTest extends TestCase
         $capturedPayload = null;
         $notificationService = $this->createMock(NotificationService::class);
         $notificationService->method('sendTemplateEmail')
-            ->willReturnCallback(function (string $to, string $templateCode, array $payload) use ($admin, $invoice, &$capturedPayload): void {
+            ->willReturnCallback(function (string $to, string $templateCode, array $payload) use ($admin, &$capturedPayload): void {
                 if ($to !== (string) $admin->email) {
                     return;
                 }

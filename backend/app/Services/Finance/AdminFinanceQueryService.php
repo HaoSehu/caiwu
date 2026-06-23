@@ -8,16 +8,15 @@ use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
-use App\Constants\ProductType;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
+use App\Services\ProductCatalog\ProductFullPathResolver;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class AdminFinanceQueryService
@@ -28,6 +27,7 @@ class AdminFinanceQueryService
 
     public function __construct(
         private readonly ProductDisplayNameResolver $productDisplayNameResolver,
+        private readonly ?ProductFullPathResolver $productFullPathResolver = null,
     ) {}
 
     public function paginateOrders(array $filters, int $perPage = 20, ?string $forcedType = null): LengthAwarePaginator
@@ -36,9 +36,10 @@ class AdminFinanceQueryService
             ->with([
                 'user:id,email,nickname,phone',
                 'invoice:id,invoice_no,order_id,type,status,amount,paid_amount,paid_at,due_date,created_at',
-                'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
-                'product.categoryMapping:id,name,parent_group_id,product_type',
-                'product.categoryMapping.parent:id,name,parent_group_id,product_type',
+                'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
+                'product.firstProductGroup:id,code,name',
+                'product.secondProductGroup:id,first_product_group_id,name',
+                'product.thirdProductGroup:id,second_product_group_id,name',
                 'service:id,name,domain,status,expires_at',
             ]);
 
@@ -149,7 +150,9 @@ class AdminFinanceQueryService
                 DB::raw('SUM(COALESCE(quantity, 1)) as quantity_total'),
             ])
             ->where('status', InvoiceStatus::PAID)
-            ->whereDoesntHave('payments', fn ($query) => $query->where('status', PaymentStatus::REFUNDED))
+            ->whereDoesntHave('payments', fn ($query) => $query
+                ->whereIn('gateway', PaymentGatewayCode::thirdPartyGateways())
+                ->where('status', PaymentStatus::REFUNDED))
             ->whereNotNull('product_id')
             ->whereBetween('paid_at', [$start, $end])
             ->whereIn('type', ['new', 'normal', 'renew'])
@@ -217,7 +220,7 @@ class AdminFinanceQueryService
             ->with([
                 'user:id,email,nickname,phone',
                 'invoice:id,invoice_no,order_id,type,status,amount,paid_amount,paid_at,due_date,created_at',
-                'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
+                'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
                 'service:id,name,domain,status,expires_at',
             ])
             ->where('type', 'upgrade');
@@ -376,11 +379,12 @@ class AdminFinanceQueryService
         $order = Order::query()
             ->with([
                 'user:id,email,nickname,phone',
-                'invoice:id,invoice_no,order_id,type,status,amount,paid_amount,paid_at,due_date,created_at',
-                'invoice.payments:id,invoice_id,payment_no,gateway,trade_no,amount,status,paid_at',
-                'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
-                'product.categoryMapping:id,name,parent_group_id,product_type',
-                'product.categoryMapping.parent:id,name,parent_group_id,product_type',
+                'invoice:id,invoice_no,order_id,type,status,amount,paid_amount,paid_at,due_date,created_at,trace_id,refund_trace_id',
+                'invoice.payments:id,invoice_id,payment_no,gateway,trade_no,amount,status,paid_at,trace_id',
+                'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
+                'product.firstProductGroup:id,code,name',
+                'product.secondProductGroup:id,first_product_group_id,name',
+                'product.thirdProductGroup:id,second_product_group_id,name',
                 'service:id,name,domain,status,expires_at',
                 'coupon:id,code,name,type,value',
             ])
@@ -397,15 +401,18 @@ class AdminFinanceQueryService
         $data['coupon_code'] = (string) ($order->coupon_code ?? '');
         $data['coupon_snapshot'] = (array) ($order->coupon_snapshot ?? []);
         $data['remark'] = (string) ($order->remark ?? '');
-        $data['payments'] = $order->invoice?->payments?->map(fn ($payment) => [
-            'id' => (int) $payment->id,
-            'payment_no' => (string) $payment->payment_no,
-            'gateway' => (string) $payment->gateway,
-            'trade_no' => (string) ($payment->trade_no ?? ''),
-            'amount' => $this->money($payment->amount),
-            'status' => (int) $payment->status,
-            'paid_at' => $payment->paid_at?->format('Y-m-d H:i:s'),
-        ])?->values()?->toArray() ?? [];
+        $data['payments'] = $order->invoice?->payments
+            ?->filter(fn (Payment $payment) => PaymentGatewayCode::isThirdParty((string) $payment->gateway))
+            ?->map(fn ($payment) => [
+                'id' => (int) $payment->id,
+                'payment_no' => (string) $payment->payment_no,
+                'gateway' => (string) $payment->gateway,
+                'trade_no' => (string) ($payment->trade_no ?? ''),
+                'amount' => $this->money($payment->amount),
+                'status' => (int) $payment->status,
+                'paid_at' => $payment->paid_at?->format('Y-m-d H:i:s'),
+                'trace_id' => (string) ($payment->trace_id ?? ''),
+            ])?->values()?->toArray() ?? [];
 
         return $data;
     }
@@ -429,10 +436,12 @@ class AdminFinanceQueryService
                 'amount' => $this->money($order->invoice->amount),
                 'paid_amount' => $this->money($order->invoice->paid_amount),
                 'paid_at' => $order->invoice->paid_at?->format('Y-m-d H:i:s'),
+                'trace_id' => (string) ($order->invoice->trace_id ?? ''),
+                'refund_trace_id' => (string) ($order->invoice->refund_trace_id ?? ''),
             ] : null,
             'product_id' => (int) ($order->product_id ?? 0),
-            'product_name' => $this->resolveOrderProductName($order),
-            'product_full_path' => $this->resolveOrderProductPath($order),
+            'product_name' => $this->productFullPathResolver()->nameForOrder($order),
+            'product_full_path' => $this->productFullPathResolver()->pathForOrder($order),
             'product_type' => (string) ($order->product_type_snapshot ?? $order->product?->product_type ?? ''),
             'service' => $order->service ? [
                 'id' => (int) $order->service->id,
@@ -453,6 +462,7 @@ class AdminFinanceQueryService
             'paid_at' => $order->paid_at?->format('Y-m-d H:i:s'),
             'created_at' => $order->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $order->updated_at?->format('Y-m-d H:i:s'),
+            'trace_id' => (string) ($order->trace_id ?? ''),
             'config_snapshot' => (array) ($order->config_snapshot ?? []),
             'config_pricing_snapshot' => (array) ($order->config_pricing_snapshot ?? []),
         ];
@@ -506,48 +516,11 @@ class AdminFinanceQueryService
                 'amount' => $this->money($payment->amount),
                 'status' => (int) $payment->status,
                 'paid_at' => $payment->paid_at?->format('Y-m-d H:i:s'),
+                'trace_id' => (string) ($payment->trace_id ?? ''),
             ],
             'paid_at' => $payment->paid_at?->format('Y-m-d H:i:s'),
             'created_at' => $payment->created_at?->format('Y-m-d H:i:s'),
         ];
-    }
-
-    private function resolveOrderProductName(Order $order): string
-    {
-        $snapshot = trim((string) ($order->display_product_name ?? $order->product_spec_snapshot ?? ''));
-        if ($snapshot !== '' && $snapshot !== '未配置规格') {
-            return $snapshot;
-        }
-
-        return $this->resolveProductName($order->product, (int) ($order->product_id ?? 0));
-    }
-
-    private function resolveOrderProductPath(Order $order): string
-    {
-        $product = $order->product;
-        $productType = trim((string) ($order->product_type_snapshot ?? $product?->product_type ?? ''));
-        $category = $product instanceof Product && $product->relationLoaded('categoryMapping')
-            ? $product->categoryMapping
-            : null;
-        $parentCategory = $category && $category->relationLoaded('parent') ? $category->parent : null;
-
-        $segments = [
-            ProductType::labelOf($productType),
-            trim((string) ($parentCategory?->name ?? '')),
-            trim((string) ($category?->name ?? '')),
-            $this->resolveOrderProductName($order),
-        ];
-
-        $clean = [];
-        foreach ($segments as $segment) {
-            $segment = trim((string) $segment);
-            if ($segment === '' || $segment === '-' || in_array($segment, $clean, true)) {
-                continue;
-            }
-            $clean[] = $segment;
-        }
-
-        return $clean !== [] ? implode('/', $clean) : $this->resolveOrderProductName($order);
     }
 
     private function resolveProductName(?Product $product, int $productId): string
@@ -625,5 +598,10 @@ class AdminFinanceQueryService
     private function money(mixed $value): string
     {
         return number_format((float) ($value ?? 0), 2, '.', '');
+    }
+
+    private function productFullPathResolver(): ProductFullPathResolver
+    {
+        return $this->productFullPathResolver ?? new ProductFullPathResolver($this->productDisplayNameResolver);
     }
 }

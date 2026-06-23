@@ -149,6 +149,9 @@ class AdminLogService
         }
 
         $logs = (clone $query)->orderByDesc('created_at')->paginate($perPage);
+        $logs->setCollection($logs->getCollection()->map(function ($log) {
+            return $this->sanitizeEmailLogItem($log->toArray());
+        }));
 
         return $this->buildPaginatorPayload($logs);
     }
@@ -588,6 +591,20 @@ class AdminLogService
         return $params;
     }
 
+    private function sanitizeEmailLogItem(array $item): array
+    {
+        if ($this->shouldRedactEmailLog($item)) {
+            $item['content'] = '邮件验证码已发送（内容已脱敏）';
+        }
+
+        return $item;
+    }
+
+    private function shouldRedactEmailLog(array $item): bool
+    {
+        return trim((string) ($item['template_code'] ?? '')) === NotificationService::TEMPLATE_EMAIL_CODE;
+    }
+
     private function maskPhone(string $phone): string
     {
         $normalized = trim($phone);
@@ -950,7 +967,7 @@ class AdminLogService
 
         $summary = (clone $query)
             ->selectRaw('COUNT(*) as total')
-            ->selectRaw("COUNT(DISTINCT module) as modules")
+            ->selectRaw('COUNT(DISTINCT module) as modules')
             ->first();
 
         return $this->buildPaginatorPayload($logs, [

@@ -8,6 +8,7 @@ use App\Exceptions\BusinessException;
 use App\Models\Service;
 use App\Models\User;
 use App\Services\System\OperationLogService;
+use App\Support\SensitiveDataSanitizer;
 use Illuminate\Support\Facades\Cache;
 
 /**
@@ -28,9 +29,10 @@ class ServicePowerService
     public function powerActionForUser(User $user, int $serviceId, string $action, array $context = []): array
     {
         $service = $this->detailService->findUserService($user, $serviceId, [
-            'product:id,product_type,product_group_id,supplier_id,provision_module,config_options,purchase_requires',
-            'product.categoryMapping:id,parent_group_id,product_type,name,slogan,slug',
-            'product.categoryMapping.parent:id,parent_group_id,product_type,name,slogan,slug',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,purchase_requires',
+            'product.firstProductGroup:id,code,name,description,slug',
+            'product.secondProductGroup:id,first_product_group_id,name,description,slug',
+            'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
             'product.supplier',
             'order:id,order_no,status,paid_at,created_at',
         ]);
@@ -48,7 +50,7 @@ class ServicePowerService
         try {
             $this->applyPendingPowerSnapshot($service, $action);
         } catch (\Throwable $exception) {
-            $refreshError = \App\Support\SensitiveDataSanitizer::sanitizeText($exception->getMessage());
+            $refreshError = SensitiveDataSanitizer::sanitizeText($exception->getMessage());
         }
 
         $actionLabel = ClientServiceConsoleService::POWER_ACTIONS[$action];
@@ -111,7 +113,10 @@ class ServicePowerService
     public function getModuleStatusForUser(User $user, int $serviceId, string $type = 'host'): array
     {
         $service = $this->detailService->findUserService($user, $serviceId, [
-            'product:id,product_type,product_group_id,supplier_id,provision_module,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,purchase_requires',
+            'product.firstProductGroup:id,code,name,description,slug',
+            'product.secondProductGroup:id,first_product_group_id,name,description,slug',
+            'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
             'product.supplier',
         ]);
 
@@ -136,7 +141,10 @@ class ServicePowerService
     public function getReinstallOptionsForUser(User $user, int $serviceId, bool $forceRefresh = false): array
     {
         $service = $this->detailService->findUserService($user, $serviceId, [
-            'product:id,product_type,product_group_id,supplier_id,provision_module,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,purchase_requires',
+            'product.firstProductGroup:id,code,name,description,slug',
+            'product.secondProductGroup:id,first_product_group_id,name,description,slug',
+            'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
             'product.supplier',
         ]);
 
@@ -184,9 +192,10 @@ class ServicePowerService
     public function resetPasswordForUser(User $user, int $serviceId, array $data, array $context = []): array
     {
         $service = $this->detailService->findUserService($user, $serviceId, [
-            'product:id,product_type,product_group_id,supplier_id,provision_module,config_options,purchase_requires',
-            'product.categoryMapping:id,parent_group_id,product_type,name,slogan,slug',
-            'product.categoryMapping.parent:id,parent_group_id,product_type,name,slogan,slug',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,purchase_requires',
+            'product.firstProductGroup:id,code,name,description,slug',
+            'product.secondProductGroup:id,first_product_group_id,name,description,slug',
+            'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
             'product.supplier',
             'order:id,order_no,status,paid_at,created_at',
         ]);
@@ -203,9 +212,10 @@ class ServicePowerService
         if ($secondVerify === [] && $password !== '') {
             $this->transformService->cacheSubmittedPasswordForService($service, $password);
             $service->refresh()->loadMissing([
-                'product:id,product_type,product_group_id,supplier_id,provision_module,config_options,purchase_requires',
-                'product.categoryMapping:id,parent_group_id,product_type,name,slogan,slug',
-                'product.categoryMapping.parent:id,parent_group_id,product_type,name,slogan,slug',
+                'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,purchase_requires',
+                'product.firstProductGroup:id,code,name,description,slug',
+                'product.secondProductGroup:id,first_product_group_id,name,description,slug',
+                'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
                 'product.supplier',
                 'order:id,order_no,status,paid_at,created_at',
             ]);
@@ -232,9 +242,10 @@ class ServicePowerService
     public function reinstallForUser(User $user, int $serviceId, array $data, array $context = []): array
     {
         $service = $this->detailService->findUserService($user, $serviceId, [
-            'product:id,product_type,product_group_id,supplier_id,provision_module,config_options,purchase_requires',
-            'product.categoryMapping:id,parent_group_id,product_type,name,slogan,slug',
-            'product.categoryMapping.parent:id,parent_group_id,product_type,name,slogan,slug',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,purchase_requires',
+            'product.firstProductGroup:id,code,name,description,slug',
+            'product.secondProductGroup:id,first_product_group_id,name,description,slug',
+            'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
             'product.supplier',
             'order:id,order_no,status,paid_at,created_at',
         ]);

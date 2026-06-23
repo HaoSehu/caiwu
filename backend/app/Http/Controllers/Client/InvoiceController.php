@@ -5,14 +5,22 @@ namespace App\Http\Controllers\Client;
 use App\Constants\InvoiceStatus;
 use App\Constants\PaymentGatewayCode;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Client\Invoice\IndexRequest;
+use App\Http\Requests\Client\Invoice\PayByAlipayRequest;
+use App\Http\Requests\Client\Invoice\PayByBalanceAndAlipayRequest;
+use App\Http\Requests\Client\Invoice\PayByBalanceRequest;
+use App\Http\Requests\Client\Invoice\QueryAlipayStatusRequest;
+use App\Http\Requests\Client\Invoice\StoreRequest;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Setting;
+use App\Models\User;
 use App\Services\Finance\CheckoutSecurityService;
 use App\Services\Finance\CheckoutService;
 use App\Services\Finance\InvoiceService;
 use App\Services\Finance\PaymentService;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
+use App\Support\VersionedJson;
 use Illuminate\Http\Request;
 
 class InvoiceController extends Controller
@@ -25,31 +33,24 @@ class InvoiceController extends Controller
         private CheckoutService $checkoutService,
     ) {}
 
-    public function index(Request $request)
+    public function index(IndexRequest $request)
     {
         $this->checkoutService->cancelExpiredUnpaidInvoicesForUser(
             (int) $request->user()->id,
             $this->buildPaymentWindowExpiredContext($request)
         );
 
-        $filters = $request->validate([
-            'status' => ['nullable', 'integer'],
-            'type' => ['nullable', 'string'],
-            'keyword' => ['nullable', 'string', 'max:80'],
-            'page' => ['nullable', 'integer', 'min:1'],
-            'page_size' => ['nullable', 'integer', 'min:1', 'max:100'],
-            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
-        ]);
+        $filters = $request->validated();
 
         $query = Invoice::with([
-                'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
-                'user:id,email,nickname',
-                'service:id,name,status,expires_at',
-                'payments',
-                'items',
-                'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle',
-                'order.product:id,product_type,product_group_id,remark,config_options,purchase_requires',
-            ])
+            'product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
+            'user:id,email,nickname',
+            'service:id,name,status,expires_at',
+            'payments',
+            'items',
+            'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle',
+            'order.product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
+        ])
             ->where('user_id', $request->user()->id)
             ->orderByDesc('id');
 
@@ -70,7 +71,8 @@ class InvoiceController extends Controller
             $query->where(function ($builder) use ($keyword) {
                 $builder->where('invoice_no', 'like', '%'.$keyword.'%')
                     ->orWhereHas('payments', function ($paymentQuery) use ($keyword) {
-                        $paymentQuery->where('payment_no', 'like', '%'.$keyword.'%');
+                        $paymentQuery->where('payment_no', 'like', '%'.$keyword.'%')
+                            ->orWhere('trade_no', 'like', '%'.$keyword.'%');
                     });
             });
         }
@@ -117,16 +119,9 @@ class InvoiceController extends Controller
         ]);
     }
 
-    public function store(Request $request)
+    public function store(StoreRequest $request)
     {
-        $data = $request->validate([
-            'product_id' => ['required', 'integer', 'min:1'],
-            'billing_cycle' => ['required', 'string', 'max:30'],
-            'quantity' => ['nullable', 'integer', 'min:1', 'max:10'],
-            'config' => ['nullable', 'array'],
-            'quote_token' => ['required', 'string', 'min:20', 'max:120'],
-            'user_coupon_id' => ['nullable', 'integer', 'min:1'],
-        ]);
+        $data = $request->validated();
 
         $idempotencyKey = trim((string) $request->header('X-Idempotency-Key', ''));
         $context = array_merge($this->buildOperationContext($request), [
@@ -135,8 +130,8 @@ class InvoiceController extends Controller
 
         $invoice = $this->checkoutService->create($request->user()->id, $data, $context);
         $invoice->loadMissing([
-            'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
-            'order.product:id,product_type,product_group_id,remark,config_options,purchase_requires',
+            'product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
+            'order.product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
             'service',
             'payments',
         ]);
@@ -147,8 +142,8 @@ class InvoiceController extends Controller
     public function show(Request $request, int $id)
     {
         $invoice = Invoice::with([
-            'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
-            'order.product:id,product_type,product_group_id,remark,config_options,purchase_requires',
+            'product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
+            'order.product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
             'service',
             'payments',
         ])
@@ -157,8 +152,8 @@ class InvoiceController extends Controller
 
         $invoice = $this->checkoutService->cancelExpiredUnpaidInvoice($invoice, $this->buildPaymentWindowExpiredContext($request));
         $invoice->loadMissing([
-            'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
-            'order.product:id,product_type,product_group_id,remark,config_options,purchase_requires',
+            'product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
+            'order.product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
             'service',
             'payments',
         ]);
@@ -169,8 +164,8 @@ class InvoiceController extends Controller
     public function cancel(Request $request, int $id)
     {
         $invoice = Invoice::with([
-            'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
-            'order.product:id,product_type,product_group_id,remark,config_options,purchase_requires',
+            'product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
+            'order.product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
             'service',
             'payments',
         ])
@@ -188,8 +183,8 @@ class InvoiceController extends Controller
             ])
         );
         $updated->loadMissing([
-            'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
-            'order.product:id,product_type,product_group_id,remark,config_options,purchase_requires',
+            'product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
+            'order.product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
             'service',
             'payments',
         ]);
@@ -197,16 +192,14 @@ class InvoiceController extends Controller
         return $this->success($this->transformInvoice($updated, $request->user()), '账单已取消');
     }
 
-    public function payByBalance(Request $request, int $id)
+    public function payByBalance(PayByBalanceRequest $request, int $id)
     {
-        $data = $request->validate([
-            'payment_session_token' => ['required', 'string', 'min:20', 'max:120'],
-        ]);
+        $data = $request->validated();
 
         $user = $request->user();
         $invoice = Invoice::with([
-            'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
-            'order.product:id,product_type,product_group_id,remark,config_options,purchase_requires',
+            'product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
+            'order.product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
             'service',
             'payments',
         ])
@@ -227,29 +220,26 @@ class InvoiceController extends Controller
             $this->buildOperationContext($request)
         );
 
-        $invoice->refresh()->load(['product:id,product_type,product_group_id,remark,config_options,purchase_requires', 'service', 'payments']);
+        $invoice->refresh()->load(['product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires', 'service', 'payments']);
         $user->refresh();
 
         return $this->success([
             'gateway' => 'balance',
             'amount' => number_format((float) $paidInvoice->paid_amount, 2, '.', ''),
             'paid_at' => $paidInvoice->paid_at?->format('Y-m-d H:i:s'),
-            'balance' => number_format((float) $user->balance, 2, '.', ''),
+            'cash_balance' => number_format((float) $user->balance, 2, '.', ''),
             'invoice' => $this->transformInvoice($invoice, $user),
         ], '支付成功');
     }
 
-    public function payByBalanceAndAlipay(Request $request, int $id)
+    public function payByBalanceAndAlipay(PayByBalanceAndAlipayRequest $request, int $id)
     {
-        $data = $request->validate([
-            'payment_session_token' => ['required', 'string', 'min:20', 'max:120'],
-            'balance_amount' => ['required', 'numeric', 'gt:0'],
-        ]);
+        $data = $request->validated();
 
         $user = $request->user();
         $invoice = Invoice::with([
-            'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
-            'order.product:id,product_type,product_group_id,remark,config_options,purchase_requires',
+            'product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
+            'order.product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
             'service',
             'payments',
         ])
@@ -271,7 +261,7 @@ class InvoiceController extends Controller
             $this->buildOperationContext($request)
         );
 
-        $invoice->refresh()->load(['product:id,product_type,product_group_id,remark,config_options,purchase_requires', 'service', 'payments']);
+        $invoice->refresh()->load(['product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires', 'service', 'payments']);
         $payment = Payment::query()
             ->where('payment_no', (string) ($result['payment_no'] ?? ''))
             ->where('invoice_id', $invoice->id)
@@ -283,7 +273,7 @@ class InvoiceController extends Controller
             return $this->error(40400, '支付记录不存在');
         }
 
-        $pollSecurity = $this->checkoutSecurityService->issueInvoicePaymentPollToken($payment, $invoice, (int) $user->id);
+        $pollSecurity = $this->checkoutSecurityService->issueInvoicePaymentPollToken($payment, $invoice, (int) $user->id, $request->ip());
 
         return $this->success([
             ...$result,
@@ -292,14 +282,12 @@ class InvoiceController extends Controller
         ], '组合支付二维码生成成功');
     }
 
-    public function payByAlipay(Request $request, int $id)
+    public function payByAlipay(PayByAlipayRequest $request, int $id)
     {
-        $data = $request->validate([
-            'payment_session_token' => ['required', 'string', 'min:20', 'max:120'],
-        ]);
+        $data = $request->validated();
 
         $user = $request->user();
-        $invoice = Invoice::with(['product:id,product_type,product_group_id,remark,config_options,purchase_requires', 'payments'])
+        $invoice = Invoice::with(['product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires', 'payments'])
             ->where('user_id', $user->id)
             ->findOrFail($id);
 
@@ -328,22 +316,19 @@ class InvoiceController extends Controller
             return $this->error(40400, '支付记录不存在');
         }
 
-        $pollSecurity = $this->checkoutSecurityService->issueInvoicePaymentPollToken($payment, $invoice, (int) $user->id);
+        $pollSecurity = $this->checkoutSecurityService->issueInvoicePaymentPollToken($payment, $invoice, (int) $user->id, $request->ip());
 
         return $this->success(array_merge($result, $pollSecurity), '二维码生成成功');
     }
 
-    public function queryAlipayStatus(Request $request, int $id)
+    public function queryAlipayStatus(QueryAlipayStatusRequest $request, int $id)
     {
-        $data = $request->validate([
-            'payment_no' => ['required', 'string', 'max:50'],
-            'poll_token' => ['required', 'string', 'min:20', 'max:120'],
-        ]);
+        $data = $request->validated();
 
         $user = $request->user();
         $invoice = Invoice::with([
-            'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
-            'order.product:id,product_type,product_group_id,remark,config_options,purchase_requires',
+            'product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
+            'order.product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
             'service',
             'payments',
         ])
@@ -365,21 +350,22 @@ class InvoiceController extends Controller
             (string) $data['poll_token'],
             $payment,
             $invoice,
-            (int) $user->id
+            (int) $user->id,
+            $request->ip()
         );
 
         $result = $this->paymentService->queryAlipayStatus($payment);
         $responseData = $result;
 
         if (($result['paid'] ?? false) === true) {
-            $invoice->refresh()->load(['product:id,product_type,product_group_id,remark,config_options,purchase_requires', 'service', 'payments']);
+            $invoice->refresh()->load(['product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires', 'service', 'payments']);
             $responseData['invoice'] = $this->transformInvoice($invoice, $user);
         }
 
         return $this->success($responseData);
     }
 
-    private function transformInvoice(Invoice $invoice, ?\App\Models\User $viewer = null): array
+    private function transformInvoice(Invoice $invoice, ?User $viewer = null): array
     {
         $invoiceDetail = $this->invoiceService->clientDetail($invoice);
         $payableAmount = (string) ($invoiceDetail['payable_amount'] ?? number_format($this->resolveInvoicePayableAmount($invoice), 2, '.', ''));
@@ -396,9 +382,11 @@ class InvoiceController extends Controller
             $payMethods[] = ['key' => PaymentGatewayCode::ALIPAY, 'name' => $alipayName];
         }
 
+        $configSnapshot = VersionedJson::withoutMeta(is_array($invoice->config_snapshot) ? $invoice->config_snapshot : []) ?? [];
         $configPricingSnapshot = is_array($invoice->config_pricing_snapshot) && $invoice->config_pricing_snapshot !== []
-            ? $invoice->config_pricing_snapshot
+            ? (VersionedJson::withoutMeta($invoice->config_pricing_snapshot) ?? [])
             : [];
+        $couponSnapshot = VersionedJson::withoutMeta(is_array($invoice->coupon_snapshot) ? $invoice->coupon_snapshot : []) ?? [];
 
         return [
             ...$invoiceDetail,
@@ -409,13 +397,13 @@ class InvoiceController extends Controller
             'product' => array_merge(is_array($invoiceDetail['product'] ?? null) ? $invoiceDetail['product'] : [], [
                 'config_options' => (array) ($invoice->product?->config_options ?? $invoice->order?->product?->config_options ?? []),
             ]),
-            'config_snapshot' => (array) ($invoice->config_snapshot ?? []),
+            'config_snapshot' => $configSnapshot,
             'config_pricing_snapshot' => $configPricingSnapshot,
             'coupon' => (int) ($invoice->coupon_id ?? 0) > 0 ? [
                 'id' => (int) $invoice->coupon_id,
-                'name' => (string) ($invoice->coupon_snapshot['name'] ?? ''),
-                'description' => (string) ($invoice->coupon_snapshot['description'] ?? ''),
-                'discount_label' => (string) ($invoice->coupon_snapshot['discount_label'] ?? ''),
+                'name' => (string) ($couponSnapshot['name'] ?? ''),
+                'description' => (string) ($couponSnapshot['description'] ?? ''),
+                'discount_label' => (string) ($couponSnapshot['discount_label'] ?? ''),
                 'discount_amount' => number_format((float) ($invoice->discount ?? 0), 2, '.', ''),
             ] : null,
             'payment_security' => [

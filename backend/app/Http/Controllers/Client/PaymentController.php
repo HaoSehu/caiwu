@@ -5,31 +5,22 @@ namespace App\Http\Controllers\Client;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Client\Payment\IndexRequest;
 use App\Models\Payment;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 class PaymentController extends Controller
 {
-    private const THIRD_PARTY_GATEWAYS = [PaymentGatewayCode::ALIPAY, PaymentGatewayCode::WECHAT];
-
-    public function index(Request $request)
+    public function index(IndexRequest $request)
     {
-        $filters = $request->validate([
-            'status' => ['nullable', 'integer'],
-            'gateway' => ['nullable', 'string', Rule::in(self::THIRD_PARTY_GATEWAYS)],
-            'keyword' => ['nullable', 'string', 'max:80'],
-            'page' => ['nullable', 'integer', 'min:1'],
-            'page_size' => ['nullable', 'integer', 'min:1', 'max:100'],
-        ]);
+        $thirdPartyGateways = PaymentGatewayCode::thirdPartyGateways();
+        $filters = $request->validated();
 
         $query = Payment::with([
-                'invoice:id,invoice_no,status,amount,type,order_id',
-                'invoice.order:id,order_no,type,status',
-                'order:id,order_no,type,status',
-            ])
+            'invoice:id,invoice_no,status,amount,type',
+        ])
             ->where('user_id', $request->user()->id)
-            ->whereIn('gateway', self::THIRD_PARTY_GATEWAYS)
+            ->whereIn('gateway', $thirdPartyGateways)
             ->orderByDesc('id');
 
         if (($filters['status'] ?? null) !== null) {
@@ -42,9 +33,8 @@ class PaymentController extends Controller
             $keyword = trim((string) $filters['keyword']);
             $query->where(function ($builder) use ($keyword) {
                 $builder->where('payment_no', 'like', '%'.$keyword.'%')
-                    ->orWhereHas('invoice', fn ($invoiceQuery) => $invoiceQuery->where('invoice_no', 'like', '%'.$keyword.'%'))
-                    ->orWhereHas('order', fn ($orderQuery) => $orderQuery->where('order_no', 'like', '%'.$keyword.'%'))
-                    ->orWhereHas('invoice.order', fn ($orderQuery) => $orderQuery->where('order_no', 'like', '%'.$keyword.'%'));
+                    ->orWhere('trade_no', 'like', '%'.$keyword.'%')
+                    ->orWhereHas('invoice', fn ($invoiceQuery) => $invoiceQuery->where('invoice_no', 'like', '%'.$keyword.'%'));
             });
         }
 
@@ -54,6 +44,7 @@ class PaymentController extends Controller
         $items = collect($paginator->items())->map(fn (Payment $payment) => [
             'id' => (int) $payment->id,
             'payment_no' => (string) $payment->payment_no,
+            'trade_no' => (string) ($payment->trade_no ?? ''),
             'gateway' => (string) $payment->gateway,
             'gateway_label' => $this->gatewayLabel((string) $payment->gateway),
             'amount' => number_format((float) $payment->amount, 2, '.', ''),
@@ -63,14 +54,6 @@ class PaymentController extends Controller
             'invoice_no' => (string) ($payment->invoice?->invoice_no ?? ''),
             'invoice_type' => (string) ($payment->invoice?->type ?? ''),
             'invoice_status' => $payment->invoice ? (int) $payment->invoice->status : null,
-            'order_id' => (int) ($payment->order?->id ?? $payment->invoice?->order?->id ?? 0),
-            'order_no' => (string) ($payment->order?->order_no ?? $payment->invoice?->order?->order_no ?? ''),
-            'order' => ($payment->order || $payment->invoice?->order) ? [
-                'id' => (int) ($payment->order?->id ?? $payment->invoice?->order?->id),
-                'order_no' => (string) ($payment->order?->order_no ?? $payment->invoice?->order?->order_no),
-                'type' => (string) ($payment->order?->type ?? $payment->invoice?->order?->type ?? ''),
-                'status' => (int) ($payment->order?->status ?? $payment->invoice?->order?->status ?? 0),
-            ] : null,
             'paid_at' => $payment->paid_at?->format('Y-m-d H:i:s'),
             'created_at' => $payment->created_at?->format('Y-m-d H:i:s'),
         ])->values()->all();
@@ -89,7 +72,7 @@ class PaymentController extends Controller
 
         $row = Payment::query()
             ->where('user_id', $userId)
-            ->whereIn('gateway', self::THIRD_PARTY_GATEWAYS)
+            ->whereIn('gateway', PaymentGatewayCode::thirdPartyGateways())
             ->selectRaw('COUNT(*) AS total')
             ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS pending', [PaymentStatus::PENDING])
             ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS success', [PaymentStatus::SUCCESS])
@@ -101,6 +84,39 @@ class PaymentController extends Controller
             'pending' => (int) ($row?->pending ?? 0),
             'success' => (int) ($row?->success ?? 0),
             'refunded' => (int) ($row?->refunded ?? 0),
+        ]);
+    }
+
+    public function show(int $id, Request $request)
+    {
+        $userId = (int) $request->user()->id;
+
+        $payment = Payment::with([
+            'invoice:id,invoice_no,status,amount,paid_amount,type,created_at',
+        ])
+            ->where('user_id', $userId)
+            ->whereIn('gateway', PaymentGatewayCode::thirdPartyGateways())
+            ->findOrFail($id);
+
+        return $this->success([
+            'id' => (int) $payment->id,
+            'payment_no' => (string) $payment->payment_no,
+            'trade_no' => (string) ($payment->trade_no ?? ''),
+            'gateway' => (string) $payment->gateway,
+            'gateway_label' => $this->gatewayLabel((string) $payment->gateway),
+            'amount' => number_format((float) $payment->amount, 2, '.', ''),
+            'status' => (int) $payment->status,
+            'status_label' => PaymentStatus::$labels[(int) $payment->status] ?? '未知',
+            'invoice' => $payment->invoice ? [
+                'id' => (int) $payment->invoice->id,
+                'invoice_no' => (string) $payment->invoice->invoice_no,
+                'status' => (int) $payment->invoice->status,
+                'amount' => number_format((float) $payment->invoice->amount, 2, '.', ''),
+                'paid_amount' => number_format((float) $payment->invoice->paid_amount, 2, '.', ''),
+                'type' => (string) ($payment->invoice->type ?? ''),
+            ] : null,
+            'paid_at' => $payment->paid_at?->format('Y-m-d H:i:s'),
+            'created_at' => $payment->created_at?->format('Y-m-d H:i:s'),
         ]);
     }
 

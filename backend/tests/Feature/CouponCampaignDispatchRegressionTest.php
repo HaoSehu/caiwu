@@ -98,6 +98,64 @@ class CouponCampaignDispatchRegressionTest extends TestCase
         }
     }
 
+    public function test_update_campaign_with_generated_coupon_is_rejected(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+        $campaign = CouponCampaign::query()->create($this->campaignPayload($suffix));
+
+        Coupon::query()->create([
+            'coupon_campaign_id' => (int) $campaign->id,
+            'name' => 'Generated Campaign Coupon '.$suffix,
+            'code' => 'GENCAMP'.strtoupper($suffix),
+            'distribution_type' => 'public',
+            'discount_scope' => 'first_month',
+            'discount_type' => 'fixed',
+            'discount_value' => '5.00',
+            'min_amount' => '0.00',
+            'status' => CouponStatus::ACTIVE,
+            'starts_at' => now()->subHour(),
+            'expires_at' => now()->addDay(),
+        ]);
+
+        $this->expectException(BusinessException::class);
+        $this->expectExceptionMessage('活动已生成优惠券批次，不允许修改');
+
+        app(CouponCampaignService::class)->updateCampaign(
+            $campaign,
+            $this->campaignPayload($suffix, ['name' => 'Updated Campaign '.$suffix])
+        );
+    }
+
+    public function test_delete_campaign_with_generated_coupon_is_rejected(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+        $campaign = CouponCampaign::query()->create($this->campaignPayload($suffix));
+
+        Coupon::query()->create([
+            'coupon_campaign_id' => (int) $campaign->id,
+            'name' => 'Generated Campaign Coupon '.$suffix,
+            'code' => 'GENDEL'.strtoupper($suffix),
+            'distribution_type' => 'public',
+            'discount_scope' => 'first_month',
+            'discount_type' => 'fixed',
+            'discount_value' => '5.00',
+            'min_amount' => '0.00',
+            'status' => CouponStatus::ACTIVE,
+            'starts_at' => now()->subHour(),
+            'expires_at' => now()->addDay(),
+        ]);
+
+        try {
+            app(CouponCampaignService::class)->deleteCampaign($campaign);
+            $this->fail('Expected generated campaign deletion to be rejected.');
+        } catch (BusinessException $exception) {
+            $this->assertSame('活动已生成优惠券批次，不允许删除', $exception->getMessage());
+            $this->assertDatabaseHas('coupon_campaigns', [
+                'id' => (int) $campaign->id,
+            ]);
+        }
+    }
+
     private function campaignPayload(string $suffix, array $overrides = []): array
     {
         return array_merge([

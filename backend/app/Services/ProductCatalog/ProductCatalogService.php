@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Services\ProductCatalog;
 
 use App\Models\Product;
-use App\Models\ProductCategory;
 use App\Models\Supplier;
 use Illuminate\Database\Eloquent\Collection;
 
@@ -13,7 +12,7 @@ use Illuminate\Database\Eloquent\Collection;
  * ProductCatalogService - 外观类，委托给各专责子服务。
  *
  * 子服务：
- *   - ProductCategoryService 分类管理（兼容旧分组接口）
+ *   - ProductCategoryService 分类管理（三层商品分组）
  *   - ProductAdminService  商品后台管理（列表、CRUD、排序、移动、开关）
  *   - ProductSyncService   上游同步（批量同步、固化绑定、库存）
  *   - ProductSiteService   前台目录（商品类型、分组树、商品卡片、全量 Catalog）
@@ -36,12 +35,12 @@ class ProductCatalogService
         return $this->categoryService->adminSummary();
     }
 
-    public function adminGroupTree(?string $productType = null): Collection
+    public function adminGroupTree(?string $productType = null): array
     {
         return $this->categoryService->adminCategoryTree($productType);
     }
 
-    public function adminCategoryTree(?string $productType = null): Collection
+    public function adminCategoryTree(?string $productType = null): array
     {
         return $this->categoryService->adminCategoryTree($productType);
     }
@@ -56,64 +55,64 @@ class ProductCatalogService
         return $this->categoryService->categoryOptions($productType);
     }
 
-    public function createGroup(array $data): ProductCategory
+    public function createGroup(array $data): array
     {
         return $this->categoryService->createCategory($data);
     }
 
-    public function createCategory(array $data): ProductCategory
+    public function createCategory(array $data): array
     {
         return $this->categoryService->createCategory($data);
     }
 
-    public function updateGroup(ProductCategory $group, array $data): ProductCategory
+    public function updateGroup(int $groupId, array $data): array
     {
-        return $this->categoryService->updateCategory($group, $data);
+        return $this->categoryService->updateCategory($groupId, $data);
     }
 
-    public function updateCategory(ProductCategory $category, array $data): ProductCategory
+    public function updateCategory(int $groupId, array $data): array
     {
-        return $this->categoryService->updateCategory($category, $data);
+        return $this->categoryService->updateCategory($groupId, $data);
     }
 
-    public function deleteGroup(ProductCategory $group): void
+    public function deleteGroup(int $groupId, int $level): void
     {
-        $this->categoryService->deleteCategory($group);
+        $this->categoryService->deleteCategory($groupId, $level);
     }
 
-    public function deleteCategory(ProductCategory $category): void
+    public function deleteCategory(int $groupId, int $level): void
     {
-        $this->categoryService->deleteCategory($category);
+        $this->categoryService->deleteCategory($groupId, $level);
     }
 
-    public function reorderAdminGroups(?string $productType, ?int $parentId, array $groupIds): array
+    public function reorderAdminGroups(int $level, ?int $parentId, array $groupIds): array
     {
-        return $this->categoryService->reorderAdminCategories($productType, $parentId, $groupIds);
+        return $this->categoryService->reorderAdminCategories($level, $parentId, $groupIds);
     }
 
-    public function reorderAdminCategories(?string $productType, ?int $parentId, array $groupIds): array
+    public function reorderAdminCategories(int $level, ?int $parentId, array $groupIds): array
     {
-        return $this->categoryService->reorderAdminCategories($productType, $parentId, $groupIds);
+        return $this->categoryService->reorderAdminCategories($level, $parentId, $groupIds);
     }
 
     public function moveAdminGroup(
-        ProductCategory $group,
-        ?string $targetProductType,
+        int $level,
+        int $groupId,
         ?int $targetParentId,
         ?int $referenceGroupId,
         string $position = 'append',
     ): array {
-        return $this->categoryService->moveAdminCategory($group, $targetProductType, $targetParentId, $referenceGroupId, $position);
+        return $this->categoryService->moveAdminCategory($level, $groupId, $targetParentId, $referenceGroupId, $position);
     }
 
     public function moveAdminCategory(
-        ProductCategory $category,
-        ?string $targetProductType,
+        int $level,
+        int $groupId,
         ?int $targetParentId,
         ?int $referenceCategoryId,
         string $position = 'append',
     ): array {
-        return $this->categoryService->moveAdminCategory($category, $targetProductType, $targetParentId, $referenceCategoryId, $position);
+        return $this->categoryService->moveAdminCategory($level, $groupId, $targetParentId, $referenceCategoryId, $position);
     }
 
     // -------------------------------------------------------------------------
@@ -132,11 +131,11 @@ class ProductCatalogService
 
     public function moveAdminProduct(
         Product $product,
-        int $targetCategoryId,
+        array $targetHierarchy,
         ?int $referenceProductId,
         string $position = 'append',
     ): array {
-        return $this->adminService->moveAdminProduct($product, $targetCategoryId, $referenceProductId, $position);
+        return $this->adminService->moveAdminProduct($product, $targetHierarchy, $referenceProductId, $position);
     }
 
     public function adminProductOwners(Product $product, array $filters, int $perPage = 20): array

@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Models\FirstProductGroup;
 use App\Models\Product;
-use App\Models\ProductCategory;
 use App\Models\Supplier;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\ProductCatalog\ProductSyncService;
@@ -32,15 +32,17 @@ class SupplierBatchConnectRegressionTest extends TestCase
             'sort_order' => 1,
         ]);
 
-        $rootCategory = ProductCategory::query()->create([
-            'parent_id' => null,
-            'product_type' => 'vps',
-            'name' => 'Imported Root '.$suffix,
-            'slug' => 'imported-root-'.$suffix,
-            'slogan' => '',
-            'is_visible' => 1,
-            'sort_order' => 0,
-        ]);
+        $firstGroup = FirstProductGroup::query()->firstOrCreate(
+            ['code' => 'vps'],
+            [
+                'name' => 'VPS',
+                'slug' => 'batch-connect-first-vps',
+                'sort_order' => 0,
+                'is_visible' => 1,
+                'is_system' => 0,
+                'legacy_product_type' => 'vps',
+            ]
+        );
 
         $supplierProductId = random_int(10000, 99999);
         $transport = $this->createMock(HostingPanelApiTransport::class);
@@ -67,7 +69,8 @@ class SupplierBatchConnectRegressionTest extends TestCase
 
         $result = $service->bulkConnectSupplierProducts($supplier, [
             'product_type' => 'vps',
-            'root_category_id' => (int) $rootCategory->id,
+            'first_product_group_id' => (int) $firstGroup->id,
+            'second_product_group_name' => '香港云服务器 / CN2',
             'product_ids' => [$supplierProductId],
             'default_status' => 1,
             'default_auto_setup' => 1,
@@ -81,7 +84,7 @@ class SupplierBatchConnectRegressionTest extends TestCase
 
         /** @var Product|null $product */
         $product = Product::query()
-            ->with('categoryMapping.parent')
+            ->with('secondProductGroup.firstProductGroup')
             ->where('supplier_id', (int) $supplier->id)
             ->where('supplier_product_id', $supplierProductId)
             ->first();
@@ -92,10 +95,10 @@ class SupplierBatchConnectRegressionTest extends TestCase
         $this->assertSame(1, (int) $product->auto_setup);
         $this->assertSame('2', (string) (($product->purchase_requires['upstream_default_config'] ?? [])['cpu'] ?? ''));
         $this->assertSame('4', (string) (($product->purchase_requires['upstream_default_config'] ?? [])['memory'] ?? ''));
-        $this->assertNotNull($product->categoryMapping);
-        $this->assertNotNull($product->categoryMapping?->parent);
-        $this->assertSame((int) $rootCategory->id, (int) $product->categoryMapping?->parent?->id);
-        $this->assertSame('香港云服务器 / CN2', $product->categoryMapping?->name);
+        $this->assertNotNull($product->secondProductGroup);
+        $this->assertNotNull($product->secondProductGroup?->firstProductGroup);
+        $this->assertSame((int) $firstGroup->id, (int) $product->secondProductGroup?->firstProductGroup?->id);
+        $this->assertSame('香港云服务器 / CN2', $product->secondProductGroup?->name);
 
         $display = (new ProductDisplayNameResolver)->resolveForProduct($product);
         $this->assertSame('2 vCPU 4G', $display['product_display_name'] ?? null);

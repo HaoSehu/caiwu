@@ -9,8 +9,8 @@ use App\Models\Product;
 use App\Models\Service;
 use App\Models\Supplier;
 use App\Models\User;
-use App\Services\User\UserService;
 use App\Services\Upstream\ProviderKey;
+use App\Services\User\UserService;
 use Tests\TestCase;
 
 class AdminUserServiceUpstreamBindingTest extends TestCase

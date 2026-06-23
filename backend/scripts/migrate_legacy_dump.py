@@ -40,8 +40,11 @@ PRESERVE_TABLES = {
 
 ALLOW_MISSING_SOURCE_TABLES = {
     "activity_logs",
+    "first_product_groups",
     "gateway_logs",
     "schedule_run_logs",
+    "second_product_groups",
+    "third_product_groups",
 }
 
 FILTER_CODEX_SETTINGS_SQL = "`group_key` NOT REGEXP '^codex_(runtime|service)_'"
@@ -859,6 +862,25 @@ def run_integrity_checks(config: DbConfig, target_db: str, target_columns: dict[
     log("关键引用检查通过")
 
 
+def run_artisan_command(args: list[str]) -> None:
+    completed = subprocess.run(
+        ["php", "artisan", *args],
+        cwd=BACKEND_DIR,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        detail = (completed.stderr or "").strip() or (completed.stdout or "").strip() or f"exit code {completed.returncode}"
+        fail(f"Artisan command failed: php artisan {' '.join(args)}\n{detail}")
+
+
+def backfill_product_group_hierarchy() -> None:
+    log("鍥炲～涓夊眰鍟嗗搧鍒嗙被鏄犲皠")
+    run_artisan_command(["product-catalog:backfill-product-group-hierarchy"])
+    run_artisan_command(["product-catalog:check-product-group-hierarchy", "--json"])
+
+
 def drop_staging_database(config: DbConfig, staging_db: str) -> None:
     run_sql(config, f"DROP DATABASE IF EXISTS {quote_db(staging_db)};")
 
@@ -946,6 +968,7 @@ def run_migration(config: DbConfig, dump_path: Path, staging_db: str, keep_stagi
         staging_columns,
         auto_increment_tables,
     )
+    backfill_product_group_hierarchy()
     run_integrity_checks(config, config.database, target_columns)
 
     if keep_staging:

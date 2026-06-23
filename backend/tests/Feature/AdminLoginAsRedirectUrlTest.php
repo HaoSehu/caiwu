@@ -95,7 +95,7 @@ class AdminLoginAsRedirectUrlTest extends TestCase
             $operationLogService,
             $this->createMock(AdminRoleBridgeService::class),
             $this->createMock(LoginRiskControlService::class),
-            new LegacyPasswordVerifier(),
+            new LegacyPasswordVerifier,
         );
     }
 }

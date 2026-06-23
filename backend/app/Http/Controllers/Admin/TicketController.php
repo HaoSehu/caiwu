@@ -3,6 +3,9 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\Ticket\AssignRequest;
+use App\Http\Requests\Admin\Ticket\ReplyRequest;
+use App\Http\Requests\Admin\Ticket\UploadImageRequest;
 use App\Models\AdminUser;
 use App\Models\Ticket;
 use App\Services\Ticket\TicketService;
@@ -48,25 +51,18 @@ class TicketController extends Controller
         return $this->success($this->ticketService->detail($ticket));
     }
 
-    public function uploadImage(Request $request)
+    public function uploadImage(UploadImageRequest $request)
     {
-        $data = $request->validate([
-            'file' => ['required', 'image', 'mimetypes:image/jpeg,image/png,image/webp', 'max:5120'],
-        ]);
+        $data = $request->validated();
 
         $image = $this->ticketService->uploadImage($request->user()->id, 'admin', $data['file']);
 
         return $this->success($image, '图片上传成功');
     }
 
-    public function reply(Request $request, Ticket $ticket)
+    public function reply(ReplyRequest $request, Ticket $ticket)
     {
-        $data = $request->validate([
-            'content' => ['nullable', 'string', 'max:10000'],
-            'attachments' => ['nullable', 'array', 'max:9'],
-            'attachments.*' => ['required', 'string', 'max:255'],
-            'quote_reply_id' => ['nullable', 'integer', 'min:1'],
-        ]);
+        $data = $request->validated();
         $reply = $this->ticketService->staffReply(
             $ticket,
             $request->user()->id,
@@ -92,9 +88,9 @@ class TicketController extends Controller
         return $this->success(null, '工单已关闭');
     }
 
-    public function assign(Request $request, Ticket $ticket)
+    public function assign(AssignRequest $request, Ticket $ticket)
     {
-        $data = $request->validate(['assignee_id' => ['required', 'integer', 'exists:admin_users,id']]);
+        $data = $request->validated();
         $ticket = $this->ticketService->assign($ticket, $data['assignee_id']);
 
         return $this->success($ticket->load('assignee:id,username,nickname'), '指派成功');

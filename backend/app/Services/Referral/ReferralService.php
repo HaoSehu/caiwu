@@ -21,6 +21,7 @@ use App\Models\UserReferral;
 use App\Services\Finance\InvoiceService;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\System\OperationLogService;
+use App\Services\User\AccountService;
 use App\Support\TextSanitizer;
 use Carbon\CarbonInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -36,6 +37,17 @@ use Illuminate\Support\Str;
 class ReferralService
 {
     private const DEFAULT_REWARD_RATE = 10.00;
+
+    /**
+     * 推广奖励相关退款阻断错误码。
+     * 用于区分"奖励已提现/可提余额不足"等需人工处理的场景，
+     * 避免管理员只看到通用文案而无法识别阻断原因。
+     */
+    public const REFUND_BLOCKED_REFERRER_MISSING_CODE = 42210;
+
+    public const REFUND_BLOCKED_REWARD_WITHDRAWN_CODE = 42211;
+
+    public const REFUND_BLOCKED_FROZEN_INSUFFICIENT_CODE = 42212;
 
     public const ACCOUNT_LOG_TYPE_REWARD_FROZEN = 'reward_frozen';
 
@@ -63,6 +75,7 @@ class ReferralService
         private OperationLogService $operationLogService,
         private InvoiceService $invoiceService,
         private readonly ?ProductDisplayNameResolver $productDisplayNameResolver = null,
+        private ?AccountService $accountService = null,
     ) {}
 
     public function ensureReferralCode(User $user): string
@@ -238,9 +251,9 @@ class ReferralService
                     ])->save();
                 }
 
-                $referrerAccount->forceFill([
+                $referrerAccount = $this->accounts()->updateAccount($referrerAccount, [
                     'referral_frozen_balance' => round((float) $referrerAccount->referral_frozen_balance + $rewardAmount, 2),
-                ])->save();
+                ]);
 
                 $this->resetUserAggregateRelations($lockedReferrer);
 
@@ -367,9 +380,9 @@ class ReferralService
                     ])->save();
                 }
 
-                $referrerAccount->forceFill([
+                $referrerAccount = $this->accounts()->updateAccount($referrerAccount, [
                     'referral_frozen_balance' => round((float) $referrerAccount->referral_frozen_balance + $rewardAmount, 2),
-                ])->save();
+                ]);
 
                 $this->resetUserAggregateRelations($lockedReferrer);
 
@@ -535,8 +548,9 @@ class ReferralService
             ->with(array_merge(
                 $this->referralUserWithRelations('referredUser'),
                 [
+                    'invoice:id,invoice_no,product_id,product_spec_snapshot,config_snapshot,paid_at',
                     'order:id,order_no,product_id,product_spec_snapshot,config_snapshot,paid_at',
-                    'product:id,product_type,product_group_id,config_options,purchase_requires',
+                    'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
                 ]
             ))
             ->where('referrer_user_id', $user->id)
@@ -579,6 +593,10 @@ class ReferralService
         $amount = round((float) ($data['amount'] ?? 0), 2);
         $minAmount = $this->withdrawMinAmount();
 
+        // 提现涉及资金外流，必须先完成实名认证（反洗钱/合规底线）。
+        // is_verified / verification_status 字段已存在，此处对齐 hasCompletedVerification 判断。
+        throw_if(! $user->hasCompletedVerification(), new BusinessException('请先完成实名认证后再申请提现'));
+
         throw_if($amount <= 0, new BusinessException('提现金额必须大于 0'));
         throw_if($amount < $minAmount, new BusinessException("奖励满 {$minAmount} 元才可提现"));
         throw_if((float) $user->referral_available_amount < $amount, new BusinessException('可提现奖励不足'));
@@ -612,10 +630,10 @@ class ReferralService
 
             throw_if((float) $account->referral_available_balance < $amount, new BusinessException('可提现奖励不足'));
 
-            $account->forceFill([
+            $account = $this->accounts()->updateAccount($account, [
                 'referral_available_balance' => round((float) $account->referral_available_balance - $amount, 2),
                 'referral_pending_withdrawal_balance' => round((float) $account->referral_pending_withdrawal_balance + $amount, 2),
-            ])->save();
+            ]);
 
             $this->resetUserAggregateRelations($lockedUser);
 
@@ -668,7 +686,7 @@ class ReferralService
                 $this->referralUserWithRelations('referredUser'),
                 [
                     'order:id,order_no,product_id,product_spec_snapshot,config_snapshot',
-                    'product:id,product_type,product_group_id,config_options,purchase_requires',
+                    'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
                 ]
             ));
 
@@ -811,11 +829,37 @@ class ReferralService
             ->find((int) $reward->referrer_user_id);
 
         if (! $referrer) {
-            throw new BusinessException('该订单已产生推广奖励，但推荐人账户不存在，无法继续退款。');
+            throw new BusinessException(
+                '该订单已产生推广奖励，但推荐人账户不存在，无法继续退款。',
+                self::REFUND_BLOCKED_REFERRER_MISSING_CODE
+            );
         }
 
-        if ((float) $referrer->referral_available_amount + 0.00001 < (float) $reward->reward_amount) {
-            throw new BusinessException('该订单对应的推广奖励已释放且已被锁定或提现，请先处理推广返利资金后再退款。');
+        $rewardAmount = round((float) $reward->reward_amount, 2);
+        $availableAmount = round((float) $referrer->referral_available_amount, 2);
+
+        if ($availableAmount + 0.00001 < $rewardAmount) {
+            // 命中"奖励已释放但可提余额不足"（典型为佣金已被提现）时，
+            // 记一条阻断审计日志，便于管理员事后人工追回提现款或走挂账流程。
+            $this->operationLogService->write(
+                userId: (int) $referrer->id,
+                userType: 'client',
+                action: 'referral.reward.refund_blocked',
+                module: 'referral',
+                targetId: (int) $order->id,
+                detail: [
+                    'order_id' => (int) $order->id,
+                    'referrer_user_id' => (int) $referrer->id,
+                    'reward_amount' => number_format($rewardAmount, 2, '.', ''),
+                    'available_balance' => number_format($availableAmount, 2, '.', ''),
+                    'reason' => 'reward_released_but_available_insufficient',
+                ],
+            );
+
+            throw new BusinessException(
+                '该订单对应的推广奖励已释放且可提余额不足（可能已被提现）。需先追回推广返利资金或走人工挂账流程后再发起退款。错误码 42211。',
+                self::REFUND_BLOCKED_REWARD_WITHDRAWN_CODE
+            );
         }
     }
 
@@ -843,7 +887,10 @@ class ReferralService
                     ->find((int) $reward->referrer_user_id);
 
                 if (! $referrer) {
-                    throw new BusinessException('该订单已产生推广奖励，但推荐人账户不存在，无法继续退款。');
+                    throw new BusinessException(
+                        '该订单已产生推广奖励，但推荐人账户不存在，无法继续退款。',
+                        self::REFUND_BLOCKED_REFERRER_MISSING_CODE
+                    );
                 }
 
                 $referrerProfile = $this->hasReferralProfilesTable()
@@ -857,21 +904,27 @@ class ReferralService
                 if ((int) $reward->status === ReferralReward::STATUS_FROZEN) {
                     throw_if(
                         (float) $referrerAccount->referral_frozen_balance + 0.00001 < $rewardAmount,
-                        new BusinessException('推广冻结奖励余额不足，无法继续退款。'),
+                        new BusinessException(
+                            '推广冻结奖励余额不足，无法继续退款。错误码 42212。',
+                            self::REFUND_BLOCKED_FROZEN_INSUFFICIENT_CODE
+                        ),
                     );
 
-                    $referrerAccount->forceFill([
+                    $referrerAccount = $this->accounts()->updateAccount($referrerAccount, [
                         'referral_frozen_balance' => max(round((float) $referrerAccount->referral_frozen_balance - $rewardAmount, 2), 0),
-                    ])->save();
+                    ]);
                 } else {
                     throw_if(
                         (float) $referrerAccount->referral_available_balance + 0.00001 < $rewardAmount,
-                        new BusinessException('该订单对应的推广奖励已释放且已被锁定或提现，请先处理推广返利资金后再退款。'),
+                        new BusinessException(
+                            '该订单对应的推广奖励已释放且可提余额不足（可能已被提现）。需先追回推广返利资金或走人工挂账流程后再发起退款。错误码 42211。',
+                            self::REFUND_BLOCKED_REWARD_WITHDRAWN_CODE
+                        ),
                     );
 
-                    $referrerAccount->forceFill([
+                    $referrerAccount = $this->accounts()->updateAccount($referrerAccount, [
                         'referral_available_balance' => max(round((float) $referrerAccount->referral_available_balance - $rewardAmount, 2), 0),
-                    ])->save();
+                    ]);
 
                     $accountType = 'referral_available';
                 }
@@ -962,12 +1015,7 @@ class ReferralService
                     $accountPayload['cash_balance'] = round((float) $account->cash_balance + $amount, 2);
                 }
 
-                $account->forceFill($accountPayload)->save();
-
-                if ($record->method === ReferralWithdrawal::METHOD_BALANCE) {
-                    $newBalance = number_format((float) $accountPayload['cash_balance'], 2, '.', '');
-                    $user->forceFill(['balance' => $newBalance])->save();
-                }
+                $account = $this->accounts()->updateAccount($account, $accountPayload);
 
                 $this->resetUserAggregateRelations($user);
 
@@ -983,6 +1031,8 @@ class ReferralService
                         'origin_type' => 'referral_withdrawal',
                         'origin_id' => $record->id,
                         'remark' => "推荐奖励提现转入余额 #{$record->id}",
+                        'operator' => $operator,
+                        'trace_id' => $traceId,
                     ]);
                 }
 
@@ -1027,10 +1077,10 @@ class ReferralService
 
             throw_if($action !== 'reject', new BusinessException('不支持的提现处理动作'));
 
-            $account->forceFill([
+            $account = $this->accounts()->updateAccount($account, [
                 'referral_pending_withdrawal_balance' => max(round((float) $account->referral_pending_withdrawal_balance - $amount, 2), 0),
                 'referral_available_balance' => round((float) $account->referral_available_balance + $amount, 2),
-            ])->save();
+            ]);
 
             $this->resetUserAggregateRelations($user);
 
@@ -1168,10 +1218,10 @@ class ReferralService
                     $account = $this->lockUserAccount($user->id);
                     $amount = round((float) $freshReward->reward_amount, 2);
 
-                    $account->forceFill([
+                    $account = $this->accounts()->updateAccount($account, [
                         'referral_frozen_balance' => max(round((float) $account->referral_frozen_balance - $amount, 2), 0),
                         'referral_available_balance' => round((float) $account->referral_available_balance + $amount, 2),
-                    ])->save();
+                    ]);
 
                     if ($this->hasReferralProfilesTable()) {
                         $profile = $this->lockReferralProfile($user->id);
@@ -1213,7 +1263,8 @@ class ReferralService
                         $this->invoiceService->createForReferralCredit(
                             $user,
                             $amount,
-                            '推广返利入账，奖励ID: '.$freshReward->id
+                            '推广返利入账，奖励ID: '.$freshReward->id,
+                            (string) ($freshReward->trace_id ?? '')
                         );
                     } catch (\Throwable $e) {
                         Log::warning('[推广返利] 创建入账账单失败', [
@@ -1255,18 +1306,10 @@ class ReferralService
             ->select('users.id')
             ->distinct();
 
-        if (User::profileTableAvailable()) {
-            $query->leftJoin('user_profiles', 'user_profiles.user_id', '=', 'users.id');
-        }
-
         $query->where(function (Builder $builder) use ($keyword) {
             $builder
                 ->where('users.email', 'like', "%{$keyword}%")
                 ->orWhere('users.nickname', 'like', "%{$keyword}%");
-
-            if (User::profileTableAvailable()) {
-                $builder->orWhere('user_profiles.nickname', 'like', "%{$keyword}%");
-            }
         });
 
         return $query
@@ -1326,13 +1369,7 @@ class ReferralService
      */
     private function referralUserWithRelations(string $relation): array
     {
-        $relations = ["{$relation}:id,email,nickname"];
-
-        if (User::profileTableAvailable()) {
-            $relations[] = "{$relation}.profile:user_id,nickname";
-        }
-
-        return $relations;
+        return ["{$relation}:id,email,nickname"];
     }
 
     private function resolveFrontendBaseUrl(string $origin): string
@@ -1459,18 +1496,9 @@ class ReferralService
 
     private function buildReferralAccountLogQuery(User $user)
     {
-        if (Schema::hasTable('account_transactions')) {
-            $query = AccountTransaction::query()
-                ->where('user_id', $user->id)
-                ->whereIn('event_type', self::ACCOUNT_LOG_EVENT_TYPES);
-
-            if ($query->exists() || ! Schema::hasTable('referral_account_logs')) {
-                return $query;
-            }
-        }
-
-        return DB::table('referral_account_logs')
-            ->where('user_id', $user->id);
+        return AccountTransaction::query()
+            ->where('user_id', $user->id)
+            ->whereIn('event_type', self::ACCOUNT_LOG_EVENT_TYPES);
     }
 
     private function buildDirectReferralUserQuery(int $referrerUserId, bool $withReadAggregates = false): Builder
@@ -1533,14 +1561,7 @@ class ReferralService
 
     private function lockUserAccount(int $userId): UserAccount
     {
-        $account = UserAccount::query()->lockForUpdate()->find($userId);
-        if ($account) {
-            return $account;
-        }
-
-        $this->createUserAccount($userId);
-
-        return UserAccount::query()->lockForUpdate()->findOrFail($userId);
+        return $this->accounts()->ensureAccount($userId, true);
     }
 
     private function createReferralProfile(int $userId, ?string $referralCode = null): UserReferral
@@ -1609,16 +1630,12 @@ class ReferralService
 
     private function createUserAccount(int $userId): UserAccount
     {
-        return UserAccount::query()->create([
-            'user_id' => $userId,
-            'cash_balance' => '0.00',
-            'credit_limit' => '0.00',
-            'referral_frozen_balance' => '0.00',
-            'referral_available_balance' => '0.00',
-            'referral_pending_withdrawal_balance' => '0.00',
-            'referral_withdrawn_balance' => '0.00',
-            'version' => 0,
-        ]);
+        return $this->accounts()->ensureAccount($userId);
+    }
+
+    private function accounts(): AccountService
+    {
+        return $this->accountService ??= app(AccountService::class);
     }
 
     /**

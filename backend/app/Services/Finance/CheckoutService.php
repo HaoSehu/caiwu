@@ -17,6 +17,7 @@ use App\Models\User;
 use App\Services\Order\Concerns\HandlesOrderCalculation;
 use App\Services\ProductCatalog\ProductCatalogService;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
+use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Services\System\OperationLogService;
 use App\Support\OrderInvoiceNoGenerator;
 use Illuminate\Contracts\Cache\LockTimeoutException;
@@ -26,7 +27,7 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * 账单购买结算服务（Invoice-first Checkout）
- * 替代原 OrderService::create + cancel 的逻辑，直接创建 Invoice，不再创建 Order。
+ * 直接创建 Invoice，Order 仅作为内部开通投影，不对用户展示为交易主模型。
  */
 class CheckoutService
 {
@@ -94,7 +95,7 @@ class CheckoutService
         $lockKey = 'lock:invoice:create:'.$userId.':'.sha1($idempotencyKey);
 
         try {
-            $invoice = Cache::lock($lockKey, 15)->block(5, function () use (
+            $invoice = Cache::lock($lockKey, 20)->block(5, function () use (
                 $userId,
                 $productId,
                 $billingCycle,
@@ -150,6 +151,7 @@ class CheckoutService
                     $configPricingSnapshot = $this->buildConfigPricingSnapshot($product, $billingCycle, $normalizedConfig, $quantity);
                     $displayNamePayload = $this->resolveProductDisplayNameResolver()->resolveForProduct($product, $normalizedConfig);
                     $productDisplayName = $this->resolveCheckoutProductDisplayName($displayNamePayload);
+                    $invoiceConfigSnapshot = $this->withProductDisplaySnapshot($product, $normalizedConfig, $productDisplayName);
                     throw_if($amount <= 0, new BusinessException('无效的计费周期'));
 
                     $couponPayload = $this->couponService->reserveOwnedCouponForInvoice(
@@ -178,11 +180,12 @@ class CheckoutService
                         'discount' => $discountAmount,
                         'billing_cycle' => $billingCycle,
                         'quantity' => $quantity,
-                        'config_snapshot' => $normalizedConfig,
+                        'config_snapshot' => $invoiceConfigSnapshot,
                         'config_pricing_snapshot' => $configPricingSnapshot,
                         'coupon_snapshot' => $couponPayload,
                         'status' => InvoiceStatus::UNPAID,
                         'due_date' => now()->addDays(7),
+                        'trace_id' => (string) ($context['trace_id'] ?? ''),
                     ]);
                     $this->invoiceService->syncProjection($invoice);
 
@@ -194,7 +197,7 @@ class CheckoutService
                         $product,
                         $billingCycle,
                         $quantity,
-                        $normalizedConfig,
+                        $invoiceConfigSnapshot,
                         $configPricingSnapshot,
                         $productDisplayName,
                         $amount,
@@ -221,6 +224,7 @@ class CheckoutService
                             'invoice_no' => (string) $invoice->invoice_no,
                             'product_id' => (int) $product->id,
                             'product_name' => $productDisplayName,
+                            'product_full_path' => (string) ($invoiceConfigSnapshot['product_full_path'] ?? ''),
                             'billing_cycle' => $billingCycle,
                             'quantity' => $quantity,
                             'amount' => $this->formatAmount($amount),
@@ -404,6 +408,7 @@ class CheckoutService
 
         $order = Order::query()->create([
             'order_no' => $orderNo,
+            'projection_type' => Order::PROJECTION_TYPE_PROVISIONING,
             'user_id' => $userId,
             'product_id' => $product->id,
             'product_spec_snapshot' => $productDisplayName,
@@ -469,7 +474,7 @@ class CheckoutService
     private function freshCheckoutInvoice(int $invoiceId): ?Invoice
     {
         return Invoice::query()
-            ->with(['product:id,product_type,product_group_id,config_options,purchase_requires', 'service'])
+            ->with(['product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires', 'service'])
             ->where('status', '!=', InvoiceStatus::CANCELLED)
             ->find($invoiceId);
     }
@@ -482,6 +487,15 @@ class CheckoutService
     private function resolveProductDisplayNameResolver(): ProductDisplayNameResolver
     {
         return $this->productDisplayNameResolver ??= new ProductDisplayNameResolver;
+    }
+
+    private function withProductDisplaySnapshot(Product $product, array $configSnapshot, string $productDisplayName): array
+    {
+        return array_merge(
+            $configSnapshot,
+            (new ProductFullPathResolver($this->resolveProductDisplayNameResolver()))
+                ->snapshotForProduct($product, $productDisplayName, $configSnapshot)
+        );
     }
 
     private function safeLog(string $level, string $message, array $context = []): void

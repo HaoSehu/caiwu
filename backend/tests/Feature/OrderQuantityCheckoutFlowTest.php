@@ -16,6 +16,7 @@ use App\Models\Setting;
 use App\Models\User;
 use App\Services\Finance\AdminOrderNotificationService;
 use App\Services\Finance\CheckoutSecurityService;
+use App\Services\Finance\CheckoutService;
 use App\Services\Finance\CouponService;
 use App\Services\Finance\InvoiceService;
 use App\Services\Finance\PaymentService;
@@ -186,7 +187,7 @@ class OrderQuantityCheckoutFlowTest extends TestCase
         $adminOrderNotificationService = $this->createMock(AdminOrderNotificationService::class);
         $adminOrderNotificationService->method('notifyInvoicePaidAfterResponse');
 
-        $checkoutService = new \App\Services\Finance\CheckoutService(
+        $checkoutService = new CheckoutService(
             $invoiceService,
             $this->createMock(PaymentService::class),
             $productCatalogService,
@@ -478,7 +479,7 @@ class OrderQuantityCheckoutFlowTest extends TestCase
         $adminOrderNotificationService = $this->createMock(AdminOrderNotificationService::class);
         $adminOrderNotificationService->method('notifyInvoicePaidAfterResponse');
 
-        $checkoutService = new \App\Services\Finance\CheckoutService(
+        $checkoutService = new CheckoutService(
             $invoiceService,
             $this->createMock(PaymentService::class),
             $productCatalogService,

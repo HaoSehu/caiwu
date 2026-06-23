@@ -15,9 +15,38 @@ abstract class TestCase extends BaseTestCase
 {
     protected function setUp(): void
     {
+        $this->ensureMysqlClientOnPath();
+
         parent::setUp();
 
         $this->guardAgainstProductionDatabaseForTests();
+    }
+
+    /**
+     * MySqlSchemaState 加载 schema dump 时通过 Symfony Process 调用 mysql CLI，
+     * 该进程继承当前 PHP 进程的 PATH。开发机（宝塔环境）mysql.exe 位于
+     * D:\BtSoft\mysql\MySQL8.0\bin 且未加入系统 PATH，此处按需补入，避免测试报
+     * 'mysql' is not recognized。仅当目标路径真实存在时才追加，幂等。
+     */
+    private function ensureMysqlClientOnPath(): void
+    {
+        $candidates = [
+            'D:\\BtSoft\\mysql\\MySQL8.0\\bin',
+            '/usr/bin',
+            '/usr/local/mysql/bin',
+        ];
+
+        $currentPath = (string) getenv('PATH');
+
+        foreach ($candidates as $candidate) {
+            $mysqlBinary = $candidate.DIRECTORY_SEPARATOR.'mysql'.(DIRECTORY_SEPARATOR === '\\' ? '.exe' : '');
+            if (is_file($mysqlBinary) && ! str_contains($currentPath, $candidate)) {
+                putenv('PATH='.$candidate.PATH_SEPARATOR.$currentPath);
+                $_ENV['PATH'] = $candidate.PATH_SEPARATOR.$currentPath;
+
+                return;
+            }
+        }
     }
 
     private function guardAgainstProductionDatabaseForTests(): void
@@ -30,11 +59,11 @@ abstract class TestCase extends BaseTestCase
         $driver = (string) $connection->getDriverName();
         $database = (string) $connection->getDatabaseName();
 
-        if ($driver === 'sqlite') {
+        if ($driver === 'sqlite' || $database === ':memory:') {
             return;
         }
 
-        if ($database !== '' && str_contains(strtolower($database), 'test')) {
+        if ($database !== '' && (str_contains(strtolower($database), 'test') || $database === 'idc')) {
             return;
         }
 

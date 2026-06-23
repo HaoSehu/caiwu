@@ -36,7 +36,8 @@ class AuthLoginRegressionTest extends TestCase
         ])
             ->assertOk()
             ->assertJsonPath('data.user.id', (int) $user->id)
-            ->assertJsonPath('data.user.balance', '0.00');
+            ->assertJsonPath('data.user.cash_balance', '0.00')
+            ->assertJsonMissingPath('data.user.balance');
     }
 
     public function test_client_login_returns_not_found_reason_for_unknown_account(): void

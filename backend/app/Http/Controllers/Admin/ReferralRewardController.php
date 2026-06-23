@@ -3,22 +3,17 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\ReferralReward\IndexRequest;
 use App\Models\ReferralReward;
 use App\Services\Referral\ReferralService;
-use Illuminate\Http\Request;
 
 class ReferralRewardController extends Controller
 {
     public function __construct(private ReferralService $referralService) {}
 
-    public function index(Request $request)
+    public function index(IndexRequest $request)
     {
-        $filters = $request->validate([
-            'keyword' => ['nullable', 'string', 'max:100'],
-            'status' => ['nullable', 'integer', 'in:0,1,2'],
-            'page' => ['nullable', 'integer', 'min:1'],
-            'page_size' => ['nullable', 'integer', 'min:1', 'max:100'],
-        ]);
+        $filters = $request->validated();
 
         $perPage = max(1, min((int) ($filters['page_size'] ?? 20), 100));
         $paginator = $this->referralService->adminRewardLogs($filters, $perPage);

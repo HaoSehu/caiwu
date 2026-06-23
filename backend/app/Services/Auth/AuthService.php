@@ -9,7 +9,6 @@ use App\Jobs\SendClientLoginEmailAlertJob;
 use App\Jobs\SendClientLoginFailureEmailAlertJob;
 use App\Models\AdminUser;
 use App\Models\User;
-use App\Models\UserProfile;
 use App\Services\Referral\ReferralService;
 use App\Services\System\NotificationService;
 use App\Services\System\OperationLogService;
@@ -113,7 +112,12 @@ class AuthService
                 'phone_change_alert' => (int) ($user->phone_change_alert ?? 1),
                 'email_change_alert' => (int) ($user->email_change_alert ?? 1),
                 'marketing_alert' => (int) ($user->marketing_alert ?? 0),
-                'balance' => (string) $user->balance,
+                'cash_balance' => (string) $user->balance,
+                'credit_limit' => (string) $user->credit_limit,
+                'referral_frozen_balance' => (string) $user->referral_frozen_amount,
+                'referral_available_balance' => (string) $user->referral_available_amount,
+                'referral_pending_withdrawal_balance' => (string) $user->referral_withdrawing_amount,
+                'referral_withdrawn_balance' => (string) $user->referral_withdrawn_amount,
                 'last_login_at' => $loginAt->format('Y-m-d H:i:s'),
                 'last_login_ip' => $ip,
             ],
@@ -159,21 +163,10 @@ class AuthService
                 'last_login_ip' => $ip,
             ]);
 
-            if (User::profileTableAvailable()) {
-                UserProfile::query()->updateOrCreate(
-                    ['user_id' => $user->id],
-                    ['nickname' => $normalizedNickname]
-                );
-            }
-
             $this->referralService->ensureReferralCode($user);
             $this->referralService->bindReferrer($user, $data['referral_code'] ?? null, [
                 'ip' => $ip,
             ]);
-
-            if (User::profileTableAvailable()) {
-                return $user->fresh(['profile']) ?? $user->loadMissing('profile');
-            }
 
             return $user->fresh() ?? $user;
         });
@@ -203,7 +196,12 @@ class AuthService
                 'phone' => (string) ($user->phone ?? ''),
                 'nickname' => $user->nickname,
                 'display_name' => (string) ($user->display_name ?? ''),
-                'balance' => '0.00',
+                'cash_balance' => '0.00',
+                'credit_limit' => '0.00',
+                'referral_frozen_balance' => '0.00',
+                'referral_available_balance' => '0.00',
+                'referral_pending_withdrawal_balance' => '0.00',
+                'referral_withdrawn_balance' => '0.00',
                 'last_login_at' => now()->format('Y-m-d H:i:s'),
                 'last_login_ip' => $ip,
             ],
@@ -319,14 +317,6 @@ class AuthService
                 'nickname' => $normalizedNickname,
             ]);
 
-            if (User::profileTableAvailable()) {
-                UserProfile::query()->updateOrCreate(
-                    ['user_id' => $lockedUser->id],
-                    ['nickname' => $normalizedNickname]
-                );
-                $lockedUser->unsetRelation('profile');
-            }
-
             $this->operationLogService->write(
                 userId: (int) $lockedUser->id,
                 userType: 'client',
@@ -339,7 +329,7 @@ class AuthService
                 ipAddress: $this->resolveContextIpAddress($context),
             );
 
-            return $this->refreshClientUser($lockedUser, User::profileTableAvailable());
+            return $this->refreshClientUser($lockedUser);
         });
     }
 
@@ -598,7 +588,7 @@ class AuthService
         $ipAddress = trim((string) ($context['ip_address'] ?? ''));
         $userAgentHash = $this->hashLoginAsUserAgent((string) ($context['user_agent'] ?? ''));
 
-        Cache::put($cacheKey, [
+        Cache::store('redis_volatile')->put($cacheKey, [
             'user_id' => (int) $user->id,
             'admin_id' => $adminId > 0 ? $adminId : null,
             'issued_ip' => $ipAddress !== '' ? $ipAddress : null,
@@ -692,7 +682,7 @@ class AuthService
             throw new BusinessException('代登录凭证不能为空', 42200, 422);
         }
 
-        $payload = Cache::pull($this->buildAdminLoginAsCacheKey($code));
+        $payload = Cache::store('redis_volatile')->pull($this->buildAdminLoginAsCacheKey($code));
         if (! is_array($payload)) {
             throw new BusinessException('代登录凭证已失效，请重新发起', 41000, 410);
         }
@@ -1074,12 +1064,8 @@ class AuthService
         }
     }
 
-    private function refreshClientUser(User $user, bool $loadProfile = false): User
+    private function refreshClientUser(User $user): User
     {
-        if ($loadProfile && User::profileTableAvailable()) {
-            return $user->fresh(['profile']) ?? $user->loadMissing('profile');
-        }
-
         return $user->fresh() ?? $user;
     }
 

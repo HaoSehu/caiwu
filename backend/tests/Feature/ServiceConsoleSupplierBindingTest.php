@@ -70,12 +70,13 @@ class ServiceConsoleSupplierBindingTest extends TestCase
     }
 
     #[Test]
-    public function service_console_product_relations_select_real_product_type_column(): void
+    public function service_console_product_relations_select_new_group_hierarchy_columns(): void
     {
         $source = file_get_contents(base_path('app/Services/ClientServiceConsole/ServiceSecurityGroupService.php'));
 
         $this->assertStringNotContainsString('product:id,name,type,', $source);
-        $this->assertStringContainsString('product:id,product_type,product_group_id,supplier_id,provision_module', $source);
+        $this->assertStringNotContainsString('product:id,product_type,product_group_id,supplier_id,provision_module', $source);
+        $this->assertStringContainsString('product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module', $source);
     }
 
     private function makeDetailService(?Supplier $resolvedSupplier): ServiceDetailService

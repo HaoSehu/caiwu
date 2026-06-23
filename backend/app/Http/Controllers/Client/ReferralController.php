@@ -3,6 +3,10 @@
 namespace App\Http\Controllers\Client;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Client\Referral\AccountLogsRequest;
+use App\Http\Requests\Client\Referral\ApplyWithdrawalRequest;
+use App\Http\Requests\Client\Referral\RewardsRequest;
+use App\Http\Requests\Client\Referral\WithdrawalsRequest;
 use App\Services\Referral\ReferralService;
 use Illuminate\Http\Request;
 
@@ -17,12 +21,9 @@ class ReferralController extends Controller
         return $this->success($this->referralService->overview($request->user(), $origin));
     }
 
-    public function rewards(Request $request)
+    public function rewards(RewardsRequest $request)
     {
-        $request->validate([
-            'page' => ['nullable', 'integer', 'min:1'],
-            'page_size' => ['nullable', 'integer', 'min:1', 'max:50'],
-        ]);
+        // validation handled by RewardsRequest
 
         $perPage = max(1, min((int) $request->input('page_size', 15), 50));
         $paginator = $this->referralService->rewardLogs($request->user(), $perPage);
@@ -45,9 +46,9 @@ class ReferralController extends Controller
                         'nickname' => $item->referredUser?->nickname,
                         'display_name' => $item->referredUser?->display_name ?: $item->referredUser?->email,
                     ],
-                    'order' => [
-                        'id' => $item->order?->id,
-                        'order_no' => $item->order?->order_no,
+                    'invoice' => [
+                        'id' => $item->invoice?->id,
+                        'invoice_no' => $item->invoice?->invoice_no,
                         'product_display_name' => $this->referralService->resolveRewardProductDisplayName($item),
                     ],
                     'product' => [
@@ -63,14 +64,9 @@ class ReferralController extends Controller
         ]);
     }
 
-    public function accountLogs(Request $request)
+    public function accountLogs(AccountLogsRequest $request)
     {
-        $filters = $request->validate([
-            'event_type' => ['nullable', 'string', 'max:30'],
-            'type' => ['nullable', 'string', 'max:30'],
-            'page' => ['nullable', 'integer', 'min:1'],
-            'page_size' => ['nullable', 'integer', 'min:1', 'max:50'],
-        ]);
+        $filters = $request->validated();
 
         if (empty($filters['event_type']) && ! empty($filters['type'])) {
             $filters['event_type'] = (string) $filters['type'];
@@ -92,12 +88,9 @@ class ReferralController extends Controller
         ]);
     }
 
-    public function withdrawals(Request $request)
+    public function withdrawals(WithdrawalsRequest $request)
     {
-        $request->validate([
-            'page' => ['nullable', 'integer', 'min:1'],
-            'page_size' => ['nullable', 'integer', 'min:1', 'max:50'],
-        ]);
+        // validation handled by WithdrawalsRequest
 
         $perPage = max(1, min((int) $request->input('page_size', 15), 50));
         $paginator = $this->referralService->withdrawalLogs($request->user(), $perPage);
@@ -120,17 +113,9 @@ class ReferralController extends Controller
         ]);
     }
 
-    public function applyWithdrawal(Request $request)
+    public function applyWithdrawal(ApplyWithdrawalRequest $request)
     {
-        $data = $request->validate([
-            'amount' => ['required', 'numeric', 'min:0.01'],
-            'method' => ['required', 'string', 'in:balance,alipay'],
-            'account_name' => ['nullable', 'string', 'max:80'],
-            'account_no' => ['nullable', 'regex:/^1[3-9]\d{9}$/'],
-            'remark' => ['nullable', 'string', 'max:255'],
-        ], [
-            'account_no.regex' => '请输入正确的支付宝手机号',
-        ]);
+        $data = $request->validated();
 
         $withdrawal = $this->referralService->createWithdrawal(
             $request->user(),

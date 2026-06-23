@@ -8,6 +8,7 @@ use App\Exceptions\BusinessException;
 use App\Models\MemberLevel;
 use App\Models\User;
 use App\Models\UserReferral;
+use App\Support\CacheKey;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -16,18 +17,14 @@ use Illuminate\Support\Str;
 
 class MemberLevelService
 {
-    private const LIST_CACHE_TTL_SECONDS = 300;
-
-    private const LIST_ALL_CACHE_KEY = 'member_levels:list:all';
-
-    private const LIST_ENABLED_CACHE_KEY = 'member_levels:list:enabled';
+    private const LIST_CACHE_TTL_SECONDS = 300; // 5分钟：会员等级不频繁变化，可适当延长
 
     /**
      * @return Collection<int, MemberLevel>
      */
     public function list(bool $enabledOnly = false): Collection
     {
-        return Cache::store('redis')->remember(
+        return Cache::remember(
             $this->buildListCacheKey($enabledOnly),
             now()->addSeconds(self::LIST_CACHE_TTL_SECONDS),
             fn () => MemberLevel::query()
@@ -278,14 +275,12 @@ class MemberLevelService
 
     private function buildListCacheKey(bool $enabledOnly): string
     {
-        return $enabledOnly
-            ? self::LIST_ENABLED_CACHE_KEY
-            : self::LIST_ALL_CACHE_KEY;
+        return CacheKey::memberLevels($enabledOnly);
     }
 
     private function forgetListCaches(): void
     {
-        Cache::store('redis')->forget(self::LIST_ALL_CACHE_KEY);
-        Cache::store('redis')->forget(self::LIST_ENABLED_CACHE_KEY);
+        Cache::forget(CacheKey::memberLevels(false));
+        Cache::forget(CacheKey::memberLevels(true));
     }
 }

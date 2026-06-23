@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\MediaFile\StoreRequest;
 use App\Models\MediaFile;
 use App\Services\Content\MediaFileService;
 use App\Support\UploadUrl;
@@ -14,6 +15,17 @@ class MediaFileController extends Controller
 
     public function index(Request $request)
     {
+        if ($request->query('group') === MediaFileService::HERO_VIDEO_GROUP) {
+            $items = $this->mediaFileService->listHeroVideos();
+
+            return $this->success([
+                'list' => $items,
+                'total' => count($items),
+                'page' => 1,
+                'page_size' => count($items),
+            ]);
+        }
+
         $paginator = $this->mediaFileService->list(
             filters: $request->only(['group', 'keyword']),
             perPage: (int) ($request->query('page_size', 24)),
@@ -40,12 +52,9 @@ class MediaFileController extends Controller
         ]);
     }
 
-    public function store(Request $request)
+    public function store(StoreRequest $request)
     {
-        $request->validate([
-            'file' => ['required', 'image', 'mimetypes:image/jpeg,image/png,image/webp', 'max:5120'],
-            'group' => ['nullable', 'string', 'max:50', 'alpha_dash:ascii'],
-        ]);
+        // validation handled by StoreRequest
 
         $group = trim((string) $request->input('group', 'content')) ?: 'content';
 

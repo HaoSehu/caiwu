@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Database\Seeders;
 
 use App\Models\Setting;
+use Illuminate\Support\Facades\DB;
 
 class SettingsSeeder
 {
@@ -54,6 +55,7 @@ class SettingsSeeder
             'email_password' => '',
             'email_from_name' => '创欧云',
             'sms_enabled' => '0',
+            'sms_driver' => 'aliyun',
             'sms_provider' => 'aliyun',
             'sms_access_key' => '',
             'sms_secret_key' => '',
@@ -155,7 +157,7 @@ class SettingsSeeder
 
     private static function seedGroup(string $group, array $values): void
     {
-        $existingKeys = \Illuminate\Support\Facades\DB::table('settings')
+        $existingKeys = DB::table('settings')
             ->where('group_key', $group)
             ->pluck('item_key')
             ->map(fn ($v) => (string) $v)

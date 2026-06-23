@@ -90,12 +90,13 @@ class FinanceLedgerControllerTest extends TestCase
 
         $this->getJson('/api/client/finance/ledger/summary')
             ->assertOk()
-            ->assertJsonPath('data.balance', '128.80')
+            ->assertJsonPath('data.cash_balance', '128.80')
+            ->assertJsonMissingPath('data.balance')
             ->assertJsonPath('data.total_out', '28.00')
             ->assertJsonPath('data.manual_adjust_out', '8.00');
     }
 
-    public function test_client_finance_ledger_hides_internal_payment_identifiers(): void
+    public function test_client_finance_ledger_exposes_payment_identifiers_and_hides_trace_id(): void
     {
         $suffix = strtoupper(bin2hex(random_bytes(4)));
         $user = $this->createClientUser('ledger-safe-'.$suffix, ['balance' => '76.00']);
@@ -159,14 +160,14 @@ class FinanceLedgerControllerTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.payment.payment_no', (string) $payment->payment_no)
-            ->assertJsonMissingPath('data.list.0.trace_id')
-            ->assertJsonMissingPath('data.list.0.payment.trade_no');
+            ->assertJsonPath('data.list.0.payment.trade_no', (string) $payment->trade_no)
+            ->assertJsonMissingPath('data.list.0.trace_id');
 
         $this->getJson('/api/client/finance/ledger/'.$ledger->id)
             ->assertOk()
             ->assertJsonPath('data.payment.payment_no', (string) $payment->payment_no)
-            ->assertJsonMissingPath('data.trace_id')
-            ->assertJsonMissingPath('data.payment.trade_no');
+            ->assertJsonPath('data.payment.trade_no', (string) $payment->trade_no)
+            ->assertJsonMissingPath('data.trace_id');
     }
 
     public function test_admin_finance_ledger_returns_all_records_and_supports_filters(): void

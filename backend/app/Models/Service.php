@@ -28,7 +28,7 @@ class Service extends Model
     protected $fillable = [
         'user_id', 'product_id', 'order_id', 'invoice_id', 'name', 'domain',
         'billing_cycle', 'amount', 'locked_pricing', 'status', 'provision_data',
-        'expires_at', 'auto_renew', 'suspended_reason',
+        'expires_at', 'auto_renew', 'suspended_reason', 'trace_id',
     ];
 
     protected function casts(): array

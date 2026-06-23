@@ -7,8 +7,13 @@ use App\Http\Requests\Admin\User\ListUsersRequest;
 use App\Http\Requests\Admin\User\ManualInvoiceEntryRequest;
 use App\Http\Requests\Admin\User\ManualProvisionUserServiceRequest;
 use App\Http\Requests\Admin\User\RechargeUserRequest;
+use App\Http\Requests\Admin\User\RefreshServiceStatusesRequest;
 use App\Http\Requests\Admin\User\RefundUserInvoiceRequest;
 use App\Http\Requests\Admin\User\RefundUserServiceRequest;
+use App\Http\Requests\Admin\User\ServiceModuleStatusRequest;
+use App\Http\Requests\Admin\User\ServicePowerRequest;
+use App\Http\Requests\Admin\User\ServiceReinstallRequest;
+use App\Http\Requests\Admin\User\ServiceResetPasswordRequest;
 use App\Http\Requests\Admin\User\StoreUserRequest;
 use App\Http\Requests\Admin\User\StoreUserServiceRequest;
 use App\Http\Requests\Admin\User\UpdateUserRequest;
@@ -21,7 +26,7 @@ use App\Http\Requests\Admin\User\UserServicesRequest;
 use App\Http\Requests\Admin\User\UserTicketsRequest;
 use App\Http\Resources\Admin\AdminUserListResource;
 use App\Http\Resources\Admin\OperationLogResource;
-use App\Http\Resources\Finance\BalanceLogResource;
+use App\Http\Resources\Finance\FinanceLedgerResource;
 use App\Http\Resources\User\UserResource;
 use App\Models\User;
 use App\Services\Auth\AuthService;
@@ -200,12 +205,9 @@ class UserController extends Controller
         );
     }
 
-    public function refreshServiceStatuses(Request $request, User $user)
+    public function refreshServiceStatuses(RefreshServiceStatusesRequest $request, User $user)
     {
-        $payload = $request->validate([
-            'service_ids' => ['required', 'array', 'min:1', 'max:50'],
-            'service_ids.*' => ['integer', 'min:1'],
-        ]);
+        $payload = $request->validated();
 
         return $this->success(
             $this->userService->refreshServiceStatuses($user, (array) ($payload['service_ids'] ?? [])),
@@ -247,11 +249,9 @@ class UserController extends Controller
     /**
      * 用户服务电源操作
      */
-    public function servicePower(Request $request, User $user, int $serviceId)
+    public function servicePower(ServicePowerRequest $request, User $user, int $serviceId)
     {
-        $payload = $request->validate([
-            'action' => ['required', 'string', 'in:on,off,reboot,hard_off,hard_reboot'],
-        ]);
+        $payload = $request->validated();
 
         return $this->success(
             $this->userService->servicePower(
@@ -273,11 +273,9 @@ class UserController extends Controller
     /**
      * 用户服务模块状态
      */
-    public function serviceModuleStatus(Request $request, User $user, int $serviceId)
+    public function serviceModuleStatus(ServiceModuleStatusRequest $request, User $user, int $serviceId)
     {
-        $filters = $request->validate([
-            'type' => ['required', 'string', 'in:host,reinstall,repassword'],
-        ]);
+        $filters = $request->validated();
 
         return $this->success(
             $this->userService->serviceModuleStatus($user, $serviceId, (string) $filters['type'])
@@ -301,11 +299,9 @@ class UserController extends Controller
     /**
      * 重置用户服务密码
      */
-    public function serviceResetPassword(Request $request, User $user, int $serviceId)
+    public function serviceResetPassword(ServiceResetPasswordRequest $request, User $user, int $serviceId)
     {
-        $payload = $request->validate([
-            'password' => ['required', 'string', 'min:8', 'max:100', 'confirmed'],
-        ]);
+        $payload = $request->validated();
 
         return $this->success(
             $this->userService->serviceResetPassword(
@@ -327,11 +323,9 @@ class UserController extends Controller
     /**
      * 用户服务重装系统
      */
-    public function serviceReinstall(Request $request, User $user, int $serviceId)
+    public function serviceReinstall(ServiceReinstallRequest $request, User $user, int $serviceId)
     {
-        $payload = $request->validate([
-            'os_id' => ['required', 'string', 'max:50'],
-        ]);
+        $payload = $request->validated();
 
         return $this->success(
             $this->userService->serviceReinstall(
@@ -436,7 +430,7 @@ class UserController extends Controller
     {
         $result = $this->userService->balanceLogs($user, $request->filters(), $request->perPage());
 
-        return $this->paginate($result['paginator'], $result['resource_class'] ?? BalanceLogResource::class, [
+        return $this->paginate($result['paginator'], $result['resource_class'] ?? FinanceLedgerResource::class, [
             'summary' => $result['summary'],
         ]);
     }

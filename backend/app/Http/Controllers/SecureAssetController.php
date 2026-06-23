@@ -2,18 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Site\ShowSecureAssetRequest;
 use App\Support\SecureAsset;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 use InvalidArgumentException;
 
 class SecureAssetController extends Controller
 {
-    public function show(Request $request)
+    public function show(ShowSecureAssetRequest $request)
     {
-        $data = $request->validate([
-            'path' => ['required', 'string', 'max:255'],
-        ]);
+        $data = $request->validated();
 
         try {
             $path = SecureAsset::normalizePath((string) $data['path']);

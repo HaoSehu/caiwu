@@ -11,6 +11,12 @@ use Illuminate\Support\Facades\File;
 
 class MediaFileService
 {
+    public const HERO_VIDEO_GROUP = 'hero-videos';
+
+    private const HERO_VIDEO_DIRECTORY = 'uploads/hero-videos';
+
+    private const VIDEO_EXTENSIONS = ['mp4', 'webm', 'ogg', 'mov', 'm4v'];
+
     public function list(array $filters, int $perPage = 24): LengthAwarePaginator
     {
         $query = MediaFile::query()->orderByDesc('id');
@@ -66,6 +72,37 @@ class MediaFileService
         ]);
     }
 
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function listHeroVideos(): array
+    {
+        $directory = public_path(self::HERO_VIDEO_DIRECTORY);
+        File::ensureDirectoryExists($directory);
+
+        $files = collect(File::files($directory))
+            ->filter(function ($file): bool {
+                return in_array(strtolower($file->getExtension()), self::VIDEO_EXTENSIONS, true);
+            })
+            ->sortBy(fn ($file) => strtolower($file->getFilename()), SORT_NATURAL)
+            ->values();
+
+        return $files->map(function ($file, int $index): array {
+            $relativePath = '/'.self::HERO_VIDEO_DIRECTORY.'/'.$file->getFilename();
+
+            return [
+                'id' => 'hero-video-'.($index + 1),
+                'filename' => $file->getFilename(),
+                'path' => $relativePath,
+                'url' => UploadUrl::resolve($relativePath),
+                'mime_type' => $this->guessVideoMimeType($file->getExtension()),
+                'size' => $file->getSize(),
+                'group' => self::HERO_VIDEO_GROUP,
+                'created_at' => date('Y-m-d H:i:s', $file->getMTime()),
+            ];
+        })->all();
+    }
+
     public function delete(MediaFile $mediaFile): void
     {
         $diskPath = $this->resolvePublicUploadPath((string) $mediaFile->path);
@@ -75,6 +112,17 @@ class MediaFileService
         }
 
         $mediaFile->delete();
+    }
+
+    private function guessVideoMimeType(string $extension): string
+    {
+        return match (strtolower($extension)) {
+            'webm' => 'video/webm',
+            'ogg' => 'video/ogg',
+            'mov' => 'video/quicktime',
+            'm4v' => 'video/x-m4v',
+            default => 'video/mp4',
+        };
     }
 
     private function resolvePublicUploadPath(string $path): ?string

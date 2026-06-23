@@ -108,6 +108,7 @@ class TestingMySqlSchemaState extends MySqlSchemaState
                 if (($quote === '\'' || $quote === '"') && $char === '\\' && $next !== null) {
                     $buffer .= $next;
                     $index++;
+
                     continue;
                 }
 
@@ -121,12 +122,14 @@ class TestingMySqlSchemaState extends MySqlSchemaState
             if (($char === '\'' || $char === '"' || $char === '`')) {
                 $quote = $char;
                 $buffer .= $char;
+
                 continue;
             }
 
             if ($char === '#' || ($char === '-' && $next === '-' && preg_match('/\s/', (string) ($sql[$index + 2] ?? '')) === 1)) {
                 $inLineComment = true;
                 $buffer .= $char;
+
                 continue;
             }
 
@@ -134,12 +137,14 @@ class TestingMySqlSchemaState extends MySqlSchemaState
                 $inBlockComment = true;
                 $buffer .= '/*';
                 $index++;
+
                 continue;
             }
 
             if ($char === ';') {
                 $statements[] = $buffer;
                 $buffer = '';
+
                 continue;
             }
 

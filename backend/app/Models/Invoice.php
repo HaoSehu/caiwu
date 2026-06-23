@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\NormalizesTraceId;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Support\OrderInvoiceNoGenerator;
+use App\Support\VersionedJson;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -27,6 +28,7 @@ class Invoice extends Model
         'config_snapshot', 'config_pricing_snapshot', 'coupon_snapshot',
         'status', 'due_date', 'paid_at',
         'refunded_at', 'refund_amount', 'refund_method', 'refund_trace_id',
+        'trace_id',
     ];
 
     protected function casts(): array
@@ -88,11 +90,6 @@ class Invoice extends Model
             return $resolved;
         }
 
-        $legacySnapshot = trim((string) ($this->attributes['product_name_snapshot'] ?? ''));
-        if ($legacySnapshot !== '') {
-            return $legacySnapshot;
-        }
-
         return null;
     }
 
@@ -119,12 +116,6 @@ class Invoice extends Model
 
         if ($normalized !== '' && trim((string) ($this->attributes['product_spec_snapshot'] ?? '')) === '') {
             $this->attributes['product_spec_snapshot'] = $normalized;
-        }
-
-        if ($this->hasPhysicalColumn('product_name_snapshot')) {
-            $this->attributes['product_name_snapshot'] = $normalized !== '' ? $normalized : null;
-
-            return;
         }
 
         unset($this->attributes['product_name_snapshot']);
@@ -163,17 +154,47 @@ class Invoice extends Model
         return is_array($configSnapshot) && $configSnapshot !== [] ? $configSnapshot : null;
     }
 
+    public function getConfigSnapshotAttribute(mixed $value): ?array
+    {
+        return VersionedJson::tradeSnapshot($value, 'invoice.config_snapshot');
+    }
+
+    public function getConfigPricingSnapshotAttribute(mixed $value): ?array
+    {
+        return VersionedJson::tradeSnapshot($value, 'invoice.config_pricing_snapshot');
+    }
+
+    public function getCouponSnapshotAttribute(mixed $value): ?array
+    {
+        return VersionedJson::tradeSnapshot($value, 'invoice.coupon_snapshot');
+    }
+
     public function setProductSnapshotJsonAttribute(mixed $value): void
     {
         $payload = is_array($value) ? $value : [];
 
-        if ($this->hasPhysicalColumn('product_snapshot_json')) {
-            $this->attributes['product_snapshot_json'] = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-
-            return;
-        }
-
         $this->attributes['config_snapshot'] = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    public function setConfigSnapshotAttribute(mixed $value): void
+    {
+        $this->attributes['config_snapshot'] = $this->encodeJson(
+            VersionedJson::tradeSnapshot($value, 'invoice.config_snapshot')
+        );
+    }
+
+    public function setConfigPricingSnapshotAttribute(mixed $value): void
+    {
+        $this->attributes['config_pricing_snapshot'] = $this->encodeJson(
+            VersionedJson::tradeSnapshot($value, 'invoice.config_pricing_snapshot')
+        );
+    }
+
+    public function setCouponSnapshotAttribute(mixed $value): void
+    {
+        $this->attributes['coupon_snapshot'] = $this->encodeJson(
+            VersionedJson::tradeSnapshot($value, 'invoice.coupon_snapshot')
+        );
     }
 
     public static function generateInvoiceNo(?CarbonInterface $time = null, ?string $suffix = null): string
@@ -211,7 +232,7 @@ class Invoice extends Model
 
             $itemName = $this->display_product_name;
             if ($itemName === '') {
-                $this->loadMissing('order.product:id,product_type,product_group_id,config_options,purchase_requires');
+                $this->loadMissing('order.product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires');
                 $itemName = trim((string) ($this->order?->display_product_name ?? ''));
             }
             $quantity = max((int) ($this->quantity ?? $this->order?->quantity ?? 1), 1);
@@ -250,19 +271,10 @@ class Invoice extends Model
 
     private function encodeJson(?array $value): ?string
     {
-        if (! is_array($value) || $value === []) {
+        if (! is_array($value)) {
             return null;
         }
 
         return json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    }
-
-    private function hasPhysicalColumn(string $column): bool
-    {
-        try {
-            return $this->getConnection()->getSchemaBuilder()->hasColumn($this->getTable(), $column);
-        } catch (\Throwable) {
-            return false;
-        }
     }
 }

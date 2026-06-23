@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\ScheduleTask\TriggerRequest;
 use App\Services\Automation\ScheduleTaskService;
 use App\Services\Automation\ScheduleTaskTriggerService;
-use Illuminate\Http\Request;
 use InvalidArgumentException;
 
 class ScheduleTaskController extends Controller
@@ -20,11 +20,9 @@ class ScheduleTaskController extends Controller
         return $this->success($this->scheduleTaskService->overview());
     }
 
-    public function trigger(Request $request)
+    public function trigger(TriggerRequest $request)
     {
-        $validated = $request->validate([
-            'task' => ['required', 'string'],
-        ]);
+        $validated = $request->validated();
 
         try {
             $result = $this->scheduleTaskTriggerService->dispatch(

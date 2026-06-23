@@ -5,6 +5,7 @@ namespace App\Http\Resources\Product;
 use App\Constants\ProductType;
 use App\Models\Product;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
+use App\Support\ProductGroupHierarchyFields;
 use App\Support\ProductProvisionHostname;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -14,11 +15,9 @@ class ProductResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $category = $this->resource->relationLoaded('categoryMapping') ? $this->categoryMapping : null;
-        $parentCategory = $category && $category->relationLoaded('parent') ? $category->parent : null;
         $supplier = $this->resource->relationLoaded('supplier') ? $this->supplier : null;
-        $publicGroupId = $category ? (int) (($category->legacy_group_id ?? 0) ?: ($category->id ?? 0)) : null;
         $productType = (string) $this->product_type;
+        $hierarchyFields = ProductGroupHierarchyFields::fromProduct($this->resource);
         $primaryPrice = $this->resolvePrimaryPrice((array) $this->pricing);
         $provisionHostname = ProductProvisionHostname::fromPurchaseRequires((array) ($this->purchase_requires ?? []));
         $displayName = (new ProductDisplayNameResolver)->resolveForProduct($this->resource);
@@ -28,17 +27,9 @@ class ProductResource extends JsonResource
 
         return [
             'id' => $this->id,
-            'category_id' => $this->resource->getAttribute('category_id') ? (int) $this->resource->getAttribute('category_id') : null,
-            'category_name' => $category?->name,
-            'category_parent_name' => $parentCategory?->name,
-            'category_full_name' => $parentCategory ? $parentCategory->name.' / '.($category?->name ?? '') : ($category?->name ?? ''),
-            'legacy_group_id' => $publicGroupId,
-            'product_group_id' => $publicGroupId,
-            'group_id' => $publicGroupId,
-            'product_group_name' => $category?->name,
-            'group_name' => $category?->name,
-            'group_parent_name' => $parentCategory?->name,
-            'group_full_name' => $parentCategory ? $parentCategory->name.' / '.($category?->name ?? '') : ($category?->name ?? ''),
+            'effective_product_group_name' => $hierarchyFields['third_product_group_name'] ?? $hierarchyFields['second_product_group_name'] ?? '',
+            'effective_product_group_parent_name' => $hierarchyFields['second_product_group_name'] ?? '',
+            'effective_product_group_full_name' => $this->resolveHierarchyFullName($hierarchyFields),
             'name' => $adminDisplayName,
             'display_name' => $adminDisplayName,
             'custom_display_name' => $adminCustomDisplayName,
@@ -49,6 +40,7 @@ class ProductResource extends JsonResource
             'product_type' => $productType,
             'type' => $productType,
             'type_label' => ProductType::labelOf($productType),
+            ...$hierarchyFields,
             'remark' => (string) ($this->remark ?? ''),
             'pricing' => (array) $this->pricing,
             'product_prices' => (array) $this->pricing,
@@ -76,6 +68,18 @@ class ProductResource extends JsonResource
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at?->format('Y-m-d H:i:s'),
         ];
+    }
+
+    private function resolveHierarchyFullName(array $hierarchyFields): string
+    {
+        return collect([
+            $hierarchyFields['first_product_group_name'] ?? '',
+            $hierarchyFields['second_product_group_name'] ?? '',
+            $hierarchyFields['third_product_group_name'] ?? '',
+        ])
+            ->map(fn ($value): string => trim((string) $value))
+            ->filter()
+            ->implode(' / ');
     }
 
     private function resolveAdminProductDisplayName(array $displayName, string $specDisplay, string $customDisplayName): string

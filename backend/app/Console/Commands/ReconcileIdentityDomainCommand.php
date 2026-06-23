@@ -157,16 +157,16 @@ class ReconcileIdentityDomainCommand extends Command
         }
 
         foreach ($summary as $table => $counts) {
-            $this->line($table . ': ' . json_encode($counts, JSON_UNESCAPED_UNICODE));
+            $this->line($table.': '.json_encode($counts, JSON_UNESCAPED_UNICODE));
         }
 
         foreach ($orphans as $key => $count) {
-            $this->line($key . ' orphan=' . $count);
+            $this->line($key.' orphan='.$count);
         }
 
-        $this->line('uniques: ' . json_encode($payload['uniques'], JSON_UNESCAPED_UNICODE));
-        $this->line('cash_balance_total: ' . json_encode($payload['cash_balance_total'], JSON_UNESCAPED_UNICODE));
-        $this->line('user_account_balance_diff: ' . json_encode($payload['user_account_balance_diff'], JSON_UNESCAPED_UNICODE));
+        $this->line('uniques: '.json_encode($payload['uniques'], JSON_UNESCAPED_UNICODE));
+        $this->line('cash_balance_total: '.json_encode($payload['cash_balance_total'], JSON_UNESCAPED_UNICODE));
+        $this->line('user_account_balance_diff: '.json_encode($payload['user_account_balance_diff'], JSON_UNESCAPED_UNICODE));
 
         return self::SUCCESS;
     }

@@ -25,6 +25,8 @@ class AutoRenewService
             'pending' => 0,
             'failed' => 0,
             'skipped' => 0,
+            'recovered' => 0,
+            'blocked' => 0,
         ];
 
         Service::query()
@@ -73,7 +75,25 @@ class AutoRenewService
 
                             $invoice->loadMissing(['product.supplier', 'service']);
 
-                            if (! $invoice || (int) $invoice->status !== InvoiceStatus::UNPAID) {
+                            if (! $invoice) {
+                                $summary['skipped']++;
+
+                                return true;
+                            }
+
+                            if ((int) $invoice->status === InvoiceStatus::PAID) {
+                                $renewedService = $this->serviceRenewService->processPaidRenewInvoice($invoice->fresh(['product.supplier', 'service']));
+
+                                if ($this->serviceRenewService->isRenewInvoiceFulfilled($invoice->fresh(['service']), $renewedService)) {
+                                    $summary['recovered']++;
+                                } else {
+                                    $summary['blocked']++;
+                                }
+
+                                return true;
+                            }
+
+                            if ((int) $invoice->status !== InvoiceStatus::UNPAID) {
                                 $summary['skipped']++;
 
                                 return true;

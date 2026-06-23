@@ -16,6 +16,10 @@ class EnsureClientAuthenticated
     {
         $user = $request->user();
 
+        if (! $user) {
+            return ApiResponseBuilder::error(40100, '未认证');
+        }
+
         if (! $user instanceof User) {
             return ApiResponseBuilder::error(40300, '仅允许客户访问');
         }

@@ -66,9 +66,6 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
                 'product_group_id' => (int) ($product->product_group_id ?: 0) ?: null,
                 'product_type' => (string) ($product->product_type ?: 'other'),
                 'remark' => null,
-                'meta_title' => null,
-                'meta_description' => null,
-                'meta_keywords' => null,
                 'pricing' => json_encode($product->pricing ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                 'setup_fee' => number_format((float) ($product->setup_fee ?? 0), 2, '.', ''),
                 'config_options' => json_encode($product->config_options ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
@@ -256,7 +253,7 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
             'user_id' => (int) $user->id,
             'invoice_id' => (int) $invoice->id,
             'gateway' => 'alipay',
-            'trade_no' => 'TRADE-SHOULD-NOT-LEAK-'.$suffix,
+            'trade_no' => 'TRADE-CLIENT-VISIBLE-'.$suffix,
             'amount' => '66.00',
             'status' => PaymentStatus::PENDING,
         ]);
@@ -272,11 +269,12 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
             ->assertJsonPath('data.service.id', (int) $service->id)
             ->assertJsonPath('data.product_display_name', '客户端云主机 2核4G')
             ->assertJsonMissingPath('data.raw_status')
-            ->assertJsonMissingPath('data.payments.0.trade_no');
+            ->assertJsonPath('data.payments.0.trade_no', 'TRADE-CLIENT-VISIBLE-'.$suffix);
 
-        $this->getJson('/api/client/invoices?keyword=TRADE-SHOULD-NOT-LEAK-'.$suffix.'&page_size=20')
+        $this->getJson('/api/client/invoices?keyword=TRADE-CLIENT-VISIBLE-'.$suffix.'&page_size=20')
             ->assertOk()
-            ->assertJsonPath('data.total', 0);
+            ->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.list.0.invoice_no', (string) $invoice->invoice_no);
     }
 
     public function test_client_invoice_list_filters_refunded_invoice_without_order_binding(): void
@@ -315,7 +313,7 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
             'paid_at' => now()->subMinute(),
         ]);
 
-        Payment::query()->create([
+        DB::table('payments')->insert([
             'payment_no' => 'CLIREFPAY'.strtoupper($suffix),
             'user_id' => (int) $user->id,
             'invoice_id' => (int) $refundedInvoice->id,
@@ -323,13 +321,15 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
             'amount' => '15.00',
             'status' => PaymentStatus::REFUNDED,
             'paid_at' => now()->subMinute(),
-            'callback_raw' => [
+            'callback_raw' => json_encode([
                 'refund' => [
                     'refund_method' => 'balance',
                     'refund_reason' => 'invoice only list filter',
                     'refunded_at' => now()->format('Y-m-d H:i:s'),
                 ],
-            ],
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
 
         Invoice::query()->create([

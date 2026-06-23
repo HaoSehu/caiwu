@@ -6,12 +6,10 @@ namespace App\Services\User\Concerns;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
-
 use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
 use App\Models\Invoice;
 use App\Models\Order;
-
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\Supplier;
@@ -567,6 +565,7 @@ trait HandlesAdminUserServices
         ) {
             $order = Order::create([
                 'order_no' => Order::generateOrderNo(),
+                'projection_type' => Order::PROJECTION_TYPE_PROVISIONING,
                 'user_id' => $user->id,
                 'product_id' => $product->id,
                 'product_spec_snapshot' => trim((string) $product->name),
@@ -959,6 +958,7 @@ trait HandlesAdminUserServices
             'status' => InvoiceStatus::PAID,
             'due_date' => $paidAt->copy()->addDays(7)->toDateString(),
             'paid_at' => $paidAt,
+            'trace_id' => $traceId,
         ]);
         app(InvoiceService::class)->syncProjection($invoice);
 

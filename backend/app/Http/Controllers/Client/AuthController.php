@@ -6,6 +6,18 @@ namespace App\Http\Controllers\Client;
 
 use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Client\Auth\ExchangeLoginAsCodeRequest;
+use App\Http\Requests\Client\Auth\LoginRequest;
+use App\Http\Requests\Client\Auth\RegisterRequest;
+use App\Http\Requests\Client\Auth\ResetPasswordRequest;
+use App\Http\Requests\Client\Auth\SendEmailCodeRequest;
+use App\Http\Requests\Client\Auth\SendPhoneCodeRequest;
+use App\Http\Requests\Client\Auth\UpdateAlipayAccountRequest;
+use App\Http\Requests\Client\Auth\UpdateEmailRequest;
+use App\Http\Requests\Client\Auth\UpdateNotificationPreferencesRequest;
+use App\Http\Requests\Client\Auth\UpdatePasswordRequest;
+use App\Http\Requests\Client\Auth\UpdatePhoneRequest;
+use App\Http\Requests\Client\Auth\UpdateProfileRequest;
 use App\Models\User;
 use App\Services\Auth\AuthService;
 use App\Services\Auth\GeeTestService;
@@ -33,20 +45,9 @@ class AuthController extends Controller
     /**
      * 客户登录
      */
-    public function login(Request $request)
+    public function login(LoginRequest $request)
     {
-        $request->merge([
-            'account' => $this->resolveSubmittedAccount($request),
-        ]);
-
-        $data = $request->validate([
-            'account' => ['required', 'string', 'max:100', function (string $attribute, mixed $value, \Closure $fail) {
-                if (AccountIdentifier::detectType((string) $value) === null) {
-                    $fail('请输入正确的邮箱或手机号');
-                }
-            }],
-            'password' => 'required|string|min:6',
-        ]);
+        $data = $request->validated();
 
         $normalizedAccount = AccountIdentifier::normalizeAccount((string) $data['account']);
         $requestIp = (string) $request->ip();
@@ -86,31 +87,9 @@ class AuthController extends Controller
     /**
      * 客户注册
      */
-    public function register(Request $request)
+    public function register(RegisterRequest $request)
     {
-        $request->merge([
-            'account' => $this->resolveSubmittedAccount($request),
-            'email' => AccountIdentifier::normalizeOptionalEmail((string) $request->input('email')),
-            'phone' => AccountIdentifier::normalizeOptionalPhone((string) $request->input('phone')),
-        ]);
-
-        $data = $request->validate([
-            'account' => ['required', 'string', 'max:100', function (string $attribute, mixed $value, \Closure $fail) {
-                if (AccountIdentifier::detectType((string) $value) === null) {
-                    $fail('请输入正确的邮箱或手机号');
-                }
-            }],
-            'code' => 'required|string|size:6',
-            'password' => 'required|string|min:6|confirmed',
-            'nickname' => 'nullable|string|max:50',
-            'email' => 'nullable|email|max:100',
-            'phone' => ['nullable', 'string', 'max:20', function (string $attribute, mixed $value, \Closure $fail) {
-                if ($value !== null && $value !== '' && AccountIdentifier::detectType((string) $value) !== 'phone') {
-                    $fail('请输入正确的手机号');
-                }
-            }],
-            'referral_code' => 'nullable|string|max:24',
-        ]);
+        $data = $request->validated();
 
         $accountType = AccountIdentifier::detectType((string) $data['account']);
         $account = AccountIdentifier::normalizeAccount((string) $data['account']);
@@ -159,11 +138,9 @@ class AuthController extends Controller
         ]);
     }
 
-    public function exchangeLoginAsCode(Request $request)
+    public function exchangeLoginAsCode(ExchangeLoginAsCodeRequest $request)
     {
-        $data = $request->validate([
-            'code' => ['required', 'string', 'min:32', 'max:128'],
-        ]);
+        $data = $request->validated();
 
         return $this->success(
             $this->authService->exchangeAdminLoginAsCode(
@@ -183,13 +160,8 @@ class AuthController extends Controller
         $user = $request->user();
         $user->loadMissing([
             'memberLevel',
+            'account',
         ]);
-        if (User::accountTableAvailable()) {
-            $user->loadMissing('account');
-        }
-        if (User::profileTableAvailable()) {
-            $user->loadMissing('profile');
-        }
         $memberLevel = $user->memberLevel;
 
         return $this->success([
@@ -198,7 +170,12 @@ class AuthController extends Controller
             'nickname' => $user->nickname,
             'display_name' => (string) ($user->display_name ?? ''),
             'phone' => (string) ($user->phone ?? ''),
-            'balance' => (string) $user->balance,
+            'cash_balance' => (string) $user->balance,
+            'credit_limit' => (string) $user->credit_limit,
+            'referral_frozen_balance' => (string) $user->referral_frozen_amount,
+            'referral_available_balance' => (string) $user->referral_available_amount,
+            'referral_pending_withdrawal_balance' => (string) $user->referral_withdrawing_amount,
+            'referral_withdrawn_balance' => (string) $user->referral_withdrawn_amount,
             'referral_code' => $user->referral_code,
             'referrer_user_id' => $user->referrer_user_id,
             'member_level_id' => $user->member_level_id,
@@ -245,11 +222,9 @@ class AuthController extends Controller
         return $this->success(null, '已退出登录');
     }
 
-    public function updateProfile(Request $request)
+    public function updateProfile(UpdateProfileRequest $request)
     {
-        $data = $request->validate([
-            'nickname' => 'nullable|string|max:50',
-        ]);
+        $data = $request->validated();
 
         $freshUser = $this->authService->updateClientProfile(
             $request->user(),
@@ -274,15 +249,9 @@ class AuthController extends Controller
         ]);
     }
 
-    public function updateAlipayAccount(Request $request)
+    public function updateAlipayAccount(UpdateAlipayAccountRequest $request)
     {
-        $data = $request->validate([
-            'real_name' => ['required', 'string', 'max:80'],
-            'account' => ['required', 'regex:/^1[3-9]\d{9}$/'],
-            'code' => ['required', 'string', 'size:6'],
-        ], [
-            'account.regex' => '请输入正确的支付宝手机号',
-        ]);
+        $data = $request->validated();
 
         $user = $request->user();
         $phone = trim((string) $data['account']);
@@ -325,16 +294,9 @@ class AuthController extends Controller
         ]);
     }
 
-    public function updateNotificationPreferences(Request $request)
+    public function updateNotificationPreferences(UpdateNotificationPreferencesRequest $request)
     {
-        $data = $request->validate([
-            'login_notify' => 'required|boolean',
-            'login_location_alert' => 'required|boolean',
-            'password_change_alert' => 'required|boolean',
-            'phone_change_alert' => 'required|boolean',
-            'email_change_alert' => 'required|boolean',
-            'marketing_alert' => 'required|boolean',
-        ]);
+        $data = $request->validated();
 
         $freshUser = $this->authService->updateClientNotificationPreferences(
             $request->user(),
@@ -352,20 +314,9 @@ class AuthController extends Controller
         ], '通知设置更新成功');
     }
 
-    public function updatePhone(Request $request)
+    public function updatePhone(UpdatePhoneRequest $request)
     {
-        $request->merge([
-            'phone' => AccountIdentifier::normalizePhone((string) $request->input('phone')),
-        ]);
-
-        $data = $request->validate([
-            'phone' => ['required', 'string', 'max:20', function (string $attribute, mixed $value, \Closure $fail) {
-                if (AccountIdentifier::detectType((string) $value) !== 'phone') {
-                    $fail('请输入正确的手机号');
-                }
-            }],
-            'code' => 'required|string|size:6',
-        ]);
+        $data = $request->validated();
 
         $user = $request->user();
         $phone = (string) $data['phone'];
@@ -389,19 +340,9 @@ class AuthController extends Controller
         ], '手机号修改成功');
     }
 
-    public function sendPhoneCode(Request $request)
+    public function sendPhoneCode(SendPhoneCodeRequest $request)
     {
-        $request->merge([
-            'phone' => AccountIdentifier::normalizePhone((string) $request->input('phone')),
-        ]);
-
-        $data = $request->validate([
-            'phone' => ['required', 'string', 'max:20', function (string $attribute, mixed $value, \Closure $fail) {
-                if (AccountIdentifier::detectType((string) $value) !== 'phone') {
-                    $fail('请输入正确的手机号');
-                }
-            }],
-        ]);
+        $data = $request->validated();
 
         if ($response = $this->ensureGeeTestVerified($request)) {
             return $response;
@@ -430,16 +371,9 @@ class AuthController extends Controller
         return $this->success(null, '短信验证码已发送');
     }
 
-    public function updateEmail(Request $request)
+    public function updateEmail(UpdateEmailRequest $request)
     {
-        $request->merge([
-            'email' => AccountIdentifier::normalizeEmail((string) $request->input('email')),
-        ]);
-
-        $data = $request->validate([
-            'email' => 'required|email|max:100|unique:users,email,'.$request->user()->id,
-            'code' => 'required|string|size:6',
-        ]);
+        $data = $request->validated();
 
         $user = $request->user();
         $email = (string) $data['email'];
@@ -463,15 +397,9 @@ class AuthController extends Controller
         ], '邮箱修改成功');
     }
 
-    public function sendEmailCode(Request $request)
+    public function sendEmailCode(SendEmailCodeRequest $request)
     {
-        $request->merge([
-            'email' => AccountIdentifier::normalizeEmail((string) $request->input('email')),
-        ]);
-
-        $data = $request->validate([
-            'email' => 'required|email|max:100',
-        ]);
+        $data = $request->validated();
 
         if ($response = $this->ensureGeeTestVerified($request)) {
             return $response;
@@ -500,21 +428,9 @@ class AuthController extends Controller
         return $this->success(null, '邮箱验证码已发送');
     }
 
-    public function resetPassword(Request $request)
+    public function resetPassword(ResetPasswordRequest $request)
     {
-        $request->merge([
-            'account' => $this->resolveSubmittedAccount($request),
-        ]);
-
-        $data = $request->validate([
-            'account' => ['required', 'string', 'max:100', function (string $attribute, mixed $value, \Closure $fail) {
-                if (AccountIdentifier::detectType((string) $value) === null) {
-                    $fail('请输入正确的邮箱或手机号');
-                }
-            }],
-            'code' => 'required|string|size:6',
-            'password' => 'required|string|min:6|confirmed',
-        ]);
+        $data = $request->validated();
 
         $accountType = AccountIdentifier::detectType((string) $data['account']);
         $account = AccountIdentifier::normalizeAccount((string) $data['account']);
@@ -543,13 +459,9 @@ class AuthController extends Controller
         return $this->success(null, '密码重置成功');
     }
 
-    public function updatePassword(Request $request)
+    public function updatePassword(UpdatePasswordRequest $request)
     {
-        $data = $request->validate([
-            'oldPassword' => 'required|string|min:6',
-            'newPassword' => 'required|string|min:6',
-            'confirmPassword' => 'required|string|same:newPassword',
-        ]);
+        $data = $request->validated();
 
         $this->authService->updateClientPassword(
             $request->user(),
@@ -618,21 +530,6 @@ class AuthController extends Controller
         }
 
         return null;
-    }
-
-    private function resolveSubmittedAccount(Request $request): string
-    {
-        $account = trim((string) $request->input('account', ''));
-        if ($account !== '') {
-            return $account;
-        }
-
-        $email = trim((string) $request->input('email', ''));
-        if ($email !== '') {
-            return $email;
-        }
-
-        return trim((string) $request->input('phone', ''));
     }
 
     private function maskIdCard(string $idCard): string

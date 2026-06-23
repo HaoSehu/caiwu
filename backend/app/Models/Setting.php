@@ -3,9 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class Setting extends Model
 {
@@ -36,6 +39,11 @@ class Setting extends Model
      * @var array<string, array<string, mixed>>
      */
     private static array $groupValueCache = [];
+
+    /**
+     * @var array<string, bool>
+     */
+    private static array $tableExistsCache = [];
 
     public static function getValue(string $group, string $key, $default = null)
     {
@@ -152,26 +160,70 @@ class Setting extends Model
      */
     private static function getGroupRawValues(string $group): array
     {
+        if (! static::settingsTableExists()) {
+            return [];
+        }
+
         if (isset(self::$groupValueCache[$group])) {
             return self::$groupValueCache[$group];
         }
 
         $cacheKey = static::groupCacheKey($group);
 
-        $values = Cache::remember($cacheKey, now()->addSeconds(self::CACHE_TTL_SECONDS), function () use ($group) {
-            return DB::table(self::TABLE_NAME)
-                ->where('group_key', $group)
-                ->orderBy('id')
-                ->get(['item_key', 'item_value'])
-                ->mapWithKeys(fn ($item) => [
-                    (string) ($item->item_key ?? '') => $item->item_value,
-                ])
-                ->all();
-        });
+        try {
+            $values = Cache::remember($cacheKey, now()->addSeconds(self::CACHE_TTL_SECONDS), function () use ($group) {
+                return DB::table(self::TABLE_NAME)
+                    ->where('group_key', $group)
+                    ->orderBy('id')
+                    ->get(['item_key', 'item_value'])
+                    ->mapWithKeys(fn ($item) => [
+                        (string) ($item->item_key ?? '') => $item->item_value,
+                    ])
+                    ->all();
+            });
+        } catch (QueryException $exception) {
+            static::markSettingsTableMissing($exception, $group);
+
+            return [];
+        }
 
         self::$groupValueCache[$group] = is_array($values) ? $values : [];
 
         return self::$groupValueCache[$group];
+    }
+
+    private static function settingsTableExists(): bool
+    {
+        $connectionName = (new static)->getConnectionName() ?: config('database.default', 'default');
+
+        if (array_key_exists($connectionName, self::$tableExistsCache)) {
+            return self::$tableExistsCache[$connectionName];
+        }
+
+        try {
+            return self::$tableExistsCache[$connectionName] = Schema::connection($connectionName)->hasTable(self::TABLE_NAME);
+        } catch (\Throwable $exception) {
+            Log::warning('[settings] 检查 settings 表失败，回退到默认配置', [
+                'connection' => $connectionName,
+                'message' => $exception->getMessage(),
+                'exception' => $exception::class,
+            ]);
+
+            return self::$tableExistsCache[$connectionName] = false;
+        }
+    }
+
+    private static function markSettingsTableMissing(QueryException $exception, string $group): void
+    {
+        $connectionName = (new static)->getConnectionName() ?: config('database.default', 'default');
+        self::$tableExistsCache[$connectionName] = false;
+
+        Log::warning('[settings] 读取 settings 表失败，回退到默认配置', [
+            'group' => $group,
+            'connection' => $connectionName,
+            'message' => $exception->getMessage(),
+            'exception' => $exception::class,
+        ]);
     }
 
     private static function forgetGroupCache(string $group): void

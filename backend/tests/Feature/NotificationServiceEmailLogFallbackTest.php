@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Models\Setting;
+use App\Services\System\AdminLogService;
 use App\Services\System\NotificationService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -136,6 +137,74 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
 
             foreach ($basicSettings as $key => $value) {
                 Setting::setValue('basic', $key, $value);
+            }
+
+            app()->instance('mail.manager', $originalMailManager);
+            Mail::swap($originalMailManager);
+        }
+    }
+
+    public function test_email_verification_code_is_redacted_in_logs(): void
+    {
+        if (! Schema::hasTable('notification_logs')) {
+            $this->markTestSkipped('notification_logs 表不存在，无法验证统一通知日志脱敏。');
+        }
+
+        $suffix = bin2hex(random_bytes(4));
+        $to = "codex-email-code-{$suffix}@example.com";
+        $code = '482915';
+        $settings = [
+            'email_enabled' => Setting::getValue('notification', 'email_enabled', '0'),
+            'email_host' => Setting::getValue('notification', 'email_host', ''),
+            'email_port' => Setting::getValue('notification', 'email_port', ''),
+            'email_username' => Setting::getValue('notification', 'email_username', ''),
+            'email_password' => Setting::getValue('notification', 'email_password', ''),
+            'email_from_name' => Setting::getValue('notification', 'email_from_name', ''),
+        ];
+
+        $fakeMailManager = $this->makeFakeMailManager();
+        $originalMailManager = app('mail.manager');
+
+        try {
+            Setting::setValue('notification', 'email_enabled', '1');
+            Setting::setValue('notification', 'email_host', 'smtp.example.com');
+            Setting::setValue('notification', 'email_port', '465');
+            Setting::setValue('notification', 'email_username', 'no-reply@example.com');
+            Setting::setValue('notification', 'email_password', 'test-secret');
+            Setting::setValue('notification', 'email_from_name', 'Codex Test');
+
+            app()->instance('mail.manager', $fakeMailManager);
+            Mail::swap($fakeMailManager);
+
+            app(NotificationService::class)->sendEmailCode($to, $code);
+
+            $log = DB::table('notification_logs')
+                ->where('channel', 'email')
+                ->where('recipient', $to)
+                ->where('template_code', NotificationService::TEMPLATE_EMAIL_CODE)
+                ->orderByDesc('id')
+                ->first();
+
+            $this->assertNotNull($log);
+            $this->assertStringNotContainsString($code, (string) $log->content);
+            $this->assertStringContainsString('已脱敏', (string) $log->content);
+
+            DB::table('notification_logs')
+                ->where('id', $log->id)
+                ->update(['content' => "验证码：{$code}"]);
+
+            $payload = app(AdminLogService::class)->getEmailLogs(['email' => $to], 15);
+            $adminLog = collect($payload['data'] ?? [])
+                ->first(fn (array $item): bool => ($item['to_email'] ?? null) === $to);
+
+            $this->assertNotNull($adminLog);
+            $this->assertStringNotContainsString($code, (string) ($adminLog['content'] ?? ''));
+            $this->assertStringContainsString('已脱敏', (string) ($adminLog['content'] ?? ''));
+        } finally {
+            $this->deleteEmailLogsByRecipient($to);
+
+            foreach ($settings as $key => $value) {
+                Setting::setValue('notification', $key, $value);
             }
 
             app()->instance('mail.manager', $originalMailManager);
