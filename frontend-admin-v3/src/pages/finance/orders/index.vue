@@ -125,7 +125,7 @@
           :total="total"
           :page-size-options="[20, 50, 100]"
           show-jumper
-          @change="handlePageChange"
+          @change="handlePaginationChange"
         />
       </div>
     </t-card>
@@ -133,7 +133,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
@@ -145,6 +145,7 @@ import { errorMessage } from '@/utils/userMessage';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import StatusTag from '@/components/status-tag/index.vue';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useListPage } from '@/hooks/useListPage';
 import { ORDER_STATUS_MAP, toSelectOptions } from '@shared/statusConfig';
 
 import './index.less';
@@ -160,32 +161,48 @@ const ORDER_TYPE_MAP: Record<string, string> = {
 
 const route = useRoute();
 const router = useRouter();
-const loading = ref(false);
-const orders = ref<OrderRecord[]>([]);
-const total = ref(0);
 const isMobile = useMediaQuery('(max-width: 768px)');
 
-const filters = reactive({
-  keyword: '',
-  type: '',
-  kind: 'all',
-  status: '',
-  start_date: '',
-  end_date: '',
-});
-
-const pagination = reactive({
-  page: 1,
-  page_size: 20,
-});
-
 const orderTypeOptions = Object.entries(ORDER_TYPE_MAP).map(([value, label]) => ({ value, label }));
-const orderStatusOptions = computed(() => toSelectOptions(ORDER_STATUS_MAP, false));
 const mode = computed<FinanceOrderMode>(() => {
   const value = route.meta.financeOrderMode;
   return value === 'renewals' || value === 'addons' ? value : 'orders';
 });
+const orderStatusOptions = computed(() => toSelectOptions(ORDER_STATUS_MAP, false));
 const mobileEyebrow = computed(() => (mode.value === 'renewals' ? '续费订单' : mode.value === 'addons' ? '附加配置订单' : '订单管理'));
+
+const {
+  filters,
+  list: orders,
+  total,
+  loading,
+  pagination,
+  loadList,
+  handleSearch,
+  resetFilters,
+  handlePaginationChange,
+} = useListPage<Record<string, any>, OrderRecord>({
+  defaultFilters: {
+    keyword: '',
+    type: '',
+    kind: 'all',
+    status: '',
+    start_date: '',
+    end_date: '',
+  },
+  defaultPageSize: 20,
+  onError: (error) => MessagePlugin.error(errorMessage(error, '加载订单列表失败')),
+  fetch: async () => {
+    const apiCall =
+      mode.value === 'renewals'
+        ? adminApi.financeMenu.renewalOrders
+        : mode.value === 'addons'
+          ? adminApi.financeMenu.addonOrders
+          : adminApi.orders.list;
+    const response = await apiCall(buildParams());
+    return response;
+  },
+});
 
 const columns = computed<PrimaryTableCol<OrderRecord>[]>(() => {
   const base: PrimaryTableCol<OrderRecord>[] = [
@@ -219,51 +236,6 @@ function buildParams() {
   if (mode.value === 'addons') params.kind = filters.kind || 'all';
   if (filters.start_date || filters.end_date) params.date_range = [filters.start_date, filters.end_date].filter(Boolean);
   return params;
-}
-
-async function loadList() {
-  loading.value = true;
-  try {
-    const apiCall =
-      mode.value === 'renewals'
-        ? adminApi.financeMenu.renewalOrders
-        : mode.value === 'addons'
-          ? adminApi.financeMenu.addonOrders
-          : adminApi.orders.list;
-    const response = await apiCall(buildParams());
-    orders.value = response.list || [];
-    total.value = Number(response.total || 0);
-    pagination.page = Number(response.page || pagination.page);
-    pagination.page_size = Number(response.page_size || pagination.page_size);
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '加载订单列表失败'));
-  } finally {
-    loading.value = false;
-  }
-}
-
-function handleSearch() {
-  pagination.page = 1;
-  loadList();
-}
-
-function resetFilters() {
-  Object.assign(filters, {
-    keyword: '',
-    type: '',
-    kind: 'all',
-    status: '',
-    start_date: '',
-    end_date: '',
-  });
-  pagination.page = 1;
-  loadList();
-}
-
-function handlePageChange(data: { current: number; pageSize: number }) {
-  pagination.page = data.current;
-  pagination.page_size = data.pageSize;
-  loadList();
 }
 
 function goDetail(row: OrderRecord) {
@@ -303,7 +275,4 @@ function orderTypeLabel(type: unknown) {
 function toRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
-
-
-onMounted(() => loadList());
 </script>

@@ -27,7 +27,7 @@
           <template #icon><refresh-icon /></template>
           刷新
         </t-button>
-        <t-button theme="primary" @click="openCampaignDialog()">
+        <t-button theme="primary" :disabled="!canManage" @click="openCampaignDialog()">
           <template #icon><add-icon /></template>
           新增活动
         </t-button>
@@ -40,6 +40,7 @@
               <div class="campaign-title-row">
                 <strong>{{ row.name || '-' }}</strong>
                 <t-tag size="small" variant="light">自动发放</t-tag>
+                <t-tag v-if="row.can_update === false" size="small" theme="default" variant="light">已锁定</t-tag>
               </div>
               <span>{{ row.description || '暂无描述' }}</span>
             </div>
@@ -89,7 +90,7 @@
 
           <template #operation="{ row }">
             <t-space v-if="!isMobile" size="small">
-              <t-button size="small" variant="text" theme="primary" :disabled="isRowBusy(row.id)" @click="openCampaignDialog(row)">
+              <t-button size="small" variant="text" theme="primary" :disabled="campaignEditDisabled(row)" @click="openCampaignDialog(row)">
                 编辑
               </t-button>
               <t-button
@@ -97,7 +98,7 @@
                 variant="text"
                 theme="success"
                 :loading="isRowRunning(row.id, 'trigger')"
-                :disabled="Number(row.status) !== 1 || isRowBusy(row.id)"
+                :disabled="!canManage || Number(row.status) !== 1 || isRowBusy(row.id)"
                 @click="handleTrigger(row)"
               >
                 立即发放
@@ -106,7 +107,7 @@
                 size="small"
                 variant="text"
                 :loading="isRowRunning(row.id, 'toggle')"
-                :disabled="isRowBusy(row.id)"
+                :disabled="!canManage || isRowBusy(row.id)"
                 @click="handleToggleStatus(row)"
               >
                 {{ Number(row.status) === 1 ? '停用' : '启用' }}
@@ -116,7 +117,7 @@
                 variant="text"
                 theme="danger"
                 :loading="isRowRunning(row.id, 'delete')"
-                :disabled="isRowBusy(row.id)"
+                :disabled="campaignDeleteDisabled(row)"
                 @click="handleDelete(row)"
               >
                 删除
@@ -282,7 +283,9 @@ import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import type { FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
 
 import { adminApi, type CouponCampaignPayload, type CouponCampaignRecord } from '@/api/admin';
+import { AdminPermissions } from '@/constants/permissions';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { hasAdminPermission } from '@/utils/permission';
 import { formatDateTime } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
@@ -339,6 +342,7 @@ const page = ref(1);
 const pageSize = ref(20);
 const rowActionState = reactive<Record<string, string>>({});
 const isMobile = useMediaQuery('(max-width: 768px)');
+const canManage = computed(() => hasAdminPermission(AdminPermissions.PRODUCT_MANAGE));
 
 const filters = reactive({
   keyword: '',
@@ -406,6 +410,18 @@ function closeCampaignDrawer() {
   handleDialogClosed();
 }
 
+function campaignEditDisabled(row: CouponCampaignRecord) {
+  return !canManage.value || isRowBusy(row.id) || row.can_update === false;
+}
+
+function campaignDeleteDisabled(row: CouponCampaignRecord) {
+  return !canManage.value || isRowBusy(row.id) || row.can_delete === false;
+}
+
+function campaignLockReason(row: CouponCampaignRecord) {
+  return String(row.lock_reason || '活动已生成优惠券批次，不允许修改');
+}
+
 
 async function loadList() {
   loading.value = true;
@@ -448,6 +464,14 @@ function handlePageChange(data: { current: number; pageSize: number }) {
 }
 
 async function openCampaignDialog(row?: CouponCampaignRecord) {
+  if (!canManage.value) {
+    MessagePlugin.warning('您没有管理优惠券活动的权限');
+    return;
+  }
+  if (row && row.can_update === false) {
+    MessagePlugin.warning(campaignLockReason(row));
+    return;
+  }
   resetForm();
   if (row) {
     form.id = Number(row.id);
@@ -500,6 +524,10 @@ function buildPayload(): CouponCampaignPayload {
 }
 
 async function submitForm() {
+  if (!canManage.value) {
+    MessagePlugin.warning('您没有管理优惠券活动的权限');
+    return;
+  }
   const validateResult = await formRef.value?.validate?.();
   if (validateResult !== true) return;
   if (!form.weekdays.length) {
@@ -547,6 +575,10 @@ function isRowBusy(rowId: number | string) {
 
 async function runRowAction(row: CouponCampaignRecord, action: string, fallbackMessage: string, task: () => Promise<void>) {
   const key = rowKey(row.id);
+  if (!canManage.value) {
+    MessagePlugin.warning('您没有管理优惠券活动的权限');
+    return;
+  }
   if (!key || isRowBusy(row.id)) return;
   rowActionState[key] = action;
   try {
@@ -559,6 +591,10 @@ async function runRowAction(row: CouponCampaignRecord, action: string, fallbackM
 }
 
 function handleTrigger(row: CouponCampaignRecord) {
+  if (!canManage.value) {
+    MessagePlugin.warning('您没有管理优惠券活动的权限');
+    return;
+  }
   const dialog = DialogPlugin.confirm({
     header: '立即发放',
     body: `确认立即发放活动「${row.name || row.id}」的新一批优惠券吗？`,
@@ -577,6 +613,10 @@ function handleTrigger(row: CouponCampaignRecord) {
 }
 
 async function handleToggleStatus(row: CouponCampaignRecord) {
+  if (!canManage.value) {
+    MessagePlugin.warning('您没有管理优惠券活动的权限');
+    return;
+  }
   await runRowAction(row, 'toggle', '更新活动状态失败', async () => {
     await adminApi.couponCampaigns.toggleStatus(row.id);
     MessagePlugin.success('活动状态已更新');
@@ -585,9 +625,17 @@ async function handleToggleStatus(row: CouponCampaignRecord) {
 }
 
 function handleDelete(row: CouponCampaignRecord) {
+  if (!canManage.value) {
+    MessagePlugin.warning('您没有管理优惠券活动的权限');
+    return;
+  }
+  if (row.can_delete === false) {
+    MessagePlugin.warning(campaignLockReason(row));
+    return;
+  }
   const dialog = DialogPlugin.confirm({
     header: '删除活动',
-    body: `确认删除活动「${row.name || row.id}」吗？删除后不会影响已经生成的优惠券批次。`,
+    body: `确认删除活动「${row.name || row.id}」吗？仅未生成批次的活动可删除。`,
     theme: 'warning',
     confirmBtn: '确认删除',
     cancelBtn: '取消',
@@ -604,10 +652,10 @@ function handleDelete(row: CouponCampaignRecord) {
 
 function mobileActionOptions(row: CouponCampaignRecord) {
   return [
-    { content: '编辑', value: 'edit', disabled: isRowBusy(row.id) },
-    { content: '立即发放', value: 'trigger', disabled: Number(row.status) !== 1 || isRowBusy(row.id) },
-    { content: Number(row.status) === 1 ? '停用' : '启用', value: 'toggle', disabled: isRowBusy(row.id) },
-    { content: '删除', value: 'delete', disabled: isRowBusy(row.id) },
+    { content: '编辑', value: 'edit', disabled: campaignEditDisabled(row) },
+    { content: '立即发放', value: 'trigger', disabled: !canManage.value || Number(row.status) !== 1 || isRowBusy(row.id) },
+    { content: Number(row.status) === 1 ? '停用' : '启用', value: 'toggle', disabled: !canManage.value || isRowBusy(row.id) },
+    { content: '删除', value: 'delete', disabled: campaignDeleteDisabled(row) },
   ];
 }
 
@@ -624,6 +672,7 @@ function campaignMobileRows(row: CouponCampaignRecord) {
     { label: '数量', value: `${row.issue_quantity || 0} 张` },
     { label: '下次', value: row.next_run_at || '未配置' },
     { label: '生成', value: `${row.generated_coupon_count || 0} 批` },
+    { label: '锁定', value: campaignLockReason(row), show: row.can_update === false || row.can_delete === false },
   ];
 }
 

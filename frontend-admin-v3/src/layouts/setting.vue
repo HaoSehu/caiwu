@@ -123,6 +123,7 @@ import { useSettingStore } from '@/store';
 const settingStore = useSettingStore();
 
 const LAYOUT_OPTION = ['side', 'top', 'mix'];
+const LAYOUT_THUMBNAILS = Object.fromEntries(LAYOUT_OPTION.map((item) => [item, createLayoutThumbnail(item)]));
 
 const MODE_OPTIONS = computed(() => [
   { type: 'light', text: t('layout.setting.theme.options.light') },
@@ -210,8 +211,23 @@ const handleCloseDrawer = () => {
   });
 };
 
+function createLayoutThumbnail(type: string): string {
+  const hasSide = type !== 'top';
+  const hasTop = type !== 'side';
+  const contentX = hasSide ? 32 : 8;
+  const contentY = hasTop ? 21 : 8;
+  const contentWidth = hasSide ? 48 : 72;
+  const contentHeight = hasTop ? 19 : 32;
+  const sideWidth = type === 'mix' ? 18 : 20;
+  const side = hasSide ? `<rect x="8" y="8" width="${sideWidth}" height="32" rx="3" fill="#165DFF" fill-opacity="0.88"/>` : '';
+  const top = hasTop ? '<rect x="8" y="8" width="72" height="9" rx="3" fill="#165DFF" fill-opacity="0.18"/>' : '';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="88" height="48" viewBox="0 0 88 48" fill="none"><rect x="1" y="1" width="86" height="46" rx="8" fill="#F8FAFC" stroke="#DCE6F5"/><rect x="${contentX}" y="${contentY}" width="${contentWidth}" height="${contentHeight}" rx="4" fill="#FFFFFF" stroke="#C8D7EE"/><rect x="${contentX + 7}" y="${contentY + 6}" width="${Math.max(16, contentWidth - 14)}" height="3" rx="1.5" fill="#A8B8D2"/><rect x="${contentX + 7}" y="${contentY + 12}" width="${Math.max(10, contentWidth - 28)}" height="3" rx="1.5" fill="#D2DCEE"/>${side}${top}</svg>`;
+
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
 const getThumbnailUrl = (name: string): string => {
-  return `https://tdesign.gtimg.com/tdesign-pro/setting/${name}.png`;
+  return LAYOUT_THUMBNAILS[name] || LAYOUT_THUMBNAILS.side;
 };
 
 watchEffect(() => {

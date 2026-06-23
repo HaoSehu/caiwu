@@ -1,13 +1,13 @@
 import { cloneDeep } from 'lodash-es';
 import { defineStore } from 'pinia';
 import {
-  AppIcon,
-  ChartIcon,
+  ChatIcon,
   DashboardIcon,
+  FileIcon,
   NotificationIcon,
-  ServiceIcon,
-  SettingIcon,
-  WalletIcon,
+  ShopIcon,
+  ToolsIcon,
+  UserCircleIcon,
 } from 'tdesign-icons-vue-next';
 import { shallowRef } from 'vue';
 import type { RouteRecordRaw } from 'vue-router';
@@ -35,31 +35,17 @@ const ADMIN_MENU_GROUPS: MenuGroupConfig[] = [
     children: ['/admin/dashboard'],
   },
   {
-    path: '/admin/menu/customer-support',
-    title: { zh_CN: '客户支持', en_US: 'Customers' },
-    icon: shallowRef(ServiceIcon),
+    path: '/admin/menu/users',
+    title: { zh_CN: '用户管理', en_US: 'Users' },
+    icon: shallowRef(UserCircleIcon),
     orderNo: 10,
-    children: ['/admin/users', '/admin/users/verification', '/admin/tickets'],
+    children: ['/admin/users', '/admin/users/verification'],
   },
   {
-    path: '/admin/menu/product-supply',
-    title: { zh_CN: '商品供应', en_US: 'Products' },
-    icon: shallowRef(AppIcon),
+    path: '/admin/menu/finance',
+    title: { zh_CN: '财务管理', en_US: 'Finance' },
+    icon: shallowRef(FileIcon),
     orderNo: 20,
-    children: ['/admin/products', '/admin/products/traffic-packages', '/admin/products/suppliers', '/admin/specs', '/admin/cpu-models'],
-  },
-  {
-    path: '/admin/menu/marketing-growth',
-    title: { zh_CN: '营销增长', en_US: 'Growth' },
-    icon: shallowRef(ChartIcon),
-    orderNo: 30,
-    children: ['/admin/referral', '/admin/member-levels', '/admin/coupons', '/admin/coupon-campaigns'],
-  },
-  {
-    path: '/admin/menu/finance-service',
-    title: { zh_CN: '财务服务', en_US: 'Finance' },
-    icon: shallowRef(WalletIcon),
-    orderNo: 40,
     children: [
       '/admin/finance/invoices',
       '/admin/finance/orders',
@@ -71,17 +57,38 @@ const ADMIN_MENU_GROUPS: MenuGroupConfig[] = [
     ],
   },
   {
-    path: '/admin/menu/content-ops',
+    path: '/admin/menu/products',
+    title: { zh_CN: '商品与服务', en_US: 'Products & Services' },
+    icon: shallowRef(ShopIcon),
+    orderNo: 30,
+    children: ['/admin/products', '/admin/products/traffic-packages', '/admin/products/suppliers', '/admin/specs', '/admin/cpu-models'],
+  },
+  {
+    path: '/admin/menu/tickets',
+    title: { zh_CN: '工单管理', en_US: 'Tickets' },
+    icon: shallowRef(ChatIcon),
+    orderNo: 40,
+    children: ['/admin/tickets'],
+  },
+  {
+    path: '/admin/menu/content',
     title: { zh_CN: '内容通知', en_US: 'Content' },
     icon: shallowRef(NotificationIcon),
     orderNo: 50,
     children: ['/admin/content/notices', '/admin/content/help', '/admin/notifications'],
   },
   {
-    path: '/admin/menu/system-ops',
-    title: { zh_CN: '系统运维', en_US: 'System' },
-    icon: shallowRef(SettingIcon),
+    path: '/admin/menu/marketing',
+    title: { zh_CN: '营销管理', en_US: 'Marketing' },
+    icon: shallowRef(DashboardIcon),
     orderNo: 60,
+    children: ['/admin/referral', '/admin/member-levels', '/admin/coupons', '/admin/coupon-campaigns'],
+  },
+  {
+    path: '/admin/menu/system',
+    title: { zh_CN: '系统管理', en_US: 'System' },
+    icon: shallowRef(ToolsIcon),
+    orderNo: 70,
     children: ['/admin/logs', '/admin/system/staff', '/admin/system/roles', '/admin/settings'],
   },
 ];

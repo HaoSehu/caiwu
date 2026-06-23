@@ -21,24 +21,12 @@ const renderTitle = (title?: LocalizedTitle, fallback?: string) => {
 };
 
 const crumbs = computed(() => {
-  const pathArray = route.path.split('/');
-  pathArray.shift();
-
-  const breadcrumbs = pathArray.reduce((breadcrumbArray, path, idx) => {
-    // 如果路由下有hiddenBreadcrumb或当前遍历到参数则隐藏
-    const meta = route.matched[idx]?.meta;
-    if (meta?.hiddenBreadcrumb || Object.values(route.params).includes(path)) {
-      return breadcrumbArray;
-    }
-    const title = renderTitle(meta?.title as LocalizedTitle, path);
-    breadcrumbArray.push({
-      path,
-      to: breadcrumbArray[idx - 1] ? `${breadcrumbArray[idx - 1].to}/${path}` : `/${path}`,
-      title,
-    });
-    return breadcrumbArray;
-  }, []);
-  return breadcrumbs;
+  return route.matched
+    .filter((r) => r.meta?.title && !r.meta.hiddenBreadcrumb && !r.path.includes('/menu/'))
+    .map((r) => ({
+      to: r.path,
+      title: renderTitle(r.meta.title as LocalizedTitle),
+    }));
 });
 </script>
 <style scoped>

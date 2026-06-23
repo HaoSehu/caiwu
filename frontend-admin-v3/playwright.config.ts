@@ -7,15 +7,15 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
   use: {
-    baseURL: 'http://127.0.0.1:5175',
+    baseURL: 'http://127.0.0.1:5176',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
   },
   webServer: {
-    command: 'npm run dev:ci',
-    url: 'http://127.0.0.1:5175',
-    reuseExistingServer: !process.env.CI,
+    command: 'npm run dev:ci -- --port 5176 --strictPort',
+    url: 'http://127.0.0.1:5176',
+    reuseExistingServer: false,
     timeout: 120_000,
   },
   projects: [

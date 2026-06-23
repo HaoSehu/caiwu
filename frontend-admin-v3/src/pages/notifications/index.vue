@@ -34,7 +34,11 @@
               <t-input v-model="emailForm.username" placeholder="请输入发件邮箱" />
             </t-form-item>
             <t-form-item label="授权密码" name="password">
-              <t-input v-model="emailForm.password" type="password" placeholder="请输入邮箱授权码" />
+              <t-input
+                v-model="emailForm.password"
+                type="password"
+                :placeholder="secretPlaceholder('email_password', '请输入邮箱授权码')"
+              />
             </t-form-item>
             <t-form-item label="发件名称" name="from_name">
               <t-input v-model="emailForm.from_name" placeholder="例如 创欧云" />
@@ -54,10 +58,14 @@
               <t-switch v-model="smsForm.enabled" />
             </t-form-item>
             <t-form-item label="Access Key" name="access_key">
-              <t-input v-model="smsForm.access_key" placeholder="请输入 Access Key" />
+              <t-input v-model="smsForm.access_key" :placeholder="secretPlaceholder('sms_access_key', '请输入 Access Key')" />
             </t-form-item>
             <t-form-item label="Secret Key" name="secret_key">
-              <t-input v-model="smsForm.secret_key" type="password" placeholder="请输入 Secret Key" />
+              <t-input
+                v-model="smsForm.secret_key"
+                type="password"
+                :placeholder="secretPlaceholder('sms_secret_key', '请输入 Secret Key')"
+              />
             </t-form-item>
             <t-form-item label="签名" name="sign_name">
               <t-input v-model="smsForm.sign_name" placeholder="请输入短信签名" />
@@ -334,6 +342,7 @@ const savingSms = ref(false);
 const emailFormRef = ref<FormInstanceFunctions>();
 const smsFormRef = ref<FormInstanceFunctions>();
 const settingsMap = ref<Record<string, unknown>>({});
+const settingsMetaMap = ref<Record<string, SettingItem>>({});
 const templateAudience = ref<TemplateAudience>('user');
 const selectedApiModule = ref('all');
 
@@ -491,6 +500,7 @@ async function loadSettings() {
   try {
     const response = await adminApi.settings.list({ group: 'notification' });
     settingsMap.value = normalizeSettings(response);
+    settingsMetaMap.value = normalizeSettingItems(response);
     fillNotificationForms();
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '加载通知配置失败'));
@@ -504,6 +514,7 @@ async function loadTemplates() {
   try {
     const response = await adminApi.settings.list({ group: 'notification' });
     settingsMap.value = normalizeSettings(response);
+    settingsMetaMap.value = normalizeSettingItems(response);
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '加载邮件模板列表失败'));
   } finally {
@@ -516,12 +527,12 @@ function fillNotificationForms() {
   emailForm.host = stringValue(settingsMap.value.email_host);
   emailForm.port = stringValue(settingsMap.value.email_port);
   emailForm.username = stringValue(settingsMap.value.email_username);
-  emailForm.password = stringValue(settingsMap.value.email_password);
+  emailForm.password = '';
   emailForm.from_name = stringValue(settingsMap.value.email_from_name);
   smsForm.enabled = toBool(settingsMap.value.sms_enabled);
-  smsForm.provider = stringValue(settingsMap.value.sms_provider) || 'aliyun';
-  smsForm.access_key = stringValue(settingsMap.value.sms_access_key);
-  smsForm.secret_key = stringValue(settingsMap.value.sms_secret_key);
+  smsForm.provider = stringValue(settingsMap.value.sms_driver) || stringValue(settingsMap.value.sms_provider) || 'aliyun';
+  smsForm.access_key = '';
+  smsForm.secret_key = '';
   smsForm.sign_name = stringValue(settingsMap.value.sms_sign_name);
   smsForm.template_code = stringValue(settingsMap.value.sms_template_code);
 }
@@ -530,16 +541,20 @@ async function saveEmailSettings() {
   if (!validateEmailForm()) return;
   savingEmail.value = true;
   try {
+    const settings: Record<string, unknown> = {
+      email_enabled: emailForm.enabled ? 1 : 0,
+      email_host: emailForm.host.trim(),
+      email_port: emailForm.port.trim(),
+      email_username: emailForm.username.trim(),
+      email_from_name: emailForm.from_name.trim(),
+    };
+    if (emailForm.password.trim()) {
+      settings.email_password = emailForm.password.trim();
+    }
+
     await adminApi.settings.save({
       group: 'notification',
-      settings: {
-        email_enabled: emailForm.enabled ? 1 : 0,
-        email_host: emailForm.host.trim(),
-        email_port: emailForm.port.trim(),
-        email_username: emailForm.username.trim(),
-        email_password: emailForm.password.trim(),
-        email_from_name: emailForm.from_name.trim(),
-      },
+      settings,
     });
     MessagePlugin.success('邮件配置已保存');
   } catch (error) {
@@ -553,16 +568,23 @@ async function saveSmsSettings() {
   if (!validateSmsForm()) return;
   savingSms.value = true;
   try {
+    const settings: Record<string, unknown> = {
+      sms_enabled: smsForm.enabled ? 1 : 0,
+      sms_driver: smsForm.provider,
+      sms_provider: smsForm.provider,
+      sms_sign_name: smsForm.sign_name.trim(),
+      sms_template_code: smsForm.template_code.trim(),
+    };
+    if (smsForm.access_key.trim()) {
+      settings.sms_access_key = smsForm.access_key.trim();
+    }
+    if (smsForm.secret_key.trim()) {
+      settings.sms_secret_key = smsForm.secret_key.trim();
+    }
+
     await adminApi.settings.save({
       group: 'notification',
-      settings: {
-        sms_enabled: smsForm.enabled ? 1 : 0,
-        sms_provider: smsForm.provider,
-        sms_access_key: smsForm.access_key.trim(),
-        sms_secret_key: smsForm.secret_key.trim(),
-        sms_sign_name: smsForm.sign_name.trim(),
-        sms_template_code: smsForm.template_code.trim(),
-      },
+      settings,
     });
     MessagePlugin.success('短信配置已保存');
   } catch (error) {
@@ -581,15 +603,15 @@ function validateEmailForm() {
     return false;
   }
   if (!emailForm.username.trim()) return warnRequired('发件邮箱');
-  if (!emailForm.password.trim()) return warnRequired('授权密码');
+  if (!hasSecretInputOrStored('email_password', emailForm.password)) return warnRequired('授权密码');
   if (!emailForm.from_name.trim()) return warnRequired('发件名称');
   return true;
 }
 
 function validateSmsForm() {
   if (!smsForm.enabled) return true;
-  if (!smsForm.access_key.trim()) return warnRequired('Access Key');
-  if (!smsForm.secret_key.trim()) return warnRequired('Secret Key');
+  if (!hasSecretInputOrStored('sms_access_key', smsForm.access_key)) return warnRequired('Access Key');
+  if (!hasSecretInputOrStored('sms_secret_key', smsForm.secret_key)) return warnRequired('Secret Key');
   if (!smsForm.sign_name.trim()) return warnRequired('签名');
   if (!smsForm.template_code.trim()) return warnRequired('验证码模板');
   return true;
@@ -624,14 +646,34 @@ async function copyApiPath(path: string) {
 }
 
 function normalizeSettings(response: SettingItem[] | Record<string, unknown>) {
-  if (Array.isArray(response)) {
-    return Object.fromEntries(response.map((item) => [item.key, item.value]));
-  }
+  const items = extractSettingItems(response);
+  if (items.length) return Object.fromEntries(items.map((item) => [item.key, item.value]));
+
   const record = toRecord(response);
-  if (Array.isArray(record.list)) {
-    return Object.fromEntries((record.list as SettingItem[]).map((item) => [item.key, item.value]));
-  }
   return record;
+}
+
+function normalizeSettingItems(response: SettingItem[] | Record<string, unknown>) {
+  return Object.fromEntries(extractSettingItems(response).map((item) => [item.key, item]));
+}
+
+function extractSettingItems(response: SettingItem[] | Record<string, unknown>) {
+  if (Array.isArray(response)) return response;
+
+  const record = toRecord(response);
+  return Array.isArray(record.list) ? (record.list as SettingItem[]) : [];
+}
+
+function hasStoredSecret(key: string) {
+  return settingsMetaMap.value[key]?.has_value === true;
+}
+
+function hasSecretInputOrStored(key: string, value: string) {
+  return value.trim() !== '' || hasStoredSecret(key);
+}
+
+function secretPlaceholder(key: string, fallback: string) {
+  return hasStoredSecret(key) ? '已配置，留空表示不修改' : fallback;
 }
 
 function methodTheme(method: string) {

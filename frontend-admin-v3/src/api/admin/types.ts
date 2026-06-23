@@ -166,6 +166,9 @@ export interface NewCustomerDailySummary {
 export interface SettingItem {
   key: string;
   value: string | number | boolean | null;
+  is_secret?: boolean;
+  has_value?: boolean;
+  masked_value?: string | number | boolean | null;
 }
 
 export interface ScheduleOverview {
@@ -433,7 +436,10 @@ export interface CouponRecord {
   starts_at?: string | null;
   expires_at?: string | null;
   sort_order?: number | string;
+  can_update?: boolean;
   can_delete?: boolean;
+  lock_reason?: string | null;
+  delete_reason?: string | null;
   updated_at?: string;
   [key: string]: unknown;
 }
@@ -503,6 +509,9 @@ export interface CouponCampaignRecord {
   last_coupon_code?: string | null;
   generated_coupon_count?: number | string;
   sort_order?: number | string;
+  can_update?: boolean;
+  can_delete?: boolean;
+  lock_reason?: string | null;
   updated_at?: string;
   [key: string]: unknown;
 }

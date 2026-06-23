@@ -1,19 +1,6 @@
-import { shallowRef } from 'vue';
 import type { RouteRecordRaw } from 'vue-router';
 
-import { ComponentGridIcon, UserIcon } from 'tdesign-icons-vue-next';
-
 export const financeRoutes: RouteRecordRaw[] = [
-  {
-    path: 'orders',
-    redirect: '/admin/finance/invoices',
-    meta: {
-      title: {
-        zh_CN: '旧订单入口',
-        en_US: 'Orders Redirect',
-      },
-    },
-  },
   {
     path: 'finance/orders',
     name: 'AdminFinanceOrders',
@@ -23,7 +10,6 @@ export const financeRoutes: RouteRecordRaw[] = [
         zh_CN: '订单管理',
         en_US: 'Orders',
       },
-      icon: shallowRef(ComponentGridIcon),
       financeOrderMode: 'orders',
       permission: 'order.list',
       keepAlive: false,
@@ -39,6 +25,7 @@ export const financeRoutes: RouteRecordRaw[] = [
         en_US: 'Order Detail',
       },
       permission: 'order.detail',
+      hidden: true,
     },
   },
   {
@@ -50,7 +37,6 @@ export const financeRoutes: RouteRecordRaw[] = [
         zh_CN: '账单管理',
         en_US: 'Invoices',
       },
-      icon: shallowRef(ComponentGridIcon),
       permission: 'invoice.list',
     },
   },
@@ -63,7 +49,6 @@ export const financeRoutes: RouteRecordRaw[] = [
         zh_CN: '充值管理',
         en_US: 'Recharges',
       },
-      icon: shallowRef(ComponentGridIcon),
       permission: 'invoice.list',
       keepAlive: false,
     },
@@ -77,7 +62,6 @@ export const financeRoutes: RouteRecordRaw[] = [
         zh_CN: '新客户',
         en_US: 'New Customers',
       },
-      icon: shallowRef(UserIcon),
       permission: 'finance.report',
     },
   },
@@ -90,9 +74,8 @@ export const financeRoutes: RouteRecordRaw[] = [
         zh_CN: '续费订单',
         en_US: 'Renewal Orders',
       },
-      icon: shallowRef(ComponentGridIcon),
       financeOrderMode: 'renewals',
-      permission: 'order.list',
+      permission: 'invoice.list',
     },
   },
   {
@@ -104,19 +87,8 @@ export const financeRoutes: RouteRecordRaw[] = [
         zh_CN: '附加配置订单',
         en_US: 'Addon Orders',
       },
-      icon: shallowRef(ComponentGridIcon),
       financeOrderMode: 'addons',
-      permission: 'order.list',
-    },
-  },
-  {
-    path: 'finance/product-income',
-    redirect: '/admin/services',
-    meta: {
-      title: {
-        zh_CN: '商品收入',
-        en_US: 'Product Income Redirect',
-      },
+      permission: 'invoice.list',
     },
   },
   {
@@ -128,8 +100,7 @@ export const financeRoutes: RouteRecordRaw[] = [
         zh_CN: '服务列表',
         en_US: 'Services',
       },
-      icon: shallowRef(ComponentGridIcon),
-      permission: 'order.list',
+      permission: 'product.list',
     },
   },
 ];

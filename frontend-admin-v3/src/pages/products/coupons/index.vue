@@ -47,7 +47,7 @@
           <template #icon><refresh-icon /></template>
           刷新
         </t-button>
-        <t-button theme="primary" :disabled="!couponFeatureEnabled" @click="openCouponDialog()">
+        <t-button theme="primary" :disabled="!couponFeatureEnabled || !canManage" @click="openCouponDialog()">
           <template #icon><add-icon /></template>
           新增优惠券
         </t-button>
@@ -63,6 +63,7 @@
                 <t-tag v-if="row.coupon_campaign_name" size="small" theme="warning" variant="light">
                   活动：{{ row.coupon_campaign_name }}
                 </t-tag>
+                <t-tag v-if="row.can_update === false" size="small" theme="default" variant="light">已锁定</t-tag>
               </div>
               <span>{{ row.description || '暂无描述' }}</span>
             </div>
@@ -109,14 +110,14 @@
 
           <template #operation="{ row }">
             <t-space v-if="!isMobile" size="small">
-              <t-button size="small" variant="text" theme="primary" :disabled="!couponFeatureEnabled" @click="openCouponDialog(row)">
+              <t-button size="small" variant="text" theme="primary" :disabled="couponEditDisabled(row)" @click="openCouponDialog(row)">
                 编辑
               </t-button>
               <t-button
                 size="small"
                 variant="text"
                 :loading="actionLoading === row.id"
-                :disabled="!couponFeatureEnabled"
+                :disabled="!couponFeatureEnabled || !canManage"
                 @click="handleToggleStatus(row)"
               >
                 {{ Number(row.status) === 1 ? '停用' : '启用' }}
@@ -125,7 +126,7 @@
                 size="small"
                 variant="text"
                 theme="danger"
-                :disabled="!couponFeatureEnabled || row.can_delete === false"
+                :disabled="couponDeleteDisabled(row)"
                 @click="handleDelete(row)"
               >
                 删除
@@ -351,8 +352,10 @@ import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import type { FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
 
 import { adminApi, type CouponPayload, type CouponRecord } from '@/api/admin';
+import { AdminPermissions } from '@/constants/permissions';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { userApi, type AdminUser } from '@/api/user';
+import { hasAdminPermission } from '@/utils/permission';
 import { formatDateTime } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
@@ -412,6 +415,7 @@ const userSearchResults = ref<UserOption[]>([]);
 const userSearchKeyword = ref('');
 const userOptionsLoading = ref(false);
 const isMobile = useMediaQuery('(max-width: 768px)');
+const canManage = computed(() => hasAdminPermission(AdminPermissions.PRODUCT_MANAGE));
 
 const filters = reactive({
   keyword: '',
@@ -488,6 +492,22 @@ function handleDialogClosed() {
 function closeCouponDrawer() {
   dialogVisible.value = false;
   handleDialogClosed();
+}
+
+function couponEditDisabled(row: CouponRecord) {
+  return !couponFeatureEnabled.value || !canManage.value || row.can_update === false;
+}
+
+function couponDeleteDisabled(row: CouponRecord) {
+  return !couponFeatureEnabled.value || !canManage.value || row.can_delete === false;
+}
+
+function couponEditDisabledReason(row: CouponRecord) {
+  return String(row.lock_reason || '已发放或活动生成的优惠券不允许修改');
+}
+
+function couponDeleteDisabledReason(row: CouponRecord) {
+  return String(row.delete_reason || '该优惠券当前不允许删除');
 }
 
 
@@ -603,8 +623,16 @@ function handlePageChange(data: { current: number; pageSize: number }) {
 }
 
 async function openCouponDialog(row?: CouponRecord) {
+  if (!canManage.value) {
+    MessagePlugin.warning('您没有管理优惠券的权限');
+    return;
+  }
   if (!couponFeatureEnabled.value) {
     MessagePlugin.warning('当前环境未启用优惠券功能');
+    return;
+  }
+  if (row && row.can_update === false) {
+    MessagePlugin.warning(couponEditDisabledReason(row));
     return;
   }
   resetForm();
@@ -663,6 +691,10 @@ function buildPayload(): CouponPayload {
 }
 
 async function submitForm() {
+  if (!canManage.value) {
+    MessagePlugin.warning('您没有管理优惠券的权限');
+    return;
+  }
   if (!couponFeatureEnabled.value) {
     MessagePlugin.warning('当前环境未启用优惠券功能');
     return;
@@ -701,6 +733,10 @@ async function submitForm() {
 }
 
 async function handleToggleStatus(row: CouponRecord) {
+  if (!canManage.value) {
+    MessagePlugin.warning('您没有管理优惠券的权限');
+    return;
+  }
   if (!couponFeatureEnabled.value) {
     MessagePlugin.warning('当前环境未启用优惠券功能');
     return;
@@ -718,13 +754,21 @@ async function handleToggleStatus(row: CouponRecord) {
 }
 
 function handleDelete(row: CouponRecord) {
+  if (!canManage.value) {
+    MessagePlugin.warning('您没有管理优惠券的权限');
+    return;
+  }
   if (!couponFeatureEnabled.value) {
     MessagePlugin.warning('当前环境未启用优惠券功能');
     return;
   }
+  if (row.can_delete === false) {
+    MessagePlugin.warning(couponDeleteDisabledReason(row));
+    return;
+  }
   const dialog = DialogPlugin.confirm({
     header: '删除优惠券',
-    body: `确认删除优惠券「${row.name || row.id}」吗？`,
+    body: `确认删除优惠券「${row.name || row.id}」吗？未使用的领取和发放记录会一并清理。`,
     theme: 'warning',
     confirmBtn: '确认删除',
     cancelBtn: '取消',
@@ -746,9 +790,9 @@ function handleDelete(row: CouponRecord) {
 
 function mobileActionOptions(row: CouponRecord) {
   return [
-    { content: '编辑', value: 'edit', disabled: !couponFeatureEnabled.value },
-    { content: Number(row.status) === 1 ? '停用' : '启用', value: 'toggle', disabled: !couponFeatureEnabled.value },
-    { content: '删除', value: 'delete', disabled: !couponFeatureEnabled.value || row.can_delete === false },
+    { content: '编辑', value: 'edit', disabled: couponEditDisabled(row) },
+    { content: Number(row.status) === 1 ? '停用' : '启用', value: 'toggle', disabled: !couponFeatureEnabled.value || !canManage.value },
+    { content: '删除', value: 'delete', disabled: couponDeleteDisabled(row) },
   ];
 }
 

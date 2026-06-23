@@ -122,6 +122,23 @@
         <t-alert theme="warning" message="当前账号缺少 settings.manage 权限，无法查看或触发定时任务。" />
       </t-card>
       <template v-else>
+        <t-card v-if="scheduleEnvAlerts.length > 0" :bordered="false" class="schedule-env-card">
+          <div class="schedule-env-grid">
+            <article
+              v-for="alert in scheduleEnvAlerts"
+              :key="alert.key"
+              class="schedule-env-item"
+              :class="`schedule-env-item--${alert.theme}`"
+            >
+              <div class="schedule-env-item__head">
+                <t-tag :theme="alert.theme" variant="light">{{ alert.label }}</t-tag>
+                <strong>{{ alert.value }}</strong>
+              </div>
+              <span v-if="alert.detail" class="schedule-env-item__detail">{{ alert.detail }}</span>
+            </article>
+          </div>
+        </t-card>
+
         <t-card :bordered="false" :loading="scheduleLoading">
           <template #title>任务清单</template>
           <template #subtitle>共 {{ scheduleTasks.length }} 个任务</template>
@@ -272,40 +289,20 @@
       </t-card>
     </template>
 
-    <t-drawer v-model:visible="detailVisible" :size="drawerSize" :header="detailTitle" :footer="false" @close="closeDetailDrawer">
-      <template v-if="currentLog">
-        <div class="detail-grid">
-          <article v-for="item in detailFields" :key="item.label">
-            <span>{{ item.label }}</span>
-            <strong>{{ item.value }}</strong>
-          </article>
-        </div>
-        <div v-for="item in detailBlocks" :key="item.label" class="detail-block">
-          <h3>{{ item.label }}</h3>
-          <iframe
-            v-if="item.html"
-            class="mail-preview-frame"
-            :srcdoc="item.value"
-            sandbox="allow-same-origin"
-            title="邮件正文预览"
-          />
-          <pre v-else class="json-block">{{ item.value }}</pre>
-        </div>
-        <div class="detail-drawer-actions">
-          <t-button variant="outline" @click="closeDetailDrawer">
-            <template #icon><chevron-left-icon /></template>
-            返回
-          </t-button>
-        </div>
-      </template>
-    </t-drawer>
+    <LogDetailDrawer
+      :visible="detailVisible"
+      :current-log="currentLog"
+      :active-tab="activeTab"
+      :drawer-size="drawerSize"
+      @close="closeDetailDrawer"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ChevronLeftIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
+import { RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import type { PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 
@@ -315,6 +312,8 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { errorMessage } from '@/utils/userMessage';
 import { AdminPermissions } from '@/constants/permissions';
 import { useUserStore } from '@/store';
+
+import LogDetailDrawer from './components/LogDetailDrawer.vue';
 
 import './index.less';
 
@@ -512,9 +511,63 @@ const statusPlaceholder = computed(() => (activeTab.value === 'api' ? '全部状
 const statusOptions = computed(() => (activeTab.value === 'api' ? httpStatusOptions : notifyStatusOptions));
 const isMobile = useMediaQuery('(max-width: 768px)');
 const drawerSize = computed(() => (isMobile.value ? '100%' : '700px'));
-const detailTitle = computed(() => `${currentLogMeta.value.title}详情`);
 const scheduleTasks = computed(() => asArray(scheduleOverview.value.tasks));
 const scheduleLogs = computed(() => asArray(scheduleOverview.value.recent_logs));
+const scheduleEnvironment = computed(() => toRecord(scheduleOverview.value.environment));
+const scheduleMutex = computed(() => toRecord(scheduleEnvironment.value.schedule_mutex));
+const scheduleAutomationConfig = computed(() => toRecord(scheduleEnvironment.value.automation_config));
+const scheduleEnvAlerts = computed(() => {
+  const env = scheduleEnvironment.value;
+  if (Object.keys(env).length === 0) return [];
+  const alerts: Array<{ key: string; label: string; value: string; detail?: string; theme: 'success' | 'warning' | 'danger' }> = [];
+
+  const mutex = scheduleMutex.value;
+  const mutexEnabled = Boolean(mutex.enabled);
+  alerts.push({
+    key: 'mutex',
+    label: '调度互斥',
+    value: mutexEnabled ? '已启用' : '降级中',
+    detail: mutexEnabled
+      ? String(mutex.mode || 'without_overlapping')
+      : `${mutex.reason || '未知原因'}（${mutex.cache_store || '未知缓存'}/${mutex.os_family || '未知系统'}）`,
+    theme: mutexEnabled ? 'success' : 'warning',
+  });
+
+  const pendingJobs = env.pending_jobs;
+  if (typeof pendingJobs === 'number') {
+    alerts.push({
+      key: 'pending_jobs',
+      label: '待处理任务',
+      value: String(pendingJobs),
+      detail: env.queue_runtime_mode ? `队列模式：${env.queue_runtime_mode}` : undefined,
+      theme: pendingJobs > 50 ? 'danger' : pendingJobs > 10 ? 'warning' : 'success',
+    });
+  }
+
+  const failedJobs = env.failed_jobs;
+  if (typeof failedJobs === 'number') {
+    alerts.push({
+      key: 'failed_jobs',
+      label: '失败任务',
+      value: String(failedJobs),
+      detail: failedJobs > 0 ? '建议排查 failed_jobs 表' : undefined,
+      theme: failedJobs > 0 ? 'danger' : 'success',
+    });
+  }
+
+  const automationStatus = String(scheduleAutomationConfig.value.status || 'loaded');
+  if (automationStatus !== 'loaded') {
+    alerts.push({
+      key: 'automation_config',
+      label: '自动化配置',
+      value: automationStatus === 'fallback_default' ? '回退默认' : automationStatus,
+      detail: String(scheduleAutomationConfig.value.fallback_reason || '配置读取失败'),
+      theme: 'warning',
+    });
+  }
+
+  return alerts;
+});
 const canManageSchedules = computed(() => hasPermission(AdminPermissions.SETTINGS_MANAGE));
 const cleanupTypes = computed(() => asArray(cleanupOverview.value.supported_cleanup_types));
 const databaseCards = computed(() => {
@@ -538,95 +591,6 @@ const fileCards = computed(() => {
 const affectedCountText = computed(() => {
   const affected = Object.values(toRecord(lastCleanupResult.value?.affected));
   return affected.reduce((total: number, value) => total + Number(value || 0), 0);
-});
-const detailFields = computed(() => {
-  const row = currentLog.value || {};
-  if (activeTab.value === 'api') {
-    return [
-      { label: '请求方法', value: fieldValue(row.method) },
-      { label: '状态码', value: fieldValue(row.status) },
-      { label: '请求路径', value: fieldValue(row.path) },
-      { label: '模块', value: fieldValue(row.module) },
-      { label: '请求号', value: fieldValue(row.request_id) },
-      { label: '记录时间', value: formatDate(row.created_at) },
-      { label: '调用端', value: userTypeLabel(row.user_type) },
-      { label: 'IP 地址', value: fieldValue(row.ip_address) },
-    ];
-  }
-  if (activeTab.value === 'admin-logins') {
-    return [
-      { label: '登录账号', value: fieldValue(row.admin_username) },
-      { label: '昵称', value: fieldValue(row.admin_nickname || row.actor_name) },
-      { label: '角色', value: fieldValue(row.role_name) },
-      { label: '登录时间', value: formatDate(row.created_at) },
-      { label: 'IP 地址', value: fieldValue(row.ip_address) },
-      { label: '数据来源', value: sourceLabel(row.source) },
-    ];
-  }
-  if (activeTab.value === 'sms') {
-    return [
-      { label: '手机号', value: fieldValue(row.phone) },
-      { label: '发送状态', value: statusLabel(row.status) },
-      { label: '模板编号', value: fieldValue(row.template_code) },
-      { label: '供应商', value: fieldValue(row.provider) },
-      { label: '请求号', value: fieldValue(row.request_id) },
-      { label: '发送时间', value: formatDate(row.sent_at) },
-      { label: '创建时间', value: formatDate(row.created_at) },
-      { label: '错误信息', value: fieldValue(row.error_msg) },
-    ];
-  }
-  if (activeTab.value === 'email') {
-    return [
-      { label: '收件邮箱', value: fieldValue(row.to_email) },
-      { label: '发送状态', value: statusLabel(row.status) },
-      { label: '主题', value: fieldValue(row.subject) },
-      { label: '模板编号', value: fieldValue(row.template_code) },
-      { label: '发送时间', value: formatDate(row.sent_at) },
-      { label: '创建时间', value: formatDate(row.created_at) },
-      { label: '错误信息', value: fieldValue(row.error_msg) },
-    ];
-  }
-  if (activeTab.value === 'tasks') {
-    return [
-      { label: '任务名称', value: fieldValue(row.task_title || row.task_key) },
-      { label: '任务键', value: fieldValue(row.task_key) },
-      { label: '日志级别', value: fieldValue(row.level) },
-      { label: '记录时间', value: formatDate(row.time) },
-    ];
-  }
-  return [
-    { label: '日志级别', value: fieldValue(row.level) },
-    { label: '记录时间', value: formatDate(row.time) },
-  ];
-});
-const detailBlocks = computed(() => {
-  const row = currentLog.value || {};
-  if (activeTab.value === 'api') {
-    return [
-      { label: '请求参数', value: formatJson(row.params) },
-      { label: '完整上下文', value: formatJson(row.detail) },
-      { label: 'User-Agent', value: formatJson(row.user_agent) },
-    ];
-  }
-  if (activeTab.value === 'admin-logins') {
-    return [{ label: '上下文详情', value: formatJson(row.detail) }];
-  }
-  if (activeTab.value === 'sms') {
-    return [
-      { label: '模板参数', value: formatJson(row.params, '暂无模板参数') },
-      { label: '短信内容', value: fieldValue(row.content) },
-    ];
-  }
-  if (activeTab.value === 'email') {
-    return [
-      { label: '邮件正文预览', value: buildContentPreviewDoc(row.content), html: true },
-      { label: 'HTML 源码', value: fieldValue(row.content) },
-    ];
-  }
-  return [
-    { label: '格式化内容', value: fieldValue(row.message) },
-    { label: '原始日志', value: fieldValue(row.raw) },
-  ];
 });
 
 function normalizeTab(value: unknown): LogsTab {
@@ -952,22 +916,6 @@ function contentPreview(value: unknown) {
     .trim();
   if (!text) return '-';
   return text.length > 96 ? `${text.slice(0, 96)}...` : text;
-}
-
-function buildContentPreviewDoc(value: unknown) {
-  const normalized = String(value ?? '').trim();
-  if (!normalized) {
-    return '<!doctype html><html lang="zh-CN"><body style="margin:0;padding:24px;color:#86909c;">暂无正文内容</body></html>';
-  }
-  if (/<!doctype\s+html|<html\b|<body\b/i.test(normalized)) return normalized;
-  if (/<([a-z][a-z0-9]*)(\s|>)/i.test(normalized)) {
-    return `<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><style>body{margin:0;padding:24px;background:#f5f7fa;font-family:Arial,sans-serif;color:#1f2329}.mail-preview{max-width:680px;margin:0 auto;padding:24px;border:1px solid #dce7ff;border-radius: var(--td-radius-extraLarge, 12px);background:#fff}</style></head><body><div class="mail-preview">${normalized}</div></body></html>`;
-  }
-  return `<!doctype html><html lang="zh-CN"><body style="margin:0;padding:24px;font-family:Arial,sans-serif;background:#f8fafc;color:#1f2329;"><pre style="margin:0;white-space:pre-wrap;line-height:1.75;">${escapeHtml(normalized)}</pre></body></html>`;
-}
-
-function escapeHtml(value: string) {
-  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 function formatBytes(value: unknown) {
