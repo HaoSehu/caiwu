@@ -1,5 +1,4 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios'
-import { ElMessage } from 'element-plus'
 import {
   attachSafeRequestDedupe,
   buildSafeRequestKey,
@@ -10,6 +9,7 @@ import {
   retrySafeRequest,
 } from '@caiwu/shared/runtime'
 import { toUserMessage } from '@/utils/userMessage'
+import { getClientToken } from '@/app/runtime/session'
 
 const DEFAULT_TIMEOUT = 18000
 const SAFE_TIMEOUT = 16000
@@ -35,6 +35,12 @@ interface RuntimeHandledError extends Error {
 
 let lastErrorMsg = ''
 let lastErrorTimer: ReturnType<typeof setTimeout> | null = null
+let messageLoader: Promise<typeof import('element-plus/es/components/message/index.mjs')> | null = null
+
+function loadMessage() {
+  messageLoader ||= import('element-plus/es/components/message/index.mjs')
+  return messageLoader
+}
 
 function showError(msg: string) {
   if (msg === lastErrorMsg) {
@@ -42,7 +48,9 @@ function showError(msg: string) {
   }
 
   lastErrorMsg = msg
-  ElMessage.error(msg)
+  void loadMessage().then((messageModule) => {
+    messageModule.default.error(msg)
+  })
   if (lastErrorTimer) {
     clearTimeout(lastErrorTimer)
   }
@@ -96,6 +104,11 @@ request.interceptors.request.use(
     runtimeConfig.silentError = Boolean(runtimeConfig.silentError || runtimeConfig.silent)
     runtimeConfig.__safeRequest = safeRequest
     runtimeConfig.timeout = resolveTimeout(runtimeConfig, safeRequest)
+
+    const token = getClientToken()
+    if (token) {
+      runtimeConfig.headers.Authorization = `Bearer ${token}`
+    }
 
     if (writeRequest && !runtimeConfig.headers['Content-Type']) {
       runtimeConfig.headers['Content-Type'] = 'application/json'

@@ -1,19 +1,21 @@
 import { useAppStore } from '@/stores/app'
+import { applyRouteMeta } from '@/utils/pageMeta'
 
 const DYNAMIC_IMPORT_RELOAD_KEY = 'www-router-dynamic-import-reload'
 const dynamicImportErrorPattern = /Failed to fetch dynamically imported module|Importing a module script failed/i
 
 export function registerClientGuards(router) {
-  router.beforeEach((to, _from, next) => {
-    const appStore = useAppStore()
-    appStore.applyPageTitle(typeof to.meta.title === 'string' ? to.meta.title : '')
-    next()
-  })
-
   router.afterEach((to) => {
     if (typeof window === 'undefined') {
       return
     }
+
+    // 同步 title / description / og:* / canonical / robots，避免动态页面沿用首页 meta
+    const appStore = useAppStore()
+    applyRouteMeta(to, {
+      siteUrl: import.meta.env.VITE_PUBLIC_SITE_URL || '',
+      siteName: appStore.siteName || '',
+    })
 
     if (window.sessionStorage.getItem(DYNAMIC_IMPORT_RELOAD_KEY) === to.fullPath) {
       window.sessionStorage.removeItem(DYNAMIC_IMPORT_RELOAD_KEY)

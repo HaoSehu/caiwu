@@ -51,6 +51,7 @@
 <script setup>
 import { computed, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElIcon } from 'element-plus/es/components/icon/index.mjs'
 import { ArrowRight } from '@element-plus/icons-vue'
 import { useAppStore } from '@/stores/app'
 import { buildWebsiteProductPath } from '@/utils/productRoute'
@@ -101,10 +102,8 @@ const activeEnterpriseGroups = computed(() => {
   ))
 })
 
-const visibleEnterpriseGroups = computed(() => activeEnterpriseGroups.value.slice(0, 6))
-
 const activeEnterpriseCards = computed(() => (
-  visibleEnterpriseGroups.value.map((group, index) => {
+  activeEnterpriseGroups.value.map((group, index) => {
     const groupId = Number(group?.id || 0)
     const summary = props.groupCatalogMap[groupId] || null
     const primaryProduct = resolveEnterprisePrimaryProduct(group, summary)
@@ -216,7 +215,7 @@ function resolveEnterprisePrimaryProduct(group, summary) {
     : null
 
   if (featuredProduct) {
-    const productGroupId = Number(featuredProduct?.group_id || featuredProduct?.groupId || 0)
+    const productGroupId = Number(featuredProduct?.effective_product_group_id || 0)
     return {
       product: featuredProduct,
       childGroupId: productGroupId > 0 && productGroupId !== Number(group?.id || 0) ? productGroupId : 0,
@@ -226,7 +225,7 @@ function resolveEnterprisePrimaryProduct(group, summary) {
   const previewProduct = Array.isArray(summary?.preview_products) ? summary.preview_products[0] : null
 
   if (previewProduct && typeof previewProduct === 'object') {
-    const productGroupId = Number(previewProduct?.group_id || previewProduct?.groupId || 0)
+    const productGroupId = Number(previewProduct?.effective_product_group_id || 0)
     return {
       product: previewProduct,
       childGroupId: productGroupId > 0 && productGroupId !== Number(group?.id || 0) ? productGroupId : 0,

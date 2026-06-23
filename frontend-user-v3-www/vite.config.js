@@ -24,15 +24,13 @@ const compressionExtensions = new Set([
 ])
 const compressionThreshold = 1024
 
+// 静态资源与站点同源，不再使用外部 CDN，统一以根路径发布。
+// 如未来需要部署到子路径，可在 .env 中设置 VITE_WWW_ASSET_BASE_URL=/子路径/。
 function resolveAssetBase(rawValue = '') {
   const normalized = String(rawValue || '').trim()
 
   if (!normalized) {
     return '/'
-  }
-
-  if (/^https?:\/\//i.test(normalized)) {
-    return normalized.endsWith('/') ? normalized : `${normalized}/`
   }
 
   if (normalized.startsWith('/')) {
@@ -42,32 +40,12 @@ function resolveAssetBase(rawValue = '') {
   return `/${normalized.replace(/^\/+/, '').replace(/\/+$/, '')}/`
 }
 
-function resolveHintOrigin(assetBase) {
-  if (!/^https?:\/\//i.test(assetBase)) {
-    return ''
-  }
-
-  try {
-    return new URL(assetBase).origin
-  } catch {
-    return ''
-  }
-}
-
 function resolveManualChunk(id) {
   const normalized = id.split(path.sep).join('/')
 
   if (normalized.includes('/node_modules/')) {
     if (normalized.includes('/axios/')) {
       return 'vendor-axios'
-    }
-
-    if (normalized.includes('/element-plus/')) {
-      return 'vendor-element-plus'
-    }
-
-    if (normalized.includes('/@element-plus/icons-vue/')) {
-      return 'vendor-icons'
     }
 
     if (
@@ -79,17 +57,8 @@ function resolveManualChunk(id) {
       return 'vendor-vue'
     }
 
-    if (normalized.includes('/three/') || normalized.includes('/@types/three/')) {
-      return 'vendor-three'
-    }
-
-    if (normalized.includes('/@novnc/novnc/')) {
-      return 'vendor-vnc'
-    }
-
     if (
-      normalized.includes('/qrcode.vue/')
-      || normalized.includes('/markdown-it/')
+      normalized.includes('/markdown-it/')
       || normalized.includes('/entities/')
       || normalized.includes('/linkify-it/')
       || normalized.includes('/mdurl/')
@@ -163,29 +132,6 @@ function createPrecompressedAssetsPlugin() {
   }
 }
 
-function createIndexNetworkHintsPlugin(assetBase) {
-  return {
-    name: 'client-index-network-hints',
-    apply: 'build',
-    transformIndexHtml(html) {
-      const hintOrigin = resolveHintOrigin(assetBase)
-
-      if (!hintOrigin) {
-        return html
-      }
-
-      const hintHost = new URL(hintOrigin).host
-      const dnsPrefetchTag = `  <link rel="dns-prefetch" href="//${hintHost}" />`
-      const preconnectTag = `  <link rel="preconnect" href="${hintOrigin}" crossorigin="anonymous" />`
-
-      return html.replace(
-        '</head>',
-        `${dnsPrefetchTag}\n${preconnectTag}\n</head>`,
-      )
-    },
-  }
-}
-
 function resolveAssetFileName(assetInfo) {
   const name = String(assetInfo.name || '')
   const extension = path.extname(name).toLowerCase()
@@ -207,21 +153,31 @@ function resolveAssetFileName(assetInfo) {
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  const assetBase = resolveAssetBase(env.VITE_WWW_ASSET_BASE_URL || env.VITE_CDN_ASSET_HOST || env.VITE_ASSET_BASE_URL || '')
+  // 资源与页面同源，去掉外部 CDN 相关变量（VITE_CDN_ASSET_HOST / VITE_ASSET_BASE_URL）。
+  const assetBase = resolveAssetBase(env.VITE_WWW_ASSET_BASE_URL || '')
 
   return {
     base: assetBase,
     plugins: [
       vue(),
       AutoImport({
-        resolvers: [ElementPlusResolver({ importStyle: false })],
         imports: ['vue', 'vue-router', 'pinia'],
       }),
       Components({
         resolvers: [ElementPlusResolver({ importStyle: false, directives: true })],
       }),
-      createIndexNetworkHintsPlugin(assetBase),
       createPrecompressedAssetsPlugin(),
+      {
+        name: 'client-fetch-priority',
+        apply: 'build',
+        transformIndexHtml(html) {
+          // 为主入口 script 标签添加 fetchpriority="high"，优化首屏 LCP
+          return html.replace(
+            /<script type="module" crossorigin src="\/assets\/js\/index-([^"]+)\.js"><\/script>/g,
+            '<script type="module" crossorigin fetchpriority="high" src="/assets/js/index-$1.js"><\/script>'
+          )
+        },
+      },
     ],
     resolve: {
       dedupe: ['vue', 'element-plus'],
@@ -233,6 +189,9 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
+      headers: {
+        'X-Content-Type-Options': 'nosniff',
+      },
       fs: {
         allow: [path.resolve(__dirname, '..')],
       },
@@ -262,10 +221,18 @@ export default defineConfig(({ mode }) => {
         'vue-router',
         'pinia',
         'axios',
+        'dayjs',
+        'dayjs/plugin/advancedFormat.js',
+        'dayjs/plugin/customParseFormat.js',
+        'dayjs/plugin/dayOfYear.js',
+        'dayjs/plugin/isSameOrAfter.js',
+        'dayjs/plugin/isSameOrBefore.js',
+        'dayjs/plugin/localeData.js',
+        'dayjs/plugin/weekOfYear.js',
+        'dayjs/plugin/weekYear.js',
         'element-plus/es',
         '@element-plus/icons-vue',
         'markdown-it',
-        'qrcode.vue',
       ],
     },
     build: {

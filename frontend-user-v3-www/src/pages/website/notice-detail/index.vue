@@ -3,5 +3,5 @@
 </template>
 
 <script setup lang="ts">
-import ContentDetailPage from '@/views/client/content/ContentDetailPage.vue'
+import ContentDetailPage from '@/views/website/content/ContentDetailPage.vue'
 </script>

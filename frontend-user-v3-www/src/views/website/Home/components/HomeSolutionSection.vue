@@ -86,6 +86,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElIcon } from 'element-plus/es/components/icon/index.mjs'
 import { Select } from '@element-plus/icons-vue'
 import { industrySolutions } from '@/data/homeSolutions'
 

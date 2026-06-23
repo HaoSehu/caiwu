@@ -1,26 +1,36 @@
-export function isSessionExpired() {
-  return false
-}
+import {
+  getClientToken,
+  setClientToken,
+  removeClientToken,
+  isClientLoggedIn,
+  isClientSessionExpired,
+} from '@/app/runtime/session'
 
 export function getToken() {
-  return null
+  return getClientToken()
 }
 
-export function setToken(_token) {
-}
-
-export function touchSessionActivity() {
+export function setToken(token) {
+  setClientToken(token)
 }
 
 export function removeToken() {
+  removeClientToken()
 }
 
 export function isLoggedIn() {
-  return false
+  return isClientLoggedIn()
+}
+
+export function isSessionExpired() {
+  return isClientSessionExpired()
 }
 
 export function getUserType() {
   return 'client'
+}
+
+export function touchSessionActivity() {
 }
 
 export function initSessionActivityTracking() {

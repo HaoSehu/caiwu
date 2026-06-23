@@ -7,7 +7,6 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
-    AuthShell: typeof import('./src/components/auth/AuthShell.vue')['default']
     ElAlert: typeof import('element-plus/es')['ElAlert']
     ElButton: typeof import('element-plus/es')['ElButton']
     ElDivider: typeof import('element-plus/es')['ElDivider']
@@ -23,7 +22,6 @@ declare module 'vue' {
     ElTabPane: typeof import('element-plus/es')['ElTabPane']
     ElTabs: typeof import('element-plus/es')['ElTabs']
     ElTooltip: typeof import('element-plus/es')['ElTooltip']
-    HeroPointCloud: typeof import('./src/components/HeroPointCloud.vue')['default']
     MobileOptionPicker: typeof import('./src/components/MobileOptionPicker.vue')['default']
     MobileOsPicker: typeof import('./src/components/MobileOsPicker.vue')['default']
     MobileRangePicker: typeof import('./src/components/MobileRangePicker.vue')['default']
@@ -32,7 +30,6 @@ declare module 'vue' {
     RouteLoadingFallback: typeof import('./src/components/common/RouteLoadingFallback.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
-    VirtualWindowList: typeof import('./src/components/common/VirtualWindowList.vue')['default']
   }
   export interface ComponentCustomProperties {
     vLoading: typeof import('element-plus/es')['ElLoadingDirective']

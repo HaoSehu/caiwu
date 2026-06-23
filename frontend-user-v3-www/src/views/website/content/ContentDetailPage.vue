@@ -5,7 +5,14 @@
         {{ config.pageTitle }}
       </router-link>
       <el-icon><ArrowRight /></el-icon>
-      <span class="reader-breadcrumb__link">{{ currentCategoryName }}</span>
+      <router-link
+        v-if="currentCategoryId"
+        class="reader-breadcrumb__link"
+        :to="categoryListRoute"
+      >
+        {{ currentCategoryName }}
+      </router-link>
+      <span v-else class="reader-breadcrumb__text">{{ currentCategoryName }}</span>
       <el-icon><ArrowRight /></el-icon>
       <span class="reader-breadcrumb__current">
         {{ currentArticle?.title || config.detailTitle }}
@@ -103,14 +110,24 @@ const currentCategoryId = ref(null)
 const tocItems = ref([{ id: 'article-top', label: '全文', level: 1 }])
 const contentRef = ref(null)
 
-const backToListRoute = computed(() => ({
-  path: config.value.routeBasePath,
-  query: {
-    category: route.query.category,
-    keyword: route.query.keyword,
-    page: route.query.page,
-  },
-}))
+const backToListRoute = computed(() => {
+  const query = {}
+  if (route.query.category) query.category = route.query.category
+  if (route.query.keyword) query.keyword = route.query.keyword
+  if (route.query.page) query.page = route.query.page
+  return {
+    path: config.value.routeBasePath,
+    query: Object.keys(query).length ? query : undefined,
+  }
+})
+
+const categoryListRoute = computed(() => {
+  if (!currentCategoryId.value) return backToListRoute.value
+  return {
+    path: config.value.routeBasePath,
+    query: { category: currentCategoryId.value },
+  }
+})
 
 const timeLabel = computed(() => (
   props.contentType === 'help' ? '更新时间' : '发布时间'
@@ -118,7 +135,7 @@ const timeLabel = computed(() => (
 
 const currentCategoryName = computed(() => {
   const matched = categories.value.find((item) => item.id === currentCategoryId.value)
-  return matched?.name || currentArticle.value?.category_name || config.value.pageTitle
+  return matched?.name || currentArticle.value?.category_name || '未分类'
 })
 
 const currentPublisher = computed(() => (
@@ -237,6 +254,7 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 16px;
+  padding-top: 24px;
 }
 
 .reader-breadcrumb {
@@ -255,6 +273,15 @@ watch(
 }
 
 .reader-breadcrumb__link {
+  color: $text-color-secondary;
+  text-decoration: none;
+
+  &:hover {
+    color: $color-primary;
+  }
+}
+
+.reader-breadcrumb__text {
   color: $text-color-secondary;
 }
 

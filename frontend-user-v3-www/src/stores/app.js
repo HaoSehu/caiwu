@@ -19,6 +19,8 @@ export const useAppStore = defineStore('app', () => {
     supportGroupQr: computed(() => siteBrandingStore.supportGroupQr),
     termsUrl: computed(() => siteBrandingStore.termsUrl),
     privacyUrl: computed(() => siteBrandingStore.privacyUrl),
+    icpRecord: computed(() => siteBrandingStore.icpRecord),
+    valueAddedLicense: computed(() => siteBrandingStore.valueAddedLicense),
     brandInitials: computed(() => siteBrandingStore.brandInitials),
     toggleSidebar: siteBrandingStore.toggleSidebar,
     applyPageTitle: siteBrandingStore.applyPageTitle,

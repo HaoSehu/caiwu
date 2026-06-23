@@ -1,6 +1,6 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-import { provideGlobalConfig } from 'element-plus'
+import { provideGlobalConfig } from 'element-plus/es/components/config-provider/index.mjs'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 
 import App from '@/App.vue'

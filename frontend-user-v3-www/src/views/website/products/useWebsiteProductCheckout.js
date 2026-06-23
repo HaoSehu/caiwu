@@ -1,5 +1,5 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from 'element-plus/es/components/message/index.mjs'
 import siteApi from '@/api/site'
 import {
   resolvePurchaseRequirementList,
@@ -88,7 +88,7 @@ export function useWebsiteProductCheckout({
     const stock = resolvedStock.value
     if (stock === null) return '正在同步实时库存，请稍候。'
     if (stock === -1 || stock > 10) return '当前库存充足，可直接提交账单。'
-    if (stock > 0) return `剩余 ${stock} 台，请尽快下单。`
+    if (stock > 0) return `剩余 ${stock} 台，请尽快购买。`
     return '当前库存不足，请联系客服。'
   })
   const canSubmit = computed(() => {

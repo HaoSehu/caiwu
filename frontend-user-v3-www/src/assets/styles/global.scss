@@ -1,3 +1,5 @@
+@use 'sass:meta';
+
 :root {
   --el-color-primary: #{$color-primary};
   --el-color-success: #{$color-success};
@@ -442,7 +444,7 @@ ol {
   }
 }
 
-@import 'record-list';
+@include meta.load-css('record-list');
 
 @media (max-width: 900px) {
   .client-metric-strip {

@@ -1,8 +1,8 @@
-# frontend-client
+# frontend-user-v3-www
 
-- 文档性质：现行方向 / 前端部署说明
+- 文档性质：现行方向 / 官网与购买入口部署说明
 - 对齐时间：2026-06-08
-- 读者画像：负责官网与用户端构建、部署的前端 / 运维同学
+- 读者画像：负责官网与购买入口构建、部署的前端 / 运维同学
 
 ## 站点基础配置
 
@@ -14,7 +14,7 @@
 ## 构建命令
 
 ```bash
-cd frontend-client
+cd frontend-user-v3-www
 
 # 常规构建
 npm run build
@@ -33,6 +33,6 @@ location / {
 ## 验证要求
 
 ```bash
-cd frontend-client
+cd frontend-user-v3-www
 npm run build
 ```

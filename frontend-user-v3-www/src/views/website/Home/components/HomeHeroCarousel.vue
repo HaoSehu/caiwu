@@ -4,6 +4,38 @@
       <div class="hero-bg__cloud hero-bg__cloud--a"></div>
       <div class="hero-bg__cloud hero-bg__cloud--b"></div>
       <div class="hero-bg__cloud hero-bg__cloud--c"></div>
+
+      <div class="hero-bg__video-wrap">
+        <video
+          ref="videoARef"
+          class="hero-bg__video"
+          :class="{ 'hero-bg__video--active': activeVideoSlot === 'a' && videoReady }"
+          :src="resolvedVideoSrc(videoSlotA)"
+          autoplay
+          muted
+          loop
+          playsinline
+          :preload="activeVideoSlot === 'a' ? 'auto' : 'none'"
+          @loadeddata="onVideoALoadedData"
+          @canplay="onVideoACanPlay"
+          @loadedmetadata="onVideoMetadata($event, 'a')"
+        ></video>
+        <video
+          ref="videoBRef"
+          class="hero-bg__video"
+          :class="{ 'hero-bg__video--active': activeVideoSlot === 'b' && videoReady }"
+          :src="resolvedVideoSrc(videoSlotB)"
+          autoplay
+          muted
+          loop
+          playsinline
+          :preload="activeVideoSlot === 'b' ? 'auto' : 'none'"
+          @loadeddata="onVideoBLoadedData"
+          @canplay="onVideoBCanPlay"
+          @loadedmetadata="onVideoMetadata($event, 'b')"
+        ></video>
+        <div class="hero-bg__video-overlay"></div>
+      </div>
     </div>
 
     <div class="container hero-stage">
@@ -52,10 +84,6 @@
         </div>
       </div>
 
-      <div v-if="showPointCloudMounted" class="hero-visual" aria-hidden="true">
-        <HeroPointCloud :shape="currentShape" />
-      </div>
-
       <div class="hero-dots" role="tablist" aria-label="轮播指示">
         <button
           v-for="(slide, index) in heroSlides"
@@ -70,7 +98,7 @@
         ></button>
       </div>
 
-      <div class="hero-mobile-nav" role="tablist" aria-label="轮播控制">
+      <div class="hero-mobile-nav" role="group" aria-label="轮播控制">
         <button
           type="button"
           class="hero-mobile-nav__arrow"
@@ -87,7 +115,7 @@
             class="hero-mobile-nav__dot"
             :class="{ 'is-active': index === activeIndex }"
             :aria-label="`切换到 ${slide.railTitle}`"
-            :aria-selected="index === activeIndex"
+            :aria-current="index === activeIndex ? 'true' : undefined"
             @click="activateSlide(index)"
           ></button>
         </div>
@@ -120,10 +148,11 @@
 </template>
 
 <script setup>
-import { computed, defineAsyncComponent, h, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElIcon } from 'element-plus/es/components/icon/index.mjs'
 import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
-import { createRafThrottle } from '@/composables/useRafThrottle'
+
 
 const props = defineProps({
   hero: {
@@ -132,29 +161,30 @@ const props = defineProps({
   },
 })
 
-const HeroPointCloudLoading = {
-  name: 'HeroPointCloudLoading',
-  render() {
-    return h('div', { class: 'hero-visual__placeholder' }, [
-      h('span', { class: 'hero-visual__glow hero-visual__glow--primary' }),
-      h('span', { class: 'hero-visual__glow hero-visual__glow--secondary' }),
-      h('span', { class: 'hero-visual__grid' }),
-    ])
-  },
-}
-
-const HeroPointCloud = defineAsyncComponent({
-  loader: () => import('@/components/HeroPointCloud.vue'),
-  loadingComponent: HeroPointCloudLoading,
-  delay: 120,
-  suspensible: false,
-})
 
 const router = useRouter()
+const videoARef = ref(null)
+const videoBRef = ref(null)
+const videoReady = ref(false)
+const activeVideoSlot = ref('a')
+const videoSlotA = ref('')
+const videoSlotB = ref('')
+const videoDurations = new Map()
 const activeIndex = ref(0)
 const heroSlides = shallowRef(Object.freeze([]))
 const heroFeatures = shallowRef(Object.freeze([]))
-const showPointCloudMounted = ref(false)
+
+// 优化：跟踪已加载的视频，避免重复下载
+const loadedVideoUrls = new Set()
+
+// 解析视频 src，避免 #t=0.1 导致浏览器重复请求
+// 只对未缓存过的视频添加 #t=0.1 海报片段
+function resolvedVideoSrc(url) {
+  if (!url) return ''
+  // 使用原始 URL（不含 #t=0.1），浏览器可复用缓存
+  return url
+}
+
 
 // 与管理端 HomeHeroService::defaultSlides() 保持一致，后端不可用时仍保留兜底
 function freezeConfigList(list) {
@@ -172,12 +202,13 @@ const DEFAULT_SLIDES = freezeConfigList([
     key: 'refresh',
     railTitle: '官网换新',
     title: '官网焕新 · 云上新体验',
-    desc: '产品目录、下单支付、自动开通、账单结算与服务支持统一打通；首页即是控制台的入口，让资源采购和后续管理始终在同一条链路里完成。',
+    desc: '产品目录、购买支付、自动开通、账单结算与服务支持统一打通；首页即是控制台入口，让资源采购和后续管理始终在同一条链路里完成。',
     primaryText: '立即体验',
     primaryPath: '/products',
     secondaryText: '查看详情',
     secondaryPath: '/about',
     shape: 'computer',
+    video: '/uploads/hero-videos/hero-1.mp4',
     ribbon: '',
     ribbonType: 'new',
   },
@@ -191,6 +222,7 @@ const DEFAULT_SLIDES = freezeConfigList([
     secondaryText: '查看线路',
     secondaryPath: '/help',
     shape: 'connection',
+    video: '/uploads/hero-videos/hero-2.mp4',
     ribbon: '',
     ribbonType: 'new',
   },
@@ -204,6 +236,7 @@ const DEFAULT_SLIDES = freezeConfigList([
     secondaryText: '在线咨询',
     secondaryPath: '/help',
     shape: 'security',
+    video: '/uploads/hero-videos/hero-3.mp4',
     ribbon: '',
     ribbonType: 'new',
   },
@@ -217,6 +250,7 @@ const DEFAULT_SLIDES = freezeConfigList([
     secondaryText: '查看优惠',
     secondaryPath: '/products',
     shape: 'value',
+    video: '/uploads/hero-videos/hero-4.mp4',
     ribbon: '',
     ribbonType: 'warm',
   },
@@ -230,6 +264,7 @@ const DEFAULT_SLIDES = freezeConfigList([
     secondaryText: '企业采购',
     secondaryPath: '/about',
     shape: 'support',
+    video: '/uploads/hero-videos/hero-5.mp4',
     ribbon: '',
     ribbonType: 'new',
   },
@@ -297,6 +332,7 @@ function normalizeSlide(raw, index = 0) {
     secondaryText: pickString(source.secondary_text ?? source.secondaryText, '查看详情'),
     secondaryPath: pickString(source.secondary_path ?? source.secondaryPath, '/about'),
     shape: ALLOWED_SHAPES.has(shape) ? shape : 'computer',
+    video: pickString(source.video, ''),
     ribbon: pickString(source.ribbon, ''),
     ribbonType: ALLOWED_RIBBON_TYPES.has(ribbonType) ? ribbonType : 'new',
   }
@@ -357,54 +393,138 @@ watch(
 )
 
 const activeSlide = computed(() => heroSlides.value[activeIndex.value] || heroSlides.value[0] || DEFAULT_SLIDES[0])
-const currentShape = computed(() => activeSlide.value?.shape || 'computer')
 
-const POINT_CLOUD_MIN_WIDTH = 961
-const showPointCloud = ref(
-  typeof window !== 'undefined' ? window.innerWidth >= POINT_CLOUD_MIN_WIDTH : false,
-)
-
-function syncPointCloudVisibility() {
-  if (typeof window === 'undefined') return
-  showPointCloud.value = window.innerWidth >= POINT_CLOUD_MIN_WIDTH
-}
-
-const syncPointCloudVisibilityWithRaf = createRafThrottle(syncPointCloudVisibility)
-
-const ROTATION_INTERVAL = 5000
+const CROSSFADE_DURATION = 800
+const MIN_ROTATION_INTERVAL = 6000
+const MAX_ROTATION_INTERVAL = 15000
 let rotationTimer = null
+
+function getRotationInterval() {
+  const src = activeSlide.value.video
+  if (!src) return MIN_ROTATION_INTERVAL
+  const duration = videoDurations.get(src)
+  if (duration && duration > 0) {
+    return Math.min(MAX_ROTATION_INTERVAL, Math.max(MIN_ROTATION_INTERVAL, duration * 1000))
+  }
+  return MIN_ROTATION_INTERVAL
+}
 
 function stopRotation() {
   if (rotationTimer) {
-    clearInterval(rotationTimer)
+    clearTimeout(rotationTimer)
     rotationTimer = null
   }
 }
 
 function startRotation() {
   stopRotation()
-  rotationTimer = setInterval(() => {
+  rotationTimer = setTimeout(() => {
     const count = heroSlides.value.length || 1
-    activeIndex.value = (activeIndex.value + 1) % count
-  }, ROTATION_INTERVAL)
+    const nextIndex = (activeIndex.value + 1) % count
+    switchToSlide(nextIndex, true)
+  }, getRotationInterval())
+}
+
+function switchToSlide(index, auto = false) {
+  if (index === activeIndex.value && auto) return
+  activeIndex.value = index
+  const slide = heroSlides.value[index]
+  const videoSrc = slide?.video || ''
+  if (!videoSrc) {
+    videoSlotA.value = ''
+    videoSlotB.value = ''
+    videoReady.value = false
+    if (auto) startRotation()
+    return
+  }
+
+  // 优化：检查当前活跃 slot 是否已加载该视频，避免重复加载
+  const currentSlotSrc = activeVideoSlot.value === 'a' ? videoSlotA.value : videoSlotB.value
+  if (currentSlotSrc === videoSrc) {
+    // 当前 slot 已是目标视频，直接显示
+    videoReady.value = true
+    if (auto) startRotation()
+    return
+  }
+
+  // 优化：检查另一个 slot 是否已缓存该视频
+  const otherSlot = activeVideoSlot.value === 'a' ? 'b' : 'a'
+  const otherSlotSrc = otherSlot === 'a' ? videoSlotA.value : videoSlotB.value
+  if (otherSlotSrc === videoSrc) {
+    // 另一个 slot 已缓存该视频，直接切换
+    activeVideoSlot.value = otherSlot
+    videoReady.value = true
+    if (auto) startRotation()
+    return
+  }
+
+  // 需要加载新视频，使用非活跃 slot
+  const nextSlot = otherSlot
+  if (nextSlot === 'a') {
+    videoSlotA.value = videoSrc
+  } else {
+    videoSlotB.value = videoSrc
+  }
+  videoReady.value = false
+  activeVideoSlot.value = nextSlot
+  if (auto) startRotation()
 }
 
 function activateSlide(index) {
-  activeIndex.value = index
+  stopRotation()
+  switchToSlide(index)
   startRotation()
 }
 
 function prevSlide() {
   const count = heroSlides.value.length || 1
-  activeIndex.value = (activeIndex.value - 1 + count) % count
+  const index = (activeIndex.value - 1 + count) % count
+  stopRotation()
+  switchToSlide(index)
   startRotation()
 }
 
 function nextSlide() {
   const count = heroSlides.value.length || 1
-  activeIndex.value = (activeIndex.value + 1) % count
+  const index = (activeIndex.value + 1) % count
+  stopRotation()
+  switchToSlide(index)
   startRotation()
 }
+
+function onVideoACanPlay() {
+  if (activeVideoSlot.value === 'a') videoReady.value = true
+}
+
+function onVideoBCanPlay() {
+  if (activeVideoSlot.value === 'b') videoReady.value = true
+}
+
+// 首帧就绪即显示：比 canplay 更早触发，配合 #t=0.1 海报片段让首屏立即可见
+function onVideoALoadedData() {
+  if (activeVideoSlot.value === 'a') videoReady.value = true
+}
+
+function onVideoBLoadedData() {
+  if (activeVideoSlot.value === 'b') videoReady.value = true
+}
+
+function onVideoMetadata(event, slot) {
+  const videoEl = event.target
+  // 去掉 #t=0.1 等片段，确保与 activeSlide.video（原始 src）匹配
+  const src = (videoEl?.src || '').split('#')[0]
+  const duration = videoEl?.duration
+  if (src && duration && Number.isFinite(duration) && duration > 0) {
+    videoDurations.set(src, duration)
+  }
+}
+
+watch(activeSlide, (slide) => {
+  if (!slide?.video) return
+  const currentSlotSrc = activeVideoSlot.value === 'a' ? videoSlotA.value : videoSlotB.value
+  if (currentSlotSrc === slide.video) return
+  switchToSlide(activeIndex.value)
+})
 
 function handleVisibilityChange() {
   if (typeof document === 'undefined') return
@@ -416,19 +536,13 @@ function handleVisibilityChange() {
 }
 
 onMounted(() => {
-  startRotation()
-  if (typeof window !== 'undefined') {
-    syncPointCloudVisibility()
-    window.requestIdleCallback?.(() => {
-      showPointCloudMounted.value = showPointCloud.value
-    }, { timeout: 1200 })
-    if (!('requestIdleCallback' in window)) {
-      window.setTimeout(() => {
-        showPointCloudMounted.value = showPointCloud.value
-      }, 320)
-    }
-    window.addEventListener('resize', syncPointCloudVisibilityWithRaf, { passive: true })
+  const firstVideo = activeSlide.value?.video || ''
+  if (firstVideo) {
+    videoSlotA.value = firstVideo
+    activeVideoSlot.value = 'a'
+    loadedVideoUrls.add(firstVideo)
   }
+  startRotation()
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', handleVisibilityChange)
   }
@@ -436,14 +550,9 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   stopRotation()
-  if (typeof window !== 'undefined') {
-    window.removeEventListener('resize', syncPointCloudVisibilityWithRaf)
-  }
   if (typeof document !== 'undefined') {
     document.removeEventListener('visibilitychange', handleVisibilityChange)
   }
-
-  syncPointCloudVisibilityWithRaf.cancel()
 })
 </script>
 
@@ -468,9 +577,7 @@ onBeforeUnmount(() => {
 .hero-section {
   position: relative;
   padding: 28px 0 44px;
-  background:
-    radial-gradient(circle at 18% 16%, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0) 34%),
-    linear-gradient(180deg, #ffffff 0%, #fbfcfe 48%, #f3f5f8 100%);
+  background: #f3f5f8;
   isolation: isolate;
 }
 
@@ -492,6 +599,38 @@ onBeforeUnmount(() => {
   overflow: hidden;
   pointer-events: none;
   z-index: 0;
+}
+
+.hero-bg__video-wrap {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+}
+
+.hero-bg__video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: opacity;
+}
+
+.hero-bg__video--active {
+  opacity: 1;
+}
+
+.hero-bg__video-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.82) 0%,
+    rgba(255, 255, 255, 0.56) 50%,
+    rgba(255, 255, 255, 0.36) 100%
+  );
 }
 
 .hero-bg__cloud {
@@ -789,73 +928,6 @@ onBeforeUnmount(() => {
   display: none;
 }
 
-.hero-visual {
-  position: relative;
-  min-width: 0;
-  min-height: 420px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: visible;
-}
-
-.hero-visual__placeholder {
-  position: relative;
-  width: min(560px, 100%);
-  aspect-ratio: 6 / 5;
-  border-radius: 28px;
-  overflow: hidden;
-  background:
-    radial-gradient(circle at 24% 28%, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0) 42%),
-    linear-gradient(145deg, rgba(227, 236, 251, 0.96) 0%, rgba(245, 248, 252, 0.98) 52%, rgba(227, 236, 251, 0.96) 100%);
-  border: 1px solid rgba(47, 94, 243, 0.1);
-  box-shadow: 0 28px 60px rgba(47, 94, 243, 0.08);
-}
-
-.hero-visual__glow,
-.hero-visual__grid {
-  position: absolute;
-  inset: 0;
-}
-
-.hero-visual__glow {
-  filter: blur(6px);
-}
-
-.hero-visual__glow--primary {
-  inset: 14% 18%;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(76, 134, 255, 0.34) 0%, rgba(76, 134, 255, 0) 68%);
-  animation: hero-visual-pulse 2.8s ease-out infinite;
-}
-
-.hero-visual__glow--secondary {
-  inset: 28% 24%;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0) 58%);
-  animation: hero-visual-pulse 2.8s ease-out infinite reverse;
-}
-
-.hero-visual__grid {
-  background-image:
-    linear-gradient(rgba(47, 94, 243, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(47, 94, 243, 0.08) 1px, transparent 1px);
-  background-size: 28px 28px;
-  mask-image: radial-gradient(circle at center, #000 28%, transparent 82%);
-  opacity: 0.72;
-}
-
-@keyframes hero-visual-pulse {
-  0% {
-    transform: scale(0.96);
-    opacity: 0.68;
-  }
-
-  100% {
-    transform: scale(1.04);
-    opacity: 1;
-  }
-}
 
 @keyframes hero-body-rise {
   0% {
@@ -877,6 +949,7 @@ onBeforeUnmount(() => {
   margin-top: 32px;
   background: rgba(255, 255, 255, 0.72);
   border: 1px solid rgba(22, 93, 255, 0.1);
+  -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   border-radius: 12px;
   box-shadow: 0 12px 30px rgba(47, 94, 243, 0.08);
@@ -990,13 +1063,6 @@ onBeforeUnmount(() => {
     margin-top: 26px;
   }
 
-  .hero-visual {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    min-height: 320px;
-    margin-top: 8px;
-  }
-
   .hero-feature-strip {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     margin-top: 24px;
@@ -1066,10 +1132,6 @@ onBeforeUnmount(() => {
     grid-column: 1;
     grid-row: auto;
     padding-top: 0;
-  }
-
-  .hero-visual {
-    display: none;
   }
 
   .hero-desc {
