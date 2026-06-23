@@ -34,6 +34,7 @@
     "format": "prettier --write \"**/*.{js,ts,vue,json,css,scss,md}\"",
     "format:check": "prettier --check \"**/*.{js,ts,vue,json,css,scss,md}\"",
     "verify:frontends": "npm run lint:frontends && npm run typecheck:frontends && npm run test:frontends && npm run build:frontends && npm run verify:refactor --workspace chuangouyun-user-v3-www && npm run verify:refactor --workspace chuangouyun-user-v4-console",
+    "workspace:health": "node backend/scripts/workspace_health_check.mjs",
     "prepare": "husky"
   },
   "lint-staged": {

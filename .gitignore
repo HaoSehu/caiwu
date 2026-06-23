@@ -1,5 +1,6 @@
 # Laravel
 backend/.env
+backend/.env.local
 backend/vendor/
 backend/taskkill
 backend/node_modules/
@@ -27,6 +28,14 @@ frontend-user-v4-console/playwright-report/
 frontend-user-v4-console/test-results/
 frontend-user-v4-console/.auth/
 shared/node_modules/
+
+# Frontend local environment overrides
+frontend-admin-v3/.env.local
+frontend-admin-v3/.env.*.local
+frontend-user-v3-www/.env.local
+frontend-user-v3-www/.env.*.local
+frontend-user-v4-console/.env.local
+frontend-user-v4-console/.env.*.local
 
 # IDE
 .vscode/
@@ -77,6 +86,19 @@ frontend-client/frontend-client/
 # Local run/test artifacts
 .runlogs/
 *.log
+backend/.env.bak*
+backend/public/uploads/
+backend/storage/app/account-user-account-backfills/
+backend/storage/app/invoice-order-reconciliations/
+backend/storage/app/json-schema-version-backfills/
+backend/storage/app/trace-id-backfills/
+backend/storage/app/private/charset-backups/
+backend/storage/app/private/foreign-key-backups/
+backend/storage/app/private/index-governance/
+backend/storage/app/private/log-archives/
+backend/storage/app/private/order-projection-backups/
+backend/storage/app/private/product-group-hierarchy-backups/
+backend/storage/app/private/tickets/
 backend/storage/framework/testing/*.sqlite
 frontend-user-v4-console/*.png
 
@@ -94,3 +116,10 @@ zjmf-manger-decoded-main/
 
 # Claude
 .claude/
+
+# Local AI tool indices / config
+.codegraph/
+.reasonix/
+.devin_tmp/
+
+backend/.env.testing
