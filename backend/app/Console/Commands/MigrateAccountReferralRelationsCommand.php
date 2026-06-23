@@ -61,11 +61,11 @@ class MigrateAccountReferralRelationsCommand extends AccountMigrateBaseCommand
         }
 
         if ($partition['skipped_referred_user_ids'] !== []) {
-            $this->warn('以下被推荐用户因目标用户缺失被跳过：' . implode(', ', $partition['skipped_referred_user_ids']));
+            $this->warn('以下被推荐用户因目标用户缺失被跳过：'.implode(', ', $partition['skipped_referred_user_ids']));
         }
 
         if ($partition['skipped_referrer_user_ids'] !== []) {
-            $this->warn('以下推荐人因目标用户缺失被跳过：' . implode(', ', $partition['skipped_referrer_user_ids']));
+            $this->warn('以下推荐人因目标用户缺失被跳过：'.implode(', ', $partition['skipped_referrer_user_ids']));
         }
 
         $columns = array_keys($payloads[0]);

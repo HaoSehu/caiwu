@@ -2,14 +2,16 @@
 
 namespace App\Models;
 
+use App\Constants\PaymentGatewayCode;
 use App\Models\Concerns\NormalizesTraceId;
+use App\Support\VersionedJson;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 
 class Payment extends Model
 {
@@ -18,6 +20,7 @@ class Payment extends Model
     protected $fillable = [
         'payment_no', 'user_id', 'order_id', 'invoice_id', 'gateway',
         'trade_no', 'amount', 'status', 'callback_raw', 'paid_at',
+        'trace_id',
     ];
 
     protected function casts(): array
@@ -29,24 +32,62 @@ class Payment extends Model
         ];
     }
 
+    protected static function booted(): void
+    {
+        static::creating(function (Payment $payment): void {
+            $gateway = trim((string) $payment->gateway);
+
+            if (! PaymentGatewayCode::isThirdParty($gateway)) {
+                throw new InvalidArgumentException('Payment 仅允许记录第三方真实资金流入，余额、手工、免费流程请使用账单和账户流水表达。');
+            }
+        });
+    }
+
     public function getCallbackRawAttribute(mixed $value): array
     {
+        $decoded = VersionedJson::decodeToArray($value);
+        if (($this->isDirty('callback_raw') || $this->wasChanged('callback_raw')) && $decoded !== null) {
+            return VersionedJson::paymentCallback($decoded, 'payment');
+        }
+
         $callbacks = $this->resolveCallbackPayloadFromStructure();
         if ($callbacks !== null) {
             return $callbacks;
         }
 
-        if (is_array($value)) {
-            return $value;
+        return $decoded === null ? [] : VersionedJson::paymentCallback($decoded, 'payment');
+    }
+
+    public function setCallbackRawAttribute(mixed $value): void
+    {
+        $payload = VersionedJson::decodeToArray($value);
+        $this->attributes['callback_raw'] = $payload === null
+            ? null
+            : json_encode(VersionedJson::paymentCallback($payload, 'payment'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    public function callbackPayload(string $callbackType = 'payment'): array
+    {
+        if (! Schema::hasTable('payment_callbacks') || ! $this->exists) {
+            return [];
         }
 
-        if (is_string($value) && $value !== '') {
-            $decoded = json_decode($value, true);
-
-            return is_array($decoded) ? $decoded : [];
+        if (! $this->relationLoaded('callbacks')) {
+            $this->loadMissing('callbacks');
         }
 
-        return [];
+        /** @var Collection<int, PaymentCallback> $callbacks */
+        $callbacks = $this->getRelation('callbacks');
+        $payload = $callbacks->firstWhere('callback_type', $callbackType)?->payload_json;
+
+        return is_array($payload)
+            ? VersionedJson::paymentCallback($payload, $callbackType)
+            : [];
+    }
+
+    public function refundCallbackPayload(): array
+    {
+        return $this->callbackPayload('refund');
     }
 
     public function user(): BelongsTo
@@ -82,74 +123,6 @@ class Payment extends Model
         return 'PAY'.now()->format('YmdHisv').Str::upper(Str::random(12));
     }
 
-    public function syncPaymentCallbackProjection(): void
-    {
-        if (! $this->exists || ! Schema::hasTable('payment_callbacks')) {
-            return;
-        }
-
-        $callbackRaw = $this->legacyCallbackRaw();
-
-        DB::transaction(function () use ($callbackRaw): void {
-            DB::table('payment_callbacks')->where('payment_id', (int) $this->id)->delete();
-
-            if ($callbackRaw === []) {
-                return;
-            }
-
-            DB::table('payment_callbacks')->insert([
-                'payment_id' => (int) $this->id,
-                'callback_type' => 'payment',
-                'gateway_trade_no' => $this->nullableValue($callbackRaw['trade_no'] ?? ($this->trade_no ?? null)),
-                'payload_json' => json_encode($callbackRaw, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                'is_verified' => $this->resolveCallbackVerified($callbackRaw),
-                'received_at' => $callbackRaw['send_pay_date'] ?? ($this->paid_at ?? $this->updated_at ?? now()),
-                'created_at' => $this->created_at ?? now(),
-                'updated_at' => $this->updated_at ?? now(),
-            ]);
-
-            $refundPayload = is_array($callbackRaw['refund'] ?? null) ? $callbackRaw['refund'] : [];
-            if ($refundPayload === []) {
-                return;
-            }
-
-            DB::table('payment_callbacks')->insert([
-                'payment_id' => (int) $this->id,
-                'callback_type' => 'refund',
-                'gateway_trade_no' => $this->nullableValue($refundPayload['trade_no'] ?? null),
-                'payload_json' => json_encode($refundPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                'is_verified' => 1,
-                'received_at' => $refundPayload['refunded_at'] ?? ($this->updated_at ?? now()),
-                'created_at' => $this->created_at ?? now(),
-                'updated_at' => $this->updated_at ?? now(),
-            ]);
-        });
-    }
-
-    private function resolveCallbackVerified(array $callbackRaw): int
-    {
-        if ((string) $this->gateway === 'balance') {
-            return 1;
-        }
-
-        if (($callbackRaw['code'] ?? null) === '10000') {
-            return 1;
-        }
-
-        if (trim((string) ($callbackRaw['trade_status'] ?? '')) === 'TRADE_SUCCESS') {
-            return 1;
-        }
-
-        return 0;
-    }
-
-    private function nullableValue(mixed $value): ?string
-    {
-        $normalized = trim((string) $value);
-
-        return $normalized === '' ? null : $normalized;
-    }
-
     private function resolveCallbackPayloadFromStructure(): ?array
     {
         if (! Schema::hasTable('payment_callbacks') || ! $this->exists) {
@@ -166,10 +139,16 @@ class Payment extends Model
             return null;
         }
 
-        $paymentPayload = (array) ($callbacks->firstWhere('callback_type', 'payment')?->payload_json ?? []);
-        $refundPayload = (array) ($callbacks->firstWhere('callback_type', 'refund')?->payload_json ?? []);
+        $paymentPayload = VersionedJson::paymentCallback(
+            $callbacks->firstWhere('callback_type', 'payment')?->payload_json ?? [],
+            'payment'
+        );
+        $refundPayload = VersionedJson::paymentCallback(
+            $callbacks->firstWhere('callback_type', 'refund')?->payload_json ?? [],
+            'refund'
+        );
 
-        if ($paymentPayload === [] && $refundPayload === []) {
+        if ($callbacks->firstWhere('callback_type', 'payment') === null && $callbacks->firstWhere('callback_type', 'refund') === null) {
             return null;
         }
 
@@ -178,17 +157,5 @@ class Payment extends Model
         }
 
         return $paymentPayload;
-    }
-
-    private function legacyCallbackRaw(): array
-    {
-        $raw = $this->getRawOriginal('callback_raw');
-        if (is_string($raw) && $raw !== '') {
-            $decoded = json_decode($raw, true);
-
-            return is_array($decoded) ? $decoded : [];
-        }
-
-        return is_array($raw) ? $raw : [];
     }
 }

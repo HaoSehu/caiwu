@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\ProductType\ReorderRequest;
+use App\Http\Requests\Admin\ProductType\StoreRequest;
+use App\Http\Requests\Admin\ProductType\UpdateRequest;
 use App\Services\ProductCatalog\ProductTypeService;
-use Illuminate\Http\Request;
 
 class ProductTypeController extends Controller
 {
@@ -19,12 +21,9 @@ class ProductTypeController extends Controller
         ]);
     }
 
-    public function store(Request $request)
+    public function store(StoreRequest $request)
     {
-        $payload = $request->validate([
-            'label' => ['required', 'string', 'max:30'],
-            'icon' => ['nullable', 'string', 'max:50'],
-        ]);
+        $payload = $request->validated();
 
         return $this->success(
             $this->productTypeService->create($payload['label'], $payload['icon'] ?? null),
@@ -32,13 +31,9 @@ class ProductTypeController extends Controller
         );
     }
 
-    public function update(Request $request, string $productType)
+    public function update(UpdateRequest $request, string $productType)
     {
-        $payload = $request->validate([
-            'label' => ['required', 'string', 'max:30'],
-            'is_hidden' => ['nullable', 'boolean'],
-            'icon' => ['nullable', 'string', 'max:50'],
-        ]);
+        $payload = $request->validated();
 
         return $this->success(
             $this->productTypeService->update(
@@ -58,12 +53,9 @@ class ProductTypeController extends Controller
         return $this->success(null, '商品种类已删除');
     }
 
-    public function reorder(Request $request)
+    public function reorder(ReorderRequest $request)
     {
-        $payload = $request->validate([
-            'values' => ['required', 'array', 'min:2'],
-            'values.*' => ['required', 'string', 'max:50', 'distinct'],
-        ]);
+        $payload = $request->validated();
 
         return $this->success(
             ['list' => $this->productTypeService->reorder($payload['values'])],

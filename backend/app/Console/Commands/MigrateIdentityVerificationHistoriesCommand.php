@@ -49,7 +49,7 @@ class MigrateIdentityVerificationHistoriesCommand extends IdentityMigrateBaseCom
 
         $statusSummary = [];
         foreach ($statusRows as $row) {
-            $statusSummary['status_' . (string) $row->verification_status] = (int) $row->cnt;
+            $statusSummary['status_'.(string) $row->verification_status] = (int) $row->cnt;
         }
 
         return array_merge([

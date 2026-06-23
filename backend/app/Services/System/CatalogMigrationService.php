@@ -68,14 +68,14 @@ class CatalogMigrationService
 
     public function sourceCount(string $table): int
     {
-        $rows = $this->sourceQuery('SELECT COUNT(*) AS cnt FROM `' . $table . '`');
+        $rows = $this->sourceQuery('SELECT COUNT(*) AS cnt FROM `'.$table.'`');
 
         return (int) ($rows[0]->cnt ?? 0);
     }
 
     public function targetCount(string $table): int
     {
-        $rows = $this->targetQuery('SELECT COUNT(*) AS cnt FROM `' . $table . '`');
+        $rows = $this->targetQuery('SELECT COUNT(*) AS cnt FROM `'.$table.'`');
 
         return (int) ($rows[0]->cnt ?? 0);
     }
@@ -214,8 +214,8 @@ class CatalogMigrationService
     }
 
     /**
-     * @param  list<string> $columns
-     * @param  array<int, array<string, mixed>> $rows
+     * @param  list<string>  $columns
+     * @param  array<int, array<string, mixed>>  $rows
      */
     public function batchInsertIgnore(string $table, array $columns, array $rows): int
     {
@@ -224,7 +224,7 @@ class CatalogMigrationService
         }
 
         $columnList = implode(', ', array_map(static fn (string $column) => "`{$column}`", $columns));
-        $rowPlaceholder = '(' . implode(', ', array_fill(0, count($columns), '?')) . ')';
+        $rowPlaceholder = '('.implode(', ', array_fill(0, count($columns), '?')).')';
         $placeholders = implode(', ', array_fill(0, count($rows), $rowPlaceholder));
 
         $bindings = [];
@@ -243,10 +243,10 @@ class CatalogMigrationService
     }
 
     /**
-     * @param  list<string> $columns
-     * @param  array<int, array<string, mixed>> $rows
-     * @param  list<string> $uniqueBy
-     * @param  list<string> $updateColumns
+     * @param  list<string>  $columns
+     * @param  array<int, array<string, mixed>>  $rows
+     * @param  list<string>  $uniqueBy
+     * @param  list<string>  $updateColumns
      */
     public function batchUpsert(string $table, array $columns, array $rows, array $uniqueBy, array $updateColumns): int
     {
@@ -300,7 +300,7 @@ class CatalogMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $legacyGroup
+     * @param  array<string, mixed>  $legacyGroup
      * @return array<string, mixed>
      */
     public function buildProductGroupPayload(array $legacyGroup): array
@@ -309,8 +309,8 @@ class CatalogMigrationService
             'id' => (int) $legacyGroup['id'],
             'parent_group_id' => isset($legacyGroup['parent_group_id']) ? (int) $legacyGroup['parent_group_id'] : null,
             'product_type' => $this->normalizeProductType($legacyGroup['product_type'] ?? null),
-            'name' => $this->normalizeRequiredString($legacyGroup['name'] ?? null, '未命名分组 #' . (int) $legacyGroup['id']),
-            'slug' => $this->normalizeRequiredString($legacyGroup['slug'] ?? null, 'group-' . (int) $legacyGroup['id']),
+            'name' => $this->normalizeRequiredString($legacyGroup['name'] ?? null, '未命名分组 #'.(int) $legacyGroup['id']),
+            'slug' => $this->normalizeRequiredString($legacyGroup['slug'] ?? null, 'group-'.(int) $legacyGroup['id']),
             'slogan' => $this->normalizeNullableString($legacyGroup['slogan'] ?? null),
             'sort_order' => (int) ($legacyGroup['sort_order'] ?? 0),
             'is_visible' => (int) (($legacyGroup['is_visible'] ?? 1) ? 1 : 0),
@@ -320,7 +320,7 @@ class CatalogMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $legacyProduct
+     * @param  array<string, mixed>  $legacyProduct
      * @param  array<string, mixed>|null  $group
      * @param  array<string, bool>  $usedSlugs
      * @return array<string, mixed>
@@ -350,7 +350,7 @@ class CatalogMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $legacyProduct
+     * @param  array<string, mixed>  $legacyProduct
      * @return array<int, array<string, mixed>>
      */
     public function buildPricingPlans(array $legacyProduct): array
@@ -405,7 +405,7 @@ class CatalogMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $legacyProduct
+     * @param  array<string, mixed>  $legacyProduct
      * @return array<int, array<string, mixed>>
      */
     public function buildConfigOptions(array $legacyProduct): array
@@ -429,7 +429,7 @@ class CatalogMigrationService
             $usedKeys[$key] = true;
             $label = $this->normalizeRequiredString(
                 $item['name'] ?? $item['field'] ?? null,
-                '配置项 ' . ($index + 1)
+                '配置项 '.($index + 1)
             );
 
             $rows[] = [
@@ -451,7 +451,7 @@ class CatalogMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $legacySupplier
+     * @param  array<string, mixed>  $legacySupplier
      * @return array<string, mixed>
      */
     public function buildSupplierPayload(array $legacySupplier): array
@@ -460,8 +460,8 @@ class CatalogMigrationService
 
         return [
             'id' => (int) $legacySupplier['id'],
-            'name' => $this->normalizeRequiredString($legacySupplier['name'] ?? null, '未命名供应商 #' . (int) $legacySupplier['id']),
-            'code' => $this->normalizeRequiredString($legacySupplier['code'] ?? null, 'supplier-' . (int) $legacySupplier['id']),
+            'name' => $this->normalizeRequiredString($legacySupplier['name'] ?? null, '未命名供应商 #'.(int) $legacySupplier['id']),
+            'code' => $this->normalizeRequiredString($legacySupplier['code'] ?? null, 'supplier-'.(int) $legacySupplier['id']),
             'interface_type' => $this->normalizeRequiredString($legacySupplier['interface_type'] ?? null, 'hosting_panel_api'),
             'api_url' => $this->normalizeNullableString($legacySupplier['api_url'] ?? null),
             'api_username' => $this->normalizeNullableString($legacySupplier['api_username'] ?? null),
@@ -479,7 +479,7 @@ class CatalogMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $legacyProduct
+     * @param  array<string, mixed>  $legacyProduct
      * @return array<string, mixed>|null
      */
     public function buildSupplierProductPayload(array $legacyProduct): ?array
@@ -521,7 +521,7 @@ class CatalogMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $legacyServer
+     * @param  array<string, mixed>  $legacyServer
      * @return array<string, mixed>
      */
     public function buildServerPayload(array $legacyServer): array
@@ -529,7 +529,7 @@ class CatalogMigrationService
         return [
             'id' => (int) $legacyServer['id'],
             'supplier_id' => null,
-            'name' => $this->normalizeRequiredString($legacyServer['name'] ?? null, '未命名节点 #' . (int) $legacyServer['id']),
+            'name' => $this->normalizeRequiredString($legacyServer['name'] ?? null, '未命名节点 #'.(int) $legacyServer['id']),
             'hostname' => $this->normalizeNullableString($legacyServer['hostname'] ?? null),
             'ip_address' => $this->normalizeNullableString($legacyServer['ip_address'] ?? null),
             'region_code' => null,
@@ -545,7 +545,7 @@ class CatalogMigrationService
     }
 
     /**
-     * @param  array<int, array<string, mixed>> $legacyProducts
+     * @param  array<int, array<string, mixed>>  $legacyProducts
      * @return array{pricing_plan_count: int, config_option_count: int, supplier_product_count: int}
      */
     public function deriveCatalogMetrics(array $legacyProducts): array
@@ -578,7 +578,7 @@ class CatalogMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $legacyProduct
+     * @param  array<string, mixed>  $legacyProduct
      * @param  array<string, mixed>|null  $group
      */
     private function resolveProductName(array $legacyProduct, ?array $group): string
@@ -588,7 +588,7 @@ class CatalogMigrationService
         if ($group !== null) {
             $groupName = $this->normalizeNullableString($group['name'] ?? null);
             if ($groupName !== null) {
-                return $groupName . ' ' . Str::upper($this->normalizeProductType($legacyProduct['product_type'] ?? null));
+                return $groupName.' '.Str::upper($this->normalizeProductType($legacyProduct['product_type'] ?? null));
             }
         }
 
@@ -597,11 +597,11 @@ class CatalogMigrationService
             return $remark;
         }
 
-        return '商品 #' . $productId;
+        return '商品 #'.$productId;
     }
 
     /**
-     * @param  array<string, mixed> $legacyProduct
+     * @param  array<string, mixed>  $legacyProduct
      */
     private function resolveProductSummary(array $legacyProduct, string $name): ?string
     {
@@ -615,21 +615,21 @@ class CatalogMigrationService
     }
 
     /**
-     * @param  array<string, bool> $usedSlugs
+     * @param  array<string, bool>  $usedSlugs
      */
     private function generateUniqueSlug(string $name, int $id, array $usedSlugs): string
     {
         $base = $this->makeSlugBase($name);
 
         if ($base === '') {
-            $base = 'product-' . $id;
+            $base = 'product-'.$id;
         }
 
         if (! isset($usedSlugs[$base])) {
             return $base;
         }
 
-        return $base . '-' . $id;
+        return $base.'-'.$id;
     }
 
     private function makeSlugBase(string $value): string
@@ -675,33 +675,33 @@ class CatalogMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $item
-     * @param  array<string, bool> $usedKeys
+     * @param  array<string, mixed>  $item
+     * @param  array<string, bool>  $usedKeys
      */
     private function buildConfigOptionKey(array $item, int $index, array $usedKeys): string
     {
         $candidate = $this->normalizeNullableString($item['field'] ?? null)
             ?? $this->normalizeNullableString($item['name'] ?? null)
-            ?? (isset($item['id']) ? 'option-' . (string) $item['id'] : null)
-            ?? 'option-' . ($index + 1);
+            ?? (isset($item['id']) ? 'option-'.(string) $item['id'] : null)
+            ?? 'option-'.($index + 1);
 
         $base = Str::snake(Str::replace(['-', ' '], '_', $candidate));
         $base = preg_replace('/[^a-z0-9_]+/i', '_', $base ?? '') ?? '';
         $base = trim((string) $base, '_');
 
         if ($base === '') {
-            $base = 'option_' . ($index + 1);
+            $base = 'option_'.($index + 1);
         }
 
         if (! isset($usedKeys[$base])) {
             return Str::limit($base, 64, '');
         }
 
-        return Str::limit($base . '_' . ($index + 1), 64, '');
+        return Str::limit($base.'_'.($index + 1), 64, '');
     }
 
     /**
-     * @param  array<string, mixed> $item
+     * @param  array<string, mixed>  $item
      */
     private function normalizeOptionType(mixed $legacyType, array $item): string
     {
@@ -813,9 +813,6 @@ class CatalogMigrationService
         return $this->encodeJson($decoded);
     }
 
-    /**
-     * @param  mixed $value
-     */
     private function encodeJson(mixed $value): string
     {
         return (string) json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

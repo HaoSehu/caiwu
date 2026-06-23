@@ -15,7 +15,7 @@ class DashboardService
 {
     private const OVERVIEW_RECENT_INVOICES_CACHE_KEY = 'dashboard:overview:recent_invoices';
 
-    private const OVERVIEW_RECENT_INVOICES_CACHE_TTL_SECONDS = 15;
+    private const OVERVIEW_RECENT_INVOICES_CACHE_TTL_SECONDS = 30; // 30秒：发票列表
 
     private const OVERVIEW_STATS_CACHE_KEY = 'dashboard:overview:stats';
 

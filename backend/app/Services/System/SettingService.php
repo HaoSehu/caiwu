@@ -2,9 +2,9 @@
 
 namespace App\Services\System;
 
-use App\Models\ProductCategory;
 use App\Models\Setting;
 use App\Models\SystemSetting;
+use App\Models\ThirdProductGroup;
 use App\Support\AutomationScheduleExpression;
 use Illuminate\Support\Collection;
 
@@ -285,12 +285,12 @@ class SettingService
         }
 
         $ids = [$categoryId];
-        $category = ProductCategory::query()
-            ->select(['id', 'parent_group_id'])
+        $thirdGroup = ThirdProductGroup::query()
+            ->select(['id', 'second_product_group_id'])
             ->find($categoryId);
 
-        if ($category instanceof ProductCategory && (int) ($category->parent_group_id ?? 0) > 0) {
-            $ids[] = (int) $category->parent_group_id;
+        if ($thirdGroup instanceof ThirdProductGroup && (int) ($thirdGroup->second_product_group_id ?? 0) > 0) {
+            $ids[] = (int) $thirdGroup->second_product_group_id;
         }
 
         return array_values(array_unique($ids));

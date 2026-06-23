@@ -52,14 +52,14 @@ class TradeMigrationService
 
     public function sourceCount(string $table): int
     {
-        $rows = $this->sourceQuery('SELECT COUNT(*) AS cnt FROM `' . $table . '`');
+        $rows = $this->sourceQuery('SELECT COUNT(*) AS cnt FROM `'.$table.'`');
 
         return (int) ($rows[0]->cnt ?? 0);
     }
 
     public function targetCount(string $table): int
     {
-        $rows = $this->targetQuery('SELECT COUNT(*) AS cnt FROM `' . $table . '`');
+        $rows = $this->targetQuery('SELECT COUNT(*) AS cnt FROM `'.$table.'`');
 
         return (int) ($rows[0]->cnt ?? 0);
     }
@@ -188,10 +188,10 @@ class TradeMigrationService
     }
 
     /**
-     * @param  list<string> $columns
-     * @param  array<int, array<string, mixed>> $rows
-     * @param  list<string> $uniqueBy
-     * @param  list<string> $updateColumns
+     * @param  list<string>  $columns
+     * @param  array<int, array<string, mixed>>  $rows
+     * @param  list<string>  $uniqueBy
+     * @param  list<string>  $updateColumns
      */
     public function batchUpsert(string $table, array $columns, array $rows, array $uniqueBy, array $updateColumns): int
     {
@@ -245,8 +245,8 @@ class TradeMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $legacyInvoice
-     * @param  array<string, mixed>|null $legacyOrder
+     * @param  array<string, mixed>  $legacyInvoice
+     * @param  array<string, mixed>|null  $legacyOrder
      * @return array<string, mixed>
      */
     public function buildInvoicePayload(array $legacyInvoice, ?array $legacyOrder, ?int $targetServiceInstanceId): array
@@ -269,7 +269,7 @@ class TradeMigrationService
 
         return [
             'id' => (int) ($legacyInvoice['id'] ?? 0),
-            'invoice_no' => $this->normalizeRequiredString($legacyInvoice['invoice_no'] ?? null, 'INV-' . (int) ($legacyInvoice['id'] ?? 0)),
+            'invoice_no' => $this->normalizeRequiredString($legacyInvoice['invoice_no'] ?? null, 'INV-'.(int) ($legacyInvoice['id'] ?? 0)),
             'user_id' => (int) ($legacyInvoice['user_id'] ?? 0),
             'scene' => $this->deriveInvoiceScene($legacyInvoice, $legacyOrder),
             'product_id' => $productId,
@@ -302,7 +302,7 @@ class TradeMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $legacyPayment
+     * @param  array<string, mixed>  $legacyPayment
      * @return array<string, mixed>
      */
     public function buildPaymentPayload(array $legacyPayment): array
@@ -311,7 +311,7 @@ class TradeMigrationService
 
         return [
             'id' => (int) ($legacyPayment['id'] ?? 0),
-            'payment_no' => $this->normalizeRequiredString($legacyPayment['payment_no'] ?? null, 'PAY-' . (int) ($legacyPayment['id'] ?? 0)),
+            'payment_no' => $this->normalizeRequiredString($legacyPayment['payment_no'] ?? null, 'PAY-'.(int) ($legacyPayment['id'] ?? 0)),
             'invoice_id' => (int) ($legacyPayment['invoice_id'] ?? 0),
             'user_id' => (int) ($legacyPayment['user_id'] ?? 0),
             'gateway' => $this->normalizeRequiredString($legacyPayment['gateway'] ?? null, 'unknown'),
@@ -333,7 +333,7 @@ class TradeMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $legacyCallback
+     * @param  array<string, mixed>  $legacyCallback
      * @return array<string, mixed>
      */
     public function buildPaymentCallbackPayload(array $legacyCallback): array
@@ -354,7 +354,7 @@ class TradeMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $legacyPayment
+     * @param  array<string, mixed>  $legacyPayment
      * @return array<string, mixed>
      */
     public function buildRefundPayload(array $legacyPayment, int $invoiceUserId): array
@@ -362,7 +362,7 @@ class TradeMigrationService
         $callbackSummary = $this->decodeJsonArray($legacyPayment['callback_raw'] ?? null);
         $refundNo = $this->normalizeRequiredString(
             $callbackSummary['refund_no'] ?? null,
-            'RF-' . (int) ($legacyPayment['id'] ?? 0)
+            'RF-'.(int) ($legacyPayment['id'] ?? 0)
         );
         $refundAmount = $callbackSummary['refund_amount'] ?? $legacyPayment['amount'] ?? 0;
         $refundReason = $callbackSummary['reason'] ?? $legacyPayment['remark'] ?? null;
@@ -386,8 +386,8 @@ class TradeMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $legacyInvoice
-     * @param  array<string, mixed>|null $legacyOrder
+     * @param  array<string, mixed>  $legacyInvoice
+     * @param  array<string, mixed>|null  $legacyOrder
      */
     public function deriveInvoiceScene(array $legacyInvoice, ?array $legacyOrder): string
     {
@@ -471,7 +471,7 @@ class TradeMigrationService
                 'invoice_id' => (int) ($item['invoice_id'] ?? 0),
                 'item_type' => $this->normalizeRequiredString($item['item_type'] ?? null, 'normal'),
                 'item_code' => null,
-                'item_name' => $this->normalizeRequiredString($item['item_name'] ?? null, '历史账单项 #' . (int) ($item['id'] ?? 0)),
+                'item_name' => $this->normalizeRequiredString($item['item_name'] ?? null, '历史账单项 #'.(int) ($item['id'] ?? 0)),
                 'quantity' => max(1, (int) ($item['quantity'] ?? 1)),
                 'unit_price' => $this->normalizeMoney($item['unit_price'] ?? null),
                 'discount_amount' => $this->normalizeMoney($item['discount_amount'] ?? null),
@@ -547,7 +547,7 @@ class TradeMigrationService
     {
         $sql = "SELECT COALESCE(SUM(`{$column}`), 0) AS total FROM `{$table}`";
         if ($where !== null && trim($where) !== '') {
-            $sql .= ' WHERE ' . $where;
+            $sql .= ' WHERE '.$where;
         }
 
         $rows = $this->sourceQuery($sql);
@@ -559,7 +559,7 @@ class TradeMigrationService
     {
         $sql = "SELECT COALESCE(SUM(`{$column}`), 0) AS total FROM `{$table}`";
         if ($where !== null && trim($where) !== '') {
-            $sql .= ' WHERE ' . $where;
+            $sql .= ' WHERE '.$where;
         }
 
         $rows = $this->targetQuery($sql);
@@ -608,10 +608,10 @@ class TradeMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $legacyInvoice
-     * @param  array<string, mixed>|null $legacyOrder
-     * @param  array<int, int> $serviceMapByLegacyServiceId
-     * @param  array<int, int> $serviceMapByLegacyOrderId
+     * @param  array<string, mixed>  $legacyInvoice
+     * @param  array<string, mixed>|null  $legacyOrder
+     * @param  array<int, int>  $serviceMapByLegacyServiceId
+     * @param  array<int, int>  $serviceMapByLegacyOrderId
      */
     private function resolveTargetServiceInstanceId(
         array $legacyInvoice,
@@ -664,7 +664,7 @@ class TradeMigrationService
             return null;
         }
 
-        return strlen($normalized) === 10 ? $normalized . ' 00:00:00' : $normalized;
+        return strlen($normalized) === 10 ? $normalized.' 00:00:00' : $normalized;
     }
 
     private function normalizeNullableString(mixed $value): ?string
@@ -695,7 +695,7 @@ class TradeMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $fallback
+     * @param  array<string, mixed>  $fallback
      */
     private function encodeSnapshotValue(mixed $value, array $fallback = []): ?string
     {
@@ -737,7 +737,7 @@ class TradeMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $payload
+     * @param  array<string, mixed>  $payload
      */
     private function encodeJson(array $payload): string
     {
@@ -749,7 +749,7 @@ class TradeMigrationService
         try {
             DB::connection($connection)->getPdo();
         } catch (\Throwable $exception) {
-            throw new \RuntimeException($label . '连接不可用：' . $connection . '，' . $exception->getMessage(), previous: $exception);
+            throw new \RuntimeException($label.'连接不可用：'.$connection.'，'.$exception->getMessage(), previous: $exception);
         }
     }
 

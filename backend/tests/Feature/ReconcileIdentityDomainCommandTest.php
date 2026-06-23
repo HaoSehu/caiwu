@@ -207,7 +207,7 @@ class ReconcileIdentityDomainCommandTest extends TestCase
 
         touch($databasePath);
 
-        config()->set('database.connections.' . $connectionName, [
+        config()->set('database.connections.'.$connectionName, [
             'driver' => 'sqlite',
             'database' => $databasePath,
             'prefix' => '',

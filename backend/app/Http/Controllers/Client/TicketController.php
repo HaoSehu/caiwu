@@ -3,11 +3,14 @@
 namespace App\Http\Controllers\Client;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Client\Ticket\ReplyRequest;
+use App\Http\Requests\Client\Ticket\ServiceOptionsRequest;
+use App\Http\Requests\Client\Ticket\StoreRequest;
+use App\Http\Requests\Client\Ticket\UploadImageRequest;
 use App\Models\Ticket;
 use App\Services\Ticket\TicketService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 class TicketController extends Controller
 {
@@ -24,29 +27,18 @@ class TicketController extends Controller
         return $this->paginate($paginator);
     }
 
-    public function store(Request $request)
+    public function store(StoreRequest $request)
     {
-        $data = $request->validate([
-            'department' => ['required', Rule::in(TicketService::DEPARTMENTS)],
-            'subject' => ['required', 'string', 'max:200'],
-            'content' => ['nullable', 'string', 'max:10000'],
-            'priority' => ['nullable', 'integer', 'between:1,4'],
-            'service_id' => ['nullable', 'integer'],
-            'attachments' => ['nullable', 'array', 'max:9'],
-            'attachments.*' => ['required', 'string', 'max:255'],
-        ]);
+        $data = $request->validated();
 
         $ticket = $this->ticketService->create($request->user()->id, $data);
 
         return $this->success($ticket, '工单提交成功');
     }
 
-    public function serviceOptions(Request $request)
+    public function serviceOptions(ServiceOptionsRequest $request)
     {
-        $data = $request->validate([
-            'keyword' => ['nullable', 'string', 'max:100'],
-            'limit' => ['nullable', 'integer', 'min:1', 'max:50'],
-        ]);
+        $data = $request->validated();
 
         return $this->success(
             $this->ticketService->clientServiceOptions(
@@ -57,11 +49,9 @@ class TicketController extends Controller
         );
     }
 
-    public function uploadImage(Request $request)
+    public function uploadImage(UploadImageRequest $request)
     {
-        $data = $request->validate([
-            'file' => ['required', 'image', 'mimetypes:image/jpeg,image/png,image/webp', 'max:5120'],
-        ]);
+        $data = $request->validated();
 
         $image = $this->ticketService->uploadImage($request->user()->id, 'client', $data['file']);
 
@@ -75,15 +65,10 @@ class TicketController extends Controller
         return $this->success($this->ticketService->detail($ticket));
     }
 
-    public function reply(Request $request, int $id)
+    public function reply(ReplyRequest $request, int $id)
     {
         $ticket = Ticket::where('user_id', $request->user()->id)->findOrFail($id);
-        $data = $request->validate([
-            'content' => ['nullable', 'string', 'max:10000'],
-            'attachments' => ['nullable', 'array', 'max:9'],
-            'attachments.*' => ['required', 'string', 'max:255'],
-            'quote_reply_id' => ['nullable', 'integer', 'min:1'],
-        ]);
+        $data = $request->validated();
         $reply = $this->ticketService->clientReply(
             $ticket,
             $request->user()->id,

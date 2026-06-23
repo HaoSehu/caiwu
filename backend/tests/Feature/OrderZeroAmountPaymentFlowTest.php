@@ -6,8 +6,7 @@ namespace Tests\Feature;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
-use App\Constants\PaymentStatus;
-use App\Models\BalanceLog;
+use App\Models\AccountTransaction;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\User;
@@ -107,7 +106,7 @@ class OrderZeroAmountPaymentFlowTest extends TestCase
             'due_date' => now()->addDay(),
         ]);
 
-        $balanceLogCountBefore = BalanceLog::query()->where('user_id', (int) $user->id)->count();
+        $balanceLogCountBefore = AccountTransaction::query()->where('user_id', (int) $user->id)->count();
 
         $service = new PaymentService(
             $this->createMock(ProvisionService::class),
@@ -146,7 +145,7 @@ class OrderZeroAmountPaymentFlowTest extends TestCase
         $this->assertSame('100.00', User::query()->findOrFail((int) $user->id)->balance);
         $this->assertSame(
             $balanceLogCountBefore,
-            BalanceLog::query()->where('user_id', (int) $user->id)->count(),
+            AccountTransaction::query()->where('user_id', (int) $user->id)->count(),
         );
     }
 }

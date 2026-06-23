@@ -43,20 +43,21 @@ class ClientReferralRegressionTest extends TestCase
             'verified_at' => null,
         ]);
 
-        DB::table('referral_account_logs')->insert([
+        DB::table('account_transactions')->insert([
             'user_id' => (int) $user->id,
+            'account_type' => 'referral_frozen',
             'event_type' => 'reward_frozen',
             'change_amount' => '10.00',
-            'frozen_balance' => '10.00',
-            'available_balance' => '0.00',
-            'pending_withdrawal_balance' => '0.00',
-            'withdrawn_balance' => '0.00',
+            'balance_after' => '10.00',
+            'source_type' => 'reward',
+            'source_id' => 1,
+            'origin_type' => 'referral_event',
+            'origin_id' => 1,
             'remark' => 'referral regression',
-            'reference_id' => null,
-            'reference_type' => null,
             'operator' => 'system',
             'trace_id' => 'referral-regression',
             'created_at' => now(),
+            'updated_at' => now(),
         ]);
 
         Sanctum::actingAs($user);

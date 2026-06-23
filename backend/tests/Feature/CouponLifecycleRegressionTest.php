@@ -5,14 +5,17 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Constants\CouponStatus;
+use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
 use App\Exceptions\BusinessException;
 use App\Models\Coupon;
+use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\User;
 use App\Models\UserCoupon;
 use App\Services\Finance\CouponService;
+use App\Services\Order\OrderService;
 use Tests\TestCase;
 
 class CouponLifecycleRegressionTest extends TestCase
@@ -84,12 +87,84 @@ class CouponLifecycleRegressionTest extends TestCase
         $this->assertNull($userCoupon->fresh()->last_used_at);
     }
 
-    public function test_update_coupon_preserves_order_bound_private_assignments(): void
+    public function test_cancel_pending_order_releases_order_coupon(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+        $user = User::query()->create([
+            'email' => 'coupon-cancel-'.$suffix.'@example.com',
+            'password' => 'secret123',
+            'phone' => '137'.str_pad((string) random_int(0, 99999999), 8, '0', STR_PAD_LEFT),
+            'status' => 1,
+        ]);
+
+        $coupon = Coupon::query()->create([
+            'name' => 'Cancel Coupon '.$suffix,
+            'code' => 'CANCEL'.strtoupper($suffix),
+            'distribution_type' => 'public',
+            'discount_scope' => 'first_month',
+            'discount_type' => 'fixed',
+            'discount_value' => '5.00',
+            'min_amount' => '0.00',
+            'used_count' => 1,
+            'status' => CouponStatus::ACTIVE,
+            'starts_at' => now()->subHour(),
+            'expires_at' => now()->addDay(),
+        ]);
+
+        $userCoupon = UserCoupon::query()->create([
+            'coupon_id' => (int) $coupon->id,
+            'user_id' => (int) $user->id,
+            'receive_type' => 'claim',
+            'status' => 1,
+            'claimed_at' => now(),
+            'last_used_at' => now(),
+        ]);
+
+        $order = Order::query()->create([
+            'order_no' => 'CUPCANCEL'.strtoupper($suffix),
+            'user_id' => (int) $user->id,
+            'coupon_id' => (int) $coupon->id,
+            'user_coupon_id' => (int) $userCoupon->id,
+            'coupon_code' => (string) $coupon->code,
+            'type' => 'new',
+            'amount' => '20.00',
+            'discount' => '5.00',
+            'billing_cycle' => 'monthly',
+            'status' => OrderStatus::PENDING,
+        ]);
+
+        $invoice = Invoice::query()->create([
+            'invoice_no' => 'CUPINV'.strtoupper($suffix),
+            'user_id' => (int) $user->id,
+            'order_id' => (int) $order->id,
+            'type' => 'normal',
+            'coupon_id' => (int) $coupon->id,
+            'user_coupon_id' => (int) $userCoupon->id,
+            'coupon_code' => (string) $coupon->code,
+            'amount' => '15.00',
+            'discount' => '5.00',
+            'paid_amount' => '0.00',
+            'status' => InvoiceStatus::UNPAID,
+            'due_date' => now()->addDay(),
+        ]);
+
+        app(OrderService::class)->cancel($order, [
+            'actor_type' => 'client',
+            'actor_user_id' => (int) $user->id,
+            'trace_id' => 'coupon-cancel-'.$suffix,
+        ]);
+
+        $this->assertSame(OrderStatus::CANCELLED, (int) $order->fresh()->status);
+        $this->assertSame(InvoiceStatus::CANCELLED, (int) $invoice->fresh()->status);
+        $this->assertSame(0, (int) $coupon->fresh()->used_count);
+        $this->assertNull($userCoupon->fresh()->last_used_at);
+    }
+
+    public function test_update_issued_private_coupon_is_rejected(): void
     {
         $suffix = bin2hex(random_bytes(4));
         $userA = $this->createUser('a', $suffix);
         $userB = $this->createUser('b', $suffix);
-        $userC = $this->createUser('c', $suffix);
 
         $service = app(CouponService::class);
         $payload = $this->privateCouponPayload($suffix, [(int) $userA->id, (int) $userB->id]);
@@ -99,62 +174,26 @@ class CouponLifecycleRegressionTest extends TestCase
         ]);
 
         $coupon = Coupon::query()->findOrFail((int) $created['id']);
-        $userCouponA = UserCoupon::query()
-            ->where('coupon_id', (int) $coupon->id)
-            ->where('user_id', (int) $userA->id)
-            ->firstOrFail();
-        $userCouponB = UserCoupon::query()
-            ->where('coupon_id', (int) $coupon->id)
-            ->where('user_id', (int) $userB->id)
-            ->firstOrFail();
 
-        Order::query()->create([
-            'order_no' => 'CUPORD'.strtoupper($suffix),
-            'user_id' => (int) $userA->id,
-            'coupon_id' => (int) $coupon->id,
-            'user_coupon_id' => (int) $userCouponA->id,
-            'type' => 'new',
-            'amount' => '20.00',
-            'discount' => '5.00',
-            'billing_cycle' => 'monthly',
-            'status' => OrderStatus::PAID,
-            'paid_at' => now(),
-        ]);
+        $this->expectException(BusinessException::class);
+        $this->expectExceptionMessage('已发放的优惠券不允许修改');
 
         $service->updateCoupon(
             $coupon,
-            $this->privateCouponPayload($suffix, [(int) $userC->id]),
+            $this->privateCouponPayload($suffix, [(int) $userA->id], [
+                'name' => 'Private Coupon Updated '.$suffix,
+            ]),
             [
                 'operator' => 'coupon-regression',
                 'trace_id' => 'coupon-update-'.$suffix,
             ]
         );
-
-        $this->assertDatabaseHas('user_coupons', [
-            'id' => (int) $userCouponA->id,
-            'status' => 0,
-            'receive_type' => 'grant',
-        ]);
-        $this->assertDatabaseMissing('user_coupons', [
-            'id' => (int) $userCouponB->id,
-        ]);
-        $this->assertDatabaseHas('user_coupons', [
-            'coupon_id' => (int) $coupon->id,
-            'user_id' => (int) $userC->id,
-            'receive_type' => 'grant',
-            'status' => 1,
-        ]);
-        $this->assertDatabaseHas('orders', [
-            'user_coupon_id' => (int) $userCouponA->id,
-        ]);
     }
 
-    public function test_switching_public_coupon_to_private_expires_previous_claims_for_checkout(): void
+    public function test_update_claimed_public_coupon_is_rejected(): void
     {
         $suffix = bin2hex(random_bytes(4));
         $claimUser = $this->createUser('claim', $suffix);
-        $grantedUser = $this->createUser('grant', $suffix);
-        $product = $this->createProduct($suffix);
         $service = app(CouponService::class);
 
         $coupon = Coupon::query()->create([
@@ -178,9 +217,12 @@ class CouponLifecycleRegressionTest extends TestCase
             'claimed_at' => now(),
         ]);
 
+        $this->expectException(BusinessException::class);
+        $this->expectExceptionMessage('已发放的优惠券不允许修改');
+
         $service->updateCoupon(
             $coupon,
-            $this->privateCouponPayload($suffix, [(int) $grantedUser->id], [
+            $this->privateCouponPayload($suffix, [(int) $claimUser->id], [
                 'name' => 'Switch Coupon '.$suffix,
                 'code' => 'SWITCH'.strtoupper($suffix),
             ]),
@@ -189,102 +231,102 @@ class CouponLifecycleRegressionTest extends TestCase
                 'trace_id' => 'coupon-switch-'.$suffix,
             ]
         );
-
-        $summary = $service->summaryForUser($claimUser);
-        $expiredPage = $service->paginateForUser($claimUser, ['status' => 'expired', 'keyword' => $suffix], 1, 10);
-
-        $this->assertSame(1, $summary['total']);
-        $this->assertSame(0, $summary['available']);
-        $this->assertSame(1, $summary['expired']);
-        $this->assertSame(1, $expiredPage['total']);
-        $this->assertSame('expired', $expiredPage['list'][0]['status'] ?? null);
-        $this->assertSame('当前优惠券已改为私有发放', $expiredPage['list'][0]['status_reason'] ?? null);
-        $this->assertDatabaseHas('user_coupons', [
-            'coupon_id' => (int) $coupon->id,
-            'user_id' => (int) $grantedUser->id,
-            'receive_type' => 'grant',
-            'status' => 1,
-        ]);
-
-        $this->expectException(BusinessException::class);
-        $this->expectExceptionMessage('当前优惠券仅对指定用户发放');
-
-        $service->previewOwnedCoupon(
-            (int) $claimedCoupon->id,
-            (int) $claimUser->id,
-            $product,
-            'monthly',
-            20.0,
-            'new'
-        );
     }
 
-    public function test_update_private_coupon_allows_replacing_deleted_assignments_within_total_limit(): void
+    public function test_delete_issued_unused_coupon_removes_assignments(): void
     {
         $suffix = bin2hex(random_bytes(4));
         $userA = $this->createUser('limit-a', $suffix);
         $userB = $this->createUser('limit-b', $suffix);
-        $userC = $this->createUser('limit-c', $suffix);
         $service = app(CouponService::class);
 
         $created = $service->createCoupon(
             $this->privateCouponPayload($suffix, [(int) $userA->id, (int) $userB->id], [
-                'name' => 'Limited Private Coupon '.$suffix,
-                'code' => 'LIMIT'.strtoupper($suffix),
+                'name' => 'Delete Unused Private Coupon '.$suffix,
+                'code' => 'DELUNUSED'.strtoupper($suffix),
                 'total_usage_limit' => 2,
             ]),
             [
                 'operator' => 'coupon-regression',
-                'trace_id' => 'coupon-limit-create-'.$suffix,
+                'trace_id' => 'coupon-delete-unused-create-'.$suffix,
             ]
         );
 
         $coupon = Coupon::query()->findOrFail((int) $created['id']);
-        $updated = $service->updateCoupon(
-            $coupon,
-            $this->privateCouponPayload($suffix, [(int) $userA->id, (int) $userC->id], [
-                'name' => 'Limited Private Coupon '.$suffix,
-                'code' => 'LIMIT'.strtoupper($suffix),
-                'total_usage_limit' => 2,
+        $this->assertSame(2, UserCoupon::query()->where('coupon_id', (int) $coupon->id)->count());
+
+        $service->deleteCoupon($coupon, [
+            'operator' => 'coupon-regression',
+            'trace_id' => 'coupon-delete-unused-'.$suffix,
+        ]);
+
+        $this->assertDatabaseMissing('user_coupons', [
+            'coupon_id' => (int) $coupon->id,
+        ]);
+        $this->assertDatabaseMissing('coupons', [
+            'id' => (int) $coupon->id,
+        ]);
+    }
+
+    public function test_delete_used_coupon_is_rejected(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+        $user = $this->createUser('used-delete', $suffix);
+        $service = app(CouponService::class);
+
+        $created = $service->createCoupon(
+            $this->privateCouponPayload($suffix, [(int) $user->id], [
+                'name' => 'Used Private Coupon '.$suffix,
+                'code' => 'USEDDEL'.strtoupper($suffix),
             ]),
             [
                 'operator' => 'coupon-regression',
-                'trace_id' => 'coupon-limit-update-'.$suffix,
+                'trace_id' => 'coupon-used-delete-create-'.$suffix,
             ]
         );
 
-        $this->assertSame((int) $coupon->id, (int) ($updated['id'] ?? 0));
-        $this->assertDatabaseHas('user_coupons', [
+        $coupon = Coupon::query()->findOrFail((int) $created['id']);
+        $userCoupon = UserCoupon::query()
+            ->where('coupon_id', (int) $coupon->id)
+            ->where('user_id', (int) $user->id)
+            ->firstOrFail();
+
+        Order::query()->create([
+            'order_no' => 'CUPUSEDDEL'.strtoupper($suffix),
+            'user_id' => (int) $user->id,
             'coupon_id' => (int) $coupon->id,
-            'user_id' => (int) $userA->id,
-            'receive_type' => 'grant',
-            'status' => 1,
+            'user_coupon_id' => (int) $userCoupon->id,
+            'type' => 'new',
+            'amount' => '20.00',
+            'discount' => '5.00',
+            'billing_cycle' => 'monthly',
+            'status' => OrderStatus::PAID,
+            'paid_at' => now(),
         ]);
-        $this->assertDatabaseMissing('user_coupons', [
-            'coupon_id' => (int) $coupon->id,
-            'user_id' => (int) $userB->id,
-            'receive_type' => 'grant',
-        ]);
-        $this->assertDatabaseHas('user_coupons', [
-            'coupon_id' => (int) $coupon->id,
-            'user_id' => (int) $userC->id,
-            'receive_type' => 'grant',
-            'status' => 1,
+        $userCoupon->forceFill(['last_used_at' => now()])->save();
+
+        $this->expectException(BusinessException::class);
+        $this->expectExceptionMessage('该优惠券已有人使用，不能删除');
+
+        $service->deleteCoupon($coupon, [
+            'operator' => 'coupon-regression',
+            'trace_id' => 'coupon-used-delete-'.$suffix,
         ]);
     }
 
     public function test_create_and_update_coupon_persist_manual_code(): void
     {
         $suffix = bin2hex(random_bytes(4));
-        $user = $this->createUser('code', $suffix);
         $service = app(CouponService::class);
         $initialCode = 'MANUAL'.strtoupper($suffix);
         $updatedCode = 'MANUALUPD'.strtoupper($suffix);
 
         $created = $service->createCoupon(
-            $this->privateCouponPayload($suffix, [(int) $user->id], [
+            $this->privateCouponPayload($suffix, [], [
                 'name' => 'Manual Code Coupon '.$suffix,
                 'code' => $initialCode,
+                'distribution_type' => 'public',
+                'user_ids' => [],
             ]),
             [
                 'operator' => 'coupon-regression',
@@ -297,9 +339,11 @@ class CouponLifecycleRegressionTest extends TestCase
 
         $service->updateCoupon(
             $coupon,
-            $this->privateCouponPayload($suffix, [(int) $user->id], [
+            $this->privateCouponPayload($suffix, [], [
                 'name' => 'Manual Code Coupon Updated '.$suffix,
                 'code' => $updatedCode,
+                'distribution_type' => 'public',
+                'user_ids' => [],
             ]),
             [
                 'operator' => 'coupon-regression',

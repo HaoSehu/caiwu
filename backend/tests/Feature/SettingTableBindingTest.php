@@ -94,22 +94,27 @@ class SettingTableBindingTest extends TestCase
     public function test_site_product_stock_endpoint_reads_current_product_group_tables(): void
     {
         $suffix = bin2hex(random_bytes(4));
-        $groupId = null;
+        $firstGroupId = null;
+        $secondGroupId = null;
         $productId = null;
 
         try {
-            $groupId = DB::table('product_groups')->insertGetId([
-                'parent_group_id' => null,
-                'product_type' => 'vps',
+            $firstGroupId = $this->resolveVisibleFirstGroupId('stock-first-'.$suffix);
+
+            $secondGroupId = (int) DB::table('second_product_groups')->insertGetId([
+                'first_product_group_id' => $firstGroupId,
                 'name' => '娴嬭瘯鍒嗙粍-'.$suffix,
-                'slogan' => '',
                 'slug' => 'stock-test-'.$suffix,
+                'description' => '',
                 'sort_order' => 0,
                 'is_visible' => 1,
             ]);
 
             $productId = DB::table('products')->insertGetId([
-                'product_group_id' => $groupId,
+                'first_product_group_id' => $firstGroupId,
+                'second_product_group_id' => $secondGroupId,
+                'third_product_group_id' => null,
+                'service_type_code' => 'vps',
                 'product_type' => 'vps',
                 'remark' => '测试商品-'.$suffix,
                 'pricing' => json_encode(['monthly' => '9.90'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
@@ -136,15 +141,42 @@ class SettingTableBindingTest extends TestCase
                 DB::table('products')->where('id', $productId)->delete();
             }
 
-            if ($groupId !== null) {
-                DB::table('product_groups')->where('id', $groupId)->delete();
+            if ($secondGroupId !== null) {
+                DB::table('second_product_groups')->where('id', $secondGroupId)->delete();
             }
         }
+    }
+
+    /**
+     * 复用或创建一个可见的一级商品分组（code=vps），返回其 ID。
+     * 一级分组按 code 唯一，且 saleProductQuery 仅放行可见商品种类，
+     * 因此这里固定使用可见的 vps 种类，不在测试结束时删除共享行。
+     */
+    private function resolveVisibleFirstGroupId(string $slugSeed): int
+    {
+        $existingId = DB::table('first_product_groups')->where('code', 'vps')->value('id');
+        if ($existingId !== null) {
+            DB::table('first_product_groups')->where('id', (int) $existingId)->update(['is_visible' => 1]);
+
+            return (int) $existingId;
+        }
+
+        return (int) DB::table('first_product_groups')->insertGetId([
+            'code' => 'vps',
+            'name' => 'VPS',
+            'slug' => $slugSeed,
+            'description' => '',
+            'sort_order' => 0,
+            'is_visible' => 1,
+            'is_system' => 0,
+            'legacy_product_type' => 'vps',
+        ]);
     }
 
     public function test_site_product_detail_endpoint_returns_group_name_and_slogan(): void
     {
         $suffix = bin2hex(random_bytes(4));
+        $firstGroupId = null;
         $parentGroupId = null;
         $childGroupId = null;
         $productId = null;
@@ -152,28 +184,31 @@ class SettingTableBindingTest extends TestCase
         $childSlogan = '分类标语-'.$suffix;
 
         try {
-            $parentGroupId = DB::table('product_groups')->insertGetId([
-                'parent_group_id' => null,
-                'product_type' => 'vps',
+            $firstGroupId = $this->resolveVisibleFirstGroupId('detail-first-'.$suffix);
+
+            $parentGroupId = (int) DB::table('second_product_groups')->insertGetId([
+                'first_product_group_id' => $firstGroupId,
                 'name' => '父级分类-'.$suffix,
-                'slogan' => $parentSlogan,
                 'slug' => 'detail-parent-'.$suffix,
+                'description' => $parentSlogan,
                 'sort_order' => 0,
                 'is_visible' => 1,
             ]);
 
-            $childGroupId = DB::table('product_groups')->insertGetId([
-                'parent_group_id' => $parentGroupId,
-                'product_type' => 'vps',
+            $childGroupId = (int) DB::table('third_product_groups')->insertGetId([
+                'second_product_group_id' => $parentGroupId,
                 'name' => '子级分类-'.$suffix,
-                'slogan' => $childSlogan,
                 'slug' => 'detail-child-'.$suffix,
+                'description' => $childSlogan,
                 'sort_order' => 0,
                 'is_visible' => 1,
             ]);
 
             $productId = DB::table('products')->insertGetId([
-                'product_group_id' => $childGroupId,
+                'first_product_group_id' => $firstGroupId,
+                'second_product_group_id' => $parentGroupId,
+                'third_product_group_id' => $childGroupId,
+                'service_type_code' => 'vps',
                 'product_type' => 'vps',
                 'remark' => '详情商品-'.$suffix,
                 'pricing' => json_encode(['monthly' => '19.90'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
@@ -209,11 +244,11 @@ class SettingTableBindingTest extends TestCase
             }
 
             if ($childGroupId !== null) {
-                DB::table('product_groups')->where('id', $childGroupId)->delete();
+                DB::table('third_product_groups')->where('id', $childGroupId)->delete();
             }
 
             if ($parentGroupId !== null) {
-                DB::table('product_groups')->where('id', $parentGroupId)->delete();
+                DB::table('second_product_groups')->where('id', $parentGroupId)->delete();
             }
         }
     }
@@ -221,22 +256,27 @@ class SettingTableBindingTest extends TestCase
     public function test_site_product_quote_endpoint_reads_current_product_group_tables(): void
     {
         $suffix = bin2hex(random_bytes(4));
-        $groupId = null;
+        $firstGroupId = null;
+        $secondGroupId = null;
         $productId = null;
 
         try {
-            $groupId = DB::table('product_groups')->insertGetId([
-                'parent_group_id' => null,
-                'product_type' => 'vps',
+            $firstGroupId = $this->resolveVisibleFirstGroupId('quote-first-'.$suffix);
+
+            $secondGroupId = (int) DB::table('second_product_groups')->insertGetId([
+                'first_product_group_id' => $firstGroupId,
                 'name' => '报价分组-'.$suffix,
-                'slogan' => '',
                 'slug' => 'quote-test-'.$suffix,
+                'description' => '',
                 'sort_order' => 0,
                 'is_visible' => 1,
             ]);
 
             $productId = DB::table('products')->insertGetId([
-                'product_group_id' => $groupId,
+                'first_product_group_id' => $firstGroupId,
+                'second_product_group_id' => $secondGroupId,
+                'third_product_group_id' => null,
+                'service_type_code' => 'vps',
                 'product_type' => 'vps',
                 'remark' => '报价商品-'.$suffix,
                 'pricing' => json_encode(['monthly' => '12.50'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
@@ -267,8 +307,8 @@ class SettingTableBindingTest extends TestCase
                 DB::table('products')->where('id', $productId)->delete();
             }
 
-            if ($groupId !== null) {
-                DB::table('product_groups')->where('id', $groupId)->delete();
+            if ($secondGroupId !== null) {
+                DB::table('second_product_groups')->where('id', $secondGroupId)->delete();
             }
         }
     }

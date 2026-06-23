@@ -8,13 +8,16 @@ use App\Constants\OrderStatus;
 use App\Constants\ProductType;
 use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
+use App\Models\FirstProductGroup;
 use App\Models\Order;
 use App\Models\Product;
-use App\Models\ProductCategory;
+use App\Models\SecondProductGroup;
 use App\Models\Supplier;
+use App\Models\ThirdProductGroup;
 use App\Services\ProductCatalog\Concerns\HandlesProductCatalogHelpers;
 use App\Services\Upstream\Contracts\ProvidesConsoleCatalog;
 use App\Services\Upstream\ProviderResolver;
+use App\Support\ProductGroupHierarchyFields;
 use App\Support\TextSanitizer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -36,10 +39,15 @@ class ProductSyncService
 
     private const REMOTE_STOCK_CACHE_TTL_SECONDS = 15;
 
+    private readonly ProductGroupHierarchyService $hierarchyService;
+
     public function __construct(
         private readonly ProviderResolver $providerResolver,
+        ?ProductGroupHierarchyService $hierarchyService = null,
         private readonly ?ProductDisplayNameResolver $productDisplayNameResolver = null,
-    ) {}
+    ) {
+        $this->hierarchyService = $hierarchyService ?? app(ProductGroupHierarchyService::class);
+    }
 
     public function batchSyncProducts(array $data): array
     {
@@ -61,7 +69,7 @@ class ProductSyncService
         );
 
         $products = Product::query()
-            ->with(['categoryMapping.parent', 'supplier'])
+            ->with(['firstProductGroup', 'secondProductGroup', 'thirdProductGroup', 'supplier'])
             ->whereIn('id', $productIds->all())
             ->get()
             ->keyBy(fn (Product $product) => (int) $product->id);
@@ -205,7 +213,7 @@ class ProductSyncService
             ->keyBy(fn (array $item) => (int) ($item['id'] ?? 0));
 
         $existingProducts = Product::withTrashed()
-            ->with(['categoryMapping.parent', 'supplier'])
+            ->with(['firstProductGroup', 'secondProductGroup', 'thirdProductGroup', 'supplier'])
             ->where('supplier_id', (int) $supplier->id)
             ->whereIn('supplier_product_id', $supplierProductIds->all())
             ->get()
@@ -215,15 +223,19 @@ class ProductSyncService
         $defaultAutoSetup = (int) ($data['default_auto_setup'] ?? 1) === 1 ? 1 : 0;
         $syncConfigOptions = (int) ($data['sync_config_options'] ?? 0) === 1;
 
-        $rootCategory = $this->resolveImportedRootCategory(
+        $firstGroup = $this->resolveImportedFirstProductGroup(
             $productType,
-            (int) ($data['root_category_id'] ?? $data['root_group_id'] ?? 0),
-            TextSanitizer::nullable((string) ($data['root_group_name'] ?? ''))
+            (int) ($data['first_product_group_id'] ?? 0)
         );
-        $childCategory = $this->resolveImportedChildCategory(
-            $productType,
-            (int) ($data['child_category_id'] ?? $data['child_group_id'] ?? 0),
-            $rootCategory
+        $targetSecondGroup = $this->resolveImportedSecondProductGroup(
+            $firstGroup,
+            (int) ($data['second_product_group_id'] ?? 0),
+            TextSanitizer::nullable((string) ($data['second_product_group_name'] ?? ''))
+        );
+        $targetThirdGroup = $this->resolveImportedThirdProductGroup(
+            $targetSecondGroup,
+            (int) ($data['third_product_group_id'] ?? 0),
+            TextSanitizer::nullable((string) ($data['third_product_group_name'] ?? ''))
         );
 
         $importedProducts = [];
@@ -254,9 +266,11 @@ class ProductSyncService
                 continue;
             }
 
-            $targetCategory = $childCategory instanceof ProductCategory
-                ? $childCategory
-                : $this->resolveImportedTargetCategory($productType, $rootCategory, $supplierProduct);
+            $targetHierarchy = $this->buildImportedTargetHierarchy(
+                $firstGroup,
+                $targetSecondGroup,
+                $targetThirdGroup
+            );
 
             $configOptions = $this->resolveImportedBatchConfigOptions(
                 $supplier,
@@ -267,7 +281,7 @@ class ProductSyncService
 
             $payload = $this->buildBulkConnectProductPayload(
                 $supplier,
-                $targetCategory,
+                $targetHierarchy,
                 $supplierProduct,
                 $productType,
                 $pricing,
@@ -577,7 +591,7 @@ class ProductSyncService
     public function siteProductStock(int $productId): ?array
     {
         $cacheKey = 'site_product_stock:'.$productId;
-        $cached = Cache::get($cacheKey);
+        $cached = Cache::store('redis_volatile')->get($cacheKey);
 
         if ($cached !== null) {
             return $cached === false ? null : $cached;
@@ -586,7 +600,7 @@ class ProductSyncService
         $product = $this->findSaleProductForStock($productId);
 
         if (! $product instanceof Product) {
-            Cache::put($cacheKey, false, now()->addSeconds(10));
+            Cache::store('redis_volatile')->put($cacheKey, false, now()->addSeconds(10));
 
             return null;
         }
@@ -598,7 +612,7 @@ class ProductSyncService
             'stock' => (int) ($product->live_stock ?? $product->stock),
         ];
 
-        Cache::put($cacheKey, $result, now()->addSeconds(15));
+        Cache::store('redis_volatile')->put($cacheKey, $result, now()->addSeconds(15));
 
         return $result;
     }
@@ -665,8 +679,8 @@ class ProductSyncService
                 }
 
                 $throttleKey = 'stock_log:detail_fail:'.$supplier->id;
-                if (! Cache::has($throttleKey)) {
-                    Cache::put($throttleKey, true, now()->addSeconds(60));
+                if (! Cache::store('redis_volatile')->has($throttleKey)) {
+                    Cache::store('redis_volatile')->put($throttleKey, true, now()->addSeconds(60));
                     Log::warning('[商品库存] 拉取上游明细库存失败', [
                         'supplier_id' => $supplier->id,
                         'supplier_name' => $supplier->name,
@@ -690,8 +704,8 @@ class ProductSyncService
                     }
 
                     $notFoundThrottleKey = 'stock_log:not_found:'.$product->id;
-                    if (! Cache::has($notFoundThrottleKey)) {
-                        Cache::put($notFoundThrottleKey, true, now()->addSeconds(60));
+                    if (! Cache::store('redis_volatile')->has($notFoundThrottleKey)) {
+                        Cache::store('redis_volatile')->put($notFoundThrottleKey, true, now()->addSeconds(60));
                         Log::warning('[商品库存] 未找到对应上游商品库存', [
                             'product_id' => (int) $product->id,
                             'supplier_id' => (int) ($product->supplier_id ?? 0),
@@ -743,7 +757,7 @@ class ProductSyncService
         }
 
         $cacheKey = $this->supplierRemoteStockCacheKey($supplier, $normalizedSupplierProductIds);
-        $cached = Cache::get($cacheKey);
+        $cached = Cache::store('redis_volatile')->get($cacheKey);
 
         if (is_array($cached)) {
             return $cached;
@@ -751,7 +765,7 @@ class ProductSyncService
 
         $remoteStocks = $this->fetchSupplierRemoteStocks($supplier, $normalizedSupplierProductIds);
 
-        Cache::put($cacheKey, $remoteStocks, now()->addSeconds(self::REMOTE_STOCK_CACHE_TTL_SECONDS));
+        Cache::store('redis_volatile')->put($cacheKey, $remoteStocks, now()->addSeconds(self::REMOTE_STOCK_CACHE_TTL_SECONDS));
 
         return $remoteStocks;
     }
@@ -796,7 +810,9 @@ class ProductSyncService
         return $this->saleProductQuery()
             ->select([
                 'id',
-                'product_group_id',
+                'first_product_group_id',
+                'second_product_group_id',
+                'third_product_group_id',
                 'supplier_id',
                 'supplier_product_id',
                 'stock',
@@ -1385,75 +1401,78 @@ class ProductSyncService
             ->implode(',');
     }
 
-    private function resolveImportedRootCategory(string $productType, int $rootCategoryId, ?string $rootGroupName): ?ProductCategory
+    private function resolveImportedFirstProductGroup(string $productType, int $firstProductGroupId): FirstProductGroup
     {
-        if ($rootCategoryId > 0) {
-            /** @var ProductCategory|null $category */
-            $category = ProductCategory::query()->with('parent')->find($rootCategoryId);
-            throw_if(! $category, new BusinessException('目标一级分类不存在'));
-            throw_if(
-                trim((string) ($category->product_type ?? '')) !== $productType,
-                new BusinessException('目标一级分类与所属一级菜单不匹配')
-            );
+        $query = FirstProductGroup::query();
+        $group = $firstProductGroupId > 0
+            ? $query->whereKey($firstProductGroupId)->first()
+            : $query->where('code', $productType)->first();
 
-            return $category->parent instanceof ProductCategory ? $category->parent : $category;
-        }
-
-        if ($rootGroupName !== null && $rootGroupName !== '') {
-            return $this->resolveOrCreateImportedRootGroup($productType, $rootGroupName);
-        }
-
-        return null;
-    }
-
-    private function resolveImportedChildCategory(
-        string $productType,
-        int $childCategoryId,
-        ?ProductCategory $rootCategory
-    ): ?ProductCategory {
-        if ($childCategoryId <= 0) {
-            return null;
-        }
-
-        /** @var ProductCategory|null $category */
-        $category = ProductCategory::query()->with('parent')->find($childCategoryId);
-        throw_if(! $category, new BusinessException('目标子分类不存在'));
-        throw_if($category->parent_id === null, new BusinessException('请选择最终子分类'));
+        throw_if(! $group instanceof FirstProductGroup, new BusinessException('目标一级菜单不存在'));
         throw_if(
-            trim((string) ($category->product_type ?? '')) !== $productType,
-            new BusinessException('目标子分类与所属一级菜单不匹配')
+            trim((string) $group->code) !== $productType,
+            new BusinessException('目标一级菜单与商品类型不匹配')
         );
 
-        if ($rootCategory instanceof ProductCategory) {
-            throw_if(
-                (int) ($category->parent_id ?? 0) !== (int) $rootCategory->id,
-                new BusinessException('目标子分类不属于所选一级分类')
-            );
-        }
-
-        return $category;
+        return $group;
     }
 
-    private function resolveImportedTargetCategory(
-        string $productType,
-        ?ProductCategory $rootCategory,
-        array $supplierProduct
-    ): ProductCategory {
-        $resolvedRoot = $rootCategory;
-        if (! $resolvedRoot instanceof ProductCategory) {
-            $fallbackRootName = trim((string) ($supplierProduct['first_group_name'] ?? ''));
-            if ($fallbackRootName === '') {
-                $fallbackRootName = '默认分类';
-            }
+    private function resolveImportedSecondProductGroup(
+        FirstProductGroup $firstGroup,
+        int $secondProductGroupId,
+        ?string $secondProductGroupName
+    ): SecondProductGroup {
+        if ($secondProductGroupId > 0) {
+            $group = SecondProductGroup::query()->whereKey($secondProductGroupId)->first();
+            throw_if(! $group instanceof SecondProductGroup, new BusinessException('目标二级分类不存在'));
+            throw_if(
+                (int) $group->first_product_group_id !== (int) $firstGroup->id,
+                new BusinessException('目标二级分类不属于所选一级菜单')
+            );
 
-            $resolvedRoot = $this->resolveOrCreateImportedRootGroup($productType, mb_substr($fallbackRootName, 0, 100));
+            return $group;
         }
 
-        return $this->resolveOrCreateImportedChildGroup(
-            $resolvedRoot,
-            $this->resolveImportedChildGroupName($supplierProduct),
-            $productType
-        );
+        $name = TextSanitizer::nullable((string) $secondProductGroupName) ?: '默认分类';
+
+        return $this->resolveOrCreateImportedSecondProductGroup($firstGroup, $name);
+    }
+
+    private function resolveImportedThirdProductGroup(
+        SecondProductGroup $secondGroup,
+        int $thirdProductGroupId,
+        ?string $thirdProductGroupName
+    ): ?ThirdProductGroup {
+        if ($thirdProductGroupId > 0) {
+            $group = ThirdProductGroup::query()->whereKey($thirdProductGroupId)->first();
+            throw_if(! $group instanceof ThirdProductGroup, new BusinessException('目标三级分类不存在'));
+            throw_if(
+                (int) $group->second_product_group_id !== (int) $secondGroup->id,
+                new BusinessException('目标三级分类不属于所选二级分类')
+            );
+
+            return $group;
+        }
+
+        $name = TextSanitizer::nullable((string) $thirdProductGroupName);
+
+        return $name !== null ? $this->resolveOrCreateImportedThirdProductGroup($secondGroup, $name) : null;
+    }
+
+    /**
+     * @return array{service_type_code:string,first_product_group_id:int,second_product_group_id:int,third_product_group_id:?int}
+     */
+    private function buildImportedTargetHierarchy(
+        FirstProductGroup $firstGroup,
+        SecondProductGroup $secondGroup,
+        ?ThirdProductGroup $thirdGroup
+    ): array {
+        return [
+            'service_type_code' => (string) $firstGroup->code,
+            'first_product_group_id' => (int) $firstGroup->id,
+            'second_product_group_id' => (int) $secondGroup->id,
+            'third_product_group_id' => $thirdGroup instanceof ThirdProductGroup ? (int) $thirdGroup->id : null,
+        ];
     }
 
     private function resolveImportedBatchConfigOptions(
@@ -1472,7 +1491,7 @@ class ProductSyncService
 
     private function buildBulkConnectProductPayload(
         Supplier $supplier,
-        ProductCategory $targetCategory,
+        array $targetHierarchy,
         array $supplierProduct,
         string $productType,
         array $pricing,
@@ -1485,9 +1504,12 @@ class ProductSyncService
         $purchaseRequires = $this->buildImportedPurchaseRequires($name);
 
         return [
-            'category_id' => (int) $targetCategory->id,
             'name' => $name,
             'product_type' => $productType,
+            'service_type_code' => (string) $targetHierarchy['service_type_code'],
+            'first_product_group_id' => (int) $targetHierarchy['first_product_group_id'],
+            'second_product_group_id' => (int) $targetHierarchy['second_product_group_id'],
+            'third_product_group_id' => $targetHierarchy['third_product_group_id'],
             'pricing' => $pricing,
             'setup_fee' => $this->normalizeImportedAmount($supplierProduct['setup_fee'] ?? null) ?? '0.00',
             'config_options' => $configOptions,
@@ -1590,8 +1612,12 @@ class ProductSyncService
         array $supplierProduct,
         string $action
     ): array {
-        $group = $product->categoryMapping;
-        $parentGroup = $group?->parent;
+        $hierarchyFields = ProductGroupHierarchyFields::fromProduct($product);
+        $groupNameSegments = array_values(array_filter([
+            trim((string) ($hierarchyFields['first_product_group_name'] ?? '')),
+            trim((string) ($hierarchyFields['second_product_group_name'] ?? '')),
+            trim((string) ($hierarchyFields['third_product_group_name'] ?? '')),
+        ], static fn (string $name): bool => $name !== ''));
 
         return [
             'action' => $action,
@@ -1599,9 +1625,15 @@ class ProductSyncService
             'supplier_product_id' => $supplierProductId,
             'supplier_display_name' => (string) ($supplierProduct['name'] ?? ''),
             'local_display_name' => $this->resolveProductDisplayName($product),
-            'group_full_name' => $parentGroup instanceof ProductCategory
-                ? $parentGroup->name.' / '.($group?->name ?? '')
-                : (string) ($group?->name ?? ''),
+            'first_product_group_id' => $hierarchyFields['first_product_group_id'],
+            'first_product_group_name' => $hierarchyFields['first_product_group_name'],
+            'second_product_group_id' => $hierarchyFields['second_product_group_id'],
+            'second_product_group_name' => $hierarchyFields['second_product_group_name'],
+            'third_product_group_id' => $hierarchyFields['third_product_group_id'],
+            'third_product_group_name' => $hierarchyFields['third_product_group_name'],
+            'effective_product_group_id' => $hierarchyFields['effective_product_group_id'],
+            'effective_product_group_level' => $hierarchyFields['effective_product_group_level'],
+            'effective_product_group_full_name' => implode(' / ', $groupNameSegments),
         ];
     }
 
@@ -1622,22 +1654,31 @@ class ProductSyncService
         return $displayName !== '' ? $displayName : ('未配置规格 #'.(int) $product->id);
     }
 
-    private function generateUniqueCategorySlug(string $source, ?int $ignoreId = null): string
+    private function generateUniqueSecondProductGroupSlug(FirstProductGroup $firstGroup, string $source): string
     {
-        $slug = Str::slug(trim($source));
-        if ($slug === '') {
-            $slug = 'category';
-        }
+        return $this->generateUniqueProductGroupSlug(
+            SecondProductGroup::query()->where('first_product_group_id', (int) $firstGroup->id),
+            $source,
+            'second-group'
+        );
+    }
 
+    private function generateUniqueThirdProductGroupSlug(SecondProductGroup $secondGroup, string $source): string
+    {
+        return $this->generateUniqueProductGroupSlug(
+            ThirdProductGroup::query()->where('second_product_group_id', (int) $secondGroup->id),
+            $source,
+            'third-group'
+        );
+    }
+
+    private function generateUniqueProductGroupSlug(Builder $query, string $source, string $fallback): string
+    {
+        $slug = Str::slug(trim($source)) ?: $fallback;
         $candidate = $slug;
         $suffix = 1;
 
-        while (
-            ProductCategory::query()
-                ->when($ignoreId, fn (Builder $query) => $query->where('id', '!=', $ignoreId))
-                ->where('slug', $candidate)
-                ->exists()
-        ) {
+        while ((clone $query)->where('slug', $candidate)->exists()) {
             $suffix++;
             $candidate = $slug.'-'.$suffix;
         }
@@ -1645,55 +1686,56 @@ class ProductSyncService
         return $candidate;
     }
 
-    private function resolveOrCreateImportedRootGroup(string $productType, string $rootGroupName): ProductCategory
+    private function resolveOrCreateImportedSecondProductGroup(FirstProductGroup $firstGroup, string $name): SecondProductGroup
     {
-        $existing = ProductCategory::query()
-            ->whereNull('parent_group_id')
-            ->where('product_type', $productType)
-            ->where('name', $rootGroupName)
+        $existing = SecondProductGroup::query()
+            ->where('first_product_group_id', (int) $firstGroup->id)
+            ->where('name', $name)
             ->first();
 
-        if ($existing) {
+        if ($existing instanceof SecondProductGroup) {
             return $existing;
         }
 
-        /** @var ProductCategory $category */
-        $category = ProductCategory::query()->create([
-            'parent_id' => null,
-            'product_type' => $productType,
-            'name' => $rootGroupName,
-            'slogan' => null,
-            'slug' => $this->generateUniqueCategorySlug($rootGroupName),
+        /** @var SecondProductGroup $group */
+        $group = SecondProductGroup::query()->create([
+            'first_product_group_id' => (int) $firstGroup->id,
+            'name' => $name,
+            'slug' => $this->generateUniqueSecondProductGroupSlug($firstGroup, $name),
+            'description' => null,
+            'banner_image' => null,
             'sort_order' => 0,
             'is_visible' => 1,
+            'legacy_product_group_id' => null,
         ]);
 
-        return $category->fresh();
+        return $group;
     }
 
-    private function resolveOrCreateImportedChildGroup(ProductCategory $rootGroup, string $childGroupName, string $productType): ProductCategory
+    private function resolveOrCreateImportedThirdProductGroup(SecondProductGroup $secondGroup, string $name): ThirdProductGroup
     {
-        $existing = ProductCategory::query()
-            ->where('parent_group_id', $rootGroup->id)
-            ->where('name', $childGroupName)
+        $existing = ThirdProductGroup::query()
+            ->where('second_product_group_id', (int) $secondGroup->id)
+            ->where('name', $name)
             ->first();
 
-        if ($existing) {
+        if ($existing instanceof ThirdProductGroup) {
             return $existing;
         }
 
-        /** @var ProductCategory $category */
-        $category = ProductCategory::query()->create([
-            'parent_id' => $rootGroup->id,
-            'product_type' => $productType,
-            'name' => $childGroupName,
-            'slogan' => null,
-            'slug' => $this->generateUniqueCategorySlug($rootGroup->name.'-'.$childGroupName),
+        /** @var ThirdProductGroup $group */
+        $group = ThirdProductGroup::query()->create([
+            'second_product_group_id' => (int) $secondGroup->id,
+            'name' => $name,
+            'slug' => $this->generateUniqueThirdProductGroupSlug($secondGroup, $name),
+            'description' => null,
+            'banner_image' => null,
             'sort_order' => 0,
             'is_visible' => 1,
+            'legacy_product_group_id' => null,
         ]);
 
-        return $category->fresh();
+        return $group;
     }
 
     private function createProductWithStructuredSync(array $payload): Product
@@ -1702,7 +1744,9 @@ class ProductSyncService
         $product = Product::withoutEvents(fn () => Product::create($payload));
 
         return $product->fresh([
-            'categoryMapping.parent',
+            'firstProductGroup',
+            'secondProductGroup',
+            'thirdProductGroup',
             'supplier',
         ]);
     }
@@ -1720,7 +1764,9 @@ class ProductSyncService
         $product->refresh();
 
         return $product->fresh([
-            'categoryMapping.parent',
+            'firstProductGroup',
+            'secondProductGroup',
+            'thirdProductGroup',
             'supplier',
         ]);
     }
@@ -1763,15 +1809,16 @@ class ProductSyncService
 
         return Product::query()
             ->onSale()
-            ->whereHas('categoryMapping', function ($query) use ($visibleProductTypes) {
+            ->whereHas('firstProductGroup', function ($query) use ($visibleProductTypes) {
+                $query->whereIn('code', $visibleProductTypes)->where('is_visible', 1);
+            })
+            ->whereHas('secondProductGroup', function ($query) {
+                $query->where('is_visible', 1);
+            })
+            ->where(function (Builder $query) {
                 $query
-                    ->visible()
-                    ->whereIn('product_type', $visibleProductTypes)
-                    ->where(function ($groupQuery) {
-                        $groupQuery
-                            ->whereNull('parent_group_id')
-                            ->orWhereHas('parent', fn ($parentQuery) => $parentQuery->visible());
-                    });
+                    ->whereNull('third_product_group_id')
+                    ->orWhereHas('thirdProductGroup', fn ($thirdQuery) => $thirdQuery->where('is_visible', 1));
             });
     }
 }

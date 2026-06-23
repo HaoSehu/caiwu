@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Support\OrderInvoiceNoGenerator;
+use App\Support\VersionedJson;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,8 +15,11 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Order extends Model
 {
+    public const PROJECTION_TYPE_PROVISIONING = 'provisioning';
+
     protected $fillable = [
         'order_no',
+        'projection_type',
         'user_id',
         'product_id',
         'product_spec_snapshot',
@@ -63,11 +67,6 @@ class Order extends Model
             return $resolved;
         }
 
-        $legacySnapshot = trim((string) ($this->attributes['product_name_snapshot'] ?? ''));
-        if ($legacySnapshot !== '') {
-            return $legacySnapshot;
-        }
-
         return null;
     }
 
@@ -96,12 +95,6 @@ class Order extends Model
             $this->attributes['product_spec_snapshot'] = $normalized;
         }
 
-        if ($this->hasPhysicalColumn('product_name_snapshot')) {
-            $this->attributes['product_name_snapshot'] = $normalized !== '' ? $normalized : null;
-
-            return;
-        }
-
         unset($this->attributes['product_name_snapshot']);
     }
 
@@ -126,19 +119,40 @@ class Order extends Model
 
     public function getConfigSnapshotAttribute(mixed $value): array
     {
-        $decoded = $this->decodeSnapshotArray($value);
+        $decoded = VersionedJson::tradeSnapshot($value, 'order.config_snapshot');
 
         return $decoded ?? [];
     }
 
     public function getConfigPricingSnapshotAttribute(mixed $value): ?array
     {
-        return $this->decodeSnapshotArray($value);
+        return VersionedJson::tradeSnapshot($value, 'order.config_pricing_snapshot');
     }
 
     public function getCouponSnapshotAttribute(mixed $value): ?array
     {
-        return $this->decodeSnapshotArray($value);
+        return VersionedJson::tradeSnapshot($value, 'order.coupon_snapshot');
+    }
+
+    public function setConfigSnapshotAttribute(mixed $value): void
+    {
+        $this->attributes['config_snapshot'] = $this->encodeSnapshotArray(
+            VersionedJson::tradeSnapshot($value, 'order.config_snapshot')
+        );
+    }
+
+    public function setConfigPricingSnapshotAttribute(mixed $value): void
+    {
+        $this->attributes['config_pricing_snapshot'] = $this->encodeSnapshotArray(
+            VersionedJson::tradeSnapshot($value, 'order.config_pricing_snapshot')
+        );
+    }
+
+    public function setCouponSnapshotAttribute(mixed $value): void
+    {
+        $this->attributes['coupon_snapshot'] = $this->encodeSnapshotArray(
+            VersionedJson::tradeSnapshot($value, 'order.coupon_snapshot')
+        );
     }
 
     public function user(): BelongsTo
@@ -195,27 +209,10 @@ class Order extends Model
         return $query->where('status', $status);
     }
 
-    private function decodeSnapshotArray(mixed $value): ?array
+    private function encodeSnapshotArray(?array $value): ?string
     {
-        if (is_array($value)) {
-            return $value;
-        }
-
-        if (is_string($value) && $value !== '') {
-            $decoded = json_decode($value, true);
-
-            return is_array($decoded) ? $decoded : null;
-        }
-
-        return null;
-    }
-
-    private function hasPhysicalColumn(string $column): bool
-    {
-        try {
-            return $this->getConnection()->getSchemaBuilder()->hasColumn($this->getTable(), $column);
-        } catch (\Throwable) {
-            return false;
-        }
+        return is_array($value)
+            ? json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+            : null;
     }
 }

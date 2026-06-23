@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\Integrations\Payments;
 
-use App\Contracts\Integrations\Payments\PaymentGatewayInterface;
 use App\Constants\PaymentGatewayCode;
+use App\Contracts\Integrations\Payments\PaymentGatewayInterface;
 
 final readonly class PaymentGatewayManager
 {

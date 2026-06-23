@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Constants\PaymentStatus;
+use App\Models\AccountTransaction;
 use App\Models\Invoice;
-use App\Models\BalanceLog;
 use App\Models\Payment;
 use App\Models\User;
-use App\Services\Finance\CheckoutSecurityService;
 use App\Services\Finance\AdminOrderNotificationService;
+use App\Services\Finance\CheckoutSecurityService;
 use App\Services\Finance\CouponService;
 use App\Services\Finance\InvoiceService;
 use App\Services\Finance\PaymentService;
@@ -103,25 +103,25 @@ class RechargeStatusBalanceRegressionTest extends TestCase
             'amount' => '5.00',
             'paid_amount' => '5.00',
         ]);
-        $this->assertDatabaseHas('users', [
-            'id' => (int) $user->id,
-            'balance' => '15.00',
+        $this->assertDatabaseHas('user_accounts', [
+            'user_id' => (int) $user->id,
+            'cash_balance' => '15.00',
         ]);
-        $this->assertDatabaseHas('balance_logs', [
+        $this->assertDatabaseHas('account_transactions', [
             'user_id' => (int) $user->id,
             'event_type' => 'recharge',
             'change_amount' => '5.00',
             'balance_after' => '15.00',
-            'reference_id' => (int) $payment->id,
+            'source_id' => (int) $payment->id,
         ]);
 
         $resultAgain = $service->queryRechargeStatus($payment->fresh());
 
         $this->assertTrue($resultAgain['paid']);
-        $this->assertSame(1, BalanceLog::query()
+        $this->assertSame(1, AccountTransaction::query()
             ->where('user_id', (int) $user->id)
             ->where('event_type', 'recharge')
-            ->where('reference_id', (int) $payment->id)
+            ->where('source_id', (int) $payment->id)
             ->count());
         $this->assertSame(1, Invoice::query()
             ->where('user_id', (int) $user->id)
@@ -182,7 +182,7 @@ class RechargeStatusBalanceRegressionTest extends TestCase
 
         $invoiceService = new class extends InvoiceService
         {
-            public function createForRecharge(User $user, float $amount, ?Payment $payment = null, ?string $remark = null): Invoice
+            public function createForRecharge(User $user, float $amount, ?Payment $payment = null, ?string $remark = null, ?string $traceId = null): Invoice
             {
                 throw new \RuntimeException('invoice create failed');
             }
@@ -211,10 +211,10 @@ class RechargeStatusBalanceRegressionTest extends TestCase
                 'invoice_id' => null,
             ]);
             $this->assertSame('10.00', User::query()->findOrFail($user->id)->balance);
-            $this->assertSame(0, BalanceLog::query()
+            $this->assertSame(0, AccountTransaction::query()
                 ->where('user_id', (int) $user->id)
                 ->where('event_type', 'recharge')
-                ->where('reference_id', (int) $payment->id)
+                ->where('source_id', (int) $payment->id)
                 ->count());
         }
     }

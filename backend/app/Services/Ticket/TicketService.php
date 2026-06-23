@@ -5,15 +5,17 @@ declare(strict_types=1);
 namespace App\Services\Ticket;
 
 use App\Constants\ServiceStatus;
+use App\Constants\UserNotificationType;
 use App\Exceptions\BusinessException;
 use App\Jobs\SendTicketNotificationEmailJob;
 use App\Models\AdminUser;
 use App\Models\Service;
 use App\Models\Ticket;
 use App\Models\TicketReply;
+use App\Services\ClientServiceConsole\ServiceTransformService;
+use App\Services\Notification\UserNotificationService;
 use App\Services\System\NotificationService;
 use App\Services\System\UploadedAssetReferenceService;
-use App\Services\ClientServiceConsole\ServiceTransformService;
 use App\Support\AdminPermissions;
 use App\Support\SecureAsset;
 use App\Support\ServiceHostname;
@@ -72,7 +74,7 @@ class TicketService
         private UploadedAssetReferenceService $uploadedAssetReferenceService,
         private NotificationService $notificationService,
         private ServiceTransformService $serviceTransformService,
-        private \App\Services\Notification\UserNotificationService $userNotificationService,
+        private UserNotificationService $userNotificationService,
     ) {}
 
     /**
@@ -387,7 +389,7 @@ class TicketService
     {
         $query = Service::query()
             ->select(['id', 'user_id', 'product_id', 'name', 'domain', 'status', 'provision_data'])
-            ->with(['product:id,product_type,product_group_id,config_options,purchase_requires'])
+            ->with(['product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires'])
             ->where('user_id', $userId);
 
         $keyword = trim($keyword);
@@ -527,7 +529,7 @@ class TicketService
 
         $this->userNotificationService->create(
             (int) ($ticket->user?->id ?? 0),
-            \App\Constants\UserNotificationType::TICKET_STAFF_REPLY,
+            UserNotificationType::TICKET_STAFF_REPLY,
             '工单收到回复',
             "工单「{$ticket->subject}」{$staffName} 回复：{$preview}",
             '/client/tickets/'.$ticket->id,

@@ -4,16 +4,17 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Models\AdminUser;
-use App\Jobs\SendTicketNotificationEmailJob;
 use App\Constants\ServiceStatus;
-use App\Models\Role;
+use App\Jobs\SendTicketNotificationEmailJob;
+use App\Models\AdminUser;
 use App\Models\Product;
+use App\Models\Role;
 use App\Models\Service;
 use App\Models\Ticket;
 use App\Models\TicketReply;
 use App\Models\User;
 use App\Services\ClientServiceConsole\ServiceTransformService;
+use App\Services\Notification\UserNotificationService;
 use App\Services\System\NotificationService;
 use App\Services\System\UploadedAssetReferenceService;
 use App\Services\Ticket\TicketService;
@@ -227,6 +228,7 @@ class TicketServiceRegressionTest extends TestCase
             $this->createMock(UploadedAssetReferenceService::class),
             $notificationService,
             $this->createMock(ServiceTransformService::class),
+            $this->createMock(UserNotificationService::class),
         );
 
         $user = $this->createClientUser('ticket-notify');
@@ -253,6 +255,7 @@ class TicketServiceRegressionTest extends TestCase
             $this->createMock(UploadedAssetReferenceService::class),
             $this->createMock(NotificationService::class),
             $this->createMock(ServiceTransformService::class),
+            $this->createMock(UserNotificationService::class),
         );
     }
 

@@ -250,11 +250,16 @@ class AlipayFaceToFaceService
      */
     public function verifyNotify(array $params): bool
     {
-        $sign = $params['sign'] ?? '';
+        $sign = (string) ($params['sign'] ?? '');
         $signType = $params['sign_type'] ?? 'RSA2';
 
         unset($params['sign'], $params['sign_type']);
         ksort($params);
+
+        // 缺少签名或未配置支付宝公钥时直接判定失败，避免 openssl_verify 抛出 PHP 警告导致 500。
+        if ($sign === '' || trim((string) $this->alipayPublicKey) === '') {
+            return false;
+        }
 
         $stringToSign = urldecode(http_build_query($params));
 
@@ -262,9 +267,16 @@ class AlipayFaceToFaceService
             .wordwrap($this->alipayPublicKey, 64, "\n", true)
             ."\n-----END PUBLIC KEY-----";
 
+        $publicKeyResource = openssl_pkey_get_public($publicKey);
+        if ($publicKeyResource === false) {
+            Log::warning('[支付宝回调] 公钥无效，签名验证失败');
+
+            return false;
+        }
+
         $algorithm = $signType === 'RSA2' ? OPENSSL_ALGO_SHA256 : OPENSSL_ALGO_SHA1;
 
-        return openssl_verify($stringToSign, base64_decode($sign), $publicKey, $algorithm) === 1;
+        return openssl_verify($stringToSign, base64_decode($sign), $publicKeyResource, $algorithm) === 1;
     }
 
     /**

@@ -52,14 +52,14 @@ class ContentSystemMigrationService
 
     public function sourceCount(string $table): int
     {
-        $rows = $this->sourceQuery('SELECT COUNT(*) AS cnt FROM `' . $table . '`');
+        $rows = $this->sourceQuery('SELECT COUNT(*) AS cnt FROM `'.$table.'`');
 
         return (int) ($rows[0]->cnt ?? 0);
     }
 
     public function targetCount(string $table): int
     {
-        $rows = $this->targetQuery('SELECT COUNT(*) AS cnt FROM `' . $table . '`');
+        $rows = $this->targetQuery('SELECT COUNT(*) AS cnt FROM `'.$table.'`');
 
         return (int) ($rows[0]->cnt ?? 0);
     }
@@ -198,10 +198,10 @@ class ContentSystemMigrationService
     }
 
     /**
-     * @param  list<string> $columns
-     * @param  array<int, array<string, mixed>> $rows
-     * @param  list<string> $uniqueBy
-     * @param  list<string> $updateColumns
+     * @param  list<string>  $columns
+     * @param  array<int, array<string, mixed>>  $rows
+     * @param  list<string>  $uniqueBy
+     * @param  list<string>  $updateColumns
      */
     public function batchUpsert(string $table, array $columns, array $rows, array $uniqueBy, array $updateColumns): int
     {
@@ -245,7 +245,7 @@ class ContentSystemMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $setting
+     * @param  array<string, mixed>  $setting
      * @return array<string, mixed>
      */
     public function buildSettingPayload(array $setting): array
@@ -267,7 +267,7 @@ class ContentSystemMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $log
+     * @param  array<string, mixed>  $log
      * @return array<string, mixed>
      */
     public function buildNotificationLogPayload(array $log): array
@@ -294,7 +294,7 @@ class ContentSystemMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $log
+     * @param  array<string, mixed>  $log
      * @return array<string, mixed>
      */
     public function buildAutomationLogPayload(array $log): array
@@ -318,7 +318,7 @@ class ContentSystemMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $log
+     * @param  array<string, mixed>  $log
      * @return array<string, mixed>
      */
     public function buildOperationLogPayload(array $log): array
@@ -343,7 +343,7 @@ class ContentSystemMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $legacyTicket
+     * @param  array<string, mixed>  $legacyTicket
      * @return array<string, mixed>
      */
     public function buildTicketPayload(array $legacyTicket, ?int $targetServiceInstanceId, ?string $lastReplyAt): array
@@ -370,7 +370,7 @@ class ContentSystemMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $legacyReply
+     * @param  array<string, mixed>  $legacyReply
      * @return array<string, mixed>
      */
     public function buildTicketReplyPayload(array $legacyReply): array
@@ -499,7 +499,7 @@ class ContentSystemMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $setting
+     * @param  array<string, mixed>  $setting
      */
     private function shouldSkipSetting(array $setting): bool
     {
@@ -568,7 +568,7 @@ class ContentSystemMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $context
+     * @param  array<string, mixed>  $context
      */
     private function deriveOperationSubjectType(string $module, array $context): ?string
     {
@@ -636,7 +636,7 @@ class ContentSystemMigrationService
 
     private function buildTicketNo(int $ticketId): string
     {
-        return 'TK' . str_pad((string) $ticketId, 8, '0', STR_PAD_LEFT);
+        return 'TK'.str_pad((string) $ticketId, 8, '0', STR_PAD_LEFT);
     }
 
     private function normalizeNullablePositiveInt(mixed $value): ?int

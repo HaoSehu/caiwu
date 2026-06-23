@@ -79,7 +79,7 @@ class MigrateIdentityAdminUserRolesCommand extends IdentityMigrateBaseCommand
         foreach (array_merge($sourceRows, $bridgeRows) as $row) {
             $adminUserId = (int) $row->admin_user_id;
             $roleId = (int) $row->role_id;
-            $merged[$adminUserId . ':' . $roleId] = [
+            $merged[$adminUserId.':'.$roleId] = [
                 'admin_user_id' => $adminUserId,
                 'role_id' => $roleId,
                 'created_at' => now(),

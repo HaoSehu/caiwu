@@ -11,6 +11,7 @@ use App\Services\Automation\ServiceStatusSyncService;
 use App\Services\Finance\CouponCampaignService;
 use App\Services\ProductCatalog\ProductCatalogService;
 use App\Services\Referral\ReferralService;
+use App\Services\System\ScheduleRunLogService;
 use App\Services\Ticket\TicketAutomationService;
 use App\Services\Upstream\Contracts\ProvidesScheduledAuthRefresh;
 use App\Services\Upstream\ProviderResolver;
@@ -63,6 +64,7 @@ class RunScheduleTaskJob implements ShouldQueue
         ProductCatalogService $productCatalogService,
         ProviderResolver $providerResolver,
         ReferralService $referralService,
+        ScheduleRunLogService $scheduleRunLogService,
         ServiceLifecycleAutomationService $serviceLifecycleAutomationService,
         ServiceStatusSyncService $serviceStatusSyncService,
         TicketAutomationService $ticketAutomationService,
@@ -72,7 +74,7 @@ class RunScheduleTaskJob implements ShouldQueue
             'admin_user_id' => $this->adminUserId,
         ]);
 
-        $result = match ($this->taskKey) {
+        $result = $scheduleRunLogService->record($this->taskTitle(), fn () => match ($this->taskKey) {
             'refresh-hosting-panel-auth' => $this->refreshHostingPanelAuth($providerResolver),
             'service-auto-renew' => $autoRenewService->handle(10),
             'referral-release-rewards' => [
@@ -89,7 +91,11 @@ class RunScheduleTaskJob implements ShouldQueue
             'sync-processing-order-status' => $this->syncProcessingOrderStatus(),
             'queue-backlog-drain' => $this->drainQueueBacklog(),
             default => throw new InvalidArgumentException('不支持的任务：'.$this->taskKey),
-        };
+        }, [
+            'task_key' => $this->taskKey,
+            'source' => 'manual_trigger',
+            'admin_user_id' => $this->adminUserId,
+        ]);
 
         Log::info('[手动任务触发] 执行完成', [
             'task' => $this->taskKey,
@@ -165,6 +171,25 @@ class RunScheduleTaskJob implements ShouldQueue
         return [
             'exit_code' => $exitCode,
         ];
+    }
+
+    private function taskTitle(): string
+    {
+        return match ($this->taskKey) {
+            'refresh-hosting-panel-auth' => '接口认证刷新',
+            'service-auto-renew' => '服务自动续费',
+            'referral-release-rewards' => '推荐奖励释放',
+            'billing-maintenance' => '账单自动化维护',
+            'coupon-campaign-dispatch' => '优惠券活动发放',
+            'product-upstream-config-sync' => '上游产品配置同步',
+            'service-lifecycle-maintenance' => '服务生命周期维护',
+            'service-status-sync' => '用户产品状态同步',
+            'ticket-auto-close' => '工单自动关闭',
+            'invoice-cleanup', 'order-cleanup' => '账单与充值清理',
+            'sync-processing-order-status' => '账单状态同步（兼容）',
+            'queue-backlog-drain' => '队列积压消费',
+            default => $this->taskKey,
+        };
     }
 
     public function failed(\Throwable $exception): void

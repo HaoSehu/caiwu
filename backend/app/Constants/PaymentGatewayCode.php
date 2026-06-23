@@ -15,16 +15,25 @@ final class PaymentGatewayCode
 
     public const WECHAT = 'wechat';
 
+    public const STRIPE = 'stripe';
+
     public const MANUAL = 'manual';
 
     public const FREE = 'free';
 
     public const ALIPAY_F2F_PLUGIN = 'alipay_f2f';
 
+    public const THIRD_PARTY_GATEWAYS = [
+        self::ALIPAY,
+        self::WECHAT,
+        self::STRIPE,
+    ];
+
     public const LABELS = [
         self::ALIPAY => '支付宝支付',
         self::BALANCE => '余额支付',
         self::WECHAT => '微信支付',
+        self::STRIPE => 'Stripe 支付',
         self::MANUAL => '管理员手动',
         self::FREE => '免费开通',
     ];
@@ -32,5 +41,15 @@ final class PaymentGatewayCode
     public static function label(string $gateway): string
     {
         return self::LABELS[$gateway] ?? $gateway;
+    }
+
+    public static function thirdPartyGateways(): array
+    {
+        return self::THIRD_PARTY_GATEWAYS;
+    }
+
+    public static function isThirdParty(string $gateway): bool
+    {
+        return in_array($gateway, self::THIRD_PARTY_GATEWAYS, true);
     }
 }

@@ -162,22 +162,22 @@ class ReconcileAccountDomainCommand extends Command
         }
 
         foreach ($summary as $table => $counts) {
-            $this->line($table . ': ' . json_encode($counts, JSON_UNESCAPED_UNICODE));
+            $this->line($table.': '.json_encode($counts, JSON_UNESCAPED_UNICODE));
         }
 
         foreach ($orphans as $key => $count) {
-            $this->line($key . ' orphan=' . $count);
+            $this->line($key.' orphan='.$count);
         }
 
-        $this->line('uniques: ' . json_encode($payload['uniques'], JSON_UNESCAPED_UNICODE));
-        $this->line('statuses: ' . json_encode($payload['statuses'], JSON_UNESCAPED_UNICODE));
-        $this->line('ledger_balance_diff: ' . json_encode($payload['ledger_balance_diff'], JSON_UNESCAPED_UNICODE));
+        $this->line('uniques: '.json_encode($payload['uniques'], JSON_UNESCAPED_UNICODE));
+        $this->line('statuses: '.json_encode($payload['statuses'], JSON_UNESCAPED_UNICODE));
+        $this->line('ledger_balance_diff: '.json_encode($payload['ledger_balance_diff'], JSON_UNESCAPED_UNICODE));
 
         return self::SUCCESS;
     }
 
     /**
-     * @param  array<int, array<string, mixed>> $payloads
+     * @param  array<int, array<string, mixed>>  $payloads
      */
     private function sumPayloads(array $payloads, string $column): string
     {
@@ -191,7 +191,7 @@ class ReconcileAccountDomainCommand extends Command
     }
 
     /**
-     * @param  array<int, object> $rows
+     * @param  array<int, object>  $rows
      * @return array<string, int>
      */
     private function statusDistribution(array $rows): array

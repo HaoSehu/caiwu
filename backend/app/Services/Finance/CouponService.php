@@ -10,10 +10,10 @@ use App\Constants\OrderStatus;
 use App\Constants\ProductType;
 use App\Exceptions\BusinessException;
 use App\Models\Coupon;
+use App\Models\FirstProductGroup;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Product;
-use App\Models\ProductCategory;
 use App\Models\User;
 use App\Models\UserCoupon;
 use App\Services\ProductCatalog\InstanceSpecCatalogService;
@@ -34,6 +34,13 @@ class CouponService
     private const USED_INVOICE_STATUSES = [
         InvoiceStatus::PAID,
         InvoiceStatus::REFUNDED,
+    ];
+
+    private const USED_ORDER_STATUSES = [
+        OrderStatus::PAID,
+        OrderStatus::PROCESSING,
+        OrderStatus::COMPLETED,
+        OrderStatus::REFUNDED,
     ];
 
     private const SUPPORTED_BILLING_CYCLE_LABELS = [
@@ -97,8 +104,16 @@ class CouponService
         }
 
         $paginator = $this->buildAdminCouponQuery($filters)
-            ->with(['userCoupons:id,coupon_id,user_id,receive_type', 'couponCampaign:id,name'])
-            ->withCount(['orders', 'userCoupons'])
+            ->with(['userCoupons:id,coupon_id,user_id,receive_type,last_used_at', 'couponCampaign:id,name'])
+            ->withCount([
+                'orders',
+                'userCoupons',
+                'orders as used_orders_count' => fn ($query) => $query->whereIn('status', self::USED_ORDER_STATUSES),
+                'invoices as used_invoices_count' => fn ($query) => $query->whereIn('status', self::USED_INVOICE_STATUSES),
+                'userCoupons as used_user_coupons_count' => fn ($query) => $query->whereNotNull('last_used_at'),
+                'orders as deletion_blocking_orders_count' => fn ($query) => $query->where('status', '!=', OrderStatus::CANCELLED),
+                'invoices as deletion_blocking_invoices_count' => fn ($query) => $query->where('status', '!=', InvoiceStatus::CANCELLED),
+            ])
             ->orderByDesc('sort_order')
             ->orderByDesc('id')
             ->paginate($perPage);
@@ -133,7 +148,7 @@ class CouponService
                 );
             }
 
-            return $coupon->fresh();
+            return $this->loadCouponForAdmin($coupon->fresh());
         });
 
         return $this->transformCouponForAdmin($coupon, $this->resolveProductNameMapFromCoupons(collect([$coupon])));
@@ -144,21 +159,29 @@ class CouponService
         $this->assertCouponsTableAvailable();
 
         $updatedCoupon = DB::transaction(function () use ($coupon, $payload, $context) {
-            $coupon->fill(
-                $this->normalizeAdminCouponPayload($payload, $context, $coupon)
-            );
-            $coupon->save();
+            $lockedCoupon = Coupon::query()
+                ->whereKey($coupon->id)
+                ->lockForUpdate()
+                ->first();
 
-            if (($coupon->distribution_type ?? 'public') === 'private') {
+            throw_if(! $lockedCoupon, new BusinessException('优惠券不存在或已删除'));
+            $this->assertCouponCanBeUpdated($lockedCoupon);
+
+            $lockedCoupon->fill(
+                $this->normalizeAdminCouponPayload($payload, $context, $lockedCoupon)
+            );
+            $lockedCoupon->save();
+
+            if (($lockedCoupon->distribution_type ?? 'public') === 'private') {
                 $this->grantCouponToUsers(
-                    $coupon,
+                    $lockedCoupon,
                     $this->normalizeUserIds((array) ($payload['user_ids'] ?? [])),
                     $context,
                     true
                 );
             }
 
-            return $coupon->fresh();
+            return $this->loadCouponForAdmin($lockedCoupon->fresh());
         });
 
         return $this->transformCouponForAdmin($updatedCoupon, $this->resolveProductNameMapFromCoupons(collect([$updatedCoupon])));
@@ -191,8 +214,12 @@ class CouponService
 
             throw_if(! $lockedCoupon, new BusinessException('优惠券不存在或已删除'));
             throw_if(
-                $lockedCoupon->orders()->exists(),
-                new BusinessException('该优惠券已产生订单记录，不能直接删除')
+                $this->couponHasRecordedUsage($lockedCoupon),
+                new BusinessException('该优惠券已有人使用，不能删除')
+            );
+            throw_if(
+                $this->couponHasDeletionBlockingReferences($lockedCoupon),
+                new BusinessException('该优惠券仍有关联订单或账单，不能删除')
             );
 
             if ($this->hasUserCouponsTable()) {
@@ -228,49 +255,54 @@ class CouponService
 
     public function adminProductTree(): array
     {
-        $groups = ProductCategory::query()
-            ->select(['id', 'parent_group_id', 'product_type', 'name', 'sort_order'])
+        $groups = FirstProductGroup::query()
+            ->select(['id', 'code', 'name', 'sort_order', 'is_visible'])
             ->with([
-                'children' => fn ($query) => $query
-                    ->select(['id', 'parent_group_id', 'product_type', 'name', 'sort_order'])
+                'secondProductGroups' => fn ($query) => $query
+                    ->select(['id', 'first_product_group_id', 'name', 'sort_order', 'is_visible'])
+                    ->orderBy('sort_order')
+                    ->orderBy('id'),
+                'secondProductGroups.thirdProductGroups' => fn ($query) => $query
+                    ->select(['id', 'second_product_group_id', 'name', 'sort_order', 'is_visible'])
                     ->orderBy('sort_order')
                     ->orderBy('id'),
             ])
-            ->whereNull('parent_group_id')
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get();
 
         $productsByGroup = Product::query()
-            ->select(['id', 'product_group_id', 'product_type', 'pricing', 'status', 'sort_order', 'purchase_requires', 'config_options'])
+            ->select([
+                'id',
+                'first_product_group_id',
+                'second_product_group_id',
+                'third_product_group_id',
+                'service_type_code',
+                'product_type',
+                'custom_display_name',
+                'pricing',
+                'status',
+                'sort_order',
+                'purchase_requires',
+                'config_options',
+            ])
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get()
-            ->groupBy('product_group_id');
+            ->groupBy(fn (Product $product) => (int) ($product->third_product_group_id ?: $product->second_product_group_id));
 
-        $buildNodes = function ($group, array $path = []) use (&$buildNodes, $productsByGroup) {
-            $publicGroupId = (int) (($group->legacy_group_id ?? 0) ?: ($group->id ?? 0));
-            $currentPath = [...$path, trim((string) $group->name)];
-            $categoryFullName = implode(' / ', array_values(array_filter($currentPath, fn ($item) => trim((string) $item) !== '')));
-
-            $children = collect($group->children ?? [])
-                ->map(fn ($child) => $buildNodes($child, $currentPath))
-                ->values()
-                ->all();
-
-            $productNodes = collect($productsByGroup->get((int) $group->id, collect()))
-                ->map(function (Product $product) use ($categoryFullName) {
+        $buildProductNodes = function (int $effectiveGroupId, string $fullName) use ($productsByGroup): array {
+            return collect($productsByGroup->get($effectiveGroupId, collect()))
+                ->map(function (Product $product) use ($fullName) {
                     $displayPayload = $this->resolveProductDisplayNameResolver()->resolveForProduct($product);
                     $customDisplayName = trim((string) ($displayPayload['custom_display_name'] ?? ''));
                     $cpuMemorySlugDisplay = trim((string) ($displayPayload['cpu_memory_slug_display'] ?? ''));
                     $productSpecDisplay = trim((string) ($displayPayload['product_spec_display'] ?? ''));
                     $cpuMemoryDisplay = trim((string) ($displayPayload['cpu_memory_display'] ?? ''));
                     $combinedDisplayName = trim((string) ($displayPayload['combined_display_name'] ?? ''));
-                    $fallbackDisplayName = trim((string) $product->name) !== ''
-                        ? trim((string) $product->name)
-                        : '未配置规格 #'.(int) $product->id;
+                    $defaultDisplayName = '未配置规格 #'.(int) $product->id;
                     $displayName = $customDisplayName
-                        ?: ($cpuMemorySlugDisplay ?: ($productSpecDisplay ?: ($cpuMemoryDisplay ?: ($combinedDisplayName ?: $fallbackDisplayName))));
+                        ?: ($cpuMemorySlugDisplay ?: ($productSpecDisplay ?: ($cpuMemoryDisplay ?: ($combinedDisplayName ?: $defaultDisplayName))));
 
                     return [
                         'id' => (int) $product->id,
@@ -286,7 +318,7 @@ class CouponService
                         'cpu_memory_slug_display' => $cpuMemorySlugDisplay,
                         'product_spec_display' => $productSpecDisplay,
                         'combined_display_name' => $combinedDisplayName,
-                        'category_full_name' => $categoryFullName,
+                        'effective_product_group_full_name' => $fullName,
                         'primary_price' => $this->resolvePrimaryPrice((array) $product->pricing),
                         'status' => (int) ($product->status ?? 0),
                         'sort_order' => (int) ($product->sort_order ?? 0),
@@ -294,21 +326,86 @@ class CouponService
                 })
                 ->values()
                 ->all();
+        };
+
+        $buildThirdNode = function ($thirdGroup, $firstGroup, $secondGroup, array $path) use ($buildProductNodes): array {
+            $thirdId = (int) ($thirdGroup->id ?? 0);
+            $currentPath = [...$path, trim((string) $thirdGroup->name)];
+            $categoryFullName = implode(' / ', array_values(array_filter($currentPath, fn ($item) => trim((string) $item) !== '')));
 
             return [
-                'id' => 'group-'.$publicGroupId,
-                'label' => (string) $group->name,
-                'node_type' => 'group',
-                'group_id' => $publicGroupId,
-                'product_type' => (string) $group->product_type,
-                'product_type_label' => ProductType::labelOf((string) $group->product_type),
+                'id' => 'group-'.$thirdId,
+                'label' => (string) $thirdGroup->name,
+                'node_type' => 'third_product_group',
+                'first_product_group_id' => (int) $firstGroup->id,
+                'first_product_group_name' => (string) $firstGroup->name,
+                'service_type_code' => (string) $firstGroup->code,
+                'service_type_label' => ProductType::labelOf((string) $firstGroup->code),
+                'second_product_group_id' => (int) $secondGroup->id,
+                'second_product_group_name' => (string) $secondGroup->name,
+                'third_product_group_id' => $thirdId,
+                'third_product_group_name' => (string) $thirdGroup->name,
+                'effective_product_group_id' => $thirdId,
+                'effective_product_group_level' => 3,
+                'effective_product_group_full_name' => $categoryFullName,
                 'leaf' => false,
                 'disabled' => false,
-                'children' => [...$children, ...$productNodes],
+                'children' => $buildProductNodes($thirdId, $categoryFullName),
             ];
         };
 
-        return $groups->map(fn ($group) => $buildNodes($group))->values()->all();
+        $buildSecondNode = function ($secondGroup, $firstGroup, array $path) use ($buildThirdNode, $buildProductNodes): array {
+            $secondId = (int) ($secondGroup->id ?? 0);
+            $currentPath = [...$path, trim((string) $secondGroup->name)];
+            $categoryFullName = implode(' / ', array_values(array_filter($currentPath, fn ($item) => trim((string) $item) !== '')));
+            $children = collect($secondGroup->thirdProductGroups ?? [])
+                ->map(fn ($thirdGroup) => $buildThirdNode($thirdGroup, $firstGroup, $secondGroup, $currentPath))
+                ->values()
+                ->all();
+
+            return [
+                'id' => 'group-'.$secondId,
+                'label' => (string) $secondGroup->name,
+                'node_type' => 'second_product_group',
+                'first_product_group_id' => (int) $firstGroup->id,
+                'first_product_group_name' => (string) $firstGroup->name,
+                'service_type_code' => (string) $firstGroup->code,
+                'service_type_label' => ProductType::labelOf((string) $firstGroup->code),
+                'second_product_group_id' => $secondId,
+                'second_product_group_name' => (string) $secondGroup->name,
+                'third_product_group_id' => null,
+                'third_product_group_name' => null,
+                'effective_product_group_id' => $secondId,
+                'effective_product_group_level' => 2,
+                'effective_product_group_full_name' => $categoryFullName,
+                'leaf' => false,
+                'disabled' => false,
+                'children' => [...$children, ...$buildProductNodes($secondId, $categoryFullName)],
+            ];
+        };
+
+        $buildFirstNode = function (FirstProductGroup $firstGroup) use ($buildSecondNode): array {
+            $path = [trim((string) $firstGroup->name)];
+            $children = collect($firstGroup->secondProductGroups ?? [])
+                ->map(fn ($secondGroup) => $buildSecondNode($secondGroup, $firstGroup, $path))
+                ->values()
+                ->all();
+
+            return [
+                'id' => 'first-'.$firstGroup->id,
+                'label' => (string) $firstGroup->name,
+                'node_type' => 'first_product_group',
+                'first_product_group_id' => (int) $firstGroup->id,
+                'first_product_group_name' => (string) $firstGroup->name,
+                'service_type_code' => (string) $firstGroup->code,
+                'service_type_label' => ProductType::labelOf((string) $firstGroup->code),
+                'leaf' => false,
+                'disabled' => false,
+                'children' => $children,
+            ];
+        };
+
+        return $groups->map(fn (FirstProductGroup $group) => $buildFirstNode($group))->values()->all();
     }
 
     /**
@@ -569,6 +666,11 @@ class CouponService
     public function releaseInvoiceCoupon(Invoice $invoice): void
     {
         $this->syncInvoiceCouponUsage($invoice);
+    }
+
+    public function releaseOrderCoupon(Order $order): void
+    {
+        $this->syncOrderCouponUsage($order);
     }
 
     public function syncOrderCouponUsage(Order $order): void
@@ -1046,6 +1148,9 @@ class CouponService
         $rawBillingCycles = (array) ($coupon->billing_cycles ?? []);
         $billingCycles = $this->normalizeBillingCycles($rawBillingCycles);
         $displayStatus = $this->resolveAdminDisplayStatus($coupon);
+        $canUpdate = $this->couponCanBeUpdatedForAdmin($coupon);
+        $canDelete = $this->couponCanBeDeletedForAdmin($coupon);
+        $lockReason = $this->resolveCouponLockReason($coupon);
 
         return [
             'id' => (int) $coupon->id,
@@ -1105,8 +1210,152 @@ class CouponService
             'trace_id' => (string) ($coupon->trace_id ?? ''),
             'created_at' => $coupon->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $coupon->updated_at?->format('Y-m-d H:i:s'),
-            'can_delete' => (int) ($coupon->orders_count ?? 0) === 0,
+            'can_update' => $canUpdate,
+            'can_delete' => $canDelete,
+            'lock_reason' => $lockReason,
+            'delete_reason' => $canDelete ? '' : $this->resolveCouponDeleteBlockReason($coupon),
         ];
+    }
+
+    private function loadCouponForAdmin(?Coupon $coupon): Coupon
+    {
+        throw_if(! $coupon, new BusinessException('优惠券不存在或已删除'));
+
+        return $coupon
+            ->loadMissing(['userCoupons:id,coupon_id,user_id,receive_type,last_used_at', 'couponCampaign:id,name'])
+            ->loadCount([
+                'orders',
+                'userCoupons',
+                'orders as used_orders_count' => fn ($query) => $query->whereIn('status', self::USED_ORDER_STATUSES),
+                'invoices as used_invoices_count' => fn ($query) => $query->whereIn('status', self::USED_INVOICE_STATUSES),
+                'userCoupons as used_user_coupons_count' => fn ($query) => $query->whereNotNull('last_used_at'),
+                'orders as deletion_blocking_orders_count' => fn ($query) => $query->where('status', '!=', OrderStatus::CANCELLED),
+                'invoices as deletion_blocking_invoices_count' => fn ($query) => $query->where('status', '!=', InvoiceStatus::CANCELLED),
+            ]);
+    }
+
+    private function assertCouponCanBeUpdated(Coupon $coupon): void
+    {
+        throw_if(
+            ! $this->couponCanBeUpdatedForAdmin($coupon),
+            new BusinessException($this->resolveCouponLockReason($coupon) ?: '已发放的优惠券不允许修改')
+        );
+    }
+
+    private function couponCanBeUpdatedForAdmin(Coupon $coupon): bool
+    {
+        return $this->resolveCouponLockReason($coupon) === '';
+    }
+
+    private function couponCanBeDeletedForAdmin(Coupon $coupon): bool
+    {
+        return ! $this->couponHasRecordedUsage($coupon)
+            && ! $this->couponHasDeletionBlockingReferences($coupon);
+    }
+
+    private function resolveCouponLockReason(Coupon $coupon): string
+    {
+        if ((int) ($coupon->coupon_campaign_id ?? 0) > 0) {
+            return '活动生成的优惠券不允许修改';
+        }
+
+        if ($this->couponHasIssuedRecords($coupon)) {
+            return '已发放的优惠券不允许修改';
+        }
+
+        return '';
+    }
+
+    private function resolveCouponDeleteBlockReason(Coupon $coupon): string
+    {
+        if ($this->couponHasRecordedUsage($coupon)) {
+            return '该优惠券已有人使用，不能删除';
+        }
+
+        if ($this->couponHasDeletionBlockingReferences($coupon)) {
+            return '该优惠券仍有关联订单或账单，不能删除';
+        }
+
+        return '';
+    }
+
+    private function couponHasIssuedRecords(Coupon $coupon): bool
+    {
+        $count = $this->loadedCountValue($coupon, 'user_coupons_count');
+        if ($count !== null) {
+            return $count > 0;
+        }
+
+        return $this->hasUserCouponsTable()
+            && UserCoupon::query()->where('coupon_id', (int) $coupon->id)->exists();
+    }
+
+    private function couponHasRecordedUsage(Coupon $coupon): bool
+    {
+        if ((int) ($coupon->used_count ?? 0) > 0) {
+            return true;
+        }
+
+        $usedOrdersCount = $this->loadedCountValue($coupon, 'used_orders_count');
+        $usedInvoicesCount = $this->loadedCountValue($coupon, 'used_invoices_count');
+        $usedUserCouponsCount = $this->loadedCountValue($coupon, 'used_user_coupons_count');
+        if ($usedOrdersCount !== null && $usedInvoicesCount !== null && $usedUserCouponsCount !== null) {
+            return ($usedOrdersCount + $usedInvoicesCount + $usedUserCouponsCount) > 0;
+        }
+
+        $couponId = (int) $coupon->id;
+
+        if ($couponId <= 0) {
+            return false;
+        }
+
+        if ($this->hasUserCouponsTable()
+            && UserCoupon::query()->where('coupon_id', $couponId)->whereNotNull('last_used_at')->exists()
+        ) {
+            return true;
+        }
+
+        return Order::query()
+            ->where('coupon_id', $couponId)
+            ->whereIn('status', self::USED_ORDER_STATUSES)
+            ->exists()
+            || Invoice::query()
+                ->where('coupon_id', $couponId)
+                ->whereIn('status', self::USED_INVOICE_STATUSES)
+                ->exists();
+    }
+
+    private function couponHasDeletionBlockingReferences(Coupon $coupon): bool
+    {
+        $blockingOrdersCount = $this->loadedCountValue($coupon, 'deletion_blocking_orders_count');
+        $blockingInvoicesCount = $this->loadedCountValue($coupon, 'deletion_blocking_invoices_count');
+        if ($blockingOrdersCount !== null && $blockingInvoicesCount !== null) {
+            return ($blockingOrdersCount + $blockingInvoicesCount) > 0;
+        }
+
+        $couponId = (int) $coupon->id;
+
+        if ($couponId <= 0) {
+            return false;
+        }
+
+        return Order::query()
+            ->where('coupon_id', $couponId)
+            ->where('status', '!=', OrderStatus::CANCELLED)
+            ->exists()
+            || Invoice::query()
+                ->where('coupon_id', $couponId)
+                ->where('status', '!=', InvoiceStatus::CANCELLED)
+                ->exists();
+    }
+
+    private function loadedCountValue(Coupon $coupon, string $attribute): ?int
+    {
+        if (! array_key_exists($attribute, $coupon->getAttributes())) {
+            return null;
+        }
+
+        return (int) ($coupon->getAttribute($attribute) ?? 0);
     }
 
     private function transformOwnedCouponForUser(UserCoupon $userCoupon, int $userUsedCount, bool $hasPlacedOrder, array $productNameMap): array
@@ -1704,7 +1953,7 @@ class CouponService
                 $displayName = (string) ($this->resolveProductDisplayNameResolver()->resolveForProduct($product)['product_display_name'] ?? '');
 
                 return [
-                    (int) $product->id => $displayName !== '' ? $displayName : (string) $product->name,
+                    (int) $product->id => $displayName !== '' ? $displayName : '未配置规格 #'.(int) $product->id,
                 ];
             })
             ->all();
@@ -1721,9 +1970,24 @@ class CouponService
         }
 
         $products = Product::query()
-            ->select(['id', 'product_group_id', 'pricing', 'purchase_requires', 'config_options'])
+            ->select([
+                'id',
+                'first_product_group_id',
+                'second_product_group_id',
+                'third_product_group_id',
+                'service_type_code',
+                'product_type',
+                'custom_display_name',
+                'pricing',
+                'purchase_requires',
+                'config_options',
+            ])
             ->whereIn('id', $productIds)
-            ->with(['categoryMapping.parent'])
+            ->with([
+                'firstProductGroup:id,code,name',
+                'secondProductGroup:id,first_product_group_id,name',
+                'thirdProductGroup:id,second_product_group_id,name',
+            ])
             ->get();
 
         $specMap = $this->instanceSpecCatalogService
@@ -1732,9 +1996,10 @@ class CouponService
 
         return $products
             ->map(function (Product $product) use ($specMap) {
-                $group = $product->categoryMapping;
-                $parentGroup = $group?->parent;
-                $typeCode = trim((string) ($group?->product_type ?? (string) $product->product_type ?? ''));
+                $firstGroup = $product->firstProductGroup;
+                $secondGroup = $product->secondProductGroup;
+                $thirdGroup = $product->thirdProductGroup;
+                $typeCode = trim((string) ($firstGroup?->code ?? $product->service_type_code ?? $product->product_type ?? ''));
                 $instanceSpecText = (string) (($specMap[(int) $product->id] ?? [])['instance_spec_text'] ?? '');
                 $displayNamePayload = $this->resolveProductDisplayNameResolver()->resolveForProduct($product, [
                     'instance_spec_text' => $instanceSpecText,
@@ -1744,13 +2009,20 @@ class CouponService
 
                 return [
                     'id' => (int) $product->id,
-                    'name' => $combinedName !== '' ? $combinedName : ($productName !== '' ? $productName : (string) $product->name),
-                    'type_label' => ProductType::labelOf($typeCode),
-                    'parent_group_name' => trim((string) ($parentGroup?->name ?? '')),
-                    'group_name' => trim((string) ($group?->name ?? '')),
+                    'name' => $combinedName !== '' ? $combinedName : ($productName !== '' ? $productName : '未配置规格 #'.(int) $product->id),
+                    'service_type_code' => $typeCode,
+                    'service_type_label' => ProductType::labelOf($typeCode),
+                    'first_product_group_id' => (int) ($product->first_product_group_id ?? 0) ?: null,
+                    'first_product_group_name' => trim((string) ($firstGroup?->name ?? '')),
+                    'second_product_group_id' => (int) ($product->second_product_group_id ?? 0) ?: null,
+                    'second_product_group_name' => trim((string) ($secondGroup?->name ?? '')),
+                    'third_product_group_id' => (int) ($product->third_product_group_id ?? 0) ?: null,
+                    'third_product_group_name' => trim((string) ($thirdGroup?->name ?? '')),
+                    'effective_product_group_id' => ((int) ($product->third_product_group_id ?? 0)) ?: (((int) ($product->second_product_group_id ?? 0)) ?: null),
+                    'effective_product_group_level' => ((int) ($product->third_product_group_id ?? 0)) > 0 ? 3 : ((((int) ($product->second_product_group_id ?? 0)) > 0) ? 2 : null),
                     '_sort_type' => $typeCode,
-                    '_sort_parent' => trim((string) ($parentGroup?->name ?? '')),
-                    '_sort_group' => trim((string) ($group?->name ?? '')),
+                    '_sort_parent' => trim((string) ($secondGroup?->name ?? '')),
+                    '_sort_group' => trim((string) ($thirdGroup?->name ?? '')),
                 ];
             })
             ->sortBy([

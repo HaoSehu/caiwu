@@ -8,6 +8,7 @@ use App\Exceptions\BusinessException;
 use App\Models\Service;
 use App\Models\User;
 use App\Services\System\OperationLogService;
+use App\Support\CacheKey;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
@@ -31,9 +32,10 @@ class ServiceVncService
     public function getVncUrlForUser(User $user, int $serviceId, array $context = []): array
     {
         $service = $this->detailService->findUserService($user, $serviceId, [
-            'product:id,product_type,product_group_id,supplier_id,provision_module,config_options,purchase_requires',
-            'product.categoryMapping:id,parent_group_id,product_type,name,slogan,slug',
-            'product.categoryMapping.parent:id,parent_group_id,product_type,name,slogan,slug',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,purchase_requires',
+            'product.firstProductGroup:id,code,name,description,slug',
+            'product.secondProductGroup:id,first_product_group_id,name,description,slug',
+            'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
             'product.supplier',
             'order:id,order_no,status,paid_at,created_at',
         ]);
@@ -84,7 +86,7 @@ class ServiceVncService
                 $noVncCredentials = $this->buildNoVncCredentialPayload($vncParams);
 
                 $token = bin2hex(random_bytes(24));
-                Cache::put('vnc_token:'.$token, array_merge($vncParams, [
+                Cache::store('redis_volatile')->put(CacheKey::vncToken($token), array_merge($vncParams, [
                     'service_id' => $serviceId,
                     'allowed_origin' => $this->resolveAllowedVncOrigin($context),
                     'single_use' => ($context['actor_type'] ?? 'client') !== 'admin',
@@ -173,8 +175,9 @@ class ServiceVncService
         $params = $this->consumeVncLaunchToken($token);
         $relayToken = bin2hex(random_bytes(24));
 
-        Cache::put('vnc_token:'.$relayToken, array_merge($params, [
+        Cache::store('redis_volatile')->put(CacheKey::vncToken($relayToken), array_merge($params, [
             'token_scope' => 'relay',
+            'single_use' => false,
             'public_token_hash' => hash('sha256', $token),
         ]), now()->addSeconds(self::VNC_RELAY_TOKEN_TTL_SECONDS));
 
@@ -249,8 +252,8 @@ class ServiceVncService
 
     private function loadVncTokenParams(string $token, bool $consumeSingleUse): array
     {
-        $cacheKey = 'vnc_token:'.$token;
-        $params = Cache::get($cacheKey);
+        $cacheKey = CacheKey::vncToken($token);
+        $params = Cache::store('redis_volatile')->get($cacheKey);
 
         if (! is_array($params) || empty($params)) {
             throw new BusinessException('VNC 链接已过期或无效，请重新获取', 40400, 404);
@@ -259,7 +262,7 @@ class ServiceVncService
         throw_if(! is_array($params) || empty($params), new BusinessException('VNC 链接已过期或无效，请重新获取', 40400, 404));
 
         if ($consumeSingleUse && (bool) ($params['single_use'] ?? true)) {
-            $params = Cache::pull($cacheKey);
+            $params = Cache::store('redis_volatile')->pull(CacheKey::vncToken($token));
             if (! is_array($params) || empty($params)) {
                 throw new BusinessException('VNC 链接已过期或无效，请重新获取', 40400, 404);
             }
@@ -273,14 +276,14 @@ class ServiceVncService
 
     private function consumeVncLaunchToken(string $token): array
     {
-        $cacheKey = 'vnc_token:'.$token;
-        $params = Cache::get($cacheKey);
+        $cacheKey = CacheKey::vncToken($token);
+        $params = Cache::store('redis_volatile')->get($cacheKey);
 
         if (! is_array($params) || empty($params) || ($params['token_scope'] ?? 'public') !== 'public') {
             throw new BusinessException('VNC 链接已过期或无效，请重新获取', 40400, 404);
         }
 
-        $params = Cache::pull($cacheKey);
+        $params = Cache::store('redis_volatile')->pull(CacheKey::vncToken($token));
         if (! is_array($params) || empty($params)) {
             throw new BusinessException('VNC 链接已过期或无效，请重新获取', 40400, 404);
         }

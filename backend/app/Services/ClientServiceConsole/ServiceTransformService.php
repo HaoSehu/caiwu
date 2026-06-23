@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\ClientServiceConsole;
 
-use App\Constants\OrderStatus;
 use App\Constants\ProductType;
 use App\Constants\ServiceStatus;
 use App\Models\OperationLog;
@@ -93,8 +92,12 @@ class ServiceTransformService
     {
         $provisionData = (array) ($service->provision_data ?? []);
         $displayDomain = ServiceHostname::resolveDisplayDomain($service, $provisionData);
-        $service->loadMissing('product.categoryMapping.parent');
-        $leafGroup = $service->product?->categoryMapping;
+        $service->loadMissing([
+            'product.firstProductGroup',
+            'product.secondProductGroup',
+            'product.thirdProductGroup',
+        ]);
+        $leafGroup = $service->product?->thirdProductGroup ?: $service->product?->secondProductGroup;
         $rootGroup = $this->resolverService->resolveServiceRootGroup($service);
         $rootGroupName = trim((string) ($rootGroup?->name ?? ''));
         $leafGroupName = trim((string) ($leafGroup?->name ?? ''));
@@ -131,15 +134,9 @@ class ServiceTransformService
                 'root_group_name' => $rootGroupName,
                 'menu_name' => $catalogProductTypeLabel,
             ],
-            'order' => [
-                'id' => (int) ($service->order?->id ?? 0),
-                'order_no' => $service->order?->order_no ?? '',
-                'status' => (int) ($service->order?->status ?? 0),
-                'status_label' => $service->order ? (OrderStatus::$labels[$service->order->status] ?? (string) $service->order->status) : '',
-            ],
             'invoice' => [
-                'id' => (int) ($service->invoice?->id ?? $service->order?->invoice?->id ?? 0),
-                'invoice_no' => $service->invoice?->invoice_no ?? $service->order?->invoice?->invoice_no ?? '',
+                'id' => (int) ($service->invoice?->id ?? 0),
+                'invoice_no' => $service->invoice?->invoice_no ?? '',
             ],
             'custom_service_name' => (string) ($provisionData['custom_service_name'] ?? ''),
             'has_custom_service_name' => trim((string) ($provisionData['custom_service_name'] ?? '')) !== '',
@@ -230,21 +227,11 @@ class ServiceTransformService
                 'type_label' => $catalogProductTypeLabel,
                 'catalog_type' => $catalogProductType,
             ],
-            'order' => [
-                'id' => $service->order?->id,
-                'order_no' => $service->order?->order_no ?? '',
-                'invoice_id' => (int) ($service->invoice?->id ?? $service->order?->invoice?->id ?? 0),
-                'invoice_no' => $service->invoice?->invoice_no ?? $service->order?->invoice?->invoice_no ?? '',
-                'status' => (int) ($service->order?->status ?? 0),
-                'status_label' => $service->order ? (OrderStatus::$labels[$service->order->status] ?? (string) $service->order->status) : '',
-                'paid_at' => $service->order?->paid_at?->format('Y-m-d H:i:s'),
-            ],
             'invoice' => [
-                'id' => (int) ($service->invoice?->id ?? $service->order?->invoice?->id ?? 0),
-                'invoice_no' => $service->invoice?->invoice_no ?? $service->order?->invoice?->invoice_no ?? '',
-                'status' => (int) ($service->invoice?->status ?? $service->order?->invoice?->status ?? 0),
-                'paid_at' => $service->invoice?->paid_at?->format('Y-m-d H:i:s')
-                    ?? $service->order?->invoice?->paid_at?->format('Y-m-d H:i:s'),
+                'id' => (int) ($service->invoice?->id ?? 0),
+                'invoice_no' => $service->invoice?->invoice_no ?? '',
+                'status' => (int) ($service->invoice?->status ?? 0),
+                'paid_at' => $service->invoice?->paid_at?->format('Y-m-d H:i:s'),
             ],
             'upstream' => [
                 'provider' => (string) ($provisionData['provider'] ?? ''),
@@ -689,7 +676,7 @@ class ServiceTransformService
             return true;
         }
 
-        $categoryId = (int) ($service->product?->category_id ?? 0);
+        $categoryId = $this->effectiveProductGroupId($service);
         if ($categoryId <= 0) {
             return false;
         }
@@ -699,6 +686,16 @@ class ServiceTransformService
             (string) ($service->product?->product_type ?? ''),
             (int) ($service->product_id ?? 0)
         ) !== [];
+    }
+
+    private function effectiveProductGroupId(Service $service): int
+    {
+        $thirdGroupId = (int) ($service->product?->third_product_group_id ?? 0);
+        if ($thirdGroupId > 0) {
+            return $thirdGroupId;
+        }
+
+        return (int) ($service->product?->second_product_group_id ?? 0);
     }
 
     private function resolveTrafficPackageConfig(): array
@@ -817,8 +814,13 @@ class ServiceTransformService
         $textPool = strtolower(implode(' ', array_filter([
             $service->name,
             $service->product?->name ?? '',
-            $service->product?->categoryMapping?->name ?? '',
-            $service->product?->categoryMapping?->parent?->name ?? '',
+            $service->product?->service_type_code ?? '',
+            $service->product?->firstProductGroup?->name ?? '',
+            $service->product?->firstProductGroup?->description ?? '',
+            $service->product?->secondProductGroup?->name ?? '',
+            $service->product?->secondProductGroup?->description ?? '',
+            $service->product?->thirdProductGroup?->name ?? '',
+            $service->product?->thirdProductGroup?->description ?? '',
         ])));
         $keywordMap = [
             'cloud_server' => ['云服务器', 'vps', 'ecs', 'cvm', '轻量'],
@@ -1345,7 +1347,6 @@ class ServiceTransformService
         $this->pushDetailItem($items, '实例名称', $detail['service_name'] ?? null);
         $this->pushDetailItem($items, '配置名称', $detail['product_display_name'] ?? $detail['product_name'] ?? null);
         $this->pushDetailItem($items, '上游实例 ID', $detail['host_id'] ?? null);
-        $this->pushDetailItem($items, '订单号', $detail['order_no'] ?? null);
         $this->pushDetailItem($items, '账单号', $detail['invoice_no'] ?? null);
         $this->pushDetailItem($items, '主机名', $detail['hostname'] ?? null);
         $this->pushDetailItem($items, '原主机名', $detail['previous_hostname'] ?? null);

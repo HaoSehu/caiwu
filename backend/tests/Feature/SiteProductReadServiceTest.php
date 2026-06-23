@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Constants\ProductType;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\Setting;
@@ -18,6 +19,7 @@ use App\Services\ProductCatalog\ProductSiteService;
 use App\Services\Site\SiteProductQuoteService;
 use App\Services\Site\SiteProductReadService;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -39,8 +41,8 @@ class SiteProductReadServiceTest extends TestCase
         DB::reconnect('sqlite');
         app('db')->setDefaultConnection('sqlite');
 
-        $this->resetModelCaches();
         $this->createSchema();
+        $this->resetModelCaches();
     }
 
     protected function tearDown(): void
@@ -48,6 +50,9 @@ class SiteProductReadServiceTest extends TestCase
         Schema::connection('sqlite')->dropIfExists('personal_access_tokens');
         Schema::connection('sqlite')->dropIfExists('users');
         Schema::connection('sqlite')->dropIfExists('products');
+        Schema::connection('sqlite')->dropIfExists('third_product_groups');
+        Schema::connection('sqlite')->dropIfExists('second_product_groups');
+        Schema::connection('sqlite')->dropIfExists('first_product_groups');
         Schema::connection('sqlite')->dropIfExists('product_groups');
         Schema::connection('sqlite')->dropIfExists('settings');
 
@@ -79,7 +84,7 @@ class SiteProductReadServiceTest extends TestCase
         ]);
 
         $product = Product::query()->create([
-            'product_group_id' => (int) $childGroup->id,
+            ...$this->productGroupFields($childGroup),
             'name' => '香港轻量云 2H2G '.$suffix,
             'product_type' => 'vps',
             'pricing' => ['monthly' => '20.00', 'quarterly' => '60.00'],
@@ -133,7 +138,7 @@ class SiteProductReadServiceTest extends TestCase
 
         foreach (range(1, 5) as $index) {
             Product::query()->create([
-                'product_group_id' => (int) $childGroup->id,
+                ...$this->productGroupFields($childGroup),
                 'name' => 'Column Cache Product '.$index.' '.$suffix,
                 'product_type' => 'vps',
                 'pricing' => ['monthly' => '20.00'],
@@ -182,7 +187,7 @@ class SiteProductReadServiceTest extends TestCase
 
         foreach (range(1, 4) as $index) {
             Product::query()->create([
-                'product_group_id' => (int) $group->id,
+                ...$this->productGroupFields($group),
                 'name' => 'CPU Catalog Cache Product '.$index.' '.$suffix,
                 'product_type' => 'vps',
                 'pricing' => ['monthly' => '20.00'],
@@ -234,7 +239,7 @@ class SiteProductReadServiceTest extends TestCase
 
         $products = collect(range(1, 4))
             ->map(fn (int $index): Product => Product::query()->create([
-                'product_group_id' => (int) $group->id,
+                ...$this->productGroupFields($group),
                 'name' => 'Spec Batch Product '.$index.' '.$suffix,
                 'product_type' => 'vps',
                 'pricing' => ['monthly' => '20.00'],
@@ -305,7 +310,7 @@ class SiteProductReadServiceTest extends TestCase
         ]);
 
         $product = Product::query()->create([
-            'product_group_id' => (int) $childGroup->id,
+            ...$this->productGroupFields($childGroup),
             'name' => '襄阳高防大带宽 4H4G '.$suffix,
             'product_type' => 'vps',
             'pricing' => ['monthly' => '90.00'],
@@ -391,7 +396,7 @@ class SiteProductReadServiceTest extends TestCase
         ]);
 
         $product = Product::query()->create([
-            'product_group_id' => (int) $childGroup->id,
+            ...$this->productGroupFields($childGroup),
             'name' => '杭州通用云 2H2G '.$suffix,
             'product_type' => 'vps',
             'pricing' => ['monthly' => '45.00'],
@@ -455,22 +460,22 @@ class SiteProductReadServiceTest extends TestCase
             ->method('siteProductsByGroupIds')
             ->with([11, 12, 13, 14, 15, 16])
             ->willReturn([
-                ['group_id' => 11, 'products' => []],
+                ['effective_product_group_id' => 11, 'products' => []],
             ]);
 
         $service = new SiteProductReadService($catalogService);
 
         $payload = $service->products([
-            'category_id' => 11,
-            'category_ids' => [12, 12],
-            'group_id' => 13,
-            'group_ids' => [14],
-            'product_group_id' => 15,
-            'product_group_ids' => [16, 15],
+            'effective_product_group_id' => 11,
+            'effective_product_group_ids' => [12, 12],
+            'second_product_group_id' => 13,
+            'second_product_group_ids' => [14],
+            'third_product_group_id' => 15,
+            'third_product_group_ids' => [16, 15],
         ]);
 
         $this->assertSame([
-            ['group_id' => 11, 'products' => []],
+            ['effective_product_group_id' => 11, 'products' => []],
         ], $payload['items_by_group']);
     }
 
@@ -499,15 +504,15 @@ class SiteProductReadServiceTest extends TestCase
             ->with([11, 12, 21])
             ->willReturn([
                 [
-                    'group_id' => 11,
+                    'effective_product_group_id' => 11,
                     'products' => [
-                        ['id' => 101, 'group_id' => 11, 'name' => '轻量云服务器 2H2G', 'primary_price' => '68.00'],
+                        ['id' => 101, 'effective_product_group_id' => 11, 'name' => '轻量云服务器 2H2G', 'primary_price' => '68.00'],
                     ],
                 ],
                 [
-                    'group_id' => 21,
+                    'effective_product_group_id' => 21,
                     'products' => [
-                        ['id' => 201, 'group_id' => 21, 'name' => '轻量云高配 4H4G', 'primary_price' => '188.00'],
+                        ['id' => 201, 'effective_product_group_id' => 21, 'name' => '轻量云高配 4H4G', 'primary_price' => '188.00'],
                     ],
                 ],
             ]);
@@ -518,7 +523,7 @@ class SiteProductReadServiceTest extends TestCase
 
         $this->assertSame('轻量云服务器 2H2G', $payload[11]['featured_product']['name'] ?? null);
         $this->assertSame('轻量云服务器 2H2G', $payload[11]['featured_product']['display_name'] ?? null);
-        $this->assertSame(11, $payload[11]['featured_product']['group_id'] ?? null);
+        $this->assertSame(11, $payload[11]['featured_product']['effective_product_group_id'] ?? null);
         $this->assertSame('轻量云高配 4H4G', $payload[11]['preview_products'][1]['name'] ?? null);
         $this->assertSame('轻量云高配 4H4G', $payload[11]['preview_products'][1]['display_name'] ?? null);
         $this->assertArrayNotHasKey('children', $payload[11]);
@@ -620,11 +625,11 @@ class SiteProductReadServiceTest extends TestCase
         $readService->expects($this->once())
             ->method('products')
             ->with([
-                'category_id' => 12,
-                'group_ids' => [13, 14],
+                'effective_product_group_id' => 12,
+                'effective_product_group_ids' => [13, 14],
             ])
             ->willReturn([
-                'items_by_group' => [['group_id' => 12, 'products' => []]],
+                'items_by_group' => [['effective_product_group_id' => 12, 'products' => []]],
             ]);
 
         $quoteService = $this->createMock(SiteProductQuoteService::class);
@@ -652,9 +657,9 @@ class SiteProductReadServiceTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.list.0.label', '云服务器');
 
-        $this->getJson('/api/site/products?category_id=12&group_ids[0]=13&group_ids[1]=14')
+        $this->getJson('/api/site/products?effective_product_group_id=12&effective_product_group_ids[0]=13&effective_product_group_ids[1]=14')
             ->assertOk()
-            ->assertJsonPath('data.items_by_group.0.group_id', 12);
+            ->assertJsonPath('data.items_by_group.0.effective_product_group_id', 12);
 
         $this->postJson('/api/site/products/501/quote', [
             'billing_cycle' => 'monthly',
@@ -752,10 +757,50 @@ class SiteProductReadServiceTest extends TestCase
             $table->timestamps();
         });
 
+        Schema::connection('sqlite')->create('first_product_groups', function (Blueprint $table): void {
+            $table->id();
+            $table->string('code', 50)->unique();
+            $table->string('name', 100);
+            $table->string('slug', 100)->nullable()->unique();
+            $table->integer('sort_order')->default(0);
+            $table->unsignedTinyInteger('is_visible')->default(1);
+            $table->unsignedTinyInteger('is_system')->default(0);
+            $table->string('legacy_product_type', 50)->nullable();
+            $table->timestamps();
+        });
+
+        Schema::connection('sqlite')->create('second_product_groups', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('first_product_group_id');
+            $table->string('name', 100);
+            $table->string('slug', 100)->nullable();
+            $table->string('description', 255)->nullable();
+            $table->integer('sort_order')->default(0);
+            $table->unsignedTinyInteger('is_visible')->default(1);
+            $table->unsignedBigInteger('legacy_product_group_id')->nullable()->unique();
+            $table->timestamps();
+        });
+
+        Schema::connection('sqlite')->create('third_product_groups', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('second_product_group_id');
+            $table->string('name', 100);
+            $table->string('slug', 100)->nullable();
+            $table->string('description', 255)->nullable();
+            $table->integer('sort_order')->default(0);
+            $table->unsignedTinyInteger('is_visible')->default(1);
+            $table->unsignedBigInteger('legacy_product_group_id')->nullable()->unique();
+            $table->timestamps();
+        });
+
         Schema::connection('sqlite')->create('products', function (Blueprint $table): void {
             $table->id();
             $table->unsignedBigInteger('product_group_id')->nullable();
-            $table->string('name', 190);
+            $table->unsignedBigInteger('first_product_group_id')->nullable();
+            $table->unsignedBigInteger('second_product_group_id')->nullable();
+            $table->unsignedBigInteger('third_product_group_id')->nullable();
+            $table->string('service_type_code', 50)->nullable();
+            $table->string('name', 190)->nullable();
             $table->string('product_type', 50)->nullable();
             $table->json('pricing')->nullable();
             $table->decimal('setup_fee', 12, 2)->default(0);
@@ -772,6 +817,72 @@ class SiteProductReadServiceTest extends TestCase
             $table->timestamp('deleted_at')->nullable();
             $table->timestamps();
         });
+
+        DB::statement(<<<'SQL'
+CREATE TRIGGER site_product_groups_first_sync
+AFTER INSERT ON product_groups
+WHEN NEW.parent_group_id IS NULL
+BEGIN
+    INSERT OR IGNORE INTO first_product_groups (code, name, slug, sort_order, is_visible, is_system, legacy_product_type, created_at, updated_at)
+    VALUES (NEW.product_type, NEW.product_type, NEW.product_type, 0, 1, 1, NEW.product_type, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+    INSERT OR IGNORE INTO second_product_groups (id, first_product_group_id, name, slug, description, sort_order, is_visible, legacy_product_group_id, created_at, updated_at)
+    SELECT NEW.id, first_product_groups.id, NEW.name, NEW.slug, NEW.slogan, NEW.sort_order, NEW.is_visible, NEW.id, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+    FROM first_product_groups
+    WHERE first_product_groups.code = NEW.product_type;
+END
+SQL);
+
+        DB::statement(<<<'SQL'
+CREATE TRIGGER site_product_groups_third_sync
+AFTER INSERT ON product_groups
+WHEN NEW.parent_group_id IS NOT NULL
+BEGIN
+    INSERT OR IGNORE INTO third_product_groups (id, second_product_group_id, name, slug, description, sort_order, is_visible, legacy_product_group_id, created_at, updated_at)
+    SELECT NEW.id, second_product_groups.id, NEW.name, NEW.slug, NEW.slogan, NEW.sort_order, NEW.is_visible, NEW.id, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+    FROM second_product_groups
+    WHERE second_product_groups.legacy_product_group_id = NEW.parent_group_id;
+END
+SQL);
+
+        DB::statement(<<<'SQL'
+CREATE TRIGGER site_products_hierarchy_sync
+AFTER INSERT ON products
+WHEN NEW.product_group_id IS NOT NULL
+BEGIN
+    UPDATE products
+    SET
+        first_product_group_id = (
+            SELECT second_product_groups.first_product_group_id
+            FROM second_product_groups
+            WHERE second_product_groups.legacy_product_group_id = NEW.product_group_id
+            UNION
+            SELECT second_product_groups.first_product_group_id
+            FROM third_product_groups
+            INNER JOIN second_product_groups ON second_product_groups.id = third_product_groups.second_product_group_id
+            WHERE third_product_groups.legacy_product_group_id = NEW.product_group_id
+            LIMIT 1
+        ),
+        second_product_group_id = (
+            SELECT second_product_groups.id
+            FROM second_product_groups
+            WHERE second_product_groups.legacy_product_group_id = NEW.product_group_id
+            UNION
+            SELECT third_product_groups.second_product_group_id
+            FROM third_product_groups
+            WHERE third_product_groups.legacy_product_group_id = NEW.product_group_id
+            LIMIT 1
+        ),
+        third_product_group_id = (
+            SELECT third_product_groups.id
+            FROM third_product_groups
+            WHERE third_product_groups.legacy_product_group_id = NEW.product_group_id
+            LIMIT 1
+        ),
+        service_type_code = NEW.product_type
+    WHERE id = NEW.id;
+END
+SQL);
 
         Schema::connection('sqlite')->create('users', function (Blueprint $table): void {
             $table->id();
@@ -819,10 +930,41 @@ class SiteProductReadServiceTest extends TestCase
 
     private function resetModelCaches(): void
     {
+        Cache::flush();
+        ProductType::resetCache();
         $this->resetStaticProperty(Setting::class, 'groupValueCache', []);
-        $this->resetStaticProperty(Product::class, 'physicalColumnExistsCache', []);
-        $this->resetStaticProperty(User::class, 'profileTableAvailable', null);
-        $this->resetStaticProperty(User::class, 'accountTableAvailable', null);
+    }
+
+    private function productGroupFields(ProductCategory $group): array
+    {
+        $groupId = (int) $group->id;
+
+        if ($group->parent_id === null) {
+            $secondGroup = DB::table('second_product_groups')
+                ->where('legacy_product_group_id', $groupId)
+                ->first();
+
+            return [
+                'first_product_group_id' => (int) $secondGroup->first_product_group_id,
+                'second_product_group_id' => (int) $secondGroup->id,
+                'third_product_group_id' => null,
+                'service_type_code' => (string) $group->product_type,
+            ];
+        }
+
+        $thirdGroup = DB::table('third_product_groups')
+            ->where('legacy_product_group_id', $groupId)
+            ->first();
+        $secondGroup = DB::table('second_product_groups')
+            ->where('id', (int) $thirdGroup->second_product_group_id)
+            ->first();
+
+        return [
+            'first_product_group_id' => (int) $secondGroup->first_product_group_id,
+            'second_product_group_id' => (int) $secondGroup->id,
+            'third_product_group_id' => (int) $thirdGroup->id,
+            'service_type_code' => (string) $group->product_type,
+        ];
     }
 
     private function resetStaticProperty(string $className, string $propertyName, mixed $value): void

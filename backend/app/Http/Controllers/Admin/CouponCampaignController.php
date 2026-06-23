@@ -3,10 +3,15 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\CouponCampaign\DestroyRequest;
+use App\Http\Requests\Admin\CouponCampaign\IndexRequest;
+use App\Http\Requests\Admin\CouponCampaign\StoreRequest;
+use App\Http\Requests\Admin\CouponCampaign\ToggleStatusRequest;
+use App\Http\Requests\Admin\CouponCampaign\TriggerRequest;
+use App\Http\Requests\Admin\CouponCampaign\UpdateRequest;
 use App\Models\CouponCampaign;
 use App\Services\Finance\CouponCampaignService;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 class CouponCampaignController extends Controller
 {
@@ -21,12 +26,9 @@ class CouponCampaignController extends Controller
         );
     }
 
-    public function index(Request $request)
+    public function index(IndexRequest $request)
     {
-        $filters = $request->validate([
-            'keyword' => ['nullable', 'string', 'max:100'],
-            'status' => ['nullable', 'in:0,1'],
-        ]);
+        $filters = $request->validated();
 
         $perPage = min(max((int) $request->input('page_size', 20), 1), 100);
 
@@ -35,30 +37,30 @@ class CouponCampaignController extends Controller
         );
     }
 
-    public function store(Request $request)
+    public function store(StoreRequest $request)
     {
         return $this->success(
             $this->couponCampaignService->createCampaign(
-                $this->validatedPayload($request),
+                $request->validated(),
                 $this->buildContext($request)
             ),
             '活动已创建'
         );
     }
 
-    public function update(Request $request, CouponCampaign $couponCampaign)
+    public function update(UpdateRequest $request, CouponCampaign $couponCampaign)
     {
         return $this->success(
             $this->couponCampaignService->updateCampaign(
                 $couponCampaign,
-                $this->validatedPayload($request),
+                $request->validated(),
                 $this->buildContext($request)
             ),
             '活动已更新'
         );
     }
 
-    public function toggleStatus(Request $request, CouponCampaign $couponCampaign)
+    public function toggleStatus(ToggleStatusRequest $request, CouponCampaign $couponCampaign)
     {
         return $this->success(
             $this->couponCampaignService->toggleCampaignStatus($couponCampaign, $this->buildContext($request)),
@@ -66,7 +68,7 @@ class CouponCampaignController extends Controller
         );
     }
 
-    public function trigger(Request $request, CouponCampaign $couponCampaign)
+    public function trigger(TriggerRequest $request, CouponCampaign $couponCampaign)
     {
         return $this->success(
             $this->couponCampaignService->triggerCampaign($couponCampaign, $this->buildContext($request)),
@@ -74,38 +76,11 @@ class CouponCampaignController extends Controller
         );
     }
 
-    public function destroy(CouponCampaign $couponCampaign)
+    public function destroy(DestroyRequest $request, CouponCampaign $couponCampaign)
     {
         $this->couponCampaignService->deleteCampaign($couponCampaign);
 
         return $this->success(null, '活动已删除');
-    }
-
-    private function validatedPayload(Request $request): array
-    {
-        return $request->validate([
-            'name' => ['required', 'string', 'max:120'],
-            'description' => ['nullable', 'string', 'max:255'],
-            'weekdays' => ['required', 'array', 'min:1'],
-            'weekdays.*' => ['integer', 'between:0,6'],
-            'trigger_time' => ['required', 'string', 'regex:/^\d{2}:\d{2}(:\d{2})?$/'],
-            'issue_quantity' => ['required', 'integer', 'min:1'],
-            'valid_duration_hours' => ['nullable', 'integer', 'min:1', 'max:87600'],
-            'discount_type' => ['required', Rule::in(['fixed', 'percentage'])],
-            'discount_scope' => ['required', Rule::in(['first_month', 'recurring', 'renew'])],
-            'discount_value' => ['required', 'numeric', 'min:0.01'],
-            'min_amount' => ['nullable', 'numeric', 'min:0'],
-            'max_discount_amount' => ['nullable', 'numeric', 'min:0'],
-            'billing_cycles' => ['nullable', 'array'],
-            'billing_cycles.*' => ['string', 'max:30'],
-            'product_ids' => ['nullable', 'array'],
-            'product_ids.*' => ['integer', 'exists:products,id'],
-            'first_order_only' => ['nullable', 'boolean'],
-            'per_user_limit' => ['nullable', 'integer', 'min:1'],
-            'status' => ['nullable', 'in:0,1'],
-            'sort_order' => ['nullable', 'integer', 'min:0', 'max:999999'],
-            'remark' => ['nullable', 'string', 'max:255'],
-        ]);
     }
 
     private function buildContext(Request $request): array

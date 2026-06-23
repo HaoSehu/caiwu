@@ -66,7 +66,7 @@ class DatabaseEngineeringCommandTest extends TestCase
         $this->assertJson($output);
 
         $payload = json_decode($output, true, 512, JSON_THROW_ON_ERROR);
-        $this->assertTrue((bool) ($payload['dry_run'] ?? false));
-        $this->assertArrayHasKey('summary', $payload);
+        $this->assertSame('dry_run', (string) ($payload['mode'] ?? ''));
+        $this->assertArrayHasKey('totals', $payload);
     }
 }

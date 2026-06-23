@@ -19,7 +19,7 @@ class CallbackSignatureMiddlewareTest extends TestCase
         $payload = $this->signedPayload(['certify_id' => 'CERT-HMAC-001'], 'nonce-001');
         $request = Request::create('/api/client/verification/callback', 'POST', $payload);
 
-        $response = (new VerifyCallbackSignature())->handle($request, fn () => response('ok'));
+        $response = (new VerifyCallbackSignature)->handle($request, fn () => response('ok'));
 
         $this->assertSame(200, $response->getStatusCode());
     }
@@ -30,7 +30,7 @@ class CallbackSignatureMiddlewareTest extends TestCase
         Cache::flush();
 
         $payload = $this->signedPayload(['certify_id' => 'CERT-HMAC-REPLAY'], 'nonce-replay');
-        $middleware = new VerifyCallbackSignature();
+        $middleware = new VerifyCallbackSignature;
 
         $middleware->handle(Request::create('/api/client/verification/callback', 'POST', $payload), fn () => response('ok'));
         $response = $middleware->handle(Request::create('/api/client/verification/callback', 'POST', $payload), fn () => response('ok'));
@@ -45,7 +45,7 @@ class CallbackSignatureMiddlewareTest extends TestCase
         Cache::flush();
 
         $payload = $this->signedPayload(['certify_id' => 'CERT-HMAC-EXPIRED'], 'nonce-expired', now()->subMinutes(10)->timestamp);
-        $response = (new VerifyCallbackSignature())->handle(
+        $response = (new VerifyCallbackSignature)->handle(
             Request::create('/api/client/verification/callback', 'POST', $payload),
             fn () => response('ok')
         );
@@ -61,7 +61,7 @@ class CallbackSignatureMiddlewareTest extends TestCase
 
         $payload = $this->signedPayload(['certify_id' => 'CERT-HMAC-BAD'], 'nonce-bad');
         $payload['sign'] = str_repeat('0', 64);
-        $response = (new VerifyCallbackSignature())->handle(
+        $response = (new VerifyCallbackSignature)->handle(
             Request::create('/api/client/verification/callback', 'POST', $payload),
             fn () => response('ok')
         );

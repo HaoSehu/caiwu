@@ -10,23 +10,27 @@ use App\Constants\InvoiceType;
 use App\Constants\OrderStatus;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
+use App\Constants\UserNotificationType;
+use App\Contracts\Integrations\Payments\PaymentGatewayInterface;
 use App\Exceptions\BusinessException;
-use App\Models\BalanceLog;
+use App\Models\AccountTransaction;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Models\User;
-use App\Models\UserAccount;
-use App\Contracts\Integrations\Payments\PaymentGatewayInterface;
 use App\Services\ClientServiceConsole\ServiceTrafficPackageService;
+use App\Services\ClientServiceConsole\ServiceUpgradeService;
 use App\Services\Integrations\Payments\Data\PaymentPrecreateRequest;
 use App\Services\Integrations\Payments\Data\PaymentRefundRequest;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
+use App\Services\Notification\UserNotificationService;
 use App\Services\Order\PaidOrderBusinessFlowDispatcher;
 use App\Services\Provisioning\ProvisionService;
 use App\Services\Provisioning\ServiceRenewService;
 use App\Services\Referral\ReferralService;
+use App\Services\User\AccountService;
+use App\Support\VersionedJson;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
@@ -45,6 +49,7 @@ class PaymentService
         private AdminOrderNotificationService $adminOrderNotificationService,
         private CouponService $couponService,
         private InvoiceService $invoiceService,
+        private ?AccountService $accountService = null,
     ) {}
 
     /**
@@ -93,6 +98,7 @@ class PaymentService
                     'status' => InvoiceStatus::PAID,
                     'paid_amount' => $lockedInvoice->amount,
                     'paid_at' => now(),
+                    'trace_id' => $traceId !== '' ? $traceId : $lockedInvoice->trace_id,
                 ])->save();
 
                 $lockedInvoice->order?->forceFill([
@@ -144,7 +150,10 @@ class PaymentService
                         -$amount,
                         $balanceAfter,
                         (int) $lockedOrder->id,
-                        '支付订单 '.(string) $lockedOrder->order_no
+                        '支付订单 '.(string) $lockedOrder->order_no,
+                        [
+                            'trace_id' => $traceId,
+                        ]
                     );
                 }
 
@@ -159,6 +168,7 @@ class PaymentService
                         'status' => InvoiceStatus::PAID,
                         'paid_amount' => $lockedOrder->invoice->amount,
                         'paid_at' => now(),
+                        'trace_id' => $traceId !== '' ? $traceId : $lockedOrder->invoice->trace_id,
                     ])->save();
                 }
 
@@ -211,9 +221,9 @@ class PaymentService
             );
 
             if ($amount > 0) {
-                $this->invoiceService->createForRecharge($lockedUser, abs($amount), null, $remark);
+                $this->invoiceService->createForRecharge($lockedUser, abs($amount), null, $remark, trim((string) ($context['trace_id'] ?? '')));
             } else {
-                $this->invoiceService->createForDeduction($lockedUser, abs($amount), $remark);
+                $this->invoiceService->createForDeduction($lockedUser, abs($amount), $remark, trim((string) ($context['trace_id'] ?? '')));
             }
         });
     }
@@ -229,8 +239,9 @@ class PaymentService
     /**
      * 支付宝充值 — 预下单
      */
-    public function rechargeByAlipay(User $user, float $amount): array
+    public function rechargeByAlipay(User $user, float $amount, array $context = []): array
     {
+        $traceId = $this->resolveTraceId($context, 'recharge:user:'.$user->id.':'.now()->format('YmdHis'));
         $this->assertVerifiedUser($user);
 
         throw_if(
@@ -243,8 +254,8 @@ class PaymentService
         $normalizedAmount = round($amount, 2);
         $lockKey = 'lock:recharge:create:'.$user->id.':'.md5(number_format($normalizedAmount, 2, '.', ''));
 
-        $payment = $this->withLock($lockKey, 20, function () use ($user, $normalizedAmount) {
-            return DB::transaction(function () use ($user, $normalizedAmount) {
+        $payment = $this->withLock($lockKey, 20, function () use ($user, $normalizedAmount, $traceId) {
+            return DB::transaction(function () use ($user, $normalizedAmount, $traceId) {
                 $payment = Payment::query()
                     ->where('user_id', $user->id)
                     ->whereNull('invoice_id')
@@ -257,6 +268,10 @@ class PaymentService
                     ->first();
 
                 if ($payment) {
+                    if (trim((string) ($payment->trace_id ?? '')) === '') {
+                        $payment->forceFill(['trace_id' => $traceId])->save();
+                    }
+
                     return $payment;
                 }
 
@@ -267,6 +282,7 @@ class PaymentService
                     'gateway' => PaymentGatewayCode::ALIPAY,
                     'amount' => $normalizedAmount,
                     'status' => PaymentStatus::PENDING,
+                    'trace_id' => $traceId,
                 ]);
             });
         }, '充值请求处理中，请勿重复提交');
@@ -277,6 +293,7 @@ class PaymentService
         $payment->forceFill([
             'callback_raw' => array_merge((array) ($payment->callback_raw ?? []), [
                 'source' => 'alipay_recharge_precreate',
+                'trace_id' => $traceId,
             ]),
         ])->save();
         $this->syncProjection($payment);
@@ -334,17 +351,27 @@ class PaymentService
                 if ((int) $lockedPayment->status === PaymentStatus::SUCCESS) {
                     if (! $lockedPayment->invoice_id) {
                         $user = User::query()->lockForUpdate()->findOrFail($lockedPayment->user_id);
-                        $this->invoiceService->createForRecharge($user, (float) $lockedPayment->amount, $lockedPayment);
+                        $this->invoiceService->createForRecharge($user, (float) $lockedPayment->amount, $lockedPayment, null, (string) ($lockedPayment->trace_id ?? ''));
                     }
 
                     return;
                 }
 
+                $traceId = $this->resolveTraceId(
+                    ['trace_id' => $lockedPayment->trace_id],
+                    'recharge:payment:'.$lockedPayment->id
+                );
+                $callbackRaw = $raw;
+                $callbackRaw['trace_id'] = $traceId;
+
+                $this->recordPaymentCallback($lockedPayment, 'payment', $callbackRaw, true, $tradeNo, $traceId);
+
                 $lockedPayment->forceFill([
                     'trade_no' => $tradeNo,
                     'status' => PaymentStatus::SUCCESS,
-                    'callback_raw' => $raw,
+                    'callback_raw' => $callbackRaw,
                     'paid_at' => now(),
+                    'trace_id' => $traceId,
                 ])->save();
                 $this->syncProjection($lockedPayment);
 
@@ -357,10 +384,13 @@ class PaymentService
                     (float) $lockedPayment->amount,
                     $balanceAfter,
                     (int) $lockedPayment->id,
-                    '支付宝充值 '.(string) $lockedPayment->payment_no
+                    '支付宝充值 '.(string) $lockedPayment->payment_no,
+                    [
+                        'trace_id' => (string) ($lockedPayment->trace_id ?? ''),
+                    ]
                 );
 
-                $this->invoiceService->createForRecharge($user, (float) $lockedPayment->amount, $lockedPayment);
+                $this->invoiceService->createForRecharge($user, (float) $lockedPayment->amount, $lockedPayment, null, (string) ($lockedPayment->trace_id ?? ''));
             });
         });
     }
@@ -375,7 +405,7 @@ class PaymentService
             new BusinessException('支付宝支付未启用')
         );
 
-        $traceId = trim((string) ($context['trace_id'] ?? ''));
+        $traceId = $this->resolveTraceId($context, 'alipay:invoice:'.$invoice->id);
         $lockKey = "lock:pay:alipay:invoice:{$invoice->id}";
 
         $payload = $this->withLock($lockKey, 20, function () use ($invoice, $user, $traceId) {
@@ -409,12 +439,15 @@ class PaymentService
                         'gateway' => PaymentGatewayCode::ALIPAY,
                         'amount' => $amount,
                         'status' => PaymentStatus::PENDING,
+                        'trace_id' => $traceId,
                         'callback_raw' => [
                             'source' => 'alipay_precreate',
                             'trace_id' => $traceId,
                         ],
                     ]);
                     $this->syncProjection($payment);
+                } elseif (trim((string) ($payment->trace_id ?? '')) === '') {
+                    $payment->forceFill(['trace_id' => $traceId])->save();
                 }
 
                 return [
@@ -454,7 +487,7 @@ class PaymentService
             new BusinessException('支付宝支付未启用')
         );
 
-        $traceId = trim((string) ($context['trace_id'] ?? ''));
+        $traceId = $this->resolveTraceId($context, 'mix:invoice:'.$invoice->id);
         $lockKey = "lock:pay:mix:invoice:{$invoice->id}";
         $normalizedBalanceAmount = round(max($balanceAmount, 0), 2);
 
@@ -488,12 +521,16 @@ class PaymentService
                     -$normalizedBalanceAmount,
                     $balanceAfter,
                     (int) $lockedInvoice->id,
-                    '账单余额支付 '.(string) $lockedInvoice->invoice_no
+                    '账单余额支付 '.(string) $lockedInvoice->invoice_no,
+                    [
+                        'trace_id' => $traceId,
+                    ]
                 );
 
                 $nextPaidAmount = round((float) ($lockedInvoice->paid_amount ?? 0) + $normalizedBalanceAmount, 2);
                 $lockedInvoice->forceFill([
                     'paid_amount' => $nextPaidAmount,
+                    'trace_id' => $traceId !== '' ? $traceId : $lockedInvoice->trace_id,
                 ])->save();
 
                 return [
@@ -519,6 +556,10 @@ class PaymentService
                 ->first();
 
             if ($existingPayment) {
+                if (trim((string) ($existingPayment->trace_id ?? '')) === '') {
+                    $existingPayment->forceFill(['trace_id' => $traceId])->save();
+                }
+
                 return $existingPayment;
             }
 
@@ -530,6 +571,7 @@ class PaymentService
                 'gateway' => PaymentGatewayCode::ALIPAY,
                 'amount' => $remainingAmount,
                 'status' => PaymentStatus::PENDING,
+                'trace_id' => $traceId,
                 'callback_raw' => [
                     'source' => 'alipay_precreate_mix',
                     'trace_id' => $traceId,
@@ -577,7 +619,7 @@ class PaymentService
             new BusinessException('支付宝支付未启用')
         );
 
-        $traceId = trim((string) ($context['trace_id'] ?? ''));
+        $traceId = $this->resolveTraceId($context, 'alipay:order:'.$order->id);
         $lockKey = "lock:pay:alipay:order:{$order->id}";
 
         $payload = $this->withLock($lockKey, 20, function () use ($order, $user, $traceId) {
@@ -611,12 +653,15 @@ class PaymentService
                         'gateway' => PaymentGatewayCode::ALIPAY,
                         'amount' => $amount,
                         'status' => PaymentStatus::PENDING,
+                        'trace_id' => $traceId,
                         'callback_raw' => [
                             'source' => 'alipay_precreate',
                             'trace_id' => $traceId,
                         ],
                     ]);
                     $this->syncProjection($payment);
+                } elseif (trim((string) ($payment->trace_id ?? '')) === '') {
+                    $payment->forceFill(['trace_id' => $traceId])->save();
                 }
 
                 return [
@@ -661,12 +706,6 @@ class PaymentService
         $tradeStatus = $params['trade_status'] ?? '';
         $tradeNo = $params['trade_no'] ?? '';
 
-        if (! in_array($tradeStatus, ['TRADE_SUCCESS', 'TRADE_FINISHED'])) {
-            Log::info('[支付宝回调] 非成功状态，跳过', ['trade_status' => $tradeStatus]);
-
-            return true;
-        }
-
         $payment = Payment::where('payment_no', $paymentNo)->first();
         if (! $payment) {
             Log::warning('[支付宝回调] 支付记录不存在', ['payment_no' => $paymentNo]);
@@ -693,6 +732,21 @@ class PaymentService
             ]);
 
             return false;
+        }
+
+        $params['trace_id'] = $this->resolveTraceId(
+            ['trace_id' => $params['trace_id'] ?? $payment->trace_id],
+            'alipay:callback:'.$payment->id
+        );
+        $this->recordPaymentCallback($payment, 'payment', $params, true, $tradeNo);
+
+        if (! in_array($tradeStatus, ['TRADE_SUCCESS', 'TRADE_FINISHED'])) {
+            Log::info('[支付宝回调] 非成功状态，已记录回调并跳过业务入账', [
+                'payment_no' => $paymentNo,
+                'trade_status' => $tradeStatus,
+            ]);
+
+            return true;
         }
 
         // 幂等：已处理过
@@ -748,16 +802,7 @@ class PaymentService
                     }
 
                     if ((int) $invoice->status === InvoiceStatus::PAID) {
-                        $lockedPayment->forceFill([
-                            'trade_no' => $tradeNo,
-                            'status' => PaymentStatus::SUCCESS,
-                            'callback_raw' => array_merge($params, [
-                                'duplicate_paid' => true,
-                                'ignored_business_update' => true,
-                            ]),
-                            'paid_at' => now(),
-                        ])->save();
-                        $this->syncProjection($lockedPayment);
+                        $this->creditCapturedPaymentToBalance($lockedPayment, $invoice, $tradeNo, $params, 'invoice_already_paid');
 
                         Log::warning('[支付宝回调] 检测到重复支付回调，已拦截二次入账', [
                             'payment_no' => $lockedPayment->payment_no,
@@ -773,15 +818,13 @@ class PaymentService
                     }
 
                     if ((int) $invoice->status === InvoiceStatus::CANCELLED) {
-                        $lockedPayment->forceFill([
-                            'trade_no' => $tradeNo,
-                            'status' => PaymentStatus::FAILED,
-                            'callback_raw' => array_merge($params, [
-                                'cancelled_invoice' => true,
-                                'ignored_business_update' => true,
-                            ]),
-                        ])->save();
-                        $this->syncProjection($lockedPayment);
+                        $this->restoreReservedMixBalance($lockedPayment, [
+                            'closed_reason' => 'cancelled_invoice_captured',
+                            'mark_payment_failed' => false,
+                            'trace_id' => (string) ($params['trace_id'] ?? ''),
+                        ]);
+                        $lockedPayment->refresh();
+                        $this->creditCapturedPaymentToBalance($lockedPayment, $invoice, $tradeNo, $params, 'cancelled_invoice');
 
                         Log::warning('[支付宝回调] 已取消账单收到支付回调，已拦截入账', [
                             'payment_no' => $lockedPayment->payment_no,
@@ -797,7 +840,14 @@ class PaymentService
                     }
 
                     if ($this->invoicePaymentWindowExpired($invoice)) {
-                        $this->markExpiredInvoicePaymentFailed($invoice, $lockedPayment, $tradeNo, $params);
+                        $this->restoreReservedMixBalance($lockedPayment, [
+                            'closed_reason' => 'payment_window_expired_captured',
+                            'mark_payment_failed' => false,
+                            'trace_id' => (string) ($params['trace_id'] ?? ''),
+                        ]);
+                        $lockedPayment->refresh();
+                        $this->creditCapturedPaymentToBalance($lockedPayment, $invoice, $tradeNo, $params, 'payment_window_expired');
+                        $this->cancelExpiredInvoiceAfterCapturedPayment($invoice, $lockedPayment);
 
                         Log::warning('[支付宝回调] 账单支付窗口已过期，已取消账单并拦截入账', [
                             'payment_no' => $lockedPayment->payment_no,
@@ -817,11 +867,36 @@ class PaymentService
                         new BusinessException('账单状态异常，无法处理支付回调')
                     );
 
+                    $invoice = $this->restoreConflictingMixBalancesForCapturedPayment(
+                        $invoice,
+                        $lockedPayment,
+                        'captured_payment_superseded_mix_balance',
+                        $params
+                    );
+
+                    if (abs(round((float) $lockedPayment->amount, 2) - $this->invoicePayableAmount($invoice)) > 0.0001) {
+                        $this->creditCapturedPaymentToBalance($lockedPayment, $invoice, $tradeNo, $params, 'payable_amount_mismatch');
+
+                        Log::warning('[支付宝回调] 支付金额与账单当前应付不匹配，已转入余额', [
+                            'payment_no' => $lockedPayment->payment_no,
+                            'invoice_id' => $invoice->id,
+                            'payment_amount' => number_format((float) $lockedPayment->amount, 2, '.', ''),
+                            'payable_amount' => number_format($this->invoicePayableAmount($invoice), 2, '.', ''),
+                        ]);
+
+                        return [
+                            'dispatch' => false,
+                            'invoice' => $invoice,
+                            'payment_no' => (string) $lockedPayment->payment_no,
+                        ];
+                    }
+
                     $lockedPayment->forceFill([
                         'trade_no' => $tradeNo,
                         'status' => PaymentStatus::SUCCESS,
                         'callback_raw' => $params,
                         'paid_at' => now(),
+                        'trace_id' => (string) ($params['trace_id'] ?? $lockedPayment->trace_id),
                     ])->save();
                     $this->syncProjection($lockedPayment);
 
@@ -829,6 +904,7 @@ class PaymentService
                         'status' => InvoiceStatus::PAID,
                         'paid_amount' => $invoice->amount,
                         'paid_at' => now(),
+                        'trace_id' => (string) ($params['trace_id'] ?? $invoice->trace_id),
                     ])->save();
 
                     $invoice->order?->forceFill([
@@ -929,14 +1005,21 @@ class PaymentService
             return;
         }
 
+        $queryPayload = array_merge($queryResult['raw'] ?? [], [
+            'out_trade_no' => $payment->payment_no,
+            'trade_no' => $tradeNo,
+            'trade_status' => $tradeStatus,
+            'source' => 'active_query',
+            'trace_id' => $this->resolveTraceId(
+                ['trace_id' => $queryResult['trace_id'] ?? $payment->trace_id],
+                'alipay:query:'.$payment->id
+            ),
+        ]);
+        $this->recordPaymentCallback($payment, 'payment', $queryPayload, true, $tradeNo);
+
         // 充值类（无 invoice_id）走充值到账逻辑
         if (! $payment->invoice_id) {
-            $this->completeRechargePayment($payment, $tradeNo, array_merge($queryResult['raw'] ?? [], [
-                'out_trade_no' => $payment->payment_no,
-                'trade_no' => $tradeNo,
-                'trade_status' => $tradeStatus,
-                'source' => 'active_query',
-            ]));
+            $this->completeRechargePayment($payment, $tradeNo, $queryPayload);
 
             return;
         }
@@ -944,8 +1027,8 @@ class PaymentService
         $lockKey = "lock:alipay:payment:{$payment->id}";
 
         try {
-            $result = $this->withLock($lockKey, 30, function () use ($payment, $tradeNo, $tradeStatus, $queryResult) {
-                return DB::transaction(function () use ($payment, $tradeNo, $tradeStatus, $queryResult) {
+            $result = $this->withLock($lockKey, 30, function () use ($payment, $tradeNo, $queryPayload) {
+                return DB::transaction(function () use ($payment, $tradeNo, $queryPayload) {
                     $lockedPayment = Payment::query()
                         ->lockForUpdate()
                         ->with(['invoice.order'])
@@ -965,16 +1048,7 @@ class PaymentService
 
                     // 已支付账单 → 标记 duplicate_paid
                     if ((int) $invoice->status === InvoiceStatus::PAID) {
-                        $lockedPayment->forceFill([
-                            'trade_no' => $tradeNo,
-                            'status' => PaymentStatus::SUCCESS,
-                            'callback_raw' => array_merge($queryResult['raw'] ?? [], [
-                                'source' => 'active_query',
-                                'duplicate_paid' => true,
-                            ]),
-                            'paid_at' => now(),
-                        ])->save();
-                        $this->syncProjection($lockedPayment);
+                        $this->creditCapturedPaymentToBalance($lockedPayment, $invoice, $tradeNo, $queryPayload, 'invoice_already_paid');
 
                         Log::warning('[支付宝主动查询] 检测到重复支付，已拦截二次入账', [
                             'payment_no' => $lockedPayment->payment_no,
@@ -986,24 +1060,26 @@ class PaymentService
 
                     // 已取消账单 → 标记 FAILED
                     if ((int) $invoice->status === InvoiceStatus::CANCELLED) {
-                        $lockedPayment->forceFill([
-                            'trade_no' => $tradeNo,
-                            'status' => PaymentStatus::FAILED,
-                            'callback_raw' => array_merge($queryResult['raw'] ?? [], [
-                                'source' => 'active_query',
-                                'cancelled_invoice' => true,
-                            ]),
-                        ])->save();
-                        $this->syncProjection($lockedPayment);
+                        $this->restoreReservedMixBalance($lockedPayment, [
+                            'closed_reason' => 'cancelled_invoice_captured',
+                            'mark_payment_failed' => false,
+                            'trace_id' => (string) ($queryPayload['trace_id'] ?? ''),
+                        ]);
+                        $lockedPayment->refresh();
+                        $this->creditCapturedPaymentToBalance($lockedPayment, $invoice, $tradeNo, $queryPayload, 'cancelled_invoice');
 
                         return ['dispatch' => false, 'invoice' => $invoice, 'payment_no' => (string) $lockedPayment->payment_no];
                     }
 
                     if ($this->invoicePaymentWindowExpired($invoice)) {
-                        $this->markExpiredInvoicePaymentFailed($invoice, $lockedPayment, $tradeNo, array_merge($queryResult['raw'] ?? [], [
-                            'source' => 'active_query',
-                            'trade_status' => $tradeStatus,
-                        ]));
+                        $this->restoreReservedMixBalance($lockedPayment, [
+                            'closed_reason' => 'payment_window_expired_captured',
+                            'mark_payment_failed' => false,
+                            'trace_id' => (string) ($queryPayload['trace_id'] ?? ''),
+                        ]);
+                        $lockedPayment->refresh();
+                        $this->creditCapturedPaymentToBalance($lockedPayment, $invoice, $tradeNo, $queryPayload, 'payment_window_expired');
+                        $this->cancelExpiredInvoiceAfterCapturedPayment($invoice, $lockedPayment);
 
                         Log::warning('[支付宝主动查询] 账单支付窗口已过期，已取消账单并拦截入账', [
                             'payment_no' => $lockedPayment->payment_no,
@@ -1019,14 +1095,32 @@ class PaymentService
                         new BusinessException('账单状态异常，无法处理支付')
                     );
 
+                    $invoice = $this->restoreConflictingMixBalancesForCapturedPayment(
+                        $invoice,
+                        $lockedPayment,
+                        'captured_payment_superseded_mix_balance',
+                        $queryPayload
+                    );
+
+                    if (abs(round((float) $lockedPayment->amount, 2) - $this->invoicePayableAmount($invoice)) > 0.0001) {
+                        $this->creditCapturedPaymentToBalance($lockedPayment, $invoice, $tradeNo, $queryPayload, 'payable_amount_mismatch');
+
+                        Log::warning('[支付宝主动查询] 支付金额与账单当前应付不匹配，已转入余额', [
+                            'payment_no' => $lockedPayment->payment_no,
+                            'invoice_id' => $invoice->id,
+                            'payment_amount' => number_format((float) $lockedPayment->amount, 2, '.', ''),
+                            'payable_amount' => number_format($this->invoicePayableAmount($invoice), 2, '.', ''),
+                        ]);
+
+                        return ['dispatch' => false, 'invoice' => $invoice, 'payment_no' => (string) $lockedPayment->payment_no];
+                    }
+
                     $lockedPayment->forceFill([
                         'trade_no' => $tradeNo,
                         'status' => PaymentStatus::SUCCESS,
-                        'callback_raw' => array_merge($queryResult['raw'] ?? [], [
-                            'source' => 'active_query',
-                            'trade_status' => $tradeStatus,
-                        ]),
+                        'callback_raw' => $queryPayload,
                         'paid_at' => now(),
+                        'trace_id' => (string) ($queryPayload['trace_id'] ?? $lockedPayment->trace_id),
                     ])->save();
                     $this->syncProjection($lockedPayment);
 
@@ -1034,6 +1128,7 @@ class PaymentService
                         'status' => InvoiceStatus::PAID,
                         'paid_amount' => $invoice->amount,
                         'paid_at' => now(),
+                        'trace_id' => (string) ($queryPayload['trace_id'] ?? $invoice->trace_id),
                     ])->save();
 
                     $invoice->order?->forceFill([
@@ -1631,8 +1726,15 @@ class PaymentService
             }
 
             if ($order->type === 'upgrade') {
-                app(ServiceTrafficPackageService::class)
-                    ->processPaidTrafficPackageOrder($order);
+                $upgradeKind = (string) data_get($order->config_pricing_snapshot ?? [], 'meta.kind', '');
+
+                if ($upgradeKind === 'host_upgrade') {
+                    app(ServiceUpgradeService::class)
+                        ->processPaidUpgradeOrder($order);
+                } else {
+                    app(ServiceTrafficPackageService::class)
+                        ->processPaidTrafficPackageOrder($order);
+                }
                 $this->notifyOrderPaid($invoice, 'upgrade');
 
                 return;
@@ -1672,9 +1774,9 @@ class PaymentService
         $serviceId = (int) ($invoice->order?->service_id ?? $invoice->service?->id ?? 0);
         $link = $serviceId > 0 ? '/client/services/'.$serviceId : '/client/services';
 
-        app(\App\Services\Notification\UserNotificationService::class)->create(
+        app(UserNotificationService::class)->create(
             $userId,
-            \App\Constants\UserNotificationType::ORDER_PAID,
+            UserNotificationType::ORDER_PAID,
             $title,
             "「{$productName}」已处理完成，账单号 {$invoice->invoice_no}。",
             $link,
@@ -1764,6 +1866,111 @@ class PaymentService
         $this->couponService->releaseInvoiceCoupon($invoice);
         $this->restoreStockForCancelledInvoice($invoice);
         $this->closeOtherPendingPayments($invoice, (int) $payment->id, 'payment_window_expired');
+    }
+
+    private function cancelExpiredInvoiceAfterCapturedPayment(Invoice $invoice, Payment $payment): void
+    {
+        $invoice->forceFill(['status' => InvoiceStatus::CANCELLED])->save();
+        $this->couponService->releaseInvoiceCoupon($invoice);
+        $this->restoreStockForCancelledInvoice($invoice);
+        $this->closeOtherPendingPayments($invoice, (int) $payment->id, 'payment_window_expired');
+    }
+
+    private function restoreConflictingMixBalancesForCapturedPayment(
+        Invoice $invoice,
+        Payment $capturedPayment,
+        string $reason,
+        array $context = [],
+    ): Invoice {
+        $paymentAmount = round((float) $capturedPayment->amount, 2);
+        if ($paymentAmount <= $this->invoicePayableAmount($invoice) + 0.0001) {
+            return $invoice;
+        }
+
+        $pendingPayments = Payment::query()
+            ->where('invoice_id', $invoice->id)
+            ->where('status', PaymentStatus::PENDING)
+            ->where('id', '!=', $capturedPayment->id)
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($pendingPayments as $pendingPayment) {
+            if ($this->resolveMixBalanceAmount($pendingPayment) <= 0) {
+                continue;
+            }
+
+            $this->restoreReservedMixBalance($pendingPayment, [
+                'closed_reason' => $reason,
+                'trace_id' => (string) ($context['trace_id'] ?? ''),
+            ]);
+        }
+
+        return Invoice::query()
+            ->lockForUpdate()
+            ->with('order')
+            ->findOrFail((int) $invoice->id);
+    }
+
+    private function creditCapturedPaymentToBalance(
+        Payment $payment,
+        Invoice $invoice,
+        string $tradeNo,
+        array $raw,
+        string $reason,
+    ): void {
+        $payment->refresh();
+        $amount = round((float) $payment->amount, 2);
+        if ($amount <= 0) {
+            return;
+        }
+
+        $traceId = (string) ($raw['trace_id'] ?? $payment->trace_id ?? '');
+        $lockedUser = User::query()
+            ->lockForUpdate()
+            ->findOrFail((int) $payment->user_id);
+        $balanceAfter = $this->setUserBalance($lockedUser, $this->getUserBalance($lockedUser) + $amount);
+
+        $this->createBalanceLog(
+            (int) $lockedUser->id,
+            FinanceLedgerEventType::RECHARGE,
+            $amount,
+            $balanceAfter,
+            (int) $payment->id,
+            '异常支付转入余额 '.(string) $payment->payment_no,
+            [
+                'trace_id' => $traceId,
+            ]
+        );
+
+        $reasonFlags = match ($reason) {
+            'invoice_already_paid' => ['duplicate_paid' => true],
+            'cancelled_invoice' => ['cancelled_invoice' => true],
+            'payment_window_expired' => ['payment_window_expired' => true],
+            default => ['payable_amount_mismatch' => true],
+        };
+
+        $callbackRaw = array_merge((array) ($payment->callback_raw ?? []), $raw, $reasonFlags, [
+            'abnormal_invoice_payment' => true,
+            'credited_to_balance' => true,
+            'credit_reason' => $reason,
+            'credited_amount' => number_format($amount, 2, '.', ''),
+            'ignored_business_update' => true,
+            'invoice_id' => (int) $invoice->id,
+        ]);
+
+        $payment->forceFill([
+            'trade_no' => $tradeNo,
+            'status' => PaymentStatus::SUCCESS,
+            'callback_raw' => $callbackRaw,
+            'paid_at' => now(),
+            'trace_id' => $traceId !== '' ? $traceId : $payment->trace_id,
+        ])->save();
+        $this->syncProjection($payment);
+    }
+
+    private function invoicePayableAmount(Invoice $invoice): float
+    {
+        return round(max((float) $invoice->amount - (float) ($invoice->paid_amount ?? 0), 0), 2);
     }
 
     private function restoreStockForCancelledInvoice(Invoice $invoice): void
@@ -1954,6 +2161,11 @@ class PaymentService
                 return false;
             }
 
+            $markPaymentFailed = array_key_exists('mark_payment_failed', $context)
+                ? (bool) $context['mark_payment_failed']
+                : true;
+            $preserveInvoicePaidAmount = (bool) ($context['preserve_invoice_paid_amount'] ?? false);
+
             $balanceAfter = $this->setUserBalance($lockedUser, $this->getUserBalance($lockedUser) + $balanceAmount);
             $suppressLogs = (bool) ($context['suppress_logs'] ?? false);
             $this->createBalanceLog(
@@ -1970,26 +2182,28 @@ class PaymentService
                 ],
             );
 
-            $nextInvoicePaidAmount = number_format(
-                max(round((float) ($invoice->paid_amount ?? 0) - $balanceAmount, 2), 0),
-                2,
-                '.',
-                ''
-            );
-            $invoice->forceFill([
-                'paid_amount' => $nextInvoicePaidAmount,
-            ])->save();
-
-            if ($invoice->order instanceof Order) {
-                $nextOrderPaidAmount = number_format(
-                    max(round((float) ($invoice->order->paid_amount ?? 0) - $balanceAmount, 2), 0),
+            if (! $preserveInvoicePaidAmount) {
+                $nextInvoicePaidAmount = number_format(
+                    max(round((float) ($invoice->paid_amount ?? 0) - $balanceAmount, 2), 0),
                     2,
                     '.',
                     ''
                 );
-                $invoice->order->forceFill([
-                    'paid_amount' => $nextOrderPaidAmount,
+                $invoice->forceFill([
+                    'paid_amount' => $nextInvoicePaidAmount,
                 ])->save();
+
+                if ($invoice->order instanceof Order) {
+                    $nextOrderPaidAmount = number_format(
+                        max(round((float) ($invoice->order->paid_amount ?? 0) - $balanceAmount, 2), 0),
+                        2,
+                        '.',
+                        ''
+                    );
+                    $invoice->order->forceFill([
+                        'paid_amount' => $nextOrderPaidAmount,
+                    ])->save();
+                }
             }
 
             $callbackRaw = (array) ($lockedPayment->callback_raw ?? []);
@@ -1998,10 +2212,14 @@ class PaymentService
             $callbackRaw['closed_reason'] = (string) ($context['closed_reason'] ?? 'mix_balance_restored');
             $callbackRaw['trace_id'] = (string) ($context['trace_id'] ?? ($callbackRaw['trace_id'] ?? ''));
 
-            $lockedPayment->forceFill([
-                'status' => PaymentStatus::FAILED,
+            $paymentPayload = [
                 'callback_raw' => $callbackRaw,
-            ])->save();
+            ];
+            if ($markPaymentFailed) {
+                $paymentPayload['status'] = PaymentStatus::FAILED;
+            }
+
+            $lockedPayment->forceFill($paymentPayload)->save();
             $this->syncProjection($lockedPayment);
 
             return true;
@@ -2010,7 +2228,7 @@ class PaymentService
 
     private function resolveMixBalanceAmount(Payment $payment): float
     {
-        $callbackRaw = $this->resolvePaymentRawCallback($payment);
+        $callbackRaw = $this->resolvePaymentRawCallback($payment, true);
         if (! (bool) data_get($callbackRaw, 'mix_payment', false)) {
             return 0.0;
         }
@@ -2018,18 +2236,14 @@ class PaymentService
         return round(max((float) data_get($callbackRaw, 'balance_amount', 0), 0), 2);
     }
 
-    private function resolvePaymentRawCallback(Payment $payment): array
+    private function resolvePaymentRawCallback(Payment $payment, bool $allowAuditMirror = false): array
     {
-        $raw = $payment->getRawOriginal('callback_raw');
-        if (is_string($raw) && $raw !== '') {
-            $decoded = json_decode($raw, true);
-            if (is_array($decoded)) {
-                return $decoded;
+        if ($allowAuditMirror) {
+            $raw = $payment->getRawOriginal('callback_raw');
+            $decoded = VersionedJson::decodeToArray($raw);
+            if ($decoded !== null) {
+                return VersionedJson::paymentCallback($decoded, 'payment');
             }
-        }
-
-        if (is_array($raw)) {
-            return $raw;
         }
 
         return (array) ($payment->callback_raw ?? []);
@@ -2084,22 +2298,17 @@ class PaymentService
 
     private function getUserBalance(User $user): float
     {
-        return round((float) $user->getRawOriginal('balance', $user->balance), 2);
+        return $this->accounts()->cashBalance($user, true);
     }
 
     private function setUserBalance(User $user, float $balance): string
     {
-        $normalized = number_format(round($balance, 2), 2, '.', '');
-        $user->forceFill(['balance' => $normalized])->save();
+        return $this->accounts()->setCashBalance($user, $balance);
+    }
 
-        if (User::accountTableAvailable()) {
-            UserAccount::query()->updateOrCreate(
-                ['user_id' => (int) $user->id],
-                ['cash_balance' => $normalized]
-            );
-        }
-
-        return $normalized;
+    private function accounts(): AccountService
+    {
+        return $this->accountService ??= app(AccountService::class);
     }
 
     private function markInvoiceRefunded(
@@ -2150,24 +2359,36 @@ class PaymentService
         string $remark = '',
         array $context = [],
     ): void {
-        $log = BalanceLog::query()->create([
+        $sourceType = $this->resolveAccountTransactionSourceType($eventType);
+
+        AccountTransaction::query()->create([
             'user_id' => $userId,
+            'account_type' => 'cash',
             'event_type' => $eventType,
             'change_amount' => number_format($changeAmount, 2, '.', ''),
             'balance_after' => $balanceAfter,
-            'reference_id' => $referenceId && $referenceId > 0 ? $referenceId : null,
+            'source_type' => $sourceType,
+            'source_id' => $referenceId && $referenceId > 0 ? $referenceId : null,
+            'origin_type' => $sourceType,
+            'origin_id' => $referenceId && $referenceId > 0 ? $referenceId : null,
             'remark' => $remark,
+            'operator' => trim((string) ($context['operator'] ?? '')) ?: null,
+            'trace_id' => trim((string) ($context['trace_id'] ?? '')) ?: null,
         ]);
+    }
 
-        if (Schema::hasTable('account_transactions')) {
-            DB::table('account_transactions')
-                ->where('origin_type', 'balance_log')
-                ->where('origin_id', (int) $log->id)
-                ->update([
-                    'operator' => trim((string) ($context['operator'] ?? '')) ?: null,
-                    'trace_id' => trim((string) ($context['trace_id'] ?? '')) ?: null,
-                ]);
-        }
+    private function resolveAccountTransactionSourceType(string $eventType): ?string
+    {
+        return match (FinanceLedgerEventType::normalize(trim($eventType))) {
+            FinanceLedgerEventType::RECHARGE => 'payment',
+            FinanceLedgerEventType::MANUAL_RECHARGE,
+            FinanceLedgerEventType::MANUAL_DEDUCTION,
+            FinanceLedgerEventType::SYSTEM_ADJUSTMENT => 'manual_adjustment',
+            FinanceLedgerEventType::INVOICE_PAYMENT,
+            FinanceLedgerEventType::INVOICE_REFUND => 'invoice',
+            FinanceLedgerEventType::REFERRAL_CREDIT_CASH => 'referral_withdrawal',
+            default => null,
+        };
     }
 
     private function ensureRechargeInvoiceProjection(Payment $payment): ?Invoice
@@ -2198,9 +2419,19 @@ class PaymentService
 
                 $user = User::query()->lockForUpdate()->findOrFail($lockedPayment->user_id);
 
-                return $this->invoiceService->createForRecharge($user, (float) $lockedPayment->amount, $lockedPayment);
+                return $this->invoiceService->createForRecharge($user, (float) $lockedPayment->amount, $lockedPayment, null, (string) ($lockedPayment->trace_id ?? ''));
             });
         });
+    }
+
+    private function resolveTraceId(array $context, string $fallback): string
+    {
+        $traceId = trim((string) ($context['trace_id'] ?? ''));
+        if ($traceId !== '') {
+            return substr($traceId, 0, 64);
+        }
+
+        return substr(trim($fallback), 0, 64);
     }
 
     private function withLock(string $lockKey, int $seconds, callable $callback, string $timeoutMessage): mixed
@@ -2214,13 +2445,109 @@ class PaymentService
 
     public function syncProjection(Payment $payment): Payment
     {
-        $payment->syncPaymentCallbackProjection();
-
         if (! Schema::hasTable('payment_callbacks')) {
             return $payment->fresh() ?? $payment;
         }
 
+        $callbackRaw = $this->resolvePaymentRawCallback($payment, true);
+        if ($callbackRaw !== []) {
+            $this->recordPaymentCallback(
+                $payment,
+                'payment',
+                $callbackRaw,
+                $this->resolveCallbackVerified($payment, $callbackRaw),
+                (string) ($callbackRaw['trade_no'] ?? $payment->trade_no ?? ''),
+                (string) ($callbackRaw['trace_id'] ?? $payment->trace_id ?? '')
+            );
+
+            $refundPayload = is_array($callbackRaw['refund'] ?? null) ? $callbackRaw['refund'] : [];
+            if ($refundPayload !== []) {
+                $this->recordPaymentCallback(
+                    $payment,
+                    'refund',
+                    $refundPayload,
+                    true,
+                    (string) ($refundPayload['trade_no'] ?? ''),
+                    (string) ($refundPayload['trace_id'] ?? $callbackRaw['trace_id'] ?? $payment->trace_id ?? '')
+                );
+            }
+        }
+
         return $payment->fresh(['callbacks']) ?? $payment;
+    }
+
+    private function recordPaymentCallback(
+        Payment $payment,
+        string $callbackType,
+        array $payload,
+        bool $isVerified = true,
+        ?string $gatewayTradeNo = null,
+        ?string $traceId = null,
+    ): void {
+        if (! Schema::hasTable('payment_callbacks') || ! $payment->exists) {
+            return;
+        }
+
+        $now = now();
+        $resolvedTraceId = trim((string) ($traceId ?? $payload['trace_id'] ?? $payment->trace_id ?? ''));
+        if ($resolvedTraceId !== '') {
+            $payload['trace_id'] = $resolvedTraceId;
+        }
+
+        $row = [
+            'gateway_trade_no' => $this->nullableString($gatewayTradeNo ?? $payload['trade_no'] ?? $payment->trade_no ?? null),
+            'payload_json' => $this->encodeJson(VersionedJson::paymentCallback($payload, $callbackType)),
+            'is_verified' => $isVerified ? 1 : 0,
+            'received_at' => $payload['send_pay_date'] ?? $payload['refunded_at'] ?? $payload['gmt_refund_pay'] ?? $now,
+            'updated_at' => $now,
+        ];
+
+        if (Schema::hasColumn('payment_callbacks', 'trace_id')) {
+            $row['trace_id'] = $this->nullableString($resolvedTraceId);
+        }
+
+        if (Schema::hasColumn('payment_callbacks', 'operator')) {
+            $row['operator'] = $this->nullableString($payload['operator'] ?? null);
+        }
+
+        if (Schema::hasColumn('payment_callbacks', 'remark')) {
+            $row['remark'] = $this->nullableString($payload['remark'] ?? $payload['refund_reason'] ?? null);
+        }
+
+        DB::table('payment_callbacks')->updateOrInsert(
+            [
+                'payment_id' => (int) $payment->id,
+                'callback_type' => $callbackType,
+            ],
+            array_merge($row, [
+                'created_at' => $payment->created_at ?? $now,
+            ])
+        );
+    }
+
+    private function resolveCallbackVerified(Payment $payment, array $callbackRaw): bool
+    {
+        if (($callbackRaw['code'] ?? null) === '10000') {
+            return true;
+        }
+
+        if (in_array(trim((string) ($callbackRaw['trade_status'] ?? '')), ['TRADE_SUCCESS', 'TRADE_FINISHED'], true)) {
+            return true;
+        }
+
+        return (int) $payment->status === PaymentStatus::SUCCESS;
+    }
+
+    private function nullableString(mixed $value): ?string
+    {
+        $normalized = trim((string) ($value ?? ''));
+
+        return $normalized === '' ? null : $normalized;
+    }
+
+    private function encodeJson(array $payload): string
+    {
+        return json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}';
     }
 
     private function elapsedMilliseconds(float $startedAt): int

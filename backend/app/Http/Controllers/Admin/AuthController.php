@@ -3,8 +3,9 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\Auth\LoginRequest;
+use App\Http\Requests\Admin\Auth\UpdateProfileRequest;
 use App\Services\Auth\AuthService;
-use App\Support\AccountIdentifier;
 use App\Support\TextSanitizer;
 use Illuminate\Http\Request;
 
@@ -15,12 +16,9 @@ class AuthController extends Controller
     /**
      * 管理员登录
      */
-    public function login(Request $request)
+    public function login(LoginRequest $request)
     {
-        $request->validate([
-            'username' => 'required|string',
-            'password' => 'required|string|min:6',
-        ]);
+        // validation handled by LoginRequest
 
         $result = $this->authService->adminLogin(
             $request->input('username'),
@@ -42,16 +40,9 @@ class AuthController extends Controller
         return $this->success($this->serializeAdmin($admin));
     }
 
-    public function updateProfile(Request $request)
+    public function updateProfile(UpdateProfileRequest $request)
     {
-        $request->merge([
-            'email' => AccountIdentifier::normalizeOptionalEmail((string) $request->input('email')),
-        ]);
-
-        $data = $request->validate([
-            'nickname' => ['nullable', 'string', 'max:50'],
-            'email' => ['nullable', 'email', 'max:100'],
-        ]);
+        $data = $request->validated();
 
         $admin = $request->user();
         $nickname = TextSanitizer::clean((string) ($data['nickname'] ?? ''));

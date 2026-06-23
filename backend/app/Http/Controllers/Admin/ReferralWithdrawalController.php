@@ -3,22 +3,19 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\ReferralWithdrawal\ApproveRequest;
+use App\Http\Requests\Admin\ReferralWithdrawal\IndexRequest;
+use App\Http\Requests\Admin\ReferralWithdrawal\RejectRequest;
 use App\Models\ReferralWithdrawal;
 use App\Services\Referral\ReferralService;
-use Illuminate\Http\Request;
 
 class ReferralWithdrawalController extends Controller
 {
     public function __construct(private ReferralService $referralService) {}
 
-    public function index(Request $request)
+    public function index(IndexRequest $request)
     {
-        $filters = $request->validate([
-            'keyword' => ['nullable', 'string', 'max:100'],
-            'status' => ['nullable', 'integer', 'in:0,1,2'],
-            'page' => ['nullable', 'integer', 'min:1'],
-            'page_size' => ['nullable', 'integer', 'min:1', 'max:100'],
-        ]);
+        $filters = $request->validated();
 
         $perPage = max(1, min((int) ($filters['page_size'] ?? 20), 100));
         $paginator = $this->referralService->adminWithdrawalList($filters, $perPage);
@@ -49,11 +46,9 @@ class ReferralWithdrawalController extends Controller
         ]);
     }
 
-    public function approve(Request $request, ReferralWithdrawal $withdrawal)
+    public function approve(ApproveRequest $request, ReferralWithdrawal $withdrawal)
     {
-        $data = $request->validate([
-            'remark' => ['nullable', 'string', 'max:255'],
-        ]);
+        $data = $request->validated();
 
         $record = $this->referralService->processWithdrawal(
             withdrawal: $withdrawal,
@@ -71,11 +66,9 @@ class ReferralWithdrawalController extends Controller
         ], '提现已通过');
     }
 
-    public function reject(Request $request, ReferralWithdrawal $withdrawal)
+    public function reject(RejectRequest $request, ReferralWithdrawal $withdrawal)
     {
-        $data = $request->validate([
-            'remark' => ['required', 'string', 'max:255'],
-        ]);
+        $data = $request->validated();
 
         $record = $this->referralService->processWithdrawal(
             withdrawal: $withdrawal,

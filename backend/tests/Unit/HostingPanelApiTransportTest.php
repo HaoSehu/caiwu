@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit;
 
+use App\Models\Supplier;
 use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiTransport;
 use ReflectionClass;
 use Tests\TestCase;
@@ -53,6 +54,55 @@ class HostingPanelApiTransportTest extends TestCase
         $this->assertFalse($this->invokePrivateMethod($transport, 'supportsConfigTemplate', [[
             'type' => 'dcimcloud',
         ]]));
+    }
+
+    public function test_it_supports_official_upgrade_and_promo_endpoints(): void
+    {
+        $transport = new class extends HostingPanelApiTransport
+        {
+            public array $captured = [];
+
+            public function login($supplier): string
+            {
+                return 'jwt-token';
+            }
+
+            public function request($supplier, string $method, string $uri, array|string $payload = [], ?string $jwt = null, array $headers = [], array $query = []): array
+            {
+                $this->captured[] = compact('method', 'uri', 'payload', 'jwt', 'query');
+
+                return ['status' => 200, 'data' => []];
+            }
+        };
+
+        $supplier = new Supplier(['api_url' => 'https://panel.example.test']);
+
+        $transport->getHostUpgradePromoPreview($supplier, 12, 'PROMO', 'jwt-token');
+        $transport->removeHostUpgradePromoCode($supplier, 12, 'jwt-token');
+        $transport->getHostUpgradeOptions($supplier, 12, 'jwt-token');
+        $transport->previewHostUpgrade($supplier, 12, 99, 'monthly', 'jwt-token');
+        $transport->applyHostUpgradePromoCode($supplier, 12, 'PROMO', 'jwt-token');
+        $transport->checkoutHostUpgrade($supplier, 12, 'jwt-token');
+
+        $this->assertSame('/v1/hosts/12/actions/upgradeconfig/promo', $transport->captured[0]['uri']);
+        $this->assertSame('PUT', $transport->captured[0]['method']);
+        $this->assertSame(['promo_code' => 'PROMO'], $transport->captured[0]['payload']);
+
+        $this->assertSame('/v1/hosts/12/actions/upgradeconfig/promo', $transport->captured[1]['uri']);
+        $this->assertSame('DELETE', $transport->captured[1]['method']);
+
+        $this->assertSame('/v1/hosts/12/actions/upgrade', $transport->captured[2]['uri']);
+        $this->assertSame('GET', $transport->captured[2]['method']);
+
+        $this->assertSame('/v1/hosts/12/actions/upgrade', $transport->captured[3]['uri']);
+        $this->assertSame('POST', $transport->captured[3]['method']);
+        $this->assertSame(['product_id' => 99, 'billingcycle' => 'monthly'], $transport->captured[3]['payload']);
+
+        $this->assertSame('/v1/hosts/12/actions/upgrade/promo', $transport->captured[4]['uri']);
+        $this->assertSame('PUT', $transport->captured[4]['method']);
+
+        $this->assertSame('/v1/hosts/12/actions/upgrade/checkout', $transport->captured[5]['uri']);
+        $this->assertSame('POST', $transport->captured[5]['method']);
     }
 
     private function invokePrivateMethod(object $object, string $method, array $arguments = []): mixed

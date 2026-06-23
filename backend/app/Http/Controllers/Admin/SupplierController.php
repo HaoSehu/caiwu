@@ -2,12 +2,11 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Constants\ProductType;
 use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\Supplier\BulkConnectProductsRequest;
 use App\Http\Resources\Product\SupplierResource;
 use App\Models\Product;
-use App\Models\ProductCategory;
 use App\Models\Supplier;
 use App\Services\ProductCatalog\ProductCatalogService;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
@@ -197,7 +196,7 @@ class SupplierController extends Controller
         ], '供应商商品同步成功');
     }
 
-    public function bulkConnectProducts(Request $request, Supplier $supplier, ProductCatalogService $productCatalogService)
+    public function bulkConnectProducts(BulkConnectProductsRequest $request, Supplier $supplier, ProductCatalogService $productCatalogService)
     {
         if (! $supplier->exists) {
             return $this->error(40400, '接口不存在');
@@ -207,29 +206,7 @@ class SupplierController extends Controller
             return $this->error(42200, '接口配置不完整，暂时无法批量对接商品');
         }
 
-        $categoryExistsRule = Rule::exists((new ProductCategory)->getTable(), 'id');
-
-        $payload = $request->validate([
-            'product_type' => ['required', 'string', Rule::in(ProductType::allowedValues())],
-            'root_group_id' => ['nullable', 'integer', 'min:1'],
-            'child_group_id' => ['nullable', 'integer', 'min:1'],
-            'root_category_id' => ['nullable', 'integer', 'min:1', $categoryExistsRule],
-            'child_category_id' => ['nullable', 'integer', 'min:1', $categoryExistsRule],
-            'root_group_name' => ['nullable', 'string', 'max:100', 'required_without_all:root_group_id,child_group_id,root_category_id,child_category_id'],
-            'product_ids' => ['required', 'array', 'min:1'],
-            'product_ids.*' => ['integer', 'min:1'],
-            'default_status' => ['nullable', 'in:0,1'],
-            'default_auto_setup' => ['nullable', 'in:0,1'],
-            'sync_config_options' => ['nullable', 'in:0,1'],
-        ]);
-
-        if (! isset($payload['root_group_id']) && isset($payload['root_category_id'])) {
-            $payload['root_group_id'] = $this->resolveLegacyGroupIdFromCategoryId((int) $payload['root_category_id']);
-        }
-
-        if (! isset($payload['child_group_id']) && isset($payload['child_category_id'])) {
-            $payload['child_group_id'] = $this->resolveLegacyGroupIdFromCategoryId((int) $payload['child_category_id']);
-        }
+        $payload = $request->validated();
 
         $result = $productCatalogService->bulkConnectSupplierProducts($supplier, $payload);
 
@@ -420,17 +397,6 @@ class SupplierController extends Controller
         return $url !== '' ? rtrim($url, '/') : '';
     }
 
-    private function resolveLegacyGroupIdFromCategoryId(int $categoryId): ?int
-    {
-        if ($categoryId <= 0) {
-            return null;
-        }
-
-        $category = ProductCategory::query()->findOrFail($categoryId);
-
-        return (int) (($category->legacy_group_id ?? 0) ?: $category->id);
-    }
-
     private function appendLocalProductMappings(Supplier $supplier, array $catalog): array
     {
         $products = is_array($catalog['products'] ?? null) ? $catalog['products'] : [];
@@ -445,7 +411,7 @@ class SupplierController extends Controller
         }
 
         $localProducts = Product::withTrashed()
-            ->with(['categoryMapping.parent'])
+            ->with(['firstProductGroup', 'secondProductGroup', 'thirdProductGroup'])
             ->where('supplier_id', $supplier->id)
             ->whereIn('supplier_product_id', $productIds)
             ->get()
@@ -453,21 +419,34 @@ class SupplierController extends Controller
 
         $mapProduct = function (array $item) use ($localProducts): array {
             $localProduct = $localProducts->get((int) ($item['id'] ?? 0));
-            $group = $localProduct?->categoryMapping;
-            $parentGroup = $group?->parent;
             $displayName = $localProduct instanceof Product
                 ? trim((string) ((new ProductDisplayNameResolver)->resolveForProduct($localProduct)['product_display_name'] ?? ''))
                 : '';
+            $firstGroup = $localProduct?->firstProductGroup;
+            $secondGroup = $localProduct?->secondProductGroup;
+            $thirdGroup = $localProduct?->thirdProductGroup;
+            $groupNameSegments = array_values(array_filter([
+                trim((string) ($firstGroup?->name ?? '')),
+                trim((string) ($secondGroup?->name ?? '')),
+                trim((string) ($thirdGroup?->name ?? '')),
+            ], static fn (string $name): bool => $name !== ''));
 
             return array_merge($item, [
                 'is_connected' => $localProduct !== null,
                 'connected_product_id' => $localProduct?->id ? (int) $localProduct->id : null,
                 'connected_display_name' => $displayName,
                 'connected_deleted' => $localProduct?->trashed() ?? false,
-                'connected_group_name' => $group?->name,
-                'connected_group_full_name' => $parentGroup
-                    ? $parentGroup->name.' / '.$group->name
-                    : ($group?->name ?? ''),
+                'connected_first_product_group_id' => $firstGroup?->id ? (int) $firstGroup->id : null,
+                'connected_first_product_group_name' => $firstGroup?->name,
+                'connected_second_product_group_id' => $secondGroup?->id ? (int) $secondGroup->id : null,
+                'connected_second_product_group_name' => $secondGroup?->name,
+                'connected_third_product_group_id' => $thirdGroup?->id ? (int) $thirdGroup->id : null,
+                'connected_third_product_group_name' => $thirdGroup?->name,
+                'connected_effective_product_group_id' => $thirdGroup?->id
+                    ? (int) $thirdGroup->id
+                    : ($secondGroup?->id ? (int) $secondGroup->id : null),
+                'connected_effective_product_group_level' => $thirdGroup?->id ? 3 : ($secondGroup?->id ? 2 : null),
+                'connected_effective_product_group_full_name' => implode(' / ', $groupNameSegments),
                 'connected_updated_at' => $localProduct?->updated_at?->format('Y-m-d H:i:s'),
             ]);
         };

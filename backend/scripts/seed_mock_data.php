@@ -12,7 +12,6 @@ use App\Models\BalanceLog;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Payment;
-use App\Services\Finance\InvoiceService;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;

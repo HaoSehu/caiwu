@@ -5,10 +5,16 @@
 - 读取 backend/.env 中的数据库配置
 - 自动创建数据库（如不存在）
 - 检查并生成 APP_KEY（如缺失）
-- 空库时优先导入基础 schema
+- 空库时优先导入由真实库导出的 schema baseline
 - 清理 Laravel 缓存
 - 执行数据库迁移
 - 自动创建默认管理员 cerbo / Temp@123456
+
+schema baseline 更新方式：
+    php backend/scripts/export_schema_baseline.php
+
+旧库 SQL 数据迁移继续使用：
+    python backend/scripts/migrate_legacy_dump.py
 """
 
 from __future__ import annotations
@@ -28,6 +34,7 @@ BACKEND_DIR = SCRIPT_DIR.parent
 ENV_FILE = BACKEND_DIR / ".env"
 ARTISAN_FILE = BACKEND_DIR / "artisan"
 SCHEMA_FILE = BACKEND_DIR / "database" / "schema" / "mysql-schema.sql"
+SCHEMA_EXPORT_SCRIPT = SCRIPT_DIR / "export_schema_baseline.php"
 
 ADMIN_BOOTSTRAP_CODE = r"""use App\Models\AdminUser;
 use App\Models\Role;
@@ -250,11 +257,14 @@ def main() -> int:
         ensure_file(ENV_FILE, f"未找到 {ENV_FILE}，请先准备后端 .env 文件")
         ensure_file(ARTISAN_FILE, f"未找到 {ARTISAN_FILE}")
         ensure_file(
+            SCHEMA_EXPORT_SCRIPT,
+            f"未找到 {SCHEMA_EXPORT_SCRIPT}，无法确认 schema baseline 更新入口",
+        )
+        ensure_file(
             BACKEND_DIR / "vendor" / "autoload.php",
             "未检测到 Composer 依赖，请先在 backend 目录执行 composer install",
         )
         ensure_command("php", "未检测到 php 命令")
-        ensure_command("mysql", "未检测到 mysql 客户端命令")
 
         db_connection = read_env_value("DB_CONNECTION")
         db_host = read_env_value("DB_HOST") or "127.0.0.1"
@@ -273,6 +283,8 @@ def main() -> int:
             fail(".env 中缺少 DB_DATABASE")
         if not db_username:
             fail(".env 中缺少 DB_USERNAME")
+        if not args.dry_run:
+            ensure_command("mysql", "未检测到 mysql 客户端命令")
 
         mysql_base_args = mysql_args(db_username, db_host, db_port, db_socket)
         escaped_database_name = db_database.replace("`", "``")
@@ -335,16 +347,19 @@ def main() -> int:
 
         if args.dry_run:
             if SCHEMA_FILE.is_file():
-                log(f"dry-run: 若数据库为空，将优先导入基础 schema {SCHEMA_FILE}")
+                log(f"dry-run: 若数据库为空，将优先导入 schema baseline {SCHEMA_FILE}")
             else:
-                log("dry-run: 未检测到基础 schema，将直接执行普通迁移")
+                log("dry-run: 未检测到 schema baseline，将直接执行普通迁移")
         else:
             if existing_table_count == "0":
                 if not SCHEMA_FILE.is_file():
-                    fail(f"目标数据库为空，但未找到基础 schema 文件：{SCHEMA_FILE}")
-                log("检测到空数据库，开始导入基础 schema")
+                    fail(
+                        f"目标数据库为空，但未找到 schema baseline：{SCHEMA_FILE}\n"
+                        f"请先执行：php {SCHEMA_EXPORT_SCRIPT}"
+                    )
+                log("检测到空数据库，将通过 schema baseline 初始化当前表结构")
             else:
-                log(f"检测到数据库已有 {existing_table_count} 张表，跳过基础 schema 导入")
+                log(f"检测到数据库已有 {existing_table_count} 张表，跳过 schema baseline 导入")
 
         log("执行数据库迁移")
         migrate_args = ["php", "artisan", "migrate", "--force"]

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\Content\ListContentArticlesRequest;
 use App\Http\Requests\Admin\Content\StoreContentArticleRequest;
 use App\Http\Requests\Admin\Content\UpdateContentArticleRequest;
+use App\Http\Requests\Admin\ContentArticle\UploadImageRequest;
 use App\Http\Resources\Content\ContentArticleResource;
 use App\Models\ContentArticle;
 use App\Services\Content\ContentArticleService;
@@ -76,11 +77,9 @@ class ContentArticleController extends Controller
         return $this->success(null, '内容删除成功');
     }
 
-    public function uploadImage(Request $request)
+    public function uploadImage(UploadImageRequest $request)
     {
-        $request->validate([
-            'file' => ['required', 'image', 'mimetypes:image/jpeg,image/png,image/webp', 'max:5120'],
-        ]);
+        // validation handled by UploadImageRequest
 
         $mediaFile = $this->mediaFileService->upload(
             file: $request->file('file'),

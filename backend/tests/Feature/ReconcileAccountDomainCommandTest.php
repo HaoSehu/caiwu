@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -404,7 +404,7 @@ class ReconcileAccountDomainCommandTest extends TestCase
 
         touch($databasePath);
 
-        config()->set('database.connections.' . $connectionName, [
+        config()->set('database.connections.'.$connectionName, [
             'driver' => 'sqlite',
             'database' => $databasePath,
             'prefix' => '',

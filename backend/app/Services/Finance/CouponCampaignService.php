@@ -109,10 +109,20 @@ class CouponCampaignService
 
     public function updateCampaign(CouponCampaign $campaign, array $payload, array $context = []): array
     {
-        $campaign->fill($this->normalizeAdminCampaignPayload($payload, $context, $campaign));
-        $campaign->save();
+        $campaign = DB::transaction(function () use ($campaign, $payload, $context) {
+            $lockedCampaign = CouponCampaign::query()
+                ->whereKey($campaign->id)
+                ->lockForUpdate()
+                ->first();
 
-        $campaign = $campaign->fresh(['lastCoupon'])->loadCount('coupons');
+            throw_if(! $lockedCampaign, new BusinessException('活动不存在或已删除'));
+            $this->assertCampaignCanBeUpdated($lockedCampaign);
+
+            $lockedCampaign->fill($this->normalizeAdminCampaignPayload($payload, $context, $lockedCampaign));
+            $lockedCampaign->save();
+
+            return $lockedCampaign->fresh(['lastCoupon'])->loadCount('coupons');
+        });
 
         return $this->transformCampaignForAdmin($campaign, $this->resolveProductNameMapFromCampaigns(collect([$campaign])));
     }
@@ -134,7 +144,20 @@ class CouponCampaignService
 
     public function deleteCampaign(CouponCampaign $campaign): void
     {
-        $campaign->delete();
+        DB::transaction(function () use ($campaign): void {
+            $lockedCampaign = CouponCampaign::query()
+                ->whereKey($campaign->id)
+                ->lockForUpdate()
+                ->first();
+
+            throw_if(! $lockedCampaign, new BusinessException('活动不存在或已删除'));
+            throw_if(
+                $this->campaignHasGeneratedCoupons($lockedCampaign),
+                new BusinessException('活动已生成优惠券批次，不允许删除')
+            );
+
+            $lockedCampaign->delete();
+        });
     }
 
     public function triggerCampaign(CouponCampaign $campaign, array $context = []): array
@@ -144,7 +167,7 @@ class CouponCampaignService
         $triggerAt = CarbonImmutable::now(config('app.timezone'));
         $ruleKey = 'manual-'.$triggerAt->format('YmdHis').'-'.Str::lower(Str::random(6));
         $result = $this->dispatchSingleCampaign($campaign, $triggerAt, $ruleKey, $context, true);
-        throw_if($result === null, new BusinessException('璇ユ椿鍔ㄤ粖鏃ュ凡鍙戞斁杩囨壒娆★紝璇峰嬁閲嶅鎿嶄綔'));
+        throw_if($result === null, new BusinessException('该活动今日已发放过批次，请勿重复操作'));
         $campaign = $campaign->fresh(['lastCoupon'])->loadCount('coupons');
 
         return [
@@ -293,6 +316,9 @@ class CouponCampaignService
         $billingCycles = $this->normalizeBillingCycles($rawBillingCycles);
         $productIds = $this->normalizeProductIds((array) ($campaign->product_ids ?? []));
         $coupon = $campaign->lastCoupon;
+        $generatedCouponCount = (int) ($campaign->coupons_count ?? 0);
+        $canMutate = $generatedCouponCount === 0;
+        $lockReason = $canMutate ? '' : '活动已生成优惠券批次，不允许修改';
 
         return [
             'id' => (int) $campaign->id,
@@ -331,7 +357,7 @@ class CouponCampaignService
             'display_status' => (int) ($campaign->status ?? CouponStatus::ACTIVE) === CouponStatus::ACTIVE ? 'active' : 'disabled',
             'display_status_label' => (int) ($campaign->status ?? CouponStatus::ACTIVE) === CouponStatus::ACTIVE ? '运行中' : '已停用',
             'sort_order' => (int) ($campaign->sort_order ?? 0),
-            'generated_coupon_count' => (int) ($campaign->coupons_count ?? 0),
+            'generated_coupon_count' => $generatedCouponCount,
             'next_run_at' => $this->resolveNextRunAt($weekdays, $this->normalizeTimeValue($campaign->trigger_time)),
             'last_dispatched_at' => $campaign->last_dispatched_at?->format('Y-m-d H:i:s'),
             'last_coupon_id' => (int) ($campaign->last_coupon_id ?? 0),
@@ -342,7 +368,27 @@ class CouponCampaignService
             'trace_id' => (string) ($campaign->trace_id ?? ''),
             'created_at' => $campaign->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $campaign->updated_at?->format('Y-m-d H:i:s'),
+            'can_update' => $canMutate,
+            'can_delete' => $canMutate,
+            'lock_reason' => $lockReason,
         ];
+    }
+
+    private function assertCampaignCanBeUpdated(CouponCampaign $campaign): void
+    {
+        throw_if(
+            $this->campaignHasGeneratedCoupons($campaign),
+            new BusinessException('活动已生成优惠券批次，不允许修改')
+        );
+    }
+
+    private function campaignHasGeneratedCoupons(CouponCampaign $campaign): bool
+    {
+        if (array_key_exists('coupons_count', $campaign->getAttributes())) {
+            return (int) ($campaign->getAttribute('coupons_count') ?? 0) > 0;
+        }
+
+        return $campaign->coupons()->exists();
     }
 
     private function normalizeAdminCampaignPayload(array $payload, array $context = [], ?CouponCampaign $campaign = null): array

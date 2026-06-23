@@ -7,6 +7,8 @@ namespace App\Services\ClientServiceConsole\Concerns;
 use App\Models\Service;
 use App\Models\Supplier;
 use App\Models\User;
+use App\Services\Upstream\ProviderKey;
+use App\Support\SensitiveDataSanitizer;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -20,7 +22,10 @@ trait HandlesClientServiceConsoleMonitoring
     public function getMonitorForUser(User $user, int $serviceId, array $filters = []): array
     {
         $service = $this->findUserService($user, $serviceId, [
-            'product:id,product_type,product_group_id,supplier_id,provision_module,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,purchase_requires',
+            'product.firstProductGroup:id,code,name,description,slug',
+            'product.secondProductGroup:id,first_product_group_id,name,description,slug',
+            'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
             'product.supplier',
         ]);
 
@@ -144,7 +149,7 @@ trait HandlesClientServiceConsoleMonitoring
             Log::warning('[客户端监控] 单图监控失败', [
                 'service_id' => $service->id,
                 'requested_type' => $selectedType,
-                'message' => \App\Support\SensitiveDataSanitizer::sanitizeText($exception->getMessage()),
+                'message' => SensitiveDataSanitizer::sanitizeText($exception->getMessage()),
             ]);
 
             return [
@@ -170,7 +175,10 @@ trait HandlesClientServiceConsoleMonitoring
     public function getMonitorBatchForUser(User $user, int $serviceId, array $filters = []): array
     {
         $service = $this->findUserService($user, $serviceId, [
-            'product:id,product_type,product_group_id,supplier_id,provision_module,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,purchase_requires',
+            'product.firstProductGroup:id,code,name,description,slug',
+            'product.secondProductGroup:id,first_product_group_id,name,description,slug',
+            'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
             'product.supplier',
         ]);
 
@@ -344,7 +352,7 @@ trait HandlesClientServiceConsoleMonitoring
             Log::warning('[客户端监控] 批量监控失败', [
                 'service_id' => $service->id,
                 'requested_types' => $requestedTypes,
-                'message' => \App\Support\SensitiveDataSanitizer::sanitizeText($exception->getMessage()),
+                'message' => SensitiveDataSanitizer::sanitizeText($exception->getMessage()),
             ]);
 
             return [
@@ -1379,7 +1387,7 @@ trait HandlesClientServiceConsoleMonitoring
     private function buildMonitorChartCacheKey(Supplier $supplier, int $hostId, string $type, int $start, int $end): string
     {
         $normalizedRange = $this->normalizeMonitorCacheRange($start, $end);
-        $providerKey = trim((string) ($supplier->interface_type ?? '')) ?: \App\Services\Upstream\ProviderKey::HOSTING_PANEL_API;
+        $providerKey = trim((string) ($supplier->interface_type ?? '')) ?: ProviderKey::HOSTING_PANEL_API;
 
         return "upstream:{$providerKey}:host_chart:".self::MONITOR_CACHE_SCHEMA_VERSION.":{$supplier->id}:{$hostId}:{$type}:{$normalizedRange['start']}:{$normalizedRange['end']}";
     }
@@ -1388,7 +1396,7 @@ trait HandlesClientServiceConsoleMonitoring
     {
         $normalizedRange = $this->normalizeMonitorCacheRange($start, $end);
 
-        return 'upstream:'.\App\Services\Upstream\ProviderKey::HOSTING_PANEL_API.':host_chart:'.self::MONITOR_CACHE_SCHEMA_VERSION.":{$supplier->id}:{$hostId}:{$type}:{$normalizedRange['start']}:{$normalizedRange['end']}";
+        return 'upstream:'.ProviderKey::HOSTING_PANEL_API.':host_chart:'.self::MONITOR_CACHE_SCHEMA_VERSION.":{$supplier->id}:{$hostId}:{$type}:{$normalizedRange['start']}:{$normalizedRange['end']}";
     }
 
     private function normalizeMonitorResponseCachePayload(array $payload): array

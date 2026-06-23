@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\AppendSecurityHeaders;
 use App\Http\Middleware\CheckPermission;
 use App\Http\Middleware\EnsureAdminAuthenticated;
 use App\Http\Middleware\EnsureClientAuthenticated;
@@ -10,6 +11,7 @@ use App\Http\Middleware\VerifyAlipayCallbackSignature;
 use App\Http\Middleware\VerifyCallbackSignature;
 use App\Support\ApiResponseBuilder;
 use Illuminate\Auth\AuthenticationException;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -17,6 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -41,6 +44,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 EnsureFrontendRequestsAreStateful::class,
             ],
             append: [
+                AppendSecurityHeaders::class,
                 LogOperation::class,
             ]
         );
@@ -86,7 +90,7 @@ return Application::configure(basePath: dirname(__DIR__))
             return null;
         });
 
-        $exceptions->render(function (\Illuminate\Database\Eloquent\ModelNotFoundException $exception, Request $request) {
+        $exceptions->render(function (ModelNotFoundException $exception, Request $request) {
             if ($request->is('api/*')) {
                 return ApiResponseBuilder::error(40400, '请求的资源不存在', null, 404);
             }
@@ -94,7 +98,7 @@ return Application::configure(basePath: dirname(__DIR__))
             return null;
         });
 
-        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\NotFoundHttpException $exception, Request $request) {
+        $exceptions->render(function (NotFoundHttpException $exception, Request $request) {
             if ($request->is('api/*')) {
                 return ApiResponseBuilder::error(40400, '请求的接口不存在', null, 404);
             }

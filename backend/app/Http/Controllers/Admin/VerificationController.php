@@ -4,13 +4,13 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\Verification\ListVerificationsRequest;
+use App\Http\Requests\Admin\Verification\UnbindRequest;
 use App\Http\Resources\Admin\AdminVerificationListResource;
 use App\Models\User;
 use App\Services\Auth\AdminVerificationQueryService;
 use App\Services\Auth\VerificationService;
 use App\Services\System\OperationLogService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class VerificationController extends Controller
 {
@@ -58,13 +58,9 @@ class VerificationController extends Controller
     /**
      * 解绑实名认证
      */
-    public function unbind(User $user, Request $request): JsonResponse
+    public function unbind(User $user, UnbindRequest $request): JsonResponse
     {
-        $payload = $request->validate([
-            'reject_reason' => ['required', 'string', 'max:255'],
-        ], [
-            'reject_reason.required' => '请输入驳回原因',
-        ]);
+        $payload = $request->validated();
 
         $adminUser = $request->user();
         $adminUserId = $adminUser?->id;

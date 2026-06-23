@@ -112,14 +112,16 @@ Route::middleware(['auth:sanctum', 'ensure.client'])->group(function () {
     Route::post('/invoices/{id}/pay/alipay', [InvoiceController::class, 'payByAlipay'])->middleware('throttle:12,1,client-invoices-pay-alipay');
     Route::get('/invoices/{id}/pay/alipay/status', [InvoiceController::class, 'queryAlipayStatus'])->middleware('throttle:30,1,client-invoices-pay-alipay-status');
 
+    // 支付记录
+    Route::get('/payments', [PaymentController::class, 'index']);
+    Route::get('/payments/summary', [PaymentController::class, 'summary']);
+    Route::get('/payments/{id}', [PaymentController::class, 'show']);
+
     // 订单
     Route::get('/orders', [OrderController::class, 'index']);
     Route::get('/orders/summary', [OrderController::class, 'summary']);
     Route::get('/orders/{id}', [OrderController::class, 'show']);
-
-    // 支付记录
-    Route::get('/payments', [PaymentController::class, 'index']);
-    Route::get('/payments/summary', [PaymentController::class, 'summary']);
+    Route::post('/orders/{id}/cancel', [OrderController::class, 'cancel'])->middleware('throttle:10,1,client-orders-cancel');
 
     // 充值
     Route::post('/recharge', [RechargeController::class, 'store'])->middleware('throttle:6,1,client-recharge-store');
@@ -137,6 +139,9 @@ Route::middleware(['auth:sanctum', 'ensure.client'])->group(function () {
     Route::get('/services/{id}/traffic-packages', [ServiceController::class, 'trafficPackages']);
     Route::post('/services/{id}/traffic-packages/quote', [ServiceController::class, 'quoteTrafficPackage'])->middleware('throttle:12,1,client-service-traffic-package-quote');
     Route::post('/services/{id}/traffic-packages/order', [ServiceController::class, 'createTrafficPackageOrder'])->middleware('throttle:6,1,client-service-traffic-package-order');
+    Route::get('/services/{id}/upgrade', [ServiceController::class, 'hostUpgradePreview']);
+    Route::post('/services/{id}/upgrade/quote', [ServiceController::class, 'quoteHostUpgrade'])->middleware('throttle:12,1,client-service-host-upgrade-quote');
+    Route::post('/services/{id}/upgrade/order', [ServiceController::class, 'createHostUpgradeOrder'])->middleware('throttle:6,1,client-service-host-upgrade-order');
     Route::get('/services/{id}/renew', [ServiceController::class, 'renewPreview']);
     Route::post('/services/{id}/renew', [ServiceController::class, 'createRenewOrder'])->middleware('throttle:6,1,client-service-renew');
     Route::put('/services/{id}/renew/auto', [ServiceController::class, 'updateAutoRenew'])->middleware('throttle:6,1,client-service-renew-auto');

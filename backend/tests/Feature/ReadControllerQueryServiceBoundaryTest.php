@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Http\Resources\Finance\BalanceLogResource;
 use App\Models\AccountTransaction;
 use App\Models\AdminUser;
 use App\Models\MemberLevel;
@@ -14,7 +13,6 @@ use App\Models\ReferralWithdrawal;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\UserAccount;
-use App\Models\UserProfile;
 use App\Models\VerificationHistory;
 use App\Services\Auth\AdminVerificationQueryService;
 use App\Services\Finance\ClientFinanceQueryService;
@@ -36,7 +34,7 @@ class ReadControllerQueryServiceBoundaryTest extends TestCase
         UserAccount::query()->updateOrCreate(
             ['user_id' => (int) $user->id],
             [
-                'cash_balance' => '88.80',
+                'cash_balance' => '0.00',
                 'credit_limit' => '0.00',
                 'referral_frozen_balance' => '0.00',
                 'referral_available_balance' => '0.00',
@@ -91,7 +89,8 @@ class ReadControllerQueryServiceBoundaryTest extends TestCase
 
         $this->assertSame(1, $balancePage['total']);
         $this->assertSame('recharge', $balancePage['list'][0]['event_type']);
-        $this->assertSame('0.00', $balanceSummary['balance']);
+        $this->assertSame('0.00', $balanceSummary['cash_balance']);
+        $this->assertArrayNotHasKey('balance', $balanceSummary);
         $this->assertSame('100.00', $balanceSummary['total_in']);
         $this->assertSame('0.00', $balanceSummary['total_out']);
     }
@@ -117,12 +116,6 @@ class ReadControllerQueryServiceBoundaryTest extends TestCase
             'referrer_user_id' => 1,
             'nickname' => 'Top Referrer',
         ]);
-        if (Schema::hasTable('user_profiles')) {
-            UserProfile::query()->updateOrCreate(
-                ['user_id' => (int) $topUser->id],
-                ['nickname' => 'Top Referrer', 'company' => '', 'qq' => '', 'admin_note' => '']
-            );
-        }
         UserAccount::query()->updateOrCreate(
             ['user_id' => (int) $topUser->id],
             [
@@ -318,7 +311,7 @@ class ReadControllerQueryServiceBoundaryTest extends TestCase
                 20
             )
             ->willReturn([
-                'list' => BalanceLogResource::collection([])->resolve(),
+                'list' => [],
                 'total' => 0,
                 'page' => 1,
                 'page_size' => 20,
@@ -330,7 +323,7 @@ class ReadControllerQueryServiceBoundaryTest extends TestCase
                 ['event_type' => 'consume']
             )
             ->willReturn([
-                'balance' => 0.0,
+                'cash_balance' => 0.0,
                 'total_in' => 0.0,
                 'total_out' => 0.0,
             ]);

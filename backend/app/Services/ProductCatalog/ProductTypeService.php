@@ -4,34 +4,72 @@ namespace App\Services\ProductCatalog;
 
 use App\Constants\ProductType;
 use App\Exceptions\BusinessException;
+use App\Models\FirstProductGroup;
 use App\Models\Product;
-use App\Models\ProductCategory;
+use App\Models\SecondProductGroup;
+use App\Models\ThirdProductGroup;
+use Illuminate\Support\Facades\Schema;
 
 class ProductTypeService
 {
+    private readonly ProductGroupHierarchyService $hierarchyService;
+
+    public function __construct(?ProductGroupHierarchyService $hierarchyService = null)
+    {
+        $this->hierarchyService = $hierarchyService ?? app(ProductGroupHierarchyService::class);
+    }
+
     public function list(): array
     {
         $items = ProductType::items();
-        $usageMap = Product::query()
-            ->join('product_groups', 'product_groups.id', '=', 'products.product_group_id')
-            ->selectRaw('product_groups.product_type as product_type, COUNT(products.id) as total')
-            ->groupBy('product_groups.product_type')
-            ->pluck('total', 'product_type')
-            ->all();
+        $values = array_values(array_map(fn (array $item): string => (string) $item['value'], $items));
+        $firstGroups = Schema::hasTable('first_product_groups')
+            ? FirstProductGroup::query()->whereIn('code', $values)->get()->keyBy('code')
+            : collect();
+        $usageMap = Schema::hasTable('first_product_groups')
+            ? Product::query()
+                ->join('first_product_groups', 'first_product_groups.id', '=', 'products.first_product_group_id')
+                ->selectRaw('first_product_groups.code as product_type, COUNT(products.id) as total')
+                ->groupBy('first_product_groups.code')
+                ->pluck('total', 'product_type')
+                ->all()
+            : [];
 
-        $groupUsageMap = ProductCategory::query()
-            ->selectRaw('product_groups.product_type as product_type, COUNT(product_groups.id) as total')
-            ->groupBy('product_groups.product_type')
-            ->pluck('total', 'product_type')
-            ->all();
+        $secondGroupUsageMap = Schema::hasTable('second_product_groups') && Schema::hasTable('first_product_groups')
+            ? SecondProductGroup::query()
+                ->join('first_product_groups', 'first_product_groups.id', '=', 'second_product_groups.first_product_group_id')
+                ->selectRaw('first_product_groups.code as product_type, COUNT(second_product_groups.id) as total')
+                ->groupBy('first_product_groups.code')
+                ->pluck('total', 'product_type')
+                ->all()
+            : [];
 
-        return array_map(function (array $item, int $index) use ($usageMap, $groupUsageMap) {
+        $thirdGroupUsageMap = Schema::hasTable('third_product_groups') && Schema::hasTable('second_product_groups') && Schema::hasTable('first_product_groups')
+            ? ThirdProductGroup::query()
+                ->join('second_product_groups', 'second_product_groups.id', '=', 'third_product_groups.second_product_group_id')
+                ->join('first_product_groups', 'first_product_groups.id', '=', 'second_product_groups.first_product_group_id')
+                ->selectRaw('first_product_groups.code as product_type, COUNT(third_product_groups.id) as total')
+                ->groupBy('first_product_groups.code')
+                ->pluck('total', 'product_type')
+                ->all()
+            : [];
+
+        $groupUsageMap = [];
+        foreach ($values as $value) {
+            $groupUsageMap[$value] = (int) ($secondGroupUsageMap[$value] ?? 0) + (int) ($thirdGroupUsageMap[$value] ?? 0);
+        }
+
+        return array_map(function (array $item, int $index) use ($usageMap, $groupUsageMap, $firstGroups) {
             $value = (string) $item['value'];
+            $firstGroup = $firstGroups->get($value);
 
             return [
                 'internal_id' => (int) ($item['internal_id'] ?? 0),
                 'value' => $value,
                 'label' => (string) $item['label'],
+                'first_product_group_id' => $firstGroup instanceof FirstProductGroup ? (int) $firstGroup->id : null,
+                'first_product_group_code' => $value,
+                'first_product_group_name' => $firstGroup instanceof FirstProductGroup ? (string) $firstGroup->name : (string) $item['label'],
                 'icon' => (string) ($item['icon'] ?? ''),
                 'is_builtin' => (bool) ($item['is_builtin'] ?? false),
                 'is_hidden' => (bool) ($item['is_hidden'] ?? false),
@@ -82,6 +120,7 @@ class ProductTypeService
         ];
 
         ProductType::saveItems($items);
+        $this->hierarchyService->syncProductTypes();
 
         return $this->findOrFail($value);
     }
@@ -114,6 +153,7 @@ class ProductTypeService
         }
 
         ProductType::saveItems($items);
+        $this->hierarchyService->syncProductTypes();
 
         return $this->findOrFail($normalizedValue);
     }
@@ -130,17 +170,28 @@ class ProductTypeService
             throw new BusinessException('商品种类不存在', 40400, 404);
         }
 
-        $groupCount = ProductCategory::query()
-            ->where('product_type', $normalizedValue)
-            ->count();
+        $firstGroup = FirstProductGroup::query()
+            ->where('code', $normalizedValue)
+            ->first();
+        $firstGroupId = $firstGroup instanceof FirstProductGroup ? (int) $firstGroup->id : 0;
+
+        $secondGroupCount = $firstGroupId > 0
+            ? SecondProductGroup::query()->where('first_product_group_id', $firstGroupId)->count()
+            : 0;
+        $thirdGroupCount = $firstGroupId > 0
+            ? ThirdProductGroup::query()
+                ->join('second_product_groups', 'second_product_groups.id', '=', 'third_product_groups.second_product_group_id')
+                ->where('second_product_groups.first_product_group_id', $firstGroupId)
+                ->count()
+            : 0;
+        $groupCount = $secondGroupCount + $thirdGroupCount;
         if ($groupCount > 0) {
             throw new BusinessException("该种类下仍有 {$groupCount} 个分组，无法删除");
         }
 
-        $usageCount = Product::query()
-            ->join('product_groups', 'product_groups.id', '=', 'products.product_group_id')
-            ->where('product_groups.product_type', $normalizedValue)
-            ->count();
+        $usageCount = $firstGroupId > 0
+            ? Product::query()->where('first_product_group_id', $firstGroupId)->count()
+            : 0;
         if ($usageCount > 0) {
             throw new BusinessException("该种类下仍有 {$usageCount} 个商品，无法删除");
         }
@@ -155,6 +206,7 @@ class ProductTypeService
         ));
 
         ProductType::saveItems($items);
+        $this->hierarchyService->syncProductTypes();
     }
 
     public function reorder(array $values): array
@@ -183,6 +235,7 @@ class ProductTypeService
             ->all();
 
         ProductType::saveItems($reorderedItems);
+        $this->hierarchyService->syncProductTypes();
 
         return $this->list();
     }

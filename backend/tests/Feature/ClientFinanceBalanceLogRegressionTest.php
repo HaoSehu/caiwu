@@ -5,14 +5,13 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Models\AccountTransaction;
-use App\Models\BalanceLog;
 use App\Models\User;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class ClientFinanceBalanceLogRegressionTest extends TestCase
 {
-    public function test_balance_logs_endpoints_work_without_account_transactions_table(): void
+    public function test_balance_logs_endpoints_use_account_transactions(): void
     {
         $user = User::query()->create([
             'email' => 'finance-balance-'.bin2hex(random_bytes(4)).'@example.com',
@@ -31,13 +30,19 @@ class ClientFinanceBalanceLogRegressionTest extends TestCase
             'verified_at' => null,
         ]);
 
-        BalanceLog::query()->create([
+        AccountTransaction::query()->create([
             'user_id' => (int) $user->id,
+            'account_type' => 'cash',
             'event_type' => 'recharge',
             'change_amount' => '88.00',
             'balance_after' => '88.00',
-            'reference_id' => 1001,
+            'source_type' => 'payment',
+            'source_id' => 1001,
+            'origin_type' => 'payment',
+            'origin_id' => 1001,
             'remark' => 'balance regression',
+            'operator' => 'system',
+            'trace_id' => 'balance-regression',
         ]);
 
         Sanctum::actingAs($user);
@@ -83,7 +88,7 @@ class ClientFinanceBalanceLogRegressionTest extends TestCase
             'balance_after' => '80.00',
             'source_type' => 'invoice',
             'source_id' => 1001,
-            'origin_type' => 'balance_log',
+            'origin_type' => 'invoice',
             'origin_id' => 2001,
             'remark' => '账单支付测试',
             'operator' => 'system',
@@ -98,7 +103,7 @@ class ClientFinanceBalanceLogRegressionTest extends TestCase
             'balance_after' => '95.00',
             'source_type' => 'invoice',
             'source_id' => 1002,
-            'origin_type' => 'balance_log',
+            'origin_type' => 'invoice',
             'origin_id' => 2002,
             'remark' => '账单退款测试',
             'operator' => 'system',
@@ -113,7 +118,7 @@ class ClientFinanceBalanceLogRegressionTest extends TestCase
             'balance_after' => '145.00',
             'source_type' => 'payment',
             'source_id' => 1003,
-            'origin_type' => 'balance_log',
+            'origin_type' => 'payment',
             'origin_id' => 2003,
             'remark' => '充值到账测试',
             'operator' => 'system',
@@ -134,7 +139,8 @@ class ClientFinanceBalanceLogRegressionTest extends TestCase
 
         $this->getJson('/api/client/balance-logs/summary')
             ->assertOk()
-            ->assertJsonPath('data.balance', '65.00')
+            ->assertJsonPath('data.cash_balance', '65.00')
+            ->assertJsonMissingPath('data.balance')
             ->assertJsonPath('data.total_in', '65.00')
             ->assertJsonPath('data.total_out', '20.00')
             ->assertJsonPath('data.recharge_in', '50.00')

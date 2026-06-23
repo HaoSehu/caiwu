@@ -71,11 +71,16 @@ foreach ($routes as $route) {
     );
 }
 
-$target = dirname($basePath).'/文档/后端/后端API清单.md';
-file_put_contents($target, implode("\n", $lines)."\n");
+$target = dirname($basePath).'/文档/开发文档/后端/后端API清单.md';
+// Windows 下 PHP 文件系统 API 按系统 ANSI(GBK) 编码解析路径，
+// UTF-8 中文路径需转 GBK 才能正确打开，否则报 "Failed to open stream: No such file or directory"。
+$writeTarget = PHP_OS_FAMILY === 'Windows'
+    ? mb_convert_encoding($target, 'GBK', 'UTF-8')
+    : $target;
+file_put_contents($writeTarget, implode("\n", $lines)."\n");
 
 fwrite(STDOUT, sprintf(
-    "已生成 API 清单: %s，接口数: %d%s",
+    '已生成 API 清单: %s，接口数: %d%s',
     $target,
     $routes->count(),
     PHP_EOL

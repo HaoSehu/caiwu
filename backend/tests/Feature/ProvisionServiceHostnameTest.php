@@ -455,7 +455,7 @@ class ProvisionServiceHostnameTest extends TestCase
             $provisionService->retryFailedProvision($order);
             $this->fail('预期应抛出上游购物车错误');
         } catch (BusinessException $exception) {
-            $this->assertSame('加入上游购物车失败：主机名前缀必须是ser;长度为13;', $exception->getMessage());
+            $this->assertSame('加入上游购物车失败，主机面板接口暂时不可用', $exception->getMessage());
         }
 
         $this->assertSame('ser1234567890', (string) (($captured['payload']['host'] ?? '')));
@@ -463,7 +463,7 @@ class ProvisionServiceHostnameTest extends TestCase
         $this->assertSame(ServiceStatus::PENDING, (int) $service->status);
         $this->assertSame(OrderStatus::PROCESSING, (int) $order->status);
         $this->assertSame(
-            '加入上游购物车失败：主机名前缀必须是ser;长度为13;',
+            '加入上游购物车失败，主机面板接口暂时不可用',
             (string) (($service->provision_data ?? [])['provision_error'] ?? '')
         );
         $this->assertFalse(array_key_exists('upstream_host_id', (array) ($service->provision_data ?? [])));

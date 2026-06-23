@@ -52,14 +52,14 @@ class AccountMigrationService
 
     public function sourceCount(string $table): int
     {
-        $rows = $this->sourceQuery('SELECT COUNT(*) AS cnt FROM `' . $table . '`');
+        $rows = $this->sourceQuery('SELECT COUNT(*) AS cnt FROM `'.$table.'`');
 
         return (int) ($rows[0]->cnt ?? 0);
     }
 
     public function targetCount(string $table): int
     {
-        $rows = $this->targetQuery('SELECT COUNT(*) AS cnt FROM `' . $table . '`');
+        $rows = $this->targetQuery('SELECT COUNT(*) AS cnt FROM `'.$table.'`');
 
         return (int) ($rows[0]->cnt ?? 0);
     }
@@ -188,10 +188,10 @@ class AccountMigrationService
     }
 
     /**
-     * @param  list<string> $columns
-     * @param  array<int, array<string, mixed>> $rows
-     * @param  list<string> $uniqueBy
-     * @param  list<string> $updateColumns
+     * @param  list<string>  $columns
+     * @param  array<int, array<string, mixed>>  $rows
+     * @param  list<string>  $uniqueBy
+     * @param  list<string>  $updateColumns
      */
     public function batchUpsert(string $table, array $columns, array $rows, array $uniqueBy, array $updateColumns): int
     {
@@ -245,7 +245,7 @@ class AccountMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $legacyReward
+     * @param  array<string, mixed>  $legacyReward
      * @return array<string, mixed>
      */
     public function buildReferralRewardPayload(array $legacyReward, ?int $targetInvoiceId): array
@@ -272,7 +272,7 @@ class AccountMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $legacyUser
+     * @param  array<string, mixed>  $legacyUser
      * @return array<string, mixed>
      */
     public function buildReferralRelationPayload(array $legacyUser): array
@@ -292,7 +292,7 @@ class AccountMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $legacyWithdrawal
+     * @param  array<string, mixed>  $legacyWithdrawal
      * @return array<string, mixed>
      */
     public function buildWithdrawalPayload(array $legacyWithdrawal): array
@@ -304,7 +304,7 @@ class AccountMigrationService
 
         return [
             'id' => $withdrawalId,
-            'withdrawal_no' => 'WD' . str_pad((string) $withdrawalId, 8, '0', STR_PAD_LEFT),
+            'withdrawal_no' => 'WD'.str_pad((string) $withdrawalId, 8, '0', STR_PAD_LEFT),
             'user_id' => (int) ($legacyWithdrawal['user_id'] ?? 0),
             'account_type' => 'referral_withdrawing',
             'amount' => $this->normalizeMoney($legacyWithdrawal['amount'] ?? null),
@@ -327,7 +327,7 @@ class AccountMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $balanceLog
+     * @param  array<string, mixed>  $balanceLog
      * @return array<string, mixed>
      */
     public function buildCashLedgerPayload(array $balanceLog): array
@@ -358,7 +358,7 @@ class AccountMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $referralLog
+     * @param  array<string, mixed>  $referralLog
      * @return array<string, mixed>
      */
     public function buildReferralLedgerPayload(array $referralLog): array
@@ -424,7 +424,7 @@ class AccountMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $userAccount
+     * @param  array<string, mixed>  $userAccount
      * @return array<int, array<string, mixed>>
      */
     public function buildBalanceSnapshotPayloads(array $userAccount, string $snapshotDate): array
@@ -439,8 +439,8 @@ class AccountMigrationService
                 'available_balance' => $this->normalizeMoney($userAccount['cash_balance'] ?? null),
                 'frozen_balance' => '0.00',
                 'snapshot_date' => $snapshotDate,
-                'created_at' => $snapshotDate . ' 00:00:00',
-                'updated_at' => $snapshotDate . ' 00:00:00',
+                'created_at' => $snapshotDate.' 00:00:00',
+                'updated_at' => $snapshotDate.' 00:00:00',
             ],
             [
                 'user_id' => $userId,
@@ -448,8 +448,8 @@ class AccountMigrationService
                 'available_balance' => '0.00',
                 'frozen_balance' => $this->normalizeMoney($userAccount['referral_frozen_balance'] ?? null),
                 'snapshot_date' => $snapshotDate,
-                'created_at' => $snapshotDate . ' 00:00:00',
-                'updated_at' => $snapshotDate . ' 00:00:00',
+                'created_at' => $snapshotDate.' 00:00:00',
+                'updated_at' => $snapshotDate.' 00:00:00',
             ],
             [
                 'user_id' => $userId,
@@ -457,8 +457,8 @@ class AccountMigrationService
                 'available_balance' => $this->normalizeMoney($userAccount['referral_available_balance'] ?? null),
                 'frozen_balance' => '0.00',
                 'snapshot_date' => $snapshotDate,
-                'created_at' => $snapshotDate . ' 00:00:00',
-                'updated_at' => $snapshotDate . ' 00:00:00',
+                'created_at' => $snapshotDate.' 00:00:00',
+                'updated_at' => $snapshotDate.' 00:00:00',
             ],
             [
                 'user_id' => $userId,
@@ -466,8 +466,8 @@ class AccountMigrationService
                 'available_balance' => '0.00',
                 'frozen_balance' => $pendingWithdrawalBalance,
                 'snapshot_date' => $snapshotDate,
-                'created_at' => $snapshotDate . ' 00:00:00',
-                'updated_at' => $snapshotDate . ' 00:00:00',
+                'created_at' => $snapshotDate.' 00:00:00',
+                'updated_at' => $snapshotDate.' 00:00:00',
             ],
             [
                 'user_id' => $userId,
@@ -475,8 +475,8 @@ class AccountMigrationService
                 'available_balance' => $this->normalizeMoney($userAccount['referral_withdrawn_balance'] ?? null),
                 'frozen_balance' => '0.00',
                 'snapshot_date' => $snapshotDate,
-                'created_at' => $snapshotDate . ' 00:00:00',
-                'updated_at' => $snapshotDate . ' 00:00:00',
+                'created_at' => $snapshotDate.' 00:00:00',
+                'updated_at' => $snapshotDate.' 00:00:00',
             ],
         ];
     }
@@ -548,10 +548,10 @@ class AccountMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $reward
-     * @param  array<int, int> $sourceInvoiceMap
-     * @param  array<int, int> $targetInvoiceMapByLegacyId
-     * @param  array<int, int> $targetInvoiceMapByLegacyOrderId
+     * @param  array<string, mixed>  $reward
+     * @param  array<int, int>  $sourceInvoiceMap
+     * @param  array<int, int>  $targetInvoiceMapByLegacyId
+     * @param  array<int, int>  $targetInvoiceMapByLegacyOrderId
      */
     private function resolveTargetInvoiceIdForReward(
         array $reward,
@@ -605,8 +605,8 @@ class AccountMigrationService
     }
 
     /**
-     * @param  array<int, array<string, mixed>> $payloads
-     * @param  array<int, true> $existingUserIds
+     * @param  array<int, array<string, mixed>>  $payloads
+     * @param  array<int, true>  $existingUserIds
      * @return array{
      *     kept: array<int, array<string, mixed>>,
      *     skipped_row_ids: list<int>,
@@ -664,8 +664,8 @@ class AccountMigrationService
     }
 
     /**
-     * @param  array<int, array<string, mixed>> $payloads
-     * @param  array<int, true> $existingUserIds
+     * @param  array<int, array<string, mixed>>  $payloads
+     * @param  array<int, true>  $existingUserIds
      * @return array{
      *     kept: array<int, array<string, mixed>>,
      *     skipped_referred_user_ids: list<int>,
@@ -743,7 +743,7 @@ class AccountMigrationService
     /**
      * @return array{total: int, derived: int, skipped_missing_legacy_invoice: int, skipped_missing_target_invoice: int, resolved_by_legacy_order_id: int}
      */
-        public function referralRewardMigrationStats(): array
+    public function referralRewardMigrationStats(): array
     {
         $sourceInvoiceMap = $this->sourceInvoiceMapByOrderId();
         $targetInvoiceMapByLegacyId = $this->targetInvoiceMapByLegacyInvoiceId();
@@ -858,7 +858,7 @@ class AccountMigrationService
     {
         $sql = "SELECT COALESCE(SUM(`{$column}`), 0) AS total FROM `{$table}`";
         if ($where !== null && trim($where) !== '') {
-            $sql .= ' WHERE ' . $where;
+            $sql .= ' WHERE '.$where;
         }
 
         $rows = $this->sourceQuery($sql);
@@ -870,7 +870,7 @@ class AccountMigrationService
     {
         $sql = "SELECT COALESCE(SUM(`{$column}`), 0) AS total FROM `{$table}`";
         if ($where !== null && trim($where) !== '') {
-            $sql .= ' WHERE ' . $where;
+            $sql .= ' WHERE '.$where;
         }
 
         $rows = $this->targetQuery($sql);
@@ -964,7 +964,7 @@ class AccountMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $referralLog
+     * @param  array<string, mixed>  $referralLog
      */
     private function resolveReferralLedgerBalanceAfter(string $eventType, array $referralLog): float
     {

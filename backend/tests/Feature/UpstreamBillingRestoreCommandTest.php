@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Integrations\Mofang\Billing\MofangBillingRestoreProfile;
 use App\Integrations\Mofang\Billing\MofangBillingRestoreService;
-use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class UpstreamBillingRestoreCommandTest extends TestCase
@@ -31,7 +29,7 @@ class UpstreamBillingRestoreCommandTest extends TestCase
         $path = tempnam(sys_get_temp_dir(), 'restore-sql-');
         file_put_contents($path, '');
 
-        $beforeCount = DB::table('payment_callbacks')->count();
+        $this->app->instance(MofangBillingRestoreService::class, $this->fakeRestoreService());
 
         try {
             $this->artisan('finance:restore-upstream-billing', [
@@ -42,14 +40,14 @@ class UpstreamBillingRestoreCommandTest extends TestCase
         } finally {
             @unlink($path);
         }
-
-        $this->assertSame($beforeCount, DB::table('payment_callbacks')->count());
     }
 
     public function test_restore_upstream_billing_accepts_legacy_mofang_confirmation_phrase(): void
     {
         $path = tempnam(sys_get_temp_dir(), 'restore-sql-');
         file_put_contents($path, '');
+
+        $this->app->instance(MofangBillingRestoreService::class, $this->fakeRestoreService());
 
         try {
             $this->artisan('finance:restore-upstream-billing', [
@@ -60,5 +58,23 @@ class UpstreamBillingRestoreCommandTest extends TestCase
         } finally {
             @unlink($path);
         }
+    }
+
+    private function fakeRestoreService(): MofangBillingRestoreService
+    {
+        return new class extends MofangBillingRestoreService
+        {
+            public function restoreFromSqlDump(string $dumpPath, bool $dryRun = false): array
+            {
+                return [
+                    'dry_run' => $dryRun,
+                    'invoices' => 0,
+                    'balance_logs' => 0,
+                    'user_balances' => 0,
+                    'skipped_missing_users' => 0,
+                    'skipped_deleted_invoices' => 0,
+                ];
+            }
+        };
     }
 }

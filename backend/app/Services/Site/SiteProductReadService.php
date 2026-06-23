@@ -105,7 +105,7 @@ class SiteProductReadService
                 return array_map(
                     static fn (array $child): array => [
                         ...$child,
-                        'root_group_id' => $groupId,
+                        'root_effective_product_group_id' => $groupId,
                     ],
                     $this->productCatalogService->siteChildGroups($groupId)
                 );
@@ -123,10 +123,10 @@ class SiteProductReadService
             ->all();
 
         $itemsByGroup = collect($this->productCatalogService->siteProductsByGroupIds($catalogGroupIds))
-            ->keyBy(fn (array $item) => (int) ($item['group_id'] ?? $item['product_group_id'] ?? 0));
+            ->keyBy(fn (array $item) => (int) ($item['effective_product_group_id'] ?? 0));
 
         $childrenByRoot = $childGroupRows
-            ->groupBy(fn (array $group) => (int) ($group['root_group_id'] ?? 0));
+            ->groupBy(fn (array $group) => (int) ($group['root_effective_product_group_id'] ?? 0));
 
         return $selectedGroups
             ->mapWithKeys(function (array $group) use ($childrenByRoot, $itemsByGroup): array {
@@ -148,7 +148,7 @@ class SiteProductReadService
                     ->flatten(1)
                     ->filter(fn (array $product) => (int) ($product['id'] ?? 0) > 0)
                     ->map(function (array $product) use ($groupId): array {
-                        $resolvedGroupId = (int) ($product['group_id'] ?? $product['product_group_id'] ?? $groupId);
+                        $resolvedGroupId = (int) ($product['effective_product_group_id'] ?? $groupId);
                         $displayName = trim((string) (
                             $product['display_name']
                             ?? $product['instance_spec_text']
@@ -158,7 +158,7 @@ class SiteProductReadService
 
                         return [
                             'id' => (int) ($product['id'] ?? 0),
-                            'group_id' => $resolvedGroupId > 0 ? $resolvedGroupId : $groupId,
+                            'effective_product_group_id' => $resolvedGroupId > 0 ? $resolvedGroupId : $groupId,
                             'name' => (string) ($product['name'] ?? ''),
                             'display_name' => $displayName,
                             'instance_spec_text' => (string) ($product['instance_spec_text'] ?? ''),
@@ -207,12 +207,12 @@ class SiteProductReadService
     private function normalizeCategoryIds(array $validated): array
     {
         return collect([
-            isset($validated['category_id']) ? [(int) $validated['category_id']] : [],
-            (array) ($validated['category_ids'] ?? []),
-            isset($validated['group_id']) ? [(int) $validated['group_id']] : [],
-            (array) ($validated['group_ids'] ?? []),
-            isset($validated['product_group_id']) ? [(int) $validated['product_group_id']] : [],
-            (array) ($validated['product_group_ids'] ?? []),
+            isset($validated['effective_product_group_id']) ? [(int) $validated['effective_product_group_id']] : [],
+            (array) ($validated['effective_product_group_ids'] ?? []),
+            isset($validated['second_product_group_id']) ? [(int) $validated['second_product_group_id']] : [],
+            (array) ($validated['second_product_group_ids'] ?? []),
+            isset($validated['third_product_group_id']) ? [(int) $validated['third_product_group_id']] : [],
+            (array) ($validated['third_product_group_ids'] ?? []),
         ])
             ->flatten()
             ->map(fn ($id) => (int) $id)

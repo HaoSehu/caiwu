@@ -4,13 +4,31 @@ namespace App\Http\Controllers\Client;
 
 use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Client\Service\CreateHostUpgradeOrderRequest;
+use App\Http\Requests\Client\Service\CreateNatForwardingRequest;
+use App\Http\Requests\Client\Service\CreateRenewOrderRequest;
+use App\Http\Requests\Client\Service\CreateSecurityGroupRequest;
+use App\Http\Requests\Client\Service\CreateSecurityRuleRequest;
+use App\Http\Requests\Client\Service\CreateTrafficPackageOrderRequest;
+use App\Http\Requests\Client\Service\IndexRequest;
 use App\Http\Requests\Client\Service\ListServiceOperationLogsRequest;
+use App\Http\Requests\Client\Service\ModuleStatusRequest;
+use App\Http\Requests\Client\Service\MonitorBatchRequest;
+use App\Http\Requests\Client\Service\MonitorRequest;
+use App\Http\Requests\Client\Service\PowerRequest;
+use App\Http\Requests\Client\Service\QuoteHostUpgradeRequest;
+use App\Http\Requests\Client\Service\QuoteTrafficPackageRequest;
+use App\Http\Requests\Client\Service\ReinstallRequest;
+use App\Http\Requests\Client\Service\RenewPreviewRequest;
+use App\Http\Requests\Client\Service\ResetPasswordRequest;
+use App\Http\Requests\Client\Service\UpdateAutoRenewRequest;
+use App\Http\Requests\Client\Service\UpdateNameRequest;
+use App\Http\Requests\Client\Service\UpdateRemarkRequest;
 use App\Services\ClientServiceConsole\ClientServiceConsoleService;
 use App\Services\Provisioning\ServiceRenewService;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Validation\Rule;
 
 class ServiceController extends Controller
 {
@@ -19,17 +37,9 @@ class ServiceController extends Controller
         private ServiceRenewService $serviceRenewService,
     ) {}
 
-    public function index(Request $request)
+    public function index(IndexRequest $request)
     {
-        $filters = $request->validate([
-            'keyword' => ['nullable', 'string', 'max:100'],
-            'status' => ['nullable', 'integer'],
-            'status_scope' => ['nullable', 'string', Rule::in(['active_pending'])],
-            'quick_filter' => ['nullable', 'string', Rule::in(['expiring_7d', 'auto_renew_enabled', 'auto_renew_7d'])],
-            'catalog_type' => ['nullable', 'string', 'max:50'],
-            'page' => ['nullable', 'integer', 'min:1'],
-            'page_size' => ['nullable', 'integer', 'min:1', 'max:50'],
-        ]);
+        $filters = $request->validated();
 
         return $this->success(
             $this->clientServiceConsoleService->paginateForUser($request->user(), $filters)
@@ -84,12 +94,9 @@ class ServiceController extends Controller
         );
     }
 
-    public function renewPreview(Request $request, int $id)
+    public function renewPreview(RenewPreviewRequest $request, int $id)
     {
-        $data = $request->validate([
-            'billing_cycle' => ['nullable', 'string', 'max:30'],
-            'user_coupon_id' => ['nullable', 'integer', 'min:1'],
-        ]);
+        $data = $request->validated();
 
         return $this->success(
             $this->serviceRenewService->previewForUser(
@@ -101,11 +108,9 @@ class ServiceController extends Controller
         );
     }
 
-    public function updateRemark(Request $request, int $id)
+    public function updateRemark(UpdateRemarkRequest $request, int $id)
     {
-        $data = $request->validate([
-            'remark' => ['nullable', 'string', 'max:120'],
-        ]);
+        $data = $request->validated();
 
         return $this->success(
             $this->clientServiceConsoleService->updateRemarkForUser(
@@ -118,11 +123,9 @@ class ServiceController extends Controller
         );
     }
 
-    public function updateName(Request $request, int $id)
+    public function updateName(UpdateNameRequest $request, int $id)
     {
-        $data = $request->validate([
-            'name' => ['nullable', 'string', 'max:120'],
-        ]);
+        $data = $request->validated();
 
         return $this->success(
             $this->clientServiceConsoleService->updateServiceNameForUser(
@@ -145,11 +148,9 @@ class ServiceController extends Controller
         );
     }
 
-    public function quoteTrafficPackage(Request $request, int $id)
+    public function quoteTrafficPackage(QuoteTrafficPackageRequest $request, int $id)
     {
-        $data = $request->validate([
-            'target_value' => ['required', 'integer', 'min:1'],
-        ]);
+        $data = $request->validated();
 
         return $this->success(
             $this->clientServiceConsoleService->quoteTrafficPackageForUser(
@@ -160,12 +161,32 @@ class ServiceController extends Controller
         );
     }
 
-    public function createRenewOrder(Request $request, int $id)
+    public function hostUpgradePreview(Request $request, int $id)
     {
-        $data = $request->validate([
-            'billing_cycle' => ['required', 'string', 'max:30'],
-            'user_coupon_id' => ['nullable', 'integer', 'min:1'],
-        ]);
+        return $this->success(
+            $this->clientServiceConsoleService->getHostUpgradePreviewForUser(
+                $request->user(),
+                $id
+            )
+        );
+    }
+
+    public function quoteHostUpgrade(QuoteHostUpgradeRequest $request, int $id)
+    {
+        $data = $request->validated();
+
+        return $this->success(
+            $this->clientServiceConsoleService->quoteHostUpgradeForUser(
+                $request->user(),
+                $id,
+                $data
+            )
+        );
+    }
+
+    public function createRenewOrder(CreateRenewOrderRequest $request, int $id)
+    {
+        $data = $request->validated();
 
         $invoice = $this->executeLockedServiceAction(
             $request,
@@ -179,7 +200,7 @@ class ServiceController extends Controller
                 $this->buildOperationContext($request)
             )
         );
-        $invoice->loadMissing(['product:id,product_type,product_group_id,config_options,purchase_requires', 'service']);
+        $invoice->loadMissing(['product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,config_options,purchase_requires', 'service']);
 
         return $this->success([
             'id' => (int) $invoice->id,
@@ -188,11 +209,9 @@ class ServiceController extends Controller
         ], '续费账单创建成功');
     }
 
-    public function createTrafficPackageOrder(Request $request, int $id)
+    public function createTrafficPackageOrder(CreateTrafficPackageOrderRequest $request, int $id)
     {
-        $data = $request->validate([
-            'target_value' => ['required', 'integer', 'min:1'],
-        ]);
+        $data = $request->validated();
 
         $invoice = $this->executeLockedServiceAction(
             $request,
@@ -205,7 +224,7 @@ class ServiceController extends Controller
                 $this->buildOperationContext($request)
             )
         );
-        $invoice->loadMissing(['product:id,product_type,product_group_id,config_options,purchase_requires', 'service']);
+        $invoice->loadMissing(['product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,config_options,purchase_requires', 'service']);
 
         return $this->success([
             'id' => (int) $invoice->id,
@@ -214,11 +233,33 @@ class ServiceController extends Controller
         ], '流量包账单创建成功');
     }
 
-    public function updateAutoRenew(Request $request, int $id)
+    public function createHostUpgradeOrder(CreateHostUpgradeOrderRequest $request, int $id)
     {
-        $data = $request->validate([
-            'auto_renew' => ['required', 'in:0,1'],
-        ]);
+        $data = $request->validated();
+
+        $invoice = $this->executeLockedServiceAction(
+            $request,
+            $id,
+            'host_upgrade_order',
+            fn () => $this->clientServiceConsoleService->createHostUpgradeInvoiceForUser(
+                $request->user(),
+                $id,
+                $data,
+                $this->buildOperationContext($request)
+            )
+        );
+        $invoice->loadMissing(['product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,config_options,purchase_requires', 'service']);
+
+        return $this->success([
+            'id' => (int) $invoice->id,
+            'invoice_no' => (string) $invoice->invoice_no,
+            'service_id' => (int) ($invoice->service_id ?? 0),
+        ], '产品升降级账单创建成功');
+    }
+
+    public function updateAutoRenew(UpdateAutoRenewRequest $request, int $id)
+    {
+        $data = $request->validated();
 
         return $this->success(
             $this->executeLockedServiceAction(
@@ -236,11 +277,9 @@ class ServiceController extends Controller
         );
     }
 
-    public function power(Request $request, int $id)
+    public function power(PowerRequest $request, int $id)
     {
-        $data = $request->validate([
-            'action' => ['required', 'string', 'in:on,off,reboot,hard_off,hard_reboot'],
-        ]);
+        $data = $request->validated();
 
         return $this->success(
             $this->executeLockedServiceAction(
@@ -258,11 +297,9 @@ class ServiceController extends Controller
         );
     }
 
-    public function moduleStatus(Request $request, int $id)
+    public function moduleStatus(ModuleStatusRequest $request, int $id)
     {
-        $filters = $request->validate([
-            'type' => ['required', 'string', 'in:host,reinstall,repassword'],
-        ]);
+        $filters = $request->validated();
 
         return $this->success(
             $this->clientServiceConsoleService->getModuleStatusForUser($request->user(), $id, $filters['type'])
@@ -280,11 +317,9 @@ class ServiceController extends Controller
         );
     }
 
-    public function resetPassword(Request $request, int $id)
+    public function resetPassword(ResetPasswordRequest $request, int $id)
     {
-        $data = $request->validate([
-            'password' => ['required', 'string', 'min:8', 'max:100', 'confirmed'],
-        ]);
+        $data = $request->validated();
 
         return $this->success(
             $this->executeLockedServiceAction(
@@ -302,11 +337,9 @@ class ServiceController extends Controller
         );
     }
 
-    public function reinstall(Request $request, int $id)
+    public function reinstall(ReinstallRequest $request, int $id)
     {
-        $data = $request->validate([
-            'os_id' => ['required', 'string', 'max:50'],
-        ]);
+        $data = $request->validated();
 
         return $this->success(
             $this->executeLockedServiceAction(
@@ -331,14 +364,9 @@ class ServiceController extends Controller
         );
     }
 
-    public function createNatForwarding(Request $request, int $id)
+    public function createNatForwarding(CreateNatForwardingRequest $request, int $id)
     {
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'ext_port' => ['nullable', 'integer', 'between:1,65535'],
-            'int_port' => ['required', 'integer', 'between:1,65535'],
-            'protocol' => ['required', 'string', 'in:1,2,3'],
-        ]);
+        $data = $request->validated();
 
         return $this->success(
             $this->executeLockedServiceAction(
@@ -386,14 +414,9 @@ class ServiceController extends Controller
         );
     }
 
-    public function monitor(Request $request, int $id)
+    public function monitor(MonitorRequest $request, int $id)
     {
-        $filters = $request->validate([
-            'type' => ['nullable', 'string', 'max:100'],
-            'range' => ['nullable', 'string', 'in:3h,24h,7d,30d'],
-            'start' => ['nullable', 'integer', 'min:0'],
-            'end' => ['nullable', 'integer', 'min:0'],
-        ]);
+        $filters = $request->validated();
 
         if ($request->has('fresh')) {
             $filters['fresh'] = $this->booleanQuery($request, 'fresh');
@@ -404,16 +427,9 @@ class ServiceController extends Controller
         );
     }
 
-    public function monitorBatch(Request $request, int $id)
+    public function monitorBatch(MonitorBatchRequest $request, int $id)
     {
-        $filters = $request->validate([
-            'types' => ['nullable', 'array', 'max:20'],
-            'types.*' => ['nullable', 'string', 'max:100'],
-            'range' => ['nullable', 'string', 'in:3h,24h,7d,30d'],
-            'start' => ['nullable', 'integer', 'min:0'],
-            'end' => ['nullable', 'integer', 'min:0'],
-            'limit' => ['nullable', 'integer', 'min:1', 'max:20'],
-        ]);
+        $filters = $request->validated();
 
         if ($request->has('fresh')) {
             $filters['fresh'] = $this->booleanQuery($request, 'fresh');
@@ -442,12 +458,9 @@ class ServiceController extends Controller
         );
     }
 
-    public function createSecurityGroup(Request $request, int $id)
+    public function createSecurityGroup(CreateSecurityGroupRequest $request, int $id)
     {
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:100'],
-            'description' => ['nullable', 'string', 'max:255'],
-        ]);
+        $data = $request->validated();
 
         return $this->success(
             $this->executeLockedServiceAction(
@@ -501,15 +514,9 @@ class ServiceController extends Controller
         );
     }
 
-    public function createSecurityRule(Request $request, int $id, int $groupId)
+    public function createSecurityRule(CreateSecurityRuleRequest $request, int $id, int $groupId)
     {
-        $data = $request->validate([
-            'direction' => ['required', 'string', 'max:20'],
-            'protocol' => ['required', 'string', 'max:50'],
-            'port' => ['required', 'string', 'max:100'],
-            'ip' => ['required', 'string', 'max:100'],
-            'description' => ['nullable', 'string', 'max:255'],
-        ]);
+        $data = $request->validated();
 
         return $this->success(
             $this->executeLockedServiceAction(

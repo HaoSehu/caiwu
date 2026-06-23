@@ -43,7 +43,7 @@ class PaymentGatewayRegistryTest extends TestCase
         $this->expectException(BusinessException::class);
         $this->expectExceptionMessage('支付网关未注册或不可用');
 
-        (new PaymentGatewayRegistry())->get('missing');
+        (new PaymentGatewayRegistry)->get('missing');
     }
 
     public function test_manager_uses_registered_gateway(): void

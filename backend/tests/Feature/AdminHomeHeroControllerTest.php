@@ -55,7 +55,7 @@ class AdminHomeHeroControllerTest extends TestCase
                     'slides',
                     'features',
                     'defaults' => ['slides', 'features'],
-                    'options' => ['shape', 'ribbon_type'],
+                    'options' => ['shape', 'ribbon_type', 'videos'],
                 ],
                 'timestamp',
             ]);
@@ -74,6 +74,7 @@ class AdminHomeHeroControllerTest extends TestCase
                     'shape' => 'computer',
                     'ribbon' => 'NEW',
                     'ribbon_type' => 'new',
+                    'video' => '/uploads/hero-videos/hero-1.mp4',
                 ],
             ],
             'features' => [
@@ -91,6 +92,7 @@ class AdminHomeHeroControllerTest extends TestCase
             ->assertOk()
             ->assertJsonPath('code', 0)
             ->assertJsonPath('data.slides.0.rail_title', '官网换新')
+            ->assertJsonPath('data.slides.0.video', '/uploads/hero-videos/hero-1.mp4')
             ->assertJsonPath('data.features.0.title', '香港 CN2 精品线路 上线');
 
         $service = app(HomeHeroService::class);

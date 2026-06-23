@@ -34,9 +34,8 @@ return [
 
         'options' => [
             'cluster' => env('REDIS_CLUSTER', 'redis'),
-            // 固定使用英文常量前缀，避免 Str::slug() 依赖 intl 扩展
-            // 不同环境下 slug('创欧云') 可能得到空串或拼音，导致缓存 key 不一致
-            'prefix' => env('REDIS_PREFIX', 'idc_database_'),
+            // Redis 前缀用于队列和 Redis 直接操作，缓存使用 cache.php 的前缀
+            'prefix' => env('REDIS_PREFIX', ''),
             'persistent' => (bool) env('REDIS_PERSISTENT', false),
         ],
 
@@ -56,6 +55,15 @@ return [
             'database' => env('REDIS_CACHE_DB', '1'),
             'timeout' => (float) env('REDIS_TIMEOUT', 2),
             'read_timeout' => (float) env('REDIS_READ_TIMEOUT', 10),
+        ],
+
+        'volatile' => [
+            'host' => env('REDIS_HOST', '127.0.0.1'),
+            'password' => env('REDIS_PASSWORD'),
+            'port' => env('REDIS_PORT', '6379'),
+            'database' => env('REDIS_VOLATILE_DB', '2'),
+            'timeout' => (float) env('REDIS_TIMEOUT', 1),
+            'read_timeout' => (float) env('REDIS_READ_TIMEOUT', 5),
         ],
     ],
 ];

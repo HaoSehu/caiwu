@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\Integrations\Payments\Drivers;
 
-use App\Contracts\Integrations\Payments\PaymentGatewayInterface;
 use App\Constants\PaymentGatewayCode;
+use App\Contracts\Integrations\Payments\PaymentGatewayInterface;
 use App\Services\Integrations\Payments\Data\PaymentPrecreateRequest;
 use App\Services\Integrations\Payments\Data\PaymentPrecreateResult;
 use App\Services\Integrations\Payments\Data\PaymentQueryResult;

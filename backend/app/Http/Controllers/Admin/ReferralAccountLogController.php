@@ -3,22 +3,16 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\ReferralAccountLog\IndexRequest;
 use App\Services\Referral\ReferralService;
-use Illuminate\Http\Request;
 
 class ReferralAccountLogController extends Controller
 {
     public function __construct(private ReferralService $referralService) {}
 
-    public function index(Request $request)
+    public function index(IndexRequest $request)
     {
-        $filters = $request->validate([
-            'keyword' => ['nullable', 'string', 'max:100'],
-            'event_type' => ['nullable', 'string', 'max:30'],
-            'type' => ['nullable', 'string', 'max:30'],
-            'page' => ['nullable', 'integer', 'min:1'],
-            'page_size' => ['nullable', 'integer', 'min:1', 'max:100'],
-        ]);
+        $filters = $request->validated();
 
         if (empty($filters['event_type']) && ! empty($filters['type'])) {
             $filters['event_type'] = (string) $filters['type'];

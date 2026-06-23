@@ -88,15 +88,16 @@ class SiteProductQuoteService
 
         return Product::query()
             ->onSale()
-            ->whereHas('categoryMapping', function ($query) use ($visibleProductTypes) {
+            ->whereHas('firstProductGroup', function ($query) use ($visibleProductTypes) {
+                $query->whereIn('code', $visibleProductTypes)->where('is_visible', 1);
+            })
+            ->whereHas('secondProductGroup', function ($query) {
+                $query->where('is_visible', 1);
+            })
+            ->where(function (Builder $query) {
                 $query
-                    ->visible()
-                    ->whereIn('product_type', $visibleProductTypes)
-                    ->where(function ($groupQuery) {
-                        $groupQuery
-                            ->whereNull('parent_group_id')
-                            ->orWhereHas('parent', fn ($parentQuery) => $parentQuery->visible());
-                    });
+                    ->whereNull('third_product_group_id')
+                    ->orWhereHas('thirdProductGroup', fn ($thirdQuery) => $thirdQuery->where('is_visible', 1));
             });
     }
 
@@ -105,7 +106,10 @@ class SiteProductQuoteService
         return $this->saleProductQuery()
             ->select([
                 'id',
-                'product_group_id',
+                'first_product_group_id',
+                'second_product_group_id',
+                'third_product_group_id',
+                'service_type_code',
                 'supplier_id',
                 'supplier_product_id',
                 'product_type',

@@ -16,6 +16,10 @@ class EnsureAdminAuthenticated
     {
         $user = $request->user();
 
+        if (! $user) {
+            return ApiResponseBuilder::error(40100, '未认证');
+        }
+
         if (! $user instanceof AdminUser) {
             return ApiResponseBuilder::error(40300, '仅允许管理员访问');
         }

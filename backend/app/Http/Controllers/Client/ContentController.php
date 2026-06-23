@@ -3,13 +3,13 @@
 namespace App\Http\Controllers\Client;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Client\Content\PublishedListRequest;
 use App\Http\Resources\Content\ContentArticleResource;
 use App\Http\Resources\Content\ContentCategoryResource;
 use App\Models\ContentArticle;
 use App\Services\Content\ContentArticleService;
 use App\Services\Content\NoticeReadService;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 class ContentController extends Controller
 {
@@ -30,7 +30,7 @@ class ContentController extends Controller
         ]);
     }
 
-    public function notices(Request $request)
+    public function notices(PublishedListRequest $request)
     {
         return $this->publishedList($request, ContentArticle::TYPE_NOTICE);
     }
@@ -67,7 +67,7 @@ class ContentController extends Controller
         return $this->success();
     }
 
-    public function helpArticles(Request $request)
+    public function helpArticles(PublishedListRequest $request)
     {
         return $this->publishedList($request, ContentArticle::TYPE_HELP);
     }
@@ -77,16 +77,9 @@ class ContentController extends Controller
         return $this->publishedDetail($articleId, ContentArticle::TYPE_HELP);
     }
 
-    private function publishedList(Request $request, string $type)
+    private function publishedList(PublishedListRequest $request, string $type)
     {
-        $filters = $request->validate([
-            'keyword' => ['nullable', 'string', 'max:100'],
-            'category_id' => ['nullable', 'integer', Rule::exists('content_categories', 'id')],
-            'content_category_id' => ['nullable', 'integer', Rule::exists('content_categories', 'id')],
-            'is_recommended' => ['nullable', 'integer', Rule::in([0, 1])],
-            'page' => ['nullable', 'integer', 'min:1'],
-            'page_size' => ['nullable', 'integer', 'min:1', 'max:50'],
-        ]);
+        $filters = $request->validated();
 
         if (empty($filters['category_id']) && ! empty($filters['content_category_id'])) {
             $filters['category_id'] = (int) $filters['content_category_id'];

@@ -2,6 +2,7 @@
 
 namespace App\Services\Auth;
 
+use App\Support\CacheKey;
 use Illuminate\Support\Facades\Cache;
 
 class VerificationCodeService
@@ -12,7 +13,7 @@ class VerificationCodeService
     public function storeEmailCode(int|string $userId, string $email, string $code, int $minutes = 10): void
     {
         $key = $this->emailCodeKey($userId, $email);
-        Cache::put($key, $code, now()->addMinutes($minutes));
+        Cache::store('redis_volatile')->put(CacheKey::verificationCode($key), $code, now()->addMinutes($minutes));
     }
 
     /**
@@ -21,10 +22,10 @@ class VerificationCodeService
     public function verifyEmailCode(int|string $userId, string $email, string $code): bool
     {
         $key = $this->emailCodeKey($userId, $email);
-        $cached = Cache::get($key);
+        $cached = Cache::store('redis_volatile')->get(CacheKey::verificationCode($key));
 
         if ($cached === $code) {
-            Cache::forget($key);
+            Cache::store('redis_volatile')->forget(CacheKey::verificationCode($key));
 
             return true;
         }
@@ -38,7 +39,7 @@ class VerificationCodeService
     public function storePhoneCode(int|string $userId, string $phone, string $code, int $minutes = 5): void
     {
         $key = $this->phoneCodeKey($userId, $phone);
-        Cache::put($key, $code, now()->addMinutes($minutes));
+        Cache::store('redis_volatile')->put(CacheKey::verificationCode($key), $code, now()->addMinutes($minutes));
     }
 
     /**
@@ -47,10 +48,10 @@ class VerificationCodeService
     public function verifyPhoneCode(int|string $userId, string $phone, string $code): bool
     {
         $key = $this->phoneCodeKey($userId, $phone);
-        $cached = Cache::get($key);
+        $cached = Cache::store('redis_volatile')->get(CacheKey::verificationCode($key));
 
         if ($cached === $code) {
-            Cache::forget($key);
+            Cache::store('redis_volatile')->forget(CacheKey::verificationCode($key));
 
             return true;
         }

@@ -5,7 +5,11 @@ declare(strict_types=1);
 namespace Tests\Unit;
 
 use App\Models\Order;
+use App\Models\FirstProductGroup;
 use App\Models\Product;
+use App\Models\SecondProductGroup;
+use App\Models\ThirdProductGroup;
+use App\Services\ProductCatalog\ProductFullPathResolver;
 use Tests\TestCase;
 
 class OrderSnapshotSemanticsTest extends TestCase
@@ -19,9 +23,25 @@ class OrderSnapshotSemanticsTest extends TestCase
             'coupon_snapshot' => json_encode(['name' => 'Test Coupon'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ], true);
 
-        $this->assertSame(['hostname' => 'srv-test-01'], $order->config_snapshot);
-        $this->assertSame(['base_amount' => '99.00'], $order->config_pricing_snapshot);
-        $this->assertSame(['name' => 'Test Coupon'], $order->coupon_snapshot);
+        $this->assertSame(1, $order->config_snapshot['_schema_version']);
+        $this->assertSame('order.config_snapshot', $order->config_snapshot['_schema_type']);
+        $this->assertSame('srv-test-01', $order->config_snapshot['hostname']);
+        $this->assertSame(1, $order->config_pricing_snapshot['_schema_version']);
+        $this->assertSame('99.00', $order->config_pricing_snapshot['base_amount']);
+        $this->assertSame(1, $order->coupon_snapshot['_schema_version']);
+        $this->assertSame('Test Coupon', $order->coupon_snapshot['name']);
+    }
+
+    public function test_it_writes_versioned_order_snapshots(): void
+    {
+        $order = new Order;
+        $order->config_snapshot = ['hostname' => 'srv-test-02'];
+        $order->config_pricing_snapshot = ['base_amount' => '199.00'];
+        $order->coupon_snapshot = ['name' => 'Versioned Coupon'];
+
+        $this->assertStringContainsString('"_schema_version":1', $order->getAttributes()['config_snapshot']);
+        $this->assertStringContainsString('"order.config_pricing_snapshot"', $order->getAttributes()['config_pricing_snapshot']);
+        $this->assertStringContainsString('"order.coupon_snapshot"', $order->getAttributes()['coupon_snapshot']);
     }
 
     public function test_it_prefers_product_spec_snapshot_for_display_fields(): void
@@ -62,5 +82,61 @@ class OrderSnapshotSemanticsTest extends TestCase
         $this->assertNull($order->product_spec_snapshot);
         $this->assertSame('2 vCPU 2G', $order->display_product_name);
         $this->assertSame('vps', $order->product_type_snapshot);
+    }
+
+    public function test_product_full_path_resolver_builds_category_path_from_product_hierarchy(): void
+    {
+        $product = new Product([
+            'product_type' => 'vps',
+            'service_type_code' => 'vps',
+            'purchase_requires' => [],
+            'config_options' => [],
+        ]);
+        $product->setRelation('firstProductGroup', tap(new FirstProductGroup, function (FirstProductGroup $group): void {
+            $group->setRawAttributes(['id' => 1, 'code' => 'vps', 'name' => '云服务器'], true);
+        }));
+        $product->setRelation('secondProductGroup', tap(new SecondProductGroup, function (SecondProductGroup $group): void {
+            $group->setRawAttributes(['id' => 2, 'first_product_group_id' => 1, 'name' => '轻量云'], true);
+        }));
+        $product->setRelation('thirdProductGroup', tap(new ThirdProductGroup, function (ThirdProductGroup $group): void {
+            $group->setRawAttributes(['id' => 3, 'second_product_group_id' => 2, 'name' => '香港'], true);
+        }));
+
+        $order = new Order([
+            'product_spec_snapshot' => 'gscs-2vcpu-2gib',
+            'product_type_snapshot' => 'vps',
+        ]);
+        $order->setRelation('product', $product);
+
+        $this->assertSame(
+            '云服务器/轻量云/香港/gscs-2vcpu-2gib',
+            (new ProductFullPathResolver)->pathForOrder($order)
+        );
+    }
+
+    public function test_product_full_path_resolver_prefers_order_snapshot_path(): void
+    {
+        $product = new Product([
+            'product_type' => 'vps',
+            'service_type_code' => 'vps',
+            'purchase_requires' => [],
+            'config_options' => [],
+        ]);
+        $product->setRelation('firstProductGroup', tap(new FirstProductGroup, function (FirstProductGroup $group): void {
+            $group->setRawAttributes(['id' => 1, 'code' => 'vps', 'name' => '云服务器'], true);
+        }));
+
+        $order = new Order([
+            'product_spec_snapshot' => 'current-name',
+            'config_snapshot' => [
+                'product_full_path' => '历史分类/历史节点/history-spec',
+            ],
+        ]);
+        $order->setRelation('product', $product);
+
+        $this->assertSame(
+            '历史分类/历史节点/history-spec',
+            (new ProductFullPathResolver)->pathForOrder($order)
+        );
     }
 }

@@ -28,7 +28,7 @@ class HomeHeroService
 
     private const CACHE_KEY = 'site:home:hero';
 
-    private const CACHE_TTL_SECONDS = 120;
+    private const CACHE_TTL_SECONDS = 300; // 5分钟：首页内容不频繁变化
 
     public const SHAPE_OPTIONS = ['computer', 'connection', 'security', 'value', 'support'];
 
@@ -79,6 +79,7 @@ class HomeHeroService
 
         Cache::forget(self::CACHE_KEY);
         $contentVersion = ContentPublishedCacheVersion::current();
+        Cache::forget(sprintf('site:home:%s:%d:%d:v%d', 'all', 50, 4, $contentVersion));
         Cache::forget(sprintf('site:home:%d:%d:%d:v%d', 4, 50, 4, $contentVersion));
         Cache::forget('site:home:4:50:4');
 
@@ -104,6 +105,7 @@ class HomeHeroService
                 'secondary_text' => '查看详情',
                 'secondary_path' => '/about',
                 'shape' => 'computer',
+                'video' => '/uploads/hero-videos/hero-1.mp4',
                 'ribbon' => '',
                 'ribbon_type' => 'new',
             ],
@@ -117,6 +119,7 @@ class HomeHeroService
                 'secondary_text' => '查看线路',
                 'secondary_path' => '/help',
                 'shape' => 'connection',
+                'video' => '/uploads/hero-videos/hero-2.mp4',
                 'ribbon' => '',
                 'ribbon_type' => 'new',
             ],
@@ -130,6 +133,7 @@ class HomeHeroService
                 'secondary_text' => '在线咨询',
                 'secondary_path' => '/help',
                 'shape' => 'security',
+                'video' => '/uploads/hero-videos/hero-3.mp4',
                 'ribbon' => '',
                 'ribbon_type' => 'new',
             ],
@@ -143,6 +147,7 @@ class HomeHeroService
                 'secondary_text' => '查看优惠',
                 'secondary_path' => '/products',
                 'shape' => 'value',
+                'video' => '/uploads/hero-videos/hero-4.mp4',
                 'ribbon' => '',
                 'ribbon_type' => 'warm',
             ],
@@ -156,6 +161,7 @@ class HomeHeroService
                 'secondary_text' => '企业采购',
                 'secondary_path' => '/about',
                 'shape' => 'support',
+                'video' => '/uploads/hero-videos/hero-5.mp4',
                 'ribbon' => '',
                 'ribbon_type' => 'new',
             ],
@@ -277,6 +283,7 @@ class HomeHeroService
             'secondary_text' => mb_substr(trim((string) ($slide['secondary_text'] ?? $slide['secondaryText'] ?? '')), 0, 20),
             'secondary_path' => mb_substr(trim((string) ($slide['secondary_path'] ?? $slide['secondaryPath'] ?? '')), 0, 255),
             'shape' => $shape,
+            'video' => $this->normalizeVideoPath($slide['video'] ?? ''),
             'ribbon' => mb_substr(trim((string) ($slide['ribbon'] ?? '')), 0, 10),
             'ribbon_type' => $ribbonType,
         ];
@@ -301,6 +308,30 @@ class HomeHeroService
             'desc' => mb_substr(trim((string) ($feature['desc'] ?? '')), 0, 120),
             'path' => mb_substr(trim((string) ($feature['path'] ?? '')), 0, 255),
         ];
+    }
+
+    private function normalizeVideoPath(mixed $value): string
+    {
+        $path = trim((string) $value);
+        if ($path === '') {
+            return '';
+        }
+
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            $path = (string) (parse_url($path, PHP_URL_PATH) ?: '');
+        }
+
+        $path = '/'.ltrim(str_replace('\\', '/', $path), '/');
+        if (! str_starts_with($path, '/uploads/hero-videos/')) {
+            return '';
+        }
+
+        $filename = basename($path);
+        if (! preg_match('/\.(mp4|webm|ogg|mov|m4v)$/i', $filename)) {
+            return '';
+        }
+
+        return '/uploads/hero-videos/'.$filename;
     }
 
     /**

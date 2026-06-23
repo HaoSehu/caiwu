@@ -58,15 +58,15 @@ class MigrateAccountLedgersCommand extends AccountMigrateBaseCommand
 
         if ($payloads === []) {
             if ($partition['skipped_row_ids'] !== []) {
-                $this->warn('全部账本记录均因缺失目标用户而被跳过：' . implode(', ', $partition['skipped_row_ids']));
+                $this->warn('全部账本记录均因缺失目标用户而被跳过：'.implode(', ', $partition['skipped_row_ids']));
             }
 
             return 0;
         }
 
         if ($partition['skipped_row_ids'] !== []) {
-            $this->warn('以下账本记录因缺失目标用户被跳过：' . implode(', ', $partition['skipped_row_ids']));
-            $this->warn('涉及缺失用户：' . implode(', ', $partition['skipped_user_ids']));
+            $this->warn('以下账本记录因缺失目标用户被跳过：'.implode(', ', $partition['skipped_row_ids']));
+            $this->warn('涉及缺失用户：'.implode(', ', $partition['skipped_user_ids']));
         }
 
         $columns = array_keys($payloads[0]);

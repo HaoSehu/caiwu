@@ -254,7 +254,7 @@ TEXT,
 用户邮箱：{{user_email}}
 账单编号：{{invoice_no}}
 账单类型：{{order_type_label}}
-配置名称：{{product_name}}
+开通商品：{{product_name}}
 计费周期：{{billing_cycle_label}}
 账单金额：¥{{order_amount}}
 账单状态：{{order_status_label}}
@@ -276,7 +276,7 @@ TEXT,
 用户名称：{{user_name}}
 用户邮箱：{{user_email}}
 账单编号：{{invoice_no}}
-配置名称：{{product_name}}
+开通商品：{{product_name}}
 计费周期：{{billing_cycle_label}}
 支付金额：¥{{paid_amount}}
 支付方式：{{payment_method}}

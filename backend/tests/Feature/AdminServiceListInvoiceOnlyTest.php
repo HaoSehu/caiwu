@@ -7,13 +7,14 @@ namespace Tests\Feature;
 use App\Constants\InvoiceStatus;
 use App\Constants\ServiceStatus;
 use App\Models\Invoice;
+use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\Service;
 use App\Models\User;
 use App\Services\Provisioning\AdminServiceListService;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
@@ -323,7 +324,7 @@ class AdminServiceListInvoiceOnlyTest extends TestCase
         ]);
         $this->mirrorProductToIdc($product, $suffix.'-legacy-order');
 
-        $order = \App\Models\Order::query()->create([
+        $order = Order::query()->create([
             'order_no' => 'ADMSVCORD'.strtoupper($suffix),
             'user_id' => (int) $user->id,
             'product_id' => (int) $product->id,

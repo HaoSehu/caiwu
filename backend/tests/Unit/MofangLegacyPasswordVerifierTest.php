@@ -13,7 +13,7 @@ class MofangLegacyPasswordVerifierTest extends TestCase
     {
         $needsRehash = false;
 
-        $matched = (new MofangLegacyPasswordVerifier())->verify(
+        $matched = (new MofangLegacyPasswordVerifier)->verify(
             'Secret123',
             '###'.md5('Secret123'),
             $needsRehash
@@ -27,7 +27,7 @@ class MofangLegacyPasswordVerifierTest extends TestCase
     {
         $needsRehash = false;
 
-        $matched = (new MofangLegacyPasswordVerifier())->verify(
+        $matched = (new MofangLegacyPasswordVerifier)->verify(
             'Secret123',
             '###'.md5('OtherSecret'),
             $needsRehash
@@ -41,7 +41,7 @@ class MofangLegacyPasswordVerifierTest extends TestCase
     {
         $needsRehash = false;
 
-        $matched = (new MofangLegacyPasswordVerifier())->verify(
+        $matched = (new MofangLegacyPasswordVerifier)->verify(
             'Secret123',
             '$2y$10$not-a-real-bcrypt-hash',
             $needsRehash

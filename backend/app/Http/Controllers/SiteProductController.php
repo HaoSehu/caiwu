@@ -2,13 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use App\Constants\ProductType;
+use App\Http\Requests\Site\IndexProductRequest;
+use App\Http\Requests\Site\InitProductRequest;
+use App\Http\Requests\Site\ProductGroupsRequest;
+use App\Http\Requests\Site\QuoteProductRequest;
 use App\Models\User;
 use App\Services\Site\SiteProductQuoteService;
 use App\Services\Site\SiteProductReadService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Validation\Rule;
 
 class SiteProductController extends Controller
 {
@@ -17,11 +19,9 @@ class SiteProductController extends Controller
         private SiteProductQuoteService $siteProductQuoteService,
     ) {}
 
-    public function init(Request $request)
+    public function init(InitProductRequest $request)
     {
-        $validated = $request->validate([
-            'product_type' => ['nullable', Rule::in(ProductType::allowedValues())],
-        ]);
+        $validated = $request->validated();
 
         return $this->success(
             $this->siteProductReadService->productsInit($validated['product_type'] ?? null)
@@ -33,11 +33,9 @@ class SiteProductController extends Controller
         return $this->success($this->siteProductReadService->productTypes());
     }
 
-    public function productGroups(Request $request)
+    public function productGroups(ProductGroupsRequest $request)
     {
-        $validated = $request->validate([
-            'product_type' => ['nullable', Rule::in(ProductType::allowedValues())],
-        ]);
+        $validated = $request->validated();
 
         return $this->success(
             $this->siteProductReadService->productGroups($validated['product_type'] ?? null)
@@ -54,19 +52,9 @@ class SiteProductController extends Controller
         return $this->success($this->siteProductReadService->groupCatalog($groupId));
     }
 
-    public function index(Request $request)
+    public function index(IndexProductRequest $request)
     {
-        $validated = $request->validate([
-            'category_id' => ['nullable', 'integer', 'min:1'],
-            'category_ids' => ['nullable', 'array', 'min:1'],
-            'category_ids.*' => ['integer', 'min:1'],
-            'product_group_id' => ['nullable', 'integer', 'min:1'],
-            'product_group_ids' => ['nullable', 'array', 'min:1'],
-            'product_group_ids.*' => ['integer', 'min:1'],
-            'group_id' => ['nullable', 'integer', 'min:1'],
-            'group_ids' => ['nullable', 'array', 'min:1'],
-            'group_ids.*' => ['integer', 'min:1'],
-        ]);
+        $validated = $request->validated();
 
         return $this->success($this->siteProductReadService->products($validated));
     }
@@ -95,14 +83,9 @@ class SiteProductController extends Controller
         return $this->success($payload);
     }
 
-    public function quote(Request $request, int $productId)
+    public function quote(QuoteProductRequest $request, int $productId)
     {
-        $validated = $request->validate([
-            'billing_cycle' => ['required', 'string', 'max:30'],
-            'config' => ['nullable', 'array'],
-            'quantity' => ['nullable', 'integer', 'min:1', 'max:10'],
-            'user_coupon_id' => ['nullable', 'integer', 'min:1'],
-        ]);
+        $validated = $request->validated();
 
         $payload = $this->siteProductQuoteService->resolveQuotePayload(
             $productId,

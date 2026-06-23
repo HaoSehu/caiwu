@@ -4,10 +4,11 @@ namespace App\Http\Controllers\Client;
 
 use App\Constants\PaymentGatewayCode;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Client\Recharge\StatusRequest;
+use App\Http\Requests\Client\Recharge\StoreRequest;
 use App\Models\Payment;
 use App\Services\Finance\CheckoutSecurityService;
 use App\Services\Finance\PaymentService;
-use Illuminate\Http\Request;
 
 class RechargeController extends Controller
 {
@@ -19,11 +20,9 @@ class RechargeController extends Controller
     /**
      * 创建充值订单（支付宝预下单）
      */
-    public function store(Request $request)
+    public function store(StoreRequest $request)
     {
-        $data = $request->validate([
-            'amount' => ['required', 'numeric', 'min:1', 'max:50000'],
-        ]);
+        $data = $request->validated();
 
         $result = $this->paymentService->rechargeByAlipay(
             $request->user(),
@@ -42,7 +41,7 @@ class RechargeController extends Controller
         }
 
         return $this->success(
-            array_merge($result, $this->checkoutSecurityService->issueRechargePollToken($payment, (int) $request->user()->id)),
+            array_merge($result, $this->checkoutSecurityService->issueRechargePollToken($payment, (int) $request->user()->id, $request->ip())),
             '充值二维码已生成'
         );
     }
@@ -50,11 +49,9 @@ class RechargeController extends Controller
     /**
      * 轮询充值状态
      */
-    public function status(Request $request, string $paymentNo)
+    public function status(StatusRequest $request, string $paymentNo)
     {
-        $data = $request->validate([
-            'poll_token' => ['required', 'string', 'min:20', 'max:120'],
-        ]);
+        $data = $request->validated();
 
         $payment = Payment::where('payment_no', $paymentNo)
             ->where('user_id', $request->user()->id)
@@ -64,7 +61,8 @@ class RechargeController extends Controller
         $this->checkoutSecurityService->assertRechargePollToken(
             (string) $data['poll_token'],
             $payment,
-            (int) $request->user()->id
+            (int) $request->user()->id,
+            $request->ip()
         );
 
         $result = $this->paymentService->queryRechargeStatus($payment);

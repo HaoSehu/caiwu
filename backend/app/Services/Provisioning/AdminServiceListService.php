@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Provisioning;
 
 use App\Constants\ServiceStatus;
+use App\Models\Invoice;
 use App\Models\Product;
 use App\Models\Service;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
@@ -45,8 +46,10 @@ class AdminServiceListService
             ])
             ->with([
                 'user:id,nickname,email,phone,status',
-                'product:id,product_group_id,product_type,config_options,purchase_requires',
-                'product.categoryMapping:id,parent_group_id,product_type,name',
+                'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
+                'product.firstProductGroup:id,code,name,description,slug',
+                'product.secondProductGroup:id,first_product_group_id,name,description,slug',
+                'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
                 'order:id,order_no,status,paid_at',
                 'invoice:id,invoice_no,service_id,order_id,product_spec_snapshot,status,paid_at',
                 'invoices:id,invoice_no,service_id,order_id,product_spec_snapshot,status,paid_at',
@@ -371,7 +374,7 @@ class AdminServiceListService
         return $this->productDisplayNameResolver ?? new ProductDisplayNameResolver;
     }
 
-    private function resolvePrimaryInvoice(Service $service): ?\App\Models\Invoice
+    private function resolvePrimaryInvoice(Service $service): ?Invoice
     {
         if ($service->invoice) {
             return $service->invoice;

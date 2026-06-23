@@ -1,17 +1,17 @@
 <?php
 
-use App\Http\Controllers\Admin\AdminStaffController;
-use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\AdminPermissionCatalogController;
 use App\Http\Controllers\Admin\AdminRoleController;
+use App\Http\Controllers\Admin\AdminStaffController;
+use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\ContentArticleController;
 use App\Http\Controllers\Admin\ContentCategoryController;
 use App\Http\Controllers\Admin\CouponCampaignController;
 use App\Http\Controllers\Admin\CouponController;
 use App\Http\Controllers\Admin\CpuModelCatalogController;
 use App\Http\Controllers\Admin\DashboardController;
-use App\Http\Controllers\Admin\FinanceMenuController;
 use App\Http\Controllers\Admin\FinanceLedgerController;
+use App\Http\Controllers\Admin\FinanceMenuController;
 use App\Http\Controllers\Admin\HomeHeroController;
 use App\Http\Controllers\Admin\InstanceSpecCatalogController;
 use App\Http\Controllers\Admin\InvoiceController;

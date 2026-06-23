@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Casts\LegacyEncrypted;
+use App\Services\User\AccountService;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -13,16 +14,11 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable, SoftDeletes;
-
-    private static ?bool $profileTableAvailable = null;
-
-    private static ?bool $accountTableAvailable = null;
 
     protected $fillable = [
         'email', 'password', 'phone', 'status', 'balance',
@@ -57,40 +53,79 @@ class User extends Authenticatable
         ];
     }
 
-    protected static function booted(): void {}
+    /** @var array<int, string> 本次保存中显式写入的账户投影字段 */
+    protected array $pendingAccountProjection = [];
+
+    protected static function booted(): void
+    {
+        // 现金余额/信用额度的真源已迁移到 user_accounts；
+        // 当通过 Eloquent 显式写入 balance/credit_limit 时，同步投影到账户表，
+        // 直接 DB::update(users) 不触发该钩子，符合账户读写边界约定。
+        static::saving(function (User $user): void {
+            $user->pendingAccountProjection = [];
+            foreach (['balance', 'credit_limit'] as $field) {
+                if (array_key_exists($field, $user->getDirty())) {
+                    $user->pendingAccountProjection[] = $field;
+                }
+            }
+        });
+
+        static::saved(function (User $user): void {
+            if ($user->pendingAccountProjection === []) {
+                return;
+            }
+
+            $attributes = $user->getAttributes();
+            $payload = [];
+            if (in_array('balance', $user->pendingAccountProjection, true) && array_key_exists('balance', $attributes)) {
+                $payload['cash_balance'] = $attributes['balance'];
+            }
+            if (in_array('credit_limit', $user->pendingAccountProjection, true) && array_key_exists('credit_limit', $attributes)) {
+                $payload['credit_limit'] = $attributes['credit_limit'];
+            }
+            $user->pendingAccountProjection = [];
+
+            if ($payload === []) {
+                return;
+            }
+
+            app(AccountService::class)->updateAccount($user, $payload);
+            $user->unsetRelation('account');
+        });
+    }
 
     public function getNicknameAttribute(mixed $value): string
     {
-        $nickname = trim((string) $this->resolveProfileValue('nickname', $value));
+        $nickname = trim((string) ($value ?? ''));
 
         return $this->hasReadableNickname($nickname) ? $nickname : '';
     }
 
     public function getCompanyAttribute(mixed $value): string
     {
-        return trim((string) $this->resolveProfileValue('company', $value));
+        return trim((string) ($value ?? ''));
     }
 
     public function getQqAttribute(mixed $value): string
     {
-        return trim((string) $this->resolveProfileValue('qq', $value));
+        return trim((string) ($value ?? ''));
     }
 
     public function getAdminNoteAttribute(mixed $value): ?string
     {
-        $normalized = trim((string) $this->resolveProfileValue('admin_note', $value));
+        $normalized = trim((string) ($value ?? ''));
 
         return $normalized === '' ? null : $normalized;
     }
 
     public function getBalanceAttribute(mixed $value): string
     {
-        return $this->normalizeDecimalString($this->resolveAccountValue('cash_balance', $value));
+        return $this->normalizeDecimalString($this->resolveAccountValue('cash_balance'));
     }
 
     public function getCreditLimitAttribute(mixed $value): string
     {
-        return $this->normalizeDecimalString($this->resolveAccountValue('credit_limit', $value));
+        return $this->normalizeDecimalString($this->resolveAccountValue('credit_limit'));
     }
 
     public function getRealNameAttribute(mixed $value): string
@@ -169,22 +204,22 @@ class User extends Authenticatable
 
     public function getReferralFrozenAmountAttribute(mixed $value): string
     {
-        return $this->normalizeDecimalString($this->resolveAccountValue('referral_frozen_balance', $value));
+        return $this->normalizeDecimalString($this->resolveAccountValue('referral_frozen_balance'));
     }
 
     public function getReferralAvailableAmountAttribute(mixed $value): string
     {
-        return $this->normalizeDecimalString($this->resolveAccountValue('referral_available_balance', $value));
+        return $this->normalizeDecimalString($this->resolveAccountValue('referral_available_balance'));
     }
 
     public function getReferralWithdrawingAmountAttribute(mixed $value): string
     {
-        return $this->normalizeDecimalString($this->resolveAccountValue('referral_pending_withdrawal_balance', $value));
+        return $this->normalizeDecimalString($this->resolveAccountValue('referral_pending_withdrawal_balance'));
     }
 
     public function getReferralWithdrawnAmountAttribute(mixed $value): string
     {
-        return $this->normalizeDecimalString($this->resolveAccountValue('referral_withdrawn_balance', $value));
+        return $this->normalizeDecimalString($this->resolveAccountValue('referral_withdrawn_balance'));
     }
 
     public function getAlipayRealNameAttribute(mixed $value): string
@@ -228,16 +263,6 @@ class User extends Authenticatable
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
-    }
-
-    public function profile(): HasOne
-    {
-        return $this->hasOne(UserProfile::class, 'user_id');
-    }
-
-    public function verificationProfile(): HasOne
-    {
-        return $this->hasOne(UserVerification::class, 'user_id');
     }
 
     public function referralProfile(): HasOne
@@ -300,11 +325,6 @@ class User extends Authenticatable
         return $this->hasMany(Payment::class);
     }
 
-    public function balanceLogs(): HasMany
-    {
-        return $this->hasMany(BalanceLog::class);
-    }
-
     public function accountTransactions(): HasMany
     {
         return $this->hasMany(AccountTransaction::class, 'user_id');
@@ -331,13 +351,7 @@ class User extends Authenticatable
     {
         $relations = [];
 
-        if (self::accountTableAvailable()) {
-            $relations[] = 'account';
-        }
-
-        if (self::profileTableAvailable()) {
-            $relations[] = 'profile';
-        }
+        $relations[] = 'account';
 
         return $query->with($relations);
     }
@@ -411,48 +425,26 @@ class User extends Authenticatable
         return $this->normalizeDecimal($value);
     }
 
-    private function resolveProfileValue(string $field, mixed $fallback = null): mixed
+    private function resolveAccountValue(string $field): mixed
     {
-        if ($this->relationLoaded('profile')) {
-            $profile = $this->getRelation('profile');
-            if ($profile instanceof UserProfile) {
-                $resolved = $profile->{$field} ?? null;
-                if ($resolved !== null && trim((string) $resolved) !== '') {
-                    return $resolved;
-                }
-            }
-        }
-
-        return $fallback;
-    }
-
-    private function resolveAccountValue(string $field, mixed $fallback = null): mixed
-    {
-        if (self::accountTableAvailable() && $this->relationLoaded('account')) {
+        if ($this->relationLoaded('account')) {
             $account = $this->getRelation('account');
             if ($account instanceof UserAccount) {
-                return $account->{$field} ?? $fallback;
+                return $account->{$field} ?? 0;
+            }
+
+            return 0;
+        }
+
+        if ($this->exists && (int) ($this->attributes['id'] ?? 0) > 0) {
+            $account = $this->account()->first();
+            if ($account instanceof UserAccount) {
+                $this->setRelation('account', $account);
+
+                return $account->{$field} ?? 0;
             }
         }
 
-        return $fallback;
-    }
-
-    public static function profileTableAvailable(): bool
-    {
-        if (self::$profileTableAvailable === null) {
-            self::$profileTableAvailable = Schema::hasTable('user_profiles');
-        }
-
-        return self::$profileTableAvailable;
-    }
-
-    public static function accountTableAvailable(): bool
-    {
-        if (self::$accountTableAvailable === null) {
-            self::$accountTableAvailable = Schema::hasTable('user_accounts');
-        }
-
-        return self::$accountTableAvailable;
+        return 0;
     }
 }

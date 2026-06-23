@@ -4,22 +4,23 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Constants\FinanceLedgerEventType;
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
 use App\Constants\PaymentStatus;
 use App\Exceptions\BusinessException;
-use App\Models\BalanceLog;
+use App\Models\AccountTransaction;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\User;
+use App\Services\Automation\InvoiceCleanupAutomationService;
 use App\Services\Finance\AdminOrderNotificationService;
 use App\Services\Finance\CheckoutSecurityService;
 use App\Services\Finance\CheckoutService;
 use App\Services\Finance\CouponService;
 use App\Services\Finance\InvoiceService;
 use App\Services\Finance\PaymentService;
-use App\Services\Automation\InvoiceCleanupAutomationService;
 use App\Services\Order\OrderService;
 use App\Services\Order\PaidOrderBusinessFlowDispatcher;
 use App\Services\PaymentGateway\AlipayFaceToFaceService;
@@ -402,21 +403,21 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
             'paid_amount' => '0.00',
             'status' => OrderStatus::PENDING,
         ]);
-        $this->assertDatabaseHas('balance_logs', [
+        $this->assertDatabaseHas('account_transactions', [
             'user_id' => (int) $user->id,
-            'reference_id' => (int) $invoice->id,
-            'event_type' => \App\Constants\FinanceLedgerEventType::INVOICE_PAYMENT,
+            'source_id' => (int) $invoice->id,
+            'event_type' => FinanceLedgerEventType::INVOICE_PAYMENT,
             'change_amount' => '-20.00',
         ]);
-        $this->assertDatabaseHas('balance_logs', [
+        $this->assertDatabaseHas('account_transactions', [
             'user_id' => (int) $user->id,
-            'reference_id' => (int) $invoice->id,
-            'event_type' => \App\Constants\FinanceLedgerEventType::INVOICE_REFUND,
+            'source_id' => (int) $invoice->id,
+            'event_type' => FinanceLedgerEventType::INVOICE_REFUND,
             'change_amount' => '20.00',
         ]);
-        $this->assertSame(2, BalanceLog::query()
+        $this->assertSame(2, AccountTransaction::query()
             ->where('user_id', (int) $user->id)
-            ->where('reference_id', (int) $invoice->id)
+            ->where('source_id', (int) $invoice->id)
             ->count());
     }
 
@@ -433,7 +434,7 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
 
         $this->makePaymentService($alipayService)->payByBalanceAndAlipay($invoice, $user, 20.00, ['trace_id' => 'mix-cancel']);
 
-        app(\App\Services\Finance\CheckoutService::class)->cancel($invoice->fresh(), [
+        app(CheckoutService::class)->cancel($invoice->fresh(), [
             'actor_type' => 'client',
             'actor_user_id' => (int) $user->id,
             'trace_id' => 'mix-cancel',
@@ -492,6 +493,189 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
             'status' => InvoiceStatus::PAID,
             'paid_amount' => '50.00',
         ]);
+    }
+
+    public function test_stale_full_alipay_qr_after_mix_payment_restores_reserved_balance(): void
+    {
+        [$user, $order, $invoice] = $this->createUserOrderInvoice('staleqr', '100.00', '30.00');
+
+        $stalePayment = Payment::query()->create([
+            'payment_no' => Payment::generatePaymentNo(),
+            'user_id' => (int) $user->id,
+            'order_id' => (int) $order->id,
+            'invoice_id' => (int) $invoice->id,
+            'gateway' => 'alipay',
+            'amount' => '100.00',
+            'status' => PaymentStatus::PENDING,
+            'trace_id' => 'stale-full-qr',
+            'callback_raw' => ['source' => 'alipay_precreate'],
+        ]);
+        $tradeNo = 'TRADE-STALE-FULL-QR-'.strtoupper(bin2hex(random_bytes(4)));
+
+        $alipayService = $this->createMock(AlipayFaceToFaceService::class);
+        $alipayService->method('isEnabled')->willReturn(true);
+        $alipayService->method('precreate')->willReturn([
+            'qr_code' => 'https://qr.alipay.test/stale-mix',
+            'out_trade_no' => 'mock-out-trade-no',
+        ]);
+        $alipayService->method('query')->willReturn([
+            'trade_status' => 'TRADE_SUCCESS',
+            'trade_no' => $tradeNo,
+            'out_trade_no' => (string) $stalePayment->payment_no,
+            'total_amount' => '100.00',
+            'raw' => [
+                'trade_status' => 'TRADE_SUCCESS',
+                'trade_no' => $tradeNo,
+                'out_trade_no' => (string) $stalePayment->payment_no,
+                'total_amount' => '100.00',
+            ],
+        ]);
+
+        $service = $this->makePaymentService($alipayService);
+        $mixResult = $service->payByBalanceAndAlipay($invoice, $user, 30.00, ['trace_id' => 'stale-mix']);
+        $mixPayment = Payment::query()->where('payment_no', (string) $mixResult['payment_no'])->firstOrFail();
+
+        $this->assertSame('0.00', User::query()->findOrFail((int) $user->id)->balance);
+        $this->assertSame('30.00', (string) $invoice->refresh()->paid_amount);
+
+        $service->queryAlipayStatus($stalePayment);
+
+        $this->assertSame('30.00', User::query()->findOrFail((int) $user->id)->balance);
+        $this->assertDatabaseHas('invoices', [
+            'id' => (int) $invoice->id,
+            'status' => InvoiceStatus::PAID,
+            'paid_amount' => '100.00',
+        ]);
+        $this->assertDatabaseHas('orders', [
+            'id' => (int) $order->id,
+            'status' => OrderStatus::PAID,
+            'paid_amount' => '100.00',
+        ]);
+        $this->assertDatabaseHas('payments', [
+            'id' => (int) $stalePayment->id,
+            'status' => PaymentStatus::SUCCESS,
+            'trade_no' => $tradeNo,
+        ]);
+        $this->assertDatabaseHas('payments', [
+            'id' => (int) $mixPayment->id,
+            'status' => PaymentStatus::FAILED,
+        ]);
+        $this->assertTrue((bool) data_get((array) $mixPayment->refresh()->callback_raw, 'balance_restored'));
+    }
+
+    public function test_cancelled_invoice_successful_alipay_payment_is_credited_to_balance(): void
+    {
+        [$user, $order, $invoice] = $this->createUserOrderInvoice('cancelpay', '80.00', '10.00');
+        $invoice->forceFill(['status' => InvoiceStatus::CANCELLED])->save();
+
+        $payment = Payment::query()->create([
+            'payment_no' => Payment::generatePaymentNo(),
+            'user_id' => (int) $user->id,
+            'order_id' => (int) $order->id,
+            'invoice_id' => (int) $invoice->id,
+            'gateway' => 'alipay',
+            'amount' => '80.00',
+            'status' => PaymentStatus::PENDING,
+        ]);
+        $tradeNo = 'TRADE-CANCELLED-CREDIT-'.strtoupper(bin2hex(random_bytes(4)));
+
+        $alipayService = $this->createMock(AlipayFaceToFaceService::class);
+        $alipayService->method('verifyNotify')->willReturn(true);
+        $alipayService->method('matchesAppId')->willReturn(true);
+
+        $this->makePaymentService($alipayService)->handleAlipayNotify([
+            'app_id' => 'mock-app-id',
+            'trade_status' => 'TRADE_SUCCESS',
+            'trade_no' => $tradeNo,
+            'out_trade_no' => (string) $payment->payment_no,
+            'total_amount' => '80.00',
+        ]);
+
+        $this->assertSame('90.00', User::query()->findOrFail((int) $user->id)->balance);
+        $this->assertDatabaseHas('invoices', [
+            'id' => (int) $invoice->id,
+            'status' => InvoiceStatus::CANCELLED,
+            'paid_amount' => '0.00',
+        ]);
+        $this->assertDatabaseHas('payments', [
+            'id' => (int) $payment->id,
+            'status' => PaymentStatus::SUCCESS,
+            'trade_no' => $tradeNo,
+        ]);
+        $this->assertDatabaseHas('account_transactions', [
+            'user_id' => (int) $user->id,
+            'event_type' => FinanceLedgerEventType::RECHARGE,
+            'change_amount' => '80.00',
+            'source_type' => 'payment',
+            'source_id' => (int) $payment->id,
+        ]);
+
+        $callbackRaw = (array) $payment->refresh()->callback_raw;
+        $this->assertTrue((bool) data_get($callbackRaw, 'cancelled_invoice'));
+        $this->assertTrue((bool) data_get($callbackRaw, 'credited_to_balance'));
+    }
+
+    public function test_expired_mix_payment_success_restores_balance_and_credits_alipay_amount(): void
+    {
+        [$user, $order, $invoice] = $this->createUserOrderInvoice('expiredmix', '100.00', '0.00');
+        $invoice->forceFill([
+            'paid_amount' => '30.00',
+            'created_at' => now()->subMinutes(10),
+            'updated_at' => now()->subMinutes(10),
+        ])->save();
+
+        $payment = Payment::query()->create([
+            'payment_no' => Payment::generatePaymentNo(),
+            'user_id' => (int) $user->id,
+            'order_id' => (int) $order->id,
+            'invoice_id' => (int) $invoice->id,
+            'gateway' => 'alipay',
+            'amount' => '70.00',
+            'status' => PaymentStatus::PENDING,
+            'callback_raw' => [
+                'source' => 'alipay_precreate_mix',
+                'mix_payment' => true,
+                'balance_amount' => '30.00',
+            ],
+        ]);
+        $tradeNo = 'TRADE-EXPIRED-MIX-CREDIT-'.strtoupper(bin2hex(random_bytes(4)));
+
+        $alipayService = $this->createMock(AlipayFaceToFaceService::class);
+        $alipayService->method('query')->willReturn([
+            'trade_status' => 'TRADE_SUCCESS',
+            'trade_no' => $tradeNo,
+            'out_trade_no' => (string) $payment->payment_no,
+            'total_amount' => '70.00',
+            'raw' => [
+                'trade_status' => 'TRADE_SUCCESS',
+                'trade_no' => $tradeNo,
+                'out_trade_no' => (string) $payment->payment_no,
+                'total_amount' => '70.00',
+            ],
+        ]);
+
+        $this->makePaymentService($alipayService)->queryAlipayStatus($payment);
+
+        $this->assertSame('100.00', User::query()->findOrFail((int) $user->id)->balance);
+        $this->assertDatabaseHas('invoices', [
+            'id' => (int) $invoice->id,
+            'status' => InvoiceStatus::CANCELLED,
+            'paid_amount' => '0.00',
+        ]);
+        $this->assertDatabaseHas('orders', [
+            'id' => (int) $order->id,
+            'paid_amount' => '0.00',
+        ]);
+        $this->assertDatabaseHas('payments', [
+            'id' => (int) $payment->id,
+            'status' => PaymentStatus::SUCCESS,
+            'trade_no' => $tradeNo,
+        ]);
+
+        $callbackRaw = (array) $payment->refresh()->callback_raw;
+        $this->assertTrue((bool) data_get($callbackRaw, 'payment_window_expired'));
+        $this->assertTrue((bool) data_get($callbackRaw, 'balance_restored'));
+        $this->assertTrue((bool) data_get($callbackRaw, 'credited_to_balance'));
     }
 
     public function test_mix_pay_refund_to_balance_refunds_full_invoice_amount(): void

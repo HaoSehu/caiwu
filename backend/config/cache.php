@@ -25,8 +25,15 @@ return [
             'connection' => env('REDIS_CACHE_CONNECTION', 'cache'),
             'lock_connection' => env('REDIS_CACHE_LOCK_CONNECTION', 'default'),
         ],
+
+        // 高频短 TTL 缓存：用于节流、临时 Token 等场景，使用 DB 2 隔离
+        'redis_volatile' => [
+            'driver' => 'redis',
+            'connection' => 'volatile',
+            'lock_connection' => env('REDIS_CACHE_LOCK_CONNECTION', 'default'),
+        ],
     ],
 
-    // 固定使用英文常量前缀，避免 Str::slug() 依赖 intl 扩展导致的环境差异
-    'prefix' => env('CACHE_PREFIX', 'idc_cache_'),
+    // 缓存键前缀，留空则不加前缀
+    'prefix' => env('CACHE_PREFIX', ''),
 ];

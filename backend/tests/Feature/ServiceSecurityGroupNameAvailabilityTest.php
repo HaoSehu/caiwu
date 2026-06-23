@@ -19,12 +19,8 @@ class ServiceSecurityGroupNameAvailabilityTest extends TestCase
     #[Test]
     public function it_rejects_duplicate_names_found_in_unfiltered_upstream_groups(): void
     {
-        $service = new class(
-            $this->createMock(OperationLogService::class),
-            $this->createMock(ServiceDetailService::class),
-            $this->createMock(ServiceTransformService::class),
-            $this->createMock(ServiceNatService::class),
-        ) extends ServiceSecurityGroupService {
+        $service = new class($this->createMock(OperationLogService::class), $this->createMock(ServiceDetailService::class), $this->createMock(ServiceTransformService::class), $this->createMock(ServiceNatService::class)) extends ServiceSecurityGroupService
+        {
             public function resolveSecurityGroupContext(Service $service, bool $fresh = false): array
             {
                 return [

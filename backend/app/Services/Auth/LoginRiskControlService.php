@@ -85,7 +85,7 @@ class LoginRiskControlService
 
         if ($account !== '') {
             RateLimiter::clear($this->accountKey($account));
-            Cache::forget($this->failureAlertKey($account));
+            Cache::store('redis_volatile')->forget($this->failureAlertKey($account));
         }
 
         if ($ip !== '') {
@@ -100,7 +100,7 @@ class LoginRiskControlService
             return false;
         }
 
-        return Cache::add(
+        return Cache::store('redis_volatile')->add(
             $this->failureAlertKey($account),
             1,
             now()->addSeconds(self::FAILURE_ALERT_DECAY_SECONDS)

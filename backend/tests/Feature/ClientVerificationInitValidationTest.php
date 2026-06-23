@@ -77,7 +77,8 @@ class ClientVerificationInitValidationTest extends TestCase
         $user = $this->createUnverifiedUser($suffix);
         $token = $user->createToken('client-verification-init-test')->plainTextToken;
 
-        $fakeService = new class extends VerificationService {
+        $fakeService = new class extends VerificationService
+        {
             public function __construct() {}
 
             public function startVerificationSession($user, string $realname, string $idcard, string $certType = 'IDENTITY_CARD'): array
@@ -106,7 +107,8 @@ class ClientVerificationInitValidationTest extends TestCase
         $token = $user->createToken('client-verification-init-test')->plainTextToken;
 
         $receivedCertType = null;
-        $fakeService = new class($receivedCertType) extends VerificationService {
+        $fakeService = new class($receivedCertType) extends VerificationService
+        {
             public function __construct(private ?string &$receivedCertType) {}
 
             public function startVerificationSession($user, string $realname, string $idcard, string $certType = 'IDENTITY_CARD'): array

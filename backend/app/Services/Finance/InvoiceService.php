@@ -4,6 +4,7 @@ namespace App\Services\Finance;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\InvoiceType;
+use App\Constants\OrderStatus;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Constants\ProductType;
@@ -14,8 +15,11 @@ use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Models\User;
-use App\Services\Order\OrderService;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
+use Carbon\CarbonImmutable;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class InvoiceService
 {
@@ -49,6 +53,7 @@ class InvoiceService
             'coupon_snapshot' => $order->coupon_snapshot,
             'status' => InvoiceStatus::UNPAID,
             'due_date' => now()->addDays(7),
+            'trace_id' => $order->trace_id,
         ]);
 
         return $this->syncProjection($invoice);
@@ -63,7 +68,7 @@ class InvoiceService
             'invoice_no' => Invoice::generateInvoiceNo(),
             'user_id' => $data['user_id'],
             'product_id' => $data['product_id'] ?? null,
-            'product_spec_snapshot' => $data['product_spec_snapshot'] ?? ($data['product_name_snapshot'] ?? null),
+            'product_spec_snapshot' => $data['product_spec_snapshot'] ?? null,
             'product_type_snapshot' => $data['product_type_snapshot'] ?? null,
             'service_id' => $data['service_id'] ?? null,
             'coupon_id' => $data['coupon_id'] ?? null,
@@ -79,15 +84,16 @@ class InvoiceService
             'coupon_snapshot' => $data['coupon_snapshot'] ?? null,
             'status' => InvoiceStatus::UNPAID,
             'due_date' => $data['due_date'] ?? now()->addDays(7),
+            'trace_id' => $data['trace_id'] ?? null,
         ]);
 
         return $this->syncProjection($invoice);
     }
 
     /**
-     * 充值到账 → 创建充值类型账单
+     * 充值到账 -> 创建充值类型账单
      */
-    public function createForRecharge(User $user, float $amount, ?Payment $payment = null, ?string $remark = null): Invoice
+    public function createForRecharge(User $user, float $amount, ?Payment $payment = null, ?string $remark = null, ?string $traceId = null): Invoice
     {
         if ($payment instanceof Payment && (int) ($payment->invoice_id ?? 0) > 0) {
             $existing = Invoice::query()
@@ -112,6 +118,7 @@ class InvoiceService
                 'remark' => $remark,
                 'payment_no' => $payment?->payment_no,
             ], static fn ($value) => $value !== null && $value !== ''),
+            'trace_id' => $traceId ?: $payment?->trace_id,
         ]);
 
         if ($payment) {
@@ -122,9 +129,9 @@ class InvoiceService
     }
 
     /**
-     * 推广返利入账 → 创建入账类型账单
+     * 推广返利入账 -> 创建入账类型账单
      */
-    public function createForReferralCredit(User $user, float $amount, ?string $remark = null): Invoice
+    public function createForReferralCredit(User $user, float $amount, ?string $remark = null, ?string $traceId = null): Invoice
     {
         return Invoice::create([
             'invoice_no' => Invoice::generateInvoiceNo(),
@@ -136,13 +143,14 @@ class InvoiceService
             'paid_at' => now(),
             'due_date' => now(),
             'config_snapshot' => $remark ? ['remark' => $remark] : null,
+            'trace_id' => $traceId,
         ]);
     }
 
     /**
-     * 扣款 → 创建扣款类型账单
+     * 扣款 -> 创建扣款类型账单
      */
-    public function createForDeduction(User $user, float $amount, ?string $remark = null): Invoice
+    public function createForDeduction(User $user, float $amount, ?string $remark = null, ?string $traceId = null): Invoice
     {
         return Invoice::create([
             'invoice_no' => Invoice::generateInvoiceNo(),
@@ -154,6 +162,7 @@ class InvoiceService
             'paid_at' => now(),
             'due_date' => now(),
             'config_snapshot' => $remark ? ['remark' => $remark] : null,
+            'trace_id' => $traceId,
         ]);
     }
 
@@ -165,8 +174,8 @@ class InvoiceService
         $query = Invoice::with([
             'user:id,email,nickname,phone',
             'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle',
-            'order.product:id,product_type,product_group_id,remark,config_options,purchase_requires',
-            'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
+            'order.product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
             'service:id,name,status,expires_at',
             'payments',
             'items',
@@ -212,8 +221,8 @@ class InvoiceService
             $end = trim((string) ($filters['date_range'][1] ?? ''));
             if ($start !== '' && $end !== '') {
                 $query->whereBetween('created_at', [
-                    \Carbon\CarbonImmutable::parse($start)->startOfDay(),
-                    \Carbon\CarbonImmutable::parse($end)->endOfDay(),
+                    CarbonImmutable::parse($start)->startOfDay(),
+                    CarbonImmutable::parse($end)->endOfDay(),
                 ]);
             }
         }
@@ -231,8 +240,8 @@ class InvoiceService
         $invoice = Invoice::with([
             'user:id,email,nickname',
             'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle',
-            'order.product:id,product_type,product_group_id,remark,config_options,purchase_requires',
-            'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
+            'order.product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
             'service:id,name,status,expires_at',
             'payments',
             'items',
@@ -302,11 +311,13 @@ class InvoiceService
             'paid_at' => $invoice->paid_at?->format('Y-m-d H:i:s'),
             'created_at' => $invoice->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $invoice->updated_at?->format('Y-m-d H:i:s'),
+            'trace_id' => (string) ($invoice->trace_id ?? ''),
+            'refund_trace_id' => (string) ($invoice->refund_trace_id ?? ''),
             'config_snapshot' => (array) ($invoice->config_snapshot ?? []),
             'config_pricing_snapshot' => (array) ($invoice->config_pricing_snapshot ?? []),
             'coupon_snapshot' => (array) ($invoice->coupon_snapshot ?? []),
             'payment_summary' => $paymentSummary,
-            'payments' => $invoice->payments->map(fn ($p) => [
+            'payments' => $this->thirdPartyPayments($invoice->payments)->map(fn ($p) => [
                 'id' => (int) $p->id,
                 'payment_no' => (string) $p->payment_no,
                 'gateway' => (string) $p->gateway,
@@ -315,6 +326,7 @@ class InvoiceService
                 'status' => (int) $p->status,
                 'status_label' => $this->resolvePaymentStatusLabel((int) $p->status),
                 'paid_at' => $p->paid_at?->format('Y-m-d H:i:s'),
+                'trace_id' => (string) ($p->trace_id ?? ''),
                 'trade_no' => (string) ($p->trade_no ?? ''),
                 'refund_method' => (string) data_get((array) ($p->callback_raw ?? []), 'refund.refund_method', ''),
                 'refund_method_label' => (string) data_get((array) ($p->callback_raw ?? []), 'refund.refund_method_label', ''),
@@ -331,12 +343,14 @@ class InvoiceService
     {
         $invoice->loadMissing([
             'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle,amount,discount,paid_amount,quantity,product_spec_snapshot,product_type_snapshot,display_product_name,config_snapshot,config_pricing_snapshot',
-            'order.product:id,product_type,product_group_id,remark,config_options,purchase_requires',
-            'order.product.categoryMapping:id,name,parent_group_id,product_type',
-            'order.product.categoryMapping.parent:id,name,parent_group_id,product_type',
-            'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
-            'product.categoryMapping:id,name,parent_group_id,product_type',
-            'product.categoryMapping.parent:id,name,parent_group_id,product_type',
+            'order.product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
+            'order.product.firstProductGroup:id,code,name',
+            'order.product.secondProductGroup:id,first_product_group_id,name',
+            'order.product.thirdProductGroup:id,second_product_group_id,name',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
+            'product.firstProductGroup:id,code,name',
+            'product.secondProductGroup:id,first_product_group_id,name',
+            'product.thirdProductGroup:id,second_product_group_id,name',
             'service:id,name,status,expires_at',
             'payments',
             'items',
@@ -349,10 +363,6 @@ class InvoiceService
         $productSpecDisplay = $this->resolveInvoiceProductSpecDisplay($invoice, $scene, $productDisplayName);
         $combinedDisplayName = $this->resolveInvoiceCombinedDisplayName($invoice, $productDisplayName);
 
-        if (is_array($paymentSummary)) {
-            unset($paymentSummary['trade_no']);
-        }
-
         return [
             'id' => (int) $invoice->id,
             'invoice_no' => (string) $invoice->invoice_no,
@@ -360,25 +370,6 @@ class InvoiceService
             'product_spec_display' => $productSpecDisplay,
             'product_display_name' => $productDisplayName,
             'combined_display_name' => $combinedDisplayName,
-            'order_id' => (int) ($invoice->order_id ?? 0),
-            'order' => $invoice->order ? [
-                'id' => (int) $invoice->order->id,
-                'order_no' => (string) $invoice->order->order_no,
-                'status' => (int) $invoice->order->status,
-                'type' => (string) $invoice->order->type,
-                'service_id' => (int) ($invoice->order->service_id ?? 0),
-                'paid_at' => $invoice->order->paid_at?->format('Y-m-d H:i:s'),
-                'billing_cycle' => (string) ($invoice->order->billing_cycle ?? ''),
-                'amount' => number_format((float) ($invoice->order->amount ?? 0), 2, '.', ''),
-                'discount' => number_format((float) ($invoice->order->discount ?? 0), 2, '.', ''),
-                'paid_amount' => number_format((float) ($invoice->order->paid_amount ?? 0), 2, '.', ''),
-                'quantity' => (int) ($invoice->order->quantity ?? 1),
-                'product_id' => (int) ($invoice->order->product_id ?? 0),
-                'product_name' => $this->resolveOrderProductName($invoice->order),
-                'product_full_path' => $this->resolveOrderProductPath($invoice->order),
-                'config_snapshot' => (array) ($invoice->order->config_snapshot ?? []),
-                'config_pricing_snapshot' => (array) ($invoice->order->config_pricing_snapshot ?? []),
-            ] : null,
             'product_id' => (int) ($invoice->product_id ?? 0),
             'product' => $invoice->product ? [
                 'id' => (int) $invoice->product->id,
@@ -408,7 +399,7 @@ class InvoiceService
             'created_at' => $invoice->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $invoice->updated_at?->format('Y-m-d H:i:s'),
             'payment_summary' => $paymentSummary,
-            'payments' => $invoice->payments->map(fn ($p) => [
+            'payments' => $this->thirdPartyPayments($invoice->payments)->map(fn ($p) => [
                 'id' => (int) $p->id,
                 'payment_no' => (string) $p->payment_no,
                 'gateway' => (string) $p->gateway,
@@ -417,6 +408,7 @@ class InvoiceService
                 'status' => (int) $p->status,
                 'status_label' => $this->resolvePaymentStatusLabel((int) $p->status),
                 'paid_at' => $p->paid_at?->format('Y-m-d H:i:s'),
+                'trade_no' => (string) ($p->trade_no ?? ''),
                 'refund_method' => (string) data_get((array) ($p->callback_raw ?? []), 'refund.refund_method', ''),
                 'refund_method_label' => (string) data_get((array) ($p->callback_raw ?? []), 'refund.refund_method_label', ''),
                 'refund_reason' => (string) data_get((array) ($p->callback_raw ?? []), 'refund.refund_reason', ''),
@@ -432,8 +424,8 @@ class InvoiceService
         $invoice->loadMissing([
             'user:id,email,nickname',
             'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle',
-            'order.product:id,product_type,product_group_id,remark,config_options,purchase_requires',
-            'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
+            'order.product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
             'service:id,name,status,expires_at',
             'payments',
             'items',
@@ -744,12 +736,19 @@ class InvoiceService
 
     private function resolvePrimaryInvoicePayment(iterable $payments): ?Payment
     {
-        $collection = collect($payments);
+        $collection = $this->thirdPartyPayments($payments);
 
         return $collection
             ->first(fn (Payment $payment) => ! (bool) data_get((array) ($payment->callback_raw ?? []), 'duplicate_paid', false)
                 && in_array((int) $payment->status, [PaymentStatus::SUCCESS, PaymentStatus::REFUNDED], true))
             ?? $collection->first(fn (Payment $payment) => in_array((int) $payment->status, [PaymentStatus::SUCCESS, PaymentStatus::REFUNDED], true));
+    }
+
+    private function thirdPartyPayments(iterable $payments): Collection
+    {
+        return collect($payments)
+            ->filter(fn (Payment $payment) => PaymentGatewayCode::isThirdParty((string) $payment->gateway))
+            ->values();
     }
 
     private function resolveInvoiceDisplayStatus(Invoice $invoice, ?array $paymentSummary): array
@@ -806,7 +805,7 @@ class InvoiceService
     {
         $payment = null;
         if ($invoice->relationLoaded('payments')) {
-            $payment = collect($invoice->payments)
+            $payment = $this->thirdPartyPayments($invoice->payments)
                 ->first(fn (Payment $item) => (int) $item->status === PaymentStatus::REFUNDED
                     || is_array(data_get((array) ($item->callback_raw ?? []), 'refund')));
         }
@@ -932,7 +931,7 @@ class InvoiceService
         return $invoice->fresh([
             'items',
             'order',
-            'product:id,product_type,product_group_id,remark,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
         ]) ?? $invoice;
     }
 
@@ -988,16 +987,21 @@ class InvoiceService
     private function resolveOrderProductPath(Order $order): string
     {
         $product = $order->product;
-        $productType = trim((string) ($order->product_type_snapshot ?? $product?->product_type ?? ''));
-        $category = $product instanceof Product && $product->relationLoaded('categoryMapping')
-            ? $product->categoryMapping
+        $firstGroup = $product instanceof Product && $product->relationLoaded('firstProductGroup')
+            ? $product->firstProductGroup
             : null;
-        $parentCategory = $category && $category->relationLoaded('parent') ? $category->parent : null;
+        $secondGroup = $product instanceof Product && $product->relationLoaded('secondProductGroup')
+            ? $product->secondProductGroup
+            : null;
+        $thirdGroup = $product instanceof Product && $product->relationLoaded('thirdProductGroup')
+            ? $product->thirdProductGroup
+            : null;
+        $productType = trim((string) ($order->product_type_snapshot ?? $firstGroup?->code ?? $product?->service_type_code ?? $product?->product_type ?? ''));
 
         $segments = [
             ProductType::labelOf($productType),
-            trim((string) ($parentCategory?->name ?? '')),
-            trim((string) ($category?->name ?? '')),
+            trim((string) ($secondGroup?->name ?? '')),
+            trim((string) ($thirdGroup?->name ?? '')),
             $this->resolveOrderProductName($order),
         ];
 
@@ -1075,26 +1079,92 @@ class InvoiceService
         return $this->productDisplayNameResolver ?? new ProductDisplayNameResolver;
     }
 
-    /**
-     * 管理员手动入账（Invoice-first 入口）。
-     *
-     * 仍通过 OrderService 完成，因为支付 / 优惠券 / 服务开通链路目前依赖 Order。
-     * 后续 Order 彻底退场时在此处改为原生实现即可，调用方无须再关心 OrderService。
-     */
     public function markPaidManually(Invoice $invoice, array $payload, array $context = []): Invoice
     {
-        $invoice->loadMissing('order');
+        $paidAt = ! empty($payload['paid_at'])
+            ? Carbon::parse((string) $payload['paid_at'])
+            : now();
+        $requestedAmount = round((float) ($payload['amount'] ?? $invoice->amount), 2);
+        $sendEmail = (bool) ($payload['send_email'] ?? false);
+        $remark = trim((string) ($payload['remark'] ?? ''));
+        $syncBusinessFlow = (bool) ($payload['sync_business_flow'] ?? false);
+        $traceId = trim((string) ($context['trace_id'] ?? ''));
 
-        throw_if(
-            ! $invoice->order instanceof Order,
-            new BusinessException('账单未关联订单，暂不支持手动入账')
-        );
+        $updatedInvoice = DB::transaction(function () use ($invoice, $paidAt, $requestedAmount, $traceId): Invoice {
+            $lockedInvoice = Invoice::query()
+                ->lockForUpdate()
+                ->with('order')
+                ->findOrFail((int) $invoice->id);
 
-        app(OrderService::class)->updateManualPaymentStatus($invoice->order, array_merge($payload, [
-            'action' => 'mark_paid',
-        ]), $context);
+            throw_if(
+                ! in_array((int) $lockedInvoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE], true),
+                new BusinessException('当前账单状态不支持手动入账')
+            );
 
-        return $invoice->fresh(['order', 'items', 'payments']) ?? $invoice;
+            $payableAmount = round((float) $lockedInvoice->amount - (float) ($lockedInvoice->paid_amount ?? 0), 2);
+            throw_if($payableAmount <= 0, new BusinessException('当前账单无需再入账'));
+            throw_if(abs($requestedAmount - $payableAmount) > 0.00001, new BusinessException('当前仅支持按账单应付金额全额入账'));
+
+            Payment::query()
+                ->where('invoice_id', $lockedInvoice->id)
+                ->where('status', PaymentStatus::PENDING)
+                ->lockForUpdate()
+                ->get()
+                ->each(function (Payment $payment) use ($traceId): void {
+                    $callbackRaw = (array) ($payment->callback_raw ?? []);
+                    $callbackRaw['closed_reason'] = 'invoice_paid_manually';
+                    $callbackRaw['trace_id'] = $traceId !== '' ? $traceId : (string) ($payment->trace_id ?? '');
+
+                    $payment->forceFill([
+                        'status' => PaymentStatus::FAILED,
+                        'callback_raw' => $callbackRaw,
+                    ])->save();
+                    app(PaymentService::class)->syncProjection($payment);
+                });
+
+            $lockedInvoice->forceFill([
+                'status' => InvoiceStatus::PAID,
+                'paid_amount' => $lockedInvoice->amount,
+                'paid_at' => $paidAt,
+                'trace_id' => $traceId !== '' ? $traceId : $lockedInvoice->trace_id,
+            ])->save();
+
+            $lockedInvoice->order?->forceFill([
+                'status' => OrderStatus::PAID,
+                'paid_amount' => $lockedInvoice->amount,
+                'paid_at' => $paidAt,
+            ])->save();
+
+            return $lockedInvoice->fresh(['order', 'items', 'payments']) ?? $lockedInvoice;
+        });
+
+        if ($syncBusinessFlow) {
+            app(PaymentService::class)->handlePaidInvoice($updatedInvoice, $traceId !== '' ? 'manual:'.$traceId : 'manual:invoice:'.$updatedInvoice->id);
+        }
+
+        OperationLog::query()->create([
+            'user_id' => ((int) ($context['operator_id'] ?? 0)) ?: null,
+            'user_type' => 'admin',
+            'action' => 'invoice.payment.mark_paid',
+            'module' => 'invoice',
+            'subject_id' => (int) $updatedInvoice->id,
+            'subject_type' => Invoice::class,
+            'detail' => [
+                'invoice_no' => (string) $updatedInvoice->invoice_no,
+                'paid_amount' => number_format((float) $updatedInvoice->paid_amount, 2, '.', ''),
+                'paid_at' => $paidAt->format('Y-m-d H:i:s'),
+                'payment_gateway' => trim((string) ($payload['payment_gateway'] ?? 'manual')) ?: 'manual',
+                'trade_no' => trim((string) ($payload['trade_no'] ?? '')),
+                'send_email' => $sendEmail,
+                'sync_business_flow' => $syncBusinessFlow,
+                'remark' => $remark,
+                'operator_name' => (string) ($context['operator_name'] ?? ''),
+                'trace_id' => $traceId,
+            ],
+            'ip_address' => (string) ($context['ip_address'] ?? ''),
+        ]);
+
+        return $updatedInvoice;
     }
 
     /**
@@ -1109,19 +1179,38 @@ class InvoiceService
             new BusinessException('账单未关联订单，暂不支持原路退款')
         );
 
-        app(OrderService::class)->updateManualPaymentStatus($invoice->order, array_merge($payload, [
-            'action' => 'refund',
-        ]), $context);
+        $result = app(PaymentService::class)->refundOrder($invoice->order, $payload, $context);
 
-        return [
-            'already_refunded' => false,
-            'refund' => [
-                'refund_method' => 'original',
-                'refund_method_label' => '原路退款',
-                'refund_amount' => (string) ($payload['amount'] ?? ''),
-                'refund_reason' => (string) ($payload['remark'] ?? '后台发起原路退款'),
-            ],
-        ];
+        if (($result['already_refunded'] ?? false) !== true) {
+            $refund = (array) ($result['refund'] ?? []);
+
+            OperationLog::query()->create([
+                'user_id' => ((int) ($context['operator_id'] ?? 0)) ?: null,
+                'user_type' => 'admin',
+                'action' => 'invoice.payment.refund',
+                'module' => 'invoice',
+                'subject_id' => (int) $invoice->id,
+                'detail' => [
+                    'invoice_no' => (string) $invoice->invoice_no,
+                    'order_id' => (int) ($invoice->order_id ?? 0),
+                    'payment_id' => (int) ($result['payment_id'] ?? 0),
+                    'refund_method' => (string) ($refund['refund_method'] ?? $payload['refund_method'] ?? 'original'),
+                    'refund_method_label' => (string) ($refund['refund_method_label'] ?? ''),
+                    'refund_amount' => (string) ($refund['refund_amount'] ?? $payload['amount'] ?? ''),
+                    'refund_reason' => (string) ($refund['refund_reason'] ?? $payload['remark'] ?? ''),
+                    'out_request_no' => (string) ($refund['out_request_no'] ?? ''),
+                    'trade_no' => (string) ($refund['trade_no'] ?? ''),
+                    'operator_name' => (string) ($context['operator_name'] ?? ''),
+                    'trace_id' => (string) ($context['trace_id'] ?? ''),
+                ],
+                'ip_address' => (string) ($context['ip_address'] ?? ''),
+            ]);
+        }
+
+        return array_merge($result, [
+            'invoice_id' => (int) $invoice->id,
+        ]);
+
     }
 
     private function resolveInvoiceLogs(Invoice $invoice): array

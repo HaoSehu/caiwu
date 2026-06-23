@@ -19,7 +19,7 @@ final class UserBalanceCache
 
     public static function summaryKey(int $userId): string
     {
-        return 'user:'.$userId.':balance_summary';
+        return CacheKey::userBalanceSummary($userId);
     }
 
     public static function forget(int $userId): void

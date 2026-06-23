@@ -67,14 +67,14 @@ class ServiceMigrationService
 
     public function sourceCount(string $table): int
     {
-        $rows = $this->sourceQuery('SELECT COUNT(*) AS cnt FROM `' . $table . '`');
+        $rows = $this->sourceQuery('SELECT COUNT(*) AS cnt FROM `'.$table.'`');
 
         return (int) ($rows[0]->cnt ?? 0);
     }
 
     public function targetCount(string $table): int
     {
-        $rows = $this->targetQuery('SELECT COUNT(*) AS cnt FROM `' . $table . '`');
+        $rows = $this->targetQuery('SELECT COUNT(*) AS cnt FROM `'.$table.'`');
 
         return (int) ($rows[0]->cnt ?? 0);
     }
@@ -203,10 +203,10 @@ class ServiceMigrationService
     }
 
     /**
-     * @param  list<string> $columns
-     * @param  array<int, array<string, mixed>> $rows
-     * @param  list<string> $uniqueBy
-     * @param  list<string> $updateColumns
+     * @param  list<string>  $columns
+     * @param  array<int, array<string, mixed>>  $rows
+     * @param  list<string>  $uniqueBy
+     * @param  list<string>  $updateColumns
      */
     public function batchUpsert(string $table, array $columns, array $rows, array $uniqueBy, array $updateColumns): int
     {
@@ -317,10 +317,10 @@ class ServiceMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $legacyOrder
-     * @param  array<string, mixed>|null $product
-     * @param  array<string, mixed>|null $supplierProduct
-     * @param  array<string, mixed>|null $sourceInvoiceHint
+     * @param  array<string, mixed>  $legacyOrder
+     * @param  array<string, mixed>|null  $product
+     * @param  array<string, mixed>|null  $supplierProduct
+     * @param  array<string, mixed>|null  $sourceInvoiceHint
      * @return array<string, mixed>
      */
     public function buildServiceInstanceFromOrder(
@@ -336,7 +336,7 @@ class ServiceMigrationService
         $name = $this->normalizeServiceName(
             $product['name'] ?? null,
             $legacyOrder['product_spec_snapshot'] ?? null,
-            $legacyServiceId > 0 ? '服务 #' . $legacyServiceId : '重建服务 #' . $orderId
+            $legacyServiceId > 0 ? '服务 #'.$legacyServiceId : '重建服务 #'.$orderId
         );
 
         $billingCycle = $this->normalizeBillingCycle($legacyOrder['billing_cycle'] ?? null);
@@ -350,7 +350,7 @@ class ServiceMigrationService
             'supplier_id' => isset($supplierProduct['supplier_id']) ? (int) $supplierProduct['supplier_id'] : null,
             'supplier_product_id' => isset($supplierProduct['id']) ? (int) $supplierProduct['id'] : null,
             'server_id' => null,
-            'service_no' => $legacyServiceId > 0 ? 'S-' . $legacyServiceId : 'R-' . $orderId,
+            'service_no' => $legacyServiceId > 0 ? 'S-'.$legacyServiceId : 'R-'.$orderId,
             'name' => $name,
             'instance_identifier' => null,
             'billing_cycle' => $billingCycle,
@@ -393,7 +393,7 @@ class ServiceMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $legacyTicket
+     * @param  array<string, mixed>  $legacyTicket
      * @return array<string, mixed>
      */
     public function buildPlaceholderServiceInstanceFromTicket(array $legacyTicket, int $fallbackProductId): array
@@ -408,8 +408,8 @@ class ServiceMigrationService
             'supplier_id' => null,
             'supplier_product_id' => null,
             'server_id' => null,
-            'service_no' => 'P-' . $serviceId,
-            'name' => '占位服务 #' . $serviceId,
+            'service_no' => 'P-'.$serviceId,
+            'name' => '占位服务 #'.$serviceId,
             'instance_identifier' => null,
             'billing_cycle' => 'monthly',
             'renewal_price' => '0.00',
@@ -434,7 +434,7 @@ class ServiceMigrationService
             'suspended_at' => null,
             'terminated_at' => null,
             'trace_id' => null,
-            'remark' => '[D级占位] 从 tickets.service_id=' . $serviceId . ' 创建，需人工补数',
+            'remark' => '[D级占位] 从 tickets.service_id='.$serviceId.' 创建，需人工补数',
             'created_at' => $createdAt,
             'updated_at' => $this->normalizeDateTimeString($legacyTicket['updated_at'] ?? null) ?? $createdAt,
         ];
@@ -532,7 +532,7 @@ class ServiceMigrationService
             }
 
             // 验证 user_id 是否存在于新库 users 表
-            if (!isset($validUserIds[$userId])) {
+            if (! isset($validUserIds[$userId])) {
                 continue;
             }
 
@@ -583,7 +583,7 @@ class ServiceMigrationService
         $fallbackProductId = $this->resolveFallbackProductId($products);
 
         foreach ($this->sourceTicketsWithServiceReference() as $ticket) {
-            $serviceNo = 'P-' . (int) ($ticket['service_id'] ?? 0);
+            $serviceNo = 'P-'.(int) ($ticket['service_id'] ?? 0);
             if (isset($seenServiceNos[$serviceNo]) || $fallbackProductId <= 0) {
                 continue;
             }
@@ -606,7 +606,7 @@ class ServiceMigrationService
         $databaseName = $this->legacyServiceDatabase !== ''
             ? $this->legacyServiceDatabase
             : (string) DB::connection($this->sourceConnection)->getDatabaseName();
-        $tableName = $this->legacyServiceTablePrefix . 'services';
+        $tableName = $this->legacyServiceTablePrefix.'services';
 
         $exists = DB::connection($this->sourceConnection)->select(
             'SELECT 1
@@ -621,7 +621,7 @@ class ServiceMigrationService
         }
 
         return array_map(static fn (object $row) => (array) $row, DB::connection($this->sourceConnection)->select(
-            'SELECT * FROM `' . $databaseName . '`.`' . $tableName . '` ORDER BY `id` ASC'
+            'SELECT * FROM `'.$databaseName.'`.`'.$tableName.'` ORDER BY `id` ASC'
         ));
     }
 
@@ -726,8 +726,8 @@ class ServiceMigrationService
             $payloads[] = [
                 'service_instance_id' => $serviceInstanceId,
                 'snapshot_type' => $snapshotType,
-                'snapshot_key' => $snapshotType . ':' . ((int) ($log['id'] ?? 0)),
-                'snapshot_payload_json' => $this->encodeJson($this->decodeJsonArray($log['meta'] ?? null) ?: new \stdClass()),
+                'snapshot_key' => $snapshotType.':'.((int) ($log['id'] ?? 0)),
+                'snapshot_payload_json' => $this->encodeJson($this->decodeJsonArray($log['meta'] ?? null) ?: new \stdClass),
                 'captured_at' => $capturedAt,
                 'created_at' => $capturedAt,
                 'updated_at' => $capturedAt,
@@ -749,8 +749,8 @@ class ServiceMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $payload
-     * @param  array<string, mixed> $legacyService
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>  $legacyService
      * @return array<string, mixed>
      */
     private function mergeLegacyServiceIntoPayload(array $payload, array $legacyService): array
@@ -874,8 +874,8 @@ class ServiceMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $log
-     * @param  array<int, int> $serviceMap
+     * @param  array<string, mixed>  $log
+     * @param  array<int, int>  $serviceMap
      */
     private function resolveTargetServiceInstanceIdForOperationLog(array $log, array $serviceMap): ?int
     {
@@ -896,8 +896,8 @@ class ServiceMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $log
-     * @param  array<int, int> $serviceMap
+     * @param  array<string, mixed>  $log
+     * @param  array<int, int>  $serviceMap
      */
     private function resolveTargetServiceInstanceIdForAutomationLog(array $log, array $serviceMap): ?int
     {
@@ -918,7 +918,7 @@ class ServiceMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $context
+     * @param  array<string, mixed>  $context
      */
     private function extractLegacyServiceIdFromContext(array $context): ?int
     {
@@ -974,7 +974,7 @@ class ServiceMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $context
+     * @param  array<string, mixed>  $context
      */
     private function resolveOperationResultStatus(array $context): string
     {
@@ -1032,7 +1032,7 @@ class ServiceMigrationService
 
     private function normalizeSnapshotType(mixed $action, mixed $taskKey): string
     {
-        $combined = trim(strtolower((string) ($action ?? ''))) . ' ' . trim(strtolower((string) ($taskKey ?? '')));
+        $combined = trim(strtolower((string) ($action ?? ''))).' '.trim(strtolower((string) ($taskKey ?? '')));
 
         return match (true) {
             str_contains($combined, 'vnc') => 'vnc_info',
@@ -1107,7 +1107,7 @@ class ServiceMigrationService
     }
 
     /**
-     * @param  array<string, mixed> $legacyRow
+     * @param  array<string, mixed>  $legacyRow
      */
     private function buildConfidenceRemark(string $confidence, array $legacyRow, string $source): string
     {
@@ -1115,10 +1115,10 @@ class ServiceMigrationService
         $id = (int) ($legacyRow['id'] ?? 0);
 
         return match ($confidence) {
-            'A' => '[A级重建] 从 ' . $source . '.service_id=' . $serviceId . ' 重建',
-            'B' => '[B级重建] 从 ' . $source . '.service_id=' . $serviceId . ' 重建',
-            'C' => '[C级推导] 从 ' . $source . '.id=' . $id . ' 推导重建，无显式 service_id',
-            default => '[D级占位] 从 ' . $source . '.id=' . $id . ' 创建',
+            'A' => '[A级重建] 从 '.$source.'.service_id='.$serviceId.' 重建',
+            'B' => '[B级重建] 从 '.$source.'.service_id='.$serviceId.' 重建',
+            'C' => '[C级推导] 从 '.$source.'.id='.$id.' 推导重建，无显式 service_id',
+            default => '[D级占位] 从 '.$source.'.id='.$id.' 创建',
         };
     }
 

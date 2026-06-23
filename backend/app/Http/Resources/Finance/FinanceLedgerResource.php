@@ -21,7 +21,6 @@ class FinanceLedgerResource extends JsonResource
         $user = $this->whenLoaded('user');
         $display = $this->displayMeta($normalizedEventType, $amount, $invoice, $payment);
         $businessScene = $this->businessScene($normalizedEventType, $invoice, $payment);
-        $order = $invoice?->order ?? null;
 
         return [
             'ledger_id' => (int) $this->id,
@@ -56,14 +55,6 @@ class FinanceLedgerResource extends JsonResource
                 'status_label' => InvoiceStatus::$labels[(int) $invoice->status] ?? (string) $invoice->status,
                 'amount' => number_format((float) $invoice->amount, 2, '.', ''),
                 'paid_amount' => number_format((float) ($invoice->paid_amount ?? 0), 2, '.', ''),
-            ] : null,
-            'order' => $order ? [
-                'id' => (int) $order->id,
-                'order_no' => (string) $order->order_no,
-                'type' => (string) $order->type,
-                'type_label' => InvoiceType::label((string) $order->type),
-                'billing_cycle' => (string) ($order->billing_cycle ?? ''),
-                'quantity' => (int) ($order->quantity ?? 1),
             ] : null,
             'payment' => $payment ? [
                 'id' => (int) $payment->id,
@@ -128,7 +119,7 @@ class FinanceLedgerResource extends JsonResource
             return true;
         }
 
-        $paymentRaw = is_array($payment?->callback_raw ?? null) ? (array) $payment->callback_raw : [];
+        $paymentRaw = method_exists($payment, 'callbackPayload') ? $payment->callbackPayload() : [];
         $values = [
             $this->operator ?? '',
             $this->trace_id ?? '',

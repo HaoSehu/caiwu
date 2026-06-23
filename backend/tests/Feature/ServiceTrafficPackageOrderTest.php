@@ -7,10 +7,11 @@ namespace Tests\Feature;
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
 use App\Constants\ServiceStatus;
+use App\Models\FirstProductGroup;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Product;
-use App\Models\ProductCategory;
+use App\Models\SecondProductGroup;
 use App\Models\Service;
 use App\Models\Setting;
 use App\Models\Supplier;
@@ -70,19 +71,28 @@ class ServiceTrafficPackageOrderTest extends TestCase
             ]);
             $supplierId = (int) $supplier->id;
 
-            $category = ProductCategory::query()->create([
-                'parent_id' => null,
-                'product_type' => 'vps',
+            // 使用新的分组结构
+            $rootGroup = FirstProductGroup::query()->create([
+                'code' => 'traffic-'.$suffix,
+                'name' => 'Traffic Root '.$suffix,
+                'slug' => 'traffic-root-'.$suffix,
+                'sort_order' => 0,
+                'is_visible' => 1,
+                'is_system' => 0,
+            ]);
+
+            $category = SecondProductGroup::query()->create([
+                'first_product_group_id' => (int) $rootGroup->id,
                 'name' => 'Traffic Category '.$suffix,
                 'slug' => 'traffic-category-'.$suffix,
-                'slogan' => '',
-                'is_visible' => 1,
                 'sort_order' => 0,
+                'is_visible' => 1,
             ]);
             $categoryId = (int) $category->id;
 
             $product = Product::query()->create([
-                'category_id' => (int) $category->id,
+                'first_product_group_id' => (int) $rootGroup->id,
+                'second_product_group_id' => (int) $category->id,
                 'name' => 'Traffic Product '.$suffix,
                 'product_type' => 'vps',
                 'pricing' => ['monthly' => '19.90'],
@@ -124,7 +134,7 @@ class ServiceTrafficPackageOrderTest extends TestCase
             $serviceId = (int) $service->id;
 
             Setting::setValue('traffic_package_catalog', 'items', json_encode([[
-                'category_id' => (int) $product->category_id,
+                'category_id' => (int) $category->id,
                 'product_type' => (string) $product->product_type,
                 'label' => '2T',
                 'target_value' => 2048,
@@ -267,7 +277,10 @@ class ServiceTrafficPackageOrderTest extends TestCase
                 DB::table('suppliers')->where('id', $supplierId)->delete();
             }
             if ($categoryId !== null) {
-                DB::table('product_groups')->where('id', $categoryId)->delete();
+                DB::table('second_product_groups')->where('id', $categoryId)->delete();
+            }
+            if (isset($rootGroup)) {
+                DB::table('first_product_groups')->where('id', (int) $rootGroup->id)->delete();
             }
             Setting::setValue('traffic_package_catalog', 'items', '[]');
             if ($userId !== null) {

@@ -63,14 +63,14 @@ class IdentityMigrationService
 
     public function sourceCount(string $table): int
     {
-        $rows = $this->sourceQuery('SELECT COUNT(*) AS cnt FROM `' . $table . '`');
+        $rows = $this->sourceQuery('SELECT COUNT(*) AS cnt FROM `'.$table.'`');
 
         return (int) ($rows[0]->cnt ?? 0);
     }
 
     public function targetCount(string $table): int
     {
-        $rows = $this->targetQuery('SELECT COUNT(*) AS cnt FROM `' . $table . '`');
+        $rows = $this->targetQuery('SELECT COUNT(*) AS cnt FROM `'.$table.'`');
 
         return (int) ($rows[0]->cnt ?? 0);
     }
@@ -227,8 +227,8 @@ class IdentityMigrationService
     }
 
     /**
-     * @param  list<string> $columns
-     * @param  array<int, array<string, mixed>> $rows
+     * @param  list<string>  $columns
+     * @param  array<int, array<string, mixed>>  $rows
      */
     public function batchInsertIgnore(string $table, array $columns, array $rows): int
     {
@@ -237,7 +237,7 @@ class IdentityMigrationService
         }
 
         $columnList = implode(', ', array_map(static fn (string $column) => "`{$column}`", $columns));
-        $rowPlaceholder = '(' . implode(', ', array_fill(0, count($columns), '?')) . ')';
+        $rowPlaceholder = '('.implode(', ', array_fill(0, count($columns), '?')).')';
         $placeholders = implode(', ', array_fill(0, count($rows), $rowPlaceholder));
 
         $bindings = [];
@@ -254,8 +254,8 @@ class IdentityMigrationService
     }
 
     /**
-     * @param  list<string> $columns
-     * @param  array<int, array<string, mixed>> $rows
+     * @param  list<string>  $columns
+     * @param  array<int, array<string, mixed>>  $rows
      */
     public function batchUpsert(string $table, array $columns, array $rows, array $uniqueBy, array $updateColumns): int
     {

@@ -67,6 +67,10 @@ final class SmsDriverManager
     {
         $key = trim((string) Setting::getValue('notification', 'sms_driver', ''));
 
+        if ($key === '') {
+            $key = trim((string) Setting::getValue('notification', 'sms_provider', ''));
+        }
+
         if ($key !== '') {
             return $key;
         }

@@ -17,6 +17,7 @@ use App\Services\Upstream\Contracts\ProvidesScheduledAuthRefresh;
 use App\Services\Upstream\Contracts\ProvidesStatusSync;
 use App\Services\Upstream\Drivers\HostingPanelApi\Concerns\HandlesApiConfigOptions;
 use App\Services\Upstream\Drivers\HostingPanelApi\Concerns\HandlesCatalogNormalization;
+use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\Support\CloudConfigTemplate;
 use App\Services\Upstream\Support\WebSessionCookieParser;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
@@ -313,6 +314,67 @@ class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsole
         return $this->post($supplier, "/v1/hosts/{$hostId}/actions/upgradeconfig/checkout", [], $resolvedJwt);
     }
 
+    public function getHostUpgradePromoPreview(Supplier $supplier, int $hostId, string $promoCode, ?string $jwt = null): array
+    {
+        $resolvedJwt = $jwt !== null && trim($jwt) !== ''
+            ? trim($jwt)
+            : $this->login($supplier);
+
+        return $this->put($supplier, "/v1/hosts/{$hostId}/actions/upgradeconfig/promo", [
+            'promo_code' => trim($promoCode),
+        ], $resolvedJwt);
+    }
+
+    public function removeHostUpgradePromoCode(Supplier $supplier, int $hostId, ?string $jwt = null): array
+    {
+        $resolvedJwt = $jwt !== null && trim($jwt) !== ''
+            ? trim($jwt)
+            : $this->login($supplier);
+
+        return $this->request($supplier, 'DELETE', "/v1/hosts/{$hostId}/actions/upgradeconfig/promo", [], $resolvedJwt);
+    }
+
+    public function getHostUpgradeOptions(Supplier $supplier, int $hostId, ?string $jwt = null): array
+    {
+        $resolvedJwt = $jwt !== null && trim($jwt) !== ''
+            ? trim($jwt)
+            : $this->login($supplier);
+
+        return $this->get($supplier, "/v1/hosts/{$hostId}/actions/upgrade", $resolvedJwt);
+    }
+
+    public function previewHostUpgrade(Supplier $supplier, int $hostId, int $productId, string $billingCycle, ?string $jwt = null): array
+    {
+        $resolvedJwt = $jwt !== null && trim($jwt) !== ''
+            ? trim($jwt)
+            : $this->login($supplier);
+
+        return $this->post($supplier, "/v1/hosts/{$hostId}/actions/upgrade", [
+            'product_id' => $productId,
+            'billingcycle' => trim($billingCycle),
+        ], $resolvedJwt);
+    }
+
+    public function applyHostUpgradePromoCode(Supplier $supplier, int $hostId, string $promoCode, ?string $jwt = null): array
+    {
+        $resolvedJwt = $jwt !== null && trim($jwt) !== ''
+            ? trim($jwt)
+            : $this->login($supplier);
+
+        return $this->put($supplier, "/v1/hosts/{$hostId}/actions/upgrade/promo", [
+            'promo_code' => trim($promoCode),
+        ], $resolvedJwt);
+    }
+
+    public function checkoutHostUpgrade(Supplier $supplier, int $hostId, ?string $jwt = null): array
+    {
+        $resolvedJwt = $jwt !== null && trim($jwt) !== ''
+            ? trim($jwt)
+            : $this->login($supplier);
+
+        return $this->post($supplier, "/v1/hosts/{$hostId}/actions/upgrade/checkout", [], $resolvedJwt);
+    }
+
     /**
      * 通过上游客户端面板的 servicedetail?action=flowpacket 页面购买流量包。
      * 部分上游仍保留 /dcim/buy_flow_packet 接口，因此页面动作失败时保留旧接口回退。
@@ -497,6 +559,11 @@ class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsole
     public function put(Supplier $supplier, string $uri, array|string $payload = [], ?string $jwt = null, array $headers = [], array $query = []): array
     {
         return $this->request($supplier, 'PUT', $uri, $payload, $jwt, $headers, $query);
+    }
+
+    public function delete(Supplier $supplier, string $uri, array|string $payload = [], ?string $jwt = null, array $headers = [], array $query = []): array
+    {
+        return $this->request($supplier, 'DELETE', $uri, $payload, $jwt, $headers, $query);
     }
 
     public function requestText(
@@ -1251,7 +1318,7 @@ PHP;
 
     private function jwtCacheKey(Supplier $supplier): string
     {
-        $providerKey = trim((string) ($supplier->interface_type ?? '')) ?: \App\Services\Upstream\ProviderKey::HOSTING_PANEL_API;
+        $providerKey = trim((string) ($supplier->interface_type ?? '')) ?: ProviderKey::HOSTING_PANEL_API;
 
         return "upstream:{$providerKey}:jwt:".$supplier->id;
     }

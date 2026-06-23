@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\MemberLevel\DestroyRequest;
 use App\Http\Resources\User\MemberLevelResource;
 use App\Models\MemberLevel;
 use App\Services\Referral\MemberLevelService;
@@ -42,15 +43,6 @@ class MemberLevelController extends Controller
 
     private function validatedPayload(Request $request): array
     {
-        return $request->validate([
-            'name' => ['required', 'string', 'max:50'],
-            'code' => ['nullable', 'string', 'max:30'],
-            'sales_amount_min' => ['required', 'numeric', 'min:0'],
-            'sales_amount_max' => ['nullable', 'numeric', 'min:0'],
-            'reward_rate' => ['required', 'numeric', 'min:0', 'max:100'],
-            'status' => ['nullable', 'integer', 'in:0,1'],
-            'sort_order' => ['nullable', 'integer', 'min:0', 'max:999999'],
-            'remark' => ['nullable', 'string', 'max:255'],
-        ]);
+        // validation handled by DestroyRequest
     }
 }

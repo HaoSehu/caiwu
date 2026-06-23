@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Client;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Client\Verification\InitVerificationRequest;
+use App\Http\Requests\Client\Verification\QrcodeRequest;
+use App\Http\Requests\Client\Verification\StatusRequest;
 use App\Models\Setting;
 use App\Services\Auth\VerificationService;
 use Illuminate\Http\Request;
@@ -38,9 +40,9 @@ class VerificationController extends Controller
     /**
      * 生成认证链接
      */
-    public function qrcode(Request $request)
+    public function qrcode(QrcodeRequest $request)
     {
-        $request->validate(['certify_id' => 'required|string']);
+        // validation handled by QrcodeRequest
 
         $user = $request->user();
         $certifyId = (string) $request->input('certify_id');
@@ -84,9 +86,9 @@ class VerificationController extends Controller
     /**
      * 查询认证状态
      */
-    public function status(Request $request)
+    public function status(StatusRequest $request)
     {
-        $request->validate(['certify_id' => 'required|string']);
+        // validation handled by StatusRequest
 
         $user = $request->user();
         $certifyId = (string) $request->input('certify_id');

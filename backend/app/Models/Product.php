@@ -15,6 +15,13 @@ class Product extends Model
 {
     use SoftDeletes;
 
+    /**
+     * products 表列清单缓存，按连接名分组，避免重复 getColumnListing 调用。
+     *
+     * @var array<string, list<string>>
+     */
+    protected static array $productColumnsCache = [];
+
     private const BILLING_CYCLE_MONTHS = [
         'monthly' => 1,
         'quarterly' => 3,
@@ -22,10 +29,10 @@ class Product extends Model
         'annually' => 12,
     ];
 
-    private static array $physicalColumnExistsCache = [];
-
     protected $fillable = [
-        'product_group_id', 'category_id', 'name', 'product_type', 'type',
+        'first_product_group_id', 'second_product_group_id', 'third_product_group_id',
+        'service_type_code',
+        'name', 'product_type', 'type',
         'custom_display_name', 'remark',
         'pricing',
         'setup_fee', 'config_options', 'purchase_requires', 'stock', 'status',
@@ -44,8 +51,9 @@ class Product extends Model
             'status' => 'integer',
             'sort_order' => 'integer',
             'auto_setup' => 'integer',
-            'category_id' => 'integer',
-            'product_group_id' => 'integer',
+            'first_product_group_id' => 'integer',
+            'second_product_group_id' => 'integer',
+            'third_product_group_id' => 'integer',
             'supplier_id' => 'integer',
             'supplier_product_id' => 'integer',
         ];
@@ -60,12 +68,13 @@ class Product extends Model
             return $normalized;
         }
 
-        $category = $this->resolveCategoryModel();
-        if ($category) {
-            $typeCode = trim((string) ($category->product_type ?? ''));
-            if ($typeCode !== '') {
-                return $typeCode;
-            }
+        $serviceTypeCode = trim((string) ($this->attributes['service_type_code'] ?? ''));
+        if ($serviceTypeCode !== '') {
+            return $serviceTypeCode;
+        }
+
+        if ($this->relationLoaded('firstProductGroup') && $this->firstProductGroup instanceof FirstProductGroup) {
+            return trim((string) $this->firstProductGroup->code);
         }
 
         return '';
@@ -93,10 +102,6 @@ class Product extends Model
 
     public function getSupplierProductNameAttribute(mixed $value): ?string
     {
-        if (! $this->hasPhysicalColumn('supplier_product_name')) {
-            return null;
-        }
-
         $normalized = trim((string) $value);
 
         return $normalized === '' ? null : $normalized;
@@ -104,10 +109,6 @@ class Product extends Model
 
     public function getRemarkAttribute(mixed $value): ?string
     {
-        if (! $this->hasPhysicalColumn('remark')) {
-            return null;
-        }
-
         $normalized = trim((string) $value);
 
         return $normalized === '' ? null : $normalized;
@@ -115,10 +116,6 @@ class Product extends Model
 
     public function getCustomDisplayNameAttribute(mixed $value): ?string
     {
-        if (! $this->hasPhysicalColumn('custom_display_name')) {
-            return null;
-        }
-
         $normalized = trim((string) $value);
 
         return $normalized === '' ? null : $normalized;
@@ -126,47 +123,23 @@ class Product extends Model
 
     public function setNameAttribute(mixed $value): void
     {
-        if (! $this->hasPhysicalColumn('name')) {
-            unset($this->attributes['name']);
-
-            return;
-        }
-
-        $this->attributes['name'] = trim((string) $value);
+        unset($this->attributes['name']);
     }
 
     public function setSupplierProductNameAttribute(mixed $value): void
     {
-        if (! $this->hasPhysicalColumn('supplier_product_name')) {
-            unset($this->attributes['supplier_product_name']);
-
-            return;
-        }
-
         $normalized = trim((string) $value);
         $this->attributes['supplier_product_name'] = $normalized !== '' ? $normalized : null;
     }
 
     public function setCustomDisplayNameAttribute(mixed $value): void
     {
-        if (! $this->hasPhysicalColumn('custom_display_name')) {
-            unset($this->attributes['custom_display_name']);
-
-            return;
-        }
-
         $normalized = trim((string) $value);
         $this->attributes['custom_display_name'] = $normalized !== '' ? $normalized : null;
     }
 
     public function setRemarkAttribute(mixed $value): void
     {
-        if (! $this->hasPhysicalColumn('remark')) {
-            unset($this->attributes['remark']);
-
-            return;
-        }
-
         $normalized = trim((string) $value);
         $this->attributes['remark'] = $normalized !== '' ? $normalized : null;
     }
@@ -178,11 +151,9 @@ class Product extends Model
             return $customDisplayName;
         }
 
-        if ($this->hasPhysicalColumn('name')) {
-            $normalized = trim((string) $value);
-            if ($normalized !== '') {
-                return $normalized;
-            }
+        $normalized = trim((string) $value);
+        if ($normalized !== '') {
+            return $normalized;
         }
 
         try {
@@ -194,26 +165,19 @@ class Product extends Model
         }
     }
 
-    public function getCategoryIdAttribute(mixed $value): ?int
+    public function firstProductGroup(): BelongsTo
     {
-        if ($value !== null && $value !== '') {
-            return (int) $value;
-        }
-
-        $productGroupId = $this->attributes['product_group_id'] ?? null;
-
-        return $productGroupId === null ? null : (int) $productGroupId;
+        return $this->belongsTo(FirstProductGroup::class, 'first_product_group_id');
     }
 
-    public function setCategoryIdAttribute(mixed $value): void
+    public function secondProductGroup(): BelongsTo
     {
-        $this->attributes['product_group_id'] = $value === null || $value === '' ? null : (int) $value;
-        unset($this->attributes['category_id']);
+        return $this->belongsTo(SecondProductGroup::class, 'second_product_group_id');
     }
 
-    public function categoryMapping(): BelongsTo
+    public function thirdProductGroup(): BelongsTo
     {
-        return $this->belongsTo(ProductCategory::class, 'product_group_id');
+        return $this->belongsTo(ThirdProductGroup::class, 'third_product_group_id');
     }
 
     public function supplier(): BelongsTo
@@ -259,18 +223,6 @@ class Product extends Model
         return round((float) $monthly * $months, 2);
     }
 
-    public function getGroupIdAttribute(): ?int
-    {
-        $category = $this->resolveCategoryModel();
-        if ($category) {
-            return (int) $category->id;
-        }
-
-        return null;
-    }
-
-    public function setGroupIdAttribute($value): void {}
-
     public function getTypeAttribute(): ?string
     {
         $value = $this->getProductTypeAttribute($this->attributes['product_type'] ?? null);
@@ -281,22 +233,6 @@ class Product extends Model
     public function setTypeAttribute(?string $value): void
     {
         $this->attributes['product_type'] = $value;
-    }
-
-    private function resolveCategoryModel(): ?ProductCategory
-    {
-        if (! $this->exists) {
-            return null;
-        }
-
-        if (! $this->relationLoaded('categoryMapping')) {
-            $this->loadMissing('categoryMapping');
-        }
-
-        /** @var ProductCategory|null $category */
-        $category = $this->getRelation('categoryMapping');
-
-        return $category;
     }
 
     private function normalizeLegacyPricing(array $pricing): array
@@ -326,33 +262,33 @@ class Product extends Model
 
     public static function optionalSelectColumns(array $columns): array
     {
-        $model = new self;
-
-        return array_values(array_filter(
-            $columns,
-            static fn (string $column): bool => $model->hasPhysicalColumn($column)
-        ));
-    }
-
-    private function hasPhysicalColumn(string $column): bool
-    {
-        $cacheKey = implode(':', [
-            $this->getConnectionName() ?: $this->getConnection()->getName(),
-            $this->getTable(),
-            $column,
-        ]);
-
-        if (array_key_exists($cacheKey, self::$physicalColumnExistsCache)) {
-            return self::$physicalColumnExistsCache[$cacheKey];
-        }
+        $connectionName = (new static)->getConnectionName() ?: config('database.default', 'default');
 
         try {
-            return self::$physicalColumnExistsCache[$cacheKey] = $this->getConnection()
-                ->getSchemaBuilder()
-                ->hasColumn($this->getTable(), $column);
+            $available = self::cachedProductColumns($connectionName);
+
+            return array_values(array_filter(
+                $columns,
+                static fn (string $column): bool => in_array(strtolower($column), $available, true)
+            ));
         } catch (\Throwable) {
-            return self::$physicalColumnExistsCache[$cacheKey] = false;
+            return [];
         }
+    }
+
+    /**
+     * 按连接缓存 products 表的列清单（小写），避免在单次请求/测试中
+     * 重复触发 getColumnListing（SQLite 下为 pragma_table_xinfo）造成 N+1 表结构查询。
+     */
+    protected static function cachedProductColumns(string $connectionName): array
+    {
+        if (isset(self::$productColumnsCache[$connectionName])) {
+            return self::$productColumnsCache[$connectionName];
+        }
+
+        $columns = array_map('strtolower', DB::connection($connectionName)->getSchemaBuilder()->getColumnListing('products'));
+
+        return self::$productColumnsCache[$connectionName] = $columns;
     }
 
     public static function buildIdcMirrorPayload(self $product, ?string $slug = null): array
@@ -368,8 +304,6 @@ class Product extends Model
             }
         };
 
-        $setIfColumnExists('product_group_id', $product->getRawOriginal('product_group_id'));
-        $setIfColumnExists('category_id', $product->getRawOriginal('product_group_id'));
         $setIfColumnExists('product_type', (string) ($product->product_type ?: 'other'));
         $setIfColumnExists('name', (string) $product->name);
         $setIfColumnExists('custom_display_name', $product->custom_display_name);

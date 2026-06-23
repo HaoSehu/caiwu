@@ -92,11 +92,11 @@ class ReconcileTradeDomainCommand extends Command
         }
 
         foreach ($summary as $table => $counts) {
-            $this->line($table . ': ' . json_encode($counts, JSON_UNESCAPED_UNICODE));
+            $this->line($table.': '.json_encode($counts, JSON_UNESCAPED_UNICODE));
         }
 
         foreach ($orphans as $key => $count) {
-            $this->line($key . ' orphan=' . $count);
+            $this->line($key.' orphan='.$count);
         }
 
         return self::SUCCESS;

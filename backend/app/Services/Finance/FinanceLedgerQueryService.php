@@ -16,6 +16,7 @@ use App\Models\Payment;
 use App\Models\PaymentCallback;
 use App\Models\User;
 use App\Support\ServiceHostname;
+use App\Support\VersionedJson;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -24,6 +25,7 @@ use Illuminate\Support\Facades\Cache;
 class FinanceLedgerQueryService
 {
     private const SUMMARY_CACHE_TTL_SECONDS = 30;
+
     public function paginateForClient(User $user, array $filters, int $perPage): array
     {
         $paginator = $this->buildQuery(array_merge($filters, ['user_id' => (int) $user->id]))->paginate($perPage);
@@ -94,7 +96,8 @@ class FinanceLedgerQueryService
             if ($balance === null && ! empty($filters['user_id'])) {
                 $balance = optional(User::query()->find((int) $filters['user_id']))->balance;
             }
-            $cached['balance'] = number_format((float) ($balance ?? 0), 2, '.', '');
+            $cached['cash_balance'] = number_format((float) ($balance ?? 0), 2, '.', '');
+            unset($cached['balance']);
 
             return $cached;
         }
@@ -171,7 +174,7 @@ class FinanceLedgerQueryService
         }
 
         $result = [
-            'balance' => number_format((float) ($balance ?? 0), 2, '.', ''),
+            'cash_balance' => number_format((float) ($balance ?? 0), 2, '.', ''),
             'total_in' => number_format((float) ($summaryRow?->total_in ?? 0), 2, '.', ''),
             'total_out' => number_format((float) ($summaryRow?->total_out ?? 0), 2, '.', ''),
             'total_count' => (int) ($summaryRow?->total_count ?? 0),
@@ -516,10 +519,6 @@ class FinanceLedgerQueryService
     {
         unset($payload['trace_id']);
 
-        if (isset($payload['payment']) && is_array($payload['payment'])) {
-            unset($payload['payment']['trade_no']);
-        }
-
         return $payload;
     }
 
@@ -531,10 +530,12 @@ class FinanceLedgerQueryService
         $configSnapshot = is_array($invoice?->config_snapshot ?? null)
             ? (array) $invoice->config_snapshot
             : (is_array($order?->config_snapshot ?? null) ? (array) $order->config_snapshot : []);
+        $configSnapshot = VersionedJson::withoutMeta($configSnapshot) ?? [];
 
         $pricingSnapshot = is_array($invoice?->config_pricing_snapshot ?? null)
             ? (array) $invoice->config_pricing_snapshot
             : (is_array($order?->config_pricing_snapshot ?? null) ? (array) $order->config_pricing_snapshot : []);
+        $pricingSnapshot = VersionedJson::withoutMeta($pricingSnapshot) ?? [];
 
         $productDisplayName = trim((string) ($invoice?->display_product_name ?? $order?->display_product_name ?? $invoice?->product_spec_snapshot ?? $order?->product_spec_snapshot ?? ''));
         if ($serviceId <= 0 && $productDisplayName === '' && $configSnapshot === [] && $pricingSnapshot === []) {
@@ -780,7 +781,7 @@ class FinanceLedgerQueryService
         }
 
         if ($payment instanceof Payment) {
-            $paymentTraceId = trim((string) data_get((array) ($payment->callback_raw ?? []), 'trace_id', ''));
+            $paymentTraceId = trim((string) data_get($payment->callbackPayload(), 'trace_id', ''));
             if ($paymentTraceId !== '' && $paymentTraceId !== $traceId) {
                 $links[] = [
                     'label' => '支付回调 Trace ID',

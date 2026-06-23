@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Exceptions\BusinessException;
-use App\Models\Service;
 use App\Services\ClientServiceConsole\ServiceDetailService;
 use App\Services\ClientServiceConsole\ServiceResolverService;
 use App\Services\ClientServiceConsole\ServiceTransformService;
@@ -19,7 +18,7 @@ class ServiceVncTokenSecurityTest extends TestCase
 {
     public function test_public_vnc_token_payload_exchanges_once_without_password(): void
     {
-        Cache::put('vnc_token:test-token', [
+        Cache::store('redis_volatile')->put('vnc_token:test-token', [
             'service_id' => 12,
             'password' => 'secret-password',
             'username' => 'root',
@@ -36,8 +35,8 @@ class ServiceVncTokenSecurityTest extends TestCase
         $this->assertSame(12, $payload['service_id']);
         $this->assertSame('/ws/vnc', $payload['relay_path']);
         $this->assertArrayNotHasKey('password', $payload);
-        $this->assertFalse(Cache::has('vnc_token:test-token'));
-        $this->assertTrue(Cache::has('vnc_token:'.$payload['token']));
+        $this->assertFalse(Cache::store('redis_volatile')->has('vnc_token:test-token'));
+        $this->assertTrue(Cache::store('redis_volatile')->has('vnc_token:'.$payload['token']));
 
         $relayParams = $service->resolveVncToken((string) $payload['token']);
         $this->assertSame('secret-password', $relayParams['password']);
@@ -49,7 +48,7 @@ class ServiceVncTokenSecurityTest extends TestCase
 
     public function test_single_use_vnc_token_is_consumed_when_relay_resolves_it(): void
     {
-        Cache::put('vnc_token:test-token', [
+        Cache::store('redis_volatile')->put('vnc_token:test-token', [
             'service_id' => 12,
             'password' => 'secret-password',
             'username' => 'root',
@@ -62,7 +61,7 @@ class ServiceVncTokenSecurityTest extends TestCase
         $params = $service->resolveVncToken('test-token');
 
         $this->assertSame('secret-password', $params['password']);
-        $this->assertFalse(Cache::has('vnc_token:test-token'));
+        $this->assertFalse(Cache::store('redis_volatile')->has('vnc_token:test-token'));
 
         $this->expectException(BusinessException::class);
         $this->expectExceptionMessage('VNC 链接已过期或无效，请重新获取');
@@ -72,7 +71,7 @@ class ServiceVncTokenSecurityTest extends TestCase
 
     public function test_admin_public_vnc_token_is_consumed_but_relay_token_is_reusable(): void
     {
-        Cache::put('vnc_token:admin-token', [
+        Cache::store('redis_volatile')->put('vnc_token:admin-token', [
             'service_id' => 34,
             'password' => 'admin-secret',
             'username' => 'administrator',
@@ -90,14 +89,14 @@ class ServiceVncTokenSecurityTest extends TestCase
         $this->assertSame(34, $payload['service_id']);
         $this->assertSame('/ws/vnc', $payload['relay_path']);
         $this->assertArrayNotHasKey('password', $payload);
-        $this->assertFalse(Cache::has('vnc_token:admin-token'));
+        $this->assertFalse(Cache::store('redis_volatile')->has('vnc_token:admin-token'));
         $this->assertSame('admin-secret', $firstParams['password']);
         $this->assertSame('admin-secret', $secondParams['password']);
     }
 
     public function test_public_vnc_token_exchange_log_never_contains_raw_token_or_password(): void
     {
-        Cache::put('vnc_token:log-token', [
+        Cache::store('redis_volatile')->put('vnc_token:log-token', [
             'service_id' => 78,
             'password' => 'log-secret-password',
             'single_use' => true,
@@ -123,7 +122,7 @@ class ServiceVncTokenSecurityTest extends TestCase
 
     public function test_admin_vnc_token_can_be_resolved_multiple_times_by_relay(): void
     {
-        Cache::put('vnc_token:admin-relay-token', [
+        Cache::store('redis_volatile')->put('vnc_token:admin-relay-token', [
             'service_id' => 56,
             'password' => 'relay-secret',
             'username' => 'administrator',
@@ -138,7 +137,7 @@ class ServiceVncTokenSecurityTest extends TestCase
 
         $this->assertSame('relay-secret', $firstParams['password']);
         $this->assertSame('relay-secret', $secondParams['password']);
-        $this->assertTrue(Cache::has('vnc_token:admin-relay-token'));
+        $this->assertTrue(Cache::store('redis_volatile')->has('vnc_token:admin-relay-token'));
     }
 
     public function test_service_transform_service_redacts_raw_remote_error_message(): void

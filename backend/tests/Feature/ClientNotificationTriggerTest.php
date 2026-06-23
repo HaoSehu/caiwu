@@ -7,14 +7,14 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Services\Auth\VerificationCodeService;
 use App\Services\System\NotificationService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Laravel\Sanctum\Sanctum;
 use Mockery;
 use Tests\TestCase;
 
 class ClientNotificationTriggerTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseTransactions;
 
     public function test_login_notify_really_sends_notification(): void
     {
@@ -80,9 +80,9 @@ class ClientNotificationTriggerTest extends TestCase
             'REMOTE_ADDR' => '203.0.113.8',
             'HTTP_USER_AGENT' => 'ClientNotificationTriggerTest/1.0',
         ])->postJson('/api/client/login', [
-                'account' => 'location-alert@example.com',
-                'password' => 'secret123',
-            ])->assertOk();
+            'account' => 'location-alert@example.com',
+            'password' => 'secret123',
+        ])->assertOk();
     }
 
     public function test_password_change_alert_really_sends_notification(): void

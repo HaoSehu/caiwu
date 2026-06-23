@@ -176,5 +176,4 @@ class ServiceHostname
 
         return $provisionData;
     }
-
 }
