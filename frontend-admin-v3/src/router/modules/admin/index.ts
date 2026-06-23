@@ -30,11 +30,11 @@ const adminRoutes: RouteRecordRaw[] = [
     children: [
       ...dashboardRoutes,
       ...usersRoutes,
-      ...marketingRoutes,
+      ...financeRoutes,
       ...ticketsRoutes,
       ...productsRoutes,
       ...contentRoutes,
-      ...financeRoutes,
+      ...marketingRoutes,
       ...systemRoutes,
     ],
   },

@@ -1,7 +1,4 @@
-import { shallowRef } from 'vue';
 import type { RouteRecordRaw } from 'vue-router';
-
-import { ChatIcon } from 'tdesign-icons-vue-next';
 
 export const ticketsRoutes: RouteRecordRaw[] = [
   {
@@ -10,10 +7,9 @@ export const ticketsRoutes: RouteRecordRaw[] = [
     component: () => import('@/pages/tickets/index.vue'),
     meta: {
       title: {
-        zh_CN: '工单管理',
+        zh_CN: '工单列表',
         en_US: 'Tickets',
       },
-      icon: shallowRef(ChatIcon),
       permission: 'ticket.list',
     },
   },
@@ -27,6 +23,7 @@ export const ticketsRoutes: RouteRecordRaw[] = [
         en_US: 'Ticket Conversation',
       },
       permission: 'ticket.list',
+      hidden: true,
     },
   },
 ];

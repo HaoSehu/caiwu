@@ -1280,7 +1280,7 @@ async function handleLoginAs() {
       return;
     }
     const target = resolveLoginAsTarget(response.redirect_url, code);
-    window.open(target, '_blank', 'noopener');
+    window.open(target, '_blank', 'noopener,noreferrer');
     MessagePlugin.success('已打开客户端登录页');
   } finally {
     loginAsLoading.value = false;

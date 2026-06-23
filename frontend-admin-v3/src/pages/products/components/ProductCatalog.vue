@@ -1105,18 +1105,48 @@ function buildCategoryTree(list: ProductCategoryRecord[]): CategoryTreeNode[] {
   const nodeMap = new Map<string, CategoryTreeNode>();
   const roots: CategoryTreeNode[] = [];
 
+  // First pass: create all nodes
   list.forEach((item) => {
-    nodeMap.set(categoryIdKey(item), { item, children: [] });
+    const key = categoryIdKey(item);
+    const existingNode = nodeMap.get(key);
+    if (existingNode) {
+      // Merge children from backend response if node already exists
+      const backendChildren = Array.isArray(item.children) ? item.children : [];
+      if (backendChildren.length > 0 && existingNode.children.length === 0) {
+        existingNode.children = backendChildren.map((child) => ({ item: child, children: [] }));
+      }
+    } else {
+      nodeMap.set(key, { item, children: [] });
+    }
   });
 
+  // Second pass: build parent-child relationships using parent_id
+  // We need to find parent by trying different level prefixes since parent_id is just a number
   list.forEach((item) => {
     const node = nodeMap.get(categoryIdKey(item));
     if (!node) return;
 
     const parentId = item.parent_id === undefined || item.parent_id === null || item.parent_id === '' ? '' : String(item.parent_id);
-    const parent = parentId ? nodeMap.get(parentId) : null;
+    if (!parentId) {
+      roots.push(node);
+      return;
+    }
+
+    // Try to find parent by trying level prefixes (parent level = current level - 1)
+    const currentLevel = productGroupLevel(item);
+    const parentLevel = currentLevel - 1;
+    if (parentLevel < 1) {
+      roots.push(node);
+      return;
+    }
+
+    const parentKey = `${parentLevel}:${parentId}`;
+    const parent = nodeMap.get(parentKey);
     if (parent) {
-      parent.children.push(node);
+      // Check if node is already in parent's children
+      if (!parent.children.some((child) => categoryIdKey(child.item) === categoryIdKey(item))) {
+        parent.children.push(node);
+      }
     } else {
       roots.push(node);
     }

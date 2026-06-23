@@ -62,7 +62,7 @@ async function mockDashboard(page: import('@playwright/test').Page) {
 }
 
 async function mockUsers(page: import('@playwright/test').Page) {
-  await page.route('**/api/admin/users**', async (route) => {
+  await page.route(/\/api\/admin\/users(?:\?.*)?$/, async (route) => {
     const request = route.request();
     if (request.method() !== 'GET') {
       await route.fulfill({
@@ -107,7 +107,7 @@ async function mockUsers(page: import('@playwright/test').Page) {
 }
 
 async function mockTickets(page: import('@playwright/test').Page) {
-  await page.route('**/api/admin/tickets**', async (route) => {
+  await page.route(/\/api\/admin\/tickets(?:\?.*)?$/, async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const keyword = url.searchParams.get('keyword') || '';
@@ -326,8 +326,23 @@ async function mockProductsHub(page: import('@playwright/test').Page) {
           message: '商品种类排序已更新',
           data: {
             list: [
-              { value: 'storage_server', label: '存储服务器', usage_count: 0, group_count: 0 },
-              { value: 'cloud_server', label: '云服务器', usage_count: 8, group_count: 2, icon: 'ServerIcon' },
+              {
+                value: 'storage_server',
+                label: '存储服务器',
+                usage_count: 0,
+                group_count: 0,
+                first_product_group_id: 21,
+                first_product_group_name: '存储',
+              },
+              {
+                value: 'cloud_server',
+                label: '云服务器',
+                usage_count: 8,
+                group_count: 2,
+                icon: 'ServerIcon',
+                first_product_group_id: 11,
+                first_product_group_name: '计算',
+              },
             ],
           },
         }),
@@ -345,15 +360,30 @@ async function mockProductsHub(page: import('@playwright/test').Page) {
 
     await route.fulfill({
       contentType: 'application/json',
-      body: JSON.stringify({
-        code: 0,
-        data: {
-          list: [
-            { value: 'cloud_server', label: '云服务器', usage_count: 8, group_count: 2, icon: 'ServerIcon' },
-            { value: 'storage_server', label: '存储服务器', usage_count: 0, group_count: 0 },
-          ],
-        },
-      }),
+        body: JSON.stringify({
+          code: 0,
+          data: {
+            list: [
+              {
+                value: 'cloud_server',
+                label: '云服务器',
+                usage_count: 8,
+                group_count: 2,
+                icon: 'ServerIcon',
+                first_product_group_id: 11,
+                first_product_group_name: '计算',
+              },
+              {
+                value: 'storage_server',
+                label: '存储服务器',
+                usage_count: 0,
+                group_count: 0,
+                first_product_group_id: 21,
+                first_product_group_name: '存储',
+              },
+            ],
+          },
+        }),
     });
   });
 
@@ -368,26 +398,58 @@ async function mockProductsHub(page: import('@playwright/test').Page) {
 
     await route.fulfill({
       contentType: 'application/json',
-      body: JSON.stringify({
-        code: 0,
-        data: {
-          tree: [
-            {
-              id: 11,
-              name: '计算',
-              product_count: 2,
-              children: [
-                { id: 12, name: '通用型', parent_id: 11, product_type: 'cloud_server', product_count: 1 },
-                { id: 13, name: '存储型', parent_id: 11, product_type: 'cloud_server', product_count: 1 },
-              ],
-            },
-          ],
-        },
+        body: JSON.stringify({
+          code: 0,
+          data: {
+            tree: [
+              {
+                id: 11,
+                name: '计算',
+                label: '计算',
+                product_type: 'cloud_server',
+                first_product_group_id: 11,
+                first_product_group_name: '计算',
+                effective_product_group_id: 11,
+                effective_product_group_level: 1,
+                product_count: 2,
+                children: [
+                  {
+                    id: 12,
+                    name: '通用型',
+                    label: '通用型',
+                    parent_id: 11,
+                    product_type: 'cloud_server',
+                    first_product_group_id: 11,
+                    first_product_group_name: '计算',
+                    second_product_group_id: 12,
+                    second_product_group_name: '通用型',
+                    effective_product_group_id: 12,
+                    effective_product_group_level: 2,
+                    product_count: 1,
+                  },
+                  {
+                    id: 13,
+                    name: '存储型',
+                    label: '存储型',
+                    parent_id: 11,
+                    product_type: 'cloud_server',
+                    first_product_group_id: 11,
+                    first_product_group_name: '计算',
+                    second_product_group_id: 13,
+                    second_product_group_name: '存储型',
+                    effective_product_group_id: 13,
+                    effective_product_group_level: 2,
+                    product_count: 1,
+                  },
+                ],
+              },
+            ],
+          },
       }),
     });
   });
 
-  await page.route('**/api/admin/products**', async (route) => {
+  await page.route(/\/api\/admin\/products(?:\?.*)?$/, async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const pathname = url.pathname;
@@ -492,8 +554,13 @@ async function mockProductsHub(page: import('@playwright/test').Page) {
               display_name: keyword ? '筛选云服务器' : '标准云服务器',
               product_type: 'cloud_server',
               product_type_label: '云服务器',
-              category_id: 12,
-              category_name: '通用型',
+              first_product_group_id: 11,
+              first_product_group_name: '计算',
+              second_product_group_id: 12,
+              second_product_group_name: '通用型',
+              effective_product_group_id: 12,
+              effective_product_group_level: 2,
+              effective_product_group_full_name: '计算 / 通用型',
               status: 1,
               pricing: { monthly: 88 },
               provision_hostname: { mode: 'system', value: '', length: 12 },
@@ -518,8 +585,13 @@ async function mockProductsHub(page: import('@playwright/test').Page) {
             id: 101,
             name: '标准云服务器',
             display_name: '标准云服务器',
-            category_id: 12,
             product_type: 'cloud_server',
+            first_product_group_id: 11,
+            first_product_group_name: '计算',
+            second_product_group_id: 12,
+            second_product_group_name: '通用型',
+            effective_product_group_id: 12,
+            effective_product_group_level: 2,
             status: 1,
             pricing: { monthly: 88 },
             supplier_id: 3,
@@ -557,7 +629,7 @@ async function mockProductsHub(page: import('@playwright/test').Page) {
     });
   });
 
-  await page.route('**/api/admin/settings**', async (route) => {
+  await page.route(/\/api\/admin\/settings(?:\?.*)?$/, async (route) => {
     if (route.request().method() !== 'GET') {
       await route.fulfill({
         contentType: 'application/json',
@@ -572,17 +644,41 @@ async function mockProductsHub(page: import('@playwright/test').Page) {
         code: 0,
         data: [
           {
-            key: 'traffic_package_catalog',
+            key: 'items',
             value: JSON.stringify([
               {
-                id: 'traffic-1',
-                group_id: 'traffic-1',
+                traffic_group_id: 'traffic:cloud_server:12:seed',
                 group_name: '基础流量包',
-                category_id: 12,
-                category_label: '通用型',
+                first_product_group_id: 11,
+                second_product_group_id: 12,
+                third_product_group_id: null,
+                effective_product_group_id: 12,
+                product_group_label: '通用型',
+                product_type: 'cloud_server',
+                product_ids: [101],
                 label: '100GB',
                 target_value: 100,
-                price: 19.9,
+                price: '19.90',
+                enabled: 1,
+                sort_order: 1,
+              },
+            ]),
+          },
+          {
+            key: 'groups',
+            value: JSON.stringify([
+              {
+                id: 'traffic:cloud_server:12:seed',
+                name: '基础流量包',
+                product_type: 'cloud_server',
+                product_group_key: '2:12',
+                first_product_group_id: 11,
+                second_product_group_id: 12,
+                third_product_group_id: null,
+                effective_product_group_id: 12,
+                product_group_label: '通用型',
+                product_ids: [101],
+                sort_order: 1,
               },
             ]),
           },
@@ -1504,7 +1600,7 @@ async function mockContent(page: import('@playwright/test').Page) {
 }
 
 async function mockNotifications(page: import('@playwright/test').Page) {
-  await page.route('**/api/admin/settings**', async (route) => {
+  await page.route(/\/api\/admin\/settings(?:\?.*)?$/, async (route) => {
     const request = route.request();
     if (request.method() === 'POST') {
       await route.fulfill({
@@ -1859,7 +1955,7 @@ async function mockUserDetail(page: import('@playwright/test').Page) {
       }),
     });
   });
-  await page.route('**/api/admin/products**', async (route) => {
+  await page.route(/\/api\/admin\/products(?:\?.*)?$/, async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const pathname = url.pathname;
@@ -2180,7 +2276,7 @@ async function mockUserDetail(page: import('@playwright/test').Page) {
 }
 
 async function mockVerifications(page: import('@playwright/test').Page) {
-  await page.route('**/api/admin/verifications**', async (route) => {
+  await page.route(/\/api\/admin\/verifications(?:\/[^/?]+)?(?:\/history|\/summary)?(?:\?.*)?$/, async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const pathname = url.pathname;
@@ -2283,7 +2379,7 @@ async function mockVerifications(page: import('@playwright/test').Page) {
     });
   });
 
-  await page.route('**/api/admin/settings**', async (route) => {
+  await page.route(/\/api\/admin\/settings(?:\?.*)?$/, async (route) => {
     if (route.request().method() === 'POST') {
       await route.fulfill({
         contentType: 'application/json',
@@ -2453,7 +2549,7 @@ async function mockLogs(page: import('@playwright/test').Page) {
 }
 
 function visibleAccount(page: import('@playwright/test').Page, account: string) {
-  return page.locator('span.users-account:visible, button.users-mobile-card__account:visible').filter({ hasText: account });
+  return page.locator('button.users-account:visible, button.users-mobile-card__account:visible').filter({ hasText: account });
 }
 
 function visibleVerificationName(page: import('@playwright/test').Page, name: string) {
@@ -2543,7 +2639,7 @@ async function mockSettingsCenter(page: Page) {
     },
   };
 
-  await page.route('**/api/admin/settings**', async (route) => {
+  await page.route(/\/api\/admin\/settings(?:\?.*)?$/, async (route) => {
     const request = route.request();
     if (request.method() !== 'GET') {
       await route.fulfill({
@@ -2602,7 +2698,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
   test('opens admin login page', async ({ page }) => {
     await page.goto('/admin/login', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/admin\/login/);
-    await expect(page.getByText('欢迎回来')).toBeVisible();
+    await expect(page.getByRole('heading', { name: '管理后台' })).toBeVisible();
     await expect(page.getByRole('button', { name: /登录|sign in/i })).toBeVisible();
   });
 
@@ -2612,7 +2708,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await mockDashboard(page);
 
     await page.goto('/admin/login', { waitUntil: 'domcontentloaded' });
-    await page.getByPlaceholder('请输入用户名').fill('cerbo');
+    await page.getByPlaceholder('请输入管理员账号').fill('cerbo');
     await page.getByPlaceholder('请输入密码').fill('Temp@123456');
     const loginRequest = page.waitForRequest('**/api/admin/login');
     await page.getByRole('button', { name: '登录' }).click();
@@ -2640,7 +2736,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
 
     await page.goto('/admin/dashboard', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/admin\/dashboard/);
-    await expect(page.getByText('运营总览')).toBeVisible();
+    await expect(page.locator('.recent-invoices-card .t-card__title')).toHaveText('最近账单');
     await expect(page.getByText('INV-TEST-001')).toBeVisible();
     await expect(page.getByText('Result')).toHaveCount(0);
     await expect(page.getByText('User Center')).toHaveCount(0);
@@ -2657,23 +2753,23 @@ test.describe('frontend-admin-v3 shell smoke', () => {
 
     await page.goto('/admin/dashboard', { waitUntil: 'domcontentloaded' });
     const sidebar = page.locator('.tdesign-starter-side-nav');
-    const menuText = (text: string) => sidebar.locator('.t-menu__content').filter({ hasText: text }).first();
+    const menuText = (text: string) => sidebar.getByText(text, { exact: true }).first();
 
-    for (const category of ['Workbench', 'Customers', 'Products', 'Growth', 'Finance', 'Content', 'System']) {
+    for (const category of ['工作台', '客户支持', '商品供应', '营销增长', '财务服务', '内容通知', '系统运维']) {
       await expect(menuText(category)).toBeVisible();
     }
 
-    await menuText('Customers').click();
-    await expect(menuText('Users')).toBeVisible();
-    await expect(menuText('Tickets')).toBeVisible();
+    await menuText('客户支持').click();
+    await expect(menuText('用户管理')).toBeVisible();
+    await expect(menuText('工单管理')).toBeVisible();
 
-    await menuText('Finance').click();
-    await expect(menuText('Invoices')).toBeVisible();
-    await expect(menuText('Services')).toBeVisible();
+    await menuText('财务服务').click();
+    await expect(menuText('账单管理')).toBeVisible();
+    await expect(menuText('服务列表')).toBeVisible();
 
-    await menuText('System').click();
-    await expect(menuText('Logs')).toBeVisible();
-    await expect(menuText('Settings')).toBeVisible();
+    await menuText('系统运维').click();
+    await expect(menuText('日志中心')).toBeVisible();
+    await expect(menuText('系统设置')).toBeVisible();
 
     await expect(sidebar.getByText('User Detail', { exact: true })).toHaveCount(0);
     await expect(sidebar.getByText('Orders Redirect', { exact: true })).toHaveCount(0);
@@ -2689,7 +2785,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
 
     await page.goto('/admin/missing-page', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/admin\/missing-page/);
-    await expect(page.getByText('404 Not Found')).toBeVisible();
+    await expect(page.locator('.result-title')).toHaveText('页面不存在');
   });
 
   test('does not expose starter example routes with token', async ({ page }) => {
@@ -2701,12 +2797,12 @@ test.describe('frontend-admin-v3 shell smoke', () => {
 
     await page.goto('/result/success', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/result\/success/);
-    await expect(page.getByText('404 Not Found')).toBeVisible();
+    await expect(page.locator('.result-title')).toHaveText('页面不存在');
     await expect(page.getByText('Success')).toHaveCount(0);
 
     await page.goto('/user/index', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/user\/index/);
-    await expect(page.getByText('404 Not Found')).toBeVisible();
+    await expect(page.locator('.result-title')).toHaveText('页面不存在');
     await expect(page.getByText('User Center')).toHaveCount(0);
   });
 
@@ -2728,19 +2824,20 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(visibleAccount(page, 'filtered@example.com')).toBeVisible();
 
     await page.getByRole('button', { name: '新增用户' }).click();
-    await expect(page.getByText('信用额度')).toBeVisible();
+    await expect(page.locator('.t-dialog:visible').getByText('新增用户')).toBeVisible();
+    await expect(page.locator('.t-dialog:visible').getByText('邮箱')).toBeVisible();
   });
 
   test('opens user recharge dialog', async ({ page }) => {
     await mockAdminInfo(page);
-    await mockUsers(page);
+    await mockUserDetail(page);
     await page.addInitScript(() => {
       window.localStorage.setItem('admin_token', 'test-token');
       window.localStorage.setItem('admin_last_active_at', String(Date.now()));
     });
 
-    await page.goto('/admin/users', { waitUntil: 'domcontentloaded' });
-    await expect(visibleAccount(page, '2908990438@qq.com')).toBeVisible();
+    await page.goto('/admin/users/1', { waitUntil: 'domcontentloaded' });
+    await expect(page).toHaveURL(/\/admin\/users\/1/);
     await page.getByRole('button', { name: '资金管理' }).first().click();
     await expect(page.getByText('操作类型')).toBeVisible();
   });
@@ -2755,7 +2852,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
 
     await page.goto('/admin/tickets', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/admin\/tickets/);
-    await expect(page.getByRole('heading', { name: '工单处理' })).toBeVisible();
+    await expect(page.locator('.ticket-card h2').filter({ hasText: '网络无法连接' })).toBeVisible();
     await expect(page.getByText('网络无法连接')).toBeVisible();
     await expect(page.getByText('客户回复')).toBeVisible();
 
@@ -2841,7 +2938,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
 
     await page.goto('/admin/products', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/admin\/products/);
-    await expect(page.getByRole('heading', { name: '商品目录' })).toBeVisible();
+    await expect(page.getByText('商品分类').first()).toBeVisible();
     await expect(page.getByText('标准云服务器')).toBeVisible();
     await expect(page.getByText('云服务器').first()).toBeVisible();
 
@@ -2854,13 +2951,15 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await page.getByRole('button', { name: '批量归类' }).click();
     const batchCategoryDialog = page.locator('.t-dialog:visible');
     await expect(batchCategoryDialog.getByText('批量归类')).toBeVisible();
-    await batchCategoryDialog.locator('.t-select').click();
-    await page.getByText('存储型').last().click();
+    await batchCategoryDialog.locator('.t-form__item').filter({ hasText: '目标分类' }).locator('.t-select').click();
+    await page.locator('.t-popup:visible .t-select-option').filter({ hasText: '存储型' }).last().click();
     const batchCategoryRequest = page.waitForRequest('**/api/admin/products/category/batch');
     await batchCategoryDialog.getByRole('button', { name: '确认归类' }).click();
     await expect((await batchCategoryRequest).postDataJSON()).toMatchObject({
       product_ids: [101],
-      target_category_id: 13,
+      target_first_product_group_id: 11,
+      target_second_product_group_id: 13,
+      target_third_product_group_id: null,
     });
 
     await page.locator('.product-table-card .t-table__body .t-checkbox').first().click();
@@ -2887,23 +2986,23 @@ test.describe('frontend-admin-v3 shell smoke', () => {
       provision_hostname: { mode: 'prefix', value: 'hk', length: 12 },
     });
 
-    await page.getByRole('button', { name: '管理种类' }).click();
+    await page.getByRole('button', { name: '管理一级分类' }).click();
     const typeDialog = page.locator('.t-dialog:visible');
-    await expect(typeDialog.getByText('管理种类')).toBeVisible();
-    await typeDialog.locator('.type-form .t-form__item').filter({ hasText: '种类名称' }).locator('input').fill('存储服务器');
+    await expect(typeDialog.getByText('管理一级分类')).toBeVisible();
+    await typeDialog.locator('.type-form .t-form__item').filter({ hasText: '一级分类名称' }).locator('input').fill('存储服务器');
     await typeDialog.locator('.type-form .t-form__item').filter({ hasText: '图标名称' }).locator('input').fill('ServerIcon');
     const createTypeRequest = page.waitForRequest(
       (request) => request.url().includes('/api/admin/product-types') && request.method() === 'POST',
     );
-    await typeDialog.getByRole('button', { name: '新增种类' }).click();
+    await typeDialog.getByRole('button', { name: '新增一级分类' }).click();
     await expect((await createTypeRequest).postDataJSON()).toMatchObject({ label: '存储服务器', icon: 'ServerIcon' });
 
     await typeDialog.locator('.type-manager-item').filter({ hasText: '云服务器' }).getByRole('button', { name: '编辑' }).click();
-    await typeDialog.locator('.type-form .t-form__item').filter({ hasText: '种类名称' }).locator('input').fill('云服务器编辑');
+    await typeDialog.locator('.type-form .t-form__item').filter({ hasText: '一级分类名称' }).locator('input').fill('云服务器编辑');
     const updateTypeRequest = page.waitForRequest(
       (request) => request.url().includes('/api/admin/product-types/cloud_server') && request.method() === 'PUT',
     );
-    await typeDialog.getByRole('button', { name: '保存种类' }).click();
+    await typeDialog.getByRole('button', { name: '保存一级分类' }).click();
     await expect((await updateTypeRequest).postDataJSON()).toMatchObject({ label: '云服务器编辑' });
 
     const reorderTypeRequest = page.waitForRequest('**/api/admin/product-types/reorder');
@@ -2916,74 +3015,90 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await typeDialog.locator('.type-manager-item').filter({ hasText: '存储服务器' }).getByRole('button', { name: '删除' }).click();
     await page.locator('.t-dialog:visible').getByRole('button', { name: '确认删除' }).click();
     await deleteTypeRequest;
-    await page.keyboard.press('Escape');
+    await typeDialog.getByRole('button', { name: '关闭' }).click();
 
     const reorderCategoryRequest = page.waitForRequest('**/api/admin/product-categories/reorder');
-    await page.locator('.category-list article').filter({ hasText: '存储型' }).getByRole('button', { name: '上移' }).click();
+    await page.locator('.category-tree-row').filter({ hasText: '存储型' }).locator('.category-menu-trigger').click();
+    await page.locator('.t-popup:visible .t-dropdown__item').filter({ hasText: '上移' }).click();
     await expect((await reorderCategoryRequest).postDataJSON()).toMatchObject({
-      category_id: 13,
-      reference_category_id: 12,
-      target_parent_id: 11,
-      target_product_type: 'cloud_server',
-      position: 'before',
+      effective_product_group_level: 2,
+      first_product_group_id: 11,
+      second_product_group_ids: [13, 12],
     });
 
-    const categoryCreateDialog = page.locator('.t-dialog:visible');
     await page.getByRole('button', { name: '新增分类' }).click();
+    const categoryCreateDialog = page.locator('.t-dialog:visible');
     await expect(categoryCreateDialog.getByText('分类名称')).toBeVisible();
     await categoryCreateDialog.locator('.t-form__item').filter({ hasText: '分类名称' }).locator('input').fill('存储型');
+    await categoryCreateDialog.locator('.t-form__item').filter({ hasText: '二级分类父级' }).locator('.t-select').click();
+    await page.locator('.t-popup:visible .t-select-option').filter({ hasText: '云服务器' }).last().click();
     const createCategoryRequest = page.waitForRequest(
       (request) => request.url().includes('/api/admin/product-categories') && request.method() === 'POST',
     );
     await categoryCreateDialog.getByRole('button', { name: '保存' }).click();
-    await expect((await createCategoryRequest).postDataJSON()).toMatchObject({ name: '存储型' });
+    await expect((await createCategoryRequest).postDataJSON()).toMatchObject({
+      name: '存储型',
+      service_type_code: 'cloud_server',
+      effective_product_group_level: 2,
+      first_product_group_id: 11,
+    });
 
-    await page.locator('.category-list').getByRole('button', { name: '编辑' }).first().click();
-    await expect(categoryCreateDialog.getByText('分类名称')).toBeVisible();
-    await categoryCreateDialog.locator('.t-form__item').filter({ hasText: '分类名称' }).locator('input').fill('通用型编辑');
+    await page.locator('.category-tree-row').filter({ hasText: '通用型' }).locator('.category-menu-trigger').click();
+    await page.locator('.t-popup:visible .t-dropdown__item').filter({ hasText: '编辑' }).click();
+    const categoryEditDialog = page.locator('.t-dialog:visible');
+    await expect(categoryEditDialog.getByText('分类名称')).toBeVisible();
+    await categoryEditDialog.locator('.t-form__item').filter({ hasText: '分类名称' }).locator('input').fill('通用型编辑');
     const updateCategoryRequest = page.waitForRequest(
       (request) => request.url().includes('/api/admin/product-categories/') && request.method() === 'PUT',
     );
-    await categoryCreateDialog.getByRole('button', { name: '保存' }).click();
-    await expect((await updateCategoryRequest).postDataJSON()).toMatchObject({ name: '通用型编辑' });
+    await categoryEditDialog.getByRole('button', { name: '保存' }).click();
+    await expect((await updateCategoryRequest).postDataJSON()).toMatchObject({
+      name: '通用型编辑',
+      service_type_code: 'cloud_server',
+      effective_product_group_level: 2,
+    });
 
     const deleteCategoryRequest = page.waitForRequest(
       (request) => request.url().includes('/api/admin/product-categories/') && request.method() === 'DELETE',
     );
-    await page.locator('.category-list').getByRole('button', { name: '删除' }).first().click();
+    await page.locator('.category-tree-row').filter({ hasText: '存储型' }).locator('.category-menu-trigger').click();
+    await page.locator('.t-popup:visible .t-dropdown__item').filter({ hasText: '删除' }).click();
     await page.locator('.t-dialog:visible').getByRole('button', { name: '确认删除' }).click();
     await deleteCategoryRequest;
 
     await page.getByRole('button', { name: '新增商品' }).click();
-    await expect(page.locator('.t-dialog:visible').getByText('商品名称')).toBeVisible();
-    await page.locator('.t-dialog:visible').getByRole('button', { name: /Cancel|取消/ }).click();
+    const newProductDrawer = page.locator('.t-drawer:visible');
+    await expect(newProductDrawer.getByText('商品名称')).toBeVisible();
+    await newProductDrawer.getByRole('button', { name: '取消' }).click();
 
     const productDetailRequest = page.waitForRequest(
       (request) => request.url().includes('/api/admin/products/101') && request.method() === 'GET',
     );
     await page.locator('.product-table-card').getByRole('button', { name: '编辑' }).first().click();
     await productDetailRequest;
-    const productDialog = page.locator('.t-dialog:visible');
-    await expect(productDialog.getByText('商品配置项')).toBeVisible();
-    await expect(productDialog.getByText('CPU', { exact: true })).toBeVisible();
+    const productDrawer = page.locator('.t-drawer:visible');
+    await expect(productDrawer.getByRole('button', { name: '产品配置' })).toBeVisible();
+    await productDrawer.getByRole('button', { name: '产品配置' }).click();
+    await expect(productDrawer.locator('.config-option-list').getByText('CPU', { exact: true })).toBeVisible();
     const templateRequest = page.waitForRequest(
       (request) => request.url().includes('/api/admin/suppliers/3/products/300/config-template') && request.method() === 'GET',
     );
-    await productDialog.getByRole('button', { name: '拉取模板' }).click();
+    await productDrawer.getByRole('button', { name: '拉取模板' }).click();
     await templateRequest;
-    await expect(productDialog.getByText('内存', { exact: true })).toBeVisible();
+    await expect(productDrawer.locator('.config-option-list').getByText('内存', { exact: true })).toBeVisible();
 
-    await productDialog.getByRole('button', { name: '新增配置' }).click();
+    await productDrawer.getByRole('button', { name: '新增配置' }).click();
     const configDialog = page.locator('.t-dialog:visible').filter({ hasText: '新增配置项' });
-    await configDialog.locator('.t-form__item').filter({ hasText: '配置名称' }).locator('input').fill('带宽');
-    await configDialog.locator('.t-form__item').filter({ hasText: '字段名' }).locator('input').fill('bandwidth');
-    await configDialog.locator('.t-form__item').filter({ hasText: '子项' }).locator('textarea').fill('10|10Mbps');
+    await configDialog.locator('.t-form__item').filter({ hasText: '配置项名称' }).locator('input').fill('带宽');
+    await configDialog.locator('.t-form__item').filter({ hasText: '配置标识' }).locator('input').fill('bandwidth');
+    await configDialog.locator('.config-subitem-grid').nth(1).locator('input').nth(0).fill('10Mbps');
+    await configDialog.locator('.config-subitem-grid').nth(1).locator('input').nth(1).fill('10');
     await configDialog.getByRole('button', { name: '保存配置' }).click();
-    await expect(productDialog.getByText('带宽', { exact: true })).toBeVisible();
+    await expect(productDrawer.locator('.config-option-list').getByText('带宽', { exact: true })).toBeVisible();
     const updateProductRequest = page.waitForRequest(
       (request) => request.url().includes('/api/admin/products/101') && request.method() === 'PUT',
     );
-    await productDialog.getByRole('button', { name: '保存', exact: true }).click();
+    await productDrawer.getByRole('button', { name: '保存更改' }).click();
     const updateProductPayload = (await updateProductRequest).postDataJSON();
     expect(updateProductPayload.config_options).toEqual(
       expect.arrayContaining([expect.objectContaining({ field: 'bandwidth', name: '带宽' })]),
@@ -3020,10 +3135,12 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     const trafficGroupDialog = page.locator('.t-dialog:visible').filter({ hasText: '新增流量包分组' });
     await expect(trafficGroupDialog.getByText('绑定配置', { exact: true })).toBeVisible();
     await trafficGroupDialog.locator('.t-form__item').filter({ hasText: '分组名称' }).locator('input').fill('高防流量包');
+    await trafficGroupDialog.locator('.t-form__item').filter({ hasText: '商品种类' }).locator('.t-select').click();
+    await page.locator('.t-popup:visible .t-select-option').filter({ hasText: '云服务器' }).last().click();
     await trafficGroupDialog.locator('.t-form__item').filter({ hasText: '关联分类' }).locator('.t-select').click();
-    await page.getByText('通用型').last().click();
+    await page.locator('.t-popup:visible .t-select-option').filter({ hasText: '通用型' }).last().click();
     await trafficGroupDialog.locator('.t-form__item').filter({ hasText: '绑定配置' }).locator('.t-select').click();
-    await page.getByText('标准云服务器').last().click();
+    await page.locator('.t-popup:visible .t-select-option').filter({ hasText: '标准云服务器' }).last().click();
     await trafficGroupDialog.getByText('分组名称', { exact: true }).click();
     const createTrafficGroupRequest = page.waitForRequest(
       (request) => request.url().includes('/api/admin/settings') && request.method() === 'POST',
@@ -3639,8 +3756,8 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     });
 
     await page.goto('/admin/settings/basic', { waitUntil: 'domcontentloaded' });
-    await expect(page).toHaveURL(/\/admin\/settings\?tab=system|\/admin\/settings$/);
-    await expect(page.getByRole('heading', { name: '系统设置' })).toBeVisible();
+    await expect(page).toHaveURL(/\/admin\/settings(?:\/basic)?(?:\?tab=system)?$/);
+    await expect(page.locator('.page-tabs-toolbar').getByText('系统设置')).toBeVisible();
     await expect(page.locator('.t-card__title').filter({ hasText: 'GeeTest 行为验证' })).toBeVisible();
     await expect(page.locator('.t-radio-button__label').filter({ hasText: '邮件短信限流' })).toBeVisible();
 
@@ -4300,7 +4417,8 @@ test.describe('frontend-admin-v3 shell smoke', () => {
       window.localStorage.setItem('admin_last_active_at', String(Date.now()));
     });
 
-    await page.goto('/admin/users?tab=verification', { waitUntil: 'domcontentloaded' });
+    await page.goto('/admin/users/verification', { waitUntil: 'domcontentloaded' });
+    await expect(page).toHaveURL(/\/admin\/users\/verification/);
     await expect(page.getByText('实名列表')).toBeVisible();
     await expect(visibleVerificationName(page, '张三')).toBeVisible();
 
@@ -4317,7 +4435,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(page.getByText('历史记录(测试用户)')).toBeVisible();
   });
 
-  test('redirects verification compatibility route', async ({ page }) => {
+  test('opens verification route directly', async ({ page }) => {
     await mockAdminInfo(page);
     await mockVerifications(page);
     await page.addInitScript(() => {
@@ -4326,7 +4444,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     });
 
     await page.goto('/admin/users/verification', { waitUntil: 'domcontentloaded' });
-    await expect(page).toHaveURL(/\/admin\/users\?tab=verification/);
+    await expect(page).toHaveURL(/\/admin\/users\/verification/);
     await expect(page.getByText('实名列表')).toBeVisible();
     await expect(visibleVerificationName(page, '张三')).toBeVisible();
   });
@@ -4339,14 +4457,14 @@ test.describe('frontend-admin-v3 shell smoke', () => {
       window.localStorage.setItem('admin_last_active_at', String(Date.now()));
     });
 
-    await page.goto('/admin/users?tab=verification', { waitUntil: 'domcontentloaded' });
+    await page.goto('/admin/users/verification', { waitUntil: 'domcontentloaded' });
 
-    await page.locator('.verification-panel').getByText('实名管理').click();
+    await page.locator('.verification-panel .t-tabs__nav-item').filter({ hasText: '实名管理' }).click();
     await expect(page.getByText('免费认证次数')).toBeVisible();
     await page.getByRole('button', { name: '保存费用设置' }).click();
     await expect(page.getByText('费用设置已保存')).toBeVisible();
 
-    await page.locator('.verification-panel').getByText('实名接口').click();
+    await page.locator('.verification-panel .t-tabs__nav-item').filter({ hasText: '实名接口' }).click();
     await expect(page.getByText('API ID')).toBeVisible();
     await page.getByRole('button', { name: '保存配置' }).click();
     await expect(page.getByText('保存成功')).toBeVisible();

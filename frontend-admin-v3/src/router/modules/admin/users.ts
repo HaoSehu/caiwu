@@ -1,7 +1,4 @@
-import { shallowRef } from 'vue';
 import type { RouteRecordRaw } from 'vue-router';
-
-import { UserIcon } from 'tdesign-icons-vue-next';
 
 export const usersRoutes: RouteRecordRaw[] = [
   {
@@ -10,10 +7,9 @@ export const usersRoutes: RouteRecordRaw[] = [
     component: () => import('@/pages/users/index.vue'),
     meta: {
       title: {
-        zh_CN: '用户管理',
-        en_US: 'Users',
+        zh_CN: '用户列表',
+        en_US: 'User List',
       },
-      icon: shallowRef(UserIcon),
       permission: 'user.list',
       keepAlive: false,
     },
@@ -40,6 +36,7 @@ export const usersRoutes: RouteRecordRaw[] = [
         en_US: 'User Detail',
       },
       permission: 'user.detail',
+      hidden: true,
     },
   },
 ];

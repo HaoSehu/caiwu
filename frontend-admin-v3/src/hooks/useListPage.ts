@@ -1,19 +1,32 @@
 import { onMounted, reactive, ref } from 'vue';
 import type { Ref } from 'vue';
 
+export interface ListPageResponse<T> {
+  list?: T[];
+  total?: number;
+  /** 后端回传的当前页码（可选，用于同步分页器） */
+  page?: number;
+  /** 后端回传的每页条数（可选，用于同步分页器） */
+  page_size?: number;
+  /** 兼容 Laravel 分页的 per_page 字段 */
+  per_page?: number;
+}
+
 export interface UseListPageOptions<F, T> {
-  /** 列表请求函数，接收 { ...filters, page, page_size }，返回 { list, total } */
-  fetch: (params: F & { page: number; page_size: number }) => Promise<{ list: T[]; total: number }>;
+  /** 列表请求函数，接收 { ...filters, page, page_size }，返回列表分页响应 */
+  fetch: (params: F & { page: number; page_size: number }) => Promise<ListPageResponse<T>>;
   /** 默认筛选值 */
   defaultFilters: F;
   /** 默认每页条数 */
   defaultPageSize?: number;
   /** 是否 onMounted 自动加载 */
   immediate?: boolean;
+  /** 自定义错误处理，默认吞掉错误 */
+  onError?: (error: unknown) => void;
 }
 
 export function useListPage<F extends Record<string, any>, T>(options: UseListPageOptions<F, T>) {
-  const { fetch, defaultFilters, defaultPageSize = 20, immediate = true } = options;
+  const { fetch, defaultFilters, defaultPageSize = 20, immediate = true, onError } = options;
 
   const filters = reactive({ ...defaultFilters }) as F;
   const list: Ref<T[]> = ref([]);
@@ -34,7 +47,12 @@ export function useListPage<F extends Record<string, any>, T>(options: UseListPa
         page_size: pagination.page_size,
       });
       list.value = res.list || [];
-      total.value = res.total || 0;
+      total.value = Number(res.total || 0);
+      if (res.page) pagination.page = Number(res.page);
+      if (res.page_size) pagination.page_size = Number(res.page_size);
+      else if (res.per_page) pagination.page_size = Number(res.per_page);
+    } catch (error) {
+      if (onError) onError(error);
     } finally {
       loading.value = false;
     }
@@ -62,6 +80,13 @@ export function useListPage<F extends Record<string, any>, T>(options: UseListPa
     return loadList();
   }
 
+  /** 兼容 t-pagination 的 change 事件回调，入参为 { current, pageSize } */
+  function handlePaginationChange(data: { current: number; pageSize: number }) {
+    pagination.page = data.current;
+    pagination.page_size = data.pageSize;
+    return loadList();
+  }
+
   if (immediate) onMounted(loadList);
 
   return {
@@ -75,5 +100,6 @@ export function useListPage<F extends Record<string, any>, T>(options: UseListPa
     resetFilters,
     handlePageChange,
     handlePageSizeChange,
+    handlePaginationChange,
   };
 }

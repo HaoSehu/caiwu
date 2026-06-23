@@ -68,12 +68,20 @@ function resolveManualChunk(id: string) {
     return 'vendor-vue';
   }
 
-  if (normalized.includes('/tdesign-vue-next/') || normalized.includes('/tdesign-icons-vue-next/')) {
+  if (normalized.includes('/tdesign-icons-vue-next/')) {
+    return 'vendor-tdesign-icons';
+  }
+
+  if (normalized.includes('/tdesign-vue-next/')) {
     return 'vendor-tdesign';
   }
 
+  if (normalized.includes('/echarts/charts/') || normalized.includes('/echarts/components/') || normalized.includes('/echarts/renderers/')) {
+    return 'vendor-echarts-modules';
+  }
+
   if (normalized.includes('/echarts/') || normalized.includes('/zrender/')) {
-    return 'vendor-echarts';
+    return 'vendor-echarts-core';
   }
 
   if (normalized.includes('/vue-i18n/')) {
@@ -231,12 +239,14 @@ export default ({ mode }: ConfigEnv): UserConfig => {
     ],
 
     server: {
+      headers: {
+        'X-Content-Type-Options': 'nosniff',
+      },
       fs: {
         allow: [path.resolve(__dirname, '..')],
       },
       port: 5174,
       host: '127.0.0.1',
-      allowedHosts: true,
       proxy: {
         '/api': {
           target: backendProxyTarget,
@@ -262,7 +272,7 @@ export default ({ mode }: ConfigEnv): UserConfig => {
       cssMinify: 'esbuild',
       cssCodeSplit: true,
       reportCompressedSize: false,
-      chunkSizeWarningLimit: 1200,
+      chunkSizeWarningLimit: 1500,
       assetsInlineLimit: 4096,
       rollupOptions: {
         output: {
