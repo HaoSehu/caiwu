@@ -1,63 +1,39 @@
 import { computed, onMounted, reactive, ref, shallowRef } from 'vue';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { useRouter } from 'vue-router';
+import {
+  ACCOUNT_TRANSACTION_EVENT_MAP,
+  PAYMENT_STATUS_MAP,
+  getStatusLabel,
+  toSelectOptions,
+} from '@shared/statusConfig';
 
 import clientApi from '@/api/client';
+import { formatMoney } from '@/utils/format';
+import type { PaymentRecord } from '@/types/client';
 
-type AnyRecord = Record<string, any>;
-type Fetcher = (params?: Record<string, unknown>) => Promise<unknown>;
-type DetailFetcher = (row: AnyRecord) => Promise<unknown>;
+type AnyRecord = Record<string, unknown>;
+type RecordListItem = PaymentRecord;
+type Fetcher = (params?: Record<string, unknown>) => Promise<{ data: { list: RecordListItem[]; total: number } }>;
+type DetailFetcher = (row: RecordListItem) => Promise<{ data: RecordListItem }>;
 
-export const ORDER_STATUS_OPTIONS = [
-  { label: '待付款', value: 0 },
-  { label: '已付款', value: 1 },
-  { label: '开通中', value: 2 },
-  { label: '已完成', value: 3 },
-  { label: '已取消', value: 4 },
-  { label: '已退款', value: 5 },
-];
-
-export const ORDER_TYPE_OPTIONS = [
-  { label: '新购', value: 'new' },
-  { label: '续费', value: 'renew' },
-];
-
-export const PAYMENT_STATUS_OPTIONS = [
-  { label: '待支付', value: 0 },
-  { label: '成功', value: 1 },
-  { label: '失败', value: 2 },
-  { label: '已退款', value: 3 },
-];
+export const PAYMENT_STATUS_OPTIONS = toSelectOptions(PAYMENT_STATUS_MAP, false);
 
 export const PAYMENT_GATEWAY_OPTIONS = [
   { label: '支付宝', value: 'alipay' },
   { label: '微信支付', value: 'wechat' },
 ];
 
-export const BALANCE_EVENT_OPTIONS = [
-  { label: '充值', value: 'recharge' },
-  { label: '消费', value: 'consume' },
-  { label: '退款', value: 'refund' },
-  { label: '调整', value: 'adjust' },
-];
+export const BALANCE_EVENT_OPTIONS = toSelectOptions(ACCOUNT_TRANSACTION_EVENT_MAP, false);
 
-export function formatMoney(value: unknown) {
-  const amount = Number(value || 0);
-  return Number.isFinite(amount) ? amount.toFixed(2) : '0.00';
-}
+export { formatMoney };
 
 export function fieldValue(value: unknown) {
   if (value === null || value === undefined || value === '') return '--';
   return String(value);
 }
 
-export function formatDateTime(value: unknown) {
-  if (!value) return '--';
-  const date = new Date(String(value).replace(/-/g, '/'));
-  if (Number.isNaN(date.getTime())) return String(value);
-  const pad = (num: number) => String(num).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
+export { formatDateTime } from '@/utils/format';
 
 const BILLING_CYCLE_LABEL_MAP: Record<string, string> = {
   monthly: '月付',
@@ -73,6 +49,15 @@ const BILLING_CYCLE_LABEL_MAP: Record<string, string> = {
 };
 
 const BILLING_CYCLE_KEYS = new Set(['billing_cycle', 'billingcycle', 'billingcycle_zh', 'period']);
+const SNAPSHOT_DISPLAY_META_KEYS = new Set([
+  'product_full_path',
+  'product_path',
+  'product_display_path',
+  'product_path_segments',
+  'first_product_group_name',
+  'second_product_group_name',
+  'third_product_group_name',
+]);
 
 export function formatBillingCycle(value: unknown) {
   const raw = String(value ?? '').trim();
@@ -82,6 +67,10 @@ export function formatBillingCycle(value: unknown) {
 
 export function toRecord(value: unknown): AnyRecord {
   return value && typeof value === 'object' ? (value as AnyRecord) : {};
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
 }
 
 const SNAPSHOT_LABEL_MAP: Record<string, string> = {
@@ -123,6 +112,7 @@ const SNAPSHOT_LABEL_MAP: Record<string, string> = {
   billingcycle_zh: '周期',
   period: '周期',
   remark: '备注',
+  data_disk_size: '数据盘',
 };
 
 export function snapshotLabel(value: unknown) {
@@ -136,7 +126,8 @@ export function flattenSnapshot(obj: unknown, valueLabelMap: Record<string, stri
   const result: { label: string; value: string }[] = [];
 
   for (const [key, val] of Object.entries(source)) {
-    if (['unit_setup_fee', 'unit_base_amount', 'unit_total_amount', 'unit_config_amount'].includes(key)) continue;
+    if (SNAPSHOT_DISPLAY_META_KEYS.has(key)) continue;
+    if (['unit_setup_fee', 'unit_base_amount', 'unit_total_amount', 'unit_config_amount', '_schema_version', '_schema_type'].includes(key)) continue;
     if (val === null || val === undefined || val === '') continue;
     if (key === 'items' && Array.isArray(val)) {
       val.forEach((item, index) => {
@@ -226,12 +217,12 @@ export function resolveOrderTagTheme(status: unknown) {
   return 'danger';
 }
 
-export function resolvePaymentTagTheme(status: unknown) {
-  const value = Number(status);
-  if (value === 1) return 'success';
-  if (value === 0) return 'warning';
-  if (value === 3) return 'default';
-  return 'danger';
+export function resolvePaymentStatusLabel(status: unknown) {
+  return getStatusLabel(PAYMENT_STATUS_MAP, Number(status));
+}
+
+export function resolveAccountTransactionEventLabel(eventType: unknown) {
+  return getStatusLabel(ACCOUNT_TRANSACTION_EVENT_MAP, String(eventType || ''));
 }
 
 export function resolveBalanceTheme(value: unknown) {
@@ -245,9 +236,9 @@ function compactParams(params: AnyRecord) {
 }
 
 function resolveListPayload(response: unknown) {
-  const payload = (response as AnyRecord)?.data || {};
+  const payload = toRecord((response as { data?: unknown } | null | undefined)?.data);
   return {
-    list: Array.isArray(payload.list) ? payload.list : [],
+    list: Array.isArray(payload.list) ? (payload.list as RecordListItem[]) : [],
     total: Number(payload.total || 0),
   };
 }
@@ -256,10 +247,10 @@ export function useRecordList(fetcher: Fetcher, errorMessage: string, options: {
   const router = useRouter();
   const loading = ref(false);
   const detailLoading = ref(false);
-  const list = shallowRef<AnyRecord[]>([]);
+  const list = shallowRef<RecordListItem[]>([]);
   const total = ref(0);
   const detailVisible = ref(false);
-  const currentRow = shallowRef<AnyRecord | null>(null);
+  const currentRow = shallowRef<RecordListItem | null>(null);
   const filters = reactive<AnyRecord>({
     page: 1,
     page_size: 10,
@@ -291,8 +282,8 @@ export function useRecordList(fetcher: Fetcher, errorMessage: string, options: {
       const payload = resolveListPayload(response);
       list.value = payload.list;
       total.value = payload.total;
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || errorMessage);
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, errorMessage));
     } finally {
       loading.value = false;
     }
@@ -319,14 +310,14 @@ export function useRecordList(fetcher: Fetcher, errorMessage: string, options: {
     void loadList();
   }
 
-  function goToInvoice(row: AnyRecord) {
+  function goToInvoice(row: RecordListItem) {
     const invoiceId = Number(row?.invoice_id || 0);
     if (invoiceId > 0) {
       router.push({ path: '/client/invoices', query: { detail: String(invoiceId) } });
     }
   }
 
-  async function openDetail(row: AnyRecord) {
+  async function openDetail(row: RecordListItem) {
     currentRow.value = row;
     detailVisible.value = true;
     if (!options.detailFetcher) return;
@@ -334,9 +325,9 @@ export function useRecordList(fetcher: Fetcher, errorMessage: string, options: {
     detailLoading.value = true;
     try {
       const response = await options.detailFetcher(row);
-      currentRow.value = (response as AnyRecord)?.data || row;
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || '详情加载失败');
+      currentRow.value = response.data || row;
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '详情加载失败'));
     } finally {
       detailLoading.value = false;
     }
@@ -372,8 +363,5 @@ export function useRecordList(fetcher: Fetcher, errorMessage: string, options: {
 }
 
 export const recordApi = {
-  orders: (params?: Record<string, unknown>) => clientApi.orders(params),
-  orderDetail: (row: AnyRecord) => clientApi.orderDetail(row.id),
   payments: (params?: Record<string, unknown>) => clientApi.payments(params),
-  balanceLogs: (params?: Record<string, unknown>) => clientApi.balanceLogs(params),
 };

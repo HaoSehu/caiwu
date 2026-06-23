@@ -2,27 +2,43 @@ import { reactive } from 'vue';
 import { MessagePlugin } from 'tdesign-vue-next';
 
 import clientApi from '@/api/client';
+import type {
+  ConsoleSelectOption,
+  FinanceLedgerRecord,
+  FinanceLedgerSummary,
+  MonitorChartRecord,
+  MonitorRangePayload,
+  NatForwardingRecord,
+  PagedList,
+  ServiceOperationLogRecord,
+  ServiceOperationLogSummary,
+} from '@/types/client';
 import { resolveErrorMessage } from './useConsoleCore';
 
-type AnyRecord = Record<string, any>;
+type MonitorRangePreset = '3h' | '24h' | '7d' | '30d';
 
 function createEmptyLogsState() {
   return {
     loading: false,
-    list: [] as AnyRecord[],
+    list: [] as ServiceOperationLogRecord[],
     total: 0,
     page: 1,
     page_size: 10,
     category: '',
     keyword: '',
-    summary: { total: 0, today_total: 0, latest_created_at: '', service_name: '' },
+    summary: {
+      total: 0,
+      today_total: 0,
+      latest_created_at: '',
+      service_name: '',
+    } as ServiceOperationLogSummary,
   };
 }
 
 function createEmptyFinanceState() {
   return {
     loading: false,
-    list: [] as AnyRecord[],
+    list: [] as FinanceLedgerRecord[],
     total: 0,
     page: 1,
     page_size: 10,
@@ -31,7 +47,7 @@ function createEmptyFinanceState() {
       total_out: '0.00',
       refund_in: '0.00',
       total_count: 0,
-    } as AnyRecord,
+    } as FinanceLedgerSummary,
   };
 }
 
@@ -44,12 +60,12 @@ export function useConsoleTabs(options: UseConsoleTabsOptions) {
 
   const monitorState = reactive({
     loading: false,
-    range: '3h',
-    window: null as AnyRecord | null,
+    range: '3h' as MonitorRangePreset,
+    window: null as MonitorRangePayload | null,
     supported: true,
     message: '',
     error: '',
-    charts: [] as AnyRecord[],
+    charts: [] as MonitorChartRecord[],
   });
 
   const natState = reactive({
@@ -58,8 +74,8 @@ export function useConsoleTabs(options: UseConsoleTabsOptions) {
     message: '',
     error: '',
     can_create: false,
-    protocols: [] as AnyRecord[],
-    list: [] as AnyRecord[],
+    protocols: [] as ConsoleSelectOption[],
+    list: [] as NatForwardingRecord[],
   });
 
   const logsState = reactive(createEmptyLogsState());
@@ -78,15 +94,15 @@ export function useConsoleTabs(options: UseConsoleTabsOptions) {
     monitorState.loading = true;
     monitorState.error = '';
     try {
-      const params: AnyRecord = { range: monitorState.range };
+      const params: Record<string, unknown> = { range: monitorState.range };
       if (force) params.fresh = 1;
       const res = await clientApi.serviceMonitorBatch(serviceId.value, params, { timeout: 12000 });
-      const payload = (res as AnyRecord).data || {};
+      const payload = res.data || {};
       monitorState.supported = payload.supported !== false;
       monitorState.message = String(payload.message || '');
       monitorState.window = payload.range || null;
       monitorState.charts = Array.isArray(payload.charts) ? payload.charts : [];
-    } catch (error: any) {
+    } catch (error: unknown) {
       monitorState.error = resolveErrorMessage(error, '加载监控数据失败');
     } finally {
       monitorState.loading = false;
@@ -95,16 +111,17 @@ export function useConsoleTabs(options: UseConsoleTabsOptions) {
 
   async function loadNatForwardings() {
     natState.loading = true;
+    natState.error = '';
     try {
       const res = await clientApi.serviceNatForwardings(serviceId.value);
-      const payload = (res as AnyRecord).data || {};
+      const payload = res.data || {};
       natState.supported = payload.supported !== false;
       natState.message = String(payload.message || '');
       natState.error = String(payload.error || '');
       natState.can_create = Boolean(payload.can_create);
       natState.protocols = Array.isArray(payload.protocols) ? payload.protocols : [];
       natState.list = Array.isArray(payload.list) ? payload.list : [];
-    } catch (error: any) {
+    } catch (error: unknown) {
       natState.error = resolveErrorMessage(error, '加载 NAT 转发失败');
     } finally {
       natState.loading = false;
@@ -114,15 +131,15 @@ export function useConsoleTabs(options: UseConsoleTabsOptions) {
   async function loadLogs() {
     logsState.loading = true;
     try {
-      const params: AnyRecord = { page: logsState.page, page_size: logsState.page_size };
+      const params: Record<string, unknown> = { page: logsState.page, page_size: logsState.page_size };
       if (logsState.category) params.category = logsState.category;
       if (logsState.keyword.trim()) params.keyword = logsState.keyword.trim();
       const res = await clientApi.serviceOperationLogs(serviceId.value, params);
-      const payload = (res as AnyRecord).data || {};
+      const payload: PagedList<ServiceOperationLogRecord> & { summary?: ServiceOperationLogSummary } = res.data || { list: [], total: 0 };
       logsState.list = Array.isArray(payload.list) ? payload.list : [];
       logsState.total = Number(payload.total || 0);
       logsState.summary = { ...logsState.summary, ...(payload.summary || {}) };
-    } catch (error: any) {
+    } catch (error: unknown) {
       MessagePlugin.error(resolveErrorMessage(error, '加载操作日志失败'));
     } finally {
       logsState.loading = false;
@@ -132,7 +149,7 @@ export function useConsoleTabs(options: UseConsoleTabsOptions) {
   async function loadFinanceLogs() {
     financeState.loading = true;
     try {
-      const params: AnyRecord = {
+      const params: Record<string, unknown> = {
         page: financeState.page,
         page_size: financeState.page_size,
         tab: 'invoices',
@@ -142,12 +159,12 @@ export function useConsoleTabs(options: UseConsoleTabsOptions) {
         clientApi.financeLedger(params),
         clientApi.financeLedgerSummary({ tab: 'invoices', service_id: serviceId.value }),
       ]);
-      const listPayload = (listRes as AnyRecord).data || {};
-      const summaryPayload = (summaryRes as AnyRecord).data || {};
+      const listPayload: PagedList<FinanceLedgerRecord> = listRes.data || { list: [], total: 0 };
+      const summaryPayload = summaryRes.data || {};
       financeState.list = Array.isArray(listPayload.list) ? listPayload.list : [];
       financeState.total = Number(listPayload.total || 0);
       financeState.summary = { ...financeState.summary, ...summaryPayload };
-    } catch (error: any) {
+    } catch (error: unknown) {
       MessagePlugin.error(resolveErrorMessage(error, '加载财务日志失败'));
     } finally {
       financeState.loading = false;

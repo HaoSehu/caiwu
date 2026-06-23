@@ -39,7 +39,7 @@
           <template v-if="isNotice && unreadCount > 0" #actions>
             <t-button theme="primary" variant="text" @click="handleMarkAllRead">全部标记已读 ({{ unreadCount }})</t-button>
           </template>
-          <t-loading :loading="loading" text="正在加载内容">
+          <DataState :loading="loading" :empty="!articleList.length" :description="config.emptyText">
             <article v-for="item in articleList" :key="item.id" class="article-row">
               <div class="article-row__head">
                 <router-link class="article-row__title" :to="buildDetailRoute(item)">{{ item.title }}</router-link>
@@ -49,11 +49,10 @@
               <div class="article-row__meta">
                 <span>{{ item.category_name || currentCategoryLabel }}</span>
                 <span>{{ item.publish_at || item.created_at || '--' }}</span>
-                <span>浏览量: {{ item.view_count || 0 }}</span>
+                <span>浏览量 {{ item.view_count || 0 }}</span>
               </div>
             </article>
-            <t-empty v-if="!loading && !articleList.length" :description="config.emptyText" />
-          </t-loading>
+          </DataState>
         </t-card>
 
         <div v-if="total > pageSize" class="content-pagination">
@@ -91,6 +90,7 @@
 <script setup lang="ts">
 import { SearchIcon } from 'tdesign-icons-vue-next';
 
+import DataState from '@shared/user-v3/components/DataState.vue';
 import { useContentList } from '@/domains/content/useContent';
 import { useNoticeReadStatus } from '@/domains/content/useNoticeReadStatus';
 
@@ -130,7 +130,7 @@ async function handleMarkAllRead() {
 
 <style scoped lang="less">
 .content-list-page {
-  padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
+  // padding 由 Starter 布局层统一提供
 }
 
 .content-list-layout {
@@ -156,10 +156,9 @@ async function handleMarkAllRead() {
 }
 
 .hero-card {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(18rem, 34%);
-  gap: var(--td-comp-margin-l);
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: var(--td-comp-margin-m);
 }
 
 .hero-copy {
@@ -170,7 +169,7 @@ async function handleMarkAllRead() {
   }
 
   p {
-    margin: var(--td-comp-margin-s) 0 0;
+    margin: var(--td-comp-margin-xs) 0 0;
     color: var(--td-text-color-secondary);
     font: var(--td-font-body-medium);
     line-height: var(--td-line-height-body-medium);
@@ -261,37 +260,36 @@ async function handleMarkAllRead() {
 
 .rank-row {
   span {
-    display: inline-flex;
-    flex: 0 0 var(--td-comp-size-m);
-    align-items: center;
-    justify-content: center;
-    color: var(--td-text-color-secondary);
-    background: var(--td-bg-color-component);
-    border-radius: var(--td-radius-small);
+    width: 1.5rem;
+    color: var(--td-brand-color);
+    font: var(--td-font-title-small);
+    text-align: center;
   }
 
   strong {
+    flex: 1;
     min-width: 0;
     overflow: hidden;
-    font: var(--td-font-body-medium);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 }
 
 .recent-row {
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: var(--td-comp-paddingTB-s) 0;
 
-  strong {
-    min-width: 0;
+  strong,
+  span {
     overflow: hidden;
-    font: var(--td-font-body-medium);
     text-overflow: ellipsis;
     white-space: nowrap;
+    max-width: 100%;
   }
 
   span {
-    flex: 0 0 auto;
     color: var(--td-text-color-secondary);
     font: var(--td-font-body-small);
   }
@@ -314,25 +312,9 @@ async function handleMarkAllRead() {
 }
 
 @media (max-width: 48rem) {
-  .content-list-page {
-    padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-s);
-  }
-
   .hero-card,
   .content-sidebar {
     grid-template-columns: 1fr;
-  }
-
-  .content-pagination {
-    justify-content: flex-start;
-    overflow-x: auto;
-  }
-
-  .recent-row {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: var(--td-comp-margin-xxs);
-    padding: var(--td-comp-paddingTB-s) 0;
   }
 }
 </style>

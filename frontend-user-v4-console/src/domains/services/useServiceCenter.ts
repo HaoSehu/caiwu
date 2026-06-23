@@ -4,6 +4,15 @@ import { useRoute, useRouter } from 'vue-router';
 import { SERVICE_STATUS, SERVICE_STATUS_MAP, toSelectOptions } from '@shared/statusConfig';
 
 import clientApi from '@/api/client';
+import { copyText, formatMoney } from '@/utils/format';
+import type {
+  CouponOption,
+  ServiceCatalogTypeOption,
+  ServiceInstance,
+  ServiceOverviewGroup,
+  ServiceOverviewPayload,
+  ServiceRenewPreview,
+} from '@/types/client';
 
 export const OS_ICON_MAP: Record<string, string> = {
   windows: '/img/os/Windows.svg',
@@ -35,18 +44,22 @@ const DEFAULT_SERVICE_STATUS_OPTION = {
   value: DEFAULT_SERVICE_STATUS_SCOPE,
 };
 
-type AnyRecord = Record<string, any>;
+type AnyRecord = Record<string, unknown>;
+type ServiceListParams = Record<string, string | number>;
+type TdesignTagTheme = 'primary' | 'success' | 'warning' | 'danger';
+type ServiceLike = Partial<ServiceInstance> & Record<string, unknown>;
+type StatusMapEntry = { label?: string };
 
-interface ServiceOverview {
-  total: number;
-  category_total: number;
-  list: AnyRecord[];
-  catalog_types: AnyRecord[];
+interface ServiceOverview extends ServiceOverviewPayload {}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
 }
 
 export function resolveServiceStatusLabel(status: unknown) {
   const serviceStatus = Number(status);
-  const label = String((SERVICE_STATUS_MAP as AnyRecord)[serviceStatus]?.label || '').trim();
+  const statusMap = SERVICE_STATUS_MAP as Record<string | number, StatusMapEntry>;
+  const label = String(statusMap[serviceStatus]?.label || '').trim();
   return label !== '' ? label : '-';
 }
 
@@ -59,12 +72,9 @@ export function createEmptyOverview(): ServiceOverview {
   };
 }
 
-export function formatMoney(value: unknown) {
-  const amount = Number(value || 0);
-  return Number.isFinite(amount) ? amount.toFixed(2) : '0.00';
-}
+export { formatMoney };
 
-export function resolveServiceName(item: AnyRecord | null | undefined) {
+export function resolveServiceName(item: ServiceLike | null | undefined) {
   return (
     item?.custom_service_name ||
     item?.name ||
@@ -75,11 +85,11 @@ export function resolveServiceName(item: AnyRecord | null | undefined) {
   );
 }
 
-export function resolveServiceOsText(item: AnyRecord) {
+export function resolveServiceOsText(item: ServiceLike) {
   return String(item?.upstream?.os || '').trim();
 }
 
-export function resolveServiceOsIcon(item: AnyRecord) {
+export function resolveServiceOsIcon(item: ServiceLike) {
   const name = resolveServiceOsText(item).toLowerCase();
   if (!name) return '';
 
@@ -90,19 +100,19 @@ export function resolveServiceOsIcon(item: AnyRecord) {
   return '';
 }
 
-export function resolveServiceMark(item: AnyRecord) {
+export function resolveServiceMark(item: ServiceLike) {
   const osText = resolveServiceOsText(item);
   const text = osText || item?.product?.type_label || item?.product?.group_name || item?.product?.display_name || '服务';
   return String(text).replace(/\s+/g, '').slice(0, 2);
 }
 
-export function findListSpecValue(item: AnyRecord, aliases: string[] = [], fallback = '--') {
+export function findListSpecValue(item: ServiceLike, aliases: string[] = [], fallback = '--') {
   const specs = Array.isArray(item?.specs) ? item.specs : [];
   for (const alias of aliases) {
     const keyword = String(alias || '').trim().toLowerCase();
     if (!keyword) continue;
 
-    const matched = specs.find((spec: AnyRecord) => String(spec?.label || '').trim().toLowerCase().includes(keyword));
+    const matched = specs.find((spec) => String(spec?.label || '').trim().toLowerCase().includes(keyword));
     const value = String(matched?.value || '').trim();
     if (value) return value;
   }
@@ -110,7 +120,7 @@ export function findListSpecValue(item: AnyRecord, aliases: string[] = [], fallb
   return fallback;
 }
 
-export function resolveListBandwidthText(item: AnyRecord) {
+export function resolveListBandwidthText(item: ServiceLike) {
   const direct = findListSpecValue(item, ['带宽', '宽带'], '');
   if (direct !== '') return direct;
 
@@ -120,7 +130,7 @@ export function resolveListBandwidthText(item: AnyRecord) {
   return inbound || outbound || '--';
 }
 
-export function resolveRuntimeStatusLabel(item: AnyRecord) {
+export function resolveRuntimeStatusLabel(item: ServiceLike) {
   return resolveServiceStatusLabel(item?.status);
 }
 
@@ -134,12 +144,12 @@ export function isExpiringSoon(dateText: string) {
   return diff > 0 && diff <= 7 * 24 * 60 * 60 * 1000;
 }
 
-export function isProvisioningService(item: AnyRecord) {
+export function isProvisioningService(item: ServiceLike) {
   if (Number(item?.status) === SERVICE_STATUS.PENDING) return true;
   return resolveRuntimeStatusLabel(item) === '开通中';
 }
 
-export function resolveTdesignStatusTheme(item: AnyRecord) {
+export function resolveTdesignStatusTheme(item: ServiceLike): TdesignTagTheme {
   const tone = String(item?.status_tone || '').trim();
   if (tone === 'success') return 'success';
   if (tone === 'warning') return 'warning';
@@ -153,7 +163,7 @@ export function useServiceCenter() {
 
   const loading = ref(false);
   const overviewLoading = ref(false);
-  const list = shallowRef<AnyRecord[]>([]);
+  const list = shallowRef<ServiceInstance[]>([]);
   const total = ref(0);
   const overview = shallowRef<ServiceOverview>(createEmptyOverview());
 
@@ -170,11 +180,11 @@ export function useServiceCenter() {
   const renewVisible = ref(false);
   const renewPreviewLoading = ref(false);
   const renewSubmitting = ref(false);
-  const renewTarget = shallowRef<AnyRecord | null>(null);
-  const renewData = shallowRef<AnyRecord | null>(null);
+  const renewTarget = shallowRef<ServiceInstance | null>(null);
+  const renewData = shallowRef<ServiceRenewPreview | null>(null);
   const remarkVisible = ref(false);
   const remarkSubmitting = ref(false);
-  const remarkTarget = shallowRef<AnyRecord | null>(null);
+  const remarkTarget = shallowRef<ServiceInstance | null>(null);
   const renewForm = reactive({
     billing_cycle: '',
     user_coupon_id: 0,
@@ -185,7 +195,9 @@ export function useServiceCenter() {
 
   const statusOptions = [DEFAULT_SERVICE_STATUS_OPTION, ...toSelectOptions(SERVICE_STATUS_MAP, false)];
   const catalogTypeOptions = computed(() =>
-    Array.isArray(overview.value.catalog_types) ? overview.value.catalog_types.filter((item: AnyRecord) => item?.value) : [],
+    Array.isArray(overview.value.catalog_types)
+      ? overview.value.catalog_types.filter((item: ServiceCatalogTypeOption) => item?.value)
+      : [],
   );
   const viewModeOptions = [
     { label: '卡片', value: 'grid' },
@@ -194,9 +206,9 @@ export function useServiceCenter() {
 
   const metricCards = computed(() => {
     const groups = Array.isArray(overview.value.list) ? overview.value.list : [];
-    const activeCount = groups.reduce((sum: number, item: AnyRecord) => sum + Number(item?.active_count || 0), 0);
-    const pendingCount = groups.reduce((sum: number, item: AnyRecord) => sum + Number(item?.pending_count || 0), 0);
-    const expiringCount = groups.reduce((sum: number, item: AnyRecord) => sum + Number(item?.expiring_count || 0), 0);
+    const activeCount = groups.reduce((sum: number, item: ServiceOverviewGroup) => sum + Number(item?.active_count || 0), 0);
+    const pendingCount = groups.reduce((sum: number, item: ServiceOverviewGroup) => sum + Number(item?.pending_count || 0), 0);
+    const expiringCount = groups.reduce((sum: number, item: ServiceOverviewGroup) => sum + Number(item?.expiring_count || 0), 0);
 
     return [
       {
@@ -228,19 +240,19 @@ export function useServiceCenter() {
 
   const selectedRenewAmount = computed(() => {
     const cycles = Array.isArray(renewData.value?.cycles) ? renewData.value.cycles : [];
-    const current = cycles.find((item: AnyRecord) => item.billing_cycle === renewForm.billing_cycle);
+    const current = cycles.find((item) => item.billing_cycle === renewForm.billing_cycle);
     return formatMoney(current?.amount || 0);
   });
 
   const availableRenewCoupons = computed(() =>
-    Array.isArray(renewData.value?.available_coupons) ? renewData.value.available_coupons : [],
+    Array.isArray(renewData.value?.available_coupons) ? (renewData.value.available_coupons as CouponOption[]) : [],
   );
 
   async function loadOverview() {
     overviewLoading.value = true;
     try {
       const res = await clientApi.groupedOverview();
-      overview.value = { ...createEmptyOverview(), ...((res as AnyRecord).data || {}) };
+      overview.value = { ...createEmptyOverview(), ...(res.data || {}) };
     } finally {
       overviewLoading.value = false;
     }
@@ -249,7 +261,7 @@ export function useServiceCenter() {
   async function loadList() {
     loading.value = true;
     try {
-      const params: AnyRecord = { page: filters.page, page_size: filters.page_size };
+      const params: ServiceListParams = { page: filters.page, page_size: filters.page_size };
       if (String(filters.keyword).trim()) params.keyword = String(filters.keyword).trim();
       if (filters.status === DEFAULT_SERVICE_STATUS_SCOPE) {
         params.status_scope = DEFAULT_SERVICE_STATUS_SCOPE;
@@ -260,8 +272,8 @@ export function useServiceCenter() {
       if (filters.quick_filter) params.quick_filter = filters.quick_filter;
 
       const res = await clientApi.services(params);
-      list.value = Array.isArray((res as AnyRecord).data?.list) ? (res as AnyRecord).data.list : [];
-      total.value = Number((res as AnyRecord).data?.total || 0);
+      list.value = Array.isArray(res.data?.list) ? res.data.list : [];
+      total.value = Number(res.data?.total || 0);
     } finally {
       loading.value = false;
     }
@@ -287,7 +299,10 @@ export function useServiceCenter() {
 
   function restoreViewMode() {
     if (typeof window === 'undefined') return;
-    viewMode.value = normalizeViewMode(window.localStorage.getItem(SERVICE_VIEW_MODE_STORAGE_KEY));
+    const stored = normalizeViewMode(window.localStorage.getItem(SERVICE_VIEW_MODE_STORAGE_KEY));
+    // 手机端强制卡片视图，忽略历史偏好
+    const isMobile = window.matchMedia('(max-width: 768px)').matches;
+    viewMode.value = isMobile ? 'grid' : stored;
   }
 
   function hydrateFiltersFromRoute() {
@@ -347,19 +362,19 @@ export function useServiceCenter() {
         billing_cycle: renewForm.billing_cycle || undefined,
         user_coupon_id: renewForm.user_coupon_id || undefined,
       });
-      renewData.value = (res as AnyRecord).data || null;
+      renewData.value = res.data || null;
       renewForm.billing_cycle = String(
-        (res as AnyRecord).data?.default_cycle || (res as AnyRecord).data?.billing_cycle || (res as AnyRecord).data?.cycles?.[0]?.billing_cycle || '',
+        res.data?.default_cycle || res.data?.billing_cycle || res.data?.cycles?.[0]?.billing_cycle || '',
       );
-      renewForm.user_coupon_id = Number((res as AnyRecord).data?.selected_user_coupon_id || 0);
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || '加载续费信息失败');
+      renewForm.user_coupon_id = Number(res.data?.selected_user_coupon_id || 0);
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '加载续费信息失败'));
     } finally {
       renewPreviewLoading.value = false;
     }
   }
 
-  async function openRenew(item: AnyRecord) {
+  async function openRenew(item: ServiceInstance) {
     renewVisible.value = true;
     renewTarget.value = item;
     renewData.value = null;
@@ -388,18 +403,18 @@ export function useServiceCenter() {
         billing_cycle: renewForm.billing_cycle,
         user_coupon_id: renewForm.user_coupon_id || undefined,
       });
-      const invoiceId = Number((res as AnyRecord).data?.id || 0);
+      const invoiceId = Number(res.data?.id || 0);
       renewVisible.value = false;
       MessagePlugin.success('续费账单已创建，正在跳转支付');
       router.push(invoiceId > 0 ? `/client/invoices/${invoiceId}/pay` : '/client/invoices');
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || '续费账单创建失败');
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '续费账单创建失败'));
     } finally {
       renewSubmitting.value = false;
     }
   }
 
-  function openRemark(item: AnyRecord) {
+  function openRemark(item: ServiceInstance) {
     remarkTarget.value = item;
     remarkForm.remark = String(item?.remark || '');
     remarkVisible.value = true;
@@ -410,8 +425,8 @@ export function useServiceCenter() {
     remarkSubmitting.value = true;
     try {
       const res = await clientApi.updateServiceRemark(remarkTarget.value.id, { remark: remarkForm.remark });
-      const updatedItem = (res as AnyRecord).data || {};
-      const index = list.value.findIndex((item: AnyRecord) => Number(item?.id || 0) === Number(remarkTarget.value?.id || 0));
+      const updatedItem = res.data || ({} as ServiceInstance);
+      const index = list.value.findIndex((item) => Number(item?.id || 0) === Number(remarkTarget.value?.id || 0));
       if (index >= 0) {
         const nextList = [...list.value];
         nextList.splice(index, 1, { ...nextList[index], ...updatedItem });
@@ -419,32 +434,28 @@ export function useServiceCenter() {
       }
       remarkVisible.value = false;
       MessagePlugin.success('备注已保存');
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || '备注保存失败');
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '备注保存失败'));
     } finally {
       remarkSubmitting.value = false;
     }
   }
 
-  async function copyText(value: unknown) {
-    const text = String(value || '').trim();
-    if (!text || text === '--') return;
-    try {
-      await navigator.clipboard.writeText(text);
-      MessagePlugin.success('公网 IP 已复制');
-    } catch {
-      MessagePlugin.warning('当前浏览器不支持自动复制，请手动复制');
-    }
+  async function copyPublicIp(value: unknown) {
+    await copyText(value, {
+      successMsg: '公网 IP 已复制',
+      errorMsg: '当前浏览器不支持自动复制，请手动复制',
+    });
   }
 
-  function handleServiceAction(command: string, item: AnyRecord) {
+  function handleServiceAction(command: string, item: ServiceInstance) {
     if (command === 'renew') {
       void openRenew(item);
       return;
     }
 
     if (command === 'invoice' || command === 'order') {
-      const targetId = item?.invoice?.id || item?.order?.invoice_id || item?.order?.id;
+      const targetId = item?.invoice?.id;
       openInvoiceDetail(targetId);
     }
   }
@@ -494,7 +505,7 @@ export function useServiceCenter() {
     submitRenew,
     openRemark,
     submitRemark,
-    copyText,
+    copyText: copyPublicIp,
     handleServiceAction,
     router,
   };

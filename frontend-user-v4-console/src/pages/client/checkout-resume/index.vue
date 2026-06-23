@@ -1,7 +1,7 @@
 <template>
   <section class="checkout-resume-page">
     <t-card class="checkout-resume-card" :bordered="false">
-      <t-loading :loading="status === 'loading'" text="正在创建账单">
+      <LoadingState :loading="status === 'loading'" text="正在创建账单">
         <div class="checkout-resume-state">
           <t-tag :theme="statusTheme" variant="light">{{ statusLabel }}</t-tag>
           <h1>{{ title }}</h1>
@@ -22,7 +22,7 @@
             <t-button v-if="status !== 'loading'" variant="outline" @click="openInvoices">前往资金中心</t-button>
           </div>
         </div>
-      </t-loading>
+      </LoadingState>
     </t-card>
   </section>
 </template>
@@ -31,6 +31,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { useRoute, useRouter } from 'vue-router';
+import LoadingState from '@shared/user-v3/components/LoadingState.vue';
 
 import clientApi from '@/api/client';
 import {
@@ -65,13 +66,13 @@ const statusTheme = computed(() => {
 
 const statusLabel = computed(() => {
   if (status.value === 'error') return '创建失败';
-  if (status.value === 'empty') return '等待下单';
+  if (status.value === 'empty') return '等待创建账单';
   return '创建账单中';
 });
 
 const title = computed(() => {
-  if (status.value === 'error') return '恢复下单失败';
-  if (status.value === 'empty') return '没有待恢复的下单信息';
+  if (status.value === 'error') return '恢复购买信息失败';
+  if (status.value === 'empty') return '没有待恢复的购买信息';
   return '正在创建账单';
 });
 
@@ -135,7 +136,7 @@ async function resumeCheckout() {
         ? { 'X-Idempotency-Key': pendingCheckout.value.idempotencyKey }
         : undefined,
     });
-    const invoiceId = Number((response as any).data?.id || 0);
+    const invoiceId = Number(response.data?.id || response.data?.invoice?.id || 0);
     clearPendingWebsiteCheckout();
     MessagePlugin.success('账单创建成功，正在跳转');
     await router.replace(invoiceId > 0 ? `/client/invoices/${invoiceId}/pay` : '/client/invoices');
@@ -162,7 +163,7 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   min-height: calc(100vh - var(--td-comp-size-xxxxxl));
-  padding: var(--td-comp-paddingTB-xl) var(--td-comp-paddingLR-l);
+  // padding 由 Starter 布局层统一提供
 }
 
 .checkout-resume-card {
@@ -238,11 +239,10 @@ onMounted(async () => {
   justify-content: center;
 }
 
-@media (max-width: 48rem) {
+@media (max-width: @screen-sm-rem) {
   .checkout-resume-page {
     align-items: stretch;
     min-height: auto;
-    padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-s);
   }
 
   .checkout-resume-state {

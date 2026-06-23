@@ -1,5 +1,12 @@
 <template>
-  <auth-shell title="账号登录" nav-text="还没有账户？" nav-link-text="现在注册" :nav-to="registerLink">
+  <auth-shell
+    title="账号登录"
+    nav-text="还没有账户？"
+    nav-link-text="现在注册"
+    :nav-to="registerLink"
+    :hero-title="heroTitle"
+    hero-description="登录后可继续查看实例、支付账单、提交工单，并维护账户安全与实名认证。"
+  >
     <t-form ref="formRef" class="client-auth-form" :data="form" :rules="rules" label-width="0" @submit="handleLogin">
       <t-form-item name="account">
         <div class="client-auth-field">
@@ -14,7 +21,6 @@
           >
             <template #prefix-icon><user-icon /></template>
           </t-input>
-          <p class="client-auth-tip">支持手机号或邮箱登录</p>
         </div>
       </t-form-item>
 
@@ -50,7 +56,7 @@
 
 <script setup lang="ts">
 import { BrowseIcon, BrowseOffIcon, LockOnIcon, UserIcon } from 'tdesign-icons-vue-next';
-import type { FormInstanceFunctions, FormRule, SubmitContext } from 'tdesign-vue-next';
+import type { FormInstanceFunctions, FormRule, FormValidateMessage, SubmitContext } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -64,6 +70,22 @@ import { toUserMessage } from '@/utils/userMessage';
 interface LoginForm {
   account: string;
   password: string;
+}
+
+interface RuntimeLoginError {
+  __handled?: boolean;
+  message?: string;
+  response?: {
+    data?: {
+      data?: {
+        captcha_required?: boolean;
+      };
+    };
+  };
+}
+
+function asRuntimeLoginError(error: unknown): RuntimeLoginError {
+  return typeof error === 'object' && error !== null ? (error as RuntimeLoginError) : {};
 }
 
 const route = useRoute();
@@ -89,6 +111,8 @@ const registerLink = computed(() => ({
   query: route.query.redirect ? { redirect: route.query.redirect } : {},
 }));
 
+const heroTitle = '进入控制台，\n继续处理服务与账单';
+
 const rules: Record<keyof LoginForm, FormRule[]> = {
   account: [
     {
@@ -103,7 +127,7 @@ const rules: Record<keyof LoginForm, FormRule[]> = {
   password: [{ required: true, message: '请输入登录密码', type: 'error', trigger: 'blur' }],
 };
 
-const isCaptchaRequiredError = (error: any) => Boolean(error?.response?.data?.data?.captcha_required);
+const isCaptchaRequiredError = (error: unknown) => Boolean(asRuntimeLoginError(error).response?.data?.data?.captcha_required);
 
 async function performLogin(captcha: unknown = null) {
   await userStore.clientLogin({
@@ -126,11 +150,11 @@ async function handleLogin(ctx: SubmitContext) {
 }
 
 function setFormErrors(errors: Partial<Record<keyof LoginForm, string>>) {
-  formRef.value?.setValidateMessage(
-    Object.fromEntries(
-      Object.entries(errors).map(([field, message]) => [field, [{ type: 'error', message }]]),
-    ) as any,
-  );
+  const validateMessage: FormValidateMessage<LoginForm> = {
+    account: errors.account ? [{ type: 'error', message: errors.account }] : [],
+    password: errors.password ? [{ type: 'error', message: errors.password }] : [],
+  };
+  formRef.value?.setValidateMessage(validateMessage);
 }
 
 function validateForm() {
@@ -157,8 +181,9 @@ async function runLogin() {
     await performLogin();
     MessagePlugin.success('登录成功');
     await router.push(redirectPath.value);
-  } catch (error: any) {
-    if (isCaptchaRequiredError(error)) {
+  } catch (error: unknown) {
+    const runtimeError = asRuntimeLoginError(error);
+    if (isCaptchaRequiredError(runtimeError)) {
       try {
         await runWithCaptcha(async (captcha: unknown) => {
           await performLogin(captcha);
@@ -166,16 +191,17 @@ async function runLogin() {
         MessagePlugin.success('登录成功');
         await router.push(redirectPath.value);
         return;
-      } catch (captchaError: any) {
-        if (!captchaError?.__handled) {
-          MessagePlugin.error(toUserMessage(captchaError?.message, '登录失败'));
+      } catch (captchaError: unknown) {
+        const runtimeCaptchaError = asRuntimeLoginError(captchaError);
+        if (!runtimeCaptchaError.__handled) {
+          MessagePlugin.error(toUserMessage(runtimeCaptchaError.message, '登录失败'));
         }
         return;
       }
     }
 
-    if (!error?.__handled) {
-      MessagePlugin.error(toUserMessage(error?.message, '登录失败'));
+    if (!runtimeError.__handled) {
+      MessagePlugin.error(toUserMessage(runtimeError.message, '登录失败'));
     }
   } finally {
     loading.value = false;

@@ -1,4 +1,13 @@
-type GenericRecord = Record<string, any>;
+import type {
+  ApiEnvelope,
+  ContentArticleRecord,
+  ContentCategoryRecord,
+  ContentDetailPayload,
+  ContentListPayload,
+  ContentOverviewPayload,
+} from '@/types/client';
+
+type GenericRecord = Record<string, unknown>;
 
 function pickFirst(...values: unknown[]) {
   return values.find((value) => value !== undefined && value !== null && value !== '');
@@ -9,7 +18,7 @@ function toNumber(value: unknown, fallback = 0) {
   return Number.isFinite(normalized) ? normalized : fallback;
 }
 
-export function normalizeContentCategory(item: GenericRecord = {}) {
+export function normalizeContentCategory(item: GenericRecord = {}): ContentCategoryRecord {
   const id = toNumber(pickFirst(item.id, item.category_id, item.categoryId), 0);
   const name = String(pickFirst(item.name, item.title, item.category_name, item.category) || '');
 
@@ -25,7 +34,7 @@ export function normalizeContentCategory(item: GenericRecord = {}) {
   };
 }
 
-export function normalizeContentArticle(item: GenericRecord = {}) {
+export function normalizeContentArticle(item: GenericRecord = {}): ContentArticleRecord {
   const categoryId = toNumber(
     pickFirst(item.category_id, item.content_category_id, item.categoryId, item.contentCategoryId),
     0,
@@ -46,6 +55,8 @@ export function normalizeContentArticle(item: GenericRecord = {}) {
     pickFirst(item.publish_at, item.published_at, item.publishedAt, item.last_published_at, item.created_at) || '',
   );
 
+  const keywords = pickFirst(item.keywords, item.keyword_list, item.keywordList);
+
   return {
     ...item,
     id: toNumber(pickFirst(item.id, item.article_id, item.articleId), 0),
@@ -61,7 +72,7 @@ export function normalizeContentArticle(item: GenericRecord = {}) {
     category_name: categoryName,
     category: categoryName,
     category_slug: String(pickFirst(item.category_slug, item.categorySlug, item.category_alias, item.categoryAlias) || ''),
-    keywords: pickFirst(item.keywords, item.keyword_list, item.keywordList) || '',
+    keywords: Array.isArray(keywords) ? keywords.map((entry) => String(entry)) : String(keywords || ''),
     status: toNumber(pickFirst(item.status, item.state), 0),
     is_pinned: toNumber(pickFirst(item.is_pinned, item.is_top, item.isTop), 0),
     is_recommended: toNumber(pickFirst(item.is_recommended, item.is_hot, item.isHot, item.recommended), 0),
@@ -75,20 +86,20 @@ export function normalizeContentArticle(item: GenericRecord = {}) {
     updated_at: String(pickFirst(item.updated_at, item.updatedAt, item.publish_at, item.published_at) || ''),
     category_detail:
       item.category_detail && typeof item.category_detail === 'object'
-        ? normalizeContentCategory(item.category_detail)
+        ? normalizeContentCategory(item.category_detail as GenericRecord)
         : null,
   };
 }
 
-export function normalizeContentCategoryList(list: unknown) {
+export function normalizeContentCategoryList(list: unknown): ContentCategoryRecord[] {
   return Array.isArray(list) ? list.map((item) => normalizeContentCategory(item)) : [];
 }
 
-export function normalizeContentArticleList(list: unknown) {
+export function normalizeContentArticleList(list: unknown): ContentArticleRecord[] {
   return Array.isArray(list) ? list.map((item) => normalizeContentArticle(item)) : [];
 }
 
-export function normalizeContentOverviewPayload(data: GenericRecord = {}) {
+export function normalizeContentOverviewPayload(data: GenericRecord = {}): ContentOverviewPayload {
   return {
     ...data,
     notices: normalizeContentArticleList(pickFirst(data.notices, data.notice_list, data.noticeList)),
@@ -104,7 +115,7 @@ export function normalizeContentOverviewPayload(data: GenericRecord = {}) {
   };
 }
 
-export function normalizeContentListPayload(data: GenericRecord = {}) {
+export function normalizeContentListPayload(data: GenericRecord = {}): ContentListPayload {
   return {
     ...data,
     list: normalizeContentArticleList(pickFirst(data.list, data.items, data.rows)),
@@ -115,13 +126,17 @@ export function normalizeContentListPayload(data: GenericRecord = {}) {
   };
 }
 
-export function normalizeContentDetailPayload(data: GenericRecord = {}) {
+export function normalizeContentDetailPayload(data: GenericRecord = {}): ContentDetailPayload {
   return normalizeContentArticle(data);
 }
 
-export function withNormalizedData(response: GenericRecord, normalizer: (payload: GenericRecord) => GenericRecord) {
+export function withNormalizedData<T>(
+  response: ApiEnvelope<Record<string, unknown>>,
+  normalizer: (payload: GenericRecord) => T,
+): ApiEnvelope<T> {
+  const payload = response?.data && typeof response.data === 'object' ? (response.data as GenericRecord) : {};
   return {
     ...response,
-    data: normalizer(response?.data && typeof response.data === 'object' ? response.data : {}),
+    data: normalizer(payload),
   };
 }

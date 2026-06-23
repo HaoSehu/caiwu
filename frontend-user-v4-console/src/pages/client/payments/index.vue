@@ -2,7 +2,7 @@
   <section class="record-page">
     <t-card class="record-card" :bordered="false">
       <div class="record-toolbar">
-        <t-input v-model="filters.keyword" clearable placeholder="搜索支付号或交易号" @enter="handleSearch" @clear="handleSearch">
+        <t-input v-model="filters.keyword" clearable placeholder="搜索商家订单号或第三方订单号" @enter="handleSearch" @clear="handleSearch">
           <template #suffixIcon><SearchIcon /></template>
         </t-input>
         <t-select v-model="filters.status" clearable placeholder="全部状态" @change="handleSearch">
@@ -22,45 +22,42 @@
     </t-card>
 
     <section class="record-list-card">
-      <t-loading :loading="loading" text="正在加载第三方支付记录">
-        <template v-if="hasRows">
+      <DataState :loading="loading" :empty="!hasRows" description="暂无第三方支付记录">
           <t-table class="record-table" row-key="id" :data="list" :columns="columns" :pagination="null" hover>
             <template #payment="{ row }">
               <div class="stack-cell">
-                <strong>{{ row.payment_no || `#${row.id}` }}</strong>
-                <span>{{ row.trade_no || '--' }}</span>
+                <strong>商家：{{ row.payment_no || '--' }}</strong>
+                <span>第三方：{{ row.trade_no || '--' }}</span>
               </div>
             </template>
-            <template #gateway="{ row }">{{ row.gateway_label || row.gateway || '--' }}</template>
+            <template #gateway="{ row }">{{ row.gateway || '--' }}</template>
             <template #amount="{ row }">¥{{ formatMoney(row.amount) }}</template>
             <template #status="{ row }">
-              <t-tag :theme="resolvePaymentTagTheme(row.status)" variant="light">{{ row.status_label || '--' }}</t-tag>
+              <StatusTag :status-map="PAYMENT_STATUS_MAP" :status="Number(row.status)" />
             </template>
             <template #time="{ row }">{{ row.paid_at || row.created_at || '--' }}</template>
             <template #operation="{ row }">
-              <t-button size="small" theme="primary" variant="text" @click="openDetail(row)">查看</t-button>
+              <t-button size="small" theme="primary" variant="text" @click="goToDetail(row)">查看</t-button>
             </template>
           </t-table>
 
           <div class="record-mobile-list">
-            <article v-for="row in list" :key="row.id" class="record-mobile-card" @click="openDetail(row)">
+            <article v-for="row in list" :key="row.id" class="record-mobile-card" @click="goToDetail(row)">
               <div class="record-mobile-card__head">
-                <strong>{{ row.payment_no || `#${row.id}` }}</strong>
-                <t-tag :theme="resolvePaymentTagTheme(row.status)" variant="light">{{ row.status_label || '--' }}</t-tag>
+                <strong>商家：{{ row.payment_no || '--' }}</strong>
+                <StatusTag :status-map="PAYMENT_STATUS_MAP" :status="Number(row.status)" />
               </div>
               <div class="stack-cell">
                 <strong>¥{{ formatMoney(row.amount) }}</strong>
-                <span>{{ row.gateway_label || row.gateway || '--' }}</span>
+                <span>{{ row.gateway || '--' }}</span>
               </div>
               <div class="record-mobile-card__meta">
-                <span>{{ row.trade_no || '等待渠道回调' }}</span>
+                <span>第三方：{{ row.trade_no || '等待渠道回调' }}</span>
                 <span>{{ row.paid_at || row.created_at || '--' }}</span>
               </div>
             </article>
           </div>
-        </template>
-        <t-empty v-else description="暂无第三方支付记录" />
-      </t-loading>
+      </DataState>
     </section>
 
     <div v-if="total > 0" class="record-pagination">
@@ -74,68 +71,27 @@
         @page-size-change="handlePageSizeChange"
       />
     </div>
-
-    <t-drawer
-      v-model:visible="detailVisible"
-      header="第三方支付详情"
-      size="min(30rem, calc(100vw - 2rem))"
-      destroy-on-close
-      :close-btn="true"
-      @close="closeDetail"
-    >
-      <div v-if="currentRow" class="record-detail-body">
-        <section class="record-detail-section">
-          <h4>第三方支付信息</h4>
-          <div class="record-kv-grid">
-            <div class="record-kv-item">
-              <span>支付金额</span>
-              <strong>¥{{ formatMoney(currentRow.amount) }}</strong>
-            </div>
-            <div class="record-kv-item">
-              <span>支付渠道</span>
-              <strong>{{ currentRow.gateway_label || currentRow.gateway || '--' }}</strong>
-            </div>
-            <div class="record-kv-item">
-              <span>状态</span>
-              <t-tag :theme="resolvePaymentTagTheme(currentRow.status)" variant="light">
-                {{ currentRow.status_label || '--' }}
-              </t-tag>
-            </div>
-            <div class="record-kv-item">
-              <span>支付号</span>
-              <strong>{{ currentRow.payment_no || `#${currentRow.id}` }}</strong>
-            </div>
-            <div class="record-kv-item">
-              <span>渠道交易号</span>
-              <strong>{{ currentRow.trade_no || '--' }}</strong>
-            </div>
-            <div class="record-kv-item">
-              <span>到账时间</span>
-              <strong>{{ currentRow.paid_at || '--' }}</strong>
-            </div>
-            <div class="record-kv-item">
-              <span>创建时间</span>
-              <strong>{{ currentRow.created_at || '--' }}</strong>
-            </div>
-          </div>
-        </section>
-      </div>
-    </t-drawer>
   </section>
 </template>
 
 <script setup lang="ts">
 import type { PrimaryTableCol } from 'tdesign-vue-next';
 import { SearchIcon } from 'tdesign-icons-vue-next';
+import { useRouter } from 'vue-router';
+import { PAYMENT_STATUS_MAP } from '@shared/statusConfig';
 
+import DataState from '@shared/user-v3/components/DataState.vue';
+import StatusTag from '@shared/user-v3/components/StatusTag.vue';
 import {
   formatMoney,
   PAYMENT_GATEWAY_OPTIONS,
   PAYMENT_STATUS_OPTIONS,
   recordApi,
-  resolvePaymentTagTheme,
   useRecordList,
 } from '@/domains/finance/useRecords';
+import type { PaymentRecord } from '@/types/client';
+
+const router = useRouter();
 
 const {
   loading,
@@ -143,18 +99,18 @@ const {
   total,
   filters,
   hasRows,
-  detailVisible,
-  currentRow,
   loadList,
   handleSearch,
   handlePageSizeChange,
   resetFilters,
-  openDetail,
-  closeDetail,
-} = useRecordList(recordApi.payments, '充值记录加载失败');
+} = useRecordList(recordApi.payments, '第三方支付记录加载失败');
+
+function goToDetail(row: PaymentRecord) {
+  router.push(`/client/payments/${row.id}`);
+}
 
 const columns: PrimaryTableCol[] = [
-  { colKey: 'payment', title: '支付号', minWidth: '14rem' },
+  { colKey: 'payment', title: '支付订单号', minWidth: '16rem' },
   { colKey: 'gateway', title: '支付渠道', width: '8rem' },
   { colKey: 'amount', title: '支付金额', width: '9rem' },
   { colKey: 'status', title: '状态', width: '8rem' },

@@ -16,7 +16,6 @@ const expectedRoutes = [
   '/client/checkout-resume',
   '/client/services',
   '/client/services/:id',
-  '/client/orders',
   '/client/invoices',
   '/client/invoices/:id',
   '/client/catalog',

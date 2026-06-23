@@ -3,9 +3,10 @@ import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import { useRoute, useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
+import { SERVICE_STATUS_MAP, getStatusLabel } from '@shared/statusConfig';
+import type { TicketAttachment, TicketImageUploadPayload, TicketRecord, TicketReplyRecord, TicketServiceOption } from '@/types/client';
 
-export type TicketRecord = Record<string, any>;
-export type ServiceOption = Record<string, any>;
+type ServiceOption = TicketServiceOption;
 
 export const TICKET_STATUS_OPTIONS = [
   { label: '开启', value: 0 },
@@ -32,8 +33,14 @@ const MAX_IMAGES = 9;
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_SIZE = 5 * 1024 * 1024;
 
-function normalizeList(data: any) {
-  if (Array.isArray(data?.list)) return data.list;
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function normalizeList(data: unknown): TicketRecord[] {
+  if (data && typeof data === 'object' && Array.isArray((data as { list?: unknown[] }).list)) {
+    return (data as { list: TicketRecord[] }).list;
+  }
   if (Array.isArray(data)) return data;
   return [];
 }
@@ -72,11 +79,11 @@ export function resolveDepartmentLabel(value: unknown) {
   return TICKET_DEPARTMENT_OPTIONS.find((item) => String(item.value) === String(value))?.label || '--';
 }
 
-export function parseAttachments(item: TicketRecord | null | undefined) {
+export function parseAttachments(item: TicketRecord | TicketReplyRecord | null | undefined) {
   const attachments = item?.attachments || item?.attachment_urls || [];
   if (!Array.isArray(attachments)) return [];
   return attachments
-    .map((attachment, index) => {
+    .map((attachment: TicketAttachment | string, index) => {
       if (typeof attachment === 'string') return { id: index, url: attachment, path: attachment };
       return {
         id: attachment?.id || attachment?.uid || index,
@@ -87,18 +94,18 @@ export function parseAttachments(item: TicketRecord | null | undefined) {
     .filter((item) => item.url);
 }
 
-function resolveServiceName(option: ServiceOption = {}) {
-  const rawName = String(option.name || option.display_name || option.product_name || '').trim();
+function resolveServiceName(option?: ServiceOption) {
+  const rawName = String(option?.name || option?.display_name || option?.product_name || '').trim();
   if (!rawName) return '';
   const parts = rawName.split('/').map((item) => item.trim()).filter(Boolean);
   return parts.length >= 2 ? parts[parts.length - 1] : rawName;
 }
 
-export function formatTicketServiceOptionLabel(option: ServiceOption = {}, includeStatus = true) {
-  const id = Number(option.id || 0);
+export function formatTicketServiceOptionLabel(option?: ServiceOption, includeStatus = true) {
+  const id = Number(option?.id || 0);
   const name = resolveServiceName(option);
   if (id <= 0 || !name) return '--';
-  const status = String(option.status_label || '').trim();
+  const status = getStatusLabel(SERVICE_STATUS_MAP, Number(option?.status));
   return includeStatus && status ? `#${id}-${name}-${status}` : `#${id}-${name}`;
 }
 
@@ -128,7 +135,7 @@ export function useTicketList() {
   const list = ref<TicketRecord[]>([]);
   const total = ref(0);
   const serviceOptions = ref<ServiceOption[]>([]);
-  const uploadFiles = ref<TicketRecord[]>([]);
+  const uploadFiles = ref<TicketImageUploadPayload[]>([]);
   const previewVisible = ref(false);
   const previewUrl = ref('');
   const filters = reactive({
@@ -170,11 +177,11 @@ export function useTicketList() {
         keyword: filters.keyword || undefined,
         status: filters.status === undefined ? undefined : filters.status,
       });
-      const payload = (res as any).data || {};
+      const payload = res.data;
       list.value = normalizeList(payload);
-      total.value = Number(payload.total || list.value.length || 0);
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || '工单列表加载失败');
+      total.value = Number(payload?.total || list.value.length || 0);
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '工单列表加载失败'));
     } finally {
       loading.value = false;
     }
@@ -184,9 +191,9 @@ export function useTicketList() {
     serviceLoading.value = true;
     try {
       const res = await clientApi.ticketServiceOptions({ limit: 50 });
-      serviceOptions.value = Array.isArray((res as any).data) ? (res as any).data : [];
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || '服务选项加载失败');
+      serviceOptions.value = Array.isArray(res.data) ? res.data : [];
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '服务选项加载失败'));
     } finally {
       serviceLoading.value = false;
     }
@@ -227,13 +234,13 @@ export function useTicketList() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await clientApi.uploadTicketImage(formData as any);
-      const payload = (res as any).data || {};
+      const res = await clientApi.uploadTicketImage(formData);
+      const payload = res.data;
       uploadFiles.value = [...uploadFiles.value, payload].slice(0, MAX_IMAGES);
       MessagePlugin.success('图片已上传');
       return true;
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || '图片上传失败');
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '图片上传失败'));
       return false;
     } finally {
       uploading.value = false;
@@ -244,7 +251,7 @@ export function useTicketList() {
     uploadFiles.value.splice(index, 1);
   }
 
-  function previewUploadFile(file: TicketRecord) {
+  function previewUploadFile(file: TicketImageUploadPayload) {
     previewUrl.value = String(file.url || file.path || '');
     previewVisible.value = Boolean(previewUrl.value);
   }
@@ -270,8 +277,8 @@ export function useTicketList() {
       resetCreateForm();
       await loadTickets();
       return true;
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || '工单提交失败');
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '工单提交失败'));
       return false;
     } finally {
       creating.value = false;
@@ -323,7 +330,7 @@ export function useTicketDetail() {
   const replyUploading = ref(false);
   const detail = shallowRef<TicketRecord | null>(null);
   const replyContent = ref('');
-  const replyAttachments = ref<TicketRecord[]>([]);
+  const replyAttachments = ref<TicketImageUploadPayload[]>([]);
   const previewVisible = ref(false);
   const previewUrl = ref('');
   const activeMobileTab = ref<'chat' | 'detail'>('chat');
@@ -341,7 +348,7 @@ export function useTicketDetail() {
     return Number(detail.value?.user?.id || detail.value?.user_id || 0);
   }
 
-  function canRecall(reply: TicketRecord) {
+  function canRecall(reply: TicketReplyRecord) {
     if (!reply || reply.recalled || reply.is_staff) return false;
     const ownerId = currentUserId();
     if (ownerId && Number(reply.user_id) !== ownerId) return false;
@@ -359,10 +366,10 @@ export function useTicketDetail() {
     loading.value = true;
     try {
       const res = await clientApi.ticketDetail(ticketId.value);
-      detail.value = (res as any).data || null;
+      detail.value = res.data || null;
       if (!detail.value) await router.replace('/client/tickets');
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || '工单详情加载失败');
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '工单详情加载失败'));
       await router.replace('/client/tickets');
     } finally {
       loading.value = false;
@@ -380,12 +387,12 @@ export function useTicketDetail() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await clientApi.uploadTicketImage(formData as any);
-      replyAttachments.value = [...replyAttachments.value, (res as any).data || {}].slice(0, MAX_IMAGES);
+      const res = await clientApi.uploadTicketImage(formData);
+      replyAttachments.value = [...replyAttachments.value, res.data || {}].slice(0, MAX_IMAGES);
       MessagePlugin.success('图片已上传');
       return true;
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || '图片上传失败');
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '图片上传失败'));
       return false;
     } finally {
       replyUploading.value = false;
@@ -396,7 +403,7 @@ export function useTicketDetail() {
     replyAttachments.value.splice(index, 1);
   }
 
-  function previewAttachment(file: TicketRecord) {
+  function previewAttachment(file: TicketImageUploadPayload | { url?: string; path?: string }) {
     previewUrl.value = String(file.url || file.path || '');
     previewVisible.value = Boolean(previewUrl.value);
   }
@@ -422,15 +429,15 @@ export function useTicketDetail() {
       resetReplyDraft();
       await loadDetail();
       return true;
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || '发送回复失败');
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '发送回复失败'));
       return false;
     } finally {
       replying.value = false;
     }
   }
 
-  async function recallReply(reply: TicketRecord) {
+  async function recallReply(reply: TicketReplyRecord) {
     if (!ticketId.value || !reply?.id) return false;
     recalling.value = true;
     try {
@@ -438,8 +445,8 @@ export function useTicketDetail() {
       MessagePlugin.success('消息已撤回');
       await loadDetail();
       return true;
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || '撤回失败');
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '撤回失败'));
       return false;
     } finally {
       recalling.value = false;
@@ -462,8 +469,8 @@ export function useTicketDetail() {
           MessagePlugin.success('工单已关闭');
           await loadDetail();
           dialog.hide();
-        } catch (error: any) {
-          MessagePlugin.error(error?.message || '关闭工单失败');
+        } catch (error: unknown) {
+          MessagePlugin.error(getErrorMessage(error, '关闭工单失败'));
         } finally {
           closing.value = false;
           dialog.setConfirmLoading(false);

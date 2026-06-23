@@ -1,20 +1,22 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import { useRoute, useRouter } from 'vue-router';
+import { INVOICE_STATUS_MAP, getStatusLabel, toSelectOptions } from '@shared/statusConfig';
 
 import clientApi from '@/api/client';
+import { formatMoney } from '@/utils/format';
 import { useUserStore } from '@/store';
+import type {
+  InvoiceAlipayPaymentPayload,
+  InvoiceListSummary,
+  InvoicePaymentMethod,
+  InvoicePaymentSecurity,
+  InvoiceRecord,
+} from '@/types/client';
 
-type AnyRecord = Record<string, any>;
 export type PayMethodKey = 'balance' | 'alipay' | 'free';
 
-export const INVOICE_STATUS_OPTIONS = [
-  { label: '待支付', value: 0 },
-  { label: '已支付', value: 1 },
-  { label: '已取消', value: 2 },
-  { label: '已逾期', value: 3 },
-  { label: '已退款', value: 5 },
-];
+export const INVOICE_STATUS_OPTIONS = toSelectOptions(INVOICE_STATUS_MAP, false);
 
 export const INVOICE_TYPE_OPTIONS = [
   { label: '新购账单', value: 'new' },
@@ -26,18 +28,14 @@ export const INVOICE_TYPE_OPTIONS = [
   { label: '手工账单', value: 'manual' },
 ];
 
-const INVOICE_STATUS_LABELS: Record<number, string> = {
-  0: '待支付',
-  1: '已支付',
-  2: '已取消',
-  3: '已逾期',
-  5: '已退款',
-};
-
 function normalizeText(value: unknown) {
   if (typeof value === 'string') return value.trim();
   if (typeof value === 'number') return String(value);
   return '';
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
 }
 
 function pickText(...values: unknown[]) {
@@ -49,7 +47,7 @@ function pickText(...values: unknown[]) {
   return '--';
 }
 
-function resolveSummaryField(row: AnyRecord | null | undefined, field: string) {
+function resolveSummaryField(row: InvoiceRecord | null | undefined, field: keyof NonNullable<InvoiceRecord['summary']> | string) {
   const summary = row?.summary;
   if (!summary || typeof summary !== 'object' || Array.isArray(summary)) {
     return '';
@@ -58,7 +56,7 @@ function resolveSummaryField(row: AnyRecord | null | undefined, field: string) {
   return normalizeText(summary[field]);
 }
 
-function hasProductBinding(row: AnyRecord | null | undefined) {
+function hasProductBinding(row: InvoiceRecord | null | undefined) {
   return Number(row?.product?.id || row?.product_id || 0) > 0;
 }
 
@@ -67,10 +65,7 @@ function normalizeTypeFilter(value: unknown) {
   return rawTypes.map((item) => normalizeText(item)).filter(Boolean).join(',');
 }
 
-export function formatMoney(value: unknown) {
-  const amount = Number(value || 0);
-  return Number.isFinite(amount) ? amount.toFixed(2) : '0.00';
-}
+export { formatMoney };
 
 export function normalizeMoney(value: unknown) {
   const amount = Number(value || 0);
@@ -78,7 +73,7 @@ export function normalizeMoney(value: unknown) {
   return Math.max(0, Math.round(amount * 100) / 100);
 }
 
-export function resolveInvoiceTitle(row: AnyRecord | null | undefined) {
+export function resolveInvoiceTitle(row: InvoiceRecord | null | undefined) {
   if (hasProductBinding(row)) {
     return pickText(
       row?.product_spec_display,
@@ -97,7 +92,7 @@ export function resolveInvoiceTitle(row: AnyRecord | null | undefined) {
   );
 }
 
-export function resolveInvoiceSubtitle(row: AnyRecord | null | undefined) {
+export function resolveInvoiceSubtitle(row: InvoiceRecord | null | undefined) {
   const title = resolveInvoiceTitle(row);
   const combinedDisplayName = normalizeText(row?.combined_display_name);
   const productDisplayName = normalizeText(row?.product_display_name);
@@ -120,38 +115,34 @@ export function resolveInvoiceSubtitle(row: AnyRecord | null | undefined) {
   );
 }
 
-export function resolveInvoiceNo(row: AnyRecord | null | undefined) {
+export function resolveInvoiceNo(row: InvoiceRecord | null | undefined) {
   return normalizeText(row?.invoice_no) || `#${row?.id || 0}`;
 }
 
-export function resolveInvoiceStatusLabel(rowOrStatus: AnyRecord | number | string | null | undefined) {
+export function resolveInvoiceStatusLabel(rowOrStatus: InvoiceRecord | number | string | null | undefined) {
   if (rowOrStatus && typeof rowOrStatus === 'object') {
-    const label = normalizeText(rowOrStatus.status_label);
-    if (label) return label;
-    return INVOICE_STATUS_LABELS[Number(rowOrStatus.status)] || '--';
+    return getStatusLabel(INVOICE_STATUS_MAP, Number(rowOrStatus.status));
   }
 
-  return INVOICE_STATUS_LABELS[Number(rowOrStatus)] || '--';
+  return getStatusLabel(INVOICE_STATUS_MAP, Number(rowOrStatus));
 }
 
-export function resolveInvoiceTagTheme(status: unknown) {
-  const current = Number(status);
-  if (current === 1) return 'success';
-  if (current === 0) return 'warning';
-  if (current === 5) return 'primary';
-  return 'danger';
-}
-
-export function isPayableInvoice(row: AnyRecord | null | undefined) {
+export function isPayableInvoice(row: InvoiceRecord | null | undefined) {
   const status = Number(row?.status);
   return status === 0 || status === 3;
 }
 
+function coercePayMethodKey(value: unknown): PayMethodKey {
+  const key = String(value || 'balance').trim();
+  if (key === 'alipay' || key === 'free') return key;
+  return 'balance';
+}
+
 function resolveListPayload(response: unknown) {
-  const payload = (response as AnyRecord)?.data || {};
+  const payload = (response as { data?: InvoiceRecord[] | { list?: InvoiceRecord[]; total?: number } } | null | undefined)?.data;
   return {
-    list: Array.isArray(payload.list) ? payload.list : [],
-    total: Number(payload.total || 0),
+    list: payload && !Array.isArray(payload) && Array.isArray(payload.list) ? payload.list : [],
+    total: payload && !Array.isArray(payload) ? Number(payload.total || 0) : 0,
   };
 }
 
@@ -161,33 +152,34 @@ export function useInvoiceList(options: { fixedTypes?: unknown; pageSize?: numbe
   const loading = ref(false);
   const summaryLoading = ref(false);
   const canceling = ref(false);
-  const list = shallowRef<AnyRecord[]>([]);
+  const list = shallowRef<InvoiceRecord[]>([]);
   const total = ref(0);
-  const summary = shallowRef<AnyRecord>({});
+  const summary = shallowRef<InvoiceListSummary>({});
   const detailVisible = ref(false);
   const routeDetailId = ref(0);
-  const currentRow = shallowRef<AnyRecord | null>(null);
+  const currentRow = shallowRef<InvoiceRecord | null>(null);
   const filters = reactive({
     page: 1,
     page_size: Number(options.pageSize || 10),
     keyword: '',
     status: '' as string | number,
     type: '',
+    quickFilter: '' as string,
   });
 
   const showTypeSelector = computed(() => !normalizeTypeFilter(options.fixedTypes));
   const metricCards = computed(() => [
     {
-      key: 'total',
-      label: '账单总数',
-      value: Number(summary.value.total_count ?? total.value ?? 0),
-      copy: '当前筛选范围内的账单记录',
+      key: 'unpaid_amount',
+      label: '待付金额',
+      value: `¥${formatMoney(summary.value.unpaid_amount || 0)}`,
+      copy: '尚未支付的账单金额',
     },
     {
       key: 'unpaid',
-      label: '待支付',
+      label: '待付账单数',
       value: Number(summary.value.unpaid_count || 0),
-      copy: `待付 ¥${formatMoney(summary.value.unpaid_amount || 0)}`,
+      copy: '需要支付的账单',
     },
     {
       key: 'paid',
@@ -196,16 +188,16 @@ export function useInvoiceList(options: { fixedTypes?: unknown; pageSize?: numbe
       copy: `累计 ¥${formatMoney(summary.value.paid_amount || summary.value.paid_total || 0)}`,
     },
     {
-      key: 'amount',
-      label: '账单金额',
-      value: `¥${formatMoney(summary.value.total_amount || 0)}`,
-      copy: '包含优惠前账单金额',
+      key: 'total',
+      label: '账单总数',
+      value: Number(summary.value.total_count ?? total.value ?? 0),
+      copy: '所有状态的账单',
     },
   ]);
 
   function buildParams() {
     const fixedTypes = normalizeTypeFilter(options.fixedTypes);
-    const params: AnyRecord = {
+    const params: Record<string, string | number> = {
       page: filters.page,
       page_size: filters.page_size,
     };
@@ -223,7 +215,7 @@ export function useInvoiceList(options: { fixedTypes?: unknown; pageSize?: numbe
     summaryLoading.value = true;
     try {
       const res = await clientApi.invoicesSummary(buildParams());
-      summary.value = (res as AnyRecord).data || {};
+      summary.value = res.data || {};
     } catch {
       summary.value = {};
     } finally {
@@ -238,8 +230,8 @@ export function useInvoiceList(options: { fixedTypes?: unknown; pageSize?: numbe
       const payload = resolveListPayload(res);
       list.value = payload.list;
       total.value = payload.total;
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || '账单列表加载失败');
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '账单列表加载失败'));
     } finally {
       loading.value = false;
     }
@@ -265,6 +257,19 @@ export function useInvoiceList(options: { fixedTypes?: unknown; pageSize?: numbe
     filters.keyword = '';
     filters.status = '';
     filters.type = '';
+    filters.quickFilter = '';
+    void loadData();
+  }
+
+  function applyQuickFilter(key: string) {
+    filters.quickFilter = key;
+    filters.page = 1;
+    filters.status = '';
+    filters.type = '';
+
+    if (key === 'pending') {
+      filters.status = 0;
+    }
     void loadData();
   }
 
@@ -280,14 +285,14 @@ export function useInvoiceList(options: { fixedTypes?: unknown; pageSize?: numbe
     try {
       const res = await clientApi.invoiceDetail(invoiceId);
       if (routeDetailId.value !== invoiceId) return;
-      currentRow.value = (res as AnyRecord).data || null;
+      currentRow.value = res.data || null;
       detailVisible.value = Boolean(currentRow.value);
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || '账单详情加载失败');
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '账单详情加载失败'));
     }
   }
 
-  function openDetail(row: AnyRecord) {
+  function openDetail(row: InvoiceRecord) {
     currentRow.value = row;
     detailVisible.value = true;
     const invoiceId = normalizeInvoiceId(row?.id);
@@ -310,15 +315,15 @@ export function useInvoiceList(options: { fixedTypes?: unknown; pageSize?: numbe
     }
   }
 
-  function goToPay(row: AnyRecord) {
+  function goToPay(row: InvoiceRecord) {
     detailVisible.value = false;
     router.push(`/client/invoices/${row.id}/pay`);
   }
 
-  function cancelInvoice(row: AnyRecord) {
+  function cancelInvoice(row: InvoiceRecord) {
     const dialog = DialogPlugin.confirm({
       header: '取消账单',
-      body: '确定取消该账单？取消后不可恢复。',
+      body: '确定取消该账单？取消后不可恢复。\n使用的优惠券将退回账户。\n如果是新产品购买，库存将释放。',
       confirmBtn: '确认取消',
       cancelBtn: '再想想',
       theme: 'warning',
@@ -331,8 +336,8 @@ export function useInvoiceList(options: { fixedTypes?: unknown; pageSize?: numbe
           closeDetail();
           await loadData();
           dialog.hide();
-        } catch (error: any) {
-          MessagePlugin.error(error?.message || '取消账单失败');
+        } catch (error: unknown) {
+          MessagePlugin.error(getErrorMessage(error, '取消账单失败'));
         } finally {
           canceling.value = false;
           dialog.setConfirmLoading(false);
@@ -382,6 +387,7 @@ export function useInvoiceList(options: { fixedTypes?: unknown; pageSize?: numbe
     handleSearch,
     handlePageSizeChange,
     resetFilters,
+    applyQuickFilter,
     openDetail,
     closeDetail,
     goToPay,
@@ -398,7 +404,7 @@ export function useInvoiceDetail() {
   const canceling = ref(false);
   const paying = ref(false);
   const polling = ref(false);
-  const detail = shallowRef<AnyRecord | null>(null);
+  const detail = shallowRef<InvoiceRecord | null>(null);
   const selectedPayMethod = ref<PayMethodKey>('balance');
   const allowBalanceDeduction = ref(false);
   const alipayDialogVisible = ref(false);
@@ -410,12 +416,12 @@ export function useInvoiceDetail() {
   const pollTimer = ref<number | null>(null);
 
   const invoiceId = computed(() => Number(route.params.id || 0));
-  const payMethods = computed<AnyRecord[]>(() => (Array.isArray(detail.value?.pay_methods) ? detail.value?.pay_methods : []));
-  const paySecurity = computed<AnyRecord>(() => detail.value?.payment_security || {});
+  const payMethods = computed<InvoicePaymentMethod[]>(() => (Array.isArray(detail.value?.pay_methods) ? detail.value?.pay_methods : []));
+  const paySecurity = computed<InvoicePaymentSecurity>(() => detail.value?.payment_security || {});
   const canPay = computed(() => Boolean(paySecurity.value.can_pay) && isPayableInvoice(detail.value));
   const alipayAvailable = computed(() => payMethods.value.some((item) => item.key === 'alipay'));
   const alipayPollingReady = computed(() => Boolean(alipayPaymentNo.value && alipayPollToken.value));
-  const balanceAmount = computed(() => normalizeMoney(userStore.info?.balance || 0));
+  const balanceAmount = computed(() => normalizeMoney(userStore.info?.cash_balance || 0));
   const payableAmount = computed(() => normalizeMoney(detail.value?.payable_amount || 0));
   const canDeductBalance = computed(() => balanceAmount.value > 0 && payableAmount.value > 0);
   const autoDeductionAmount = computed(() => normalizeMoney(Math.min(balanceAmount.value, payableAmount.value)));
@@ -458,11 +464,11 @@ export function useInvoiceDetail() {
   function syncPayMethod() {
     if (!payMethods.value.length) return;
     if (payMethods.value.some((item) => item.key === selectedPayMethod.value)) return;
-    selectedPayMethod.value = (payMethods.value[0]?.key || 'balance') as PayMethodKey;
+    selectedPayMethod.value = coercePayMethodKey(payMethods.value[0]?.key);
   }
 
   function selectPayMethod(value: unknown) {
-    selectedPayMethod.value = String(value || 'balance') as PayMethodKey;
+    selectedPayMethod.value = coercePayMethodKey(value);
     allowBalanceDeduction.value = false;
     resetPaymentPayload();
   }
@@ -479,12 +485,13 @@ export function useInvoiceDetail() {
     }
   }
 
-  function applyAlipayPayload(payload: AnyRecord, usedBalanceDeduction: boolean) {
-    alipayQrCode.value = String(payload.qr_code || '');
-    alipayPaymentNo.value = String(payload.payment_no || '');
-    alipayPollToken.value = String(payload.poll_token || '');
-    appliedDeductionAmount.value = usedBalanceDeduction ? String(payload.balance_amount || autoDeductionAmountText.value) : '0.00';
-    alipayAmount.value = String(payload.amount || estimatedAlipayAmountText.value || detail.value?.payable_amount || '0.00');
+  function applyAlipayPayload(payload: InvoiceAlipayPaymentPayload | null | undefined, usedBalanceDeduction: boolean) {
+    const data = payload || {};
+    alipayQrCode.value = String(data.qr_code || '');
+    alipayPaymentNo.value = String(data.payment_no || '');
+    alipayPollToken.value = String(data.poll_token || '');
+    appliedDeductionAmount.value = usedBalanceDeduction ? String(data.balance_amount || autoDeductionAmountText.value) : '0.00';
+    alipayAmount.value = String(data.amount || estimatedAlipayAmountText.value || detail.value?.payable_amount || '0.00');
     alipayDialogVisible.value = Boolean(alipayQrCode.value);
   }
 
@@ -493,7 +500,7 @@ export function useInvoiceDetail() {
     loading.value = true;
     try {
       const res = await clientApi.invoiceDetail(invoiceId.value);
-      detail.value = (res as AnyRecord).data || null;
+      detail.value = res.data || null;
       alipayAmount.value = formatMoney(payableAmount.value);
       syncPayMethod();
       if (detail.value && !isPayableInvoice(detail.value)) {
@@ -507,8 +514,8 @@ export function useInvoiceDetail() {
       if (detail.value?.status === 1) {
         resetPaymentPayload();
       }
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || '账单详情加载失败');
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '账单详情加载失败'));
     } finally {
       loading.value = false;
     }
@@ -531,8 +538,8 @@ export function useInvoiceDetail() {
           resetPaymentPayload();
           await loadDetail();
           dialog.hide();
-        } catch (error: any) {
-          MessagePlugin.error(error?.message || '取消账单失败');
+        } catch (error: unknown) {
+          MessagePlugin.error(getErrorMessage(error, '取消账单失败'));
         } finally {
           canceling.value = false;
           dialog.setConfirmLoading(false);
@@ -556,10 +563,10 @@ export function useInvoiceDetail() {
       MessagePlugin.success('账单已支付');
       resetPaymentPayload();
       await refreshClientInfo();
-      detail.value = (res as AnyRecord).data?.invoice || detail.value;
+      detail.value = res.data?.invoice || detail.value;
       await loadDetail();
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || '余额支付失败');
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '余额支付失败'));
     } finally {
       paying.value = false;
     }
@@ -607,7 +614,7 @@ export function useInvoiceDetail() {
         : await clientApi.payInvoiceByAlipay(invoiceId.value, {
             payment_session_token: sessionToken,
           });
-      const payload = (res as AnyRecord).data || {};
+      const payload = res.data;
       applyAlipayPayload(payload, shouldUseBalanceDeduction);
 
       if (alipayQrCode.value) {
@@ -619,8 +626,8 @@ export function useInvoiceDetail() {
           }
         }, 5000);
       }
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || '生成支付宝二维码失败');
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '生成支付宝二维码失败'));
     } finally {
       paying.value = false;
     }
@@ -635,7 +642,7 @@ export function useInvoiceDetail() {
         payment_no: alipayPaymentNo.value,
         poll_token: alipayPollToken.value,
       });
-      const payload = (res as AnyRecord).data || {};
+      const payload = res.data || {};
       if (payload.paid) {
         clearPollingTimer();
         resetPaymentPayload();
@@ -646,8 +653,8 @@ export function useInvoiceDetail() {
       } else if (!silent) {
         MessagePlugin.info(payload.message || '当前仍未支付成功');
       }
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || '查询支付状态失败');
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '查询支付状态失败'));
     } finally {
       polling.value = false;
     }
@@ -664,7 +671,7 @@ export function useInvoiceDetail() {
   );
 
   watch(
-    () => [detail.value?.payable_amount, userStore.info?.balance],
+    () => [detail.value?.payable_amount, userStore.info?.cash_balance],
     () => {
       if (!showBalanceDeductionOption.value) {
         allowBalanceDeduction.value = false;

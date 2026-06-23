@@ -4,6 +4,19 @@
       <h1>个人资料</h1>
     </header>
 
+    <nav class="profile-tabs-mobile" aria-label="账户中心">
+      <button
+        v-for="tab in profileTabs"
+        :key="tab.value"
+        type="button"
+        class="profile-tabs-mobile__item"
+        :class="{ 'is-active': activeTab === tab.value }"
+        @click="handleProfileTabChange(tab.value)"
+      >
+        {{ tab.label }}
+      </button>
+    </nav>
+
     <aside class="profile-nav">
       <t-card class="profile-card" :bordered="false">
         <template #title>账户中心</template>
@@ -22,8 +35,10 @@
         <template #actions><t-tag variant="light">基础信息</t-tag></template>
         <t-form label-align="left" label-width="6rem" class="profile-form">
           <t-form-item label="账户ID">
-            <t-input :value="profileForm.id" readonly />
-            <t-button variant="outline" @click="copyText(profileForm.id)">复制</t-button>
+            <div class="profile-id-row">
+              <t-input :value="profileForm.id" readonly />
+              <t-button variant="outline" @click="copyText(profileForm.id)">复制</t-button>
+            </div>
           </t-form-item>
           <t-form-item label="注册时间"><t-input :value="profileForm.createdAt || '--'" readonly /></t-form-item>
           <t-form-item label="用户名"><t-input v-model="profileForm.nickname" maxlength="50" placeholder="请输入用户名" /></t-form-item>
@@ -103,6 +118,13 @@
 <script setup lang="ts">
 import { useProfile } from '@/domains/account/useProfile';
 
+const profileTabs = [
+  { value: 'profile', label: '个人资料' },
+  { value: 'security', label: '账户安全' },
+  { value: 'agent', label: '合作代理' },
+  { value: 'notification', label: '消息提醒' },
+] as const;
+
 const {
   activeTab,
   profileLoading,
@@ -127,7 +149,7 @@ const {
   display: grid;
   grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr);
   gap: var(--td-comp-margin-m);
-  padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
+  // padding 由 Starter 布局层统一提供
 }
 
 .client-page-heading {
@@ -159,6 +181,17 @@ const {
 
 .profile-form {
   max-width: 46rem;
+}
+
+.profile-id-row {
+  display: flex;
+  gap: var(--td-comp-margin-s);
+  align-items: center;
+  width: 100%;
+}
+
+.profile-tabs-mobile {
+  display: none;
 }
 
 .profile-footer {
@@ -219,14 +252,81 @@ const {
   }
 }
 
-@media (max-width: 56rem) {
+@media (max-width: @screen-sm-max) {
   .profile-page {
     grid-template-columns: 1fr;
-    padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-s);
+    gap: var(--td-comp-margin-s);
   }
 
+  .client-page-heading {
+    h1 {
+      font: var(--td-font-title-medium);
+    }
+  }
+
+  // 手机端隐藏桌面侧栏，使用顶部横向标签
   .profile-nav {
-    position: static;
+    display: none;
+  }
+
+  .profile-tabs-mobile {
+    display: flex;
+    gap: var(--td-comp-margin-xxs);
+    padding: var(--td-comp-paddingTB-xxs) var(--td-comp-paddingLR-xxs);
+    background: var(--td-bg-color-container);
+    border: thin solid var(--td-border-color);
+    border-radius: var(--td-radius-medium);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+
+    &__item {
+      flex: 1 0 auto;
+      padding: var(--td-comp-paddingTB-s) var(--td-comp-paddingLR-m);
+      color: var(--td-text-color-primary);
+      background: transparent;
+      border: none;
+      border-radius: var(--td-radius-default);
+      font: var(--td-font-body-medium);
+      white-space: nowrap;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+
+      &.is-active {
+        color: var(--td-brand-color);
+        background: var(--td-brand-color-light);
+        font-weight: 600;
+      }
+    }
+  }
+
+  // 表单标签顶部对齐，输入框占满整行
+  .profile-form {
+    :deep(.t-form__label) {
+      width: auto !important;
+      min-width: 0 !important;
+      padding-right: 0;
+      padding-bottom: var(--td-comp-margin-xxs);
+    }
+
+    :deep(.t-form__controls) {
+      width: 100% !important;
+      margin-left: 0 !important;
+    }
+  }
+
+  .profile-id-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--td-comp-margin-xs);
+
+    :deep(.t-button) {
+      align-self: flex-end;
+    }
   }
 
   .profile-footer,
@@ -234,6 +334,12 @@ const {
   .notification-item {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .profile-footer {
+    .t-button {
+      align-self: stretch;
+    }
   }
 }
 </style>

@@ -1,6 +1,6 @@
 <template>
   <section class="client-verification">
-    <t-loading :loading="loading" text="正在加载实名信息">
+    <LoadingState :loading="loading" text="正在加载实名信息">
       <t-card class="verification-status-card" :bordered="false">
         <div class="verification-status-card__main">
           <div>
@@ -54,7 +54,7 @@
           </ul>
         </t-card>
       </div>
-    </t-loading>
+    </LoadingState>
 
     <t-dialog
       v-model:visible="showVerificationDialog"
@@ -113,8 +113,10 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue';
-import QrcodeVue from 'qrcode.vue';
+import { defineAsyncComponent, onMounted } from 'vue';
+import LoadingState from '@shared/user-v3/components/LoadingState.vue';
+
+const QrcodeVue = defineAsyncComponent(() => import('qrcode.vue'));
 
 import { useVerification } from '@/domains/account/useVerification';
 
@@ -156,7 +158,7 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: var(--td-comp-margin-m);
-  padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
+  // padding 由 Starter 布局层统一提供
 }
 
 .verification-status-card,
@@ -296,11 +298,7 @@ onMounted(async () => {
   font: var(--td-font-body-medium);
 }
 
-@media (max-width: 48rem) {
-  .client-verification {
-    padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-s);
-  }
-
+@media (max-width: @screen-sm-rem) {
   .verification-status-card__main,
   .verification-meta-grid,
   .verification-guide-grid {

@@ -4,8 +4,10 @@
     nav-text="想起密码了？"
     nav-link-text="返回登录"
     :nav-to="loginLink"
-    cta-text="返回官网产品页 >"
+    cta-text="返回产品页"
     cta-to="/products"
+    hero-title="重置密码后，继续进入控制台"
+    hero-description="找回登录凭证后，可继续处理服务、账单与账户安全设置。"
   >
     <t-form ref="formRef" class="client-auth-form" :data="form" :rules="rules" label-width="0" @submit="handleSubmit">
       <t-form-item name="account">
@@ -68,14 +70,16 @@
         </div>
       </t-form-item>
 
-      <t-button block size="large" theme="primary" :loading="loading" @click="submitForm">重置密码</t-button>
+      <t-button class="client-auth-submit" block size="large" theme="primary" :loading="loading" @click="submitForm">
+        重置密码
+      </t-button>
     </t-form>
   </auth-shell>
 </template>
 
 <script setup lang="ts">
 import { BrowseIcon, BrowseOffIcon, LockOnIcon } from 'tdesign-icons-vue-next';
-import type { FormInstanceFunctions, FormRule, SubmitContext } from 'tdesign-vue-next';
+import type { FormInstanceFunctions, FormRule, FormValidateMessage, SubmitContext } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onBeforeUnmount, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -90,6 +94,11 @@ interface ResetPasswordForm {
   code: string;
   password: string;
   password_confirmation: string;
+}
+
+interface RuntimeHandledError {
+  __handled?: boolean;
+  message?: string;
 }
 
 const route = useRoute();
@@ -185,9 +194,10 @@ async function handleSendCode() {
 
     MessagePlugin.success(`${accountPayload.accountType === 'phone' ? '短信' : '邮箱'}验证码已发送`);
     startCountdown();
-  } catch (error: any) {
-    if (!error?.__handled) {
-      MessagePlugin.error(error?.message || '验证码发送失败');
+  } catch (error: unknown) {
+    const runtimeError = error as RuntimeHandledError;
+    if (!runtimeError.__handled) {
+      MessagePlugin.error(runtimeError.message || '验证码发送失败');
     }
   } finally {
     sendingCode.value = false;
@@ -207,11 +217,13 @@ async function handleSubmit(ctx: SubmitContext) {
 }
 
 function setFormErrors(errors: Partial<Record<keyof ResetPasswordForm, string>>) {
-  formRef.value?.setValidateMessage(
-    Object.fromEntries(
-      Object.entries(errors).map(([field, message]) => [field, [{ type: 'error', message }]]),
-    ) as any,
-  );
+  const validateMessage: FormValidateMessage<ResetPasswordForm> = {
+    account: errors.account ? [{ type: 'error', message: errors.account }] : [],
+    code: errors.code ? [{ type: 'error', message: errors.code }] : [],
+    password: errors.password ? [{ type: 'error', message: errors.password }] : [],
+    password_confirmation: errors.password_confirmation ? [{ type: 'error', message: errors.password_confirmation }] : [],
+  };
+  formRef.value?.setValidateMessage(validateMessage);
 }
 
 function validateForm() {
@@ -258,9 +270,10 @@ async function runResetPassword() {
       path: '/client/login',
       query: { account: normalizeAccountValue(form.account) },
     });
-  } catch (error: any) {
-    if (!error?.__handled) {
-      MessagePlugin.error(error?.message || '密码重置失败');
+  } catch (error: unknown) {
+    const runtimeError = error as RuntimeHandledError;
+    if (!runtimeError.__handled) {
+      MessagePlugin.error(runtimeError.message || '密码重置失败');
     }
   } finally {
     loading.value = false;

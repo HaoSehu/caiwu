@@ -1,4 +1,3 @@
-import { keys } from 'lodash';
 import { defineStore } from 'pinia';
 import { Color } from 'tvision-color';
 
@@ -12,7 +11,7 @@ import { generateColorMap, insertThemeStylesheet } from '@/utils/color';
 const state: Record<string, any> = {
   ...STYLE_CONFIG,
   showSettingPanel: false,
-  isMobileSidebarVisible: true,
+  isMobileSidebarVisible: false,
   colorList: {} as TColorSeries,
   chartColors: LIGHT_CHART_COLORS,
 };
@@ -103,7 +102,7 @@ export const useSettingStore = defineStore('setting', {
     },
   },
   persist: {
-    pick: [...keys(STYLE_CONFIG), 'colorList', 'chartColors'],
+    pick: [...Object.keys(STYLE_CONFIG), 'colorList', 'chartColors'],
   },
 });
 

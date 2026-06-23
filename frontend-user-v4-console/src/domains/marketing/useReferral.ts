@@ -1,12 +1,39 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { MessagePlugin } from 'tdesign-vue-next';
+import { ACCOUNT_TRANSACTION_EVENT_MAP, getStatusLabel } from '@shared/statusConfig';
 
 import { clientAuthApi } from '@/api/auth';
 import clientApi from '@/api/client';
+import { copyText } from '@/utils/format';
 import { useUserStore } from '@/store';
+import type {
+  ClientAlipayAccount,
+  ClientNotificationPreferences,
+  ReferralAccountLogRecord,
+  ReferralOverviewPayload,
+  ReferralRewardRecord,
+  ReferralWithdrawalRecord,
+} from '@/types/client';
 
-type AnyRecord = Record<string, any>;
 type TagTheme = 'default' | 'success' | 'warning' | 'primary' | 'danger';
+
+type BindFormState = {
+  real_name: string;
+  account: string;
+  code: string;
+};
+
+type WithdrawFormState = {
+  amount: string;
+};
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') {
+    return error.message;
+  }
+  return fallback;
+}
 
 export function money(value: unknown) {
   const amount = Number(value || 0);
@@ -31,6 +58,14 @@ export function withdrawStatus(status: unknown) {
   return map[Number(status)] || { label: String(status ?? '--'), theme: 'default' };
 }
 
+export function accountEventLabel(eventType: unknown) {
+  return getStatusLabel(ACCOUNT_TRANSACTION_EVENT_MAP, String(eventType || ''));
+}
+
+function resolveList<T>(list: T[] | undefined) {
+  return Array.isArray(list) ? list : [];
+}
+
 export function useReferral() {
   const userStore = useUserStore();
   const loading = ref(false);
@@ -38,22 +73,26 @@ export function useReferral() {
   const bindDialogVisible = ref(false);
   const withdrawSubmitting = ref(false);
   const bindSubmitting = ref(false);
-  const overview = reactive<AnyRecord>({});
-  const rewards = ref<AnyRecord[]>([]);
-  const accountLogs = ref<AnyRecord[]>([]);
-  const withdrawals = ref<AnyRecord[]>([]);
-  const alipayAccount = reactive({ real_name: '', account: '', is_bound: false });
-  const withdrawForm = reactive({ amount: '' });
-  const bindForm = reactive({ real_name: '', account: '', code: '' });
+  const overview = reactive<ReferralOverviewPayload>({});
+  const rewards = ref<ReferralRewardRecord[]>([]);
+  const accountLogs = ref<ReferralAccountLogRecord[]>([]);
+  const withdrawals = ref<ReferralWithdrawalRecord[]>([]);
+  const alipayAccount = reactive<ClientAlipayAccount & { is_bound: boolean }>({
+    real_name: '',
+    account: '',
+    is_bound: false,
+  });
+  const withdrawForm = reactive<WithdrawFormState>({ amount: '' });
+  const bindForm = reactive<BindFormState>({ real_name: '', account: '', code: '' });
 
-  const availableAmountText = computed(() => money(overview.referral_available_amount || overview.available_amount));
-  const frozenAmountText = computed(() => money(overview.referral_frozen_amount || overview.pending_amount));
-  const totalRewardText = computed(() => money(overview.total_reward_amount || overview.total_amount));
-  const withdrawnAmountText = computed(() => money(overview.referral_withdrawn_amount || overview.withdrawn_amount));
+  const availableAmountText = computed(() => money(overview.referral_available_amount));
+  const frozenAmountText = computed(() => money(overview.referral_frozen_amount));
+  const totalRewardText = computed(() => money(overview.total_reward_amount));
+  const withdrawnAmountText = computed(() => money(overview.referral_withdrawn_amount));
   const withdrawMinAmountText = computed(() => money(overview.withdraw_min_amount || 20));
   const rewardRateText = computed(() => `${money(overview.reward_rate || overview.current_member_level?.reward_rate || 0)}%`);
   const freezeDaysText = computed(() => String(Number(overview.reward_freeze_days || 0)));
-  const levelName = computed(() => overview.current_member_level?.name || 'v1');
+  const levelName = computed(() => overview.current_member_level?.name || 'V1');
   const isAlipayBound = computed(() => Boolean(alipayAccount.is_bound && alipayAccount.account));
   const referralLink = computed(() => {
     if (overview.referral_link) return overview.referral_link;
@@ -61,25 +100,22 @@ export function useReferral() {
     return code && typeof window !== 'undefined' ? `${window.location.origin}/client/register?ref=${code}` : '--';
   });
   const summaryCards = computed(() => [
-    { key: 'available', label: '可提现余额', value: `¥${availableAmountText.value}`, primary: true },
-    { key: 'frozen', label: '冻结中', value: `¥${frozenAmountText.value}` },
-    { key: 'total', label: '累计奖励', value: `¥${totalRewardText.value}` },
-    { key: 'withdrawn', label: '已提现', value: `¥${withdrawnAmountText.value}` },
+    { key: 'available', label: '可提现余额', value: `￥${availableAmountText.value}`, primary: true },
+    { key: 'frozen', label: '冻结中', value: `￥${frozenAmountText.value}` },
+    { key: 'total', label: '累计奖励', value: `￥${totalRewardText.value}` },
+    { key: 'withdrawn', label: '已提现', value: `￥${withdrawnAmountText.value}` },
     { key: 'direct', label: '直推人数', value: `${Number(overview.direct_referral_count || 0)} 人` },
-    { key: 'orders', label: '推荐账单数', value: `${Number(overview.rewarded_orders_count || 0)} 单` },
+    { key: 'orders', label: '奖励账单数', value: `${Number(overview.rewarded_orders_count || 0)} 单` },
   ]);
-
-  function resolveList(response: unknown) {
-    const payload = (response as AnyRecord)?.data || {};
-    return Array.isArray(payload.list) ? payload.list : [];
-  }
 
   async function loadAlipayAccount() {
     try {
       const response = await clientAuthApi.alipayAccount();
-      Object.assign(alipayAccount, (response as AnyRecord).data || {});
+      Object.assign(alipayAccount, response.data || {});
+      alipayAccount.is_bound = Boolean(response.data?.is_bound && response.data?.account);
     } catch {
       Object.assign(alipayAccount, userStore.info?.alipay_account || {});
+      alipayAccount.is_bound = Boolean(userStore.info?.alipay_account?.is_bound && userStore.info?.alipay_account?.account);
     }
   }
 
@@ -92,12 +128,12 @@ export function useReferral() {
         clientApi.referralAccountLogs({ page: 1, page_size: 10 }),
         clientApi.referralWithdrawals({ page: 1, page_size: 10 }),
       ]);
-      Object.assign(overview, (overviewRes as AnyRecord).data || {});
-      rewards.value = resolveList(rewardsRes);
-      accountLogs.value = resolveList(logsRes);
-      withdrawals.value = resolveList(withdrawalsRes);
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || '推荐奖励数据加载失败');
+      Object.assign(overview, overviewRes.data || {});
+      rewards.value = resolveList(rewardsRes.data?.list);
+      accountLogs.value = resolveList(logsRes.data?.list);
+      withdrawals.value = resolveList(withdrawalsRes.data?.list);
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '推荐奖励数据加载失败'));
     } finally {
       loading.value = false;
     }
@@ -108,17 +144,12 @@ export function useReferral() {
       MessagePlugin.warning('推荐链接暂不可用');
       return;
     }
-    try {
-      await navigator.clipboard.writeText(referralLink.value);
-      MessagePlugin.success('推荐链接已复制');
-    } catch {
-      MessagePlugin.warning('复制失败，请手动复制');
-    }
+    await copyText(referralLink.value, { successMsg: '推荐链接已复制' });
   }
 
   function openBindDialog() {
     bindForm.real_name = alipayAccount.real_name || String(userStore.info?.real_name || '');
-    bindForm.account = alipayAccount.account || String(userStore.info?.phone || '');
+    bindForm.account = alipayAccount.account || '';
     bindForm.code = '';
     bindDialogVisible.value = true;
   }
@@ -127,12 +158,13 @@ export function useReferral() {
     bindSubmitting.value = true;
     try {
       const response = await clientAuthApi.updateAlipayAccount({ ...bindForm });
-      Object.assign(alipayAccount, (response as AnyRecord).data || {});
+      Object.assign(alipayAccount, response.data || {});
+      alipayAccount.is_bound = Boolean(response.data?.is_bound && response.data?.account);
       bindDialogVisible.value = false;
       MessagePlugin.success('支付宝绑定成功');
       await userStore.getUserInfo();
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || '支付宝绑定失败');
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '支付宝绑定失败'));
     } finally {
       bindSubmitting.value = false;
     }
@@ -144,6 +176,7 @@ export function useReferral() {
       MessagePlugin.warning('请输入提现金额');
       return;
     }
+
     withdrawSubmitting.value = true;
     try {
       await clientApi.applyWithdrawal({
@@ -155,8 +188,8 @@ export function useReferral() {
       MessagePlugin.success('提现申请已提交');
       withdrawForm.amount = '';
       await loadAll();
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || '提现申请提交失败');
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '提现申请提交失败'));
     } finally {
       withdrawSubmitting.value = false;
     }

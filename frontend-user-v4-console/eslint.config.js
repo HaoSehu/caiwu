@@ -23,7 +23,6 @@ export default antfu(
         globals: {
           ...globals.browser,
           ...globals.node,
-          ...globals.jest,
           defineProps: 'readonly',
           defineEmits: 'readonly',
         },

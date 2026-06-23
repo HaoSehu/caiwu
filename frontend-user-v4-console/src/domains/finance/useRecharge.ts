@@ -3,23 +3,28 @@ import { MessagePlugin } from 'tdesign-vue-next';
 import { useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
+import { copyText, formatMoney } from '@/utils/format';
 import { useUserStore } from '@/store';
-
-type AnyRecord = Record<string, any>;
+import type { RechargeOrderPayload, RechargeStatusPayload, ServiceInstance } from '@/types/client';
 
 const ACTIVE_SERVICE_STATUS = 1;
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
-export const RECHARGE_PRESET_AMOUNTS = [10, 20, 50, 100, 200, 500];
+export const RECHARGE_PRESET_AMOUNTS = [20, 50, 100, 200, 500];
 
-export function formatMoney(value: unknown) {
-  const amount = Number(value || 0);
-  return Number.isFinite(amount) ? amount.toFixed(2) : '0.00';
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') {
+    return error.message;
+  }
+  return fallback;
 }
+
+export { formatMoney };
 
 export function normalizeRechargeAmount(value: unknown) {
   const amount = Number(value || 0);
-  if (!Number.isFinite(amount)) return 10;
+  if (!Number.isFinite(amount)) return 20;
   return Math.min(50000, Math.max(1, Math.round(amount)));
 }
 
@@ -30,8 +35,8 @@ function parseDateTime(value: unknown) {
   return Number.isFinite(timestamp) ? timestamp : null;
 }
 
-function isRenewableService(service: AnyRecord) {
-  return Number(service?.status) === ACTIVE_SERVICE_STATUS && Number(service?.id || 0) > 0;
+function isRenewableService(service: ServiceInstance) {
+  return Number(service.status) === ACTIVE_SERVICE_STATUS && Number(service.id || 0) > 0;
 }
 
 function resolveAlipayLaunchUrl(rawUrl: unknown) {
@@ -55,14 +60,14 @@ export function useRecharge() {
   const userStore = useUserStore();
 
   const amount = ref(10);
-  const inputAmount = ref(10);
+  const inputAmount = ref(20);
   const submitting = ref(false);
   const polling = ref(false);
   const rechargePaid = ref(false);
   const summaryLoading = ref(false);
-  const paymentPayload = shallowRef<AnyRecord | null>(null);
+  const paymentPayload = shallowRef<RechargeOrderPayload | (RechargeOrderPayload & RechargeStatusPayload) | null>(null);
   const rechargeSummary = reactive({
-    balance: '0.00',
+    cashBalance: '0.00',
     renewNeeded7Days: '0.00',
   });
 
@@ -90,7 +95,7 @@ export function useRecharge() {
     {
       key: 'balance',
       label: '当前余额',
-      value: rechargeSummary.balance,
+      value: rechargeSummary.cashBalance,
       suffix: '元',
     },
     {
@@ -133,14 +138,14 @@ export function useRecharge() {
     submitting.value = true;
     rechargePaid.value = false;
     try {
-      const res = await clientApi.recharge({ amount: targetAmount });
+      const response = await clientApi.recharge({ amount: targetAmount });
       amount.value = targetAmount;
       inputAmount.value = targetAmount;
-      paymentPayload.value = (res as AnyRecord).data || null;
+      paymentPayload.value = response.data || null;
       MessagePlugin.success('充值二维码已生成');
       return paymentPayload.value;
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || '创建充值订单失败');
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '创建充值账单失败'));
       return null;
     } finally {
       submitting.value = false;
@@ -157,8 +162,8 @@ export function useRecharge() {
 
     polling.value = true;
     try {
-      const res = await clientApi.rechargeStatus(pollPaymentNo, { poll_token: pollToken });
-      const payload = (res as AnyRecord).data || {};
+      const response = await clientApi.rechargeStatus(pollPaymentNo, { poll_token: pollToken });
+      const payload = response.data || {};
       if (payload.paid) {
         rechargePaid.value = true;
         paymentPayload.value = {
@@ -168,13 +173,13 @@ export function useRecharge() {
         };
         clearPollingTimer();
         await refreshClientInfo();
-        rechargeSummary.balance = formatMoney(payload.balance ?? userStore.info?.balance ?? rechargeSummary.balance);
+        rechargeSummary.cashBalance = formatMoney(payload.cash_balance ?? userStore.info?.cash_balance ?? rechargeSummary.cashBalance);
         MessagePlugin.success('充值成功，余额已刷新');
       } else if (!options.silentPending) {
         MessagePlugin.info(payload.message || '当前仍未支付成功');
       }
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || '查询充值状态失败');
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '查询充值状态失败'));
     } finally {
       polling.value = false;
     }
@@ -195,24 +200,24 @@ export function useRecharge() {
     try {
       await userStore.getUserInfo();
     } catch {
-      // 余额刷新失败时保留轮询返回的余额，下一次进入页面再同步账户资料。
+      // 余额刷新失败时保留轮询返回的余额，下次进入页面再同步账户资料。
     }
   }
 
-  async function resolvePreviewRenewAmount(service: AnyRecord) {
-    const serviceId = Number(service?.id || 0);
+  async function resolvePreviewRenewAmount(service: ServiceInstance) {
+    const serviceId = Number(service.id || 0);
     if (serviceId <= 0) return 0;
 
     try {
-      const res = await clientApi.serviceRenewPreview(serviceId);
-      const renewPrice = Number((res as AnyRecord).data?.renew_price || 0);
+      const response = await clientApi.serviceRenewPreview(serviceId);
+      const renewPrice = Number(response.data?.renew_price || 0);
       return Number.isFinite(renewPrice) ? renewPrice : 0;
     } catch {
       return 0;
     }
   }
 
-  async function sumRenewAmounts(services: AnyRecord[], chunkSize = 4) {
+  async function sumRenewAmounts(services: ServiceInstance[], chunkSize = 4) {
     let totalAmount = 0;
 
     for (let index = 0; index < services.length; index += chunkSize) {
@@ -228,19 +233,19 @@ export function useRecharge() {
     summaryLoading.value = true;
 
     try {
-      const collectedServices: AnyRecord[] = [];
+      const collectedServices: ServiceInstance[] = [];
       let page = 1;
       let total = 0;
       let pageSize = 50;
 
       do {
-        const res = await clientApi.services({
+        const response = await clientApi.services({
           page,
           page_size: pageSize,
           status_scope: 'active_pending',
         });
 
-        const payload = (res as AnyRecord).data || {};
+        const payload = response.data || { list: [], total: 0 };
         const list = Array.isArray(payload.list) ? payload.list : [];
         total = Number(payload.total || 0);
         pageSize = Number(payload.page_size || pageSize || 50);
@@ -251,16 +256,16 @@ export function useRecharge() {
       const now = Date.now();
       const sevenDaysLater = now + SEVEN_DAYS_MS;
       const renewNeededServices = collectedServices.filter((service) => {
-        const expiresAt = parseDateTime(service?.expires_at);
+        const expiresAt = parseDateTime(service.expires_at);
         return isRenewableService(service) && expiresAt !== null && expiresAt >= now && expiresAt <= sevenDaysLater;
       });
       const renewNeeded7Days = await sumRenewAmounts(renewNeededServices);
 
-      rechargeSummary.balance = formatMoney(userStore.info?.balance || 0);
+      rechargeSummary.cashBalance = formatMoney(userStore.info?.cash_balance || 0);
       rechargeSummary.renewNeeded7Days = formatMoney(renewNeeded7Days);
-    } catch (error: any) {
-      rechargeSummary.balance = formatMoney(userStore.info?.balance || 0);
-      MessagePlugin.error(error?.message || '加载充值摘要失败');
+    } catch (error: unknown) {
+      rechargeSummary.cashBalance = formatMoney(userStore.info?.cash_balance || 0);
+      MessagePlugin.error(getErrorMessage(error, '加载充值摘要失败'));
     } finally {
       summaryLoading.value = false;
     }
@@ -292,12 +297,10 @@ export function useRecharge() {
 
   async function copyPayUrl() {
     if (!qrCodeValue.value) return;
-    try {
-      await navigator.clipboard.writeText(qrCodeValue.value);
-      MessagePlugin.success('支付链接已复制到剪贴板');
-    } catch {
-      MessagePlugin.warning('当前浏览器不支持自动复制，请手动复制');
-    }
+    await copyText(qrCodeValue.value, {
+      successMsg: '支付链接已复制到剪贴板',
+      errorMsg: '当前浏览器不支持自动复制，请手动复制',
+    });
   }
 
   function openServiceQuickFilter(quickFilter: unknown) {

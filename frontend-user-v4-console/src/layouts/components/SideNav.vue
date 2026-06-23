@@ -34,16 +34,16 @@
   </template>
 </template>
 <script setup lang="ts">
-import { difference, remove, union } from 'lodash';
 import type { MenuValue } from 'tdesign-vue-next';
 import type { PropType } from 'vue';
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { useSiteBrandingStore } from '@/app/stores/siteBranding';
 import { prefix } from '@/config/global';
 import { getActive } from '@/router';
 import { useSettingStore } from '@/store';
+import { useDeviceLayout } from '@/composables/useDeviceLayout';
 import type { MenuRoute, ModeType } from '@/types/interface';
 
 import MenuContent from './MenuContent.vue';
@@ -79,12 +79,11 @@ const { menu, showLogo, isFixed, layout, theme, isCompact } = defineProps({
   },
 });
 
-const MOBILE_POINT = 768;
 const EXPANDED_LOGO_SRC = '/uploads/logo/logo.svg';
 const COLLAPSED_LOGO_SRC = '/uploads/logo/logo1.svg';
 
 const settingStore = useSettingStore();
-const isMobile = ref(typeof window !== 'undefined' ? window.innerWidth <= MOBILE_POINT : false);
+const { isMobile, isTablet } = useDeviceLayout();
 const collapsed = computed(() => (isMobile.value ? false : settingStore.isSidebarCompact));
 const menuAutoCollapsed = computed(() => settingStore.menuAutoCollapsed);
 const brandLogoSrc = computed(() => (collapsed.value ? COLLAPSED_LOGO_SRC : EXPANDED_LOGO_SRC));
@@ -97,7 +96,7 @@ const getExpanded = () => {
   const path = getActive();
   const result = findExpandedByMenu(menu as MenuRoute[], path) || fallbackExpanded(path);
 
-  expanded.value = menuAutoCollapsed.value ? result : union(result, expanded.value);
+  expanded.value = menuAutoCollapsed.value ? result : unionMenuValues(result, expanded.value);
 };
 
 watch(
@@ -111,10 +110,8 @@ watch(
 );
 
 const onExpanded = (value: MenuValue[]) => {
-  const currentOperationMenu = difference(expanded.value, value);
-  const allExpanded = union(value, expanded.value);
-  remove(allExpanded, (item) => currentOperationMenu.includes(item));
-  expanded.value = allExpanded;
+  const currentOperationMenu = expanded.value.filter((item) => !value.includes(item));
+  expanded.value = unionMenuValues(value, expanded.value).filter((item) => !currentOperationMenu.includes(item));
 };
 
 const sideMode = computed(() => {
@@ -161,28 +158,21 @@ const menuCls = computed(() => {
 const router = useRouter();
 const siteBranding = useSiteBrandingStore();
 
-const autoCollapsed = () => {
-  const mobile = window.innerWidth <= MOBILE_POINT;
-  const wasMobile = isMobile.value;
-
-  isMobile.value = mobile;
-
-  settingStore.updateConfig({
-    isSidebarCompact: false,
-    isMobileSidebarVisible: mobile ? (wasMobile ? settingStore.isMobileSidebarVisible : true) : false,
-  });
-};
+// 响应式断点驱动侧边栏状态：平板自动收起，手机用抽屉，PC 保持展开
+watch(
+  [isMobile, isTablet],
+  ([mobile, tablet], [wasMobile]) => {
+    settingStore.updateConfig({
+      isSidebarCompact: tablet,
+      isMobileSidebarVisible: mobile ? (wasMobile ? settingStore.isMobileSidebarVisible : false) : false,
+    });
+  },
+  { immediate: true },
+);
 
 onMounted(() => {
   getExpanded();
-  autoCollapsed();
   siteBranding.fetchSiteConfig();
-
-  window.addEventListener('resize', autoCollapsed);
-});
-
-onUnmounted(() => {
-  window.removeEventListener('resize', autoCollapsed);
 });
 
 const goHome = () => {
@@ -209,6 +199,10 @@ function isRouteMatch(routePath: string, activePath: string) {
 function fallbackExpanded(path: string) {
   const parts = path.split('/').slice(1);
   return parts.map((_, index) => `/${parts.slice(0, index + 1).join('/')}`);
+}
+
+function unionMenuValues(left: MenuValue[], right: MenuValue[]) {
+  return Array.from(new Set([...left, ...right]));
 }
 
 function closeMobileSidebar() {

@@ -11,7 +11,7 @@
     <div class="reader-layout">
       <main class="reader-main">
         <t-card class="reader-card" :bordered="false">
-          <t-loading :loading="loading" text="正在加载详情">
+          <DataState :loading="loading" :empty="!currentArticle" :description="config.emptyText">
             <article id="article-top" class="reader-article">
               <header class="reader-header">
                 <h1>{{ currentArticle?.title || config.detailTitle }}</h1>
@@ -23,10 +23,9 @@
               </header>
 
               <t-divider v-if="currentArticle" />
-              <div v-if="currentArticle" ref="contentRef" class="reader-content" v-html="articleContentHtml"></div>
-              <t-empty v-else-if="!loading" :description="config.emptyText" />
+              <div ref="contentRef" class="reader-content" v-html="articleContentHtml"></div>
             </article>
-          </t-loading>
+          </DataState>
         </t-card>
       </main>
 
@@ -61,6 +60,7 @@
 <script setup lang="ts">
 import { ChevronRightIcon } from 'tdesign-icons-vue-next';
 
+import DataState from '@shared/user-v3/components/DataState.vue';
 import { useContentDetail } from '@/domains/content/useContent';
 
 const props = defineProps<{
@@ -91,7 +91,7 @@ const {
   display: flex;
   flex-direction: column;
   gap: var(--td-comp-margin-m);
-  padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
+  // padding 由 Starter 布局层统一提供
 }
 
 .reader-breadcrumb {
@@ -233,7 +233,6 @@ const {
     box-sizing: border-box;
   }
 
-  // 覆盖全局 .t-button + .t-button 的 margin-left，避免纵向排列时第二个按钮被挤窄
   :deep(.t-button + .t-button) {
     margin-left: 0;
   }

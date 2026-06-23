@@ -6,8 +6,7 @@
   </div>
 </template>
 <script lang="ts" setup>
-import { useWindowSize } from '@vueuse/core';
-import { debounce } from 'lodash';
+import { useDebounceFn, useWindowSize } from '@vueuse/core';
 import type { CSSProperties } from 'vue';
 import { computed, ref, unref, watch } from 'vue';
 
@@ -58,9 +57,9 @@ function calcHeight() {
   const { showFooter, isUseTabsRouter, showBreadcrumb } = settingStore;
   const headerHeight = Number.parseFloat(sizeXxxl);
   const navDom = document.querySelector('.t-tabs__nav');
-  const navHeight = isUseTabsRouter ? getOuterHeight(navDom) : 0;
+  const navHeight = isUseTabsRouter && navDom ? getOuterHeight(navDom) : 0;
   const breadcrumbDom = document.querySelector('.t-breadcrumb');
-  const breadcrumbHeight = showBreadcrumb ? getOuterHeight(breadcrumbDom) : 0;
+  const breadcrumbHeight = showBreadcrumb && breadcrumbDom ? getOuterHeight(breadcrumbDom) : 0;
   const contentPadding = Number.parseFloat(paddingTBXxl) * 2;
   const footerDom = document.querySelector('.t-layout__footer');
   const footerHeight = showFooter && footerDom ? getOuterHeight(footerDom) : 0;
@@ -76,10 +75,12 @@ function hideLoading() {
 }
 
 // 如果窗口大小发生变化
-watch([width, height], debounce(calcHeight, 250));
+const debouncedCalcHeight = useDebounceFn(calcHeight, 250);
+
+watch([width, height], debouncedCalcHeight);
 watch(
   [() => settingStore.showFooter, () => settingStore.isUseTabsRouter, () => settingStore.showBreadcrumb],
-  debounce(calcHeight, 250),
+  debouncedCalcHeight,
 );
 </script>
 <style lang="less" scoped>

@@ -1,4 +1,3 @@
-import { uniqBy } from 'lodash';
 import { computed, toRaw, unref } from 'vue';
 import { useRouter } from 'vue-router';
 
@@ -35,8 +34,19 @@ export function useFrameKeepAlive() {
         res.push(...getAllFramePages(children));
       }
     }
-    res = uniqBy(res, 'name');
+    res = uniqByRouteName(res);
     return res;
+  }
+
+  function uniqByRouteName(routes: MenuRoute[]) {
+    const seen = new Set<unknown>();
+    return routes.filter((route) => {
+      if (seen.has(route.name)) {
+        return false;
+      }
+      seen.add(route.name);
+      return true;
+    });
   }
 
   function showIframe(item: MenuRoute) {

@@ -24,8 +24,7 @@
     </t-card>
 
     <section class="ticket-list-card">
-      <t-loading :loading="loading" text="正在加载工单">
-        <template v-if="list.length">
+      <DataState :loading="loading" :empty="!list.length" description="暂无工单记录">
           <div class="ticket-table-shell">
             <t-table row-key="id" :data="list" :columns="columns" :pagination="null" hover>
               <template #subject="{ row }">
@@ -61,9 +60,7 @@
               </span>
             </button>
           </div>
-        </template>
-        <t-empty v-else description="暂无工单记录" />
-      </t-loading>
+      </DataState>
     </section>
 
     <div v-if="total > 0" class="ticket-pagination">
@@ -156,6 +153,7 @@ import { onMounted } from 'vue';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
 import { AddIcon } from 'tdesign-icons-vue-next';
 
+import DataState from '@shared/user-v3/components/DataState.vue';
 import {
   formatTicketTime,
   resolvePriorityLabel,
@@ -222,7 +220,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: var(--td-comp-margin-m);
-  padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
+  // padding 由 Starter 布局层统一提供
 }
 
 .ticket-filter-card {
@@ -266,16 +264,15 @@ onMounted(() => {
   flex-direction: column;
   gap: var(--td-comp-margin-s);
   width: 100%;
-  padding: 14px 14px 12px;
+  padding: 0.875rem 0.875rem 0.75rem;
   overflow: hidden;
   color: var(--td-text-color-primary);
   text-align: left;
   cursor: pointer;
-  background: linear-gradient(180deg, var(--td-bg-color-container) 0%, #fbfdff 100%);
-  border: 1px solid #d8e1ee;
-  border-left: 1px solid #d8e1ee;
+  background: var(--td-bg-color-container);
+  border: 0.0625rem solid var(--td-component-stroke);
   border-radius: var(--td-radius-medium);
-  box-shadow: 0 6px 18px rgba(25, 35, 50, 0.08);
+  box-shadow: var(--td-shadow-1);
 }
 
 .mobile-ticket-card__top,
@@ -287,8 +284,8 @@ onMounted(() => {
 }
 
 .mobile-ticket-card__top {
-  padding-bottom: 10px;
-  border-bottom: 1px solid #edf1f6;
+  padding-bottom: 0.625rem;
+  border-bottom: 0.0625rem solid var(--td-component-stroke);
 }
 
 .mobile-ticket-card__title {
@@ -384,11 +381,7 @@ onMounted(() => {
   width: 100%;
 }
 
-@media (max-width: 48rem) {
-  .client-tickets {
-    padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-s);
-  }
-
+@media (max-width: @screen-sm-rem) {
   .ticket-filter-bar {
     grid-template-columns: 1fr;
   }
@@ -408,7 +401,7 @@ onMounted(() => {
 
   .mobile-ticket-list {
     display: grid;
-    gap: 12px;
+    gap: 0.75rem;
   }
 
   .ticket-pagination {

@@ -8,7 +8,7 @@
       <strong>{{ detail.name || `实例 #${serviceId}` }}</strong>
     </div>
 
-    <t-loading :loading="detailLoading" text="正在加载实例控制台">
+    <LoadingState :loading="detailLoading" text="正在加载实例控制台">
       <t-card class="console-header-card" :bordered="false">
         <div class="console-header-main">
           <div class="console-title-line">
@@ -40,14 +40,27 @@
         </div>
 
         <div class="console-header-actions">
-          <t-button theme="primary" :disabled="!detail.actions?.power || actionLoading" @click="handlePowerAction('on')">开机</t-button>
-          <t-button variant="outline" :disabled="!detail.actions?.power || actionLoading" @click="handlePowerAction('off')">关机</t-button>
-          <t-button variant="outline" :disabled="!detail.actions?.power || actionLoading" @click="handlePowerAction('reboot')">重启</t-button>
+          <t-button v-if="isInstanceRunning" variant="outline" :disabled="!detail.actions?.power || actionLoading" @click="handlePowerAction('off')">
+            <template #icon><PauseCircleFilledIcon /></template>
+            关机
+          </t-button>
+          <t-button v-else theme="primary" :disabled="!detail.actions?.power || actionLoading" @click="handlePowerAction('on')">
+            <template #icon><PlayCircleFilledIcon /></template>
+            开机
+          </t-button>
+          <t-button variant="outline" :disabled="!detail.actions?.power || actionLoading" @click="handlePowerAction('reboot')">
+            <template #icon><RotateIcon /></template>
+            重启
+          </t-button>
           <t-button variant="outline" :loading="statusSyncing" :disabled="!canSyncStatus || actionLoading" @click="handleSyncStatus">
+            <template #icon><RefreshIcon /></template>
             状态同步
           </t-button>
-          <t-dropdown trigger="click" :options="moreOptions" @click="({ value }) => handleMoreCommand(String(value))">
-            <t-button variant="outline">更多</t-button>
+          <t-dropdown trigger="click" :options="moreOptions" @click="({ value }: { value: string | number }) => handleMoreCommand(String(value))">
+            <t-button variant="outline">
+              <template #icon><EllipsisIcon /></template>
+              更多
+            </t-button>
           </t-dropdown>
         </div>
       </t-card>
@@ -128,8 +141,8 @@
                         :aria-label="showPassword ? '隐藏密码' : '显示密码'"
                         @click="showPassword = !showPassword"
                       >
-                        <BrowseOffIcon v-if="showPassword" size="18px" />
-                        <BrowseIcon v-else size="18px" />
+                        <BrowseOffIcon v-if="showPassword" size="1.125rem" />
+                        <BrowseIcon v-else size="1.125rem" />
                       </button>
                     </t-tooltip>
                     <t-tooltip v-if="detail.connection?.has_password" content="复制密码">
@@ -139,7 +152,7 @@
                         aria-label="复制密码"
                         @click="copyText(detail.connection?.password || '')"
                       >
-                        <CopyIcon size="18px" />
+                        <CopyIcon size="1.125rem" />
                       </button>
                     </t-tooltip>
                     <t-button v-if="detail.actions?.password_reset" size="small" variant="text" theme="primary" @click="openPasswordDialog">重置</t-button>
@@ -167,8 +180,8 @@
                     </t-button>
                   </div>
                 </div>
-                <InfoCell label="账单号" :value="detail.invoice?.invoice_no || detail.order?.invoice_no || detail.order?.order_no || '--'" copyable @copy="copyText" />
-                <InfoCell label="账单状态" :value="detail.order?.status_label || detail.invoice?.status_label || '--'" strong />
+                <InfoCell label="账单号" :value="detail.invoice?.invoice_no || '--'" copyable @copy="copyText" />
+                <InfoCell label="账单状态" :value="resolveInvoiceStatusLabel(detail.invoice?.status)" strong />
               </div>
             </t-card>
           </section>
@@ -249,7 +262,7 @@
                               v-for="seriesPoint in resolveActiveMonitorPoint(chart)?.seriesPoints || []"
                               :key="`${seriesPoint.key}-point`"
                             >
-                              <circle :cx="seriesPoint.x" :cy="seriesPoint.y" r="4.8" fill="#fff" :stroke="seriesPoint.color" stroke-width="1.5" />
+                              <circle class="monitor-point-halo" :cx="seriesPoint.x" :cy="seriesPoint.y" r="4.8" :stroke="seriesPoint.color" stroke-width="1.5" />
                               <circle :cx="seriesPoint.x" :cy="seriesPoint.y" r="2.2" :fill="seriesPoint.color" />
                             </template>
                           </g>
@@ -389,7 +402,7 @@
           <section v-else-if="activeTab === 'power'" class="console-panel-section">
             <t-card title="电源管理" :bordered="false">
               <div class="detail-grid">
-                <InfoCell label="当前状态" :value="detail.runtime?.power_label || detail.upstream?.status_label || '--'" strong />
+                <InfoCell label="当前状态" :value="instanceStatusText" strong />
                 <InfoCell label="状态描述" :value="detail.runtime?.description || '状态正常'" strong />
               </div>
               <t-divider />
@@ -461,12 +474,12 @@
                     <t-tag size="small" :theme="resolveFinanceTagTheme(row)" variant="light">
                       {{ resolveFinanceBusinessLabel(row) }}
                     </t-tag>
-                    <span>{{ row.event_type_label || row.display?.badge || '--' }}</span>
+                    <span>{{ resolveFinanceEventLabel(row.event_type) || row.display?.badge || '--' }}</span>
                   </div>
                 </template>
                 <template #amount="{ row }">
                   <span class="finance-amount" :class="{ 'is-income': Number(row.change_amount || 0) > 0, 'is-outcome': Number(row.change_amount || 0) < 0 }">
-                    {{ Number(row.change_amount || 0) > 0 ? '+' : '' }}¥{{ formatMoney(row.change_amount || row.amount || 0) }}
+                    {{ Number(row.change_amount || 0) > 0 ? '+' : '' }}¥{{ formatMoney(row.change_amount || 0) }}
                   </span>
                 </template>
                 <template #summary="{ row }">
@@ -521,7 +534,7 @@
           </section>
         </main>
       </div>
-    </t-loading>
+    </LoadingState>
 
     <t-dialog v-model:visible="groupVisible" header="新增安全组" width="min(30rem, calc(100vw - 2rem))" destroy-on-close>
       <div class="dialog-form">
@@ -598,7 +611,7 @@
     </t-dialog>
 
     <t-dialog v-model:visible="reinstallVisible" header="重装系统" width="min(34rem, calc(100vw - 2rem))" destroy-on-close>
-      <t-loading :loading="reinstallState.loading" text="正在加载系统列表">
+      <LoadingState :loading="reinstallState.loading" text="正在加载系统列表" compact>
         <div class="dialog-form">
           <label>
             <span>系统分组</span>
@@ -613,7 +626,7 @@
             </t-select>
           </label>
         </div>
-      </t-loading>
+      </LoadingState>
       <template #footer>
         <t-button variant="outline" @click="reinstallVisible = false">取消</t-button>
         <t-button theme="primary" :loading="actionLoading" :disabled="!reinstallState.os_id" @click="submitReinstall">提交重装</t-button>
@@ -621,7 +634,7 @@
     </t-dialog>
 
     <t-dialog v-model:visible="renewVisible" header="服务续费" width="min(34rem, calc(100vw - 2rem))" destroy-on-close>
-      <t-loading :loading="renewLoading" text="正在加载续费信息">
+      <LoadingState :loading="renewLoading" text="正在加载续费信息" compact>
         <template v-if="renewData">
           <t-radio-group v-model="renewForm.billing_cycle" class="renew-cycle-group" @change="handleRenewCycleChange">
             <t-radio-button v-for="cycle in renewData.cycles || []" :key="cycle.billing_cycle" :value="cycle.billing_cycle">
@@ -640,7 +653,7 @@
           </div>
         </template>
         <t-empty v-else-if="!renewLoading" description="未获取到可续费周期" />
-      </t-loading>
+      </LoadingState>
       <template #footer>
         <t-button variant="outline" @click="renewVisible = false">取消</t-button>
         <t-button theme="primary" :loading="renewSubmitting" :disabled="!renewForm.billing_cycle" @click="submitRenew">创建续费账单</t-button>
@@ -667,13 +680,15 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { BrowseIcon, BrowseOffIcon, CopyIcon, DashboardIcon, EditIcon, FileIcon, ServerIcon } from 'tdesign-icons-vue-next';
+import { BillIcon, BrowseIcon, BrowseOffIcon, CatalogIcon, ChartLineDataIcon, CopyIcon, DashboardIcon, DesktopIcon, EditIcon, EllipsisIcon, FileIcon, ForwardIcon, LockOnIcon, PauseCircleFilledIcon, PlayCircleFilledIcon, RefreshIcon, RotateIcon, ServerIcon } from 'tdesign-icons-vue-next';
 
 import { useServiceConsole } from '@/domains/services/useServiceConsole';
+import LoadingState from '@shared/user-v3/components/LoadingState.vue';
+import { resolveInvoiceStatusLabel } from '@/domains/finance/useInvoices';
 import { InfoCell } from './components/InfoCell';
 import { DiceIcon } from './components/DiceIcon';
 import { useConsoleMonitor, MONITOR_CHART_WIDTH, MONITOR_CHART_HEIGHT, MONITOR_CHART_TOP, MONITOR_CHART_BOTTOM } from './composables/useConsoleMonitor';
-import { securityColumns, natColumns, logColumns, financeColumns, resolveFinanceTagTheme, resolveFinanceBusinessLabel } from './composables/useConsoleTables';
+import { securityColumns, natColumns, logColumns, financeColumns, resolveFinanceTagTheme, resolveFinanceBusinessLabel, resolveFinanceEventLabel } from './composables/useConsoleTables';
 
 const {
   detail,
@@ -782,13 +797,13 @@ const consoleNavItems = computed(() => {
   };
   const icons: Record<string, unknown> = {
     overview: DashboardIcon,
-    monitor: DashboardIcon,
-    security: ServerIcon,
-    nat: ServerIcon,
+    monitor: ChartLineDataIcon,
+    security: LockOnIcon,
+    nat: ForwardIcon,
     power: ServerIcon,
-    logs: FileIcon,
-    finance: FileIcon,
-    vnc: ServerIcon,
+    logs: CatalogIcon,
+    finance: BillIcon,
+    vnc: DesktopIcon,
   };
   return availableTabs.value.map((key) => ({ key, label: labels[key] || key, icon: icons[key] || DashboardIcon }));
 });
@@ -806,6 +821,8 @@ const isExpiringSoon = computed(() => {
   if (!Number.isFinite(expiresAt)) return false;
   return expiresAt - Date.now() <= 7 * 24 * 60 * 60 * 1000;
 });
+
+const isInstanceRunning = computed(() => instanceStatusTheme.value === 'success');
 
 const {
   monitorChartViews,
@@ -835,17 +852,17 @@ function handleMoreCommand(command: string) {
 .service-console {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
+  gap: 1rem;
+  // padding 由 Starter 布局层统一提供
 }
 
 /* ---- 面包屑 ---- */
 .console-breadcrumb {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
   color: var(--td-text-color-secondary);
-  font-size: 13px;
+  font-size: 0.8125rem;
 
   strong {
     color: var(--td-text-color-primary);
@@ -872,17 +889,17 @@ function handleMoreCommand(command: string) {
 /* ---- 顶部卡片 ---- */
 .console-header-card {
   background: var(--td-bg-color-container);
-  border: 1px solid var(--td-border-color);
+  border: 0.0625rem solid var(--td-border-color);
   border-radius: var(--td-radius-medium);
   box-shadow: var(--td-shadow-1);
 }
 
 .console-header-card :deep(.t-card__body) {
   display: flex;
-  gap: 20px;
+  gap: 1.25rem;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 22px 24px;
+  padding: 1.375rem 1.5rem;
 }
 
 .console-header-main {
@@ -892,13 +909,13 @@ function handleMoreCommand(command: string) {
 .console-title-line {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 0.625rem;
   align-items: center;
 
   h1 {
     margin: 0;
     color: var(--td-text-color-primary);
-    font-size: 18px;
+    font-size: 1.125rem;
     font-weight: 700;
     line-height: 1.4;
   }
@@ -907,19 +924,19 @@ function handleMoreCommand(command: string) {
 .console-meta-line {
   display: flex;
   flex-wrap: wrap;
-  gap: 20px;
-  margin-top: 12px;
+  gap: 1.25rem;
+  margin-top: 0.75rem;
   color: var(--td-text-color-secondary);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .console-remark-line {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
-  margin-top: 10px;
+  gap: 0.375rem;
+  margin-top: 0.625rem;
   color: var(--td-text-color-secondary);
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.7;
 
   span {
@@ -941,8 +958,12 @@ function handleMoreCommand(command: string) {
 .console-header-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 0.625rem;
   justify-content: flex-end;
+
+  :deep(.t-button + .t-button) {
+    margin-left: 0;
+  }
 }
 
 .console-alert,
@@ -952,8 +973,8 @@ function handleMoreCommand(command: string) {
 
 .console-workbench {
   display: grid;
-  grid-template-columns: 168px minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: 10.5rem minmax(0, 1fr);
+  gap: 1rem;
   align-items: start;
 }
 
@@ -964,9 +985,9 @@ function handleMoreCommand(command: string) {
   z-index: 2;
   display: grid;
   gap: 0;
-  padding: 10px 0;
+  padding: 0.625rem 0;
   background: var(--td-bg-color-container);
-  border: 1px solid var(--td-border-color);
+  border: 0.0625rem solid var(--td-border-color);
   border-radius: var(--td-radius-medium);
   box-shadow: var(--td-shadow-1);
   overflow: hidden;
@@ -975,10 +996,10 @@ function handleMoreCommand(command: string) {
 .console-sidebar-item {
   position: relative;
   display: flex;
-  gap: 10px;
+  gap: 0.625rem;
   align-items: center;
   width: 100%;
-  padding: 14px 18px;
+  padding: 0.875rem 1.125rem;
   color: var(--td-text-color-primary);
   text-align: left;
   cursor: pointer;
@@ -987,8 +1008,8 @@ function handleMoreCommand(command: string) {
   transition: background-color 0.2s ease, color 0.2s ease;
 
   svg {
-    width: 18px;
-    height: 18px;
+    width: 1.125rem;
+    height: 1.125rem;
     flex-shrink: 0;
   }
 
@@ -1000,23 +1021,13 @@ function handleMoreCommand(command: string) {
   &.is-active {
     color: var(--td-brand-color);
     background: var(--td-brand-color-light);
-
-    &::before {
-      content: '';
-      position: absolute;
-      left: 0;
-      top: 0;
-      bottom: 0;
-      width: 3px;
-      background: var(--td-brand-color);
-    }
   }
 }
 
 .console-content {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 1rem;
   min-width: 0;
 }
 
@@ -1024,7 +1035,7 @@ function handleMoreCommand(command: string) {
 .console-panel,
 .console-content :deep(.t-card) {
   background: var(--td-bg-color-container);
-  border: 1px solid var(--td-border-color);
+  border: 0.0625rem solid var(--td-border-color);
   border-radius: var(--td-radius-medium);
   box-shadow: var(--td-shadow-1);
   overflow: hidden;
@@ -1034,7 +1045,7 @@ function handleMoreCommand(command: string) {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   grid-auto-flow: dense;
-  gap: 10px;
+  gap: 0.625rem;
 }
 
 .console-panel-wide {
@@ -1044,57 +1055,57 @@ function handleMoreCommand(command: string) {
 /* ---- 详情格 ---- */
 .detail-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 1rem;
 }
 
 .credential-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 14px;
+  gap: 0.875rem;
 }
 
 .credential-grid .detail-cell,
 .credential-grid :deep(.detail-cell) {
   display: grid;
-  grid-template-columns: 64px minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: 4rem minmax(0, 1fr);
+  gap: 0.75rem;
   align-items: center;
-  padding: 2px 0;
+  padding: 0.125rem 0;
 }
 
 .detail-cell {
   display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  padding: 4px 0;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.25rem 0;
 
   > span {
-    min-width: 60px;
+    min-width: 3.75rem;
     flex-shrink: 0;
     color: var(--td-text-color-placeholder);
-    font-size: 12px;
+    font-size: 0.75rem;
     line-height: 1.6;
   }
 }
 
 .detail-cell > :deep(span:first-child) {
-  min-width: 60px;
+  min-width: 3.75rem;
   flex-shrink: 0;
   color: var(--td-text-color-placeholder);
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.6;
 }
 
 .detail-cell-value {
   display: flex;
-  gap: 8px;
+  gap: 0.5rem;
   align-items: center;
   flex-wrap: wrap;
   min-width: 0;
   flex: 1;
   color: var(--td-text-color-primary);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
 
   &.is-warning {
@@ -1112,11 +1123,11 @@ function handleMoreCommand(command: string) {
   display: flex;
   flex: 1;
   flex-wrap: nowrap;
-  gap: 8px;
+  gap: 0.5rem;
   align-items: center;
   min-width: 0;
   color: var(--td-text-color-primary);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
 }
 
@@ -1141,7 +1152,7 @@ function handleMoreCommand(command: string) {
 .credential-password-value {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 0.5rem;
   align-items: center;
   width: 100%;
 }
@@ -1168,8 +1179,8 @@ function handleMoreCommand(command: string) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 1.5rem;
+  height: 1.5rem;
   padding: 0;
   color: var(--td-brand-color);
   cursor: pointer;
@@ -1187,8 +1198,8 @@ function handleMoreCommand(command: string) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 1.5rem;
+  height: 1.5rem;
   padding: 0;
   color: var(--td-brand-color);
   cursor: pointer;
@@ -1208,9 +1219,9 @@ function handleMoreCommand(command: string) {
 
 .credential-icon-button :deep(.t-icon),
 :deep(.copy-link .t-icon) {
-  font-size: 18px;
-  width: 18px;
-  height: 18px;
+  font-size: 1.125rem;
+  width: 1.125rem;
+  height: 1.125rem;
   margin: 0;
   line-height: 1;
 }
@@ -1222,39 +1233,39 @@ function handleMoreCommand(command: string) {
 .monitor-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 0.75rem;
 }
 
 .monitor-card {
   display: grid;
-  gap: 12px;
-  min-height: 236px;
-  padding: 16px;
+  gap: 0.75rem;
+  min-height: 14.75rem;
+  padding: 1rem;
   background: var(--td-bg-color-component);
-  border: 1px solid var(--td-border-color);
+  border: 0.0625rem solid var(--td-border-color);
   border-radius: var(--td-radius-medium);
 }
 
 .monitor-card-header {
   display: flex;
-  gap: 12px;
+  gap: 0.75rem;
   align-items: flex-start;
   justify-content: space-between;
 
   div {
     display: grid;
-    gap: 4px;
+    gap: 0.25rem;
     min-width: 0;
   }
 
   span {
     color: var(--td-text-color-secondary);
-    font-size: 13px;
+    font-size: 0.8125rem;
   }
 
   strong {
     color: var(--td-text-color-primary);
-    font-size: 22px;
+    font-size: 1.375rem;
     font-weight: 700;
     line-height: 1.2;
   }
@@ -1262,31 +1273,31 @@ function handleMoreCommand(command: string) {
   small {
     flex: none;
     color: var(--td-text-color-placeholder);
-    font-size: 12px;
+    font-size: 0.75rem;
     line-height: 1.8;
   }
 }
 
 .monitor-chart-shell {
   display: grid;
-  grid-template-columns: 56px minmax(0, 1fr);
+  grid-template-columns: 3.5rem minmax(0, 1fr);
   gap: 0;
-  min-height: 162px;
+  min-height: 10.125rem;
 }
 
 .monitor-y-axis {
   position: relative;
   min-width: 0;
-  height: 140px;
-  padding-right: 8px;
+  height: 8.75rem;
+  padding-right: 0.5rem;
 
   span {
     position: absolute;
-    right: 8px;
-    max-width: 48px;
+    right: 0.5rem;
+    max-width: 3rem;
     overflow: hidden;
     color: var(--td-text-color-placeholder);
-    font-size: 11px;
+    font-size: 0.6875rem;
     line-height: 1;
     text-align: right;
     text-overflow: ellipsis;
@@ -1301,28 +1312,28 @@ function handleMoreCommand(command: string) {
 
 .monitor-chart-plot {
   position: relative;
-  height: 140px;
+  height: 8.75rem;
   overflow: visible;
   border-radius: var(--td-radius-small);
-  background: linear-gradient(to top, rgba(0, 82, 217, 0.025), rgba(0, 82, 217, 0));
+  background: linear-gradient(to top, var(--td-brand-color-1), transparent);
 }
 
 .monitor-chart {
   display: block;
   width: 100%;
-  height: 140px;
+  height: 8.75rem;
   overflow: visible;
   cursor: crosshair;
 }
 
 .monitor-chart-grid line {
-  stroke: rgba(134, 144, 156, 0.1);
+  stroke: var(--td-component-stroke);
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
 }
 
 .monitor-chart-axis {
-  stroke: rgba(134, 144, 156, 0.18);
+  stroke: var(--td-component-border);
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
 }
@@ -1332,6 +1343,10 @@ function handleMoreCommand(command: string) {
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
+}
+
+.monitor-point-halo {
+  fill: var(--td-bg-color-container);
 }
 
 .monitor-chart-pointer {
@@ -1348,21 +1363,21 @@ function handleMoreCommand(command: string) {
   position: absolute;
   z-index: 4;
   display: flex;
-  min-width: 132px;
+  min-width: 8.25rem;
   flex-direction: column;
-  gap: 6px;
-  padding: 8px 10px;
+  gap: 0.375rem;
+  padding: 0.5rem 0.625rem;
   color: var(--td-text-color-primary);
   pointer-events: none;
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid rgba(0, 82, 217, 0.14);
-  border-radius: 8px;
+  background: var(--td-bg-color-container);
+  border: 0.0625rem solid var(--td-component-border);
+  border-radius: 0.5rem;
   box-shadow: var(--td-shadow-2);
-  transform: translate(-50%, calc(-100% - 10px));
+  transform: translate(-50%, calc(-100% - 0.625rem));
 
   strong {
     color: var(--td-text-color-primary);
-    font-size: 12px;
+    font-size: 0.75rem;
     font-weight: 600;
     line-height: 1.2;
     white-space: nowrap;
@@ -1371,19 +1386,19 @@ function handleMoreCommand(command: string) {
 
 .monitor-tooltip-row {
   display: grid;
-  grid-template-columns: 8px auto minmax(0, 1fr);
-  gap: 6px;
+  grid-template-columns: 0.5rem auto minmax(0, 1fr);
+  gap: 0.375rem;
   align-items: center;
 
   i {
-    width: 8px;
-    height: 8px;
-    border-radius: 999px;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 62.4375rem;
   }
 
   b,
   em {
-    font-size: 12px;
+    font-size: 0.75rem;
     line-height: 1.2;
     white-space: nowrap;
   }
@@ -1407,10 +1422,10 @@ function handleMoreCommand(command: string) {
 .monitor-x-axis {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 6px;
+  gap: 0.5rem;
+  margin-top: 0.375rem;
   color: var(--td-text-color-placeholder);
-  font-size: 11px;
+  font-size: 0.6875rem;
   line-height: 1.3;
 
   span {
@@ -1432,30 +1447,30 @@ function handleMoreCommand(command: string) {
 .monitor-chart-empty {
   display: flex;
   align-items: center;
-  min-height: 120px;
+  min-height: 7.5rem;
   color: var(--td-text-color-placeholder);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .monitor-metrics {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--td-border-color);
+  gap: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 0.0625rem solid var(--td-border-color);
 
   span {
     min-width: 0;
     color: var(--td-text-color-placeholder);
-    font-size: 12px;
+    font-size: 0.75rem;
   }
 
   strong {
     display: block;
-    margin-top: 3px;
+    margin-top: 0.1875rem;
     overflow: hidden;
     color: var(--td-text-color-primary);
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 600;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1464,18 +1479,18 @@ function handleMoreCommand(command: string) {
 
 .security-group-list {
   display: grid;
-  gap: 10px;
+  gap: 0.625rem;
 }
 
 .security-group-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
+  gap: 0.75rem;
   align-items: center;
-  padding: 14px;
+  padding: 0.875rem;
   cursor: pointer;
   background: var(--td-bg-color-component);
-  border: 1px solid var(--td-border-color);
+  border: 0.0625rem solid var(--td-border-color);
   border-radius: var(--td-radius-medium);
   transition: border-color 0.2s ease, background-color 0.2s ease;
 
@@ -1488,14 +1503,14 @@ function handleMoreCommand(command: string) {
 
 .security-group-card__main {
   display: grid;
-  gap: 6px;
+  gap: 0.375rem;
   min-width: 0;
 
   p {
     margin: 0;
     overflow: hidden;
     color: var(--td-text-color-secondary);
-    font-size: 13px;
+    font-size: 0.8125rem;
     line-height: 1.6;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1505,7 +1520,7 @@ function handleMoreCommand(command: string) {
 .security-row__name {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 0.5rem;
   align-items: center;
   min-width: 0;
 
@@ -1513,7 +1528,7 @@ function handleMoreCommand(command: string) {
     min-width: 0;
     overflow: hidden;
     color: var(--td-text-color-primary);
-    font-size: 14px;
+    font-size: 0.875rem;
     font-weight: 600;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1523,60 +1538,60 @@ function handleMoreCommand(command: string) {
 .security-group-card__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 0.5rem;
   justify-content: flex-end;
 }
 
 .security-rules-panel {
   display: grid;
-  gap: 12px;
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid var(--td-border-color);
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 0.0625rem solid var(--td-border-color);
 }
 
 .security-rules-panel__head {
   display: flex;
-  gap: 12px;
+  gap: 0.75rem;
   align-items: center;
   justify-content: space-between;
 
   div {
     display: grid;
-    gap: 4px;
+    gap: 0.25rem;
   }
 
   strong {
     color: var(--td-text-color-primary);
-    font-size: 15px;
+    font-size: 0.9375rem;
     font-weight: 700;
   }
 
   span {
     color: var(--td-text-color-placeholder);
-    font-size: 12px;
+    font-size: 0.75rem;
   }
 }
 
 .dialog-form {
   display: grid;
-  gap: 14px;
+  gap: 0.875rem;
 
   label {
     display: grid;
-    gap: 7px;
+    gap: 0.4375rem;
   }
 
   span {
     color: var(--td-text-color-secondary);
-    font-size: 13px;
+    font-size: 0.8125rem;
   }
 }
 
 .password-generate-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 32px;
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) 2rem;
+  gap: 0.5rem;
   align-items: center;
 }
 
@@ -1584,13 +1599,13 @@ function handleMoreCommand(command: string) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 2rem;
+  height: 2rem;
   padding: 0;
   color: var(--td-brand-color);
   cursor: pointer;
   background: var(--td-bg-color-container);
-  border: 1px solid var(--td-border-color);
+  border: 0.0625rem solid var(--td-border-color);
   border-radius: var(--td-radius-small);
   transition: border-color 0.2s ease, background-color 0.2s ease;
 
@@ -1601,17 +1616,17 @@ function handleMoreCommand(command: string) {
 }
 
 .dice-icon {
-  width: 18px;
-  height: 18px;
+  width: 1.125rem;
+  height: 1.125rem;
 }
 
 .log-summary {
   display: flex;
   flex-wrap: wrap;
-  gap: 20px;
-  margin-bottom: 16px;
+  gap: 1.25rem;
+  margin-bottom: 1rem;
   color: var(--td-text-color-secondary);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .finance-summary span {
@@ -1620,7 +1635,7 @@ function handleMoreCommand(command: string) {
 
 .finance-type-cell {
   display: flex;
-  gap: 8px;
+  gap: 0.5rem;
   align-items: center;
   white-space: nowrap;
 }
@@ -1641,7 +1656,7 @@ function handleMoreCommand(command: string) {
 .finance-summary-cell {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0.25rem;
   min-width: 0;
 
   strong {
@@ -1651,7 +1666,7 @@ function handleMoreCommand(command: string) {
 
   span {
     color: var(--td-text-color-secondary);
-    font-size: 12px;
+    font-size: 0.75rem;
     line-height: 1.5;
     word-break: break-word;
   }
@@ -1660,23 +1675,23 @@ function handleMoreCommand(command: string) {
 .maintenance-box,
 .danger-box {
   display: grid;
-  gap: 8px;
-  padding: 18px;
+  gap: 0.5rem;
+  padding: 1.125rem;
   background: var(--td-bg-color-component);
-  border: 1px solid var(--td-border-color);
+  border: 0.0625rem solid var(--td-border-color);
   border-radius: var(--td-radius-medium);
 
   h3 {
     margin: 0;
     color: var(--td-text-color-primary);
-    font-size: 15px;
+    font-size: 0.9375rem;
     font-weight: 700;
   }
 
   p {
     margin: 0;
     color: var(--td-text-color-secondary);
-    font-size: 13px;
+    font-size: 0.8125rem;
     line-height: 1.8;
   }
 }
@@ -1684,10 +1699,10 @@ function handleMoreCommand(command: string) {
 .vnc-panel {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 18px;
+  gap: 1rem;
+  padding: 1.125rem;
   background: var(--td-bg-color-component);
-  border: 1px solid var(--td-border-color);
+  border: 0.0625rem solid var(--td-border-color);
   border-radius: var(--td-radius-medium);
 }
 
@@ -1695,7 +1710,7 @@ function handleMoreCommand(command: string) {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  gap: 16px;
+  gap: 1rem;
   align-items: center;
 
   p {
@@ -1707,45 +1722,45 @@ function handleMoreCommand(command: string) {
 .vnc-frame-shell {
   position: relative;
   overflow: hidden;
-  min-height: 560px;
+  min-height: 35rem;
   background: var(--td-bg-color-page);
-  border: 1px solid var(--td-border-color);
+  border: 0.0625rem solid var(--td-border-color);
   border-radius: var(--td-radius-default);
 }
 
 .vnc-frame {
   display: block;
   width: 100%;
-  height: 560px;
+  height: 35rem;
   border: 0;
-  background: #fff;
+  background: var(--td-bg-color-container);
 }
 
 .vnc-empty {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 560px;
+  min-height: 35rem;
   color: var(--td-text-color-placeholder);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
-@media (max-width: 768px) {
+@media (max-width: @screen-sm-rem) {
   .vnc-frame-shell,
   .vnc-frame,
   .vnc-empty {
-    min-height: 420px;
+    min-height: 26.25rem;
   }
 
   .vnc-frame {
-    height: 420px;
+    height: 26.25rem;
   }
 }
 
 .console-pagination {
   display: flex;
   justify-content: flex-end;
-  margin-top: 16px;
+  margin-top: 1rem;
   overflow-x: auto;
 }
 
@@ -1753,18 +1768,18 @@ function handleMoreCommand(command: string) {
 .renew-cycle-group {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 0.75rem;
 
   :deep(.t-radio-button) {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 0.5rem;
     align-items: flex-start;
-    padding: 16px;
+    padding: 1rem;
     height: auto;
-    min-height: 80px;
-    border: 1px solid var(--td-border-color) !important;
-    border-radius: 8px !important;
+    min-height: 5rem;
+    border: 0.0625rem solid var(--td-border-color) !important;
+    border-radius: 0.5rem !important;
     background: var(--td-bg-color-component);
     cursor: pointer;
     transition: border-color 0.2s ease;
@@ -1784,29 +1799,29 @@ function handleMoreCommand(command: string) {
 .renew-coupon-row,
 .renew-total-line {
   display: flex;
-  gap: 12px;
+  gap: 0.75rem;
   align-items: center;
   justify-content: space-between;
-  margin-top: 16px;
+  margin-top: 1rem;
 
   span {
     color: var(--td-text-color-secondary);
-    font-size: 13px;
+    font-size: 0.8125rem;
   }
 }
 
 .renew-total-line {
-  padding-top: 16px;
-  border-top: 1px solid var(--td-border-color);
+  padding-top: 1rem;
+  border-top: 0.0625rem solid var(--td-border-color);
 
   strong {
     color: var(--td-error-color);
-    font-size: 24px;
+    font-size: 1.5rem;
     font-weight: 700;
   }
 }
 
-@media (max-width: 1200px) {
+@media (max-width: @screen-lg-rem) {
   .console-overview-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1816,16 +1831,17 @@ function handleMoreCommand(command: string) {
   }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 56.25rem) {
   .console-header-card :deep(.t-card__body) {
     flex-direction: column;
-    gap: 14px;
-    padding: 18px 16px;
+    gap: 0.875rem;
+    padding: 1.125rem 1rem;
   }
 
   .console-workbench {
     display: flex;
     flex-direction: column;
+    align-items: stretch;
   }
 
   .console-sidebar {
@@ -1833,36 +1849,42 @@ function handleMoreCommand(command: string) {
     display: grid;
     width: 100%;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 8px;
-    padding: 10px;
+    gap: 0.375rem;
+    padding: 0.5rem;
     overflow: visible;
   }
 
   .console-sidebar-item {
     flex-direction: column;
     justify-content: center;
-    gap: 6px;
-    min-height: 64px;
-    padding: 10px 8px;
-    border: 1px solid var(--td-border-color);
-    border-radius: 8px;
+    gap: 0.25rem;
+    min-height: 3.25rem;
+    padding: 0.5rem 0.375rem;
+    border: 0.0625rem solid var(--td-border-color);
     text-align: center;
-    font-size: 12px;
+    font-size: 0.6875rem;
     line-height: 1.3;
+
+    svg {
+      width: 1rem;
+      height: 1rem;
+    }
 
     &.is-active {
       border-color: var(--td-brand-color);
+      background: var(--td-brand-color-light);
+    }
 
-      &::before {
-        display: none;
-      }
+    &:not(.is-active):hover {
+      background: var(--td-brand-color-light);
+      border-color: var(--td-brand-color-hover);
     }
   }
 
   .console-header-actions {
     width: 100%;
     justify-content: flex-start;
-    gap: 8px;
+    gap: 0.5rem;
   }
 
   .console-overview-grid,
@@ -1873,22 +1895,23 @@ function handleMoreCommand(command: string) {
   }
 }
 
-@media (max-width: 767px) {
-  .service-console {
-    padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-s);
-  }
-
-  .console-sidebar {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
+@media (max-width: @screen-sm-rem) {
   .console-meta-line {
     flex-direction: column;
-    gap: 8px;
+    gap: 0.5rem;
+  }
+
+  .console-header-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.375rem;
   }
 
   .console-header-actions :deep(.t-button) {
     width: 100%;
+    min-width: 0;
+    margin-left: 0 !important;
+    justify-content: center;
   }
 
   .renew-cycle-group {

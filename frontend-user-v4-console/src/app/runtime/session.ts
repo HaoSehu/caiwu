@@ -3,6 +3,7 @@ import { createSessionDriver, initSessionActivityTracking } from '@caiwu/shared/
 const driver = createSessionDriver({
   tokenKey: 'client_token',
   lastActiveKey: 'client_last_active_at',
+  cookieDomain: (import.meta.env.VITE_SESSION_COOKIE_DOMAIN as string | undefined) || undefined,
 });
 
 export function getClientToken() {

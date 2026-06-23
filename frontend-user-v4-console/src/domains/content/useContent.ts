@@ -1,30 +1,68 @@
 import { computed, nextTick, ref, watch } from 'vue';
-import type { LocationQueryRaw } from 'vue-router';
+import type { LocationQueryRaw, RouteLocationRaw } from 'vue-router';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { useRoute, useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
+import type {
+  ApiEnvelope,
+  ContentArticleRecord,
+  ContentCategoryRecord,
+  ContentDetailPayload,
+  ContentListPayload,
+  ContentOverviewPayload,
+} from '@/types/client';
 import { renderMarkdown } from '@/utils/markdown';
 
 type ContentType = 'notice' | 'help';
-type AnyRecord = Record<string, any>;
 
-const CONTENT_CONFIG = {
+interface TocItem {
+  id: string;
+  label: string;
+  level: number;
+}
+
+type ListQueryParams = Record<string, unknown> & {
+  page: number;
+  page_size: number;
+  category_id?: number;
+  keyword?: string;
+};
+
+interface ContentListConfig {
+  pageTitle: string;
+  detailTitle: string;
+  heroDescription: string;
+  searchPlaceholder: string;
+  emptyText: string;
+  allCategoryLabel: string;
+  hotTitle: string;
+  secondaryTitle: string;
+  categoryTitle: string;
+  routeBasePath: string;
+  detailRouteName: 'ClientNoticeDetail' | 'ClientHelpDetail';
+  overviewCategoryKey: keyof Pick<ContentOverviewPayload, 'notice_categories' | 'help_categories'>;
+  fetchList: (params?: Record<string, unknown>) => Promise<ApiEnvelope<ContentListPayload>>;
+  fetchDetail: (id: number | string) => Promise<ApiEnvelope<ContentDetailPayload>>;
+  keywordSuggestions: string[];
+}
+
+const CONTENT_CONFIG: Record<ContentType, ContentListConfig> = {
   notice: {
     pageTitle: '官方公告',
     detailTitle: '公告详情',
     heroDescription: '查看平台最新通知、维护公告、产品更新与重要业务提醒。',
-    searchPlaceholder: '请输入您要搜索的关键词',
+    searchPlaceholder: '请输入要搜索的公告关键词',
     emptyText: '暂无公告内容',
-    allCategoryLabel: '所有分类',
-    hotTitle: '热门文章',
-    secondaryTitle: '最新活动',
+    allCategoryLabel: '全部分类',
+    hotTitle: '热门公告',
+    secondaryTitle: '最近更新',
     categoryTitle: '公告分类',
     routeBasePath: '/client/notices',
     detailRouteName: 'ClientNoticeDetail',
-    listMethod: 'notices',
-    detailMethod: 'noticeDetail',
     overviewCategoryKey: 'notice_categories',
+    fetchList: clientApi.notices,
+    fetchDetail: clientApi.noticeDetail,
     keywordSuggestions: ['服务条款', '公告通知', '云服务器', '产品更新'],
   },
   help: {
@@ -39,12 +77,20 @@ const CONTENT_CONFIG = {
     categoryTitle: '帮助分类',
     routeBasePath: '/client/help',
     detailRouteName: 'ClientHelpDetail',
-    listMethod: 'helpArticles',
-    detailMethod: 'helpDetail',
     overviewCategoryKey: 'help_categories',
+    fetchList: clientApi.helpArticles,
+    fetchDetail: clientApi.helpDetail,
     keywordSuggestions: ['新手入门', '支付账单', '服务管理', '续费说明'],
   },
-} as const;
+};
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') {
+    return error.message;
+  }
+  return fallback;
+}
 
 function parseQueryNumber(value: unknown, fallback = 0) {
   const normalized = Array.isArray(value) ? value[0] : value;
@@ -72,8 +118,25 @@ function compactQuery(query: Record<string, unknown>): LocationQueryRaw {
   return result;
 }
 
-function resolveList(data: AnyRecord | undefined) {
-  return Array.isArray(data?.list) ? data.list : [];
+function resolveList(payload?: ContentListPayload | null) {
+  return Array.isArray(payload?.list) ? payload.list : [];
+}
+
+function resolveCategories(
+  payload: ContentOverviewPayload | null | undefined,
+  key: keyof Pick<ContentOverviewPayload, 'notice_categories' | 'help_categories'>,
+) {
+  if (!payload) return [] as ContentCategoryRecord[];
+  const value = payload[key];
+  return Array.isArray(value) ? value : [];
+}
+
+function sortByPublishTime(list: ContentArticleRecord[]) {
+  return [...list].sort((a, b) => {
+    const timeA = new Date(a.publish_at || a.created_at || 0).getTime();
+    const timeB = new Date(b.publish_at || b.created_at || 0).getTime();
+    return timeB - timeA;
+  });
 }
 
 export function useContentList(contentType: ContentType) {
@@ -81,10 +144,10 @@ export function useContentList(contentType: ContentType) {
   const router = useRouter();
   const config = CONTENT_CONFIG[contentType];
   const loading = ref(false);
-  const categories = ref<AnyRecord[]>([]);
-  const articleList = ref<AnyRecord[]>([]);
-  const hotArticles = ref<AnyRecord[]>([]);
-  const recentArticles = ref<AnyRecord[]>([]);
+  const categories = ref<ContentCategoryRecord[]>([]);
+  const articleList = ref<ContentArticleRecord[]>([]);
+  const hotArticles = ref<ContentArticleRecord[]>([]);
+  const recentArticles = ref<ContentArticleRecord[]>([]);
   const keyword = ref('');
   const page = ref(1);
   const pageSize = 10;
@@ -102,38 +165,32 @@ export function useContentList(contentType: ContentType) {
   });
 
   async function loadOverview() {
-    const res = await clientApi.contentOverview();
-    categories.value = (res as AnyRecord).data?.[config.overviewCategoryKey] || [];
+    const response = await clientApi.contentOverview();
+    categories.value = resolveCategories(response.data, config.overviewCategoryKey);
   }
 
   async function loadList() {
-    const params: AnyRecord = {
+    const params: ListQueryParams = {
       page: page.value,
       page_size: pageSize,
     };
     if (activeCategoryId.value > 0) params.category_id = activeCategoryId.value;
     if (keyword.value) params.keyword = keyword.value;
 
-    const method = clientApi[config.listMethod] as (params?: AnyRecord) => Promise<unknown>;
-    const res = await method(params);
-    const payload = (res as AnyRecord).data || {};
+    const response = await config.fetchList(params);
+    const payload = response.data;
     articleList.value = resolveList(payload);
     total.value = Number(payload.total || 0);
-    if (!categories.value.length) categories.value = payload.categories || [];
+    if (!categories.value.length) {
+      categories.value = Array.isArray(payload.categories) ? payload.categories : [];
+    }
   }
 
   async function loadSidebarContent() {
-    const method = clientApi[config.listMethod] as (params?: AnyRecord) => Promise<unknown>;
-    const res = await method({ page: 1, page_size: 20 });
-    const list = resolveList((res as AnyRecord).data);
+    const response = await config.fetchList({ page: 1, page_size: 20 });
+    const list = resolveList(response.data);
     hotArticles.value = [...list].sort((a, b) => Number(b.view_count || 0) - Number(a.view_count || 0)).slice(0, 5);
-    recentArticles.value = [...list]
-      .sort((a, b) => {
-        const timeA = new Date(a.publish_at || a.created_at || 0).getTime();
-        const timeB = new Date(b.publish_at || b.created_at || 0).getTime();
-        return timeB - timeA;
-      })
-      .slice(0, 5);
+    recentArticles.value = sortByPublishTime(list).slice(0, 5);
   }
 
   async function syncPage() {
@@ -143,8 +200,8 @@ export function useContentList(contentType: ContentType) {
       page.value = parseQueryNumber(route.query.page, 1);
       activeCategoryId.value = parseQueryNumber(route.query.category, 0);
       await Promise.all([loadOverview(), loadList(), loadSidebarContent()]);
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || `${config.pageTitle}加载失败`);
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, `${config.pageTitle}加载失败`));
     } finally {
       loading.value = false;
     }
@@ -179,7 +236,7 @@ export function useContentList(contentType: ContentType) {
     submitSearch();
   }
 
-  function buildDetailRoute(item: AnyRecord) {
+  function buildDetailRoute(item: ContentArticleRecord): RouteLocationRaw {
     return {
       name: config.detailRouteName,
       params: { id: item.id },
@@ -226,13 +283,13 @@ export function useContentDetail(contentType: ContentType) {
   const router = useRouter();
   const config = CONTENT_CONFIG[contentType];
   const loading = ref(false);
-  const categories = ref<AnyRecord[]>([]);
-  const currentArticle = ref<AnyRecord | null>(null);
+  const categories = ref<ContentCategoryRecord[]>([]);
+  const currentArticle = ref<ContentDetailPayload | null>(null);
   const currentCategoryId = ref<number | null>(null);
-  const tocItems = ref([{ id: 'article-top', label: '全文', level: 1 }]);
+  const tocItems = ref<TocItem[]>([{ id: 'article-top', label: '全文', level: 1 }]);
   const contentRef = ref<HTMLElement | null>(null);
 
-  const backToListRoute = computed(() => ({
+  const backToListRoute = computed<RouteLocationRaw>(() => ({
     path: config.routeBasePath,
     query: compactQuery({
       category: route.query.category,
@@ -263,28 +320,28 @@ export function useContentDetail(contentType: ContentType) {
   );
   const articleContentHtml = computed(() =>
     renderMarkdown(currentArticle.value?.content, {
-      imageAltFallback: currentArticle.value?.title || config.detailTitle || '相关配图',
+      imageAltFallback: currentArticle.value?.title || config.detailTitle || '相关文章配图',
     }),
   );
 
   async function loadOverview() {
-    const res = await clientApi.contentOverview();
-    categories.value = (res as AnyRecord).data?.[config.overviewCategoryKey] || [];
+    const response = await clientApi.contentOverview();
+    categories.value = resolveCategories(response.data, config.overviewCategoryKey);
   }
 
   async function loadArticleDetail(articleId: unknown) {
-    const method = clientApi[config.detailMethod] as (id: unknown) => Promise<unknown>;
-    const res = await method(articleId);
-    currentArticle.value = (res as AnyRecord).data || null;
-    currentCategoryId.value = Number((res as AnyRecord).data?.category_id || 0) || null;
+    const normalizedId = Number(articleId);
+    const response = await config.fetchDetail(Number.isFinite(normalizedId) && normalizedId > 0 ? normalizedId : String(articleId));
+    currentArticle.value = response.data || null;
+    currentCategoryId.value = Number(response.data?.category_id || 0) || null;
   }
 
   async function syncPage() {
     loading.value = true;
     try {
       await Promise.all([loadOverview(), loadArticleDetail(route.params.id)]);
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || `${config.detailTitle}加载失败`);
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, `${config.detailTitle}加载失败`));
     } finally {
       loading.value = false;
     }
@@ -312,7 +369,7 @@ export function useContentDetail(contentType: ContentType) {
     }
 
     const headings = Array.from(container.querySelectorAll('h1, h2, h3, h4'));
-    const items = [{ id: 'article-top', label: '全文', level: 1 }];
+    const items: TocItem[] = [{ id: 'article-top', label: '全文', level: 1 }];
     headings.forEach((heading, index) => {
       const label = heading.textContent?.trim();
       if (!label) return;

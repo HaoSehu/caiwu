@@ -18,7 +18,7 @@ const router = useRouter();
 
 <style scoped lang="less">
 .catalog-page {
-  padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
+  // padding 由 Starter 布局层统一提供
 }
 
 .catalog-card {
@@ -40,12 +40,6 @@ const router = useRouter();
     margin: 0;
     color: var(--td-text-color-secondary);
     font: var(--td-font-body-medium);
-  }
-}
-
-@media (max-width: 48rem) {
-  .catalog-page {
-    padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-s);
   }
 }
 </style>

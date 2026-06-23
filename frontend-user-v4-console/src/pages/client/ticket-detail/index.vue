@@ -8,7 +8,7 @@
       </t-button>
     </div>
 
-    <t-loading :loading="loading" text="正在加载工单详情">
+    <LoadingState :loading="loading" text="正在加载工单详情">
       <template v-if="detail">
         <div class="ticket-detail-shell">
           <aside class="ticket-meta-card">
@@ -161,7 +161,7 @@
         </div>
       </template>
       <t-empty v-else description="工单不存在" />
-    </t-loading>
+    </LoadingState>
 
     <t-dialog v-model:visible="previewVisible" header="附件预览" width="min(45rem, calc(100vw - var(--td-comp-margin-xl)))">
       <img v-if="previewUrl" :src="previewUrl" class="preview-image" alt="附件预览" />
@@ -172,6 +172,7 @@
 <script setup lang="ts">
 import { onMounted } from 'vue';
 import { AddIcon } from 'tdesign-icons-vue-next';
+import LoadingState from '@shared/user-v3/components/LoadingState.vue';
 
 import {
   formatTicketTime,
@@ -232,7 +233,7 @@ onMounted(() => {
   flex-direction: column;
   gap: var(--td-comp-margin-m);
   min-height: calc(100vh - var(--td-comp-size-xxxxxl));
-  padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
+  // padding 由 Starter 布局层统一提供
 }
 
 .ticket-detail-toolbar {
@@ -449,16 +450,16 @@ onMounted(() => {
 
 .reply-textarea :deep(.t-textarea__inner) {
   resize: none;
+  min-height: 2rem;
+  max-height: 7.5rem;
 }
 
-.ticket-closed-notice {
-  margin: var(--td-comp-margin-m);
-  padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
-  color: var(--td-warning-color);
-  text-align: center;
-  background: var(--td-warning-color-light);
-  border: thin solid var(--td-warning-color);
-  border-radius: var(--td-radius-medium);
+.reply-textarea {
+  align-self: center;
+}
+
+.reply-textarea :deep(.t-textarea__info_wrapper) {
+  display: none;
 }
 
 .preview-image {
@@ -466,10 +467,9 @@ onMounted(() => {
   width: 100%;
 }
 
-@media (max-width: 48rem) {
+@media (max-width: @screen-sm-rem) {
   .ticket-detail-page {
     min-height: calc(100vh - var(--td-comp-size-xxxl));
-    padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-s);
   }
 
   .ticket-detail-toolbar {
@@ -503,7 +503,7 @@ onMounted(() => {
     display: flex;
   }
 
-  .ticket-conversation-card:has(.t-tabs__nav-item:nth-child(2).t-is-active) {
+  .ticket-conversation-card:has(.t-tabs__nav-item:nth-child(3).t-is-active) {
     .mobile-detail-card {
       display: grid;
     }

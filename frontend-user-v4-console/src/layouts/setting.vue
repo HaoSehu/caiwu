@@ -68,7 +68,7 @@
           <t-switch v-model="formData.isSidebarFixed" />
         </t-form-item>
 
-        <div class="setting-group-title">{{ t('layout.setting.element.title') }}</div>
+        <div class="setting-group-title">{{ t('layout.setting.displaySwitch.title') }}</div>
         <t-form-item :label="t('layout.setting.sideMode')" name="sideMode">
           <t-radio-group v-model="formData.sideMode" class="side-mode-radio">
             <t-radio-button key="light" value="light" :label="t('layout.setting.theme.options.light')" />
@@ -77,21 +77,21 @@
         </t-form-item>
         <t-form-item
           v-show="formData.layout === 'side'"
-          :label="t('layout.setting.element.showHeader')"
+          :label="t('layout.setting.displaySwitch.showHeader')"
           name="showHeader"
         >
           <t-switch v-model="formData.showHeader" />
         </t-form-item>
-        <t-form-item :label="t('layout.setting.element.showBreadcrumb')" name="showBreadcrumb">
+        <t-form-item :label="t('layout.setting.displaySwitch.showBreadcrumb')" name="showBreadcrumb">
           <t-switch v-model="formData.showBreadcrumb" />
         </t-form-item>
-        <t-form-item :label="t('layout.setting.element.showFooter')" name="showFooter">
+        <t-form-item :label="t('layout.setting.displaySwitch.showFooter')" name="showFooter">
           <t-switch v-model="formData.showFooter" />
         </t-form-item>
-        <t-form-item :label="t('layout.setting.element.useTagTabs')" name="isUseTabsRouter">
+        <t-form-item :label="t('layout.setting.displaySwitch.useTagTabs')" name="isUseTabsRouter">
           <t-switch v-model="formData.isUseTabsRouter"></t-switch>
         </t-form-item>
-        <t-form-item :label="t('layout.setting.element.menuAutoCollapsed')" name="menuAutoCollapsed">
+        <t-form-item :label="t('layout.setting.displaySwitch.menuAutoCollapsed')" name="menuAutoCollapsed">
           <t-switch v-model="formData.menuAutoCollapsed"></t-switch>
         </t-form-item>
       </t-form>
@@ -108,7 +108,7 @@
 import { useClipboard } from '@vueuse/core';
 import type { PopupVisibleChangeContext } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
-import { computed, onMounted, ref, watchEffect } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watchEffect } from 'vue';
 
 import SettingAutoIcon from '@/assets/assets-setting-auto.svg';
 import SettingDarkIcon from '@/assets/assets-setting-dark.svg';
@@ -123,6 +123,7 @@ import { useSettingStore } from '@/store';
 const settingStore = useSettingStore();
 
 const LAYOUT_OPTION = ['side', 'top', 'mix'];
+const LAYOUT_THUMBNAILS = Object.fromEntries(LAYOUT_OPTION.map((item) => [item, createLayoutThumbnail(item)]));
 
 const MODE_OPTIONS = computed(() => [
   { type: 'light', text: t('layout.setting.theme.options.light') },
@@ -163,10 +164,16 @@ const changeColor = (hex: string) => {
   formData.value.brandTheme = hex;
 };
 
+const handleDynamicColorClick = () => {
+  isColoPickerDisplay.value = true;
+};
+
 onMounted(() => {
-  document.querySelector('.dynamic-color-btn').addEventListener('click', () => {
-    isColoPickerDisplay.value = true;
-  });
+  document.querySelector('.dynamic-color-btn')?.addEventListener('click', handleDynamicColorClick);
+});
+
+onBeforeUnmount(() => {
+  document.querySelector('.dynamic-color-btn')?.removeEventListener('click', handleDynamicColorClick);
 });
 
 const onPopupVisibleChange = (visible: boolean, context: PopupVisibleChangeContext) => {
@@ -204,8 +211,23 @@ const handleCloseDrawer = () => {
   });
 };
 
+function createLayoutThumbnail(type: string): string {
+  const hasSide = type !== 'top';
+  const hasTop = type !== 'side';
+  const contentX = hasSide ? 32 : 8;
+  const contentY = hasTop ? 21 : 8;
+  const contentWidth = hasSide ? 48 : 72;
+  const contentHeight = hasTop ? 19 : 32;
+  const sideWidth = type === 'mix' ? 18 : 20;
+  const side = hasSide ? `<rect x="8" y="8" width="${sideWidth}" height="32" rx="3" fill="#165DFF" fill-opacity="0.88"/>` : '';
+  const top = hasTop ? '<rect x="8" y="8" width="72" height="9" rx="3" fill="#165DFF" fill-opacity="0.18"/>' : '';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="88" height="48" viewBox="0 0 88 48" fill="none"><rect x="1" y="1" width="86" height="46" rx="8" fill="#F8FAFC" stroke="#DCE6F5"/><rect x="${contentX}" y="${contentY}" width="${contentWidth}" height="${contentHeight}" rx="4" fill="#FFFFFF" stroke="#C8D7EE"/><rect x="${contentX + 7}" y="${contentY + 6}" width="${Math.max(16, contentWidth - 14)}" height="3" rx="1.5" fill="#A8B8D2"/><rect x="${contentX + 7}" y="${contentY + 12}" width="${Math.max(10, contentWidth - 28)}" height="3" rx="1.5" fill="#D2DCEE"/>${side}${top}</svg>`;
+
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
 const getThumbnailUrl = (name: string): string => {
-  return `https://tdesign.gtimg.com/tdesign-pro/setting/${name}.png`;
+  return LAYOUT_THUMBNAILS[name] || LAYOUT_THUMBNAILS.side;
 };
 
 watchEffect(() => {

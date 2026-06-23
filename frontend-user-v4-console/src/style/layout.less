@@ -46,6 +46,17 @@
       min-width: 0;
     }
   }
+
+  // 手机端统一页面边距 12px
+  .tdesign-starter-content-layout {
+    padding: 12px !important;
+  }
+}
+
+// 统一页面边距 12px（覆盖 TDesign token 默认值 14px/20px）
+#app {
+  --td-comp-paddingTB-l: 12px;
+  --td-comp-paddingLR-l: 12px;
 }
 
 .t-menu--dark .t-menu__operations .t-icon {
@@ -107,6 +118,15 @@
       border: 2px solid transparent;
       background-clip: content-box;
       background-color: var(--td-scrollbar-color);
+    }
+
+    @media (max-width: @screen-sm-max) {
+      &::-webkit-scrollbar {
+        display: none;
+      }
+
+      scrollbar-width: none;
+      -ms-overflow-style: none;
     }
   }
 

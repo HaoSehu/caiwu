@@ -2,14 +2,23 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { MessagePlugin } from 'tdesign-vue-next';
 
 import clientApi from '@/api/client';
+import type { ApiEnvelope, CouponRecord, PagedList } from '@/types/client';
 
-type AnyRecord = Record<string, any>;
 type CouponTab = 'owned' | 'plaza';
+type CouponTabChangeValue = CouponTab | { value?: CouponTab | string } | null | undefined;
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') {
+    return error.message;
+  }
+  return fallback;
+}
 
 function createTabState() {
   return reactive({
     loading: false,
-    list: [] as AnyRecord[],
+    list: [] as CouponRecord[],
     total: 0,
     page: 1,
     pageSize: 10,
@@ -36,31 +45,31 @@ export function resolveDiscountTypeLabel(type: unknown) {
   return '优惠券';
 }
 
-export function resolveDiscountValue(item: AnyRecord) {
-  if (item.discount_type === 'fixed') return `¥${formatCouponAmount(item.discount_value)}`;
+export function resolveDiscountValue(item: CouponRecord) {
+  if (item.discount_type === 'fixed') return `￥${formatCouponAmount(item.discount_value)}`;
   if (item.discount_type === 'percentage') {
     const discount = Number(item.discount_value || 0) / 10;
     if (!Number.isFinite(discount) || discount <= 0) return item.discount_label || '--';
-    return `${discount % 1 === 0 ? discount.toFixed(0) : discount.toFixed(1)}折`;
+    return `${discount % 1 === 0 ? discount.toFixed(0) : discount.toFixed(1)} 折`;
   }
   return item.discount_label || '--';
 }
 
-export function resolveThresholdText(item: AnyRecord) {
+export function resolveThresholdText(item: CouponRecord) {
   const amount = Number(item.min_amount || 0);
-  return amount > 0 ? `满 ¥${formatCouponAmount(amount)} 可用` : '无门槛';
+  return amount > 0 ? `满 ￥${formatCouponAmount(amount)} 可用` : '无门槛';
 }
 
-export function resolveDiscountAmountText(item: AnyRecord) {
-  if (item.discount_type === 'fixed') return `减 ¥${formatCouponAmount(item.discount_value)}`;
+export function resolveDiscountAmountText(item: CouponRecord) {
+  if (item.discount_type === 'fixed') return `减 ￥${formatCouponAmount(item.discount_value)}`;
   if (item.discount_type === 'percentage') {
-    return item.max_discount_amount ? `最高减 ¥${formatCouponAmount(item.max_discount_amount)}` : item.discount_label || '--';
+    return item.max_discount_amount ? `最高减 ￥${formatCouponAmount(item.max_discount_amount)}` : item.discount_label || '--';
   }
-  return item.discount_amount ? `减 ¥${formatCouponAmount(item.discount_amount)}` : item.discount_label || '--';
+  return item.discount_amount ? `减 ￥${formatCouponAmount(item.discount_amount)}` : item.discount_label || '--';
 }
 
-function resolveListPayload(response: unknown) {
-  const payload = (response as AnyRecord)?.data || {};
+function resolveListPayload(response: ApiEnvelope<PagedList<CouponRecord>>) {
+  const payload = response.data || { list: [], total: 0 };
   return {
     list: Array.isArray(payload.list) ? payload.list : [],
     total: Number(payload.total || 0),
@@ -71,7 +80,7 @@ export function useCoupons() {
   const activeTab = ref<CouponTab>('owned');
   const claimingId = ref(0);
   const detailVisible = ref(false);
-  const selectedCoupon = ref<AnyRecord | null>(null);
+  const selectedCoupon = ref<CouponRecord | null>(null);
   const ownedState = createTabState();
   const plazaState = createTabState();
 
@@ -108,8 +117,8 @@ export function useCoupons() {
       const payload = resolveListPayload(response);
       state.list = payload.list;
       state.total = payload.total;
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || (tab === 'plaza' ? '优惠券广场加载失败' : '优惠券列表加载失败'));
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, tab === 'plaza' ? '优惠券广场加载失败' : '优惠券列表加载失败'));
     } finally {
       state.loading = false;
     }
@@ -129,15 +138,16 @@ export function useCoupons() {
     void loadList(tab);
   }
 
-  async function switchTab(tabValue: unknown) {
-    const candidate = typeof tabValue === 'object' && tabValue !== null && 'value' in tabValue ? (tabValue as AnyRecord).value : tabValue;
+  async function switchTab(tabValue: CouponTabChangeValue) {
+    const candidate =
+      typeof tabValue === 'object' && tabValue !== null && 'value' in tabValue ? tabValue.value : tabValue;
     const tab = String(candidate || activeTab.value || 'owned') === 'plaza' ? 'plaza' : 'owned';
     activeTab.value = tab;
     const state = getState(tab);
     if (!state.list.length && !state.loading) await loadList(tab);
   }
 
-  function openCouponDetail(item: AnyRecord) {
+  function openCouponDetail(item: CouponRecord) {
     selectedCoupon.value = item;
     detailVisible.value = true;
   }
@@ -150,8 +160,8 @@ export function useCoupons() {
       await clientApi.claimCoupon(id);
       MessagePlugin.success('领取成功');
       await Promise.all([loadList('owned'), loadList('plaza')]);
-    } catch (error: any) {
-      MessagePlugin.error(error?.message || '优惠券领取失败');
+    } catch (error: unknown) {
+      MessagePlugin.error(getErrorMessage(error, '优惠券领取失败'));
     } finally {
       claimingId.value = 0;
     }

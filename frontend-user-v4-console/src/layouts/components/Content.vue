@@ -2,7 +2,7 @@
   <div v-if="!isRefreshing">
     <router-view v-if="!isFramePage" v-slot="{ Component }">
       <transition name="fade" mode="out-in">
-        <keep-alive :include="aliveViews">
+        <keep-alive :include="aliveViews" :max="10">
           <component :is="Component" />
         </keep-alive>
       </transition>
@@ -13,7 +13,6 @@
   <t-loading v-else />
 </template>
 <script setup lang="ts">
-import { isBoolean, isUndefined } from 'lodash';
 import type { ComputedRef } from 'vue';
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
@@ -39,7 +38,8 @@ const aliveViews = computed(() => {
   return tabRouters
     .filter((route) => {
       const keepAliveConfig = route.meta?.keepAlive;
-      const isRouteKeepAlive = isUndefined(keepAliveConfig) || (isBoolean(keepAliveConfig) && keepAliveConfig); // 默认开启keepalive
+      // 默认开启 keepalive：未显式配置或显式 true 时缓存
+      const isRouteKeepAlive = keepAliveConfig === undefined || keepAliveConfig === true;
       return route.isAlive && isRouteKeepAlive;
     })
     .map((route) => route.name);

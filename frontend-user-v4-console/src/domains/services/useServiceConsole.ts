@@ -13,8 +13,6 @@ import { useConsoleVnc } from './console/useConsoleVnc';
 import { useConsoleDialogs } from './console/useConsoleDialogs';
 import { useConsoleTabs } from './console/useConsoleTabs';
 
-type AnyRecord = Record<string, any>;
-
 export function useServiceConsole() {
   const router = useRouter();
 
@@ -176,8 +174,9 @@ export function useServiceConsole() {
     try {
       await refreshHostStatus();
       MessagePlugin.success(detail.value.actions?.module_status ? '实例状态已同步' : '实例状态已刷新');
-    } catch (error: any) {
-      MessagePlugin.error(String(error?.message || '').trim() || '同步实例状态失败');
+    } catch (error: unknown) {
+      const runtimeError = error as { message?: string };
+      MessagePlugin.error(String(runtimeError?.message || '').trim() || '同步实例状态失败');
     } finally {
       statusSyncing.value = false;
     }
@@ -206,8 +205,6 @@ export function useServiceConsole() {
     if (runtimeLabel) return runtimeLabel;
     const runtimeDescription = String(detail.value.runtime?.description || '').trim();
     if (runtimeDescription) return runtimeDescription;
-    const upstreamLabel = String(detail.value.upstream?.status_label || '').trim();
-    if (upstreamLabel) return upstreamLabel;
     return resolveServiceStatusLabel(detail.value.status);
   });
   const instanceStatusTheme = computed(() => {
@@ -233,14 +230,10 @@ export function useServiceConsole() {
 
   // Copy helper with toast
   async function copyTextWithToast(value: unknown) {
-    const text = String(value || '').trim();
-    if (!text || text === '--') return;
-    try {
-      await copyText(value);
-      MessagePlugin.success('内容已复制');
-    } catch {
-      MessagePlugin.warning('当前浏览器不支持自动复制，请手动复制');
-    }
+    await copyText(value, {
+      successMsg: '内容已复制',
+      errorMsg: '当前浏览器不支持自动复制，请手动复制',
+    });
   }
 
   // Route watchers
