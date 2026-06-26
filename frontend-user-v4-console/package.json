@@ -17,7 +17,7 @@
     "stylelint:fix": "stylelint --fix src/**/*.{html,vue,css,sass,less}",
     "prepare": "husky",
     "site:preview": "npm run build && cp -r dist _site",
-    "test": "echo \"no test specified,work in process\"",
+    "test": "node --experimental-strip-types ./tests/domains/useCoupons.spec.ts",
     "verify:refactor": "node scripts/verify-refactor.mjs",
     "test:coverage": "echo \"no test:coverage specified,work in process\""
   },

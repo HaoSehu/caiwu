@@ -3,18 +3,16 @@
     <t-card :bordered="false">
       <div class="page-tabs-toolbar">
         <t-tabs :value="activeTab" @change="handleTabChange">
-          <t-tab-panel v-for="item in tabOptions" :key="item.value" :value="item.value" :label="item.label" />
+          <template v-for="group in tabGroups" :key="group.group">
+            <t-tab-panel
+              v-for="(item, idx) in group.tabs"
+              :key="item.value"
+              :value="item.value"
+              :label="item.label"
+              :class="{ 'tab-group-first': idx === 0 }"
+            />
+          </template>
         </t-tabs>
-        <t-space>
-          <t-button variant="outline" :loading="currentLoading" @click="refreshCurrentTab">
-            <template #icon><refresh-icon /></template>
-            刷新
-          </t-button>
-          <t-button theme="primary" :loading="currentSaving" @click="saveCurrentTab">
-            <template #icon><check-icon /></template>
-            保存设置
-          </t-button>
-        </t-space>
       </div>
     </t-card>
 
@@ -101,6 +99,13 @@
           </div>
         </t-form>
       </t-card>
+
+      <div class="settings-bottom-actions">
+        <t-button theme="primary" :loading="currentSaving" @click="saveCurrentTab">
+          <template #icon><check-icon /></template>
+          保存设置
+        </t-button>
+      </div>
 
     </template>
 
@@ -220,6 +225,14 @@
           </div>
         </section>
       </t-card>
+
+      <div class="settings-bottom-actions">
+        <t-button theme="primary" :loading="currentSaving" @click="saveCurrentTab">
+          <template #icon><check-icon /></template>
+          保存设置
+        </t-button>
+      </div>
+
     </template>
 
     <input ref="fileInputRef" class="hidden-file-input" type="file" accept="image/*" @change="handleImageFileChange" />
@@ -367,14 +380,27 @@ const automationScheduleModeOptions: FieldOption[] = [
   { label: '每天', value: 'daily' },
 ];
 
-const tabOptions: Array<{ label: string; value: SettingsTab }> = [
-  { label: '系统设置', value: 'system' },
-  { label: '支付配置', value: 'payment' },
-  { label: '推荐奖励', value: 'referral' },
-  { label: '自动化策略', value: 'automation' },
-  { label: '基础信息', value: 'site_basic' },
-  { label: '首页 Banner', value: 'site_hero' },
+const tabGroups: Array<{ group: string; label: string; tabs: Array<{ label: string; value: SettingsTab }> }> = [
+  {
+    group: 'config',
+    label: '基础配置',
+    tabs: [
+      { label: '系统设置', value: 'system' },
+      { label: '支付配置', value: 'payment' },
+      { label: '推荐奖励', value: 'referral' },
+      { label: '自动化策略', value: 'automation' },
+    ],
+  },
+  {
+    group: 'site',
+    label: '站点内容',
+    tabs: [
+      { label: '基础信息', value: 'site_basic' },
+      { label: '首页 Banner', value: 'site_hero' },
+    ],
+  },
 ];
+const tabOptions = tabGroups.flatMap((g) => g.tabs);
 const activeTab = ref<SettingsTab>(normalizeTab(route.query.tab));
 
 const configs: Record<Exclude<SettingsTab, 'site_hero'>, SettingsConfig> = {

@@ -5,6 +5,12 @@ export interface SessionDriverOptions {
   tokenKey: string
   lastActiveKey: string
   idleTimeoutMs?: number
+  /**
+   * Cookie 作用域。设置后会话信息写入 Cookie 而非 localStorage，
+   * 以便在同一主域的不同子域 / 端口间共享登录态。
+   * 例如生产环境传 `.coyjs.cn`，开发环境可留空（同主机不同端口的 Cookie 默认共享）。
+   */
+  cookieDomain?: string
 }
 
 export interface SessionDriver {
@@ -17,6 +23,64 @@ export interface SessionDriver {
   readStorageItem: (_key: string) => string
 }
 
+const COOKIE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
+
+function readCookie(name: string) {
+  if (typeof document === 'undefined') {
+    return ''
+  }
+
+  const prefix = `${encodeURIComponent(name)}=`
+  const segments = document.cookie ? document.cookie.split('; ') : []
+  for (const segment of segments) {
+    if (segment.startsWith(prefix)) {
+      return decodeURIComponent(segment.slice(prefix.length))
+    }
+  }
+
+  return ''
+}
+
+function writeCookie(name: string, value: string, cookieDomain?: string) {
+  if (typeof document === 'undefined') {
+    return
+  }
+
+  const secure = typeof window !== 'undefined' && window.location.protocol === 'https:'
+  const parts = [
+    `${encodeURIComponent(name)}=${encodeURIComponent(value)}`,
+    'path=/',
+    `max-age=${COOKIE_MAX_AGE_SECONDS}`,
+    'SameSite=Lax',
+  ]
+  if (cookieDomain) {
+    parts.push(`domain=${cookieDomain}`)
+  }
+  if (secure) {
+    parts.push('Secure')
+  }
+
+  document.cookie = parts.join('; ')
+}
+
+function deleteCookie(name: string, cookieDomain?: string) {
+  if (typeof document === 'undefined') {
+    return
+  }
+
+  const parts = [
+    `${encodeURIComponent(name)}=`,
+    'path=/',
+    'max-age=0',
+    'SameSite=Lax',
+  ]
+  if (cookieDomain) {
+    parts.push(`domain=${cookieDomain}`)
+  }
+
+  document.cookie = parts.join('; ')
+}
+
 function readStorageItem(_key: string) {
   if (typeof window === 'undefined') {
     return ''
@@ -27,33 +91,46 @@ function readStorageItem(_key: string) {
 
 export function createSessionDriver(options: SessionDriverOptions): SessionDriver {
   const idleTimeoutMs = Number(options.idleTimeoutMs || 3 * 60 * 60 * 1000)
+  const cookieDomain = options.cookieDomain || undefined
+
+  function readSession(key: string) {
+    const fromCookie = readCookie(key)
+    if (fromCookie) {
+      return fromCookie
+    }
+    // 平滑迁移：历史登录态存于 localStorage，读到后回写 Cookie
+    const legacy = readStorageItem(key)
+    if (legacy) {
+      writeCookie(key, legacy, cookieDomain)
+      window.localStorage.removeItem(key)
+      return legacy
+    }
+    return ''
+  }
 
   function getLastActiveAt() {
-    const raw = readStorageItem(options.lastActiveKey)
+    const raw = readSession(options.lastActiveKey)
     const timestamp = Number(raw)
 
     return Number.isFinite(timestamp) && timestamp > 0 ? timestamp : 0
   }
 
   function setLastActiveAt(timestamp = Date.now()) {
-    if (typeof window === 'undefined') {
-      return
-    }
-
-    window.localStorage.setItem(options.lastActiveKey, String(timestamp))
+    writeCookie(options.lastActiveKey, String(timestamp), cookieDomain)
   }
 
   function clearStoredToken() {
-    if (typeof window === 'undefined') {
-      return
+    deleteCookie(options.tokenKey, cookieDomain)
+    deleteCookie(options.lastActiveKey, cookieDomain)
+    // 清理历史遗留的 localStorage 数据，避免新旧机制并存
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem(options.tokenKey)
+      window.localStorage.removeItem(options.lastActiveKey)
     }
-
-    window.localStorage.removeItem(options.tokenKey)
-    window.localStorage.removeItem(options.lastActiveKey)
   }
 
   function isSessionExpired() {
-    const storedToken = readStorageItem(options.tokenKey)
+    const storedToken = readSession(options.tokenKey)
 
     if (!storedToken) {
       return false
@@ -70,7 +147,7 @@ export function createSessionDriver(options: SessionDriverOptions): SessionDrive
   }
 
   function getToken() {
-    const storedToken = readStorageItem(options.tokenKey)
+    const storedToken = readSession(options.tokenKey)
 
     if (!storedToken) {
       return null
@@ -89,16 +166,16 @@ export function createSessionDriver(options: SessionDriverOptions): SessionDrive
   }
 
   function setToken(token: string) {
-    if (!token || typeof token !== 'string' || typeof window === 'undefined') {
+    if (!token || typeof token !== 'string') {
       return
     }
 
-    window.localStorage.setItem(options.tokenKey, token)
+    writeCookie(options.tokenKey, token, cookieDomain)
     setLastActiveAt()
   }
 
   function touchSessionActivity() {
-    if (!readStorageItem(options.tokenKey)) {
+    if (!readSession(options.tokenKey)) {
       return
     }
 

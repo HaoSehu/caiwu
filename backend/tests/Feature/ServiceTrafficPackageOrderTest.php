@@ -48,6 +48,7 @@ class ServiceTrafficPackageOrderTest extends TestCase
         $productId = null;
         $categoryId = null;
         $serviceId = null;
+        $orderId = null;
         $invoiceId = null;
 
         try {
@@ -248,9 +249,11 @@ class ServiceTrafficPackageOrderTest extends TestCase
             );
 
             $invoiceId = (int) $invoice->id;
+            $orderId = (int) ($invoice->order_id ?? 0);
 
             $this->assertSame('upgrade', (string) $invoice->type);
             $this->assertSame((int) $service->id, (int) $invoice->service_id);
+            $this->assertGreaterThan(0, $orderId);
             $this->assertSame('39.90', number_format((float) $invoice->amount, 2, '.', ''));
             $this->assertSame(2048, (int) ($invoice->config_snapshot['flow_limit'] ?? 0));
             $this->assertSame(
@@ -263,9 +266,18 @@ class ServiceTrafficPackageOrderTest extends TestCase
                 'service_id' => (int) $service->id,
                 'status' => InvoiceStatus::UNPAID,
             ]);
+            $this->assertDatabaseHas('orders', [
+                'id' => $orderId,
+                'type' => 'upgrade',
+                'service_id' => (int) $service->id,
+                'status' => OrderStatus::PENDING,
+            ]);
         } finally {
             if ($invoiceId !== null && $invoiceId > 0) {
                 DB::table('invoices')->where('id', $invoiceId)->delete();
+            }
+            if ($orderId !== null && $orderId > 0) {
+                DB::table('orders')->where('id', $orderId)->delete();
             }
             if ($serviceId !== null) {
                 DB::table('services')->where('id', $serviceId)->delete();
@@ -395,8 +407,8 @@ class ServiceTrafficPackageOrderTest extends TestCase
 
             $couponService = $this->createMock(CouponService::class);
             $couponService->expects($this->once())
-                ->method('syncOrderCouponUsageAfterResponse')
-                ->with($this->callback(fn (Order $candidate): bool => (int) $candidate->id === (int) $order->id));
+                ->method('syncInvoiceCouponUsageAfterResponse')
+                ->with($this->callback(fn (Invoice $candidate): bool => (int) $candidate->id === (int) $invoice->id));
 
             $adminOrderNotificationService = $this->createMock(AdminOrderNotificationService::class);
             $adminOrderNotificationService->expects($this->once())

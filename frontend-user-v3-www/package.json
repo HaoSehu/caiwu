@@ -11,7 +11,7 @@
     "lint": "eslint src scripts tests --ext .js,.ts,.vue",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
     "check:source-health": "node ./scripts/check-source-health.mjs",
-    "test": "node ./tests/machineSpecOptions.test.mjs",
+    "test": "node ./tests/machineSpecOptions.test.mjs && node ./tests/productCatalogNormalizer.test.mjs && node ./tests/configNumberOptionBounds.test.mjs",
     "verify:refactor": "node ./scripts/verify-refactor.mjs"
   },
   "dependencies": {

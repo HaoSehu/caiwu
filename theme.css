@@ -597,6 +597,29 @@
   min-width: 0;
 }
 
+@media (max-width: 768px) {
+  #app .page-tabs-toolbar .t-tabs__nav-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  #app .page-tabs-toolbar .t-tabs__nav-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  #app .page-tabs-toolbar .t-tabs__nav-item {
+    padding: 0 12px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  #app .page-tabs-toolbar .t-tabs__operations {
+    display: none;
+  }
+}
+
 #app .page-inline-actions {
   justify-content: flex-end;
 }

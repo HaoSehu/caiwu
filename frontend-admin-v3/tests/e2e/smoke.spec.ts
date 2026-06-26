@@ -449,6 +449,65 @@ async function mockProductsHub(page: import('@playwright/test').Page) {
     });
   });
 
+  await page.route('**/api/admin/coupons/product-tree**', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        code: 0,
+        data: {
+          tree: [
+            {
+              id: 11,
+              name: '襄阳',
+              label: '襄阳',
+              product_type: 'cloud_server',
+              product_type_label: '云服务器',
+              first_product_group_id: 11,
+              first_product_group_name: '襄阳',
+              effective_product_group_id: 11,
+              effective_product_group_level: 1,
+              children: [
+                {
+                  id: 12,
+                  name: '高宽',
+                  label: '高宽',
+                  product_type: 'cloud_server',
+                  first_product_group_id: 11,
+                  first_product_group_name: '襄阳',
+                  second_product_group_id: 12,
+                  second_product_group_name: '高宽',
+                  effective_product_group_id: 12,
+                  effective_product_group_level: 2,
+                  effective_product_group_full_name: '襄阳 / 高宽',
+                  children: [
+                    {
+                      id: 101,
+                      product_id: 101,
+                      label: '标准云服务器',
+                      display_name: '标准云服务器',
+                      category_full_name: '襄阳 / 高宽',
+                      product_type: 'cloud_server',
+                      first_product_group_id: 11,
+                      first_product_group_name: '襄阳',
+                      second_product_group_id: 12,
+                      second_product_group_name: '高宽',
+                      effective_product_group_id: 12,
+                      effective_product_group_level: 2,
+                      node_type: 'product',
+                      leaf: true,
+                      primary_price: { cycle: 'monthly', amount: '99.00' },
+                      status: 1,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    });
+  });
+
   await page.route(/\/api\/admin\/products(?:\?.*)?$/, async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -3118,7 +3177,11 @@ test.describe('frontend-admin-v3 shell smoke', () => {
 
     const pullTrafficRequest = page.waitForRequest('**/api/admin/products/traffic-packages/pull');
     await page.getByRole('button', { name: '上游拉取' }).click();
-    await expect((await pullTrafficRequest).postDataJSON()).toMatchObject({ category_id: 12, product_type: '' });
+    await expect((await pullTrafficRequest).postDataJSON()).toMatchObject({
+      second_product_group_id: 12,
+      product_type: 'cloud_server',
+      source_product_id: 101,
+    });
     await expect(page.locator('.traffic-row input').first()).toHaveValue('200GB');
 
     const saveTrafficRequest = page.waitForRequest(
@@ -3135,12 +3198,9 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     const trafficGroupDialog = page.locator('.t-dialog:visible').filter({ hasText: '新增流量包分组' });
     await expect(trafficGroupDialog.getByText('绑定配置', { exact: true })).toBeVisible();
     await trafficGroupDialog.locator('.t-form__item').filter({ hasText: '分组名称' }).locator('input').fill('高防流量包');
-    await trafficGroupDialog.locator('.t-form__item').filter({ hasText: '商品种类' }).locator('.t-select').click();
-    await page.locator('.t-popup:visible .t-select-option').filter({ hasText: '云服务器' }).last().click();
-    await trafficGroupDialog.locator('.t-form__item').filter({ hasText: '关联分类' }).locator('.t-select').click();
-    await page.locator('.t-popup:visible .t-select-option').filter({ hasText: '通用型' }).last().click();
-    await trafficGroupDialog.locator('.t-form__item').filter({ hasText: '绑定配置' }).locator('.t-select').click();
-    await page.locator('.t-popup:visible .t-select-option').filter({ hasText: '标准云服务器' }).last().click();
+    await trafficGroupDialog.locator('.t-form__item').filter({ hasText: '绑定配置' }).locator('.binding-tree-select').click();
+    await page.locator('.t-popup:visible').getByText('标准云服务器', { exact: true }).last().click();
+    await expect(trafficGroupDialog.getByText('襄阳 / 高宽')).toBeVisible();
     await trafficGroupDialog.getByText('分组名称', { exact: true }).click();
     const createTrafficGroupRequest = page.waitForRequest(
       (request) => request.url().includes('/api/admin/settings') && request.method() === 'POST',

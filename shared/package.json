@@ -16,15 +16,16 @@
   "types": "./index.d.ts",
   "dependencies": {
     "axios": "^1.7.0",
-    "markdown-it": "^14.1.1",
+    "markdown-it": "^14.2.0",
     "vue": "^3.5.0"
   },
   "devDependencies": {
-    "@types/markdown-it": "^14.1.2"
+    "@types/markdown-it": "^14.1.2",
+    "jsdom": "^29.1.1"
   },
   "scripts": {
     "lint": "eslint . --ext .js,.ts,.vue",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --experimental-strip-types ./tests/runtime.test.mjs"
+    "test": "node --experimental-strip-types ./tests/runtime.test.mjs && node --experimental-strip-types ./tests/sanitizer.test.mjs"
   }
 }

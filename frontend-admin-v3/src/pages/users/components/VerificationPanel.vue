@@ -205,7 +205,8 @@
 import { ChevronLeftIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 
 import { adminApi, type SettingItem, type VerificationRecord } from '@/api/admin';
 import { formatDateTime } from '@/utils/format';
@@ -213,6 +214,8 @@ import { required } from '@/utils/formRules';
 import { useUserStore } from '@/store';
 
 const userStore = useUserStore();
+const route = useRoute();
+const router = useRouter();
 const activePane = ref('list');
 const listLoading = ref(false);
 const apiLoading = ref(false);
@@ -287,7 +290,21 @@ const feeRules: Record<string, FormRule[]> = {
 
 function setActivePane(value: string | number) {
   activePane.value = String(value);
+  router.replace({ query: { ...route.query, tab: activePane.value === 'list' ? undefined : activePane.value } });
 }
+
+// 初始化从 URL 同步 Tab
+const validPanes = ['list', 'manage', 'api'];
+const initPane = route.query.tab as string;
+if (initPane && validPanes.includes(initPane)) {
+  activePane.value = initPane;
+}
+watch(() => route.query.tab, (val) => {
+  const q = val as string;
+  if (q && validPanes.includes(q) && activePane.value !== q) {
+    activePane.value = q;
+  }
+});
 
 function buildListParams() {
   const params: Record<string, string | number> = {

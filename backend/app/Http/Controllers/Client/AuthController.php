@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Client;
 use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Client\Auth\ExchangeLoginAsCodeRequest;
+use App\Http\Requests\Client\Auth\LoginByCodeRequest;
 use App\Http\Requests\Client\Auth\LoginRequest;
 use App\Http\Requests\Client\Auth\RegisterRequest;
 use App\Http\Requests\Client\Auth\ResetPasswordRequest;
@@ -80,6 +81,48 @@ class AuthController extends Controller
         }
 
         $this->loginRiskControlService->clearSuccessfulLogin($normalizedAccount, $requestIp);
+
+        return $this->success($result, '登录成功');
+    }
+
+    /**
+     * 客户验证码登录
+     */
+    public function loginByCode(LoginByCodeRequest $request)
+    {
+        $data = $request->validated();
+
+        $account = AccountIdentifier::normalizeAccount((string) $data['account']);
+        $accountType = AccountIdentifier::detectType($account);
+        $code = (string) $data['code'];
+
+        // 查找用户用于验证码校验
+        $user = $this->authService->findClientByAccount($accountType, $account);
+        if (! $user) {
+            return $this->error(42200, $accountType === 'phone' ? '手机号未注册' : '邮箱未注册');
+        }
+
+        // 验证码校验：先尝试 guest，再用用户ID重试
+        $verified = $accountType === 'phone'
+            ? $this->codeService->verifyPhoneCode('guest', $account, $code)
+            : $this->codeService->verifyEmailCode('guest', $account, $code);
+
+        if (! $verified) {
+            $verified = $accountType === 'phone'
+                ? $this->codeService->verifyPhoneCode((int) $user->id, $account, $code)
+                : $this->codeService->verifyEmailCode((int) $user->id, $account, $code);
+        }
+
+        if (! $verified) {
+            return $this->error(42200, $accountType === 'phone' ? '短信验证码错误或已过期' : '邮箱验证码错误或已过期');
+        }
+
+        $result = $this->authService->clientLoginByCode(
+            $account,
+            $code,
+            (string) $request->ip(),
+            $request->userAgent()
+        );
 
         return $this->success($result, '登录成功');
     }
@@ -348,8 +391,21 @@ class AuthController extends Controller
             return $response;
         }
 
-        $userId = $this->resolveCodeOwnerId($request);
         $phone = (string) $data['phone'];
+
+        // 登录场景：校验账号是否存在且正常
+        if (($data['purpose'] ?? null) === 'login') {
+            $accountType = AccountIdentifier::detectType($phone);
+            $user = $this->authService->findClientByAccount($accountType, $phone);
+            if (! $user) {
+                return $this->error(42200, '手机号未注册');
+            }
+            if ($user->status !== 1) {
+                return $this->error(40300, '账号已被禁用');
+            }
+        }
+
+        $userId = $this->resolveCodeOwnerId($request);
         $code = (string) random_int(100000, 999999);
         $ip = $request->ip();
 
@@ -405,8 +461,21 @@ class AuthController extends Controller
             return $response;
         }
 
-        $userId = $this->resolveCodeOwnerId($request);
         $email = (string) $data['email'];
+
+        // 登录场景：校验账号是否存在且正常
+        if (($data['purpose'] ?? null) === 'login') {
+            $accountType = AccountIdentifier::detectType($email);
+            $user = $this->authService->findClientByAccount($accountType, $email);
+            if (! $user) {
+                return $this->error(42200, '邮箱未注册');
+            }
+            if ($user->status !== 1) {
+                return $this->error(40300, '账号已被禁用');
+            }
+        }
+
+        $userId = $this->resolveCodeOwnerId($request);
         $code = (string) random_int(100000, 999999);
         $ip = $request->ip();
 

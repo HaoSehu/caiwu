@@ -45,7 +45,7 @@
             v-for="{ node: item, level, childCount } in categoryTreeRows"
             :key="String(item.id)"
             class="category-tree-row"
-            :class="{ active: isCategoryRowActive(item), disabled: categorySortLoadingId }"
+            :class="{ active: isCategoryRowActive(item), 'active-parent': isCategoryRowParentOfSelected(item), disabled: categorySortLoadingId }"
             :style="{ '--category-level': level }"
           >
             <button
@@ -62,7 +62,7 @@
                   {{ categoryDisplayName(item) }}
                 </span>
               </span>
-              <small class="category-count">{{ childCount > 0 ? `${childCount} 个子分类` : `${item.product_count || 0} 个商品` }}</small>
+              <small class="category-count">{{ childCount > 0 ? `${childCount} 个子分类` : `${item.products_count ?? (item.product_count || 0)} 个商品` }}</small>
             </button>
             <t-dropdown
               class="category-menu"
@@ -261,7 +261,7 @@
               v-for="{ node: item, level, childCount } in categoryTreeRows"
               :key="String(item.id)"
               class="category-tree-row"
-              :class="{ active: isCategoryRowActive(item), disabled: categorySortLoadingId }"
+              :class="{ active: isCategoryRowActive(item), 'active-parent': isCategoryRowParentOfSelected(item), disabled: categorySortLoadingId }"
               :style="{ '--category-level': level }"
             >
               <button
@@ -278,7 +278,7 @@
                     {{ categoryDisplayName(item) }}
                   </span>
                 </span>
-                <small class="category-count">{{ childCount > 0 ? `${childCount} 个子分类` : `${item.product_count || 0} 个商品` }}</small>
+                <small class="category-count">{{ childCount > 0 ? `${childCount} 个子分类` : `${item.products_count ?? (item.product_count || 0)} 个商品` }}</small>
               </button>
               <t-dropdown
                 class="category-menu"
@@ -989,7 +989,20 @@ const categoryProductTypeOptions = computed(() => {
   return catalogFilters.product_type ? [{ value: catalogFilters.product_type, label: selectedProductTypeLabel.value }] : [];
 });
 const categoryTree = computed(() => buildCategoryTree(categoryOptions.value));
-const filteredCategoryTree = computed(() => filterCategoryTree(categoryTree.value, categoryKeyword.value.trim().toLowerCase()));
+// 顶部 type-strip 已展示一级分类（L1，例如"云服务器"），分类树里跳过该层，
+// 将 L2（例如"襄阳"）作为树根展示，L3（例如"高宽"）作为其子节点，形成一级 + 二级菜单。
+const displayCategoryTree = computed(() => {
+  const lifted: CategoryTreeNode[] = [];
+  categoryTree.value.forEach((root) => {
+    if (productGroupLevel(root.item) === 1 && root.children.length) {
+      lifted.push(...root.children);
+    } else {
+      lifted.push(root);
+    }
+  });
+  return lifted;
+});
+const filteredCategoryTree = computed(() => filterCategoryTree(displayCategoryTree.value, categoryKeyword.value.trim().toLowerCase()));
 const categoryTreeRows = computed(() => flattenCategoryTreeRows(filteredCategoryTree.value));
 const selectableProductGroupOptions = computed(() => categoryOptions.value.filter((item) => isSelectableProductGroup(item)));
 const visibleCategoryCount = computed(() => categoryTreeRows.value.length);
@@ -1246,7 +1259,14 @@ function isCategoryExpanded(row: ProductCategoryRecord) {
 function isCategoryRowActive(row: ProductCategoryRecord) {
   const selectedKey = String(catalogFilters.product_group_key || '');
   if (!selectedKey) return false;
-  if (categoryIdKey(row) === selectedKey) return true;
+  // 仅高亮精确选中的行，父节点不再显示选中背景，避免父子背景连成一片
+  return categoryIdKey(row) === selectedKey;
+}
+
+function isCategoryRowParentOfSelected(row: ProductCategoryRecord) {
+  const selectedKey = String(catalogFilters.product_group_key || '');
+  if (!selectedKey) return false;
+  if (categoryIdKey(row) === selectedKey) return false;
   const node = findCategoryTreeNode(categoryTree.value, categoryIdKey(row));
   return Boolean(node?.children.length && categoryIdKey(firstDisplayCategoryNode(node)) === selectedKey);
 }

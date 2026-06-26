@@ -118,7 +118,7 @@
                     <el-input-number
                       v-model="configForm[cfg.key + '_num']"
                       :min="cfg.min ?? 1"
-                      :max="cfg.max > 0 ? cfg.max : undefined"
+                      :max="cfg.max ?? undefined"
                       controls-position="right"
                       @change="fetchQuote"
                     />
@@ -150,7 +150,7 @@
                     <el-input-number
                       v-model="configForm[cfg.key + '_num']"
                       :min="cfg.min ?? 1"
-                      :max="cfg.max > 0 ? cfg.max : undefined"
+                      :max="cfg.max ?? undefined"
                       controls-position="right"
                       @change="fetchQuote"
                     />
@@ -389,6 +389,7 @@ import {
 } from '@/utils/websiteProductConfig'
 import { navigateToConsole } from '@/utils/consoleUrl'
 import { buildIdempotencyKey, encodePendingWebsiteCheckout, savePendingWebsiteCheckout } from '@/utils/websiteCheckout'
+import { buildPendingCouponRedirectUrl } from '@/utils/websiteCoupon'
 import { isCpuConfigKey, isMemoryConfigKey, resolveMachineSpecPresentation } from '@/domains/products/machineSpecResolver'
 import { useWebsiteProductConfigurator } from '@/domains/products/useWebsiteProductConfigurator'
 
@@ -770,9 +771,10 @@ function redirectToConsoleCheckout(orderPayload, idempotencyKey) {
 
   savePendingWebsiteCheckout(pendingCheckout)
   const checkoutPayload = encodePendingWebsiteCheckout(pendingCheckout)
+  const checkoutPath = buildPendingCouponRedirectUrl('/client/checkout-resume', orderPayload.user_coupon_id)
   ElMessage.success('正在进入控制台继续创建账单')
 
-  navigateToConsole('/client/checkout-resume', checkoutPayload
+  navigateToConsole(checkoutPath, checkoutPayload
     ? { checkout_payload: checkoutPayload }
     : {})
 }

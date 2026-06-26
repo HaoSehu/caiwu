@@ -37,7 +37,7 @@
                     <span>{{ resolveDiscountTypeLabel(item.discount_type) }}</span>
                     <strong>{{ resolveDiscountValue(item) }}</strong>
                   </div>
-                  <t-tag :theme="resolveStatusTheme(item.status)" variant="light">
+                  <t-tag :theme="resolveStatusTheme(item)" variant="light">
                     {{ item.status_label || item.status || '--' }}
                   </t-tag>
                 </div>
@@ -47,6 +47,9 @@
                   <div class="coupon-item__chips">
                     <span>{{ resolveThresholdText(item) }}</span>
                     <span>{{ resolveDiscountAmountText(item) }}</span>
+                    <span v-if="item.first_order_only">限首单</span>
+                    <span v-if="item.per_user_limit">可使用 {{ item.remaining_times ?? 0 }}/{{ item.per_user_limit }} 次</span>
+                    <span v-else>不限次</span>
                   </div>
                 </div>
                 <div class="coupon-item__foot">
@@ -80,7 +83,7 @@
                     <span>{{ resolveDiscountTypeLabel(item.discount_type) }}</span>
                     <strong>{{ resolveDiscountValue(item) }}</strong>
                   </div>
-                  <t-tag :theme="resolveStatusTheme(item.status)" variant="light">
+                  <t-tag :theme="resolveStatusTheme(item)" variant="light">
                     {{ item.status_label || item.status || '--' }}
                   </t-tag>
                 </div>
@@ -90,6 +93,8 @@
                   <div class="coupon-item__chips">
                     <span>{{ resolveThresholdText(item) }}</span>
                     <span>{{ resolveDiscountAmountText(item) }}</span>
+                    <span v-if="item.first_order_only">限首单</span>
+                    <span v-if="item.total_usage_limit">剩余 {{ item.remaining_stock }}/{{ item.total_usage_limit }} 张</span>
                   </div>
                 </div>
                 <div class="coupon-item__foot">
@@ -123,6 +128,18 @@
 
     <t-drawer v-model:visible="detailVisible" header="优惠券详情" size="min(42rem, calc(100vw - 2rem))" destroy-on-close>
       <div v-if="selectedCoupon" class="coupon-detail">
+        <section v-if="selectedCoupon.uid" class="coupon-detail-section">
+          <div class="coupon-detail-section__head">
+            <h3>券实例编号</h3>
+            <span>{{ selectedCoupon.status_label || '--' }}</span>
+          </div>
+          <div class="coupon-detail-section__body">
+            <div class="coupon-product-empty-grid">
+              <span>实例编号</span>
+              <strong>{{ selectedCoupon.uid }}</strong>
+            </div>
+          </div>
+        </section>
         <section class="coupon-detail-section">
           <div class="coupon-detail-section__head">
             <h3>适用产品</h3>

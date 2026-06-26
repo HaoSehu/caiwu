@@ -1,4 +1,6 @@
 import MarkdownIt from 'markdown-it'
+import type { RenderRule } from 'markdown-it/lib/renderer.mjs'
+import type StateCore from 'markdown-it/lib/rules_core/state_core.mjs'
 import { sanitizeRenderedHtml } from './htmlSanitizer'
 
 export interface MarkdownRendererOptions {
@@ -19,7 +21,7 @@ export function createMarkdownRenderer(options: MarkdownRendererOptions = {}) {
 
   const defaultValidateLink = markdown.validateLink
 
-  markdown.validateLink = (url) => {
+  markdown.validateLink = (url: string) => {
     const value = String(url || '').trim()
     const normalized = value.replace(/[\u0000-\u001F\u007F\s]+/g, '')
 
@@ -31,7 +33,7 @@ export function createMarkdownRenderer(options: MarkdownRendererOptions = {}) {
   }
 
   if (options.demoteHeadings) {
-    markdown.core.ruler.after('block', 'demote_headings', (state) => {
+    markdown.core.ruler.after('block', 'demote_headings', (state: StateCore) => {
       for (const token of state.tokens) {
         if (token.type !== 'heading_open' && token.type !== 'heading_close') {
           continue
@@ -45,7 +47,7 @@ export function createMarkdownRenderer(options: MarkdownRendererOptions = {}) {
   }
 
   const defaultImageRule = markdown.renderer.rules.image
-  markdown.renderer.rules.image = (tokens, idx, renderOptions, env, self) => {
+  const imageRule: RenderRule = (tokens, idx, renderOptions, env, self) => {
     const token = tokens[idx]
     const altIndex = token.attrIndex('alt')
     const altFromAttr = altIndex >= 0 ? (token.attrs?.[altIndex]?.[1] || '') : ''
@@ -67,9 +69,10 @@ export function createMarkdownRenderer(options: MarkdownRendererOptions = {}) {
 
     return self.renderToken(tokens, idx, renderOptions)
   }
+  markdown.renderer.rules.image = imageRule
 
   const defaultLinkOpenRule = markdown.renderer.rules.link_open
-  markdown.renderer.rules.link_open = (tokens, idx, renderOptions, env, self) => {
+  const linkOpenRule: RenderRule = (tokens, idx, renderOptions, env, self) => {
     const token = tokens[idx]
     const targetIndex = token.attrIndex('target')
 
@@ -92,6 +95,7 @@ export function createMarkdownRenderer(options: MarkdownRendererOptions = {}) {
 
     return self.renderToken(tokens, idx, renderOptions)
   }
+  markdown.renderer.rules.link_open = linkOpenRule
 
   return function renderMarkdown(content = '', renderOptions: RenderMarkdownOptions = {}) {
     const source = String(content || '').trim()

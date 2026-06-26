@@ -42,9 +42,14 @@ export const useUserStore = defineStore('user', {
         ...admin,
       };
     },
+    syncTokenFromSession() {
+      this.token = getAdminToken() || '';
+    },
     async getUserInfo() {
       const token = getAdminToken();
       if (!token) {
+        this.token = '';
+        this.userInfo = { ...InitUserInfo };
         throw new Error('未登录');
       }
       this.token = token;
@@ -56,6 +61,9 @@ export const useUserStore = defineStore('user', {
         permissions: res.permissions || [],
         ...res,
       };
+      // 与 Cookie 中的最新 token 保持一致，避免 localStorage 残留旧值
+      this.syncTokenFromSession();
+      return this.userInfo;
     },
     async logout() {
       try {
@@ -64,7 +72,15 @@ export const useUserStore = defineStore('user', {
         }
       } catch {
         // 本地退出优先，接口失败不阻断清理 token。
+      } finally {
+        this.token = '';
+        this.userInfo = { ...InitUserInfo };
+        removeAdminToken();
       }
+    },
+    // 仅清理本地会话（token + userInfo），不调用后端 logout 接口。
+    // 用于落地登录页时清理已失效的残留会话，避免误触发后端调用。
+    resetLocalSession() {
       this.token = '';
       this.userInfo = { ...InitUserInfo };
       removeAdminToken();
@@ -76,6 +92,8 @@ export const useUserStore = defineStore('user', {
       permissionStore.initRoutes();
     },
     key: 'user',
-    pick: ['token'],
+    // token 单一由 Cookie/session 管理（setAdminToken），避免与 localStorage 双存储不同步。
+    // 仅持久化 userInfo，减少刷新后重复请求 getUserInfo。
+    pick: ['userInfo'],
   },
 });

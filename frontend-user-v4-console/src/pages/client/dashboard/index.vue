@@ -669,46 +669,10 @@ async function loadDashboard() {
           balanceLogsLoaded.value = true;
         }
 
-        // [TEST] 模拟近7天消费数据，测试完成后删除此块
-        balanceLogsDaily.value = (() => {
-          const mock: BalanceLog[] = [];
-          const amounts = [-128.50, -45.00, 0, -320.75, -15.20, -89.90, -200.00];
-          for (let i = 6; i >= 0; i -= 1) {
-            const d = new Date();
-            d.setDate(d.getDate() - i);
-            const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-            if (amounts[6 - i] !== 0) {
-              mock.push({ id: 1000 + i, change_amount: amounts[6 - i], created_at: `${dateStr} 12:00:00`, remark: '模拟消费' });
-            }
-          }
-          return mock;
-        })();
-        // [TEST] 模拟数据结束
         if (paidInvoicesRes.status === 'fulfilled') {
           paidInvoices.value = resolvePagedList(paidInvoicesRes.value.data);
           invoicesLoaded.value = true;
         }
-
-        // [TEST] 模拟12个月账单数据，测试完成后删除此块
-        paidInvoices.value = (() => {
-          const mock: InvoiceRecord[] = [];
-          const year = new Date().getFullYear();
-          const monthlyAmounts = [1200, 850, 0, 2100, 1500, 980, 0, 3200, 1800, 650, 2400, 1100];
-          for (let m = 0; m < 12; m += 1) {
-            if (monthlyAmounts[m] > 0) {
-              mock.push({
-                id: 2000 + m,
-                paid_amount: monthlyAmounts[m],
-                amount: monthlyAmounts[m],
-                paid_at: `${year}-${String(m + 1).padStart(2, '0')}-15 10:00:00`,
-                status: 1,
-              });
-            }
-          }
-          return mock;
-        })();
-        invoicesLoaded.value = true;
-        // [TEST] 模拟12个月数据结束
       } catch (error) {
         // 静默失败，不影响首屏显示
         console.error('Failed to load secondary data:', error);
@@ -1019,6 +983,12 @@ onMounted(() => {
   color: var(--td-text-color-secondary);
   font: var(--td-font-body-small);
   white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.bar-chart__slot:hover .bar-chart__value {
+  opacity: 1;
 }
 
 .chart-summary {

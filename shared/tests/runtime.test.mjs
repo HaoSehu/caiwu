@@ -7,7 +7,30 @@ assert.equal(deriveInitials('创欧云'), '创欧')
 assert.equal(deriveInitials('Cloud Union'), 'CU')
 
 const storage = new Map()
+const cookies = new Map()
+
+const documentMock = {}
+Object.defineProperty(documentMock, 'cookie', {
+  get() {
+    return Array.from(cookies.entries())
+      .map(([key, value]) => `${key}=${value}`)
+      .join('; ')
+  },
+  set(value) {
+    const [pair, ...parts] = String(value).split('; ')
+    const [rawKey, rawValue = ''] = pair.split('=')
+    const key = decodeURIComponent(rawKey)
+    const maxAgePart = parts.find((part) => part.startsWith('max-age='))
+    if (maxAgePart === 'max-age=0') {
+      cookies.delete(key)
+      return
+    }
+    cookies.set(key, decodeURIComponent(rawValue))
+  },
+})
+
 global.window = {
+  location: { protocol: 'http:' },
   localStorage: {
     getItem(key) {
       return storage.get(key) || null
@@ -20,6 +43,7 @@ global.window = {
     },
   },
 }
+global.document = documentMock
 
 const driver = createSessionDriver({
   tokenKey: 'token',
@@ -34,5 +58,6 @@ driver.removeToken()
 assert.equal(driver.getToken(), null)
 
 delete global.window
+delete global.document
 
 console.log('shared runtime tests passed')

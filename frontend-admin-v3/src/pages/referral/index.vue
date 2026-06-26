@@ -7,10 +7,6 @@
           <t-tab-panel value="rewards" label="奖励" />
           <t-tab-panel value="withdrawals" label="提现" />
         </t-tabs>
-        <t-button variant="outline" :loading="currentLoading" @click="refreshCurrentTab">
-          <template #icon><refresh-icon /></template>
-          刷新
-        </t-button>
       </div>
     </t-card>
 
@@ -259,7 +255,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
@@ -280,7 +277,23 @@ import './index.less';
 type ReferralTab = 'overview' | 'rewards' | 'withdrawals';
 type WithdrawalMode = 'approve' | 'reject';
 
+const route = useRoute();
+const router = useRouter();
 const activeTab = ref<ReferralTab>('overview');
+
+// 初始化从 URL 同步 Tab
+const validTabs: ReferralTab[] = ['overview', 'rewards', 'withdrawals'];
+const initTab = route.query.tab as string;
+if (initTab && validTabs.includes(initTab as ReferralTab)) {
+  activeTab.value = initTab as ReferralTab;
+}
+watch(() => route.query.tab, (val) => {
+  const q = val as string;
+  if (q && validTabs.includes(q as ReferralTab) && activeTab.value !== q) {
+    activeTab.value = q as ReferralTab;
+    refreshCurrentTab();
+  }
+});
 const overviewLoading = ref(false);
 const rewardsLoading = ref(false);
 const withdrawalsLoading = ref(false);
@@ -384,6 +397,7 @@ const withdrawalColumns: PrimaryTableCol<ReferralWithdrawalRecord>[] = [
 
 function handleTabChange(value: string | number) {
   activeTab.value = String(value) as ReferralTab;
+  router.replace({ query: { ...route.query, tab: activeTab.value === 'overview' ? undefined : activeTab.value } });
   refreshCurrentTab();
 }
 

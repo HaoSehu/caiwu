@@ -53,6 +53,15 @@
                 <t-descriptions-item label="优先级">{{ resolvePriorityLabel(detail.priority) }}</t-descriptions-item>
                 <t-descriptions-item label="状态">{{ resolveTicketStatusLabel(detail.status) }}</t-descriptions-item>
                 <t-descriptions-item label="处理人">{{ assigneeName }}</t-descriptions-item>
+                <t-descriptions-item label="关联服务">
+                  <template v-if="detail.service?.id || detail.service_id">
+                    {{ detail.service?.id || detail.service_id }}
+                    <template v-if="detail.service?.display_name || detail.service?.name">
+                      （{{ detail.service?.display_name || detail.service?.name }}）
+                    </template>
+                  </template>
+                  <template v-else>--</template>
+                </t-descriptions-item>
               </t-descriptions>
               <t-button v-if="!isClosed" theme="danger" variant="outline" block :loading="closing" @click="closeTicket">
                 关闭工单

@@ -100,9 +100,33 @@ const payloadRows = computed(() => {
     .map((item) => ({ label: item.label, value: String(item.value) }));
 });
 
+function resolveQueryPendingCouponId() {
+  const raw = Array.isArray(route.query.pending_coupon_id)
+    ? route.query.pending_coupon_id[0]
+    : route.query.pending_coupon_id;
+  const id = Number(raw || 0);
+  return Number.isFinite(id) && id > 0 ? id : 0;
+}
+
+function applyPendingCouponFromQuery(payload: PendingWebsiteCheckout | null) {
+  const couponId = resolveQueryPendingCouponId();
+
+  if (!couponId || !payload?.orderPayload || typeof payload.orderPayload !== 'object') {
+    return payload;
+  }
+
+  return {
+    ...payload,
+    orderPayload: {
+      ...payload.orderPayload,
+      user_coupon_id: couponId,
+    },
+  };
+}
+
 function resolvePendingCheckout() {
   const queryPayload = typeof route.query.checkout_payload === 'string' ? route.query.checkout_payload : '';
-  const decodedPayload = decodePendingWebsiteCheckout(queryPayload);
+  const decodedPayload = applyPendingCouponFromQuery(decodePendingWebsiteCheckout(queryPayload));
 
   if (decodedPayload) {
     savePendingWebsiteCheckout(decodedPayload);
@@ -110,7 +134,11 @@ function resolvePendingCheckout() {
     return;
   }
 
-  pendingCheckout.value = getPendingWebsiteCheckout();
+  const storedPayload = applyPendingCouponFromQuery(getPendingWebsiteCheckout());
+  if (storedPayload) {
+    savePendingWebsiteCheckout(storedPayload);
+  }
+  pendingCheckout.value = storedPayload;
 }
 
 function openProducts() {

@@ -1,5 +1,12 @@
 <template>
   <div class="coupons-page">
+    <t-tabs v-model="activeTab" @change="handleTabChange" class="coupon-tabs">
+      <t-tab-panel value="coupons" label="优惠券列表" />
+      <t-tab-panel value="campaigns" label="活动券管理" />
+    </t-tabs>
+
+    <!-- 优惠券列表 -->
+    <template v-if="activeTab === 'coupons'">
     <t-alert
       v-if="!couponFeatureEnabled"
       theme="warning"
@@ -181,6 +188,12 @@
       @close="handleDialogClosed"
     >
       <div class="coupon-drawer-shell">
+        <t-alert
+          v-if="lockedFields.length"
+          theme="warning"
+          :message="`${lockReason}，部分字段不允许修改`"
+          style="margin-bottom: 16px"
+        />
         <t-form ref="formRef" class="coupon-drawer-form" :data="form" :rules="formRules" label-align="top">
           <section class="coupon-drawer-section" data-title="基础信息">
             <div class="coupon-form-grid">
@@ -188,19 +201,19 @@
                 <t-input v-model="form.name" maxlength="120" placeholder="例如：新客首单立减券" />
               </t-form-item>
               <t-form-item label="发放方式" name="distribution_type">
-                <t-select v-model="form.distribution_type">
+                <t-select v-model="form.distribution_type" :disabled="isFieldLocked('distribution_type')">
                   <t-option value="public" label="公开优惠券" />
                   <t-option value="private" label="私有优惠券" />
                 </t-select>
               </t-form-item>
               <t-form-item label="优惠类型" name="discount_type">
-                <t-select v-model="form.discount_type">
+                <t-select v-model="form.discount_type" :disabled="isFieldLocked('discount_type')">
                   <t-option value="fixed" label="满减券" />
                   <t-option value="percentage" label="折扣券" />
                 </t-select>
               </t-form-item>
               <t-form-item label="优惠阶段" name="discount_scope">
-                <t-select v-model="form.discount_scope">
+                <t-select v-model="form.discount_scope" :disabled="isFieldLocked('discount_scope')">
                   <t-option value="first_month" label="首月优惠" />
                   <t-option value="recurring" label="持续优惠" />
                   <t-option value="renew" label="续费优惠" />
@@ -342,11 +355,16 @@
         </div>
       </div>
     </t-drawer>
+    </template>
+
+    <!-- 活动券管理 -->
+    <CouponCampaigns v-else />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, defineAsyncComponent, onMounted, reactive, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { AddIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import type { FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
@@ -360,6 +378,8 @@ import { formatDateTime } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
+
+const CouponCampaigns = defineAsyncComponent(() => import('@/pages/products/coupon-campaigns/index.vue'));
 
 import './index.less';
 
@@ -400,6 +420,23 @@ const billingCycleOptions = [
   { label: '年付', value: 'annually' },
 ];
 
+// ── Tab 切换（优惠券 / 活动券）──
+const route = useRoute();
+const router = useRouter();
+const activeTab = ref<'coupons' | 'campaigns'>(route.query.tab === 'campaigns' ? 'campaigns' : 'coupons');
+
+function syncTabFromQuery() {
+  activeTab.value = route.query.tab === 'campaigns' ? 'campaigns' : 'coupons';
+}
+
+function handleTabChange(val: string) {
+  activeTab.value = val as 'coupons' | 'campaigns';
+  router.replace({ query: { ...route.query, tab: val === 'coupons' ? undefined : val } });
+}
+
+onMounted(syncTabFromQuery);
+watch(() => route.query.tab, syncTabFromQuery);
+
 const loading = ref(false);
 const saving = ref(false);
 const actionLoading = ref<number | string | null>(null);
@@ -426,6 +463,8 @@ const filters = reactive({
 });
 
 const form = reactive<CouponForm>(createDefaultForm());
+const lockedFields = ref<string[]>([]);
+const lockReason = ref('');
 
 const formRules: Record<string, FormRule[]> = {
   name: [{ required: true, message: '请输入优惠券名称', type: 'error' }],
@@ -482,6 +521,8 @@ function resetForm() {
   Object.assign(form, createDefaultForm());
   userSearchKeyword.value = '';
   userSearchResults.value = [];
+  lockedFields.value = [];
+  lockReason.value = '';
 }
 
 function handleDialogClosed() {
@@ -495,7 +536,7 @@ function closeCouponDrawer() {
 }
 
 function couponEditDisabled(row: CouponRecord) {
-  return !couponFeatureEnabled.value || !canManage.value || row.can_update === false;
+  return !couponFeatureEnabled.value || !canManage.value;
 }
 
 function couponDeleteDisabled(row: CouponRecord) {
@@ -508,6 +549,10 @@ function couponEditDisabledReason(row: CouponRecord) {
 
 function couponDeleteDisabledReason(row: CouponRecord) {
   return String(row.delete_reason || '该优惠券当前不允许删除');
+}
+
+function isFieldLocked(field: string): boolean {
+  return lockedFields.value.includes(field);
 }
 
 
@@ -631,12 +676,10 @@ async function openCouponDialog(row?: CouponRecord) {
     MessagePlugin.warning('当前环境未启用优惠券功能');
     return;
   }
-  if (row && row.can_update === false) {
-    MessagePlugin.warning(couponEditDisabledReason(row));
-    return;
-  }
   resetForm();
   if (row) {
+    lockedFields.value = Array.isArray(row.locked_fields) ? [...row.locked_fields] : [];
+    lockReason.value = String(row.lock_reason || '');
     form.id = Number(row.id);
     form.name = String(row.name || '');
     form.distribution_type = String(row.distribution_type || 'public');

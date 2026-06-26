@@ -52,10 +52,13 @@ const ALLOWED_ATTRS = new Set([
   'alt',
   'class',
   'colspan',
+  'decoding',
   'height',
   'href',
   'id',
+  'loading',
   'rel',
+  'referrerpolicy',
   'rowspan',
   'src',
   'target',
@@ -106,6 +109,20 @@ function cleanAttribute(element, attr) {
     element.removeAttribute(attr.name)
     return
   }
+
+  if (attrName === 'loading' && !['lazy', 'eager'].includes(String(attr.value).toLowerCase())) {
+    element.removeAttribute(attr.name)
+    return
+  }
+
+  if (attrName === 'decoding' && !['async', 'sync', 'auto'].includes(String(attr.value).toLowerCase())) {
+    element.removeAttribute(attr.name)
+    return
+  }
+
+  if (attrName === 'referrerpolicy' && !['no-referrer', 'same-origin', 'strict-origin', 'strict-origin-when-cross-origin'].includes(String(attr.value).toLowerCase())) {
+    element.removeAttribute(attr.name)
+  }
 }
 
 function sanitizeElement(element, imageAltFallback) {
@@ -134,6 +151,12 @@ function sanitizeElement(element, imageAltFallback) {
   if (tagName === 'img' && !element.getAttribute('alt')) {
     element.setAttribute('alt', imageAltFallback)
   }
+
+  if (tagName === 'img') {
+    element.setAttribute('loading', 'lazy')
+    element.setAttribute('decoding', 'async')
+    element.setAttribute('referrerpolicy', 'no-referrer')
+  }
 }
 
 function walk(node, imageAltFallback) {
@@ -154,6 +177,11 @@ export function sanitizeRenderedHtml(html, options = {}) {
 
   if (!source || typeof DOMParser === 'undefined' || typeof Node === 'undefined') {
     return source
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
   }
 
   const imageAltFallback = String(options.imageAltFallback || 'image').trim() || 'image'

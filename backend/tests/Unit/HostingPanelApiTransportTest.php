@@ -105,6 +105,37 @@ class HostingPanelApiTransportTest extends TestCase
         $this->assertSame('POST', $transport->captured[5]['method']);
     }
 
+    public function test_it_treats_json_unauthorized_status_as_jwt_failure(): void
+    {
+        $transport = new HostingPanelApiTransport;
+
+        $this->assertTrue($this->invokePrivateMethod($transport, 'shouldForgetJwtCacheForResponse', [
+            200,
+            ['status' => 401],
+            'jwt-token',
+        ]));
+        $this->assertTrue($this->invokePrivateMethod($transport, 'shouldForgetJwtCacheForResponse', [
+            200,
+            ['code' => '401'],
+            'jwt-token',
+        ]));
+        $this->assertTrue($this->invokePrivateMethod($transport, 'shouldForgetJwtCacheForResponse', [
+            401,
+            ['status' => 200],
+            'jwt-token',
+        ]));
+        $this->assertFalse($this->invokePrivateMethod($transport, 'shouldForgetJwtCacheForResponse', [
+            200,
+            ['status' => 401],
+            '',
+        ]));
+        $this->assertFalse($this->invokePrivateMethod($transport, 'shouldForgetJwtCacheForResponse', [
+            200,
+            ['status' => 200],
+            'jwt-token',
+        ]));
+    }
+
     private function invokePrivateMethod(object $object, string $method, array $arguments = []): mixed
     {
         $reflection = new ReflectionClass($object);

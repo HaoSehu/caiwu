@@ -614,7 +614,7 @@ class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsole
             throw new BusinessException('供应商接口请求失败，请稍后重试或联系管理员', 50000);
         }
 
-        if ($httpCode === 401 && $jwt !== null && trim($jwt) !== '') {
+        if ($this->shouldForgetJwtCacheForResponse($httpCode, null, $jwt)) {
             $this->forgetJwtCache($supplier);
         }
 
@@ -685,7 +685,7 @@ class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsole
         $output = trim($output, "\xEF\xBB\xBF");
         $decoded = json_decode($output, true);
 
-        if ($httpCode === 401 && $jwt !== null && trim($jwt) !== '') {
+        if ($this->shouldForgetJwtCacheForResponse($httpCode, $decoded, $jwt)) {
             $this->forgetJwtCache($supplier);
         }
 
@@ -1343,6 +1343,25 @@ PHP;
 
             return Cache::store(config('cache.default', 'file'));
         }
+    }
+
+    private function shouldForgetJwtCacheForResponse(int $httpCode, mixed $decoded, ?string $jwt): bool
+    {
+        if ($jwt === null || trim($jwt) === '') {
+            return false;
+        }
+
+        if ($httpCode === 401) {
+            return true;
+        }
+
+        if (! is_array($decoded)) {
+            return false;
+        }
+
+        $status = (int) ($decoded['status'] ?? $decoded['code'] ?? $decoded['status_code'] ?? 0);
+
+        return $status === 401;
     }
 
     private function safeLog(string $level, string $message, array $context = []): void

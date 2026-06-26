@@ -4,6 +4,22 @@
   gap: 16px;
 }
 
+.tab-group-first {
+  margin-left: 16px;
+  position: relative;
+}
+
+.tab-group-first::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1px;
+  height: 16px;
+  background: var(--td-border-level-1-color);
+}
+
 .schedule-env-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

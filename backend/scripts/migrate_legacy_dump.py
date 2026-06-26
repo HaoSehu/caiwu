@@ -20,7 +20,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 
 SCRIPT_PATH = Path(__file__).resolve()
@@ -42,12 +42,16 @@ ALLOW_MISSING_SOURCE_TABLES = {
     "activity_logs",
     "first_product_groups",
     "gateway_logs",
+    "notice_reads",
     "schedule_run_logs",
     "second_product_groups",
     "third_product_groups",
+    "user_notifications",
 }
 
 FILTER_CODEX_SETTINGS_SQL = "`group_key` NOT REGEXP '^codex_(runtime|service)_'"
+
+USE_PYMYSQL = False
 
 CORE_SCHEMA_COLUMNS = {
     "products": {"remark"},

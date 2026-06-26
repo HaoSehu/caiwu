@@ -1,10 +1,12 @@
 import { cloneDeep } from 'lodash-es';
 import { defineStore } from 'pinia';
 import {
-  ChatIcon,
+  ChartIcon,
   DashboardIcon,
   FileIcon,
+  GiftIcon,
   NotificationIcon,
+  ServerIcon,
   ShopIcon,
   ToolsIcon,
   UserCircleIcon,
@@ -27,6 +29,7 @@ interface MenuGroupConfig {
 }
 
 const ADMIN_MENU_GROUPS: MenuGroupConfig[] = [
+  // ── 工作台 ──────────────────────────────────────────────
   {
     path: '/admin/menu/workbench',
     title: { zh_CN: '工作台', en_US: 'Workbench' },
@@ -34,13 +37,15 @@ const ADMIN_MENU_GROUPS: MenuGroupConfig[] = [
     orderNo: 0,
     children: ['/admin/dashboard'],
   },
+  // ── 用户管理：用户列表 / 实名认证 / 推广返利 ─────────────
   {
     path: '/admin/menu/users',
     title: { zh_CN: '用户管理', en_US: 'Users' },
     icon: shallowRef(UserCircleIcon),
     orderNo: 10,
-    children: ['/admin/users', '/admin/users/verification'],
+    children: ['/admin/users', '/admin/users/verification', '/admin/referral'],
   },
+  // ── 财务管理：账单 / 订单 / 充值 / 新客户（订单内部切 Tab 区分普通/续费/附加）──
   {
     path: '/admin/menu/finance',
     title: { zh_CN: '财务管理', en_US: 'Finance' },
@@ -50,46 +55,59 @@ const ADMIN_MENU_GROUPS: MenuGroupConfig[] = [
       '/admin/finance/invoices',
       '/admin/finance/orders',
       '/admin/finance/recharges',
-      '/admin/finance/renewals',
-      '/admin/finance/addons',
       '/admin/finance/new-customers',
-      '/admin/services',
     ],
   },
+  // ── 商品管理：商品目录（内部切 Tab：商品/流量包/提供商）/ 规格 / CPU 型号 ──
   {
     path: '/admin/menu/products',
-    title: { zh_CN: '商品与服务', en_US: 'Products & Services' },
+    title: { zh_CN: '商品管理', en_US: 'Products' },
     icon: shallowRef(ShopIcon),
     orderNo: 30,
-    children: ['/admin/products', '/admin/products/traffic-packages', '/admin/products/suppliers', '/admin/specs', '/admin/cpu-models'],
+    children: [
+      '/admin/products',
+      '/admin/products/traffic-packages',
+      '/admin/specs',
+      '/admin/cpu-models',
+    ],
   },
+  // ── 服务运维：服务实例 / 工单 ─────────────────────────────
   {
-    path: '/admin/menu/tickets',
-    title: { zh_CN: '工单管理', en_US: 'Tickets' },
-    icon: shallowRef(ChatIcon),
+    path: '/admin/menu/service-ops',
+    title: { zh_CN: '服务运维', en_US: 'Service Ops' },
+    icon: shallowRef(ServerIcon),
     orderNo: 40,
-    children: ['/admin/tickets'],
+    children: ['/admin/services', '/admin/tickets'],
   },
+  // ── 内容管理：公告 / 帮助 ───────────────────────────────
   {
     path: '/admin/menu/content',
-    title: { zh_CN: '内容通知', en_US: 'Content' },
+    title: { zh_CN: '内容管理', en_US: 'Content' },
     icon: shallowRef(NotificationIcon),
     orderNo: 50,
-    children: ['/admin/content/notices', '/admin/content/help', '/admin/notifications'],
+    children: ['/admin/content/notices', '/admin/content/help'],
   },
+  // ── 营销管理：会员等级 / 优惠券（内部切 Tab：优惠券/活动券）──
   {
     path: '/admin/menu/marketing',
     title: { zh_CN: '营销管理', en_US: 'Marketing' },
-    icon: shallowRef(DashboardIcon),
+    icon: shallowRef(GiftIcon),
     orderNo: 60,
-    children: ['/admin/referral', '/admin/member-levels', '/admin/coupons', '/admin/coupon-campaigns'],
+    children: ['/admin/member-levels', '/admin/coupons'],
   },
+  // ── 系统管理：通知 / 日志 / 员工 / 角色 / 设置 ──────────
   {
     path: '/admin/menu/system',
     title: { zh_CN: '系统管理', en_US: 'System' },
     icon: shallowRef(ToolsIcon),
     orderNo: 70,
-    children: ['/admin/logs', '/admin/system/staff', '/admin/system/roles', '/admin/settings'],
+    children: [
+      '/admin/notifications',
+      '/admin/logs',
+      '/admin/system/staff',
+      '/admin/system/roles',
+      '/admin/settings',
+    ],
   },
 ];
 

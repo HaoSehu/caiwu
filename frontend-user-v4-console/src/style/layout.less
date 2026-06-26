@@ -260,6 +260,21 @@
   opacity: 0.4;
 }
 
+// 侧边栏菜单层级样式：一级白色，二级灰色
+.t-default-menu .t-menu--scroll > div > .t-submenu > .t-menu__item {
+  background: var(--td-bg-color-container);
+}
+
+.t-default-menu .t-menu__sub .t-submenu__item {
+  background: var(--td-bg-color-secondarycontainer);
+  border-radius: var(--td-radius-small);
+  margin: 2px 8px;
+}
+
+.t-default-menu .t-menu__sub .t-submenu__item.t-is-active {
+  background: var(--td-brand-color-light);
+}
+
 .t-menu__popup {
   z-index: 1000;
 }

@@ -7,10 +7,6 @@
           <t-tab-panel value="email-templates" label="邮件模板" />
           <t-tab-panel value="api-directory" label="API 接口" />
         </t-tabs>
-        <t-button variant="outline" :loading="currentLoading" @click="refreshCurrentTab">
-          <template #icon><refresh-icon /></template>
-          刷新
-        </t-button>
       </div>
     </t-card>
 

@@ -7,6 +7,7 @@ import {
   parseParamOptions,
   REGION_FIELD_KEYS,
 } from '@/utils/websiteProductConfig'
+import { resolveNumberOptionBounds } from '@/domains/products/configNumberOptionBounds'
 import { isCpuConfigKey, resolveMachineSpecPresentation } from './machineSpecResolver'
 
 const MACHINE_KEYS = ['cpu', 'core', 'memory', 'ram', 'disk', 'storage', 'ssd', 'hdd', '系统盘', '数据盘', '内存', '硬盘']
@@ -82,10 +83,8 @@ export function useWebsiteProductConfigurator(productDetail) {
     const isNum = isNumberField(item)
     const subOptions = parseSubOptions(item)
     const options = isNum ? [] : subOptions
-    const minQ = Number(item.qty_minimum || 0)
-    const maxQ = Number(item.qty_maximum || 9999)
-    const hasExplicitMin = item.qty_minimum !== undefined && item.qty_minimum !== null && item.qty_minimum !== ''
-    const defaultNum = isNum ? (hasExplicitMin ? minQ : (Number(item.parameter) || 1)) : 0
+    const bounds = resolveNumberOptionBounds(item)
+    const defaultNum = isNum ? (bounds.hasExplicitMin ? bounds.min : (Number(item.parameter) || 1)) : 0
 
     return {
       key,
@@ -94,8 +93,8 @@ export function useWebsiteProductConfigurator(productDetail) {
       sortOrder: Number(item.sort_order || 0),
       isNumber: isNum,
       defaultNum,
-      min: isNum ? (hasExplicitMin ? minQ : 1) : undefined,
-      max: isNum ? (maxQ > 0 ? maxQ : 9999) : undefined,
+      min: isNum ? bounds.min : undefined,
+      max: isNum ? bounds.max : undefined,
       unit: String(item.unit || item.suffix_text || '').trim(),
       options,
       subOptions,

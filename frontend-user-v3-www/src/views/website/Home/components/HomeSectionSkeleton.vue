@@ -1,7 +1,35 @@
 <template>
   <section class="home-section-skeleton" :class="`home-section-skeleton--${type}`" aria-hidden="true">
     <div class="container">
-      <div v-if="type === 'products'" class="home-section-skeleton__stack">
+      <div v-if="type === 'hero'" class="home-section-skeleton__hero">
+        <div class="home-section-skeleton__hero-rail">
+          <span
+            v-for="item in 5"
+            :key="`hero-rail-${item}`"
+            class="home-section-skeleton__pill home-section-skeleton__pill--rail"
+          ></span>
+        </div>
+
+        <div class="home-section-skeleton__hero-body">
+          <span class="home-section-skeleton__line home-section-skeleton__line--hero-title"></span>
+          <span class="home-section-skeleton__line home-section-skeleton__line--hero-desc"></span>
+          <span class="home-section-skeleton__line home-section-skeleton__line--hero-desc short"></span>
+          <div class="home-section-skeleton__actions">
+            <span class="home-section-skeleton__pill home-section-skeleton__pill--button"></span>
+            <span class="home-section-skeleton__pill home-section-skeleton__pill--button ghost"></span>
+          </div>
+        </div>
+
+        <div class="home-section-skeleton__hero-features">
+          <span
+            v-for="item in 5"
+            :key="`hero-feature-${item}`"
+            class="home-section-skeleton__feature"
+          ></span>
+        </div>
+      </div>
+
+      <div v-else-if="type === 'products'" class="home-section-skeleton__stack">
         <div class="home-section-skeleton__heading">
           <span class="home-section-skeleton__line home-section-skeleton__line--title"></span>
           <span class="home-section-skeleton__line home-section-skeleton__line--desc"></span>
@@ -124,6 +152,12 @@ defineProps({
   background: #ffffff;
 }
 
+.home-section-skeleton--hero {
+  min-height: 640px;
+  padding: 120px 0 32px;
+  background: linear-gradient(135deg, #f8fbff 0%, #eef4ff 52%, #ffffff 100%);
+}
+
 .home-section-skeleton--solutions,
 .home-section-skeleton--register {
   background: #f4f7fc;
@@ -136,6 +170,32 @@ defineProps({
 .home-section-skeleton__stack {
   display: grid;
   gap: 28px;
+}
+
+.home-section-skeleton__hero {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-rows: minmax(320px, auto) auto;
+  gap: 28px 48px;
+  align-items: center;
+}
+
+.home-section-skeleton__hero-rail {
+  display: grid;
+  gap: 12px;
+}
+
+.home-section-skeleton__hero-body {
+  display: grid;
+  align-content: center;
+  gap: 18px;
+}
+
+.home-section-skeleton__hero-features {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
 }
 
 .home-section-skeleton__heading {
@@ -256,6 +316,7 @@ defineProps({
 .home-section-skeleton__line,
 .home-section-skeleton__pill,
 .home-section-skeleton__media,
+.home-section-skeleton__feature,
 .home-section-skeleton__list-item,
 .home-section-skeleton__promo {
   position: relative;
@@ -280,9 +341,20 @@ defineProps({
   height: 14px;
 }
 
+.home-section-skeleton__line--hero-title {
+  width: min(520px, 72%);
+  height: 46px;
+}
+
+.home-section-skeleton__line--hero-desc {
+  width: min(620px, 88%);
+  height: 16px;
+}
+
 .home-section-skeleton__line--desc.short,
 .home-section-skeleton__line--panel-desc.short,
-.home-section-skeleton__line--card-desc.short {
+.home-section-skeleton__line--card-desc.short,
+.home-section-skeleton__line--hero-desc.short {
   width: 58%;
 }
 
@@ -336,6 +408,12 @@ defineProps({
   width: 100%;
 }
 
+.home-section-skeleton__feature {
+  display: block;
+  min-height: 108px;
+  border-radius: 14px;
+}
+
 .home-section-skeleton__pill--button {
   width: 132px;
 }
@@ -373,8 +451,18 @@ defineProps({
   }
 
   .home-section-skeleton__grid--news,
-  .home-section-skeleton__panel {
+  .home-section-skeleton__panel,
+  .home-section-skeleton__hero {
     grid-template-columns: 1fr;
+  }
+
+  .home-section-skeleton__hero {
+    grid-template-rows: auto;
+    gap: 24px;
+  }
+
+  .home-section-skeleton__hero-features {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .home-section-skeleton__register {
@@ -398,8 +486,14 @@ defineProps({
   }
 
   .home-section-skeleton__grid--products,
-  .home-section-skeleton__promo-grid {
+  .home-section-skeleton__promo-grid,
+  .home-section-skeleton__hero-features {
     grid-template-columns: 1fr;
+  }
+
+  .home-section-skeleton--hero {
+    min-height: 560px;
+    padding: 92px 0 28px;
   }
 }
 </style>

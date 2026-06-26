@@ -170,6 +170,54 @@ export interface ConsoleTrafficInfo {
   [key: string]: unknown;
 }
 
+export interface ServiceTrafficPackageOption {
+  option_id?: number | string;
+  target_value?: number | string;
+  target_label?: string;
+  label?: string;
+  price?: number | string;
+  sort_order?: number | string;
+  mode?: string;
+  [key: string]: unknown;
+}
+
+export interface ServiceTrafficPackagePreview {
+  supported?: boolean;
+  message?: string;
+  service_id?: number;
+  service_name?: string;
+  traffic?: ConsoleTrafficInfo | null;
+  packages?: ServiceTrafficPackageOption[];
+  [key: string]: unknown;
+}
+
+export interface ServiceTrafficPackageQuote {
+  service_id?: number;
+  service_name?: string;
+  upstream_host_id?: number | string;
+  mode?: string;
+  traffic?: ConsoleTrafficInfo | null;
+  selection?: ServiceTrafficPackageOption & {
+    current_label?: string;
+    target_snapshot?: number | string;
+  };
+  pricing?: {
+    amount?: number | string;
+    original_amount?: number | string;
+    discount_amount?: number | string;
+    billing_cycle?: string;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
+export interface ServiceTrafficPackageOrderPayload {
+  id?: number;
+  invoice_no?: string;
+  service_id?: number;
+  [key: string]: unknown;
+}
+
 export interface ConsoleConnectionInfo {
   hostname?: string;
   username?: string;
@@ -338,6 +386,7 @@ export interface CouponProductScopeItem {
 
 export interface CouponRecord {
   id: number;
+  uid?: string;
   coupon_id?: number;
   name?: string;
   description?: string;
@@ -358,6 +407,14 @@ export interface CouponRecord {
   starts_at?: string;
   receive_type?: string;
   receive_type_label?: string;
+  per_user_limit?: number | null;
+  used_times?: number;
+  remaining_times?: number | null;
+  first_order_only?: boolean;
+  total_usage_limit?: number | null;
+  remaining_stock?: number | null;
+  used_at?: string | null;
+  revoked_at?: string | null;
   billing_cycle_text?: string;
   products?: CouponProductScopeItem[];
   [key: string]: unknown;

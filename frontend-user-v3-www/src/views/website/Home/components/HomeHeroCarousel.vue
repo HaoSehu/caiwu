@@ -19,6 +19,8 @@
           @loadeddata="onVideoALoadedData"
           @canplay="onVideoACanPlay"
           @loadedmetadata="onVideoMetadata($event, 'a')"
+          @playing="onVideoPlaying('a')"
+          @pause="onVideoPaused('a')"
         ></video>
         <video
           ref="videoBRef"
@@ -33,6 +35,8 @@
           @loadeddata="onVideoBLoadedData"
           @canplay="onVideoBCanPlay"
           @loadedmetadata="onVideoMetadata($event, 'b')"
+          @playing="onVideoPlaying('b')"
+          @pause="onVideoPaused('b')"
         ></video>
         <div class="hero-bg__video-overlay"></div>
       </div>
@@ -148,7 +152,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElIcon } from 'element-plus/es/components/icon/index.mjs'
 import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
@@ -174,14 +178,8 @@ const activeIndex = ref(0)
 const heroSlides = shallowRef(Object.freeze([]))
 const heroFeatures = shallowRef(Object.freeze([]))
 
-// 优化：跟踪已加载的视频，避免重复下载
-const loadedVideoUrls = new Set()
-
-// 解析视频 src，避免 #t=0.1 导致浏览器重复请求
-// 只对未缓存过的视频添加 #t=0.1 海报片段
 function resolvedVideoSrc(url) {
   if (!url) return ''
-  // 使用原始 URL（不含 #t=0.1），浏览器可复用缓存
   return url
 }
 
@@ -358,22 +356,26 @@ const EMPTY_HERO = Object.freeze({
 
 const hero = computed(() => (props.hero && typeof props.hero === 'object' ? props.hero : EMPTY_HERO))
 
+function hasHeroField(data, key) {
+  return Boolean(data && typeof data === 'object' && Object.prototype.hasOwnProperty.call(data, key))
+}
+
 function normalizeHeroSlides(data) {
   const slides = Array.isArray(data?.slides) ? data.slides : []
-  if (!slides.length) {
-    return freezeNormalizedList(DEFAULT_SLIDES, normalizeSlide)
+  if (hasHeroField(data, 'slides')) {
+    return freezeNormalizedList(slides, normalizeSlide)
   }
 
-  return freezeNormalizedList(slides, normalizeSlide)
+  return freezeNormalizedList(DEFAULT_SLIDES, normalizeSlide)
 }
 
 function normalizeHeroFeatures(data) {
   const features = Array.isArray(data?.features) ? data.features : []
-  if (!features.length) {
-    return freezeNormalizedList(DEFAULT_FEATURES, normalizeFeature)
+  if (hasHeroField(data, 'features')) {
+    return freezeNormalizedList(features, normalizeFeature)
   }
 
-  return freezeNormalizedList(features, normalizeFeature)
+  return freezeNormalizedList(DEFAULT_FEATURES, normalizeFeature)
 }
 
 watch(
@@ -397,7 +399,12 @@ const activeSlide = computed(() => heroSlides.value[activeIndex.value] || heroSl
 const CROSSFADE_DURATION = 800
 const MIN_ROTATION_INTERVAL = 6000
 const MAX_ROTATION_INTERVAL = 15000
+const PLAYBACK_RETRY_DELAY = 400
+const MAX_PLAYBACK_RETRIES = 3
 let rotationTimer = null
+let playbackRetryTimer = null
+let playbackRetryCount = 0
+let isUnmounting = false
 
 function getRotationInterval() {
   const src = activeSlide.value.video
@@ -416,6 +423,95 @@ function stopRotation() {
   }
 }
 
+function stopPlaybackRetry() {
+  if (playbackRetryTimer) {
+    clearTimeout(playbackRetryTimer)
+    playbackRetryTimer = null
+  }
+}
+
+function resetPlaybackRetry() {
+  playbackRetryCount = 0
+  stopPlaybackRetry()
+}
+
+function isDocumentVisible() {
+  return typeof document === 'undefined' || document.visibilityState !== 'hidden'
+}
+
+function getVideoElement(slot = activeVideoSlot.value) {
+  return slot === 'a' ? videoARef.value : videoBRef.value
+}
+
+function prepareVideoElement(videoEl) {
+  if (!videoEl) return
+  videoEl.muted = true
+  videoEl.loop = true
+  videoEl.playsInline = true
+  videoEl.setAttribute('playsinline', '')
+}
+
+function pauseVideo(videoEl) {
+  if (videoEl && !videoEl.paused) {
+    videoEl.pause()
+  }
+}
+
+function pauseInactiveVideo() {
+  const inactiveSlot = activeVideoSlot.value === 'a' ? 'b' : 'a'
+  pauseVideo(getVideoElement(inactiveSlot))
+}
+
+function pauseAllVideos() {
+  pauseVideo(videoARef.value)
+  pauseVideo(videoBRef.value)
+}
+
+function ensureActiveVideoPlayback() {
+  if (isUnmounting) return
+  if (!isDocumentVisible()) return
+
+  const videoEl = getVideoElement()
+  if (!videoEl) return
+
+  prepareVideoElement(videoEl)
+  pauseInactiveVideo()
+
+  if (!videoEl.currentSrc && !videoEl.src) return
+
+  if (videoEl.readyState === 0) {
+    videoEl.load?.()
+    return
+  }
+
+  const playResult = videoEl.play?.()
+  if (playResult && typeof playResult.catch === 'function') {
+    playResult.catch(() => {
+      if (!isDocumentVisible() || playbackRetryCount >= MAX_PLAYBACK_RETRIES) return
+      playbackRetryCount += 1
+      queueActiveVideoPlayback(PLAYBACK_RETRY_DELAY)
+    })
+  }
+}
+
+function queueActiveVideoPlayback(delay = 0) {
+  if (isUnmounting) return
+  stopPlaybackRetry()
+
+  const run = () => {
+    playbackRetryTimer = null
+    nextTick(() => {
+      ensureActiveVideoPlayback()
+    })
+  }
+
+  if (delay > 0) {
+    playbackRetryTimer = setTimeout(run, delay)
+  } else {
+    run()
+  }
+}
+
 function startRotation() {
   stopRotation()
   rotationTimer = setTimeout(() => {
@@ -431,9 +527,11 @@ function switchToSlide(index, auto = false) {
   const slide = heroSlides.value[index]
   const videoSrc = slide?.video || ''
   if (!videoSrc) {
+    resetPlaybackRetry()
     videoSlotA.value = ''
     videoSlotB.value = ''
     videoReady.value = false
+    pauseAllVideos()
     if (auto) startRotation()
     return
   }
@@ -443,6 +541,7 @@ function switchToSlide(index, auto = false) {
   if (currentSlotSrc === videoSrc) {
     // 当前 slot 已是目标视频，直接显示
     videoReady.value = true
+    queueActiveVideoPlayback()
     if (auto) startRotation()
     return
   }
@@ -452,8 +551,10 @@ function switchToSlide(index, auto = false) {
   const otherSlotSrc = otherSlot === 'a' ? videoSlotA.value : videoSlotB.value
   if (otherSlotSrc === videoSrc) {
     // 另一个 slot 已缓存该视频，直接切换
+    resetPlaybackRetry()
     activeVideoSlot.value = otherSlot
     videoReady.value = true
+    queueActiveVideoPlayback()
     if (auto) startRotation()
     return
   }
@@ -465,8 +566,10 @@ function switchToSlide(index, auto = false) {
   } else {
     videoSlotB.value = videoSrc
   }
+  resetPlaybackRetry()
   videoReady.value = false
   activeVideoSlot.value = nextSlot
+  queueActiveVideoPlayback()
   if (auto) startRotation()
 }
 
@@ -493,26 +596,43 @@ function nextSlide() {
 }
 
 function onVideoACanPlay() {
-  if (activeVideoSlot.value === 'a') videoReady.value = true
+  markVideoReady('a')
 }
 
 function onVideoBCanPlay() {
-  if (activeVideoSlot.value === 'b') videoReady.value = true
+  markVideoReady('b')
 }
 
-// 首帧就绪即显示：比 canplay 更早触发，配合 #t=0.1 海报片段让首屏立即可见
 function onVideoALoadedData() {
-  if (activeVideoSlot.value === 'a') videoReady.value = true
+  markVideoReady('a')
 }
 
 function onVideoBLoadedData() {
-  if (activeVideoSlot.value === 'b') videoReady.value = true
+  markVideoReady('b')
+}
+
+function markVideoReady(slot) {
+  if (activeVideoSlot.value !== slot) return
+  videoReady.value = true
+  queueActiveVideoPlayback()
+}
+
+function onVideoPlaying(slot) {
+  if (activeVideoSlot.value === slot) {
+    resetPlaybackRetry()
+  }
+}
+
+function onVideoPaused(slot) {
+  if (!isUnmounting && activeVideoSlot.value === slot && isDocumentVisible()) {
+    queueActiveVideoPlayback(PLAYBACK_RETRY_DELAY)
+  }
 }
 
 function onVideoMetadata(event, slot) {
   const videoEl = event.target
-  // 去掉 #t=0.1 等片段，确保与 activeSlide.video（原始 src）匹配
-  const src = (videoEl?.src || '').split('#')[0]
+  const slotSrc = slot === 'a' ? videoSlotA.value : videoSlotB.value
+  const src = slotSrc || (videoEl?.src || '').split('#')[0]
   const duration = videoEl?.duration
   if (src && duration && Number.isFinite(duration) && duration > 0) {
     videoDurations.set(src, duration)
@@ -522,7 +642,10 @@ function onVideoMetadata(event, slot) {
 watch(activeSlide, (slide) => {
   if (!slide?.video) return
   const currentSlotSrc = activeVideoSlot.value === 'a' ? videoSlotA.value : videoSlotB.value
-  if (currentSlotSrc === slide.video) return
+  if (currentSlotSrc === slide.video) {
+    queueActiveVideoPlayback()
+    return
+  }
   switchToSlide(activeIndex.value)
 })
 
@@ -530,8 +653,11 @@ function handleVisibilityChange() {
   if (typeof document === 'undefined') return
   if (document.visibilityState === 'hidden') {
     stopRotation()
+    stopPlaybackRetry()
+    pauseAllVideos()
   } else {
     startRotation()
+    queueActiveVideoPlayback()
   }
 }
 
@@ -540,7 +666,7 @@ onMounted(() => {
   if (firstVideo) {
     videoSlotA.value = firstVideo
     activeVideoSlot.value = 'a'
-    loadedVideoUrls.add(firstVideo)
+    queueActiveVideoPlayback()
   }
   startRotation()
   if (typeof document !== 'undefined') {
@@ -549,7 +675,10 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  isUnmounting = true
   stopRotation()
+  stopPlaybackRetry()
+  pauseAllVideos()
   if (typeof document !== 'undefined') {
     document.removeEventListener('visibilitychange', handleVisibilityChange)
   }

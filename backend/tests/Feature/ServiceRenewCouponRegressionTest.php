@@ -8,12 +8,15 @@ use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
 use App\Constants\PaymentStatus;
 use App\Constants\ServiceStatus;
+use App\Constants\UserCouponStatus;
+use App\Models\Coupon;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\User;
+use App\Models\UserCoupon;
 use App\Services\Finance\AdminOrderNotificationService;
 use App\Services\Finance\CheckoutSecurityService;
 use App\Services\Finance\CouponService;
@@ -35,6 +38,7 @@ class ServiceRenewCouponRegressionTest extends TestCase
     public function test_it_cancels_stale_pending_renew_invoice_before_creating_coupon_invoice(): void
     {
         $suffix = bin2hex(random_bytes(4));
+        $couponCode = 'CPNRENEW'.strtoupper($suffix);
 
         $user = User::query()->create([
             'email' => 'renew-coupon-'.$suffix.'@example.com',
@@ -69,6 +73,28 @@ class ServiceRenewCouponRegressionTest extends TestCase
             'auto_renew' => 0,
         ]);
 
+        $coupon = Coupon::query()->create([
+            'name' => 'Renew Coupon',
+            'code' => $couponCode,
+            'distribution_type' => 'public',
+            'discount_scope' => 'renew',
+            'discount_type' => 'fixed',
+            'discount_value' => '5.00',
+            'min_amount' => '0.00',
+            'used_count' => 0,
+            'status' => 1,
+            'starts_at' => now()->subHour(),
+            'expires_at' => now()->addDay(),
+        ]);
+
+        $userCoupon = UserCoupon::query()->create([
+            'coupon_id' => (int) $coupon->id,
+            'user_id' => (int) $user->id,
+            'receive_type' => 'claim',
+            'status' => UserCouponStatus::OWNED,
+            'claimed_at' => now()->subHour(),
+        ]);
+
         $existingOrder = Order::query()->create([
             'order_no' => 'RENEWOLD'.strtoupper($suffix),
             'user_id' => (int) $user->id,
@@ -77,9 +103,9 @@ class ServiceRenewCouponRegressionTest extends TestCase
             'product_type_snapshot' => (string) $product->product_type,
             'service_id' => (int) $service->id,
             'type' => 'renew',
-            'coupon_id' => 71,
-            'user_coupon_id' => 7,
-            'coupon_code' => 'CPNRENEW',
+            'coupon_id' => (int) $coupon->id,
+            'user_coupon_id' => (int) $userCoupon->id,
+            'coupon_code' => $couponCode,
             'amount' => '20.00',
             'discount' => '0.00',
             'paid_amount' => '0.00',
@@ -98,9 +124,9 @@ class ServiceRenewCouponRegressionTest extends TestCase
             'amount' => '20.00',
             'paid_amount' => '0.00',
             'billing_cycle' => 'monthly',
-            'coupon_id' => 71,
-            'user_coupon_id' => 7,
-            'coupon_code' => 'CPNRENEW',
+            'coupon_id' => (int) $coupon->id,
+            'user_coupon_id' => (int) $userCoupon->id,
+            'coupon_code' => $couponCode,
             'status' => InvoiceStatus::UNPAID,
             'due_date' => now()->addDay(),
         ]);
@@ -116,9 +142,9 @@ class ServiceRenewCouponRegressionTest extends TestCase
         ]);
 
         $couponPayload = [
-            'coupon_id' => 71,
-            'user_coupon_id' => 7,
-            'code' => 'CPNRENEW',
+            'coupon_id' => (int) $coupon->id,
+            'user_coupon_id' => (int) $userCoupon->id,
+            'code' => $couponCode,
             'discount_amount' => '5.00',
         ];
 
@@ -126,7 +152,7 @@ class ServiceRenewCouponRegressionTest extends TestCase
         $couponService->expects($this->once())
             ->method('previewOwnedCoupon')
             ->with(
-                7,
+                (int) $userCoupon->id,
                 (int) $user->id,
                 $this->callback(fn (Product $candidate): bool => (int) $candidate->id === (int) $product->id),
                 'monthly',
@@ -137,7 +163,7 @@ class ServiceRenewCouponRegressionTest extends TestCase
         $couponService->expects($this->once())
             ->method('reserveOwnedCouponForInvoice')
             ->with(
-                7,
+                (int) $userCoupon->id,
                 (int) $user->id,
                 $this->callback(fn (Product $candidate): bool => (int) $candidate->id === (int) $product->id),
                 'monthly',
@@ -183,7 +209,7 @@ class ServiceRenewCouponRegressionTest extends TestCase
             $user,
             (int) $service->id,
             'monthly',
-            7,
+            (int) $userCoupon->id,
             [
                 'actor_type' => 'client',
                 'actor_user_id' => (int) $user->id,
@@ -206,8 +232,8 @@ class ServiceRenewCouponRegressionTest extends TestCase
             'id' => (int) $newInvoice->id,
             'service_id' => (int) $service->id,
             'status' => InvoiceStatus::UNPAID,
-            'coupon_id' => 71,
-            'user_coupon_id' => 7,
+            'coupon_id' => (int) $coupon->id,
+            'user_coupon_id' => (int) $userCoupon->id,
             'discount' => '5.00',
             'amount' => '15.00',
         ]);

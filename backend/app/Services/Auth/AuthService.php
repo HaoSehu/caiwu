@@ -125,6 +125,68 @@ class AuthService
     }
 
     /**
+     * 客户验证码登录
+     */
+    public function clientLoginByCode(string $account, string $code, string $ip, ?string $userAgent = null): array
+    {
+        $accountType = AccountIdentifier::detectType($account);
+        if (! $accountType) {
+            throw new BusinessException('请输入正确的邮箱或手机号', 42200, 422);
+        }
+
+        $normalizedAccount = AccountIdentifier::normalizeAccount($account);
+        $user = $this->findClientByAccount($accountType, $normalizedAccount);
+
+        if (! $user) {
+            throw new BusinessException('未找到该账号', 40100, 422);
+        }
+
+        if ($user->status !== 1) {
+            throw new BusinessException('账号已被禁用', 40300, 403);
+        }
+
+        $loginAt = now();
+        $token = $user->createToken('client-token')->plainTextToken;
+        $this->finishClientLoginAfterResponse(
+            userId: (int) $user->id,
+            loginAt: $loginAt->format('Y-m-d H:i:s'),
+            ip: $ip,
+            email: trim((string) $user->email),
+            displayName: (string) $user->display_name,
+            userAgent: $userAgent,
+            loginNotifyEnabled: (bool) (($user->login_notify ?? null) ?? $user->login_email_alert),
+            loginLocationAlertEnabled: (bool) ($user->login_location_alert ?? true),
+            previousIp: trim((string) ($user->last_login_ip ?? '')),
+        );
+
+        return [
+            'token' => $token,
+            'user' => [
+                'id' => $user->id,
+                'email' => (string) ($user->email ?? ''),
+                'phone' => (string) ($user->phone ?? ''),
+                'nickname' => $user->nickname,
+                'display_name' => (string) ($user->display_name ?? ''),
+                'login_email_alert' => (int) $user->login_email_alert,
+                'login_notify' => (int) (($user->login_notify ?? null) ?? $user->login_email_alert),
+                'login_location_alert' => (int) ($user->login_location_alert ?? 1),
+                'password_change_alert' => (int) ($user->password_change_alert ?? 1),
+                'phone_change_alert' => (int) ($user->phone_change_alert ?? 1),
+                'email_change_alert' => (int) ($user->email_change_alert ?? 1),
+                'marketing_alert' => (int) ($user->marketing_alert ?? 0),
+                'cash_balance' => (string) $user->balance,
+                'credit_limit' => (string) $user->credit_limit,
+                'referral_frozen_balance' => (string) $user->referral_frozen_amount,
+                'referral_available_balance' => (string) $user->referral_available_amount,
+                'referral_pending_withdrawal_balance' => (string) $user->referral_withdrawing_amount,
+                'referral_withdrawn_balance' => (string) $user->referral_withdrawn_amount,
+                'last_login_at' => $loginAt->format('Y-m-d H:i:s'),
+                'last_login_ip' => $ip,
+            ],
+        ];
+    }
+
+    /**
      * 客户注册
      */
     public function clientRegister(array $data, string $ip): array

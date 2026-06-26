@@ -1,6 +1,13 @@
 <template>
   <div class="finance-orders-page">
     <t-card :bordered="false">
+      <t-tabs v-model="activeTab" @change="handleTabChange" class="order-tabs">
+        <t-tab-panel value="all" label="全部订单" />
+        <t-tab-panel value="orders" label="普通订单" />
+        <t-tab-panel value="renewals" label="续费订单" />
+        <t-tab-panel value="addons" label="附加配置" />
+      </t-tabs>
+
       <div class="order-filter">
         <t-input
           class="filter-keyword"
@@ -12,7 +19,7 @@
         >
           <template #suffix-icon><search-icon /></template>
         </t-input>
-        <t-select v-if="mode === 'orders'" class="filter-type" v-model="filters.type" clearable placeholder="类型" @change="handleSearch">
+        <t-select v-if="mode === 'orders' || mode === 'all'" class="filter-type" v-model="filters.type" clearable placeholder="类型" @change="handleSearch">
           <t-option v-for="item in orderTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
         </t-select>
         <t-select v-if="mode === 'addons'" class="filter-type" v-model="filters.kind" clearable placeholder="配置类型" @change="handleSearch">
@@ -133,7 +140,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, watch } from 'vue';
+import { computed, ref, watch, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
@@ -150,7 +157,7 @@ import { ORDER_STATUS_MAP, toSelectOptions } from '@shared/statusConfig';
 
 import './index.less';
 
-type FinanceOrderMode = 'orders' | 'renewals' | 'addons';
+type FinanceOrderMode = 'all' | 'orders' | 'renewals' | 'addons';
 
 const ORDER_TYPE_MAP: Record<string, string> = {
   new: '新购',
@@ -159,17 +166,43 @@ const ORDER_TYPE_MAP: Record<string, string> = {
   upgrade: '附加配置',
 };
 
+const ORDER_TAB_OPTIONS = [
+  { value: 'all', label: '全部订单' },
+  { value: 'orders', label: '普通订单' },
+  { value: 'renewals', label: '续费订单' },
+  { value: 'addons', label: '附加配置' },
+];
+
 const route = useRoute();
 const router = useRouter();
 const isMobile = useMediaQuery('(max-width: 768px)');
 
+// Tab 状态同步 URL query—— ref 初始化即读取，确保 useListPage 首次加载使用正确模式
+function resolveTabFromQuery(): FinanceOrderMode {
+  const q = route.query.tab as string;
+  return q && ORDER_TAB_OPTIONS.some((o) => o.value === q) ? (q as FinanceOrderMode) : 'all';
+}
+const activeTab = ref<FinanceOrderMode>(resolveTabFromQuery());
+
+function syncTabFromQuery() {
+  activeTab.value = resolveTabFromQuery();
+}
+
+function handleTabChange(val: string) {
+  activeTab.value = val as FinanceOrderMode;
+  router.replace({ query: { ...route.query, tab: val === 'all' ? undefined : val } });
+}
+
+onMounted(syncTabFromQuery);
+watch(() => route.query.tab, syncTabFromQuery);
+
 const orderTypeOptions = Object.entries(ORDER_TYPE_MAP).map(([value, label]) => ({ value, label }));
-const mode = computed<FinanceOrderMode>(() => {
-  const value = route.meta.financeOrderMode;
-  return value === 'renewals' || value === 'addons' ? value : 'orders';
-});
+const mode = computed<FinanceOrderMode>(() => activeTab.value);
 const orderStatusOptions = computed(() => toSelectOptions(ORDER_STATUS_MAP, false));
-const mobileEyebrow = computed(() => (mode.value === 'renewals' ? '续费订单' : mode.value === 'addons' ? '附加配置订单' : '订单管理'));
+const mobileEyebrow = computed(() => {
+  const found = ORDER_TAB_OPTIONS.find((o) => o.value === mode.value);
+  return found?.label || '订单管理';
+});
 
 const {
   filters,
@@ -232,7 +265,7 @@ function buildParams() {
   };
   if (filters.keyword) params.keyword = filters.keyword;
   if (filters.status !== '') params.status = filters.status;
-  if (mode.value === 'orders' && filters.type) params.type = filters.type;
+  if ((mode.value === 'orders' || mode.value === 'all') && filters.type) params.type = filters.type;
   if (mode.value === 'addons') params.kind = filters.kind || 'all';
   if (filters.start_date || filters.end_date) params.date_range = [filters.start_date, filters.end_date].filter(Boolean);
   return params;
@@ -256,7 +289,8 @@ function orderMobileRows(row: OrderRecord) {
   ];
 }
 
-watch(mode, () => resetFilters());
+// Tab 切换时重置筛选并重新加载
+watch(activeTab, () => resetFilters());
 
 function userName(row: OrderRecord) {
   const user = toRecord(row.user);

@@ -3,12 +3,16 @@
     <t-card :bordered="false">
       <div class="page-tabs-toolbar">
         <t-tabs :value="activeTab" @change="handleTabChange">
-          <t-tab-panel v-for="item in tabOptions" :key="item.value" :value="item.value" :label="item.label" />
+          <template v-for="group in tabGroups" :key="group.group">
+            <t-tab-panel
+              v-for="(item, idx) in group.tabs"
+              :key="item.value"
+              :value="item.value"
+              :label="item.label"
+              :class="{ 'tab-group-first': idx === 0 }"
+            />
+          </template>
         </t-tabs>
-        <t-button variant="outline" :loading="currentLoading" @click="refreshCurrentTab">
-          <template #icon><refresh-icon /></template>
-          刷新
-        </t-button>
       </div>
     </t-card>
 
@@ -363,16 +367,29 @@ const cleanupForm = reactive({
   confirm_text: '',
 });
 
-const tabOptions: Array<{ value: LogsTab; label: string }> = [
-  { value: 'system', label: '系统日志' },
-  { value: 'admin-logins', label: '管理员登录' },
-  { value: 'api', label: 'API 日志' },
-  { value: 'sms', label: '短信日志' },
-  { value: 'email', label: '邮件日志' },
-  { value: 'tasks', label: '任务日志' },
-  { value: 'schedules', label: '定时任务' },
-  { value: 'cleanup', label: '日志清理' },
+const tabGroups: Array<{ group: string; label: string; tabs: Array<{ value: LogsTab; label: string }> }> = [
+  {
+    group: 'logs',
+    label: '日志查看',
+    tabs: [
+      { value: 'system', label: '系统日志' },
+      { value: 'admin-logins', label: '管理员登录' },
+      { value: 'api', label: 'API 日志' },
+      { value: 'sms', label: '短信日志' },
+      { value: 'email', label: '邮件日志' },
+      { value: 'tasks', label: '任务日志' },
+    ],
+  },
+  {
+    group: 'ops',
+    label: '运维操作',
+    tabs: [
+      { value: 'schedules', label: '定时任务' },
+      { value: 'cleanup', label: '日志清理' },
+    ],
+  },
 ];
+const tabOptions = tabGroups.flatMap((g) => g.tabs);
 
 const logLevelOptions = ['DEBUG', 'INFO', 'NOTICE', 'WARNING', 'ERROR', 'CRITICAL', 'ALERT', 'EMERGENCY'];
 const methodOptions = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'];

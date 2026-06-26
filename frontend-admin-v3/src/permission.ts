@@ -18,18 +18,22 @@ router.beforeEach(async (to, from, next) => {
   const { whiteListRouters } = permissionStore;
 
   const userStore = useUserStore();
+  // 始终以 Cookie/session 中的 token 为准，避免 Pinia state 与 Cookie 不同步
+  userStore.syncTokenFromSession();
+  const token = userStore.token;
 
-  if (userStore.token) {
+  if (token) {
     if (to.path === '/admin/login') {
+      // 已登录访问登录页：放行（afterEach 会在落地后清理旧会话）
       next();
       return;
     }
     try {
-      await userStore.getUserInfo();
+      // 仅在动态路由未构建时拉取用户信息，避免每次导航都请求接口
+      // （刷新或首次登录后 routesBuilt=false；后续跳转 routesBuilt=true 直接复用缓存）
+      if (!permissionStore.routesBuilt || !userStore.userInfo?.name) {
+        await userStore.getUserInfo();
 
-      const { routesBuilt } = permissionStore;
-
-      if (!routesBuilt) {
         const routeList = await permissionStore.buildAsyncRoutes(userStore.userInfo?.permissions || []);
         routeList.forEach((item: RouteRecordRaw) => {
           router.addRoute(item);
@@ -41,8 +45,8 @@ router.beforeEach(async (to, from, next) => {
         } else {
           const redirect = decodeURIComponent((from.query.redirect || to.path) as string);
           next(to.path === redirect ? { ...to, replace: true } : { path: redirect, query: to.query });
-          return;
         }
+        return;
       }
 
       // 权限校验：检查路由 meta.permission
@@ -64,6 +68,9 @@ router.beforeEach(async (to, from, next) => {
         next(`/`);
       }
     } catch (error) {
+      // getUserInfo 失败时仅跳转登录页，不在此处清除 token，
+      // 避免 401/网络抖动等瞬时错误被放大为强制登出。
+      // 真正的会话失效由登录页 onMounted 或用户主动登出处理。
       MessagePlugin.error(toUserMessage(error instanceof Error ? error.message : '', '登录状态已失效，请重新登录'));
       next({
         path: '/admin/login',
@@ -86,11 +93,15 @@ router.beforeEach(async (to, from, next) => {
 });
 
 router.afterEach((to) => {
+  // 落地到登录页时，清理上一轮可能残留的动态路由与本地用户信息，
+  // 但仅在确实没有有效 token 时才清除，避免误清正在使用的会话。
   if (to.path === '/admin/login') {
     const userStore = useUserStore();
+    userStore.syncTokenFromSession();
+    if (!userStore.token) {
+      userStore.resetLocalSession();
+    }
     const permissionStore = getPermissionStore();
-
-    userStore.logout();
     permissionStore.restoreRoutes();
   }
   NProgress.done();

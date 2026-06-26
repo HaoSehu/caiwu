@@ -44,6 +44,17 @@ export const useUserStore = defineStore('user', {
       this.userInfo = normalizeUserInfo(payload?.user || {});
       return res;
     },
+    async clientLoginByCode(loginData: Record<string, unknown>) {
+      const res = await clientAuthApi.loginByCode(loginData);
+      const payload = res.data as ClientAuthSessionPayload | undefined;
+      const token = String(payload?.token || '');
+      if (token) {
+        setClientToken(token);
+        this.token = token;
+      }
+      this.userInfo = normalizeUserInfo(payload?.user || {});
+      return res;
+    },
     async login(loginData: Record<string, unknown>) {
       return this.clientLogin(loginData);
     },

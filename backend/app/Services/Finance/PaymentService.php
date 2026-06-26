@@ -1548,12 +1548,10 @@ class PaymentService
         }
         $latency['business_flow_dispatch_ms'] = $this->elapsedMilliseconds($stepStartedAt);
 
-        // 优惠券同步（仅当存在 order 时，CouponService 仍以 order 为归属单位）
+        // 优惠券同步统一走 invoice 状态机，具体执行交给 coupon 队列。
         $stepStartedAt = microtime(true);
         try {
-            if ($invoice->order) {
-                $this->couponService->syncOrderCouponUsageAfterResponse($invoice->order);
-            }
+            $this->couponService->syncInvoiceCouponUsageAfterResponse($invoice);
         } catch (\Throwable $exception) {
             Log::warning('[购买链路] 支付成功后优惠券同步调度失败', [
                 'invoice_id' => (int) $invoice->id,

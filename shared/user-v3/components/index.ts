@@ -1,6 +1,7 @@
 export { default as AppDialog } from './AppDialog.vue';
 export { default as AppDrawer } from './AppDrawer.vue';
 export { default as DataState } from './DataState.vue';
+export { default as LoadingState } from './LoadingState.vue';
 export { default as DetailScaffold } from './DetailScaffold.vue';
 export { default as MotionWrapper } from './MotionWrapper.vue';
 export { default as PageScaffold } from './PageScaffold.vue';
