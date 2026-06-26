@@ -4,6 +4,22 @@
   gap: 16px;
 }
 
+.tab-group-first {
+  margin-left: 16px;
+  position: relative;
+}
+
+.tab-group-first::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1px;
+  height: 16px;
+  background: var(--td-border-level-1-color);
+}
+
 .settings-head {
   display: flex;
   align-items: flex-start;
@@ -507,4 +523,10 @@
   .feature-card {
     grid-template-columns: 1fr;
   }
+}
+
+.settings-bottom-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 16px 0;
 }

@@ -10,7 +10,6 @@ export const financeRoutes: RouteRecordRaw[] = [
         zh_CN: '订单管理',
         en_US: 'Orders',
       },
-      financeOrderMode: 'orders',
       permission: 'order.list',
       keepAlive: false,
     },
@@ -68,27 +67,27 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: 'finance/renewals',
     name: 'AdminFinanceRenewals',
-    component: () => import('@/pages/finance/orders/index.vue'),
+    redirect: { path: '/admin/finance/orders', query: { tab: 'renewals' } },
     meta: {
       title: {
         zh_CN: '续费订单',
         en_US: 'Renewal Orders',
       },
-      financeOrderMode: 'renewals',
       permission: 'invoice.list',
+      hidden: true,
     },
   },
   {
     path: 'finance/addons',
     name: 'AdminFinanceAddons',
-    component: () => import('@/pages/finance/orders/index.vue'),
+    redirect: { path: '/admin/finance/orders', query: { tab: 'addons' } },
     meta: {
       title: {
         zh_CN: '附加配置订单',
         en_US: 'Addon Orders',
       },
-      financeOrderMode: 'addons',
       permission: 'invoice.list',
+      hidden: true,
     },
   },
   {

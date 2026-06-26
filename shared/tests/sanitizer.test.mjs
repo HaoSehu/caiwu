@@ -75,6 +75,9 @@ const { sanitizeRenderedHtml } = await import('../htmlSanitizer.js')
 {
   const result = sanitizeRenderedHtml('<img src="https://example.com/img.png" alt="test">')
   assert.ok(result.includes('https://example.com/img.png'), '合法 img src 应保留')
+  assert.ok(result.includes('loading="lazy"'), 'img 应默认懒加载')
+  assert.ok(result.includes('decoding="async"'), 'img 应默认异步解码')
+  assert.ok(result.includes('referrerpolicy="no-referrer"'), 'img 应默认隐藏来源页')
 }
 
 // 10. 无 alt 的 img 应添加默认 alt
@@ -94,7 +97,7 @@ const { sanitizeRenderedHtml } = await import('../htmlSanitizer.js')
   const backup = globalThis.DOMParser
   globalThis.DOMParser = undefined
   const result = sanitizeRenderedHtml('<p>Raw</p>')
-  assert.equal(result, '<p>Raw</p>', '无 DOMParser 时应返回原始输入')
+  assert.equal(result, '&lt;p&gt;Raw&lt;/p&gt;', '无 DOMParser 时应转义 HTML')
   globalThis.DOMParser = backup
 }
 

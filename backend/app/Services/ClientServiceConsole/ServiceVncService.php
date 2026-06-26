@@ -47,13 +47,13 @@ class ServiceVncService
             throw $this->normalizeVncBusinessException($exception);
         }
 
-        $response = $runtime->post(
-            $supplier,
-            '/provision/default',
-            ['func' => 'vnc', 'id' => $hostId],
-            $jwt,
-            ['content-type: application/x-www-form-urlencoded']
-        );
+        $response = $this->requestUpstreamVncUrl($runtime, $supplier, $hostId, $jwt);
+        if ($this->shouldRetryWithFreshJwt($response)) {
+            $freshJwt = $this->refreshVncJwt($runtime, $supplier, $serviceId, $hostId);
+            if ($freshJwt !== '') {
+                $response = $this->requestUpstreamVncUrl($runtime, $supplier, $hostId, $freshJwt);
+            }
+        }
         $this->assertVncSuccess($response);
 
         $payload = $this->detailService->extractPayload($response);
@@ -168,6 +168,70 @@ class ServiceVncService
         }
 
         return $exception;
+    }
+
+    private function requestUpstreamVncUrl(object $runtime, mixed $supplier, int $hostId, string $jwt): array
+    {
+        return $runtime->post(
+            $supplier,
+            '/provision/default',
+            ['func' => 'vnc', 'id' => $hostId],
+            $jwt,
+            ['content-type: application/x-www-form-urlencoded']
+        );
+    }
+
+    private function shouldRetryWithFreshJwt(array $response): bool
+    {
+        $status = (int) ($response['status'] ?? $response['code'] ?? $response['status_code'] ?? 0);
+        if ($status === 401) {
+            return true;
+        }
+
+        $message = mb_strtolower(trim((string) ($response['msg'] ?? $response['message'] ?? '')));
+        if ($message === '') {
+            return false;
+        }
+
+        return str_contains($message, 'jwt')
+            || str_contains($message, 'auth')
+            || str_contains($message, 'unauthorized')
+            || str_contains($message, 'token expired')
+            || str_contains($message, 'session')
+            || str_contains($message, '认证')
+            || str_contains($message, '登录已过期')
+            || str_contains($message, '登陆已过期');
+    }
+
+    private function refreshVncJwt(object $runtime, mixed $supplier, int $serviceId, int $hostId): string
+    {
+        if (! is_callable([$runtime, 'refreshJwt'])) {
+            return '';
+        }
+
+        try {
+            $jwt = trim((string) $runtime->refreshJwt($supplier));
+        } catch (\Throwable $exception) {
+            $this->safeLog('warning', '[VNC] 上游认证刷新失败', [
+                'service_id' => $serviceId,
+                'supplier_id' => (int) ($supplier->id ?? 0),
+                'host_id' => $hostId,
+                'message' => $exception->getMessage(),
+                'exception' => $exception::class,
+            ]);
+
+            return '';
+        }
+
+        if ($jwt !== '') {
+            $this->safeLog('info', '[VNC] 上游认证已刷新，重试获取链接', [
+                'service_id' => $serviceId,
+                'supplier_id' => (int) ($supplier->id ?? 0),
+                'host_id' => $hostId,
+            ]);
+        }
+
+        return $jwt;
     }
 
     public function resolvePublicVncTokenPayload(string $token): array

@@ -108,6 +108,17 @@
             </t-card>
 
             <t-card class="console-panel console-panel-wide" title="配置信息" :bordered="false">
+              <template #actions>
+                <t-button
+                  v-if="canBuyTrafficPackage"
+                  variant="text"
+                  theme="primary"
+                  :loading="trafficLoading"
+                  @click="openTrafficPackageDialog"
+                >
+                  {{ detail.traffic?.button_text || '购买流量包' }}
+                </t-button>
+              </template>
               <div class="detail-grid">
                 <InfoCell label="流量" :value="detail.traffic?.limited ? `${detail.traffic.usage_label || '0G'} / ${detail.traffic.limit_label || '不限'}` : '不限'" strong />
                 <InfoCell label="区域" :value="serviceRegion" strong />
@@ -371,7 +382,9 @@
                       新增规则
                     </t-button>
                   </div>
+                  <!-- 桌面端表格 -->
                   <t-table
+                    class="security-rules-table"
                     row-key="id"
                     :data="securityState.rules"
                     :columns="securityColumns"
@@ -383,6 +396,34 @@
                       <t-button theme="danger" variant="text" :disabled="securityState.submitting" @click="deleteSecurityRule(row)">删除</t-button>
                     </template>
                   </t-table>
+                  <!-- 手机端卡片列表 -->
+                  <div class="security-rules-cards">
+                    <div v-for="rule in securityState.rules" :key="rule.id" class="security-rule-card">
+                      <div class="security-rule-card__row">
+                        <span class="security-rule-card__label">方向</span>
+                        <span class="security-rule-card__value">{{ rule.direction_label }}</span>
+                      </div>
+                      <div class="security-rule-card__row">
+                        <span class="security-rule-card__label">协议</span>
+                        <span class="security-rule-card__value">{{ rule.protocol_label || rule.protocol || '--' }}</span>
+                      </div>
+                      <div class="security-rule-card__row">
+                        <span class="security-rule-card__label">端口</span>
+                        <span class="security-rule-card__value">{{ rule.port }}</span>
+                      </div>
+                      <div class="security-rule-card__row">
+                        <span class="security-rule-card__label">来源</span>
+                        <span class="security-rule-card__value">{{ rule.ip }}</span>
+                      </div>
+                      <div v-if="rule.description" class="security-rule-card__row">
+                        <span class="security-rule-card__label">说明</span>
+                        <span class="security-rule-card__value">{{ rule.description }}</span>
+                      </div>
+                      <div class="security-rule-card__actions">
+                        <t-button theme="danger" variant="text" size="small" :disabled="securityState.submitting" @click="deleteSecurityRule(rule)">删除</t-button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </template>
             </t-card>
@@ -396,33 +437,6 @@
               <t-alert v-if="natState.error" theme="warning" class="console-inline-alert">{{ natState.error }}</t-alert>
               <t-empty v-else-if="natState.supported === false" :description="natState.message || '当前实例暂不支持 NAT 转发'" />
               <t-table v-else row-key="id" :data="natState.list" :columns="natColumns" :pagination="null" size="small" />
-            </t-card>
-          </section>
-
-          <section v-else-if="activeTab === 'power'" class="console-panel-section">
-            <t-card title="电源管理" :bordered="false">
-              <div class="detail-grid">
-                <InfoCell label="当前状态" :value="instanceStatusText" strong />
-                <InfoCell label="状态描述" :value="detail.runtime?.description || '状态正常'" strong />
-              </div>
-              <t-divider />
-              <div class="maintenance-box">
-                <h3>维护操作</h3>
-                <p>重置实例密码或重装系统会下发到上游控制台，执行后请等待任务完成。</p>
-                <t-space>
-                  <t-button variant="outline" :disabled="!detail.actions?.password_reset || actionLoading" @click="openPasswordDialog">重置密码</t-button>
-                  <t-button variant="outline" :disabled="!detail.actions?.reinstall || actionLoading" @click="openReinstallDialog">重装系统</t-button>
-                </t-space>
-              </div>
-              <t-divider />
-              <div class="danger-box">
-                <h3>危险操作</h3>
-                <p>以下操作可能导致数据丢失，仅在实例无响应时使用。</p>
-                <t-space>
-                  <t-button theme="danger" variant="outline" :disabled="!detail.actions?.power || actionLoading" @click="handlePowerAction('hard_off')">强制关机</t-button>
-                  <t-button theme="danger" variant="outline" :disabled="!detail.actions?.power || actionLoading" @click="handlePowerAction('hard_reboot')">强制重启</t-button>
-                </t-space>
-              </div>
             </t-card>
           </section>
 
@@ -563,13 +577,13 @@
         </label>
         <label>
           <span>协议</span>
-          <t-select v-model="ruleForm.protocol" placeholder="请选择协议">
+          <t-select v-model="ruleForm.protocol" placeholder="请选择协议" @change="onProtocolChange">
             <t-option v-for="item in securityState.protocols" :key="item.value" :label="item.label" :value="item.value" />
           </t-select>
         </label>
         <label>
           <span>端口</span>
-          <t-input v-model="ruleForm.port" placeholder="例如 22 或 80-90" />
+          <t-input v-model="ruleForm.port" :placeholder="isPortDisabled ? (isAllPortProtocol ? '全部端口（自动填充）' : '该协议无端口（自动处理）') : '例如 22 或 80-90'" :disabled="isPortDisabled" />
         </label>
         <label>
           <span>IP 范围</span>
@@ -660,6 +674,47 @@
       </template>
     </t-dialog>
 
+    <t-dialog v-model:visible="trafficVisible" header="购买流量包" width="min(36rem, calc(100vw - 2rem))" destroy-on-close>
+      <LoadingState :loading="trafficLoading" text="正在加载流量包" compact>
+        <template v-if="trafficData?.supported !== false && trafficPackages.length">
+          <div class="traffic-summary">
+            <div>
+              <span>当前流量</span>
+              <strong>{{ trafficData?.traffic?.usage_label || detail.traffic?.usage_label || '0G' }} / {{ trafficData?.traffic?.limit_label || detail.traffic?.limit_label || '不限' }}</strong>
+            </div>
+            <div>
+              <span>剩余流量</span>
+              <strong>{{ trafficData?.traffic?.remaining_label || detail.traffic?.remaining_label || '不限' }}</strong>
+            </div>
+          </div>
+          <t-radio-group v-model="trafficForm.target_value" class="traffic-package-group" @change="handleTrafficPackageChange">
+            <t-radio-button v-for="item in trafficPackages" :key="String(item.target_value)" :value="Number(item.target_value || 0)">
+              <span class="traffic-package-option">
+                <strong>{{ item.target_label || item.label || `${item.target_value}G` }}</strong>
+                <em>¥{{ formatMoney(item.price || 0) }}</em>
+              </span>
+            </t-radio-button>
+          </t-radio-group>
+          <div class="traffic-total-line">
+            <span>{{ selectedTrafficPackage?.target_label || selectedTrafficPackage?.label || '已选档位' }}</span>
+            <strong>{{ trafficQuoting ? '报价中' : `¥${trafficPayableAmount}` }}</strong>
+          </div>
+        </template>
+        <t-empty v-else-if="!trafficLoading" :description="trafficData?.message || '暂无可购买流量包'" />
+      </LoadingState>
+      <template #footer>
+        <t-button variant="outline" @click="trafficVisible = false">取消</t-button>
+        <t-button
+          theme="primary"
+          :loading="trafficSubmitting"
+          :disabled="trafficLoading || trafficQuoting || !trafficForm.target_value || !trafficPackages.length"
+          @click="submitTrafficPackageOrder"
+        >
+          创建账单
+        </t-button>
+      </template>
+    </t-dialog>
+
     <t-dialog v-model:visible="nameVisible" header="修改实例名称" width="min(28rem, calc(100vw - 2rem))" destroy-on-close>
       <t-input v-model="nameForm.name" :maxlength="120" placeholder="填写便于识别的实例名称" />
       <template #footer>
@@ -680,7 +735,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { BillIcon, BrowseIcon, BrowseOffIcon, CatalogIcon, ChartLineDataIcon, CopyIcon, DashboardIcon, DesktopIcon, EditIcon, EllipsisIcon, FileIcon, ForwardIcon, LockOnIcon, PauseCircleFilledIcon, PlayCircleFilledIcon, RefreshIcon, RotateIcon, ServerIcon } from 'tdesign-icons-vue-next';
+import { BillIcon, BrowseIcon, BrowseOffIcon, CatalogIcon, ChartLineDataIcon, CopyIcon, DashboardIcon, DesktopIcon, EditIcon, EllipsisIcon, FileIcon, ForwardIcon, LockOnIcon, PauseCircleFilledIcon, PlayCircleFilledIcon, RefreshIcon, RotateIcon } from 'tdesign-icons-vue-next';
 
 import { useServiceConsole } from '@/domains/services/useServiceConsole';
 import LoadingState from '@shared/user-v3/components/LoadingState.vue';
@@ -704,6 +759,12 @@ const {
   renewSubmitting,
   renewData,
   renewForm,
+  trafficVisible,
+  trafficLoading,
+  trafficQuoting,
+  trafficSubmitting,
+  trafficData,
+  trafficForm,
   nameVisible,
   nameSubmitting,
   nameForm,
@@ -721,6 +782,9 @@ const {
   groupForm,
   ruleVisible,
   ruleForm,
+  isPortDisabled,
+  isAllPortProtocol,
+  onProtocolChange,
   natState,
   logsState,
   financeState,
@@ -743,6 +807,9 @@ const {
   resolvedPassword,
   renewAmount,
   renewCoupons,
+  trafficPackages,
+  selectedTrafficPackage,
+  trafficPayableAmount,
   reinstallGroupedOptions,
   currentReinstallOptions,
   findSpecValue,
@@ -756,6 +823,9 @@ const {
   handleRenewCycleChange,
   handleRenewCouponChange,
   submitRenew,
+  openTrafficPackageDialog,
+  handleTrafficPackageChange,
+  submitTrafficPackageOrder,
   openNameDialog,
   submitName,
   openRemarkDialog,
@@ -790,7 +860,6 @@ const consoleNavItems = computed(() => {
     monitor: '监控信息',
     security: '安全组',
     nat: '端口转发',
-    power: '电源管理',
     logs: '操作日志',
     finance: '财务日志',
     vnc: 'VNC 控制台',
@@ -800,7 +869,6 @@ const consoleNavItems = computed(() => {
     monitor: ChartLineDataIcon,
     security: LockOnIcon,
     nat: ForwardIcon,
-    power: ServerIcon,
     logs: CatalogIcon,
     finance: BillIcon,
     vnc: DesktopIcon,
@@ -823,6 +891,7 @@ const isExpiringSoon = computed(() => {
 });
 
 const isInstanceRunning = computed(() => instanceStatusTheme.value === 'success');
+const canBuyTrafficPackage = computed(() => Boolean(detail.value.actions?.traffic_package && detail.value.traffic?.purchase_enabled !== false));
 
 const {
   monitorChartViews,
@@ -1550,6 +1619,46 @@ function handleMoreCommand(command: string) {
   border-top: 0.0625rem solid var(--td-border-color);
 }
 
+.security-rules-cards {
+  display: none;
+}
+
+.security-rule-card {
+  display: grid;
+  gap: 0.375rem;
+  padding: 0.75rem 0.875rem;
+  border: 0.0625rem solid var(--td-component-stroke);
+  background: var(--td-bg-color-secondarycontainer);
+}
+
+.security-rule-card__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.security-rule-card__label {
+  color: var(--td-text-color-placeholder);
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.security-rule-card__value {
+  color: var(--td-text-color-primary);
+  font-size: 0.8125rem;
+  text-align: right;
+  word-break: break-all;
+}
+
+.security-rule-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 0.375rem;
+  margin-top: 0.125rem;
+  border-top: 0.0625rem solid var(--td-component-stroke);
+}
+
 .security-rules-panel__head {
   display: flex;
   gap: 0.75rem;
@@ -1669,30 +1778,6 @@ function handleMoreCommand(command: string) {
     font-size: 0.75rem;
     line-height: 1.5;
     word-break: break-word;
-  }
-}
-
-.maintenance-box,
-.danger-box {
-  display: grid;
-  gap: 0.5rem;
-  padding: 1.125rem;
-  background: var(--td-bg-color-component);
-  border: 0.0625rem solid var(--td-border-color);
-  border-radius: var(--td-radius-medium);
-
-  h3 {
-    margin: 0;
-    color: var(--td-text-color-primary);
-    font-size: 0.9375rem;
-    font-weight: 700;
-  }
-
-  p {
-    margin: 0;
-    color: var(--td-text-color-secondary);
-    font-size: 0.8125rem;
-    line-height: 1.8;
   }
 }
 
@@ -1821,6 +1906,106 @@ function handleMoreCommand(command: string) {
   }
 }
 
+.traffic-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+
+  div {
+    display: grid;
+    gap: 0.375rem;
+    padding: 0.875rem;
+    background: var(--td-bg-color-component);
+    border: 0.0625rem solid var(--td-border-color);
+    border-radius: var(--td-radius-medium);
+  }
+
+  span {
+    color: var(--td-text-color-secondary);
+    font-size: 0.75rem;
+  }
+
+  strong {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--td-text-color-primary);
+    font-size: 0.9375rem;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.traffic-package-group {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+
+  :deep(.t-radio-button) {
+    height: auto;
+    min-height: 4.25rem;
+    padding: 0.875rem 1rem;
+    border: 0.0625rem solid var(--td-border-color) !important;
+    border-radius: 0.5rem !important;
+    background: var(--td-bg-color-component);
+  }
+
+  :deep(.t-is-checked) {
+    color: var(--td-brand-color);
+    background: var(--td-brand-color-light) !important;
+    border-color: var(--td-brand-color) !important;
+  }
+}
+
+.traffic-package-option {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-width: 0;
+
+  strong,
+  em {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  strong {
+    font-weight: 700;
+  }
+
+  em {
+    color: var(--td-error-color);
+    font-style: normal;
+    font-weight: 700;
+  }
+}
+
+.traffic-total-line {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 0.0625rem solid var(--td-border-color);
+
+  span {
+    color: var(--td-text-color-secondary);
+    font-size: 0.8125rem;
+  }
+
+  strong {
+    color: var(--td-error-color);
+    font-size: 1.5rem;
+    font-weight: 700;
+  }
+}
+
 @media (max-width: @screen-lg-rem) {
   .console-overview-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1918,10 +2103,25 @@ function handleMoreCommand(command: string) {
     grid-template-columns: 1fr;
   }
 
+  .traffic-summary,
+  .traffic-package-group {
+    grid-template-columns: 1fr;
+  }
+
   .renew-coupon-row,
   .renew-total-line {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  /* 安全组规则：手机端隐藏表格，显示卡片 */
+  .security-rules-table {
+    display: none;
+  }
+
+  .security-rules-cards {
+    display: grid;
+    gap: 0.75rem;
   }
 }
 </style>

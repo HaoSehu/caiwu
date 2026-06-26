@@ -37,7 +37,9 @@
           <t-form-item label="账户ID">
             <div class="profile-id-row">
               <t-input :value="profileForm.id" readonly />
-              <t-button variant="outline" @click="copyText(profileForm.id)">复制</t-button>
+              <t-button variant="outline" shape="square" @click="copyText(profileForm.id)">
+                <CopyIcon />
+              </t-button>
             </div>
           </t-form-item>
           <t-form-item label="注册时间"><t-input :value="profileForm.createdAt || '--'" readonly /></t-form-item>
@@ -101,15 +103,73 @@
       </t-card>
     </main>
 
-    <t-dialog v-model:visible="passwordDialogVisible" header="修改登录密码" width="min(30rem, calc(100vw - 2rem))">
-      <t-form label-align="top">
+    <t-dialog v-model:visible="passwordDialogVisible" :header="passwordMode === 'old' ? '修改登录密码' : '验证码重置密码'" width="min(30rem, calc(100vw - 2rem))">
+      <t-form v-if="passwordMode === 'old'" label-align="top">
         <t-form-item label="原密码"><t-input v-model="passwordForm.oldPassword" type="password" /></t-form-item>
         <t-form-item label="新密码"><t-input v-model="passwordForm.newPassword" type="password" /></t-form-item>
         <t-form-item label="确认密码"><t-input v-model="passwordForm.confirmPassword" type="password" /></t-form-item>
+        <div class="password-forgot" @click="togglePasswordMode">忘记原密码？</div>
+      </t-form>
+      <t-form v-else label-align="top">
+        <t-tabs v-if="profileForm.phone && profileForm.email" v-model="resetForm.type" :theme="'normal'">
+          <t-tab-panel value="phone" label="手机验证" />
+          <t-tab-panel value="email" label="邮箱验证" />
+        </t-tabs>
+        <div v-else-if="profileForm.phone" class="reset-single-tip">验证方式：手机验证</div>
+        <div v-else class="reset-single-tip">验证方式：邮箱验证</div>
+        <t-form-item label="验证对象"><t-input :value="resetForm.type === 'phone' ? profileForm.phone : profileForm.email" readonly /></t-form-item>
+        <t-form-item label="验证码">
+          <div class="bind-code-row">
+            <t-input v-model="resetForm.code" placeholder="请输入 6 位验证码" maxlength="6" />
+            <t-button variant="outline" :disabled="resetCountdown > 0" @click="sendResetCode">
+              {{ resetCountdown > 0 ? `${resetCountdown}s` : '发送验证码' }}
+            </t-button>
+          </div>
+        </t-form-item>
+        <t-form-item label="新密码"><t-input v-model="resetForm.password" type="password" placeholder="至少 6 位" /></t-form-item>
+        <t-form-item label="确认密码"><t-input v-model="resetForm.confirmPassword" type="password" /></t-form-item>
+        <div class="password-forgot" @click="togglePasswordMode">使用原密码修改</div>
       </t-form>
       <template #footer>
         <t-button variant="outline" @click="passwordDialogVisible = false">取消</t-button>
-        <t-button theme="primary" :loading="profileLoading" @click="changePassword">确定</t-button>
+        <t-button v-if="passwordMode === 'old'" theme="primary" :loading="profileLoading" @click="changePassword">确定</t-button>
+        <t-button v-else theme="primary" :loading="profileLoading" @click="submitResetPassword">确定</t-button>
+      </template>
+    </t-dialog>
+
+    <t-dialog v-model:visible="phoneDialogVisible" header="更换绑定手机" width="min(30rem, calc(100vw - 2rem))">
+      <t-form label-align="top">
+        <t-form-item label="新手机号"><t-input v-model="phoneForm.phone" placeholder="请输入新手机号" /></t-form-item>
+        <t-form-item label="验证码">
+          <div class="bind-code-row">
+            <t-input v-model="phoneForm.code" placeholder="请输入 6 位验证码" maxlength="6" />
+            <t-button variant="outline" :disabled="phoneCountdown > 0" @click="sendPhoneVerificationCode">
+              {{ phoneCountdown > 0 ? `${phoneCountdown}s` : '发送验证码' }}
+            </t-button>
+          </div>
+        </t-form-item>
+      </t-form>
+      <template #footer>
+        <t-button variant="outline" @click="phoneDialogVisible = false">取消</t-button>
+        <t-button theme="primary" :loading="profileLoading" @click="submitPhoneChange">确定</t-button>
+      </template>
+    </t-dialog>
+
+    <t-dialog v-model:visible="emailDialogVisible" header="更换绑定邮箱" width="min(30rem, calc(100vw - 2rem))">
+      <t-form label-align="top">
+        <t-form-item label="新邮箱"><t-input v-model="emailForm.email" placeholder="请输入新邮箱" /></t-form-item>
+        <t-form-item label="验证码">
+          <div class="bind-code-row">
+            <t-input v-model="emailForm.code" placeholder="请输入 6 位验证码" maxlength="6" />
+            <t-button variant="outline" :disabled="emailCountdown > 0" @click="sendEmailVerificationCode">
+              {{ emailCountdown > 0 ? `${emailCountdown}s` : '发送验证码' }}
+            </t-button>
+          </div>
+        </t-form-item>
+      </t-form>
+      <template #footer>
+        <t-button variant="outline" @click="emailDialogVisible = false">取消</t-button>
+        <t-button theme="primary" :loading="profileLoading" @click="submitEmailChange">确定</t-button>
       </template>
     </t-dialog>
   </section>
@@ -117,6 +177,7 @@
 
 <script setup lang="ts">
 import { useProfile } from '@/domains/account/useProfile';
+import { CopyIcon } from 'tdesign-icons-vue-next';
 
 const profileTabs = [
   { value: 'profile', label: '个人资料' },
@@ -130,8 +191,17 @@ const {
   profileLoading,
   notificationLoading,
   passwordDialogVisible,
+  phoneDialogVisible,
+  emailDialogVisible,
+  passwordMode,
   profileForm,
   passwordForm,
+  resetForm,
+  resetCountdown,
+  phoneForm,
+  emailForm,
+  phoneCountdown,
+  emailCountdown,
   notificationList,
   balanceText,
   enabledNotificationCount,
@@ -139,6 +209,13 @@ const {
   copyText,
   updateProfile,
   changePassword,
+  togglePasswordMode,
+  sendResetCode,
+  submitResetPassword,
+  sendPhoneVerificationCode,
+  sendEmailVerificationCode,
+  submitPhoneChange,
+  submitEmailChange,
   saveNotificationPreferences,
   handleProfileTabChange,
 } = useProfile();
@@ -188,6 +265,36 @@ const {
   gap: var(--td-comp-margin-s);
   align-items: center;
   width: 100%;
+}
+
+.bind-code-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  width: 100%;
+
+  .t-button {
+    min-width: 8.5rem;
+    white-space: nowrap;
+  }
+}
+
+.password-forgot {
+  margin-top: -0.25rem;
+  font-size: 0.8125rem;
+  color: var(--td-brand-color);
+  cursor: pointer;
+  user-select: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.reset-single-tip {
+  margin-bottom: var(--td-comp-margin-s);
+  font-size: 0.8125rem;
+  color: var(--td-text-color-secondary);
 }
 
 .profile-tabs-mobile {
@@ -320,12 +427,18 @@ const {
   }
 
   .profile-id-row {
-    flex-direction: column;
+    flex-direction: row;
     align-items: stretch;
     gap: var(--td-comp-margin-xs);
 
+    :deep(.t-input) {
+      flex: 1;
+      min-width: 0;
+    }
+
     :deep(.t-button) {
-      align-self: flex-end;
+      flex-shrink: 0;
+      padding: 0 var(--td-comp-paddingLR-s);
     }
   }
 

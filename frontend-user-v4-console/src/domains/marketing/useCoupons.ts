@@ -33,7 +33,14 @@ export function formatCouponAmount(value: unknown) {
   return amount % 1 === 0 ? String(amount) : amount.toFixed(2);
 }
 
-export function resolveStatusTheme(status: unknown) {
+export function resolveStatusTheme(statusOrItem: unknown, statusLabel?: unknown) {
+  const item =
+    typeof statusOrItem === 'object' && statusOrItem !== null ? (statusOrItem as CouponRecord) : null;
+  const status = item?.status ?? statusOrItem;
+  const label = item?.status_label ?? statusLabel;
+
+  if (status === 'revoked' || item?.revoked_at) return 'danger';
+  if (item?.used_at || label === '已使用') return 'default';
   if (status === 'available') return 'success';
   if (status === 'used_up') return 'warning';
   return 'default';
@@ -83,6 +90,9 @@ export function useCoupons() {
   const selectedCoupon = ref<CouponRecord | null>(null);
   const ownedState = createTabState();
   const plazaState = createTabState();
+
+  // 默认筛选"可用"优惠券
+  ownedState.status = 'available';
 
   const currentState = computed(() => (activeTab.value === 'plaza' ? plazaState : ownedState));
   const currentStatusOptions = computed(() =>

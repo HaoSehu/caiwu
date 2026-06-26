@@ -33,6 +33,7 @@ Route::post('/auth/login-as/exchange', [AuthController::class, 'exchangeLoginAsC
 Route::post('/auth/phone-code', [AuthController::class, 'sendPhoneCode'])->middleware('throttle:6,1,client-auth-phone-code');
 Route::post('/auth/email-code', [AuthController::class, 'sendEmailCode'])->middleware('throttle:6,1,client-auth-email-code');
 Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:5,1,client-auth-reset-password');
+Route::post('/auth/login-by-code', [AuthController::class, 'loginByCode'])->middleware('throttle:5,1,client-auth-login-by-code');
 Route::match(['GET', 'POST'], '/verification/callback', [VerificationController::class, 'callback'])->middleware('verify.callback');
 Route::get('/verification/scan', [VerificationController::class, 'scan']);
 

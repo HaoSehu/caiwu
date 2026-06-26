@@ -1,15 +1,18 @@
 <template>
   <div class="home-page">
-    <HomeHeroCarousel :hero="homeHero" />
+    <HomeHeroCarousel v-if="homeHeroReady" :hero="homeHero || {}" />
+    <HomeSectionSkeleton v-else type="hero" />
 
     <HomeProductTabs
+      v-if="productContentReady"
       :loading="loading"
       :product-types="productTypes"
       :root-groups="rootGroups"
       :group-catalog-map="groupCatalogMap"
     />
+    <HomeSectionSkeleton v-else type="products" />
 
-    <template v-if="mountDeferredSections">
+    <template v-if="homeContentReady && mountDeferredSections">
       <HomeSolutionSection />
       <HomeNewsSection :notices="notices" />
       <HomeRegisterBar />
@@ -23,7 +26,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import siteApi from '@/api/site'
 import { useAppStore } from '@/stores/app'
 import HomeHeroCarousel from '@/views/website/Home/components/HomeHeroCarousel.vue'
@@ -41,13 +44,23 @@ interface ProductTypeItem {
 }
 
 const appStore = useAppStore()
-const loading = ref(false)
+const loading = ref(true)
+const homeLoaded = ref(false)
+const homeLoadSucceeded = ref(false)
 const mountDeferredSections = ref(false)
-const homeHero = ref<Record<string, unknown>>({})
+const homeHero = ref<Record<string, unknown> | null>(null)
 const notices = ref<any[]>([])
 const rootGroups = ref<any[]>([])
 const groupCatalogMap = ref<Record<string, unknown>>({})
 const productTypes = ref<ProductTypeItem[]>([])
+const homeContentReady = computed(() => homeLoaded.value && homeLoadSucceeded.value)
+const homeHeroReady = computed(() => {
+  const hero = homeHero.value
+  const slides = hero && typeof hero === 'object' ? hero.slides : null
+
+  return homeContentReady.value && Array.isArray(slides) && slides.length > 0
+})
+const productContentReady = computed(() => homeContentReady.value && rootGroups.value.length > 0)
 
 function deriveProductTypesFromGroups(groups: any[]) {
   const map = new Map<string, ProductTypeItem>()
@@ -74,6 +87,8 @@ function deriveProductTypesFromGroups(groups: any[]) {
 
 async function loadHomePage() {
   loading.value = true
+  homeLoaded.value = false
+  homeLoadSucceeded.value = false
 
   try {
     // 优化：移除 home-hero 请求，hero 数据已包含在 home 响应中
@@ -83,6 +98,7 @@ async function loadHomePage() {
     ])
 
     if (homeRes.status === 'fulfilled') {
+      homeLoadSucceeded.value = true
       const data = homeRes.value.data || {}
       notices.value = Array.isArray(data.notices) ? data.notices : []
       rootGroups.value = Array.isArray(data.root_groups) ? data.root_groups : []
@@ -106,12 +122,17 @@ async function loadHomePage() {
       productTypes.value = deriveProductTypesFromGroups(rootGroups.value)
     }
   } finally {
+    homeLoaded.value = true
     loading.value = false
   }
 }
 
 onMounted(async () => {
   await loadHomePage()
+
+  if (!homeLoadSucceeded.value) {
+    return
+  }
 
   if (typeof window !== 'undefined') {
     window.requestAnimationFrame(() => {

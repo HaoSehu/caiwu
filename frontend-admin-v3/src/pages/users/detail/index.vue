@@ -644,7 +644,7 @@
 import { ChevronLeftIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { adminApi, type ProductBindingRecord } from '@/api/admin';
@@ -682,7 +682,9 @@ const saveLoading = ref(false);
 const rechargeLoading = ref(false);
 const actionLoading = ref(false);
 const loginAsLoading = ref(false);
-const activeTab = ref<TabName>('basic');
+const VALID_DETAIL_TABS: TabName[] = ['basic', 'referral', 'services', 'invoices', 'balance', 'tickets', 'logs', 'notices'];
+const initialTab = route.query.tab as string;
+const activeTab = ref<TabName>(initialTab && VALID_DETAIL_TABS.includes(initialTab as TabName) ? (initialTab as TabName) : 'basic');
 const loadedTabs = reactive<Record<string, boolean>>({});
 const user = ref<AdminUser>({ id: 0, status: 1 });
 const stats = ref<Record<string, number | string>>({});
@@ -974,6 +976,7 @@ function syncEditForm() {
 
 function handleTabChange(value: string | number) {
   activeTab.value = String(value) as TabName;
+  router.replace({ query: { ...route.query, tab: activeTab.value === 'basic' ? undefined : activeTab.value } });
   if (activeTab.value === 'services' && !loadedTabs.services) loadServices();
   if (activeTab.value === 'invoices' && !loadedTabs.invoices) loadInvoices();
   if (activeTab.value === 'balance' && !loadedTabs.balance) loadBalance();
@@ -1923,5 +1926,20 @@ function toNumber(value: unknown) {
   return Number.isFinite(number) ? number : 0;
 }
 
-onMounted(loadDetail);
+onMounted(() => {
+  // setup 期间已初始化 Tab 与 URL 一致
+  // 若直接进入带 ?tab= 的 URL，确保懒加载对应数据
+  if (activeTab.value !== 'basic') {
+    handleTabChange(activeTab.value);
+  }
+  loadDetail();
+});
+
+// 监听 URL tab 变化（同路由复用时触发）
+watch(() => route.query.tab, (val) => {
+  const q = Array.isArray(val) ? val[0] : val;
+  if (q && VALID_DETAIL_TABS.includes(q as TabName) && activeTab.value !== q) {
+    handleTabChange(q);
+  }
+});
 </script>

@@ -22,6 +22,7 @@ function putEnvelope<T>(url: string, data?: Record<string, unknown>) {
 
 export const clientAuthApi = {
   login: (data: Record<string, unknown>) => postEnvelope<ClientAuthSessionPayload>('/client/login', data),
+  loginByCode: (data: Record<string, unknown>) => postEnvelope<ClientAuthSessionPayload>('/client/auth/login-by-code', data),
   register: (data: Record<string, unknown>) => postEnvelope<ClientAuthSessionPayload>('/client/register', data),
   exchangeLoginAsCode: (data: Record<string, unknown>) =>
     postEnvelope<ClientAuthSessionPayload>('/client/auth/login-as/exchange', data),

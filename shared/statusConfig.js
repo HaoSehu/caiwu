@@ -46,7 +46,7 @@ export const STATUS_TAG_TYPES = {
   purple:  'purple',    // 需要配合自定义样式
 }
 
-// ===================== 订单状态 =====================
+// ===================== 购买状态（历史订单状态） =====================
 
 export const ORDER_STATUS = {
   PENDING:    0,  // 待付款
@@ -66,7 +66,7 @@ export const ORDER_STATUS_MAP = {
   [ORDER_STATUS.REFUNDED]:   { label: '已退款', color: STATUS_COLORS.danger,  tagType: 'danger',   icon: 'RefreshLeft'   },
 }
 
-// 订单类型
+// 购买类型（历史订单类型）
 export const ORDER_TYPE_MAP = {
   new:     '新购',
   renew:   '续费',
@@ -101,6 +101,22 @@ export const INVOICE_STATUS_MAP = {
   [INVOICE_STATUS.CANCELLED]: { label: '已取消', color: STATUS_COLORS.info,    tagType: 'info',    icon: 'CircleClose' },
   [INVOICE_STATUS.OVERDUE]:   { label: '已逾期', color: STATUS_COLORS.danger,  tagType: 'danger',  icon: 'WarningFilled'},
   [INVOICE_STATUS.REFUNDED]:  { label: '已退款', color: STATUS_COLORS.danger,  tagType: 'danger',  icon: 'RefreshLeft' },
+}
+
+// ===================== 第三方支付状态 =====================
+
+export const PAYMENT_STATUS = {
+  PENDING:  0,  // 待支付
+  PAID:     1,  // 成功
+  FAILED:   2,  // 失败
+  REFUNDED: 3,  // 已退款
+}
+
+export const PAYMENT_STATUS_MAP = {
+  [PAYMENT_STATUS.PENDING]:  { label: '待支付', color: STATUS_COLORS.warning, tagType: 'warning', icon: 'Clock'       },
+  [PAYMENT_STATUS.PAID]:     { label: '成功',   color: STATUS_COLORS.success, tagType: 'success', icon: 'Select'      },
+  [PAYMENT_STATUS.FAILED]:   { label: '失败',   color: STATUS_COLORS.danger,  tagType: 'danger',  icon: 'CircleClose' },
+  [PAYMENT_STATUS.REFUNDED]: { label: '已退款', color: STATUS_COLORS.info,    tagType: 'info',    icon: 'RefreshLeft' },
 }
 
 // ===================== 服务/产品实例状态 =====================
@@ -184,6 +200,20 @@ export const FINANCE_LEDGER_EVENT_MAP = {
   manual_deduction: { label: '手动扣款', tagType: 'danger', direction: 'out' },
   referral_credit_cash: { label: '奖励转余额', tagType: 'success', direction: 'in' },
   system_adjustment: { label: '系统调账', tagType: 'info', direction: 'in' },
+}
+
+export const ACCOUNT_TRANSACTION_EVENT_MAP = {
+  ...FINANCE_LEDGER_EVENT_MAP,
+  consume: { label: '消费', tagType: 'danger', direction: 'out' },
+  refund: { label: '退款', tagType: 'success', direction: 'in' },
+  adjust: { label: '调账', tagType: 'info', direction: 'in' },
+  reward_frozen: { label: '奖励冻结', tagType: 'warning', direction: 'in' },
+  reward_released: { label: '奖励释放', tagType: 'success', direction: 'in' },
+  reward_reversed: { label: '奖励冲正', tagType: 'danger', direction: 'out' },
+  withdraw_apply: { label: '提现申请', tagType: 'warning', direction: 'out' },
+  withdraw_approved: { label: '提现通过', tagType: 'success', direction: 'out' },
+  withdraw_rejected: { label: '提现驳回', tagType: 'danger', direction: 'in' },
+  referral_withdraw_approved: { label: '提现通过', tagType: 'success', direction: 'out' },
 }
 
 // ===================== 通用工具函数 =====================

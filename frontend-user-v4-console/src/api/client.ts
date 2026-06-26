@@ -43,6 +43,9 @@ import type {
   ServiceOverviewPayload,
   ServiceRemarkUpdatePayload,
   ServiceRenewPreview,
+  ServiceTrafficPackageOrderPayload,
+  ServiceTrafficPackagePreview,
+  ServiceTrafficPackageQuote,
   ServiceVncPayload,
   SecurityGroupPayload,
   SecurityRulePayload,
@@ -93,11 +96,12 @@ const clientApi = {
     putEnvelope<ServiceNameUpdatePayload>(`/client/services/${id}/name`, data),
   updateServiceRemark: (id: number | string, data: Record<string, unknown>) =>
     putEnvelope<ServiceRemarkUpdatePayload>(`/client/services/${id}/remark`, data),
-  serviceTrafficPackages: (id: number | string) => request.get(`/client/services/${id}/traffic-packages`),
+  serviceTrafficPackages: (id: number | string) =>
+    getEnvelope<ServiceTrafficPackagePreview>(`/client/services/${id}/traffic-packages`),
   quoteTrafficPackage: (id: number | string, data: Record<string, unknown>) =>
-    request.post(`/client/services/${id}/traffic-packages/quote`, data),
+    postEnvelope<ServiceTrafficPackageQuote>(`/client/services/${id}/traffic-packages/quote`, data),
   createTrafficPackageOrder: (id: number | string, data: Record<string, unknown>) =>
-    request.post(`/client/services/${id}/traffic-packages/order`, data),
+    postEnvelope<ServiceTrafficPackageOrderPayload>(`/client/services/${id}/traffic-packages/order`, data),
   serviceRenewPreview: (id: number | string, params?: QueryParams) =>
     getEnvelope<ServiceRenewPreview>(`/client/services/${id}/renew`, { params }),
   createRenewOrder: (id: number | string, data: Record<string, unknown>) =>

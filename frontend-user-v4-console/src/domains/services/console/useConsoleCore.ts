@@ -5,8 +5,8 @@ import type { ConsoleMachineCategory, ConsoleServiceDetail, ServiceSpecItem } fr
 type ConsoleDetailPatch = Partial<ConsoleServiceDetail>;
 
 export const DEFAULT_TAB = 'overview';
-export const CLOUD_TABS = ['overview', 'monitor', 'security', 'power', 'logs', 'finance', 'vnc'];
-export const NAT_TABS = ['overview', 'monitor', 'security', 'nat', 'power', 'logs', 'finance', 'vnc'];
+export const CLOUD_TABS = ['overview', 'monitor', 'security', 'logs', 'finance', 'vnc'];
+export const NAT_TABS = ['overview', 'monitor', 'security', 'nat', 'logs', 'finance', 'vnc'];
 export const VNC_CREDENTIAL_STORAGE_PREFIX = 'caiwu:vnc-credentials:';
 
 export function emptyDetail(): ConsoleServiceDetail {

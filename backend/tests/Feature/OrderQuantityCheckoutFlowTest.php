@@ -414,8 +414,8 @@ class OrderQuantityCheckoutFlowTest extends TestCase
 
         $couponService = $this->createMock(CouponService::class);
         $couponService->expects($this->once())
-            ->method('syncOrderCouponUsageAfterResponse')
-            ->with($this->callback(fn (Order $candidate): bool => (int) $candidate->id === (int) $order->id));
+            ->method('syncInvoiceCouponUsageAfterResponse')
+            ->with($this->callback(fn (Invoice $candidate): bool => (int) $candidate->id === (int) $invoice->id));
 
         $adminOrderNotificationService = $this->createMock(AdminOrderNotificationService::class);
         $adminOrderNotificationService->expects($this->once())

@@ -370,7 +370,9 @@ class OrderService
                 'status' => OrderStatus::CANCELLED,
             ])->save();
 
-            $this->couponService->releaseOrderCoupon($lockedOrder);
+            if ($invoice instanceof Invoice) {
+                $this->couponService->syncInvoiceCouponUsage($invoice);
+            }
 
             // 仅新购订单在创建时预扣库存，取消时恢复库存。
             if ((string) $lockedOrder->type === 'new' && $lockedOrder->product_id) {
@@ -622,7 +624,7 @@ class OrderService
             ])->save();
         });
 
-        $this->couponService->syncOrderCouponUsage($order);
+        $this->couponService->syncInvoiceCouponUsage($invoice->fresh() ?? $invoice);
 
         $updatedOrder = $this->freshAdminOrder($order);
 

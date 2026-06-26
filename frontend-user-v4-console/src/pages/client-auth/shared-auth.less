@@ -37,6 +37,11 @@
   margin-bottom: 1.25rem;
 }
 
+/* 含 extra 提示的表单项需要额外间距，避免绝对定位的 extra 文字被下方元素遮挡 */
+:deep(.t-form__item.t-form__item-with-extra) {
+  padding-bottom: var(--td-line-height-body-small, 20px);
+}
+
 :deep(.t-form__controls-content) {
   line-height: normal;
 }
@@ -166,13 +171,5 @@
 
   .client-auth-submit {
     margin-top: 0.375rem;
-  }
-
-  .client-auth-code-row {
-    grid-template-columns: 1fr;
-  }
-
-  .client-auth-code-row .t-button {
-    width: 100%;
   }
 }

@@ -8,7 +8,7 @@ import {
 import { normalizeMoneyText, resolveProductDisplayName } from '@/utils/websiteProductConfig'
 import { navigateToConsole } from '@/utils/consoleUrl'
 import { buildIdempotencyKey, encodePendingWebsiteCheckout, savePendingWebsiteCheckout } from '@/utils/websiteCheckout'
-import { clearPendingWebsiteCoupon, getPendingWebsiteCouponId } from '@/utils/websiteCoupon'
+import { buildPendingCouponRedirectUrl, clearPendingWebsiteCoupon, getPendingWebsiteCouponId } from '@/utils/websiteCoupon'
 
 export function useWebsiteProductCheckout({
   productDetail,
@@ -166,9 +166,10 @@ export function useWebsiteProductCheckout({
 
     savePendingWebsiteCheckout(pendingCheckout)
     const checkoutPayload = encodePendingWebsiteCheckout(pendingCheckout)
+    const checkoutPath = buildPendingCouponRedirectUrl('/client/checkout-resume', orderPayload.user_coupon_id)
     ElMessage.success('正在进入控制台继续创建账单')
 
-    navigateToConsole('/client/checkout-resume', checkoutPayload
+    navigateToConsole(checkoutPath, checkoutPayload
       ? { checkout_payload: checkoutPayload }
       : {})
   }

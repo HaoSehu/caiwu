@@ -21,6 +21,7 @@ use App\Services\System\OperationLogService;
 use App\Services\System\SettingService;
 use App\Services\Upstream\Contracts\ProvidesConsoleCatalog;
 use App\Services\Upstream\ProviderResolver;
+use App\Support\OrderInvoiceNoGenerator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -178,7 +179,10 @@ class ServiceTrafficPackageService
             $sameAmount = round((float) ($existingInvoice->amount ?? 0), 2) === round((float) $quote['pricing']['amount'], 2);
 
             if ($sameKind && $sameConfigOption && $sameAmount) {
-                $existingInvoice->loadMissing(['product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,config_options,purchase_requires', 'service']);
+                $displayPayload = (new ProductDisplayNameResolver)->resolveForProduct($product, (array) ($existingInvoice->config_snapshot ?? []));
+                $productSpecDisplay = (string) ($displayPayload['product_spec_display'] ?? $displayPayload['combined_display_name'] ?? '');
+                $this->ensureTrafficPackageOrderForInvoice($existingInvoice, $service, $product, $productSpecDisplay, $context);
+                $existingInvoice = $existingInvoice->fresh(['product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,config_options,purchase_requires', 'service', 'order']) ?? $existingInvoice;
 
                 $this->operationLogService->writeServiceConsoleLog($service, 'service.console.traffic_package.invoice.create', [
                     'category' => 'upgrade',
@@ -203,9 +207,10 @@ class ServiceTrafficPackageService
 
         $invoice = DB::transaction(function () use ($service, $product, $quote, $context) {
             $displayPayload = (new ProductDisplayNameResolver)->resolveForProduct($product);
-            $productSpecDisplay = (string) ($displayPayload['product_spec_display'] ?? '');
+            $productSpecDisplay = (string) ($displayPayload['product_spec_display'] ?? $displayPayload['combined_display_name'] ?? '');
+            $orderNo = Order::generateOrderNo();
             $invoice = Invoice::query()->create([
-                'invoice_no' => Invoice::generateInvoiceNo(),
+                'invoice_no' => Invoice::generateInvoiceNoFromOrderNo($orderNo),
                 'user_id' => (int) $service->user_id,
                 'product_id' => (int) $product->id,
                 'product_spec_snapshot' => $productSpecDisplay,
@@ -250,8 +255,9 @@ class ServiceTrafficPackageService
             ]);
 
             $this->invoiceService->syncProjection($invoice);
+            $this->createTrafficPackageOrderForInvoice($invoice, $service, $product, $productSpecDisplay, $orderNo);
 
-            return $invoice->load(['product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,config_options,purchase_requires', 'service']);
+            return $invoice->load(['product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,config_options,purchase_requires', 'service', 'order']);
         });
 
         $this->operationLogService->writeServiceConsoleLog($service, 'service.console.traffic_package.invoice.create', [
@@ -265,6 +271,78 @@ class ServiceTrafficPackageService
         ], $context);
 
         return $invoice;
+    }
+
+    private function ensureTrafficPackageOrderForInvoice(
+        Invoice $invoice,
+        Service $service,
+        Product $product,
+        string $productSpecDisplay,
+        array $context = [],
+    ): Order {
+        $invoice->loadMissing('order');
+
+        if ($invoice->order instanceof Order) {
+            return $invoice->order;
+        }
+
+        return DB::transaction(function () use ($invoice, $service, $product, $productSpecDisplay, $context): Order {
+            $lockedInvoice = Invoice::query()
+                ->lockForUpdate()
+                ->with('order')
+                ->findOrFail((int) $invoice->id);
+
+            if ($lockedInvoice->order instanceof Order) {
+                return $lockedInvoice->order;
+            }
+
+            $orderNo = OrderInvoiceNoGenerator::deriveOrderNoFromInvoiceNo((string) $lockedInvoice->invoice_no)
+                ?? Order::generateOrderNo();
+
+            return $this->createTrafficPackageOrderForInvoice(
+                $lockedInvoice,
+                $service,
+                $product,
+                $productSpecDisplay,
+                $orderNo,
+                $context
+            );
+        });
+    }
+
+    private function createTrafficPackageOrderForInvoice(
+        Invoice $invoice,
+        Service $service,
+        Product $product,
+        string $productSpecDisplay,
+        ?string $orderNo = null,
+        array $context = [],
+    ): Order {
+        $order = Order::query()->create([
+            'order_no' => $orderNo ?: Order::generateOrderNo(),
+            'projection_type' => Order::PROJECTION_TYPE_PROVISIONING,
+            'user_id' => (int) $invoice->user_id,
+            'product_id' => (int) $product->id,
+            'product_spec_snapshot' => $productSpecDisplay !== '' ? $productSpecDisplay : (string) ($invoice->product_spec_snapshot ?? ''),
+            'product_type_snapshot' => (string) $product->product_type,
+            'service_id' => (int) $service->id,
+            'type' => 'upgrade',
+            'amount' => (string) $invoice->amount,
+            'discount' => (string) ($invoice->discount ?? '0.00'),
+            'paid_amount' => (string) ($invoice->paid_amount ?? '0.00'),
+            'billing_cycle' => (string) ($invoice->billing_cycle ?: 'one_time'),
+            'quantity' => 1,
+            'config_snapshot' => (array) ($invoice->config_snapshot ?? []),
+            'config_pricing_snapshot' => (array) ($invoice->config_pricing_snapshot ?? []),
+            'coupon_snapshot' => (array) ($invoice->coupon_snapshot ?? []),
+            'status' => (int) $invoice->status === InvoiceStatus::PAID ? OrderStatus::PAID : OrderStatus::PENDING,
+            'paid_at' => $invoice->paid_at,
+            'trace_id' => (string) ($context['trace_id'] ?? $invoice->trace_id ?? ''),
+        ]);
+
+        $invoice->forceFill(['order_id' => (int) $order->id])->save();
+
+        return $order;
     }
 
     public function processPaidTrafficPackageOrder(Order $order): ?Service

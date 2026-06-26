@@ -18,6 +18,7 @@ class SendEmailCodeRequest extends ClientFormRequest
     {
         return [
             'email' => 'required|email|max:100',
+            'purpose' => 'nullable|string|in:login,register,reset,generic',
         ];
     }
 }

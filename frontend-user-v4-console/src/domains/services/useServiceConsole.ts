@@ -12,6 +12,7 @@ import { useConsoleReinstall } from './console/useConsoleReinstall';
 import { useConsoleVnc } from './console/useConsoleVnc';
 import { useConsoleDialogs } from './console/useConsoleDialogs';
 import { useConsoleTabs } from './console/useConsoleTabs';
+import { useConsoleTrafficPackages } from './console/useConsoleTrafficPackages';
 
 export function useServiceConsole() {
   const router = useRouter();
@@ -78,6 +79,22 @@ export function useServiceConsole() {
     submitRenew,
   } = useConsoleRenew({ serviceId });
 
+  const {
+    trafficVisible,
+    trafficLoading,
+    trafficQuoting,
+    trafficSubmitting,
+    trafficData,
+    trafficQuote,
+    trafficForm,
+    trafficPackages,
+    selectedTrafficPackage,
+    trafficPayableAmount,
+    openTrafficPackageDialog,
+    handleTrafficPackageChange,
+    submitTrafficPackageOrder,
+  } = useConsoleTrafficPackages({ serviceId });
+
   // Security groups
   const {
     securityState,
@@ -87,6 +104,9 @@ export function useServiceConsole() {
     groupForm,
     ruleVisible,
     ruleForm,
+    isPortDisabled,
+    isAllPortProtocol,
+    onProtocolChange,
     loadSecurityGroups,
     loadSecurityGroupRules,
     selectSecurityGroup,
@@ -292,6 +312,13 @@ export function useServiceConsole() {
     renewSubmitting,
     renewData,
     renewForm,
+    trafficVisible,
+    trafficLoading,
+    trafficQuoting,
+    trafficSubmitting,
+    trafficData,
+    trafficQuote,
+    trafficForm,
     nameVisible,
     nameSubmitting,
     nameForm,
@@ -309,6 +336,9 @@ export function useServiceConsole() {
     groupForm,
     ruleVisible,
     ruleForm,
+    isPortDisabled,
+    isAllPortProtocol,
+    onProtocolChange,
     natState,
     logsState,
     financeState,
@@ -333,6 +363,9 @@ export function useServiceConsole() {
     resolvedPassword,
     renewAmount,
     renewCoupons,
+    trafficPackages,
+    selectedTrafficPackage,
+    trafficPayableAmount,
     reinstallGroupedOptions,
     currentReinstallOptions,
 
@@ -351,6 +384,9 @@ export function useServiceConsole() {
     handleRenewCycleChange,
     handleRenewCouponChange,
     submitRenew,
+    openTrafficPackageDialog,
+    handleTrafficPackageChange,
+    submitTrafficPackageOrder,
     openNameDialog,
     submitName,
     openRemarkDialog,

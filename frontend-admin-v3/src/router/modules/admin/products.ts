@@ -44,7 +44,7 @@ export const productsRoutes: RouteRecordRaw[] = [
     component: () => import('@/pages/products/index.vue'),
     meta: {
       title: {
-        zh_CN: '流量包',
+        zh_CN: '流量包管理',
         en_US: 'Traffic Packages',
       },
       productTab: 'traffic-packages',
@@ -54,14 +54,14 @@ export const productsRoutes: RouteRecordRaw[] = [
   {
     path: 'products/suppliers',
     name: 'AdminSuppliers',
-    component: () => import('@/pages/products/index.vue'),
+    redirect: { path: '/admin/products', query: { tab: 'suppliers' } },
     meta: {
       title: {
         zh_CN: '提供商',
         en_US: 'Suppliers',
       },
-      productTab: 'suppliers',
       permission: 'product.manage',
+      hidden: true,
     },
   },
 ];

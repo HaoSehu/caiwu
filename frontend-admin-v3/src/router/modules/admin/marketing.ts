@@ -28,13 +28,14 @@ export const marketingRoutes: RouteRecordRaw[] = [
   {
     path: 'coupon-campaigns',
     name: 'AdminCouponCampaigns',
-    component: () => import('@/pages/products/coupon-campaigns/index.vue'),
+    redirect: { path: '/admin/coupons', query: { tab: 'campaigns' } },
     meta: {
       title: {
         zh_CN: '活动券',
         en_US: 'Coupon Campaigns',
       },
       permission: 'product.manage',
+      hidden: true,
     },
   },
   {

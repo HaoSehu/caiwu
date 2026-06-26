@@ -52,3 +52,28 @@ export function clearPendingWebsiteCoupon() {
   if (!canUseSessionStorage()) return
   sessionStorage.removeItem(WEBSITE_PENDING_COUPON_KEY)
 }
+
+export function buildPendingCouponRedirectUrl(targetPath, userCouponId) {
+  const path = String(targetPath || '/client/checkout-resume').trim() || '/client/checkout-resume'
+  const couponId = Number(userCouponId || 0)
+
+  if (couponId <= 0) {
+    return path
+  }
+
+  try {
+    const base = typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1'
+    const url = new URL(path, base)
+    url.searchParams.set('pending_coupon_id', String(couponId))
+
+    if (/^https?:\/\//i.test(path)) {
+      return url.toString()
+    }
+
+    return `${url.pathname}${url.search}${url.hash}`
+  } catch {
+    const [withoutHash, hash = ''] = path.split('#')
+    const separator = withoutHash.includes('?') ? '&' : '?'
+    return `${withoutHash}${separator}pending_coupon_id=${encodeURIComponent(String(couponId))}${hash ? `#${hash}` : ''}`
+  }
+}

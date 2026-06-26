@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Client\Ticket;
 
 use App\Http\Requests\Client\Common\ClientFormRequest;
+use App\Services\Ticket\TicketService;
 use Illuminate\Validation\Rule;
 
 class StoreRequest extends ClientFormRequest

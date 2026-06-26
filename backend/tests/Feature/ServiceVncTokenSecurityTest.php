@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Exceptions\BusinessException;
+use App\Models\Service;
+use App\Models\Supplier;
+use App\Models\User;
 use App\Services\ClientServiceConsole\ServiceDetailService;
 use App\Services\ClientServiceConsole\ServiceResolverService;
 use App\Services\ClientServiceConsole\ServiceTransformService;
@@ -157,6 +160,87 @@ class ServiceVncTokenSecurityTest extends TestCase
 
         $this->assertSame('上游状态同步超时，请稍后重试', $message);
         $this->assertStringNotContainsString('secret-supplier.example', (string) $message);
+    }
+
+    public function test_vnc_link_request_refreshes_jwt_once_when_upstream_returns_auth_failure(): void
+    {
+        $user = new User;
+        $user->forceFill(['id' => 1]);
+
+        $service = new Service;
+        $service->forceFill(['id' => 321, 'user_id' => 1, 'provision_data' => []]);
+
+        $supplier = new Supplier;
+        $supplier->forceFill(['id' => 45]);
+
+        $runtime = new class
+        {
+            public int $postCalls = 0;
+
+            public int $refreshCalls = 0;
+
+            public array $jwts = [];
+
+            public function post(Supplier $supplier, string $uri, array|string $payload = [], ?string $jwt = null, array $headers = [], array $query = []): array
+            {
+                $this->postCalls++;
+                $this->jwts[] = $jwt;
+
+                if ($this->postCalls === 1) {
+                    return ['status' => 401, 'msg' => 'jwt expired'];
+                }
+
+                return [
+                    'status' => 200,
+                    'msg' => '获取VNC链接成功',
+                    'data' => [
+                        'url' => 'wss://vnc.example.test/websockify?password=secret',
+                    ],
+                ];
+            }
+
+            public function refreshJwt(Supplier $supplier): string
+            {
+                $this->refreshCalls++;
+
+                return 'fresh-jwt';
+            }
+        };
+
+        $detailService = $this->getMockBuilder(ServiceDetailService::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['findUserService', 'resolveUpstreamContext', 'assertSuccess', 'extractPayload'])
+            ->getMock();
+        $detailService->method('findUserService')->willReturn($service);
+        $detailService->method('resolveUpstreamContext')->willReturn([$runtime, $supplier, 99, 'stale-jwt']);
+        $detailService->method('extractPayload')->willReturnCallback(
+            fn (array $response): array => is_array($response['data'] ?? null) ? $response['data'] : $response
+        );
+        $detailService->method('assertSuccess')->willReturnCallback(function (array $response): void {
+            $status = (int) ($response['status'] ?? $response['code'] ?? 0);
+            if (! in_array($status, [200, 1001], true)) {
+                throw new BusinessException('获取VNC链接失败，主机面板接口暂时不可用', 42200);
+            }
+        });
+
+        $transformService = $this->createMock(ServiceTransformService::class);
+        $transformService->method('canExecuteConsoleActions')->willReturn(true);
+        $transformService->method('readCachedConnection')->willReturn([]);
+        $transformService->method('transformDetail')->willReturn(['id' => 321]);
+
+        $operationLogService = $this->createMock(OperationLogService::class);
+        $operationLogService->expects($this->once())->method('writeServiceConsoleLog');
+
+        $result = (new ServiceVncService(
+            $operationLogService,
+            $detailService,
+            $transformService,
+        ))->getVncUrlForUser($user, 321, ['request_origin' => 'https://console.example.test']);
+
+        $this->assertSame(2, $runtime->postCalls);
+        $this->assertSame(1, $runtime->refreshCalls);
+        $this->assertSame(['stale-jwt', 'fresh-jwt'], $runtime->jwts);
+        $this->assertStringContainsString('/vnc/vnc.html?', $result['url']);
     }
 
     private function makeVncService(): ServiceVncService

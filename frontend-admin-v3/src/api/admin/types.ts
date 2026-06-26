@@ -350,6 +350,19 @@ export interface ProductBindingRecord {
     amount?: string;
   };
   status?: number;
+  /**
+   * 商品所属产品类型标识（来自一级分组的 service_type_code），可选。
+   * 仅当从产品绑定树派生时填充（如流量包分组），其它消费方可忽略。
+   */
+  product_type?: string;
+  first_product_group_id?: number | null;
+  first_product_group_name?: string | null;
+  second_product_group_id?: number | null;
+  second_product_group_name?: string | null;
+  third_product_group_id?: number | null;
+  third_product_group_name?: string | null;
+  effective_product_group_id?: number;
+  effective_product_group_level?: number;
 }
 
 export interface InstanceSpecRecord {
@@ -439,6 +452,7 @@ export interface CouponRecord {
   can_update?: boolean;
   can_delete?: boolean;
   lock_reason?: string | null;
+  locked_fields?: string[];
   delete_reason?: string | null;
   updated_at?: string;
   [key: string]: unknown;

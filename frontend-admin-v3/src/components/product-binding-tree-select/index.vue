@@ -2,15 +2,18 @@
   <t-tree-select
     v-model="localValue"
     class="binding-tree-select"
+    :class="{ 'binding-tree-select--compact': props.compact }"
     :data="treeOptions"
     :tree-props="treeProps"
     :loading="treeLoading"
-    :disabled="treeLoading"
+    :disabled="props.disabled || treeLoading"
     :multiple="props.mode !== 'single'"
     filterable
     clearable
-    :min-collapsed-num="props.mode === 'single' ? 0 : 1"
+    :min-collapsed-num="minCollapsedNum"
     :placeholder="placeholderText"
+    :popup-props="treePopupProps"
+    :collapsed-items="collapsedItems"
     @change="handleChange"
   />
 </template>
@@ -24,8 +27,20 @@ const props = withDefaults(defineProps<{
   modelValue: string | number | (string | number)[] | null | undefined;
   existingBindings?: ProductBindingRecord[];
   mode?: BindingTreeMode;
+  placeholder?: string;
+  compact?: boolean;
+  hideTypeGroup?: boolean;
+  expandAll?: boolean;
+  popupMaxHeight?: number;
+  disabled?: boolean;
 }>(), {
   mode: 'multiple',
+  placeholder: '',
+  compact: false,
+  hideTypeGroup: false,
+  expandAll: false,
+  popupMaxHeight: 360,
+  disabled: false,
 });
 
 const emit = defineEmits<{
@@ -33,11 +48,24 @@ const emit = defineEmits<{
   change: [payload: { binding_ids: string[]; bindings: ProductBindingRecord[] }];
 }>();
 
-const { treeLoading, treeOptions, treeProps, loadTree, selectionToBindings } = useProductBindingTree(props.mode);
+const {
+  treeLoading,
+  treeOptions,
+  treeProps,
+  loadTree,
+  normalizeSelectionForTree,
+  firstSelectionForTree,
+  selectionToBindings,
+} = useProductBindingTree(props.mode, {
+  hideTypeGroup: () => props.hideTypeGroup,
+  expandAll: () => props.expandAll,
+});
 
-const localValue = ref<string | string[]>(props.mode === 'single' ? firstModelValue(props.modelValue) : normalizeModelValue(props.modelValue));
+const localValue = ref<string | string[]>(props.mode === 'single' ? firstSelectionForTree(props.modelValue) : normalizeSelectionForTree(props.modelValue));
 
 const placeholderText = computed(() => {
+  if (props.placeholder) return props.placeholder;
+
   switch (props.mode) {
     case 'single': return '选择一个商品配置';
     case 'batch': return '按分类批量选择绑定配置';
@@ -45,14 +73,32 @@ const placeholderText = computed(() => {
   }
 });
 
+const minCollapsedNum = computed(() => {
+  if (props.mode === 'single') return 0;
+  return props.compact ? 0 : 1;
+});
+
+const collapsedItems = computed(() => {
+  if (!props.compact || props.mode === 'single') return undefined;
+  return (_h: unknown, context: { count: number }) => `已选 ${context.count} 个配置`;
+});
+
+const treePopupProps = computed(() => ({
+  overlayClassName: 'binding-tree-select-popup',
+  overlayInnerStyle: {
+    maxHeight: `${props.popupMaxHeight}px`,
+    overflowY: 'auto',
+  },
+}));
+
 watch(
-  () => props.modelValue,
-  (val) => {
+  [() => props.modelValue, treeOptions],
+  ([modelValue]) => {
     if (props.mode === 'single') {
-      const strVal = firstModelValue(val);
+      const strVal = firstSelectionForTree(modelValue);
       if (localValue.value !== strVal) localValue.value = strVal;
     } else {
-      const arrVal = normalizeModelValue(val);
+      const arrVal = normalizeSelectionForTree(modelValue);
       if (JSON.stringify(arrVal) !== JSON.stringify(localValue.value)) {
         localValue.value = arrVal;
       }
@@ -68,10 +114,10 @@ function handleChange(value: unknown) {
     localValue.value = normalizeTreeValue(value);
   } else if (props.mode === 'single') {
     // 单选模式：TDesign 传回的是 string
-    localValue.value = firstModelValue(value as string | number | (string | number)[] | null | undefined);
+    localValue.value = firstTreeValue(value);
   } else {
     // 多选模式
-    localValue.value = result.binding_ids;
+    localValue.value = normalizeTreeValue(value);
   }
 
   const currentValue = normalizeRawModelValue(props.modelValue);
@@ -88,19 +134,35 @@ function normalizeRawModelValue(value: string | number | (string | number)[] | n
   return Array.isArray(value) ? value : [value];
 }
 
-function normalizeModelValue(value: string | number | (string | number)[] | null | undefined): string[] {
-  return normalizeRawModelValue(value).map((item) => String(item || '').trim()).filter(Boolean);
-}
-
-function firstModelValue(value: string | number | (string | number)[] | null | undefined): string {
-  return normalizeModelValue(value)[0] || '';
-}
-
 function normalizeTreeValue(value: unknown): string[] {
   return (Array.isArray(value) ? value : [value])
     .map((item) => String(item || '').trim())
     .filter(Boolean);
 }
 
+function firstTreeValue(value: unknown): string {
+  return normalizeTreeValue(value)[0] || '';
+}
+
 loadTree();
 </script>
+
+<style scoped lang="less">
+.binding-tree-select {
+  width: 100%;
+}
+
+.binding-tree-select--compact {
+  :deep(.t-tag-input) {
+    min-height: 32px;
+  }
+
+  :deep(.t-tag) {
+    max-width: 100%;
+  }
+}
+
+:global(.binding-tree-select-popup) {
+  max-width: calc(100vw - 32px);
+}
+</style>

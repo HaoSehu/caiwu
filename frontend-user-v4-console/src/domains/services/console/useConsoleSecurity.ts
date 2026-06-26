@@ -31,6 +31,74 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
   const ruleVisible = ref(false);
   const ruleForm = reactive({ direction: '', protocol: '', port: '', ip: '', description: '' });
 
+  /** 已知协议的默认端口映射（小写）。值为 null 表示该协议无端口（如 ICMP）。 */
+  const PROTOCOL_DEFAULT_PORT: Record<string, string | null> = {
+    all: '1-65535',
+    icmp: null,
+    icmpv6: null,
+    ssh: '22',
+    telnet: '23',
+    smtp: '25',
+    dns: '53',
+    dhcp: '67-68',
+    http: '80',
+    pop3: '110',
+    imap: '143',
+    https: '443',
+    rdp: '3389',
+    mysql: '3306',
+    redis: '6379',
+    postgres: '5432',
+  };
+
+  /** 解析当前选中协议的默认端口（兼容 全部/全部 TCP/UDP 这种组合标签） */
+  function resolveProtocolDefaultPort(): string | null {
+    const raw = String(ruleForm.protocol || '').toLowerCase();
+    const label = (securityState.protocols.find((p) => String(p.value).toLowerCase() === raw)?.label || '').toLowerCase();
+
+    // 精确匹配 PROTOCOL_DEFAULT_PORT
+    if (Object.prototype.hasOwnProperty.call(PROTOCOL_DEFAULT_PORT, raw)) {
+      return PROTOCOL_DEFAULT_PORT[raw];
+    }
+
+    // 兼容标签中含 all/全部 的组合（全部、全部 TCP、全部 UDP、TCP ALL 等）→ 端口 1-65535
+    if (raw.includes('all') || label.includes('全部') || label === 'all') {
+      return '1-65535';
+    }
+
+    // 兼容标签中含 icmp/ICMP 的组合
+    if (raw.includes('icmp') || label.includes('icmp')) {
+      return null;
+    }
+
+    // 常规协议（TCP/UDP）由用户手动填写端口
+    return undefined;
+  }
+
+  /** 端口输入是否禁用（协议为固定/无端口类型时） */
+  const isPortDisabled = computed(() => {
+    const port = resolveProtocolDefaultPort();
+    return port !== undefined;
+  });
+
+  /** 旧字段保留兼容：是否所有端口 */
+  const isAllPortProtocol = computed(() => resolveProtocolDefaultPort() === '1-65535');
+
+  /** 协议变化时自动填充端口 */
+  function onProtocolChange(val: string) {
+    ruleForm.protocol = val;
+    const defaultPort = resolveProtocolDefaultPort();
+    if (defaultPort === undefined) {
+      // 普通协议：若之前是自动填充值则清空，让用户输入
+      if (ruleForm.port === '1-65535') ruleForm.port = '';
+    } else if (defaultPort === null) {
+      // ICMP 等无端口协议：留空提交
+      ruleForm.port = '';
+    } else {
+      ruleForm.port = defaultPort;
+    }
+  }
+
   const activeSecurityGroup = computed(
     () => securityState.groups.find((item) => Number(item.id || 0) === activeSecurityGroupId.value) || null,
   );
@@ -97,7 +165,8 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
   function openSecurityRuleDialog() {
     ruleForm.direction = String(securityState.directions[0]?.value || '');
     ruleForm.protocol = String(securityState.protocols[0]?.value || '');
-    ruleForm.port = '';
+    const defaultPort = resolveProtocolDefaultPort();
+    ruleForm.port = defaultPort === undefined || defaultPort === null ? '' : defaultPort;
     ruleForm.ip = '0.0.0.0/0';
     ruleForm.description = '';
     ruleVisible.value = true;
@@ -169,16 +238,19 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
       MessagePlugin.warning('请先选择安全组');
       return;
     }
-    if (!ruleForm.direction || !ruleForm.protocol || !ruleForm.port.trim() || !ruleForm.ip.trim()) {
+    const defaultPort = resolveProtocolDefaultPort();
+    const isNoPortProtocol = defaultPort === null;
+    if (!ruleForm.direction || !ruleForm.protocol || (!isNoPortProtocol && !ruleForm.port.trim()) || !ruleForm.ip.trim()) {
       MessagePlugin.warning('请填写完整的规则信息');
       return;
     }
     securityState.submitting = true;
     try {
+      const portValue = isNoPortProtocol ? (ruleForm.port.trim() || '1-65535') : ruleForm.port.trim();
       const res = await clientApi.createSecurityRule(serviceId.value, activeSecurityGroupId.value, {
         direction: ruleForm.direction,
         protocol: ruleForm.protocol,
-        port: ruleForm.port.trim(),
+        port: portValue,
         ip: ruleForm.ip.trim(),
         description: ruleForm.description.trim(),
       });
@@ -226,6 +298,9 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
     groupForm,
     ruleVisible,
     ruleForm,
+    isPortDisabled,
+    isAllPortProtocol,
+    onProtocolChange,
     loadSecurityGroups,
     loadSecurityGroupRules,
     selectSecurityGroup,
