@@ -23,6 +23,7 @@ function normalizeUserInfo(raw: Record<string, unknown> = {}): ClientUserInfo {
 export const useUserStore = defineStore('user', {
   state: () => ({
     token: getClientToken() || '',
+    profileHydrated: false,
     userInfo: { ...initUserInfo },
   }),
   getters: {
@@ -32,6 +33,18 @@ export const useUserStore = defineStore('user', {
   actions: {
     syncTokenFromSession() {
       this.token = getClientToken() || '';
+      if (!this.token) {
+        this.profileHydrated = false;
+      }
+    },
+    clearLocalSession() {
+      removeClientToken();
+      if (typeof window !== 'undefined') {
+        window.localStorage.removeItem('client_user');
+      }
+      this.token = '';
+      this.profileHydrated = false;
+      this.userInfo = { ...initUserInfo };
     },
     async clientLogin(loginData: Record<string, unknown>) {
       const res = await clientAuthApi.login(loginData);
@@ -42,6 +55,7 @@ export const useUserStore = defineStore('user', {
         this.token = token;
       }
       this.userInfo = normalizeUserInfo(payload?.user || {});
+      this.profileHydrated = true;
       return res;
     },
     async clientLoginByCode(loginData: Record<string, unknown>) {
@@ -53,6 +67,7 @@ export const useUserStore = defineStore('user', {
         this.token = token;
       }
       this.userInfo = normalizeUserInfo(payload?.user || {});
+      this.profileHydrated = true;
       return res;
     },
     async login(loginData: Record<string, unknown>) {
@@ -67,6 +82,7 @@ export const useUserStore = defineStore('user', {
         this.token = token;
       }
       this.userInfo = normalizeUserInfo(payload?.user || {});
+      this.profileHydrated = true;
       return res;
     },
     async exchangeLoginAsCode(code: string) {
@@ -83,6 +99,7 @@ export const useUserStore = defineStore('user', {
       const res = await clientAuthApi.info();
       this.userInfo = normalizeUserInfo(res.data || {});
       this.syncTokenFromSession();
+      this.profileHydrated = true;
       return this.userInfo;
     },
     async logout() {
@@ -93,9 +110,7 @@ export const useUserStore = defineStore('user', {
       } catch {
         // Logout must always clear the local client session even if the API is unavailable.
       } finally {
-        removeClientToken();
-        this.token = '';
-        this.userInfo = { ...initUserInfo };
+        this.clearLocalSession();
       }
     },
   },

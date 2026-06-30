@@ -2,13 +2,36 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import { provideGlobalConfig } from 'element-plus/es/components/config-provider/index.mjs'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
+import 'element-plus/es/components/message/style/css'
 
 import App from '@/App.vue'
 import { createClientRouter } from '@/app/router'
 import { initClientRuntimeConnectionHints, primeClientConnectionHints } from '@/app/runtime/network'
 import { useAppStore } from '@/stores/app'
-import '@/assets/styles/element/index.scss'
 import '@/assets/styles/global.scss'
+
+const SITE_CONFIG_PREFETCH_TIMEOUT = 1200
+
+function isHomeRoute(pathname: string) {
+  return pathname === '/' || pathname === ''
+}
+
+async function preloadSiteConfig(appStore: ReturnType<typeof useAppStore>) {
+  if (typeof window === 'undefined' || isHomeRoute(window.location.pathname)) {
+    return false
+  }
+
+  const timeoutPromise = new Promise<void>((resolve) => {
+    window.setTimeout(resolve, SITE_CONFIG_PREFETCH_TIMEOUT)
+  })
+
+  const result = await Promise.race([
+    appStore.fetchSiteConfig().catch(() => undefined),
+    timeoutPromise,
+  ])
+
+  return Boolean(result)
+}
 
 export function bootstrapClientApp() {
   const app = createApp(App)
@@ -23,27 +46,36 @@ export function bootstrapClientApp() {
     apiBaseUrl: import.meta.env.VITE_API_BASE_URL,
   })
 
-  // 淡出初始加载动画后再挂载，避免白闪
-  const splash = document.getElementById('app-splash')
-  if (splash) {
-    splash.classList.add('fade-out')
-    splash.addEventListener('transitionend', () => splash.remove(), { once: true })
-    // 兜底：即使 transition 未触发也确保移除
-    setTimeout(() => splash.remove(), 400)
-  }
-
-  app.mount('#app')
-
   const appStore = useAppStore()
-  if (typeof window === 'undefined' || window.location.pathname !== '/') {
-    appStore.fetchSiteConfig()
-      .finally(() => {
-        primeClientConnectionHints({
-          urls: [
-            appStore.siteLogo,
-            appStore.siteFavicon,
-          ],
-        })
-      })
-  }
+  const splash = document.getElementById('app-splash')
+
+  void preloadSiteConfig(appStore)
+    .then((preloaded) => {
+      if (splash) {
+        splash.classList.add('fade-out')
+        splash.addEventListener('transitionend', () => splash.remove(), { once: true })
+        setTimeout(() => splash.remove(), 400)
+      }
+
+      app.mount('#app')
+
+      if (typeof window === 'undefined' || window.location.pathname !== '/') {
+        const primeHints = () => {
+          primeClientConnectionHints({
+            urls: [
+              appStore.siteLogo,
+              appStore.siteFavicon,
+            ],
+          })
+        }
+
+        if (preloaded) {
+          primeHints()
+          return
+        }
+
+        void appStore.fetchSiteConfig()
+          .finally(primeHints)
+      }
+    })
 }

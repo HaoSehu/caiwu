@@ -80,7 +80,7 @@ export function useWebsiteProductsCatalog({ onProductSelect, onResetSelection })
 
     return Number(activeGroup.value?.effective_product_group_id || 0)
   })
-  const showMobileTypePicker = computed(() => isMobile.value && !mobileTypeEntered.value)
+  const showMobileTypePicker = computed(() => false)
   const shouldAutoSelectProduct = computed(() => getPendingWebsiteCouponId() <= 0)
   const visibleProducts = computed(() => {
     const categoryId = activeCatalogCategoryId.value

@@ -67,6 +67,9 @@ function redirectLogin() {
 
   redirectingToLogin = true;
   removeClientToken();
+  if (typeof window !== 'undefined') {
+    window.localStorage.removeItem('client_user');
+  }
   router.push('/client/login').finally(() => {
     redirectingToLogin = false;
   });

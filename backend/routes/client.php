@@ -174,7 +174,6 @@ Route::middleware(['auth:sanctum', 'ensure.client'])->group(function () {
     Route::post('/tickets/{id}/reply', [ClientTicketController::class, 'reply'])->middleware('throttle:10,1,client-ticket-reply');
     Route::post('/tickets/{id}/replies/{replyId}/recall', [ClientTicketController::class, 'recall'])->middleware('throttle:10,1,client-ticket-recall');
     Route::post('/tickets/{id}/close', [ClientTicketController::class, 'close'])->middleware('throttle:10,1,client-ticket-close');
-
     // 管理工具
     Route::post('/blackhole/query', [BlackholeController::class, 'query']);
     Route::post('/blackhole/ningbo/whitelist', [BlackholeController::class, 'addNingboWhitelist'])->middleware('throttle:6,1,client-blackhole-write');

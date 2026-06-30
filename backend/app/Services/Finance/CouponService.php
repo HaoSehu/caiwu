@@ -1310,15 +1310,17 @@ class CouponService
 
     private function assertCouponCanBeUpdated(Coupon $coupon, array $payload = []): void
     {
-        $lockedFields = $this->resolveCouponLockedFields($coupon);
+        $reason = $this->resolveCouponLockReason($coupon);
 
-        if ($lockedFields === []) {
+        if ($reason === '') {
             return;
         }
 
         if ($payload === []) {
             return;
         }
+
+        throw new BusinessException($reason.'不允许修改');
 
         foreach ($lockedFields as $field) {
             if (! array_key_exists($field, $payload)) {
@@ -1351,7 +1353,7 @@ class CouponService
 
     private function couponCanBeUpdatedForAdmin(Coupon $coupon): bool
     {
-        return true;
+        return $this->resolveCouponLockReason($coupon) === '';
     }
 
     private function couponCanBeDeletedForAdmin(Coupon $coupon): bool

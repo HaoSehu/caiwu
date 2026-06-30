@@ -1,86 +1,85 @@
-@use 'sass:map';
-@use '../variables.scss' as *;
+@use '../variables.scss' as vars;
 
 @forward 'element-plus/theme-chalk/src/common/var.scss' with (
   $colors: (
     'primary': (
-      'base': $color-primary,
+      'base': vars.$color-primary,
     ),
     'success': (
-      'base': $color-success,
+      'base': vars.$color-success,
     ),
     'warning': (
-      'base': $color-warning,
+      'base': vars.$color-warning,
     ),
     'danger': (
-      'base': $color-danger,
+      'base': vars.$color-danger,
     ),
     'error': (
-      'base': $color-danger,
+      'base': vars.$color-danger,
     ),
     'info': (
-      'base': $color-info,
+      'base': vars.$color-info,
     ),
   ),
   $text-color: (
-    'primary': $text-color-primary,
-    'regular': $text-color-secondary,
-    'secondary': $text-color-secondary,
-    'placeholder': $text-color-placeholder,
-    'disabled': $text-color-disabled,
+    'primary': vars.$text-color-primary,
+    'regular': vars.$text-color-secondary,
+    'secondary': vars.$text-color-secondary,
+    'placeholder': vars.$text-color-placeholder,
+    'disabled': vars.$text-color-disabled,
   ),
   $border-color: (
-    '': $border-color,
-    'light': $divider-color,
-    'lighter': $divider-color,
-    'extra-light': $bg-color-soft,
-    'dark': $border-color-strong,
-    'darker': $border-color-strong,
+    '': vars.$border-color,
+    'light': vars.$divider-color,
+    'lighter': vars.$divider-color,
+    'extra-light': vars.$bg-color-soft,
+    'dark': vars.$border-color-strong,
+    'darker': vars.$border-color-strong,
   ),
   $fill-color: (
-    '': $bg-color-soft,
-    'light': $bg-color-soft,
-    'lighter': $bg-color-hover,
-    'extra-light': $bg-color-soft,
-    'dark': $bg-color-stripe,
-    'darker': $border-color,
-    'blank': $bg-color-card,
+    '': vars.$bg-color-soft,
+    'light': vars.$bg-color-soft,
+    'lighter': vars.$bg-color-hover,
+    'extra-light': vars.$bg-color-soft,
+    'dark': vars.$bg-color-stripe,
+    'darker': vars.$border-color,
+    'blank': vars.$bg-color-card,
   ),
   $bg-color: (
-    '': $bg-color-card,
-    'page': $bg-color,
-    'overlay': $bg-color-card,
+    '': vars.$bg-color-card,
+    'page': vars.$bg-color,
+    'overlay': vars.$bg-color-card,
   ),
   $border-radius: (
-    'base': $sm-border-radius,
-    'small': $sm-border-radius,
+    'base': vars.$sm-border-radius,
+    'small': vars.$sm-border-radius,
     'round': 999px,
     'circle': 100%,
   ),
   $box-shadow: (
     '': (
-      $shadow-md,
+      vars.$shadow-md,
     ),
     'light': (
-      $shadow-sm,
+      vars.$shadow-sm,
     ),
     'lighter': (
-      $shadow-sm,
+      vars.$shadow-sm,
     ),
     'dark': (
-      $shadow-lg,
+      vars.$shadow-lg,
     ),
   ),
   $font-family: (
-    '': $font-family-main,
+    '': vars.$font-family-main,
   ),
   $font-size: (
-    'extra-large': $font-size-h1,
+    'extra-large': vars.$font-size-h1,
     'large': 18px,
-    'medium': $font-size-lg,
-    'base': $font-size-base,
+    'medium': vars.$font-size-lg,
+    'base': vars.$font-size-base,
     'small': 13px,
-    'extra-small': $font-size-sm,
+    'extra-small': vars.$font-size-sm,
   ),
   $common-component-size: (
     'large': 40px,
@@ -92,5 +91,3 @@
     'extra-light': rgba(15, 23, 42, 0.08),
   )
 );
-
-@use 'element-plus/theme-chalk/src/index.scss' as *;

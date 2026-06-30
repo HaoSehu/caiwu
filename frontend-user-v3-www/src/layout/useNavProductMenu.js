@@ -22,6 +22,10 @@ export function useNavProductMenu() {
     return groupsByType.value[key] || []
   })
 
+  function getGroupsForType(typeValue) {
+    return groupsByType.value[typeValue] || []
+  }
+
   async function loadProductTypes() {
     if (cachedProductTypes && Date.now() - cachedTimestamp < CACHE_TTL) {
       productTypes.value = cachedProductTypes
@@ -115,8 +119,10 @@ export function useNavProductMenu() {
     activeTypeValue,
     activeType,
     activeGroups,
+    getGroupsForType,
     loading,
     activateType,
+    loadGroupsForType,
     init,
     reset,
   }

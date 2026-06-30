@@ -35,6 +35,11 @@
           <span class="auth-brand__divider" />
           <span class="auth-brand__context">用户控制台</span>
         </router-link>
+        <span class="auth-shell__header-spacer" />
+        <button class="auth-shell__back" type="button" @click="handleBack">
+          <chevron-left-icon />
+          <span>返回</span>
+        </button>
       </header>
 
       <section class="auth-shell__content">
@@ -69,8 +74,10 @@
 </template>
 
 <script setup lang="ts">
+import { ChevronLeftIcon } from 'tdesign-icons-vue-next';
 import { computed, onMounted, ref, watch } from 'vue';
 import type { RouteLocationRaw } from 'vue-router';
+import { useRouter } from 'vue-router';
 
 import { useSiteBrandingStore } from '@/app/stores/siteBranding';
 
@@ -97,12 +104,21 @@ withDefaults(
 );
 
 const siteBranding = useSiteBrandingStore();
+const router = useRouter();
 const currentYear = computed(() => new Date().getFullYear());
 const logoLoadFailed = ref(false);
 const showLogo = computed(() => Boolean(siteBranding.siteLogo) && !logoLoadFailed.value);
 
 function handleLogoError() {
   logoLoadFailed.value = true;
+}
+
+function handleBack() {
+  if (window.history.length > 1) {
+    router.back();
+  } else {
+    router.push('/');
+  }
 }
 
 watch(
@@ -381,6 +397,29 @@ onMounted(() => {
   min-height: 2.75rem;
 }
 
+.auth-shell__header-spacer {
+  flex: 1;
+}
+
+.auth-shell__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.375rem 0.75rem;
+  border: none;
+  background: transparent;
+  color: var(--td-text-color-secondary);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: color 0.2s;
+  border-radius: 0.375rem;
+
+  &:hover {
+    color: var(--td-text-color-primary);
+    background: var(--td-bg-color-secondarycontainer);
+  }
+}
+
 .auth-brand {
   display: inline-flex;
   align-items: center;
@@ -393,8 +432,8 @@ onMounted(() => {
 .auth-brand__logo {
   display: block;
   width: auto;
-  max-width: 11.5rem;
-  height: 1.875rem;
+  max-width: 15rem;
+  height: 2.5rem;
   object-fit: contain;
 }
 
@@ -647,8 +686,8 @@ onMounted(() => {
   }
 
   .auth-brand__logo {
-    max-width: 9.75rem;
-    height: 1.625rem;
+    max-width: 12.5rem;
+    height: 2rem;
   }
 
   .auth-brand__mark {

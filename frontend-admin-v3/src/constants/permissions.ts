@@ -4,6 +4,7 @@ export const AdminPermissions = {
   USER_LIST: 'user.list',
   USER_DETAIL: 'user.detail',
   USER_MANAGE: 'user.manage',
+  USER_LOGIN_AS: 'user.login_as',
   USER_RECHARGE: 'user.recharge',
   VERIFICATION_LIST: 'verification.list',
   VERIFICATION_UNBIND: 'verification.unbind',

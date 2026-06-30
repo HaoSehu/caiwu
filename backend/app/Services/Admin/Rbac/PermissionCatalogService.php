@@ -77,7 +77,9 @@ class PermissionCatalogService
             return 'all';
         }
 
-        return explode('.', $permission)[1] ?? 'view';
+        $segments = explode('.', $permission);
+
+        return $segments[count($segments) - 1] ?? 'view';
     }
 
     private function detectGroup(string $permission): string
@@ -88,7 +90,7 @@ class PermissionCatalogService
             AdminPermissions::ROLE_LIST, AdminPermissions::ROLE_MANAGE => 'organization_role',
             AdminPermissions::PERMISSION_LIST => 'organization_permission',
             AdminPermissions::DASHBOARD_VIEW => 'dashboard_workbench',
-            AdminPermissions::USER_LIST, AdminPermissions::USER_DETAIL, AdminPermissions::USER_MANAGE => 'customer_profile',
+            AdminPermissions::USER_LIST, AdminPermissions::USER_DETAIL, AdminPermissions::USER_MANAGE, AdminPermissions::USER_LOGIN_AS => 'customer_profile',
             AdminPermissions::VERIFICATION_LIST, AdminPermissions::VERIFICATION_UNBIND => 'customer_verification',
             AdminPermissions::ORDER_LIST, AdminPermissions::ORDER_DETAIL, AdminPermissions::ORDER_MANAGE => 'finance_order',
             AdminPermissions::INVOICE_LIST, AdminPermissions::INVOICE_DETAIL, AdminPermissions::INVOICE_MANAGE => 'finance_invoice',
@@ -166,6 +168,9 @@ class PermissionCatalogService
             'recharge' => '充值',
             'unbind' => '驳回/解绑',
             'reply' => '回复',
+            'conversations' => '对话列表',
+            'settings' => '配置',
+            'delete' => '删除',
             'report' => '报表',
             'withdraw' => '提现',
         ][$this->detectAction($permission)] ?? $this->detectAction($permission);
@@ -183,7 +188,8 @@ class PermissionCatalogService
             AdminPermissions::SETTINGS_MANAGE,
             AdminPermissions::FINANCE_WITHDRAW,
             AdminPermissions::USER_RECHARGE,
-            AdminPermissions::VERIFICATION_UNBIND => 'high',
+            AdminPermissions::VERIFICATION_UNBIND,
+            AdminPermissions::USER_LOGIN_AS => 'high',
             default => str_ends_with($permission, '.manage') || str_ends_with($permission, '.reply') ? 'medium' : 'low',
         };
     }
@@ -232,6 +238,7 @@ class PermissionCatalogService
             AdminPermissions::USER_LIST => '查看用户列表',
             AdminPermissions::USER_DETAIL => '查看用户详情',
             AdminPermissions::USER_MANAGE => '管理用户',
+            AdminPermissions::USER_LOGIN_AS => '代登录用户',
             AdminPermissions::USER_RECHARGE => '用户充值',
             AdminPermissions::VERIFICATION_LIST => '查看实名认证',
             AdminPermissions::VERIFICATION_UNBIND => '驳回解绑实名',

@@ -1,0 +1,11 @@
+{
+  "h1Color": "rgb(16, 24, 40)",
+  "h1Opacity": "1",
+  "heroOpacity": "1",
+  "mainOpacity": "1",
+  "appOpacity": "1",
+  "pageOpacity": "1",
+  "stripOpacity": "1",
+  "bodyBg": "rgb(245, 247, 251)",
+  "transitionClasses": []
+}

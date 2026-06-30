@@ -164,7 +164,7 @@ export default defineConfig(({ mode }) => {
         imports: ['vue', 'vue-router', 'pinia'],
       }),
       Components({
-        resolvers: [ElementPlusResolver({ importStyle: false, directives: true })],
+        resolvers: [ElementPlusResolver({ importStyle: 'sass', directives: true })],
       }),
       createPrecompressedAssetsPlugin(),
       {
@@ -215,7 +215,6 @@ export default defineConfig(({ mode }) => {
       },
     },
     optimizeDeps: {
-      noDiscovery: true,
       include: [
         'vue',
         'vue-router',
@@ -230,7 +229,6 @@ export default defineConfig(({ mode }) => {
         'dayjs/plugin/localeData.js',
         'dayjs/plugin/weekOfYear.js',
         'dayjs/plugin/weekYear.js',
-        'element-plus/es',
         '@element-plus/icons-vue',
         'markdown-it',
       ],
@@ -255,7 +253,7 @@ export default defineConfig(({ mode }) => {
     css: {
       preprocessorOptions: {
         scss: {
-          additionalData: `@use "@/assets/styles/variables.scss" as *;`,
+          additionalData: `@use "@/assets/styles/element/index.scss"; @use "@/assets/styles/variables.scss" as *;`,
         },
       },
     },

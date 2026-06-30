@@ -5,6 +5,7 @@
 
 const META_SELECTORS = {
   description: 'meta[name="description"]',
+  keywords: 'meta[name="keywords"]',
   ogTitle: 'meta[property="og:title"]',
   ogDescription: 'meta[property="og:description"]',
   ogUrl: 'meta[property="og:url"]',
@@ -12,6 +13,7 @@ const META_SELECTORS = {
 }
 
 const CANONICAL_SELECTOR = 'link[rel="canonical"]'
+const STRUCTURED_DATA_SCRIPT_ID = 'route-structured-data'
 
 function writeMetaBySelector(selector, content) {
   if (typeof document === 'undefined') return
@@ -38,16 +40,37 @@ function writeMetaBySelector(selector, content) {
   }
 }
 
+function writeStructuredData(structuredData) {
+  if (typeof document === 'undefined') return
+
+  let node = document.head.querySelector(`#${STRUCTURED_DATA_SCRIPT_ID}`)
+  if (!structuredData) {
+    if (node?.parentNode) node.parentNode.removeChild(node)
+    return
+  }
+
+  if (!node) {
+    node = document.createElement('script')
+    node.id = STRUCTURED_DATA_SCRIPT_ID
+    node.type = 'application/ld+json'
+    document.head.appendChild(node)
+  }
+
+  node.textContent = JSON.stringify(structuredData)
+}
+
 /**
  * 应用页面 meta。
  * @param {Object} options
  * @param {string} [options.title]      页面标题（不含站点名后缀，站点名由 applyPageTitle 拼接）
  * @param {string} [options.description]
+ * @param {string} [options.keywords]
  * @param {string} [options.canonical]  完整 canonical URL
  * @param {string} [options.ogTitle]    默认回退到 title
  * @param {string} [options.ogDescription] 默认回退到 description
  * @param {string} [options.ogUrl]      默认回退到 canonical
  * @param {string} [options.robots]     如 'noindex,nofollow'；为空则移除 robots meta
+ * @param {Object|Object[]} [options.structuredData] 页面结构化数据；为空则移除
  */
 export function updatePageMeta(options = {}) {
   if (typeof document === 'undefined') return
@@ -55,11 +78,13 @@ export function updatePageMeta(options = {}) {
   const {
     title,
     description,
+    keywords,
     canonical,
     ogTitle = title,
     ogDescription = description,
     ogUrl = canonical,
     robots,
+    structuredData,
   } = options
 
   if (title) {
@@ -67,11 +92,13 @@ export function updatePageMeta(options = {}) {
   }
 
   writeMetaBySelector(META_SELECTORS.description, description || '')
+  writeMetaBySelector(META_SELECTORS.keywords, keywords || '')
   writeMetaBySelector(META_SELECTORS.ogTitle, ogTitle || '')
   writeMetaBySelector(META_SELECTORS.ogDescription, ogDescription || '')
   writeMetaBySelector(META_SELECTORS.ogUrl, ogUrl || '')
   writeMetaBySelector(META_SELECTORS.robots, robots || '')
   writeMetaBySelector(CANONICAL_SELECTOR, canonical || '')
+  writeStructuredData(structuredData || null)
 }
 
 /**
@@ -85,10 +112,14 @@ export function applyRouteMeta(to, baseConfig = {}) {
 
   const pageTitle = typeof meta.title === 'string' ? meta.title : ''
   const description = typeof meta.description === 'string' ? meta.description : ''
+  const keywords = typeof meta.keywords === 'string' ? meta.keywords : ''
   const canonical = meta.canonical
     ? (siteUrl ? `${siteUrl}${meta.canonical}` : meta.canonical)
     : ''
   const robots = typeof meta.robots === 'string' ? meta.robots : ''
+  const structuredData = typeof meta.structuredData === 'function'
+    ? meta.structuredData({ siteUrl, route: to })
+    : meta.structuredData
 
   // 仅当标题未包含站点名时追加后缀，避免静态页（已含完整标题）与详情页（短标题）重复拼接
   const fullTitle = pageTitle && siteName && !pageTitle.includes(siteName)
@@ -98,10 +129,12 @@ export function applyRouteMeta(to, baseConfig = {}) {
   updatePageMeta({
     title: fullTitle,
     description,
+    keywords,
     canonical,
     ogTitle: fullTitle,
     ogDescription: description,
     ogUrl: canonical,
     robots,
+    structuredData,
   })
 }

@@ -14,11 +14,13 @@
 
     <template v-if="homeContentReady && mountDeferredSections">
       <HomeSolutionSection />
+      <HomePartnerSection />
       <HomeNewsSection :notices="notices" />
       <HomeRegisterBar />
     </template>
     <template v-else>
       <HomeSectionSkeleton type="solutions" />
+      <HomeSectionSkeleton type="partner" />
       <HomeSectionSkeleton type="news" />
       <HomeSectionSkeleton type="register" />
     </template>
@@ -26,15 +28,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
 import siteApi from '@/api/site'
 import { useAppStore } from '@/stores/app'
 import HomeHeroCarousel from '@/views/website/Home/components/HomeHeroCarousel.vue'
 import HomeProductTabs from '@/views/website/Home/components/HomeProductTabs.vue'
-import HomeNewsSection from '@/views/website/Home/components/HomeNewsSection.vue'
-import HomeRegisterBar from '@/views/website/Home/components/HomeRegisterBar.vue'
 import HomeSectionSkeleton from '@/views/website/Home/components/HomeSectionSkeleton.vue'
-import HomeSolutionSection from '@/views/website/Home/components/HomeSolutionSection.vue'
+
+const HomeSolutionSection = defineAsyncComponent(() => import('@/views/website/Home/components/HomeSolutionSection.vue'))
+const HomePartnerSection = defineAsyncComponent(() => import('@/views/website/Home/components/HomePartnerSection.vue'))
+const HomeNewsSection = defineAsyncComponent(() => import('@/views/website/Home/components/HomeNewsSection.vue'))
+const HomeRegisterBar = defineAsyncComponent(() => import('@/views/website/Home/components/HomeRegisterBar.vue'))
 
 interface ProductTypeItem {
   id?: number

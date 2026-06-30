@@ -220,7 +220,7 @@ const activeIndustrySolution = computed(() => (
 
 .solution-panel__rail-item.is-active {
   color: #ffffff;
-  background: linear-gradient(90deg, #2f5ef3 0%, #3a7bff 100%);
+  background: #2f5ef3;
   font-weight: 600;
 }
 

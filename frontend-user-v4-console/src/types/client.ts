@@ -1274,6 +1274,8 @@ export interface TicketRecord {
   priority?: number | string;
   department?: string;
   content?: string;
+  close_reason?: string | null;
+  close_reason_label?: string | null;
   created_at?: string;
   updated_at?: string;
   user_id?: number;

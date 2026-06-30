@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Exceptions\BusinessException;
+use App\Models\Service;
 use App\Services\ClientServiceConsole\ServiceDetailService;
 use App\Services\ClientServiceConsole\ServiceNatService;
 use App\Services\ClientServiceConsole\ServiceSecurityGroupService;
@@ -198,6 +200,55 @@ HTML;
         ]);
 
         $this->assertTrue($allowed);
+    }
+
+    #[Test]
+    public function it_rejects_hidden_security_group_ids_for_write_operations(): void
+    {
+        $service = new class($this->createMock(OperationLogService::class), $this->createMock(ServiceDetailService::class), $this->createMock(ServiceTransformService::class), $this->createMock(ServiceNatService::class)) extends ServiceSecurityGroupService
+        {
+            public function resolveSecurityGroupContext(Service $service, bool $fresh = false): array
+            {
+                return [
+                    'groups' => [
+                        ['id' => 976, 'name' => '1'],
+                    ],
+                    'raw_groups' => [
+                        ['id' => 976, 'name' => '1'],
+                        ['id' => 1001, 'name' => '123'],
+                    ],
+                ];
+            }
+        };
+
+        $this->expectException(BusinessException::class);
+        $this->expectExceptionMessage('安全组不存在或不允许当前服务操作');
+
+        $this->invokePrivateMethod($service, 'assertSecurityGroupVisibleToCurrentHost', [new Service, 1001]);
+    }
+
+    #[Test]
+    public function it_allows_visible_security_group_ids_for_write_operations(): void
+    {
+        $service = new class($this->createMock(OperationLogService::class), $this->createMock(ServiceDetailService::class), $this->createMock(ServiceTransformService::class), $this->createMock(ServiceNatService::class)) extends ServiceSecurityGroupService
+        {
+            public function resolveSecurityGroupContext(Service $service, bool $fresh = false): array
+            {
+                return [
+                    'groups' => [
+                        ['id' => 976, 'name' => '1'],
+                    ],
+                    'raw_groups' => [
+                        ['id' => 976, 'name' => '1'],
+                        ['id' => 1001, 'name' => '123'],
+                    ],
+                ];
+            }
+        };
+
+        $context = $this->invokePrivateMethod($service, 'assertSecurityGroupVisibleToCurrentHost', [new Service, 976]);
+
+        $this->assertSame([['id' => 976, 'name' => '1']], $context['groups']);
     }
 
     private function invokePrivateMethod(object $target, string $method, array $arguments = []): mixed

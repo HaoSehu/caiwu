@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import { listSeoLandingSitemapRoutes } from '../src/data/seoLandingPages.js'
 import { loadBuildEnv } from './build-env.mjs'
 
 const distDir = path.resolve(process.cwd(), 'dist')
@@ -7,7 +8,7 @@ const DEFAULT_SITE_URL = 'https://www.coyjs.cn'
 loadBuildEnv()
 const siteUrl = normalizeSiteUrl(process.env.VITE_PUBLIC_SITE_URL || DEFAULT_SITE_URL)
 
-const publicRoutes = [
+const staticPublicRoutes = [
   { path: '/', priority: '1.0', changefreq: 'daily' },
   { path: '/products', priority: '0.9', changefreq: 'daily' },
   { path: '/about', priority: '0.6', changefreq: 'monthly' },
@@ -15,6 +16,11 @@ const publicRoutes = [
   { path: '/privacy', priority: '0.4', changefreq: 'yearly' },
   { path: '/notices', priority: '0.7', changefreq: 'daily' },
   { path: '/help', priority: '0.7', changefreq: 'weekly' },
+]
+
+const publicRoutes = [
+  ...staticPublicRoutes,
+  ...listSeoLandingSitemapRoutes(),
 ]
 
 function normalizeSiteUrl(value) {

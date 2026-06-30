@@ -18,6 +18,14 @@ export function removeClientToken() {
   driver.removeToken();
 }
 
+export function clearClientSessionArtifacts() {
+  driver.removeToken();
+
+  if (typeof window !== 'undefined') {
+    window.localStorage.removeItem('client_user');
+  }
+}
+
 export function isClientLoggedIn() {
   return driver.isLoggedIn();
 }

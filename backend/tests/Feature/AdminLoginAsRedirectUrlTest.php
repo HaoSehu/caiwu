@@ -17,7 +17,7 @@ use Tests\TestCase;
 
 class AdminLoginAsRedirectUrlTest extends TestCase
 {
-    public function test_issue_admin_login_as_code_uses_client_console_url_for_redirect(): void
+    public function test_issue_admin_login_as_code_uses_client_console_url_without_embedding_code_in_query(): void
     {
         config([
             'app.frontend_url' => 'https://www.sw7111.top',
@@ -33,8 +33,8 @@ class AdminLoginAsRedirectUrlTest extends TestCase
 
         $this->assertNotEmpty($result['login_code']);
         $this->assertSame(
-            'https://console.sw7111.top/client/login-as?code='.$result['login_code'],
-            $result['redirect_url']
+            'https://console.sw7111.top/client/login-as',
+            $result['target_url']
         );
     }
 

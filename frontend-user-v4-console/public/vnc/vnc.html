@@ -523,6 +523,20 @@
     }
   }
 
+  function readCookieValue(name) {
+    try {
+      const prefix = `${encodeURIComponent(name)}=`
+      const segments = document.cookie ? document.cookie.split('; ') : []
+      for (const segment of segments) {
+        if (segment.startsWith(prefix)) {
+          return decodeURIComponent(segment.slice(prefix.length))
+        }
+      }
+    } catch {}
+
+    return ''
+  }
+
   // 读取 storage 前的属性访问本身就可能因跨域 iframe 限制抛出 SecurityError，
   // 因此统一在 getter 外层包裹 try/catch，任何异常都静默跳过当前候选。
   function safeResolveStorage(getter) {
@@ -535,22 +549,7 @@
 
   function getAuthToken(mode = 'client') {
     const tokenKey = mode === 'admin' ? 'admin_token' : 'client_token'
-    const candidates = [
-      () => window.sessionStorage,
-      () => window.localStorage,
-      () => (window.parent && window.parent !== window ? window.parent.sessionStorage : null),
-      () => (window.parent && window.parent !== window ? window.parent.localStorage : null),
-      () => (window.opener ? window.opener.sessionStorage : null),
-      () => (window.opener ? window.opener.localStorage : null),
-    ]
-
-    for (const getStorage of candidates) {
-      const storage = safeResolveStorage(getStorage)
-      const token = String(readStorageValue(storage, tokenKey) || '').trim()
-      if (token) return token
-    }
-
-    return ''
+    return String(readCookieValue(tokenKey) || '').trim()
   }
 
   function buildRequestHeaders(extraHeaders = {}, mode = 'client') {

@@ -7,6 +7,7 @@
 
       <div class="hero-bg__video-wrap">
         <video
+          v-if="heroVideoEnabled"
           ref="videoARef"
           class="hero-bg__video"
           :class="{ 'hero-bg__video--active': activeVideoSlot === 'a' && videoReady }"
@@ -15,7 +16,7 @@
           muted
           loop
           playsinline
-          :preload="activeVideoSlot === 'a' ? 'auto' : 'none'"
+          :preload="activeVideoSlot === 'a' ? 'metadata' : 'none'"
           @loadeddata="onVideoALoadedData"
           @canplay="onVideoACanPlay"
           @loadedmetadata="onVideoMetadata($event, 'a')"
@@ -23,6 +24,7 @@
           @pause="onVideoPaused('a')"
         ></video>
         <video
+          v-if="heroVideoEnabled"
           ref="videoBRef"
           class="hero-bg__video"
           :class="{ 'hero-bg__video--active': activeVideoSlot === 'b' && videoReady }"
@@ -31,7 +33,7 @@
           muted
           loop
           playsinline
-          :preload="activeVideoSlot === 'b' ? 'auto' : 'none'"
+          :preload="activeVideoSlot === 'b' ? 'metadata' : 'none'"
           @loadeddata="onVideoBLoadedData"
           @canplay="onVideoBCanPlay"
           @loadedmetadata="onVideoMetadata($event, 'b')"
@@ -103,14 +105,6 @@
       </div>
 
       <div class="hero-mobile-nav" role="group" aria-label="轮播控制">
-        <button
-          type="button"
-          class="hero-mobile-nav__arrow"
-          aria-label="上一张"
-          @click="prevSlide"
-        >
-          <el-icon><ArrowLeft /></el-icon>
-        </button>
         <div class="hero-mobile-nav__dots">
           <button
             v-for="(slide, index) in heroSlides"
@@ -123,14 +117,6 @@
             @click="activateSlide(index)"
           ></button>
         </div>
-        <button
-          type="button"
-          class="hero-mobile-nav__arrow"
-          aria-label="下一张"
-          @click="nextSlide"
-        >
-          <el-icon><ArrowRight /></el-icon>
-        </button>
       </div>
     </div>
 
@@ -155,7 +141,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElIcon } from 'element-plus/es/components/icon/index.mjs'
-import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
+import { ArrowRight } from '@element-plus/icons-vue'
 
 
 const props = defineProps({
@@ -170,6 +156,7 @@ const router = useRouter()
 const videoARef = ref(null)
 const videoBRef = ref(null)
 const videoReady = ref(false)
+const heroVideoEnabled = ref(false)
 const activeVideoSlot = ref('a')
 const videoSlotA = ref('')
 const videoSlotB = ref('')
@@ -401,10 +388,99 @@ const MIN_ROTATION_INTERVAL = 6000
 const MAX_ROTATION_INTERVAL = 15000
 const PLAYBACK_RETRY_DELAY = 400
 const MAX_PLAYBACK_RETRIES = 3
+const HERO_VIDEO_IDLE_TIMEOUT = 1200
+const HERO_VIDEO_MOBILE_WIDTH = 768
+const SLOW_CONNECTION_TYPES = new Set(['slow-2g', '2g', '3g'])
 let rotationTimer = null
 let playbackRetryTimer = null
+let videoEnableTimer = null
+let videoEnableIdleId = null
 let playbackRetryCount = 0
 let isUnmounting = false
+
+function getNavigatorConnection() {
+  if (typeof navigator === 'undefined') return null
+  return navigator.connection || navigator.mozConnection || navigator.webkitConnection || null
+}
+
+function clearVideoSlots() {
+  videoSlotA.value = ''
+  videoSlotB.value = ''
+  activeVideoSlot.value = 'a'
+  videoReady.value = false
+}
+
+function shouldEnableHeroVideo() {
+  if (typeof window === 'undefined') return false
+  if (window.matchMedia?.(`(max-width: ${HERO_VIDEO_MOBILE_WIDTH}px)`).matches) {
+    return false
+  }
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+    return false
+  }
+
+  const connection = getNavigatorConnection()
+  if (connection?.saveData) {
+    return false
+  }
+
+  return !SLOW_CONNECTION_TYPES.has(connection?.effectiveType)
+}
+
+function clearVideoEnableSchedule() {
+  if (videoEnableTimer) {
+    window.clearTimeout(videoEnableTimer)
+    videoEnableTimer = null
+  }
+
+  if (videoEnableIdleId !== null && typeof window !== 'undefined' && typeof window.cancelIdleCallback === 'function') {
+    window.cancelIdleCallback(videoEnableIdleId)
+    videoEnableIdleId = null
+  }
+}
+
+function disableHeroVideo() {
+  clearVideoEnableSchedule()
+  heroVideoEnabled.value = false
+  resetPlaybackRetry()
+  stopPlaybackRetry()
+  pauseAllVideos()
+  clearVideoSlots()
+}
+
+function enableHeroVideo() {
+  if (!shouldEnableHeroVideo()) {
+    disableHeroVideo()
+    return
+  }
+
+  heroVideoEnabled.value = true
+  switchToSlide(activeIndex.value)
+}
+
+function scheduleHeroVideoEnable() {
+  if (!shouldEnableHeroVideo()) {
+    disableHeroVideo()
+    return
+  }
+
+  clearVideoEnableSchedule()
+
+  const activate = () => {
+    videoEnableTimer = null
+    videoEnableIdleId = null
+    if (!isUnmounting) {
+      enableHeroVideo()
+    }
+  }
+
+  if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+    videoEnableIdleId = window.requestIdleCallback(activate, { timeout: HERO_VIDEO_IDLE_TIMEOUT })
+    return
+  }
+
+  videoEnableTimer = window.setTimeout(activate, HERO_VIDEO_IDLE_TIMEOUT)
+}
 
 function getRotationInterval() {
   const src = activeSlide.value.video
@@ -526,11 +602,16 @@ function switchToSlide(index, auto = false) {
   activeIndex.value = index
   const slide = heroSlides.value[index]
   const videoSrc = slide?.video || ''
+  if (!heroVideoEnabled.value) {
+    clearVideoSlots()
+    pauseAllVideos()
+    if (auto) startRotation()
+    return
+  }
+
   if (!videoSrc) {
     resetPlaybackRetry()
-    videoSlotA.value = ''
-    videoSlotB.value = ''
-    videoReady.value = false
+    clearVideoSlots()
     pauseAllVideos()
     if (auto) startRotation()
     return
@@ -640,6 +721,7 @@ function onVideoMetadata(event, slot) {
 }
 
 watch(activeSlide, (slide) => {
+  if (!heroVideoEnabled.value) return
   if (!slide?.video) return
   const currentSlotSrc = activeVideoSlot.value === 'a' ? videoSlotA.value : videoSlotB.value
   if (currentSlotSrc === slide.video) {
@@ -657,18 +739,17 @@ function handleVisibilityChange() {
     pauseAllVideos()
   } else {
     startRotation()
-    queueActiveVideoPlayback()
+    if (heroVideoEnabled.value) {
+      queueActiveVideoPlayback()
+    } else {
+      scheduleHeroVideoEnable()
+    }
   }
 }
 
 onMounted(() => {
-  const firstVideo = activeSlide.value?.video || ''
-  if (firstVideo) {
-    videoSlotA.value = firstVideo
-    activeVideoSlot.value = 'a'
-    queueActiveVideoPlayback()
-  }
   startRotation()
+  scheduleHeroVideoEnable()
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', handleVisibilityChange)
   }
@@ -676,6 +757,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   isUnmounting = true
+  clearVideoEnableSchedule()
   stopRotation()
   stopPlaybackRetry()
   pauseAllVideos()
@@ -733,7 +815,7 @@ onBeforeUnmount(() => {
 .hero-bg__video-wrap {
   position: absolute;
   inset: 0;
-  z-index: -1;
+  z-index: 0;
 }
 
 .hero-bg__video {
@@ -756,17 +838,18 @@ onBeforeUnmount(() => {
   inset: 0;
   background: linear-gradient(
     135deg,
-    rgba(255, 255, 255, 0.82) 0%,
-    rgba(255, 255, 255, 0.56) 50%,
-    rgba(255, 255, 255, 0.36) 100%
+    rgba(255, 255, 255, 0.68) 0%,
+    rgba(255, 255, 255, 0.38) 52%,
+    rgba(255, 255, 255, 0.18) 100%
   );
 }
 
 .hero-bg__cloud {
   position: absolute;
+  z-index: 1;
   border-radius: 50%;
   filter: blur(60px);
-  opacity: 0.82;
+  opacity: 0.46;
   mix-blend-mode: screen;
 }
 
@@ -784,7 +867,7 @@ onBeforeUnmount(() => {
   width: 520px;
   height: 520px;
   background: radial-gradient(circle, rgba(236, 240, 245, 0.92), rgba(236, 240, 245, 0) 70%);
-  opacity: 0.52;
+  opacity: 0.28;
 }
 
 .hero-bg__cloud--c {
@@ -793,7 +876,7 @@ onBeforeUnmount(() => {
   width: 780px;
   height: 780px;
   background: radial-gradient(circle, rgba(221, 227, 234, 0.72), rgba(221, 227, 234, 0) 68%);
-  opacity: 0.5;
+  opacity: 0.24;
 }
 
 .hero-stage {
@@ -850,7 +933,7 @@ onBeforeUnmount(() => {
 }
 
 .hero-rail__item.is-active {
-  background: linear-gradient(90deg, #2f5ef3, #4f7cf7);
+  background: #2f5ef3;
   color: #ffffff;
   box-shadow: 0 14px 28px rgba(47, 94, 243, 0.28);
   transform: none;
@@ -881,17 +964,17 @@ onBeforeUnmount(() => {
 }
 
 .hero-rail__ribbon--hot {
-  background: linear-gradient(180deg, #fa4355, #e8213a);
+  background: #e8213a;
   box-shadow: 0 3px 8px rgba(232, 33, 58, 0.24);
 }
 
 .hero-rail__ribbon--warm {
-  background: linear-gradient(180deg, #ff8842, #f4651b);
+  background: #f4651b;
   box-shadow: 0 3px 8px rgba(244, 101, 27, 0.22);
 }
 
 .hero-rail__ribbon--new {
-  background: linear-gradient(180deg, #4f7cf7, #2f5ef3);
+  background: #2f5ef3;
   box-shadow: 0 3px 8px rgba(47, 94, 243, 0.22);
 }
 
@@ -1028,14 +1111,14 @@ onBeforeUnmount(() => {
 }
 
 .hero-cta--primary {
-  background: linear-gradient(90deg, #2f5ef3 0%, #3a7bff 100%);
+  background: #2f5ef3;
   color: #ffffff;
   box-shadow: 0 14px 30px rgba(47, 94, 243, 0.34);
 }
 
 .hero-cta--primary:hover {
   transform: translateY(-2px);
-  background: linear-gradient(90deg, #2754e3 0%, #3470ef 100%);
+  background: #2754e3;
   box-shadow: 0 20px 40px rgba(47, 94, 243, 0.45);
 }
 
@@ -1246,7 +1329,7 @@ onBeforeUnmount(() => {
   }
 
   .hero-rail__item.is-active {
-    background: linear-gradient(90deg, #2f5ef3 0%, #4f7cf7 100%);
+    background: #2f5ef3;
   }
 
   .hero-rail__arrow {
@@ -1344,28 +1427,6 @@ onBeforeUnmount(() => {
     justify-content: center;
     gap: 14px;
     padding: 6px 0 0;
-  }
-
-  .hero-mobile-nav__arrow {
-    display: grid;
-    place-items: center;
-    flex-shrink: 0;
-    width: 32px;
-    height: 32px;
-    padding: 0;
-    border: 1px solid rgba(47, 94, 243, 0.22);
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.72);
-    color: #2f5ef3;
-    font-size: 13px;
-    cursor: pointer;
-    transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
-  }
-
-  .hero-mobile-nav__arrow:active {
-    background: rgba(47, 94, 243, 0.12);
-    border-color: rgba(47, 94, 243, 0.44);
-    transform: scale(0.94);
   }
 
   .hero-mobile-nav__dots {
