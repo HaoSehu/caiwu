@@ -38,6 +38,9 @@
               </t-descriptions-item>
               <t-descriptions-item label="创建时间">{{ formatTicketTime(detail.created_at) }}</t-descriptions-item>
               <t-descriptions-item label="更新时间">{{ formatTicketTime(detail.updated_at) }}</t-descriptions-item>
+              <t-descriptions-item v-if="detail.close_reason_label" label="关闭原因">
+                {{ detail.close_reason_label }}
+              </t-descriptions-item>
             </t-descriptions>
           </aside>
 
@@ -61,6 +64,9 @@
                     </template>
                   </template>
                   <template v-else>--</template>
+                </t-descriptions-item>
+                <t-descriptions-item v-if="detail.close_reason_label" label="关闭原因">
+                  {{ detail.close_reason_label }}
                 </t-descriptions-item>
               </t-descriptions>
               <t-button v-if="!isClosed" theme="danger" variant="outline" block :loading="closing" @click="closeTicket">

@@ -62,6 +62,7 @@ router.beforeEach(async (to, _from, next) => {
 
   if (to.meta.requireAuth) {
     if (!token) {
+      useUserStore().clearLocalSession();
       next({
         path: '/client/login',
         query: { redirect: to.fullPath },
@@ -72,12 +73,13 @@ router.beforeEach(async (to, _from, next) => {
     const userStore = useUserStore();
     userStore.syncTokenFromSession();
 
-    if (!userStore.userInfo.name && !fetchingUser) {
+    if ((!userStore.profileHydrated || !userStore.userInfo.name) && !fetchingUser) {
       fetchingUser = true;
       try {
         await userStore.getUserInfo();
       } catch {
         fetchingUser = false;
+        userStore.clearLocalSession();
         next({
           path: '/client/login',
           query: { redirect: to.fullPath },

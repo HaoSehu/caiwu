@@ -107,10 +107,10 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
     return String(payload?.message || '').trim() || fallback;
   }
 
-  async function loadSecurityGroups() {
+  async function loadSecurityGroups(fresh = false) {
     securityState.loading = true;
     try {
-      const res = await clientApi.serviceSecurityGroups(serviceId.value);
+      const res = await clientApi.serviceSecurityGroups(serviceId.value, fresh ? { fresh: true } : undefined);
       const payload = res.data || {};
       securityState.supported = payload.supported !== false;
       securityState.message = String(payload.message || '');

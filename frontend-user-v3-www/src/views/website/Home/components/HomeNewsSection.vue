@@ -258,7 +258,7 @@ function openNotice(item) {
   height: 200px;
   background:
     radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.18), transparent 55%),
-    linear-gradient(135deg, #1b3aa6 0%, #1e49cf 55%, #2861f5 100%);
+    #1e49cf;
   overflow: hidden;
 }
 

@@ -49,6 +49,58 @@ class UserAccountProjectionService
     }
 
     /**
+     * @return array{
+     *     user_id:int,
+     *     nickname:string,
+     *     email:string,
+     *     cash_balance:string,
+     *     credit_limit:string,
+     *     referral_available_balance:string,
+     *     verification_status:int
+     * }
+     */
+    public function summaryForUser(int $userId): array
+    {
+        $this->ensureTablesExist();
+
+        $row = DB::table('users as u')
+            ->leftJoin('user_accounts as ua', 'ua.user_id', '=', 'u.id')
+            ->where('u.id', $userId)
+            ->select([
+                'u.id',
+                'u.nickname',
+                'u.email',
+                'u.verification_status',
+            ])
+            ->selectRaw('COALESCE(ua.cash_balance, u.balance, 0) as resolved_cash_balance')
+            ->selectRaw('COALESCE(ua.credit_limit, u.credit_limit, 0) as resolved_credit_limit')
+            ->selectRaw(
+                'CASE
+                    WHEN ua.user_id IS NULL THEN COALESCE(u.referral_available_amount, 0)
+                    WHEN ROUND(COALESCE(ua.referral_available_balance, 0), 2) = 0
+                        AND ROUND(COALESCE(u.referral_available_amount, 0), 2) <> 0
+                    THEN u.referral_available_amount
+                    ELSE COALESCE(ua.referral_available_balance, 0)
+                END as resolved_referral_available_balance'
+            )
+            ->first();
+
+        if ($row === null) {
+            throw new \RuntimeException('用户不存在');
+        }
+
+        return [
+            'user_id' => (int) $row->id,
+            'nickname' => trim((string) ($row->nickname ?? '')),
+            'email' => trim((string) ($row->email ?? '')),
+            'cash_balance' => $this->money($row->resolved_cash_balance ?? 0),
+            'credit_limit' => $this->money($row->resolved_credit_limit ?? 0),
+            'referral_available_balance' => $this->money($row->resolved_referral_available_balance ?? 0),
+            'verification_status' => (int) ($row->verification_status ?? 0),
+        ];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function backfill(bool $execute, int $chunkSize = 500, bool $syncLegacyUsers = false): array

@@ -14,6 +14,8 @@ class AdminPermissions
 
     public const USER_MANAGE = 'user.manage';
 
+    public const USER_LOGIN_AS = 'user.login_as';
+
     public const USER_RECHARGE = 'user.recharge';
 
     public const VERIFICATION_LIST = 'verification.list';

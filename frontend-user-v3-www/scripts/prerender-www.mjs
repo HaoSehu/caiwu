@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import { listSeoLandingSitemapRoutes } from '../src/data/seoLandingPages.js'
 import { loadBuildEnv } from './build-env.mjs'
 
 const distDir = path.resolve(process.cwd(), 'dist')
@@ -8,7 +9,7 @@ const DEFAULT_SITE_URL = 'https://www.coyjs.cn'
 loadBuildEnv()
 const siteUrl = normalizeSiteUrl(process.env.VITE_PUBLIC_SITE_URL || DEFAULT_SITE_URL)
 
-const routes = [
+const staticRoutes = [
   {
     path: '/',
     title: '创欧云 - 稳定、安全、高性价比的云服务器与 IDC 服务平台',
@@ -46,6 +47,11 @@ const routes = [
   },
 ]
 
+const routes = [
+  ...staticRoutes,
+  ...listSeoLandingSitemapRoutes(),
+]
+
 function normalizeSiteUrl(value) {
   return String(value || '').replace(/\/+$/, '') || DEFAULT_SITE_URL
 }
@@ -70,10 +76,20 @@ function replaceTag(html, pattern, replacement) {
   return html.replace('</head>', `  ${replacement}\n</head>`)
 }
 
+function renderStructuredData(route) {
+  if (typeof route.structuredData !== 'function') return ''
+  const payload = route.structuredData(siteUrl)
+  if (!payload) return ''
+
+  return `<script type="application/ld+json" id="route-structured-data">${JSON.stringify(payload)}</script>`
+}
+
 function renderRouteHtml(template, route) {
   const title = escapeHtml(route.title)
   const description = escapeHtml(route.description)
+  const keywords = escapeHtml(route.keywords || '')
   const canonical = canonicalFor(route.path)
+  const structuredData = renderStructuredData(route)
 
   let html = template
     .replace(/<title>.*?<\/title>/i, `<title>${title}</title>`)
@@ -82,11 +98,23 @@ function renderRouteHtml(template, route) {
     .replace(/<meta property="og:description" content=".*?" \/>/i, `<meta property="og:description" content="${description}" />`)
     .replace(/<meta property="og:url" content=".*?" \/>/i, `<meta property="og:url" content="${canonical}" />`)
 
+  if (keywords) {
+    html = html.replace(/<meta name="keywords" content=".*?" \/>/i, `<meta name="keywords" content="${keywords}" />`)
+  }
+
   html = replaceTag(
     html,
     /<link rel="canonical" href=".*?" \/>/i,
     `<link rel="canonical" href="${canonical}" />`,
   )
+
+  if (structuredData) {
+    html = replaceTag(
+      html,
+      /<script type="application\/ld\+json" id="route-structured-data">.*?<\/script>/i,
+      structuredData,
+    )
+  }
 
   return html
 }

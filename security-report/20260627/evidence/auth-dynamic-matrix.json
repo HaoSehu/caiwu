@@ -1,0 +1,383 @@
+{
+  "generated_at": "2026-06-27T13:31:46.746Z",
+  "environment": "local-127.0.0.1",
+  "client_user_id": 1,
+  "masks": {
+    "client_token_1": "17|3*******************************************0792",
+    "client_token_2": "18|W*******************************************39d8",
+    "admin_token": "19|f*******************************************8cd4",
+    "admin_token_2": "20|t*******************************************3436"
+  },
+  "test_results": [
+    {
+      "id": "AUTH-001",
+      "name": "Client info without token",
+      "status": 401,
+      "code": 40100,
+      "message": "未登录或登录已过期",
+      "pass": true
+    },
+    {
+      "id": "AUTH-002",
+      "name": "Admin info without token",
+      "status": 401,
+      "code": 40100,
+      "message": "未登录或登录已过期",
+      "pass": true
+    },
+    {
+      "id": "AUTH-003",
+      "name": "Client token on admin endpoint",
+      "status": 403,
+      "code": 40300,
+      "message": "仅允许管理员访问",
+      "pass": true
+    },
+    {
+      "id": "AUTH-004",
+      "name": "Admin token on client endpoint",
+      "status": 403,
+      "code": 40300,
+      "message": "仅允许客户访问",
+      "pass": true
+    },
+    {
+      "id": "AUTH-005",
+      "name": "Tampered client token",
+      "status": 401,
+      "code": 40100,
+      "message": "未登录或登录已过期",
+      "pass": true
+    },
+    {
+      "id": "AUTH-006",
+      "name": "Reused logged-out client token",
+      "status": 401,
+      "code": 40100,
+      "message": "未登录或登录已过期",
+      "pass": true
+    },
+    {
+      "id": "AUTH-007",
+      "name": "Second concurrent client token remains valid after first logout",
+      "status": 200,
+      "code": 0,
+      "message": "操作成功",
+      "pass": true
+    },
+    {
+      "id": "AUTH-008",
+      "name": "Reused logged-out admin token",
+      "status": 401,
+      "code": 40100,
+      "message": "未登录或登录已过期",
+      "pass": true
+    },
+    {
+      "id": "AUTH-009",
+      "name": "Admin login-as first exchange",
+      "status": 200,
+      "code": 0,
+      "message": "代登录成功",
+      "pass": true
+    },
+    {
+      "id": "AUTH-010",
+      "name": "Admin login-as replay exchange",
+      "status": 410,
+      "code": 41000,
+      "message": "代登录凭证已失效，请重新发起",
+      "pass": true
+    }
+  ],
+  "response_samples": {
+    "client_login": {
+      "code": 0,
+      "message": "登录成功",
+      "data": {
+        "token": "17|3*******************************************0792",
+        "user": {
+          "id": 1,
+          "email": "2908990438@qq.com",
+          "phone": "19219178808",
+          "nickname": "李维佳",
+          "display_name": "李维佳",
+          "login_email_alert": 1,
+          "login_notify": 1,
+          "login_location_alert": 1,
+          "password_change_alert": "[redacted]",
+          "phone_change_alert": 1,
+          "email_change_alert": 1,
+          "marketing_alert": 0,
+          "cash_balance": "99820.30",
+          "credit_limit": "0.00",
+          "referral_frozen_balance": "0.00",
+          "referral_available_balance": "0.00",
+          "referral_pending_withdrawal_balance": "0.00",
+          "referral_withdrawn_balance": "0.00",
+          "last_login_at": "2026-06-27 21:31:40",
+          "last_login_ip": "127.0.0.1"
+        }
+      },
+      "timestamp": 1782567100
+    },
+    "admin_login": {
+      "code": 0,
+      "message": "登录成功",
+      "data": {
+        "token": "19|f*******************************************8cd4",
+        "admin": {
+          "id": 1,
+          "username": "cerbo",
+          "nickname": "管理员",
+          "email": "2908990438@qq.com",
+          "role": "超级管理员",
+          "permissions": [
+            "*"
+          ]
+        }
+      },
+      "timestamp": 1782567104
+    },
+    "client_info": {
+      "code": 0,
+      "message": "操作成功",
+      "data": {
+        "id": 1,
+        "email": "2908990438@qq.com",
+        "nickname": "李维佳",
+        "display_name": "李维佳",
+        "phone": "19219178808",
+        "cash_balance": "99820.30",
+        "credit_limit": "0.00",
+        "referral_frozen_balance": "0.00",
+        "referral_available_balance": "0.00",
+        "referral_pending_withdrawal_balance": "0.00",
+        "referral_withdrawn_balance": "0.00",
+        "referral_code": "NGUXLK",
+        "referrer_user_id": null,
+        "member_level_id": 1,
+        "total_sales_amount": "0.00",
+        "member_level": {
+          "id": 1,
+          "name": "v1",
+          "code": "v1",
+          "reward_rate": "5.00"
+        },
+        "status": 1,
+        "is_verified": 0,
+        "real_name": "李维佳",
+        "id_card_masked": "6****************1",
+        "verification_status": 5,
+        "verification_message": "1",
+        "verification_certify_id": null,
+        "login_email_alert": 1,
+        "login_notify": 1,
+        "login_location_alert": 1,
+        "password_change_alert": "[redacted]",
+        "phone_change_alert": 1,
+        "email_change_alert": 1,
+        "marketing_alert": 0,
+        "alipay_account": {
+          "real_name": "",
+          "account": "",
+          "is_bound": false
+        },
+        "last_login_at": "2026-06-27 21:31:41",
+        "last_login_ip": "127.0.0.1",
+        "verified_at": null,
+        "created_at": "2025-01-17 06:30:14"
+      },
+      "timestamp": 1782567104
+    },
+    "admin_info": {
+      "code": 0,
+      "message": "操作成功",
+      "data": {
+        "id": 1,
+        "username": "cerbo",
+        "nickname": "管理员",
+        "email": "2908990438@qq.com",
+        "role": "超级管理员",
+        "permissions": [
+          "*"
+        ]
+      },
+      "timestamp": 1782567104
+    },
+    "client_on_admin": {
+      "code": 40300,
+      "message": "仅允许管理员访问",
+      "data": null,
+      "timestamp": 1782567104
+    },
+    "admin_on_client": {
+      "code": 40300,
+      "message": "仅允许客户访问",
+      "data": null,
+      "timestamp": 1782567105
+    },
+    "tampered_client": {
+      "code": 40100,
+      "message": "未登录或登录已过期",
+      "data": null,
+      "timestamp": 1782567105
+    },
+    "logout_client": {
+      "code": 0,
+      "message": "已退出登录",
+      "data": null,
+      "timestamp": 1782567105
+    },
+    "reuse_client": {
+      "code": 40100,
+      "message": "未登录或登录已过期",
+      "data": null,
+      "timestamp": 1782567105
+    },
+    "client_second_still_valid": {
+      "code": 0,
+      "message": "操作成功",
+      "data": {
+        "id": 1,
+        "email": "2908990438@qq.com",
+        "nickname": "李维佳",
+        "display_name": "李维佳",
+        "phone": "19219178808",
+        "cash_balance": "99820.30",
+        "credit_limit": "0.00",
+        "referral_frozen_balance": "0.00",
+        "referral_available_balance": "0.00",
+        "referral_pending_withdrawal_balance": "0.00",
+        "referral_withdrawn_balance": "0.00",
+        "referral_code": "NGUXLK",
+        "referrer_user_id": null,
+        "member_level_id": 1,
+        "total_sales_amount": "0.00",
+        "member_level": {
+          "id": 1,
+          "name": "v1",
+          "code": "v1",
+          "reward_rate": "5.00"
+        },
+        "status": 1,
+        "is_verified": 0,
+        "real_name": "李维佳",
+        "id_card_masked": "6****************1",
+        "verification_status": 5,
+        "verification_message": "1",
+        "verification_certify_id": null,
+        "login_email_alert": 1,
+        "login_notify": 1,
+        "login_location_alert": 1,
+        "password_change_alert": "[redacted]",
+        "phone_change_alert": 1,
+        "email_change_alert": 1,
+        "marketing_alert": 0,
+        "alipay_account": {
+          "real_name": "",
+          "account": "",
+          "is_bound": false
+        },
+        "last_login_at": "2026-06-27 21:31:41",
+        "last_login_ip": "127.0.0.1",
+        "verified_at": null,
+        "created_at": "2025-01-17 06:30:14"
+      },
+      "timestamp": 1782567105
+    },
+    "logout_admin": {
+      "code": 0,
+      "message": "已退出登录",
+      "data": null,
+      "timestamp": 1782567105
+    },
+    "reuse_admin": {
+      "code": 40100,
+      "message": "未登录或登录已过期",
+      "data": null,
+      "timestamp": 1782567105
+    },
+    "login_as_issue": {
+      "code": 0,
+      "message": "操作成功",
+      "data": {
+        "login_code": "H9VQ********************************************************Ezhk",
+        "expires_in": 120,
+        "user": {
+          "id": 1,
+          "email": "2908990438@qq.com",
+          "nickname": "李维佳"
+        },
+        "redirect_url": "http://127.0.0.1:5173/client/login-as?code=H9VQ********************************************************Ezhk"
+      },
+      "timestamp": 1782567106
+    },
+    "login_as_exchange_first": {
+      "code": 0,
+      "message": "代登录成功",
+      "data": {
+        "token": "21|1*******************************************b58e",
+        "user": {
+          "id": 1,
+          "email": "2908990438@qq.com",
+          "nickname": "李维佳"
+        }
+      },
+      "timestamp": 1782567106
+    },
+    "login_as_exchange_replay": {
+      "code": 41000,
+      "message": "代登录凭证已失效，请重新发起",
+      "data": null,
+      "timestamp": 1782567106
+    }
+  },
+  "sensitive_field_review": {
+    "client_auth_info_fields": [
+      "id",
+      "email",
+      "nickname",
+      "display_name",
+      "phone",
+      "cash_balance",
+      "credit_limit",
+      "referral_frozen_balance",
+      "referral_available_balance",
+      "referral_pending_withdrawal_balance",
+      "referral_withdrawn_balance",
+      "referral_code",
+      "referrer_user_id",
+      "member_level_id",
+      "total_sales_amount",
+      "member_level",
+      "status",
+      "is_verified",
+      "real_name",
+      "id_card_masked",
+      "verification_status",
+      "verification_message",
+      "verification_certify_id",
+      "login_email_alert",
+      "login_notify",
+      "login_location_alert",
+      "password_change_alert",
+      "phone_change_alert",
+      "email_change_alert",
+      "marketing_alert",
+      "alipay_account",
+      "last_login_at",
+      "last_login_ip",
+      "verified_at",
+      "created_at"
+    ],
+    "admin_auth_info_fields": [
+      "id",
+      "username",
+      "nickname",
+      "email",
+      "role",
+      "permissions"
+    ]
+  }
+}

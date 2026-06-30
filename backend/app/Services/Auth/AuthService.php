@@ -644,7 +644,7 @@ class AuthService
         $this->ensureClientAvailable($user);
 
         $code = Str::random(64);
-        $redirectUrl = $this->resolveAdminLoginAsRedirectUrl($code);
+        $targetUrl = $this->resolveAdminLoginAsTargetUrl();
         $cacheKey = $this->buildAdminLoginAsCacheKey($code);
         $adminId = (int) ($context['admin_id'] ?? 0);
         $ipAddress = trim((string) ($context['ip_address'] ?? ''));
@@ -679,11 +679,11 @@ class AuthService
                 'email' => (string) $user->email,
                 'nickname' => (string) $user->nickname,
             ],
-            'redirect_url' => $redirectUrl,
+            'target_url' => $targetUrl,
         ];
     }
 
-    private function resolveAdminLoginAsRedirectUrl(string $code): string
+    private function resolveAdminLoginAsTargetUrl(): string
     {
         $consoleUrl = $this->normalizeConfiguredUrl((string) config('app.client_console_url', ''));
         if ($consoleUrl === '') {
@@ -695,7 +695,7 @@ class AuthService
             throw new BusinessException('CLIENT_CONSOLE_URL 不能与 ADMIN_URL 相同，无法生成客户端代登录链接', 50000, 500);
         }
 
-        return $consoleUrl.'/client/login-as?code='.rawurlencode($code);
+        return $consoleUrl.'/client/login-as';
     }
 
     private function normalizeConfiguredUrl(string $url): string

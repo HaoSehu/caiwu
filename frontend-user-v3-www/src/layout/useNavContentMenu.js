@@ -83,7 +83,7 @@ export function useNavContentMenu(contentType) {
   })
 
   function activateCategory(cat) {
-    activeCategory.value = cat
+    activeCategory.value = activeCategory.value === cat ? null : cat
   }
 
   return { items, loading, init, categories, activeCategory, filteredItems, activateCategory }

@@ -45,7 +45,7 @@ function goRegister() {
   border-radius: 14px;
   width: min(1200px, calc(100% - 48px));
   margin: 0 auto;
-  background: linear-gradient(120deg, #1b3aa6 0%, #1e49cf 50%, #2861f5 100%);
+  background: #1e49cf;
   box-shadow: 0 24px 48px rgba(27, 58, 166, 0.22);
 
   /* 9.1 Visual Mode: Grain Texture */

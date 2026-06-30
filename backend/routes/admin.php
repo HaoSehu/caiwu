@@ -99,7 +99,6 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function () {
         Route::put('/users/{user}', [UserController::class, 'update']);
         Route::delete('/users/{user}', [UserController::class, 'destroy']);
         Route::post('/users/{user}/toggle-status', [UserController::class, 'toggleStatus']);
-        Route::post('/users/{user}/login-as', [UserController::class, 'loginAs']);
         Route::post('/users/{user}/services', [UserController::class, 'storeService']);
         Route::delete('/users/{user}/services/{serviceId}', [UserController::class, 'destroyService']);
         Route::put('/users/{user}/services/{serviceId}/meta', [UserController::class, 'updateServiceMeta']);
@@ -110,6 +109,10 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function () {
         Route::post('/users/{user}/services/{serviceId}/refund', [UserController::class, 'refundService']);
         Route::post('/services/custom-hostnames/batch', [ServiceController::class, 'batchUpdateCustomHostnames']);
         Route::get('/os-options', [UserController::class, 'osOptions']);
+    });
+
+    Route::middleware(['permission:'.AdminPermissions::USER_LOGIN_AS])->group(function () {
+        Route::post('/users/{user}/login-as', [UserController::class, 'loginAs']);
     });
 
     Route::middleware(['permission:'.AdminPermissions::USER_RECHARGE])->group(function () {
@@ -345,4 +348,5 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function () {
         Route::post('/media-files', [MediaFileController::class, 'store']);
         Route::delete('/media-files/{mediaFile}', [MediaFileController::class, 'destroy']);
     });
+
 });

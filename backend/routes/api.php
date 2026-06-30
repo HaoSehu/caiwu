@@ -32,7 +32,6 @@ Route::get('/site/notices', [SiteContentController::class, 'notices']);
 Route::get('/site/notices/{articleId}', [SiteContentController::class, 'noticeDetail']);
 Route::get('/site/help-articles', [SiteContentController::class, 'helpArticles']);
 Route::get('/site/help-articles/{articleId}', [SiteContentController::class, 'helpDetail']);
-
 // 健康检查
 Route::get('/health', function () {
     return response()->json([

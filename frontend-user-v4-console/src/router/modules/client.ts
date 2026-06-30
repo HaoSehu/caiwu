@@ -8,7 +8,6 @@ import {
   FileIcon,
   GiftIcon,
   HelpCircleIcon,
-  MoneyIcon,
   NotificationIcon,
   ServerIcon,
   ServiceIcon,

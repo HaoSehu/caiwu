@@ -4,6 +4,12 @@ import { applyDocumentTitle, deriveInitials, syncDocumentTitle, updateFavicon } 
 import siteApi from '@/api/site'
 import { DEFAULT_SUPPORT_CONTACTS } from '@/data/supportContacts'
 
+declare global {
+  interface Window {
+    __CW_SITE_CONFIG__?: Record<string, unknown> | null
+  }
+}
+
 const DEFAULT_SITE_NAME = import.meta.env.VITE_APP_TITLE || '创欧云'
 const DEFAULT_SITE_LOGO = '/branding/logo.svg'
 const DEFAULT_FAVICON = '/branding/logo1.svg'
@@ -18,23 +24,40 @@ function pick(raw, keys, fallback) {
   return fallback
 }
 
+function readBootstrappedSiteConfig() {
+  if (typeof window === 'undefined') {
+    return {}
+  }
+
+  return window.__CW_SITE_CONFIG__ && typeof window.__CW_SITE_CONFIG__ === 'object'
+    ? window.__CW_SITE_CONFIG__
+    : {}
+}
+
 export const useSiteBrandingStore = defineStore('site-branding', () => {
+  const initialSiteConfig = readBootstrappedSiteConfig()
   const sidebarCollapsed = ref(false)
-  const siteName = ref(DEFAULT_SITE_NAME)
-  const browserTitle = ref(DEFAULT_SITE_NAME)
-  const siteLogo = ref(DEFAULT_SITE_LOGO)
-  const siteFavicon = ref(DEFAULT_FAVICON)
-  const serviceQqGroup = ref(DEFAULT_SUPPORT_CONTACTS.qqGroup)
-  const serviceEmail = ref(DEFAULT_SUPPORT_CONTACTS.email)
-  const serviceHours = ref(DEFAULT_SUPPORT_CONTACTS.hours)
-  const supportGroupTitle = ref('')
-  const supportGroupText = ref('')
-  const supportGroupQr = ref(DEFAULT_SUPPORT_CONTACTS.groupQr)
-  const supportGroupLink = ref('')
-  const termsUrl = ref('')
-  const privacyUrl = ref('')
-  const icpRecord = ref(String(import.meta.env.VITE_ICP_RECORD || ''))
-  const valueAddedLicense = ref(String(import.meta.env.VITE_VALUE_ADDED_LICENSE || ''))
+  const siteName = ref(pick(initialSiteConfig, ['site_name'], DEFAULT_SITE_NAME))
+  const browserTitle = ref(pick(initialSiteConfig, ['browser_title'], siteName.value || DEFAULT_SITE_NAME))
+  const siteLogo = ref(pick(initialSiteConfig, ['site_logo'], DEFAULT_SITE_LOGO))
+  const siteFavicon = ref(pick(initialSiteConfig, ['site_favicon'], DEFAULT_FAVICON))
+  const serviceQqGroup = ref(pick(initialSiteConfig, ['service_qq_group', 'serviceQqGroup'], DEFAULT_SUPPORT_CONTACTS.qqGroup))
+  const serviceEmail = ref(pick(initialSiteConfig, ['service_email', 'serviceEmail'], DEFAULT_SUPPORT_CONTACTS.email))
+  const serviceHours = ref(pick(initialSiteConfig, ['service_hours', 'serviceHours'], DEFAULT_SUPPORT_CONTACTS.hours))
+  const supportGroupTitle = ref(pick(initialSiteConfig, ['support_group_title', 'supportGroupTitle'], ''))
+  const supportGroupText = ref(pick(initialSiteConfig, ['support_group_text', 'supportGroupText'], ''))
+  const supportGroupQr = ref(pick(initialSiteConfig, ['support_group_qr', 'supportGroupQr'], DEFAULT_SUPPORT_CONTACTS.groupQr))
+  const supportGroupLink = ref(pick(initialSiteConfig, ['support_group_link', 'supportGroupLink'], ''))
+  const termsUrl = ref(pick(initialSiteConfig, ['terms_url'], ''))
+  const privacyUrl = ref(pick(initialSiteConfig, ['privacy_url'], ''))
+  const icpRecord = ref(pick(initialSiteConfig, ['icp_record', 'icpRecord'], String(import.meta.env.VITE_ICP_RECORD || '')))
+  const valueAddedLicense = ref(
+    pick(
+      initialSiteConfig,
+      ['value_added_license', 'valueAddedLicense', 'value_added_telecom_license'],
+      String(import.meta.env.VITE_VALUE_ADDED_LICENSE || ''),
+    ),
+  )
   const brandInitials = computed(() => deriveInitials(siteName.value))
 
   let fetchPromise = null

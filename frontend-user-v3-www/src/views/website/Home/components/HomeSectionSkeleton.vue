@@ -124,6 +124,20 @@
         </div>
       </div>
 
+      <div v-else-if="type === 'partner'" class="home-section-skeleton__partner">
+        <div class="home-section-skeleton__heading">
+          <span class="home-section-skeleton__line home-section-skeleton__line--title"></span>
+          <span class="home-section-skeleton__line home-section-skeleton__line--desc"></span>
+        </div>
+        <div class="home-section-skeleton__partner-rows">
+          <span
+            v-for="item in 6"
+            :key="`partner-row-${item}`"
+            class="home-section-skeleton__partner-strip"
+          ></span>
+        </div>
+      </div>
+
       <div v-else class="home-section-skeleton__register">
         <span class="home-section-skeleton__line home-section-skeleton__line--register-title"></span>
         <span class="home-section-skeleton__pill home-section-skeleton__pill--button"></span>
@@ -308,7 +322,7 @@ defineProps({
   justify-content: space-between;
   gap: 24px;
   padding: 28px 40px;
-  background: linear-gradient(120deg, #1b3aa6 0%, #1e49cf 50%, #2861f5 100%);
+  background: #1e49cf;
   border: none;
   box-shadow: 0 24px 48px rgba(27, 58, 166, 0.18);
 }
@@ -494,6 +508,38 @@ defineProps({
   .home-section-skeleton--hero {
     min-height: 560px;
     padding: 92px 0 28px;
+  }
+}
+
+.home-section-skeleton__partner {
+  display: grid;
+  gap: 28px;
+}
+
+.home-section-skeleton__partner-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.home-section-skeleton__partner-strip {
+  display: block;
+  height: 80px;
+  border-radius: 8px;
+
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(90deg, rgba(222, 230, 242, 0.92) 0%, rgba(245, 248, 252, 0.98) 50%, rgba(222, 230, 242, 0.92) 100%);
+  background-size: 200% 100%;
+  animation: home-section-skeleton-shimmer 1.4s ease-out infinite;
+}
+
+@media (max-width: 640px) {
+  .home-section-skeleton__partner-strip {
+    height: 56px;
+  }
+  .home-section-skeleton__partner-rows {
+    gap: 6px;
   }
 }
 </style>

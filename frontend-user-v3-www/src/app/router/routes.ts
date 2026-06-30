@@ -1,5 +1,13 @@
 import { lazyRouteView } from '@caiwu/shared/runtime'
+import { buildSeoLandingRouteMeta, seoLandingPages } from '@/data/seoLandingPages'
 import type { RouteRecordRaw } from 'vue-router'
+
+const seoLandingRoutes: RouteRecordRaw[] = seoLandingPages.map((page) => ({
+  path: page.path.replace(/^\/+/, ''),
+  name: page.routeName,
+  component: lazyRouteView(() => import('@/pages/website/seo-landing/index.vue')),
+  meta: buildSeoLandingRouteMeta(page),
+}))
 
 export const clientRoutes: RouteRecordRaw[] = [
   {
@@ -26,6 +34,7 @@ export const clientRoutes: RouteRecordRaw[] = [
           canonical: '/products',
         },
       },
+      ...seoLandingRoutes,
       {
         path: 'products/:typeId(\\d+)/:groupId(\\d+)/:childGroupId(\\d+)/:productId(\\d+)',
         name: 'WwwProductsPurchaseWithChild',

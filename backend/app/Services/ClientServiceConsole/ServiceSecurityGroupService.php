@@ -157,7 +157,15 @@ class ServiceSecurityGroupService
             'product.supplier',
         ]);
 
-        $result = $this->callSecurityGroupAction($service, 'linkSecurityGroup', ['id' => $groupId], '应用安全组');
+        $securityGroupContext = $this->assertSecurityGroupVisibleToCurrentHost($service, $groupId);
+
+        $result = $this->callSecurityGroupAction(
+            $service,
+            'linkSecurityGroup',
+            ['id' => $groupId],
+            '应用安全组',
+            $securityGroupContext
+        );
         $this->forgetSecurityGroupContextCache($service);
 
         $message = trim((string) ($result['response']['msg'] ?? '')) ?: '安全组已应用';
@@ -183,7 +191,15 @@ class ServiceSecurityGroupService
             'product.supplier',
         ]);
 
-        $result = $this->callSecurityGroupAction($service, 'delSecurityGroup', ['id' => $groupId], '删除安全组');
+        $securityGroupContext = $this->assertSecurityGroupVisibleToCurrentHost($service, $groupId);
+
+        $result = $this->callSecurityGroupAction(
+            $service,
+            'delSecurityGroup',
+            ['id' => $groupId],
+            '删除安全组',
+            $securityGroupContext
+        );
         $this->forgetSecurityGroupContextCache($service);
 
         $message = trim((string) ($result['response']['msg'] ?? '')) ?: '安全组已删除';
@@ -209,14 +225,22 @@ class ServiceSecurityGroupService
             'product.supplier',
         ]);
 
-        $result = $this->callSecurityGroupAction($service, 'createSecurityRule', [
-            'id' => $groupId,
-            'direction' => trim((string) ($data['direction'] ?? '')),
-            'protocol' => trim((string) ($data['protocol'] ?? '')),
-            'port' => trim((string) ($data['port'] ?? '')),
-            'ip' => trim((string) ($data['ip'] ?? '')),
-            'description' => trim((string) ($data['description'] ?? '')),
-        ], '创建安全组规则');
+        $securityGroupContext = $this->assertSecurityGroupVisibleToCurrentHost($service, $groupId);
+
+        $result = $this->callSecurityGroupAction(
+            $service,
+            'createSecurityRule',
+            [
+                'id' => $groupId,
+                'direction' => trim((string) ($data['direction'] ?? '')),
+                'protocol' => trim((string) ($data['protocol'] ?? '')),
+                'port' => trim((string) ($data['port'] ?? '')),
+                'ip' => trim((string) ($data['ip'] ?? '')),
+                'description' => trim((string) ($data['description'] ?? '')),
+            ],
+            '创建安全组规则',
+            $securityGroupContext
+        );
         $this->forgetSecurityGroupContextCache($service);
 
         $message = trim((string) ($result['response']['msg'] ?? '')) ?: '规则创建成功';
@@ -249,10 +273,18 @@ class ServiceSecurityGroupService
             'product.supplier',
         ]);
 
-        $result = $this->callSecurityGroupAction($service, 'delSecurityRule', [
-            'id' => $ruleId,
-            'group' => $groupId,
-        ], '删除安全组规则');
+        $securityGroupContext = $this->assertSecurityGroupVisibleToCurrentHost($service, $groupId);
+
+        $result = $this->callSecurityGroupAction(
+            $service,
+            'delSecurityRule',
+            [
+                'id' => $ruleId,
+                'group' => $groupId,
+            ],
+            '删除安全组规则',
+            $securityGroupContext
+        );
         $this->forgetSecurityGroupContextCache($service);
 
         $message = trim((string) ($result['response']['msg'] ?? '')) ?: '规则已删除';
@@ -331,9 +363,9 @@ class ServiceSecurityGroupService
 
     // ── Private helpers ────────────────────────────────────────────────────
 
-    private function callSecurityGroupAction(Service $service, string $func, array $payload, string $action): array
+    private function callSecurityGroupAction(Service $service, string $func, array $payload, string $action, ?array $context = null): array
     {
-        $context = $this->resolveSecurityGroupContext($service);
+        $context ??= $this->resolveSecurityGroupContext($service);
         $runtime = $this->detailService->resolveRuntimeCapabilityForSupplier($context['supplier']);
         $response = $runtime->post(
             $context['supplier'],
@@ -379,6 +411,24 @@ class ServiceSecurityGroupService
             ! $this->isSecurityGroupBoundToBindings($bindings, $groupId, (array) ($context['raw_groups'] ?? [])),
             new BusinessException('安全组不存在或未绑定到当前主机', 42200)
         );
+    }
+
+    private function assertSecurityGroupVisibleToCurrentHost(Service $service, int $groupId): array
+    {
+        if ($groupId <= 0) {
+            throw new BusinessException('安全组不存在或不允许当前服务操作', 42200);
+        }
+
+        $context = $this->resolveSecurityGroupContext($service, true);
+        $visible = collect((array) ($context['groups'] ?? []))
+            ->contains(fn ($item) => is_array($item) && (int) ($item['id'] ?? 0) === $groupId);
+
+        throw_if(
+            ! $visible,
+            new BusinessException('安全组不存在或不允许当前服务操作', 42200)
+        );
+
+        return $context;
     }
 
     private function isSecurityGroupBoundToBindings(array $bindings, int $groupId, array $availableGroups = []): bool
@@ -592,7 +642,31 @@ class ServiceSecurityGroupService
             true
         );
 
-        return array_values(array_filter($groups, function (array $group) use ($ownedIds, $ownedNames): bool {
+        return array_values(array_map(function (array $group) use ($ownedIds, $ownedNames): array {
+            // 用户拥有的安全组，应允许删除和应用
+            $groupId = (int) ($group['id'] ?? 0);
+            $normalizedName = $this->normalizeKeywordText((string) ($group['name'] ?? ''));
+            $isOwned = ($groupId > 0 && isset($ownedIds[$groupId])) || ($normalizedName !== '' && isset($ownedNames[$normalizedName]));
+            $isApplied = (bool) ($group['is_applied'] ?? false);
+
+            if ($isOwned) {
+                // 强制启用删除和应用权限（上游HTML解析可能失败）
+                $group['can_delete'] = true;
+                $group['can_apply'] = true;
+                // 已应用的安全组不能重复应用
+                $group['apply_disabled'] = $isApplied;
+                // 删除不限制（上游会判断是否允许删除已应用的安全组）
+                $group['delete_disabled'] = false;
+                if (empty($group['delete_text'])) {
+                    $group['delete_text'] = '删除';
+                }
+                if (empty($group['apply_text'])) {
+                    $group['apply_text'] = '应用';
+                }
+            }
+
+            return $group;
+        }, array_filter($groups, function (array $group) use ($ownedIds, $ownedNames): bool {
             if ((bool) ($group['is_applied'] ?? false)) {
                 return true;
             }
@@ -605,7 +679,7 @@ class ServiceSecurityGroupService
             $normalizedName = $this->normalizeKeywordText((string) ($group['name'] ?? ''));
 
             return $normalizedName !== '' && isset($ownedNames[$normalizedName]);
-        }));
+        })));
     }
 
     private function resolveOwnedSecurityGroupBindingsForService(Service $service): array

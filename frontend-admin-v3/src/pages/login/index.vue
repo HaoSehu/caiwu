@@ -29,7 +29,7 @@
             clearable
           />
         </t-form-item>
-        <t-form-item>
+        <t-form-item class="login-submit-item">
           <t-button block theme="primary" size="large" type="submit" :loading="loading">
             登录
           </t-button>
@@ -157,6 +157,12 @@ async function handleLogin() {
   p {
     font-size: var(--td-font-size-size-3, 14px);
     color: var(--td-text-color-secondary, #5b6b82);
+  }
+}
+
+.login-submit-item {
+  :deep(.t-form__label) {
+    display: none;
   }
 }
 

@@ -11,13 +11,14 @@
     "lint": "eslint src scripts tests --ext .js,.ts,.vue",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
     "check:source-health": "node ./scripts/check-source-health.mjs",
-    "test": "node ./tests/machineSpecOptions.test.mjs && node ./tests/productCatalogNormalizer.test.mjs && node ./tests/configNumberOptionBounds.test.mjs",
+    "test": "node ./tests/machineSpecOptions.test.mjs && node ./tests/productCatalogNormalizer.test.mjs && node ./tests/configNumberOptionBounds.test.mjs && node ./tests/seoLandingPages.test.mjs",
     "verify:refactor": "node ./scripts/verify-refactor.mjs"
   },
   "dependencies": {
     "@caiwu/shared": "file:../shared",
     "@element-plus/icons-vue": "^2.3.0",
     "axios": "^1.13.6",
+    "dayjs": "^1.11.21",
     "element-plus": "^2.9.0",
     "markdown-it": "^14.2.0",
     "pinia": "^3.0.4",

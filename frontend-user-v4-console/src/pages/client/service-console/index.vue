@@ -318,7 +318,7 @@
             <t-card title="安全组" :bordered="false">
               <template #actions>
                 <t-space>
-                  <t-button :loading="securityState.loading" @click="loadSecurityGroups">刷新</t-button>
+                  <t-button :loading="securityState.loading" @click="loadSecurityGroups(true)">刷新</t-button>
                   <t-button theme="primary" :disabled="securityState.supported === false" @click="openSecurityGroupDialog">新建安全组</t-button>
                 </t-space>
               </template>

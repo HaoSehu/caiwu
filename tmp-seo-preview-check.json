@@ -1,0 +1,80 @@
+[
+  {
+    "path": "/cloud-server",
+    "label": "desktop",
+    "h1": "稳定易用的云服务器",
+    "canonical": "https://www.coyjs.cn/cloud-server",
+    "hasStructuredData": true,
+    "faqCount": 3,
+    "overflow": 0,
+    "splash": false,
+    "heroHeight": 520,
+    "productCards": 3,
+    "messages": []
+  },
+  {
+    "path": "/hong-kong-server",
+    "label": "desktop",
+    "h1": "面向亚太业务的香港服务器",
+    "canonical": "https://www.coyjs.cn/hong-kong-server",
+    "hasStructuredData": true,
+    "faqCount": 3,
+    "overflow": 0,
+    "splash": false,
+    "heroHeight": 520,
+    "productCards": 3,
+    "messages": []
+  },
+  {
+    "path": "/us-server",
+    "label": "desktop",
+    "h1": "适合海外部署的美国服务器",
+    "canonical": "https://www.coyjs.cn/us-server",
+    "hasStructuredData": true,
+    "faqCount": 3,
+    "overflow": 0,
+    "splash": false,
+    "heroHeight": 520,
+    "productCards": 3,
+    "messages": []
+  },
+  {
+    "path": "/high-defense-server",
+    "label": "desktop",
+    "h1": "面向防护需求的高防服务器",
+    "canonical": "https://www.coyjs.cn/high-defense-server",
+    "hasStructuredData": true,
+    "faqCount": 3,
+    "overflow": 0,
+    "splash": false,
+    "heroHeight": 520,
+    "productCards": 3,
+    "messages": []
+  },
+  {
+    "path": "/cloud-pc",
+    "label": "desktop",
+    "h1": "灵活可用的云电脑",
+    "canonical": "https://www.coyjs.cn/cloud-pc",
+    "hasStructuredData": true,
+    "faqCount": 3,
+    "overflow": 0,
+    "splash": false,
+    "heroHeight": 520,
+    "productCards": 3,
+    "messages": []
+  },
+  {
+    "path": "/cloud-server",
+    "label": "mobile",
+    "h1": "稳定易用的云服务器",
+    "canonical": "https://www.coyjs.cn/cloud-server",
+    "hasStructuredData": true,
+    "faqCount": 3,
+    "overflow": 0,
+    "splash": false,
+    "heroHeight": 513.640625,
+    "productCards": 3,
+    "messages": []
+  }
+]

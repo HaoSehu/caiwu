@@ -652,8 +652,10 @@ import { productApi, type ProductRecord } from '@/api/product';
 import { supplierApi } from '@/api/supplier';
 import { userApi, type AdminUser, type PageParams } from '@/api/user';
 import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
+import { AdminPermissions } from '@/constants/permissions';
 import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
 import { required } from '@/utils/formRules';
+import { hasAdminPermission } from '@/utils/permission';
 import { toUserMessage, errorMessage } from '@/utils/userMessage';
 import { INVOICE_STATUS_MAP, SERVICE_STATUS_MAP, toLabelMap, toSelectOptions, toTagTypeMap } from '@shared/statusConfig';
 
@@ -748,6 +750,10 @@ const invoiceDrawer = reactive({
   currentId: 0,
   detail: { invoice: {}, payments: [], items: [], logs: [] } as Row,
 });
+const canLoginAs = computed(() => hasAdminPermission(AdminPermissions.USER_LOGIN_AS));
+const LOGIN_AS_READY_EVENT = 'caiwu:login-as-ready';
+const LOGIN_AS_CODE_EVENT = 'caiwu:login-as-code';
+const LOGIN_AS_READY_TIMEOUT_MS = 10000;
 const addServiceProductId = ref<number | undefined>();
 const addServiceProductIdArray = computed<(string | number)[]>({
   get: () => (addServiceProductId.value ? [addServiceProductId.value] : []),
@@ -1274,6 +1280,11 @@ function handleToggleStatus() {
 }
 
 async function handleLoginAs() {
+  if (!canLoginAs.value) {
+    MessagePlugin.error('当前账号没有代登录权限');
+    return;
+  }
+
   loginAsLoading.value = true;
   try {
     const response = await userApi.loginAs(userId.value);
@@ -1282,27 +1293,63 @@ async function handleLoginAs() {
       MessagePlugin.error('未获取到代登录凭证');
       return;
     }
-    const target = resolveLoginAsTarget(response.redirect_url, code);
-    window.open(target, '_blank', 'noopener,noreferrer');
+    const target = resolveLoginAsTarget(response.target_url);
+    const popup = window.open(target, '_blank');
+    if (!popup) {
+      MessagePlugin.error('娴忚鍣ㄦ嫤姝簡浠ｇ櫥褰曠獥鍙ｏ紝璇峰厑璁稿脊绐楀悗閲嶈瘯');
+      return;
+    }
+
+    await waitForLoginAsReady(popup, target);
+    popup.postMessage({ type: LOGIN_AS_CODE_EVENT, code }, new URL(target, window.location.origin).origin);
     MessagePlugin.success('已打开客户端登录页');
+  } catch (error) {
+    MessagePlugin.error(errorMessage(error, '代登录失败'));
   } finally {
     loginAsLoading.value = false;
   }
 }
 
-function resolveLoginAsTarget(redirectUrl: string | undefined, code: string) {
-  const fallbackPath = `/client/login-as?code=${encodeURIComponent(code)}`;
-  const rawTarget = String(redirectUrl || '').trim();
+function resolveLoginAsTarget(targetUrl: string | undefined) {
+  const fallbackPath = '/client/login-as';
+  const rawTarget = String(targetUrl || '').trim();
   if (!rawTarget) return fallbackPath;
 
   try {
     const target = new URL(rawTarget, window.location.origin);
     target.pathname = '/client/login-as';
-    target.searchParams.set('code', code);
+    target.searchParams.delete('code');
     return target.toString();
   } catch {
     return fallbackPath;
   }
+}
+
+function waitForLoginAsReady(targetWindow: Window, targetUrl: string) {
+  const targetOrigin = new URL(targetUrl, window.location.origin).origin;
+
+  return new Promise<void>((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      window.removeEventListener('message', handleMessage);
+      reject(new Error('瀹㈡埛绔唬鐧诲綍绐楀彛鏈畬鎴愬垵濮嬪寲'));
+    }, LOGIN_AS_READY_TIMEOUT_MS);
+
+    function handleMessage(event: MessageEvent) {
+      if (event.source !== targetWindow || event.origin !== targetOrigin) {
+        return;
+      }
+
+      if (event.data?.type !== LOGIN_AS_READY_EVENT) {
+        return;
+      }
+
+      window.clearTimeout(timer);
+      window.removeEventListener('message', handleMessage);
+      resolve();
+    }
+
+    window.addEventListener('message', handleMessage);
+  });
 }
 
 async function openServiceDrawer(row: Row) {

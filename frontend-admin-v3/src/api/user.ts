@@ -104,7 +104,7 @@ export const userApi = {
   toggleStatus: (id: number | string) => request.post({ url: `/admin/users/${id}/toggle-status` }),
   recharge: (id: number | string, data: UserRechargePayload) =>
     request.post({ url: `/admin/users/${id}/recharge`, data }),
-  loginAs: (id: number | string) => request.post<{ login_code?: string; redirect_url?: string }>({ url: `/admin/users/${id}/login-as` }),
+  loginAs: (id: number | string) => request.post<{ login_code?: string; target_url?: string }>({ url: `/admin/users/${id}/login-as` }),
   services: (id: number | string, params: PageParams) =>
     request.get<{ list?: Record<string, unknown>[]; total?: number; page?: number; page_size?: number }>({
       url: `/admin/users/${id}/services`,
