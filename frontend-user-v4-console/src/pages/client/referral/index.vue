@@ -32,7 +32,7 @@
           <t-tag :theme="isAlipayBound ? 'success' : 'warning'" variant="light">{{ isAlipayBound ? '已绑定' : '提现前需先绑定' }}</t-tag>
         </template>
         <div v-if="!isAlipayBound" class="referral-empty">
-          <t-empty description="提现前需要先绑定支付宝，并完成该手机号的短信验证。" />
+          <t-empty description="提现前需要先绑定支付宝，并完成该手机号的短信验证，无需上传支付宝图片。" />
           <t-button theme="primary" @click="openBindDialog">立即绑定</t-button>
         </div>
         <t-form v-else class="withdraw-form" layout="inline">
@@ -82,6 +82,7 @@
 
     <t-dialog v-model:visible="bindDialogVisible" header="绑定提现支付宝" width="min(30rem, calc(100vw - 2rem))">
       <t-form label-align="top">
+        <p class="bind-dialog-tip">仅需填写实名、支付宝绑定手机号和短信验证码，无需上传支付宝图片。</p>
         <t-form-item label="真实姓名"><t-input v-model="bindForm.real_name" placeholder="请输入支付宝实名姓名" /></t-form-item>
         <t-form-item label="支付宝手机号"><t-input v-model="bindForm.account" placeholder="请输入支付宝绑定手机号" /></t-form-item>
         <t-form-item label="短信验证码"><t-input v-model="bindForm.code" placeholder="请输入短信验证码" /></t-form-item>
@@ -204,6 +205,12 @@ const logColumns: PrimaryTableCol[] = [
 
 .referral-card p {
   margin: var(--td-comp-margin-s) 0 0;
+  color: var(--td-text-color-secondary);
+  font: var(--td-font-body-small);
+}
+
+.bind-dialog-tip {
+  margin: 0 0 var(--td-comp-margin-s);
   color: var(--td-text-color-secondary);
   font: var(--td-font-body-small);
 }

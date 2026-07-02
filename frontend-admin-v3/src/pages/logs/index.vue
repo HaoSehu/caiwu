@@ -39,6 +39,23 @@
           </t-select>
           <t-input v-if="showFilter('phone')" v-model="filters.phone" clearable placeholder="输入接收手机号" @enter="handleLogSearch" />
           <t-input v-if="showFilter('email')" v-model="filters.email" clearable placeholder="输入收件邮箱" @enter="handleLogSearch" />
+          <t-select v-if="showFilter('gateway')" v-model="filters.gateway" clearable placeholder="支付网关">
+            <t-option v-for="item in gatewayOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </t-select>
+          <t-select v-if="showFilter('action')" v-model="filters.action" clearable placeholder="网关操作">
+            <t-option v-for="item in gatewayActionOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </t-select>
+          <t-select v-if="showFilter('result_status')" v-model="filters.result_status" clearable placeholder="结果状态">
+            <t-option v-for="item in gatewayResultOptions" :key="String(item.value)" :label="item.label" :value="item.value" />
+          </t-select>
+          <t-select v-if="showFilter('actor_type')" v-model="filters.actor_type" clearable placeholder="操作人类型">
+            <t-option label="管理员" value="admin" />
+            <t-option label="客户" value="client" />
+            <t-option label="系统" value="system" />
+          </t-select>
+          <t-select v-if="showFilter('subject_type')" v-model="filters.subject_type" clearable placeholder="关联类型">
+            <t-option v-for="item in activitySubjectOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </t-select>
           <t-input v-if="showFilter('keyword')" v-model="filters.keyword" clearable :placeholder="keywordPlaceholder" @enter="handleLogSearch">
             <template #suffix-icon><search-icon /></template>
           </t-input>
@@ -91,16 +108,38 @@
               <t-tag :theme="levelTheme(row.level)" variant="light">{{ fieldValue(row.level) }}</t-tag>
             </template>
             <template #status="{ row }">
-              <t-tag :theme="statusTheme(row.status)" variant="light">{{ statusLabel(row.status) }}</t-tag>
+              <t-tag :theme="statusTheme(statusValue(row))" variant="light">{{ statusLabel(statusValue(row)) }}</t-tag>
             </template>
             <template #httpStatus="{ row }">
               <t-tag :theme="httpStatusTheme(row.status)" variant="light">{{ fieldValue(row.status) }}</t-tag>
             </template>
             <template #message="{ row }">
-              <span class="line-clamp">{{ messageText(row) }}</span>
+              <div v-if="isTextLog" class="log-message">
+                <t-tag v-if="messageTag(row)" size="small" variant="light" class="log-message__tag">{{ messageTag(row) }}</t-tag>
+                <span class="log-message__body">
+                  <template v-for="(seg, si) in parseMessageSegments(row)" :key="si">
+                    <span v-if="seg.type === 'text'">{{ seg.text }}</span>
+                    <t-tag
+                      v-else
+                      size="small"
+                      variant="outline"
+                      class="log-message__id-tag"
+                      :title="`点击复制 ${seg.label}:${seg.id}`"
+                      @click="copyId(seg.label, seg.id)"
+                    >{{ seg.label }}:{{ seg.id }}</t-tag>
+                  </template>
+                </span>
+              </div>
+              <span v-else class="line-clamp">{{ messageText(row) }}</span>
             </template>
             <template #error="{ row }">
               <span :class="{ 'danger-text': row.error_msg }">{{ fieldValue(row.error_msg) }}</span>
+            </template>
+            <template #gateway="{ row }">
+              {{ gatewayLabel(row.gateway) }}
+            </template>
+            <template #result_status="{ row }">
+              <t-tag :theme="gatewayResultStatusTheme(row.result_status)" variant="light">{{ gatewayResultStatusLabel(row.result_status) }}</t-tag>
             </template>
             <template #actions="{ row }">
               <t-button theme="primary" variant="text" @click="openDetail(row)">详情</t-button>
@@ -199,6 +238,7 @@
     <template v-else>
       <t-card :bordered="false" :loading="cleanupLoading">
         <t-alert theme="warning" message="日志清理为不可逆操作，请确认保留天数、清理类型和确认文本。" />
+        <t-alert v-if="!canManageLogCleanup" theme="warning" message="当前账号缺少 log.manage 权限，只能查看清理概览，不能执行清理。" />
 
         <section class="cleanup-section">
           <div class="section-title">
@@ -259,7 +299,7 @@
               <t-input v-model="cleanupForm.confirm_text" clearable placeholder="请输入 立即清理" />
             </t-form-item>
             <div class="cleanup-actions">
-              <t-button theme="danger" :loading="cleanupSubmitting" @click="handleCleanup">立即清理</t-button>
+              <t-button theme="danger" :loading="cleanupSubmitting" :disabled="cleanupSubmitDisabled" @click="handleCleanup">立即清理</t-button>
               <t-button variant="outline" @click="cleanupForm.confirm_text = ''">清空确认</t-button>
             </div>
           </t-form>
@@ -321,14 +361,14 @@ import LogDetailDrawer from './components/LogDetailDrawer.vue';
 
 import './index.less';
 
-type LogTab = 'system' | 'admin-logins' | 'api' | 'sms' | 'email' | 'tasks';
+type LogTab = 'system' | 'admin-logins' | 'api' | 'sms' | 'email' | 'tasks' | 'gateway' | 'activity';
 type LogsTab = LogTab | 'schedules' | 'cleanup';
 type RecordRow = Record<string, unknown>;
 
 const route = useRoute();
 const router = useRouter();
 const userStore = useUserStore();
-const validTabs: LogsTab[] = ['system', 'admin-logins', 'api', 'sms', 'email', 'tasks', 'schedules', 'cleanup'];
+const validTabs: LogsTab[] = ['system', 'admin-logins', 'api', 'sms', 'email', 'tasks', 'gateway', 'activity', 'schedules', 'cleanup'];
 const activeTab = ref<LogsTab>(normalizeTab(route.query.tab));
 const logLoading = ref(false);
 const scheduleLoading = ref(false);
@@ -354,6 +394,11 @@ const filters = reactive({
   email: '',
   start_date: '',
   end_date: '',
+  gateway: '',
+  action: '',
+  result_status: '',
+  actor_type: '',
+  subject_type: '',
 });
 
 const logPagination = reactive({
@@ -378,6 +423,8 @@ const tabGroups: Array<{ group: string; label: string; tabs: Array<{ value: Logs
       { value: 'sms', label: '短信日志' },
       { value: 'email', label: '邮件日志' },
       { value: 'tasks', label: '任务日志' },
+      { value: 'gateway', label: '网关日志' },
+      { value: 'activity', label: '活动日志' },
     ],
   },
   {
@@ -398,6 +445,35 @@ const notifyStatusOptions = [
   { label: '待发送', value: 'pending' },
   { label: '发送成功', value: 'success' },
   { label: '发送失败', value: 'failed' },
+];
+const gatewayOptions = [
+  { label: '支付宝', value: 'alipay' },
+  { label: '微信支付', value: 'wechat' },
+  { label: 'Stripe', value: 'stripe' },
+  { label: '支付宝当面付（历史）', value: 'alipay_f2f' },
+];
+const gatewayActionOptions = [
+  { label: '预下单', value: 'precreate' },
+  { label: '回调通知', value: 'notify' },
+  { label: '主动查询', value: 'query' },
+  { label: '退款', value: 'refund' },
+];
+const gatewayResultOptions = [
+  { label: '成功', value: 'success' },
+  { label: '失败', value: 'failed' },
+  { label: '处理中', value: 'pending' },
+  { label: '未知', value: 'unknown' },
+];
+const activitySubjectOptions = [
+  { label: '账单', value: 'invoice' },
+  { label: '订单', value: 'order' },
+  { label: '支付', value: 'payment' },
+  { label: '服务', value: 'service' },
+  { label: '用户', value: 'user' },
+  { label: '工单', value: 'ticket' },
+  { label: '商品', value: 'product' },
+  { label: '优惠券', value: 'coupon' },
+  { label: '系统', value: 'system' },
 ];
 const taskLogOptions = [
   { value: 'refresh-hosting-panel-auth', label: '接口认证刷新' },
@@ -449,6 +525,18 @@ const logMeta: Record<LogTab, { title: string; description: string; filters: str
     description: '聚合展示调度任务执行结果、错误级别和原始日志内容。',
     filters: ['task_key', 'level', 'keyword', 'date'],
     keyword: '任务名称或日志内容',
+  },
+  gateway: {
+    title: '网关日志',
+    description: '支付网关请求/响应日志，含交易号、状态与错误信息。',
+    filters: ['keyword', 'gateway', 'action', 'result_status', 'date'],
+    keyword: '交易号、网关名或错误信息',
+  },
+  activity: {
+    title: '活动日志',
+    description: '业务活动审计日志，记录谁在什么模块做了什么操作。',
+    filters: ['keyword', 'module', 'actor_type', 'subject_type', 'date'],
+    keyword: '操作人姓名 / 邮箱 / 手机号 / ID、模块或描述',
   },
 };
 
@@ -505,6 +593,25 @@ const baseLogColumns: Record<LogTab, PrimaryTableCol<RecordRow>[]> = {
     { colKey: 'message', title: '日志内容', minWidth: 420 },
     { colKey: 'actions', title: '操作', fixed: 'right', width: 90 },
   ],
+  gateway: [
+    { colKey: 'time', title: '记录时间', width: 170 },
+    { colKey: 'gateway', title: '网关', width: 110 },
+    { colKey: 'action', title: '操作', width: 110 },
+    { colKey: 'out_trade_no', title: '商户单号', minWidth: 180, ellipsis: true },
+    { colKey: 'trade_no', title: '交易号', minWidth: 180, ellipsis: true },
+    { colKey: 'result_status', title: '结果', width: 90 },
+    { colKey: 'error_msg', title: '错误信息', minWidth: 150, ellipsis: true },
+    { colKey: 'actions', title: '操作', fixed: 'right', width: 90 },
+  ],
+  activity: [
+    { colKey: 'time', title: '记录时间', width: 170 },
+    { colKey: 'primary', title: '操作人', minWidth: 180 },
+    { colKey: 'module', title: '模块', width: 120 },
+    { colKey: 'action', title: '动作', minWidth: 150 },
+    { colKey: 'message', title: '描述', minWidth: 300 },
+    { colKey: 'subject_type', title: '关联类型', width: 120 },
+    { colKey: 'actions', title: '操作', fixed: 'right', width: 90 },
+  ],
 };
 const scheduleColumns: PrimaryTableCol<RecordRow>[] = [
   { colKey: 'task', title: '任务名称', minWidth: 260 },
@@ -523,6 +630,7 @@ const scheduleLogColumns: PrimaryTableCol<RecordRow>[] = [
 const currentLoading = computed(() => logLoading.value || scheduleLoading.value || cleanupLoading.value || cleanupSubmitting.value);
 const currentLogMeta = computed(() => (isLogTab(activeTab.value) ? logMeta[activeTab.value] : logMeta.system));
 const logTableColumns = computed(() => (isLogTab(activeTab.value) ? baseLogColumns[activeTab.value] : []));
+const isTextLog = computed(() => activeTab.value === 'system' || activeTab.value === 'tasks' || activeTab.value === 'activity');
 const keywordPlaceholder = computed(() => currentLogMeta.value.keyword);
 const statusPlaceholder = computed(() => (activeTab.value === 'api' ? '全部状态码' : '全部发送状态'));
 const statusOptions = computed(() => (activeTab.value === 'api' ? httpStatusOptions : notifyStatusOptions));
@@ -565,9 +673,9 @@ const scheduleEnvAlerts = computed(() => {
   if (typeof failedJobs === 'number') {
     alerts.push({
       key: 'failed_jobs',
-      label: '失败任务',
+      label: '失败队列任务',
       value: String(failedJobs),
-      detail: failedJobs > 0 ? '建议排查 failed_jobs 表' : undefined,
+      detail: failedJobs > 0 ? 'failed_jobs 表累计失败记录，建议排查后重试或清理' : undefined,
       theme: failedJobs > 0 ? 'danger' : 'success',
     });
   }
@@ -586,6 +694,16 @@ const scheduleEnvAlerts = computed(() => {
   return alerts;
 });
 const canManageSchedules = computed(() => hasPermission(AdminPermissions.SETTINGS_MANAGE));
+const canManageLogCleanup = computed(() => hasPermission(AdminPermissions.LOG_MANAGE));
+const cleanupSubmitDisabled = computed(
+  () =>
+    cleanupSubmitting.value ||
+    !canManageLogCleanup.value ||
+    !cleanupForm.type ||
+    !Number.isFinite(Number(cleanupForm.keep_days)) ||
+    Number(cleanupForm.keep_days) < 1 ||
+    cleanupForm.confirm_text.trim() !== '立即清理',
+);
 const cleanupTypes = computed(() => asArray(cleanupOverview.value.supported_cleanup_types));
 const databaseCards = computed(() => {
   const database = toRecord(cleanupOverview.value.database);
@@ -594,6 +712,7 @@ const databaseCards = computed(() => {
     { key: 'email', label: '邮件日志', value: numberText(database.email) },
     { key: 'api', label: 'API 日志', value: numberText(database.api) },
     { key: 'admin_login', label: '管理员登录日志', value: numberText(database.admin_login) },
+    { key: 'schedule_run', label: '调度执行日志', value: numberText(database.schedule_run) },
   ];
 });
 const fileCards = computed(() => {
@@ -616,7 +735,7 @@ function normalizeTab(value: unknown): LogsTab {
 }
 
 function isLogTab(value: LogsTab): value is LogTab {
-  return ['system', 'admin-logins', 'api', 'sms', 'email', 'tasks'].includes(value);
+  return ['system', 'admin-logins', 'api', 'sms', 'email', 'tasks', 'gateway', 'activity'].includes(value);
 }
 
 function showFilter(name: string) {
@@ -682,6 +801,8 @@ function requestLogList(tab: LogTab, params: LogListParams): Promise<LaravelPagi
     sms: adminApi.logs.sms,
     email: adminApi.logs.email,
     tasks: adminApi.logs.tasks,
+    gateway: adminApi.logs.gateway,
+    activity: adminApi.logs.activity,
   };
   return map[tab](params);
 }
@@ -704,6 +825,11 @@ function resetLogFilters(shouldLoad = true) {
     email: '',
     start_date: '',
     end_date: '',
+    gateway: '',
+    action: '',
+    result_status: '',
+    actor_type: '',
+    subject_type: '',
   });
   logPagination.page = 1;
   if (shouldLoad && isLogTab(activeTab.value)) loadLogs();
@@ -763,6 +889,10 @@ async function loadCleanupOverview() {
 }
 
 async function handleCleanup() {
+  if (!canManageLogCleanup.value) {
+    MessagePlugin.warning('当前账号缺少 log.manage 权限');
+    return;
+  }
   if (!cleanupForm.type) {
     MessagePlugin.warning('请选择清理类型');
     return;
@@ -808,6 +938,7 @@ function primaryTitle(row: RecordRow) {
   if (activeTab.value === 'sms') return fieldValue(row.phone);
   if (activeTab.value === 'email') return fieldValue(row.to_email);
   if (activeTab.value === 'tasks') return fieldValue(row.task_title || row.task_key);
+  if (activeTab.value === 'activity') return fieldValue(row.actor_name || '系统');
   return fieldValue(row.id);
 }
 
@@ -816,18 +947,99 @@ function primarySubText(row: RecordRow) {
   if (activeTab.value === 'api') return userTypeLabel(row.user_type);
   if (activeTab.value === 'sms' || activeTab.value === 'email') return `发送时间：${formatDate(row.sent_at)}`;
   if (activeTab.value === 'tasks') return fieldValue(row.task_key);
+  if (activeTab.value === 'activity') return fieldValue(row.actor_type === 'system' ? '系统操作' : `ID: ${row.actor_id || '-'}`);
   return '';
 }
 
 function messageText(row: RecordRow) {
   if (activeTab.value === 'email') return contentPreview(row.content);
+  if (activeTab.value === 'activity') return fieldValue(row.description);
   return fieldValue(row.message || row.content);
+}
+
+function messageTag(row: RecordRow): string {
+  const text = messageText(row);
+  const match = text.match(/^\[([^\]]+)\]/);
+  return match ? match[1] : '';
+}
+
+function messageBody(row: RecordRow): string {
+  const text = messageText(row);
+  return text.replace(/^\[[^\]]+\]\s*/, '');
+}
+
+type MessageSegment = { type: 'text'; text: string } | { type: 'id'; label: string; id: string };
+
+const ID_PATTERNS: Array<{ label: string; regex: RegExp }> = [
+  { label: 'Invoice ID', regex: /Invoice\s*ID\s*[:：]\s*(\d+)/gi },
+  { label: 'Order ID', regex: /Order\s*ID\s*[:：]\s*(\d+)/gi },
+  { label: 'Host ID', regex: /Host\s*ID\s*[:：]\s*(\d+)/gi },
+  { label: 'User ID', regex: /User\s*ID\s*[:：]\s*(\d+)/gi },
+  { label: 'Service ID', regex: /Service\s*ID\s*[:：]\s*(\d+)/gi },
+  { label: 'Ticket ID', regex: /Ticket\s*ID\s*[:：]\s*(\d+)/gi },
+  { label: 'Payment ID', regex: /Payment\s*ID\s*[:：]\s*(\d+)/gi },
+  { label: 'Product ID', regex: /Product\s*ID\s*[:：]\s*(\d+)/gi },
+  { label: 'Supplier ID', regex: /Supplier\s*ID\s*[:：]\s*(\d+)/gi },
+  { label: 'Admin ID', regex: /Admin\s*ID\s*[:：]\s*(\d+)/gi },
+];
+
+function parseMessageSegments(row: RecordRow): MessageSegment[] {
+  const text = messageBody(row);
+  if (!text) return [{ type: 'text', text: '-' }];
+
+  const matches: Array<{ index: number; end: number; label: string; id: string }> = [];
+
+  for (const pattern of ID_PATTERNS) {
+    pattern.regex.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = pattern.regex.exec(text)) !== null) {
+      matches.push({
+        index: match.index,
+        end: match.index + match[0].length,
+        label: pattern.label,
+        id: match[1],
+      });
+    }
+  }
+
+  if (matches.length === 0) return [{ type: 'text', text }];
+
+  matches.sort((a, b) => a.index - b.index);
+
+  const segments: MessageSegment[] = [];
+  let cursor = 0;
+
+  for (const m of matches) {
+    if (m.index > cursor) {
+      segments.push({ type: 'text', text: text.slice(cursor, m.index) });
+    }
+    segments.push({ type: 'id', label: m.label, id: m.id });
+    cursor = m.end;
+  }
+
+  if (cursor < text.length) {
+    segments.push({ type: 'text', text: text.slice(cursor) });
+  }
+
+  return segments;
+}
+
+function copyId(label: string, id: string) {
+  const value = `${label}:${id}`;
+  navigator.clipboard.writeText(value).then(
+    () => MessagePlugin.success(`已复制 ${value}`),
+    () => MessagePlugin.warning('复制失败，请手动选择'),
+  );
 }
 
 function statusLabel(status: unknown) {
   if (activeTab.value === 'admin-logins') return sourceLabel(status);
   const statusKey = String(status || '').toLowerCase();
   return String({ success: '发送成功', failed: '发送失败', pending: '待发送' }[statusKey] || fieldValue(status));
+}
+
+function statusValue(row: RecordRow) {
+  return activeTab.value === 'admin-logins' ? row.source : row.status;
 }
 
 function statusTheme(status: unknown) {
@@ -946,6 +1158,31 @@ function formatBytes(value: unknown) {
     unitIndex += 1;
   }
   return `${current.toFixed(current >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
+function gatewayResultStatusLabel(value: unknown) {
+  return (
+    {
+      success: '成功',
+      failed: '失败',
+      pending: '处理中',
+    }[String(value || '').toLowerCase()] || fieldValue(value) || '未知'
+  );
+}
+
+function gatewayLabel(value: unknown) {
+  const key = String(value || '').toLowerCase();
+  return gatewayOptions.find((item) => item.value === key)?.label || fieldValue(value);
+}
+
+function gatewayResultStatusTheme(value: unknown) {
+  return (
+    {
+      success: 'success',
+      failed: 'danger',
+      pending: 'warning',
+    }[String(value || '').toLowerCase()] || 'default'
+  );
 }
 
 function formatScheduleCycle(row: RecordRow) {

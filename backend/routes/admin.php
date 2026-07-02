@@ -14,6 +14,7 @@ use App\Http\Controllers\Admin\FinanceLedgerController;
 use App\Http\Controllers\Admin\FinanceMenuController;
 use App\Http\Controllers\Admin\HomeHeroController;
 use App\Http\Controllers\Admin\InstanceSpecCatalogController;
+use App\Http\Controllers\Admin\IntegrationPluginController;
 use App\Http\Controllers\Admin\InvoiceController;
 use App\Http\Controllers\Admin\LogController;
 use App\Http\Controllers\Admin\MediaFileController;
@@ -171,7 +172,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function () {
         Route::get('/coupon-campaigns/summary', [CouponCampaignController::class, 'summary']);
         Route::get('/coupon-campaigns', [CouponCampaignController::class, 'index']);
         Route::get('/products/{product}/owners', [ProductController::class, 'owners']);
-        Route::get('/products/{product}', [ProductController::class, 'show']);
+        Route::get('/products/{product}', [ProductController::class, 'show'])->withTrashed();
         Route::get('/services', [ServiceController::class, 'index']);
     });
 
@@ -207,11 +208,13 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function () {
         Route::post('/products/provision-hostname/batch', [ProductController::class, 'batchUpdateProvisionHostname']);
         Route::post('/products/category/batch', [ProductController::class, 'batchUpdateCategory']);
         Route::post('/products/reorder', [ProductController::class, 'reorder']);
+        Route::post('/products/{productId}/restore', [ProductController::class, 'restore']);
+        Route::delete('/products/{productId}/force', [ProductController::class, 'forceDelete']);
         Route::post('/products/{product}/toggle-status', [ProductController::class, 'toggleStatus']);
         Route::put('/products/{product}/sort-order', [ProductController::class, 'updateSortOrder']);
         Route::post('/products', [ProductController::class, 'store']);
         Route::put('/products/{product}', [ProductController::class, 'update']);
-        Route::delete('/products/{product}', [ProductController::class, 'destroy']);
+        Route::delete('/products/{product}', [ProductController::class, 'destroy'])->withTrashed();
         Route::post('/coupons', [CouponController::class, 'store']);
         Route::put('/coupons/{coupon}', [CouponController::class, 'update']);
         Route::post('/coupons/{coupon}/toggle-status', [CouponController::class, 'toggleStatus']);
@@ -247,6 +250,17 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function () {
     Route::middleware(['permission:'.AdminPermissions::SETTINGS_MANAGE])->group(function () {
         Route::get('/settings', [SettingController::class, 'index']);
         Route::post('/settings', [SettingController::class, 'update']);
+        Route::get('/integration-plugins', [IntegrationPluginController::class, 'index']);
+        Route::post('/integration-plugins/scan', [IntegrationPluginController::class, 'scan']);
+        Route::post('/integration-plugins/install', [IntegrationPluginController::class, 'install']);
+        Route::get('/integration-plugins/{plugin}', [IntegrationPluginController::class, 'show']);
+        Route::put('/integration-plugins/{plugin}/config', [IntegrationPluginController::class, 'updateConfig']);
+        Route::post('/integration-plugins/{plugin}/enable', [IntegrationPluginController::class, 'enable']);
+        Route::post('/integration-plugins/{plugin}/disable', [IntegrationPluginController::class, 'disable']);
+        Route::delete('/integration-plugins/{plugin}', [IntegrationPluginController::class, 'destroy']);
+        Route::post('/integration-plugins/{plugin}/health-check', [IntegrationPluginController::class, 'healthCheck']);
+        Route::post('/integration-plugins/{plugin}/test-email', [IntegrationPluginController::class, 'testEmail']);
+        Route::post('/integration-plugins/{plugin}/test-sms', [IntegrationPluginController::class, 'testSms']);
         Route::get('/schedules/overview', [ScheduleTaskController::class, 'overview']);
         Route::post('/schedules/trigger', [ScheduleTaskController::class, 'trigger']);
         Route::get('/site/home-hero', [HomeHeroController::class, 'show']);
@@ -346,6 +360,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function () {
         Route::post('/content/upload-image', [ContentArticleController::class, 'uploadImage']);
         Route::get('/media-files', [MediaFileController::class, 'index']);
         Route::post('/media-files', [MediaFileController::class, 'store']);
+        Route::post('/media-files/reindex', [MediaFileController::class, 'reindex']);
         Route::delete('/media-files/{mediaFile}', [MediaFileController::class, 'destroy']);
     });
 

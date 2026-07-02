@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Client\Verification\InitVerificationRequest;
 use App\Http\Requests\Client\Verification\QrcodeRequest;
 use App\Http\Requests\Client\Verification\StatusRequest;
-use App\Models\Setting;
 use App\Services\Auth\VerificationService;
 use Illuminate\Http\Request;
 
@@ -131,21 +130,7 @@ class VerificationController extends Controller
      */
     public function feeConfig()
     {
-        $freeAttempts = max(0, (int) Setting::getValue(
-            'verification',
-            'free_attempts',
-            config('idc.verification.free_attempts', 3)
-        ));
-        $retryFee = max(0, (float) Setting::getValue(
-            'verification',
-            'retry_fee',
-            config('idc.verification.retry_fee', 2.00)
-        ));
-
-        return $this->success([
-            'free_attempts' => $freeAttempts,
-            'retry_fee' => $retryFee,
-        ]);
+        return $this->success($this->verificationService->feeConfig());
     }
 
     /**

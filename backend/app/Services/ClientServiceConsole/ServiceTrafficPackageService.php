@@ -372,7 +372,21 @@ class ServiceTrafficPackageService
         try {
             [$catalog, $supplier, $hostId, $jwt] = $this->detailService->resolveUpstreamContext($service);
             $invoiceId = 0;
+            $hostDetail = [];
 
+            if (is_callable([$catalog, 'purchaseTrafficPackage'])) {
+                $purchaseResult = $catalog->purchaseTrafficPackage(
+                    $supplier,
+                    $hostId,
+                    $mode,
+                    $configOption,
+                    $flowPacketId,
+                    $this->detailService->resolveSupplierRootUrl($supplier),
+                    $jwt
+                );
+                $invoiceId = (int) ($purchaseResult['upstream_invoice_id'] ?? 0);
+                $hostDetail = is_array($purchaseResult['host_detail'] ?? null) ? $purchaseResult['host_detail'] : [];
+            } else {
             if ($mode === 'flowpacket') {
                 $rootUrl = $this->detailService->resolveSupplierRootUrl($supplier);
                 $buyResponse = $catalog->buyFlowPacket($supplier, $rootUrl, $flowPacketId, $hostId, $jwt);
@@ -404,6 +418,7 @@ class ServiceTrafficPackageService
             $this->detailService->assertSuccess($detailResponse, '读取流量包购买结果');
             $detailPayload = $this->detailService->extractPayload($detailResponse);
             $hostDetail = is_array($detailPayload['host'] ?? null) ? $detailPayload['host'] : [];
+            }
 
             if ($hostDetail !== []) {
                 $this->detailService->syncServiceFromRemote($service, $hostDetail);

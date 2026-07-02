@@ -880,7 +880,7 @@ def run_artisan_command(args: list[str]) -> None:
 
 
 def backfill_product_group_hierarchy() -> None:
-    log("鍥炲～涓夊眰鍟嗗搧鍒嗙被鏄犲皠")
+    log("回填三层商品分类映射")
     run_artisan_command(["product-catalog:backfill-product-group-hierarchy"])
     run_artisan_command(["product-catalog:check-product-group-hierarchy", "--json"])
 

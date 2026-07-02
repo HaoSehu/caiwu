@@ -22,7 +22,10 @@ use App\Services\ProductCatalog\ProductCatalogService;
 use App\Services\Referral\ReferralService;
 use App\Services\System\SettingService;
 use App\Services\Ticket\TicketAutomationService;
-use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiTransport;
+use App\Services\Upstream\Contracts\ProvidesScheduledAuthRefresh;
+use App\Services\Upstream\Contracts\UpstreamDriver;
+use App\Services\Upstream\ProviderRegistry;
+use App\Services\Upstream\ProviderResolver;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -89,6 +92,12 @@ class ScheduleTaskExecutionCoverageTest extends TestCase
     public function test_manual_dispatch_executes_each_triggerable_schedule_task(): void
     {
         $this->createSuppliersTable();
+        $scheduledAuthRefresh = new RecordingScheduledAuthRefresh;
+        $providerRegistry = new ProviderRegistry([
+            new FakeScheduledAuthRefreshDriver($scheduledAuthRefresh),
+        ]);
+        app()->instance(ProviderRegistry::class, $providerRegistry);
+        app()->instance(ProviderResolver::class, new ProviderResolver($providerRegistry));
 
         Supplier::query()->create([
             'name' => 'Mock Supplier',
@@ -96,16 +105,10 @@ class ScheduleTaskExecutionCoverageTest extends TestCase
             'status' => 1,
         ]);
 
-        $transport = $this->createMock(HostingPanelApiTransport::class);
-        $transport->expects($this->once())
-            ->method('refreshJwt')
-            ->with($this->callback(fn ($supplier): bool => $supplier instanceof Supplier && (int) $supplier->status === 1));
-        app()->instance(HostingPanelApiTransport::class, $transport);
-
         $autoRenewService = $this->createMock(AutoRenewService::class);
         $autoRenewService->expects($this->once())
             ->method('handle')
-            ->with(10)
+            ->with()
             ->willReturn(['matched' => 0, 'paid' => 0, 'pending' => 0, 'failed' => 0, 'skipped' => 0]);
         app()->instance(AutoRenewService::class, $autoRenewService);
 
@@ -211,6 +214,8 @@ class ScheduleTaskExecutionCoverageTest extends TestCase
             $this->assertSame($taskKey, $result['task'] ?? null);
             $this->assertSame('sync', $result['execution_mode'] ?? null);
         }
+
+        $this->assertSame([1], $scheduledAuthRefresh->supplierStatuses);
     }
 
     public function test_sync_processing_order_status_command_is_a_compatibility_no_op(): void
@@ -320,5 +325,52 @@ class ScheduleTaskExecutionCoverageTest extends TestCase
             $table->unsignedInteger('available_at');
             $table->unsignedInteger('created_at');
         });
+    }
+}
+
+final class FakeScheduledAuthRefreshDriver implements UpstreamDriver
+{
+    public function __construct(
+        private readonly RecordingScheduledAuthRefresh $scheduledAuthRefresh,
+    ) {}
+
+    public function key(): string
+    {
+        return 'hosting_panel_api';
+    }
+
+    public function label(): string
+    {
+        return 'Fake Hosting Panel API';
+    }
+
+    public function capabilities(): array
+    {
+        return [ProvidesScheduledAuthRefresh::class];
+    }
+
+    public function supports(string $capability): bool
+    {
+        return $capability === ProvidesScheduledAuthRefresh::class;
+    }
+
+    public function resolve(string $capability): ?object
+    {
+        return $this->supports($capability) ? $this->scheduledAuthRefresh : null;
+    }
+}
+
+final class RecordingScheduledAuthRefresh implements ProvidesScheduledAuthRefresh
+{
+    /**
+     * @var list<int>
+     */
+    public array $supplierStatuses = [];
+
+    public function refreshJwt(Supplier $supplier): string
+    {
+        $this->supplierStatuses[] = (int) $supplier->status;
+
+        return 'test-jwt';
     }
 }

@@ -7,14 +7,13 @@ namespace Tests\Feature;
 use App\Constants\OrderStatus;
 use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
-use App\Integrations\Mofang\Adapters\MofangFinanceAdapter;
-use App\Integrations\Mofang\Drivers\MofangFinanceDriver;
-use App\Integrations\Mofang\Support\MofangCloudConfigTemplate;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\Supplier;
 use App\Models\User;
+use App\Services\Integrations\Plugins\PluginFileLoader;
+use App\Services\Integrations\Plugins\PluginScanner;
 use App\Services\Provisioning\ProvisionService;
 use App\Services\System\SettingService;
 use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiDriver;
@@ -23,6 +22,9 @@ use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
 use App\Support\ProductProvisionHostname;
+use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangCloudConfigTemplate;
+use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangFinanceAdapter;
+use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangFinanceDriver;
 use ArrayObject;
 use Illuminate\Support\Facades\Cache;
 use PHPUnit\Framework\Attributes\Test;
@@ -33,6 +35,10 @@ class ProvisionServiceHostnameTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        app(PluginFileLoader::class)->ensureLoaded(
+            app(PluginScanner::class)->requireManifest('upstream', 'mofang_finance')
+        );
 
         Cache::flush();
     }
@@ -193,6 +199,48 @@ class ProvisionServiceHostnameTest extends TestCase
                 array $headers = [],
                 array $query = []
             ): array {
+                if ($uri === '/v1/login_api') {
+                    return ['status' => 200, 'code' => 200, 'jwt' => 'jwt-test-token'];
+                }
+
+                if ($uri === '/v1/cart') {
+                    return [
+                        'status' => 200,
+                        'code' => 200,
+                        'data' => [
+                            'gateway_list' => [
+                                ['name' => 'credit'],
+                            ],
+                        ],
+                    ];
+                }
+
+                if ($uri === '/v1/cart/checkout') {
+                    return [
+                        'status' => 200,
+                        'code' => 200,
+                        'data' => [
+                            'invoiceid' => 8899,
+                            'hostid' => [7788],
+                        ],
+                    ];
+                }
+
+                if ($uri === '/v1/hosts/7788') {
+                    return [
+                        'status' => 200,
+                        'code' => 200,
+                        'data' => [
+                            'host' => [
+                                'domain' => 'srv7788.example.test',
+                                'domainstatus' => 'Active',
+                                'product_id' => 9001,
+                                'product_name' => '魔方云服务器',
+                            ],
+                        ],
+                    ];
+                }
+
                 return ['status' => 200, 'code' => 200, 'data' => []];
             }
 

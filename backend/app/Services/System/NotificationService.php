@@ -6,10 +6,9 @@ use App\Models\EmailLog;
 use App\Models\NotificationLog;
 use App\Models\Setting;
 use App\Models\User;
+use App\Services\Mail\MailDriverManager;
 use App\Support\EmailTemplateCatalog;
-use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
 
 class NotificationService
@@ -19,6 +18,8 @@ class NotificationService
     public const TEMPLATE_LOGIN_ALERT = '100002';
 
     public const TEMPLATE_SERVICE_RENEW_REMINDER = '100003';
+
+    public const TEMPLATE_AUTO_RENEW_UPCOMING = '100020';
 
     public const TEMPLATE_INVOICE_PAYMENT_REMINDER = '100004';
 
@@ -52,6 +53,10 @@ class NotificationService
 
     public const TEMPLATE_EMAIL_CHANGED_ALERT = '100019';
 
+    public function __construct(
+        private readonly MailDriverManager $mailDriverManager,
+    ) {}
+
     public function sendEmail(string $to, string $subject, string $content, ?string $templateCode = null): void
     {
         $logContext = $this->createEmailLog($to, $subject, $content, $templateCode);
@@ -61,21 +66,9 @@ class NotificationService
                 throw new \RuntimeException('邮件通知未启用');
             }
 
-            $host = (string) Setting::getValue('notification', 'email_host', '');
-            $port = (string) Setting::getValue('notification', 'email_port', '');
-            $username = (string) Setting::getValue('notification', 'email_username', '');
-            $password = (string) Setting::getValue('notification', 'email_password', '');
-            $fromName = (string) Setting::getValue('notification', 'email_from_name', config('app.name', '创欧云'));
-
-            if ($host === '' || $port === '' || $username === '' || $password === '') {
-                throw new \RuntimeException('邮件接口配置不完整');
-            }
-
-            $this->configureMailer($host, $port, $username, $password, $fromName);
-
-            Mail::html($content, function ($message) use ($to, $subject, $username, $fromName) {
-                $message->to($to)->subject($subject)->from($username, $fromName);
-            });
+            $this->mailDriverManager->resolve()->sendHtml($to, $subject, $content, [
+                'template_code' => $templateCode,
+            ]);
 
             $this->updateEmailLog($logContext, [
                 'status' => 'success',
@@ -421,37 +414,6 @@ class NotificationService
         }
     }
 
-    private function configureMailer(string $host, string $port, string $username, string $password, string $fromName): void
-    {
-        Config::set('mail.default', 'smtp');
-        Config::set('mail.mailers.smtp.host', $host);
-        Config::set('mail.mailers.smtp.port', (int) $port);
-        Config::set('mail.mailers.smtp.username', $username);
-        Config::set('mail.mailers.smtp.password', $password);
-        Config::set('mail.mailers.smtp.encryption', $this->resolveEncryption($port));
-        Config::set('mail.mailers.smtp.timeout', $this->resolveTimeoutSeconds());
-        Config::set('mail.from.address', $username);
-        Config::set('mail.from.name', $fromName);
-
-        app('mail.manager')->forgetMailers();
-    }
-
-    private function resolveEncryption(string $port): ?string
-    {
-        return match ((string) $port) {
-            '465' => 'ssl',
-            '25' => null,
-            default => 'tls',
-        };
-    }
-
-    private function resolveTimeoutSeconds(): int
-    {
-        $timeout = (int) Setting::getValue('notification', 'email_timeout_seconds', 8);
-
-        return $timeout > 0 ? $timeout : 8;
-    }
-
     private function resolveUserAgentSummary(?string $userAgent): string
     {
         $ua = mb_strtolower(trim((string) $userAgent));
@@ -546,11 +508,9 @@ class NotificationService
 
     private function buildEmbeddedLogoSvgMarkup(): string
     {
-        // 使用 FRONTEND_URL，uploads/ 目录通过 nginx 伪静态已代理到后端
         $baseUrl = rtrim((string) (config('app.frontend_url') ?: config('app.url', '')), '/');
+        $svgCandidates = $this->resolveLogoCandidates();
 
-        // 优先使用 SVG logo，矢量格式在任何尺寸下都清晰
-        $svgCandidates = ['uploads/logo/logo1.svg', 'uploads/logo/logo.svg'];
         foreach ($svgCandidates as $candidate) {
             if (is_file(public_path($candidate))) {
                 $logoUrl = $baseUrl.'/'.$candidate;
@@ -559,8 +519,7 @@ class NotificationService
             }
         }
 
-        // 回退：内联小体积 SVG（<20KB）
-        foreach (['uploads/logo/logo1.svg', 'uploads/logo/logo.svg'] as $candidate) {
+        foreach ($svgCandidates as $candidate) {
             $svg = @file_get_contents(public_path($candidate));
             if (is_string($svg) && trim($svg) !== '' && strlen($svg) <= 20480) {
                 $svg = preg_replace('/<\?xml[\s\S]*?\?>\s*/i', '', $svg) ?? $svg;
@@ -571,6 +530,34 @@ class NotificationService
         }
 
         return '';
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function resolveLogoCandidates(): array
+    {
+        $configured = trim((string) Setting::getValue('basic', 'site_logo', ''));
+        $candidates = [];
+
+        if ($configured !== '') {
+            $normalized = ltrim((string) (parse_url($configured, PHP_URL_PATH) ?: ''), '/');
+            if ($normalized !== '') {
+                $candidates[] = $normalized;
+            }
+        }
+
+        return array_values(array_unique(array_merge(
+            $candidates,
+            [
+                'media/logo1.svg',
+                'media/logo.svg',
+                'uploads/media/images/site-settings/logo1.svg',
+                'uploads/media/images/site-settings/logo.svg',
+                'uploads/logo/logo1.svg',
+                'uploads/logo/logo.svg',
+            ]
+        )));
     }
 
     private function renderTemplateText(string $template, array $params): string

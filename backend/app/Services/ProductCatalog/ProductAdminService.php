@@ -38,8 +38,9 @@ class ProductAdminService
 
     public function adminProductList(array $filters, int $perPage = 20)
     {
+        $lifecycleStatus = $this->normalizeLifecycleStatus($filters['lifecycle_status'] ?? null);
         $query = $this->applyAdminProductFilters(
-            Product::query()
+            $this->applyLifecycleScope(Product::query(), $lifecycleStatus)
                 ->select([
                     'id',
                     'product_type',
@@ -54,6 +55,7 @@ class ProductAdminService
                     'auto_setup',
                     'supplier_id',
                     'supplier_product_id',
+                    'deleted_at',
                     ...Product::optionalSelectColumns([
                         'custom_display_name',
                         'first_product_group_id',
@@ -649,6 +651,25 @@ class ProductAdminService
         $this->forgetSiteCatalogCache();
     }
 
+    public function restoreProduct(Product $product): Product
+    {
+        throw_if(! $product->trashed(), new BusinessException('商品未删除，无需恢复'));
+
+        $product->restore();
+        $this->forgetSiteCatalogCache();
+
+        return $product->refresh()->load(['firstProductGroup', 'secondProductGroup', 'thirdProductGroup', 'supplier']);
+    }
+
+    public function forceDeleteProduct(Product $product): void
+    {
+        throw_if(! $product->trashed(), new BusinessException('请先删除商品，再执行彻底删除'));
+        throw_if($product->services()->count() > 0, new BusinessException('该商品已有服务实例，无法彻底删除'));
+
+        $product->forceDelete();
+        $this->forgetSiteCatalogCache();
+    }
+
     public function toggleProductStatus(Product $product): Product
     {
         $product->update([
@@ -662,10 +683,12 @@ class ProductAdminService
 
     private function applyAdminProductFilters(Builder $query, array $filters): Builder
     {
+        $lifecycleStatus = $this->normalizeLifecycleStatus($filters['lifecycle_status'] ?? null);
+
         return $query
-            ->when(! empty($filters['keyword']), function (Builder $builder) use ($filters) {
+            ->when(! empty($filters['keyword']), function (Builder $builder) use ($filters, $lifecycleStatus) {
                 $keyword = trim((string) $filters['keyword']);
-                $matchedProductIds = $this->resolveDisplayNameMatchedProductIds($keyword);
+                $matchedProductIds = $this->resolveDisplayNameMatchedProductIds($keyword, $lifecycleStatus);
 
                 $builder->where(function (Builder $keywordQuery) use ($keyword, $matchedProductIds) {
                     $keywordQuery
@@ -698,14 +721,14 @@ class ProductAdminService
     /**
      * @return array<int, int>
      */
-    private function resolveDisplayNameMatchedProductIds(string $keyword): array
+    private function resolveDisplayNameMatchedProductIds(string $keyword, string $lifecycleStatus = 'active'): array
     {
         $keyword = trim($keyword);
         if ($keyword === '') {
             return [];
         }
 
-        return Product::query()
+        return $this->applyLifecycleScope(Product::query(), $lifecycleStatus)
             ->select(['id', 'product_type', 'purchase_requires', 'config_options'])
             ->get()
             ->filter(function (Product $product) use ($keyword): bool {
@@ -717,6 +740,24 @@ class ProductAdminService
             ->map(fn ($id) => (int) $id)
             ->values()
             ->all();
+    }
+
+    private function applyLifecycleScope(Builder $query, string $lifecycleStatus): Builder
+    {
+        return match ($lifecycleStatus) {
+            'all' => $query->withTrashed(),
+            'deleted' => $query->onlyTrashed(),
+            default => $query,
+        };
+    }
+
+    private function normalizeLifecycleStatus(mixed $value): string
+    {
+        $normalized = trim((string) $value);
+
+        return in_array($normalized, ['active', 'deleted', 'all'], true)
+            ? $normalized
+            : 'active';
     }
 
     private function buildSplitProductVariants(Product $source): array

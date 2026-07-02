@@ -74,11 +74,12 @@
         <section class="edit-section">
           <h3 class="edit-section__title">封面与摘要</h3>
           <div class="edit-section__body edit-section__body--single">
-            <t-form-item label="封面图" name="cover_image">
+            <t-form-item label="封面" name="cover_image">
               <div class="cover-image-selector" @click="openCoverImageDrawer">
-                <image-icon />
+                <image-icon v-if="!isCoverVideo" />
+                <video-icon v-else />
                 <span v-if="form.cover_image" class="cover-image-selector__name">{{ form.cover_image.split('/').pop() }}</span>
-                <span v-else class="cover-image-selector__placeholder">点击选择封面图</span>
+                <span v-else class="cover-image-selector__placeholder">点击选择封面图片或视频</span>
                 <chevron-right-icon />
               </div>
             </t-form-item>
@@ -118,42 +119,54 @@
 
     <t-drawer
       :visible="coverImageDrawerVisible"
-      header="选择封面图"
+      header="选择封面媒体"
       :size="520"
       placement="right"
       :footer="null"
       @close="closeCoverImageDrawer"
     >
-      <div class="cover-drawer-upload">
+      <div class="cover-drawer-toolbar">
+        <t-select v-model="coverMediaType" placeholder="全部类型" @change="loadCoverMediaList">
+          <t-option v-for="item in coverMediaTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
+        </t-select>
         <t-button variant="outline" @click="openCoverImagePicker">
           <template #icon><upload-icon /></template>
-          上传新图片
+          上传新文件
         </t-button>
       </div>
       <div class="cover-drawer-grid">
         <div
-          v-for="img in coverImageList"
-          :key="img.url"
+          v-for="item in coverImageList"
+          :key="item.url"
           class="cover-drawer-card"
-          :class="{ 'is-selected': form.cover_image === img.url }"
-          @click="selectCoverImage(img.url)"
+          :class="{ 'is-selected': form.cover_image === item.url }"
+          @click="selectCoverImage(item.url)"
         >
-          <img class="cover-drawer-card__img" :src="img.url" :alt="img.filename" loading="lazy" />
+          <video
+            v-if="item.isVideo"
+            :ref="(el) => handleCoverVideoPreviewRef(el)"
+            class="cover-drawer-card__img"
+            :src="item.url"
+            muted
+            preload="auto"
+            playsinline
+          ></video>
+          <img v-else class="cover-drawer-card__img" :src="item.url" :alt="item.filename" loading="lazy" />
           <div class="cover-drawer-card__label">
-            <check-circle-filled-icon v-if="form.cover_image === img.url" class="cover-drawer-card__check" />
-            <span>{{ img.filename }}</span>
+            <check-circle-filled-icon v-if="form.cover_image === item.url" class="cover-drawer-card__check" />
+            <span>{{ item.filename }}</span>
           </div>
         </div>
-        <div v-if="!coverImageList.length && !coverImageLoading" class="cover-drawer-empty">暂无已上传图片，请先上传</div>
+        <div v-if="!coverImageList.length && !coverImageLoading" class="cover-drawer-empty">暂无已上传媒体，请先上传</div>
       </div>
     </t-drawer>
 
-    <input ref="coverImageInputRef" type="file" accept="image/jpeg,image/png,image/webp" style="display:none" @change="handleCoverImageUpload" />
+    <input ref="coverImageInputRef" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/ogg,video/quicktime,video/x-m4v" style="display:none" @change="handleCoverImageUpload" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, type ComponentPublicInstance } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   ArrowLeftIcon,
@@ -161,6 +174,7 @@ import {
   ChevronRightIcon,
   ImageIcon,
   UploadIcon,
+  VideoIcon,
 } from 'tdesign-icons-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import type { FormInstanceFunctions, FormRule } from 'tdesign-vue-next';
@@ -170,9 +184,40 @@ import {
   type ContentArticlePayload,
   type ContentArticleRecord,
   type ContentCategoryRecord,
+  type MediaFileRecord,
 } from '@/api/admin';
 
 import './index.less';
+
+interface CoverMediaItem {
+  url: string;
+  filename: string;
+  isVideo: boolean;
+}
+
+function isMediaVideo(row: MediaFileRecord): boolean {
+  return String(row.type || '').toLowerCase() === 'video' || String(row.mime_type || '').startsWith('video/');
+}
+
+function isUrlVideo(url: string): boolean {
+  const lower = url.toLowerCase();
+  return lower.endsWith('.mp4') || lower.endsWith('.webm') || lower.endsWith('.ogg') || lower.endsWith('.mov') || lower.endsWith('.m4v');
+}
+
+function handleCoverVideoPreviewRef(el: Element | ComponentPublicInstance | null) {
+  if (!(el instanceof HTMLVideoElement)) return;
+  const video = el;
+  const onReady = () => {
+    video.play()
+      .then(() => { video.pause(); })
+      .catch(() => { /* autoplay blocked */ });
+  };
+  if (video.readyState >= 2) {
+    onReady();
+  } else {
+    video.addEventListener('loadeddata', onReady, { once: true });
+  }
+}
 
 interface ArticleForm {
   id: number | string | null;
@@ -203,11 +248,18 @@ const formRef = ref<FormInstanceFunctions>();
 const coverImageInputRef = ref<HTMLInputElement>();
 const coverImageDrawerVisible = ref(false);
 const coverImageLoading = ref(false);
-const coverImageList = ref<Array<{ url: string; filename: string }>>([]);
+const coverImageList = ref<CoverMediaItem[]>([]);
+const coverMediaType = ref('');
+const coverMediaTypeOptions = [
+  { label: '全部类型', value: '' },
+  { label: '图片', value: 'image' },
+  { label: '视频', value: 'video' },
+];
 const categories = ref<ContentCategoryRecord[]>([]);
 
 const contentType = computed<string>(() => String(route.meta.contentType || route.query.type || 'notice'));
 const articleLabel = computed(() => (contentType.value === 'help' ? '帮助文章' : '公告'));
+const isCoverVideo = computed(() => isUrlVideo(form.cover_image));
 
 const statusOptions = [
   { label: '草稿', value: 0 },
@@ -334,15 +386,25 @@ async function submit() {
   }
 }
 
-// Cover image drawer
+// Cover media drawer
 async function openCoverImageDrawer() {
   coverImageDrawerVisible.value = true;
-  if (coverImageList.value.length) return;
+  await loadCoverMediaList();
+}
+
+async function loadCoverMediaList() {
   coverImageLoading.value = true;
   try {
-    const res = await adminApi.media.list({ group: 'content', page_size: 100 });
+    const res = await adminApi.media.list({
+      type: coverMediaType.value || undefined,
+      page_size: 100,
+    });
     coverImageList.value = (res.list || [])
-      .map((item) => ({ url: String(item.url || ''), filename: String(item.filename || '').split('/').pop() || '' }))
+      .map((item) => ({
+        url: String(item.url || ''),
+        filename: String(item.filename || '').split('/').pop() || '',
+        isVideo: isMediaVideo(item),
+      }))
       .filter((item) => item.url);
   } catch {
     coverImageList.value = [];
@@ -377,13 +439,19 @@ async function handleCoverImageUpload(event: Event) {
     const response = await adminApi.media.upload(data);
     const url = String(response.url || '');
     form.cover_image = url;
-    if (url) coverImageList.value.unshift({ url, filename: String(response.filename || '').split('/').pop() || file.name });
-    MessagePlugin.success('封面图上传成功');
+    if (url) {
+      coverImageList.value.unshift({
+        url,
+        filename: String(response.filename || '').split('/').pop() || file.name,
+        isVideo: isMediaVideo(response),
+      });
+    }
+    MessagePlugin.success('封面上传成功');
   } catch (error) {
     const record = error as Record<string, unknown>;
     const resp = record.response as Record<string, unknown> | undefined;
     const d = resp?.data as Record<string, unknown> | undefined;
-    MessagePlugin.error(String(d?.message || record.message || '封面图上传失败'));
+    MessagePlugin.error(String(d?.message || record.message || '封面上传失败'));
   }
 }
 

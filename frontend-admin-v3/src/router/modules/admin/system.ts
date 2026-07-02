@@ -44,10 +44,54 @@ export const systemRoutes: RouteRecordRaw[] = [
     component: () => import('@/pages/settings/index.vue'),
     meta: {
       title: {
-        zh_CN: '系统设置',
-        en_US: 'Settings',
+        zh_CN: '系统配置',
+        en_US: 'System Settings',
       },
       permission: 'settings.manage',
+      settingsTab: 'system',
+    },
+  },
+  {
+    path: 'automation',
+    name: 'AdminAutomation',
+    component: () => import('@/pages/settings/index.vue'),
+    meta: {
+      title: {
+        zh_CN: '自动化策略',
+        en_US: 'Automation',
+      },
+      permission: 'settings.manage',
+      settingsTab: 'automation',
+    },
+  },
+  {
+    path: 'payment',
+    name: 'AdminPayment',
+    redirect: '/admin/integration-plugins',
+  },
+  {
+    path: 'integration-plugins',
+    name: 'AdminIntegrationPlugins',
+    component: () => import('@/pages/integration-plugins/index.vue'),
+    meta: {
+      title: {
+        zh_CN: '插件管理',
+        en_US: 'Plugins',
+      },
+      permission: 'settings.manage',
+    },
+  },
+  {
+    path: 'referral-settings',
+    name: 'AdminReferralSettings',
+    component: () => import('@/pages/settings/index.vue'),
+    meta: {
+      title: {
+        zh_CN: '推荐奖励',
+        en_US: 'Referral Settings',
+      },
+      permission: 'settings.manage',
+      settingsTab: 'referral',
     },
   },
 ];

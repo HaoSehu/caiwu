@@ -14,6 +14,11 @@ class GeneralLogListRequest extends LogListRequest
             'status' => ['nullable', 'integer', 'min:100', 'max:599'],
             'task_key' => ['nullable', 'string', 'max:60'],
             'user_type' => ['nullable', 'in:admin,client,guest'],
+            'gateway' => ['nullable', 'string', 'max:50'],
+            'action' => ['nullable', 'string', 'max:100'],
+            'result_status' => ['nullable', 'in:success,failed,pending,unknown'],
+            'actor_type' => ['nullable', 'in:admin,client,system,sub_account'],
+            'subject_type' => ['nullable', 'string', 'max:50'],
             'start_date' => ['nullable', 'date'],
             'end_date' => ['nullable', 'date'],
         ]);
@@ -29,6 +34,11 @@ class GeneralLogListRequest extends LogListRequest
             'status',
             'task_key',
             'user_type',
+            'gateway',
+            'action',
+            'result_status',
+            'actor_type',
+            'subject_type',
             'start_date',
             'end_date',
         ]);

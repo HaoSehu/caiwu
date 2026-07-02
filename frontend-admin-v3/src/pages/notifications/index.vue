@@ -3,7 +3,6 @@
     <t-card :bordered="false">
       <div class="page-tabs-toolbar">
         <t-tabs :value="activeTab" @change="handleTabChange">
-          <t-tab-panel value="interfaces" label="接口配置" />
           <t-tab-panel value="email-templates" label="邮件模板" />
           <t-tab-panel value="api-directory" label="API 接口" />
         </t-tabs>
@@ -476,17 +475,16 @@ const apiColumns: PrimaryTableCol<ApiCatalogItem>[] = [
 
 function normalizeTab(value: unknown): NotificationTab {
   const tab = Array.isArray(value) ? value[0] : value;
-  return tab === 'email-templates' || tab === 'api-directory' ? tab : 'interfaces';
+  return tab === 'api-directory' ? tab : 'email-templates';
 }
 
 function handleTabChange(value: string | number) {
   activeTab.value = normalizeTab(value);
-  router.replace({ path: '/admin/notifications', query: activeTab.value === 'interfaces' ? {} : { tab: activeTab.value } });
+  router.replace({ path: '/admin/notifications', query: activeTab.value === 'email-templates' ? {} : { tab: activeTab.value } });
   refreshCurrentTab();
 }
 
 function refreshCurrentTab() {
-  if (activeTab.value === 'interfaces') return loadSettings();
   if (activeTab.value === 'email-templates') return loadTemplates();
   return undefined;
 }
@@ -719,7 +717,6 @@ watch(
   () => route.query.tab,
   (value) => {
     activeTab.value = normalizeTab(value);
-    if (activeTab.value === 'interfaces' && !Object.keys(settingsMap.value).length) loadSettings();
     if (activeTab.value === 'email-templates' && !Object.keys(settingsMap.value).length) loadTemplates();
   },
 );

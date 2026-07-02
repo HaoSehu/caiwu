@@ -47,7 +47,7 @@ class UploadSecurityTest extends TestCase
         $path = (string) $mediaFile->path;
         $this->uploadedFiles[] = public_path(ltrim($path, '/'));
 
-        $this->assertStringStartsWith('/uploads/security_test/', $path);
+        $this->assertMatchesRegularExpression('#^/media/[^/]+\.jpg$#', $path);
         $this->assertStringEndsWith('.jpg', $path);
         $this->assertStringNotContainsString('.php', $path);
         $this->assertFileExists(public_path(ltrim($path, '/')));
@@ -68,8 +68,28 @@ class UploadSecurityTest extends TestCase
         $this->mediaFileIds[] = (int) $response->json('data.id');
         $this->uploadedFiles[] = public_path(ltrim($path, '/'));
 
-        $this->assertStringStartsWith('/uploads/content/', $path);
+        $this->assertMatchesRegularExpression('#^/media/[^/]+\.jpg$#', $path);
         $this->assertStringEndsWith('.jpg', $path);
+        $this->assertFileExists(public_path(ltrim($path, '/')));
+    }
+
+    public function test_media_upload_endpoint_accepts_video_and_stores_it_under_unified_media_directory(): void
+    {
+        Sanctum::actingAs($this->createAdmin());
+
+        $response = $this->post('/api/admin/media-files', [
+            'file' => UploadedFile::fake()->create('hero.mp4', 128, 'video/mp4'),
+            'group' => MediaFileService::HERO_VIDEO_GROUP,
+        ]);
+
+        $response->assertOk()->assertJsonPath('code', 0);
+
+        $path = (string) $response->json('data.path');
+        $this->mediaFileIds[] = (int) $response->json('data.id');
+        $this->uploadedFiles[] = public_path(ltrim($path, '/'));
+
+        $this->assertMatchesRegularExpression('#^/media/[^/]+\.mp4$#', $path);
+        $this->assertStringEndsWith('.mp4', $path);
         $this->assertFileExists(public_path(ltrim($path, '/')));
     }
 
@@ -93,12 +113,12 @@ class UploadSecurityTest extends TestCase
 
         parse_str((string) parse_url((string) $image['url'], PHP_URL_QUERY), $query);
         $path = (string) ($query['path'] ?? '');
-        $absolutePath = storage_path('app/'.str_replace('/', DIRECTORY_SEPARATOR, $path));
+        $absolutePath = public_path(str_replace('/', DIRECTORY_SEPARATOR, ltrim($path, '/')));
         $this->uploadedFiles[] = $absolutePath;
 
         $this->assertSame('ticket.jpg', $image['name']);
         $this->assertSame('image/jpeg', $image['mime_type']);
-        $this->assertStringStartsWith('private/tickets/', $path);
+        $this->assertStringStartsWith('uploads/tickets/temp/', $path);
         $this->assertStringEndsWith('.jpg', $path);
         $this->assertFileExists($absolutePath);
     }

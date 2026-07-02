@@ -103,7 +103,7 @@ class SettingTableBindingTest extends TestCase
 
             $secondGroupId = (int) DB::table('second_product_groups')->insertGetId([
                 'first_product_group_id' => $firstGroupId,
-                'name' => '娴嬭瘯鍒嗙粍-'.$suffix,
+                'name' => '测试分组-'.$suffix,
                 'slug' => 'stock-test-'.$suffix,
                 'description' => '',
                 'sort_order' => 0,

@@ -245,7 +245,7 @@ cd frontend-user-v4-console && npm run dev
 ## 14. 测试账号
 
 - 用户：`2908990438@qq.com` / `Cheng2008li#7111`
-- 管理员：`cerbo` / `Temp@123456`
+- 管理员：`cerbo` / `Cheng2008li#7111`
 
 ## 15. 前端构建产物
 

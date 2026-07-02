@@ -91,12 +91,12 @@ class BillingAutomationServiceTest extends TestCase
     {
         $user = User::query()->create([
             'email' => 'renew@test.com',
-            'nickname' => '娴嬭瘯瀹㈡埛',
+            'nickname' => '测试客户',
         ]);
 
         $service = Service::query()->create([
             'user_id' => $user->id,
-            'name' => '浜戞湇鍔″櫒 A',
+            'name' => '云服务器 A',
             'billing_cycle' => 'monthly',
             'status' => ServiceStatus::ACTIVE,
             'expires_at' => now()->addDays(5)->setTime(23, 59, 59),
@@ -110,8 +110,8 @@ class BillingAutomationServiceTest extends TestCase
                 'renew@test.com',
                 NotificationService::TEMPLATE_SERVICE_RENEW_REMINDER,
                 $this->callback(function (array $payload): bool {
-                    $this->assertSame('娴嬭瘯瀹㈡埛', $payload['display_name'] ?? null);
-                    $this->assertSame('浜戞湇鍔″櫒 A', $payload['service_name'] ?? null);
+                    $this->assertSame('测试客户', $payload['display_name'] ?? null);
+                    $this->assertSame('云服务器 A', $payload['service_name'] ?? null);
                     $this->assertSame(5, $payload['days_left'] ?? null);
 
                     return true;
@@ -150,12 +150,12 @@ class BillingAutomationServiceTest extends TestCase
     {
         $user = User::query()->create([
             'email' => 'invoice@test.com',
-            'nickname' => '寤哄崟瀹㈡埛',
+            'nickname' => '建单客户',
         ]);
 
         $service = Service::query()->create([
             'user_id' => $user->id,
-            'name' => '浜戞湇鍔″櫒 B',
+            'name' => '云服务器 B',
             'billing_cycle' => 'monthly',
             'status' => ServiceStatus::ACTIVE,
             'auto_renew' => 1,

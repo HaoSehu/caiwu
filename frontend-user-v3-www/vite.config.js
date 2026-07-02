@@ -206,6 +206,10 @@ export default defineConfig(({ mode }) => {
           target: backendProxyTarget,
           changeOrigin: true,
         },
+        '/media': {
+          target: backendProxyTarget,
+          changeOrigin: true,
+        },
         '/ws/vnc': {
           target: backendWsProxyTarget,
           changeOrigin: true,

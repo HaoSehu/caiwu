@@ -34,6 +34,12 @@ class HomeHeroService
 
     public const RIBBON_TYPE_OPTIONS = ['hot', 'warm', 'new'];
 
+    private const LEGACY_HERO_VIDEO_PREFIX = '/uploads/hero-videos/';
+
+    private const MEDIA_LIBRARY_HERO_VIDEO_PREFIX = '/uploads/media/videos/hero-videos/';
+
+    private const FLAT_MEDIA_PREFIX = '/media/';
+
     /**
      * 返回前台与管理端均可直接消费的 hero 内容。
      *
@@ -105,7 +111,7 @@ class HomeHeroService
                 'secondary_text' => '查看详情',
                 'secondary_path' => '/about',
                 'shape' => 'computer',
-                'video' => '/uploads/hero-videos/hero-1.mp4',
+                'video' => $this->defaultHeroVideoPath('hero-1.mp4'),
                 'ribbon' => '',
                 'ribbon_type' => 'new',
             ],
@@ -119,7 +125,7 @@ class HomeHeroService
                 'secondary_text' => '查看线路',
                 'secondary_path' => '/help',
                 'shape' => 'connection',
-                'video' => '/uploads/hero-videos/hero-2.mp4',
+                'video' => $this->defaultHeroVideoPath('hero-2.mp4'),
                 'ribbon' => '',
                 'ribbon_type' => 'new',
             ],
@@ -133,7 +139,7 @@ class HomeHeroService
                 'secondary_text' => '在线咨询',
                 'secondary_path' => '/help',
                 'shape' => 'security',
-                'video' => '/uploads/hero-videos/hero-3.mp4',
+                'video' => $this->defaultHeroVideoPath('hero-3.mp4'),
                 'ribbon' => '',
                 'ribbon_type' => 'new',
             ],
@@ -147,7 +153,7 @@ class HomeHeroService
                 'secondary_text' => '查看优惠',
                 'secondary_path' => '/products',
                 'shape' => 'value',
-                'video' => '/uploads/hero-videos/hero-4.mp4',
+                'video' => $this->defaultHeroVideoPath('hero-4.mp4'),
                 'ribbon' => '',
                 'ribbon_type' => 'warm',
             ],
@@ -161,7 +167,7 @@ class HomeHeroService
                 'secondary_text' => '企业采购',
                 'secondary_path' => '/about',
                 'shape' => 'support',
-                'video' => '/uploads/hero-videos/hero-5.mp4',
+                'video' => $this->defaultHeroVideoPath('hero-5.mp4'),
                 'ribbon' => '',
                 'ribbon_type' => 'new',
             ],
@@ -322,7 +328,13 @@ class HomeHeroService
         }
 
         $path = '/'.ltrim(str_replace('\\', '/', $path), '/');
-        if (! str_starts_with($path, '/uploads/hero-videos/')) {
+        $isFlatMediaPath = preg_match('/^\/media\/[^\/]+\.(mp4|webm|ogg|mov|m4v)$/i', $path) === 1;
+
+        if (
+            ! $isFlatMediaPath
+            && ! str_starts_with($path, self::LEGACY_HERO_VIDEO_PREFIX)
+            && ! str_starts_with($path, self::MEDIA_LIBRARY_HERO_VIDEO_PREFIX)
+        ) {
             return '';
         }
 
@@ -331,7 +343,25 @@ class HomeHeroService
             return '';
         }
 
-        return '/uploads/hero-videos/'.$filename;
+        if ($isFlatMediaPath) {
+            return $path;
+        }
+
+        if (str_starts_with($path, self::MEDIA_LIBRARY_HERO_VIDEO_PREFIX)) {
+            return $path;
+        }
+
+        return self::LEGACY_HERO_VIDEO_PREFIX.$filename;
+    }
+
+    private function defaultHeroVideoPath(string $filename): string
+    {
+        $libraryPath = MediaFileService::relativePath($filename);
+        if (@is_file(public_path(ltrim($libraryPath, '/')))) {
+            return $libraryPath;
+        }
+
+        return self::LEGACY_HERO_VIDEO_PREFIX.$filename;
     }
 
     /**

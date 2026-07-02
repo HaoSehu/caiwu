@@ -366,13 +366,22 @@ class ProvisionService
             throw new BusinessException('供应商信息不存在，无法自动开通');
         }
 
+        $provisioning = $this->resolveProvisioningCapability($product);
+        if (method_exists($provisioning, 'provisionOrder')) {
+            $this->resolveProvisionHostname($order);
+            $cartLockKey = "lock:supplier:cart:{$supplier->id}";
+
+            return Cache::lock($cartLockKey, 30)->block(10, function () use ($order, $supplier, $provisioning) {
+                return $provisioning->provisionOrder($order, $supplier, $order->service);
+            });
+        }
+
         // 幂等键回查：如果 service 已有 upstream_host_id，先查上游确认 host 存在且 Active，
         // 直接返回而不重新走购物车流程，避免重复开通。
         $existingService = $order->service;
         if ($existingService && ! empty($existingService->provision_data['upstream_host_id'])) {
             $existingHostId = (int) $existingService->provision_data['upstream_host_id'];
             try {
-                $provisioning = $this->resolveProvisioningCapability($product);
                 $jwt = $provisioning->login($supplier);
                 $detailResponse = $provisioning->get($supplier, "/v1/hosts/{$existingHostId}", $jwt);
                 if (($detailResponse['status'] ?? 0) === 200) {
@@ -402,7 +411,6 @@ class ProvisionService
         }
 
         $cartLockKey = "lock:supplier:cart:{$supplier->id}";
-        $provisioning = $this->resolveProvisioningCapability($product);
 
         $startedAt = microtime(true);
 
@@ -1014,6 +1022,12 @@ class ProvisionService
         $rule = (function () use ($product, $supplier, $supplierProductId) {
             try {
                 $provisioning = $this->resolveProvisioningCapability($product);
+                if (method_exists($provisioning, 'getProductProvisionConfig')) {
+                    $response = $provisioning->getProductProvisionConfig($supplier, $supplierProductId);
+
+                    return $this->extractUpstreamProvisionHostnameRule($response, $supplierProductId);
+                }
+
                 $jwt = $provisioning->login($supplier);
                 $response = $provisioning->get($supplier, '/v1/productsconfig', $jwt, [
                     'product_id' => $supplierProductId,

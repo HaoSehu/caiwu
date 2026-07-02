@@ -37,9 +37,13 @@ Route::post('/auth/login-by-code', [AuthController::class, 'loginByCode'])->midd
 Route::match(['GET', 'POST'], '/verification/callback', [VerificationController::class, 'callback'])->middleware('verify.callback');
 Route::get('/verification/scan', [VerificationController::class, 'scan']);
 
-// 支付宝异步通知（无需认证，支付宝服务器回调）
+// 支付宝异步通知（无需认证，支付宝服务器回调）— 向后兼容
 Route::post('/payment/alipay/notify', [PaymentCallbackController::class, 'alipayNotify'])
     ->middleware('verify.alipay.callback');
+
+// 第三方支付网关异步通知（通用入口）
+Route::post('/payment/notify/{gateway}', [PaymentCallbackController::class, 'notify'])
+    ->middleware('verify.payment.callback');
 
 // VNC Token 验证（无需认证，供VNC页面独立访问）
 Route::get('/vnc-tokens/{token}', [ServiceController::class, 'vncToken'])->middleware('throttle:30,1,client-vnc-token');

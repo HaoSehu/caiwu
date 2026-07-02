@@ -8,7 +8,11 @@ use App\Models\AdminUser;
 use App\Models\Product;
 use App\Models\Role;
 use App\Models\Supplier;
+use App\Services\System\AdminLogService;
 use App\Support\AdminPermissions;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -34,6 +38,122 @@ class AdminSecurityBoundaryRegressionTest extends TestCase
         ])
             ->assertForbidden()
             ->assertJsonPath('code', 40300);
+    }
+
+    public function test_log_cleanup_accepts_schedule_run_type_from_overview(): void
+    {
+        Cache::flush();
+        Sanctum::actingAs($this->createAdminUser([AdminPermissions::LOG_MANAGE]));
+
+        $oldLogId = DB::table('schedule_run_logs')->insertGetId([
+            'task_name' => 'cleanup-boundary-old-'.bin2hex(random_bytes(4)),
+            'status' => 'success',
+            'duration_ms' => 1,
+            'summary' => json_encode([], JSON_THROW_ON_ERROR),
+            'started_at' => now()->subYears(20),
+            'finished_at' => now()->subYears(20),
+            'created_at' => now()->subYears(20),
+            'updated_at' => now()->subYears(20),
+        ]);
+        $recentLogId = DB::table('schedule_run_logs')->insertGetId([
+            'task_name' => 'cleanup-boundary-recent-'.bin2hex(random_bytes(4)),
+            'status' => 'success',
+            'duration_ms' => 1,
+            'summary' => json_encode([], JSON_THROW_ON_ERROR),
+            'started_at' => now(),
+            'finished_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $response = $this->postJson('/api/admin/logs/cleanup', [
+            'type' => 'schedule_run',
+            'keep_days' => 3650,
+            'confirm_text' => '立即清理',
+        ]);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('code', 0);
+
+        $this->assertGreaterThanOrEqual(1, (int) $response->json('data.affected.schedule_run'));
+
+        $this->assertDatabaseMissing('schedule_run_logs', ['id' => (int) $oldLogId]);
+        $this->assertDatabaseHas('schedule_run_logs', ['id' => (int) $recentLogId]);
+    }
+
+    public function test_log_cleanup_refreshes_overview_cache_after_database_cleanup(): void
+    {
+        Cache::flush();
+        Sanctum::actingAs($this->createAdminUser([AdminPermissions::LOG_MANAGE]));
+
+        $requestId = 'cleanup-overview-'.bin2hex(random_bytes(4));
+        DB::table('notification_logs')->insert([
+            'channel' => 'sms',
+            'recipient' => '13900000000',
+            'template_code' => 'cleanup-test',
+            'content' => 'cleanup test',
+            'params_json' => json_encode([], JSON_THROW_ON_ERROR),
+            'provider' => 'test',
+            'request_id' => $requestId,
+            'status' => 'success',
+            'created_at' => now()->subYears(20),
+            'updated_at' => now()->subYears(20),
+        ]);
+
+        $before = $this->getJson('/api/admin/logs/cleanup/overview')
+            ->assertOk()
+            ->json('data.database.sms');
+
+        $this->postJson('/api/admin/logs/cleanup', [
+            'type' => 'sms',
+            'keep_days' => 3650,
+            'confirm_text' => '立即清理',
+        ])->assertOk();
+
+        $after = $this->getJson('/api/admin/logs/cleanup/overview')
+            ->assertOk()
+            ->json('data.database.sms');
+
+        $this->assertLessThan((int) $before, (int) $after);
+        $this->assertDatabaseMissing('notification_logs', ['request_id' => $requestId]);
+    }
+
+    public function test_file_log_cleanup_removes_multiline_entries_as_a_unit(): void
+    {
+        Cache::flush();
+        $originalStoragePath = app()->storagePath();
+        $tempStoragePath = $originalStoragePath.DIRECTORY_SEPARATOR.'framework'.DIRECTORY_SEPARATOR.'testing'.DIRECTORY_SEPARATOR.'log-cleanup-'.bin2hex(random_bytes(4));
+
+        File::ensureDirectoryExists($tempStoragePath.DIRECTORY_SEPARATOR.'logs');
+        app()->useStoragePath($tempStoragePath);
+
+        try {
+            file_put_contents(storage_path('logs/laravel.log'), implode("\n", [
+                '['.now()->subYears(20)->format('Y-m-d H:i:s').'] local.ERROR: cleanup old failure',
+                '[stacktrace]',
+                '#0 /app/OldFailure.php(1): old()',
+                '['.now()->format('Y-m-d H:i:s').'] local.INFO: cleanup recent message',
+                '',
+            ]));
+
+            app(AdminLogService::class)->cleanup([
+                'type' => 'system',
+                'keep_days' => 3650,
+                'confirm_text' => '立即清理',
+            ]);
+
+            $content = (string) file_get_contents(storage_path('logs/laravel.log'));
+
+            $this->assertStringNotContainsString('cleanup old failure', $content);
+            $this->assertStringNotContainsString('[stacktrace]', $content);
+            $this->assertStringNotContainsString('OldFailure.php', $content);
+            $this->assertStringContainsString('cleanup recent message', $content);
+        } finally {
+            app()->useStoragePath($originalStoragePath);
+            File::deleteDirectory($tempStoragePath);
+            Cache::flush();
+        }
     }
 
     public function test_supplier_with_bound_products_cannot_be_deleted(): void

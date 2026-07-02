@@ -15,6 +15,13 @@ use Tests\TestCase;
 
 class AdminUserManualServiceStockTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->activateIntegrationPluginForTest('upstream', 'mofang_finance');
+    }
+
     public function test_manual_admin_service_can_be_created_when_product_stock_is_zero(): void
     {
         $suffix = bin2hex(random_bytes(4));

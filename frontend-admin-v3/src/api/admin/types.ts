@@ -191,6 +191,11 @@ export interface LogListParams {
   status?: string | number;
   phone?: string;
   email?: string;
+  gateway?: string;
+  action?: string;
+  result_status?: string;
+  actor_type?: string;
+  subject_type?: string;
 }
 
 export interface LaravelPagination<T extends Record<string, unknown> = Record<string, unknown>> {
@@ -290,12 +295,19 @@ export interface MediaFileRecord {
   url?: string;
   path?: string;
   mime_type?: string;
+  type?: string;
   size?: number;
   group?: string;
   created_at?: string;
   width?: number;
   height?: number;
   [key: string]: unknown;
+}
+
+export interface MediaReindexResult {
+  created?: number;
+  skipped?: number;
+  total?: number;
 }
 
 // ─── Site Hero ────────────────────────────────────────────────

@@ -30,7 +30,7 @@ final class UploadUrl
 
         if (str_starts_with($value, 'http://') || str_starts_with($value, 'https://')) {
             $parsedPath = parse_url($value, PHP_URL_PATH);
-            if (is_string($parsedPath) && str_starts_with($parsedPath, '/uploads/')) {
+            if (is_string($parsedPath) && self::isManagedUploadPath($parsedPath)) {
                 if (! self::uploadedFileExists($parsedPath)) {
                     return $value;
                 }
@@ -49,6 +49,13 @@ final class UploadUrl
         $normalized = '/'.ltrim($relativePath, '/');
 
         return is_file(public_path(ltrim($normalized, '/')));
+    }
+
+    private static function isManagedUploadPath(string $path): bool
+    {
+        $normalized = '/'.ltrim($path, '/');
+
+        return str_starts_with($normalized, '/media/') || str_starts_with($normalized, '/uploads/');
     }
 
     private static function buildFrontendUrl(string $relativePath): string

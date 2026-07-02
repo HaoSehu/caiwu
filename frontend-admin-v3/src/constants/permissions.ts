@@ -21,6 +21,7 @@ export const AdminPermissions = {
   PRODUCT_MANAGE: 'product.manage',
   SETTINGS_MANAGE: 'settings.manage',
   LOG_LIST: 'log.list',
+  LOG_MANAGE: 'log.manage',
   REFERRAL_LIST: 'referral.list',
   FINANCE_REPORT: 'finance.report',
   FINANCE_WITHDRAW: 'finance.withdraw',

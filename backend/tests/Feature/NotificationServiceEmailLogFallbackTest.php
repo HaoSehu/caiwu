@@ -5,8 +5,12 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Models\Setting;
+use App\Services\Integrations\Plugins\PluginInstaller;
+use App\Services\Integrations\Plugins\PluginScanner;
+use App\Services\Mail\MailDriverManager;
 use App\Services\System\AdminLogService;
 use App\Services\System\NotificationService;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
@@ -14,6 +18,23 @@ use Tests\TestCase;
 
 class NotificationServiceEmailLogFallbackTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->ensureSmtpMailPluginEnabled();
+    }
+
+    public function test_notification_service_no_longer_uses_plugin_placeholder_smtp_values(): void
+    {
+        $content = file_get_contents(base_path('app/Services/System/NotificationService.php'));
+
+        $this->assertIsString($content);
+        $this->assertStringNotContainsString("\$host = 'plugin'", $content);
+        $this->assertStringNotContainsString("\$username = 'plugin'", $content);
+        $this->assertStringNotContainsString('邮件接口配置不完整', $content);
+    }
+
     public function test_send_email_falls_back_to_email_logs_when_notification_logs_table_is_missing(): void
     {
         if (Schema::hasTable('notification_logs')) {
@@ -267,5 +288,54 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
                 ];
             }
         };
+    }
+
+    private function ensureSmtpMailPluginEnabled(): void
+    {
+        $this->ensurePluginTables();
+
+        $scanner = app(PluginScanner::class);
+        $installer = app(PluginInstaller::class);
+        $scanner->requireManifest('mail', 'smtp');
+        $plugin = $installer->install('mail', 'smtp');
+        $installer->enable($plugin);
+
+        $this->app->forgetInstance(MailDriverManager::class);
+    }
+
+    private function ensurePluginTables(): void
+    {
+        if (! Schema::hasTable('integration_plugins')) {
+            Schema::create('integration_plugins', function (Blueprint $table): void {
+                $table->id();
+                $table->string('domain', 32);
+                $table->string('slug', 120);
+                $table->string('plugin_key', 120);
+                $table->string('name', 120);
+                $table->string('version', 32)->default('1.0.0');
+                $table->string('provider_class', 255)->nullable();
+                $table->string('entry_class', 255);
+                $table->json('capabilities_json')->nullable();
+                $table->json('config_schema_json')->nullable();
+                $table->unsignedTinyInteger('status')->default(0);
+                $table->timestamp('installed_at')->nullable();
+                $table->timestamps();
+                $table->unique(['domain', 'slug']);
+                $table->unique(['domain', 'plugin_key']);
+            });
+        }
+
+        if (! Schema::hasTable('integration_plugin_configs')) {
+            Schema::create('integration_plugin_configs', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('plugin_id');
+                $table->json('config_json')->nullable();
+                $table->longText('secret_json')->nullable();
+                $table->json('has_secret_json')->nullable();
+                $table->unsignedBigInteger('updated_by')->nullable();
+                $table->timestamps();
+                $table->unique('plugin_id');
+            });
+        }
     }
 }

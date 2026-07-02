@@ -4,9 +4,9 @@ use App\Constants\PaymentGatewayCode;
 
 return [
     'payments' => [
-        'default' => env('PAYMENT_GATEWAY_DEFAULT', PaymentGatewayCode::ALIPAY_F2F_PLUGIN),
+        'default' => env('PAYMENT_GATEWAY_DEFAULT', PaymentGatewayCode::ALIPAY),
         'drivers' => [
-            PaymentGatewayCode::ALIPAY_F2F_PLUGIN => [
+            PaymentGatewayCode::ALIPAY => [
                 'name' => '支付宝当面付',
                 'provider' => PaymentGatewayCode::ALIPAY,
             ],
@@ -25,6 +25,17 @@ return [
         'drivers' => [
             'aliyun' => [
                 'name' => '阿里云短信',
+            ],
+        ],
+    ],
+    'mail' => [
+        'default' => env('MAIL_DRIVER_DEFAULT', 'smtp'),
+        'drivers' => [
+            'smtp' => [
+                'name' => 'Single SMTP',
+            ],
+            'multi_smtp_round_robin' => [
+                'name' => 'Multi SMTP Round Robin',
             ],
         ],
     ],

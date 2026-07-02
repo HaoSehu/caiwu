@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Unit;
 
-use App\Integrations\Mofang\Adapters\MofangFinanceAdapter;
-use App\Integrations\Mofang\Drivers\MofangFinanceDriver;
-use App\Integrations\Mofang\Support\MofangCloudConfigTemplate;
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\Supplier;
@@ -17,6 +14,9 @@ use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiTransport;
 use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
+use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangCloudConfigTemplate;
+use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangFinanceAdapter;
+use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangFinanceDriver;
 use Tests\TestCase;
 
 class ProviderResolverTest extends TestCase

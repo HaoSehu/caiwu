@@ -381,6 +381,25 @@ TEXT,
 TEXT,
                 'variables' => ['site_name', 'display_name', 'old_email', 'new_email', 'changed_at', 'ip', 'device'],
             ],
+            '100020' => [
+                'code' => '100020',
+                'name' => '即将自动续费提醒',
+                'description' => '自动续费执行前一天发送提醒邮件。',
+                'subject' => '【{{site_name}}】即将自动续费提醒',
+                'content' => <<<'TEXT'
+您好，{{display_name}}：
+
+{{urgency_message}}
+
+服务名称：{{service_name}}
+到期时间：{{expires_at}}
+计费周期：{{billing_cycle_label}}
+自动续费日期：{{auto_renew_date}}
+
+如需取消自动续费，请在 {{auto_renew_date}} 前登录控制台关闭。
+TEXT,
+                'variables' => ['site_name', 'display_name', 'service_name', 'expires_at', 'billing_cycle_label', 'auto_renew_date', 'urgency_message'],
+            ],
         ];
     }
 

@@ -9,6 +9,7 @@ use App\Services\Integrations\Payments\Data\PaymentPrecreateResult;
 use App\Services\Integrations\Payments\Data\PaymentQueryResult;
 use App\Services\Integrations\Payments\Data\PaymentRefundRequest;
 use App\Services\Integrations\Payments\Data\PaymentRefundResult;
+use Illuminate\Http\Response;
 
 interface PaymentGatewayInterface
 {
@@ -27,4 +28,10 @@ interface PaymentGatewayInterface
     public function refund(PaymentRefundRequest $request): PaymentRefundResult;
 
     public function verifyNotify(array $payload): bool;
+
+    /**
+     * 构建异步通知响应（各网关格式不同）。
+     * 支付宝返回 text/plain "success"/"fail"，微信返回 application/xml。
+     */
+    public function buildNotifyResponse(bool $success): Response;
 }

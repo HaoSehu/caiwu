@@ -15,7 +15,6 @@ use App\Services\Finance\CouponService;
 use App\Services\Finance\InvoiceService;
 use App\Services\Finance\PaymentService;
 use App\Services\Order\PaidOrderBusinessFlowDispatcher;
-use App\Services\PaymentGateway\AlipayFaceToFaceService;
 use App\Services\Provisioning\ProvisionService;
 use App\Services\Provisioning\ServiceRenewService;
 use App\Services\Referral\ReferralService;
@@ -57,26 +56,28 @@ class RechargeStatusBalanceRegressionTest extends TestCase
 
         $tradeNo = 'TRADE-'.strtoupper(bin2hex(random_bytes(4)));
 
-        $alipayService = $this->createMock(AlipayFaceToFaceService::class);
-        $alipayService->expects($this->once())
-            ->method('query')
-            ->with((string) $payment->payment_no)
-            ->willReturn([
-                'trade_status' => 'TRADE_SUCCESS',
-                'trade_no' => $tradeNo,
-                'out_trade_no' => (string) $payment->payment_no,
-                'total_amount' => '5.00',
-                'raw' => [
+        $alipayGateway = $this->makeFakePaymentGateway([
+            'query' => function (string $outTradeNo) use ($payment, $tradeNo): array {
+                $this->assertSame((string) $payment->payment_no, $outTradeNo);
+
+                return [
                     'trade_status' => 'TRADE_SUCCESS',
                     'trade_no' => $tradeNo,
                     'out_trade_no' => (string) $payment->payment_no,
                     'total_amount' => '5.00',
-                ],
-            ]);
+                    'raw' => [
+                        'trade_status' => 'TRADE_SUCCESS',
+                        'trade_no' => $tradeNo,
+                        'out_trade_no' => (string) $payment->payment_no,
+                        'total_amount' => '5.00',
+                    ],
+                ];
+            },
+        ]);
 
         $service = new PaymentService(
             $this->createMock(ProvisionService::class),
-            $this->makePaymentGatewayManagerForTest($alipayService),
+            $this->makePaymentGatewayManagerForTest($alipayGateway),
             $this->createMock(ServiceRenewService::class),
             $this->createMock(ReferralService::class),
             $this->createMock(PaidOrderBusinessFlowDispatcher::class),
@@ -118,6 +119,7 @@ class RechargeStatusBalanceRegressionTest extends TestCase
         $resultAgain = $service->queryRechargeStatus($payment->fresh());
 
         $this->assertTrue($resultAgain['paid']);
+        $this->assertSame(1, $alipayGateway->countCalls('query'));
         $this->assertSame(1, AccountTransaction::query()
             ->where('user_id', (int) $user->id)
             ->where('event_type', 'recharge')
@@ -163,22 +165,24 @@ class RechargeStatusBalanceRegressionTest extends TestCase
         ]);
 
         $tradeNo = 'TRADE-ROLLBACK-'.strtoupper(bin2hex(random_bytes(4)));
-        $alipayService = $this->createMock(AlipayFaceToFaceService::class);
-        $alipayService->expects($this->once())
-            ->method('query')
-            ->with((string) $payment->payment_no)
-            ->willReturn([
-                'trade_status' => 'TRADE_SUCCESS',
-                'trade_no' => $tradeNo,
-                'out_trade_no' => (string) $payment->payment_no,
-                'total_amount' => '5.00',
-                'raw' => [
+        $alipayGateway = $this->makeFakePaymentGateway([
+            'query' => function (string $outTradeNo) use ($payment, $tradeNo): array {
+                $this->assertSame((string) $payment->payment_no, $outTradeNo);
+
+                return [
                     'trade_status' => 'TRADE_SUCCESS',
                     'trade_no' => $tradeNo,
                     'out_trade_no' => (string) $payment->payment_no,
                     'total_amount' => '5.00',
-                ],
-            ]);
+                    'raw' => [
+                        'trade_status' => 'TRADE_SUCCESS',
+                        'trade_no' => $tradeNo,
+                        'out_trade_no' => (string) $payment->payment_no,
+                        'total_amount' => '5.00',
+                    ],
+                ];
+            },
+        ]);
 
         $invoiceService = new class extends InvoiceService
         {
@@ -190,7 +194,7 @@ class RechargeStatusBalanceRegressionTest extends TestCase
 
         $service = new PaymentService(
             $this->createMock(ProvisionService::class),
-            $this->makePaymentGatewayManagerForTest($alipayService),
+            $this->makePaymentGatewayManagerForTest($alipayGateway),
             $this->createMock(ServiceRenewService::class),
             $this->createMock(ReferralService::class),
             $this->createMock(PaidOrderBusinessFlowDispatcher::class),
@@ -205,6 +209,7 @@ class RechargeStatusBalanceRegressionTest extends TestCase
         try {
             $service->queryRechargeStatus($payment);
         } finally {
+            $this->assertSame(1, $alipayGateway->countCalls('query'));
             $this->assertDatabaseHas('payments', [
                 'id' => (int) $payment->id,
                 'status' => PaymentStatus::PENDING,

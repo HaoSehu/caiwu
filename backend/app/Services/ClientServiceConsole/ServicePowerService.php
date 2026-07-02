@@ -42,7 +42,9 @@ class ServicePowerService
         throw_if(! $this->transformService->canExecuteConsoleActions($service), new BusinessException('当前实例状态不支持该操作', 42200));
 
         [$runtime, $supplier, $hostId, $jwt] = $this->detailService->resolveUpstreamContext($service);
-        $response = $runtime->put($supplier, "/v1/hosts/{$hostId}/module/{$action}", [], $jwt);
+        $response = is_callable([$runtime, 'powerAction'])
+            ? $runtime->powerAction($supplier, $hostId, $action, $jwt)
+            : $runtime->put($supplier, "/v1/hosts/{$hostId}/module/{$action}", [], $jwt);
         $this->detailService->assertSuccess($response, ClientServiceConsoleService::POWER_ACTIONS[$action]);
 
         $refreshError = '';
@@ -158,7 +160,9 @@ class ServicePowerService
             }
         }
 
-        $response = $runtime->get($supplier, "/v1/hosts/{$hostId}/module/reinstall", $jwt);
+        $response = is_callable([$runtime, 'getReinstallOptions'])
+            ? $runtime->getReinstallOptions($supplier, $hostId, $jwt)
+            : $runtime->get($supplier, "/v1/hosts/{$hostId}/module/reinstall", $jwt);
         $this->detailService->assertSuccess($response, '读取重装系统');
 
         $payload = $this->detailService->extractPayload($response);
@@ -203,9 +207,11 @@ class ServicePowerService
 
         [$runtime, $supplier, $hostId, $jwt] = $this->detailService->resolveUpstreamContext($service);
         $password = (string) ($data['password'] ?? '');
-        $response = $runtime->put($supplier, "/v1/hosts/{$hostId}/module/repassword", [
-            'password' => $password,
-        ], $jwt);
+        $response = is_callable([$runtime, 'resetPassword'])
+            ? $runtime->resetPassword($supplier, $hostId, $password, $jwt)
+            : $runtime->put($supplier, "/v1/hosts/{$hostId}/module/repassword", [
+                'password' => $password,
+            ], $jwt);
         $this->detailService->assertSuccess($response, '重置密码');
         $secondVerify = $this->detailService->extractSecondVerify($response);
 
@@ -253,7 +259,9 @@ class ServicePowerService
 
         [$runtime, $supplier, $hostId, $jwt] = $this->detailService->resolveUpstreamContext($service);
         $payload = ['os_id' => (string) ($data['os_id'] ?? '')];
-        $response = $runtime->put($supplier, "/v1/hosts/{$hostId}/module/reinstall", $payload, $jwt);
+        $response = is_callable([$runtime, 'reinstall'])
+            ? $runtime->reinstall($supplier, $hostId, (string) $payload['os_id'], $jwt)
+            : $runtime->put($supplier, "/v1/hosts/{$hostId}/module/reinstall", $payload, $jwt);
         $this->detailService->assertSuccess($response, '重装系统');
 
         $taskStatus = null;

@@ -9,6 +9,7 @@ import { ticketsApi } from './ticket';
 import { verificationsApi } from './verification';
 import { memberLevelsApi } from './memberLevel';
 import { instanceSpecCatalogApi, cpuModelCatalogApi } from './spec';
+import { pluginsApi } from './plugins';
 
 // Shared admin API types.
 export * from './types';
@@ -70,4 +71,7 @@ export const adminApi = {
 
   // Verifications
   verifications: verificationsApi,
+
+  // Integration Plugins
+  plugins: pluginsApi,
 };

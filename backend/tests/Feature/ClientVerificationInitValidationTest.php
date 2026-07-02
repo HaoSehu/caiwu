@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Models\Setting;
 use App\Models\User;
 use App\Services\Auth\VerificationService;
-use Illuminate\Support\Facades\DB;
+use App\Services\Integrations\Plugins\PluginConfigRepository;
+use App\Services\Integrations\Plugins\PluginInstaller;
+use App\Services\Integrations\Plugins\PluginScanner;
+use App\Services\Verification\VerificationDriverManager;
 use Tests\TestCase;
 
 class ClientVerificationInitValidationTest extends TestCase
@@ -131,46 +133,35 @@ class ClientVerificationInitValidationTest extends TestCase
         $this->assertSame('IDENTITY_CARD', $receivedCertType);
     }
 
-    public function test_fee_config_reads_admin_saved_verification_settings(): void
+    public function test_fee_config_reads_enabled_verification_plugin_config(): void
     {
         $suffix = bin2hex(random_bytes(4));
         $user = $this->createUnverifiedUser($suffix);
         $token = $user->createToken('client-verification-fee-config-test')->plainTextToken;
-        $keys = ['free_attempts', 'retry_fee'];
-        $originalRows = DB::table('settings')
-            ->where('group_key', 'verification')
-            ->whereIn('item_key', $keys)
-            ->get(['group_key', 'item_key', 'item_value'])
-            ->map(fn (object $row): array => [
-                'group_key' => (string) $row->group_key,
-                'item_key' => (string) $row->item_key,
-                'item_value' => $row->item_value,
-            ])
-            ->all();
 
-        try {
-            DB::table('settings')
-                ->where('group_key', 'verification')
-                ->whereIn('item_key', $keys)
-                ->delete();
+        $scanner = app(PluginScanner::class);
+        $installer = app(PluginInstaller::class);
+        $configRepository = app(PluginConfigRepository::class);
+        $manifest = $scanner->requireManifest('verification', 'stay33');
+        $plugin = $installer->install('verification', 'stay33');
+        $configRepository->save($plugin, $manifest, [
+            'api' => 'verification-api',
+            'key' => 'verification-secret',
+            'biz_code' => 'FACE',
+            'charge_enabled' => true,
+            'amount' => 8.5,
+            'free_times' => 5,
+        ]);
+        $installer->enable($plugin);
+        $this->app->forgetInstance(VerificationDriverManager::class);
+        $this->app->forgetInstance(VerificationService::class);
 
-            Setting::setValue('verification', 'free_attempts', 5);
-            Setting::setValue('verification', 'retry_fee', '8.50');
-
-            $this->withHeader('Authorization', 'Bearer '.$token)
-                ->getJson('/api/client/verification/fee-config')
-                ->assertOk()
-                ->assertJsonPath('data.free_attempts', 5)
-                ->assertJsonPath('data.retry_fee', 8.5);
-        } finally {
-            DB::table('settings')
-                ->where('group_key', 'verification')
-                ->whereIn('item_key', $keys)
-                ->delete();
-
-            if ($originalRows !== []) {
-                DB::table('settings')->insert($originalRows);
-            }
-        }
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson('/api/client/verification/fee-config')
+            ->assertOk()
+            ->assertJsonPath('data.free_attempts', 5)
+            ->assertJsonPath('data.retry_fee', 8.5)
+            ->assertJsonPath('data.charge_enabled', true)
+            ->assertJsonPath('data.amount', 8.5);
     }
 }

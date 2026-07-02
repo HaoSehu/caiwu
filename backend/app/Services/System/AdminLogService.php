@@ -34,6 +34,8 @@ class AdminLogService
 
     private const CLEANUP_OVERVIEW_CACHE_TTL_SECONDS = 20;
 
+    private const CLEANUP_OVERVIEW_CACHE_VERSION_KEY = 'admin_logs:cleanup_overview:version';
+
     private const FILE_LOG_SUMMARY_CACHE_TTL_SECONDS = 20;
 
     private const TASK_META = [
@@ -935,7 +937,7 @@ class AdminLogService
     public function getActivityLogs(array $filters, int $page, int $perPage): array
     {
         if (! Schema::hasTable('activity_logs')) {
-            return $this->buildPaginatorPayload($this->emptyPaginator($perPage));
+            return $this->getBusinessOperationLogsAsActivityLogs($filters, $page, $perPage);
         }
 
         $query = ActivityLog::query();
@@ -946,6 +948,10 @@ class AdminLogService
                 $builder->where('description', 'like', "%{$keyword}%")
                     ->orWhere('actor_name', 'like', "%{$keyword}%")
                     ->orWhere('module', 'like', "%{$keyword}%");
+
+                if (ctype_digit($keyword)) {
+                    $builder->orWhere('actor_id', (int) $keyword);
+                }
             });
         }
 
@@ -965,6 +971,17 @@ class AdminLogService
 
         $logs = (clone $query)->orderByDesc('created_at')->paginate($perPage, ['*'], 'page', $page);
 
+        if ($logs->total() === 0) {
+            return $this->getBusinessOperationLogsAsActivityLogs($filters, $page, $perPage);
+        }
+
+        $logs->setCollection($logs->getCollection()->map(function (ActivityLog $log) {
+            $item = $log->toArray();
+            $item['source'] = 'activity_log';
+
+            return $item;
+        }));
+
         $summary = (clone $query)
             ->selectRaw('COUNT(*) as total')
             ->selectRaw('COUNT(DISTINCT module) as modules')
@@ -973,6 +990,188 @@ class AdminLogService
         return $this->buildPaginatorPayload($logs, [
             'total' => (int) ($summary?->total ?? 0),
             'modules' => (int) ($summary?->modules ?? 0),
+            'source' => 'activity_logs',
         ]);
+    }
+
+    private function getBusinessOperationLogsAsActivityLogs(array $filters, int $page, int $perPage): array
+    {
+        if (! Schema::hasTable('operation_logs')) {
+            return $this->buildPaginatorPayload($this->emptyPaginator($perPage));
+        }
+
+        $query = OperationLog::query()
+            ->whereRaw('action NOT REGEXP ?', [self::HTTP_ACTION_REGEXP])
+            ->where('action', '<>', 'admin.login');
+
+        if (! empty($filters['keyword'])) {
+            $keyword = trim((string) $filters['keyword']);
+            $actorCandidates = $this->resolveActorKeywordCandidates($keyword);
+            $query->where(function ($builder) use ($keyword, $actorCandidates) {
+                $builder->where('action', 'like', "%{$keyword}%")
+                    ->orWhere('module', 'like', "%{$keyword}%")
+                    ->orWhere('ip_address', 'like', "%{$keyword}%")
+                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.title')) like ?", ["%{$keyword}%"])
+                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.message')) like ?", ["%{$keyword}%"])
+                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.content')) like ?", ["%{$keyword}%"])
+                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.target')) like ?", ["%{$keyword}%"]);
+
+                if ($actorCandidates['admin'] !== []) {
+                    $builder->orWhere(function ($query) use ($actorCandidates) {
+                        $query->where('user_type', 'admin')
+                            ->whereIn('user_id', $actorCandidates['admin']);
+                    });
+                }
+
+                if ($actorCandidates['client'] !== []) {
+                    $builder->orWhere(function ($query) use ($actorCandidates) {
+                        $query->where('user_type', 'client')
+                            ->whereIn('user_id', $actorCandidates['client']);
+                    });
+                }
+            });
+        }
+
+        if (! empty($filters['module'])) {
+            $query->where('module', trim((string) $filters['module']));
+        }
+
+        if (! empty($filters['actor_type'])) {
+            $actorType = trim((string) $filters['actor_type']);
+            if ($actorType === 'system') {
+                $query->where(function ($builder) {
+                    $builder->whereNull('user_type')
+                        ->orWhere('user_type', '')
+                        ->orWhere('user_type', 'system');
+                });
+            } else {
+                $query->where('user_type', $actorType);
+            }
+        }
+
+        if (! empty($filters['subject_type'])) {
+            $query->where('module', trim((string) $filters['subject_type']));
+        }
+
+        $this->applyDateFilter($query, $filters);
+
+        $logs = (clone $query)->orderByDesc('created_at')->paginate($perPage, ['*'], 'page', $page);
+        $logs->setCollection(
+            $this->mapOperationLogs($logs->getCollection(), true)
+                ->map(fn (array $item) => $this->mapOperationLogToActivityRow($item))
+        );
+
+        $summary = (clone $query)
+            ->selectRaw('COUNT(*) as total')
+            ->selectRaw('COUNT(DISTINCT module) as modules')
+            ->first();
+
+        return $this->buildPaginatorPayload($logs, [
+            'total' => (int) ($summary?->total ?? 0),
+            'modules' => (int) ($summary?->modules ?? 0),
+            'source' => 'operation_logs',
+        ]);
+    }
+
+    private function mapOperationLogToActivityRow(array $item): array
+    {
+        $detail = is_array($item['detail'] ?? null) ? $item['detail'] : [];
+        $module = trim((string) ($item['module'] ?? ''));
+        $actorType = trim((string) ($item['user_type'] ?? '')) ?: 'system';
+        $actorName = trim((string) ($item['actor_name'] ?? '')) ?: $this->fallbackActorName($actorType);
+
+        return [
+            'id' => 'operation-'.$item['id'],
+            'source' => 'operation_log',
+            'actor_type' => $actorType,
+            'actor_id' => $item['user_id'] ?? null,
+            'actor_name' => $actorName,
+            'module' => $module,
+            'action' => trim((string) ($item['action'] ?? '')),
+            'description' => $this->operationLogDescription($item),
+            'subject_type' => $module !== '' ? $module : null,
+            'subject_id' => $item['target_id'] ?? null,
+            'context' => SensitiveDataSanitizer::sanitize($detail),
+            'ip_address' => trim((string) ($item['ip_address'] ?? '')),
+            'created_at' => $item['created_at'] ?? null,
+        ];
+    }
+
+    private function operationLogDescription(array $item): string
+    {
+        foreach (['title', 'content', 'target'] as $key) {
+            $value = trim((string) ($item[$key] ?? ''));
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        $detail = is_array($item['detail'] ?? null) ? $item['detail'] : [];
+        foreach (['title', 'message', 'content', 'target'] as $key) {
+            $value = trim((string) ($detail[$key] ?? ''));
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return trim((string) ($item['action'] ?? ''));
+    }
+
+    private function fallbackActorName(string $actorType): string
+    {
+        return [
+            'admin' => '管理员',
+            'client' => '客户',
+            'system' => '系统',
+            'sub_account' => '子账号',
+        ][$actorType] ?? $actorType;
+    }
+
+    private function resolveActorKeywordCandidates(string $keyword): array
+    {
+        $keyword = trim($keyword);
+        if ($keyword === '') {
+            return ['admin' => [], 'client' => []];
+        }
+
+        $adminIds = collect();
+        if (Schema::hasTable('admin_users')) {
+            $adminIds = AdminUser::query()
+                ->where(function ($query) use ($keyword) {
+                    $query->where('username', 'like', "%{$keyword}%")
+                        ->orWhere('nickname', 'like', "%{$keyword}%")
+                        ->orWhere('email', 'like', "%{$keyword}%");
+
+                    if (ctype_digit($keyword)) {
+                        $query->orWhere('id', (int) $keyword);
+                    }
+                })
+                ->limit(200)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id);
+        }
+
+        $clientIds = collect();
+        if (Schema::hasTable('users')) {
+            $clientIds = User::query()
+                ->where(function ($query) use ($keyword) {
+                    $query->where('email', 'like', "%{$keyword}%")
+                        ->orWhere('phone', 'like', "%{$keyword}%")
+                        ->orWhere('nickname', 'like', "%{$keyword}%")
+                        ->orWhere('real_name', 'like', "%{$keyword}%");
+
+                    if (ctype_digit($keyword)) {
+                        $query->orWhere('id', (int) $keyword);
+                    }
+                })
+                ->limit(200)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id);
+        }
+
+        return [
+            'admin' => $adminIds->values()->all(),
+            'client' => $clientIds->values()->all(),
+        ];
     }
 }

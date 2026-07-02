@@ -3,6 +3,7 @@ import {
   attachSafeRequestDedupe,
   buildSafeRequestKey,
   createRequestId,
+  extractValidationErrors,
   getNetworkProfile,
   isSafeRequest,
   isWriteRequest,
@@ -175,8 +176,8 @@ request.interceptors.response.use(
       msg = '请求超时，请检查网络后重试'
     }
 
-    if (error.response?.status === 422 && error.response?.data?.errors) {
-      const errors = Object.values(error.response.data.errors).flat()
+    if (error.response?.status === 422) {
+      const errors = extractValidationErrors(error.response?.data)
       const trustedErrors = errors
         .map((item) => toUserMessage(item, ''))
         .filter(Boolean)

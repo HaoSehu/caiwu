@@ -22,7 +22,6 @@ use App\Services\Finance\InvoiceService;
 use App\Services\Finance\PaymentService;
 use App\Services\Order\OrderService;
 use App\Services\Order\PaidOrderBusinessFlowDispatcher;
-use App\Services\PaymentGateway\AlipayFaceToFaceService;
 use App\Services\ProductCatalog\ProductCatalogService;
 use App\Services\Provisioning\ProvisionService;
 use App\Services\Provisioning\ServiceRenewService;
@@ -312,7 +311,7 @@ class OrderQuantityCheckoutFlowTest extends TestCase
 
         $paymentService = new PaymentService(
             $provisionService,
-            $this->makePaymentGatewayManagerForTest($this->createMock(AlipayFaceToFaceService::class)),
+            $this->makePaymentGatewayManagerForTest(),
             $this->createMock(ServiceRenewService::class),
             $this->createMock(ReferralService::class),
             $this->createMock(PaidOrderBusinessFlowDispatcher::class),
@@ -340,7 +339,7 @@ class OrderQuantityCheckoutFlowTest extends TestCase
         ]);
 
         $product = Product::query()->create([
-            'name' => '閸氬本顒炵紒顓″瀭濞村鐦崯鍡楁惂',
+            'name' => '续费同步测试商品',
             'product_type' => 'server',
             'pricing' => ['monthly' => '16.00'],
             'setup_fee' => '0.00',
@@ -424,7 +423,7 @@ class OrderQuantityCheckoutFlowTest extends TestCase
 
         $paymentService = new PaymentService(
             $this->createMock(ProvisionService::class),
-            $this->makePaymentGatewayManagerForTest($this->createMock(AlipayFaceToFaceService::class)),
+            $this->makePaymentGatewayManagerForTest(),
             $serviceRenewService,
             $this->createMock(ReferralService::class),
             $dispatcher,

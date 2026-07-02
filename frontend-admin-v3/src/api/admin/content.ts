@@ -6,6 +6,7 @@ import type {
   ContentArticleRecord,
   ContentArticlePayload,
   MediaFileRecord,
+  MediaReindexResult,
   HomeHeroSlide,
   HomeHeroFeature,
   HomeHeroPayload,
@@ -41,7 +42,7 @@ export const contentApi = {
 };
 
 export const mediaApi = {
-  list: (params?: { group?: string; keyword?: string; page?: number; page_size?: number }) =>
+  list: (params?: { group?: string; keyword?: string; type?: string; page?: number; page_size?: number }) =>
     request.get<{ list?: MediaFileRecord[]; total?: number; page?: number; page_size?: number }>({
       url: '/admin/media-files',
       params,
@@ -51,6 +52,14 @@ export const mediaApi = {
       url: '/admin/media-files',
       data,
       headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  reindex: () =>
+    request.post<MediaReindexResult>({
+      url: '/admin/media-files/reindex',
+    }),
+  remove: (id: number | string) =>
+    request.delete({
+      url: `/admin/media-files/${id}`,
     }),
 };
 

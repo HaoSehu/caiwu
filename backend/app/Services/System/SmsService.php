@@ -5,6 +5,7 @@ namespace App\Services\System;
 use App\Models\NotificationLog;
 use App\Models\Setting;
 use App\Models\SmsLog;
+use App\Services\Sms\Contracts\SmsDriver;
 use App\Services\Sms\Data\SmsSendRequest;
 use App\Services\Sms\SmsDriverManager;
 use Illuminate\Support\Facades\Log;
@@ -23,14 +24,15 @@ class SmsService
     {
         $templateCode = (string) Setting::getValue('notification', 'sms_template_code', '100001');
         $templateParams = ['code' => $code, 'min' => '5'];
-        $logContext = $this->createSmsLog($phone, $templateCode, $templateParams);
+        $driver = $this->resolveDriverForLog();
+        $logContext = $this->createSmsLog($phone, $templateCode, $templateParams, $driver?->key() ?? 'unconfigured');
 
         try {
             if (! $this->isEnabled()) {
                 throw new \RuntimeException('短信通知未启用');
             }
 
-            $driver = $this->driverManager->resolve();
+            $driver ??= $this->driverManager->resolve();
             $result = $driver->sendVerifyCode(new SmsSendRequest($phone, $code));
 
             $this->updateSmsLog($logContext, [
@@ -85,7 +87,7 @@ class SmsService
     /**
      * @return array{table: 'notification_logs'|'sms_logs'|null, id: int|null}
      */
-    private function createSmsLog(string $phone, string $templateCode, array $templateParams): array
+    private function createSmsLog(string $phone, string $templateCode, array $templateParams, string $provider): array
     {
         try {
             if (Schema::hasTable('notification_logs')) {
@@ -95,7 +97,7 @@ class SmsService
                     'template_code' => $templateCode,
                     'content' => $this->buildVerificationLogContent(),
                     'params_json' => $this->buildVerificationLogParams($templateParams),
-                    'provider' => 'aliyun',
+                    'provider' => $provider,
                     'status' => 'pending',
                     'origin_type' => 'sms_verify',
                     'origin_id' => 0,
@@ -110,7 +112,7 @@ class SmsService
                     'template_code' => $templateCode,
                     'content' => $this->buildVerificationLogContent(),
                     'params' => $this->buildVerificationLogParams($templateParams),
-                    'provider' => 'aliyun',
+                    'provider' => $provider,
                     'status' => 'pending',
                     'error_msg' => null,
                     'sent_at' => null,
@@ -127,6 +129,15 @@ class SmsService
         }
 
         return ['table' => null, 'id' => null];
+    }
+
+    private function resolveDriverForLog(): ?SmsDriver
+    {
+        try {
+            return $this->driverManager->resolve();
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**

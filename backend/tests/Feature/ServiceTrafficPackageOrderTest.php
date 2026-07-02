@@ -25,7 +25,6 @@ use App\Services\Finance\CouponService;
 use App\Services\Finance\InvoiceService;
 use App\Services\Finance\PaymentService;
 use App\Services\Order\PaidOrderBusinessFlowDispatcher;
-use App\Services\PaymentGateway\AlipayFaceToFaceService;
 use App\Services\Provisioning\ProvisionService;
 use App\Services\Provisioning\ServiceRenewService;
 use App\Services\Referral\ReferralService;
@@ -149,24 +148,28 @@ class ServiceTrafficPackageOrderTest extends TestCase
                 ->method('login')
                 ->with($this->callback(fn (Supplier $candidate): bool => (int) $candidate->id === (int) $supplier->id))
                 ->willReturn('traffic-jwt');
-            $transport->expects($this->exactly(2))
+            $transport->expects($this->once())
+                ->method('getHostDetail')
+                ->with(
+                    $this->callback(fn (Supplier $candidate): bool => (int) $candidate->id === (int) $supplier->id),
+                    778899,
+                    'traffic-jwt'
+                )
+                ->willReturn([
+                    'status' => 200,
+                    'data' => [
+                        'host' => [
+                            'bwusage' => 256.5,
+                            'bwlimit' => 1024,
+                            'domainstatus' => 'Active',
+                        ],
+                    ],
+                ]);
+            $transport->expects($this->once())
                 ->method('get')
                 ->willReturnCallback(function (Supplier $candidate, string $uri, ?string $jwt = null, array $query = []) use ($supplier) {
                     $this->assertSame((int) $supplier->id, (int) $candidate->id);
                     $this->assertSame('traffic-jwt', $jwt);
-
-                    if ($uri === '/v1/hosts/778899') {
-                        return [
-                            'status' => 200,
-                            'data' => [
-                                'host' => [
-                                    'bwusage' => 256.5,
-                                    'bwlimit' => 1024,
-                                    'domainstatus' => 'Active',
-                                ],
-                            ],
-                        ];
-                    }
 
                     if ($uri === '/v1/hosts/778899/module/status') {
                         $this->assertSame(['type' => 'host'], $query);
@@ -417,7 +420,7 @@ class ServiceTrafficPackageOrderTest extends TestCase
 
             $paymentService = new PaymentService(
                 $this->createMock(ProvisionService::class),
-                $this->makePaymentGatewayManagerForTest($this->createMock(AlipayFaceToFaceService::class)),
+                $this->makePaymentGatewayManagerForTest(),
                 $this->createMock(ServiceRenewService::class),
                 $this->createMock(ReferralService::class),
                 $dispatcher,

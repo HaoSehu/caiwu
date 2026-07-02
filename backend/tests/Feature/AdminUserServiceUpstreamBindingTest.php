@@ -15,6 +15,13 @@ use Tests\TestCase;
 
 class AdminUserServiceUpstreamBindingTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->activateIntegrationPluginForTest('upstream', 'mofang_finance');
+    }
+
     public function test_manual_service_can_bind_mofang_finance_supplier_and_override_upstream_product_id(): void
     {
         $suffix = bin2hex(random_bytes(4));

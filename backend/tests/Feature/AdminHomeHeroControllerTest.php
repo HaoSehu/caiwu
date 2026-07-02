@@ -107,6 +107,58 @@ class AdminHomeHeroControllerTest extends TestCase
             ->assertJsonPath('data.features.0.title', '香港 CN2 精品线路 上线');
     }
 
+    public function test_admin_update_home_hero_accepts_media_library_video_path(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+        $role = Role::query()->create([
+            'name' => 'admin-hero-media-'.$suffix,
+            'label' => 'Admin Hero Media',
+            'permissions' => [AdminPermissions::ALL],
+        ]);
+
+        $admin = AdminUser::query()->create([
+            'username' => 'admin-hero-media-'.$suffix,
+            'password' => 'Temp@123456',
+            'role_id' => (int) $role->id,
+            'nickname' => 'Admin Hero Media',
+            'email' => 'admin-hero-media-'.$suffix.'@example.com',
+            'status' => 1,
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->postJson('/api/admin/site/home-hero', [
+            'slides' => [
+                [
+                    'key' => 'refresh',
+                    'rail_title' => '官网焕新',
+                    'title' => '官网焕新 · 新版已上线',
+                    'desc' => '新版首页已经发布，欢迎立即体验。',
+                    'primary_text' => '立即体验',
+                    'primary_path' => '/products',
+                    'secondary_text' => '查看详情',
+                    'secondary_path' => '/about',
+                    'shape' => 'computer',
+                    'ribbon' => 'NEW',
+                    'ribbon_type' => 'new',
+                    'video' => '/media/hero.mp4',
+                ],
+            ],
+            'features' => [
+                [
+                    'key' => 'dynamic',
+                    'kicker' => '产品动态',
+                    'title' => '首页视频已切到媒体库目录',
+                    'desc' => '媒体库视频可以直接给首页 Hero 使用。',
+                    'path' => '/products',
+                ],
+            ],
+        ])
+            ->assertOk()
+            ->assertJsonPath('code', 0)
+            ->assertJsonPath('data.slides.0.video', '/media/hero.mp4');
+    }
+
     public function test_admin_update_home_hero_auto_fills_shape_and_key_when_missing(): void
     {
         $suffix = bin2hex(random_bytes(4));

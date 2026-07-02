@@ -1,0 +1,82 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Caiwu\Plugins\Sms\DemoSms\Lib;
+
+use App\Services\Sms\Data\SmsSendRequest;
+use App\Services\Sms\Data\SmsSendResult;
+
+class DemoSmsService
+{
+    public function key(): string
+    {
+        return 'demo_sms';
+    }
+
+    public function label(): string
+    {
+        return 'Demo 短信';
+    }
+
+    public function sendVerifyCode(SmsSendRequest $request): SmsSendResult
+    {
+        return new SmsSendResult(
+            status: 'success',
+            requestId: 'demo-sms-'.date('YmdHis'),
+            templateCode: (string) $request->option('template_code', 'DEMO_001'),
+            templateParams: ['code' => $request->code],
+            raw: ['demo' => true, 'phone' => $request->phone],
+        );
+    }
+
+    public function execute(array $request): array
+    {
+        $action = trim((string) ($request['action'] ?? ''));
+        $payload = is_array($request['payload'] ?? null) ? $request['payload'] : [];
+        $config = is_array($request['config'] ?? null) ? $request['config'] : [];
+
+        return match ($action) {
+            'sms.send_verify_code' => $this->success($action, $this->sendVerifyCode(new SmsSendRequest(
+                phone: (string) ($payload['phone'] ?? ''),
+                code: (string) ($payload['code'] ?? ''),
+                options: $this->resolveOptions($payload, $config),
+            ))->toArray()),
+            'sms.test' => $this->success($action, $this->sendVerifyCode(new SmsSendRequest(
+                phone: (string) ($payload['phone'] ?? ''),
+                code: '888888',
+                options: $this->resolveOptions($payload, $config),
+            ))->toArray()),
+            default => ['success' => false, 'action' => $action, 'message' => 'Unsupported plugin action', 'data' => []],
+        };
+    }
+
+    private function success(string $action, array $data): array
+    {
+        return [
+            'success' => true,
+            'action' => $action,
+            'data' => $data,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>  $config
+     * @return array<string, mixed>
+     */
+    private function resolveOptions(array $payload, array $config): array
+    {
+        $options = is_array($payload['options'] ?? null) ? $payload['options'] : [];
+
+        if (! array_key_exists('sign_name', $options) && isset($config['sign_name'])) {
+            $options['sign_name'] = $config['sign_name'];
+        }
+
+        if (! array_key_exists('template_code', $options) && isset($config['template_code'])) {
+            $options['template_code'] = $config['template_code'];
+        }
+
+        return $options;
+    }
+}

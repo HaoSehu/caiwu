@@ -62,5 +62,6 @@ class SmsLogSanitizationTest extends TestCase
         $this->assertStringNotContainsString('您的验证码为{$code}，{$expire_minutes}分钟内有效。', $content);
         $this->assertStringNotContainsString("'raw' => \$result", $content);
         $this->assertStringNotContainsString("'decoded' => \$decoded", $content);
+        $this->assertStringNotContainsString("'provider' => 'aliyun'", $content);
     }
 }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Client;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\PaymentGatewayCode;
+use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Client\Invoice\IndexRequest;
 use App\Http\Requests\Client\Invoice\PayByAlipayRequest;
@@ -377,7 +378,7 @@ class InvoiceController extends Controller
         $payMethods = [['key' => 'balance', 'name' => '余额支付']];
         if ((float) $payableAmount <= 0) {
             $payMethods = [['key' => 'free', 'name' => '确认支付']];
-        } elseif ($this->paymentGatewayManager->alipay()->isEnabled()) {
+        } elseif ($this->isAlipayPayMethodEnabled()) {
             $alipayName = Setting::getValue('payment', 'alipay_name') ?: '支付宝支付';
             $payMethods[] = ['key' => PaymentGatewayCode::ALIPAY, 'name' => $alipayName];
         }
@@ -417,6 +418,15 @@ class InvoiceController extends Controller
     private function resolveInvoicePayableAmount(Invoice $invoice): float
     {
         return round(max((float) ($invoice->amount ?? 0) - (float) ($invoice->paid_amount ?? 0), 0), 2);
+    }
+
+    private function isAlipayPayMethodEnabled(): bool
+    {
+        try {
+            return $this->paymentGatewayManager->alipay()->isEnabled();
+        } catch (BusinessException) {
+            return false;
+        }
     }
 
     private function buildClientListItem(Invoice $invoice): array

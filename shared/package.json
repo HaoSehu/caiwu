@@ -26,6 +26,6 @@
   "scripts": {
     "lint": "eslint . --ext .js,.ts,.vue",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --experimental-strip-types ./tests/runtime.test.mjs && node --experimental-strip-types ./tests/sanitizer.test.mjs"
+    "test": "node --experimental-strip-types ./tests/runtime.test.mjs && node --experimental-strip-types ./tests/sanitizer.test.mjs && node --experimental-strip-types ./tests/http-validation.test.mjs"
   }
 }

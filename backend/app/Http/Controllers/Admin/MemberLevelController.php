@@ -3,11 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Admin\MemberLevel\DestroyRequest;
+use App\Http\Requests\Admin\MemberLevel\SaveRequest;
 use App\Http\Resources\User\MemberLevelResource;
 use App\Models\MemberLevel;
 use App\Services\Referral\MemberLevelService;
-use Illuminate\Http\Request;
 
 class MemberLevelController extends Controller
 {
@@ -18,18 +17,16 @@ class MemberLevelController extends Controller
         return $this->success(MemberLevelResource::collection($this->memberLevelService->list())->resolve());
     }
 
-    public function store(Request $request)
+    public function store(SaveRequest $request)
     {
-        $payload = $this->validatedPayload($request);
-        $level = $this->memberLevelService->create($payload);
+        $level = $this->memberLevelService->create($request->validated());
 
         return $this->success(new MemberLevelResource($level), '等级创建成功');
     }
 
-    public function update(Request $request, MemberLevel $memberLevel)
+    public function update(SaveRequest $request, MemberLevel $memberLevel)
     {
-        $payload = $this->validatedPayload($request);
-        $level = $this->memberLevelService->update($memberLevel, $payload);
+        $level = $this->memberLevelService->update($memberLevel, $request->validated());
 
         return $this->success(new MemberLevelResource($level), '等级更新成功');
     }
@@ -39,10 +36,5 @@ class MemberLevelController extends Controller
         $this->memberLevelService->delete($memberLevel);
 
         return $this->success(null, '等级删除成功');
-    }
-
-    private function validatedPayload(Request $request): array
-    {
-        // validation handled by DestroyRequest
     }
 }

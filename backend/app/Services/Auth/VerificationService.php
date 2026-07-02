@@ -7,6 +7,7 @@ use App\Exceptions\BusinessException;
 use App\Models\Setting;
 use App\Models\User;
 use App\Models\VerificationHistory;
+use App\Services\Verification\Contracts\ProvidesVerificationFeeConfig;
 use App\Services\Verification\Contracts\VerificationDriver;
 use App\Services\Verification\Data\VerificationInitializeRequest;
 use App\Services\Verification\Data\VerificationInitializeResult;
@@ -226,6 +227,22 @@ class VerificationService
             'verification_api_masked' => $this->maskConfigValue($api),
             'verification_biz_code' => $this->resolvedBizCode(),
             'configured' => trim($api) !== '' && trim($key) !== '',
+        ];
+    }
+
+    public function feeConfig(): array
+    {
+        $driver = $this->driver();
+
+        if ($driver instanceof ProvidesVerificationFeeConfig) {
+            return $driver->feeConfig()->toArray();
+        }
+
+        return [
+            'free_attempts' => 0,
+            'retry_fee' => 0.0,
+            'charge_enabled' => false,
+            'amount' => 0.0,
         ];
     }
 

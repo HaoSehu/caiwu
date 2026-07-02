@@ -3,7 +3,6 @@
     <t-tabs :value="activePane" @change="setActivePane">
       <t-tab-panel value="list" label="实名列表" />
       <t-tab-panel value="manage" label="实名管理" />
-      <t-tab-panel value="api" label="实名接口" />
     </t-tabs>
 
     <section v-if="activePane === 'list'" class="verification-section">
@@ -127,28 +126,6 @@
       </t-form>
     </section>
 
-    <section v-else class="verification-section verification-form-section">
-      <t-form ref="apiFormRef" :data="apiForm" :rules="apiRules" label-align="top">
-        <t-form-item label="API ID" name="verification_api">
-          <t-input v-model="apiForm.verification_api" placeholder="请输入 API ID" />
-        </t-form-item>
-        <t-form-item label="API KEY" name="verification_key">
-          <t-input v-model="apiForm.verification_key" placeholder="请输入 API KEY" />
-        </t-form-item>
-        <t-form-item label="认证方式" name="verification_biz_code">
-          <t-select v-model="apiForm.verification_biz_code">
-            <t-option label="人脸识别" value="FACE" />
-            <t-option label="证照认证" value="CERT_PHOTO" />
-            <t-option label="证照+人脸" value="CERT_PHOTO_FACE" />
-            <t-option label="快捷认证" value="SMART_FACE" />
-          </t-select>
-        </t-form-item>
-        <t-form-item>
-          <t-button theme="primary" :loading="apiLoading" @click="saveApiSettings">保存配置</t-button>
-        </t-form-item>
-      </t-form>
-    </section>
-
     <t-drawer v-model:visible="detailVisible" size="560px" header="实名认证详情" :footer="false" @close="closeVerificationDetail">
       <t-loading :loading="detailLoading" size="small">
         <t-descriptions :column="1" bordered>
@@ -218,7 +195,6 @@ const route = useRoute();
 const router = useRouter();
 const activePane = ref('list');
 const listLoading = ref(false);
-const apiLoading = ref(false);
 const feeLoading = ref(false);
 const actionLoadingId = ref<number | string | null>(null);
 const list = ref<VerificationRecord[]>([]);
@@ -228,7 +204,6 @@ const pageSize = ref(20);
 const quickStatus = ref('all');
 const filters = reactive({ keyword: '' });
 
-const apiFormRef = ref<FormInstanceFunctions>();
 const feeFormRef = ref<FormInstanceFunctions>();
 const apiForm = reactive({
   verification_api: '',
@@ -279,10 +254,6 @@ const pagination = computed(() => ({
   showJumper: true,
 }));
 
-const apiRules: Record<string, FormRule[]> = {
-  verification_biz_code: [required('请选择认证方式')],
-};
-
 const feeRules: Record<string, FormRule[]> = {
   free_attempts: [required('请输入免费认证次数')],
   retry_fee: [required('请输入再次认证费用')],
@@ -294,7 +265,7 @@ function setActivePane(value: string | number) {
 }
 
 // 初始化从 URL 同步 Tab
-const validPanes = ['list', 'manage', 'api'];
+const validPanes = ['list', 'manage'];
 const initPane = route.query.tab as string;
 if (initPane && validPanes.includes(initPane)) {
   activePane.value = initPane;
@@ -488,19 +459,6 @@ async function handleReject() {
     await Promise.all([loadList(), loadSummary()]);
   } finally {
     actionLoadingId.value = null;
-  }
-}
-
-async function saveApiSettings() {
-  const result = await apiFormRef.value?.validate?.();
-  if (result !== true) return;
-  apiLoading.value = true;
-  try {
-    await adminApi.verifications.saveSettings({ ...apiForm });
-    MessagePlugin.success('保存成功');
-    await loadSummary();
-  } finally {
-    apiLoading.value = false;
   }
 }
 

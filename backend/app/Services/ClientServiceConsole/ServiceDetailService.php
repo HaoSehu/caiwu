@@ -465,7 +465,9 @@ class ServiceDetailService
                 $resolvedJwt = $runtime->login($supplier);
             }
 
-            $detailResponse = $runtime->get($supplier, "/v1/hosts/{$hostId}", $resolvedJwt);
+            $detailResponse = is_callable([$runtime, 'getHostDetail'])
+                ? $runtime->getHostDetail($supplier, $hostId, $resolvedJwt)
+                : $runtime->get($supplier, "/v1/hosts/{$hostId}", $resolvedJwt);
             $this->assertSuccess($detailResponse, '读取主机详情');
             $detailPayload = $this->extractPayload($detailResponse);
         } catch (\Throwable $exception) {
@@ -584,7 +586,9 @@ class ServiceDetailService
         }
 
         $runtime = $this->resolveRuntimeCapabilityForSupplier($supplier);
-        $response = $runtime->get($supplier, "/v1/hosts/{$hostId}/module", $jwt);
+        $response = is_callable([$runtime, 'getSupportedModules'])
+            ? $runtime->getSupportedModules($supplier, $hostId, $jwt)
+            : $runtime->get($supplier, "/v1/hosts/{$hostId}/module", $jwt);
         $this->assertSuccess($response, '读取监控模块');
 
         $payload = $this->extractPayload($response);
@@ -720,9 +724,11 @@ class ServiceDetailService
     {
         $normalizedType = $this->normalizeModuleStatusType($type);
         $runtime = $this->resolveRuntimeCapabilityForSupplier($supplier);
-        $response = $runtime->get($supplier, "/v1/hosts/{$hostId}/module/status", $jwt, [
-            'type' => $normalizedType,
-        ]);
+        $response = is_callable([$runtime, 'getModuleStatus'])
+            ? $runtime->getModuleStatus($supplier, $hostId, $normalizedType, $jwt)
+            : $runtime->get($supplier, "/v1/hosts/{$hostId}/module/status", $jwt, [
+                'type' => $normalizedType,
+            ]);
         $this->assertSuccess($response, ClientServiceConsoleService::MODULE_STATUS_TYPES[$normalizedType] ?? '读取状态');
 
         return $this->extractPayload($response);

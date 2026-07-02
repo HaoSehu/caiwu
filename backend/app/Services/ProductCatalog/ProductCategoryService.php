@@ -32,6 +32,7 @@ class ProductCategoryService
                 'second_product_groups_total' => SecondProductGroup::query()->count(),
                 'third_product_groups_total' => ThirdProductGroup::query()->count(),
                 'products_total' => Product::query()->count(),
+                'products_deleted' => Product::onlyTrashed()->count(),
                 'products_active' => Product::query()->where('status', 1)->count(),
                 'products_low_stock' => Product::query()->where('stock', '>=', 0)->where('stock', '<=', 5)->count(),
             ]
@@ -45,13 +46,24 @@ class ProductCategoryService
                 trim((string) $serviceTypeCode) !== '',
                 fn (Builder $query) => $query->where('code', trim((string) $serviceTypeCode))
             )
-            ->withCount(['products', 'secondProductGroups'])
+            ->withCount([
+                'products',
+                'products as products_with_trashed_count' => fn ($query) => $query->withTrashed(),
+                'secondProductGroups',
+            ])
             ->with([
                 'secondProductGroups' => fn ($query) => $query
-                    ->withCount(['products', 'thirdProductGroups'])
+                    ->withCount([
+                        'products',
+                        'products as products_with_trashed_count' => fn ($productsQuery) => $productsQuery->withTrashed(),
+                        'thirdProductGroups',
+                    ])
                     ->with([
                         'thirdProductGroups' => fn ($thirdQuery) => $thirdQuery
-                            ->withCount(['products'])
+                            ->withCount([
+                                'products',
+                                'products as products_with_trashed_count' => fn ($productsQuery) => $productsQuery->withTrashed(),
+                            ])
                             ->orderBy('sort_order')
                             ->orderBy('id'),
                     ])
@@ -342,6 +354,7 @@ class ProductCategoryService
             'is_visible' => (int) $group->is_visible,
             'status' => (int) $group->is_visible,
             'products_count' => (int) ($group->products_count ?? 0),
+            'products_with_trashed_count' => (int) ($group->products_with_trashed_count ?? 0),
             'children_count' => (int) ($group->second_product_groups_count ?? $children->count()),
             'children' => $children
                 ->map(fn (SecondProductGroup $child): array => $this->secondGroupPayload($child, $group))
@@ -380,6 +393,7 @@ class ProductCategoryService
             'parent_id' => (int) $group->first_product_group_id,
             'parent_name' => (string) ($firstGroup?->name ?? ''),
             'products_count' => (int) ($group->products_count ?? 0),
+            'products_with_trashed_count' => (int) ($group->products_with_trashed_count ?? 0),
             'children_count' => (int) ($group->third_product_groups_count ?? $children->count()),
             'children' => $children
                 ->map(fn (ThirdProductGroup $child): array => $this->thirdGroupPayload($child, $group))
@@ -419,6 +433,7 @@ class ProductCategoryService
             'parent_id' => (int) $group->second_product_group_id,
             'parent_name' => (string) ($secondGroup?->name ?? ''),
             'products_count' => (int) ($group->products_count ?? 0),
+            'products_with_trashed_count' => (int) ($group->products_with_trashed_count ?? 0),
             'children_count' => 0,
             'children' => [],
             'created_at' => $group->created_at?->format('Y-m-d H:i:s'),
@@ -525,13 +540,24 @@ class ProductCategoryService
     private function loadFirstGroup(int $id): FirstProductGroup
     {
         return FirstProductGroup::query()
-            ->withCount(['products', 'secondProductGroups'])
+            ->withCount([
+                'products',
+                'products as products_with_trashed_count' => fn ($query) => $query->withTrashed(),
+                'secondProductGroups',
+            ])
             ->with([
                 'secondProductGroups' => fn ($query) => $query
-                    ->withCount(['products', 'thirdProductGroups'])
+                    ->withCount([
+                        'products',
+                        'products as products_with_trashed_count' => fn ($productsQuery) => $productsQuery->withTrashed(),
+                        'thirdProductGroups',
+                    ])
                     ->with([
                         'thirdProductGroups' => fn ($thirdQuery) => $thirdQuery
-                            ->withCount(['products'])
+                            ->withCount([
+                                'products',
+                                'products as products_with_trashed_count' => fn ($productsQuery) => $productsQuery->withTrashed(),
+                            ])
                             ->orderBy('sort_order')
                             ->orderBy('id'),
                     ])
@@ -545,10 +571,17 @@ class ProductCategoryService
     {
         return SecondProductGroup::query()
             ->with(['firstProductGroup'])
-            ->withCount(['products', 'thirdProductGroups'])
+            ->withCount([
+                'products',
+                'products as products_with_trashed_count' => fn ($query) => $query->withTrashed(),
+                'thirdProductGroups',
+            ])
             ->with([
                 'thirdProductGroups' => fn ($query) => $query
-                    ->withCount(['products'])
+                    ->withCount([
+                        'products',
+                        'products as products_with_trashed_count' => fn ($productsQuery) => $productsQuery->withTrashed(),
+                    ])
                     ->orderBy('sort_order')
                     ->orderBy('id'),
             ])
@@ -559,7 +592,10 @@ class ProductCategoryService
     {
         return ThirdProductGroup::query()
             ->with(['secondProductGroup.firstProductGroup'])
-            ->withCount(['products'])
+            ->withCount([
+                'products',
+                'products as products_with_trashed_count' => fn ($query) => $query->withTrashed(),
+            ])
             ->findOrFail($id);
     }
 

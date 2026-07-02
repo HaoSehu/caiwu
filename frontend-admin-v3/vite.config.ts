@@ -256,6 +256,10 @@ export default ({ mode }: ConfigEnv): UserConfig => {
           target: backendProxyTarget,
           changeOrigin: true,
         },
+        '/media': {
+          target: backendProxyTarget,
+          changeOrigin: true,
+        },
         '/ws/vnc': {
           target: backendWsProxyTarget,
           changeOrigin: true,

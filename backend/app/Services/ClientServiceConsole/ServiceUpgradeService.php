@@ -193,6 +193,18 @@ class ServiceUpgradeService
         [$catalog, $supplier, $hostId, $jwt] = $this->detailService->resolveUpstreamContext($service);
 
         try {
+            if (is_callable([$catalog, 'purchaseHostUpgrade'])) {
+                $purchaseResult = $catalog->purchaseHostUpgrade(
+                    $supplier,
+                    $hostId,
+                    $productId,
+                    $billingCycle,
+                    $promoCode,
+                    $jwt
+                );
+                $invoiceId = (int) ($purchaseResult['upstream_invoice_id'] ?? 0);
+                $hostDetail = is_array($purchaseResult['host_detail'] ?? null) ? $purchaseResult['host_detail'] : [];
+            } else {
             $previewResponse = $catalog->previewHostUpgrade($supplier, $hostId, $productId, $billingCycle, $jwt);
             $this->detailService->assertSuccess($previewResponse, '提交产品升降级预览');
 
@@ -214,6 +226,7 @@ class ServiceUpgradeService
             $this->detailService->assertSuccess($detailResponse, '读取产品升降级结果');
             $detailPayload = $this->detailService->extractPayload($detailResponse);
             $hostDetail = is_array($detailPayload['host'] ?? null) ? $detailPayload['host'] : [];
+            }
             if ($hostDetail !== []) {
                 $this->detailService->syncServiceFromRemote($service, $hostDetail);
                 $service->refresh();

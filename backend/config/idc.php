@@ -39,8 +39,8 @@ return [
     // 服务暂停后自动终止天数
     'service_terminate_days' => 30,
 
-    // 自动续费提前天数
-    'auto_renew_days_before' => 7,
+    // 自动续费提前天数（到期前 N 天自动扣款）
+    'auto_renew_days_before' => 3,
 
     // 计费周期映射（天数）
     'billing_cycle_days' => [
