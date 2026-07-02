@@ -21,8 +21,8 @@ class UserReadAggregateLoadingTest extends TestCase
             'password' => 'secret123',
             'phone' => '131'.str_pad((string) random_int(0, 99999999), 8, '0', STR_PAD_LEFT),
             'status' => 1,
-            'nickname' => '娴嬭瘯鏄电О',
-            'real_name' => '寮犱笁',
+            'nickname' => '测试昵称',
+            'real_name' => '张三',
             'verification_status' => 2,
         ]);
 
@@ -50,10 +50,10 @@ class UserReadAggregateLoadingTest extends TestCase
         DB::disableQueryLog();
 
         $this->assertCount(0, $queries);
-        $this->assertSame('娴嬭瘯鏄电О', $detailPayload['nickname'] ?? null);
+        $this->assertSame('测试昵称', $detailPayload['nickname'] ?? null);
         $this->assertSame('88.80', $detailPayload['cash_balance'] ?? null);
         $this->assertArrayNotHasKey('balance', $detailPayload);
-        $this->assertSame('娴嬭瘯鏄电О', $listPayload[0]['nickname'] ?? null);
+        $this->assertSame('测试昵称', $listPayload[0]['nickname'] ?? null);
         $this->assertSame(88.8, (float) ($listPayload[0]['cash_balance'] ?? 0));
         $this->assertArrayNotHasKey('balance', $listPayload[0]);
     }

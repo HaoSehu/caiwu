@@ -535,11 +535,6 @@ class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsole
             'duration_ms' => $totalMs,
             'status_codes' => $statusCodes,
         ];
-        if ($errors !== []) {
-            $logContext['errors'] = $errors;
-        }
-        $this->safeLog('info', '[主机面板接口] 并发接口完成', $logContext);
-
         return $normalized;
     }
 

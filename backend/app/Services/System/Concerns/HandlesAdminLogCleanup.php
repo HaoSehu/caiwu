@@ -17,7 +17,8 @@ trait HandlesAdminLogCleanup
         $logPath = storage_path('logs/laravel.log');
         $fileModifiedAt = is_file($logPath) ? (int) filemtime($logPath) : 0;
         $fileSize = is_file($logPath) ? (int) filesize($logPath) : 0;
-        $cacheKey = "admin_logs:cleanup_overview:{$fileModifiedAt}:{$fileSize}";
+        $cacheVersion = (int) Cache::get(self::CLEANUP_OVERVIEW_CACHE_VERSION_KEY, 1);
+        $cacheKey = "admin_logs:cleanup_overview:{$cacheVersion}:{$fileModifiedAt}:{$fileSize}";
 
         return Cache::remember(
             $cacheKey,
@@ -36,7 +37,7 @@ trait HandlesAdminLogCleanup
                         'schedule_run' => ScheduleRunLog::query()->count(),
                     ],
                     'file' => [
-                        'path' => $logPath,
+                        'path' => 'storage/logs/laravel.log',
                         'exists' => is_file($logPath),
                         'size_bytes' => is_file($logPath) ? (int) filesize($logPath) : 0,
                         'updated_at' => is_file($logPath) ? date('Y-m-d H:i:s', (int) filemtime($logPath)) : null,
@@ -112,6 +113,8 @@ trait HandlesAdminLogCleanup
             $affected = array_merge($affected, $fileCleanup);
         }
 
+        $this->bumpCleanupOverviewCacheVersion();
+
         return [
             'type' => $type,
             'keep_days' => $keepDays,
@@ -134,55 +137,78 @@ trait HandlesAdminLogCleanup
             return $affected;
         }
 
-        $lines = explode("\n", $content);
+        $lines = preg_split('/\r\n|\n|\r/', rtrim($content, "\r\n"));
+        if ($lines === false) {
+            return $affected;
+        }
+
         $filteredLines = [];
+        $currentEntry = [];
         $taskRemovedCount = 0;
         $systemRemovedCount = 0;
 
-        foreach ($lines as $line) {
-            $line = rtrim($line, "\r\n");
-            if ($line === '') {
-                $filteredLines[] = $line;
-
-                continue;
+        $flushEntry = function (array $entry) use ($type, $cutoff, &$filteredLines, &$taskRemovedCount, &$systemRemovedCount): void {
+            if ($entry === []) {
+                return;
             }
 
-            $logDate = $this->extractLogDate($line);
+            $logDate = $this->extractLogDate((string) $entry[0]);
             if ($logDate === null) {
+                array_push($filteredLines, ...$entry);
+
+                return;
+            }
+
+            $isTaskLog = $this->isTaskLogLine(implode("\n", $entry));
+            $shouldRemoveTask = ($type === 'task' || $type === 'all' || $type === 'all_file')
+                && $isTaskLog
+                && $logDate < $cutoff;
+            $shouldRemoveSystem = ($type === 'system' || $type === 'all' || $type === 'all_file')
+                && ! $isTaskLog
+                && $logDate < $cutoff;
+
+            if ($shouldRemoveTask) {
+                $taskRemovedCount++;
+
+                return;
+            }
+
+            if ($shouldRemoveSystem) {
+                $systemRemovedCount++;
+
+                return;
+            }
+
+            array_push($filteredLines, ...$entry);
+        };
+
+        foreach ($lines as $line) {
+            $line = (string) $line;
+            $logDate = $this->extractLogDate($line);
+            if ($logDate !== null) {
+                $flushEntry($currentEntry);
+                $currentEntry = [$line];
+
+                continue;
+            }
+
+            if ($currentEntry === []) {
                 $filteredLines[] = $line;
 
                 continue;
             }
 
-            $shouldRemove = false;
-            $isTaskLog = $this->isTaskLogLine($line);
-
-            if ($type === 'task' || $type === 'all' || $type === 'all_file') {
-                if ($isTaskLog && $logDate < $cutoff) {
-                    $shouldRemove = true;
-                    $taskRemovedCount++;
-                }
-            }
-
-            if ($type === 'system' || $type === 'all' || $type === 'all_file') {
-                if (! $isTaskLog && $logDate < $cutoff) {
-                    $shouldRemove = true;
-                    $systemRemovedCount++;
-                }
-            }
-
-            if ($shouldRemove) {
-            } else {
-                $filteredLines[] = $line;
-            }
+            $currentEntry[] = $line;
         }
+
+        $flushEntry($currentEntry);
 
         if ($taskRemovedCount > 0 || $systemRemovedCount > 0) {
             $newContent = implode("\n", $filteredLines);
             if (substr($newContent, -1) !== "\n") {
                 $newContent .= "\n";
             }
-            file_put_contents($logPath, $newContent);
+            file_put_contents($logPath, $newContent, LOCK_EX);
         }
 
         if ($type === 'task' || $type === 'all' || $type === 'all_file') {
@@ -193,6 +219,14 @@ trait HandlesAdminLogCleanup
         }
 
         return $affected;
+    }
+
+    private function bumpCleanupOverviewCacheVersion(): void
+    {
+        Cache::forever(
+            self::CLEANUP_OVERVIEW_CACHE_VERSION_KEY,
+            (int) Cache::get(self::CLEANUP_OVERVIEW_CACHE_VERSION_KEY, 1) + 1
+        );
     }
 
     private function extractLogDate(string $line): ?Carbon

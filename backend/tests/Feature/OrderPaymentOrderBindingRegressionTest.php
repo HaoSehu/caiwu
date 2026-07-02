@@ -8,6 +8,7 @@ use App\Constants\FinanceLedgerEventType;
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
 use App\Constants\PaymentStatus;
+use App\Contracts\Integrations\Payments\PaymentGatewayInterface;
 use App\Exceptions\BusinessException;
 use App\Models\AccountTransaction;
 use App\Models\Invoice;
@@ -23,7 +24,6 @@ use App\Services\Finance\InvoiceService;
 use App\Services\Finance\PaymentService;
 use App\Services\Order\OrderService;
 use App\Services\Order\PaidOrderBusinessFlowDispatcher;
-use App\Services\PaymentGateway\AlipayFaceToFaceService;
 use App\Services\Provisioning\ProvisionService;
 use App\Services\Provisioning\ServiceRenewService;
 use App\Services\Referral\ReferralService;
@@ -183,11 +183,11 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
         $this->assertSame(InvoiceStatus::CANCELLED, (int) $invoice->refresh()->status);
     }
 
-    private function makePaymentService(AlipayFaceToFaceService $alipayService): PaymentService
+    private function makePaymentService(?PaymentGatewayInterface $alipayGateway = null): PaymentService
     {
         return new PaymentService(
             $this->createMock(ProvisionService::class),
-            $this->makePaymentGatewayManagerForTest($alipayService),
+            $this->makePaymentGatewayManagerForTest($alipayGateway),
             $this->createMock(ServiceRenewService::class),
             $this->createMock(ReferralService::class),
             $this->createMock(PaidOrderBusinessFlowDispatcher::class),
@@ -262,7 +262,7 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
 
         $service = new PaymentService(
             $this->createMock(ProvisionService::class),
-            $this->makePaymentGatewayManagerForTest($this->createMock(AlipayFaceToFaceService::class)),
+            $this->makePaymentGatewayManagerForTest(),
             $this->createMock(ServiceRenewService::class),
             $this->createMock(ReferralService::class),
             $this->createMock(PaidOrderBusinessFlowDispatcher::class),
@@ -337,16 +337,17 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
             'due_date' => now()->addDay(),
         ]);
 
-        $alipayService = $this->createMock(AlipayFaceToFaceService::class);
-        $alipayService->method('isEnabled')->willReturn(true);
-        $alipayService->method('precreate')->willReturn([
-            'qr_code' => 'https://qr.alipay.test/mix-pay',
-            'out_trade_no' => 'mock-out-trade-no',
+        $alipayGateway = $this->makeFakePaymentGateway([
+            'enabled' => true,
+            'precreate' => [
+                'qr_code' => 'https://qr.alipay.test/mix-pay',
+                'out_trade_no' => 'mock-out-trade-no',
+            ],
         ]);
 
         $service = new PaymentService(
             $this->createMock(ProvisionService::class),
-            $this->makePaymentGatewayManagerForTest($alipayService),
+            $this->makePaymentGatewayManagerForTest($alipayGateway),
             $this->createMock(ServiceRenewService::class),
             $this->createMock(ReferralService::class),
             $this->createMock(PaidOrderBusinessFlowDispatcher::class),
@@ -381,12 +382,13 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
     {
         [$user, $order, $invoice] = $this->createUserOrderInvoice('mixfail');
 
-        $alipayService = $this->createMock(AlipayFaceToFaceService::class);
-        $alipayService->method('isEnabled')->willReturn(true);
-        $alipayService->method('precreate')->willThrowException(new BusinessException('网关失败'));
+        $alipayGateway = $this->makeFakePaymentGateway([
+            'enabled' => true,
+            'precreate' => new BusinessException('网关失败'),
+        ]);
 
         try {
-            $this->makePaymentService($alipayService)->payByBalanceAndAlipay($invoice, $user, 20.00, ['trace_id' => 'mix-fail']);
+            $this->makePaymentService($alipayGateway)->payByBalanceAndAlipay($invoice, $user, 20.00, ['trace_id' => 'mix-fail']);
             $this->fail('Expected precreate failure.');
         } catch (BusinessException $exception) {
             $this->assertSame('网关失败', $exception->getMessage());
@@ -425,14 +427,15 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
     {
         [$user, $order, $invoice] = $this->createUserOrderInvoice('mixcancel');
 
-        $alipayService = $this->createMock(AlipayFaceToFaceService::class);
-        $alipayService->method('isEnabled')->willReturn(true);
-        $alipayService->method('precreate')->willReturn([
-            'qr_code' => 'https://qr.alipay.test/mix-cancel',
-            'out_trade_no' => 'mock-out-trade-no',
+        $alipayGateway = $this->makeFakePaymentGateway([
+            'enabled' => true,
+            'precreate' => [
+                'qr_code' => 'https://qr.alipay.test/mix-cancel',
+                'out_trade_no' => 'mock-out-trade-no',
+            ],
         ]);
 
-        $this->makePaymentService($alipayService)->payByBalanceAndAlipay($invoice, $user, 20.00, ['trace_id' => 'mix-cancel']);
+        $this->makePaymentService($alipayGateway)->payByBalanceAndAlipay($invoice, $user, 20.00, ['trace_id' => 'mix-cancel']);
 
         app(CheckoutService::class)->cancel($invoice->fresh(), [
             'actor_type' => 'client',
@@ -456,14 +459,15 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
     {
         [$user, $order, $invoice] = $this->createUserOrderInvoice('mixsuccess');
 
-        $alipayService = $this->createMock(AlipayFaceToFaceService::class);
-        $alipayService->method('isEnabled')->willReturn(true);
-        $alipayService->method('precreate')->willReturn([
-            'qr_code' => 'https://qr.alipay.test/mix-success',
-            'out_trade_no' => 'mock-out-trade-no',
+        $alipayGateway = $this->makeFakePaymentGateway([
+            'enabled' => true,
+            'precreate' => [
+                'qr_code' => 'https://qr.alipay.test/mix-success',
+                'out_trade_no' => 'mock-out-trade-no',
+            ],
         ]);
 
-        $result = $this->makePaymentService($alipayService)->payByBalanceAndAlipay($invoice, $user, 20.00, ['trace_id' => 'mix-success']);
+        $result = $this->makePaymentService($alipayGateway)->payByBalanceAndAlipay($invoice, $user, 20.00, ['trace_id' => 'mix-success']);
         $payment = Payment::query()->where('payment_no', (string) $result['payment_no'])->firstOrFail();
 
         $tradeNo = 'TRADE-MIX-SUCCESS-'.strtoupper(bin2hex(random_bytes(4)));
@@ -479,9 +483,11 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
                 'total_amount' => '30.00',
             ],
         ];
-        $alipayService->method('query')->willReturn($queryResult);
+        $alipayGateway = $this->makeFakePaymentGateway([
+            'query' => $queryResult,
+        ]);
 
-        $this->makePaymentService($alipayService)->queryAlipayStatus($payment);
+        $this->makePaymentService($alipayGateway)->queryAlipayStatus($payment);
 
         $this->assertDatabaseHas('orders', [
             'id' => (int) $order->id,
@@ -512,26 +518,27 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
         ]);
         $tradeNo = 'TRADE-STALE-FULL-QR-'.strtoupper(bin2hex(random_bytes(4)));
 
-        $alipayService = $this->createMock(AlipayFaceToFaceService::class);
-        $alipayService->method('isEnabled')->willReturn(true);
-        $alipayService->method('precreate')->willReturn([
-            'qr_code' => 'https://qr.alipay.test/stale-mix',
-            'out_trade_no' => 'mock-out-trade-no',
-        ]);
-        $alipayService->method('query')->willReturn([
-            'trade_status' => 'TRADE_SUCCESS',
-            'trade_no' => $tradeNo,
-            'out_trade_no' => (string) $stalePayment->payment_no,
-            'total_amount' => '100.00',
-            'raw' => [
+        $alipayGateway = $this->makeFakePaymentGateway([
+            'enabled' => true,
+            'precreate' => [
+                'qr_code' => 'https://qr.alipay.test/stale-mix',
+                'out_trade_no' => 'mock-out-trade-no',
+            ],
+            'query' => [
                 'trade_status' => 'TRADE_SUCCESS',
                 'trade_no' => $tradeNo,
                 'out_trade_no' => (string) $stalePayment->payment_no,
                 'total_amount' => '100.00',
+                'raw' => [
+                    'trade_status' => 'TRADE_SUCCESS',
+                    'trade_no' => $tradeNo,
+                    'out_trade_no' => (string) $stalePayment->payment_no,
+                    'total_amount' => '100.00',
+                ],
             ],
         ]);
 
-        $service = $this->makePaymentService($alipayService);
+        $service = $this->makePaymentService($alipayGateway);
         $mixResult = $service->payByBalanceAndAlipay($invoice, $user, 30.00, ['trace_id' => 'stale-mix']);
         $mixPayment = Payment::query()->where('payment_no', (string) $mixResult['payment_no'])->firstOrFail();
 
@@ -579,11 +586,12 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
         ]);
         $tradeNo = 'TRADE-CANCELLED-CREDIT-'.strtoupper(bin2hex(random_bytes(4)));
 
-        $alipayService = $this->createMock(AlipayFaceToFaceService::class);
-        $alipayService->method('verifyNotify')->willReturn(true);
-        $alipayService->method('matchesAppId')->willReturn(true);
+        $alipayGateway = $this->makeFakePaymentGateway([
+            'verify_notify' => true,
+            'matches_merchant' => true,
+        ]);
 
-        $this->makePaymentService($alipayService)->handleAlipayNotify([
+        $this->makePaymentService($alipayGateway)->handleAlipayNotify([
             'app_id' => 'mock-app-id',
             'trade_status' => 'TRADE_SUCCESS',
             'trade_no' => $tradeNo,
@@ -640,21 +648,22 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
         ]);
         $tradeNo = 'TRADE-EXPIRED-MIX-CREDIT-'.strtoupper(bin2hex(random_bytes(4)));
 
-        $alipayService = $this->createMock(AlipayFaceToFaceService::class);
-        $alipayService->method('query')->willReturn([
-            'trade_status' => 'TRADE_SUCCESS',
-            'trade_no' => $tradeNo,
-            'out_trade_no' => (string) $payment->payment_no,
-            'total_amount' => '70.00',
-            'raw' => [
+        $alipayGateway = $this->makeFakePaymentGateway([
+            'query' => [
                 'trade_status' => 'TRADE_SUCCESS',
                 'trade_no' => $tradeNo,
                 'out_trade_no' => (string) $payment->payment_no,
                 'total_amount' => '70.00',
+                'raw' => [
+                    'trade_status' => 'TRADE_SUCCESS',
+                    'trade_no' => $tradeNo,
+                    'out_trade_no' => (string) $payment->payment_no,
+                    'total_amount' => '70.00',
+                ],
             ],
         ]);
 
-        $this->makePaymentService($alipayService)->queryAlipayStatus($payment);
+        $this->makePaymentService($alipayGateway)->queryAlipayStatus($payment);
 
         $this->assertSame('100.00', User::query()->findOrFail((int) $user->id)->balance);
         $this->assertDatabaseHas('invoices', [
@@ -711,8 +720,7 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
         ])->save();
         $user->forceFill(['balance' => '10.00'])->save();
 
-        $alipayService = $this->createMock(AlipayFaceToFaceService::class);
-        $result = $this->makePaymentService($alipayService)->refundInvoiceToBalance($user, $invoice, [
+        $result = $this->makePaymentService()->refundInvoiceToBalance($user, $invoice, [
             'remark' => '组合支付退款',
         ]);
 

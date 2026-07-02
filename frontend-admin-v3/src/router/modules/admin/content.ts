@@ -84,6 +84,44 @@ export const contentRoutes: RouteRecordRaw[] = [
     },
   },
   {
+    path: 'content/media-library',
+    name: 'AdminMediaLibrary',
+    component: () => import('@/pages/content/media-library.vue'),
+    meta: {
+      title: {
+        zh_CN: '媒体库',
+        en_US: 'Media Library',
+      },
+      permission: 'content.manage',
+    },
+  },
+  {
+    path: 'site-info',
+    name: 'AdminSiteInfo',
+    component: () => import('@/pages/settings/index.vue'),
+    meta: {
+      title: {
+        zh_CN: '站点信息',
+        en_US: 'Site Info',
+      },
+      permission: 'settings.manage',
+      settingsTab: 'site_basic',
+    },
+  },
+  {
+    path: 'site-hero',
+    name: 'AdminSiteHero',
+    component: () => import('@/pages/settings/index.vue'),
+    meta: {
+      title: {
+        zh_CN: '首页装修',
+        en_US: 'Site Hero',
+      },
+      permission: 'settings.manage',
+      settingsTab: 'site_hero',
+    },
+  },
+  {
     path: 'notifications',
     name: 'AdminNotifications',
     component: () => import('@/pages/notifications/index.vue'),
@@ -104,6 +142,7 @@ export const contentRoutes: RouteRecordRaw[] = [
         zh_CN: '邮件模板详情',
         en_US: 'Email Template Detail',
       },
+      permission: 'content.list',
       hidden: true,
     },
   },

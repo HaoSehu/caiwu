@@ -172,6 +172,10 @@ class ServiceVncService
 
     private function requestUpstreamVncUrl(object $runtime, mixed $supplier, int $hostId, string $jwt): array
     {
+        if (is_callable([$runtime, 'getVncUrl'])) {
+            return $runtime->getVncUrl($supplier, $hostId, $jwt);
+        }
+
         return $runtime->post(
             $supplier,
             '/provision/default',

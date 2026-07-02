@@ -39,6 +39,7 @@ export const OS_ICON_MAP: Record<string, string> = {
 const SERVICE_VIEW_MODE_STORAGE_KEY = 'client-services-view-mode';
 const DEFAULT_SERVICE_STATUS_SCOPE = 'active_pending';
 const DEFAULT_SERVICE_STATUS = DEFAULT_SERVICE_STATUS_SCOPE;
+const MOBILE_VIEW_MODE_QUERY = '(max-width: 48rem)';
 const DEFAULT_SERVICE_STATUS_OPTION = {
   label: '默认分类（已开通 / 开通中）',
   value: DEFAULT_SERVICE_STATUS_SCOPE,
@@ -301,7 +302,7 @@ export function useServiceCenter() {
     if (typeof window === 'undefined') return;
     const stored = normalizeViewMode(window.localStorage.getItem(SERVICE_VIEW_MODE_STORAGE_KEY));
     // 手机端强制卡片视图，忽略历史偏好
-    const isMobile = window.matchMedia('(max-width: 768px)').matches;
+    const isMobile = window.matchMedia(MOBILE_VIEW_MODE_QUERY).matches;
     viewMode.value = isMobile ? 'grid' : stored;
   }
 

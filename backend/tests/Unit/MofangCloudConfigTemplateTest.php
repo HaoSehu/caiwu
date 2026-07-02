@@ -4,14 +4,25 @@ declare(strict_types=1);
 
 namespace Tests\Unit;
 
-use App\Integrations\Mofang\Adapters\MofangFinanceAdapter;
-use App\Integrations\Mofang\Support\MofangCloudConfigTemplate;
 use App\Models\Supplier;
+use App\Services\Integrations\Plugins\PluginFileLoader;
+use App\Services\Integrations\Plugins\PluginScanner;
 use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiTransport;
-use PHPUnit\Framework\TestCase;
+use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangCloudConfigTemplate;
+use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangFinanceAdapter;
+use Tests\TestCase;
 
 class MofangCloudConfigTemplateTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        app(PluginFileLoader::class)->ensureLoaded(
+            app(PluginScanner::class)->requireManifest('upstream', 'mofang_finance')
+        );
+    }
+
     public function test_it_builds_cloud_config_template_from_product_description(): void
     {
         $template = new MofangCloudConfigTemplate;
@@ -44,25 +55,15 @@ class MofangCloudConfigTemplateTest extends TestCase
 
     public function test_mofang_adapter_falls_back_to_cloud_template_when_remote_options_are_empty(): void
     {
-        $supplier = new Supplier;
-        $transport = $this->createMock(HostingPanelApiTransport::class);
-        $transport
-            ->method('getProductCatalog')
-            ->with($supplier)
-            ->willReturn([
-                'products' => [
-                    [
-                        'id' => 1001,
-                        'name' => '香港 CN2 云服务器',
-                        'type' => 'dcimcloud',
-                        'description' => 'CPU：2核<br>内存：4G<br>带宽：20M',
-                    ],
-                ],
-            ]);
-        $transport
-            ->method('fetchRealConfigOptions')
-            ->with($supplier, 1001)
-            ->willReturn([]);
+        $supplier = $this->makeSupplier();
+        $transport = $this->makeCatalogTransport([
+            [
+                'id' => 1001,
+                'name' => '香港 CN2 云服务器',
+                'type' => 'dcimcloud',
+                'description' => 'CPU：2核<br>内存：4G<br>带宽：20M',
+            ],
+        ]);
 
         $template = (new MofangFinanceAdapter($transport, new MofangCloudConfigTemplate))
             ->getProductConfigTemplate($supplier, 1001);
@@ -76,26 +77,16 @@ class MofangCloudConfigTemplateTest extends TestCase
 
     public function test_mofang_adapter_labels_mofang_cloud_product_types(): void
     {
-        $supplier = new Supplier;
-        $transport = $this->createMock(HostingPanelApiTransport::class);
-        $transport
-            ->method('getProductCatalog')
-            ->with($supplier)
-            ->willReturn([
-                'products' => [
-                    [
-                        'id' => 1001,
-                        'name' => '香港 CN2 云服务器',
-                        'type' => 'dcimcloud',
-                        'type_label' => 'dcimcloud',
-                        'description' => 'CPU：2核',
-                    ],
-                ],
-            ]);
-        $transport
-            ->method('fetchRealConfigOptions')
-            ->with($supplier, 1001)
-            ->willReturn([]);
+        $supplier = $this->makeSupplier();
+        $transport = $this->makeCatalogTransport([
+            [
+                'id' => 1001,
+                'name' => '香港 CN2 云服务器',
+                'type' => 'dcimcloud',
+                'type_label' => 'dcimcloud',
+                'description' => 'CPU：2核',
+            ],
+        ]);
 
         $template = (new MofangFinanceAdapter($transport, new MofangCloudConfigTemplate))
             ->getProductConfigTemplate($supplier, 1001);
@@ -105,40 +96,82 @@ class MofangCloudConfigTemplateTest extends TestCase
 
     public function test_mofang_adapter_labels_mofang_cloud_product_types_in_catalog(): void
     {
-        $supplier = new Supplier;
-        $transport = $this->createMock(HostingPanelApiTransport::class);
-        $transport
-            ->method('getProductCatalog')
-            ->with($supplier)
-            ->willReturn([
-                'groups' => [
-                    [
-                        'key' => 'group-cloud',
-                        'label' => '云服务器',
-                        'items' => [
-                            [
-                                'id' => 1001,
-                                'name' => '香港 CN2 云服务器',
-                                'type' => 'dcimcloud',
-                                'type_label' => 'dcimcloud',
-                            ],
-                        ],
-                    ],
-                ],
-                'products' => [
-                    [
-                        'id' => 1001,
-                        'name' => '香港 CN2 云服务器',
-                        'type' => 'dcimcloud',
-                        'type_label' => 'dcimcloud',
-                    ],
-                ],
-            ]);
+        $supplier = $this->makeSupplier();
+        $transport = $this->makeCatalogTransport([
+            [
+                'id' => 1001,
+                'name' => '香港 CN2 云服务器',
+                'type' => 'dcimcloud',
+                'type_label' => 'dcimcloud',
+            ],
+        ]);
 
         $catalog = (new MofangFinanceAdapter($transport, new MofangCloudConfigTemplate))
             ->getProductCatalog($supplier);
 
         $this->assertSame('云服务器', $catalog['products'][0]['type_label']);
         $this->assertSame('云服务器', $catalog['groups'][0]['items'][0]['type_label']);
+    }
+
+    private function makeSupplier(): Supplier
+    {
+        return new Supplier([
+            'id' => 1,
+            'interface_type' => 'mofang_finance_api',
+            'api_url' => 'https://mofang.example.test',
+            'api_username' => 'demo',
+            'api_key' => 'secret',
+        ]);
+    }
+
+    private function makeCatalogTransport(array $products): HostingPanelApiTransport
+    {
+        return new class($products) extends HostingPanelApiTransport
+        {
+            public function __construct(private readonly array $products) {}
+
+            public function request(
+                Supplier $supplier,
+                string $method,
+                string $uri,
+                array|string $payload = [],
+                ?string $jwt = null,
+                array $headers = [],
+                array $query = []
+            ): array {
+                if ($uri === '/v1/login_api') {
+                    return ['status' => 200, 'jwt' => 'mofang-jwt'];
+                }
+
+                if ($uri === '/v1/products') {
+                    return [
+                        'status' => 200,
+                        'data' => [
+                            'first_group' => [
+                                [
+                                    'name' => '云服务器',
+                                    'group' => [
+                                        [
+                                            'name' => '云服务器',
+                                            'products' => $this->products,
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ];
+                }
+
+                if ($uri === '/v1/productsconfig') {
+                    return ['status' => 200, 'data' => ['first_group' => []]];
+                }
+
+                if (str_contains($uri, '/cart/get_product_config')) {
+                    return ['status' => 200, 'data' => ['config_groups' => []]];
+                }
+
+                return ['status' => 200, 'data' => []];
+            }
+        };
     }
 }

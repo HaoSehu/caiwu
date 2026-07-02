@@ -52,6 +52,10 @@ class LogOperation
                         : 500);
             }
 
+            if ($exception === null && $this->shouldSkipSuccessfulPollingRequest($request, $statusCode)) {
+                return;
+            }
+
             $detail = [
                 'params' => SensitiveDataSanitizer::sanitize($request->all()),
                 'status' => $statusCode,
@@ -97,6 +101,17 @@ class LogOperation
         }
 
         return true;
+    }
+
+    private function shouldSkipSuccessfulPollingRequest(Request $request, int $statusCode): bool
+    {
+        if ($statusCode >= 400 || $request->method() !== 'GET') {
+            return false;
+        }
+
+        return $request->is('api/client/verification/status')
+            || $request->is('api/client/recharge/*/status')
+            || $request->is('api/client/invoices/*/pay/alipay/status');
     }
 
     private function resolveUserType(mixed $user): string

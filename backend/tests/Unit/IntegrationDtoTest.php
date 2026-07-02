@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Tests\Unit;
 
 use App\Services\Sms\Data\SmsSendResult;
-use App\Services\Sms\Drivers\AliyunSmsDriver;
 use App\Services\Verification\Data\VerificationInitializeResult;
 use App\Services\Verification\Data\VerificationScanUrlResult;
 use App\Services\Verification\Data\VerificationStatusResult;
-use App\Services\Verification\Drivers\Stay33Driver;
+use Caiwu\Plugins\Certification\Stay33\Logic\Stay33Client;
+use Caiwu\Plugins\Sms\Aliyun\Lib\AliyunSmsClient;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 
@@ -40,19 +40,22 @@ class IntegrationDtoTest extends TestCase
 
     public function test_provider_english_errors_are_mapped_to_chinese_messages(): void
     {
+        $this->loadPluginFile('sms/aliyun/lib/AliyunSmsClient.php');
+        $this->loadPluginFile('certification/stay33/logic/Stay33Client.php');
+
         $this->assertSame(
             '短信发送失败，请稍后重试',
-            $this->invokePrivate(new AliyunSmsDriver, 'resolveFailureMessage', ['InvalidAccessKeyId.NotFound'])
+            $this->invokePrivate(new AliyunSmsClient([]), 'resolveFailureMessage', ['InvalidAccessKeyId.NotFound'])
         );
 
         $this->assertSame(
             '短信余额不足',
-            $this->invokePrivate(new AliyunSmsDriver, 'resolveFailureMessage', ['短信余额不足'])
+            $this->invokePrivate(new AliyunSmsClient([]), 'resolveFailureMessage', ['短信余额不足'])
         );
 
         $this->assertSame(
             '实名认证接口配置错误，请联系管理员',
-            $this->invokePrivate(new Stay33Driver, 'safeProviderMessage', ['SYSTEM_ERROR', '实名认证接口配置错误，请联系管理员'])
+            $this->invokePrivate(new Stay33Client([]), 'safeProviderMessage', ['SYSTEM_ERROR', '实名认证接口配置错误，请联系管理员'])
         );
     }
 
@@ -63,5 +66,10 @@ class IntegrationDtoTest extends TestCase
         $methodRef->setAccessible(true);
 
         return $methodRef->invokeArgs($instance, $args);
+    }
+
+    private function loadPluginFile(string $relativePath): void
+    {
+        require_once dirname(__DIR__, 2).'/plugins/'.$relativePath;
     }
 }

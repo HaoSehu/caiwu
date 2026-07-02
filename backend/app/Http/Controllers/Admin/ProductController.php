@@ -37,6 +37,7 @@ class ProductController extends Controller
         $filters = $request->only([
             'keyword',
             'status',
+            'lifecycle_status',
             'product_type',
             'type',
             'first_product_group_id',
@@ -101,9 +102,30 @@ class ProductController extends Controller
 
     public function destroy(Product $product)
     {
+        if ($product->trashed()) {
+            return $this->success(null, '商品删除成功');
+        }
+
         $this->productCatalogService->deleteProduct($product);
 
         return $this->success(null, '商品删除成功');
+    }
+
+    public function restore(int $productId)
+    {
+        $product = Product::withTrashed()->findOrFail($productId);
+        $product = $this->productCatalogService->restoreProduct($product);
+        $product->loadCount(['orders', 'services']);
+
+        return $this->success(new ProductResource($product), '商品已恢复');
+    }
+
+    public function forceDelete(int $productId)
+    {
+        $product = Product::withTrashed()->findOrFail($productId);
+        $this->productCatalogService->forceDeleteProduct($product);
+
+        return $this->success(null, '商品已彻底删除');
     }
 
     public function toggleStatus(Product $product)

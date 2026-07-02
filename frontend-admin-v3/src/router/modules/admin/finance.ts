@@ -62,6 +62,7 @@ export const financeRoutes: RouteRecordRaw[] = [
         en_US: 'New Customers',
       },
       permission: 'finance.report',
+      hidden: true,
     },
   },
   {

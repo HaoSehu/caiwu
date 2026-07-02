@@ -11,7 +11,6 @@ use App\Services\Finance\CouponService;
 use App\Services\Finance\InvoiceService;
 use App\Services\Finance\PaymentService;
 use App\Services\Order\PaidOrderBusinessFlowDispatcher;
-use App\Services\PaymentGateway\AlipayFaceToFaceService;
 use App\Services\Provisioning\ProvisionService;
 use App\Services\Provisioning\ServiceRenewService;
 use App\Services\Referral\ReferralService;
@@ -35,12 +34,11 @@ class RechargeRequiresVerificationTest extends TestCase
             'verification_status' => 0,
         ]);
 
-        $alipayService = $this->createMock(AlipayFaceToFaceService::class);
-        $alipayService->method('isEnabled')->willReturn(true);
+        $alipayGateway = $this->makeFakePaymentGateway(['enabled' => true]);
 
         $service = new PaymentService(
             $this->createMock(ProvisionService::class),
-            $this->makePaymentGatewayManagerForTest($alipayService),
+            $this->makePaymentGatewayManagerForTest($alipayGateway),
             $this->createMock(ServiceRenewService::class),
             $this->createMock(ReferralService::class),
             $this->createMock(PaidOrderBusinessFlowDispatcher::class),

@@ -1,21 +1,5 @@
 <template>
   <div class="settings-page">
-    <t-card :bordered="false">
-      <div class="page-tabs-toolbar">
-        <t-tabs :value="activeTab" @change="handleTabChange">
-          <template v-for="group in tabGroups" :key="group.group">
-            <t-tab-panel
-              v-for="(item, idx) in group.tabs"
-              :key="item.value"
-              :value="item.value"
-              :label="item.label"
-              :class="{ 'tab-group-first': idx === 0 }"
-            />
-          </template>
-        </t-tabs>
-      </div>
-    </t-card>
-
     <template v-if="activeTab !== 'site_hero'">
       <t-card v-if="sections.length > 1" :bordered="false">
         <div class="section-nav">
@@ -74,16 +58,12 @@
                   format="HH:mm:ss"
                   :placeholder="field.placeholder || `请选择${field.label}`"
                 />
-                <t-input
-                  v-else-if="field.type === 'image'"
-                  v-model="form[field.key]"
-                  :maxlength="field.maxlength"
-                  :placeholder="field.placeholder || `请输入${field.label}`"
-                >
-                  <template #suffix-icon>
-                    <upload-icon class="upload-trigger" @click="selectImage(field)" />
-                  </template>
-                </t-input>
+                <div v-if="field.type === 'image'" class="cover-image-selector" @click="selectImage(field)">
+                  <image-icon />
+                  <span v-if="form[field.key]" class="cover-image-selector__name">{{ String(form[field.key]).split('/').pop() }}</span>
+                  <span v-else class="cover-image-selector__placeholder">点击选择{{ field.label }}</span>
+                  <chevron-right-icon />
+                </div>
                 <t-input
                   v-else
                   v-model="form[field.key]"
@@ -91,9 +71,6 @@
                   :maxlength="field.maxlength"
                   :placeholder="field.placeholder || `请输入${field.label}`"
                 />
-                <div v-if="field.preview === 'image' && form[field.key]" class="field-preview">
-                  <img :src="String(form[field.key])" :alt="field.label" />
-                </div>
               </div>
             </article>
           </div>
@@ -236,16 +213,66 @@
     </template>
 
     <input ref="fileInputRef" class="hidden-file-input" type="file" accept="image/*" @change="handleImageFileChange" />
+    <input ref="mediaDrawerUploadRef" class="hidden-file-input" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" @change="handleMediaDrawerUpload" />
+
+    <t-drawer
+      :visible="mediaDrawerVisible"
+      header="选择媒体"
+      :size="520"
+      placement="right"
+      :footer="null"
+      @close="closeMediaDrawer"
+    >
+      <div class="cover-drawer-toolbar">
+        <t-select v-model="mediaDrawerType" placeholder="全部类型" @change="loadMediaDrawerList">
+          <t-option v-for="item in mediaDrawerTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
+        </t-select>
+        <t-button variant="outline" @click="openMediaDrawerUpload">
+          <template #icon><upload-icon /></template>
+          上传新文件
+        </t-button>
+      </div>
+      <div class="cover-drawer-grid">
+        <div
+          v-for="item in mediaDrawerList"
+          :key="item.url"
+          class="cover-drawer-card"
+          :class="{ 'is-selected': pendingImageField && String(form[pendingImageField.key]) === item.url }"
+          @click="selectMediaFromDrawer(item)"
+        >
+          <video
+            v-if="item.isVideo"
+            class="cover-drawer-card__img"
+            :src="item.url"
+            muted
+            preload="auto"
+            playsinline
+            @loadeddata="(e: Event) => { const v = e.target as HTMLVideoElement; v.play().then(() => v.pause()).catch(() => {}); }"
+          ></video>
+          <img v-else class="cover-drawer-card__img" :src="item.url" :alt="item.filename" loading="lazy" />
+          <div class="cover-drawer-card__label">
+            <check-circle-filled-icon v-if="pendingImageField && String(form[pendingImageField.key]) === item.url" class="cover-drawer-card__check" />
+            <span>{{ item.filename }}</span>
+          </div>
+        </div>
+        <div v-if="!mediaDrawerList.length && !mediaDrawerLoading" class="cover-drawer-empty">暂无已上传媒体，请先上传</div>
+      </div>
+    </t-drawer>
 
     <t-drawer
       :visible="videoDrawerVisible"
-      header="选择背景视频"
+      :header="videoDrawerTitle"
       :size="560"
       placement="right"
       :footer="null"
       @close="closeVideoDrawer"
     >
-      <div class="video-drawer-grid">
+      <t-radio-group v-model="videoDrawerMode" variant="default-filled" class="video-drawer-tabs">
+        <t-radio-button value="select">选择已有视频</t-radio-button>
+        <t-radio-button value="url">输入视频 URL</t-radio-button>
+      </t-radio-group>
+
+      <div v-if="videoDrawerMode === 'select'" class="video-drawer-grid">
         <div
           v-for="opt in heroVideoOptions"
           :key="opt.value"
@@ -273,6 +300,25 @@
           后端 uploads/hero-videos 目录暂无视频
         </div>
       </div>
+
+      <div v-else class="video-drawer-url-mode">
+        <p class="video-drawer-url-mode__hint">输入第三方视频 URL，支持 mp4/webm 格式。</p>
+        <t-input
+          v-model="videoUrlInput"
+          placeholder="https://example.com/videos/bg.mp4"
+          clearable
+          @keyup.enter="confirmVideoUrl"
+        />
+        <div v-if="videoUrlPreview" class="video-drawer-url-mode__preview">
+          <video :src="videoUrlPreview" muted loop playsinline preload="metadata" controls></video>
+        </div>
+        <t-space class="video-drawer-url-mode__actions">
+          <t-button theme="primary" @click="confirmVideoUrl">
+            <template #icon><check-icon /></template>
+            确认使用该 URL
+          </t-button>
+        </t-space>
+      </div>
     </t-drawer>
   </div>
 </template>
@@ -288,6 +334,7 @@ import {
   CheckIcon,
   ChevronRightIcon,
   DeleteIcon,
+  ImageIcon,
   RefreshIcon,
   UploadIcon,
   VideoIcon,
@@ -295,14 +342,13 @@ import {
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import type { TableRowData } from 'tdesign-vue-next';
 
-import { adminApi, type HomeHeroFeature, type HomeHeroPayload, type HomeHeroSlide, type SettingItem } from '@/api/admin';
+import { adminApi, type HomeHeroFeature, type HomeHeroPayload, type HomeHeroSlide, type MediaFileRecord, type SettingItem } from '@/api/admin';
 import { errorMessage } from '@/utils/userMessage';
 
 import './index.less';
 
 type SettingsTab =
   | 'system'
-  | 'payment'
   | 'referral'
   | 'automation'
   | 'site_basic'
@@ -360,6 +406,16 @@ const activeSection = ref('');
 const form = reactive<Record<string, FieldValue>>({});
 const fileInputRef = ref<HTMLInputElement>();
 const pendingImageField = ref<SettingField | null>(null);
+const mediaDrawerVisible = ref(false);
+const mediaDrawerLoading = ref(false);
+const mediaDrawerList = ref<Array<{ url: string; filename: string; isVideo: boolean }>>([]);
+const mediaDrawerType = ref('');
+const mediaDrawerTypeOptions = [
+  { label: '全部类型', value: '' },
+  { label: '图片', value: 'image' },
+  { label: '视频', value: 'video' },
+];
+const mediaDrawerUploadRef = ref<HTMLInputElement>();
 
 const maxSlides = 5;
 const maxFeatures = 5;
@@ -370,6 +426,9 @@ const heroSnapshot = ref('');
 const videoDrawerVisible = ref(false);
 const videoDrawerSlideIndex = ref(-1);
 const videoDrawerCurrentSrc = ref('');
+const videoDrawerMode = ref<'select' | 'url'>('select');
+const videoUrlInput = ref('');
+const videoUrlPreview = ref('');
 
 const automationScheduleModeOptions: FieldOption[] = [
   { label: '每 5 分钟', value: 'every_five_minutes' },
@@ -386,7 +445,6 @@ const tabGroups: Array<{ group: string; label: string; tabs: Array<{ label: stri
     label: '基础配置',
     tabs: [
       { label: '系统设置', value: 'system' },
-      { label: '支付配置', value: 'payment' },
       { label: '推荐奖励', value: 'referral' },
       { label: '自动化策略', value: 'automation' },
     ],
@@ -401,7 +459,6 @@ const tabGroups: Array<{ group: string; label: string; tabs: Array<{ label: stri
   },
 ];
 const tabOptions = tabGroups.flatMap((g) => g.tabs);
-const activeTab = ref<SettingsTab>(normalizeTab(route.query.tab));
 
 const configs: Record<Exclude<SettingsTab, 'site_hero'>, SettingsConfig> = {
   system: {
@@ -430,23 +487,6 @@ const configs: Record<Exclude<SettingsTab, 'site_hero'>, SettingsConfig> = {
           { key: 'sms_cooldown_seconds', group: 'message_limit', label: '手机号冷却时间（秒）', type: 'number', default: 60, min: 0 },
           { key: 'sms_target_hourly_limit', group: 'message_limit', label: '手机号每小时上限', type: 'number', default: 10, min: 0 },
           { key: 'sms_ip_hourly_limit', group: 'message_limit', label: '短信 IP 每小时上限', type: 'number', default: 20, min: 0 },
-        ],
-      },
-    ],
-  },
-  payment: {
-    group: 'payment',
-    title: '支付配置',
-    description: '配置支付开关、前台支付名称以及支付宝当面付参数。',
-    sections: [
-      {
-        title: '支付宝支付',
-        fields: [
-          { key: 'alipay_enabled', label: '启用支付宝支付', type: 'switch', default: false },
-          { key: 'alipay_name', label: '前端名称', type: 'input', default: '支付宝支付', requiredWhen: (model) => Boolean(model.alipay_enabled) },
-          { key: 'alipay_app_id', label: 'APPID', type: 'input', default: '', requiredWhen: (model) => Boolean(model.alipay_enabled) },
-          { key: 'alipay_private_key', label: '商户私钥', type: 'password', default: '', wide: true, requiredWhen: (model) => Boolean(model.alipay_enabled) },
-          { key: 'alipay_public_key', label: '支付宝公钥', type: 'password', default: '', wide: true, requiredWhen: (model) => Boolean(model.alipay_enabled) },
         ],
       },
     ],
@@ -525,10 +565,10 @@ const configs: Record<Exclude<SettingsTab, 'site_hero'>, SettingsConfig> = {
         fields: [
           { key: 'site_name', label: '站点名称', type: 'input', default: '', maxlength: 50, placeholder: '例如：创欧云' },
           { key: 'browser_title', label: '浏览器标题', type: 'input', default: '', maxlength: 80, placeholder: '留空则默认使用站点名称' },
-          { key: 'site_logo', label: '站点 Logo', type: 'image', default: '', maxlength: 255, preview: 'image', wide: true, placeholder: '/branding/logo.svg' },
-          { key: 'site_favicon', label: '站点 Favicon', type: 'image', default: '', maxlength: 255, preview: 'image', wide: true, placeholder: '/branding/logo1.svg' },
+          { key: 'site_logo', label: '站点 Logo', type: 'image', default: '', maxlength: 255, placeholder: '/branding/logo.svg' },
+          { key: 'site_favicon', label: '站点 Favicon', type: 'image', default: '', maxlength: 255, placeholder: '/branding/logo1.svg' },
           { key: 'service_phone', label: '官方QQ群', type: 'input', default: '', maxlength: 40 },
-          { key: 'support_group_qr', label: '官方群聊二维码', type: 'image', default: '', maxlength: 255, preview: 'image', wide: true },
+          { key: 'support_group_qr', label: '官方群聊二维码', type: 'image', default: '', maxlength: 255 },
           { key: 'support_group_link', label: '入群链接', type: 'input', default: '', maxlength: 255 },
           { key: 'terms_url', label: '服务条款链接', type: 'input', default: '', maxlength: 255 },
           { key: 'privacy_url', label: '隐私政策链接', type: 'input', default: '', maxlength: 255 },
@@ -552,22 +592,43 @@ const currentLoading = computed(() => (activeTab.value === 'site_hero' ? heroLoa
 const currentSaving = computed(() => (activeTab.value === 'site_hero' ? heroSaving.value : settingsSaving.value));
 const heroDirty = computed(() => JSON.stringify(heroForm) !== heroSnapshot.value);
 
+const videoDrawerTitle = computed(() => {
+  if (videoDrawerSlideIndex.value < 0) return '选择背景视频';
+  const slide = heroForm.slides[videoDrawerSlideIndex.value];
+  return `背景视频 · 第 ${videoDrawerSlideIndex.value + 1} 项${slide?.rail_title ? '（' + slide.rail_title + '）' : ''}`;
+});
+
 function normalizeTab(value: unknown): SettingsTab {
   const tab = Array.isArray(value) ? value[0] : value;
   if (tab === 'site') return 'site_basic';
   return tabOptions.some((item) => item.value === tab) ? (tab as SettingsTab) : 'system';
 }
 
-function handleTabChange(value: string | number) {
-  activeTab.value = normalizeTab(value);
-  router.replace({ path: '/admin/settings', query: activeTab.value === 'system' ? {} : { tab: activeTab.value } });
-  refreshCurrentTab();
+function resolveInitialTab(): SettingsTab {
+  const metaTab = route.meta.settingsTab;
+  if (typeof metaTab === 'string' && tabOptions.some((item) => item.value === metaTab)) {
+    return metaTab as SettingsTab;
+  }
+  return normalizeTab(route.query.tab);
 }
+
+const activeTab = ref<SettingsTab>(resolveInitialTab());
 
 function refreshCurrentTab() {
   if (activeTab.value === 'site_hero') return loadHero();
   return loadSettings();
 }
+
+// 路由切换时同步 activeTab
+watch(
+  () => route.meta.settingsTab,
+  (newTab) => {
+    if (typeof newTab === 'string' && tabOptions.some((item) => item.value === newTab)) {
+      activeTab.value = newTab as SettingsTab;
+      refreshCurrentTab();
+    }
+  },
+);
 
 function saveCurrentTab() {
   if (activeTab.value === 'site_hero') return saveHero();
@@ -677,9 +738,84 @@ function isFieldRequired(field: SettingField) {
 
 function selectImage(field: SettingField) {
   pendingImageField.value = field;
-  if (fileInputRef.value) {
-    fileInputRef.value.value = '';
-    fileInputRef.value.click();
+  openMediaDrawer();
+}
+
+function openMediaDrawer() {
+  mediaDrawerVisible.value = true;
+  mediaDrawerType.value = '';
+  loadMediaDrawerList();
+}
+
+function closeMediaDrawer() {
+  mediaDrawerVisible.value = false;
+}
+
+async function loadMediaDrawerList() {
+  mediaDrawerLoading.value = true;
+  try {
+    const res = await adminApi.media.list({
+      type: mediaDrawerType.value || undefined,
+      page_size: 100,
+    });
+    mediaDrawerList.value = (res.list || [])
+      .map(function(item) {
+        return {
+          url: String(item.url || ''),
+          filename: String(item.filename || '').split('/').pop() || '',
+          isVideo: isMediaDrawerVideo(item),
+        };
+      })
+      .filter(function(item) { return item.url; });
+  } catch {
+    mediaDrawerList.value = [];
+  } finally {
+    mediaDrawerLoading.value = false;
+  }
+}
+
+function isMediaDrawerVideo(row: MediaFileRecord): boolean {
+  return String(row.type || '').toLowerCase() === 'video' || String(row.mime_type || '').startsWith('video/');
+}
+
+function selectMediaFromDrawer(item: { url: string; filename: string; isVideo: boolean }) {
+  const field = pendingImageField.value;
+  if (!field) return;
+  form[field.key] = item.url;
+  MessagePlugin.success('已选择');
+  closeMediaDrawer();
+}
+
+function openMediaDrawerUpload() {
+  if (mediaDrawerUploadRef.value) {
+    mediaDrawerUploadRef.value.value = '';
+    mediaDrawerUploadRef.value.click();
+  }
+}
+
+async function handleMediaDrawerUpload(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+  const data = new FormData();
+  data.append('file', file);
+  data.append('group', 'site-settings');
+  try {
+    const response = await adminApi.media.upload(data);
+    const url = String(response.url || '');
+    if (url) {
+      mediaDrawerList.value.unshift({
+        url,
+        filename: String(response.filename || '').split('/').pop() || file.name,
+        isVideo: isMediaDrawerVideo(response),
+      });
+    }
+    // Also set as the selected image
+    const field = pendingImageField.value;
+    if (field) form[field.key] = url;
+    MessagePlugin.success('上传成功');
+  } catch (error) {
+    const record = error as Record<string, unknown>;
+    MessagePlugin.error(String(record.message || '上传失败'));
   }
 }
 
@@ -883,13 +1019,26 @@ function onVideoCardLeave(event: MouseEvent) {
 
 function openVideoDrawer(slideIndex: number) {
   videoDrawerSlideIndex.value = slideIndex
-  videoDrawerCurrentSrc.value = String(heroForm.slides[slideIndex]?.video || '')
+  const current = String(heroForm.slides[slideIndex]?.video || '')
+  videoDrawerCurrentSrc.value = current
+  const isPredefined = heroVideoOptions.value.some((opt) => opt.value === current)
+  if (current && !isPredefined) {
+    videoDrawerMode.value = 'url'
+    videoUrlInput.value = current
+    videoUrlPreview.value = current
+  } else {
+    videoDrawerMode.value = 'select'
+    videoUrlInput.value = ''
+    videoUrlPreview.value = ''
+  }
   videoDrawerVisible.value = true
 }
 
 function closeVideoDrawer() {
   videoDrawerVisible.value = false
   videoDrawerSlideIndex.value = -1
+  videoUrlInput.value = ''
+  videoUrlPreview.value = ''
 }
 
 function selectVideoFromDrawer(value: string) {
@@ -900,12 +1049,37 @@ function selectVideoFromDrawer(value: string) {
   closeVideoDrawer()
 }
 
+function confirmVideoUrl() {
+  const url = videoUrlInput.value.trim()
+  if (!url) {
+    MessagePlugin.warning('请输入视频 URL')
+    return
+  }
+  if (!/^https?:\/\/.+/.test(url)) {
+    MessagePlugin.warning('请输入以 http:// 或 https:// 开头的有效 URL')
+    return
+  }
+  const idx = videoDrawerSlideIndex.value
+  if (idx >= 0 && idx < heroForm.slides.length) {
+    heroForm.slides[idx].video = url
+  }
+  MessagePlugin.success('已设置第三方视频 URL')
+  closeVideoDrawer()
+}
+
 function videoDisplayName(src: string) {
   if (!src) return ''
-  const filename = src.split('/').pop() || src
   const opt = heroVideoOptions.value.find((item) => item.value === src)
-  if (opt?.size) return `${filename} · ${formatFileSize(opt.size)}`
-  return filename
+  if (opt?.size) return `${opt.filename || src.split('/').pop()} · ${formatFileSize(opt.size)}`
+  if (opt) return opt.filename || src.split('/').pop() || src
+  // External URL — show shortened domain path
+  try {
+    const url = new URL(src)
+    const path = url.pathname.split('/').filter(Boolean).pop() || url.hostname
+    return `外部 · ${path}`
+  } catch {
+    return src.split('/').pop() || src
+  }
 }
 
 function moveItem<T>(list: T[], index: number, offset: number) {
@@ -923,6 +1097,14 @@ function toRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
 
+
+watch(videoUrlInput, (value) => {
+  if (/^https?:\/\/.+/.test(value)) {
+    videoUrlPreview.value = value
+  } else {
+    videoUrlPreview.value = ''
+  }
+})
 
 watch(
   () => route.query.tab,

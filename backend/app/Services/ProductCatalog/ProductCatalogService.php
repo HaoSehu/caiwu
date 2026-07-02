@@ -183,6 +183,16 @@ class ProductCatalogService
         $this->adminService->deleteProduct($product);
     }
 
+    public function restoreProduct(Product $product): Product
+    {
+        return $this->adminService->restoreProduct($product);
+    }
+
+    public function forceDeleteProduct(Product $product): void
+    {
+        $this->adminService->forceDeleteProduct($product);
+    }
+
     public function toggleProductStatus(Product $product): Product
     {
         return $this->adminService->toggleProductStatus($product);

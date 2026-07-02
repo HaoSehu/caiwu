@@ -15,6 +15,9 @@ class UserNotificationType
     /** 服务续费提醒（到期前） */
     public const SERVICE_RENEW_REMINDER = 'service_renew_reminder';
 
+    /** 即将自动续费提醒 */
+    public const SERVICE_AUTO_RENEW_UPCOMING = 'service_auto_renew_upcoming';
+
     /** 服务到期/暂停提醒 */
     public const SERVICE_EXPIRE_REMINDER = 'service_expire_reminder';
 
@@ -36,6 +39,7 @@ class UserNotificationType
     public const LABELS = [
         self::ORDER_PAID => '订购提醒',
         self::SERVICE_RENEW_REMINDER => '续费提醒',
+        self::SERVICE_AUTO_RENEW_UPCOMING => '自动续费提醒',
         self::SERVICE_EXPIRE_REMINDER => '到期提醒',
         self::INVOICE_PAYMENT_REMINDER => '账单提醒',
         self::INVOICE_OVERDUE_REMINDER => '逾期提醒',

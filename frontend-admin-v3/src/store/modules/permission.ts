@@ -1,11 +1,10 @@
 import { cloneDeep } from 'lodash-es';
 import { defineStore } from 'pinia';
 import {
-  ChartIcon,
+  ArticleIcon,
   DashboardIcon,
   FileIcon,
   GiftIcon,
-  NotificationIcon,
   ServerIcon,
   ShopIcon,
   ToolsIcon,
@@ -37,25 +36,24 @@ const ADMIN_MENU_GROUPS: MenuGroupConfig[] = [
     orderNo: 0,
     children: ['/admin/dashboard'],
   },
-  // ── 用户管理：用户列表 / 实名认证 / 推广返利 ─────────────
+  // ── 客户管理：用户列表 / 实名认证 ─────────────────────
   {
     path: '/admin/menu/users',
-    title: { zh_CN: '用户管理', en_US: 'Users' },
+    title: { zh_CN: '客户管理', en_US: 'Customers' },
     icon: shallowRef(UserCircleIcon),
     orderNo: 10,
-    children: ['/admin/users', '/admin/users/verification', '/admin/referral'],
+    children: ['/admin/users', '/admin/users/verification'],
   },
-  // ── 财务管理：账单 / 订单 / 充值 / 新客户（订单内部切 Tab 区分普通/续费/附加）──
+  // ── 交易管理：订单 / 账单 / 充值 ───────────
   {
     path: '/admin/menu/finance',
-    title: { zh_CN: '财务管理', en_US: 'Finance' },
+    title: { zh_CN: '交易管理', en_US: 'Transactions' },
     icon: shallowRef(FileIcon),
     orderNo: 20,
     children: [
-      '/admin/finance/invoices',
       '/admin/finance/orders',
+      '/admin/finance/invoices',
       '/admin/finance/recharges',
-      '/admin/finance/new-customers',
     ],
   },
   // ── 商品管理：商品目录（内部切 Tab：商品/流量包/提供商）/ 规格 / CPU 型号 ──
@@ -66,47 +64,54 @@ const ADMIN_MENU_GROUPS: MenuGroupConfig[] = [
     orderNo: 30,
     children: [
       '/admin/products',
-      '/admin/products/traffic-packages',
       '/admin/specs',
       '/admin/cpu-models',
     ],
   },
-  // ── 服务运维：服务实例 / 工单 ─────────────────────────────
+  // ── 服务交付：服务实例 / 工单 ─────────────────────────────
   {
     path: '/admin/menu/service-ops',
-    title: { zh_CN: '服务运维', en_US: 'Service Ops' },
+    title: { zh_CN: '服务交付', en_US: 'Service Delivery' },
     icon: shallowRef(ServerIcon),
     orderNo: 40,
     children: ['/admin/services', '/admin/tickets'],
   },
-  // ── 内容管理：公告 / 帮助 ───────────────────────────────
+  // ── 内容运营：站点信息 / 首页装修 / 公告 / 帮助 / 媒体库 ──
   {
     path: '/admin/menu/content',
-    title: { zh_CN: '内容管理', en_US: 'Content' },
-    icon: shallowRef(NotificationIcon),
+    title: { zh_CN: '内容运营', en_US: 'Content' },
+    icon: shallowRef(ArticleIcon),
     orderNo: 50,
-    children: ['/admin/content/notices', '/admin/content/help'],
+    children: [
+      '/admin/site-info',
+      '/admin/site-hero',
+      '/admin/content/notices',
+      '/admin/content/help',
+      '/admin/content/media-library',
+    ],
   },
-  // ── 营销管理：会员等级 / 优惠券（内部切 Tab：优惠券/活动券）──
+  // ── 营销增长：会员等级 / 优惠券 / 推广返利 / 推荐奖励 ──
   {
     path: '/admin/menu/marketing',
-    title: { zh_CN: '营销管理', en_US: 'Marketing' },
+    title: { zh_CN: '营销增长', en_US: 'Growth' },
     icon: shallowRef(GiftIcon),
     orderNo: 60,
-    children: ['/admin/member-levels', '/admin/coupons'],
+    children: ['/admin/member-levels', '/admin/coupons', '/admin/referral', '/admin/referral-settings'],
   },
-  // ── 系统管理：通知 / 日志 / 员工 / 角色 / 设置 ──────────
+  // ── 平台管理：系统配置 / 自动化 / 通知 / 日志 / 员工 / 角色 ──
   {
     path: '/admin/menu/system',
-    title: { zh_CN: '系统管理', en_US: 'System' },
+    title: { zh_CN: '平台管理', en_US: 'Platform' },
     icon: shallowRef(ToolsIcon),
     orderNo: 70,
     children: [
+      '/admin/settings',
+      '/admin/automation',
+      '/admin/integration-plugins',
       '/admin/notifications',
       '/admin/logs',
       '/admin/system/staff',
       '/admin/system/roles',
-      '/admin/settings',
     ],
   },
 ];

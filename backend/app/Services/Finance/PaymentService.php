@@ -123,8 +123,8 @@ class PaymentService
         $traceId = trim((string) ($context['trace_id'] ?? ''));
         $lockKey = "lock:pay:order:{$order->id}";
 
-        $paidInvoice = $this->withLock($lockKey, 30, function () use ($order, $user, $traceId) {
-            return DB::transaction(function () use ($order, $user, $traceId) {
+        $paidInvoice = $this->withLock($lockKey, 30, function () use ($order, $user, $traceId, $context) {
+            return DB::transaction(function () use ($order, $user, $traceId, $context) {
                 $lockedOrder = Order::query()
                     ->lockForUpdate()
                     ->with('invoice')
@@ -139,6 +139,11 @@ class PaymentService
                 );
 
                 $amount = $this->resolveOrderPayableAmount($lockedOrder);
+                throw_if(
+                    $amount <= 0 && $this->isAutoRenewBalancePayment($lockedOrder, $context),
+                    new BusinessException('自动续费金额异常，已拦截本次续费')
+                );
+
                 if ($amount > 0) {
                     $currentBalance = $this->getUserBalance($lockedUser);
                     throw_if($currentBalance < $amount, new BusinessException('余额不足'));
@@ -164,11 +169,17 @@ class PaymentService
                 ])->save();
 
                 if ($lockedOrder->invoice instanceof Invoice) {
+                    $configSnapshot = is_array($lockedOrder->invoice->config_snapshot ?? null)
+                        ? $lockedOrder->invoice->config_snapshot : [];
+                    $configSnapshot['fulfillment_pending'] = true;
+                    $configSnapshot['fulfillment_type'] = (string) $lockedOrder->type;
+
                     $lockedOrder->invoice->forceFill([
                         'status' => InvoiceStatus::PAID,
                         'paid_amount' => $lockedOrder->invoice->amount,
                         'paid_at' => now(),
                         'trace_id' => $traceId !== '' ? $traceId : $lockedOrder->invoice->trace_id,
+                        'config_snapshot' => $configSnapshot,
                     ])->save();
                 }
 
@@ -181,6 +192,17 @@ class PaymentService
         $order = $order->fresh(['invoice']) ?? $order;
         if ($order->invoice instanceof Invoice) {
             $this->handlePaidInvoice($order->invoice, $traceId !== '' ? 'balance:'.$traceId : 'balance:'.$order->id);
+        }
+
+        // 履约完成后清除 pending 标记
+        if ($order->invoice instanceof Invoice) {
+            $configSnapshot = is_array($order->invoice->config_snapshot ?? null)
+                ? $order->invoice->config_snapshot : [];
+            if (! empty($configSnapshot['fulfillment_pending'])) {
+                $configSnapshot['fulfillment_pending'] = false;
+                $configSnapshot['fulfillment_cleared_at'] = now()->toDateTimeString();
+                $order->invoice->forceFill(['config_snapshot' => $configSnapshot])->saveQuietly();
+            }
         }
 
         return $paidInvoice?->fresh() ?? $paidInvoice ?? $order->invoice;
@@ -293,6 +315,76 @@ class PaymentService
         $payment->forceFill([
             'callback_raw' => array_merge((array) ($payment->callback_raw ?? []), [
                 'source' => 'alipay_recharge_precreate',
+                'trace_id' => $traceId,
+            ]),
+        ])->save();
+        $this->syncProjection($payment);
+
+        return [
+            'payment_no' => $payment->payment_no,
+            'qr_code' => $result['qr_code'],
+            'amount' => number_format($normalizedAmount, 2, '.', ''),
+        ];
+    }
+
+    /**
+     * 第三方网关充值（通用入口）
+     */
+    public function rechargeByGateway(User $user, float $amount, string $gateway, array $context = []): array
+    {
+        $traceId = $this->resolveTraceId($context, "{$gateway}:user:{$user->id}:".now()->format('YmdHis'));
+        $this->assertVerifiedUser($user);
+
+        $resolvedGateway = $this->resolveGateway($gateway);
+
+        throw_if(! $resolvedGateway->isEnabled(), new BusinessException(
+            PaymentGatewayCode::label($gateway).'支付未启用'
+        ));
+        throw_if($amount < 1, new BusinessException('充值金额不能小于 1 元'));
+        throw_if($amount > 50000, new BusinessException('单笔充值不能超过 50000 元'));
+
+        $normalizedAmount = round($amount, 2);
+        $lockKey = "lock:recharge:create:{$user->id}:".md5(number_format($normalizedAmount, 2, '.', ''));
+
+        $payment = $this->withLock($lockKey, 20, function () use ($user, $normalizedAmount, $traceId, $gateway) {
+            return DB::transaction(function () use ($user, $normalizedAmount, $traceId, $gateway) {
+                $payment = Payment::query()
+                    ->where('user_id', $user->id)
+                    ->whereNull('invoice_id')
+                    ->where('gateway', $gateway)
+                    ->where('status', PaymentStatus::PENDING)
+                    ->where('amount', $normalizedAmount)
+                    ->where('created_at', '>=', now()->subMinutes(15))
+                    ->lockForUpdate()
+                    ->latest('id')
+                    ->first();
+
+                if ($payment) {
+                    if (trim((string) ($payment->trace_id ?? '')) === '') {
+                        $payment->forceFill(['trace_id' => $traceId])->save();
+                    }
+
+                    return $payment;
+                }
+
+                return Payment::query()->create([
+                    'payment_no' => Payment::generatePaymentNo(),
+                    'user_id' => $user->id,
+                    'invoice_id' => null,
+                    'gateway' => $gateway,
+                    'amount' => $normalizedAmount,
+                    'status' => PaymentStatus::PENDING,
+                    'trace_id' => $traceId,
+                ]);
+            });
+        }, '充值请求处理中，请勿重复提交');
+
+        $subject = config('app.name', 'IDC').' - 账户充值 ¥'.number_format($normalizedAmount, 2, '.', '');
+        $result = $this->precreateGatewayPayment($gateway, $payment->payment_no, $normalizedAmount, $subject);
+
+        $payment->forceFill([
+            'callback_raw' => array_merge((array) ($payment->callback_raw ?? []), [
+                'source' => "{$gateway}_recharge_precreate",
                 'trace_id' => $traceId,
             ]),
         ])->save();
@@ -478,6 +570,173 @@ class PaymentService
     }
 
     /**
+     * 第三方网关支付（通用入口，支持 Invoice）
+     */
+    public function payByGateway(Invoice $invoice, User $user, string $gateway, array $context = []): array
+    {
+        $resolvedGateway = $this->resolveGateway($gateway);
+
+        throw_if(! $resolvedGateway->isEnabled(), new BusinessException(
+            PaymentGatewayCode::label($gateway).'支付未启用'
+        ));
+
+        $traceId = $this->resolveTraceId($context, "{$gateway}:invoice:{$invoice->id}");
+        $lockKey = "lock:pay:{$gateway}:invoice:{$invoice->id}";
+
+        $payload = $this->withLock($lockKey, 20, function () use ($invoice, $user, $traceId, $gateway) {
+            return DB::transaction(function () use ($invoice, $user, $traceId, $gateway) {
+                $lockedInvoice = Invoice::query()
+                    ->lockForUpdate()
+                    ->with('order')
+                    ->findOrFail($invoice->id);
+
+                throw_if(
+                    ! in_array((int) $lockedInvoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE], true),
+                    new BusinessException('账单状态异常，无法支付')
+                );
+
+                $amount = round((float) $lockedInvoice->amount - (float) ($lockedInvoice->paid_amount ?? 0), 2);
+                throw_if($amount <= 0, new BusinessException('无需支付'));
+
+                $payment = Payment::query()
+                    ->where('invoice_id', $lockedInvoice->id)
+                    ->where('gateway', $gateway)
+                    ->where('status', PaymentStatus::PENDING)
+                    ->latest('id')
+                    ->first();
+
+                if (! $payment) {
+                    $payment = Payment::query()->create([
+                        'payment_no' => Payment::generatePaymentNo(),
+                        'user_id' => $user->id,
+                        'order_id' => (int) ($lockedInvoice->order?->id ?? 0) ?: null,
+                        'invoice_id' => $lockedInvoice->id,
+                        'gateway' => $gateway,
+                        'amount' => $amount,
+                        'status' => PaymentStatus::PENDING,
+                        'trace_id' => $traceId,
+                        'callback_raw' => [
+                            'source' => "{$gateway}_precreate",
+                            'trace_id' => $traceId,
+                        ],
+                    ]);
+                    $this->syncProjection($payment);
+                } elseif (trim((string) ($payment->trace_id ?? '')) === '') {
+                    $payment->forceFill(['trace_id' => $traceId])->save();
+                }
+
+                return [
+                    'invoice' => $lockedInvoice,
+                    'payment' => $payment,
+                ];
+            });
+        }, '支付二维码生成中，请稍后重试');
+
+        /** @var Invoice $lockedInvoice */
+        $lockedInvoice = $payload['invoice'];
+        /** @var Payment $payment */
+        $payment = $payload['payment'];
+
+        $subject = config('app.name', 'IDC').' - 账单 '.$lockedInvoice->invoice_no;
+        $result = $this->precreateGatewayPayment(
+            $gateway,
+            $payment->payment_no,
+            (float) $payment->amount,
+            $subject,
+            $this->resolveInvoicePaymentTimeoutExpress($lockedInvoice)
+        );
+
+        return [
+            'payment_no' => $payment->payment_no,
+            'qr_code' => $result['qr_code'],
+            'amount' => number_format((float) $payment->amount, 2, '.', ''),
+        ];
+    }
+
+    /**
+     * 第三方网关支付（通用入口，支持 Order）
+     */
+    public function payOrderByGateway(Order $order, User $user, string $gateway, array $context = []): array
+    {
+        $resolvedGateway = $this->resolveGateway($gateway);
+
+        throw_if(! $resolvedGateway->isEnabled(), new BusinessException(
+            PaymentGatewayCode::label($gateway).'支付未启用'
+        ));
+
+        $traceId = $this->resolveTraceId($context, "{$gateway}:order:{$order->id}");
+        $lockKey = "lock:pay:{$gateway}:order:{$order->id}";
+
+        $payload = $this->withLock($lockKey, 20, function () use ($order, $user, $traceId, $gateway) {
+            return DB::transaction(function () use ($order, $user, $traceId, $gateway) {
+                $lockedOrder = Order::query()
+                    ->lockForUpdate()
+                    ->with('invoice')
+                    ->findOrFail($order->id);
+
+                throw_if(
+                    (int) $lockedOrder->status !== OrderStatus::PENDING,
+                    new BusinessException('当前订单状态不支持支付')
+                );
+
+                $amount = $this->resolveOrderPayableAmount($lockedOrder);
+                throw_if($amount <= 0, new BusinessException('当前订单无需支付'));
+
+                $payment = Payment::query()
+                    ->where('order_id', $lockedOrder->id)
+                    ->where('gateway', $gateway)
+                    ->where('status', PaymentStatus::PENDING)
+                    ->latest('id')
+                    ->first();
+
+                if (! $payment) {
+                    $payment = Payment::query()->create([
+                        'payment_no' => Payment::generatePaymentNo(),
+                        'user_id' => $user->id,
+                        'order_id' => (int) $lockedOrder->id,
+                        'invoice_id' => (int) ($lockedOrder->invoice?->id ?? 0) ?: null,
+                        'gateway' => $gateway,
+                        'amount' => $amount,
+                        'status' => PaymentStatus::PENDING,
+                        'trace_id' => $traceId,
+                        'callback_raw' => [
+                            'source' => "{$gateway}_precreate",
+                            'trace_id' => $traceId,
+                        ],
+                    ]);
+                    $this->syncProjection($payment);
+                } elseif (trim((string) ($payment->trace_id ?? '')) === '') {
+                    $payment->forceFill(['trace_id' => $traceId])->save();
+                }
+
+                return [
+                    'order' => $lockedOrder,
+                    'payment' => $payment,
+                ];
+            });
+        }, '支付二维码生成中，请稍后重试');
+
+        /** @var Order $lockedOrder */
+        $lockedOrder = $payload['order'];
+        /** @var Payment $payment */
+        $payment = $payload['payment'];
+
+        $subject = config('app.name', 'IDC').' - 订单 '.$lockedOrder->order_no;
+        $result = $this->precreateGatewayPayment(
+            $gateway,
+            $payment->payment_no,
+            (float) $payment->amount,
+            $subject
+        );
+
+        return [
+            'payment_no' => $payment->payment_no,
+            'qr_code' => $result['qr_code'],
+            'amount' => number_format((float) $payment->amount, 2, '.', ''),
+        ];
+    }
+
+    /**
      * 先扣余额，再为剩余金额生成支付宝二维码。
      */
     public function payByBalanceAndAlipay(Invoice $invoice, User $user, float $balanceAmount, array $context = []): array
@@ -612,6 +871,143 @@ class PaymentService
         ];
     }
 
+    /**
+     * 先扣余额，再为剩余金额通过指定第三方网关生成二维码（通用入口）
+     */
+    public function payByBalanceAndGateway(Invoice $invoice, User $user, float $balanceAmount, string $gateway, array $context = []): array
+    {
+        $resolvedGateway = $this->resolveGateway($gateway);
+
+        throw_if(! $resolvedGateway->isEnabled(), new BusinessException(
+            PaymentGatewayCode::label($gateway).'支付未启用'
+        ));
+
+        $traceId = $this->resolveTraceId($context, "mix:invoice:{$invoice->id}");
+        $lockKey = "lock:pay:mix:invoice:{$invoice->id}";
+        $normalizedBalanceAmount = round(max($balanceAmount, 0), 2);
+
+        $payload = $this->withLock($lockKey, 20, function () use ($invoice, $user, $traceId, $normalizedBalanceAmount) {
+            return DB::transaction(function () use ($invoice, $user, $traceId, $normalizedBalanceAmount) {
+                $lockedInvoice = Invoice::query()
+                    ->lockForUpdate()
+                    ->with('order')
+                    ->findOrFail($invoice->id);
+                $lockedUser = User::query()
+                    ->lockForUpdate()
+                    ->findOrFail($user->id);
+
+                throw_if(
+                    ! in_array((int) $lockedInvoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE], true),
+                    new BusinessException('账单状态异常，无法支付')
+                );
+
+                $remainingAmount = round((float) $lockedInvoice->amount - (float) ($lockedInvoice->paid_amount ?? 0), 2);
+                throw_if($remainingAmount <= 0, new BusinessException('当前账单无需支付'));
+                throw_if($normalizedBalanceAmount <= 0, new BusinessException('余额支付金额必须大于 0'));
+                throw_if($normalizedBalanceAmount >= $remainingAmount, new BusinessException('余额支付金额需小于待支付金额'));
+
+                $currentBalance = $this->getUserBalance($lockedUser);
+                throw_if($currentBalance < $normalizedBalanceAmount, new BusinessException('余额不足'));
+
+                $balanceAfter = $this->setUserBalance($lockedUser, $currentBalance - $normalizedBalanceAmount);
+                $this->createBalanceLog(
+                    (int) $lockedUser->id,
+                    FinanceLedgerEventType::INVOICE_PAYMENT,
+                    -$normalizedBalanceAmount,
+                    $balanceAfter,
+                    (int) $lockedInvoice->id,
+                    '账单余额支付 '.(string) $lockedInvoice->invoice_no,
+                    [
+                        'trace_id' => $traceId,
+                    ]
+                );
+
+                $nextPaidAmount = round((float) ($lockedInvoice->paid_amount ?? 0) + $normalizedBalanceAmount, 2);
+                $lockedInvoice->forceFill([
+                    'paid_amount' => $nextPaidAmount,
+                    'trace_id' => $traceId !== '' ? $traceId : $lockedInvoice->trace_id,
+                ])->save();
+
+                return [
+                    'invoice' => $lockedInvoice,
+                    'remaining_amount' => round(max((float) $lockedInvoice->amount - $nextPaidAmount, 0), 2),
+                ];
+            });
+        }, '支付请求处理中，请勿重复提交');
+
+        /** @var Invoice $lockedInvoice */
+        $lockedInvoice = $payload['invoice'];
+        $remainingAmount = (float) ($payload['remaining_amount'] ?? 0);
+
+        throw_if($remainingAmount <= 0, new BusinessException('当前账单无需继续发起'.PaymentGatewayCode::label($gateway).'支付'));
+
+        $gatewayPayment = DB::transaction(function () use ($lockedInvoice, $user, $remainingAmount, $traceId, $normalizedBalanceAmount, $gateway) {
+            $existingPayment = Payment::query()
+                ->where('invoice_id', $lockedInvoice->id)
+                ->where('gateway', $gateway)
+                ->where('status', PaymentStatus::PENDING)
+                ->where('amount', $remainingAmount)
+                ->latest('id')
+                ->first();
+
+            if ($existingPayment) {
+                if (trim((string) ($existingPayment->trace_id ?? '')) === '') {
+                    $existingPayment->forceFill(['trace_id' => $traceId])->save();
+                }
+
+                return $existingPayment;
+            }
+
+            $payment = Payment::query()->create([
+                'payment_no' => Payment::generatePaymentNo(),
+                'user_id' => $user->id,
+                'order_id' => (int) ($lockedInvoice->order?->id ?? 0) ?: null,
+                'invoice_id' => $lockedInvoice->id,
+                'gateway' => $gateway,
+                'amount' => $remainingAmount,
+                'status' => PaymentStatus::PENDING,
+                'trace_id' => $traceId,
+                'callback_raw' => [
+                    'source' => "{$gateway}_precreate_mix",
+                    'trace_id' => $traceId,
+                    'mix_payment' => true,
+                    'balance_amount' => $normalizedBalanceAmount,
+                ],
+            ]);
+            $this->syncProjection($payment);
+
+            return $payment;
+        });
+
+        $subject = config('app.name', 'IDC').' - 账单 '.$lockedInvoice->invoice_no;
+        try {
+            $result = $this->precreateGatewayPayment(
+                $gateway,
+                $gatewayPayment->payment_no,
+                $remainingAmount,
+                $subject,
+                $this->resolveInvoicePaymentTimeoutExpress($lockedInvoice)
+            );
+        } catch (\Throwable $exception) {
+            $this->restoreReservedMixBalance($gatewayPayment, [
+                'trace_id' => $traceId,
+                'closed_reason' => "{$gateway}_precreate_failed",
+                'suppress_logs' => true,
+            ]);
+
+            throw $exception;
+        }
+
+        return [
+            'balance_amount' => number_format($normalizedBalanceAmount, 2, '.', ''),
+            'payment_no' => $gatewayPayment->payment_no,
+            'qr_code' => $result['qr_code'],
+            'amount' => number_format($remainingAmount, 2, '.', ''),
+            'paid_amount' => number_format((float) $lockedInvoice->paid_amount, 2, '.', ''),
+            'payable_amount' => number_format($remainingAmount, 2, '.', ''),
+        ];
+    }
+
     public function payOrderByAlipay(Order $order, User $user, array $context = []): array
     {
         throw_if(
@@ -684,6 +1080,250 @@ class PaymentService
             'qr_code' => $result['qr_code'],
             'amount' => number_format((float) $payment->amount, 2, '.', ''),
         ];
+    }
+
+    /**
+     * 第三方网关异步通知处理（通用入口）
+     */
+    public function handleGatewayNotify(string $gateway, array $params): bool
+    {
+        $resolvedGateway = $this->resolveGateway($gateway);
+        $gatewayLabel = PaymentGatewayCode::label($gateway);
+
+        if (! $resolvedGateway->verifyNotify($params)) {
+            Log::warning("[{$gatewayLabel}回调] 签名验证失败", [
+                'gateway' => $gateway,
+                'payment_no' => (string) ($params['out_trade_no'] ?? ''),
+                'trade_no' => (string) ($params['trade_no'] ?? ''),
+                'trade_status' => (string) ($params['trade_status'] ?? ''),
+            ]);
+
+            return false;
+        }
+
+        $paymentNo = $params['out_trade_no'] ?? '';
+        $tradeStatus = $params['trade_status'] ?? '';
+        $tradeNo = $params['trade_no'] ?? '';
+
+        $payment = Payment::where('payment_no', $paymentNo)->first();
+        if (! $payment) {
+            Log::warning("[{$gatewayLabel}回调] 支付记录不存在", ['payment_no' => $paymentNo]);
+
+            return false;
+        }
+
+        // 商户号校验（支付宝: app_id, 微信: mch_id）
+        $merchantId = $params['app_id'] ?? $params['mch_id'] ?? '';
+        if ($merchantId !== '' && ! $resolvedGateway->matchesMerchantId($merchantId)) {
+            Log::warning("[{$gatewayLabel}回调] 商户号不匹配", [
+                'payment_no' => $paymentNo,
+                'merchant_id' => $merchantId,
+            ]);
+
+            return false;
+        }
+
+        $notifyAmount = round((float) ($params['total_amount'] ?? $params['amount'] ?? 0), 2);
+        $expectedAmount = round((float) $payment->amount, 2);
+        if ($notifyAmount <= 0 || abs($notifyAmount - $expectedAmount) > 0.0001) {
+            Log::warning("[{$gatewayLabel}回调] 金额校验失败", [
+                'payment_no' => $paymentNo,
+                'expected_amount' => $expectedAmount,
+                'notify_amount' => $notifyAmount,
+            ]);
+
+            return false;
+        }
+
+        $params['trace_id'] = $this->resolveTraceId(
+            ['trace_id' => $params['trace_id'] ?? $payment->trace_id],
+            "{$gateway}:callback:{$payment->id}"
+        );
+        $this->recordPaymentCallback($payment, 'payment', $params, true, $tradeNo);
+
+        // 各网关成功状态不同，由 queryGatewayPayment 的结果判断
+        if (! in_array($tradeStatus, ['TRADE_SUCCESS', 'TRADE_FINISHED', 'SUCCESS'], true)) {
+            Log::info("[{$gatewayLabel}回调] 非成功状态，已记录回调并跳过业务入账", [
+                'payment_no' => $paymentNo,
+                'trade_status' => $tradeStatus,
+            ]);
+
+            return true;
+        }
+
+        // 幂等：已处理过
+        if ((int) $payment->status === PaymentStatus::SUCCESS) {
+            $this->ensureRechargeInvoiceProjection($payment);
+
+            return true;
+        }
+
+        // 充值类（无 invoice_id）走充值到账逻辑
+        if (! $payment->invoice_id) {
+            $this->completeRechargePayment($payment, $tradeNo, $params);
+
+            return true;
+        }
+
+        $lockKey = "lock:{$gateway}:payment:{$payment->id}";
+
+        try {
+            $result = $this->withLock($lockKey, 30, function () use ($payment, $tradeNo, $params, $gatewayLabel) {
+                return DB::transaction(function () use ($payment, $tradeNo, $params, $gatewayLabel) {
+                    $lockedPayment = Payment::query()
+                        ->lockForUpdate()
+                        ->with(['invoice.order'])
+                        ->find($payment->id);
+
+                    if (! $lockedPayment) {
+                        return ['dispatch' => false, 'invoice' => null, 'payment_no' => ''];
+                    }
+
+                    if ((int) $lockedPayment->status === PaymentStatus::SUCCESS) {
+                        return [
+                            'dispatch' => false,
+                            'invoice' => $lockedPayment->invoice,
+                            'payment_no' => (string) $lockedPayment->payment_no,
+                        ];
+                    }
+
+                    $invoice = $lockedPayment->invoice_id
+                        ? Invoice::query()->lockForUpdate()->with('order')->find($lockedPayment->invoice_id)
+                        : null;
+
+                    if (! $invoice) {
+                        return ['dispatch' => false, 'invoice' => null, 'payment_no' => (string) $lockedPayment->payment_no];
+                    }
+
+                    if ((int) $invoice->status === InvoiceStatus::PAID) {
+                        $this->creditCapturedPaymentToBalance($lockedPayment, $invoice, $tradeNo, $params, 'invoice_already_paid');
+
+                        Log::warning("[{$gatewayLabel}回调] 检测到重复支付回调，已拦截二次入账", [
+                            'payment_no' => $lockedPayment->payment_no,
+                            'invoice_id' => $invoice->id,
+                            'order_id' => $invoice->order?->id,
+                        ]);
+
+                        return ['dispatch' => false, 'invoice' => $invoice, 'payment_no' => (string) $lockedPayment->payment_no];
+                    }
+
+                    if ((int) $invoice->status === InvoiceStatus::CANCELLED) {
+                        $this->restoreReservedMixBalance($lockedPayment, [
+                            'closed_reason' => 'cancelled_invoice_captured',
+                            'mark_payment_failed' => false,
+                            'trace_id' => (string) ($params['trace_id'] ?? ''),
+                        ]);
+                        $lockedPayment->refresh();
+                        $this->creditCapturedPaymentToBalance($lockedPayment, $invoice, $tradeNo, $params, 'cancelled_invoice');
+
+                        Log::warning("[{$gatewayLabel}回调] 已取消账单收到支付回调，已拦截入账", [
+                            'payment_no' => $lockedPayment->payment_no,
+                            'invoice_id' => $invoice->id,
+                            'order_id' => $invoice->order?->id,
+                        ]);
+
+                        return ['dispatch' => false, 'invoice' => $invoice, 'payment_no' => (string) $lockedPayment->payment_no];
+                    }
+
+                    if ($this->invoicePaymentWindowExpired($invoice)) {
+                        $this->restoreReservedMixBalance($lockedPayment, [
+                            'closed_reason' => 'payment_window_expired_captured',
+                            'mark_payment_failed' => false,
+                            'trace_id' => (string) ($params['trace_id'] ?? ''),
+                        ]);
+                        $lockedPayment->refresh();
+                        $this->creditCapturedPaymentToBalance($lockedPayment, $invoice, $tradeNo, $params, 'payment_window_expired');
+                        $this->cancelExpiredInvoiceAfterCapturedPayment($invoice, $lockedPayment);
+
+                        Log::warning("[{$gatewayLabel}回调] 账单支付窗口已过期，已取消账单并拦截入账", [
+                            'payment_no' => $lockedPayment->payment_no,
+                            'invoice_id' => $invoice->id,
+                            'order_id' => $invoice->order?->id,
+                        ]);
+
+                        return ['dispatch' => false, 'invoice' => $invoice, 'payment_no' => (string) $lockedPayment->payment_no];
+                    }
+
+                    throw_if(
+                        ! in_array((int) $invoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE], true),
+                        new BusinessException('账单状态异常，无法处理支付回调')
+                    );
+
+                    $invoice = $this->restoreConflictingMixBalancesForCapturedPayment(
+                        $invoice,
+                        $lockedPayment,
+                        'captured_payment_superseded_mix_balance',
+                        $params
+                    );
+
+                    if (abs(round((float) $lockedPayment->amount, 2) - $this->invoicePayableAmount($invoice)) > 0.0001) {
+                        $this->creditCapturedPaymentToBalance($lockedPayment, $invoice, $tradeNo, $params, 'payable_amount_mismatch');
+
+                        Log::warning("[{$gatewayLabel}回调] 支付金额与账单当前应付不匹配，已转入余额", [
+                            'payment_no' => $lockedPayment->payment_no,
+                            'invoice_id' => $invoice->id,
+                            'payment_amount' => number_format((float) $lockedPayment->amount, 2, '.', ''),
+                            'payable_amount' => number_format($this->invoicePayableAmount($invoice), 2, '.', ''),
+                        ]);
+
+                        return ['dispatch' => false, 'invoice' => $invoice, 'payment_no' => (string) $lockedPayment->payment_no];
+                    }
+
+                    $lockedPayment->forceFill([
+                        'trade_no' => $tradeNo,
+                        'status' => PaymentStatus::SUCCESS,
+                        'callback_raw' => $params,
+                        'paid_at' => now(),
+                        'trace_id' => (string) ($params['trace_id'] ?? $lockedPayment->trace_id),
+                    ])->save();
+                    $this->syncProjection($lockedPayment);
+
+                    $invoice->forceFill([
+                        'status' => InvoiceStatus::PAID,
+                        'paid_amount' => $invoice->amount,
+                        'paid_at' => now(),
+                        'trace_id' => (string) ($params['trace_id'] ?? $invoice->trace_id),
+                    ])->save();
+
+                    $invoice->order?->forceFill([
+                        'status' => OrderStatus::PAID,
+                        'paid_amount' => $invoice->amount,
+                        'paid_at' => now(),
+                    ])->save();
+
+                    $this->closeOtherPendingPayments($invoice, (int) $lockedPayment->id, 'invoice_paid_by_gateway');
+
+                    return [
+                        'dispatch' => true,
+                        'invoice' => $invoice,
+                        'payment_no' => (string) $lockedPayment->payment_no,
+                    ];
+                });
+            }, '支付回调处理中，请稍后重试');
+        } catch (BusinessException $exception) {
+            Log::warning("[{$gatewayLabel}回调] 处理失败", [
+                'payment_no' => $paymentNo,
+                'trade_no' => $tradeNo,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return false;
+        } catch (\Throwable $exception) {
+            Log::error("[{$gatewayLabel}回调] 处理异常", [
+                'payment_no' => $paymentNo,
+                'trade_no' => $tradeNo,
+                'message' => $exception->getMessage(),
+                'exception' => $exception::class,
+            ]);
+
+            return false;
+        }
+
+        if (($result['dispatch'] ?? false) && ($result['invoice'] ?? null) instanceof Invoice) {
+            $this->handlePaidInvoice($result['invoice'], "{$gateway}:".($result['payment_no'] ?? $paymentNo));
+        }
+
+        return true;
     }
 
     /**
@@ -946,6 +1586,37 @@ class PaymentService
         }
 
         return true;
+    }
+
+    /**
+     * 轮询第三方网关支付状态（通用入口）
+     *
+     * 注意：主动查询的响应数据格式与异步通知不同，
+     *       不能复用 handleGatewayNotify() 的签名验证逻辑，
+     *       需要独立处理支付成功的入账流程。
+     */
+    public function queryGatewayPaymentStatus(Payment $payment): array
+    {
+        if ((int) $payment->status === PaymentStatus::SUCCESS) {
+            return ['paid' => true, 'trade_no' => $payment->trade_no];
+        }
+
+        $gateway = (string) $payment->gateway;
+        $result = $this->queryGatewayPayment($gateway, $payment->payment_no);
+
+        if (in_array($result['trade_status'], ['TRADE_SUCCESS', 'TRADE_FINISHED', 'SUCCESS'], true)) {
+            // 主动查询确认已支付，直接走入账流程（不经过签名验证）
+            $this->completePaymentFromQuery($payment, $result);
+            $payment->refresh();
+
+            return [
+                'paid' => (int) $payment->status === PaymentStatus::SUCCESS,
+                'trade_no' => $payment->trade_no ?: $result['trade_no'],
+                'trade_status' => $result['trade_status'],
+            ];
+        }
+
+        return ['paid' => false, 'trade_status' => $result['trade_status']];
     }
 
     /**
@@ -2028,6 +2699,17 @@ class PaymentService
         );
     }
 
+    private function isAutoRenewBalancePayment(Order $order, array $context = []): bool
+    {
+        if (! empty($context['auto_renew'])) {
+            return true;
+        }
+
+        $configSnapshot = is_array($order->config_snapshot ?? null) ? $order->config_snapshot : [];
+
+        return ! empty($configSnapshot['auto_renew']);
+    }
+
     private function resolveRefundableAlipayPayment(Invoice $invoice): ?Payment
     {
         return $this->resolvePrimaryRefundablePayment($invoice, [PaymentGatewayCode::ALIPAY]);
@@ -2041,14 +2723,22 @@ class PaymentService
         return 'RFD'.$payment->payment_no;
     }
 
-    private function alipayGateway(): PaymentGatewayInterface
+    private function resolveGateway(string $gateway): PaymentGatewayInterface
     {
-        return $this->paymentGatewayManager->alipay();
+        return $this->paymentGatewayManager->gateway($gateway);
     }
 
-    private function precreateAlipayPayment(string $outTradeNo, float $amount, string $subject, ?string $timeoutExpress = null): array
+    /**
+     * @deprecated 使用 resolveGateway(PaymentGatewayCode::ALIPAY) 替代
+     */
+    private function alipayGateway(): PaymentGatewayInterface
     {
-        return $this->alipayGateway()
+        return $this->resolveGateway(PaymentGatewayCode::ALIPAY);
+    }
+
+    private function precreateGatewayPayment(string $gateway, string $outTradeNo, float $amount, string $subject, ?string $timeoutExpress = null): array
+    {
+        return $this->resolveGateway($gateway)
             ->precreate(new PaymentPrecreateRequest(
                 outTradeNo: $outTradeNo,
                 amount: $amount,
@@ -2056,6 +2746,14 @@ class PaymentService
                 timeoutExpress: $timeoutExpress,
             ))
             ->toArray();
+    }
+
+    /**
+     * @deprecated 使用 precreateGatewayPayment() 替代
+     */
+    private function precreateAlipayPayment(string $outTradeNo, float $amount, string $subject, ?string $timeoutExpress = null): array
+    {
+        return $this->precreateGatewayPayment(PaymentGatewayCode::ALIPAY, $outTradeNo, $amount, $subject, $timeoutExpress);
     }
 
     private function resolveInvoicePaymentTimeoutExpress(Invoice $invoice): string
@@ -2082,24 +2780,33 @@ class PaymentService
         return $base->addSeconds(CheckoutSecurityService::paymentSessionTtlSeconds());
     }
 
-    private function queryAlipayPayment(string $outTradeNo): array
+    private function queryGatewayPayment(string $gateway, string $outTradeNo): array
     {
-        return $this->alipayGateway()
+        return $this->resolveGateway($gateway)
             ->query($outTradeNo)
             ->toArray();
     }
 
     /**
+     * @deprecated 使用 queryGatewayPayment() 替代
+     */
+    private function queryAlipayPayment(string $outTradeNo): array
+    {
+        return $this->queryGatewayPayment(PaymentGatewayCode::ALIPAY, $outTradeNo);
+    }
+
+    /**
      * 支付业务仍保留旧数组结构，网关层只负责 provider 请求和响应归一化。
      */
-    private function refundAlipayPayment(
+    private function refundGatewayPayment(
+        string $gateway,
         string $outTradeNo,
         float $refundAmount,
         string $refundReason,
         ?string $tradeNo,
         string $outRequestNo,
     ): array {
-        return $this->alipayGateway()
+        return $this->resolveGateway($gateway)
             ->refund(new PaymentRefundRequest(
                 outTradeNo: $outTradeNo,
                 refundAmount: $refundAmount,
@@ -2108,6 +2815,19 @@ class PaymentService
                 outRequestNo: $outRequestNo,
             ))
             ->toArray();
+    }
+
+    /**
+     * @deprecated 使用 refundGatewayPayment() 替代
+     */
+    private function refundAlipayPayment(
+        string $outTradeNo,
+        float $refundAmount,
+        string $refundReason,
+        ?string $tradeNo,
+        string $outRequestNo,
+    ): array {
+        return $this->refundGatewayPayment(PaymentGatewayCode::ALIPAY, $outTradeNo, $refundAmount, $refundReason, $tradeNo, $outRequestNo);
     }
 
     private function resolvePrimaryRefundablePayment(Invoice $invoice, ?array $gateways = null): ?Payment

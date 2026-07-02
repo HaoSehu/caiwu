@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
-use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiDriver;
+use App\Services\Integrations\Plugins\PluginDomain;
+use App\Services\Integrations\Plugins\PluginRuntimeRegistry;
+use App\Services\Upstream\Contracts\UpstreamDriver;
 use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiTransport;
 use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
@@ -16,17 +18,20 @@ class UpstreamServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(HostingPanelApiTransport::class);
-        $this->app->singleton(HostingPanelApiDriver::class);
         $this->app->singleton(
             WebSessionCookieParser::class,
             fn (): WebSessionCookieParser => new WebSessionCookieParser(
                 $this->app->tagged('upstream.web_session_credential_parsers')
             )
         );
-        $this->app->tag([HostingPanelApiDriver::class], 'upstream.drivers');
 
         $this->app->singleton(ProviderRegistry::class, function ($app): ProviderRegistry {
-            return new ProviderRegistry($app->tagged('upstream.drivers'));
+            return new ProviderRegistry(
+                $app->make(PluginRuntimeRegistry::class)->resolveEntries(
+                    PluginDomain::UPSTREAM,
+                    UpstreamDriver::class,
+                )
+            );
         });
 
         $this->app->singleton(ProviderResolver::class);

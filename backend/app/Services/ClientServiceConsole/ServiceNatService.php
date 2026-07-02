@@ -104,19 +104,22 @@ class ServiceNatService
         ]);
 
         [$runtime, $supplier, $hostId, $jwt, $natContext] = $this->resolveNatAclContext($service, true);
-        $response = $runtime->post(
-            $supplier,
-            $natContext['endpoint'],
-            [
+        $payload = [
                 'func' => 'addNatAcl',
                 'name' => trim((string) ($data['name'] ?? '')),
                 'ext_port' => trim((string) ($data['ext_port'] ?? '')),
                 'int_port' => trim((string) ($data['int_port'] ?? '')),
                 'select-protocol' => trim((string) ($data['protocol'] ?? '')),
-            ],
-            $jwt,
-            ['content-type: application/x-www-form-urlencoded']
-        );
+            ];
+        $response = is_callable([$runtime, 'submitCustomModuleAction'])
+            ? $runtime->submitCustomModuleAction($supplier, $natContext['endpoint'], $payload, $jwt)
+            : $runtime->post(
+                $supplier,
+                $natContext['endpoint'],
+                $payload,
+                $jwt,
+                ['content-type: application/x-www-form-urlencoded']
+            );
         $this->detailService->assertSuccess($response, '创建端口转发');
         $this->forgetNatAclContextCache($service);
 
@@ -150,13 +153,16 @@ class ServiceNatService
         ]);
 
         [$runtime, $supplier, $hostId, $jwt, $natContext] = $this->resolveNatAclContext($service, true);
-        $response = $runtime->post(
-            $supplier,
-            $natContext['endpoint'],
-            ['func' => 'delNatAcl', 'id' => $forwardingId],
-            $jwt,
-            ['content-type: application/x-www-form-urlencoded']
-        );
+        $payload = ['func' => 'delNatAcl', 'id' => $forwardingId];
+        $response = is_callable([$runtime, 'submitCustomModuleAction'])
+            ? $runtime->submitCustomModuleAction($supplier, $natContext['endpoint'], $payload, $jwt)
+            : $runtime->post(
+                $supplier,
+                $natContext['endpoint'],
+                $payload,
+                $jwt,
+                ['content-type: application/x-www-form-urlencoded']
+            );
         $this->detailService->assertSuccess($response, '删除端口转发');
         $this->forgetNatAclContextCache($service);
 
@@ -198,7 +204,9 @@ class ServiceNatService
 
         $moduleKey = trim((string) ($module['function'] ?? '')) ?: 'nat_acl';
         $moduleName = trim((string) ($module['name'] ?? '')) ?: 'NAT 转发';
-        $html = $this->fetchCustomModulePage($runtime, $supplier, $hostId, $jwt, $moduleKey);
+        $html = is_callable([$runtime, 'fetchCustomModulePage'])
+            ? $runtime->fetchCustomModulePage($supplier, $hostId, $moduleKey, $jwt)
+            : $this->fetchCustomModulePage($runtime, $supplier, $hostId, $jwt, $moduleKey);
         $page = $this->parseNatAclPage($html);
 
         throw_if(trim((string) ($page['endpoint'] ?? '')) === '', new BusinessException('未解析到 NAT 转发请求地址', 50000));

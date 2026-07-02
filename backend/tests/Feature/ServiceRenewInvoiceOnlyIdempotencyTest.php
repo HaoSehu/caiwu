@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
 use App\Constants\ServiceStatus;
+use App\Exceptions\BusinessException;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Product;
@@ -402,6 +403,230 @@ class ServiceRenewInvoiceOnlyIdempotencyTest extends TestCase
             1,
             Invoice::query()
                 ->where('service_id', $service->id)
+                ->where('type', 'renew')
+                ->count()
+        );
+    }
+
+    #[Test]
+    public function create_renew_invoice_never_reuses_an_older_paid_invoice_when_a_newer_paid_invoice_exists(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+
+        $user = User::query()->create([
+            'email' => 'renew-paid-priority-'.$suffix.'@example.com',
+            'password' => 'Temp@123456',
+            'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
+            'status' => 1,
+            'nickname' => 'Renew Paid Priority',
+            'real_name' => '',
+            'id_card' => '',
+            'verification_status' => 0,
+            'verification_message' => '',
+            'verification_certify_id' => null,
+            'member_level_id' => null,
+            'total_sales_amount' => '0.00',
+            'referrer_user_id' => null,
+            'verified_at' => null,
+        ]);
+        $this->mirrorUserToIdc($user, 'renew-paid-priority-'.$suffix);
+
+        $product = Product::query()->create([
+            'name' => 'Renew Paid Priority Product '.$suffix,
+            'product_type' => 'vps',
+            'pricing' => ['monthly' => '57.00'],
+            'setup_fee' => '0.00',
+            'config_options' => [],
+            'purchase_requires' => [],
+            'stock' => -1,
+            'status' => 1,
+            'auto_setup' => 0,
+        ]);
+        $this->mirrorProductToIdc($product, $suffix);
+
+        $service = Service::query()->create([
+            'user_id' => (int) $user->id,
+            'product_id' => (int) $product->id,
+            'name' => 'Renew Paid Priority Service '.$suffix,
+            'domain' => 'renew-paid-priority-'.$suffix.'.example.com',
+            'billing_cycle' => 'monthly',
+            'amount' => '57.00',
+            'status' => ServiceStatus::ACTIVE,
+            'locked_pricing' => ['monthly' => '57.00'],
+            'provision_data' => [],
+            'expires_at' => Carbon::parse('2026-06-30 00:00:00'),
+            'auto_renew' => 1,
+        ]);
+
+        $olderPaidInvoice = Invoice::query()->create([
+            'invoice_no' => 'INVRENEWOLDER'.strtoupper($suffix),
+            'user_id' => (int) $user->id,
+            'product_id' => (int) $product->id,
+            'service_id' => (int) $service->id,
+            'type' => 'renew',
+            'amount' => '57.00',
+            'paid_amount' => '57.00',
+            'billing_cycle' => 'monthly',
+            'status' => InvoiceStatus::PAID,
+            'paid_at' => Carbon::parse('2026-05-01 13:41:24'),
+            'due_date' => Carbon::parse('2026-05-08 00:00:00'),
+            'config_snapshot' => [
+                'renew_fulfillment_status' => 'failed',
+            ],
+        ]);
+
+        $newerPaidInvoice = Invoice::query()->create([
+            'invoice_no' => 'INVRENEWNEWER'.strtoupper($suffix),
+            'user_id' => (int) $user->id,
+            'product_id' => (int) $product->id,
+            'service_id' => (int) $service->id,
+            'type' => 'renew',
+            'amount' => '57.00',
+            'paid_amount' => '57.00',
+            'billing_cycle' => 'monthly',
+            'status' => InvoiceStatus::PAID,
+            'paid_at' => Carbon::parse('2026-06-01 19:28:53'),
+            'due_date' => Carbon::parse('2026-06-08 00:00:00'),
+        ]);
+
+        $service->forceFill([
+            'provision_data' => [
+                'last_renew_invoice_id' => (int) $newerPaidInvoice->id,
+                'last_renew_invoice_no' => (string) $newerPaidInvoice->invoice_no,
+            ],
+        ])->save();
+
+        $couponService = $this->createMock(CouponService::class);
+        $couponService->expects($this->once())
+            ->method('reserveOwnedCouponForInvoice')
+            ->willReturn([]);
+
+        $renewService = new ServiceRenewService(
+            new InvoiceService,
+            new ProviderResolver(
+                new ProviderRegistry([
+                    new HostingPanelApiDriver($this->createMock(HostingPanelApiTransport::class)),
+                ])
+            ),
+            $couponService,
+            $this->createMock(OperationLogService::class),
+            new class extends SettingService
+            {
+                public function getAutomationConfig(): array
+                {
+                    return array_merge(parent::defaultAutomationConfig(), [
+                        'expire_unsuspend_notify_enabled' => false,
+                    ]);
+                }
+            },
+            $this->createMock(NotificationService::class),
+        );
+
+        $result = $renewService->createRenewInvoiceForUser($user, (int) $service->id, 'monthly', 0, [
+            'auto_renew' => true,
+            'trace_id' => 'auto-renew-paid-priority-'.$suffix,
+        ]);
+
+        $this->assertNotSame((int) $olderPaidInvoice->id, (int) $result->id);
+    }
+
+    #[Test]
+    public function create_renew_order_rolls_back_zero_amount_auto_renew_attempt(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+
+        $user = User::query()->create([
+            'email' => 'renew-zero-auto-'.$suffix.'@example.com',
+            'password' => 'Temp@123456',
+            'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
+            'status' => 1,
+            'nickname' => 'Renew Zero Auto',
+            'real_name' => '',
+            'id_card' => '',
+            'verification_status' => 0,
+            'verification_message' => '',
+            'verification_certify_id' => null,
+            'member_level_id' => null,
+            'total_sales_amount' => '0.00',
+            'referrer_user_id' => null,
+            'verified_at' => null,
+        ]);
+
+        $product = Product::query()->create([
+            'name' => 'Renew Zero Auto Product '.$suffix,
+            'product_type' => 'vps',
+            'pricing' => ['monthly' => '49.00'],
+            'setup_fee' => '0.00',
+            'config_options' => [],
+            'purchase_requires' => [],
+            'stock' => -1,
+            'status' => 1,
+            'auto_setup' => 0,
+        ]);
+
+        $service = Service::query()->create([
+            'user_id' => (int) $user->id,
+            'product_id' => (int) $product->id,
+            'name' => 'Renew Zero Auto Service '.$suffix,
+            'domain' => 'renew-zero-auto-'.$suffix.'.example.com',
+            'billing_cycle' => 'monthly',
+            'amount' => '49.00',
+            'status' => ServiceStatus::ACTIVE,
+            'locked_pricing' => ['monthly' => '49.00'],
+            'provision_data' => [],
+            'expires_at' => Carbon::parse('2026-07-01 00:00:00'),
+            'auto_renew' => 1,
+        ]);
+
+        $couponService = $this->createMock(CouponService::class);
+        $couponService->expects($this->once())
+            ->method('reserveOwnedCouponForOrder')
+            ->willReturn([
+                'discount_amount' => '49.00',
+            ]);
+
+        $renewService = new ServiceRenewService(
+            new InvoiceService,
+            new ProviderResolver(
+                new ProviderRegistry([
+                    new HostingPanelApiDriver($this->createMock(HostingPanelApiTransport::class)),
+                ])
+            ),
+            $couponService,
+            $this->createMock(OperationLogService::class),
+            new class extends SettingService
+            {
+                public function getAutomationConfig(): array
+                {
+                    return array_merge(parent::defaultAutomationConfig(), [
+                        'expire_unsuspend_notify_enabled' => false,
+                    ]);
+                }
+            },
+            $this->createMock(NotificationService::class),
+        );
+
+        try {
+            $renewService->createRenewOrderForUser($user, (int) $service->id, 'monthly', 0, [
+                'auto_renew' => true,
+                'trace_id' => 'auto-renew-zero-order-'.$suffix,
+            ]);
+            $this->fail('Expected zero-amount auto-renew order creation to be blocked.');
+        } catch (BusinessException $exception) {
+            $this->assertSame('自动续费金额异常，已拦截本次续费', $exception->getMessage());
+        }
+
+        $this->assertSame(
+            0,
+            Order::query()
+                ->where('service_id', (int) $service->id)
+                ->where('type', 'renew')
+                ->count()
+        );
+        $this->assertSame(
+            0,
+            Invoice::query()
+                ->where('service_id', (int) $service->id)
                 ->where('type', 'renew')
                 ->count()
         );

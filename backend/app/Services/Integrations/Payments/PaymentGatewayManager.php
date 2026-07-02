@@ -15,13 +15,13 @@ final readonly class PaymentGatewayManager
 
     public function gateway(?string $key = null): PaymentGatewayInterface
     {
-        $selectedKey = trim((string) ($key ?: config('integrations.payments.default', PaymentGatewayCode::ALIPAY_F2F_PLUGIN)));
+        $selectedKey = trim((string) ($key ?: config('integrations.payments.default', PaymentGatewayCode::ALIPAY)));
 
         return $this->registry->get($selectedKey);
     }
 
     public function alipay(): PaymentGatewayInterface
     {
-        return $this->gateway(PaymentGatewayCode::ALIPAY_F2F_PLUGIN);
+        return $this->gateway(PaymentGatewayCode::ALIPAY);
     }
 }

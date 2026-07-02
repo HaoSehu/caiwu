@@ -49,6 +49,7 @@ export const productsRoutes: RouteRecordRaw[] = [
       },
       productTab: 'traffic-packages',
       permission: 'product.manage',
+      hidden: true,
     },
   },
   {

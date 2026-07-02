@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Models\OperationLog;
 use App\Models\User;
 use App\Services\Auth\AuthService;
+use App\Services\Auth\VerificationCodeService;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -118,6 +119,49 @@ class ClientProfileRegressionTest extends TestCase
         $this->assertDatabaseHas('users', [
             'email' => $email,
             'nickname' => 'Registered Nickname',
+        ]);
+    }
+
+    public function test_client_can_bind_alipay_without_uploading_any_image(): void
+    {
+        $phone = '138'.str_pad((string) random_int(0, 99999999), 8, '0', STR_PAD_LEFT);
+        $user = User::query()->create([
+            'email' => 'client-alipay-'.bin2hex(random_bytes(4)).'@example.com',
+            'password' => 'Temp@123456',
+            'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
+            'status' => 1,
+            'nickname' => 'Alipay User',
+            'real_name' => '',
+            'id_card' => '',
+            'verification_status' => 0,
+            'verification_message' => '',
+            'verification_certify_id' => null,
+            'member_level_id' => null,
+            'total_sales_amount' => '0.00',
+            'referrer_user_id' => null,
+            'verified_at' => null,
+            'alipay_real_name' => '',
+            'alipay_account' => '',
+        ]);
+
+        app(VerificationCodeService::class)->storePhoneCode((int) $user->id, $phone, '123456');
+
+        Sanctum::actingAs($user);
+
+        $this->putJson('/api/client/auth/alipay-account', [
+            'real_name' => '张三',
+            'account' => $phone,
+            'code' => '123456',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.real_name', '张三')
+            ->assertJsonPath('data.account', $phone)
+            ->assertJsonPath('data.is_bound', true);
+
+        $this->assertDatabaseHas('users', [
+            'id' => (int) $user->id,
+            'alipay_real_name' => '张三',
+            'alipay_account' => $phone,
         ]);
     }
 }

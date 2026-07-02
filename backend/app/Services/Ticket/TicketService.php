@@ -653,8 +653,8 @@ class TicketService
 
     public function uploadImage(int $actorId, string $actorType, UploadedFile $file): array
     {
-        $directoryPath = 'private/tickets/'.now()->format('Ymd');
-        $directory = storage_path('app/'.$directoryPath);
+        $directoryPath = 'uploads/tickets/temp';
+        $directory = public_path($directoryPath);
         File::ensureDirectoryExists($directory);
 
         $extension = UploadedImage::extension($file);

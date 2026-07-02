@@ -62,7 +62,7 @@ class ServiceLifecycleAutomationServiceTest extends TestCase
     public function test_it_will_not_terminate_a_service_immediately_when_terminate_days_is_zero(): void
     {
         $service = Service::query()->create([
-            'name' => '娴嬭瘯鏈嶅姟A',
+            'name' => '测试服务A',
             'status' => ServiceStatus::ACTIVE,
             'expires_at' => now()->subDays(2),
             'provision_data' => [],
@@ -93,7 +93,7 @@ class ServiceLifecycleAutomationServiceTest extends TestCase
     public function test_it_clears_suspend_reason_when_a_service_is_auto_cancelled(): void
     {
         $service = Service::query()->create([
-            'name' => '娴嬭瘯鏈嶅姟B',
+            'name' => '测试服务B',
             'status' => ServiceStatus::SUSPENDED,
             'expires_at' => now()->subDays(5),
             'suspended_reason' => 'expired',

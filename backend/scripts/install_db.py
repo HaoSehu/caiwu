@@ -35,6 +35,8 @@ ENV_FILE = BACKEND_DIR / ".env"
 ARTISAN_FILE = BACKEND_DIR / "artisan"
 SCHEMA_FILE = BACKEND_DIR / "database" / "schema" / "mysql-schema.sql"
 SCHEMA_EXPORT_SCRIPT = SCRIPT_DIR / "export_schema_baseline.php"
+ADMIN_PASSWORD_ENV_KEY = "INSTALL_ADMIN_PASSWORD"
+DEFAULT_ADMIN_PASSWORD = "Temp@123456"
 
 ADMIN_BOOTSTRAP_CODE = r"""use App\Models\AdminUser;
 use App\Models\Role;
@@ -65,7 +67,8 @@ $admin->forceFill([
 ]);
 
 if ($isNewAdmin) {
-    $admin->password = 'Temp@123456';
+    $adminPassword = getenv('INSTALL_ADMIN_PASSWORD') ?: 'Temp@123456';
+    $admin->password = $adminPassword;
 }
 
 $admin->save();
@@ -135,6 +138,22 @@ def mask_secret(value: str) -> str:
     return "******" if value else "(空)"
 
 
+def resolve_admin_password(app_env: str) -> str:
+    configured = read_env_value(ADMIN_PASSWORD_ENV_KEY) or os.environ.get(ADMIN_PASSWORD_ENV_KEY, "")
+    password = configured or DEFAULT_ADMIN_PASSWORD
+    normalized_env = app_env.strip().lower()
+
+    if normalized_env == "production":
+        if not configured:
+            fail(f"生产环境必须在 .env 或环境变量中设置 {ADMIN_PASSWORD_ENV_KEY}")
+        if password == DEFAULT_ADMIN_PASSWORD:
+            fail(f"生产环境禁止使用默认管理员密码，请修改 {ADMIN_PASSWORD_ENV_KEY}")
+        if len(password) < 12:
+            fail(f"生产环境 {ADMIN_PASSWORD_ENV_KEY} 长度不能少于 12 位")
+
+    return password
+
+
 def ensure_file(path: Path, message: str) -> None:
     if not path.is_file():
         fail(message)
@@ -149,6 +168,25 @@ def mysql_env(db_password: str) -> dict[str, str]:
     env = os.environ.copy()
     if db_password:
         env["MYSQL_PWD"] = db_password
+    return env
+
+
+def php_mysql_env(
+    db_username: str,
+    db_password: str,
+    db_host: str,
+    db_port: str,
+    db_socket: str,
+    db_database: str = "",
+) -> dict[str, str]:
+    env = os.environ.copy()
+    env["INSTALL_DB_USERNAME"] = db_username
+    env["INSTALL_DB_PASSWORD"] = db_password
+    env["INSTALL_DB_HOST"] = db_host
+    env["INSTALL_DB_PORT"] = db_port
+    env["INSTALL_DB_SOCKET"] = db_socket
+    env["INSTALL_DB_DATABASE"] = db_database
+
     return env
 
 
@@ -225,6 +263,110 @@ def run_mysql_sql(
     )
 
 
+def php_pdo_bootstrap(*, with_database: bool) -> str:
+    required_database_check = """
+if ($database === '') {
+    fwrite(STDERR, 'INSTALL_DB_DATABASE is required' . PHP_EOL);
+    exit(1);
+}
+""" if with_database else ""
+
+    return f"""
+$host = getenv('INSTALL_DB_HOST') ?: '127.0.0.1';
+$port = getenv('INSTALL_DB_PORT') ?: '3306';
+$socket = getenv('INSTALL_DB_SOCKET') ?: '';
+$database = getenv('INSTALL_DB_DATABASE') ?: '';
+$username = getenv('INSTALL_DB_USERNAME') ?: '';
+$password = getenv('INSTALL_DB_PASSWORD') ?: '';
+
+if ($username === '') {{
+    fwrite(STDERR, 'INSTALL_DB_USERNAME is required' . PHP_EOL);
+    exit(1);
+}}
+
+{required_database_check}
+
+$databaseSuffix = $database !== '' ? ';dbname=' . $database : '';
+
+$dsn = $socket !== ''
+    ? 'mysql:unix_socket=' . $socket . $databaseSuffix . ';charset=utf8mb4'
+    : 'mysql:host=' . $host . ';port=' . $port . $databaseSuffix . ';charset=utf8mb4';
+
+$options = [
+    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+];
+
+if (defined('PDO::MYSQL_ATTR_MULTI_STATEMENTS')) {{
+    $options[PDO::MYSQL_ATTR_MULTI_STATEMENTS] = true;
+}}
+
+$pdo = new PDO($dsn, $username, $password, $options);
+""".strip()
+
+
+def run_php_mysql_sql(
+    db_username: str,
+    db_password: str,
+    db_host: str,
+    db_port: str,
+    db_socket: str,
+    sql: str,
+) -> None:
+    php_code = php_pdo_bootstrap(with_database=False) + "\n$pdo->exec(getenv('INSTALL_DB_SQL') ?: '');"
+    env = php_mysql_env(db_username, db_password, db_host, db_port, db_socket)
+    env["INSTALL_DB_SQL"] = sql
+
+    run_command(["php", "-r", php_code], env=env, capture=True)
+
+
+def query_php_mysql_value(
+    db_username: str,
+    db_password: str,
+    db_host: str,
+    db_port: str,
+    db_socket: str,
+    db_database: str,
+) -> str:
+    php_code = php_pdo_bootstrap(with_database=False) + """
+$statement = $pdo->prepare('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ?');
+$statement->execute([$database]);
+echo (string) $statement->fetchColumn();
+"""
+    completed = run_command(
+        ["php", "-r", php_code],
+        env=php_mysql_env(db_username, db_password, db_host, db_port, db_socket, db_database),
+        capture=True,
+    )
+    assert completed is not None
+
+    return (completed.stdout or "").strip()
+
+
+def import_schema_with_php(
+    db_username: str,
+    db_password: str,
+    db_host: str,
+    db_port: str,
+    db_socket: str,
+    db_database: str,
+    schema_file: Path,
+) -> None:
+    php_code = php_pdo_bootstrap(with_database=True) + """
+$schemaFile = getenv('INSTALL_DB_SCHEMA_FILE') ?: '';
+$sql = $schemaFile !== '' && is_file($schemaFile) ? file_get_contents($schemaFile) : false;
+if ($sql === false || $sql === '') {
+    fwrite(STDERR, 'Schema file is empty or unreadable: ' . $schemaFile . PHP_EOL);
+    exit(1);
+}
+$pdo->exec($sql);
+"""
+    env = php_mysql_env(db_username, db_password, db_host, db_port, db_socket, db_database)
+    env["INSTALL_DB_SCHEMA_FILE"] = str(schema_file)
+
+    run_command(["php", "-r", php_code], env=env, capture=True)
+
+
 def query_mysql_value(
     mysql_base_args: list[str],
     db_password: str,
@@ -239,14 +381,18 @@ def query_mysql_value(
     return (completed.stdout or "").strip()
 
 
-def run_artisan_php(php_code: str, *, dry_run: bool) -> None:
+def run_artisan_php(php_code: str, *, dry_run: bool, admin_password: str) -> None:
     if dry_run:
         log("dry-run: php artisan tinker --execute '<初始化默认管理员代码>'")
         return
 
+    env = os.environ.copy()
+    env[ADMIN_PASSWORD_ENV_KEY] = admin_password
+
     run_command(
         ["php", "artisan", "tinker", f"--execute={php_code}"],
         cwd=BACKEND_DIR,
+        env=env,
     )
 
 
@@ -274,6 +420,8 @@ def main() -> int:
         db_password = read_env_value("DB_PASSWORD")
         db_socket = read_env_value("DB_SOCKET")
         app_key_value = read_env_value("APP_KEY")
+        app_env = read_env_value("APP_ENV") or os.environ.get("APP_ENV", "local")
+        admin_password = resolve_admin_password(app_env)
 
         if not db_connection:
             fail(".env 中缺少 DB_CONNECTION")
@@ -283,8 +431,9 @@ def main() -> int:
             fail(".env 中缺少 DB_DATABASE")
         if not db_username:
             fail(".env 中缺少 DB_USERNAME")
-        if not args.dry_run:
-            ensure_command("mysql", "未检测到 mysql 客户端命令")
+        mysql_client_available = shutil.which("mysql") is not None
+        if not args.dry_run and not mysql_client_available:
+            log("未检测到 mysql 客户端，将使用 PHP PDO 执行数据库创建、表数量检查和 schema baseline 导入")
 
         mysql_base_args = mysql_args(db_username, db_host, db_port, db_socket)
         escaped_database_name = db_database.replace("`", "``")
@@ -310,12 +459,15 @@ def main() -> int:
                 dry_run=args.dry_run,
             )
 
-        run_mysql_sql(
-            mysql_base_args,
-            db_password,
-            create_database_sql,
-            dry_run=args.dry_run,
-        )
+        if args.dry_run or mysql_client_available:
+            run_mysql_sql(
+                mysql_base_args,
+                db_password,
+                create_database_sql,
+                dry_run=args.dry_run,
+            )
+        else:
+            run_php_mysql_sql(db_username, db_password, db_host, db_port, db_socket, create_database_sql)
 
         escaped_table_schema = db_database.replace("'", "''")
         table_count_sql = (
@@ -325,8 +477,17 @@ def main() -> int:
         existing_table_count = "0"
         if args.dry_run:
             log("dry-run: 检查目标数据库当前表数量")
-        else:
+        elif mysql_client_available:
             existing_table_count = query_mysql_value(mysql_base_args, db_password, table_count_sql) or "0"
+        else:
+            existing_table_count = query_php_mysql_value(
+                db_username,
+                db_password,
+                db_host,
+                db_port,
+                db_socket,
+                db_database,
+            ) or "0"
 
         if not app_key_value:
             log("未检测到 APP_KEY，开始生成 Laravel 应用密钥")
@@ -361,10 +522,24 @@ def main() -> int:
             else:
                 log(f"检测到数据库已有 {existing_table_count} 张表，跳过 schema baseline 导入")
 
+        imported_schema_with_php = False
+        if not args.dry_run and existing_table_count == "0" and SCHEMA_FILE.is_file() and not mysql_client_available:
+            log("使用 PHP PDO 导入 schema baseline")
+            import_schema_with_php(
+                db_username,
+                db_password,
+                db_host,
+                db_port,
+                db_socket,
+                db_database,
+                SCHEMA_FILE,
+            )
+            imported_schema_with_php = True
+
         log("执行数据库迁移")
         migrate_args = ["php", "artisan", "migrate", "--force"]
         if SCHEMA_FILE.is_file():
-            if args.dry_run or existing_table_count == "0":
+            if (args.dry_run or existing_table_count == "0") and not imported_schema_with_php:
                 migrate_args = [
                     "php",
                     "artisan",
@@ -380,7 +555,7 @@ def main() -> int:
         )
 
         log("初始化默认管理员 cerbo")
-        run_artisan_php(ADMIN_BOOTSTRAP_CODE, dry_run=args.dry_run)
+        run_artisan_php(ADMIN_BOOTSTRAP_CODE, dry_run=args.dry_run, admin_password=admin_password)
 
         log("数据库初始化完成")
         return 0

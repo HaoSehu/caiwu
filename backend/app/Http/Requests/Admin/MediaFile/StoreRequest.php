@@ -9,7 +9,7 @@ class StoreRequest extends AdminFormRequest
     public function rules(): array
     {
         return [
-            'file' => ['required', 'image', 'mimetypes:image/jpeg,image/png,image/webp', 'max:5120'],
+            'file' => ['required', 'file', 'mimetypes:image/jpeg,image/png,image/webp,video/mp4,video/webm,video/ogg,video/quicktime,video/x-m4v', 'max:102400'],
             'group' => ['nullable', 'string', 'max:50', 'alpha_dash:ascii'],
         ];
     }

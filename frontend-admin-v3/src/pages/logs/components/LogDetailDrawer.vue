@@ -40,7 +40,7 @@ import { ChevronLeftIcon } from 'tdesign-icons-vue-next';
 
 import { fieldValue } from '@/utils/format';
 
-type LogTab = 'system' | 'admin-logins' | 'api' | 'sms' | 'email' | 'tasks';
+type LogTab = 'system' | 'admin-logins' | 'api' | 'sms' | 'email' | 'tasks' | 'gateway' | 'activity';
 type RecordRow = Record<string, unknown>;
 
 const props = defineProps<{
@@ -63,6 +63,8 @@ const headerTitle = computed(() => {
   if (props.activeTab === 'sms') return `短信日志 · ${fieldValue(row.phone) || '详情'}`;
   if (props.activeTab === 'email') return `邮件日志 · ${fieldValue(row.to_email) || '详情'}`;
   if (props.activeTab === 'tasks') return `任务日志 · ${fieldValue(row.task_key) || '详情'}`;
+  if (props.activeTab === 'gateway') return `网关日志 · ${fieldValue(row.gateway) || ''} ${fieldValue(row.action) || ''}`;
+  if (props.activeTab === 'activity') return `活动日志 · ${fieldValue(row.actor_name) || '详情'}`;
   return `系统日志 · ${fieldValue(row.id) || '详情'}`;
 });
 
@@ -121,6 +123,30 @@ const detailFields = computed(() => {
       { label: '记录时间', value: formatDate(row.time) },
     ];
   }
+  if (props.activeTab === 'gateway') {
+    return [
+      { label: '网关', value: gatewayLabel(row.gateway) },
+      { label: '操作', value: fieldValue(row.action) },
+      { label: '结果状态', value: fieldValue(row.result_status) },
+      { label: '商户单号', value: fieldValue(row.out_trade_no) },
+      { label: '交易号', value: fieldValue(row.trade_no) },
+      { label: '账单 ID', value: fieldValue(row.invoice_id) },
+      { label: '记录时间', value: formatDate(row.created_at) },
+    ];
+  }
+  if (props.activeTab === 'activity') {
+    return [
+      { label: '操作人', value: fieldValue(row.actor_name) },
+      { label: '操作人类型', value: fieldValue(row.actor_type) },
+      { label: '模块', value: fieldValue(row.module) },
+      { label: '动作', value: fieldValue(row.action) },
+      { label: '关联类型', value: fieldValue(row.subject_type) },
+      { label: '关联 ID', value: fieldValue(row.subject_id) },
+      { label: '记录时间', value: formatDate(row.created_at) },
+      { label: 'IP 地址', value: fieldValue(row.ip_address) },
+      { label: '数据来源', value: activitySourceLabel(row.source) },
+    ];
+  }
   return [
     { label: '日志级别', value: fieldValue(row.level) },
     { label: '记录时间', value: formatDate(row.time) },
@@ -149,6 +175,19 @@ const detailBlocks = computed(() => {
     return [
       { label: '邮件正文预览', value: buildContentPreviewDoc(row.content), html: true },
       { label: 'HTML 源码', value: fieldValue(row.content) },
+    ];
+  }
+  if (props.activeTab === 'gateway') {
+    return [
+      { label: '请求数据', value: formatJson(row.request_data) },
+      { label: '响应数据', value: formatJson(row.response_data) },
+      { label: '错误信息', value: fieldValue(row.error_msg) },
+    ];
+  }
+  if (props.activeTab === 'activity') {
+    return [
+      { label: '描述', value: fieldValue(row.description) },
+      { label: '上下文', value: formatJson(row.context) },
     ];
   }
   return [
@@ -183,6 +222,26 @@ function sourceLabel(value: unknown) {
       operation_log: '操作日志',
       admin_snapshot: '账号快照',
     }[String(value || '').toLowerCase()] || '未知来源'
+  );
+}
+
+function activitySourceLabel(value: unknown) {
+  return (
+    {
+      activity_log: '活动日志',
+      operation_log: '操作日志',
+    }[String(value || '').toLowerCase()] || fieldValue(value)
+  );
+}
+
+function gatewayLabel(value: unknown) {
+  return (
+    {
+      alipay: '支付宝',
+      wechat: '微信支付',
+      stripe: 'Stripe',
+      alipay_f2f: '支付宝当面付（历史）',
+    }[String(value || '').toLowerCase()] || fieldValue(value)
   );
 }
 

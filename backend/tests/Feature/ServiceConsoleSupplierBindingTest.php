@@ -10,13 +10,25 @@ use App\Models\Supplier;
 use App\Services\ClientServiceConsole\ServiceDetailService;
 use App\Services\ClientServiceConsole\ServiceResolverService;
 use App\Services\ClientServiceConsole\ServiceTransformService;
+use App\Services\Integrations\Plugins\PluginInstaller;
+use App\Services\Integrations\Plugins\PluginScanner;
 use App\Services\System\OperationLogService;
+use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 class ServiceConsoleSupplierBindingTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->ensureHostingPanelPluginEnabled();
+    }
+
     #[Test]
     public function it_prefers_the_service_bound_supplier_over_the_product_supplier(): void
     {
@@ -97,5 +109,55 @@ class ServiceConsoleSupplierBindingTest extends TestCase
                 return $this->resolvedSupplier;
             }
         };
+    }
+
+    private function ensureHostingPanelPluginEnabled(): void
+    {
+        $this->ensurePluginTables();
+
+        $scanner = app(PluginScanner::class);
+        $installer = app(PluginInstaller::class);
+        $scanner->requireManifest('upstream', 'hosting_panel_api');
+        $plugin = $installer->install('upstream', 'hosting_panel_api');
+        $installer->enable($plugin);
+
+        $this->app->forgetInstance(ProviderRegistry::class);
+        $this->app->forgetInstance(ProviderResolver::class);
+    }
+
+    private function ensurePluginTables(): void
+    {
+        if (! Schema::hasTable('integration_plugins')) {
+            Schema::create('integration_plugins', function (Blueprint $table): void {
+                $table->id();
+                $table->string('domain', 32);
+                $table->string('slug', 120);
+                $table->string('plugin_key', 120);
+                $table->string('name', 120);
+                $table->string('version', 32)->default('1.0.0');
+                $table->string('provider_class', 255)->nullable();
+                $table->string('entry_class', 255);
+                $table->json('capabilities_json')->nullable();
+                $table->json('config_schema_json')->nullable();
+                $table->unsignedTinyInteger('status')->default(0);
+                $table->timestamp('installed_at')->nullable();
+                $table->timestamps();
+                $table->unique(['domain', 'slug']);
+                $table->unique(['domain', 'plugin_key']);
+            });
+        }
+
+        if (! Schema::hasTable('integration_plugin_configs')) {
+            Schema::create('integration_plugin_configs', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('plugin_id');
+                $table->json('config_json')->nullable();
+                $table->longText('secret_json')->nullable();
+                $table->json('has_secret_json')->nullable();
+                $table->unsignedBigInteger('updated_by')->nullable();
+                $table->timestamps();
+                $table->unique('plugin_id');
+            });
+        }
     }
 }

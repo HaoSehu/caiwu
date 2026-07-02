@@ -16,7 +16,7 @@ class MediaFileController extends Controller
     public function index(Request $request)
     {
         if ($request->query('group') === MediaFileService::HERO_VIDEO_GROUP) {
-            $items = $this->mediaFileService->listHeroVideos();
+            $items = $this->mediaFileService->listHeroVideos((string) $request->query('keyword', ''));
 
             return $this->success([
                 'list' => $items,
@@ -27,7 +27,7 @@ class MediaFileController extends Controller
         }
 
         $paginator = $this->mediaFileService->list(
-            filters: $request->only(['group', 'keyword']),
+            filters: $request->only(['group', 'keyword', 'type']),
             perPage: (int) ($request->query('page_size', 24)),
         );
 
@@ -41,6 +41,7 @@ class MediaFileController extends Controller
             'width' => $item->width,
             'height' => $item->height,
             'group' => $item->group,
+            'type' => str_starts_with((string) $item->mime_type, 'video/') ? 'video' : 'image',
             'created_at' => optional($item->created_at)?->toDateTimeString(),
         ]);
 
@@ -54,8 +55,6 @@ class MediaFileController extends Controller
 
     public function store(StoreRequest $request)
     {
-        // validation handled by StoreRequest
-
         $group = trim((string) $request->input('group', 'content')) ?: 'content';
 
         $mediaFile = $this->mediaFileService->upload(
@@ -69,8 +68,12 @@ class MediaFileController extends Controller
             'filename' => $mediaFile->filename,
             'url' => UploadUrl::resolve($mediaFile->path),
             'path' => $mediaFile->path,
+            'mime_type' => $mediaFile->mime_type,
+            'size' => $mediaFile->size,
             'width' => $mediaFile->width,
             'height' => $mediaFile->height,
+            'group' => $mediaFile->group,
+            'type' => str_starts_with((string) $mediaFile->mime_type, 'video/') ? 'video' : 'image',
         ], '上传成功');
     }
 
@@ -79,5 +82,12 @@ class MediaFileController extends Controller
         $this->mediaFileService->delete($mediaFile);
 
         return $this->success(null, '删除成功');
+    }
+
+    public function reindex(Request $request)
+    {
+        $result = $this->mediaFileService->reindexMediaDirectory((int) $request->user()->id);
+
+        return $this->success($result, '重新获取成功');
     }
 }

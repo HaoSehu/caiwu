@@ -31,9 +31,10 @@
     27 => 'NunoMaduro\\Collision\\Adapters\\Laravel\\CollisionServiceProvider',
     28 => 'Termwind\\Laravel\\TermwindServiceProvider',
     29 => 'App\\Providers\\AppServiceProvider',
-    30 => 'App\\Providers\\IntegrationServiceProvider',
-    31 => 'App\\Integrations\\Mofang\\MofangServiceProvider',
-    32 => 'App\\Providers\\UpstreamServiceProvider',
+    30 => 'App\\Providers\\PluginServiceProvider',
+    31 => 'App\\Providers\\IntegrationServiceProvider',
+    32 => 'App\\Integrations\\Mofang\\MofangServiceProvider',
+    33 => 'App\\Providers\\UpstreamServiceProvider',
   ),
   'eager' => 
   array (
@@ -52,9 +53,10 @@
     12 => 'NunoMaduro\\Collision\\Adapters\\Laravel\\CollisionServiceProvider',
     13 => 'Termwind\\Laravel\\TermwindServiceProvider',
     14 => 'App\\Providers\\AppServiceProvider',
-    15 => 'App\\Providers\\IntegrationServiceProvider',
-    16 => 'App\\Integrations\\Mofang\\MofangServiceProvider',
-    17 => 'App\\Providers\\UpstreamServiceProvider',
+    15 => 'App\\Providers\\PluginServiceProvider',
+    16 => 'App\\Providers\\IntegrationServiceProvider',
+    17 => 'App\\Integrations\\Mofang\\MofangServiceProvider',
+    18 => 'App\\Providers\\UpstreamServiceProvider',
   ),
   'deferred' => 
   array (

@@ -324,7 +324,9 @@ class ServiceSecurityGroupService
 
         $moduleKey = trim((string) ($module['function'] ?? ''));
         $moduleName = trim((string) ($module['name'] ?? '')) ?: '安全组';
-        $html = $this->natService->fetchCustomModulePage($runtime, $supplier, $hostId, $jwt, $moduleKey);
+        $html = is_callable([$runtime, 'fetchCustomModulePage'])
+            ? $runtime->fetchCustomModulePage($supplier, $hostId, $moduleKey, $jwt)
+            : $this->natService->fetchCustomModulePage($runtime, $supplier, $hostId, $jwt, $moduleKey);
         $page = $this->parseSecurityGroupPage($service, $html);
 
         $context = [
@@ -367,13 +369,16 @@ class ServiceSecurityGroupService
     {
         $context ??= $this->resolveSecurityGroupContext($service);
         $runtime = $this->detailService->resolveRuntimeCapabilityForSupplier($context['supplier']);
-        $response = $runtime->post(
-            $context['supplier'],
-            $context['endpoint'],
-            array_merge($payload, ['func' => $func]),
-            $context['jwt'],
-            ['content-type: application/x-www-form-urlencoded']
-        );
+        $requestPayload = array_merge($payload, ['func' => $func]);
+        $response = is_callable([$runtime, 'submitCustomModuleAction'])
+            ? $runtime->submitCustomModuleAction($context['supplier'], $context['endpoint'], $requestPayload, $context['jwt'])
+            : $runtime->post(
+                $context['supplier'],
+                $context['endpoint'],
+                $requestPayload,
+                $context['jwt'],
+                ['content-type: application/x-www-form-urlencoded']
+            );
         $this->detailService->assertSuccess($response, $action);
 
         return ['context' => $context, 'response' => $response];

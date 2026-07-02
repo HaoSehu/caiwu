@@ -8,6 +8,7 @@ export interface ProductListParams extends PagedListParams {
   second_product_group_id?: number | string;
   third_product_group_id?: number | string;
   status?: number | string;
+  lifecycle_status?: 'active' | 'deleted' | 'all' | string;
   [key: string]: unknown;
 }
 
@@ -36,6 +37,9 @@ export interface ProductRecord {
   product_type_label?: string;
   status?: number | string;
   status_label?: string;
+  is_deleted?: boolean;
+  lifecycle_status?: 'active' | 'deleted' | 'all' | string;
+  deleted_at?: string | null;
   auto_setup?: number | string | boolean;
   monthly_price?: number | string;
   primary_price?: { cycle?: string; amount?: number | string };
@@ -85,6 +89,8 @@ export interface ProductCategoryRecord {
   children_count?: number | string;
   sort_order?: number | string;
   product_count?: number | string;
+  products_count?: number | string;
+  products_with_trashed_count?: number | string;
   [key: string]: unknown;
 }
 
@@ -110,6 +116,8 @@ export const productApi = {
   update: (id: number | string, data: Record<string, unknown>) =>
     request.put({ url: `/admin/products/${id}`, data }),
   delete: (id: number | string) => request.delete({ url: `/admin/products/${id}` }),
+  restore: (id: number | string) => request.post<ProductRecord>({ url: `/admin/products/${id}/restore` }),
+  forceDelete: (id: number | string) => request.delete({ url: `/admin/products/${id}/force` }),
   toggleStatus: (id: number | string) => request.post({ url: `/admin/products/${id}/toggle-status` }),
   reorderProduct: (data: Record<string, unknown>) =>
     request.post({ url: '/admin/products/reorder', data }),

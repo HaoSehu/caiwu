@@ -185,6 +185,12 @@ class ServiceStatusSyncService
 
         $statusSync = $provider->require(ProvidesStatusSync::class, '当前供应商不支持状态同步');
 
+        if (method_exists($statusSync, 'syncServiceStatuses')) {
+            $this->syncSupplierServicesThroughPlugin($statusSync, $supplier, $services, $supplierRequestChunkSize, $summary, $serviceProductMap);
+
+            return;
+        }
+
         try {
             $jwt = $statusSync->login($supplier);
         } catch (\Throwable $exception) {
@@ -263,6 +269,98 @@ class ServiceStatusSyncService
                     }
                 }
             });
+    }
+
+    private function syncSupplierServicesThroughPlugin(
+        object $statusSync,
+        Supplier $supplier,
+        Collection $services,
+        int $supplierRequestChunkSize,
+        array &$summary,
+        Collection $serviceProductMap,
+    ): void {
+        $services
+            ->chunk($supplierRequestChunkSize)
+            ->each(function (Collection $batch) use ($statusSync, $supplier, $serviceProductMap, $supplierRequestChunkSize, &$summary): void {
+                try {
+                    $requestResult = $statusSync->syncServiceStatuses(
+                        $supplier,
+                        $this->buildPluginStatusSyncItems($batch),
+                        $supplierRequestChunkSize
+                    );
+                    $responses = is_array($requestResult['services'] ?? null) ? $requestResult['services'] : [];
+                } catch (\Throwable $exception) {
+                    $summary['failed'] += $batch->count();
+
+                    foreach ($batch as $service) {
+                        if ($service instanceof Service) {
+                            $this->markSyncFailure($service, $exception->getMessage());
+                        }
+                    }
+
+                    Log::error('[定时任务] 用户产品状态同步失败：插件批量请求异常', [
+                        'supplier_id' => $supplier->id,
+                        'service_ids' => $batch->pluck('id')->values()->all(),
+                        'message' => $exception->getMessage(),
+                        'exception' => $exception::class,
+                    ]);
+
+                    return;
+                }
+
+                foreach ($batch as $service) {
+                    if (! $service instanceof Service) {
+                        continue;
+                    }
+
+                    try {
+                        $hydratedService = $serviceProductMap->get($service->id);
+                        if ($hydratedService instanceof Service) {
+                            $service->setRelation('product', $hydratedService->product);
+                            $service->setRelation('order', $hydratedService->order);
+                        }
+
+                        $response = $responses[$service->id] ?? $responses[(string) $service->id] ?? [];
+                        if (! is_array($response) || $response === []) {
+                            throw new BusinessException('状态同步失败：插件未返回服务结果', 42200);
+                        }
+
+                        $error = trim((string) ($response['error'] ?? ''));
+                        if ($error !== '') {
+                            throw new BusinessException($error, 42200);
+                        }
+
+                        $host = is_array($response['host'] ?? null) ? $response['host'] : [];
+                        $runtime = is_array($response['runtime'] ?? null) ? $response['runtime'] : [];
+
+                        $this->syncServiceSnapshot($service, $host, $runtime);
+                        $summary['synced']++;
+                    } catch (\Throwable $exception) {
+                        $summary['failed']++;
+                        $this->markSyncFailure($service, $exception->getMessage());
+
+                        Log::warning('[定时任务] 用户产品状态同步失败', [
+                            'service_id' => $service->id,
+                            'supplier_id' => $supplier->id,
+                            'host_id' => $this->resolveHostId($service),
+                            'message' => $exception->getMessage(),
+                            'exception' => $exception::class,
+                        ]);
+                    }
+                }
+            });
+    }
+
+    private function buildPluginStatusSyncItems(Collection $services): array
+    {
+        return $services
+            ->filter(fn ($service): bool => $service instanceof Service && $this->resolveHostId($service) > 0)
+            ->map(fn (Service $service): array => [
+                'service_id' => (int) $service->id,
+                'host_id' => $this->resolveHostId($service),
+            ])
+            ->values()
+            ->all();
     }
 
     private function executeBatchRequests(object $statusSync, Supplier $supplier, Collection $services, string $jwt): array

@@ -138,6 +138,11 @@ const transform: AxiosTransform = {
   // 响应错误处理
   responseInterceptorsCatch: (error: any, instance: AxiosInstance) => {
     const { config } = error;
+    const responseMessage = error?.response?.data?.message;
+    if (responseMessage) {
+      error.message = toUserMessage(responseMessage, error.message || '请求接口错误');
+    }
+
     if (!config || !config.requestOptions.retry) return Promise.reject(error);
 
     config.retryCount = config.retryCount || 0;

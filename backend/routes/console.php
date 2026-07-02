@@ -305,7 +305,7 @@ $applyScheduleMutex(Schedule::call(function () use ($writeScheduleOutput, $recor
 $applyScheduleMutex(Schedule::call(function () use ($writeScheduleOutput, $recordScheduleRun, $withAdvisoryLock) {
     $recordScheduleRun('服务自动续费', function () use ($withAdvisoryLock) {
         return $withAdvisoryLock('service-auto-renew', 240, function () {
-            $summary = app(AutoRenewService::class)->handle(10);
+            $summary = app(AutoRenewService::class)->handle(60);
             if (($summary['matched'] ?? 0) > 0) {
                 Log::info('[定时任务] 自动续费执行完成', $summary);
             } else {
@@ -316,7 +316,7 @@ $applyScheduleMutex(Schedule::call(function () use ($writeScheduleOutput, $recor
         });
     });
     $writeScheduleOutput('服务自动续费刷新成功');
-})->everyFiveMinutes()->name('服务自动续费'), 15);
+})->hourly()->name('服务自动续费'), 30);
 
 $applyScheduleMutex(Schedule::call(function () use ($writeScheduleOutput, $recordScheduleRun) {
     $recordScheduleRun('推荐奖励释放', function () {

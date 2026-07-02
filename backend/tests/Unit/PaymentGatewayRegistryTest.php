@@ -13,6 +13,7 @@ use App\Services\Integrations\Payments\Data\PaymentRefundRequest;
 use App\Services\Integrations\Payments\Data\PaymentRefundResult;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
 use App\Services\Integrations\Payments\PaymentGatewayRegistry;
+use Illuminate\Http\Response;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 
@@ -110,5 +111,10 @@ final readonly class FakePaymentGateway implements PaymentGatewayInterface
     public function verifyNotify(array $payload): bool
     {
         return true;
+    }
+
+    public function buildNotifyResponse(bool $success): Response
+    {
+        return new Response($success ? 'success' : 'fail', 200, ['Content-Type' => 'text/plain']);
     }
 }

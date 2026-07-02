@@ -6,6 +6,7 @@ import {
   attachSafeRequestDedupe,
   buildSafeRequestKey,
   createRequestId,
+  extractValidationErrors,
   getNetworkProfile,
   isSafeRequest,
   isWriteRequest,
@@ -190,8 +191,8 @@ httpClient.interceptors.response.use(
       msg = '请求超时，请检查网络后重试';
     }
 
-    if (error.response?.status === 422 && error.response?.data?.errors) {
-      const errors = Object.values(error.response.data.errors).flat();
+    if (error.response?.status === 422) {
+      const errors = extractValidationErrors(error.response?.data);
       const trustedErrors = errors.map((item) => toUserMessage(item, '')).filter(Boolean);
       msg = trustedErrors.length > 0 ? trustedErrors.join(', ') : '参数填写有误，请检查后重试';
     }

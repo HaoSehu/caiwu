@@ -7,6 +7,8 @@ BACKEND_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 ENV_FILE="${BACKEND_DIR}/.env"
 ARTISAN_FILE="${BACKEND_DIR}/artisan"
 SCHEMA_FILE="${BACKEND_DIR}/database/schema/mysql-schema.sql"
+ADMIN_PASSWORD_ENV_KEY="INSTALL_ADMIN_PASSWORD"
+DEFAULT_ADMIN_PASSWORD="Temp@123456"
 
 DRY_RUN=0
 
@@ -36,6 +38,9 @@ usage() {
 参数：
   --dry-run   只打印将要执行的步骤，不真正写入数据库
   -h, --help  查看帮助
+
+生产环境要求：
+  APP_ENV=production 时必须设置 INSTALL_ADMIN_PASSWORD，且不能使用默认弱口令
 EOF
 }
 
@@ -89,6 +94,26 @@ mask_secret() {
   printf '******'
 }
 
+resolve_admin_password() {
+  local configured="${INSTALL_ADMIN_PASSWORD:-}"
+  local password=""
+  local normalized_env="${APP_ENV_VALUE,,}"
+
+  if [[ -z "${configured}" ]]; then
+    configured="$(read_env_value "${ADMIN_PASSWORD_ENV_KEY}")"
+  fi
+
+  password="${configured:-${DEFAULT_ADMIN_PASSWORD}}"
+
+  if [[ "${normalized_env}" == "production" ]]; then
+    [[ -n "${configured}" ]] || fail "生产环境必须在 .env 或环境变量中设置 ${ADMIN_PASSWORD_ENV_KEY}"
+    [[ "${password}" != "${DEFAULT_ADMIN_PASSWORD}" ]] || fail "生产环境禁止使用默认管理员密码，请修改 ${ADMIN_PASSWORD_ENV_KEY}"
+    [[ "${#password}" -ge 12 ]] || fail "生产环境 ${ADMIN_PASSWORD_ENV_KEY} 长度不能少于 12 位"
+  fi
+
+  printf '%s' "${password}"
+}
+
 run_cmd() {
   if (( DRY_RUN )); then
     printf '[install-db] dry-run:'
@@ -135,7 +160,7 @@ run_artisan_php() {
     return 0
   fi
 
-  php artisan tinker --execute="${php_code}"
+  INSTALL_ADMIN_PASSWORD="${ADMIN_PASSWORD_VALUE}" php artisan tinker --execute="${php_code}"
 }
 
 [[ -f "${ENV_FILE}" ]] || fail "未找到 ${ENV_FILE}，请先准备后端 .env 文件"
@@ -153,6 +178,9 @@ DB_USERNAME="$(read_env_value DB_USERNAME)"
 DB_PASSWORD="$(read_env_value DB_PASSWORD)"
 DB_SOCKET="$(read_env_value DB_SOCKET)"
 APP_KEY_VALUE="$(read_env_value APP_KEY)"
+APP_ENV_VALUE="$(read_env_value APP_ENV)"
+APP_ENV_VALUE="${APP_ENV_VALUE:-local}"
+ADMIN_PASSWORD_VALUE="$(resolve_admin_password)"
 
 [[ -n "${DB_CONNECTION}" ]] || fail ".env 中缺少 DB_CONNECTION"
 [[ "${DB_CONNECTION}" == "mysql" ]] || fail "当前脚本仅支持 mysql，实际为：${DB_CONNECTION}"
@@ -266,7 +294,8 @@ $admin->forceFill([
 ]);
 
 if ($isNewAdmin) {
-    $admin->password = 'Temp@123456';
+  $adminPassword = getenv('INSTALL_ADMIN_PASSWORD') ?: 'Temp@123456';
+  $admin->password = $adminPassword;
 }
 
 $admin->save();

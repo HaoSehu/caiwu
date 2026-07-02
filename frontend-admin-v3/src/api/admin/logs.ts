@@ -20,6 +20,10 @@ export const logsApi = {
     request.get<Record<string, unknown>>({ url: '/admin/logs/system/summary', params }),
   adminLogins: (params: LogListParams) =>
     request.get<LaravelPagination>({ url: '/admin/logs/admin-logins', params }),
+  gateway: (params: LogListParams) =>
+    request.get<LaravelPagination>({ url: '/admin/logs/gateway', params }),
+  activity: (params: LogListParams) =>
+    request.get<LaravelPagination>({ url: '/admin/logs/activity', params }),
   cleanupOverview: () =>
     request.get<Record<string, unknown>>({ url: '/admin/logs/cleanup/overview' }),
   cleanup: (data: LogCleanupPayload) =>

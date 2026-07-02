@@ -62,7 +62,7 @@
                   {{ categoryDisplayName(item) }}
                 </span>
               </span>
-              <small class="category-count">{{ childCount > 0 ? `${childCount} 个子分类` : `${item.products_count ?? (item.product_count || 0)} 个商品` }}</small>
+              <small class="category-count">{{ categoryCountLabel(item, childCount) }}</small>
             </button>
             <t-dropdown
               class="category-menu"
@@ -104,6 +104,14 @@
           >
             <t-option :value="1" label="显示中" />
             <t-option :value="0" label="已隐藏" />
+          </t-select>
+          <t-select
+            class="catalog-filter-status"
+            v-model="catalogFilters.lifecycle_status"
+            placeholder="商品范围"
+            @change="handleCatalogSearch"
+          >
+            <t-option v-for="item in lifecycleStatusOptions" :key="item.value" :value="item.value" :label="item.label" />
           </t-select>
           <div class="catalog-filter-actions">
             <t-button theme="primary" @click="handleCatalogSearch">
@@ -162,7 +170,7 @@
               </div>
             </template>
             <template #status="{ row }">
-              <span class="visibility-status-text" :class="{ 'is-hidden': !isProductVisible(row) }">
+              <span class="visibility-status-text" :class="{ 'is-hidden': !isProductVisible(row), 'is-deleted': row.is_deleted }">
                 {{ productVisibilityLabel(row) }}
               </span>
             </template>
@@ -177,11 +185,33 @@
             </template>
             <template #operation="{ row }">
               <t-space size="small">
-                <t-button size="small" variant="text" theme="primary" @click="openProductDialog(row)">编辑</t-button>
-                <t-button size="small" variant="text" :loading="productActionLoading === row.id" @click="handleToggleProduct(row)">
-                  {{ Number(row.status) === 1 ? '隐藏' : '显示' }}
-                </t-button>
-                <t-button size="small" variant="text" theme="danger" @click="handleDeleteProduct(row)">删除</t-button>
+                <template v-if="row.is_deleted">
+                  <t-button
+                    size="small"
+                    variant="text"
+                    theme="primary"
+                    :loading="productActionLoading === `restore:${row.id}`"
+                    @click="handleRestoreProduct(row)"
+                  >
+                    恢复
+                  </t-button>
+                  <t-button
+                    size="small"
+                    variant="text"
+                    theme="danger"
+                    :loading="productActionLoading === `force:${row.id}`"
+                    @click="handleForceDeleteProduct(row)"
+                  >
+                    彻底删除
+                  </t-button>
+                </template>
+                <template v-else>
+                  <t-button size="small" variant="text" theme="primary" @click="openProductDialog(row)">编辑</t-button>
+                  <t-button size="small" variant="text" :loading="productActionLoading === row.id" @click="handleToggleProduct(row)">
+                    {{ Number(row.status) === 1 ? '隐藏' : '显示' }}
+                  </t-button>
+                  <t-button size="small" variant="text" theme="danger" @click="handleDeleteProduct(row)">删除</t-button>
+                </template>
               </t-space>
             </template>
           </t-table>
@@ -278,7 +308,7 @@
                     {{ categoryDisplayName(item) }}
                   </span>
                 </span>
-                <small class="category-count">{{ childCount > 0 ? `${childCount} 个子分类` : `${item.products_count ?? (item.product_count || 0)} 个商品` }}</small>
+                <small class="category-count">{{ categoryCountLabel(item, childCount) }}</small>
               </button>
               <t-dropdown
                 class="category-menu"
@@ -820,6 +850,8 @@ interface ConfigOptionSubItemFormRow {
   sort_order: number;
 }
 
+type ProductLifecycleStatus = 'active' | 'deleted' | 'all';
+
 // --- State ---
 const summaryLoading = ref(false);
 const typeLoading = ref(false);
@@ -864,6 +896,7 @@ const catalogFilters = reactive({
   product_type: '',
   product_group_key: '' as string,
   status: '' as number | string,
+  lifecycle_status: 'active' as ProductLifecycleStatus,
 });
 
 const productDialogVisible = ref(false);
@@ -945,6 +978,11 @@ const productPricingPlanOptions = [
   { value: 'rule1', label: '规则一', ratios: { quarterly: 3, semiannually: 4.8, annually: 9 } },
   { value: 'rule2', label: '规则二', ratios: { quarterly: 2.7, semiannually: 5.1, annually: 9.6 } },
 ];
+const lifecycleStatusOptions = [
+  { value: 'active', label: '正常商品' },
+  { value: 'deleted', label: '已删除商品' },
+  { value: 'all', label: '全部商品' },
+] satisfies Array<{ value: ProductLifecycleStatus; label: string }>;
 
 const productDrawerSections = [
   { key: 'basic', label: '详情', description: '名称、分类、状态' },
@@ -1106,7 +1144,34 @@ function isCategoryVisible(row: ProductCategoryRecord) {
   return !(value === false || value === 0 || value === '0');
 }
 
+function countValue(value: unknown) {
+  const count = Number(value);
+  return Number.isFinite(count) && count > 0 ? count : 0;
+}
+
+function categoryActiveProductCount(row: ProductCategoryRecord) {
+  return countValue(row.products_count ?? row.product_count);
+}
+
+function categoryTotalProductCount(row: ProductCategoryRecord) {
+  const total = countValue(row.products_with_trashed_count);
+  return total > 0 ? total : categoryActiveProductCount(row);
+}
+
+function categoryCountLabel(row: ProductCategoryRecord, childCount: number) {
+  if (childCount > 0) return `${childCount} 个子分类`;
+
+  const activeCount = categoryActiveProductCount(row);
+  const totalCount = categoryTotalProductCount(row);
+  const deletedCount = Math.max(totalCount - activeCount, 0);
+
+  if (deletedCount > 0) return `${totalCount} 个商品（含 ${deletedCount} 个已删除）`;
+
+  return `${activeCount} 个商品`;
+}
+
 function productVisibilityLabel(row: ProductRecord) {
+  if (row.is_deleted) return '已删除';
   return isProductVisible(row) ? '显示中' : '已隐藏';
 }
 
@@ -1503,6 +1568,9 @@ function deleteType(type: ProductTypeRecord) {
       try {
         await productApi.deleteType(type.value);
         MessagePlugin.success('一级分类已删除');
+        if (false && catalogFilters.lifecycle_status === 'all') {
+          MessagePlugin.info('当前筛选为“全部商品”，已删除商品仍会显示在列表中');
+        }
         dialog.hide();
         if (catalogFilters.product_type === type.value) {
           catalogFilters.product_type = '';
@@ -1573,14 +1641,24 @@ async function handleMoveCategory(row: ProductCategoryRecord, direction: 'up' | 
   }
 }
 
+function shouldAutoRevealDeletedProducts(row: ProductCategoryRecord | null) {
+  if (!row || catalogFilters.lifecycle_status !== 'active') return false;
+  return categoryActiveProductCount(row) === 0 && categoryTotalProductCount(row) > 0;
+}
+
 async function loadProducts() {
   productLoading.value = true;
   try {
     const selectedGroup = findProductGroupByKey(categoryOptions.value, catalogFilters.product_group_key);
+    if (shouldAutoRevealDeletedProducts(selectedGroup)) {
+      catalogFilters.lifecycle_status = 'all';
+      MessagePlugin.info('当前分类仅包含已删除商品，已自动切换到“全部商品”');
+    }
     const response = await productApi.list({
       keyword: catalogFilters.keyword,
       product_type: catalogFilters.product_type,
       status: catalogFilters.status,
+      lifecycle_status: catalogFilters.lifecycle_status,
       ...productGroupPayload(selectedGroup),
       page: productPage.value,
       page_size: productPageSize.value,
@@ -1647,6 +1725,7 @@ function resetCatalogFilters() {
   catalogFilters.keyword = '';
   catalogFilters.product_group_key = '';
   catalogFilters.status = '';
+  catalogFilters.lifecycle_status = 'active';
   syncDefaultCatalogCategory();
   productPage.value = 1;
   void loadProducts();
@@ -2298,9 +2377,57 @@ function handleDeleteProduct(row: ProductRecord) {
         await productApi.delete(row.id);
         MessagePlugin.success('商品已删除');
         dialog.hide();
+        if (catalogFilters.lifecycle_status === 'all') {
+          MessagePlugin.info('当前筛选为“全部商品”，已删除商品仍会显示在列表中');
+        }
         await Promise.all([loadProductSummary(), loadProducts()]);
       } catch (error) {
         MessagePlugin.error(errorMessage(error, '删除商品失败'));
+      } finally {
+        productActionLoading.value = null;
+      }
+    },
+  });
+}
+
+function handleRestoreProduct(row: ProductRecord) {
+  const dialog = DialogPlugin.confirm({
+    header: '恢复商品',
+    body: `确认恢复《${row.display_name || row.name || row.id}》吗？`,
+    confirmBtn: '确认恢复',
+    cancelBtn: '取消',
+    async onConfirm() {
+      productActionLoading.value = `restore:${row.id}`;
+      try {
+        await productApi.restore(row.id);
+        MessagePlugin.success('商品已恢复');
+        dialog.hide();
+        await Promise.all([loadProductSummary(), loadProducts()]);
+      } catch (error) {
+        MessagePlugin.error(errorMessage(error, '恢复商品失败'));
+      } finally {
+        productActionLoading.value = null;
+      }
+    },
+  });
+}
+
+function handleForceDeleteProduct(row: ProductRecord) {
+  const dialog = DialogPlugin.confirm({
+    header: '彻底删除商品',
+    body: `确认彻底删除《${row.display_name || row.name || row.id}》吗？该操作不可恢复。`,
+    theme: 'warning',
+    confirmBtn: '确认彻底删除',
+    cancelBtn: '取消',
+    async onConfirm() {
+      productActionLoading.value = `force:${row.id}`;
+      try {
+        await productApi.forceDelete(row.id);
+        MessagePlugin.success('商品已彻底删除');
+        dialog.hide();
+        await Promise.all([loadProductSummary(), loadProducts()]);
+      } catch (error) {
+        MessagePlugin.error(errorMessage(error, '彻底删除商品失败'));
       } finally {
         productActionLoading.value = null;
       }

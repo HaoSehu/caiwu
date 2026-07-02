@@ -28,13 +28,19 @@ class BillingAutomationService
     {
         $config = $this->settingService->getAutomationConfig();
 
-        return [
+        $results = [
             'renew_notice_sent' => $this->sendRenewNotices($config),
+            'auto_renew_upcoming_sent' => $this->sendAutoRenewUpcomingNotices($config),
             'renew_orders_created' => $this->createRenewOrders($config),
             'invoice_pre_due_sent' => $this->sendInvoiceBeforeDueReminders($config),
             'invoice_overdue_sent' => $this->sendInvoiceOverdueReminders($config),
             'invoices_marked_overdue' => $this->markInvoicesOverdue($config),
         ];
+
+        // 续费履约补偿：检查已支付但 fulfillment_pending 未清除的账单
+        $results['fulfillment_recovered'] = $this->recoverStuckFulfillments();
+
+        return $results;
     }
 
     // ─── 服务续费提醒 ──────────────────────────────────────────────────────────
@@ -135,6 +141,112 @@ class BillingAutomationService
             } catch (\Throwable $exception) {
                 AutomationLog::forgetRecord('billing-maintenance', 'renew_notice', 'service', (int) $service->id, $ruleKey);
                 Log::warning('[定时任务] 服务续费提醒发送失败', [
+                    'service_id' => $service->id,
+                    'email' => $email,
+                    'message' => $exception->getMessage(),
+                ]);
+            }
+        }
+
+        return $count;
+    }
+
+    // ─── 即将自动续费提醒 ──────────────────────────────────────────────────────
+
+    /**
+     * 在自动续费执行前 1 天，向开启了自动续费的用户发送"即将自动续费"邮件通知。
+     *
+     * 通知时机 = auto_renew_days_before + 1 天，即比实际扣款日早 1 天。
+     * 示例：auto_renew_days_before=3 → 到期前 4 天发送通知，到期前 3 天扣款。
+     */
+    private function sendAutoRenewUpcomingNotices(array $config): int
+    {
+        if (! $config['renew_notice_enabled']) {
+            return 0;
+        }
+
+        $autoRenewDays = (int) config('idc.auto_renew_days_before', 3);
+        $noticeDay = $autoRenewDays + 1; // 自动续费前 1 天通知
+
+        $resolvedNow = now();
+        $siteName = (string) config('idc.site_name', config('app.name', '服务商'));
+        $targetDate = $resolvedNow->copy()->addDays($noticeDay)->toDateString();
+
+        $services = Service::query()
+            ->with('user:id,email,nickname')
+            ->where('auto_renew', 1)
+            ->where('status', ServiceStatus::ACTIVE)
+            ->whereNotNull('expires_at')
+            ->whereBetween('expires_at', [
+                $targetDate.' 00:00:00',
+                $targetDate.' 23:59:59',
+            ])
+            ->get();
+
+        $count = 0;
+
+        foreach ($services as $service) {
+            $email = trim((string) ($service->user?->email ?? ''));
+            if ($email === '') {
+                continue;
+            }
+
+            $expiresAt = $service->expires_at instanceof Carbon
+                ? $service->expires_at
+                : Carbon::parse($service->expires_at);
+
+            $ruleKey = 'expiry:'.$expiresAt->format('Y-m-d').':auto_renew_upcoming:'.$noticeDay;
+            if (! AutomationLog::recordOnce(
+                'billing-maintenance', 'auto_renew_upcoming', 'service', (int) $service->id, $ruleKey
+            )) {
+                continue;
+            }
+
+            $displayName = $service->user?->display_name ?? '客户';
+            $expiryStr = $expiresAt->format('Y-m-d H:i');
+            $autoRenewDate = $expiresAt->copy()->subDays($autoRenewDays)->format('Y-m-d');
+            $cycleLabel = $this->resolveCycleLabel((string) $service->billing_cycle);
+
+            $urgencyLine = "您的服务 {$service->name} 将于 {$autoRenewDate} 由系统自动续费（{$cycleLabel}），请确保账户余额充足。如不希望自动续费，请在 {$autoRenewDate} 前登录控制台关闭自动续费。";
+
+            try {
+                $this->notificationService->sendTemplateEmail(
+                    $email,
+                    NotificationService::TEMPLATE_AUTO_RENEW_UPCOMING,
+                    [
+                        'site_name' => $siteName,
+                        'display_name' => $displayName,
+                        'service_name' => (string) $service->name,
+                        'expires_at' => $expiryStr,
+                        'auto_renew_date' => $autoRenewDate,
+                        'billing_cycle_label' => $cycleLabel,
+                        'urgency_message' => $urgencyLine,
+                    ]
+                );
+                $this->userNotificationService->create(
+                    (int) $service->user_id,
+                    UserNotificationType::SERVICE_AUTO_RENEW_UPCOMING,
+                    '即将自动续费',
+                    $urgencyLine,
+                    '/client/services/'.$service->id,
+                    ['service_id' => (int) $service->id, 'expires_at' => $expiryStr, 'auto_renew_date' => $autoRenewDate]
+                );
+                AutomationLog::markExecuted(
+                    'billing-maintenance',
+                    'auto_renew_upcoming',
+                    'service',
+                    (int) $service->id,
+                    $ruleKey,
+                    [
+                        'email' => $email,
+                        'expires_at' => $expiryStr,
+                        'auto_renew_date' => $autoRenewDate,
+                    ]
+                );
+                $count++;
+            } catch (\Throwable $exception) {
+                AutomationLog::forgetRecord('billing-maintenance', 'auto_renew_upcoming', 'service', (int) $service->id, $ruleKey);
+                Log::warning('[定时任务] 自动续费预告发送失败', [
                     'service_id' => $service->id,
                     'email' => $email,
                     'message' => $exception->getMessage(),
@@ -461,5 +573,75 @@ class BillingAutomationService
         }
 
         return null;
+    }
+
+    /**
+     * 续费履约补偿恢复
+     *
+     * 扫描已支付但 fulfillment_pending 未清除的续费账单，
+     * 重新触发续费履约流程以修复支付事务提交后 handlePaidInvoice 未完成导致的缺口。
+     */
+    private function recoverStuckFulfillments(): int
+    {
+        $stuckInvoices = Invoice::query()
+            ->with(['service.product.supplier'])
+            ->where('status', InvoiceStatus::PAID)
+            ->where('type', 'renew')
+            ->whereNotNull('config_snapshot')
+            ->get()
+            ->filter(function (Invoice $invoice): bool {
+                $config = is_array($invoice->config_snapshot ?? null) ? $invoice->config_snapshot : [];
+
+                return ! empty($config['fulfillment_pending']);
+            });
+
+        $count = 0;
+
+        foreach ($stuckInvoices as $invoice) {
+            try {
+                // 检查是否已被其他进程处理
+                $config = is_array($invoice->config_snapshot ?? null) ? $invoice->config_snapshot : [];
+                if (empty($config['fulfillment_pending'])) {
+                    continue;
+                }
+
+                // 检查服务是否已续费
+                $service = $invoice->service;
+                if ($service) {
+                    $renewProvisionData = is_array($service->provision_data ?? null) ? $service->provision_data : [];
+                    if ((int) ($renewProvisionData['last_renew_invoice_id'] ?? 0) === (int) $invoice->id) {
+                        // 实际已履约完成，仅需清除标记
+                        $config['fulfillment_pending'] = false;
+                        $config['fulfillment_cleared_at'] = now()->toDateTimeString();
+                        $invoice->forceFill(['config_snapshot' => $config])->saveQuietly();
+                        $count++;
+
+                        continue;
+                    }
+                }
+
+                // 重新触发续费履约
+                $this->serviceRenewService->processPaidRenewInvoice($invoice);
+
+                // 清除 pending 标记
+                $config['fulfillment_pending'] = false;
+                $config['fulfillment_cleared_at'] = now()->toDateTimeString();
+                $invoice->forceFill(['config_snapshot' => $config])->saveQuietly();
+
+                Log::info('[定时任务] 续费履约补偿恢复成功', [
+                    'invoice_id' => $invoice->id,
+                    'invoice_no' => $invoice->invoice_no ?? '',
+                ]);
+                $count++;
+            } catch (\Throwable $exception) {
+                Log::warning('[定时任务] 续费履约补偿恢复失败', [
+                    'invoice_id' => $invoice->id,
+                    'invoice_no' => $invoice->invoice_no ?? '',
+                    'message' => $exception->getMessage(),
+                ]);
+            }
+        }
+
+        return $count;
     }
 }

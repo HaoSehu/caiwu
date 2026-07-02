@@ -1331,7 +1331,7 @@ function waitForLoginAsReady(targetWindow: Window, targetUrl: string) {
   return new Promise<void>((resolve, reject) => {
     const timer = window.setTimeout(() => {
       window.removeEventListener('message', handleMessage);
-      reject(new Error('瀹㈡埛绔唬鐧诲綍绐楀彛鏈畬鎴愬垵濮嬪寲'));
+      reject(new Error('客户端模拟登录窗口未完成初始化'));
     }, LOGIN_AS_READY_TIMEOUT_MS);
 
     function handleMessage(event: MessageEvent) {

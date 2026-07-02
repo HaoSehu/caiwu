@@ -76,7 +76,7 @@ class RunScheduleTaskJob implements ShouldQueue
 
         $result = $scheduleRunLogService->record($this->taskTitle(), fn () => match ($this->taskKey) {
             'refresh-hosting-panel-auth' => $this->refreshHostingPanelAuth($providerResolver),
-            'service-auto-renew' => $autoRenewService->handle(10),
+            'service-auto-renew' => $autoRenewService->handle(),
             'referral-release-rewards' => [
                 'released' => $referralService->releaseMaturedRewards(),
             ],

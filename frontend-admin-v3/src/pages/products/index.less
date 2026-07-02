@@ -552,10 +552,10 @@
 }
 
 .category-tree-main {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--td-comp-margin-s);
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
@@ -584,7 +584,7 @@
 }
 
 .category-count {
-  flex: 0 0 auto;
+  width: 100%;
   overflow: hidden;
   color: var(--td-text-color-placeholder);
   font-size: var(--td-font-size-size-1, 12px);
@@ -1508,7 +1508,7 @@
   }
 
   .category-tree-main {
-    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 1px;
   }
 
   .table-scroll {
