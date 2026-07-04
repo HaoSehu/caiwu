@@ -15,9 +15,12 @@ use App\Models\Setting;
 use App\Models\Supplier;
 use App\Services\Provisioning\ProvisionService;
 use App\Services\System\SettingService;
+use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiDriver;
+use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
 use App\Support\AdminPermissions;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -410,10 +413,26 @@ class ProductSplitRegressionTest extends TestCase
 
     public function test_split_default_config_is_sent_to_upstream_cart_payload(): void
     {
-        $product = new Product([
-            'id' => 901,
+        $suffix = bin2hex(random_bytes(4));
+        $pluginId = $this->ensureHostingPanelIntegrationPlugin();
+        $supplier = Supplier::query()->create([
+            'name' => 'Cart Payload Supplier '.$suffix,
+            'code' => 'cart-payload-'.$suffix,
+            'interface_type' => ProviderKey::HOSTING_PANEL_API,
+            'api_url' => 'https://example.com',
+            'api_username' => 'tester',
+            'api_key' => 'secret',
+            'status' => 1,
+            'sort_order' => 0,
+        ]);
+        $product = Product::query()->create([
             'name' => '美国 2H4G',
+            'product_type' => 'vps',
+            'pricing' => ['monthly' => '50.00'],
+            'setup_fee' => '0.00',
             'supplier_product_id' => 9001,
+            'supplier_id' => (int) $supplier->id,
+            'provision_module' => ProviderKey::HOSTING_PANEL_API,
             'auto_setup' => 0,
             'purchase_requires' => [
                 'upstream_default_config' => [
@@ -433,7 +452,11 @@ class ProductSplitRegressionTest extends TestCase
                     ],
                 ],
             ],
+            'stock' => -1,
+            'status' => 1,
+            'sort_order' => 0,
         ]);
+        $this->createProductUpstreamBinding($supplier, $product, $pluginId, 9001);
 
         $order = new class extends Order
         {
@@ -721,6 +744,61 @@ class ProductSplitRegressionTest extends TestCase
         $this->assertSame(['memory', 'flow_limit'], collect($splitProduct->config_options)->pluck('field')->values()->all());
         $this->assertSame(1, count((array) ($splitProduct->config_options[0]['sub'] ?? [])));
         $this->assertSame('4096', (string) (($splitProduct->config_options[0]['sub'][0]['option_name_first'] ?? '')));
+    }
+
+    private function ensureHostingPanelIntegrationPlugin(): int
+    {
+        DB::table('integration_plugins')->updateOrInsert([
+            'domain' => 'upstream',
+            'plugin_key' => ProviderKey::HOSTING_PANEL_API,
+        ], [
+            'slug' => ProviderKey::HOSTING_PANEL_API,
+            'name' => 'Hosting Panel API',
+            'version' => '1.0.0',
+            'provider_class' => null,
+            'entry_class' => HostingPanelApiDriver::class,
+            'capabilities_json' => json_encode([]),
+            'config_schema_json' => json_encode([]),
+            'status' => 1,
+            'installed_at' => now(),
+            'updated_at' => now(),
+            'created_at' => now(),
+        ]);
+
+        return (int) DB::table('integration_plugins')
+            ->where('domain', 'upstream')
+            ->where('plugin_key', ProviderKey::HOSTING_PANEL_API)
+            ->value('id');
+    }
+
+    private function createProductUpstreamBinding(
+        Supplier $supplier,
+        Product $product,
+        int $pluginId,
+        int $upstreamProductId
+    ): void {
+        $supplierBindingId = DB::table('supplier_plugin_bindings')->insertGetId([
+            'supplier_id' => (int) $supplier->id,
+            'plugin_id' => $pluginId,
+            'provider_key' => ProviderKey::HOSTING_PANEL_API,
+            'environment' => 'production',
+            'status' => 1,
+            'priority' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('product_upstream_bindings')->insert([
+            'product_id' => (int) $product->id,
+            'supplier_plugin_binding_id' => $supplierBindingId,
+            'plugin_id' => $pluginId,
+            'provider_key' => ProviderKey::HOSTING_PANEL_API,
+            'upstream_product_id' => (string) $upstreamProductId,
+            'auto_setup' => 0,
+            'status' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 
     /**

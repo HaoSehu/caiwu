@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Caiwu\Plugins\Servers\MofangFinance\Lib;
 
-use App\Models\Supplier;
 use App\Models\Order;
 use App\Models\Service;
+use App\Models\Supplier;
 use App\Services\Upstream\Contracts\ProvidesConsoleAccess;
 use App\Services\Upstream\Contracts\ProvidesConsoleCatalog;
 use App\Services\Upstream\Contracts\ProvidesConsoleNetwork;

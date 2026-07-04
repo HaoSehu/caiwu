@@ -7,6 +7,7 @@ use App\Models\ReferralWithdrawal;
 use App\Models\User;
 use App\Models\UserAccount;
 use App\Models\UserReferral;
+use App\Support\AdminPrivacy;
 use Illuminate\Support\Facades\Schema;
 
 class AdminReferralOverviewService
@@ -68,6 +69,8 @@ class AdminReferralOverviewService
             ->limit(10)
             ->get();
 
+        $privacy = AdminPrivacy::current();
+
         return [
             'summary' => [
                 'rewards_total' => (int) ($rewardSummary?->rewards_total ?? 0),
@@ -83,9 +86,9 @@ class AdminReferralOverviewService
             ],
             'top_referrers' => $topReferrers->map(fn (User $user) => [
                 'id' => (int) $user->id,
-                'email' => (string) $user->email,
+                'email' => $privacy->email($user->email),
                 'nickname' => (string) $user->nickname,
-                'display_name' => (string) $user->display_name,
+                'display_name' => $privacy->displayName($user->display_name, $user->email, $user->phone, $user->real_name),
                 'member_level' => $user->memberLevel ? [
                     'id' => (int) $user->memberLevel->id,
                     'name' => (string) $user->memberLevel->name,

@@ -122,12 +122,12 @@ class InvoicePaymentEntrySwitchTest extends BaseTestCase
         ]);
         $this->assertDatabaseHas('payments', [
             'invoice_id' => (int) $invoice->id,
-            'gateway' => PaymentGatewayCode::ALIPAY,
+            'gateway_key' => PaymentGatewayCode::ALIPAY,
             'status' => PaymentStatus::FAILED,
         ]);
         $this->assertDatabaseMissing('payments', [
             'invoice_id' => (int) $invoice->id,
-            'gateway' => 'manual',
+            'gateway_key' => 'manual',
         ]);
         $this->assertDatabaseHas('operation_logs', [
             'module' => 'invoice',
@@ -297,6 +297,7 @@ class InvoicePaymentEntrySwitchTest extends BaseTestCase
             $table->json('coupon_snapshot')->nullable();
             $table->string('trace_id', 64)->nullable();
             $table->timestamps();
+            $table->softDeletes();
         });
 
         Schema::create('invoices', function (Blueprint $table): void {
@@ -319,6 +320,7 @@ class InvoicePaymentEntrySwitchTest extends BaseTestCase
             $table->json('coupon_snapshot')->nullable();
             $table->string('trace_id', 64)->nullable();
             $table->timestamps();
+            $table->softDeletes();
         });
 
         Schema::create('payments', function (Blueprint $table): void {
@@ -327,7 +329,7 @@ class InvoicePaymentEntrySwitchTest extends BaseTestCase
             $table->unsignedBigInteger('user_id');
             $table->unsignedBigInteger('order_id')->nullable();
             $table->unsignedBigInteger('invoice_id')->nullable();
-            $table->string('gateway', 50);
+            $table->string('gateway_key', 120)->nullable();
             $table->string('trade_no')->nullable();
             $table->decimal('amount', 12, 2)->default(0);
             $table->integer('status')->default(0);
@@ -335,6 +337,7 @@ class InvoicePaymentEntrySwitchTest extends BaseTestCase
             $table->timestamp('paid_at')->nullable();
             $table->string('trace_id', 64)->nullable();
             $table->timestamps();
+            $table->softDeletes();
         });
 
         Schema::create('invoice_items', function (Blueprint $table): void {

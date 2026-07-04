@@ -1015,6 +1015,20 @@
   font-size: var(--td-font-size-size-2, 13px);
 }
 
+.supplier-form-help {
+  margin: 0 0 var(--td-comp-margin-s) 110px;
+  color: var(--td-text-color-secondary);
+  font-size: var(--td-font-size-size-2, 13px);
+  line-height: 20px;
+}
+
+.supplier-field-tip {
+  margin: var(--td-comp-margin-xs) 0 0;
+  color: var(--td-text-color-placeholder);
+  font-size: var(--td-font-size-size-1, 12px);
+  line-height: 18px;
+}
+
 .split-product-meta {
   display: flex;
   flex-wrap: wrap;
@@ -1375,6 +1389,39 @@
 
   .traffic-editor {
     grid-template-columns: 1fr;
+  }
+
+  .product-drawer {
+    grid-template-columns: 1fr;
+  }
+
+  .product-drawer-nav {
+    position: static;
+    display: flex;
+    gap: 8px;
+    height: auto;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--td-component-border);
+    padding: 12px;
+  }
+
+  .product-drawer-nav-item {
+    min-width: 128px;
+    flex-shrink: 0;
+  }
+
+  .product-drawer-main {
+    max-height: none;
+    padding: 16px 14px;
+  }
+
+  .config-subitem-table {
+    overflow-x: auto;
+  }
+
+  .config-subitem-grid {
+    min-width: 560px;
   }
 }
 

@@ -32,7 +32,6 @@ class AutoRenewServiceTest extends TestCase
             'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
             'status' => 1,
             'nickname' => 'Auto Renew Paid',
-            'balance' => '49.00',
             'real_name' => '',
             'id_card' => '',
             'verification_status' => 0,
@@ -43,6 +42,9 @@ class AutoRenewServiceTest extends TestCase
             'referrer_user_id' => null,
             'verified_at' => null,
         ]);
+        // balance 已从 $fillable 移出，通过 forceFill+save 触发 booted hook 同步到 user_accounts
+        $user->forceFill(['balance' => '49.00'])->save();
+        $user->refresh();
 
         $product = Product::query()->create([
             'name' => 'Auto Renew Paid Product '.$suffix,
@@ -148,7 +150,6 @@ class AutoRenewServiceTest extends TestCase
             'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
             'status' => 1,
             'nickname' => 'Auto Renew Pending',
-            'balance' => '0.00',
             'real_name' => '',
             'id_card' => '',
             'verification_status' => 0,

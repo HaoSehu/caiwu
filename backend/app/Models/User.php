@@ -21,7 +21,7 @@ class User extends Authenticatable
     use HasApiTokens, HasFactory, Notifiable, SoftDeletes;
 
     protected $fillable = [
-        'email', 'password', 'phone', 'status', 'balance',
+        'email', 'password', 'phone', 'status',
         'nickname', 'company', 'qq', 'admin_note',
         'referral_code', 'referrer_user_id', 'referred_at', 'member_level_id', 'total_sales_amount',
         'is_verified', 'real_name', 'id_card', 'verification_status', 'verification_message', 'verification_certify_id', 'verified_at',
@@ -29,7 +29,13 @@ class User extends Authenticatable
         'login_email_alert', 'login_notify', 'login_location_alert', 'password_change_alert', 'phone_change_alert', 'email_change_alert', 'marketing_alert', 'last_login_ip', 'last_login_at',
     ];
 
-    protected $hidden = ['password'];
+    // balance/credit_limit 真源已迁移到 user_accounts，必须通过 AccountService 写入，禁止批量赋值
+    // 其余敏感字段（real_name/id_card/is_verified 等）由各自 Service 的 forceFill() 写入，
+    // 保留在 $fillable 是为了兼容工厂和测试创建，生产接口层通过 FormRequest 在参数层面过滤
+    protected $guarded = ['balance', 'credit_limit'];
+
+    // id_card 是加密存储的身份证号，序列化时不返回原文（通过脱敏专用端点按需读取）
+    protected $hidden = ['password', 'id_card'];
 
     protected function casts(): array
     {

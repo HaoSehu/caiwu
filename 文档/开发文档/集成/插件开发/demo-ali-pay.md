@@ -10,6 +10,7 @@ backend/plugins/gateways/ali_pay/
 ├── controller/
 │   └── IndexController.php
 └── lib/
+    ├── AlipayClient.php
     └── AlipayService.php
 ```
 
@@ -76,7 +77,7 @@ use Caiwu\Plugins\Gateways\AliPay\Lib\AlipayService;
 class AliPayPlugin extends AlipayService {}
 ```
 
-入口类可以很薄，真实能力放在 `lib/AlipayService.php`。
+入口类可以很薄，真实能力放在 `lib/AlipayService.php`，支付宝 SDK/签名、预下单、查询、退款细节放在 `lib/AlipayClient.php`。
 
 ## 业务类 demo
 
@@ -87,26 +88,44 @@ declare(strict_types=1);
 
 namespace Caiwu\Plugins\Gateways\AliPay\Lib;
 
-use App\Contracts\Integrations\Payments\PaymentGatewayInterface;
-use App\Services\Integrations\Payments\Drivers\AlipayFaceToFaceGateway;
-
-class AlipayService implements PaymentGatewayInterface
+class AlipayService
 {
-    public function __construct(
-        private readonly AlipayFaceToFaceGateway $gateway,
-    ) {}
+    private ?AlipayClient $client = null;
 
     public function key(): string
     {
-        return $this->gateway->key();
+        return 'alipay';
     }
 
     public function name(): string
     {
-        return $this->gateway->name();
+        return '支付宝当面付';
     }
 
-    // precreate/query/refund/verifyNotify/buildNotifyResponse 均委托给平台受控 driver。
+    public function execute(array $request): array
+    {
+        $action = (string) ($request['action'] ?? '');
+        $payload = is_array($request['payload'] ?? null) ? $request['payload'] : [];
+        $config = is_array($request['config'] ?? null) ? $request['config'] : [];
+
+        return match ($action) {
+            'payment.precreate' => $this->success($action, $this->client($config)->precreate(/* ... */)),
+            'payment.query' => $this->success($action, $this->client($config)->query(/* ... */)),
+            'payment.refund' => $this->success($action, $this->client($config)->refund(/* ... */)),
+            'payment.verify_notify' => $this->success($action, ['verified' => $this->client($config)->verifyNotify($payload)]),
+            default => ['success' => false, 'action' => $action, 'message' => 'Unsupported plugin action', 'data' => []],
+        };
+    }
+
+    private function client(array $config): AlipayClient
+    {
+        return $this->client ??= new AlipayClient($config);
+    }
+
+    private function success(string $action, array $data): array
+    {
+        return ['success' => true, 'action' => $action, 'data' => $data];
+    }
 }
 ```
 
@@ -122,6 +141,7 @@ class AlipayService implements PaymentGatewayInterface
 
 平台负责：
 
+- 通过 `PluginPaymentGateway` 把 `payment.*` action 转为平台 `PaymentGatewayInterface` 调用。
 - 创建和更新 `payments`。
 - 金额、商户号、订单号校验。
 - 回调幂等、入账、订单履约。

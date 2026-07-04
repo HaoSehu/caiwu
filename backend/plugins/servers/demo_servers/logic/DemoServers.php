@@ -16,9 +16,10 @@ use App\Services\Upstream\Contracts\ProvidesProvisioning;
 use App\Services\Upstream\Contracts\ProvidesRenewal;
 use App\Services\Upstream\Contracts\ProvidesScheduledAuthRefresh;
 use App\Services\Upstream\Contracts\ProvidesStatusSync;
+use App\Services\Upstream\Contracts\ProvidesSupplierFormSchema;
 use App\Services\Upstream\Contracts\UpstreamDriver;
 
-class DemoServers implements UpstreamDriver, ProvidesConsoleAccess, ProvidesConsoleCatalog, ProvidesConsoleNetwork, ProvidesConsoleRuntime, ProvidesConsoleSecurity, ProvidesProvisioning, ProvidesRenewal, ProvidesScheduledAuthRefresh, ProvidesStatusSync
+class DemoServers implements ProvidesConsoleAccess, ProvidesConsoleCatalog, ProvidesConsoleNetwork, ProvidesConsoleRuntime, ProvidesConsoleSecurity, ProvidesProvisioning, ProvidesRenewal, ProvidesScheduledAuthRefresh, ProvidesStatusSync, ProvidesSupplierFormSchema, UpstreamDriver
 {
     private const CAPABILITIES = [
         ProvidesConsoleAccess::class,
@@ -57,6 +58,23 @@ class DemoServers implements UpstreamDriver, ProvidesConsoleAccess, ProvidesCons
         return $this->supports($capability) ? $this : null;
     }
 
+    public function supplierFormSchema(): array
+    {
+        return [
+            'help' => 'Demo 上游不请求真实接口，只需要可选的模拟区域配置。',
+            'fields' => [
+                [
+                    'key' => 'demo_region',
+                    'label' => '模拟区域',
+                    'type' => 'text',
+                    'required' => false,
+                    'placeholder' => 'ap-demo-1',
+                    'default' => 'ap-demo-1',
+                ],
+            ],
+        ];
+    }
+
     public function execute(array $request): array
     {
         $action = trim((string) ($request['action'] ?? ''));
@@ -87,6 +105,11 @@ class DemoServers implements UpstreamDriver, ProvidesConsoleAccess, ProvidesCons
                 'data' => [
                     'resolved' => $this->resolve((string) ($payload['capability'] ?? '')),
                 ],
+            ],
+            'server.supplier_form_schema' => [
+                'success' => true,
+                'action' => $action,
+                'data' => $this->supplierFormSchema(),
             ],
             'server.health_check' => [
                 'success' => true,

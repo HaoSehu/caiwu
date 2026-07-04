@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ReferralReward\IndexRequest;
 use App\Models\ReferralReward;
 use App\Services\Referral\ReferralService;
+use App\Support\AdminPrivacy;
 
 class ReferralRewardController extends Controller
 {
@@ -14,6 +15,7 @@ class ReferralRewardController extends Controller
     public function index(IndexRequest $request)
     {
         $filters = $request->validated();
+        $privacy = AdminPrivacy::fromRequest($request);
 
         $perPage = max(1, min((int) ($filters['page_size'] ?? 20), 100));
         $paginator = $this->referralService->adminRewardLogs($filters, $perPage);
@@ -31,15 +33,15 @@ class ReferralRewardController extends Controller
                 'remark' => $item->remark,
                 'referrer' => $item->referrer ? [
                     'id' => $item->referrer->id,
-                    'email' => $item->referrer->email,
+                    'email' => $privacy->email($item->referrer->email),
                     'nickname' => $item->referrer->nickname,
-                    'display_name' => $item->referrer->display_name,
+                    'display_name' => $privacy->displayName($item->referrer->display_name, $item->referrer->email, $item->referrer->phone, $item->referrer->real_name),
                 ] : null,
                 'referred_user' => $item->referredUser ? [
                     'id' => $item->referredUser->id,
-                    'email' => $item->referredUser->email,
+                    'email' => $privacy->email($item->referredUser->email),
                     'nickname' => $item->referredUser->nickname,
-                    'display_name' => $item->referredUser->display_name,
+                    'display_name' => $privacy->displayName($item->referredUser->display_name, $item->referredUser->email, $item->referredUser->phone, $item->referredUser->real_name),
                 ] : null,
                 'order' => $item->order ? [
                     'id' => $item->order->id,

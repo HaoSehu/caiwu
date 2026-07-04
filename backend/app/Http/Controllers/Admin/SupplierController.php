@@ -10,6 +10,8 @@ use App\Http\Requests\Admin\Supplier\UpsertRequest;
 use App\Http\Resources\Product\SupplierResource;
 use App\Models\Product;
 use App\Models\Supplier;
+use App\Services\Integrations\Plugins\PluginBindingResolver;
+use App\Services\Integrations\Plugins\UpstreamBindingWriter;
 use App\Services\ProductCatalog\ProductCatalogService;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\Upstream\Contracts\ProvidesConsoleCatalog;
@@ -25,6 +27,9 @@ class SupplierController extends Controller
     {
         $filters = $request->validated();
         $query = Supplier::query();
+        if (Schema::hasTable('supplier_plugin_bindings')) {
+            $query->with('pluginBindings');
+        }
         $keyword = trim((string) ($filters['keyword'] ?? ''));
         $status = $filters['status'] ?? null;
 
@@ -65,13 +70,19 @@ class SupplierController extends Controller
         ]);
     }
 
-    public function store(UpsertRequest $request)
+    public function store(UpsertRequest $request, UpstreamBindingWriter $bindingWriter)
     {
-        $payload = $request->payload();
-        $payload['code'] = $this->generateInternalCode($payload['interface_type']);
-        $supplier = Supplier::create($payload);
+        $bindingPayload = $request->upstreamBindingPayload();
+        $supplierPayload = $request->supplierPayload();
+        $supplierPayload['code'] = $this->generateInternalCode($bindingPayload['provider_key']);
+        $supplier = DB::transaction(function () use ($supplierPayload, $bindingPayload, $bindingWriter): Supplier {
+            $supplier = Supplier::create($supplierPayload);
+            $bindingWriter->syncSupplierBinding($supplier, $bindingPayload);
 
-        return $this->success(new SupplierResource($supplier), '创建成功');
+            return $supplier;
+        });
+
+        return $this->success(new SupplierResource($supplier->refresh()), '创建成功');
     }
 
     public function show(Supplier $supplier)
@@ -79,30 +90,81 @@ class SupplierController extends Controller
         if (! $supplier->exists) {
             return $this->error(40400, '接口不存在');
         }
+        $binding = $this->supplierBindingProjection($supplier, includeSecrets: true);
+        $providerKey = trim((string) ($binding['provider_key'] ?? ''));
 
         return $this->success([
             'id' => $supplier->id,
             'name' => $supplier->name,
             'code' => $supplier->code,
-            'interface_type' => $supplier->interface_type,
-            'api_url' => (string) $supplier->api_url,
-            'has_api_url' => trim((string) $supplier->api_url) !== '',
-            'api_username' => (string) $supplier->api_username,
-            'has_api_key' => trim((string) $supplier->api_key) !== '',
+            'provider_key' => $providerKey,
+            'provider_label' => $this->providerLabel($providerKey),
+            'api_url' => '',
+            'has_api_url' => (bool) ($binding['has_base_url'] ?? false),
+            'api_username' => (string) ($binding['account_name'] ?? ''),
+            'has_api_key' => (bool) ($binding['has_api_key'] ?? false),
+            'provider_config' => $this->visibleProviderConfig($providerKey, (array) ($binding['provider_config'] ?? [])),
+            'has_provider_secret_values' => $this->providerSecretValues($providerKey, (array) ($binding['provider_config'] ?? [])),
+            'upstream_binding' => $this->upstreamBindingPayload($supplier),
             'status' => (int) $supplier->status,
             'sort_order' => (int) $supplier->sort_order,
         ]);
     }
 
-    public function update(UpsertRequest $request, Supplier $supplier)
+    public function revealSecret(Supplier $supplier, string $key)
     {
         if (! $supplier->exists) {
             return $this->error(40400, '接口不存在');
         }
 
-        $payload = $request->payload();
-        $payload['code'] = $supplier->code ?: $this->generateInternalCode($payload['interface_type'], $supplier->id);
-        $updated = $supplier->update($payload);
+        $secretKey = trim($key);
+        $binding = $this->supplierBindingProjection($supplier, includeSecrets: true);
+        if ($secretKey === 'api_key') {
+            $value = trim((string) ($binding['api_key'] ?? ''));
+            if ($value === '') {
+                throw new BusinessException('接口密钥尚未配置', 42200);
+            }
+
+            return $this->success(['key' => $secretKey, 'value' => $value]);
+        }
+
+        $providerKey = trim((string) ($binding['provider_key'] ?? ''));
+        $descriptor = app(ProviderRegistry::class)->descriptor($providerKey);
+        $fields = (array) ($descriptor?->supplierForm['fields'] ?? []);
+        $field = collect($fields)->first(function (mixed $item) use ($secretKey): bool {
+            return is_array($item)
+                && trim((string) ($item['key'] ?? '')) === $secretKey
+                && (bool) ($item['secret'] ?? false);
+        });
+
+        if (! is_array($field)) {
+            throw new BusinessException('敏感字段不存在', 42200);
+        }
+
+        $config = (array) ($binding['provider_config'] ?? []);
+        $value = trim((string) ($config[$secretKey] ?? ''));
+        if ($value === '') {
+            throw new BusinessException('敏感字段尚未配置', 42200);
+        }
+
+        return $this->success(['key' => $secretKey, 'value' => $value]);
+    }
+
+    public function update(UpsertRequest $request, Supplier $supplier, UpstreamBindingWriter $bindingWriter)
+    {
+        if (! $supplier->exists) {
+            return $this->error(40400, '接口不存在');
+        }
+
+        $bindingPayload = $request->upstreamBindingPayload();
+        $supplierPayload = $request->supplierPayload();
+        $supplierPayload['code'] = $supplier->code ?: $this->generateInternalCode($bindingPayload['provider_key'], $supplier->id);
+        $updated = DB::transaction(function () use ($supplier, $supplierPayload, $bindingPayload, $bindingWriter): bool {
+            $updated = $supplier->update($supplierPayload);
+            $bindingWriter->syncSupplierBinding($supplier->refresh(), $bindingPayload);
+
+            return $updated;
+        });
 
         if (! $updated) {
             return $this->error(50000, '接口更新失败');
@@ -157,9 +219,10 @@ class SupplierController extends Controller
         }
 
         try {
-            $provider = $providerResolver->resolveForSupplier($supplier);
+            $runtimeSupplier = $this->supplierWithRuntimeCredentials($supplier);
+            $provider = $providerResolver->resolveForSupplier($runtimeSupplier);
             $renewal = $provider->require(ProvidesRenewal::class, '当前供应商暂不支持余额查询');
-            $result = $renewal->getBalance($supplier);
+            $result = $renewal->getBalance($runtimeSupplier);
         } catch (BusinessException $exception) {
             return $exception->render();
         }
@@ -181,9 +244,10 @@ class SupplierController extends Controller
             return $this->error(42200, '接口配置不完整，暂时无法同步供应商商品');
         }
 
-        $provider = $providerResolver->resolveForSupplier($supplier);
+        $runtimeSupplier = $this->supplierWithRuntimeCredentials($supplier);
+        $provider = $providerResolver->resolveForSupplier($runtimeSupplier);
         $catalogCapability = $provider->require(ProvidesConsoleCatalog::class, '当前供应商暂不支持商品同步');
-        $catalog = $catalogCapability->getProductCatalog($supplier);
+        $catalog = $catalogCapability->getProductCatalog($runtimeSupplier);
         $catalog = $this->appendLocalProductMappings($supplier, $catalog);
 
         return $this->success([
@@ -206,7 +270,7 @@ class SupplierController extends Controller
 
         $payload = $request->validated();
 
-        $result = $productCatalogService->bulkConnectSupplierProducts($supplier, $payload);
+        $result = $productCatalogService->bulkConnectSupplierProducts($this->supplierWithRuntimeCredentials($supplier), $payload);
 
         return $this->success($result, '批量对接完成');
     }
@@ -221,14 +285,15 @@ class SupplierController extends Controller
             return $this->error(42200, '接口配置不完整，暂时无法拉取商品配置');
         }
 
-        $provider = $providerResolver->resolveForSupplier($supplier);
+        $runtimeSupplier = $this->supplierWithRuntimeCredentials($supplier);
+        $provider = $providerResolver->resolveForSupplier($runtimeSupplier);
         $catalogCapability = $provider->require(ProvidesConsoleCatalog::class, '当前供应商暂不支持拉取商品配置');
-        $template = $catalogCapability->getProductConfigTemplate($supplier, $productId);
+        $template = $catalogCapability->getProductConfigTemplate($runtimeSupplier, $productId);
 
         return $this->success([
             'supplier_id' => $supplier->id,
             'supplier_name' => $supplier->name,
-            'supplier_product_id' => $productId,
+            'upstream_product_id' => $productId,
             'product' => $template['product'],
             'config_options' => $template['config_options'],
             'auto_filled_fields' => $template['auto_filled_fields'],
@@ -237,9 +302,104 @@ class SupplierController extends Controller
 
     private function canQueryProvider(Supplier $supplier): bool
     {
-        return trim((string) $supplier->api_url) !== ''
-            && trim((string) $supplier->api_username) !== ''
-            && trim((string) $supplier->api_key) !== '';
+        $binding = $this->supplierBindingProjection($supplier, includeSecrets: true);
+        $providerKey = trim((string) ($binding['provider_key'] ?? ''));
+        $descriptor = app(ProviderRegistry::class)->descriptor($providerKey);
+        $fields = (array) ($descriptor?->supplierForm['fields'] ?? []);
+        $providerConfig = (array) ($binding['provider_config'] ?? []);
+
+        foreach ($fields as $field) {
+            if (! is_array($field) || ! (bool) ($field['required'] ?? false)) {
+                continue;
+            }
+
+            $key = trim((string) ($field['key'] ?? ''));
+            $value = match ($key) {
+                'api_url' => $binding['base_url'] ?? null,
+                'api_username' => $binding['account_name'] ?? null,
+                'api_key' => $binding['api_key'] ?? null,
+                default => $providerConfig[$key] ?? null,
+            };
+
+            if (trim((string) ($value ?? '')) === '') {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function visibleProviderConfig(string $providerKey, array $providerConfig): array
+    {
+        $descriptor = app(ProviderRegistry::class)->descriptor($providerKey);
+        $fields = (array) ($descriptor?->supplierForm['fields'] ?? []);
+        $visible = [];
+
+        foreach ($fields as $field) {
+            if (! is_array($field)) {
+                continue;
+            }
+
+            $key = trim((string) ($field['key'] ?? ''));
+            if ($key === '' || in_array($key, ['api_url', 'api_username', 'api_key'], true)) {
+                continue;
+            }
+
+            $value = $providerConfig[$key] ?? null;
+            $visible[$key] = (bool) ($field['secret'] ?? false) ? '' : $value;
+        }
+
+        return $visible;
+    }
+
+    private function providerSecretValues(string $providerKey, array $providerConfig): array
+    {
+        $descriptor = app(ProviderRegistry::class)->descriptor($providerKey);
+        $fields = (array) ($descriptor?->supplierForm['fields'] ?? []);
+        $values = [];
+
+        foreach ($fields as $field) {
+            if (! is_array($field) || ! (bool) ($field['secret'] ?? false)) {
+                continue;
+            }
+
+            $key = trim((string) ($field['key'] ?? ''));
+            if ($key === '' || in_array($key, ['api_url', 'api_username', 'api_key'], true)) {
+                continue;
+            }
+
+            $values[$key] = trim((string) ($providerConfig[$key] ?? '')) !== '';
+        }
+
+        return $values;
+    }
+
+    private function upstreamBindingPayload(Supplier $supplier): ?array
+    {
+        if (! Schema::hasTable('supplier_plugin_bindings')) {
+            return null;
+        }
+
+        $binding = $this->supplierBindingProjection($supplier);
+        if ($binding === []) {
+            return null;
+        }
+
+        return [
+            'id' => (int) $binding['id'],
+            'plugin_id' => (int) $binding['plugin_id'],
+            'provider_key' => (string) $binding['provider_key'],
+            'environment' => (string) $binding['environment'],
+            'status' => (int) $binding['status'],
+            'priority' => (int) $binding['priority'],
+            'base_url' => '',
+            'has_base_url' => (bool) ($binding['has_base_url'] ?? false),
+            'account_name' => (string) ($binding['account_name'] ?? ''),
+            'has_secret_values' => is_array($binding['has_secret_values'] ?? null) ? $binding['has_secret_values'] : [],
+            'last_checked_at' => $binding['last_checked_at'] ?? null,
+            'last_check_status' => $binding['last_check_status'] ?? null,
+            'last_check_error' => $binding['last_check_error'] ?? null,
+        ];
     }
 
     private function generateInternalCode(string $interfaceType, ?int $ignoreId = null): string
@@ -274,12 +434,7 @@ class SupplierController extends Controller
             return $catalog;
         }
 
-        $localProducts = Product::withTrashed()
-            ->with(['firstProductGroup', 'secondProductGroup', 'thirdProductGroup'])
-            ->where('supplier_id', $supplier->id)
-            ->whereIn('supplier_product_id', $productIds)
-            ->get()
-            ->keyBy(fn (Product $product) => (int) ($product->supplier_product_id ?? 0));
+        $localProducts = $this->localProductsByUpstreamProductIds($supplier, $productIds);
 
         $mapProduct = function (array $item) use ($localProducts): array {
             $localProduct = $localProducts->get((int) ($item['id'] ?? 0));
@@ -328,12 +483,71 @@ class SupplierController extends Controller
         return $catalog;
     }
 
+    private function providerKeyForSupplier(Supplier $supplier): string
+    {
+        $binding = $this->supplierBindingProjection($supplier);
+
+        return trim((string) ($binding['provider_key'] ?? ''));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function supplierBindingProjection(Supplier $supplier, bool $includeSecrets = false): array
+    {
+        return app(PluginBindingResolver::class)->supplierBindingProjection($supplier, $includeSecrets);
+    }
+
+    private function supplierWithRuntimeCredentials(Supplier $supplier): Supplier
+    {
+        return app(PluginBindingResolver::class)->supplierWithRuntimeCredentials($supplier);
+    }
+
+    private function providerLabel(string $providerKey): string
+    {
+        if ($providerKey === '') {
+            return '';
+        }
+
+        return app(ProviderRegistry::class)->descriptor($providerKey)?->label ?? $providerKey;
+    }
+
+    private function localProductsByUpstreamProductIds(Supplier $supplier, array $productIds)
+    {
+        $normalizedIds = collect($productIds)
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        $bindingProducts = collect();
+        $bindingIds = $this->supplierPluginBindingIds((int) $supplier->id);
+        if (Schema::hasTable('product_upstream_bindings') && Schema::hasTable('supplier_plugin_bindings')) {
+            if ($normalizedIds !== [] && $bindingIds !== []) {
+                $bindingProducts = Product::withTrashed()
+                    ->with(['firstProductGroup', 'secondProductGroup', 'thirdProductGroup'])
+                    ->select('products.*', 'pub.upstream_product_id as binding_upstream_product_id')
+                    ->join('product_upstream_bindings as pub', 'pub.product_id', '=', 'products.id')
+                    ->whereIn('pub.supplier_plugin_binding_id', $bindingIds)
+                    ->whereIn('pub.upstream_product_id', array_map(static fn (int $id): string => (string) $id, $normalizedIds))
+                    ->orderByDesc('pub.status')
+                    ->orderByDesc('pub.id')
+                    ->get()
+                    ->keyBy(fn (Product $product) => (int) $product->getAttribute('binding_upstream_product_id'));
+            }
+
+            return $bindingProducts;
+        }
+
+        return $bindingProducts;
+    }
+
     private function supplierUsageSummary(Supplier $supplier): array
     {
         $supplierId = (int) $supplier->id;
-        $productCount = Product::withTrashed()
-            ->where('supplier_id', $supplierId)
-            ->count();
+        $bindingIds = $this->supplierPluginBindingIds($supplierId);
+        $productCount = $this->countBoundProducts($supplierId, $bindingIds);
         $serviceCount = $this->countBoundServices($supplierId);
         $serviceInstanceCount = $this->countBoundServiceInstances($supplierId);
 
@@ -345,19 +559,57 @@ class SupplierController extends Controller
         ];
     }
 
+    /**
+     * @return array<int, int>
+     */
+    private function supplierPluginBindingIds(int $supplierId): array
+    {
+        if ($supplierId <= 0 || ! Schema::hasTable('supplier_plugin_bindings')) {
+            return [];
+        }
+
+        return DB::table('supplier_plugin_bindings')
+            ->where('supplier_id', $supplierId)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<int, int>  $bindingIds
+     */
+    private function countBoundProducts(int $supplierId, array $bindingIds): int
+    {
+        $productIds = collect();
+
+        if ($bindingIds !== [] && Schema::hasTable('product_upstream_bindings')) {
+            $productIds = $productIds->merge(
+                DB::table('product_upstream_bindings')
+                    ->whereIn('supplier_plugin_binding_id', $bindingIds)
+                    ->pluck('product_id')
+                    ->map(fn ($id) => (int) $id)
+            );
+        }
+
+        return $productIds
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->count();
+    }
+
     private function countBoundServices(int $supplierId): int
     {
-        if (! Schema::hasTable('services') || ! Schema::hasColumn('services', 'provision_data')) {
+        $bindingIds = $this->supplierPluginBindingIds($supplierId);
+        if ($bindingIds === [] || ! Schema::hasTable('service_upstream_bindings')) {
             return 0;
         }
 
-        return (int) DB::table('services')
-            ->where(function ($query) use ($supplierId) {
-                $query
-                    ->where('provision_data->supplier_id', $supplierId)
-                    ->orWhere('provision_data->supplier_id', (string) $supplierId);
-            })
-            ->count();
+        return (int) DB::table('service_upstream_bindings')
+            ->whereIn('supplier_plugin_binding_id', $bindingIds)
+            ->distinct()
+            ->count('service_id');
     }
 
     private function countBoundServiceInstances(int $supplierId): int

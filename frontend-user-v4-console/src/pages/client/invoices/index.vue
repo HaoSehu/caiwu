@@ -187,24 +187,24 @@ const columns: PrimaryTableCol[] = [
   { colKey: 'operation', title: '操作', width: '10rem', fixed: 'right', align: 'right' },
 ];
 
-function paymentRecord(row: Record<string, any>) {
+function paymentRecord(row: InvoiceRecord): Record<string, unknown> {
   return row.payment_summary && typeof row.payment_summary === 'object' ? row.payment_summary : {};
 }
 
-function paymentRecordNo(row: Record<string, any>) {
+function paymentRecordNo(row: InvoiceRecord) {
   const payment = paymentRecord(row);
-  return payment.payment_no || '--';
+  return String(payment.payment_no || '--');
 }
 
-function paymentTradeNo(row: Record<string, any>) {
+function paymentTradeNo(row: InvoiceRecord) {
   const payment = paymentRecord(row);
-  return payment.trade_no || '--';
+  return String(payment.trade_no || '--');
 }
 
-function paymentRecordSummary(row: Record<string, any>) {
+function paymentRecordSummary(row: InvoiceRecord) {
   const payment = paymentRecord(row);
-  const parts = [payment.gateway].filter(Boolean);
-  return parts.length ? parts.join(' / ') : '--';
+  const parts = [payment.gateway_label || payment.gateway_key || payment.gateway].filter(Boolean);
+  return parts.length ? parts.map((item) => String(item)).join(' / ') : '--';
 }
 </script>
 

@@ -79,14 +79,12 @@ const { menu, showLogo, isFixed, layout, theme, isCompact } = defineProps({
   },
 });
 
-const EXPANDED_LOGO_SRC = '/uploads/logo/logo.svg';
-const COLLAPSED_LOGO_SRC = '/uploads/logo/logo1.svg';
-
 const settingStore = useSettingStore();
+const siteBranding = useSiteBrandingStore();
 const { isMobile, isTablet } = useDeviceLayout();
 const collapsed = computed(() => (isMobile.value ? false : settingStore.isSidebarCompact));
 const menuAutoCollapsed = computed(() => settingStore.menuAutoCollapsed);
-const brandLogoSrc = computed(() => (collapsed.value ? COLLAPSED_LOGO_SRC : EXPANDED_LOGO_SRC));
+const brandLogoSrc = computed(() => siteBranding.clientConsoleIcon || siteBranding.siteLogo);
 
 const active = computed(() => getActive());
 
@@ -156,7 +154,6 @@ const menuCls = computed(() => {
 });
 
 const router = useRouter();
-const siteBranding = useSiteBrandingStore();
 
 // 响应式断点驱动侧边栏状态：平板自动收起，手机用抽屉，PC 保持展开
 watch(

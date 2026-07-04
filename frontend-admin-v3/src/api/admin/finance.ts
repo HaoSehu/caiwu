@@ -46,9 +46,9 @@ export const financeMenuApi = {
       url: '/admin/finance/renewal-orders',
       params,
     }),
-  addonOrders: (params: OrderListParams) =>
+  upgradeOrders: (params: OrderListParams) =>
     request.get<{ list?: OrderRecord[]; total?: number; page?: number; page_size?: number }>({
-      url: '/admin/finance/addon-orders',
+      url: '/admin/finance/upgrade-orders',
       params,
     }),
 };

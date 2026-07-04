@@ -11,6 +11,8 @@ final class PaymentGatewayCode
 {
     public const ALIPAY = 'alipay';
 
+    public const YIPAY = 'yipay';
+
     public const BALANCE = 'balance';
 
     public const WECHAT = 'wechat';
@@ -25,12 +27,14 @@ final class PaymentGatewayCode
 
     public const THIRD_PARTY_GATEWAYS = [
         self::ALIPAY,
+        self::YIPAY,
         self::WECHAT,
         self::STRIPE,
     ];
 
     public const LABELS = [
         self::ALIPAY => '支付宝支付',
+        self::YIPAY => '易支付',
         self::BALANCE => '余额支付',
         self::WECHAT => '微信支付',
         self::STRIPE => 'Stripe 支付',
@@ -41,6 +45,17 @@ final class PaymentGatewayCode
     public static function label(string $gateway): string
     {
         return self::LABELS[$gateway] ?? $gateway;
+    }
+
+    public static function normalize(string $gateway): string
+    {
+        $gateway = trim($gateway);
+
+        return match ($gateway) {
+            self::ALIPAY_F2F_PLUGIN, 'ali_pay' => self::ALIPAY,
+            'yi_pay' => self::YIPAY,
+            default => $gateway,
+        };
     }
 
     public static function thirdPartyGateways(): array

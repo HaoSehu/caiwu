@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Sms;
 
 use App\Exceptions\BusinessException;
-use App\Models\Setting;
+use App\Services\Integrations\Plugins\IntegrationDriverBindingResolver;
 use App\Services\Sms\Contracts\SmsDriver;
 use InvalidArgumentException;
 
@@ -19,8 +19,10 @@ final class SmsDriverManager
      *
      * @param  iterable<int, SmsDriver>  $drivers
      */
-    public function __construct(iterable $drivers = [])
-    {
+    public function __construct(
+        iterable $drivers = [],
+        private ?IntegrationDriverBindingResolver $bindingResolver = null,
+    ) {
         foreach ($drivers as $driver) {
             $this->register($driver);
         }
@@ -43,7 +45,16 @@ final class SmsDriverManager
 
     public function resolve(?string $key = null): SmsDriver
     {
-        $resolvedKey = $key ?? $this->getConfiguredKey();
+        $resolvedKey = trim((string) ($key ?? ''));
+        if ($resolvedKey === '') {
+            foreach ($this->bindingResolver()->smsDriverCandidates() as $candidate) {
+                if (isset($this->drivers[$candidate])) {
+                    return $this->drivers[$candidate];
+                }
+            }
+
+            $resolvedKey = $this->getConfiguredKey();
+        }
 
         if (isset($this->drivers[$resolvedKey])) {
             return $this->drivers[$resolvedKey];
@@ -65,18 +76,11 @@ final class SmsDriverManager
 
     private function getConfiguredKey(): string
     {
-        $key = trim((string) Setting::getValue('notification', 'sms_driver', ''));
+        return $this->bindingResolver()->smsDriverKey();
+    }
 
-        if ($key === '') {
-            $key = trim((string) Setting::getValue('notification', 'sms_provider', ''));
-        }
-
-        if ($key !== '') {
-            return $key;
-        }
-
-        $default = trim((string) config('integrations.sms.default', 'aliyun'));
-
-        return $default !== '' ? $default : 'aliyun';
+    private function bindingResolver(): IntegrationDriverBindingResolver
+    {
+        return $this->bindingResolver ??= app(IntegrationDriverBindingResolver::class);
     }
 }

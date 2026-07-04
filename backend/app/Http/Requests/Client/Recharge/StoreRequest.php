@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Client\Recharge;
 
+use App\Constants\PaymentGatewayCode;
 use App\Http\Requests\Client\Common\ClientFormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreRequest extends ClientFormRequest
 {
@@ -10,6 +12,7 @@ class StoreRequest extends ClientFormRequest
     {
         return [
             'amount' => ['required', 'numeric', 'min:1', 'max:50000'],
+            'gateway' => ['nullable', 'string', Rule::in(PaymentGatewayCode::thirdPartyGateways())],
         ];
     }
 }

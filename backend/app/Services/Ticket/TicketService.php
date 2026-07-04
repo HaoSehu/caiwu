@@ -13,6 +13,7 @@ use App\Models\Service;
 use App\Models\Ticket;
 use App\Models\TicketReply;
 use App\Services\ClientServiceConsole\ServiceTransformService;
+use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\Notification\UserNotificationService;
 use App\Services\System\NotificationService;
 use App\Services\System\UploadedAssetReferenceService;
@@ -397,8 +398,28 @@ class TicketService
             $query->where(function ($builder) use ($keyword) {
                 $builder->where('name', 'like', '%'.$keyword.'%')
                     ->orWhere('domain', 'like', '%'.$keyword.'%')
-                    ->orWhere('id', $keyword)
-                    ->orWhere('provision_data->requested_host', 'like', '%'.$keyword.'%');
+                    ->orWhere('id', $keyword);
+
+                if (self::tableExists('service_connection_snapshots')) {
+                    $likeKeyword = '%'.$keyword.'%';
+                    $builder->orWhereExists(function ($subQuery) use ($likeKeyword): void {
+                        $subQuery
+                            ->selectRaw('1')
+                            ->from('service_connection_snapshots as scs')
+                            ->whereColumn('scs.service_id', 'services.id')
+                            ->where(function ($connectionQuery) use ($likeKeyword): void {
+                                $connectionQuery
+                                    ->where('scs.hostname', 'like', $likeKeyword)
+                                    ->orWhere('scs.ip_address', 'like', $likeKeyword)
+                                    ->orWhere('scs.connection_json->requested_host', 'like', $likeKeyword)
+                                    ->orWhere('scs.connection_json->custom_hostname', 'like', $likeKeyword)
+                                    ->orWhere('scs.connection_json->username', 'like', $likeKeyword)
+                                    ->orWhere('scs.connection_json->internal_ip', 'like', $likeKeyword);
+                            });
+                    });
+                } else {
+                    $builder->orWhere('provision_data->requested_host', 'like', '%'.$keyword.'%');
+                }
             });
         }
 
@@ -410,7 +431,7 @@ class TicketService
                 'name' => $this->resolveServiceDisplayName($service),
                 'service_name' => trim((string) $service->name),
                 'product_name' => trim((string) ($service->product?->name ?? '')),
-                'domain' => ServiceHostname::resolveDisplayDomain($service, (array) ($service->provision_data ?? [])),
+                'domain' => ServiceHostname::resolveDisplayDomain($service, $this->serviceProvisionData($service)),
                 'status' => (int) $service->status,
                 'status_label' => ServiceStatus::$labels[(int) $service->status] ?? (string) $service->status,
             ])
@@ -871,7 +892,7 @@ class TicketService
     private function resolveLinkedServicePayload(Service $service): array
     {
         $service->loadMissing('product');
-        $provisionData = (array) ($service->provision_data ?? []);
+        $provisionData = $this->serviceProvisionData($service, includeSecrets: true);
         $cachedConnection = $this->serviceTransformService->readCachedConnection($provisionData);
         $connection = [
             'dedicated_ip' => trim((string) ($provisionData['dedicated_ip'] ?? ($cachedConnection['hostname'] ?? ''))),
@@ -892,6 +913,17 @@ class TicketService
             'connection' => $connection,
             'specs' => is_array($specs) ? $specs : [],
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serviceProvisionData(Service $service, bool $includeSecrets = false): array
+    {
+        $legacy = is_array($service->provision_data ?? null) ? $service->provision_data : [];
+        $projection = app(PluginBindingResolver::class)->serviceProvisionProjection($service, $includeSecrets);
+
+        return $projection === [] ? $legacy : array_replace($legacy, $projection);
     }
 
     private function formatReply(TicketReply $reply, string $senderName): array

@@ -10,6 +10,9 @@ class EmailLog extends Model
 {
     protected $fillable = [
         'template_code',
+        'plugin_id',
+        'driver_key',
+        'trace_id',
         'to_email',
         'subject',
         'content',
@@ -20,6 +23,7 @@ class EmailLog extends Model
 
     protected $casts = [
         'sent_at' => 'datetime',
+        'plugin_id' => 'integer',
     ];
 
     protected static function booted(): void
@@ -35,26 +39,40 @@ class EmailLog extends Model
             return;
         }
 
+        $payload = [
+            'channel' => 'email',
+            'recipient' => trim((string) ($this->to_email ?? '')),
+            'template_code' => trim((string) ($this->template_code ?? '')) ?: null,
+            'subject' => trim((string) ($this->subject ?? '')) ?: null,
+            'content' => (string) ($this->content ?? ''),
+            'params_json' => null,
+            'provider' => null,
+            'request_id' => null,
+            'status' => trim((string) ($this->status ?? 'pending')),
+            'error_msg' => trim((string) ($this->error_msg ?? '')) ?: null,
+            'sent_at' => $this->sent_at,
+            'created_at' => $this->created_at ?? now(),
+            'updated_at' => $this->updated_at ?? now(),
+        ];
+
+        if (Schema::hasColumn('notification_logs', 'plugin_id')) {
+            $payload['plugin_id'] = $this->plugin_id;
+        }
+
+        if (Schema::hasColumn('notification_logs', 'driver_key')) {
+            $payload['driver_key'] = trim((string) ($this->driver_key ?? '')) ?: null;
+        }
+
+        if (Schema::hasColumn('notification_logs', 'trace_id')) {
+            $payload['trace_id'] = trim((string) ($this->trace_id ?? '')) ?: null;
+        }
+
         DB::table('notification_logs')->updateOrInsert(
             [
                 'origin_type' => 'email_log',
                 'origin_id' => (int) $this->id,
             ],
-            [
-                'channel' => 'email',
-                'recipient' => trim((string) ($this->to_email ?? '')),
-                'template_code' => trim((string) ($this->template_code ?? '')) ?: null,
-                'subject' => trim((string) ($this->subject ?? '')) ?: null,
-                'content' => (string) ($this->content ?? ''),
-                'params_json' => null,
-                'provider' => null,
-                'request_id' => null,
-                'status' => trim((string) ($this->status ?? 'pending')),
-                'error_msg' => trim((string) ($this->error_msg ?? '')) ?: null,
-                'sent_at' => $this->sent_at,
-                'created_at' => $this->created_at ?? now(),
-                'updated_at' => $this->updated_at ?? now(),
-            ]
+            $payload
         );
     }
 }

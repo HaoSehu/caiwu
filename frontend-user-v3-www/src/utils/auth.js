@@ -4,6 +4,8 @@ import {
   removeClientToken,
   isClientLoggedIn,
   isClientSessionExpired,
+  initClientSessionActivityTracking,
+  touchClientSessionActivity,
 } from '@/app/runtime/session'
 
 export function getToken() {
@@ -31,7 +33,9 @@ export function getUserType() {
 }
 
 export function touchSessionActivity() {
+  touchClientSessionActivity()
 }
 
 export function initSessionActivityTracking() {
+  initClientSessionActivityTracking()
 }

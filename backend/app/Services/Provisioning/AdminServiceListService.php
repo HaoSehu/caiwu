@@ -8,15 +8,19 @@ use App\Constants\ServiceStatus;
 use App\Models\Invoice;
 use App\Models\Product;
 use App\Models\Service;
+use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Support\ServiceHostname;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class AdminServiceListService
 {
     public function __construct(
         private readonly ?ProductDisplayNameResolver $productDisplayNameResolver = null,
+        private ?PluginBindingResolver $bindingResolver = null,
     ) {}
 
     /**
@@ -82,7 +86,7 @@ class AdminServiceListService
 
     private function transform(Service $service): array
     {
-        $provisionData = (array) ($service->provision_data ?? []);
+        $provisionData = $this->serviceProvisionData($service, includeSecrets: true);
         $connection = $this->resolveConnection($provisionData);
         $hostIps = $this->resolveHostIps($provisionData, $connection);
         $statusLabels = ServiceStatus::$labels ?? [];
@@ -151,7 +155,13 @@ class AdminServiceListService
             ? (array) $provisionData['connection']
             : [];
         $secretConnection = $this->readConnectionSecret($provisionData);
-        $connection = array_merge($secretConnection, $plainConnection);
+        $snapshotConnection = [
+            'hostname' => $provisionData['hostname'] ?? ($provisionData['connection_cached_hostname'] ?? ''),
+            'username' => $provisionData['username'] ?? '',
+            'internal_ip' => $provisionData['internal_ip'] ?? '',
+            'port' => $provisionData['port'] ?? ($provisionData['nat_remote_port'] ?? 0),
+        ];
+        $connection = array_merge($snapshotConnection, $secretConnection, $plainConnection);
 
         return [
             'hostname' => trim((string) ($connection['hostname'] ?? '')),
@@ -193,32 +203,14 @@ class AdminServiceListService
     {
         $likeKeyword = '%'.$keyword.'%';
         $numericKeyword = $this->extractNumericKeyword($keyword);
-        $provisionDataFields = [
-            'provision_data->requested_host',
-            'provision_data->custom_hostname',
-            'provision_data->default_service_name',
-            'provision_data->custom_service_name',
-            'provision_data->upstream_host_id',
-            'provision_data->upstream_host_ids',
-            'provision_data->dedicated_ip',
-            'provision_data->assigned_ips',
-            'provision_data->internal_ip',
-            'provision_data->nat_remote_address',
-            'provision_data->nat_remote_host',
-            'provision_data->username',
-            'provision_data->os',
-            'provision_data->connection->hostname',
-            'provision_data->connection->username',
-            'provision_data->connection->internal_ip',
-        ];
 
-        $query->where(function (Builder $builder) use ($keyword, $likeKeyword, $numericKeyword, $provisionDataFields) {
+        $query->where(function (Builder $builder) use ($keyword, $likeKeyword, $numericKeyword) {
             $builder->where('name', 'like', $likeKeyword)
                 ->orWhere('domain', 'like', $likeKeyword);
 
-            $connectionMatchedServiceIds = $this->resolveConnectionMatchedServiceIds($keyword);
-            if ($connectionMatchedServiceIds !== []) {
-                $builder->orWhereIn('id', $connectionMatchedServiceIds);
+            $snapshotMatchedServiceIds = $this->resolveSnapshotMatchedServiceIds($keyword);
+            if ($snapshotMatchedServiceIds !== []) {
+                $builder->orWhereIn('id', $snapshotMatchedServiceIds);
             }
 
             if ($numericKeyword !== null) {
@@ -226,10 +218,6 @@ class AdminServiceListService
                     ->orWhere('user_id', $numericKeyword)
                     ->orWhere('order_id', $numericKeyword)
                     ->orWhere('invoice_id', $numericKeyword);
-            }
-
-            foreach ($provisionDataFields as $field) {
-                $builder->orWhere($field, 'like', $likeKeyword);
             }
 
             $builder
@@ -302,29 +290,50 @@ class AdminServiceListService
         return (int) $matches[1];
     }
 
-    private function resolveConnectionMatchedServiceIds(string $keyword): array
+    private function resolveSnapshotMatchedServiceIds(string $keyword): array
     {
-        return Service::query()
-            ->select(['id', 'provision_data'])
-            ->whereNotNull('provision_data')
-            ->where('provision_data->connection_secret', '!=', '')
-            ->latest('id')
-            ->limit(500)
-            ->get()
-            ->filter(function (Service $service) use ($keyword): bool {
-                $connection = $this->readConnectionSecret((array) ($service->provision_data ?? []));
-                if ($connection === []) {
-                    return false;
-                }
+        $likeKeyword = '%'.$keyword.'%';
+        $ids = collect();
 
-                return collect([
-                    $connection['hostname'] ?? '',
-                    $connection['username'] ?? '',
-                    $connection['internal_ip'] ?? '',
-                    $connection['port'] ?? '',
-                ])->contains(fn ($value) => stripos((string) $value, $keyword) !== false);
+        $ids = $ids->merge(DB::table('service_upstream_bindings')
+            ->where(function ($query) use ($likeKeyword): void {
+                $query->where('upstream_service_id', 'like', $likeKeyword)
+                    ->orWhere('upstream_account_id', 'like', $likeKeyword)
+                    ->orWhere('status_snapshot', 'like', $likeKeyword)
+                    ->orWhere('runtime_snapshot_json', 'like', $likeKeyword)
+                    ->orWhere('connection_snapshot_json', 'like', $likeKeyword);
             })
-            ->map(fn (Service $service) => (int) $service->id)
+            ->limit(500)
+            ->pluck('service_id'));
+
+        if (Schema::hasTable('service_runtime_snapshots')) {
+            $ids = $ids->merge(DB::table('service_runtime_snapshots')
+                ->where(function ($query) use ($likeKeyword): void {
+                    $query->where('status_key', 'like', $likeKeyword)
+                        ->orWhere('status_text', 'like', $likeKeyword)
+                        ->orWhere('resource_json', 'like', $likeKeyword)
+                        ->orWhere('metrics_json', 'like', $likeKeyword)
+                        ->orWhere('snapshot_json', 'like', $likeKeyword);
+                })
+                ->limit(500)
+                ->pluck('service_id'));
+        }
+
+        if (Schema::hasTable('service_connection_snapshots')) {
+            $ids = $ids->merge(DB::table('service_connection_snapshots')
+                ->where(function ($query) use ($likeKeyword): void {
+                    $query->where('hostname', 'like', $likeKeyword)
+                        ->orWhere('ip_address', 'like', $likeKeyword)
+                        ->orWhere('connection_json', 'like', $likeKeyword);
+                })
+                ->limit(500)
+                ->pluck('service_id'));
+        }
+
+        return $ids
+            ->map(fn ($id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
             ->values()
             ->all();
     }
@@ -372,6 +381,19 @@ class AdminServiceListService
     private function resolveProductDisplayNameResolver(): ProductDisplayNameResolver
     {
         return $this->productDisplayNameResolver ?? new ProductDisplayNameResolver;
+    }
+
+    private function serviceProvisionData(Service $service, bool $includeSecrets = false): array
+    {
+        $legacy = is_array($service->provision_data ?? null) ? $service->provision_data : [];
+        $projection = $this->bindingResolver()->serviceProvisionProjection($service, $includeSecrets);
+
+        return $projection === [] ? $legacy : array_replace($legacy, $projection);
+    }
+
+    private function bindingResolver(): PluginBindingResolver
+    {
+        return $this->bindingResolver ??= app(PluginBindingResolver::class);
     }
 
     private function resolvePrimaryInvoice(Service $service): ?Invoice

@@ -16,9 +16,7 @@ class SettingsSeeder
     public static function seed(): void
     {
         static::seedGroup('system', [
-            'geetest_enabled' => '1',
-            'geetest_captcha_id' => '',
-            'geetest_captcha_key' => '',
+            'captcha_enabled' => '1',
             'provision_hostname_enforce' => '0',
             'provision_hostname_prefix' => 'srv',
             'provision_hostname_charsets' => 'number',
@@ -30,6 +28,7 @@ class SettingsSeeder
             'browser_title' => '创欧云 - 云计算服务平台',
             'site_logo' => '',
             'site_favicon' => '',
+            'client_console_icon' => '',
             'service_phone' => '',
             'service_email' => '',
             'service_hours' => '',
@@ -39,45 +38,16 @@ class SettingsSeeder
             'privacy_url' => '',
         ]);
 
-        static::seedGroup('payment', [
-            'alipay_enabled' => '0',
-            'alipay_name' => '支付宝支付',
-            'alipay_app_id' => '',
-            'alipay_private_key' => '',
-            'alipay_public_key' => '',
-        ]);
-
         static::seedGroup('notification', [
             'email_enabled' => '0',
-            'email_host' => '',
-            'email_port' => '465',
-            'email_username' => '',
-            'email_password' => '',
-            'email_from_name' => '创欧云',
             'sms_enabled' => '0',
-            'sms_driver' => 'aliyun',
-            'sms_provider' => 'aliyun',
-            'sms_access_key' => '',
-            'sms_secret_key' => '',
-            'sms_sign_name' => '',
-            'sms_template_code' => '',
-        ]);
-
-        static::seedGroup('verification', [
-            'verification_api' => '',
-            'verification_biz_code' => '',
-            'verification_key' => '',
         ]);
 
         static::seedGroup('message_limit', [
             'email_rate_limit_enabled' => '1',
-            'email_cooldown_seconds' => '60',
-            'email_target_hourly_limit' => '10',
-            'email_ip_hourly_limit' => '20',
+            'email_ip_minute_limit' => '6',
             'sms_rate_limit_enabled' => '1',
-            'sms_cooldown_seconds' => '60',
-            'sms_target_hourly_limit' => '10',
-            'sms_ip_hourly_limit' => '20',
+            'sms_ip_minute_limit' => '6',
         ]);
 
         static::seedGroup('automation', [

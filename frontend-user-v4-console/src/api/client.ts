@@ -4,6 +4,7 @@ import request from '@/utils/request';
 import type {
   ApiEnvelope,
   BalanceLog,
+  ClientFinanceListParams,
   ConsoleSelectOption,
   ConsoleServiceDetail,
   ContentDetailPayload,
@@ -53,7 +54,6 @@ import type {
   TicketImageUploadPayload,
   TicketRecord,
   TicketServiceOption,
-  ToolActionPayload,
 } from '@/types/client';
 
 import {
@@ -169,8 +169,8 @@ const clientApi = {
   rechargeStatus: (paymentNo: string, params?: QueryParams) =>
     getEnvelope<RechargeStatusPayload>(`/client/recharge/${paymentNo}/status`, { params }),
 
-  invoices: (params?: QueryParams) => getEnvelope<PagedList<InvoiceRecord>>('/client/invoices', { params }),
-  invoicesSummary: (params?: QueryParams) => getEnvelope<InvoiceListSummary>('/client/invoices/summary', { params }),
+  invoices: (params?: ClientFinanceListParams) => getEnvelope<PagedList<InvoiceRecord>>('/client/invoices', { params }),
+  invoicesSummary: (params?: ClientFinanceListParams) => getEnvelope<InvoiceListSummary>('/client/invoices/summary', { params }),
   createInvoice: (data: Record<string, unknown>, config?: Record<string, unknown>) =>
     postEnvelope<InvoiceCreatePayload>('/client/invoices', data, config),
   invoiceDetail: (id: number | string) => getEnvelope<InvoiceRecord>(`/client/invoices/${id}`),
@@ -184,12 +184,12 @@ const clientApi = {
   queryInvoiceAlipayStatus: (id: number | string, params?: QueryParams) =>
     getEnvelope<InvoiceAlipayStatusPayload>(`/client/invoices/${id}/pay/alipay/status`, { params }),
 
-  payments: (params?: QueryParams) => getEnvelope<PagedList<PaymentRecord>>('/client/payments', { params }),
-  paymentsSummary: (params?: QueryParams) => request.get('/client/payments/summary', { params }),
+  payments: (params?: ClientFinanceListParams) => getEnvelope<PagedList<PaymentRecord>>('/client/payments', { params }),
+  paymentsSummary: (params?: ClientFinanceListParams) => request.get('/client/payments/summary', { params }),
   paymentDetail: (id: number | string) => getEnvelope<PaymentRecord>(`/client/payments/${id}`),
 
-  orders: (params?: QueryParams) => getEnvelope<PagedList<OrderRecord>>('/client/orders', { params }),
-  orderSummary: (params?: QueryParams) => getEnvelope<OrderListSummary>('/client/orders/summary', { params }),
+  orders: (params?: ClientFinanceListParams) => getEnvelope<PagedList<OrderRecord>>('/client/orders', { params }),
+  orderSummary: (params?: ClientFinanceListParams) => getEnvelope<OrderListSummary>('/client/orders/summary', { params }),
   orderDetail: (id: number | string) => getEnvelope<OrderRecord>(`/client/orders/${id}`),
   cancelOrder: (id: number | string) => request.post(`/client/orders/${id}/cancel`),
 
@@ -247,15 +247,6 @@ const clientApi = {
       withNormalizedData<ContentDetailPayload>(response, normalizeContentDetailPayload),
     ),
 
-  blackholeQuery: (data: Record<string, unknown>) => postEnvelope<ToolActionPayload>('/client/blackhole/query', data),
-  blackholeAddNingboWhitelist: (data: Record<string, unknown>) =>
-    postEnvelope<ToolActionPayload>('/client/blackhole/ningbo/whitelist', data),
-  blackholeToggleShiyanLayer7Rule: (data: Record<string, unknown>) =>
-    postEnvelope<ToolActionPayload>('/client/blackhole/shiyan/layer7/toggle', data),
-  blackholeAddShiyanLayer4Rule: (data: Record<string, unknown>) =>
-    postEnvelope<ToolActionPayload>('/client/blackhole/shiyan/layer4/add', data),
-  blackholeDeleteShiyanLayer4Rule: (data: Record<string, unknown>) =>
-    postEnvelope<ToolActionPayload>('/client/blackhole/shiyan/layer4/delete', data),
 };
 
 export default clientApi;

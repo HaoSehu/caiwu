@@ -10,7 +10,7 @@ export const marketingRoutes: RouteRecordRaw[] = [
         zh_CN: '会员等级',
         en_US: 'Member Levels',
       },
-      permission: 'member_level.manage',
+      permission: 'member_level.list',
     },
   },
   {
@@ -22,7 +22,7 @@ export const marketingRoutes: RouteRecordRaw[] = [
         zh_CN: '优惠券',
         en_US: 'Coupons',
       },
-      permission: 'product.manage',
+      permission: 'product.list',
     },
   },
   {
@@ -34,7 +34,7 @@ export const marketingRoutes: RouteRecordRaw[] = [
         zh_CN: '活动券',
         en_US: 'Coupon Campaigns',
       },
-      permission: 'product.manage',
+      permission: 'product.list',
       hidden: true,
     },
   },

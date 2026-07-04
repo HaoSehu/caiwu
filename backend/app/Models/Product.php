@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 
@@ -36,8 +38,8 @@ class Product extends Model
         'custom_display_name', 'remark',
         'pricing',
         'setup_fee', 'config_options', 'purchase_requires', 'stock', 'status',
-        'sort_order', 'provision_module', 'auto_setup',
-        'supplier_id', 'supplier_product_id', 'supplier_product_name',
+        'sort_order', 'auto_setup',
+        'supplier_product_name',
     ];
 
     protected function casts(): array
@@ -54,8 +56,6 @@ class Product extends Model
             'first_product_group_id' => 'integer',
             'second_product_group_id' => 'integer',
             'third_product_group_id' => 'integer',
-            'supplier_id' => 'integer',
-            'supplier_product_id' => 'integer',
         ];
     }
 
@@ -95,11 +95,6 @@ class Product extends Model
         return $this->decodeJsonArrayAttribute($value);
     }
 
-    public function getSupplierProductIdAttribute(mixed $value): ?int
-    {
-        return $value === null ? null : (int) $value;
-    }
-
     public function getSupplierProductNameAttribute(mixed $value): ?string
     {
         $normalized = trim((string) $value);
@@ -119,6 +114,19 @@ class Product extends Model
         $normalized = trim((string) $value);
 
         return $normalized === '' ? null : $normalized;
+    }
+
+    public function getSupplierAttribute(): ?Supplier
+    {
+        if ((int) ($this->attributes['id'] ?? 0) <= 0) {
+            return null;
+        }
+
+        try {
+            return app(PluginBindingResolver::class)->supplierForProduct($this);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     public function setNameAttribute(mixed $value): void
@@ -180,9 +188,9 @@ class Product extends Model
         return $this->belongsTo(ThirdProductGroup::class, 'third_product_group_id');
     }
 
-    public function supplier(): BelongsTo
+    public function supplier(): HasOne
     {
-        return $this->belongsTo(Supplier::class, 'supplier_id');
+        return $this->hasOne(Supplier::class, 'id', 'id')->whereRaw('1 = 0');
     }
 
     public function orders(): HasMany
@@ -193,6 +201,11 @@ class Product extends Model
     public function services(): HasMany
     {
         return $this->hasMany(Service::class);
+    }
+
+    public function upstreamBindings(): HasMany
+    {
+        return $this->hasMany(ProductUpstreamBinding::class, 'product_id');
     }
 
     public function scopeOnSale($query)
@@ -318,10 +331,7 @@ class Product extends Model
         $setIfColumnExists('stock', (int) ($product->stock ?? -1));
         $setIfColumnExists('status', (int) ($product->status ?? 1));
         $setIfColumnExists('sort_order', (int) ($product->sort_order ?? 0));
-        $setIfColumnExists('provision_module', $product->provision_module);
         $setIfColumnExists('auto_setup', (int) ($product->auto_setup ?? 0));
-        $setIfColumnExists('supplier_id', $product->supplier_id);
-        $setIfColumnExists('supplier_product_id', $product->supplier_product_id);
         $setIfColumnExists('supplier_product_name', $product->supplier_product_name);
         $setIfColumnExists('deleted_at', null);
         $setIfColumnExists('created_at', $product->created_at ?? now());

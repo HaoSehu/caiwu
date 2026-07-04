@@ -5,8 +5,10 @@ namespace App\Console\Commands;
 use App\Models\Service;
 use App\Models\Supplier;
 use App\Services\ClientServiceConsole\ClientServiceConsoleService;
+use App\Services\Integrations\Plugins\PluginBindingResolver;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Throwable;
 
 class SyncUpstreamServicesCommand extends Command
@@ -18,16 +20,30 @@ class SyncUpstreamServicesCommand extends Command
 
     protected $description = '批量从上游拉取服务最新状态（IP、运行状态等）并同步到本地';
 
-    public function handle(ClientServiceConsoleService $consoleService): int
+    public function handle(ClientServiceConsoleService $consoleService, PluginBindingResolver $bindingResolver): int
     {
         $dryRun = (bool) $this->option('dry-run');
         $delayMs = max(0, (int) $this->option('delay'));
         $idsRaw = trim((string) $this->option('service-ids'));
 
         $query = Service::query()
-            ->with(['product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,config_options,purchase_requires', 'product.supplier'])
-            ->whereNotNull('provision_data->upstream_host_id')
-            ->where('provision_data->upstream_host_id', '<>', '');
+            ->with(['product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires'])
+            ->where(function ($builder): void {
+                if (Schema::hasTable('service_upstream_bindings')) {
+                    $builder->whereExists(function ($subQuery): void {
+                        $subQuery
+                            ->selectRaw('1')
+                            ->from('service_upstream_bindings as sub')
+                            ->whereColumn('sub.service_id', 'services.id')
+                            ->whereNotNull('sub.upstream_service_id')
+                            ->where('sub.upstream_service_id', '<>', '');
+                    });
+
+                    return;
+                }
+
+                $builder->whereRaw('1 = 0');
+            });
 
         if ($idsRaw !== '') {
             $ids = array_filter(array_map('intval', explode(',', $idsRaw)));
@@ -51,14 +67,15 @@ class SyncUpstreamServicesCommand extends Command
 
         if ($dryRun) {
             $headers = ['ID', '名称', 'upstream_host_id', '供应商'];
-            $rows = $services->map(function (Service $s) {
-                $pd = (array) ($s->provision_data ?? []);
+            $rows = $services->map(function (Service $s) use ($bindingResolver) {
+                $supplier = $bindingResolver->supplierForService($s)
+                    ?? ($s->product ? $bindingResolver->supplierForProduct($s->product) : null);
 
                 return [
                     $s->id,
                     $s->name,
-                    $pd['upstream_host_id'] ?? $pd['upstream_service_id'] ?? '-',
-                    $s->product?->supplier?->name ?? '-',
+                    $bindingResolver->upstreamServiceIdForService($s) ?? '-',
+                    $supplier instanceof Supplier ? ($supplier->name ?? '-') : '-',
                 ];
             })->all();
             $this->table($headers, $rows);
@@ -71,9 +88,9 @@ class SyncUpstreamServicesCommand extends Command
         $skipped = 0;
 
         foreach ($services as $service) {
-            $provisionData = (array) ($service->provision_data ?? []);
-            $hostId = (int) (($provisionData['upstream_host_id'] ?? $provisionData['upstream_service_id'] ?? 0) ?: 0);
-            $supplier = $service->product?->supplier;
+            $hostId = (int) (($bindingResolver->upstreamServiceIdForService($service) ?? '') ?: 0);
+            $supplier = $bindingResolver->supplierForService($service)
+                ?? ($service->product ? $bindingResolver->supplierForProduct($service->product) : null);
 
             if (! $supplier instanceof Supplier) {
                 $this->warn("  [跳过] 服务 #{$service->id}（{$service->name}）：供应商不存在");

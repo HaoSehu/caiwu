@@ -4,6 +4,7 @@ namespace App\Services\Provisioning;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
+use App\Constants\OrderType;
 use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
 use App\Models\Invoice;
@@ -15,13 +16,14 @@ use App\Models\User;
 use App\Services\Finance\CheckoutService;
 use App\Services\Finance\CouponService;
 use App\Services\Finance\InvoiceService;
+use App\Services\Integrations\Plugins\PluginBindingResolver;
+use App\Services\Integrations\Plugins\ServiceUpstreamBindingWriter;
 use App\Services\Integrations\Support\ProviderErrorMapper;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\System\NotificationService;
 use App\Services\System\OperationLogService;
 use App\Services\System\SettingService;
 use App\Services\Upstream\Contracts\ProvidesRenewal;
-use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderResolver;
 use App\Support\SensitiveDataSanitizer;
 use Carbon\Carbon;
@@ -44,6 +46,8 @@ class ServiceRenewService
 
     private const RENEW_FULFILLMENT_FAILED = 'failed';
 
+    private const RENEW_ATTEMPT_ACTION = 'renew';
+
     private const CYCLE_SORT_MAP = [
         'monthly' => 1,
         'quarterly' => 2,
@@ -55,6 +59,8 @@ class ServiceRenewService
         'onetime' => 7,
     ];
 
+    private ?ServiceUpstreamBindingWriter $serviceBindingWriter = null;
+
     public function __construct(
         private InvoiceService $invoiceService,
         private ProviderResolver $providerResolver,
@@ -62,6 +68,7 @@ class ServiceRenewService
         private OperationLogService $operationLogService,
         private SettingService $settingService,
         private NotificationService $notificationService,
+        private ?PluginBindingResolver $bindingResolver = null,
     ) {}
 
     public function previewForUser(User $user, int $serviceId, ?string $selectedBillingCycle = null, int $userCouponId = 0): array
@@ -194,7 +201,7 @@ class ServiceRenewService
         $existingInvoice = Invoice::query()
             ->where('user_id', $user->id)
             ->where('service_id', $service->id)
-            ->where('type', 'renew')
+            ->where('type', OrderType::RENEW)
             ->where('billing_cycle', $cycle)
             ->where('user_coupon_id', $userCouponId > 0 ? $userCouponId : null)
             ->where('status', InvoiceStatus::UNPAID)
@@ -210,7 +217,7 @@ class ServiceRenewService
                 $effectiveProduct,
                 $cycle,
                 $amount,
-                'renew'
+                OrderType::RENEW
             );
             $expectedDiscount = round((float) ($expectedCouponPayload['discount_amount'] ?? 0), 2);
 
@@ -238,7 +245,9 @@ class ServiceRenewService
             ]));
         }
 
-        $invoice = DB::transaction(function () use ($user, $service, $cycle, $amount, $renewConfig, $cycleOption, $effectiveProduct, $userCouponId, $context) {
+        $sourceProvisionData = $this->serviceProvisionData($service);
+
+        $invoice = DB::transaction(function () use ($user, $service, $cycle, $amount, $renewConfig, $cycleOption, $effectiveProduct, $userCouponId, $context, $sourceProvisionData) {
             $displayPayload = (new ProductDisplayNameResolver)->resolveForProduct($effectiveProduct);
             $productSpecDisplay = (string) ($displayPayload['product_spec_display'] ?? '');
             $couponPayload = $this->couponService->reserveOwnedCouponForInvoice(
@@ -259,7 +268,7 @@ class ServiceRenewService
                 'product_spec_snapshot' => $productSpecDisplay,
                 'product_type_snapshot' => (string) $effectiveProduct->product_type,
                 'service_id' => $service->id,
-                'type' => 'renew',
+                'type' => OrderType::RENEW,
                 'amount' => $payableAmount,
                 'discount' => $discountAmount,
                 'paid_amount' => 0,
@@ -270,7 +279,7 @@ class ServiceRenewService
                 'config_snapshot' => array_filter([
                     'renew_service_id' => (int) $service->id,
                     'renew_service_name' => (string) $service->name,
-                    'source_type' => (string) (($service->provision_data['source_type'] ?? '') ?: 'manual'),
+                    'source_type' => (string) (($sourceProvisionData['source_type'] ?? '') ?: 'manual'),
                     'created_by' => (string) ($context['source'] ?? $context['operator'] ?? ''),
                     'auto_renew' => ! empty($context['auto_renew']) ? 1 : null,
                     'auto_renew_trace_id' => ! empty($context['auto_renew']) ? (string) ($context['trace_id'] ?? '') : null,
@@ -323,7 +332,9 @@ class ServiceRenewService
         $amount = round((float) ($cycleOption['amount'] ?? 0), 2);
         throw_if($amount <= 0, new BusinessException('当前续费周期金额无效'));
 
-        $order = DB::transaction(function () use ($user, $service, $cycle, $amount, $renewConfig, $cycleOption, $effectiveProduct, $userCouponId, $context) {
+        $sourceProvisionData = $this->serviceProvisionData($service);
+
+        $order = DB::transaction(function () use ($user, $service, $cycle, $amount, $renewConfig, $cycleOption, $effectiveProduct, $userCouponId, $context, $sourceProvisionData) {
             $displayPayload = (new ProductDisplayNameResolver)->resolveForProduct($effectiveProduct);
             $productSpecDisplay = (string) ($displayPayload['product_spec_display'] ?? '');
             $couponPayload = $this->couponService->reserveOwnedCouponForOrder(
@@ -332,7 +343,7 @@ class ServiceRenewService
                 $effectiveProduct,
                 $cycle,
                 $amount,
-                'renew'
+                OrderType::RENEW
             );
             $discountAmount = round((float) ($couponPayload['discount_amount'] ?? 0), 2);
 
@@ -344,7 +355,7 @@ class ServiceRenewService
                 'product_spec_snapshot' => $productSpecDisplay,
                 'product_type_snapshot' => (string) $effectiveProduct->product_type,
                 'service_id' => (int) $service->id,
-                'type' => 'renew',
+                'type' => OrderType::RENEW,
                 'coupon_id' => $couponPayload['coupon_id'] ?? null,
                 'user_coupon_id' => $couponPayload['user_coupon_id'] ?? null,
                 'coupon_code' => $couponPayload['code'] ?? null,
@@ -356,7 +367,7 @@ class ServiceRenewService
                 'config_snapshot' => array_filter([
                     'renew_service_id' => (int) $service->id,
                     'renew_service_name' => (string) $service->name,
-                    'source_type' => (string) (($service->provision_data['source_type'] ?? '') ?: 'manual'),
+                    'source_type' => (string) (($sourceProvisionData['source_type'] ?? '') ?: 'manual'),
                     'created_by' => (string) ($context['source'] ?? $context['operator'] ?? ''),
                     'auto_renew' => ! empty($context['auto_renew']) ? 1 : null,
                     'auto_renew_trace_id' => ! empty($context['auto_renew']) ? (string) ($context['trace_id'] ?? '') : null,
@@ -408,26 +419,28 @@ class ServiceRenewService
     {
         $service = $this->findUserService($user, $serviceId);
         $service = $this->healServiceProductMapping($service);
+        $effectiveProduct = $this->resolveEffectiveProduct($service);
         $enabled = $autoRenew === 1 ? 1 : 0;
 
-        if ($this->supportsUpstreamRenew($service, $this->resolveEffectiveProduct($service))) {
-            $supplier = ($this->resolveEffectiveProduct($service) ?? $service->product)?->supplier;
+        if ($this->supportsUpstreamRenew($service, $effectiveProduct)) {
+            $supplier = $this->supplierWithRuntimeCredentials(($effectiveProduct ?? $service->product)?->supplier);
             $hostId = $this->resolveUpstreamHostId($service);
 
             if ($supplier instanceof Supplier && $hostId > 0) {
-                $renewal = $this->resolveRenewalCapability($service, $this->resolveEffectiveProduct($service));
+                $renewal = $this->resolveRenewalCapability($service, $effectiveProduct);
                 $response = $renewal->setHostAutoRenew($supplier, $hostId, $enabled);
-                $this->assertUpstreamSuccess($response, [200], '同步上游自动续费状态');
+                $this->assertUpstreamSuccess($response, [200], '同步上游自动续费状态', $this->resolveProviderKeyForService($service, $effectiveProduct));
             }
         }
 
-        $provisionData = is_array($service->provision_data ?? null) ? $service->provision_data : [];
+        $provisionData = $this->serviceProvisionData($service);
         $provisionData['initiative_renew'] = $enabled;
 
         $service->forceFill([
             'auto_renew' => $enabled,
             'provision_data' => $provisionData,
         ])->save();
+        $this->serviceBindingWriter()->syncServiceState($service, $effectiveProduct, $provisionData);
 
         $this->operationLogService->writeServiceConsoleLog($service, 'service.console.renew.auto_update', [
             'category' => 'renew',
@@ -505,7 +518,7 @@ class ServiceRenewService
             return $service->fresh(['product.supplier']) ?? $service;
         }
 
-        $provisionData = is_array($service->provision_data ?? null) ? $service->provision_data : [];
+        $provisionData = $this->serviceProvisionData($service);
         if ((int) ($provisionData['last_renew_invoice_id'] ?? 0) === (int) $invoice->id) {
             return $service->fresh(['product.supplier']) ?? $service;
         }
@@ -516,7 +529,7 @@ class ServiceRenewService
 
         // 尝试上游续费
         if ($this->supportsUpstreamRenew($service, $effectiveProduct)) {
-            $supplier = $effectiveProduct?->supplier;
+            $supplier = $this->supplierWithRuntimeCredentials($effectiveProduct?->supplier);
             $hostId = $this->resolveUpstreamHostId($service);
 
             if ($supplier instanceof Supplier && $hostId > 0) {
@@ -534,7 +547,7 @@ class ServiceRenewService
                     } else {
                         $jwt = $renewal->login($supplier);
                         $renewResponse = $renewal->renewHost($supplier, $hostId, $billingCycle);
-                        $this->assertUpstreamSuccess($renewResponse, [200], '提交上游续费');
+                        $this->assertUpstreamSuccess($renewResponse, [200], '提交上游续费', $this->resolveProviderKeyForService($service, $effectiveProduct));
                         $renewPayload = $this->extractPayload($renewResponse);
                         $upstreamInvoiceId = (int) ($renewPayload['invoiceid'] ?? $renewResponse['invoiceid'] ?? 0);
 
@@ -547,12 +560,12 @@ class ServiceRenewService
                         ]);
 
                         $fundResponse = $renewal->post($supplier, "/v1/invoices/{$upstreamInvoiceId}/fund", [], $jwt);
-                        $this->assertUpstreamSuccess($fundResponse, [200, 1001], '使用供应商余额支付续费账单');
+                        $this->assertUpstreamSuccess($fundResponse, [200, 1001], '使用供应商余额支付续费账单', $this->resolveProviderKeyForService($service, $effectiveProduct));
 
                         $hostDetail = [];
                         try {
                             $detailResponse = $renewal->get($supplier, "/v1/hosts/{$hostId}", $jwt);
-                            $this->assertUpstreamSuccess($detailResponse, [200], '读取上游续费结果');
+                            $this->assertUpstreamSuccess($detailResponse, [200], '读取上游续费结果', $this->resolveProviderKeyForService($service, $effectiveProduct));
                             $detailPayload = $this->extractPayload($detailResponse);
                             $hostDetail = is_array($detailPayload['host'] ?? null) ? $detailPayload['host'] : [];
                         } catch (\Throwable $detailException) {
@@ -577,7 +590,7 @@ class ServiceRenewService
                     ]);
 
                     $nextExpiresAt = $this->resolveRenewedExpiry($service, $billingCycle, $hostDetail);
-                    $provisionData = is_array($service->provision_data ?? null) ? $service->provision_data : [];
+                    $provisionData = $this->serviceProvisionData($service);
                     $provisionData['upstream_invoice_id'] = $upstreamInvoiceId;
                     $provisionData['upstream_status'] = (string) ($hostDetail['domainstatus'] ?? ($provisionData['upstream_status'] ?? ''));
                     $provisionData['initiative_renew'] = (int) $service->auto_renew;
@@ -594,7 +607,7 @@ class ServiceRenewService
                 } catch (\Throwable $exception) {
                     // 恢复：检查上游续费账单是否已生成或已支付（fund 后崩溃保护）
                     $currentService = $service->fresh(['product.supplier']) ?? $service;
-                    $currentProvisionData = is_array($currentService->provision_data ?? null) ? $currentService->provision_data : [];
+                    $currentProvisionData = $this->serviceProvisionData($currentService);
                     $existingUpstreamInvoiceId = (int) ($currentProvisionData['upstream_invoice_id'] ?? 0);
 
                     if ($existingUpstreamInvoiceId > 0 && isset($supplier) && $supplier instanceof Supplier && $hostId > 0) {
@@ -670,7 +683,7 @@ class ServiceRenewService
                             if ($upstreamStatus === 'Unpaid') {
                                 // 上游账单未支付→重试余额支付
                                 $fundResponse = $renewal->post($supplier, "/v1/invoices/{$existingUpstreamInvoiceId}/fund", [], $recoveryJwt);
-                                $this->assertUpstreamSuccess($fundResponse, [200, 1001], '恢复：重试供应商余额支付续费账单');
+                                $this->assertUpstreamSuccess($fundResponse, [200, 1001], '恢复：重试供应商余额支付续费账单', $this->resolveProviderKeyForService($currentService, $effectiveProduct));
 
                                 $recoveryHostDetail = [];
                                 try {
@@ -723,6 +736,13 @@ class ServiceRenewService
                         'renew_error' => $message,
                         'last_renew_attempt_at' => now()->format('Y-m-d H:i:s'),
                     ]);
+                    $failureProvisionData = $this->serviceProvisionData($service);
+                    $this->recordRenewInvoiceAttempt($service, $effectiveProduct, $invoice, $failureProvisionData, 'failed', $message, [
+                        'upstream_host_id' => $hostId > 0 ? $hostId : null,
+                        'upstream_invoice_id' => (int) ($failureProvisionData['upstream_invoice_id'] ?? 0) > 0
+                            ? (int) $failureProvisionData['upstream_invoice_id']
+                            : null,
+                    ]);
 
                     Log::error('[服务续费·账单] 上游续费失败', [
                         'invoice_id' => $invoice->id,
@@ -745,7 +765,7 @@ class ServiceRenewService
     private function completeLocalRenewByInvoice(Service $service, Invoice $invoice, string $billingCycle): Service
     {
         $nextExpiresAt = $this->resolveRenewedExpiry($service, $billingCycle);
-        $provisionData = is_array($service->provision_data ?? null) ? $service->provision_data : [];
+        $provisionData = $this->serviceProvisionData($service);
         $provisionData['last_renewed_at'] = now()->format('Y-m-d H:i:s');
         $provisionData['last_renew_billing_cycle'] = $billingCycle;
         $provisionData['last_renew_invoice_id'] = (int) $invoice->id;
@@ -786,15 +806,21 @@ class ServiceRenewService
             ]);
         });
 
-        $this->sendUnsuspendNotificationIfNeeded($service, $previousStatus);
+        $updatedService = $service->fresh(['product.supplier']) ?? $service;
+        $this->serviceBindingWriter()->syncServiceState($updatedService, $updatedService->product, $provisionData);
+        $this->recordRenewInvoiceAttempt($updatedService, $updatedService->product, $invoice, $provisionData, 'success', null, [
+            'expires_at' => $nextExpiresAt?->format('Y-m-d H:i:s'),
+            'service_status' => (int) $updatedService->status,
+        ]);
+        $this->sendUnsuspendNotificationIfNeeded($updatedService, $previousStatus);
 
-        return $service->fresh(['product.supplier']) ?? $service;
+        return $updatedService;
     }
 
     private function completeLocalRenewal(Service $service, Order $order): Service
     {
         $nextExpiresAt = $this->resolveRenewedExpiry($service, (string) $order->billing_cycle);
-        $provisionData = is_array($service->provision_data ?? null) ? $service->provision_data : [];
+        $provisionData = $this->serviceProvisionData($service);
         $provisionData['last_renewed_at'] = now()->format('Y-m-d H:i:s');
         $provisionData['last_renew_billing_cycle'] = (string) $order->billing_cycle;
         $provisionData['last_renew_order_id'] = (int) $order->id;
@@ -902,9 +928,15 @@ class ServiceRenewService
             ])->save();
         });
 
-        $this->sendUnsuspendNotificationIfNeeded($service, $previousStatus);
+        $updatedService = $service->fresh(['product.supplier', 'order']) ?? $service;
+        $this->serviceBindingWriter()->syncServiceState($updatedService, $updatedService->product, $provisionData);
+        $this->recordRenewOrderAttempt($updatedService, $updatedService->product, $order, $provisionData, 'success', null, [
+            'expires_at' => $nextExpiresAt?->format('Y-m-d H:i:s'),
+            'service_status' => (int) $updatedService->status,
+        ]);
+        $this->sendUnsuspendNotificationIfNeeded($updatedService, $previousStatus);
 
-        return $service->fresh(['product.supplier', 'order']) ?? $service;
+        return $updatedService;
     }
 
     private function isRenewOrderAlreadyCompleted(Order $order, Service $service): bool
@@ -913,7 +945,7 @@ class ServiceRenewService
             return true;
         }
 
-        $provisionData = is_array($service->provision_data ?? null) ? $service->provision_data : [];
+        $provisionData = $this->serviceProvisionData($service);
 
         return (int) ($provisionData['last_renew_order_id'] ?? 0) === (int) $order->id;
     }
@@ -928,7 +960,7 @@ class ServiceRenewService
             return false;
         }
 
-        $provisionData = is_array($service->provision_data ?? null) ? $service->provision_data : [];
+        $provisionData = $this->serviceProvisionData($service);
         if ((int) ($provisionData['last_renew_invoice_id'] ?? 0) === (int) $invoice->id) {
             return true;
         }
@@ -944,7 +976,7 @@ class ServiceRenewService
         $latestPaidInvoice = Invoice::query()
             ->where('user_id', $user->id)
             ->where('service_id', $service->id)
-            ->where('type', 'renew')
+            ->where('type', OrderType::RENEW)
             ->where('billing_cycle', $cycle)
             ->where('user_coupon_id', $userCouponId > 0 ? $userCouponId : null)
             ->where('status', InvoiceStatus::PAID)
@@ -970,7 +1002,7 @@ class ServiceRenewService
         return Invoice::query()
             ->where('user_id', (int) $invoice->user_id)
             ->where('service_id', $serviceId)
-            ->where('type', 'renew')
+            ->where('type', OrderType::RENEW)
             ->where('status', InvoiceStatus::PAID)
             ->where('id', '>', (int) $invoice->id)
             ->latest('id')
@@ -985,14 +1017,16 @@ class ServiceRenewService
             'renew_invoice_no' => (string) $invoice->invoice_no,
         ], $payload);
 
-        $provisionData = is_array($service->provision_data ?? null) ? $service->provision_data : [];
+        $provisionData = $this->serviceProvisionData($service);
         $service->forceFill([
             'provision_data' => array_merge($provisionData, $statusPayload),
         ])->save();
+        $updatedService = $service->fresh(['product.supplier']) ?? $service;
+        $this->serviceBindingWriter()->syncServiceState($updatedService, $updatedService->product, array_merge($provisionData, $statusPayload));
 
         $this->syncInvoiceRenewFulfillmentSnapshot($invoice, $status, $statusPayload);
 
-        return $service->fresh(['product.supplier']) ?? $service;
+        return $updatedService;
     }
 
     private function syncInvoiceRenewFulfillmentSnapshot(Invoice $invoice, string $status, array $payload = []): void
@@ -1005,6 +1039,74 @@ class ServiceRenewService
         ])->save();
     }
 
+    private function recordRenewInvoiceAttempt(
+        Service $service,
+        ?Product $product,
+        Invoice $invoice,
+        array $provisionData,
+        string $attemptStatus,
+        ?string $errorMessage = null,
+        array $responseMeta = []
+    ): void {
+        $this->serviceBindingWriter()->recordProvisionAttempt(
+            $service,
+            $product,
+            $provisionData,
+            $attemptStatus,
+            $errorMessage,
+            $this->filterAttemptMeta([
+                'invoice_id' => (int) $invoice->id,
+                'invoice_no' => (string) $invoice->invoice_no,
+                'billing_cycle' => (string) ($invoice->billing_cycle ?? ''),
+                'source' => (string) ($provisionData['last_renew_source'] ?? ''),
+                'trace_id' => (string) ($invoice->trace_id ?? ''),
+                'auto_renew' => (int) ($provisionData['initiative_renew'] ?? 0),
+            ]),
+            $this->filterAttemptMeta(array_merge([
+                'renew_invoice_id' => $provisionData['renew_invoice_id'] ?? null,
+                'renew_invoice_no' => $provisionData['renew_invoice_no'] ?? null,
+                'upstream_invoice_id' => $provisionData['upstream_invoice_id'] ?? null,
+                'last_renewed_at' => $provisionData['last_renewed_at'] ?? null,
+                'renew_fulfillment_status' => $provisionData[self::RENEW_FULFILLMENT_STATUS_KEY] ?? null,
+            ], $responseMeta)),
+            self::RENEW_ATTEMPT_ACTION
+        );
+    }
+
+    private function recordRenewOrderAttempt(
+        Service $service,
+        ?Product $product,
+        Order $order,
+        array $provisionData,
+        string $attemptStatus,
+        ?string $errorMessage = null,
+        array $responseMeta = []
+    ): void {
+        $this->serviceBindingWriter()->recordProvisionAttempt(
+            $service,
+            $product,
+            $provisionData,
+            $attemptStatus,
+            $errorMessage,
+            $this->filterAttemptMeta([
+                'order_id' => (int) $order->id,
+                'order_no' => (string) $order->order_no,
+                'billing_cycle' => (string) ($order->billing_cycle ?? ''),
+                'source' => (string) ($provisionData['last_renew_source'] ?? ''),
+                'trace_id' => (string) ($order->trace_id ?? ''),
+            ]),
+            $this->filterAttemptMeta(array_merge([
+                'last_renewed_at' => $provisionData['last_renewed_at'] ?? null,
+            ], $responseMeta)),
+            self::RENEW_ATTEMPT_ACTION
+        );
+    }
+
+    private function filterAttemptMeta(array $payload): array
+    {
+        return array_filter($payload, static fn (mixed $value): bool => $value !== null && $value !== '' && $value !== []);
+    }
+
     private function supportsUpstreamRenew(Service $service, ?Product $product = null): bool
     {
         return $this->resolveUpstreamHostId($service) > 0
@@ -1013,22 +1115,44 @@ class ServiceRenewService
 
     private function resolveEffectiveProduct(Service $service): ?Product
     {
-        $currentProduct = $service->product;
-        $provisionData = is_array($service->provision_data ?? null) ? $service->provision_data : [];
-        $supplierId = (int) (($provisionData['supplier_id'] ?? ($currentProduct?->supplier_id ?? 0)) ?: 0);
-        $upstreamProductId = (int) (($provisionData['upstream_product_id'] ?? $provisionData['supplier_product_id'] ?? 0) ?: 0);
+        $boundProductId = (int) (($this->pluginBindingResolver()->productIdForService($service) ?? 0) ?: 0);
+        if ($boundProductId > 0) {
+            $boundProduct = Product::query()->with('supplier')->find($boundProductId);
+            if ($boundProduct instanceof Product) {
+                return $boundProduct;
+            }
+        }
 
-        if ($supplierId <= 0 || $upstreamProductId <= 0) {
+        $currentProduct = $service->product;
+        $provisionData = $this->serviceProvisionData($service);
+        $supplierId = (int) (
+            ($this->pluginBindingResolver()->supplierIdForService($service) ?? 0)
+            ?: ($currentProduct instanceof Product ? ($this->pluginBindingResolver()->supplierIdForProduct($currentProduct) ?? 0) : 0)
+        );
+        $upstreamProductId = (string) (
+            $this->pluginBindingResolver()->upstreamProductIdForService($service)
+            ?? ($currentProduct instanceof Product ? $this->pluginBindingResolver()->upstreamProductIdForProduct($currentProduct) : null)
+            ?? ($provisionData['upstream_product_id'] ?? '')
+        );
+
+        if ($supplierId <= 0 || trim($upstreamProductId) === '') {
             return $currentProduct;
         }
 
-        return Product::query()
-            ->with('supplier')
-            ->where('supplier_id', $supplierId)
-            ->where('supplier_product_id', $upstreamProductId)
-            ->where('status', 1)
-            ->orderByDesc('id')
-            ->first() ?: $currentProduct;
+        $boundProductId = $this->pluginBindingResolver()->productIdForSupplierAndUpstreamProduct($supplierId, $upstreamProductId);
+        if ($boundProductId !== null) {
+            $boundProduct = Product::query()
+                ->with('supplier')
+                ->whereKey($boundProductId)
+                ->where('status', 1)
+                ->first();
+
+            if ($boundProduct instanceof Product) {
+                return $boundProduct;
+            }
+        }
+
+        return $currentProduct;
     }
 
     private function healServiceProductMapping(Service $service): Service
@@ -1050,7 +1174,21 @@ class ServiceRenewService
 
     private function resolveUpstreamHostId(Service $service): int
     {
-        return (int) ((((array) ($service->provision_data ?? []))['upstream_host_id'] ?? 0) ?: 0);
+        return (int) (($this->pluginBindingResolver()->upstreamServiceIdForService($service) ?? '') ?: 0);
+    }
+
+    private function resolveProviderKeyForService(Service $service, ?Product $product = null): string
+    {
+        if ($product instanceof Product) {
+            $productKey = $this->providerResolver->resolveForProduct($product)->key();
+            if ($productKey !== null && trim($productKey) !== '') {
+                return trim($productKey);
+            }
+        }
+
+        $serviceKey = $this->providerResolver->resolveForService($service)->key();
+
+        return $serviceKey !== null ? trim($serviceKey) : '';
     }
 
     private function findUserService(User $user, int $serviceId): Service
@@ -1088,12 +1226,37 @@ class ServiceRenewService
         return round((float) $value, 2);
     }
 
+    private function pluginBindingResolver(): PluginBindingResolver
+    {
+        return $this->bindingResolver ??= new PluginBindingResolver;
+    }
+
+    private function supplierWithRuntimeCredentials(?Supplier $supplier): ?Supplier
+    {
+        return $supplier instanceof Supplier
+            ? $this->pluginBindingResolver()->supplierWithRuntimeCredentials($supplier)
+            : null;
+    }
+
+    private function serviceBindingWriter(): ServiceUpstreamBindingWriter
+    {
+        return $this->serviceBindingWriter ??= app(ServiceUpstreamBindingWriter::class);
+    }
+
+    private function serviceProvisionData(Service $service, bool $includeSecrets = false): array
+    {
+        $legacy = is_array($service->provision_data ?? null) ? $service->provision_data : [];
+        $projection = $this->pluginBindingResolver()->serviceProvisionProjection($service, $includeSecrets);
+
+        return $projection === [] ? $legacy : array_replace($legacy, $projection);
+    }
+
     private function extractPayload(array $response): array
     {
         return is_array($response['data'] ?? null) ? $response['data'] : $response;
     }
 
-    private function assertUpstreamSuccess(array $response, array $allowedStatuses, string $action): void
+    private function assertUpstreamSuccess(array $response, array $allowedStatuses, string $action, string $providerKey = ''): void
     {
         $status = (int) ($response['status'] ?? $response['code'] ?? $response['status_code'] ?? 200);
         if (in_array($status, $allowedStatuses, true)) {
@@ -1107,7 +1270,7 @@ class ServiceRenewService
             'message' => SensitiveDataSanitizer::sanitizeText($message),
         ]);
 
-        throw new BusinessException(app(ProviderErrorMapper::class)->toUserMessage(ProviderKey::HOSTING_PANEL_API, $action, $message));
+        throw new BusinessException(app(ProviderErrorMapper::class)->toUserMessage($providerKey, $action, $message));
     }
 
     private function resolveRenewalCapability(Service $service, ?Product $product = null): object

@@ -24,6 +24,7 @@ use App\Services\System\SettingService;
 use App\Services\Ticket\TicketAutomationService;
 use App\Services\Upstream\Contracts\ProvidesScheduledAuthRefresh;
 use App\Services\Upstream\Contracts\UpstreamDriver;
+use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
 use Illuminate\Database\Schema\Blueprint;
@@ -44,7 +45,7 @@ class ScheduleTaskExecutionCoverageTest extends TestCase
 
     protected function tearDown(): void
     {
-        foreach (['jobs', 'orders', 'services', 'suppliers', 'settings'] as $table) {
+        foreach (['jobs', 'orders', 'services', 'supplier_plugin_bindings', 'integration_plugins', 'suppliers', 'settings'] as $table) {
             Schema::connection('sqlite')->dropIfExists($table);
         }
 
@@ -92,6 +93,7 @@ class ScheduleTaskExecutionCoverageTest extends TestCase
     public function test_manual_dispatch_executes_each_triggerable_schedule_task(): void
     {
         $this->createSuppliersTable();
+        $this->createSupplierPluginBindingTables();
         $scheduledAuthRefresh = new RecordingScheduledAuthRefresh;
         $providerRegistry = new ProviderRegistry([
             new FakeScheduledAuthRefreshDriver($scheduledAuthRefresh),
@@ -99,10 +101,31 @@ class ScheduleTaskExecutionCoverageTest extends TestCase
         app()->instance(ProviderRegistry::class, $providerRegistry);
         app()->instance(ProviderResolver::class, new ProviderResolver($providerRegistry));
 
-        Supplier::query()->create([
+        $supplier = Supplier::query()->create([
             'name' => 'Mock Supplier',
-            'interface_type' => 'hosting_panel_api',
+            'interface_type' => ProviderKey::HOSTING_PANEL_API,
             'status' => 1,
+        ]);
+        $pluginId = DB::table('integration_plugins')->insertGetId([
+            'domain' => 'upstream',
+            'slug' => ProviderKey::HOSTING_PANEL_API,
+            'plugin_key' => ProviderKey::HOSTING_PANEL_API,
+            'name' => 'Hosting Panel API',
+            'version' => '1.0.0',
+            'entry_class' => FakeScheduledAuthRefreshDriver::class,
+            'status' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('supplier_plugin_bindings')->insert([
+            'supplier_id' => (int) $supplier->id,
+            'plugin_id' => $pluginId,
+            'provider_key' => ProviderKey::HOSTING_PANEL_API,
+            'environment' => 'production',
+            'status' => 1,
+            'priority' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
 
         $autoRenewService = $this->createMock(AutoRenewService::class);
@@ -252,6 +275,7 @@ class ScheduleTaskExecutionCoverageTest extends TestCase
             '--sleep' => 1,
             '--tries' => 3,
             '--timeout' => 1200,
+            '--memory' => 2048,
             '--stop-when-empty' => true,
             '--max-time' => 50,
         ])->assertExitCode(0);
@@ -290,6 +314,32 @@ class ScheduleTaskExecutionCoverageTest extends TestCase
             $table->string('name')->nullable();
             $table->string('interface_type')->nullable();
             $table->unsignedTinyInteger('status')->default(1);
+            $table->timestamps();
+        });
+    }
+
+    private function createSupplierPluginBindingTables(): void
+    {
+        Schema::connection('sqlite')->create('integration_plugins', function (Blueprint $table): void {
+            $table->id();
+            $table->string('domain', 32);
+            $table->string('slug', 120);
+            $table->string('plugin_key', 120);
+            $table->string('name', 120);
+            $table->string('version', 32)->default('1.0.0');
+            $table->string('entry_class', 255);
+            $table->unsignedTinyInteger('status')->default(0);
+            $table->timestamps();
+        });
+
+        Schema::connection('sqlite')->create('supplier_plugin_bindings', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('supplier_id');
+            $table->unsignedBigInteger('plugin_id');
+            $table->string('provider_key', 120);
+            $table->string('environment', 30)->default('production');
+            $table->unsignedTinyInteger('status')->default(1);
+            $table->integer('priority')->default(0);
             $table->timestamps();
         });
     }
@@ -336,7 +386,7 @@ final class FakeScheduledAuthRefreshDriver implements UpstreamDriver
 
     public function key(): string
     {
-        return 'hosting_panel_api';
+        return ProviderKey::HOSTING_PANEL_API;
     }
 
     public function label(): string

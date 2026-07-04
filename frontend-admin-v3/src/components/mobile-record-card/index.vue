@@ -174,10 +174,10 @@ function handleAction(option: DropdownOption) {
 }
 
 .mobile-record-card__more {
-  width: 28px;
-  min-width: 28px;
-  height: 28px;
-  min-height: 28px;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
   padding: 0;
   color: var(--td-text-color-placeholder);
   font-weight: 700;

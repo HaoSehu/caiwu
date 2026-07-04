@@ -12,6 +12,7 @@ use App\Services\Integrations\Plugins\PluginScanner;
 use App\Services\System\NotificationService;
 use Caiwu\Plugins\Mail\MultiSmtpRoundRobin\Lib\MultiSmtpRoundRobinService;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -68,10 +69,7 @@ class MultiSmtpRoundRobinPluginTest extends TestCase
             $this->assertFalse((bool) ($preview['accounts']['items'][0]['enabled'] ?? true));
             $this->assertTrue((bool) ($preview['accounts']['items'][0]['password_configured'] ?? false));
         } finally {
-            IntegrationPlugin::query()
-                ->where('domain', 'mail')
-                ->where('slug', 'multi_smtp_round_robin')
-                ->delete();
+            $this->deleteMultiSmtpPluginForTest();
         }
     }
 
@@ -80,7 +78,6 @@ class MultiSmtpRoundRobinPluginTest extends TestCase
         $this->ensurePluginTables();
         $settings = [
             'email_enabled' => Setting::getValue('notification', 'email_enabled', '0'),
-            'mail_driver' => Setting::getValue('notification', 'mail_driver', ''),
         ];
 
         $fakeMailManager = $this->makeFakeMailManager();
@@ -136,10 +133,29 @@ class MultiSmtpRoundRobinPluginTest extends TestCase
             app()->instance('mail.manager', $originalMailManager);
             Mail::swap($originalMailManager);
 
+            if (Schema::hasTable('integration_plugin_bindings')) {
+                DB::table('integration_plugin_bindings')
+                    ->where('domain', 'mail')
+                    ->where('binding_key', 'mail_driver')
+                    ->where('provider_key', 'multi_smtp_round_robin')
+                    ->delete();
+            }
+
+            $this->deleteMultiSmtpPluginForTest();
+        }
+    }
+
+    private function deleteMultiSmtpPluginForTest(): void
+    {
+        DB::statement('SET FOREIGN_KEY_CHECKS=0');
+
+        try {
             IntegrationPlugin::query()
                 ->where('domain', 'mail')
                 ->where('slug', 'multi_smtp_round_robin')
                 ->delete();
+        } finally {
+            DB::statement('SET FOREIGN_KEY_CHECKS=1');
         }
     }
 
@@ -175,6 +191,30 @@ class MultiSmtpRoundRobinPluginTest extends TestCase
                 $table->unsignedBigInteger('updated_by')->nullable();
                 $table->timestamps();
                 $table->unique('plugin_id');
+            });
+        }
+
+        if (! Schema::hasTable('integration_plugin_bindings')) {
+            Schema::create('integration_plugin_bindings', function (Blueprint $table): void {
+                $table->id();
+                $table->string('domain', 32);
+                $table->unsignedBigInteger('plugin_id');
+                $table->string('binding_type', 50);
+                $table->string('bindable_type', 120)->default('global');
+                $table->unsignedBigInteger('bindable_id')->default(0);
+                $table->string('binding_key', 120);
+                $table->string('provider_key', 120)->nullable();
+                $table->integer('priority')->default(0);
+                $table->unsignedTinyInteger('status')->default(1);
+                $table->json('config_json')->nullable();
+                $table->longText('secret_json')->nullable();
+                $table->json('has_secret_json')->nullable();
+                $table->json('runtime_policy_json')->nullable();
+                $table->unsignedBigInteger('created_by')->nullable();
+                $table->unsignedBigInteger('updated_by')->nullable();
+                $table->string('backfill_batch_id', 64)->nullable();
+                $table->timestamps();
+                $table->unique(['domain', 'binding_type', 'bindable_type', 'bindable_id', 'binding_key'], 'plugin_bindings_unique');
             });
         }
     }

@@ -202,7 +202,7 @@ class ProductController extends Controller
                     isset($payload['third_product_group_id']) ? (int) $payload['third_product_group_id'] : null,
                     trim((string) ($payload['product_type'] ?? '')),
                     (int) ($payload['supplier_id'] ?? 0),
-                    (int) ($payload['supplier_product_id'] ?? 0),
+                    (int) ($payload['upstream_product_id'] ?? 0),
                     (int) ($payload['source_product_id'] ?? 0),
                 ),
             '流量包配置拉取成功'

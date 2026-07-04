@@ -6,8 +6,8 @@ namespace App\Services\ProductCatalog;
 
 use App\Constants\ProductType;
 use App\Models\Invoice;
-use App\Models\Product;
 use App\Models\Order;
+use App\Models\Product;
 
 class ProductFullPathResolver
 {

@@ -4,64 +4,83 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Exceptions\BusinessException;
 use App\Http\Controllers\Admin\SupplierController;
 use App\Http\Resources\Product\SupplierResource;
 use App\Jobs\ProcessPaidOrderFulfillmentJob;
 use App\Jobs\ProcessPaidOrderReferralRewardJob;
+use App\Jobs\RunScheduleTaskJob;
+use App\Jobs\SendClientLoginEmailAlertJob;
+use App\Jobs\SendClientLoginFailureEmailAlertJob;
 use App\Jobs\SendPaidInvoiceAdminNotificationJob;
+use App\Jobs\SendTicketNotificationEmailJob;
+use App\Jobs\SyncInvoiceCouponUsageJob;
 use App\Jobs\SyncPaidInvoiceCouponUsageJob;
+use App\Models\Setting;
 use App\Models\Supplier;
 use App\Services\ClientServiceConsole\ServiceDetailService;
 use App\Services\ClientServiceConsole\ServiceTransformService;
+use App\Services\Integrations\Plugins\UpstreamBindingWriter;
 use App\Services\System\SettingService;
+use App\Services\Upstream\ProviderKey;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use ReflectionClass;
 use Tests\TestCase;
 
 class BackendHealthFixRegressionTest extends TestCase
 {
-    public function test_setting_payload_masks_sensitive_value(): void
+    public function test_plugin_secret_setting_is_not_returned_from_settings_api_payload(): void
     {
-        $service = new SettingService;
-        $method = (new ReflectionClass($service))->getMethod('formatSettingPayload');
-        $method->setAccessible(true);
+        Setting::setValue('payment', 'alipay_private_key', 'plain-private-key');
 
-        $payload = $method->invoke($service, 'payment', 'alipay_private_key', 'plain-private-key');
+        $payload = (new SettingService)->getGroupSettings('payment')
+            ->pluck('key')
+            ->all();
 
-        $this->assertSame('', $payload['value']);
-        $this->assertTrue($payload['is_secret']);
-        $this->assertTrue($payload['has_value']);
-        $this->assertSame('******', $payload['masked_value']);
+        $this->assertNotContains('alipay_private_key', $payload);
     }
 
-    public function test_empty_sensitive_setting_is_not_saved_as_replacement(): void
+    public function test_plugin_setting_keys_are_ignored_when_saving_settings_group(): void
     {
-        $service = new SettingService;
-        $method = (new ReflectionClass($service))->getMethod('prepareSettingsForSave');
-        $method->setAccessible(true);
+        DB::table('settings')
+            ->where('group_key', 'payment')
+            ->whereIn('item_key', ['alipay_private_key', 'alipay_enabled'])
+            ->delete();
 
-        $payload = $method->invoke($service, [
-            'alipay_private_key' => '   ',
+        (new SettingService)->saveGroupSettings('payment', [
+            'alipay_private_key' => 'plain-private-key',
             'alipay_enabled' => '1',
         ]);
 
-        $this->assertArrayNotHasKey('alipay_private_key', $payload);
-        $this->assertSame('1', $payload['alipay_enabled']);
+        $this->assertDatabaseMissing('settings', [
+            'group_key' => 'payment',
+            'item_key' => 'alipay_private_key',
+        ]);
+        $this->assertDatabaseMissing('settings', [
+            'group_key' => 'payment',
+            'item_key' => 'alipay_enabled',
+        ]);
+    }
+
+    public function test_plugin_secret_setting_cannot_be_revealed_from_settings_api(): void
+    {
+        Setting::setValue('notification', 'email_password', 'mail-secret');
+
+        $this->expectException(BusinessException::class);
+
+        (new SettingService)->revealSensitiveSetting('notification', 'email_password');
     }
 
     public function test_supplier_resource_does_not_return_api_key(): void
     {
-        $supplier = new Supplier([
-            'id' => 1,
+        $suffix = bin2hex(random_bytes(4));
+        $supplier = Supplier::query()->create([
             'name' => '测试供应商',
-            'code' => 'supplier_test',
-            'interface_type' => 'mofang_finance_api',
-            'api_username' => 'demo',
-            'api_key' => 'secret-value',
+            'code' => 'supplier_test_'.$suffix,
             'status' => 1,
         ]);
+        $this->syncSupplierBinding($supplier, 'secret-value');
 
         $payload = (new SupplierResource($supplier))->toArray(Request::create('/'));
 
@@ -71,18 +90,14 @@ class BackendHealthFixRegressionTest extends TestCase
 
     public function test_supplier_show_does_not_return_api_key(): void
     {
-        $supplier = new Supplier([
-            'id' => 1,
+        $suffix = bin2hex(random_bytes(4));
+        $supplier = Supplier::query()->create([
             'name' => '测试供应商',
-            'code' => 'supplier_test',
-            'interface_type' => 'mofang_finance_api',
-            'api_url' => 'https://supplier.example.com',
-            'api_username' => 'demo',
-            'api_key' => 'secret-value',
+            'code' => 'supplier_test_'.$suffix,
             'status' => 1,
             'sort_order' => 0,
         ]);
-        $supplier->exists = true;
+        $this->syncSupplierBinding($supplier, 'secret-value');
 
         $response = (new SupplierController)->show($supplier);
         $payload = $response->getData(true);
@@ -91,29 +106,59 @@ class BackendHealthFixRegressionTest extends TestCase
         $this->assertTrue($payload['data']['has_api_key']);
     }
 
+    public function test_supplier_api_key_can_be_revealed_on_demand(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+        $supplier = Supplier::query()->create([
+            'name' => '测试供应商',
+            'code' => 'supplier_test_'.$suffix,
+            'status' => 1,
+        ]);
+        $this->syncSupplierBinding($supplier, 'supplier-secret');
+
+        $response = (new SupplierController)->revealSecret($supplier, 'api_key');
+        $payload = $response->getData(true);
+
+        $this->assertSame('api_key', $payload['data']['key']);
+        $this->assertSame('supplier-secret', $payload['data']['value']);
+    }
+
     public function test_provider_aware_cache_keys_keep_mofang_independent(): void
     {
-        $supplier = new Supplier([
-            'interface_type' => 'mofang_finance_api',
+        $suffix = bin2hex(random_bytes(4));
+        $supplier = Supplier::query()->create([
+            'name' => 'Mofang Cache Supplier '.$suffix,
+            'code' => 'mofang-cache-'.$suffix,
+            'interface_type' => ProviderKey::MOFANG_FINANCE_API,
+            'status' => 1,
+            'sort_order' => 0,
         ]);
-        $supplier->id = 9;
-        $supplier->exists = true;
+        $this->createSupplierPluginBinding($supplier, $this->ensureMofangIntegrationPlugin());
+        $supplierId = (int) $supplier->id;
 
         $this->assertSame(
-            'upstream:mofang_finance_api:product_config_options:9:123',
+            "upstream:mofang_finance_api:product_config_options:{$supplierId}:123",
             app(ServiceTransformService::class)->buildProductConfigOptionsCacheKey($supplier, 123)
         );
         $this->assertSame(
-            'upstream:mofang_finance_api:host_modules:9:456',
+            "upstream:mofang_finance_api:host_modules:{$supplierId}:456",
             app(ServiceDetailService::class)->buildMonitorModuleCacheKey($supplier, 456)
         );
+        $this->assertSame(
+            "upstream:mofang_finance_api:reinstall_options:{$supplierId}:789",
+            app(ServiceDetailService::class)->buildReinstallOptionsCacheKey($supplier, 789)
+        );
 
-        $this->assertStringContainsString(
+        $this->assertStringNotContainsString(
             'buildLegacyProductConfigOptionsCacheKey',
             file_get_contents(base_path('app/Services/ClientServiceConsole/ServiceTransformService.php')) ?: ''
         );
-        $this->assertStringContainsString(
+        $this->assertStringNotContainsString(
             'buildLegacyMonitorModuleCacheKey',
+            file_get_contents(base_path('app/Services/ClientServiceConsole/ServiceDetailService.php')) ?: ''
+        );
+        $this->assertStringNotContainsString(
+            'buildLegacyReinstallOptionsCacheKey',
             file_get_contents(base_path('app/Services/ClientServiceConsole/ServiceDetailService.php')) ?: ''
         );
     }
@@ -176,6 +221,26 @@ class BackendHealthFixRegressionTest extends TestCase
         $this->assertSame(300, (new SyncPaidInvoiceCouponUsageJob(1))->timeout);
     }
 
+    public function test_queue_jobs_define_timeout_policy(): void
+    {
+        $jobs = [
+            new ProcessPaidOrderFulfillmentJob(1),
+            new ProcessPaidOrderReferralRewardJob(1),
+            new RunScheduleTaskJob('queue-backlog-drain'),
+            new SendClientLoginEmailAlertJob(1, 'client@example.test', '客户', '2026-07-02 12:00:00', '127.0.0.1'),
+            new SendClientLoginFailureEmailAlertJob(1, 'client@example.test', '客户', 'client@example.test', '2026-07-02 12:00:00', '127.0.0.1'),
+            new SendPaidInvoiceAdminNotificationJob(1),
+            new SendTicketNotificationEmailJob('admin@example.test', 'ticket_created'),
+            new SyncInvoiceCouponUsageJob(1),
+            new SyncPaidInvoiceCouponUsageJob(1),
+        ];
+
+        foreach ($jobs as $job) {
+            $this->assertObjectHasProperty('timeout', $job, $job::class.' must define a queue timeout.');
+            $this->assertGreaterThan(0, $job->timeout, $job::class.' timeout must be positive.');
+        }
+    }
+
     public function test_schedule_worker_consumes_declared_queues_with_timeout(): void
     {
         $source = file_get_contents(base_path('routes/console.php'));
@@ -184,6 +249,26 @@ class BackendHealthFixRegressionTest extends TestCase
         $this->assertSame('provision,referral,notification,coupon,default', config('queue.caiwu_worker_queues'));
         $this->assertStringContainsString('queue.caiwu_worker_queues', $source);
         $this->assertStringContainsString('queue.caiwu_worker_timeout', $source);
+    }
+
+    public function test_sentry_is_configurable_without_enabling_default_pii(): void
+    {
+        $bootstrap = file_get_contents(base_path('bootstrap/app.php'));
+
+        $this->assertIsString($bootstrap);
+        $this->assertStringContainsString('SentryIntegration::handles($exceptions)', $bootstrap);
+        $composer = json_decode(
+            file_get_contents(base_path('composer.json')) ?: '{}',
+            true
+        );
+
+        $this->assertArrayHasKey('sentry/sentry-laravel', (array) ($composer['require'] ?? []));
+
+        $config = require base_path('config/sentry.php');
+
+        $this->assertSame('', (string) ($config['dsn'] ?? ''));
+        $this->assertFalse((bool) ($config['send_default_pii'] ?? true));
+        $this->assertContains('/up', (array) ($config['ignore_transactions'] ?? []));
     }
 
     public function test_vnc_relay_log_masks_token(): void
@@ -201,5 +286,58 @@ class BackendHealthFixRegressionTest extends TestCase
         $this->assertSame('请填写:attribute。', $messages['required']);
         $this->assertSame('真实姓名', $messages['attributes']['realname']);
         $this->assertSame('证件号码', $messages['attributes']['idcard']);
+    }
+
+    private function ensureMofangIntegrationPlugin(): int
+    {
+        DB::table('integration_plugins')->updateOrInsert([
+            'domain' => 'upstream',
+            'plugin_key' => ProviderKey::MOFANG_FINANCE_API,
+        ], [
+            'slug' => 'mofang_finance',
+            'name' => '魔方财务接口',
+            'version' => '1.0.0',
+            'provider_class' => null,
+            'entry_class' => 'Caiwu\\Plugins\\Servers\\MofangFinance\\MofangFinancePlugin',
+            'capabilities_json' => json_encode([]),
+            'config_schema_json' => json_encode([]),
+            'status' => 1,
+            'installed_at' => now(),
+            'updated_at' => now(),
+            'created_at' => now(),
+        ]);
+
+        return (int) DB::table('integration_plugins')
+            ->where('domain', 'upstream')
+            ->where('plugin_key', ProviderKey::MOFANG_FINANCE_API)
+            ->value('id');
+    }
+
+    private function createSupplierPluginBinding(Supplier $supplier, int $pluginId): void
+    {
+        DB::table('supplier_plugin_bindings')->insert([
+            'supplier_id' => (int) $supplier->id,
+            'plugin_id' => $pluginId,
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'environment' => 'production',
+            'status' => 1,
+            'priority' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    private function syncSupplierBinding(Supplier $supplier, string $apiKey): void
+    {
+        $this->ensureMofangIntegrationPlugin();
+        app(UpstreamBindingWriter::class)->syncSupplierBinding($supplier, [
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'base_url' => 'https://supplier.example.com',
+            'account_name' => 'demo',
+            'api_key' => $apiKey,
+            'provider_config' => [],
+            'status' => 1,
+            'priority' => 0,
+        ]);
     }
 }

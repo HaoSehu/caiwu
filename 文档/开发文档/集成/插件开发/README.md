@@ -1,20 +1,20 @@
-  # Caiwu 插件开发指南
+# Caiwu 插件开发指南
 
-本文档说明当前项目的插件目录规范、加载规则、配置规则和 5 个首批插件 demo。插件系统采用“魔方财务风格目录 + Laravel 受控加载”方案：插件上传到固定目录后，由管理员在后台扫描、安装、配置、启用。
+本文档说明当前项目的插件目录规范、加载规则、配置规则和真实插件包。插件系统采用“魔方财务风格目录 + Laravel 受控加载”方案：插件上传到固定目录后，由管理员在后台扫描、安装、配置、启用。
 
 ## 目录映射
 
 插件统一放在 `backend/plugins` 下，目录按能力域划分：
 
-| 能力域 | 管理端 domain | 物理目录 | 契约 |
+| 能力域 | 管理端 domain | 物理目录 | 平台适配器/契约 |
 | --- | --- | --- | --- |
-| 支付渠道 | `payment` | `backend/plugins/gateways` | `PaymentGatewayInterface` |
-| 实名认证 | `verification` | `backend/plugins/certification` | `VerificationDriver` |
-| 邮件发送 | `mail` | `backend/plugins/mail` | `MailDriver` |
-| 短信发送 | `sms` | `backend/plugins/sms` | `SmsDriver` |
-| 上游开通/控制 | `upstream` | `backend/plugins/servers` | `UpstreamDriver` |
+| 支付渠道 | `payment` | `backend/plugins/gateways` | `PluginPaymentGateway` → `PaymentGatewayInterface` |
+| 实名认证 | `verification` | `backend/plugins/certification` | `PluginVerificationDriver` → `VerificationDriver` |
+| 邮件发送 | `mail` | `backend/plugins/mail` | `PluginMailDriver` → `MailDriver` |
+| 短信发送 | `sms` | `backend/plugins/sms` | `PluginSmsDriver` → `SmsDriver` |
+| 上游开通/控制 | `upstream` | `backend/plugins/servers` | `PluginUpstreamDriver` → `UpstreamDriver` |
 
-`domain` 是后台 API 和数据库里使用的领域名；物理目录沿用魔方财务的 `gateways/certification/mail/sms/servers` 风格。
+`domain` 是后台 API 和数据库里使用的领域名；物理目录沿用魔方财务的 `gateways/certification/mail/sms/servers` 风格。插件入口类不直接实现平台契约，入口类提供 `execute(array $request): array`，平台通过 `PluginRuntimeRegistry` 和领域 adapter 转换为内部契约。
 
 ## 单插件结构
 
@@ -60,12 +60,9 @@ return [
         'version' => '1.0.0',
         'entry' => ExamplePlugin::class,
         'capabilities' => ['verify_code'],
-        'extra' => [
-            'selection_setting' => [
-                'group' => 'notification',
-                'key' => 'sms_driver',
-                'value' => 'example',
-            ],
+        'driver_binding' => [
+            'binding_type' => 'notification',
+            'binding_key' => 'verify_code',
         ],
     ],
     'config' => [
@@ -80,7 +77,7 @@ return [
 - `info.slug`：必须和插件目录名一致。
 - `info.key`：业务注册 key，同领域内唯一。
 - `info.name`：后台展示名。
-- `info.entry`：入口类，必须存在并实现对应领域契约。
+- `info.entry`：入口类，必须存在，并提供 `execute(array $request): array`。
 
 配置字段支持：
 
@@ -303,14 +300,34 @@ return [
 - 空提交表示保留旧密钥。
 - 多 SMTP 的 `accounts` 字段支持脱敏预览和按索引保留密码。
 
+## 绑定表与运行日志
+
+插件安装记录只表达“系统识别到了哪个插件”，业务场景选择必须通过绑定表表达，不再通过 `settings` 中的旧 driver/provider key 反写。
+
+| 表 | 用途 |
+| --- | --- |
+| `integration_plugin_bindings` | 支付、实名、短信、邮件等全局或场景级默认插件绑定。 |
+| `supplier_plugin_bindings` | 供应商到上游插件账号、地址、密钥和运行环境的绑定。 |
+| `product_upstream_bindings` | 商品到上游商品 ID、配置模板和开通策略的绑定。 |
+| `service_upstream_bindings` | 服务实例到上游实例 ID、供应商绑定和状态快照的绑定。 |
+| `integration_plugin_runtime_logs` | 每次插件 action 的 domain、plugin、binding、actor、耗时、状态和脱敏请求/响应摘要。 |
+
+运行规则：
+
+- 启用插件只更新 `integration_plugins` 状态；选择“哪个业务场景使用哪个插件”写入绑定表。
+- 插件全局配置进入 `integration_plugin_configs`，绑定级覆盖配置进入对应绑定表，二者不能互相反写。
+- 支付、通知、上游等平台服务必须从绑定解析器读取插件，不再新增 `selection_setting`、`syncLegacySettings()` 或 settings fallback。
+- 插件运行日志由 `PluginRuntimeRegistry::execute()` 统一写入，插件内部不要自建业务运行日志表。
+- 敏感字段只允许进入加密列或脱敏摘要，禁止写入 runtime log 的明文字段。
+
 ## 生命周期
 
 1. 上传插件目录到固定能力域目录。
 2. 后台“插件管理”点击扫描。
-3. 点击安装，后端校验 `config.php`、目录一致性、入口类和领域契约。
+3. 点击安装，后端校验 `config.php`、目录一致性、入口类和 `execute()` 方法。
 4. 后台填写配置。
-5. 点击启用，后端校验必填配置并同步 `selection_setting`。
-6. 业务运行时从 `PluginRuntimeRegistry` 注册启用插件。
+5. 点击启用，后端校验必填配置并更新插件状态。
+6. 业务运行时从 `PluginRuntimeRegistry` 执行插件动作，或通过平台 adapter 注册为支付、实名、短信、邮件、上游等内部契约。
 
 ## 安全边界
 
@@ -318,19 +335,58 @@ return [
 - 支付回调、订单履约、账务入账、服务开通仍由平台服务层控制。
 - 第三方调用必须封装在插件服务或平台 driver 中，不放 Controller。
 - 回调类可放 `controller/`，但平台路由必须统一做签名、幂等、日志和审计。
-- 插件返回值必须转换为平台 DTO/Result，不把第三方原始结构直接透传到业务层。
+- 插件返回值必须由平台 adapter 转换为 DTO/Result，不把第三方原始结构直接透传到业务层。
 
-## 当前 5 个真实代码包 demo
+## 运行时调用模型
 
-以下 demo 直接放在 `backend/plugins/{能力域}/`，会像普通插件一样被后台扫描到。它们用于开发研究，不建议在生产环境启用。
+插件入口统一接收如下结构：
 
-| 能力域 | demo 目录 | 说明 |
+```php
+[
+    'domain' => 'payment',
+    'slug' => 'ali_pay',
+    'key' => 'alipay',
+    'action' => 'payment.precreate',
+    'payload' => [],
+    'config' => [],
+    'context' => [],
+]
+```
+
+插件返回结构：
+
+```php
+[
+    'success' => true,
+    'action' => 'payment.precreate',
+    'message' => '',
+    'data' => [],
+]
+```
+
+平台侧负责：
+
+- `PluginPaymentGateway`：把 `payment.*` action 转为支付 DTO。
+- `PluginVerificationDriver`：把 `verification.*` action 转为实名结果。
+- `PluginSmsDriver` / `PluginMailDriver`：把发送 action 转为通知结果。
+- `PluginUpstreamDriver`：把 `server.resolve_capability` 转为上游能力对象。
+
+## 当前真实插件包
+
+以下插件直接放在 `backend/plugins/{能力域}/`，会像普通插件一样被后台扫描到。`demo_*` 用于开发研究，不建议在生产环境启用；真实插件启用前必须完成配置、测试和回调边界确认。
+
+| 能力域 | 插件目录 | 说明 |
 | --- | --- | --- |
-| 支付渠道 | `backend/plugins/gateways/demo_pay` | 实现 `PaymentGatewayInterface` 的模拟支付网关 |
-| 实名认证 | `backend/plugins/certification/demo_verification` | 实现 `VerificationDriver` 的模拟实名插件 |
-| 邮件发送 | `backend/plugins/mail/demo_mail` | 实现 `MailDriver` 的模拟邮件插件 |
-| 短信发送 | `backend/plugins/sms/demo_sms` | 实现 `SmsDriver` 的模拟短信插件 |
-| 上游开通/控制 | `backend/plugins/servers/demo_servers` | 实现 `UpstreamDriver` 的模拟上游插件 |
+| 支付渠道 | `backend/plugins/gateways/ali_pay` | 支付宝当面付真实支付插件 |
+| 支付渠道 | `backend/plugins/gateways/demo_pay` | 模拟支付网关 |
+| 实名认证 | `backend/plugins/certification/stay33` | Stay33 实名认证插件 |
+| 实名认证 | `backend/plugins/certification/demo_verification` | 模拟实名插件 |
+| 邮件发送 | `backend/plugins/mail/multi_smtp_round_robin` | 多 SMTP 轮询邮件插件 |
+| 邮件发送 | `backend/plugins/mail/demo_mail` | 模拟邮件插件 |
+| 短信发送 | `backend/plugins/sms/aliyun` | 阿里云短信插件 |
+| 短信发送 | `backend/plugins/sms/demo_sms` | 模拟短信插件 |
+| 上游开通/控制 | `backend/plugins/servers/mofang_finance` | 魔方财务上游插件 |
+| 上游开通/控制 | `backend/plugins/servers/demo_servers` | 模拟上游插件 |
 
 每个 demo 包都包含：
 
@@ -343,11 +399,8 @@ return [
 ## 当前插件说明文档
 
 - [支付宝当面付插件 demo](./demo-ali-pay.md)
-- [Stay33 实名认证插件 demo](./demo-stay33.md)
-- [多 SMTP 轮询邮件插件 demo](./demo-multi-smtp-round-robin.md)
-- [阿里云短信插件 demo](./demo-aliyun-sms.md)
-- [上游服务插件 demo](./demo-servers.md)
-- [魔方财务上游插件说明](./demo-mofang-finance.md)
+
+其他插件以各自目录内 `README.md` / `DEVELOPMENT.md` 和当前代码为准；不要在导航中保留不存在的说明文档链接。
 
 ## 验证命令
 

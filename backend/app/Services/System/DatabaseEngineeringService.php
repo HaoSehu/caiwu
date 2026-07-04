@@ -63,6 +63,7 @@ class DatabaseEngineeringService
             'ticket_replies_deleted_orphans' => 0,
             'services_deleted_orphan_user_or_product' => 0,
             'services_cleared_orphan_invoice_id' => 0,
+            'invoices_cleared_orphan_order_id' => 0,
             'invoices_deleted_orphan_user_or_product' => 0,
             'payments_orphan_user_or_invoice_reported' => 0,
             'trace_ids_backfilled' => 0,
@@ -109,6 +110,12 @@ class DatabaseEngineeringService
                 'services',
                 'invoice_id',
                 'invoices',
+                'id'
+            );
+            $summary['invoices_cleared_orphan_order_id'] = $this->clearOrphansToNull(
+                'invoices',
+                'order_id',
+                'orders',
                 'id'
             );
             $summary['invoices_deleted_orphan_user_or_product'] =
@@ -238,6 +245,7 @@ class DatabaseEngineeringService
             'services.user_id->users.id' => $this->countOrphans('services', 'user_id', 'users', 'id'),
             'services.product_id->products.id' => $this->countOrphans('services', 'product_id', 'products', 'id'),
             'services.invoice_id->invoices.id' => $this->countOrphans('services', 'invoice_id', 'invoices', 'id'),
+            'invoices.order_id->orders.id' => $this->countOrphans('invoices', 'order_id', 'orders', 'id'),
             'invoices.user_id->users.id' => $this->countOrphans('invoices', 'user_id', 'users', 'id'),
             'invoices.product_id->products.id' => $this->countOrphans('invoices', 'product_id', 'products', 'id'),
             'payments.user_id->users.id' => $this->countOrphans('payments', 'user_id', 'users', 'id'),

@@ -14,7 +14,6 @@ use App\Http\Requests\Client\Invoice\QueryAlipayStatusRequest;
 use App\Http\Requests\Client\Invoice\StoreRequest;
 use App\Models\Invoice;
 use App\Models\Payment;
-use App\Models\Setting;
 use App\Models\User;
 use App\Services\Finance\CheckoutSecurityService;
 use App\Services\Finance\CheckoutService;
@@ -22,6 +21,7 @@ use App\Services\Finance\InvoiceService;
 use App\Services\Finance\PaymentService;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
 use App\Support\VersionedJson;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 
 class InvoiceController extends Controller
@@ -77,8 +77,9 @@ class InvoiceController extends Controller
                     });
             });
         }
+        $this->applyDateFilter($query, $filters);
 
-        $perPage = (int) ($filters['page_size'] ?? $filters['per_page'] ?? 15);
+        $perPage = (int) ($filters['page_size'] ?? 15);
         $list = $query->paginate($perPage);
 
         $items = collect($list->items())
@@ -267,7 +268,7 @@ class InvoiceController extends Controller
             ->where('payment_no', (string) ($result['payment_no'] ?? ''))
             ->where('invoice_id', $invoice->id)
             ->where('user_id', $user->id)
-            ->where('gateway', PaymentGatewayCode::ALIPAY)
+            ->whereGatewayKey(PaymentGatewayCode::ALIPAY)
             ->first();
 
         if (! $payment) {
@@ -310,7 +311,7 @@ class InvoiceController extends Controller
             ->where('payment_no', (string) ($result['payment_no'] ?? ''))
             ->where('invoice_id', $invoice->id)
             ->where('user_id', $user->id)
-            ->where('gateway', PaymentGatewayCode::ALIPAY)
+            ->whereGatewayKey(PaymentGatewayCode::ALIPAY)
             ->first();
 
         if (! $payment) {
@@ -340,7 +341,7 @@ class InvoiceController extends Controller
             ->where('payment_no', (string) $data['payment_no'])
             ->where('invoice_id', $invoice->id)
             ->where('user_id', $user->id)
-            ->where('gateway', PaymentGatewayCode::ALIPAY)
+            ->whereGatewayKey(PaymentGatewayCode::ALIPAY)
             ->first();
 
         if (! $payment) {
@@ -379,8 +380,7 @@ class InvoiceController extends Controller
         if ((float) $payableAmount <= 0) {
             $payMethods = [['key' => 'free', 'name' => '确认支付']];
         } elseif ($this->isAlipayPayMethodEnabled()) {
-            $alipayName = Setting::getValue('payment', 'alipay_name') ?: '支付宝支付';
-            $payMethods[] = ['key' => PaymentGatewayCode::ALIPAY, 'name' => $alipayName];
+            $payMethods[] = ['key' => PaymentGatewayCode::ALIPAY, 'name' => PaymentGatewayCode::label(PaymentGatewayCode::ALIPAY)];
         }
 
         $configSnapshot = VersionedJson::withoutMeta(is_array($invoice->config_snapshot) ? $invoice->config_snapshot : []) ?? [];
@@ -478,6 +478,33 @@ class InvoiceController extends Controller
         }
 
         return array_values(array_unique($types));
+    }
+
+    private function applyDateFilter($query, array $filters): void
+    {
+        $start = trim((string) ($filters['start_date'] ?? ''));
+        $end = trim((string) ($filters['end_date'] ?? ''));
+
+        if ($start === '' && $end === '') {
+            return;
+        }
+
+        if ($start !== '' && $end !== '') {
+            $query->whereBetween('created_at', [
+                CarbonImmutable::parse($start)->startOfDay(),
+                CarbonImmutable::parse($end)->endOfDay(),
+            ]);
+
+            return;
+        }
+
+        if ($start !== '') {
+            $query->where('created_at', '>=', CarbonImmutable::parse($start)->startOfDay());
+
+            return;
+        }
+
+        $query->where('created_at', '<=', CarbonImmutable::parse($end)->endOfDay());
     }
 
     private function buildOperationContext(Request $request, string $actorType = 'client'): array

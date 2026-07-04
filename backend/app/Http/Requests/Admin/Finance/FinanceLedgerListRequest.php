@@ -4,10 +4,14 @@ namespace App\Http\Requests\Admin\Finance;
 
 use App\Constants\FinanceLedgerEventType;
 use App\Http\Requests\Admin\Common\AdminFormRequest;
+use App\Http\Requests\Concerns\HasDateRangeFilter;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class FinanceLedgerListRequest extends AdminFormRequest
 {
+    use HasDateRangeFilter;
+
     public function rules(): array
     {
         return array_merge($this->paginationRules(100), [
@@ -19,9 +23,7 @@ class FinanceLedgerListRequest extends AdminFormRequest
             'invoice_no' => ['nullable', 'string', 'max:50'],
             'payment_no' => ['nullable', 'string', 'max:50'],
             'keyword' => ['nullable', 'string', 'max:100'],
-            'date_range' => ['nullable', 'array', 'size:2'],
-            'date_range.0' => ['required_with:date_range', 'date'],
-            'date_range.1' => ['required_with:date_range', 'date'],
+            ...$this->dateRangeRules(),
         ]);
     }
 
@@ -36,7 +38,18 @@ class FinanceLedgerListRequest extends AdminFormRequest
             'invoice_no',
             'payment_no',
             'keyword',
-            'date_range',
+            'start_date',
+            'end_date',
         ]);
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            $this->validateDateRange($validator);
+            $this->rejectPrivacyFilters($validator, [], [
+                'keyword' => '邮箱、手机号等隐私关键词',
+            ]);
+        });
     }
 }

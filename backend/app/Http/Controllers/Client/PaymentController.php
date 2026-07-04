@@ -7,6 +7,7 @@ use App\Constants\PaymentStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Client\Payment\IndexRequest;
 use App\Models\Payment;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 
 class PaymentController extends Controller
@@ -20,14 +21,15 @@ class PaymentController extends Controller
             'invoice:id,invoice_no,status,amount,type',
         ])
             ->where('user_id', $request->user()->id)
-            ->whereIn('gateway', $thirdPartyGateways)
+            ->whereGatewayKeyIn($thirdPartyGateways)
             ->orderByDesc('id');
 
         if (($filters['status'] ?? null) !== null) {
             $query->where('status', (int) $filters['status']);
         }
-        if (! empty($filters['gateway'])) {
-            $query->where('gateway', $filters['gateway']);
+        $gateway = trim((string) ($filters['type'] ?? $filters['gateway'] ?? ''));
+        if ($gateway !== '') {
+            $query->whereGatewayKey($gateway);
         }
         if (! empty($filters['keyword'])) {
             $keyword = trim((string) $filters['keyword']);
@@ -37,6 +39,7 @@ class PaymentController extends Controller
                     ->orWhereHas('invoice', fn ($invoiceQuery) => $invoiceQuery->where('invoice_no', 'like', '%'.$keyword.'%'));
             });
         }
+        $this->applyDateFilter($query, $filters);
 
         $perPage = (int) ($filters['page_size'] ?? 15);
         $paginator = $query->paginate($perPage);
@@ -45,8 +48,9 @@ class PaymentController extends Controller
             'id' => (int) $payment->id,
             'payment_no' => (string) $payment->payment_no,
             'trade_no' => (string) ($payment->trade_no ?? ''),
-            'gateway' => (string) $payment->gateway,
-            'gateway_label' => $this->gatewayLabel((string) $payment->gateway),
+            'gateway' => $this->gatewayKey($payment),
+            'gateway_key' => $this->gatewayKey($payment),
+            'gateway_label' => $this->gatewayLabel($this->gatewayKey($payment)),
             'amount' => number_format((float) $payment->amount, 2, '.', ''),
             'status' => (int) $payment->status,
             'status_label' => PaymentStatus::$labels[(int) $payment->status] ?? '未知',
@@ -72,7 +76,7 @@ class PaymentController extends Controller
 
         $row = Payment::query()
             ->where('user_id', $userId)
-            ->whereIn('gateway', PaymentGatewayCode::thirdPartyGateways())
+            ->whereGatewayKeyIn(PaymentGatewayCode::thirdPartyGateways())
             ->selectRaw('COUNT(*) AS total')
             ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS pending', [PaymentStatus::PENDING])
             ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS success', [PaymentStatus::SUCCESS])
@@ -95,15 +99,16 @@ class PaymentController extends Controller
             'invoice:id,invoice_no,status,amount,paid_amount,type,created_at',
         ])
             ->where('user_id', $userId)
-            ->whereIn('gateway', PaymentGatewayCode::thirdPartyGateways())
+            ->whereGatewayKeyIn(PaymentGatewayCode::thirdPartyGateways())
             ->findOrFail($id);
 
         return $this->success([
             'id' => (int) $payment->id,
             'payment_no' => (string) $payment->payment_no,
             'trade_no' => (string) ($payment->trade_no ?? ''),
-            'gateway' => (string) $payment->gateway,
-            'gateway_label' => $this->gatewayLabel((string) $payment->gateway),
+            'gateway' => $this->gatewayKey($payment),
+            'gateway_key' => $this->gatewayKey($payment),
+            'gateway_label' => $this->gatewayLabel($this->gatewayKey($payment)),
             'amount' => number_format((float) $payment->amount, 2, '.', ''),
             'status' => (int) $payment->status,
             'status_label' => PaymentStatus::$labels[(int) $payment->status] ?? '未知',
@@ -124,8 +129,41 @@ class PaymentController extends Controller
     {
         return match ($gateway) {
             PaymentGatewayCode::ALIPAY => '支付宝',
+            PaymentGatewayCode::YIPAY => PaymentGatewayCode::label(PaymentGatewayCode::YIPAY),
             PaymentGatewayCode::WECHAT => PaymentGatewayCode::label(PaymentGatewayCode::WECHAT),
             default => $gateway,
         };
+    }
+
+    private function gatewayKey(Payment $payment): string
+    {
+        return $payment->gatewayKey();
+    }
+
+    private function applyDateFilter($query, array $filters): void
+    {
+        $start = trim((string) ($filters['start_date'] ?? ''));
+        $end = trim((string) ($filters['end_date'] ?? ''));
+
+        if ($start === '' && $end === '') {
+            return;
+        }
+
+        if ($start !== '' && $end !== '') {
+            $query->whereBetween('created_at', [
+                CarbonImmutable::parse($start)->startOfDay(),
+                CarbonImmutable::parse($end)->endOfDay(),
+            ]);
+
+            return;
+        }
+
+        if ($start !== '') {
+            $query->where('created_at', '>=', CarbonImmutable::parse($start)->startOfDay());
+
+            return;
+        }
+
+        $query->where('created_at', '<=', CarbonImmutable::parse($end)->endOfDay());
     }
 }

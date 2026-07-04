@@ -13,10 +13,9 @@ return [
         'entry' => MultiSmtpRoundRobinPlugin::class,
         'capabilities' => ['smtp', 'round_robin', 'cooldown'],
         'extra' => [
-            'selection_setting' => [
-                'group' => 'notification',
-                'key' => 'mail_driver',
-                'value' => 'multi_smtp_round_robin',
+            'driver_binding' => [
+                'binding_key' => 'mail_driver',
+                'provider_key' => 'multi_smtp_round_robin',
             ],
         ],
     ],

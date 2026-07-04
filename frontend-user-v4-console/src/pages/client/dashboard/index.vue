@@ -321,18 +321,24 @@ function toDateText(value: Date) {
   return `${year}-${month}-${day}`;
 }
 
-function last7DaysRange(): string[] {
+function last7DaysRange() {
   const now = new Date();
   const start = new Date(now);
   start.setDate(start.getDate() - 6);
-  return [toDateText(start), toDateText(now)];
+  return {
+    start_date: toDateText(start),
+    end_date: toDateText(now),
+  };
 }
 
-function currentMonthRange(): string[] {
+function currentMonthRange() {
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth(), 1);
   const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  return [toDateText(start), toDateText(end)];
+  return {
+    start_date: toDateText(start),
+    end_date: toDateText(end),
+  };
 }
 
 function resolvePagedList<T>(payload: { list?: T[] } | T[] | null | undefined): T[] {
@@ -606,7 +612,7 @@ async function loadDashboard() {
     ] = await Promise.allSettled([
       clientApi.notices({ page: 1, page_size: 5 }),
       clientApi.tickets({ page: 1, page_size: 5 }),
-      clientApi.financeLedgerSummary({ date_range: monthRange }),
+      clientApi.financeLedgerSummary(monthRange),
       clientApi.couponsSummary(),
       clientApi.groupedOverview(),
       clientApi.referralOverview(),
@@ -657,7 +663,7 @@ async function loadDashboard() {
         const [helpRes, unreadRes, balanceLogsRes, paidInvoicesRes] = await Promise.allSettled([
           clientApi.helpArticles({ page: 1, page_size: 10 }),
           fetchUnreadCount(true),
-          clientApi.balanceLogs({ date_range: last7DaysRange(), page_size: 200 }),
+          clientApi.balanceLogs({ ...last7DaysRange(), page_size: 200 }),
           clientApi.invoices({ page: 1, page_size: 100, status: 1 }),
         ]);
 

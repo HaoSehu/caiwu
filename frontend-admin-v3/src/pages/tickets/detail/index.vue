@@ -188,7 +188,7 @@
               </div>
               <div>
                 <span>登录密码</span>
-                <button type="button" @click="copyText(linkedServiceConnection.password)">
+                <button type="button" @click="toggleLinkedServicePassword">
                   {{ linkedServicePassword }}
                 </button>
               </div>
@@ -285,6 +285,7 @@ const previewVisible = ref(false);
 const previewUrl = ref('');
 const quoteReply = ref<{ id: number | string; sender_name: string; content: string } | null>(null);
 const replyForm = reactive({ content: '' });
+const linkedServicePasswordVisible = ref(false);
 
 const priorityOptions = [
   { label: '低', value: 1 },
@@ -347,7 +348,7 @@ const linkedServiceConnection = computed(() => ({
   ...(detail.value?.service?.connection || {}),
 }));
 const linkedServicePassword = computed(() =>
-  linkedServiceConnection.value.has_password ? linkedServiceConnection.value.password || '******' : '--',
+  linkedServiceConnection.value.has_password ? (linkedServicePasswordVisible.value ? linkedServiceConnection.value.password || '******' : '******') : '--',
 );
 const linkedServiceSpecs = computed(() => {
   const specs = detail.value?.service?.specs;
@@ -450,6 +451,7 @@ async function loadDetail() {
 
   detailLoading.value = true;
   detail.value = null;
+  linkedServicePasswordVisible.value = false;
   resetReplyDraft();
   try {
     const response = await adminApi.tickets.detail(id);
@@ -467,7 +469,13 @@ async function reloadCurrentDetail() {
   if (!detail.value?.id) return;
   const response = await adminApi.tickets.detail(detail.value.id);
   detail.value = response;
+  linkedServicePasswordVisible.value = false;
   assignForm.assignee_id = response.assignee_id || null;
+}
+
+function toggleLinkedServicePassword() {
+  if (!linkedServiceConnection.value.has_password) return;
+  linkedServicePasswordVisible.value = !linkedServicePasswordVisible.value;
 }
 
 function goBack() {

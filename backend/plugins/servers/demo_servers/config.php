@@ -44,7 +44,7 @@ return [
             'title' => '上游标识',
             'type' => 'readonly',
             'value' => 'demo_servers',
-            'description' => '供应商 interface_type 为 demo_servers 时使用该演示插件。',
+            'description' => '供应商绑定 provider_key 为 demo_servers 时使用该演示插件。',
         ],
         'demo_region' => [
             'title' => '模拟区域',

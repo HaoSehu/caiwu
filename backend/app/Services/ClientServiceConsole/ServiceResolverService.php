@@ -7,6 +7,7 @@ namespace App\Services\ClientServiceConsole;
 use App\Constants\ProductType;
 use App\Models\FirstProductGroup;
 use App\Models\Service;
+use App\Services\Integrations\Plugins\PluginBindingResolver;
 
 /**
  * 服务属性解析共享服务（无外部依赖）
@@ -34,6 +35,8 @@ class ServiceResolverService
         'cloud pc',
         'cloud desktop',
     ];
+
+    private ?PluginBindingResolver $bindingResolver = null;
 
     public function resolveServiceRootGroup(Service $service): ?FirstProductGroup
     {
@@ -66,7 +69,7 @@ class ServiceResolverService
 
     public function resolveConsoleMode(Service $service, array $provisionData = []): string
     {
-        $provisionData = $provisionData !== [] ? $provisionData : (array) ($service->provision_data ?? []);
+        $provisionData = $provisionData !== [] ? $provisionData : $this->serviceProvisionData($service);
         $explicitMode = strtolower(trim((string) ($provisionData['console_mode'] ?? '')));
 
         if (in_array($explicitMode, [self::CONSOLE_MODE_DEFAULT, self::CONSOLE_MODE_NAT], true)) {
@@ -80,7 +83,7 @@ class ServiceResolverService
 
     private function isNatConsoleService(Service $service, array $provisionData = []): bool
     {
-        $provisionData = $provisionData !== [] ? $provisionData : (array) ($service->provision_data ?? []);
+        $provisionData = $provisionData !== [] ? $provisionData : $this->serviceProvisionData($service);
         $catalogProductType = $this->normalizeConsoleTypeValue($this->resolveGroupedOverviewTypeValue($service));
 
         if (in_array($catalogProductType, self::NAT_CONSOLE_TYPE_VALUES, true)) {
@@ -108,6 +111,22 @@ class ServiceResolverService
         }
 
         return false;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serviceProvisionData(Service $service): array
+    {
+        $legacy = is_array($service->provision_data ?? null) ? $service->provision_data : [];
+        $projection = $this->bindingResolver()->serviceProvisionProjection($service);
+
+        return $projection === [] ? $legacy : array_replace($legacy, $projection);
+    }
+
+    private function bindingResolver(): PluginBindingResolver
+    {
+        return $this->bindingResolver ??= app(PluginBindingResolver::class);
     }
 
     private function normalizeConsoleTypeValue(string $value): string

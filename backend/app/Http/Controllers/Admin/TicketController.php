@@ -10,6 +10,7 @@ use App\Models\AdminUser;
 use App\Models\Ticket;
 use App\Services\Ticket\TicketService;
 use App\Support\AdminPermissions;
+use App\Support\AdminPrivacy;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -98,6 +99,7 @@ class TicketController extends Controller
 
     public function adminUsers()
     {
+        $privacy = AdminPrivacy::current();
         $columns = ['id', 'username', 'nickname', 'role_id'];
         $hasEmailColumn = Schema::hasColumn('admin_users', 'email');
 
@@ -117,7 +119,7 @@ class TicketController extends Controller
             'id' => (int) $a->id,
             'username' => $a->username,
             'nickname' => $a->display_name,
-            'email' => $hasEmailColumn ? (string) ($a->email ?? '') : '',
+            'email' => $hasEmailColumn ? $privacy->email($a->email ?? '') : '',
         ])->values());
     }
 }

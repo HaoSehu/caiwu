@@ -3,20 +3,18 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Supplier extends Model
 {
     protected $hidden = [
         'api_key',
+        'provider_config',
     ];
 
     protected $fillable = [
         'name',
         'code',
-        'interface_type',
-        'api_url',
-        'api_username',
-        'api_key',
         'contact_name',
         'contact_phone',
         'contact_email',
@@ -37,5 +35,10 @@ class Supplier extends Model
     public function scopeEnabled($query)
     {
         return $query->where('status', 1);
+    }
+
+    public function pluginBindings(): HasMany
+    {
+        return $this->hasMany(SupplierPluginBinding::class, 'supplier_id');
     }
 }

@@ -120,7 +120,7 @@ This catalog is harness-agnostic, but most readers will run it on Claude Code. H
 
 ### Where personas live
 
-Plugin subagents go in `agents/` at the plugin root. This repo is a plugin (`.claude-plugin/plugin.json`), so `agents/code-reviewer.md`, `agents/security-auditor.md`, and `agents/test-engineer.md` are auto-discovered when the plugin is enabled. No path configuration needed.
+Project subagents go in `.agents/agents/` in this repository and are maintained alongside `.agents/skills/`.
 
 ### Subagents vs. Agent Teams
 
@@ -161,7 +161,7 @@ Don't redefine these. Layer your specialist personas (code-reviewer, security-au
 
 ### Frontmatter restrictions for plugin agents
 
-Plugin subagents do **not** support the `hooks`, `mcpServers`, or `permissionMode` frontmatter fields — these are silently ignored. If a future persona needs any of those, the user must copy the file into `.claude/agents/` or `~/.claude/agents/` instead.
+Project subagents should stay in `.agents/agents/`. If a future runtime requires extra fields such as `hooks`, `mcpServers`, or `permissionMode`, document the runtime-specific behavior before adding it.
 
 The fields that DO work in plugin agents are: `name`, `description`, `tools`, `disallowedTools`, `model`, `maxTurns`, `skills`, `memory`, `background`, `effort`, `isolation`, `color`, `initialPrompt`. Use `model` per-persona if you want to optimize cost (e.g. Haiku for `test-engineer` coverage scans, Sonnet for `code-reviewer`, Opus for `security-auditor`).
 
@@ -202,7 +202,7 @@ This is exactly the case the Agent Teams docs describe: *"With multiple independ
 
 ### Setup (one-time, per-environment)
 
-Agent Teams is experimental. In `~/.claude/settings.json`:
+Agent Teams is experimental. Configure it in the active agent runtime settings:
 
 ```json
 {

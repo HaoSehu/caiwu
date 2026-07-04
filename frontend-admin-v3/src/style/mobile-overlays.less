@@ -1,3 +1,15 @@
+/* 平板端大弹窗/抽屉宽度兜底：769-1024px 区间限制最大宽度 */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .t-dialog {
+    max-width: calc(100vw - 32px) !important;
+  }
+
+  .t-drawer--right,
+  .t-drawer--left {
+    max-width: calc(100vw - 32px) !important;
+  }
+}
+
 @media (max-width: 768px) {
   .t-dialog__position {
     align-items: center !important;

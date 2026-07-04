@@ -7,6 +7,8 @@ namespace Tests\Unit;
 use App\Services\Automation\Contracts\ScheduleHook;
 use App\Services\Automation\ScheduleHookService;
 use App\Services\System\ScheduleRunLogService;
+use Illuminate\Support\Facades\Log;
+use Mockery;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -36,6 +38,15 @@ class ScheduleHookServiceTest extends TestCase
 
     public function test_listener_failures_are_reported_without_interrupting_scheduler(): void
     {
+        Log::shouldReceive('warning')
+            ->once()
+            ->with('[调度Hook] 执行失败', Mockery::on(
+                fn (array $context): bool => ($context['hook'] ?? null) === ScheduleHookService::HOOK_TASK_AFTER
+                    && ($context['listener'] ?? null) === FailingScheduleHookServiceTestListener::class
+                    && ($context['message'] ?? null) === 'hook failed for test'
+                    && ($context['exception'] ?? null) === RuntimeException::class
+            ));
+
         config()->set('schedule_hooks.listeners.'.ScheduleHookService::HOOK_TASK_AFTER, [
             FailingScheduleHookServiceTestListener::class,
             ScheduleHookServiceTestListener::class,
@@ -97,6 +108,39 @@ class ScheduleHookServiceTest extends TestCase
         $this->assertSame(ScheduleHookService::HOOK_TASK_FAILED, ScheduleHookServiceTestListener::$received[0]['hook']);
         $this->assertSame('hook-failure-task', ScheduleHookServiceTestListener::$received[0]['context']['task_key']);
         $this->assertSame(RuntimeException::class, ScheduleHookServiceTestListener::$received[0]['context']['exception_class']);
+    }
+
+    public function test_schedule_run_log_record_fires_legacy_cron_hooks_and_activity_log(): void
+    {
+        config()->set('schedule_hooks.listeners.'.ScheduleHookService::HOOK_BEFORE_CRON, [
+            ScheduleHookServiceTestListener::class,
+        ]);
+        config()->set('schedule_hooks.listeners.'.ScheduleHookService::HOOK_AFTER_CRON, [
+            ScheduleHookServiceTestListener::class,
+        ]);
+
+        $result = app(ScheduleRunLogService::class)->record('账单自动化维护', fn (): array => [
+            'renew_orders_created' => 0,
+        ], [
+            'task_key' => 'billing-maintenance',
+            'source' => 'unit-test',
+        ]);
+
+        $this->assertSame(['renew_orders_created' => 0], $result);
+        $this->assertCount(2, ScheduleHookServiceTestListener::$received);
+        $this->assertSame(ScheduleHookService::HOOK_BEFORE_CRON, ScheduleHookServiceTestListener::$received[0]['hook']);
+        $this->assertSame(ScheduleHookService::HOOK_AFTER_CRON, ScheduleHookServiceTestListener::$received[1]['hook']);
+        $this->assertSame('billing-maintenance', ScheduleHookServiceTestListener::$received[0]['context']['task_key']);
+        $this->assertSame(['renew_orders_created' => 0], ScheduleHookServiceTestListener::$received[1]['context']['summary']);
+
+        $this->assertDatabaseHas('activity_logs', [
+            'actor_type' => 'system',
+            'actor_name' => 'System',
+            'module' => 'cron',
+            'action' => 'success',
+            'description' => 'Cron_账单自动化维护执行完成',
+            'subject_type' => 'schedule_task',
+        ]);
     }
 }
 

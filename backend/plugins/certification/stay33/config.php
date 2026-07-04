@@ -13,18 +13,9 @@ return [
         'entry' => Stay33Plugin::class,
         'capabilities' => ['personal', 'scan_url', 'query_status', 'verify_callback', 'fee_config'],
         'extra' => [
-            'legacy_settings' => [
-                'group' => 'verification',
-                'map' => [
-                    'api' => 'verification_api',
-                    'key' => 'verification_key',
-                    'biz_code' => 'verification_biz_code',
-                ],
-            ],
-            'selection_setting' => [
-                'group' => 'verification',
-                'key' => 'verification_driver',
-                'value' => 'stay33',
+            'driver_binding' => [
+                'binding_key' => 'verification_driver',
+                'provider_key' => 'stay33',
             ],
         ],
     ],
@@ -38,8 +29,5 @@ return [
         'charge_enabled' => ['title' => '插件收费', 'type' => 'switch', 'value' => false, 'description' => '开启后，用户发起实名认证时按配置金额扣费。'],
         'amount' => ['title' => '收费金额', 'type' => 'number', 'value' => 0, 'min' => 0, 'step' => 0.01, 'description' => '单位：元。关闭收费时该字段不生效。', 'visible_when' => ['field' => 'charge_enabled', 'operator' => 'eq', 'value' => true]],
         'free_times' => ['title' => '免费次数', 'type' => 'number', 'value' => 0, 'min' => 0, 'step' => 1, 'description' => '每个用户可免费发起认证的次数。'],
-        'ssl_divider' => ['title' => 'SSL 证书', 'type' => 'divider'],
-        'ssl_verify' => ['title' => 'SSL 证书校验', 'type' => 'switch', 'value' => true, 'description' => '生产环境建议保持开启；证书链问题请优先配置 CA Bundle。'],
-        'ca_bundle' => ['title' => 'CA Bundle 路径', 'type' => 'text', 'value' => '', 'required' => false, 'placeholder' => '例如 C:\\php\\extras\\ssl\\cacert.pem', 'description' => 'Windows/PHP cURL 缺少根证书时填写 cacert.pem 绝对路径。'],
     ],
 ];

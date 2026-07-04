@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\Supplier;
+use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\Integrations\Support\ProviderErrorMapper;
 use App\Services\Upstream\ProviderKey;
 use App\Support\SensitiveDataSanitizer;
@@ -38,6 +39,7 @@ final class MofangProvisionService
 
     public function __construct(
         private readonly MofangFinanceTransport $transport,
+        private ?PluginBindingResolver $bindingResolver = null,
     ) {}
 
     public function provisionOrder(Order $order, Supplier $supplier, ?Service $existingService = null): array
@@ -47,8 +49,9 @@ final class MofangProvisionService
             throw new BusinessException('商品信息不存在，无法自动开通');
         }
 
-        if ($existingService && ! empty($existingService->provision_data['upstream_host_id'])) {
-            $existingHostId = (int) $existingService->provision_data['upstream_host_id'];
+        if ($existingService && $this->resolveExistingHostId($existingService) > 0) {
+            $existingHostId = $this->resolveExistingHostId($existingService);
+            $existingProvisionData = (array) ($existingService->provision_data ?? []);
             try {
                 $jwt = $this->transport->login($supplier);
                 $detailResponse = $this->transport->getHostDetail($supplier, $existingHostId, $jwt);
@@ -62,9 +65,9 @@ final class MofangProvisionService
                     ]);
 
                     return [
-                        'requested_host' => (string) ($existingService->provision_data['requested_host'] ?? ''),
-                        'upstream_invoice_id' => (int) ($existingService->provision_data['upstream_invoice_id'] ?? 0),
-                        'upstream_host_ids' => $existingService->provision_data['upstream_host_ids'] ?? [$existingHostId],
+                        'requested_host' => (string) ($existingProvisionData['requested_host'] ?? ''),
+                        'upstream_invoice_id' => (int) ($existingProvisionData['upstream_invoice_id'] ?? 0),
+                        'upstream_host_ids' => $existingProvisionData['upstream_host_ids'] ?? [$existingHostId],
                         'upstream_host_id' => $existingHostId,
                         'host_detail' => $hostDetail,
                     ];
@@ -206,7 +209,7 @@ final class MofangProvisionService
                 'order_no' => (string) $order->order_no,
                 'supplier_id' => (int) $supplier->id,
                 'provider_key' => ProviderKey::MOFANG_FINANCE_API,
-                'supplier_product_id' => (int) ($product->supplier_product_id ?? 0),
+                'upstream_product_id' => $this->resolveProductUpstreamProductId($product),
                 'requested_host' => $requestedHost,
                 'upstream_invoice_id' => $invoiceId,
                 'upstream_host_id' => $hostId,
@@ -244,13 +247,37 @@ final class MofangProvisionService
         }
 
         return [
-            'product_id' => (int) $product->supplier_product_id,
+            'product_id' => $this->resolveProductUpstreamProductId($product),
             'billingcycle' => (string) $order->billing_cycle,
             'qty' => 1,
             'host' => $hostname,
             'password' => $password,
             'configoption' => $this->buildConfigOptionMap($product, $configSnapshot),
         ];
+    }
+
+    private function resolveExistingHostId(Service $service): int
+    {
+        $bindingHostId = $this->bindingResolver()->upstreamServiceIdForService($service);
+        $provisionData = (array) ($service->provision_data ?? []);
+
+        return (int) (($bindingHostId ?? '') ?: ($provisionData['upstream_host_id'] ?? 0) ?: 0);
+    }
+
+    private function resolveProductUpstreamProductId(Product $product): int
+    {
+        $upstreamProductId = $this->bindingResolver()->upstreamProductIdForProduct($product);
+
+        if ($upstreamProductId !== null) {
+            return (int) $upstreamProductId;
+        }
+
+        throw new BusinessException('商品上游绑定不存在，无法自动开通');
+    }
+
+    private function bindingResolver(): PluginBindingResolver
+    {
+        return $this->bindingResolver ??= app(PluginBindingResolver::class);
     }
 
     private function buildConfigOptionMap(Product $product, array $configSnapshot): array

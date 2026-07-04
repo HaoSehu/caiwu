@@ -42,6 +42,16 @@ class LogArchiveService
             'retain_days' => 180,
             'description' => '自动化任务业务日志',
         ],
+        'schedule_run_logs' => [
+            'date_column' => 'created_at',
+            'retain_days' => 180,
+            'description' => '调度任务运行日志',
+        ],
+        'integration_plugin_runtime_logs' => [
+            'date_column' => 'created_at',
+            'retain_days' => 180,
+            'description' => '插件运行审计日志',
+        ],
     ];
 
     private const EXCLUDED_AUDIT_TABLES = [

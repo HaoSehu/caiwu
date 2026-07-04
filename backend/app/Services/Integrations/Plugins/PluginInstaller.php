@@ -6,7 +6,6 @@ namespace App\Services\Integrations\Plugins;
 
 use App\Exceptions\BusinessException;
 use App\Models\IntegrationPlugin;
-use App\Models\Setting;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
 use App\Services\Integrations\Payments\PaymentGatewayRegistry;
 use App\Services\Mail\MailDriverManager;
@@ -16,6 +15,7 @@ use App\Services\Upstream\ProviderResolver;
 use App\Services\Verification\VerificationDriverManager;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class PluginInstaller
 {
@@ -61,11 +61,14 @@ class PluginInstaller
         $this->assertManifestExecutable($manifest);
         $this->configRepository->assertConfigReady($plugin, $manifest);
 
-        $plugin->forceFill([
-            'status' => IntegrationPlugin::STATUS_ENABLED,
-        ])->save();
+        DB::transaction(function () use ($plugin, $manifest): void {
+            $plugin->forceFill([
+                'status' => IntegrationPlugin::STATUS_ENABLED,
+            ])->save();
 
-        $this->syncSelectionSetting($manifest, true);
+            $this->syncDriverBinding($plugin, $manifest, true);
+        });
+
         $this->forgetDomainRuntime($manifest->domain);
 
         return $plugin->fresh('config') ?? $plugin;
@@ -75,11 +78,14 @@ class PluginInstaller
     {
         $manifest = $this->scanner->requireManifest((string) $plugin->domain, (string) $plugin->slug);
 
-        $plugin->forceFill([
-            'status' => IntegrationPlugin::STATUS_DISABLED,
-        ])->save();
+        DB::transaction(function () use ($plugin, $manifest): void {
+            $plugin->forceFill([
+                'status' => IntegrationPlugin::STATUS_DISABLED,
+            ])->save();
 
-        $this->syncSelectionSetting($manifest, false);
+            $this->syncDriverBinding($plugin, $manifest, false);
+        });
+
         $this->forgetDomainRuntime($manifest->domain);
 
         return $plugin->fresh('config') ?? $plugin;
@@ -98,38 +104,55 @@ class PluginInstaller
         }
     }
 
-    private function syncSelectionSetting(PluginManifest $manifest, bool $enabled): void
+    private function syncDriverBinding(IntegrationPlugin $plugin, PluginManifest $manifest, bool $enabled): void
     {
-        $selection = is_array($manifest->extra['selection_setting'] ?? null) ? $manifest->extra['selection_setting'] : [];
-        $group = trim((string) ($selection['group'] ?? ''));
-        $key = trim((string) ($selection['key'] ?? ''));
-        $value = trim((string) ($selection['value'] ?? ''));
-
-        if ($group === '' || $key === '') {
+        if (! Schema::hasTable('integration_plugin_bindings')) {
             return;
         }
 
-        if ($enabled) {
-            Setting::setValue($group, $key, $value !== '' ? $value : $manifest->key);
+        $binding = is_array($manifest->extra['driver_binding'] ?? null) ? $manifest->extra['driver_binding'] : [];
+        $bindingKey = trim((string) ($binding['binding_key'] ?? ''));
+        if ($bindingKey === '') {
+            return;
+        }
+
+        $identity = [
+            'domain' => $manifest->domain,
+            'binding_type' => trim((string) ($binding['binding_type'] ?? 'global')) ?: 'global',
+            'bindable_type' => trim((string) ($binding['bindable_type'] ?? 'setting')) ?: 'setting',
+            'bindable_id' => (int) ($binding['bindable_id'] ?? 0),
+            'binding_key' => $bindingKey,
+        ];
+
+        $payload = [
+            'plugin_id' => (int) $plugin->id,
+            'provider_key' => trim((string) ($binding['provider_key'] ?? '')) ?: $manifest->key,
+            'priority' => (int) ($binding['priority'] ?? 0),
+            'status' => $enabled ? 1 : 0,
+            'updated_at' => now(),
+        ];
+
+        $query = DB::table('integration_plugin_bindings')->where($identity);
+        if ($query->exists()) {
+            $query->update($payload);
 
             return;
         }
 
-        $current = trim((string) Setting::getValue($group, $key, ''));
-        if ($current === ($value !== '' ? $value : $manifest->key)) {
-            Setting::setValue($group, $key, '');
-        }
+        DB::table('integration_plugin_bindings')->insert(array_merge($identity, $payload, [
+            'created_at' => now(),
+        ]));
     }
 
     private function forgetDomainRuntime(string $domain): void
     {
         match ($domain) {
-            PluginDomain::PAYMENT => $this->forgetInstances(PaymentGatewayRegistry::class, PaymentGatewayManager::class),
+            PluginDomain::PAYMENT      => $this->forgetInstances(PaymentGatewayRegistry::class, PaymentGatewayManager::class),
             PluginDomain::VERIFICATION => $this->forgetInstances(VerificationDriverManager::class),
-            PluginDomain::MAIL => $this->forgetInstances(MailDriverManager::class),
-            PluginDomain::SMS => $this->forgetInstances(SmsDriverManager::class),
-            PluginDomain::UPSTREAM => $this->forgetInstances(ProviderRegistry::class, ProviderResolver::class),
-            default => null,
+            PluginDomain::MAIL         => $this->forgetInstances(MailDriverManager::class),
+            PluginDomain::SMS          => $this->forgetInstances(SmsDriverManager::class),
+            PluginDomain::UPSTREAM     => $this->forgetInstances(ProviderRegistry::class, ProviderResolver::class),
+            default                    => null,
         };
     }
 

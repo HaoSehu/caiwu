@@ -5,20 +5,30 @@ namespace App\Models;
 use App\Constants\PaymentGatewayCode;
 use App\Models\Concerns\NormalizesTraceId;
 use App\Support\VersionedJson;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 class Payment extends Model
 {
-    use NormalizesTraceId;
+    use NormalizesTraceId, SoftDeletes;
 
     protected $fillable = [
-        'payment_no', 'user_id', 'order_id', 'invoice_id', 'gateway',
+        'payment_no', 'user_id',
+        /**
+         * @deprecated order_id 是冗余字段，推荐通过 payment → invoice → order 链路追溯订单。
+         *             仅在创建时由 PaymentService 按 Invoice.order_id 回填，不保证与实际订单一致。
+         */
+        'order_id',
+        'invoice_id', 'gateway',
+        'plugin_id', 'gateway_key',
         'trade_no', 'amount', 'status', 'callback_raw', 'paid_at',
         'trace_id',
     ];
@@ -35,12 +45,58 @@ class Payment extends Model
     protected static function booted(): void
     {
         static::creating(function (Payment $payment): void {
-            $gateway = trim((string) $payment->gateway);
+            $gateway = $payment->gatewayKey();
 
             if (! PaymentGatewayCode::isThirdParty($gateway)) {
                 throw new InvalidArgumentException('Payment 仅允许记录第三方真实资金流入，余额、手工、免费流程请使用账单和账户流水表达。');
             }
+
+            if ($gateway !== '') {
+                if (static::paymentColumnExists('gateway_key') && trim((string) ($payment->gateway_key ?? '')) === '') {
+                    $payment->gateway_key = $gateway;
+                }
+            }
         });
+    }
+
+    protected function gateway(): Attribute
+    {
+        return Attribute::make(
+            get: fn (mixed $value, array $attributes): string => $this->resolveGatewayKeyFromAttributes($attributes),
+            set: function (mixed $value): array {
+                $gateway = PaymentGatewayCode::normalize((string) $value);
+
+                return ['gateway_key' => $gateway !== '' ? $gateway : null];
+            }
+        );
+    }
+
+    public function gatewayKey(): string
+    {
+        return $this->resolveGatewayKeyFromAttributes($this->getAttributes());
+    }
+
+    public function isThirdPartyGateway(): bool
+    {
+        return PaymentGatewayCode::isThirdParty($this->gatewayKey());
+    }
+
+    public function scopeWhereGatewayKey(Builder $query, string $gateway): Builder
+    {
+        return $query->where(static::gatewayStorageColumn(), PaymentGatewayCode::normalize($gateway));
+    }
+
+    public function scopeWhereGatewayKeyIn(Builder $query, array $gateways): Builder
+    {
+        $gatewayKeys = array_values(array_unique(array_filter(
+            array_map(
+                static fn (mixed $gateway): string => PaymentGatewayCode::normalize((string) $gateway),
+                $gateways
+            ),
+            static fn (string $gateway): bool => $gateway !== ''
+        )));
+
+        return $query->whereIn(static::gatewayStorageColumn(), $gatewayKeys);
     }
 
     public function getCallbackRawAttribute(mixed $value): array
@@ -105,6 +161,11 @@ class Payment extends Model
         return $this->belongsTo(Invoice::class);
     }
 
+    public function plugin(): BelongsTo
+    {
+        return $this->belongsTo(IntegrationPlugin::class, 'plugin_id');
+    }
+
     public function callbacks(): HasMany
     {
         return $this->hasMany(PaymentCallback::class, 'payment_id');
@@ -121,6 +182,44 @@ class Payment extends Model
         }
 
         return 'PAY'.now()->format('YmdHisv').Str::upper(Str::random(12));
+    }
+
+    /**
+     * Build a payment select list that keeps gatewayKey() hydrated from
+     * the normalized payments.gateway_key column.
+     *
+     * @param  list<string>  $columns
+     * @return list<string>
+     */
+    public static function gatewayProjectionColumns(array $columns): array
+    {
+        $result = array_values(array_filter(
+            $columns,
+            static fn (string $column): bool => $column !== 'gateway' && $column !== 'gateway_key'
+        ));
+
+        if (static::paymentColumnExists('gateway_key')) {
+            $result[] = 'gateway_key';
+        }
+
+        return array_values(array_unique($result));
+    }
+
+    private static function gatewayStorageColumn(): string
+    {
+        return 'gateway_key';
+    }
+
+    private static function paymentColumnExists(string $column): bool
+    {
+        return Schema::hasTable('payments') && Schema::hasColumn('payments', $column);
+    }
+
+    private function resolveGatewayKeyFromAttributes(array $attributes): string
+    {
+        $gatewayKey = trim((string) ($attributes['gateway_key'] ?? ''));
+
+        return PaymentGatewayCode::normalize($gatewayKey);
     }
 
     private function resolveCallbackPayloadFromStructure(): ?array

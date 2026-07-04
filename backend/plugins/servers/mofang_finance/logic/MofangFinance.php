@@ -66,6 +66,11 @@ class MofangFinance
                     'resolved' => $this->resolve((string) ($payload['capability'] ?? '')),
                 ],
             ],
+            'server.supplier_form_schema' => [
+                'success' => true,
+                'action' => $action,
+                'data' => $this->driver->supplierFormSchema(),
+            ],
             default => [
                 'success' => false,
                 'action' => $action,

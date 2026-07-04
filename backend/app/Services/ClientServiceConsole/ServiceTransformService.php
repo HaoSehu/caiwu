@@ -10,10 +10,11 @@ use App\Models\OperationLog;
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\Supplier;
+use App\Services\Integrations\Plugins\PluginBindingResolver;
+use App\Services\Integrations\Plugins\ServiceUpstreamBindingWriter;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\System\SettingService;
 use App\Services\Upstream\Contracts\ProvidesConsoleRuntime;
-use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderResolver;
 use App\Support\ServiceHostname;
 use Carbon\Carbon;
@@ -90,7 +91,7 @@ class ServiceTransformService
 
     public function transformListItem(Service $service): array
     {
-        $provisionData = (array) ($service->provision_data ?? []);
+        $provisionData = $this->serviceProvisionData($service);
         $displayDomain = ServiceHostname::resolveDisplayDomain($service, $provisionData);
         $service->loadMissing([
             'product.firstProductGroup',
@@ -141,7 +142,7 @@ class ServiceTransformService
             'custom_service_name' => (string) ($provisionData['custom_service_name'] ?? ''),
             'has_custom_service_name' => trim((string) ($provisionData['custom_service_name'] ?? '')) !== '',
             'upstream' => [
-                'host_id' => (int) (($provisionData['upstream_host_id'] ?? 0) ?: 0),
+                'host_id' => (int) (($this->bindingResolver()->upstreamServiceIdForService($service) ?? 0) ?: 0),
                 'status' => (string) ($provisionData['upstream_status'] ?? ''),
                 'status_label' => $this->resolveUpstreamStatusLabel((string) ($provisionData['upstream_status'] ?? '')),
                 'dedicated_ip' => (string) ($provisionData['dedicated_ip'] ?? ''),
@@ -160,7 +161,7 @@ class ServiceTransformService
 
     public function transformDetail(Service $service, ?array $remoteState = null, string $remoteError = ''): array
     {
-        $provisionData = (array) ($service->provision_data ?? []);
+        $provisionData = $this->serviceProvisionData($service, includeSecrets: true);
         $cachedConnection = $this->readCachedConnection($provisionData);
         $host = (array) ($remoteState['host'] ?? []);
         $runtime = (array) ($remoteState['runtime'] ?? []);
@@ -234,10 +235,10 @@ class ServiceTransformService
                 'paid_at' => $service->invoice?->paid_at?->format('Y-m-d H:i:s'),
             ],
             'upstream' => [
-                'provider' => (string) ($provisionData['provider'] ?? ''),
-                'supplier_id' => (int) (($provisionData['supplier_id'] ?? ($service->product?->supplier_id ?? 0)) ?: 0),
-                'supplier_product_id' => (int) (($provisionData['supplier_product_id'] ?? ($service->product?->supplier_product_id ?? 0)) ?: 0),
-                'host_id' => (int) (($provisionData['upstream_host_id'] ?? 0) ?: 0),
+                'provider_key' => (string) ($this->bindingResolver()->providerKeyForService($service) ?? ''),
+                'supplier_id' => $this->resolveManagedSupplierId($service, $provisionData),
+                'upstream_product_id' => $this->resolveUpstreamProductId($service, $provisionData),
+                'host_id' => $this->resolveUpstreamHostId($service, $provisionData),
                 'invoice_id' => (int) (($provisionData['upstream_invoice_id'] ?? 0) ?: 0),
                 'status' => $serviceStatus,
                 'status_label' => $this->resolveUpstreamStatusLabel($serviceStatus),
@@ -355,11 +356,12 @@ class ServiceTransformService
 
     public function canManageService(Service $service): bool
     {
-        $provisionData = (array) ($service->provision_data ?? []);
-        $supplierId = (int) (($provisionData['supplier_id'] ?? ($service->product?->supplier_id ?? 0)) ?: 0);
+        $provisionData = $this->serviceProvisionData($service);
+        $supplierId = $this->resolveManagedSupplierId($service, $provisionData);
+        $hostId = $this->resolveUpstreamHostId($service, $provisionData);
 
         return app(ProviderResolver::class)->resolveForService($service)->supports(ProvidesConsoleRuntime::class)
-            && (int) (($provisionData['upstream_host_id'] ?? 0) ?: 0) > 0
+            && $hostId > 0
             && $supplierId > 0;
     }
 
@@ -378,7 +380,7 @@ class ServiceTransformService
             return false;
         }
 
-        $provisionData = (array) ($service->provision_data ?? []);
+        $provisionData = $this->serviceProvisionData($service);
         $normalizedUpstreamStatus = strtolower(trim($upstreamStatus !== ''
             ? $upstreamStatus
             : (string) ($provisionData['upstream_status'] ?? '')));
@@ -398,7 +400,7 @@ class ServiceTransformService
 
     public function canManualProvisionService(Service $service): bool
     {
-        $provisionData = (array) ($service->provision_data ?? []);
+        $provisionData = $this->serviceProvisionData($service);
         $provisionError = trim((string) ($provisionData['provision_error'] ?? ''));
 
         return $provisionError !== ''
@@ -409,18 +411,27 @@ class ServiceTransformService
 
     public function readCachedConnection(array $provisionData): array
     {
+        $directConnection = [
+            'hostname' => trim((string) ($provisionData['hostname'] ?? $provisionData['connection_cached_hostname'] ?? '')),
+            'username' => trim((string) ($provisionData['username'] ?? '')),
+            'password' => (string) ($provisionData['password'] ?? ''),
+            'port' => (int) (($provisionData['port'] ?? $provisionData['nat_remote_port'] ?? 0) ?: 0),
+            'internal_ip' => trim((string) ($provisionData['internal_ip'] ?? '')),
+        ];
+        $directConnection = array_filter($directConnection, static fn (mixed $value): bool => $value !== '' && $value !== 0);
+
         $payload = trim((string) ($provisionData['connection_secret'] ?? ''));
         if ($payload === '') {
-            return [];
+            return $directConnection;
         }
 
         try {
             $decoded = json_decode(Crypt::decryptString($payload), true);
         } catch (\Throwable) {
-            return [];
+            return $directConnection;
         }
 
-        return is_array($decoded) ? $decoded : [];
+        return is_array($decoded) ? array_replace($decoded, $directConnection) : $directConnection;
     }
 
     public function writeCachedConnection(array $connection): string
@@ -436,7 +447,7 @@ class ServiceTransformService
 
     public function cacheSubmittedPasswordForService(Service $service, string $password): void
     {
-        $provisionData = (array) ($service->provision_data ?? []);
+        $provisionData = $this->serviceProvisionData($service, includeSecrets: true);
         $cachedConnection = $this->readCachedConnection($provisionData);
         $connection = [
             'hostname' => ServiceHostname::resolveConnectionHostname($service, $provisionData, $cachedConnection),
@@ -451,6 +462,8 @@ class ServiceTransformService
         $provisionData['last_password_reset_requested_at'] = now()->format('Y-m-d H:i:s');
 
         $service->forceFill(['provision_data' => $provisionData])->save();
+        app(ServiceUpstreamBindingWriter::class)
+            ->syncServiceState($service, null, $provisionData);
     }
 
     public function resolveNatRemoteSnapshot(array $provisionData, array $nat = []): array
@@ -525,7 +538,7 @@ class ServiceTransformService
     {
         $localConfigOptions = is_array($service->product?->config_options ?? null) ? $service->product->config_options : [];
         $upstreamProductId = (int) (($host['product_id'] ?? ($provisionData['upstream_product_id'] ?? 0)) ?: 0);
-        $supplier = $service->product?->supplier;
+        $supplier = $service->product instanceof Product ? $this->resolveProductSupplier($service->product) : null;
 
         if (
             ! $supplier instanceof Supplier
@@ -535,7 +548,10 @@ class ServiceTransformService
             return $localConfigOptions;
         }
 
-        if ((int) ($service->product?->supplier_product_id ?? 0) === $upstreamProductId && $localConfigOptions !== []) {
+        if ($service->product instanceof Product
+            && $this->resolveProductUpstreamProductId($service->product) === $upstreamProductId
+            && $localConfigOptions !== []
+        ) {
             return $localConfigOptions;
         }
 
@@ -867,37 +883,104 @@ class ServiceTransformService
 
     public function buildProductConfigOptionsCacheKey(Supplier $supplier, int $productId): string
     {
-        $providerKey = trim((string) ($supplier->interface_type ?? '')) ?: ProviderKey::HOSTING_PANEL_API;
+        $providerKey = $this->bindingResolver()->providerKeyForSupplier($supplier);
+
+        $providerKey = trim((string) $providerKey) !== '' ? trim((string) $providerKey) : 'unbound';
 
         return "upstream:{$providerKey}:product_config_options:{$supplier->id}:{$productId}";
+    }
+
+    /**
+     * @param  array<string, mixed>  $provisionData
+     */
+    private function resolveManagedSupplierId(Service $service, array $provisionData): int
+    {
+        $supplierId = (int) (($this->bindingResolver()->supplierIdForService($service) ?? 0) ?: 0);
+
+        if ($supplierId <= 0 && $service->product instanceof Product) {
+            $supplierId = (int) (($this->bindingResolver()->supplierIdForProduct($service->product) ?? 0) ?: 0);
+        }
+
+        if ($supplierId > 0) {
+            return $supplierId;
+        }
+
+        return 0;
+    }
+
+    /**
+     * @param  array<string, mixed>  $provisionData
+     */
+    private function resolveUpstreamProductId(Service $service, array $provisionData): int
+    {
+        $upstreamProductId = $this->bindingResolver()->upstreamProductIdForService($service);
+
+        if ($upstreamProductId === null && $service->product instanceof Product) {
+            $upstreamProductId = $this->bindingResolver()->upstreamProductIdForProduct($service->product);
+        }
+
+        if ($upstreamProductId !== null) {
+            return (int) $upstreamProductId;
+        }
+
+        return 0;
+    }
+
+    /**
+     * @param  array<string, mixed>  $provisionData
+     */
+    private function resolveUpstreamHostId(Service $service, array $provisionData): int
+    {
+        $upstreamServiceId = $this->bindingResolver()->upstreamServiceIdForService($service);
+        if ($upstreamServiceId !== null) {
+            return (int) $upstreamServiceId;
+        }
+
+        return 0;
+    }
+
+    private function bindingResolver(): PluginBindingResolver
+    {
+        return app(PluginBindingResolver::class);
+    }
+
+    private function serviceProvisionData(Service $service, bool $includeSecrets = false): array
+    {
+        $legacy = (array) ($service->provision_data ?? []);
+        $projection = $this->bindingResolver()->serviceProvisionProjection($service, $includeSecrets);
+
+        return $projection === [] ? $legacy : array_replace($legacy, $projection);
+    }
+
+    private function resolveProductSupplier(Product $product): ?Supplier
+    {
+        $boundSupplier = $this->bindingResolver()->supplierForProduct($product);
+        if ($boundSupplier instanceof Supplier) {
+            return $this->bindingResolver()->supplierWithRuntimeCredentials($boundSupplier);
+        }
+
+        return null;
+    }
+
+    private function resolveProductUpstreamProductId(Product $product): int
+    {
+        $upstreamProductId = $this->bindingResolver()->upstreamProductIdForProduct($product);
+        if ($upstreamProductId !== null) {
+            return (int) $upstreamProductId;
+        }
+
+        return 0;
     }
 
     private function getCachedProductConfigOptions(Supplier $supplier, int $productId): array
     {
         $cacheKey = $this->buildProductConfigOptionsCacheKey($supplier, $productId);
-        $legacyCacheKey = $this->buildLegacyProductConfigOptionsCacheKey($supplier, $productId);
-        $cacheKeys = array_values(array_unique([$cacheKey, $legacyCacheKey]));
-        $cachedValues = Cache::many($cacheKeys);
-
-        foreach ($cacheKeys as $lookupKey) {
-            $cached = $cachedValues[$lookupKey] ?? null;
-            if (! is_array($cached) || $cached === []) {
-                continue;
-            }
-
-            if ($lookupKey !== $cacheKey) {
-                Cache::put($cacheKey, $cached, now()->addMinutes(30));
-            }
-
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached) && $cached !== []) {
             return $cached;
         }
 
         return [];
-    }
-
-    private function buildLegacyProductConfigOptionsCacheKey(Supplier $supplier, int $productId): string
-    {
-        return 'upstream:'.ProviderKey::HOSTING_PANEL_API.":product_config_options:{$supplier->id}:{$productId}";
     }
 
     // ── Private spec helpers ───────────────────────────────────────────────

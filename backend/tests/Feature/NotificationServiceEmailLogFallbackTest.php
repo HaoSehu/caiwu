@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Models\Setting;
+use App\Services\Integrations\Plugins\PluginConfigRepository;
 use App\Services\Integrations\Plugins\PluginInstaller;
 use App\Services\Integrations\Plugins\PluginScanner;
 use App\Services\Mail\MailDriverManager;
@@ -50,11 +51,6 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
 
         $settings = [
             'email_enabled' => Setting::getValue('notification', 'email_enabled', '0'),
-            'email_host' => Setting::getValue('notification', 'email_host', ''),
-            'email_port' => Setting::getValue('notification', 'email_port', ''),
-            'email_username' => Setting::getValue('notification', 'email_username', ''),
-            'email_password' => Setting::getValue('notification', 'email_password', ''),
-            'email_from_name' => Setting::getValue('notification', 'email_from_name', ''),
         ];
 
         $fakeMailManager = $this->makeFakeMailManager();
@@ -63,11 +59,6 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
 
         try {
             Setting::setValue('notification', 'email_enabled', '1');
-            Setting::setValue('notification', 'email_host', 'smtp.example.com');
-            Setting::setValue('notification', 'email_port', '465');
-            Setting::setValue('notification', 'email_username', 'no-reply@example.com');
-            Setting::setValue('notification', 'email_password', 'test-secret');
-            Setting::setValue('notification', 'email_from_name', 'Codex Test');
 
             app()->instance('mail.manager', $fakeMailManager);
             Mail::swap($fakeMailManager);
@@ -110,11 +101,6 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
         $to = "codex-template-{$suffix}@example.com";
         $notificationSettings = [
             'email_enabled' => Setting::getValue('notification', 'email_enabled', '0'),
-            'email_host' => Setting::getValue('notification', 'email_host', ''),
-            'email_port' => Setting::getValue('notification', 'email_port', ''),
-            'email_username' => Setting::getValue('notification', 'email_username', ''),
-            'email_password' => Setting::getValue('notification', 'email_password', ''),
-            'email_from_name' => Setting::getValue('notification', 'email_from_name', ''),
         ];
         $basicSettings = [
             'site_name' => Setting::getValue('basic', 'site_name', ''),
@@ -126,11 +112,6 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
 
         try {
             Setting::setValue('notification', 'email_enabled', '1');
-            Setting::setValue('notification', 'email_host', 'smtp.example.com');
-            Setting::setValue('notification', 'email_port', '465');
-            Setting::setValue('notification', 'email_username', 'no-reply@example.com');
-            Setting::setValue('notification', 'email_password', 'test-secret');
-            Setting::setValue('notification', 'email_from_name', 'Codex Test');
             Setting::setValue('basic', 'site_name', 'Codex Billing');
 
             app()->instance('mail.manager', $fakeMailManager);
@@ -176,11 +157,6 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
         $code = '482915';
         $settings = [
             'email_enabled' => Setting::getValue('notification', 'email_enabled', '0'),
-            'email_host' => Setting::getValue('notification', 'email_host', ''),
-            'email_port' => Setting::getValue('notification', 'email_port', ''),
-            'email_username' => Setting::getValue('notification', 'email_username', ''),
-            'email_password' => Setting::getValue('notification', 'email_password', ''),
-            'email_from_name' => Setting::getValue('notification', 'email_from_name', ''),
         ];
 
         $fakeMailManager = $this->makeFakeMailManager();
@@ -188,11 +164,6 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
 
         try {
             Setting::setValue('notification', 'email_enabled', '1');
-            Setting::setValue('notification', 'email_host', 'smtp.example.com');
-            Setting::setValue('notification', 'email_port', '465');
-            Setting::setValue('notification', 'email_username', 'no-reply@example.com');
-            Setting::setValue('notification', 'email_password', 'test-secret');
-            Setting::setValue('notification', 'email_from_name', 'Codex Test');
 
             app()->instance('mail.manager', $fakeMailManager);
             Mail::swap($fakeMailManager);
@@ -296,8 +267,17 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
 
         $scanner = app(PluginScanner::class);
         $installer = app(PluginInstaller::class);
-        $scanner->requireManifest('mail', 'smtp');
+        $configRepository = app(PluginConfigRepository::class);
+        $manifest = $scanner->requireManifest('mail', 'smtp');
         $plugin = $installer->install('mail', 'smtp');
+        $configRepository->save($plugin, $manifest, [
+            'host' => 'smtp.example.com',
+            'port' => 465,
+            'username' => 'no-reply@example.com',
+            'password' => 'test-secret',
+            'from_name' => 'Codex Test',
+            'timeout_seconds' => 8,
+        ]);
         $installer->enable($plugin);
 
         $this->app->forgetInstance(MailDriverManager::class);

@@ -23,16 +23,18 @@ class RechargeController extends Controller
     public function store(StoreRequest $request)
     {
         $data = $request->validated();
+        $gateway = (string) ($data['gateway'] ?? PaymentGatewayCode::ALIPAY);
 
-        $result = $this->paymentService->rechargeByAlipay(
+        $result = $this->paymentService->rechargeByGateway(
             $request->user(),
-            (float) $data['amount']
+            (float) $data['amount'],
+            $gateway
         );
 
         $payment = Payment::query()
             ->where('payment_no', (string) ($result['payment_no'] ?? ''))
             ->where('user_id', $request->user()->id)
-            ->where('gateway', PaymentGatewayCode::ALIPAY)
+            ->whereGatewayKey($gateway)
             ->whereNull('invoice_id')
             ->first();
 
@@ -55,7 +57,7 @@ class RechargeController extends Controller
 
         $payment = Payment::where('payment_no', $paymentNo)
             ->where('user_id', $request->user()->id)
-            ->where('gateway', PaymentGatewayCode::ALIPAY)
+            ->whereGatewayKeyIn(PaymentGatewayCode::thirdPartyGateways())
             ->firstOrFail();
 
         $this->checkoutSecurityService->assertRechargePollToken(

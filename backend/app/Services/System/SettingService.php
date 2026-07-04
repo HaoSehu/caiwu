@@ -2,6 +2,7 @@
 
 namespace App\Services\System;
 
+use App\Exceptions\BusinessException;
 use App\Models\Setting;
 use App\Models\SystemSetting;
 use App\Models\ThirdProductGroup;
@@ -11,6 +12,45 @@ use Illuminate\Support\Collection;
 class SettingService
 {
     private const FIXED_RENEW_NOTICE_DAYS = [7, 3, 1];
+
+    private const PLUGIN_SETTING_KEYS = [
+        'system' => [
+            'captcha_driver',
+            'geetest_enabled',
+            'geetest_captcha_id',
+            'geetest_captcha_key',
+        ],
+        'payment' => [
+            'alipay_enabled',
+            'alipay_name',
+            'alipay_app_id',
+            'alipay_private_key',
+            'alipay_public_key',
+        ],
+        'notification' => [
+            'email_host',
+            'email_port',
+            'email_username',
+            'email_password',
+            'email_from_name',
+            'email_encryption',
+            'email_timeout_seconds',
+            'sms_driver',
+            'sms_provider',
+            'sms_access_key',
+            'sms_secret_key',
+            'sms_sign_name',
+            'sms_template_code',
+        ],
+        'verification' => [
+            'verification_driver',
+            'verification_api',
+            'verification_key',
+            'verification_biz_code',
+            'free_attempts',
+            'retry_fee',
+        ],
+    ];
 
     public static function defaultTrafficPackageConfig(): array
     {
@@ -72,6 +112,7 @@ class SettingService
 
         $dynamicSettings = $storedSettings
             ->reject(fn ($setting, string $key) => array_key_exists($key, $fallbackSettingMap))
+            ->reject(fn ($setting, string $key) => $this->isPluginSettingKey($group, $key))
             ->map(fn (SystemSetting $setting) => $this->formatSettingPayload(
                 (string) ($setting->group_key ?? $group),
                 (string) ($setting->item_key ?? ''),
@@ -85,7 +126,30 @@ class SettingService
 
     public function saveGroupSettings(string $group, array $settings): void
     {
-        Setting::setValues($group, $this->prepareSettingsForSave($settings));
+        Setting::setValues(
+            $group,
+            $this->filterPluginSettings($group, $this->prepareSettingsForSave($settings))
+        );
+    }
+
+    public function revealSensitiveSetting(string $group, string $key): array
+    {
+        $settingKey = trim($key);
+        $settingGroup = trim($group);
+        if ($settingKey === '' || $this->isPluginSettingKey($settingGroup, $settingKey) || ! Setting::isSensitiveKey($settingKey)) {
+            throw new BusinessException('敏感配置不存在', 42200);
+        }
+
+        $value = Setting::getValue($settingGroup, $settingKey, '');
+        if (! $this->hasSettingValue($value)) {
+            throw new BusinessException('敏感配置尚未填写', 42200);
+        }
+
+        return [
+            'group' => $settingGroup,
+            'key' => $settingKey,
+            'value' => $value,
+        ];
     }
 
     public function getProvisionHostnameConfig(): array
@@ -343,16 +407,7 @@ class SettingService
     {
         return match ($group) {
             'system' => [
-                'geetest_enabled' => $this->normalizeBooleanConfigValue(config('idc.geetest.enabled', false)) ? '1' : '0',
-                'geetest_captcha_id' => (string) config('idc.geetest.captcha_id', ''),
-                'geetest_captcha_key' => (string) config('idc.geetest.captcha_key', ''),
-            ],
-            'payment' => [
-                'alipay_enabled' => '0',
-                'alipay_name' => '支付宝支付',
-                'alipay_app_id' => (string) config('alipay.app_id', ''),
-                'alipay_private_key' => (string) config('alipay.private_key', ''),
-                'alipay_public_key' => (string) config('alipay.alipay_public_key', ''),
+                'captcha_enabled' => $this->defaultCaptchaEnabled() ? '1' : '0',
             ],
             'traffic_package' => [
                 'traffic_package_enabled' => '1',
@@ -362,6 +417,12 @@ class SettingService
                 'traffic_package_option_keyword' => '流量',
                 'traffic_package_allow_choice_mode' => '1',
                 'traffic_package_allow_quantity_mode' => '1',
+            ],
+            'message_limit' => [
+                'email_rate_limit_enabled' => '1',
+                'email_ip_minute_limit' => '6',
+                'sms_rate_limit_enabled' => '1',
+                'sms_ip_minute_limit' => '6',
             ],
             default => [],
         };
@@ -399,9 +460,15 @@ class SettingService
     private function shouldPersistEmptyFallback(string $group, string $key): bool
     {
         return in_array($group.':'.$key, [
-            'system:geetest_enabled',
-            'payment:alipay_enabled',
+            'system:captcha_enabled',
         ], true);
+    }
+
+    private function defaultCaptchaEnabled(): bool
+    {
+        return $this->normalizeBooleanConfigValue(
+            config('idc.captcha.enabled', false)
+        );
     }
 
     private function resolveSettingValue(string $group, string $key, mixed $fallbackValue = ''): mixed
@@ -449,6 +516,27 @@ class SettingService
         }
 
         return $settings;
+    }
+
+    /**
+     * @param  array<string, mixed>  $settings
+     * @return array<string, mixed>
+     */
+    private function filterPluginSettings(string $group, array $settings): array
+    {
+        return array_filter(
+            $settings,
+            fn (string|int $key): bool => ! $this->isPluginSettingKey($group, (string) $key),
+            ARRAY_FILTER_USE_KEY
+        );
+    }
+
+    private function isPluginSettingKey(string $group, string $key): bool
+    {
+        $group = trim($group);
+        $key = trim($key);
+
+        return $key !== '' && in_array($key, self::PLUGIN_SETTING_KEYS[$group] ?? [], true);
     }
 
     private function maskSecretValue(mixed $value): string

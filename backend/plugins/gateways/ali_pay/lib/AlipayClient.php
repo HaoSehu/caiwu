@@ -9,6 +9,7 @@ use App\Services\System\GatewayLogService;
 use App\Support\SensitiveDataSanitizer;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -32,10 +33,6 @@ class AlipayClient
 
     private bool $enabled;
 
-    private bool $sslVerify;
-
-    private string $caBundle;
-
     /**
      * @param  array<string, mixed>  $config
      */
@@ -44,14 +41,12 @@ class AlipayClient
         $this->appId = $this->configString('app_id', 'alipay_app_id', config('alipay.app_id', ''));
         $this->privateKey = $this->configString('private_key', 'alipay_private_key', config('alipay.private_key', ''));
         $this->alipayPublicKey = $this->configString('alipay_public_key', 'alipay_public_key', config('alipay.alipay_public_key', ''));
-        $this->gateway = $this->configString('gateway', null, config('alipay.gateway', 'https://openapi.alipay.com/gateway.do'));
+        $this->gateway = trim((string) config('alipay.gateway', 'https://openapi.alipay.com/gateway.do'));
         $this->notifyUrl = $this->resolveNotifyUrl();
         $this->timeout = config('alipay.timeout', '30m');
         $this->signType = 'RSA2';
         $this->charset = 'utf-8';
         $this->enabled = $this->configBool('alipay_enabled', 'alipay_enabled', false);
-        $this->sslVerify = $this->configBool('ssl_verify', null, (bool) config('alipay.ssl_verify', true));
-        $this->caBundle = $this->configString('ca_bundle', null, config('alipay.ca_bundle', ''));
     }
 
     /**
@@ -62,7 +57,7 @@ class AlipayClient
     private function resolveNotifyUrl(): string
     {
         // 优先使用专门配置的回调 URL
-        $notifyUrl = $this->configString('notify_url', null, config('alipay.notify_url', ''));
+        $notifyUrl = trim((string) config('alipay.notify_url', ''));
         if ($notifyUrl !== '') {
             return $notifyUrl;
         }
@@ -90,11 +85,21 @@ class AlipayClient
     }
 
     /**
-     * 从 settings 表读取，fallback 到 .env/config
+     * 从 settings 表读取，带 60 秒 Redis 缓存。
+     * 管理员更新支付宝配置后，可通过 Cache::forget('payment.alipay.settings') 立即生效。
      */
     private function setting(string $key, string $default = ''): string
     {
-        $value = Setting::getValue('payment', $key);
+        $settings = Cache::remember('payment.alipay.settings', 60, function () {
+            return [
+                'alipay_app_id'         => Setting::getValue('payment', 'alipay_app_id') ?? '',
+                'alipay_private_key'    => Setting::getValue('payment', 'alipay_private_key') ?? '',
+                'alipay_public_key'     => Setting::getValue('payment', 'alipay_public_key') ?? '',
+                'alipay_enabled'        => Setting::getValue('payment', 'alipay_enabled') ?? '',
+            ];
+        });
+
+        $value = $settings[$key] ?? null;
 
         return ($value !== null && $value !== '') ? (string) $value : $default;
     }
@@ -324,31 +329,13 @@ class AlipayClient
         try {
             $response = $this->buildHttpClient()->post($url, $params);
         } catch (ConnectionException $exception) {
-            if (! app()->environment('production') && str_contains($exception->getMessage(), 'SSL certificate problem')) {
-                Log::warning('[支付宝当面付] SSL 证书错误，非生产环境降级重试', [
-                    'gateway' => $this->gateway,
-                    'message' => $exception->getMessage(),
-                ]);
+            Log::error('[支付宝当面付] 网关请求失败', [
+                'gateway' => $this->gateway,
+                'message' => $exception->getMessage(),
+                'exception' => $exception::class,
+            ]);
 
-                try {
-                    $response = $this->buildHttpClient(false)->post($url, $params);
-                } catch (ConnectionException $retryException) {
-                    Log::error('[支付宝当面付] 降级重试仍失败', [
-                        'gateway' => $this->gateway,
-                        'message' => $retryException->getMessage(),
-                    ]);
-
-                    throw new BusinessException('支付网关暂时不可用，请稍后重试', 42200, 422);
-                }
-            } else {
-                Log::error('[支付宝当面付] 网关请求失败', [
-                    'gateway' => $this->gateway,
-                    'message' => $exception->getMessage(),
-                    'exception' => $exception::class,
-                ]);
-
-                throw new BusinessException('支付网关暂时不可用，请稍后重试', 42200, 422);
-            }
+            throw new BusinessException('支付网关暂时不可用，请稍后重试', 42200, 422);
         }
 
         $body = $response->body();
@@ -372,21 +359,11 @@ class AlipayClient
         return $result;
     }
 
-    private function buildHttpClient(?bool $overrideVerify = null): PendingRequest
+    private function buildHttpClient(): PendingRequest
     {
-        $verify = $overrideVerify ?? $this->sslVerify;
-        if ($overrideVerify === null && $this->caBundle !== '' && is_file($this->caBundle)) {
-            $verify = $this->caBundle;
-        }
-
-        if (app()->environment('production') && $verify === false) {
-            $verify = true;
-        }
-
         return Http::asForm()
             ->timeout(15)
-            ->retry(1, 200)
-            ->withOptions(['verify' => $verify]);
+            ->retry(1, 200);
     }
 
     /**

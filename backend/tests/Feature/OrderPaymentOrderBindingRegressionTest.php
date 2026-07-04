@@ -275,7 +275,7 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
 
         $this->assertDatabaseMissing('payments', [
             'order_id' => (int) $order->id,
-            'gateway' => 'balance',
+            'gateway_key' => 'balance',
         ]);
 
         $this->assertDatabaseHas('orders', [
@@ -365,13 +365,13 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
 
         $this->assertDatabaseMissing('payments', [
             'invoice_id' => (int) $invoice->id,
-            'gateway' => 'balance',
+            'gateway_key' => 'balance',
         ]);
         $this->assertDatabaseHas('payments', [
             'payment_no' => $result['payment_no'],
             'order_id' => (int) $order->id,
             'invoice_id' => (int) $invoice->id,
-            'gateway' => 'alipay',
+            'gateway_key' => 'alipay',
             'status' => PaymentStatus::PENDING,
             'amount' => '30.00',
         ]);
@@ -754,7 +754,7 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
 
         $this->assertDatabaseMissing('payments', [
             'invoice_id' => (int) $invoice->id,
-            'gateway' => 'manual',
+            'gateway_key' => 'manual',
         ]);
         $this->assertDatabaseHas('invoices', [
             'id' => (int) $invoice->id,
@@ -786,7 +786,7 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
 
         $this->assertDatabaseMissing('payments', [
             'invoice_id' => (int) $invoice->id,
-            'gateway' => 'offline',
+            'gateway_key' => 'offline',
         ]);
         $this->assertDatabaseHas('invoices', [
             'id' => (int) $invoice->id,
@@ -818,7 +818,7 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
 
         $this->assertDatabaseMissing('payments', [
             'invoice_id' => (int) $invoice->id,
-            'gateway' => 'alipay',
+            'gateway_key' => 'alipay',
             'status' => PaymentStatus::SUCCESS,
         ]);
         $this->assertDatabaseHas('invoices', [

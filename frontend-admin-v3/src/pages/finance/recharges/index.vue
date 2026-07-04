@@ -207,7 +207,8 @@ function buildParams() {
   };
   if (filters.keyword) params.keyword = filters.keyword;
   if (filters.status !== '') params.status = filters.status;
-  if (filters.start_date || filters.end_date) params.date_range = [filters.start_date, filters.end_date].filter(Boolean);
+  if (filters.start_date) params.start_date = filters.start_date;
+  if (filters.end_date) params.end_date = filters.end_date;
   return params;
 }
 

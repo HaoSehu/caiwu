@@ -79,23 +79,24 @@ class LogController extends Controller
         );
     }
 
+    public function runtimeLogs(GeneralLogListRequest $request)
+    {
+        return $this->success(
+            $this->adminLogService->getRuntimeLogs($request->filters(), $request->pageNumber(), $request->perPage(20, 100))
+        );
+    }
+
+    public function runtimeLogsSummary(GeneralLogListRequest $request)
+    {
+        return $this->success(
+            $this->adminLogService->getRuntimeLogsSummary($request->filters())
+        );
+    }
+
     public function adminLoginLogs(GeneralLogListRequest $request)
     {
         return $this->success(
             $this->adminLogService->getAdminLoginLogs($request->filters(), $request->pageNumber(), $request->perPage(20, 100))
-        );
-    }
-
-    public function cleanupOverview()
-    {
-        return $this->success($this->adminLogService->getCleanupOverview());
-    }
-
-    public function cleanup(CleanupLogRequest $request)
-    {
-        return $this->success(
-            $this->adminLogService->cleanup($request->payload()),
-            '日志清理完成'
         );
     }
 
@@ -124,6 +125,21 @@ class LogController extends Controller
     {
         return $this->success(
             app(ScheduleRunLogService::class)->getHealthOverview()
+        );
+    }
+
+    public function cleanupOverview()
+    {
+        return $this->success(
+            $this->adminLogService->getCleanupOverview()
+        );
+    }
+
+    public function cleanup(CleanupLogRequest $request)
+    {
+        return $this->success(
+            $this->adminLogService->cleanup($request->payload()),
+            '清理完成'
         );
     }
 }

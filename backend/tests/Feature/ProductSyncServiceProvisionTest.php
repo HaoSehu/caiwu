@@ -12,15 +12,35 @@ use App\Models\Product;
 use App\Models\Service;
 use App\Models\Supplier;
 use App\Models\User;
+use App\Services\Integrations\Plugins\PluginFileLoader;
+use App\Services\Integrations\Plugins\PluginScanner;
 use App\Services\ProductCatalog\ProductSyncService;
-use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiDriver;
+use App\Services\Upstream\Contracts\ProvidesConsoleCatalog;
+use App\Services\Upstream\Contracts\UpstreamDriver;
 use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiTransport;
+use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class ProductSyncServiceProvisionTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        app(PluginFileLoader::class)->ensureLoaded(
+            app(PluginScanner::class)->requireManifest('upstream', 'mofang_finance')
+        );
+        Artisan::call('migrate', [
+            '--path' => 'database/migrations/2026_07_03_130000_create_plugin_binding_runtime_and_audit_tables.php',
+            '--force' => true,
+        ]);
+        $this->activateIntegrationPluginForTest('upstream', 'mofang_finance');
+    }
+
     public function test_assert_product_can_be_provisioned_blocks_when_local_stock_is_insufficient(): void
     {
         $suffix = bin2hex(random_bytes(4));
@@ -59,7 +79,7 @@ class ProductSyncServiceProvisionTest extends TestCase
         $supplier = Supplier::query()->create([
             'name' => 'Provision Supplier '.$suffix,
             'code' => 'provision-'.$suffix,
-            'interface_type' => 'hosting_panel_api',
+            'interface_type' => ProviderKey::MOFANG_FINANCE_API,
             'api_url' => 'https://supplier-'.$suffix.'.example.com',
             'api_username' => 'demo',
             'api_key' => 'secret',
@@ -79,8 +99,10 @@ class ProductSyncServiceProvisionTest extends TestCase
             'status' => 1,
             'auto_setup' => 0,
             'supplier_id' => (int) $supplier->id,
+            'provision_module' => ProviderKey::MOFANG_FINANCE_API,
             'supplier_product_id' => $supplierProductId,
         ]);
+        $this->bindProductToMofang($supplier, $product, $supplierProductId);
 
         Order::query()->create([
             'order_no' => 'ORDPROVISION'.strtoupper($suffix),
@@ -124,7 +146,7 @@ class ProductSyncServiceProvisionTest extends TestCase
         $supplier = Supplier::query()->create([
             'name' => 'Provision Supplier Pending Service '.$suffix,
             'code' => 'provision-pending-'.$suffix,
-            'interface_type' => 'hosting_panel_api',
+            'interface_type' => ProviderKey::MOFANG_FINANCE_API,
             'api_url' => 'https://supplier-'.$suffix.'.example.com',
             'api_username' => 'demo',
             'api_key' => 'secret',
@@ -144,8 +166,10 @@ class ProductSyncServiceProvisionTest extends TestCase
             'status' => 1,
             'auto_setup' => 1,
             'supplier_id' => (int) $supplier->id,
+            'provision_module' => ProviderKey::MOFANG_FINANCE_API,
             'supplier_product_id' => $supplierProductId,
         ]);
+        $this->bindProductToMofang($supplier, $product, $supplierProductId);
 
         $user = User::query()->create([
             'email' => 'provision-pending-'.$suffix.'@example.com',
@@ -212,7 +236,77 @@ class ProductSyncServiceProvisionTest extends TestCase
     private function makeProviderResolver(HostingPanelApiTransport $transport): ProviderResolver
     {
         return new ProviderResolver(new ProviderRegistry([
-            new HostingPanelApiDriver($transport),
+            new class($transport) implements UpstreamDriver
+            {
+                public function __construct(private readonly HostingPanelApiTransport $transport) {}
+
+                public function key(): string
+                {
+                    return ProviderKey::MOFANG_FINANCE_API;
+                }
+
+                public function label(): string
+                {
+                    return '魔方财务接口';
+                }
+
+                public function capabilities(): array
+                {
+                    return [ProvidesConsoleCatalog::class];
+                }
+
+                public function supports(string $capability): bool
+                {
+                    return $capability === ProvidesConsoleCatalog::class
+                        && $this->transport instanceof ProvidesConsoleCatalog;
+                }
+
+                public function resolve(string $capability): ?object
+                {
+                    return $this->supports($capability) ? $this->transport : null;
+                }
+            },
         ]));
+    }
+
+    private function bindProductToMofang(Supplier $supplier, Product $product, int|string $upstreamProductId): void
+    {
+        $pluginId = (int) DB::table('integration_plugins')
+            ->where('domain', 'upstream')
+            ->where('plugin_key', ProviderKey::MOFANG_FINANCE_API)
+            ->value('id');
+
+        $this->assertGreaterThan(0, $pluginId);
+
+        DB::table('supplier_plugin_bindings')->updateOrInsert([
+            'supplier_id' => (int) $supplier->id,
+            'plugin_id' => $pluginId,
+            'environment' => 'production',
+        ], [
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'status' => 1,
+            'priority' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $supplierBindingId = (int) DB::table('supplier_plugin_bindings')
+            ->where('supplier_id', (int) $supplier->id)
+            ->where('plugin_id', $pluginId)
+            ->where('environment', 'production')
+            ->value('id');
+
+        DB::table('product_upstream_bindings')->updateOrInsert([
+            'product_id' => (int) $product->id,
+            'supplier_plugin_binding_id' => $supplierBindingId,
+            'upstream_product_id' => (string) $upstreamProductId,
+        ], [
+            'plugin_id' => $pluginId,
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'auto_setup' => (int) ($product->auto_setup ?? 0) === 1 ? 1 : 0,
+            'status' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 }

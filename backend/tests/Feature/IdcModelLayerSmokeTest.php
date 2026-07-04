@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Models\AccountLedger;
+use App\Models\AccountTransaction;
 use App\Models\Coupon;
 use App\Models\Invoice;
 use App\Models\Product;
-use App\Models\ServiceInstance;
+use App\Models\Service;
 use App\Models\Ticket;
 use App\Models\TicketReply;
 use App\Models\User;
@@ -20,9 +20,10 @@ class IdcModelLayerSmokeTest extends TestCase
 {
     public function test_core_models_use_default_connection(): void
     {
-        $this->assertNull((new ServiceInstance)->getConnectionName());
-        $this->assertSame('service_instances', (new ServiceInstance)->getTable());
-        $this->assertNull((new AccountLedger)->getConnectionName());
+        $this->assertNull((new Service)->getConnectionName());
+        $this->assertSame('services', (new Service)->getTable());
+        $this->assertNull((new AccountTransaction)->getConnectionName());
+        $this->assertSame('account_transactions', (new AccountTransaction)->getTable());
         $this->assertNull((new Invoice)->getConnectionName());
         $this->assertNull((new Ticket)->getConnectionName());
     }

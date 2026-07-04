@@ -16,17 +16,17 @@ use App\Services\Integrations\Plugins\PluginFileLoader;
 use App\Services\Integrations\Plugins\PluginScanner;
 use App\Services\Provisioning\ProvisionService;
 use App\Services\System\SettingService;
-use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiDriver;
+use App\Services\Upstream\Contracts\ProvidesProvisioning;
+use App\Services\Upstream\Contracts\UpstreamDriver;
 use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiTransport;
 use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
 use App\Support\ProductProvisionHostname;
-use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangCloudConfigTemplate;
-use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangFinanceAdapter;
-use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangFinanceDriver;
 use ArrayObject;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -39,6 +39,11 @@ class ProvisionServiceHostnameTest extends TestCase
         app(PluginFileLoader::class)->ensureLoaded(
             app(PluginScanner::class)->requireManifest('upstream', 'mofang_finance')
         );
+        Artisan::call('migrate', [
+            '--path' => 'database/migrations/2026_07_03_130000_create_plugin_binding_runtime_and_audit_tables.php',
+            '--force' => true,
+        ]);
+        $this->activateIntegrationPluginForTest('upstream', 'mofang_finance');
 
         Cache::flush();
     }
@@ -181,6 +186,12 @@ class ProvisionServiceHostnameTest extends TestCase
     #[Test]
     public function it_preserves_mofang_provider_key_after_successful_upstream_provisioning(): void
     {
+        Artisan::call('migrate', [
+            '--path' => 'database/migrations/2026_07_03_130000_create_plugin_binding_runtime_and_audit_tables.php',
+            '--force' => true,
+        ]);
+        $this->activateIntegrationPluginForTest('upstream', 'mofang_finance');
+
         $transport = new class extends HostingPanelApiTransport
         {
             public function __construct() {}
@@ -334,9 +345,38 @@ class ProvisionServiceHostnameTest extends TestCase
 
         $createdService = $service->processPaidOrder($order);
 
-        $this->assertSame(ProviderKey::MOFANG_FINANCE_API, $createdService->provision_data['provider'] ?? null);
+        $this->assertSame(ProviderKey::MOFANG_FINANCE_API, $createdService->provision_data['provider_key'] ?? null);
         $this->assertSame(7788, $createdService->provision_data['upstream_host_id'] ?? null);
+        $this->assertSame(9001, $createdService->provision_data['upstream_product_id'] ?? null);
         $this->assertSame(ServiceStatus::ACTIVE, (int) $createdService->status);
+
+        $binding = DB::table('service_upstream_bindings')
+            ->where('service_id', (int) $createdService->id)
+            ->where('provider_key', ProviderKey::MOFANG_FINANCE_API)
+            ->where('upstream_service_id', '7788')
+            ->first();
+
+        $this->assertNotNull($binding);
+        $this->assertDatabaseHas('service_runtime_snapshots', [
+            'service_id' => (int) $createdService->id,
+            'service_upstream_binding_id' => (int) $binding->id,
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'status_key' => 'Active',
+        ]);
+        $this->assertDatabaseHas('service_connection_snapshots', [
+            'service_id' => (int) $createdService->id,
+            'service_upstream_binding_id' => (int) $binding->id,
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'connection_type' => 'default',
+            'hostname' => 'srv7788',
+        ]);
+        $this->assertDatabaseHas('service_provision_attempts', [
+            'service_id' => (int) $createdService->id,
+            'service_upstream_binding_id' => (int) $binding->id,
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'action' => 'provision',
+            'attempt_status' => 'success',
+        ]);
     }
 
     #[Test]
@@ -503,7 +543,7 @@ class ProvisionServiceHostnameTest extends TestCase
             $provisionService->retryFailedProvision($order);
             $this->fail('预期应抛出上游购物车错误');
         } catch (BusinessException $exception) {
-            $this->assertSame('加入上游购物车失败，主机面板接口暂时不可用', $exception->getMessage());
+            $this->assertSame('加入上游购物车失败，上游业务接口暂时不可用', $exception->getMessage());
         }
 
         $this->assertSame('ser1234567890', (string) (($captured['payload']['host'] ?? '')));
@@ -511,7 +551,7 @@ class ProvisionServiceHostnameTest extends TestCase
         $this->assertSame(ServiceStatus::PENDING, (int) $service->status);
         $this->assertSame(OrderStatus::PROCESSING, (int) $order->status);
         $this->assertSame(
-            '加入上游购物车失败，主机面板接口暂时不可用',
+            '加入上游购物车失败，上游业务接口暂时不可用',
             (string) (($service->provision_data ?? [])['provision_error'] ?? '')
         );
         $this->assertFalse(array_key_exists('upstream_host_id', (array) ($service->provision_data ?? [])));
@@ -709,6 +749,84 @@ class ProvisionServiceHostnameTest extends TestCase
         $this->assertSame(OrderStatus::COMPLETED, (int) $order->status);
     }
 
+    #[Test]
+    public function process_paid_order_recognizes_existing_upstream_binding_without_legacy_provision_data_host(): void
+    {
+        $this->activateIntegrationPluginForTest('upstream', 'mofang_finance');
+
+        $provisionService = new ProvisionService(
+            $this->makeProviderResolver(new class extends HostingPanelApiTransport
+            {
+                public function login(Supplier $supplier): string
+                {
+                    throw new \RuntimeException('Upstream should not be called when service binding already exists.');
+                }
+            }, true),
+            new class extends SettingService
+            {
+                public function getProvisionHostnameConfig(): array
+                {
+                    return [
+                        'prefix' => 'ser',
+                        'length' => 15,
+                        'pool' => '0123456789',
+                    ];
+                }
+            }
+        );
+
+        $order = $this->makeOrder('ser-binding-only', 506);
+        $order->forceFill([
+            'type' => 'new',
+            'status' => OrderStatus::PAID,
+        ]);
+        $order->exists = true;
+        $order->product->forceFill([
+            'provision_module' => ProviderKey::MOFANG_FINANCE_API,
+        ]);
+        $order->product->supplier->forceFill([
+            'interface_type' => ProviderKey::MOFANG_FINANCE_API,
+        ]);
+
+        $service = Service::query()->create([
+            'user_id' => (int) $order->user_id,
+            'product_id' => (int) $order->product->id,
+            'name' => 'Binding Only Service',
+            'domain' => 'ser-binding-only',
+            'billing_cycle' => 'monthly',
+            'amount' => '5.00',
+            'locked_pricing' => [],
+            'status' => ServiceStatus::ACTIVE,
+            'provision_data' => [
+                'source_type' => 'upstream',
+                'provider' => ProviderKey::MOFANG_FINANCE_API,
+            ],
+        ]);
+        $order->setRelation('service', $service);
+
+        $pluginId = (int) DB::table('integration_plugins')
+            ->where('domain', 'upstream')
+            ->where('plugin_key', ProviderKey::MOFANG_FINANCE_API)
+            ->value('id');
+        $this->assertGreaterThan(0, $pluginId);
+
+        DB::table('service_upstream_bindings')->insert([
+            'service_id' => (int) $service->id,
+            'plugin_id' => $pluginId,
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'upstream_service_id' => '98765',
+            'status_snapshot' => 'Active',
+            'last_synced_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $result = $provisionService->processPaidOrder($order);
+
+        $this->assertSame((int) $service->id, (int) $result?->id);
+        $this->assertSame(OrderStatus::COMPLETED, (int) $order->status);
+    }
+
     private function makeOrder(
         string $snapshotHostname,
         int $productId = 501,
@@ -721,9 +839,9 @@ class ProvisionServiceHostnameTest extends TestCase
         $suffix = bin2hex(random_bytes(4));
 
         $supplier = Supplier::query()->create([
-            'code' => 'test-hosting-'.$suffix,
+            'code' => 'test-mofang-'.$suffix,
             'name' => '测试供应商-'.$suffix,
-            'interface_type' => 'hosting_panel_api',
+            'interface_type' => ProviderKey::MOFANG_FINANCE_API,
             'status' => 1,
             'sort_order' => 0,
         ]);
@@ -747,14 +865,18 @@ class ProvisionServiceHostnameTest extends TestCase
 
         $product = Product::query()->create([
             'id' => $productId,
+            'custom_display_name' => '测试云电脑-'.$suffix,
             'product_type' => 'vps',
             'remark' => '西安云电脑',
             'supplier_id' => (int) $supplier->id,
             'supplier_product_id' => 9001,
             'auto_setup' => 1,
-            'provision_module' => 'hosting_panel_api',
+            'provision_module' => ProviderKey::MOFANG_FINANCE_API,
             'pricing' => ['monthly' => '5.00'],
+            'setup_fee' => '0.00',
             'purchase_requires' => $purchaseRequires,
+            'stock' => -1,
+            'status' => 1,
             'config_options' => [
                 [
                     'field' => 'cpu',
@@ -773,6 +895,7 @@ class ProvisionServiceHostnameTest extends TestCase
             ],
         ]);
         $product->setRelation('supplier', $supplier);
+        $this->bindProductToMofang($supplier, $product, 9001);
 
         $order = new class extends Order
         {
@@ -803,26 +926,36 @@ class ProvisionServiceHostnameTest extends TestCase
 
     private function makeRetryOrderAndService(string $snapshotHostname, string $serviceDomain): array
     {
-        $supplier = new Supplier([
-            'id' => 102,
-            'interface_type' => 'hosting_panel_api',
+        $suffix = bin2hex(random_bytes(4));
+
+        $supplier = Supplier::query()->create([
+            'code' => 'retry-mofang-'.$suffix,
+            'name' => '重试供应商-'.$suffix,
+            'interface_type' => ProviderKey::MOFANG_FINANCE_API,
+            'status' => 1,
+            'sort_order' => 0,
         ]);
 
-        $product = new Product([
-            'id' => 601,
-            'name' => '成都云电脑 2H2G',
-            'supplier_id' => 102,
+        $product = Product::query()->create([
+            'custom_display_name' => '成都云电脑 2H2G',
+            'product_type' => 'vps',
+            'supplier_id' => (int) $supplier->id,
             'supplier_product_id' => 665,
             'auto_setup' => 1,
-            'provision_module' => 'hosting_panel_api',
+            'provision_module' => ProviderKey::MOFANG_FINANCE_API,
+            'pricing' => ['monthly' => '99.00'],
+            'setup_fee' => '0.00',
             'purchase_requires' => [
                 'provision_hostname' => [
                     'mode' => 'system',
                 ],
             ],
             'config_options' => [],
+            'stock' => -1,
+            'status' => 1,
         ]);
         $product->setRelation('supplier', $supplier);
+        $this->bindProductToMofang($supplier, $product, 665);
 
         $order = new class extends Order
         {
@@ -839,7 +972,7 @@ class ProvisionServiceHostnameTest extends TestCase
             'order_no' => 'ORD20260404000002RETRY',
             'type' => 'new',
             'user_id' => 8001,
-            'product_id' => 601,
+            'product_id' => (int) $product->id,
             'service_id' => 5001,
             'billing_cycle' => 'monthly',
             'amount' => 99.00,
@@ -865,7 +998,7 @@ class ProvisionServiceHostnameTest extends TestCase
         $service->forceFill([
             'id' => 5001,
             'user_id' => 8001,
-            'product_id' => 601,
+            'product_id' => (int) $product->id,
             'order_id' => 4001,
             'name' => '成都云电脑 2H2G',
             'domain' => $serviceDomain,
@@ -914,17 +1047,85 @@ class ProvisionServiceHostnameTest extends TestCase
         return $method->invoke($service, $order);
     }
 
-    private function makeProviderResolver(HostingPanelApiTransport $transport, bool $includeMofang = false): ProviderResolver
+    private function makeProviderResolver(HostingPanelApiTransport $transport, bool $includeMofang = true): ProviderResolver
     {
-        $drivers = [
-            new HostingPanelApiDriver($transport),
-        ];
+        $drivers = [];
 
         if ($includeMofang) {
-            $drivers[] = new MofangFinanceDriver(new MofangFinanceAdapter($transport, new MofangCloudConfigTemplate));
+            $drivers[] = new class($transport) implements UpstreamDriver
+            {
+                public function __construct(private readonly HostingPanelApiTransport $transport) {}
+
+                public function key(): string
+                {
+                    return ProviderKey::MOFANG_FINANCE_API;
+                }
+
+                public function label(): string
+                {
+                    return '魔方财务接口';
+                }
+
+                public function capabilities(): array
+                {
+                    return [ProvidesProvisioning::class];
+                }
+
+                public function supports(string $capability): bool
+                {
+                    return $capability === ProvidesProvisioning::class
+                        && $this->transport instanceof ProvidesProvisioning;
+                }
+
+                public function resolve(string $capability): ?object
+                {
+                    return $this->supports($capability) ? $this->transport : null;
+                }
+            };
         }
 
         return new ProviderResolver(new ProviderRegistry($drivers));
+    }
+
+    private function bindProductToMofang(Supplier $supplier, Product $product, int|string $upstreamProductId): void
+    {
+        $pluginId = (int) DB::table('integration_plugins')
+            ->where('domain', 'upstream')
+            ->where('plugin_key', ProviderKey::MOFANG_FINANCE_API)
+            ->value('id');
+
+        $this->assertGreaterThan(0, $pluginId);
+
+        DB::table('supplier_plugin_bindings')->updateOrInsert([
+            'supplier_id' => (int) $supplier->id,
+            'plugin_id' => $pluginId,
+            'environment' => 'production',
+        ], [
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'status' => 1,
+            'priority' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $supplierBindingId = (int) DB::table('supplier_plugin_bindings')
+            ->where('supplier_id', (int) $supplier->id)
+            ->where('plugin_id', $pluginId)
+            ->where('environment', 'production')
+            ->value('id');
+
+        DB::table('product_upstream_bindings')->updateOrInsert([
+            'product_id' => (int) $product->id,
+            'supplier_plugin_binding_id' => $supplierBindingId,
+            'upstream_product_id' => (string) $upstreamProductId,
+        ], [
+            'plugin_id' => $pluginId,
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'auto_setup' => 1,
+            'status' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 
     private function buildUpstreamProductConfigResponse(): array

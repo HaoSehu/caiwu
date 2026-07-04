@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
 use App\Constants\ServiceStatus;
+use App\Exceptions\BusinessException;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\Service;
@@ -16,12 +17,26 @@ use App\Services\ClientServiceConsole\ServiceDetailService;
 use App\Services\ClientServiceConsole\ServiceUpgradeService;
 use App\Services\Finance\InvoiceService;
 use App\Services\System\OperationLogService;
+use App\Services\Upstream\ProviderKey;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class ServiceUpgradeServiceTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->activateIntegrationPluginForTest('upstream', 'mofang_finance');
+        Artisan::call('migrate', [
+            '--path' => 'database/migrations/2026_07_03_130000_create_plugin_binding_runtime_and_audit_tables.php',
+            '--force' => true,
+        ]);
+    }
 
     public function test_create_host_upgrade_invoice_for_user_builds_upgrade_invoice(): void
     {
@@ -172,13 +187,11 @@ class ServiceUpgradeServiceTest extends TestCase
             'billing_cycle' => 'monthly',
             'amount' => '10.00',
             'status' => ServiceStatus::ACTIVE,
-            'provision_data' => [
-                'upstream_host_id' => 778899,
-                'provider' => 'mofang_finance_api',
-            ],
+            'provision_data' => [],
             'expires_at' => now()->addMonth(),
             'auto_renew' => 0,
         ]);
+        $this->createNormalizedServiceBinding($supplier, $product, $service, 5566, 778899);
 
         $order = Order::query()->create([
             'order_no' => 'UPG'.strtoupper($suffix),
@@ -204,6 +217,7 @@ class ServiceUpgradeServiceTest extends TestCase
             'coupon_snapshot' => [],
             'status' => OrderStatus::PAID,
             'paid_at' => now(),
+            'trace_id' => 'host-upgrade-paid-'.$suffix,
         ]);
 
         $detailService = $this->createMock(ServiceDetailService::class);
@@ -258,5 +272,189 @@ class ServiceUpgradeServiceTest extends TestCase
         $this->assertSame(OrderStatus::COMPLETED, (int) $order->fresh()->status);
         $this->assertSame('host_upgrade', (string) data_get($service->fresh()->provision_data ?? [], 'last_upgrade_kind', ''));
         $this->assertSame(9988, (int) data_get($service->fresh()->provision_data ?? [], 'last_upgrade_invoice_id', 0));
+        $this->assertSame(778899, (int) data_get($service->fresh()->provision_data ?? [], 'upstream_host_id', 0));
+        $this->assertSame(ProviderKey::MOFANG_FINANCE_API, (string) DB::table('service_upstream_bindings')
+            ->where('service_id', (int) $service->id)
+            ->value('provider_key'));
+        $this->assertDatabaseHas('service_runtime_snapshots', [
+            'service_id' => (int) $service->id,
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+        ]);
+        $this->assertDatabaseHas('service_provision_attempts', [
+            'service_id' => (int) $service->id,
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'action' => 'upgrade',
+            'attempt_status' => 'success',
+            'trace_id' => 'host-upgrade-paid-'.$suffix,
+        ]);
+    }
+
+    public function test_process_paid_upgrade_order_records_failed_attempt(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+
+        $user = User::query()->create([
+            'email' => 'host-upgrade-failed-'.$suffix.'@example.com',
+            'password' => 'Temp@123456',
+            'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
+            'status' => 1,
+        ]);
+
+        $supplier = Supplier::query()->create([
+            'name' => 'Upgrade Failed Supplier '.$suffix,
+            'code' => 'upgrade-failed-supplier-'.$suffix,
+            'interface_type' => 'mofang_finance_api',
+            'api_url' => 'https://upgrade-failed-'.$suffix.'.example.test',
+            'api_username' => 'demo',
+            'api_key' => 'secret',
+            'status' => 1,
+        ]);
+
+        $product = Product::query()->create([
+            'name' => 'Upgrade Failed Product '.$suffix,
+            'product_type' => 'vps',
+            'pricing' => ['monthly' => '10.00'],
+            'setup_fee' => '0.00',
+            'config_options' => [],
+            'purchase_requires' => [],
+            'stock' => -1,
+            'status' => 1,
+            'auto_setup' => 0,
+            'supplier_id' => (int) $supplier->id,
+        ]);
+
+        $service = Service::query()->create([
+            'user_id' => (int) $user->id,
+            'product_id' => (int) $product->id,
+            'name' => 'Upgrade Failed Service '.$suffix,
+            'domain' => 'upgrade-failed-'.$suffix.'.example.com',
+            'billing_cycle' => 'monthly',
+            'amount' => '10.00',
+            'status' => ServiceStatus::ACTIVE,
+            'provision_data' => [],
+            'expires_at' => now()->addMonth(),
+            'auto_renew' => 0,
+        ]);
+        $this->createNormalizedServiceBinding($supplier, $product, $service, 5566, 778899);
+
+        $order = Order::query()->create([
+            'order_no' => 'UPGF'.strtoupper($suffix),
+            'user_id' => (int) $user->id,
+            'product_id' => (int) $product->id,
+            'product_spec_snapshot' => '升级失败订单',
+            'product_type_snapshot' => 'vps',
+            'service_id' => (int) $service->id,
+            'type' => 'upgrade',
+            'amount' => '88.80',
+            'discount' => '0.00',
+            'paid_amount' => '88.80',
+            'billing_cycle' => 'monthly',
+            'config_snapshot' => ['upgrade_product_id' => 5566],
+            'config_pricing_snapshot' => [
+                'meta' => [
+                    'kind' => 'host_upgrade',
+                    'product_id' => 5566,
+                    'billing_cycle' => 'monthly',
+                    'promo_code' => 'PROMO88',
+                ],
+            ],
+            'coupon_snapshot' => [],
+            'status' => OrderStatus::PAID,
+            'paid_at' => now(),
+            'trace_id' => 'host-upgrade-failed-'.$suffix,
+        ]);
+
+        $detailService = $this->createMock(ServiceDetailService::class);
+        $detailService->method('resolveUpstreamContext')->willReturn([
+            new class
+            {
+                public function purchaseHostUpgrade(
+                    Supplier $supplier,
+                    int $hostId,
+                    int $productId,
+                    string $billingCycle,
+                    string $promoCode,
+                    ?string $jwt = null
+                ): array {
+                    throw new BusinessException('上游升降级余额不足');
+                }
+            },
+            $supplier,
+            778899,
+            'jwt-token',
+        ]);
+
+        $operationLogService = $this->createMock(OperationLogService::class);
+        $operationLogService->expects($this->never())->method('writeServiceConsoleLog');
+
+        $serviceUpgradeService = new ServiceUpgradeService(
+            $detailService,
+            app(InvoiceService::class),
+            $operationLogService,
+        );
+
+        $resolved = $serviceUpgradeService->processPaidUpgradeOrder($order);
+
+        $this->assertInstanceOf(Service::class, $resolved);
+        $this->assertSame(OrderStatus::PROCESSING, (int) $order->fresh()->status);
+        $this->assertSame('上游升降级余额不足', (string) data_get($service->fresh()->provision_data ?? [], 'upgrade_error', ''));
+        $this->assertDatabaseHas('service_provision_attempts', [
+            'service_id' => (int) $service->id,
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'action' => 'upgrade',
+            'attempt_status' => 'failed',
+            'trace_id' => 'host-upgrade-failed-'.$suffix,
+            'error_code' => 'upgrade_failed',
+        ]);
+    }
+
+    private function createNormalizedServiceBinding(
+        Supplier $supplier,
+        Product $product,
+        Service $service,
+        int $upstreamProductId,
+        int $upstreamHostId
+    ): void {
+        $pluginId = (int) DB::table('integration_plugins')
+            ->where('domain', 'upstream')
+            ->where('plugin_key', ProviderKey::MOFANG_FINANCE_API)
+            ->value('id');
+
+        $this->assertGreaterThan(0, $pluginId);
+
+        $supplierBindingId = DB::table('supplier_plugin_bindings')->insertGetId([
+            'supplier_id' => (int) $supplier->id,
+            'plugin_id' => $pluginId,
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'environment' => 'production',
+            'status' => 1,
+            'priority' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $productBindingId = DB::table('product_upstream_bindings')->insertGetId([
+            'product_id' => (int) $product->id,
+            'supplier_plugin_binding_id' => $supplierBindingId,
+            'plugin_id' => $pluginId,
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'upstream_product_id' => (string) $upstreamProductId,
+            'auto_setup' => 1,
+            'status' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('service_upstream_bindings')->insert([
+            'service_id' => (int) $service->id,
+            'product_upstream_binding_id' => $productBindingId,
+            'supplier_plugin_binding_id' => $supplierBindingId,
+            'plugin_id' => $pluginId,
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'upstream_service_id' => (string) $upstreamHostId,
+            'status_snapshot' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 }

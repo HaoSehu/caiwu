@@ -8,6 +8,7 @@ use App\Http\Requests\Admin\ReferralWithdrawal\IndexRequest;
 use App\Http\Requests\Admin\ReferralWithdrawal\RejectRequest;
 use App\Models\ReferralWithdrawal;
 use App\Services\Referral\ReferralService;
+use App\Support\AdminPrivacy;
 
 class ReferralWithdrawalController extends Controller
 {
@@ -16,6 +17,7 @@ class ReferralWithdrawalController extends Controller
     public function index(IndexRequest $request)
     {
         $filters = $request->validated();
+        $privacy = AdminPrivacy::fromRequest($request);
 
         $perPage = max(1, min((int) ($filters['page_size'] ?? 20), 100));
         $paginator = $this->referralService->adminWithdrawalList($filters, $perPage);
@@ -25,8 +27,8 @@ class ReferralWithdrawalController extends Controller
                 'id' => $item->id,
                 'amount' => number_format((float) $item->amount, 2, '.', ''),
                 'method' => $item->method,
-                'account_name' => $item->account_name_display,
-                'account_no' => $item->account_no,
+                'account_name' => $privacy->name($item->account_name_display),
+                'account_no' => $privacy->account($item->account_no),
                 'status' => (int) $item->status,
                 'remark' => $item->remark,
                 'operator' => $item->operator,
@@ -35,9 +37,9 @@ class ReferralWithdrawalController extends Controller
                 'processed_at' => $item->processed_at?->format('Y-m-d H:i:s'),
                 'user' => $item->user ? [
                     'id' => $item->user->id,
-                    'email' => $item->user->email,
+                    'email' => $privacy->email($item->user->email),
                     'nickname' => $item->user->nickname,
-                    'display_name' => $item->user->display_name,
+                    'display_name' => $privacy->displayName($item->user->display_name, $item->user->email, $item->user->phone, $item->user->real_name),
                 ] : null,
             ])->values()->all(),
             'total' => $paginator->total(),

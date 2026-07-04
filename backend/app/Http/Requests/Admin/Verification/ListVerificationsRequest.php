@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Admin\Verification;
 
 use App\Http\Requests\Admin\Common\AdminFormRequest;
+use Illuminate\Validation\Validator;
 
 class ListVerificationsRequest extends AdminFormRequest
 {
@@ -22,5 +23,12 @@ class ListVerificationsRequest extends AdminFormRequest
             'is_verified',
             'verification_status',
         ]);
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(fn (Validator $validator) => $this->rejectPrivacyFilters($validator, [], [
+            'keyword' => '邮箱、手机号、证件号等隐私关键词',
+        ]));
     }
 }

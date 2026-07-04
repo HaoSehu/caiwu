@@ -185,7 +185,7 @@ import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import { adminApi, type SettingItem, type VerificationRecord } from '@/api/admin';
+import { adminApi, type VerificationRecord } from '@/api/admin';
 import { formatDateTime } from '@/utils/format';
 import { required } from '@/utils/formRules';
 import { useUserStore } from '@/store';
@@ -205,11 +205,6 @@ const quickStatus = ref('all');
 const filters = reactive({ keyword: '' });
 
 const feeFormRef = ref<FormInstanceFunctions>();
-const apiForm = reactive({
-  verification_api: '',
-  verification_key: '',
-  verification_biz_code: 'FACE',
-});
 const feeForm = reactive({
   free_attempts: 3,
   retry_fee: 2,
@@ -305,32 +300,18 @@ async function loadList() {
   }
 }
 
-async function loadSettings() {
-  const settings = await adminApi.verifications.settings();
-  applySettings(settings || []);
-}
-
 async function loadSummary() {
   try {
     const response = await adminApi.verifications.summary();
-    Object.assign(summaryConfig, response.config || {});
+    const config = response.config || {};
+    Object.keys(summaryConfig).forEach((key) => delete summaryConfig[key]);
+    Object.assign(summaryConfig, config);
+    feeForm.free_attempts = Number(config.free_attempts ?? 0);
+    feeForm.retry_fee = Number(config.retry_fee ?? config.amount ?? 0);
   } catch {
+    Object.keys(summaryConfig).forEach((key) => delete summaryConfig[key]);
     Object.assign(summaryConfig, {});
   }
-}
-
-function applySettings(settings: SettingItem[]) {
-  settings.forEach((item) => {
-    if (item.key in apiForm) {
-      apiForm[item.key as keyof typeof apiForm] = String(item.value || '');
-    }
-    if (item.key === 'free_attempts') {
-      feeForm.free_attempts = Number(item.value || 0);
-    }
-    if (item.key === 'retry_fee') {
-      feeForm.retry_fee = Number(item.value || 0);
-    }
-  });
 }
 
 function handleSearch() {
@@ -359,7 +340,7 @@ function handlePageChange(pageInfo: PageInfo) {
 
 function verificationMethodLabel(row: VerificationRecord) {
   if (!hasVerificationRecord(row)) return '-';
-  const bizCode = String(summaryConfig.verification_biz_code || apiForm.verification_biz_code || 'FACE');
+  const bizCode = String(summaryConfig.verification_biz_code || 'FACE');
   const labels: Record<string, string> = {
     FACE: '人脸识别',
     CERT_PHOTO: '证照认证',
@@ -467,11 +448,30 @@ async function saveFeeSettings() {
   if (result !== true) return;
   feeLoading.value = true;
   try {
-    await adminApi.verifications.saveSettings({ ...feeForm });
+    const plugin = await resolveActiveVerificationPlugin();
+    if (!plugin?.id) {
+      MessagePlugin.error('请先在插件管理中安装并启用实名认证插件');
+      return;
+    }
+
+    const detail = await adminApi.plugins.detail(plugin.id);
+    const retryFee = Math.max(0, Number(feeForm.retry_fee || 0));
+    await adminApi.plugins.updateConfig(plugin.id, {
+      ...(detail.config || {}),
+      free_times: Math.max(0, Number(feeForm.free_attempts || 0)),
+      amount: retryFee,
+      charge_enabled: retryFee > 0,
+    });
+    await loadSummary();
     MessagePlugin.success('费用设置已保存');
   } finally {
     feeLoading.value = false;
   }
+}
+
+async function resolveActiveVerificationPlugin() {
+  const response = await adminApi.plugins.list({ domain: 'verification' });
+  return (response.list || []).find((item) => item.is_enabled && item.id) || null;
 }
 
 function formatDetailValue(value?: string | number | null) {
@@ -481,7 +481,6 @@ function formatDetailValue(value?: string | number | null) {
 
 onMounted(() => {
   loadList();
-  loadSettings();
   loadSummary();
 });
 </script>

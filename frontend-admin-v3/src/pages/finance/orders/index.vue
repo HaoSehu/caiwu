@@ -5,7 +5,7 @@
         <t-tab-panel value="all" label="全部订单" />
         <t-tab-panel value="orders" label="普通订单" />
         <t-tab-panel value="renewals" label="续费订单" />
-        <t-tab-panel value="addons" label="附加配置" />
+        <t-tab-panel value="upgrade" label="附加配置" />
       </t-tabs>
 
       <div class="order-filter">
@@ -22,7 +22,7 @@
         <t-select v-if="mode === 'orders' || mode === 'all'" class="filter-type" v-model="filters.type" clearable placeholder="类型" @change="handleSearch">
           <t-option v-for="item in orderTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
         </t-select>
-        <t-select v-if="mode === 'addons'" class="filter-type" v-model="filters.kind" clearable placeholder="配置类型" @change="handleSearch">
+        <t-select v-if="mode === 'upgrade'" class="filter-type" v-model="filters.upgrade_kind" clearable placeholder="配置类型" @change="handleSearch">
           <t-option label="全部" value="all" />
           <t-option label="流量包" value="traffic_package" />
         </t-select>
@@ -78,10 +78,10 @@
             </div>
           </template>
           <template #type="{ row }">{{ row.type_label || orderTypeLabel(row.type) }}</template>
-          <template #addon="{ row }">
+          <template #upgrade="{ row }">
             <div class="stack-cell">
-              <strong>{{ row.addon_kind_label || '附加配置' }}</strong>
-              <span>{{ fieldValue(row.addon_target_label || row.addon_mode) }}</span>
+              <strong>{{ row.upgrade_kind_label || '附加配置' }}</strong>
+              <span>{{ fieldValue(row.upgrade_target_label || row.upgrade_mode) }}</span>
             </div>
           </template>
           <template #amount="{ row }">{{ formatMoney(row.amount) }}</template>
@@ -153,24 +153,17 @@ import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import StatusTag from '@/components/status-tag/index.vue';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useListPage } from '@/hooks/useListPage';
-import { ORDER_STATUS_MAP, toSelectOptions } from '@shared/statusConfig';
+import { ORDER_STATUS_MAP, ORDER_TYPE_MAP, toSelectOptions } from '@shared/statusConfig';
 
 import './index.less';
 
-type FinanceOrderMode = 'all' | 'orders' | 'renewals' | 'addons';
-
-const ORDER_TYPE_MAP: Record<string, string> = {
-  new: '新购',
-  normal: '新购',
-  renew: '续费',
-  upgrade: '附加配置',
-};
+type FinanceOrderMode = 'all' | 'orders' | 'renewals' | 'upgrade';
 
 const ORDER_TAB_OPTIONS = [
   { value: 'all', label: '全部订单' },
   { value: 'orders', label: '普通订单' },
   { value: 'renewals', label: '续费订单' },
-  { value: 'addons', label: '附加配置' },
+  { value: 'upgrade', label: '附加配置' },
 ];
 
 const route = useRoute();
@@ -218,7 +211,7 @@ const {
   defaultFilters: {
     keyword: '',
     type: '',
-    kind: 'all',
+    upgrade_kind: 'all',
     status: '',
     start_date: '',
     end_date: '',
@@ -229,8 +222,8 @@ const {
     const apiCall =
       mode.value === 'renewals'
         ? adminApi.financeMenu.renewalOrders
-        : mode.value === 'addons'
-          ? adminApi.financeMenu.addonOrders
+        : mode.value === 'upgrade'
+          ? adminApi.financeMenu.upgradeOrders
           : adminApi.orders.list;
     const response = await apiCall(buildParams());
     return response;
@@ -244,8 +237,8 @@ const columns = computed<PrimaryTableCol<OrderRecord>[]>(() => {
     { colKey: 'product', title: '产品/服务', minWidth: 240 },
     { colKey: 'type', title: '类型', width: 110 },
   ];
-  if (mode.value === 'addons') {
-    base.push({ colKey: 'addon', title: '配置', minWidth: 140 });
+  if (mode.value === 'upgrade') {
+    base.push({ colKey: 'upgrade', title: '配置', minWidth: 140 });
   }
   base.push(
     { colKey: 'amount', title: '金额', width: 120 },
@@ -266,8 +259,9 @@ function buildParams() {
   if (filters.keyword) params.keyword = filters.keyword;
   if (filters.status !== '') params.status = filters.status;
   if ((mode.value === 'orders' || mode.value === 'all') && filters.type) params.type = filters.type;
-  if (mode.value === 'addons') params.kind = filters.kind || 'all';
-  if (filters.start_date || filters.end_date) params.date_range = [filters.start_date, filters.end_date].filter(Boolean);
+  if (mode.value === 'upgrade') params.upgrade_kind = filters.upgrade_kind || 'all';
+  if (filters.start_date) params.start_date = filters.start_date;
+  if (filters.end_date) params.end_date = filters.end_date;
   return params;
 }
 

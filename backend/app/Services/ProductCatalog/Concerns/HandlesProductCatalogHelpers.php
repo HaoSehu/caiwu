@@ -43,13 +43,13 @@ trait HandlesProductCatalogHelpers
     {
         Cache::forget(self::ADMIN_SUMMARY_CACHE_KEY);
         Cache::forget(self::SITE_CATALOG_CACHE_KEY);
-        
+
         // 清理所有 site:home 相关缓存
         if (Cache::supportsTags()) {
             Cache::tags(['site:home'])->flush();
             Cache::tags(['site:products'])->flush();
         }
-        
+
         $this->bumpSiteCatalogCacheVersion();
     }
 

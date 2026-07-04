@@ -35,7 +35,7 @@ class ServiceNatService
     public function getNatForwardingsForUser(User $user, int $serviceId): array
     {
         $service = $this->detailService->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -96,7 +96,7 @@ class ServiceNatService
     public function createNatForwardingForUser(User $user, int $serviceId, array $data, array $context = []): array
     {
         $service = $this->detailService->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -105,12 +105,12 @@ class ServiceNatService
 
         [$runtime, $supplier, $hostId, $jwt, $natContext] = $this->resolveNatAclContext($service, true);
         $payload = [
-                'func' => 'addNatAcl',
-                'name' => trim((string) ($data['name'] ?? '')),
-                'ext_port' => trim((string) ($data['ext_port'] ?? '')),
-                'int_port' => trim((string) ($data['int_port'] ?? '')),
-                'select-protocol' => trim((string) ($data['protocol'] ?? '')),
-            ];
+            'func' => 'addNatAcl',
+            'name' => trim((string) ($data['name'] ?? '')),
+            'ext_port' => trim((string) ($data['ext_port'] ?? '')),
+            'int_port' => trim((string) ($data['int_port'] ?? '')),
+            'select-protocol' => trim((string) ($data['protocol'] ?? '')),
+        ];
         $response = is_callable([$runtime, 'submitCustomModuleAction'])
             ? $runtime->submitCustomModuleAction($supplier, $natContext['endpoint'], $payload, $jwt)
             : $runtime->post(
@@ -145,7 +145,7 @@ class ServiceNatService
     public function deleteNatForwardingForUser(User $user, int $serviceId, int $forwardingId, array $context = []): array
     {
         $service = $this->detailService->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -461,19 +461,7 @@ class ServiceNatService
 
     private function resolveSupplierRootUrl(Supplier $supplier): string
     {
-        $baseUrl = trim((string) $supplier->api_url);
-        $parts = parse_url($baseUrl);
-
-        if (! is_array($parts) || empty($parts['scheme']) || empty($parts['host'])) {
-            return rtrim($baseUrl, '/');
-        }
-
-        $rootUrl = $parts['scheme'].'://'.$parts['host'];
-        if (isset($parts['port'])) {
-            $rootUrl .= ':'.$parts['port'];
-        }
-
-        return $rootUrl;
+        return $this->detailService->resolveSupplierRootUrl($supplier);
     }
 
     private function createHtmlXPath(string $html): ?\DOMXPath

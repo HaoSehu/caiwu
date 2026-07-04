@@ -61,7 +61,17 @@ const transform: AxiosTransform = {
       removeAdminToken();
       router.push('/admin/login');
     }
-    throw new Error(message);
+    const apiError = new Error(message) as Error & {
+      code?: unknown;
+      data?: unknown;
+      errors?: unknown;
+      response?: { data: unknown };
+    };
+    apiError.code = code;
+    apiError.data = data.data;
+    apiError.errors = data.data?.errors;
+    apiError.response = { data };
+    throw apiError;
   },
 
   // 请求前处理配置

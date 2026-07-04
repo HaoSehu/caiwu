@@ -6,6 +6,7 @@ namespace App\Http\Middleware;
 
 use App\Contracts\Integrations\Payments\PaymentGatewayInterface;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
+use App\Services\Integrations\Plugins\PaymentGatewayBindingResolver;
 use App\Support\SensitiveDataSanitizer;
 use Closure;
 use Illuminate\Http\Request;
@@ -16,11 +17,14 @@ class VerifyPaymentCallbackSignature
 {
     public function __construct(
         private readonly PaymentGatewayManager $paymentGatewayManager,
+        private readonly PaymentGatewayBindingResolver $paymentGatewayBindingResolver,
     ) {}
 
     public function handle(Request $request, Closure $next): Response
     {
-        $gatewayKey = trim((string) $request->route('gateway', ''));
+        $gatewayKey = $this->paymentGatewayBindingResolver->normalizeGatewayKey(
+            trim((string) $request->route('gateway', ''))
+        );
         $params = $request->all();
 
         try {

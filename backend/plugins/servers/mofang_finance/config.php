@@ -44,7 +44,7 @@ return [
             'title' => '上游标识',
             'type' => 'readonly',
             'value' => 'mofang_finance_api',
-            'description' => '供应商 interface_type 必须保持该值，不要别名为 hosting_panel_api。',
+            'description' => '供应商绑定 provider_key 必须保持该值，不要别名为 hosting_panel_api。',
         ],
     ],
 ];

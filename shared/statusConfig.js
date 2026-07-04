@@ -70,7 +70,7 @@ export const ORDER_STATUS_MAP = {
 export const ORDER_TYPE_MAP = {
   new:     '新购',
   renew:   '续费',
-  upgrade: '升降级',
+  upgrade: '附加配置',
 }
 
 // 账单类型

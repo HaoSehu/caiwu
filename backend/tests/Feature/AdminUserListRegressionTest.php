@@ -20,7 +20,7 @@ class AdminUserListRegressionTest extends TestCase
         $role = Role::query()->create([
             'name' => 'user-list-regression-'.$suffix,
             'label' => 'User List Regression',
-            'permissions' => [AdminPermissions::USER_LIST],
+            'permissions' => [AdminPermissions::USER_LIST, AdminPermissions::PRIVACY_VIEW_RAW],
         ]);
 
         $admin = AdminUser::query()->create([

@@ -4,16 +4,20 @@ declare(strict_types=1);
 
 namespace App\Services\System;
 
+use App\Constants\PaymentGatewayCode;
 use App\Models\ActivityLog;
 use App\Models\AdminUser;
 use App\Models\EmailLog;
 use App\Models\GatewayLog;
+use App\Models\IntegrationPluginRuntimeLog;
 use App\Models\NotificationLog;
 use App\Models\OperationLog;
 use App\Models\Role;
+use App\Models\ScheduleRunLog;
 use App\Models\SmsLog;
 use App\Models\User;
 use App\Services\System\Concerns\HandlesAdminLogCleanup;
+use App\Support\AdminPrivacy;
 use App\Support\SensitiveDataSanitizer;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -283,20 +287,30 @@ class AdminLogService
 
     public function getSystemLogs(array $filters, int $page, int $perPage): array
     {
-        $entries = $this->buildSystemLogEntries($filters);
+        return $this->getActivityLogs($filters, $page, $perPage);
+    }
+
+    public function getSystemLogsSummary(array $filters): array
+    {
+        return $this->getActivityLogsSummary($filters);
+    }
+
+    public function getRuntimeLogs(array $filters, int $page, int $perPage): array
+    {
+        $entries = $this->buildRuntimeLogEntries($filters);
 
         $paginator = $this->paginateCollection($entries, $page, $perPage);
 
         return $this->buildPaginatorPayload($paginator);
     }
 
-    public function getSystemLogsSummary(array $filters): array
+    public function getRuntimeLogsSummary(array $filters): array
     {
         return Cache::remember(
-            $this->buildFileLogSummaryCacheKey('system', $filters),
+            $this->buildFileLogSummaryCacheKey('runtime', $filters),
             now()->addSeconds(self::FILE_LOG_SUMMARY_CACHE_TTL_SECONDS),
             function () use ($filters) {
-                $entries = $this->buildSystemLogEntries($filters);
+                $entries = $this->buildRuntimeLogEntries($filters);
 
                 return [
                     'total' => $entries->count(),
@@ -367,7 +381,8 @@ class AdminLogService
         }
 
         $admins = $fallback->orderByDesc('last_login_at')->paginate($perPage, ['*'], 'page', $page);
-        $admins->setCollection($admins->getCollection()->map(function (AdminUser $admin) {
+        $privacy = AdminPrivacy::current();
+        $admins->setCollection($admins->getCollection()->map(function (AdminUser $admin) use ($privacy) {
             return [
                 'id' => (int) $admin->id,
                 'user_id' => (int) $admin->id,
@@ -376,7 +391,7 @@ class AdminLogService
                 'admin_username' => trim((string) $admin->username),
                 'admin_nickname' => trim((string) ($admin->nickname ?? '')),
                 'role_name' => trim((string) ($admin->role?->label ?: $admin->role?->name ?: '')),
-                'ip_address' => trim((string) ($admin->last_login_ip ?? '')),
+                'ip_address' => $privacy->ip($admin->last_login_ip ?? ''),
                 'created_at' => $admin->last_login_at?->format('Y-m-d H:i:s'),
                 'detail' => [
                     'source' => 'admin_users.last_login_at',
@@ -413,11 +428,13 @@ class AdminLogService
     private function buildSmsLogQuery(array $filters): ?Builder
     {
         if (Schema::hasTable('notification_logs')) {
+            $tableName = 'notification_logs';
             $query = NotificationLog::query()
                 ->where('channel', 'sms')
                 ->selectRaw('id, recipient as phone, template_code, content, params_json, status, provider, request_id, error_msg, sent_at, created_at, updated_at, origin_type');
             $recipientColumn = 'recipient';
         } elseif (Schema::hasTable('sms_logs')) {
+            $tableName = 'sms_logs';
             $query = SmsLog::query()
                 ->selectRaw("id, phone, template_code, content, params as params_json, status, provider, request_id, error_msg, sent_at, created_at, updated_at, 'sms_log' as origin_type");
             $recipientColumn = 'phone';
@@ -425,15 +442,20 @@ class AdminLogService
             return null;
         }
 
+        $this->addOptionalSelectColumns($query, $tableName, ['plugin_id', 'driver_key', 'trace_id']);
+        $this->applyPluginLogFilters($query, $tableName, $filters, 'driver_key');
+
         if (! empty($filters['phone'])) {
             $query->where($recipientColumn, 'like', '%'.trim((string) $filters['phone']).'%');
         }
 
         if (! empty($filters['keyword'])) {
             $keyword = trim((string) $filters['keyword']);
-            $query->where(function ($builder) use ($keyword) {
+            $query->where(function ($builder) use ($keyword, $tableName) {
                 $builder->where('template_code', 'like', "%{$keyword}%")
                     ->orWhere('request_id', 'like', "%{$keyword}%");
+
+                $this->applyOptionalKeywordColumns($builder, $tableName, $keyword, ['driver_key', 'trace_id']);
             });
         }
 
@@ -447,11 +469,13 @@ class AdminLogService
     private function buildEmailLogQuery(array $filters): ?Builder
     {
         if (Schema::hasTable('notification_logs')) {
+            $tableName = 'notification_logs';
             $query = NotificationLog::query()
                 ->where('channel', 'email')
                 ->selectRaw('id, template_code, recipient as to_email, subject, content, status, error_msg, sent_at, created_at, updated_at');
             $recipientColumn = 'recipient';
         } elseif (Schema::hasTable('email_logs')) {
+            $tableName = 'email_logs';
             $query = EmailLog::query()
                 ->selectRaw('id, template_code, to_email, subject, content, status, error_msg, sent_at, created_at, updated_at');
             $recipientColumn = 'to_email';
@@ -459,16 +483,21 @@ class AdminLogService
             return null;
         }
 
+        $this->addOptionalSelectColumns($query, $tableName, ['plugin_id', 'driver_key', 'trace_id']);
+        $this->applyPluginLogFilters($query, $tableName, $filters, 'driver_key');
+
         if (! empty($filters['email'])) {
             $query->where($recipientColumn, 'like', '%'.trim((string) $filters['email']).'%');
         }
 
         if (! empty($filters['keyword'])) {
             $keyword = trim((string) ($filters['keyword'] ?? ''));
-            $query->where(function ($builder) use ($keyword) {
+            $query->where(function ($builder) use ($keyword, $tableName) {
                 $builder->where('template_code', 'like', "%{$keyword}%")
                     ->orWhere('subject', 'like', "%{$keyword}%")
                     ->orWhere('content', 'like', "%{$keyword}%");
+
+                $this->applyOptionalKeywordColumns($builder, $tableName, $keyword, ['driver_key', 'trace_id']);
             });
         }
 
@@ -482,20 +511,25 @@ class AdminLogService
     private function buildNotificationSummaryQuery(string $channel, array $filters): ?Builder
     {
         if (Schema::hasTable('notification_logs')) {
+            $tableName = 'notification_logs';
             $query = NotificationLog::query()->where('channel', $channel);
             $recipientColumn = 'recipient';
             $hasRequestId = true;
         } elseif ($channel === 'sms' && Schema::hasTable('sms_logs')) {
+            $tableName = 'sms_logs';
             $query = SmsLog::query();
             $recipientColumn = 'phone';
             $hasRequestId = true;
         } elseif ($channel === 'email' && Schema::hasTable('email_logs')) {
+            $tableName = 'email_logs';
             $query = EmailLog::query();
             $recipientColumn = 'to_email';
             $hasRequestId = false;
         } else {
             return null;
         }
+
+        $this->applyPluginLogFilters($query, $tableName, $filters, 'driver_key');
 
         if ($channel === 'sms' && ! empty($filters['phone'])) {
             $query->where($recipientColumn, 'like', '%'.trim((string) $filters['phone']).'%');
@@ -507,13 +541,15 @@ class AdminLogService
 
         if (! empty($filters['keyword'])) {
             $keyword = trim((string) $filters['keyword']);
-            $query->where(function ($builder) use ($channel, $hasRequestId, $keyword) {
+            $query->where(function ($builder) use ($channel, $hasRequestId, $keyword, $tableName) {
                 if ($channel === 'sms') {
                     $builder->where('template_code', 'like', "%{$keyword}%");
 
                     if ($hasRequestId) {
                         $builder->orWhere('request_id', 'like', "%{$keyword}%");
                     }
+
+                    $this->applyOptionalKeywordColumns($builder, $tableName, $keyword, ['driver_key', 'trace_id']);
 
                     return;
                 }
@@ -525,6 +561,8 @@ class AdminLogService
                 if ($hasRequestId) {
                     $builder->orWhere('request_id', 'like', "%{$keyword}%");
                 }
+
+                $this->applyOptionalKeywordColumns($builder, $tableName, $keyword, ['driver_key', 'trace_id']);
             });
         }
 
@@ -547,6 +585,50 @@ class AdminLogService
         return new LengthAwarePaginator([], 0, $perPage);
     }
 
+    /**
+     * @param  array<int, string>  $columns
+     */
+    private function addOptionalSelectColumns(Builder $query, string $tableName, array $columns): void
+    {
+        foreach ($columns as $column) {
+            if ($this->tableHasColumn($tableName, $column)) {
+                $query->addSelect($column);
+            }
+        }
+    }
+
+    private function applyPluginLogFilters(Builder $query, string $tableName, array $filters, ?string $businessKeyColumn = null): void
+    {
+        if (! empty($filters['plugin_id']) && $this->tableHasColumn($tableName, 'plugin_id')) {
+            $query->where('plugin_id', (int) $filters['plugin_id']);
+        }
+
+        if ($businessKeyColumn !== null && ! empty($filters[$businessKeyColumn]) && $this->tableHasColumn($tableName, $businessKeyColumn)) {
+            $query->where($businessKeyColumn, trim((string) $filters[$businessKeyColumn]));
+        }
+
+        if (! empty($filters['trace_id']) && $this->tableHasColumn($tableName, 'trace_id')) {
+            $query->where('trace_id', 'like', '%'.trim((string) $filters['trace_id']).'%');
+        }
+    }
+
+    /**
+     * @param  array<int, string>  $columns
+     */
+    private function applyOptionalKeywordColumns(Builder $query, string $tableName, string $keyword, array $columns): void
+    {
+        foreach ($columns as $column) {
+            if ($this->tableHasColumn($tableName, $column)) {
+                $query->orWhere($column, 'like', "%{$keyword}%");
+            }
+        }
+    }
+
+    private function tableHasColumn(string $tableName, string $column): bool
+    {
+        return Schema::hasTable($tableName) && Schema::hasColumn($tableName, $column);
+    }
+
     private function normalizeNotificationParams(mixed $value): array
     {
         if (is_array($value)) {
@@ -564,7 +646,10 @@ class AdminLogService
 
     private function sanitizeSmsLogItem(array $item): array
     {
-        $item['phone'] = $this->maskPhone((string) ($item['phone'] ?? ''));
+        $privacy = AdminPrivacy::current();
+        $item['phone'] = $privacy->allowsRaw()
+            ? $privacy->phone($item['phone'] ?? '')
+            : (new AdminPrivacy(false, true))->phone($item['phone'] ?? '');
 
         if ($this->shouldRedactSmsLog($item)) {
             $item['content'] = '短信验证码已发送（内容已脱敏）';
@@ -595,6 +680,8 @@ class AdminLogService
 
     private function sanitizeEmailLogItem(array $item): array
     {
+        $item['to_email'] = AdminPrivacy::current()->email($item['to_email'] ?? '');
+
         if ($this->shouldRedactEmailLog($item)) {
             $item['content'] = '邮件验证码已发送（内容已脱敏）';
         }
@@ -607,21 +694,16 @@ class AdminLogService
         return trim((string) ($item['template_code'] ?? '')) === NotificationService::TEMPLATE_EMAIL_CODE;
     }
 
-    private function maskPhone(string $phone): string
+    private function buildTaskLogEntries(array $filters): Collection
     {
-        $normalized = trim($phone);
-        if ($normalized === '') {
-            return '';
-        }
-
-        if (mb_strlen($normalized) <= 7) {
-            return $normalized;
-        }
-
-        return mb_substr($normalized, 0, 3).'****'.mb_substr($normalized, -4);
+        return $this->buildScheduleRunTaskLogEntries($filters)
+            ->merge($this->buildCronActivityTaskLogEntries($filters))
+            ->merge($this->buildFileTaskLogEntries($filters))
+            ->sortByDesc(fn (array $item) => (string) ($item['time'] ?? $item['created_at'] ?? ''))
+            ->values();
     }
 
-    private function buildTaskLogEntries(array $filters): Collection
+    private function buildFileTaskLogEntries(array $filters): Collection
     {
         return collect($this->readLaravelLogEntries())
             ->filter(fn (array $item) => ! empty($item['task_key']))
@@ -634,6 +716,10 @@ class AdminLogService
                     return false;
                 }
 
+                if (! empty($filters['status']) && $this->statusFromLogLevel((string) ($item['level'] ?? '')) !== trim((string) $filters['status'])) {
+                    return false;
+                }
+
                 if (! empty($filters['keyword'])) {
                     $keyword = trim((string) $filters['keyword']);
                     if (! str_contains((string) $item['message'], $keyword) && ! str_contains((string) $item['task_title'], $keyword)) {
@@ -643,13 +729,154 @@ class AdminLogService
 
                 return $this->matchLogDateRange((string) $item['time'], $filters);
             })
+            ->map(function (array $item) {
+                $item['source'] = 'laravel_log';
+                $item['status'] = $this->statusFromLogLevel((string) ($item['level'] ?? ''));
+                $item['summary'] = null;
+                $item['error_msg'] = in_array(strtoupper((string) ($item['level'] ?? '')), ['ERROR', 'CRITICAL', 'ALERT', 'EMERGENCY'], true)
+                    ? ($item['raw'] ?? $item['message'] ?? null)
+                    : null;
+
+                return $item;
+            })
             ->values();
     }
 
-    private function buildSystemLogEntries(array $filters): Collection
+    private function buildScheduleRunTaskLogEntries(array $filters): Collection
     {
-        return collect($this->readLaravelLogEntries())
-            ->filter(fn (array $item) => empty($item['task_key']))
+        if (! Schema::hasTable('schedule_run_logs')) {
+            return collect();
+        }
+
+        $query = ScheduleRunLog::query();
+
+        if (! empty($filters['task_key'])) {
+            $query->where('task_name', trim((string) $filters['task_key']));
+        }
+
+        if (! empty($filters['status'])) {
+            $query->where('status', trim((string) $filters['status']));
+        }
+
+        if (! empty($filters['keyword'])) {
+            $keyword = trim((string) $filters['keyword']);
+            $query->where(function ($builder) use ($keyword) {
+                $builder->where('task_name', 'like', "%{$keyword}%")
+                    ->orWhere('error_msg', 'like', "%{$keyword}%");
+            });
+        }
+
+        if (! empty($filters['start_date'])) {
+            $query->where('started_at', '>=', Carbon::parse((string) $filters['start_date'])->startOfDay());
+        }
+
+        if (! empty($filters['end_date'])) {
+            $query->where('started_at', '<=', Carbon::parse((string) $filters['end_date'])->endOfDay());
+        }
+
+        return $query
+            ->orderByDesc('started_at')
+            ->limit(1000)
+            ->get()
+            ->map(function (ScheduleRunLog $log) {
+                $taskKey = trim((string) $log->task_name);
+                $summary = is_array($log->summary) ? SensitiveDataSanitizer::sanitize($log->summary) : null;
+                $errorMessage = trim((string) ($log->error_msg ?? ''));
+                $message = $errorMessage !== ''
+                    ? $errorMessage
+                    : $this->taskSummaryText($summary, trim((string) $log->status));
+
+                return [
+                    'id' => 'schedule-'.$log->id,
+                    'source' => 'schedule_run_logs',
+                    'time' => $log->started_at?->format('Y-m-d H:i:s') ?: $log->created_at?->format('Y-m-d H:i:s'),
+                    'started_at' => $log->started_at?->format('Y-m-d H:i:s'),
+                    'finished_at' => $log->finished_at?->format('Y-m-d H:i:s'),
+                    'task_key' => $taskKey,
+                    'task_name' => $taskKey,
+                    'task_title' => self::TASK_META[$taskKey]['title'] ?? $taskKey,
+                    'status' => trim((string) $log->status),
+                    'level' => $this->levelFromTaskStatus((string) $log->status),
+                    'duration_ms' => (int) $log->duration_ms,
+                    'summary' => $summary,
+                    'error_msg' => $errorMessage,
+                    'message' => $message,
+                    'raw' => $errorMessage,
+                ];
+            })
+            ->values();
+    }
+
+    private function buildCronActivityTaskLogEntries(array $filters): Collection
+    {
+        if (! Schema::hasTable('activity_logs')) {
+            return collect();
+        }
+
+        $query = ActivityLog::query()->where('module', 'cron');
+
+        if (! empty($filters['task_key'])) {
+            $taskKey = trim((string) $filters['task_key']);
+            $query->where(function ($builder) use ($taskKey) {
+                $builder->where('description', 'like', "%{$taskKey}%")
+                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.task_key')) = ?", [$taskKey]);
+            });
+        }
+
+        if (! empty($filters['status'])) {
+            $query->where('action', trim((string) $filters['status']));
+        }
+
+        if (! empty($filters['keyword'])) {
+            $keyword = trim((string) $filters['keyword']);
+            $query->where(function ($builder) use ($keyword) {
+                $builder->where('description', 'like', "%{$keyword}%")
+                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.task_key')) like ?", ["%{$keyword}%"])
+                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.error_message')) like ?", ["%{$keyword}%"]);
+            });
+        }
+
+        $this->applyDateFilter($query, $filters);
+
+        return $query
+            ->orderByDesc('created_at')
+            ->limit(1000)
+            ->get()
+            ->map(function (ActivityLog $log) {
+                $context = is_array($log->context) ? SensitiveDataSanitizer::sanitize($log->context) : [];
+                $taskKey = trim((string) ($context['task_key'] ?? ''));
+                $status = trim((string) $log->action);
+
+                return [
+                    'id' => 'activity-'.$log->id,
+                    'source' => 'activity_logs',
+                    'time' => $log->created_at?->format('Y-m-d H:i:s'),
+                    'started_at' => null,
+                    'finished_at' => $log->created_at?->format('Y-m-d H:i:s'),
+                    'task_key' => $taskKey,
+                    'task_name' => $taskKey ?: trim((string) $log->subject_type),
+                    'task_title' => $taskKey !== '' ? (self::TASK_META[$taskKey]['title'] ?? $taskKey) : trim((string) $log->subject_type),
+                    'status' => $status,
+                    'level' => $this->levelFromTaskStatus($status),
+                    'duration_ms' => isset($context['duration_ms']) ? (int) $context['duration_ms'] : null,
+                    'summary' => $context['summary'] ?? null,
+                    'error_msg' => $context['error_message'] ?? null,
+                    'message' => trim((string) $log->description),
+                    'raw' => trim((string) $log->description),
+                ];
+            })
+            ->values();
+    }
+
+    private function buildRuntimeLogEntries(array $filters): Collection
+    {
+        $fileEntries = $this->hasStructuredRuntimeFilter($filters)
+            ? collect()
+            : collect($this->readLaravelLogEntries())
+                ->filter(fn (array $item) => empty($item['task_key']));
+
+        return $fileEntries
+            ->merge($this->buildPluginRuntimeLogEntries($filters))
             ->filter(function (array $item) use ($filters) {
                 if (! empty($filters['level']) && strtoupper((string) $item['level']) !== strtoupper((string) $filters['level'])) {
                     return false;
@@ -664,7 +891,129 @@ class AdminLogService
 
                 return $this->matchLogDateRange((string) $item['time'], $filters);
             })
+            ->sortByDesc(fn (array $item) => strtotime((string) ($item['time'] ?? '')) ?: 0)
             ->values();
+    }
+
+    private function buildPluginRuntimeLogEntries(array $filters): Collection
+    {
+        if (! Schema::hasTable('integration_plugin_runtime_logs')) {
+            return collect();
+        }
+
+        $query = IntegrationPluginRuntimeLog::query();
+
+        if (! empty($filters['plugin_id'])) {
+            $query->where('plugin_id', (int) $filters['plugin_id']);
+        }
+
+        if (! empty($filters['gateway_key'])) {
+            $query->where('plugin_key', trim((string) $filters['gateway_key']));
+        }
+
+        if (! empty($filters['driver_key'])) {
+            $query->where('plugin_key', trim((string) $filters['driver_key']));
+        }
+
+        if (! empty($filters['trace_id'])) {
+            $query->where('trace_id', 'like', '%'.trim((string) $filters['trace_id']).'%');
+        }
+
+        if (! empty($filters['status'])) {
+            $query->where('status', trim((string) $filters['status']));
+        }
+
+        if (! empty($filters['keyword'])) {
+            $keyword = trim((string) $filters['keyword']);
+            $query->where(function (Builder $builder) use ($keyword): void {
+                $builder->where('plugin_key', 'like', "%{$keyword}%")
+                    ->orWhere('slug', 'like', "%{$keyword}%")
+                    ->orWhere('action', 'like', "%{$keyword}%")
+                    ->orWhere('trace_id', 'like', "%{$keyword}%")
+                    ->orWhere('error_message', 'like', "%{$keyword}%");
+            });
+        }
+
+        $this->applyDateFilter($query, $filters);
+
+        return $query
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->limit(1600)
+            ->get()
+            ->map(fn (IntegrationPluginRuntimeLog $log): array => $this->mapPluginRuntimeLogEntry($log));
+    }
+
+    private function mapPluginRuntimeLogEntry(IntegrationPluginRuntimeLog $log): array
+    {
+        $status = trim((string) ($log->status ?? ''));
+        $pluginLabel = trim((string) ($log->plugin_key ?: $log->slug));
+        $action = trim((string) ($log->action ?? ''));
+        $error = trim((string) ($log->error_message ?? ''));
+        $message = trim($pluginLabel.' '.$action);
+
+        if ($error !== '') {
+            $message = trim($message.' - '.$error);
+        }
+
+        return [
+            'id' => 'plugin-runtime-'.$log->id,
+            'source' => 'integration_plugin_runtime_logs',
+            'time' => $log->created_at?->format('Y-m-d H:i:s'),
+            'level' => strtolower($status) === 'failed' ? 'ERROR' : 'INFO',
+            'message' => $message !== '' ? $message : 'plugin runtime',
+            'raw' => $message,
+            'status' => $status,
+            'trace_id' => trim((string) ($log->trace_id ?? '')),
+            'domain' => trim((string) ($log->domain ?? '')),
+            'plugin_id' => $log->plugin_id,
+            'plugin_key' => trim((string) ($log->plugin_key ?? '')),
+            'slug' => trim((string) ($log->slug ?? '')),
+            'action' => $action,
+            'duration_ms' => $log->duration_ms,
+            'error_msg' => $error,
+            'request_meta' => $log->request_meta_json ?? [],
+            'response_meta' => $log->response_meta_json ?? [],
+        ];
+    }
+
+    private function hasStructuredRuntimeFilter(array $filters): bool
+    {
+        foreach (['plugin_id', 'gateway_key', 'driver_key', 'trace_id'] as $key) {
+            if (! empty($filters[$key])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function levelFromTaskStatus(string $status): string
+    {
+        return match (strtolower($status)) {
+            'success' => 'SUCCESS',
+            'skipped' => 'NOTICE',
+            'failed' => 'ERROR',
+            default => 'INFO',
+        };
+    }
+
+    private function statusFromLogLevel(string $level): string
+    {
+        return in_array(strtoupper($level), ['ERROR', 'CRITICAL', 'ALERT', 'EMERGENCY'], true)
+            ? 'failed'
+            : 'success';
+    }
+
+    private function taskSummaryText(?array $summary, string $status): string
+    {
+        if ($summary === null || $summary === []) {
+            return $status === '' ? '任务执行完成' : '任务状态：'.$status;
+        }
+
+        $json = json_encode($summary, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        return $json === false ? '任务执行完成' : $json;
     }
 
     private function buildFileLogSummaryCacheKey(string $type, array $filters): string
@@ -691,6 +1040,7 @@ class AdminLogService
 
     private function mapOperationLogs(Collection $logs, bool $includeMessageFields): Collection
     {
+        $privacy = AdminPrivacy::current();
         $adminIds = $logs->where('user_type', 'admin')->pluck('user_id')->filter()->unique()->values();
         $clientIds = $logs->where('user_type', 'client')->pluck('user_id')->filter()->unique()->values();
 
@@ -719,7 +1069,7 @@ class AdminLogService
                 ])
                 ->keyBy('id');
 
-        return $logs->map(function (OperationLog $log) use ($admins, $roles, $clients, $includeMessageFields) {
+        return $logs->map(function (OperationLog $log) use ($admins, $roles, $clients, $includeMessageFields, $privacy) {
             $detail = is_array($log->detail) ? $log->detail : [];
             $actorName = '';
             $roleName = '';
@@ -734,7 +1084,7 @@ class AdminLogService
             } elseif ($log->user_type === 'client') {
                 $client = $clients->get($log->user_id);
                 if ($client instanceof User) {
-                    $actorName = trim((string) $client->display_name);
+                    $actorName = $privacy->displayName($client->display_name, $client->email, $client->phone, $client->real_name);
                 }
             }
 
@@ -747,8 +1097,8 @@ class AdminLogService
                 'action' => trim((string) $log->action),
                 'module' => trim((string) ($log->module ?? '')),
                 'target_id' => $log->target_id ? (int) $log->target_id : null,
-                'detail' => $detail,
-                'ip_address' => trim((string) ($log->ip_address ?? '')),
+                'detail' => $privacy->payload($detail),
+                'ip_address' => $privacy->ip($log->ip_address ?? ''),
                 'created_at' => $log->created_at?->format('Y-m-d H:i:s'),
             ];
 
@@ -894,6 +1244,7 @@ class AdminLogService
         }
 
         $query = GatewayLog::query();
+        $this->applyPluginLogFilters($query, 'gateway_logs', $filters, 'gateway_key');
 
         if (! empty($filters['keyword'])) {
             $keyword = trim((string) $filters['keyword']);
@@ -902,11 +1253,13 @@ class AdminLogService
                     ->orWhere('trade_no', 'like', "%{$keyword}%")
                     ->orWhere('gateway', 'like', "%{$keyword}%")
                     ->orWhere('error_msg', 'like', "%{$keyword}%");
+
+                $this->applyOptionalKeywordColumns($builder, 'gateway_logs', $keyword, ['gateway_key', 'trace_id']);
             });
         }
 
         if (! empty($filters['gateway'])) {
-            $query->where('gateway', trim((string) $filters['gateway']));
+            $query->where('gateway_key', PaymentGatewayCode::normalize((string) $filters['gateway']));
         }
 
         if (! empty($filters['action'])) {
@@ -941,33 +1294,7 @@ class AdminLogService
         }
 
         $query = ActivityLog::query();
-
-        if (! empty($filters['keyword'])) {
-            $keyword = trim((string) $filters['keyword']);
-            $query->where(function ($builder) use ($keyword) {
-                $builder->where('description', 'like', "%{$keyword}%")
-                    ->orWhere('actor_name', 'like', "%{$keyword}%")
-                    ->orWhere('module', 'like', "%{$keyword}%");
-
-                if (ctype_digit($keyword)) {
-                    $builder->orWhere('actor_id', (int) $keyword);
-                }
-            });
-        }
-
-        if (! empty($filters['module'])) {
-            $query->where('module', trim((string) $filters['module']));
-        }
-
-        if (! empty($filters['actor_type'])) {
-            $query->where('actor_type', trim((string) $filters['actor_type']));
-        }
-
-        if (! empty($filters['subject_type'])) {
-            $query->where('subject_type', trim((string) $filters['subject_type']));
-        }
-
-        $this->applyDateFilter($query, $filters);
+        $this->applyActivityLogFilters($query, $filters);
 
         $logs = (clone $query)->orderByDesc('created_at')->paginate($perPage, ['*'], 'page', $page);
 
@@ -975,9 +1302,15 @@ class AdminLogService
             return $this->getBusinessOperationLogsAsActivityLogs($filters, $page, $perPage);
         }
 
-        $logs->setCollection($logs->getCollection()->map(function (ActivityLog $log) {
+        $privacy = AdminPrivacy::current();
+        $logs->setCollection($logs->getCollection()->map(function (ActivityLog $log) use ($privacy) {
             $item = $log->toArray();
             $item['source'] = 'activity_log';
+            $item['context'] = $privacy->payload($item['context'] ?? []);
+            $item['ip_address'] = $privacy->ip($item['ip_address'] ?? '');
+            if (($item['actor_type'] ?? '') === 'client') {
+                $item['actor_name'] = $privacy->displayName($item['actor_name'] ?? '');
+            }
 
             return $item;
         }));
@@ -994,6 +1327,103 @@ class AdminLogService
         ]);
     }
 
+    public function getActivityLogsSummary(array $filters): array
+    {
+        if (Schema::hasTable('activity_logs')) {
+            $query = ActivityLog::query();
+            $this->applyActivityLogFilters($query, $filters);
+
+            $summary = (clone $query)
+                ->selectRaw('COUNT(*) as total')
+                ->selectRaw('COUNT(DISTINCT module) as modules')
+                ->first();
+
+            if ((int) ($summary?->total ?? 0) > 0) {
+                return [
+                    'total' => (int) ($summary?->total ?? 0),
+                    'modules' => (int) ($summary?->modules ?? 0),
+                    'source' => 'activity_logs',
+                ];
+            }
+        }
+
+        if (! Schema::hasTable('operation_logs')) {
+            return [
+                'total' => 0,
+                'modules' => 0,
+                'source' => 'none',
+            ];
+        }
+
+        $query = OperationLog::query()
+            ->whereRaw('action NOT REGEXP ?', [self::HTTP_ACTION_REGEXP])
+            ->where('action', '<>', 'admin.login');
+        $this->applyBusinessOperationActivityFilters($query, $filters);
+
+        $summary = (clone $query)
+            ->selectRaw('COUNT(*) as total')
+            ->selectRaw('COUNT(DISTINCT module) as modules')
+            ->first();
+
+        return [
+            'total' => (int) ($summary?->total ?? 0),
+            'modules' => (int) ($summary?->modules ?? 0),
+            'source' => 'operation_logs',
+        ];
+    }
+
+    private function applyActivityLogFilters(Builder $query, array $filters): void
+    {
+        if (! empty($filters['keyword'])) {
+            $keyword = trim((string) $filters['keyword']);
+            $query->where(function ($builder) use ($keyword) {
+                $builder->where('description', 'like', "%{$keyword}%")
+                    ->orWhere('actor_name', 'like', "%{$keyword}%")
+                    ->orWhere('module', 'like', "%{$keyword}%")
+                    ->orWhere('ip_address', 'like', "%{$keyword}%");
+
+                if (ctype_digit($keyword)) {
+                    $builder->orWhere('actor_id', (int) $keyword)
+                        ->orWhere('subject_id', (int) $keyword);
+                }
+            });
+        }
+
+        if (! empty($filters['actor_keyword'])) {
+            $keyword = trim((string) $filters['actor_keyword']);
+            $query->where(function ($builder) use ($keyword) {
+                $builder->where('actor_name', 'like', "%{$keyword}%");
+
+                if (ctype_digit($keyword)) {
+                    $builder->orWhere('actor_id', (int) $keyword);
+                }
+            });
+        }
+
+        if (! empty($filters['description_keyword'])) {
+            $keyword = trim((string) $filters['description_keyword']);
+            $query->where('description', 'like', "%{$keyword}%");
+        }
+
+        if (! empty($filters['ip_address'])) {
+            $query->where('ip_address', 'like', '%'.trim((string) $filters['ip_address']).'%');
+        }
+
+        if (! empty($filters['module'])) {
+            $query->where('module', trim((string) $filters['module']));
+        }
+
+        if (! empty($filters['actor_type'])) {
+            $query->where('actor_type', trim((string) $filters['actor_type']));
+        }
+
+        if (! empty($filters['subject_type'])) {
+            $query->where('subject_type', trim((string) $filters['subject_type']));
+        }
+
+        $this->applyDateFilter($query, $filters);
+    }
+
     private function getBusinessOperationLogsAsActivityLogs(array $filters, int $page, int $perPage): array
     {
         if (! Schema::hasTable('operation_logs')) {
@@ -1003,11 +1433,33 @@ class AdminLogService
         $query = OperationLog::query()
             ->whereRaw('action NOT REGEXP ?', [self::HTTP_ACTION_REGEXP])
             ->where('action', '<>', 'admin.login');
+        $this->applyBusinessOperationActivityFilters($query, $filters);
 
+        $logs = (clone $query)->orderByDesc('created_at')->paginate($perPage, ['*'], 'page', $page);
+        $logs->setCollection(
+            $this->mapOperationLogs($logs->getCollection(), true)
+                ->map(fn (array $item) => $this->mapOperationLogToActivityRow($item))
+        );
+
+        $summary = (clone $query)
+            ->selectRaw('COUNT(*) as total')
+            ->selectRaw('COUNT(DISTINCT module) as modules')
+            ->first();
+
+        return $this->buildPaginatorPayload($logs, [
+            'total' => (int) ($summary?->total ?? 0),
+            'modules' => (int) ($summary?->modules ?? 0),
+            'source' => 'operation_logs',
+        ]);
+    }
+
+    private function applyBusinessOperationActivityFilters(Builder $query, array $filters): void
+    {
         if (! empty($filters['keyword'])) {
             $keyword = trim((string) $filters['keyword']);
             $actorCandidates = $this->resolveActorKeywordCandidates($keyword);
-            $query->where(function ($builder) use ($keyword, $actorCandidates) {
+            $subjectIdColumn = $this->operationLogSubjectIdColumn();
+            $query->where(function ($builder) use ($keyword, $actorCandidates, $subjectIdColumn) {
                 $builder->where('action', 'like', "%{$keyword}%")
                     ->orWhere('module', 'like', "%{$keyword}%")
                     ->orWhere('ip_address', 'like', "%{$keyword}%")
@@ -1015,6 +1467,10 @@ class AdminLogService
                     ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.message')) like ?", ["%{$keyword}%"])
                     ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.content')) like ?", ["%{$keyword}%"])
                     ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.target')) like ?", ["%{$keyword}%"]);
+
+                if (ctype_digit($keyword) && $subjectIdColumn !== null) {
+                    $builder->orWhere($subjectIdColumn, (int) $keyword);
+                }
 
                 if ($actorCandidates['admin'] !== []) {
                     $builder->orWhere(function ($query) use ($actorCandidates) {
@@ -1030,6 +1486,49 @@ class AdminLogService
                     });
                 }
             });
+        }
+
+        if (! empty($filters['actor_keyword'])) {
+            $keyword = trim((string) $filters['actor_keyword']);
+            $actorCandidates = $this->resolveActorKeywordCandidates($keyword);
+            $query->where(function ($builder) use ($keyword, $actorCandidates) {
+                if (ctype_digit($keyword)) {
+                    $builder->where('user_id', (int) $keyword);
+                }
+
+                if ($actorCandidates['admin'] !== []) {
+                    $builder->orWhere(function ($query) use ($actorCandidates) {
+                        $query->where('user_type', 'admin')
+                            ->whereIn('user_id', $actorCandidates['admin']);
+                    });
+                }
+
+                if ($actorCandidates['client'] !== []) {
+                    $builder->orWhere(function ($query) use ($actorCandidates) {
+                        $query->where('user_type', 'client')
+                            ->whereIn('user_id', $actorCandidates['client']);
+                    });
+                }
+
+                if (! ctype_digit($keyword) && $actorCandidates['admin'] === [] && $actorCandidates['client'] === []) {
+                    $builder->whereRaw('1 = 0');
+                }
+            });
+        }
+
+        if (! empty($filters['description_keyword'])) {
+            $keyword = trim((string) $filters['description_keyword']);
+            $query->where(function ($builder) use ($keyword) {
+                $builder->where('action', 'like', "%{$keyword}%")
+                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.title')) like ?", ["%{$keyword}%"])
+                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.message')) like ?", ["%{$keyword}%"])
+                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.content')) like ?", ["%{$keyword}%"])
+                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.target')) like ?", ["%{$keyword}%"]);
+            });
+        }
+
+        if (! empty($filters['ip_address'])) {
+            $query->where('ip_address', 'like', '%'.trim((string) $filters['ip_address']).'%');
         }
 
         if (! empty($filters['module'])) {
@@ -1054,23 +1553,19 @@ class AdminLogService
         }
 
         $this->applyDateFilter($query, $filters);
+    }
 
-        $logs = (clone $query)->orderByDesc('created_at')->paginate($perPage, ['*'], 'page', $page);
-        $logs->setCollection(
-            $this->mapOperationLogs($logs->getCollection(), true)
-                ->map(fn (array $item) => $this->mapOperationLogToActivityRow($item))
-        );
+    private function operationLogSubjectIdColumn(): ?string
+    {
+        if (Schema::hasColumn('operation_logs', 'subject_id')) {
+            return 'subject_id';
+        }
 
-        $summary = (clone $query)
-            ->selectRaw('COUNT(*) as total')
-            ->selectRaw('COUNT(DISTINCT module) as modules')
-            ->first();
+        if (Schema::hasColumn('operation_logs', 'target_id')) {
+            return 'target_id';
+        }
 
-        return $this->buildPaginatorPayload($logs, [
-            'total' => (int) ($summary?->total ?? 0),
-            'modules' => (int) ($summary?->modules ?? 0),
-            'source' => 'operation_logs',
-        ]);
+        return null;
     }
 
     private function mapOperationLogToActivityRow(array $item): array

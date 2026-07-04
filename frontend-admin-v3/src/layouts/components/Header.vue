@@ -21,6 +21,9 @@
               <t-dropdown-item class="operations-dropdown-container-item" @click="handleNav('/user/index')">
                 <user-circle-icon />{{ t('layout.header.user') }}
               </t-dropdown-item>
+              <t-dropdown-item class="operations-dropdown-container-item" @click="openPasswordDialog">
+                <setting-icon />修改密码
+              </t-dropdown-item>
               <t-dropdown-item class="operations-dropdown-container-item" @click="handleLogout">
                 <poweroff-icon />{{ t('layout.header.signOut') }}
               </t-dropdown-item>
@@ -41,20 +44,45 @@
         </div>
       </template>
     </t-head-menu>
+
+    <t-dialog
+      v-model:visible="passwordVisible"
+      header="修改密码"
+      width="520px"
+      :confirm-btn="{ content: '保存', theme: 'primary' }"
+      :confirm-loading="passwordSaving"
+      @confirm="submitPassword"
+    >
+      <t-form ref="passwordFormRef" :data="passwordForm" :rules="passwordRules" label-align="top">
+        <t-form-item label="当前密码" name="current_password">
+          <t-input v-model="passwordForm.current_password" type="password" />
+        </t-form-item>
+        <t-form-item label="新密码" name="password">
+          <t-input v-model="passwordForm.password" type="password" />
+        </t-form-item>
+        <t-form-item label="确认新密码" name="password_confirmation">
+          <t-input v-model="passwordForm.password_confirmation" type="password" />
+        </t-form-item>
+      </t-form>
+    </t-dialog>
   </div>
 </template>
 <script setup lang="ts">
 import { ChevronDownIcon, PoweroffIcon, SettingIcon, UserCircleIcon } from 'tdesign-icons-vue-next';
 import type { PropType } from 'vue';
-import { computed } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
+import { MessagePlugin } from 'tdesign-vue-next';
+import type { FormInstanceFunctions, FormRule } from 'tdesign-vue-next';
 
+import { adminAuthApi } from '@/api/auth';
 import LogoFull from '@/assets/assets-logo-full.svg?component';
 import { prefix } from '@/config/global';
 import { t } from '@/locales';
 import { getActive } from '@/router';
 import { useSettingStore, useUserStore } from '@/store';
 import type { MenuRoute, ModeType } from '@/types/interface';
+import { errorMessage } from '@/utils/userMessage';
 
 import MenuContent from './MenuContent.vue';
 
@@ -92,6 +120,22 @@ const { theme, layout, showLogo, menu, isFixed, isCompact } = defineProps({
 const router = useRouter();
 const settingStore = useSettingStore();
 const user = useUserStore();
+const passwordVisible = ref(false);
+const passwordSaving = ref(false);
+const passwordFormRef = ref<FormInstanceFunctions>();
+const passwordForm = reactive({
+  current_password: '',
+  password: '',
+  password_confirmation: '',
+});
+const passwordRules: Record<string, FormRule[]> = {
+  current_password: [{ required: true, message: '请输入当前密码', type: 'error' }],
+  password: [
+    { required: true, message: '请输入新密码', type: 'error' },
+    { min: 8, message: '新密码至少 8 位', type: 'error' },
+  ],
+  password_confirmation: [{ required: true, message: '请再次输入新密码', type: 'error' }],
+};
 
 const toggleSettingPanel = () => {
   settingStore.updateConfig({
@@ -130,6 +174,41 @@ const changeCollapsed = () => {
 
 const handleNav = (url: string) => {
   router.push(url);
+};
+
+const openPasswordDialog = () => {
+  Object.assign(passwordForm, {
+    current_password: '',
+    password: '',
+    password_confirmation: '',
+  });
+  passwordVisible.value = true;
+};
+
+const submitPassword = async () => {
+  const result = await passwordFormRef.value?.validate?.();
+  if (result !== true) return;
+
+  if (passwordForm.password.length < 8) {
+    MessagePlugin.warning('新密码至少 8 位');
+    return;
+  }
+
+  if (passwordForm.password !== passwordForm.password_confirmation) {
+    MessagePlugin.warning('两次输入的新密码不一致');
+    return;
+  }
+
+  passwordSaving.value = true;
+  try {
+    await adminAuthApi.updatePassword({ ...passwordForm });
+    MessagePlugin.success('密码已更新');
+    passwordVisible.value = false;
+  } catch (error) {
+    MessagePlugin.error(errorMessage(error, '修改密码失败'));
+  } finally {
+    passwordSaving.value = false;
+  }
 };
 
 const handleLogout = () => {

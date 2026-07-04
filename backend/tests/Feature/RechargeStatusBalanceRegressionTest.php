@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Models\AccountTransaction;
 use App\Models\Invoice;
@@ -131,6 +132,95 @@ class RechargeStatusBalanceRegressionTest extends TestCase
             ->where('amount', '5.00')
             ->count());
         $this->assertSame('15.00', User::query()->findOrFail($user->id)->balance);
+    }
+
+    public function test_query_recharge_status_supports_non_alipay_third_party_gateway(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+
+        $user = User::query()->create([
+            'email' => 'recharge-yipay-'.$suffix.'@example.com',
+            'password' => 'Temp@123456',
+            'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
+            'status' => 1,
+            'nickname' => 'Recharge YiPay',
+            'real_name' => '',
+            'id_card' => '',
+            'verification_status' => 0,
+            'verification_message' => '',
+            'verification_certify_id' => null,
+            'member_level_id' => null,
+            'total_sales_amount' => '0.00',
+            'referrer_user_id' => null,
+            'verified_at' => null,
+        ]);
+        $user->forceFill(['balance' => '3.00'])->save();
+
+        $payment = Payment::query()->create([
+            'payment_no' => Payment::generatePaymentNo(),
+            'user_id' => (int) $user->id,
+            'invoice_id' => null,
+            'gateway' => PaymentGatewayCode::YIPAY,
+            'amount' => '7.00',
+            'status' => PaymentStatus::PENDING,
+        ]);
+
+        $tradeNo = 'YIPAY-'.strtoupper(bin2hex(random_bytes(4)));
+        $gateway = $this->makeFakePaymentGateway([
+            'key' => PaymentGatewayCode::YIPAY,
+            'query' => function (string $outTradeNo) use ($payment, $tradeNo): array {
+                $this->assertSame((string) $payment->payment_no, $outTradeNo);
+
+                return [
+                    'trade_status' => 'TRADE_SUCCESS',
+                    'trade_no' => $tradeNo,
+                    'out_trade_no' => (string) $payment->payment_no,
+                    'total_amount' => '7.00',
+                    'raw' => [
+                        'trade_status' => 'TRADE_SUCCESS',
+                        'trade_no' => $tradeNo,
+                        'out_trade_no' => (string) $payment->payment_no,
+                        'money' => '7.00',
+                    ],
+                ];
+            },
+        ]);
+
+        $service = new PaymentService(
+            $this->createMock(ProvisionService::class),
+            $this->makePaymentGatewayManagerForTest($gateway),
+            $this->createMock(ServiceRenewService::class),
+            $this->createMock(ReferralService::class),
+            $this->createMock(PaidOrderBusinessFlowDispatcher::class),
+            $this->createMock(AdminOrderNotificationService::class),
+            $this->createMock(CouponService::class),
+            new InvoiceService,
+        );
+
+        $result = $service->queryRechargeStatus($payment);
+
+        $this->assertTrue($result['paid']);
+        $this->assertSame($tradeNo, $result['trade_no']);
+        $this->assertDatabaseHas('payments', [
+            'id' => (int) $payment->id,
+            'gateway_key' => PaymentGatewayCode::YIPAY,
+            'status' => PaymentStatus::SUCCESS,
+            'trade_no' => $tradeNo,
+        ]);
+
+        $payment->refresh();
+        $this->assertNotNull($payment->invoice_id);
+        $this->assertDatabaseHas('invoices', [
+            'id' => (int) $payment->invoice_id,
+            'user_id' => (int) $user->id,
+            'type' => 'recharge',
+            'amount' => '7.00',
+            'paid_amount' => '7.00',
+        ]);
+        $this->assertDatabaseHas('user_accounts', [
+            'user_id' => (int) $user->id,
+            'cash_balance' => '10.00',
+        ]);
     }
 
     public function test_recharge_completion_rolls_back_when_recharge_invoice_creation_fails(): void

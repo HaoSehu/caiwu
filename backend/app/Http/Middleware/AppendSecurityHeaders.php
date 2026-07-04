@@ -39,6 +39,15 @@ class AppendSecurityHeaders
             $response->headers->set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
         }
 
+        // Content-Security-Policy：限制脚本/对象/基础URI来源，防御XSS注入
+        // API 接口返回 JSON，不需要加载外部脚本；SPA 页面由前端单独配置更宽松的策略
+        if (! $response->headers->has('Content-Security-Policy')) {
+            $response->headers->set(
+                'Content-Security-Policy',
+                "default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+            );
+        }
+
         return $response;
     }
 }

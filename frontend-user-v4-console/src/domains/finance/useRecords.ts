@@ -10,17 +10,20 @@ import {
 
 import clientApi from '@/api/client';
 import { formatMoney } from '@/utils/format';
-import type { PaymentRecord } from '@/types/client';
+import type { ClientFinanceListParams, PaymentRecord } from '@/types/client';
+
+import { resolveQuickDateRange } from './dateFilters';
 
 type AnyRecord = Record<string, unknown>;
 type RecordListItem = PaymentRecord;
-type Fetcher = (params?: Record<string, unknown>) => Promise<{ data: { list: RecordListItem[]; total: number } }>;
+type Fetcher = (params?: ClientFinanceListParams) => Promise<{ data: { list: RecordListItem[]; total: number } }>;
 type DetailFetcher = (row: RecordListItem) => Promise<{ data: RecordListItem }>;
 
 export const PAYMENT_STATUS_OPTIONS = toSelectOptions(PAYMENT_STATUS_MAP, false);
 
 export const PAYMENT_GATEWAY_OPTIONS = [
   { label: '支付宝', value: 'alipay' },
+  { label: '易支付', value: 'yipay' },
   { label: '微信支付', value: 'wechat' },
 ];
 
@@ -229,10 +232,10 @@ export function resolveBalanceTheme(value: unknown) {
   return Number(value || 0) >= 0 ? 'success' : 'danger';
 }
 
-function compactParams(params: AnyRecord) {
+function compactParams(params: ClientFinanceListParams): ClientFinanceListParams {
   return Object.fromEntries(
     Object.entries(params).filter(([, value]) => value !== '' && value !== undefined && value !== null),
-  );
+  ) as ClientFinanceListParams;
 }
 
 function resolveListPayload(response: unknown) {
@@ -251,27 +254,28 @@ export function useRecordList(fetcher: Fetcher, errorMessage: string, options: {
   const total = ref(0);
   const detailVisible = ref(false);
   const currentRow = shallowRef<RecordListItem | null>(null);
-  const filters = reactive<AnyRecord>({
+  const filters = reactive({
     page: 1,
     page_size: 10,
     keyword: '',
-    status: '',
+    status: '' as string | number,
     type: '',
-    gateway: '',
-    event_type: '',
+    start_date: '',
+    end_date: '',
+    quickFilter: '',
   });
 
   const hasRows = computed(() => list.value.length > 0);
 
-  function buildParams() {
+  function buildParams(): ClientFinanceListParams {
     return compactParams({
       page: filters.page,
       page_size: filters.page_size,
       keyword: filters.keyword,
       status: filters.status,
       type: filters.type,
-      gateway: filters.gateway,
-      event_type: filters.event_type,
+      start_date: filters.start_date,
+      end_date: filters.end_date,
     });
   }
 
@@ -305,8 +309,26 @@ export function useRecordList(fetcher: Fetcher, errorMessage: string, options: {
     filters.keyword = '';
     filters.status = '';
     filters.type = '';
-    filters.gateway = '';
-    filters.event_type = '';
+    filters.start_date = '';
+    filters.end_date = '';
+    filters.quickFilter = '';
+    void loadList();
+  }
+
+  function applyQuickFilter(key: string) {
+    filters.quickFilter = key;
+    filters.page = 1;
+    filters.status = '';
+    filters.type = '';
+    filters.start_date = '';
+    filters.end_date = '';
+
+    if (key === 'pending') {
+      filters.status = 0;
+    }
+    const range = resolveQuickDateRange(key);
+    filters.start_date = range.start_date || '';
+    filters.end_date = range.end_date || '';
     void loadList();
   }
 
@@ -356,6 +378,7 @@ export function useRecordList(fetcher: Fetcher, errorMessage: string, options: {
     handleSearch,
     handlePageSizeChange,
     resetFilters,
+    applyQuickFilter,
     goToInvoice,
     openDetail,
     closeDetail,
@@ -363,5 +386,5 @@ export function useRecordList(fetcher: Fetcher, errorMessage: string, options: {
 }
 
 export const recordApi = {
-  payments: (params?: Record<string, unknown>) => clientApi.payments(params),
+  payments: (params?: ClientFinanceListParams) => clientApi.payments(params),
 };

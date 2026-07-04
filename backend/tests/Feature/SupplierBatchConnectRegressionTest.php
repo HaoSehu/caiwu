@@ -7,16 +7,36 @@ namespace Tests\Feature;
 use App\Models\FirstProductGroup;
 use App\Models\Product;
 use App\Models\Supplier;
+use App\Services\Integrations\Plugins\PluginFileLoader;
+use App\Services\Integrations\Plugins\PluginScanner;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\ProductCatalog\ProductSyncService;
-use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiDriver;
+use App\Services\Upstream\Contracts\ProvidesConsoleCatalog;
+use App\Services\Upstream\Contracts\UpstreamDriver;
 use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiTransport;
+use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class SupplierBatchConnectRegressionTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        app(PluginFileLoader::class)->ensureLoaded(
+            app(PluginScanner::class)->requireManifest('upstream', 'mofang_finance')
+        );
+        Artisan::call('migrate', [
+            '--path' => 'database/migrations/2026_07_03_130000_create_plugin_binding_runtime_and_audit_tables.php',
+            '--force' => true,
+        ]);
+        $this->activateIntegrationPluginForTest('upstream', 'mofang_finance');
+    }
+
     public function test_bulk_connect_supplier_products_creates_local_products_from_upstream_catalog(): void
     {
         $suffix = bin2hex(random_bytes(4));
@@ -24,13 +44,14 @@ class SupplierBatchConnectRegressionTest extends TestCase
         $supplier = Supplier::query()->create([
             'name' => 'Batch Connect Supplier '.$suffix,
             'code' => 'batch-connect-'.$suffix,
-            'interface_type' => 'hosting_panel_api',
+            'interface_type' => ProviderKey::MOFANG_FINANCE_API,
             'api_url' => 'https://supplier-'.$suffix.'.example.com',
             'api_username' => 'demo',
             'api_key' => 'secret',
             'status' => 1,
             'sort_order' => 1,
         ]);
+        $this->bindSupplierToMofang($supplier);
 
         $firstGroup = FirstProductGroup::query()->firstOrCreate(
             ['code' => 'vps'],
@@ -85,8 +106,11 @@ class SupplierBatchConnectRegressionTest extends TestCase
         /** @var Product|null $product */
         $product = Product::query()
             ->with('secondProductGroup.firstProductGroup')
-            ->where('supplier_id', (int) $supplier->id)
-            ->where('supplier_product_id', $supplierProductId)
+            ->join('product_upstream_bindings as pub', 'pub.product_id', '=', 'products.id')
+            ->join('supplier_plugin_bindings as spb', 'spb.id', '=', 'pub.supplier_plugin_binding_id')
+            ->where('spb.supplier_id', (int) $supplier->id)
+            ->where('pub.upstream_product_id', (string) $supplierProductId)
+            ->select('products.*')
             ->first();
 
         $this->assertNotNull($product);
@@ -153,7 +177,58 @@ class SupplierBatchConnectRegressionTest extends TestCase
     private function makeProviderResolver(HostingPanelApiTransport $transport): ProviderResolver
     {
         return new ProviderResolver(new ProviderRegistry([
-            new HostingPanelApiDriver($transport),
+            new class($transport) implements UpstreamDriver
+            {
+                public function __construct(private readonly HostingPanelApiTransport $transport) {}
+
+                public function key(): string
+                {
+                    return ProviderKey::MOFANG_FINANCE_API;
+                }
+
+                public function label(): string
+                {
+                    return '魔方财务接口';
+                }
+
+                public function capabilities(): array
+                {
+                    return [ProvidesConsoleCatalog::class];
+                }
+
+                public function supports(string $capability): bool
+                {
+                    return $capability === ProvidesConsoleCatalog::class
+                        && $this->transport instanceof ProvidesConsoleCatalog;
+                }
+
+                public function resolve(string $capability): ?object
+                {
+                    return $this->supports($capability) ? $this->transport : null;
+                }
+            },
         ]));
+    }
+
+    private function bindSupplierToMofang(Supplier $supplier): void
+    {
+        $pluginId = (int) DB::table('integration_plugins')
+            ->where('domain', 'upstream')
+            ->where('plugin_key', ProviderKey::MOFANG_FINANCE_API)
+            ->value('id');
+
+        $this->assertGreaterThan(0, $pluginId);
+
+        DB::table('supplier_plugin_bindings')->updateOrInsert([
+            'supplier_id' => (int) $supplier->id,
+            'plugin_id' => $pluginId,
+            'environment' => 'production',
+        ], [
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'status' => 1,
+            'priority' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 }

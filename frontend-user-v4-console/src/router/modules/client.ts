@@ -256,12 +256,6 @@ export default [
         meta: { title: title('工单交流'), requireAuth: true, hidden: true, activeMenu: '/client/tickets' },
       },
       {
-        path: 'tools',
-        name: 'ClientToolsShiyan',
-        component: () => import('@/pages/client/tools/index.vue'),
-        meta: { title: title('管理工具'), requireAuth: true, hidden: true, activeMenu: '/client/services' },
-      },
-      {
         path: 'notices/:id',
         name: 'ClientNoticeDetail',
         component: () => import('@/pages/client/notice-detail/index.vue'),

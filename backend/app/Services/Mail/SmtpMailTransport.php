@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Mail;
 
-use App\Models\Setting;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Mail;
 
@@ -67,8 +66,6 @@ class SmtpMailTransport
             return $configured;
         }
 
-        $timeout = (int) Setting::getValue('notification', 'email_timeout_seconds', 8);
-
-        return $timeout > 0 ? $timeout : 8;
+        return 8;
     }
 }

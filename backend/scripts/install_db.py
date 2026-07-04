@@ -40,27 +40,18 @@ DEFAULT_ADMIN_PASSWORD = "Temp@123456"
 
 ADMIN_BOOTSTRAP_CODE = r"""use App\Models\AdminUser;
 use App\Models\Role;
+use App\Services\Admin\Rbac\BuiltinAdminRoleService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
-$role = Role::query()->firstOrCreate(
-    ['name' => 'super_admin'],
-    [
-        'label' => '超级管理员',
-        'permissions' => ['*'],
-    ]
-);
-
-$role->forceFill([
-    'label' => trim((string) ($role->label ?? '')) !== '' ? $role->label : '超级管理员',
-    'permissions' => ['*'],
-])->save();
+app(BuiltinAdminRoleService::class)->sync();
+$superAdminRole = Role::query()->where('name', 'super_admin')->first();
 
 $admin = AdminUser::query()->firstOrNew(['username' => 'cerbo']);
 $isNewAdmin = ! $admin->exists;
 
 $admin->forceFill([
-    'role_id' => (int) $role->id,
+    'role_id' => (int) $superAdminRole->id,
     'nickname' => trim((string) ($admin->nickname ?? '')) !== '' ? $admin->nickname : '默认管理员',
     'email' => trim((string) ($admin->email ?? '')) !== '' ? $admin->email : 'cerbo@example.com',
     'status' => $isNewAdmin ? 1 : (int) ($admin->status ?? 1),
@@ -77,7 +68,7 @@ if (Schema::hasTable('admin_user_roles')) {
     DB::table('admin_user_roles')->updateOrInsert(
         [
             'admin_user_id' => (int) $admin->id,
-            'role_id' => (int) $role->id,
+            'role_id' => (int) $superAdminRole->id,
         ],
         []
     );
@@ -320,6 +311,31 @@ def run_php_mysql_sql(
     run_command(["php", "-r", php_code], env=env, capture=True)
 
 
+def run_server_sql(
+    mysql_base_args: list[str],
+    db_username: str,
+    db_password: str,
+    db_host: str,
+    db_port: str,
+    db_socket: str,
+    sql: str,
+    *,
+    dry_run: bool,
+    mysql_client_available: bool,
+) -> None:
+    if dry_run or mysql_client_available:
+        run_mysql_sql(
+            mysql_base_args,
+            db_password,
+            sql,
+            dry_run=dry_run,
+        )
+
+        return
+
+    run_php_mysql_sql(db_username, db_password, db_host, db_port, db_socket, sql)
+
+
 def query_php_mysql_value(
     db_username: str,
     db_password: str,
@@ -452,22 +468,29 @@ def main() -> int:
         if args.reset:
             drop_database_sql = f"DROP DATABASE IF EXISTS `{escaped_database_name}`;"
             log(f"重置目标数据库：{db_database}")
-            run_mysql_sql(
+            run_server_sql(
                 mysql_base_args,
+                db_username,
                 db_password,
+                db_host,
+                db_port,
+                db_socket,
                 drop_database_sql,
                 dry_run=args.dry_run,
+                mysql_client_available=mysql_client_available,
             )
 
-        if args.dry_run or mysql_client_available:
-            run_mysql_sql(
-                mysql_base_args,
-                db_password,
-                create_database_sql,
-                dry_run=args.dry_run,
-            )
-        else:
-            run_php_mysql_sql(db_username, db_password, db_host, db_port, db_socket, create_database_sql)
+        run_server_sql(
+            mysql_base_args,
+            db_username,
+            db_password,
+            db_host,
+            db_port,
+            db_socket,
+            create_database_sql,
+            dry_run=args.dry_run,
+            mysql_client_available=mysql_client_available,
+        )
 
         escaped_table_schema = db_database.replace("'", "''")
         table_count_sql = (

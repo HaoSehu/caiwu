@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\ProductCatalog;
 
 use App\Constants\OrderStatus;
+use App\Constants\OrderType;
 use App\Constants\ProductType;
 use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
@@ -14,6 +15,8 @@ use App\Models\Product;
 use App\Models\SecondProductGroup;
 use App\Models\Supplier;
 use App\Models\ThirdProductGroup;
+use App\Services\Integrations\Plugins\PluginBindingResolver;
+use App\Services\Integrations\Plugins\UpstreamBindingWriter;
 use App\Services\ProductCatalog\Concerns\HandlesProductCatalogHelpers;
 use App\Services\Upstream\Contracts\ProvidesConsoleCatalog;
 use App\Services\Upstream\ProviderResolver;
@@ -24,6 +27,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class ProductSyncService
@@ -45,6 +49,8 @@ class ProductSyncService
         private readonly ProviderResolver $providerResolver,
         ?ProductGroupHierarchyService $hierarchyService = null,
         private readonly ?ProductDisplayNameResolver $productDisplayNameResolver = null,
+        private ?UpstreamBindingWriter $upstreamBindingWriter = null,
+        private ?PluginBindingResolver $bindingResolver = null,
     ) {
         $this->hierarchyService = $hierarchyService ?? app(ProductGroupHierarchyService::class);
     }
@@ -86,7 +92,7 @@ class ProductSyncService
                 continue;
             }
 
-            $supplier = $product->supplier;
+            $supplier = $this->resolveProductSupplier($product);
 
             if (! $supplier instanceof Supplier) {
                 $items[] = $this->buildBatchSyncSkippedItem($productId, $product, '商品未绑定供应商');
@@ -94,7 +100,7 @@ class ProductSyncService
                 continue;
             }
 
-            if ((int) ($product->supplier_product_id ?? 0) <= 0) {
+            if ($this->resolveProductUpstreamProductId($product) <= 0) {
                 $items[] = $this->buildBatchSyncSkippedItem($productId, $product, '商品未绑定上游商品');
 
                 continue;
@@ -110,7 +116,7 @@ class ProductSyncService
         }
 
         foreach ($validProductsBySupplier as $supplierProducts) {
-            $supplier = $supplierProducts[0]->supplier;
+            $supplier = $this->resolveProductSupplier($supplierProducts[0]);
 
             if (! $supplier instanceof Supplier) {
                 continue;
@@ -133,7 +139,7 @@ class ProductSyncService
                     $remoteConfigOptions = $this->prefetchImportedConfigOptions(
                         $supplier,
                         collect($supplierProducts)
-                            ->map(fn (Product $product) => (int) ($product->supplier_product_id ?? 0))
+                            ->map(fn (Product $product) => $this->resolveProductUpstreamProductId($product))
                             ->filter(fn (int $supplierProductId) => $supplierProductId > 0)
                             ->values()
                             ->all()
@@ -153,7 +159,7 @@ class ProductSyncService
                     $items[] = array_merge($syncResult, [
                         'product_id' => (int) $product->id,
                         'product_name' => (string) $product->name,
-                        'supplier_id' => (int) ($product->supplier_id ?? 0),
+                        'supplier_id' => (int) $supplier->id,
                         'supplier_name' => (string) ($supplier->name ?? ''),
                     ]);
                 }
@@ -212,12 +218,7 @@ class ProductSyncService
             ->filter(fn ($item) => is_array($item) && (int) ($item['id'] ?? 0) > 0)
             ->keyBy(fn (array $item) => (int) ($item['id'] ?? 0));
 
-        $existingProducts = Product::withTrashed()
-            ->with(['firstProductGroup', 'secondProductGroup', 'thirdProductGroup', 'supplier'])
-            ->where('supplier_id', (int) $supplier->id)
-            ->whereIn('supplier_product_id', $supplierProductIds->all())
-            ->get()
-            ->keyBy(fn (Product $product) => (int) ($product->supplier_product_id ?? 0));
+        $existingProducts = $this->findExistingProductsBySupplierUpstreamIds($supplier, $supplierProductIds->all());
 
         $defaultStatus = (int) ($data['default_status'] ?? 1) === 1 ? 1 : 0;
         $defaultAutoSetup = (int) ($data['default_auto_setup'] ?? 1) === 1 ? 1 : 0;
@@ -341,16 +342,11 @@ class ProductSyncService
         $dryRun = (bool) ($data['dry_run'] ?? false);
 
         $products = Product::query()
-            ->with('supplier')
             ->when(
                 $productIds->isNotEmpty(),
                 fn ($query) => $query->whereIn('id', $productIds->all())
             )
-            ->whereNotNull('supplier_id')
-            ->where('supplier_id', '>', 0)
-            ->whereNotNull('supplier_product_id')
-            ->where('supplier_product_id', '>', 0)
-            ->orderBy('supplier_id')
+            ->tap(fn (Builder $query) => $this->applyHasUpstreamProductBindingScope($query))
             ->orderBy('id')
             ->get();
 
@@ -359,8 +355,9 @@ class ProductSyncService
             fn (Product $product) => $forceAll || $this->productNeedsUpstreamFinalize($product, $syncConfigOptions)
         );
 
-        foreach ($eligibleProducts->groupBy(fn (Product $product) => (int) $product->supplier_id) as $supplierProducts) {
-            $supplier = $supplierProducts->first()?->supplier;
+        foreach ($eligibleProducts->groupBy(fn (Product $product) => (int) ($this->resolveProductSupplier($product)?->id ?? 0)) as $supplierProducts) {
+            $firstProduct = $supplierProducts->first();
+            $supplier = $firstProduct instanceof Product ? $this->resolveProductSupplier($firstProduct) : null;
 
             if (! $supplier instanceof Supplier) {
                 foreach ($supplierProducts as $product) {
@@ -384,7 +381,7 @@ class ProductSyncService
                 $remoteConfigOptions = $this->prefetchImportedConfigOptions(
                     $supplier,
                     $supplierProducts
-                        ->map(fn (Product $product) => (int) ($product->supplier_product_id ?? 0))
+                        ->map(fn (Product $product) => $this->resolveProductUpstreamProductId($product))
                         ->filter(fn (int $supplierProductId) => $supplierProductId > 0)
                         ->values()
                         ->all()
@@ -394,12 +391,6 @@ class ProductSyncService
             foreach ($supplierProducts as $product) {
                 $payload = [];
                 $updatedFields = [];
-                $targetModule = trim((string) $supplier->interface_type);
-
-                if ($targetModule !== '' && trim((string) ($product->provision_module ?? '')) !== $targetModule) {
-                    $payload['provision_module'] = $targetModule;
-                    $updatedFields[] = 'provision_module';
-                }
 
                 if ((int) ($product->auto_setup ?? 0) !== 1) {
                     $payload['auto_setup'] = 1;
@@ -407,7 +398,7 @@ class ProductSyncService
                 }
 
                 if ($syncConfigOptions) {
-                    $supplierProductId = (int) ($product->supplier_product_id ?? 0);
+                    $supplierProductId = $this->resolveProductUpstreamProductId($product);
                     $normalizedRemoteConfigOptions = $this->normalizeImportedConfigOptions(
                         $remoteConfigOptions[$supplierProductId] ?? []
                     );
@@ -443,9 +434,9 @@ class ProductSyncService
                     'status' => 'updated',
                     'product_id' => (int) $product->id,
                     'product_name' => (string) $product->name,
-                    'supplier_id' => (int) ($product->supplier_id ?? 0),
+                    'supplier_id' => (int) $supplier->id,
                     'supplier_name' => (string) ($supplier->name ?? ''),
-                    'supplier_product_id' => (int) ($product->supplier_product_id ?? 0),
+                    'upstream_product_id' => $this->resolveProductUpstreamProductId($product),
                     'updated_fields' => $updatedFields,
                 ];
             }
@@ -478,12 +469,7 @@ class ProductSyncService
         ];
 
         $products = Product::query()
-            ->with('supplier')
-            ->whereNotNull('supplier_id')
-            ->where('supplier_id', '>', 0)
-            ->whereNotNull('supplier_product_id')
-            ->where('supplier_product_id', '>', 0)
-            ->orderBy('supplier_id')
+            ->tap(fn (Builder $query) => $this->applyHasUpstreamProductBindingScope($query))
             ->orderBy('id')
             ->get();
 
@@ -495,8 +481,9 @@ class ProductSyncService
 
         $hasChanges = false;
 
-        foreach ($products->groupBy(fn (Product $product) => (int) ($product->supplier_id ?? 0)) as $supplierProducts) {
-            $supplier = $supplierProducts->first()?->supplier;
+        foreach ($products->groupBy(fn (Product $product) => (int) ($this->resolveProductSupplier($product)?->id ?? 0)) as $supplierProducts) {
+            $firstProduct = $supplierProducts->first();
+            $supplier = $firstProduct instanceof Product ? $this->resolveProductSupplier($firstProduct) : null;
 
             if (! $supplier instanceof Supplier) {
                 $summary['skipped_products'] += $supplierProducts->count();
@@ -528,7 +515,7 @@ class ProductSyncService
                 $remoteConfigOptions = $catalogCapability->fetchBatchProductConfigOptions(
                     $supplier,
                     $supplierProducts
-                        ->map(fn (Product $product) => (int) ($product->supplier_product_id ?? 0))
+                        ->map(fn (Product $product) => $this->resolveProductUpstreamProductId($product))
                         ->filter(fn (int $supplierProductId) => $supplierProductId > 0)
                         ->unique()
                         ->values()
@@ -549,7 +536,7 @@ class ProductSyncService
             }
 
             foreach ($supplierProducts as $product) {
-                $supplierProductId = (int) ($product->supplier_product_id ?? 0);
+                $supplierProductId = $this->resolveProductUpstreamProductId($product);
                 $normalizedRemoteConfigOptions = $this->normalizeImportedConfigOptions(
                     $remoteConfigOptions[$supplierProductId] ?? []
                 );
@@ -653,20 +640,23 @@ class ProductSyncService
 
         $liveStockMap = [];
         $upstreamProducts = $products->filter(function (Product $product) {
-            return (int) ($product->supplier_product_id ?? 0) > 0
-                && $product->supplier instanceof Supplier
-                && $this->providerResolver->resolveForSupplier($product->supplier)->supports(ProvidesConsoleCatalog::class);
+            $supplier = $this->resolveProductSupplier($product);
+
+            return $this->resolveProductUpstreamProductId($product) > 0
+                && $supplier instanceof Supplier
+                && $this->providerResolver->resolveForSupplier($supplier)->supports(ProvidesConsoleCatalog::class);
         });
 
-        foreach ($upstreamProducts->groupBy(fn (Product $product) => (int) ($product->supplier_id ?? 0)) as $supplierProducts) {
-            $supplier = $supplierProducts->first()?->supplier;
+        foreach ($upstreamProducts->groupBy(fn (Product $product) => (int) ($this->resolveProductSupplier($product)?->id ?? 0)) as $supplierProducts) {
+            $firstProduct = $supplierProducts->first();
+            $supplier = $firstProduct instanceof Product ? $this->resolveProductSupplier($firstProduct) : null;
 
             if (! $supplier instanceof Supplier) {
                 continue;
             }
 
             $supplierProductIds = $supplierProducts
-                ->map(fn (Product $product) => (int) ($product->supplier_product_id ?? 0))
+                ->map(fn (Product $product) => $this->resolveProductUpstreamProductId($product))
                 ->filter(fn (int $supplierProductId) => $supplierProductId > 0)
                 ->values()
                 ->all();
@@ -693,7 +683,7 @@ class ProductSyncService
             }
 
             foreach ($supplierProducts as $product) {
-                $supplierProductId = (int) ($product->supplier_product_id ?? 0);
+                $supplierProductId = $this->resolveProductUpstreamProductId($product);
                 $remoteStock = array_key_exists($supplierProductId, $remoteStocks)
                     ? $remoteStocks[$supplierProductId]
                     : null;
@@ -708,8 +698,8 @@ class ProductSyncService
                         Cache::store('redis_volatile')->put($notFoundThrottleKey, true, now()->addSeconds(60));
                         Log::warning('[商品库存] 未找到对应上游商品库存', [
                             'product_id' => (int) $product->id,
-                            'supplier_id' => (int) ($product->supplier_id ?? 0),
-                            'supplier_product_id' => $supplierProductId,
+                            'supplier_id' => (int) $supplier->id,
+                            'upstream_product_id' => $supplierProductId,
                         ]);
                     }
 
@@ -813,8 +803,6 @@ class ProductSyncService
                 'first_product_group_id',
                 'second_product_group_id',
                 'third_product_group_id',
-                'supplier_id',
-                'supplier_product_id',
                 'stock',
             ])
             ->whereKey($productId)
@@ -867,12 +855,14 @@ class ProductSyncService
 
     private function buildBatchSyncSkippedItem(int $productId, ?Product $product, string $reason): array
     {
+        $supplier = $product instanceof Product ? $this->resolveProductSupplier($product) : null;
+
         return [
             'status' => 'skipped',
             'product_id' => $productId,
             'product_name' => $product instanceof Product ? (string) $product->name : '',
-            'supplier_id' => $product instanceof Product ? (int) ($product->supplier_id ?? 0) : 0,
-            'supplier_name' => $product?->supplier instanceof Supplier ? (string) ($product->supplier->name ?? '') : '',
+            'supplier_id' => $supplier instanceof Supplier ? (int) $supplier->id : 0,
+            'supplier_name' => $supplier instanceof Supplier ? (string) ($supplier->name ?? '') : '',
             'updated_fields' => [],
             'reason' => $reason,
         ];
@@ -896,7 +886,7 @@ class ProductSyncService
         } catch (\Throwable $exception) {
             Log::warning('[商品同步] 批量拉取上游配置项失败', [
                 'supplier_id' => (int) $supplier->id,
-                'supplier_product_ids' => $normalizedSupplierProductIds,
+                'upstream_product_ids' => $normalizedSupplierProductIds,
                 'message' => $exception->getMessage(),
                 'exception' => $exception::class,
             ]);
@@ -921,8 +911,8 @@ class ProductSyncService
         bool $syncConfigOptions,
         bool $syncConfigPricing,
     ): array {
-        $supplierProductId = (int) ($product->supplier_product_id ?? 0);
-        $supplier = $product->supplier;
+        $supplierProductId = $this->resolveProductUpstreamProductId($product);
+        $supplier = $this->resolveProductSupplier($product);
 
         if (! $supplier instanceof Supplier) {
             return $this->buildBatchSyncSkippedItem((int) $product->id, $product, '商品未绑定供应商');
@@ -991,14 +981,9 @@ class ProductSyncService
 
     private function productNeedsUpstreamFinalize(Product $product, bool $syncConfigOptions): bool
     {
-        $supplier = $product->supplier;
+        $supplier = $this->resolveProductSupplier($product);
         if (! $supplier instanceof Supplier) {
             return false;
-        }
-
-        $targetModule = trim((string) ($supplier->interface_type ?? ''));
-        if ($targetModule !== '' && trim((string) ($product->provision_module ?? '')) !== $targetModule) {
-            return true;
         }
 
         if ((int) ($product->auto_setup ?? 0) !== 1) {
@@ -1014,13 +999,15 @@ class ProductSyncService
 
     private function buildFinalizeUpstreamSkippedItem(Product $product, string $reason): array
     {
+        $supplier = $this->resolveProductSupplier($product);
+
         return [
             'status' => 'skipped',
             'product_id' => (int) $product->id,
             'product_name' => (string) $product->name,
-            'supplier_id' => (int) ($product->supplier_id ?? 0),
-            'supplier_name' => $product->supplier instanceof Supplier ? (string) ($product->supplier->name ?? '') : '',
-            'supplier_product_id' => (int) ($product->supplier_product_id ?? 0),
+            'supplier_id' => $supplier instanceof Supplier ? (int) $supplier->id : 0,
+            'supplier_name' => $supplier instanceof Supplier ? (string) ($supplier->name ?? '') : '',
+            'upstream_product_id' => $this->resolveProductUpstreamProductId($product),
             'reason' => $reason,
         ];
     }
@@ -1212,7 +1199,7 @@ class ProductSyncService
         } catch (\Throwable $exception) {
             Log::warning('[商品批量对接] 自动拉取配置项失败', [
                 'supplier_id' => $supplier->id,
-                'supplier_product_id' => $supplierProductId,
+                'upstream_product_id' => $supplierProductId,
                 'message' => $exception->getMessage(),
             ]);
 
@@ -1222,6 +1209,8 @@ class ProductSyncService
 
     private function resolveCatalogCapability(Supplier $supplier): object
     {
+        $this->upstreamBindingWriter()->syncSupplierBinding($supplier);
+
         return $this->providerResolver
             ->resolveForSupplier($supplier)
             ->require(ProvidesConsoleCatalog::class, '当前供应商不支持商品目录同步');
@@ -1502,6 +1491,8 @@ class ProductSyncService
         $name = TextSanitizer::nullable((string) ($supplierProduct['name'] ?? ''));
         throw_if($name === null, new BusinessException('上游商品名称不能为空'));
         $purchaseRequires = $this->buildImportedPurchaseRequires($name);
+        $this->upstreamBindingWriter()->syncSupplierBinding($supplier);
+        $providerKey = $this->providerResolver->resolveForSupplier($supplier)->key();
 
         return [
             'name' => $name,
@@ -1517,10 +1508,12 @@ class ProductSyncService
             'stock' => $this->resolveRemoteCatalogStock($supplierProduct),
             'status' => $defaultStatus,
             'sort_order' => 0,
-            'provision_module' => trim((string) ($supplier->interface_type ?? '')) ?: null,
             'auto_setup' => $defaultAutoSetup,
-            'supplier_id' => (int) $supplier->id,
-            'supplier_product_id' => (int) ($supplierProduct['id'] ?? 0),
+            'upstream_binding' => [
+                'provider_key' => $providerKey !== null && trim($providerKey) !== '' ? trim($providerKey) : null,
+                'supplier_id' => (int) $supplier->id,
+                'upstream_product_id' => (int) ($supplierProduct['id'] ?? 0),
+            ],
         ];
     }
 
@@ -1622,7 +1615,7 @@ class ProductSyncService
         return [
             'action' => $action,
             'product_id' => (int) $product->id,
-            'supplier_product_id' => $supplierProductId,
+            'upstream_product_id' => $supplierProductId,
             'supplier_display_name' => (string) ($supplierProduct['name'] ?? ''),
             'local_display_name' => $this->resolveProductDisplayName($product),
             'first_product_group_id' => $hierarchyFields['first_product_group_id'],
@@ -1640,7 +1633,7 @@ class ProductSyncService
     private function buildBulkConnectSkippedItem(int $supplierProductId, ?array $supplierProduct, string $reason): array
     {
         return [
-            'supplier_product_id' => $supplierProductId,
+            'upstream_product_id' => $supplierProductId,
             'supplier_display_name' => (string) ($supplierProduct['name'] ?? ''),
             'reason' => $reason,
         ];
@@ -1740,19 +1733,26 @@ class ProductSyncService
 
     private function createProductWithStructuredSync(array $payload): Product
     {
+        $bindingPayload = $this->extractUpstreamBindingPayload($payload);
+        unset($payload['upstream_binding']);
+
         /** @var Product $product */
         $product = Product::withoutEvents(fn () => Product::create($payload));
+        $product = $product->fresh() ?? $product;
+        $this->syncProductBindingFromPayload($product, $bindingPayload);
 
         return $product->fresh([
             'firstProductGroup',
             'secondProductGroup',
             'thirdProductGroup',
-            'supplier',
         ]);
     }
 
     private function persistProductWithStructuredSync(Product $product, array $payload): Product
     {
+        $bindingPayload = $this->extractUpstreamBindingPayload($payload);
+        unset($payload['upstream_binding']);
+
         Product::withoutEvents(function () use ($product, $payload): void {
             $product->fill($payload)->save();
         });
@@ -1762,13 +1762,124 @@ class ProductSyncService
         }
 
         $product->refresh();
+        $this->syncProductBindingFromPayload($product, $bindingPayload);
 
         return $product->fresh([
             'firstProductGroup',
             'secondProductGroup',
             'thirdProductGroup',
-            'supplier',
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array{supplier_id: int, upstream_product_id: string}|null
+     */
+    private function extractUpstreamBindingPayload(array $payload): ?array
+    {
+        $binding = is_array($payload['upstream_binding'] ?? null) ? $payload['upstream_binding'] : [];
+        $supplierId = (int) (($binding['supplier_id'] ?? 0) ?: 0);
+        $upstreamProductId = trim((string) ($binding['upstream_product_id'] ?? ''));
+
+        if ($supplierId <= 0 || $upstreamProductId === '') {
+            return null;
+        }
+
+        return [
+            'supplier_id' => $supplierId,
+            'upstream_product_id' => $upstreamProductId,
+        ];
+    }
+
+    private function syncProductBindingFromPayload(Product $product, ?array $bindingPayload): void
+    {
+        if ($bindingPayload === null) {
+            return;
+        }
+
+        $supplier = Supplier::query()->find($bindingPayload['supplier_id']);
+        if (! $supplier instanceof Supplier) {
+            return;
+        }
+
+        $this->upstreamBindingWriter()->syncProductBinding(
+            $product,
+            $supplier,
+            $bindingPayload['upstream_product_id']
+        );
+    }
+
+    private function applyHasUpstreamProductBindingScope(Builder $query): void
+    {
+        if (Schema::hasTable('product_upstream_bindings')) {
+            $query->whereExists(function ($subQuery): void {
+                $subQuery
+                    ->selectRaw('1')
+                    ->from('product_upstream_bindings as pub')
+                    ->whereColumn('pub.product_id', 'products.id')
+                    ->where('pub.status', 1);
+            });
+
+            return;
+        }
+
+        $query->whereRaw('0 = 1');
+    }
+
+    private function findExistingProductsBySupplierUpstreamIds(Supplier $supplier, array $supplierProductIds)
+    {
+        $normalizedIds = collect($supplierProductIds)
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($normalizedIds !== [] && Schema::hasTable('product_upstream_bindings') && Schema::hasTable('supplier_plugin_bindings')) {
+            return Product::withTrashed()
+                ->with(['firstProductGroup', 'secondProductGroup', 'thirdProductGroup'])
+                ->select('products.*', 'pub.upstream_product_id as binding_upstream_product_id')
+                ->join('product_upstream_bindings as pub', 'pub.product_id', '=', 'products.id')
+                ->join('supplier_plugin_bindings as spb', 'spb.id', '=', 'pub.supplier_plugin_binding_id')
+                ->where('spb.supplier_id', (int) $supplier->id)
+                ->whereIn('pub.upstream_product_id', array_map(static fn (int $id): string => (string) $id, $normalizedIds))
+                ->orderByDesc('pub.status')
+                ->orderByDesc('pub.id')
+                ->get()
+                ->keyBy(fn (Product $product) => (int) ($product->getAttribute('binding_upstream_product_id') ?: $this->resolveProductUpstreamProductId($product)));
+        }
+
+        return collect();
+    }
+
+    private function resolveProductSupplier(Product $product): ?Supplier
+    {
+        $supplier = $this->bindingResolver()->supplierForProduct($product);
+        if ($supplier instanceof Supplier) {
+            return $supplier;
+        }
+
+        return null;
+    }
+
+    private function resolveProductUpstreamProductId(Product $product): int
+    {
+        $bindingValue = $this->bindingResolver()->upstreamProductIdForProduct($product);
+        if ($bindingValue !== null && trim((string) $bindingValue) !== '') {
+            return (int) $bindingValue;
+        }
+
+        return 0;
+    }
+
+    private function upstreamBindingWriter(): UpstreamBindingWriter
+    {
+        return $this->upstreamBindingWriter ??= app(UpstreamBindingWriter::class);
+    }
+
+    private function bindingResolver(): PluginBindingResolver
+    {
+        return $this->bindingResolver ??= app(PluginBindingResolver::class);
     }
 
     private function queryOpenStockReservations(array $productIds): array
@@ -1780,7 +1891,7 @@ class ProductSyncService
         return Order::query()
             ->selectRaw('product_id, SUM(CASE WHEN quantity IS NULL OR quantity < 1 THEN 1 ELSE quantity END) as aggregate')
             ->whereIn('product_id', $productIds)
-            ->where('type', 'new')
+            ->where('type', OrderType::NEW)
             ->whereIn('status', [
                 OrderStatus::PENDING,
                 OrderStatus::PAID,

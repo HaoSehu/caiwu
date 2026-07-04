@@ -7,8 +7,8 @@ namespace App\Services\Integrations\Plugins\Adapters;
 use App\Services\Integrations\Plugins\PluginManifest;
 use App\Services\Integrations\Plugins\PluginRuntimeRegistry;
 use App\Services\Verification\Contracts\ProvidesVerificationFeeConfig;
-use App\Services\Verification\Contracts\VerifiesVerificationCallbacks;
 use App\Services\Verification\Contracts\VerificationDriver;
+use App\Services\Verification\Contracts\VerifiesVerificationCallbacks;
 use App\Services\Verification\Data\VerificationCallbackRequest;
 use App\Services\Verification\Data\VerificationCallbackVerificationResult;
 use App\Services\Verification\Data\VerificationFeeConfig;
@@ -17,7 +17,7 @@ use App\Services\Verification\Data\VerificationInitializeResult;
 use App\Services\Verification\Data\VerificationScanUrlResult;
 use App\Services\Verification\Data\VerificationStatusResult;
 
-final readonly class PluginVerificationDriver implements VerificationDriver, VerifiesVerificationCallbacks, ProvidesVerificationFeeConfig
+final readonly class PluginVerificationDriver implements ProvidesVerificationFeeConfig, VerificationDriver, VerifiesVerificationCallbacks
 {
     public function __construct(
         private PluginRuntimeRegistry $runtime,

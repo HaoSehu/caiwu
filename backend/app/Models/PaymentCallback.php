@@ -8,6 +8,8 @@ class PaymentCallback extends Model
 {
     protected $fillable = [
         'payment_id',
+        'plugin_id',
+        'gateway_key',
         'callback_type',
         'gateway_trade_no',
         'payload_json',
@@ -19,6 +21,7 @@ class PaymentCallback extends Model
     {
         return [
             'payment_id' => 'integer',
+            'plugin_id' => 'integer',
             'payload_json' => 'array',
             'is_verified' => 'integer',
             'received_at' => 'datetime',

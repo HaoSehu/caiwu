@@ -60,27 +60,30 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
 
     private function mirrorProductToIdc(Product $product, string $suffix): void
     {
+        $payload = [
+            'product_group_id' => (int) ($product->product_group_id ?: 0) ?: null,
+            'product_type' => (string) ($product->product_type ?: 'other'),
+            'remark' => null,
+            'pricing' => json_encode($product->pricing ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'setup_fee' => number_format((float) ($product->setup_fee ?? 0), 2, '.', ''),
+            'config_options' => json_encode($product->config_options ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'purchase_requires' => json_encode($product->purchase_requires ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'stock' => (int) ($product->stock ?? 0),
+            'status' => 1,
+            'sort_order' => 0,
+            'provision_module' => null,
+            'auto_setup' => 0,
+            'supplier_id' => null,
+            'supplier_product_id' => null,
+            'deleted_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ];
+        $columns = DB::connection()->getSchemaBuilder()->getColumnListing('products');
+
         DB::connection()->table('products')->updateOrInsert(
             ['id' => (int) $product->id],
-            [
-                'product_group_id' => (int) ($product->product_group_id ?: 0) ?: null,
-                'product_type' => (string) ($product->product_type ?: 'other'),
-                'remark' => null,
-                'pricing' => json_encode($product->pricing ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                'setup_fee' => number_format((float) ($product->setup_fee ?? 0), 2, '.', ''),
-                'config_options' => json_encode($product->config_options ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                'purchase_requires' => json_encode($product->purchase_requires ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                'stock' => (int) ($product->stock ?? 0),
-                'status' => 1,
-                'sort_order' => 0,
-                'provision_module' => null,
-                'auto_setup' => 0,
-                'supplier_id' => null,
-                'supplier_product_id' => null,
-                'deleted_at' => null,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]
+            array_intersect_key($payload, array_fill_keys($columns, true))
         );
     }
 
@@ -317,7 +320,7 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
             'payment_no' => 'CLIREFPAY'.strtoupper($suffix),
             'user_id' => (int) $user->id,
             'invoice_id' => (int) $refundedInvoice->id,
-            'gateway' => 'balance',
+            'gateway_key' => 'balance',
             'amount' => '15.00',
             'status' => PaymentStatus::REFUNDED,
             'paid_at' => now()->subMinute(),
@@ -515,7 +518,7 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $orderPanelResponse = $this->getJson('/api/client/invoices?type=new,normal,renew,upgrade,traffic&page_size=20')
+        $orderPanelResponse = $this->getJson('/api/client/invoices?type=new,normal,renew,upgrade&page_size=20')
             ->assertOk()
             ->assertJsonPath('data.total', 2);
 

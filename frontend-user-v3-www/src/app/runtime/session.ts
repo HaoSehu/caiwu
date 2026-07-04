@@ -29,3 +29,7 @@ export function isClientSessionExpired() {
 export function initClientSessionActivityTracking() {
   initSessionActivityTracking('client', () => driver.touchSessionActivity())
 }
+
+export function touchClientSessionActivity() {
+  driver.touchSessionActivity()
+}

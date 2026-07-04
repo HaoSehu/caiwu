@@ -2,27 +2,34 @@
 
 namespace App\Services\System;
 
+use App\Models\IntegrationPlugin;
 use App\Models\NotificationLog;
 use App\Models\Setting;
 use App\Models\SmsLog;
+use App\Services\Integrations\Plugins\IntegrationDriverBindingResolver;
+use App\Services\Integrations\Plugins\PluginConfigRepository;
 use App\Services\Sms\Contracts\SmsDriver;
 use App\Services\Sms\Data\SmsSendRequest;
 use App\Services\Sms\SmsDriverManager;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class SmsService
 {
     private SmsDriverManager $driverManager;
 
-    public function __construct(SmsDriverManager $driverManager)
-    {
+    public function __construct(
+        SmsDriverManager $driverManager,
+        private ?IntegrationDriverBindingResolver $driverBindingResolver = null,
+        private ?PluginConfigRepository $pluginConfigRepository = null,
+    ) {
         $this->driverManager = $driverManager;
     }
 
     public function sendVerifyCode(string $phone, string $code): void
     {
-        $templateCode = (string) Setting::getValue('notification', 'sms_template_code', '100001');
+        $templateCode = $this->activeSmsTemplateCode();
         $templateParams = ['code' => $code, 'min' => '5'];
         $driver = $this->resolveDriverForLog();
         $logContext = $this->createSmsLog($phone, $templateCode, $templateParams, $driver?->key() ?? 'unconfigured');
@@ -89,9 +96,11 @@ class SmsService
      */
     private function createSmsLog(string $phone, string $templateCode, array $templateParams, string $provider): array
     {
+        $traceId = $this->notificationTraceId('sms', $templateCode);
+
         try {
             if (Schema::hasTable('notification_logs')) {
-                $log = NotificationLog::create([
+                $log = NotificationLog::create(array_merge([
                     'channel' => 'sms',
                     'recipient' => $phone,
                     'template_code' => $templateCode,
@@ -101,13 +110,13 @@ class SmsService
                     'status' => 'pending',
                     'origin_type' => 'sms_verify',
                     'origin_id' => 0,
-                ]);
+                ], $this->smsAuditPayload('notification_logs', $traceId, $provider)));
 
                 return ['table' => 'notification_logs', 'id' => (int) $log->getKey()];
             }
 
             if (Schema::hasTable('sms_logs')) {
-                $log = SmsLog::create([
+                $log = SmsLog::create(array_merge([
                     'phone' => $phone,
                     'template_code' => $templateCode,
                     'content' => $this->buildVerificationLogContent(),
@@ -116,7 +125,7 @@ class SmsService
                     'status' => 'pending',
                     'error_msg' => null,
                     'sent_at' => null,
-                ]);
+                ], $this->smsAuditPayload('sms_logs', $traceId, $provider)));
 
                 return ['table' => 'sms_logs', 'id' => (int) $log->getKey()];
             }
@@ -129,6 +138,65 @@ class SmsService
         }
 
         return ['table' => null, 'id' => null];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function smsAuditPayload(string $table, string $traceId, string $driverKey): array
+    {
+        $context = $this->driverBindingResolver()->smsContext($driverKey !== 'unconfigured' ? $driverKey : null);
+        $payload = [];
+
+        if (Schema::hasColumn($table, 'plugin_id')) {
+            $payload['plugin_id'] = $context['plugin_id'];
+        }
+
+        if (Schema::hasColumn($table, 'driver_key')) {
+            $payload['driver_key'] = $context['driver_key'];
+        }
+
+        if (Schema::hasColumn($table, 'trace_id')) {
+            $payload['trace_id'] = $traceId;
+        }
+
+        return $payload;
+    }
+
+    private function driverBindingResolver(): IntegrationDriverBindingResolver
+    {
+        return $this->driverBindingResolver ??= app(IntegrationDriverBindingResolver::class);
+    }
+
+    private function activeSmsTemplateCode(): string
+    {
+        $context = $this->driverBindingResolver()->smsContext();
+        $pluginId = (int) ($context['plugin_id'] ?? 0);
+
+        if ($pluginId > 0 && Schema::hasTable('integration_plugins')) {
+            $plugin = IntegrationPlugin::query()->whereKey($pluginId)->first();
+            if ($plugin instanceof IntegrationPlugin) {
+                $config = $this->pluginConfigRepository()->resolvedConfig($plugin);
+                $templateCode = trim((string) ($config['template_code'] ?? ''));
+                if ($templateCode !== '') {
+                    return $templateCode;
+                }
+            }
+        }
+
+        return '100001';
+    }
+
+    private function pluginConfigRepository(): PluginConfigRepository
+    {
+        return $this->pluginConfigRepository ??= app(PluginConfigRepository::class);
+    }
+
+    private function notificationTraceId(string $channel, string $templateCode): string
+    {
+        $template = trim($templateCode) !== '' ? trim($templateCode) : 'none';
+
+        return substr($channel.':'.$template.':'.str_replace('-', '', (string) Str::uuid()), 0, 64);
     }
 
     private function resolveDriverForLog(): ?SmsDriver

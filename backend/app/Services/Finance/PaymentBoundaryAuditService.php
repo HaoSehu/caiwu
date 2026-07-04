@@ -16,23 +16,29 @@ class PaymentBoundaryAuditService
     {
         $thirdPartyGateways = PaymentGatewayCode::thirdPartyGateways();
         $gatewayCounts = DB::table('payments')
-            ->select('gateway')
+            ->selectRaw('gateway_key')
             ->selectRaw('COUNT(*) AS total')
-            ->groupBy('gateway')
-            ->orderBy('gateway')
-            ->pluck('total', 'gateway')
+            ->groupBy('gateway_key')
+            ->orderBy('gateway_key')
+            ->pluck('total', 'gateway_key')
             ->map(fn ($value) => (int) $value)
             ->all();
 
         $thirdPartyCount = (int) DB::table('payments')
-            ->whereIn('gateway', $thirdPartyGateways)
+            ->whereIn('gateway_key', $thirdPartyGateways)
             ->count();
         $nonThirdPartyCount = (int) DB::table('payments')
-            ->whereNotIn('gateway', $thirdPartyGateways)
+            ->where(function ($query) use ($thirdPartyGateways): void {
+                $query->whereNotIn('gateway_key', $thirdPartyGateways)
+                    ->orWhereNull('gateway_key');
+            })
             ->count();
 
         $samples = DB::table('payments')
-            ->whereNotIn('gateway', $thirdPartyGateways)
+            ->where(function ($query) use ($thirdPartyGateways): void {
+                $query->whereNotIn('gateway_key', $thirdPartyGateways)
+                    ->orWhereNull('gateway_key');
+            })
             ->orderByDesc('id')
             ->limit($sampleLimit)
             ->get([
@@ -41,7 +47,7 @@ class PaymentBoundaryAuditService
                 'user_id',
                 'order_id',
                 'invoice_id',
-                'gateway',
+                'gateway_key',
                 'amount',
                 'status',
                 'paid_at',
@@ -53,7 +59,8 @@ class PaymentBoundaryAuditService
                 'user_id' => (int) $row->user_id,
                 'order_id' => $row->order_id !== null ? (int) $row->order_id : null,
                 'invoice_id' => $row->invoice_id !== null ? (int) $row->invoice_id : null,
-                'gateway' => (string) $row->gateway,
+                'gateway' => (string) $row->gateway_key,
+                'gateway_key' => (string) $row->gateway_key,
                 'amount' => (string) $row->amount,
                 'status' => (int) $row->status,
                 'paid_at' => $row->paid_at,

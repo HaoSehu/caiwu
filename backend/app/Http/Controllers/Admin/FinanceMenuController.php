@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Admin;
 
+use App\Constants\OrderType;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\Finance\OrderListRequest;
+use App\Http\Requests\Admin\Finance\RechargeListRequest;
+use App\Http\Requests\Admin\Finance\UpgradeOrderListRequest;
 use App\Http\Requests\Admin\FinanceMenu\NewCustomerDailySummaryRequest;
 use App\Http\Requests\Admin\FinanceMenu\ProductIncomeSummaryRequest;
 use App\Services\Finance\AdminFinanceQueryService;
-use Illuminate\Http\Request;
 
 class FinanceMenuController extends Controller
 {
@@ -16,13 +19,10 @@ class FinanceMenuController extends Controller
         private readonly AdminFinanceQueryService $financeQueryService,
     ) {}
 
-    public function recharges(Request $request)
+    public function recharges(RechargeListRequest $request)
     {
-        $filters = $request->only(['keyword', 'status', 'date_range']);
-        $perPage = max(1, min((int) $request->input('page_size', 20), 100));
-
         return $this->paginate(
-            $this->financeQueryService->paginateRecharges($filters, $perPage)
+            $this->financeQueryService->paginateRecharges($request->validated(), $request->perPage())
         );
     }
 
@@ -50,23 +50,17 @@ class FinanceMenuController extends Controller
         );
     }
 
-    public function renewalOrders(Request $request)
+    public function renewalOrders(OrderListRequest $request)
     {
-        $filters = $request->only(['keyword', 'status', 'date_range']);
-        $perPage = max(1, min((int) $request->input('page_size', 20), 100));
-
         return $this->paginate(
-            $this->financeQueryService->paginateOrders($filters, $perPage, 'renew')
+            $this->financeQueryService->paginateOrders($request->validated(), $request->perPage(), OrderType::RENEW)
         );
     }
 
-    public function addonOrders(Request $request)
+    public function upgradeOrders(UpgradeOrderListRequest $request)
     {
-        $filters = $request->only(['keyword', 'status', 'kind', 'date_range']);
-        $perPage = max(1, min((int) $request->input('page_size', 20), 100));
-
         return $this->paginate(
-            $this->financeQueryService->paginateAddonOrders($filters, $perPage)
+            $this->financeQueryService->paginateUpgradeOrders($request->validated(), $request->perPage())
         );
     }
 }

@@ -9,6 +9,7 @@ use App\Models\ScheduleRunLog;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 trait HandlesAdminLogCleanup
 {
@@ -34,6 +35,7 @@ trait HandlesAdminLogCleanup
                         'email' => NotificationLog::query()->where('channel', 'email')->count(),
                         'api' => $this->baseApiLogQuery()->count(),
                         'admin_login' => $this->baseAdminLoginLogQuery()->count(),
+                        'business_audit' => $this->businessAuditLogCount(),
                         'schedule_run' => ScheduleRunLog::query()->count(),
                     ],
                     'file' => [
@@ -42,6 +44,7 @@ trait HandlesAdminLogCleanup
                         'size_bytes' => is_file($logPath) ? (int) filesize($logPath) : 0,
                         'updated_at' => is_file($logPath) ? date('Y-m-d H:i:s', (int) filemtime($logPath)) : null,
                         'task_log_count' => $taskLogCount,
+                        'runtime_log_count' => $systemLogCount,
                         'system_log_count' => $systemLogCount,
                     ],
                     'supported_cleanup_types' => [
@@ -49,9 +52,10 @@ trait HandlesAdminLogCleanup
                         ['value' => 'email', 'label' => '邮件日志'],
                         ['value' => 'api', 'label' => 'API日志'],
                         ['value' => 'admin_login', 'label' => '管理员登录日志'],
+                        ['value' => 'business_audit', 'label' => '系统日志（业务审计）'],
                         ['value' => 'schedule_run', 'label' => '调度执行日志'],
-                        ['value' => 'task', 'label' => '定时任务日志'],
-                        ['value' => 'system', 'label' => '系统日志'],
+                        ['value' => 'task', 'label' => '自动任务日志'],
+                        ['value' => 'runtime', 'label' => '运行日志'],
                         ['value' => 'all_db', 'label' => '全部数据库日志'],
                         ['value' => 'all_file', 'label' => '全部文件日志'],
                         ['value' => 'all', 'label' => '全部日志'],
@@ -78,6 +82,7 @@ trait HandlesAdminLogCleanup
                 $affected['admin_login'] = $this->baseAdminLoginLogQuery()
                     ->where('created_at', '<', $cutoff)
                     ->delete();
+                $affected['business_audit'] = $this->deleteBusinessAuditLogsBefore($cutoff);
                 $affected['schedule_run'] = ScheduleRunLog::query()->where('created_at', '<', $cutoff)->delete();
             });
         } else {
@@ -102,13 +107,17 @@ trait HandlesAdminLogCleanup
                         ->delete();
                 }
 
+                if ($type === 'business_audit') {
+                    $affected['business_audit'] = $this->deleteBusinessAuditLogsBefore($cutoff);
+                }
+
                 if ($type === 'schedule_run') {
                     $affected['schedule_run'] = ScheduleRunLog::query()->where('created_at', '<', $cutoff)->delete();
                 }
             });
         }
 
-        if ($type === 'all' || $type === 'all_file' || $type === 'task' || $type === 'system') {
+        if ($type === 'all' || $type === 'all_file' || $type === 'task' || $type === 'runtime' || $type === 'system') {
             $fileCleanup = $this->cleanupFileLogs($type, $cutoff);
             $affected = array_merge($affected, $fileCleanup);
         }
@@ -163,7 +172,7 @@ trait HandlesAdminLogCleanup
             $shouldRemoveTask = ($type === 'task' || $type === 'all' || $type === 'all_file')
                 && $isTaskLog
                 && $logDate < $cutoff;
-            $shouldRemoveSystem = ($type === 'system' || $type === 'all' || $type === 'all_file')
+            $shouldRemoveSystem = ($type === 'runtime' || $type === 'system' || $type === 'all' || $type === 'all_file')
                 && ! $isTaskLog
                 && $logDate < $cutoff;
 
@@ -214,11 +223,43 @@ trait HandlesAdminLogCleanup
         if ($type === 'task' || $type === 'all' || $type === 'all_file') {
             $affected['task'] = $taskRemovedCount;
         }
-        if ($type === 'system' || $type === 'all' || $type === 'all_file') {
-            $affected['system'] = $systemRemovedCount;
+        if ($type === 'runtime' || $type === 'system' || $type === 'all' || $type === 'all_file') {
+            $affected['runtime'] = $systemRemovedCount;
         }
 
         return $affected;
+    }
+
+    private function businessAuditLogCount(): int
+    {
+        $activityCount = Schema::hasTable('activity_logs') ? DB::table('activity_logs')->count() : 0;
+        $operationCount = Schema::hasTable('operation_logs')
+            ? DB::table('operation_logs')
+                ->whereRaw('action NOT REGEXP ?', [self::HTTP_ACTION_REGEXP])
+                ->where('action', '<>', 'admin.login')
+                ->count()
+            : 0;
+
+        return (int) $activityCount + (int) $operationCount;
+    }
+
+    private function deleteBusinessAuditLogsBefore(Carbon $cutoff): int
+    {
+        $deleted = 0;
+
+        if (Schema::hasTable('activity_logs')) {
+            $deleted += DB::table('activity_logs')->where('created_at', '<', $cutoff)->delete();
+        }
+
+        if (Schema::hasTable('operation_logs')) {
+            $deleted += DB::table('operation_logs')
+                ->whereRaw('action NOT REGEXP ?', [self::HTTP_ACTION_REGEXP])
+                ->where('action', '<>', 'admin.login')
+                ->where('created_at', '<', $cutoff)
+                ->delete();
+        }
+
+        return (int) $deleted;
     }
 
     private function bumpCleanupOverviewCacheVersion(): void

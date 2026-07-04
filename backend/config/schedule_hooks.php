@@ -20,6 +20,30 @@ return [
     |
     */
     'listeners' => [
+        ScheduleHookService::HOOK_BEFORE_CRON => [
+            //
+        ],
+
+        ScheduleHookService::HOOK_AFTER_CRON => [
+            //
+        ],
+
+        ScheduleHookService::HOOK_BEFORE_DAILY_CRON => [
+            //
+        ],
+
+        ScheduleHookService::HOOK_AFTER_DAILY_CRON => [
+            //
+        ],
+
+        ScheduleHookService::HOOK_AFTER_FIVE_MINUTE_CRON => [
+            //
+        ],
+
+        ScheduleHookService::HOOK_AFTER_HALF_HOUR_MINUTE_CRON => [
+            //
+        ],
+
         ScheduleHookService::HOOK_TASK_BEFORE => [
             //
         ],

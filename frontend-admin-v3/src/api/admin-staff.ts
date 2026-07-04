@@ -30,7 +30,7 @@ export interface StaffRecord {
 }
 
 export interface StaffPayload {
-  username: string;
+  username?: string;
   nickname?: string | null;
   email?: string | null;
   role_id: number | string;
@@ -55,4 +55,5 @@ export const adminStaffApi = {
   toggleStatus: (id: number | string) => request.post<StaffRecord>({ url: `/admin/staff/${id}/toggle-status` }),
   resetPassword: (id: number | string, data: { password: string; password_confirmation: string }) =>
     request.post({ url: `/admin/staff/${id}/reset-password`, data }),
+  delete: (id: number | string) => request.delete({ url: `/admin/staff/${id}` }),
 };

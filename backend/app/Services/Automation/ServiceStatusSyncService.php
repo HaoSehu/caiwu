@@ -9,9 +9,10 @@ use App\Exceptions\BusinessException;
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\Supplier;
+use App\Services\Integrations\Plugins\PluginBindingResolver;
+use App\Services\Integrations\Plugins\ServiceUpstreamBindingWriter;
 use App\Services\Integrations\Support\ProviderErrorMapper;
 use App\Services\Upstream\Contracts\ProvidesStatusSync;
-use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderResolver;
 use App\Support\SensitiveDataSanitizer;
 use App\Support\ServiceHostname;
@@ -43,6 +44,8 @@ class ServiceStatusSyncService
 
     public function __construct(
         private ProviderResolver $providerResolver,
+        private ?PluginBindingResolver $bindingResolver = null,
+        private ?ServiceUpstreamBindingWriter $bindingWriter = null,
     ) {}
 
     public function handle(
@@ -65,8 +68,7 @@ class ServiceStatusSyncService
                 ServiceStatus::SUSPENDED,
                 ServiceStatus::EXPIRED,
             ])
-            ->whereNotNull('services.provision_data->upstream_host_id')
-            ->where('services.provision_data->upstream_host_id', '<>', '')
+            ->tap(fn ($query) => $this->applySyncableUpstreamBindingScope($query))
             ->chunkById(max(1, $serviceChunkSize), function (EloquentCollection $services) use (&$summary, $supplierRequestChunkSize) {
                 $summary['scanned'] += $services->count();
                 $this->syncChunk($services, max(1, $supplierRequestChunkSize), $summary);
@@ -128,6 +130,7 @@ class ServiceStatusSyncService
             ->enabled()
             ->whereIn('id', $supplierIds)
             ->get()
+            ->map(fn (Supplier $supplier): Supplier => $this->bindingResolver()->supplierWithRuntimeCredentials($supplier))
             ->keyBy('id');
 
         collect($services)
@@ -156,8 +159,7 @@ class ServiceStatusSyncService
 
     private function isSyncableService(Service $service): bool
     {
-        $provisionData = is_array($service->provision_data ?? null) ? $service->provision_data : [];
-        $hostId = (int) (($provisionData['upstream_host_id'] ?? 0) ?: 0);
+        $hostId = $this->resolveHostId($service);
 
         return $this->providerResolver->resolveForService($service)->supports(ProvidesStatusSync::class)
             && $hostId > 0
@@ -182,6 +184,7 @@ class ServiceStatusSyncService
 
             return;
         }
+        $providerKey = trim((string) ($provider->key() ?? $provider->rawKey() ?? ''));
 
         $statusSync = $provider->require(ProvidesStatusSync::class, '当前供应商不支持状态同步');
 
@@ -214,7 +217,7 @@ class ServiceStatusSyncService
 
         $services
             ->chunk($supplierRequestChunkSize)
-            ->each(function (Collection $batch) use ($statusSync, $supplier, $serviceProductMap, &$jwt, &$summary): void {
+            ->each(function (Collection $batch) use ($statusSync, $supplier, $serviceProductMap, $providerKey, &$jwt, &$summary): void {
                 try {
                     $requestResult = $this->executeBatchRequests($statusSync, $supplier, $batch, $jwt);
                     $jwt = $requestResult['jwt'];
@@ -250,8 +253,8 @@ class ServiceStatusSyncService
                             $service->setRelation('order', $hydratedService->order);
                         }
 
-                        $host = $this->extractHostPayload($responses['detail_'.$service->id] ?? []);
-                        $runtime = $this->extractRuntimePayload($responses['runtime_'.$service->id] ?? [], $service, $host);
+                        $host = $this->extractHostPayload($responses['detail_'.$service->id] ?? [], $providerKey);
+                        $runtime = $this->extractRuntimePayload($responses['runtime_'.$service->id] ?? [], $service, $host, $providerKey);
 
                         $this->syncServiceSnapshot($service, $host, $runtime);
                         $summary['synced']++;
@@ -429,9 +432,9 @@ class ServiceStatusSyncService
         return false;
     }
 
-    private function extractHostPayload(array $response): array
+    private function extractHostPayload(array $response, string $providerKey): array
     {
-        $payload = $this->extractParallelPayload($response, '读取主机详情');
+        $payload = $this->extractParallelPayload($response, '读取主机详情', $providerKey);
         $host = is_array($payload['host'] ?? null) ? $payload['host'] : [];
 
         if ($host === []) {
@@ -441,10 +444,10 @@ class ServiceStatusSyncService
         return $host;
     }
 
-    private function extractRuntimePayload(array $response, Service $service, array $host): array
+    private function extractRuntimePayload(array $response, Service $service, array $host, string $providerKey): array
     {
         try {
-            return $this->extractParallelPayload($response, '读取电源状态');
+            return $this->extractParallelPayload($response, '读取电源状态', $providerKey);
         } catch (\Throwable $exception) {
             $runtimeUnavailableContext = $this->resolveRuntimeUnavailableContext($response, $host);
 
@@ -545,7 +548,7 @@ class ServiceStatusSyncService
         return false;
     }
 
-    private function extractParallelPayload(array $response, string $action): array
+    private function extractParallelPayload(array $response, string $action, string $providerKey): array
     {
         if ($response === []) {
             throw new BusinessException($action.'失败：未获取到有效响应', 42200);
@@ -561,12 +564,12 @@ class ServiceStatusSyncService
             throw new BusinessException($action.'失败：响应为空', 42200);
         }
 
-        $this->assertSuccess($payload, $action);
+        $this->assertSuccess($payload, $action, $providerKey);
 
         return $this->extractPayload($payload);
     }
 
-    private function assertSuccess(array $response, string $action): void
+    private function assertSuccess(array $response, string $action, string $providerKey): void
     {
         $status = (int) ($response['status'] ?? $response['code'] ?? $response['status_code'] ?? 0);
 
@@ -581,7 +584,7 @@ class ServiceStatusSyncService
             'message' => SensitiveDataSanitizer::sanitizeText($message),
         ]);
 
-        throw new BusinessException(app(ProviderErrorMapper::class)->toUserMessage(ProviderKey::HOSTING_PANEL_API, $action, $message), 42200);
+        throw new BusinessException(app(ProviderErrorMapper::class)->toUserMessage($providerKey, $action, $message), 42200);
     }
 
     private function extractPayload(array $response): array
@@ -592,7 +595,7 @@ class ServiceStatusSyncService
     private function syncServiceSnapshot(Service $service, array $host, array $runtime = []): void
     {
         $now = now()->format('Y-m-d H:i:s');
-        $currentProvisionData = (array) ($service->provision_data ?? []);
+        $currentProvisionData = $this->serviceProvisionData($service, includeSecrets: true);
         $cachedConnection = $this->readCachedConnection($currentProvisionData);
         $normalizedHostStatus = strtolower(trim((string) ($host['domainstatus'] ?? '')));
         $resolvedUpstreamStatus = $this->resolveServiceStatusFromUpstream((string) ($host['domainstatus'] ?? ''));
@@ -637,18 +640,24 @@ class ServiceStatusSyncService
             'suspended_reason' => $this->resolveSyncedSuspendedReason($service, $resolvedServiceStatus, $resolvedUpstreamStatus),
             'provision_data' => $provisionData,
         ])->save();
+
+        $service->refresh()->loadMissing('product.supplier');
+        $this->bindingWriter()->syncServiceState($service, $service->product, $provisionData);
     }
 
     private function markSyncFailure(Service $service, string $message): void
     {
         try {
-            $provisionData = (array) ($service->provision_data ?? []);
+            $provisionData = $this->serviceProvisionData($service);
             $provisionData['last_status_sync_attempt_at'] = now()->format('Y-m-d H:i:s');
             $provisionData['status_sync_error'] = mb_substr(trim($message), 0, 200);
 
             $service->forceFill([
                 'provision_data' => $provisionData,
             ])->save();
+
+            $service->refresh()->loadMissing('product.supplier');
+            $this->bindingWriter()->syncServiceState($service, $service->product, $provisionData);
         } catch (\Throwable $exception) {
             Log::warning('[定时任务] 用户产品状态同步失败记录写入异常', [
                 'service_id' => $service->id,
@@ -660,22 +669,57 @@ class ServiceStatusSyncService
 
     private function resolveSupplierId(Service $service, ?Product $product = null): int
     {
-        $provisionData = (array) ($service->provision_data ?? []);
-
-        $supplierId = (int) (($provisionData['supplier_id'] ?? 0) ?: 0);
+        $supplierId = (int) (($this->bindingResolver()->supplierIdForService($service) ?? 0) ?: 0);
 
         if ($supplierId <= 0 && $product instanceof Product) {
-            $supplierId = (int) ($product->supplier_id ?? 0);
+            $supplierId = (int) (($this->bindingResolver()->supplierIdForProduct($product) ?? 0) ?: 0);
         }
 
-        return $supplierId;
+        if ($supplierId > 0) {
+            return $supplierId;
+        }
+
+        return 0;
     }
 
     private function resolveHostId(Service $service): int
     {
-        $provisionData = (array) ($service->provision_data ?? []);
+        $bindingHostId = $this->bindingResolver()->upstreamServiceIdForService($service);
+        if ($bindingHostId !== null) {
+            return (int) $bindingHostId;
+        }
 
-        return (int) (($provisionData['upstream_host_id'] ?? 0) ?: 0);
+        return 0;
+    }
+
+    private function applySyncableUpstreamBindingScope($query): void
+    {
+        $query->whereExists(function ($subQuery): void {
+            $subQuery
+                ->selectRaw('1')
+                ->from('service_upstream_bindings as sub')
+                ->whereColumn('sub.service_id', 'services.id')
+                ->whereNotNull('sub.upstream_service_id')
+                ->where('sub.upstream_service_id', '<>', '');
+        });
+    }
+
+    private function bindingResolver(): PluginBindingResolver
+    {
+        return $this->bindingResolver ??= app(PluginBindingResolver::class);
+    }
+
+    private function bindingWriter(): ServiceUpstreamBindingWriter
+    {
+        return $this->bindingWriter ??= app(ServiceUpstreamBindingWriter::class);
+    }
+
+    private function serviceProvisionData(Service $service, bool $includeSecrets = false): array
+    {
+        $legacy = is_array($service->provision_data ?? null) ? $service->provision_data : [];
+        $projection = $this->bindingResolver()->serviceProvisionProjection($service, $includeSecrets);
+
+        return $projection === [] ? $legacy : array_replace($legacy, $projection);
     }
 
     private function readCachedConnection(array $provisionData): array

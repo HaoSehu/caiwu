@@ -7,6 +7,7 @@ namespace App\Services\Finance;
 use App\Constants\InvoiceStatus;
 use App\Constants\InvoiceType;
 use App\Constants\OrderStatus;
+use App\Constants\OrderType;
 use App\Constants\PaymentStatus;
 use App\Exceptions\BusinessException;
 use App\Models\Invoice;
@@ -33,34 +34,7 @@ class CheckoutService
 {
     use HandlesOrderCalculation;
 
-    private const RANGE_TYPES = [4, 7, 9, 11, 14, 15, 16, 17, 18, 19];
-
-    private const OS_TYPES = [5];
-
-    private const BILLING_CYCLE_MONTHS = [
-        'monthly' => 1,
-        'quarterly' => 3,
-        'semiannually' => 6,
-        'annually' => 12,
-    ];
-
-    private const TYPE_FIELD_MAP = [
-        4 => 'ip_num',
-        5 => 'os',
-        6 => 'cpu',
-        7 => 'cpu',
-        8 => 'memory',
-        9 => 'memory',
-        10 => 'bw',
-        11 => 'bw',
-        12 => 'area',
-        13 => 'system_disk_size',
-        14 => 'system_disk_size',
-        16 => 'cpu',
-        17 => 'memory',
-        18 => 'bw',
-        19 => 'system_disk_size',
-    ];
+    // RANGE_TYPES / OS_TYPES / BILLING_CYCLE_MONTHS / TYPE_FIELD_MAP 已移入 HandlesOrderCalculation Trait
 
     public function __construct(
         private InvoiceService $invoiceService,
@@ -413,7 +387,7 @@ class CheckoutService
             'product_id' => $product->id,
             'product_spec_snapshot' => $productDisplayName,
             'product_type_snapshot' => (string) $product->product_type,
-            'type' => 'new',
+            'type' => OrderType::NEW,
             'coupon_id' => $couponPayload['id'] ?? null,
             'user_coupon_id' => $couponPayload['user_coupon_id'] ?? null,
             'coupon_code' => $couponPayload['code'] ?? null,

@@ -19,7 +19,7 @@ class HostingPanelApiTransportParallelGetTest extends TestCase
         ]);
 
         $transport = new HostingPanelApiTransport;
-        $supplier = new Supplier([
+        $supplier = (new Supplier)->forceFill([
             'id' => 1,
             'api_url' => 'https://supplier.example.test',
         ]);

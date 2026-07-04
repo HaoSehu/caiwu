@@ -110,8 +110,6 @@ class SiteProductQuoteService
                 'second_product_group_id',
                 'third_product_group_id',
                 'service_type_code',
-                'supplier_id',
-                'supplier_product_id',
                 'product_type',
                 'pricing',
                 'setup_fee',

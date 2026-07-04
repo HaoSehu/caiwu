@@ -35,7 +35,7 @@ class ServiceSecurityGroupService
     public function getSecurityGroupsForUser(User $user, int $serviceId, bool $fresh = false): array
     {
         $service = $this->detailService->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -93,7 +93,7 @@ class ServiceSecurityGroupService
     public function getSecurityGroupRulesForUser(User $user, int $serviceId, int $groupId): array
     {
         $service = $this->detailService->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -119,7 +119,7 @@ class ServiceSecurityGroupService
     public function createSecurityGroupForUser(User $user, int $serviceId, array $data, array $context = []): array
     {
         $service = $this->detailService->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -150,7 +150,7 @@ class ServiceSecurityGroupService
     public function applySecurityGroupForUser(User $user, int $serviceId, int $groupId, array $context = []): array
     {
         $service = $this->detailService->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -184,7 +184,7 @@ class ServiceSecurityGroupService
     public function deleteSecurityGroupForUser(User $user, int $serviceId, int $groupId, array $context = []): array
     {
         $service = $this->detailService->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -218,7 +218,7 @@ class ServiceSecurityGroupService
     public function createSecurityRuleForUser(User $user, int $serviceId, int $groupId, array $data, array $context = []): array
     {
         $service = $this->detailService->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -266,7 +266,7 @@ class ServiceSecurityGroupService
     public function deleteSecurityRuleForUser(User $user, int $serviceId, int $groupId, int $ruleId, array $context = []): array
     {
         $service = $this->detailService->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -478,6 +478,10 @@ class ServiceSecurityGroupService
         );
 
         if ($text === '') {
+            return false;
+        }
+
+        if (str_contains($text, 'nat') || str_contains($text, '端口转发') || str_contains($text, '端口映射')) {
             return false;
         }
 
@@ -757,9 +761,13 @@ class ServiceSecurityGroupService
 
     private function resolveSecurityGroupBindingHostId(Service $service): int
     {
-        $provisionData = (array) ($service->provision_data ?? []);
+        try {
+            [, $hostId] = $this->detailService->resolveManagedSupplierAndHost($service);
 
-        return (int) (($provisionData['upstream_host_id'] ?? 0) ?: 0);
+            return (int) $hostId;
+        } catch (\Throwable) {
+            return 0;
+        }
     }
 
     private function extractSecurityGroupRowActions(\DOMXPath $xpath, \DOMNode $row): array

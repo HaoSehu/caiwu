@@ -73,6 +73,7 @@ const monthlyRevenue = shallowRef<MonthlyRevenue>({});
 const dashboardStats = shallowRef<DashboardStats>({});
 const productChartRef = ref<HTMLDivElement>();
 const dailyChartRef = ref<HTMLDivElement>();
+let resizeFrame = 0;
 let productChart: echarts.ECharts | null = null;
 let dailyChart: echarts.ECharts | null = null;
 
@@ -152,6 +153,14 @@ function resizeCharts() {
   dailyChart?.resize();
 }
 
+function scheduleResizeCharts() {
+  if (resizeFrame) return;
+  resizeFrame = window.requestAnimationFrame(() => {
+    resizeFrame = 0;
+    resizeCharts();
+  });
+}
+
 async function loadDashboard() {
   loading.value = true;
   try {
@@ -180,7 +189,7 @@ watch(monthlyRevenue, () => {
 
 onMounted(() => {
   loadDashboard();
-  window.addEventListener('resize', resizeCharts);
+  window.addEventListener('resize', scheduleResizeCharts);
 });
 
 onActivated(() => {
@@ -197,7 +206,11 @@ onDeactivated(() => {
 });
 
 onBeforeUnmount(() => {
-  window.removeEventListener('resize', resizeCharts);
+  window.removeEventListener('resize', scheduleResizeCharts);
+  if (resizeFrame) {
+    window.cancelAnimationFrame(resizeFrame);
+    resizeFrame = 0;
+  }
   productChart?.dispose();
   productChart = null;
   dailyChart?.dispose();

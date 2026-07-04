@@ -252,27 +252,19 @@ import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
 import InvoiceDetailDrawer from '@/components/finance-record-detail/InvoiceDetailDrawer.vue';
 import RecordDetailPage, { type RecordDetailMetric, type RecordDetailTab } from '@/components/record-detail-page/index.vue';
-import { INVOICE_STATUS_MAP, ORDER_STATUS_MAP, PAYMENT_STATUS_MAP, getStatusLabel, getStatusTagType, toLabelMap, toTagTypeMap } from '@shared/statusConfig';
+import {
+  INVOICE_STATUS_MAP,
+  INVOICE_TYPE_MAP,
+  ORDER_STATUS_MAP,
+  ORDER_TYPE_MAP,
+  PAYMENT_STATUS_MAP,
+  getStatusLabel,
+  getStatusTagType,
+  toLabelMap,
+  toTagTypeMap,
+} from '@shared/statusConfig';
 
 import './index.less';
-
-const ORDER_TYPE_MAP: Record<string, string> = {
-  new: '新购',
-  normal: '新购',
-  renew: '续费',
-  upgrade: '附加配置',
-};
-
-const INVOICE_TYPE_MAP: Record<string, string> = {
-  new: '新购',
-  normal: '新购',
-  renew: '续费',
-  recharge: '充值',
-  upgrade: '附加配置',
-  deduction: '扣款',
-  referral_credit: '推荐奖励账单',
-  manual: '手工账单',
-};
 
 const SNAPSHOT_LABEL_MAP: Record<string, string> = {
   bw: '带宽',

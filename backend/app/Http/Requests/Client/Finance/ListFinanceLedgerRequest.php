@@ -4,10 +4,13 @@ namespace App\Http\Requests\Client\Finance;
 
 use App\Constants\FinanceLedgerEventType;
 use App\Http\Requests\Client\Common\ClientFormRequest;
+use App\Http\Requests\Concerns\HasDateRangeFilter;
 use Illuminate\Validation\Rule;
 
 class ListFinanceLedgerRequest extends ClientFormRequest
 {
+    use HasDateRangeFilter;
+
     public function rules(): array
     {
         return array_merge($this->paginationRules(100), [
@@ -18,9 +21,7 @@ class ListFinanceLedgerRequest extends ClientFormRequest
             'service_id' => ['nullable', 'integer', 'min:1'],
             'invoice_no' => ['nullable', 'string', 'max:50'],
             'payment_no' => ['nullable', 'string', 'max:50'],
-            'date_range' => ['nullable', 'array', 'size:2'],
-            'date_range.0' => ['required_with:date_range', 'date'],
-            'date_range.1' => ['required_with:date_range', 'date'],
+            ...$this->dateRangeRules(),
         ]);
     }
 
@@ -34,7 +35,8 @@ class ListFinanceLedgerRequest extends ClientFormRequest
             'service_id',
             'invoice_no',
             'payment_no',
-            'date_range',
+            'start_date',
+            'end_date',
         ]);
     }
 }

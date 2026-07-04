@@ -52,6 +52,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function () {
     // 认证信息
     Route::get('/auth/info', [AuthController::class, 'info']);
     Route::put('/auth/profile', [AuthController::class, 'updateProfile']);
+    Route::put('/auth/password', [AuthController::class, 'updatePassword']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
 
     // 仪表盘
@@ -68,7 +69,6 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function () {
     Route::middleware(['permission:'.AdminPermissions::USER_DETAIL])->group(function () {
         Route::get('/users/{user}', [UserController::class, 'show']);
         Route::get('/users/{user}/services', [UserController::class, 'services']);
-        Route::post('/users/{user}/services/refresh-statuses', [UserController::class, 'refreshServiceStatuses']);
         Route::get('/users/{user}/services/{serviceId}/base', [UserController::class, 'serviceBaseDetail']);
         Route::get('/users/{user}/services/{serviceId}/remote-status', [UserController::class, 'serviceRemoteStatus']);
         Route::get('/users/{user}/services/{serviceId}', [UserController::class, 'serviceDetail']);
@@ -100,6 +100,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function () {
         Route::put('/users/{user}', [UserController::class, 'update']);
         Route::delete('/users/{user}', [UserController::class, 'destroy']);
         Route::post('/users/{user}/toggle-status', [UserController::class, 'toggleStatus']);
+        Route::post('/users/{user}/services/refresh-statuses', [UserController::class, 'refreshServiceStatuses']);
         Route::post('/users/{user}/services', [UserController::class, 'storeService']);
         Route::delete('/users/{user}/services/{serviceId}', [UserController::class, 'destroyService']);
         Route::put('/users/{user}/services/{serviceId}/meta', [UserController::class, 'updateServiceMeta']);
@@ -139,7 +140,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function () {
         Route::get('/invoices', [InvoiceController::class, 'index']);
         Route::get('/finance/recharges', [FinanceMenuController::class, 'recharges']);
         Route::get('/finance/renewal-orders', [FinanceMenuController::class, 'renewalOrders']);
-        Route::get('/finance/addon-orders', [FinanceMenuController::class, 'addonOrders']);
+        Route::get('/finance/upgrade-orders', [FinanceMenuController::class, 'upgradeOrders']);
         Route::get('/finance/ledger', [FinanceLedgerController::class, 'index']);
         Route::get('/finance/ledger/summary', [FinanceLedgerController::class, 'summary']);
     });
@@ -159,7 +160,6 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function () {
     // 工单管理
     Route::middleware(['permission:'.AdminPermissions::PRODUCT_LIST])->group(function () {
         Route::get('/products/summary', [ProductController::class, 'summary']);
-        Route::post('/products/traffic-packages/pull', [ProductController::class, 'pullTrafficPackageCatalog']);
         Route::get('/instance-spec-catalog', [InstanceSpecCatalogController::class, 'index']);
         Route::get('/cpu-model-catalog', [CpuModelCatalogController::class, 'index']);
         Route::get('/product-types', [ProductTypeController::class, 'index']);
@@ -202,7 +202,6 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function () {
         Route::post('/product-types', [ProductTypeController::class, 'store']);
         Route::put('/product-types/{productType}', [ProductTypeController::class, 'update']);
         Route::delete('/product-types/{productType}', [ProductTypeController::class, 'destroy']);
-        Route::post('/products/batch-sync', [ProductController::class, 'batchSync']);
         Route::post('/products/split-preview', [ProductController::class, 'splitPreview']);
         Route::post('/products/split', [ProductController::class, 'split']);
         Route::post('/products/provision-hostname/batch', [ProductController::class, 'batchUpdateProvisionHostname']);
@@ -232,38 +231,95 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function () {
         Route::post('/product-categories', [ProductCategoryController::class, 'store']);
         Route::put('/product-categories/{productCategory}', [ProductCategoryController::class, 'update']);
         Route::delete('/product-categories/{productCategory}', [ProductCategoryController::class, 'destroy']);
+    });
+
+    Route::middleware(['permission:'.AdminPermissions::PRODUCT_SYNC])->group(function () {
+        Route::post('/products/batch-sync', [ProductController::class, 'batchSync']);
+        Route::post('/products/traffic-packages/pull', [ProductController::class, 'pullTrafficPackageCatalog']);
+    });
+
+    Route::middleware(['permission:'.AdminPermissions::SUPPLIER_LIST])->group(function () {
         Route::get('/suppliers/summary', [SupplierController::class, 'summary']);
         Route::get('/suppliers/provider-types', [SupplierController::class, 'providerTypes']);
         Route::get('/suppliers', [SupplierController::class, 'index']);
+    });
+
+    Route::middleware(['permission:'.AdminPermissions::SUPPLIER_DETAIL])->group(function () {
+        Route::get('/suppliers/{supplier}', [SupplierController::class, 'show']);
+    });
+
+    Route::middleware(['permission:'.AdminPermissions::SUPPLIER_SYNC])->group(function () {
         Route::get('/suppliers/{supplier}/balance', [SupplierController::class, 'balance']);
         Route::get('/suppliers/{supplier}/products', [SupplierController::class, 'products']);
         Route::post('/suppliers/{supplier}/products/batch-connect', [SupplierController::class, 'bulkConnectProducts']);
         Route::get('/suppliers/{supplier}/products/{productId}/config-template', [SupplierController::class, 'productConfigTemplate']);
+    });
+
+    Route::middleware(['permission:'.AdminPermissions::SUPPLIER_SECRET_REVEAL])->group(function () {
+        Route::get('/suppliers/{supplier}/secret/{key}', [SupplierController::class, 'revealSecret'])
+            ->where('key', '[A-Za-z0-9_.-]+');
+    });
+
+    Route::middleware(['permission:'.AdminPermissions::SUPPLIER_MANAGE])->group(function () {
         Route::post('/suppliers/{supplier}/toggle-status', [SupplierController::class, 'toggleStatus']);
-        Route::get('/suppliers/{supplier}', [SupplierController::class, 'show']);
         Route::post('/suppliers', [SupplierController::class, 'store']);
         Route::put('/suppliers/{supplier}', [SupplierController::class, 'update']);
         Route::delete('/suppliers/{supplier}', [SupplierController::class, 'destroy']);
     });
 
     // 系统配置
-    Route::middleware(['permission:'.AdminPermissions::SETTINGS_MANAGE])->group(function () {
+    Route::middleware(['permission:'.AdminPermissions::SETTINGS_VIEW])->group(function () {
         Route::get('/settings', [SettingController::class, 'index']);
+    });
+
+    Route::middleware(['permission:'.AdminPermissions::SETTINGS_MANAGE])->group(function () {
         Route::post('/settings', [SettingController::class, 'update']);
+    });
+
+    Route::middleware(['permission:'.AdminPermissions::SETTINGS_SECRET_REVEAL])->group(function () {
+        Route::get('/settings/{group}/secret/{key}', [SettingController::class, 'revealSecret'])
+            ->where('group', '[A-Za-z0-9_.-]+')
+            ->where('key', '[A-Za-z0-9_.-]+');
+    });
+
+    Route::middleware(['permission:'.AdminPermissions::INTEGRATION_PLUGIN_VIEW])->group(function () {
         Route::get('/integration-plugins', [IntegrationPluginController::class, 'index']);
+        Route::get('/integration-plugins/{plugin}', [IntegrationPluginController::class, 'show']);
+    });
+
+    Route::middleware(['permission:'.AdminPermissions::INTEGRATION_PLUGIN_MANAGE])->group(function () {
         Route::post('/integration-plugins/scan', [IntegrationPluginController::class, 'scan']);
         Route::post('/integration-plugins/install', [IntegrationPluginController::class, 'install']);
-        Route::get('/integration-plugins/{plugin}', [IntegrationPluginController::class, 'show']);
         Route::put('/integration-plugins/{plugin}/config', [IntegrationPluginController::class, 'updateConfig']);
         Route::post('/integration-plugins/{plugin}/enable', [IntegrationPluginController::class, 'enable']);
         Route::post('/integration-plugins/{plugin}/disable', [IntegrationPluginController::class, 'disable']);
         Route::delete('/integration-plugins/{plugin}', [IntegrationPluginController::class, 'destroy']);
+    });
+
+    Route::middleware(['permission:'.AdminPermissions::INTEGRATION_PLUGIN_TEST])->group(function () {
         Route::post('/integration-plugins/{plugin}/health-check', [IntegrationPluginController::class, 'healthCheck']);
         Route::post('/integration-plugins/{plugin}/test-email', [IntegrationPluginController::class, 'testEmail']);
         Route::post('/integration-plugins/{plugin}/test-sms', [IntegrationPluginController::class, 'testSms']);
+    });
+
+    Route::middleware(['permission:'.AdminPermissions::INTEGRATION_PLUGIN_SECRET_REVEAL])->group(function () {
+        Route::get('/integration-plugins/{plugin}/config-secret/{key}', [IntegrationPluginController::class, 'revealConfigSecret'])
+            ->where('key', '[A-Za-z0-9_.-]+');
+    });
+
+    Route::middleware(['permission:'.AdminPermissions::SCHEDULE_VIEW])->group(function () {
         Route::get('/schedules/overview', [ScheduleTaskController::class, 'overview']);
+    });
+
+    Route::middleware(['permission:'.AdminPermissions::SCHEDULE_TRIGGER])->group(function () {
         Route::post('/schedules/trigger', [ScheduleTaskController::class, 'trigger']);
+    });
+
+    Route::middleware(['permission:'.AdminPermissions::SITE_VIEW])->group(function () {
         Route::get('/site/home-hero', [HomeHeroController::class, 'show']);
+    });
+
+    Route::middleware(['permission:'.AdminPermissions::SITE_MANAGE])->group(function () {
         Route::post('/site/home-hero', [HomeHeroController::class, 'update']);
     });
 
@@ -279,6 +335,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function () {
         Route::put('/staff/{staff}', [AdminStaffController::class, 'update']);
         Route::post('/staff/{staff}/toggle-status', [AdminStaffController::class, 'toggleStatus']);
         Route::post('/staff/{staff}/reset-password', [AdminStaffController::class, 'resetPassword']);
+        Route::delete('/staff/{staff}', [AdminStaffController::class, 'destroy']);
     });
 
     // 角色与权限管理
@@ -309,6 +366,8 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function () {
         Route::get('/logs/tasks/summary', [LogController::class, 'taskLogsSummary']);
         Route::get('/logs/system', [LogController::class, 'systemLogs']);
         Route::get('/logs/system/summary', [LogController::class, 'systemLogsSummary']);
+        Route::get('/logs/runtime', [LogController::class, 'runtimeLogs']);
+        Route::get('/logs/runtime/summary', [LogController::class, 'runtimeLogsSummary']);
         Route::get('/logs/admin-logins', [LogController::class, 'adminLoginLogs']);
         Route::get('/logs/gateway', [LogController::class, 'gatewayLogs']);
         Route::get('/logs/activity', [LogController::class, 'activityLogs']);
@@ -328,16 +387,22 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function () {
     });
 
     // 会员等级
-    Route::middleware(['permission:'.AdminPermissions::MEMBER_LEVEL_MANAGE])->group(function () {
+    Route::middleware(['permission:'.AdminPermissions::MEMBER_LEVEL_LIST])->group(function () {
         Route::get('/member-levels', [MemberLevelController::class, 'index']);
+    });
+
+    Route::middleware(['permission:'.AdminPermissions::MEMBER_LEVEL_MANAGE])->group(function () {
         Route::post('/member-levels', [MemberLevelController::class, 'store']);
         Route::put('/member-levels/{memberLevel}', [MemberLevelController::class, 'update']);
         Route::delete('/member-levels/{memberLevel}', [MemberLevelController::class, 'destroy']);
     });
 
     // 推荐奖励提现
-    Route::middleware(['permission:'.AdminPermissions::FINANCE_WITHDRAW])->group(function () {
+    Route::middleware(['permission:'.AdminPermissions::REFERRAL_WITHDRAWAL_LIST])->group(function () {
         Route::get('/referral-withdrawals', [ReferralWithdrawalController::class, 'index']);
+    });
+
+    Route::middleware(['permission:'.AdminPermissions::FINANCE_WITHDRAW])->group(function () {
         Route::post('/referral-withdrawals/{withdrawal}/approve', [ReferralWithdrawalController::class, 'approve']);
         Route::post('/referral-withdrawals/{withdrawal}/reject', [ReferralWithdrawalController::class, 'reject']);
     });
@@ -348,6 +413,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function () {
         Route::get('/content/categories', [ContentCategoryController::class, 'index']);
         Route::get('/content/articles', [ContentArticleController::class, 'index']);
         Route::get('/content/articles/{article}', [ContentArticleController::class, 'show']);
+        Route::get('/media-files', [MediaFileController::class, 'index']);
     });
 
     Route::middleware(['permission:'.AdminPermissions::CONTENT_MANAGE])->group(function () {
@@ -358,7 +424,6 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function () {
         Route::put('/content/articles/{article}', [ContentArticleController::class, 'update']);
         Route::delete('/content/articles/{article}', [ContentArticleController::class, 'destroy']);
         Route::post('/content/upload-image', [ContentArticleController::class, 'uploadImage']);
-        Route::get('/media-files', [MediaFileController::class, 'index']);
         Route::post('/media-files', [MediaFileController::class, 'store']);
         Route::post('/media-files/reindex', [MediaFileController::class, 'reindex']);
         Route::delete('/media-files/{mediaFile}', [MediaFileController::class, 'destroy']);

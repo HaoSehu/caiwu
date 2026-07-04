@@ -13,7 +13,8 @@ use App\Models\ProductCategory;
 use App\Models\Service;
 use App\Models\User;
 use App\Services\Provisioning\AdminServiceListService;
-use Illuminate\Support\Facades\Crypt;
+use App\Services\Upstream\ProviderKey;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
@@ -465,28 +466,13 @@ class AdminServiceListInvoiceOnlyTest extends TestCase
             'status' => ServiceStatus::ACTIVE,
             'provision_data' => [
                 'source_invoice_id' => (int) $invoice->id,
-                'custom_hostname' => 'custom-host-'.$suffix.'.example.net',
-                'requested_host' => 'requested-host-'.$suffix.'.example.net',
-                'upstream_host_id' => 'runtime-host-'.$suffix,
-                'upstream_host_ids' => ['runtime-array-'.$suffix],
-                'dedicated_ip' => '198.51.100.61',
-                'assigned_ips' => ['203.0.113.77', '2001:db8::77'],
-                'internal_ip' => '10.55.77.4',
-                'username' => 'runtime-user-'.$suffix,
-                'connection_secret' => Crypt::encryptString((string) json_encode([
-                    'hostname' => 'console-host-'.$suffix.'.example.net',
-                    'username' => 'console-user-'.$suffix,
-                    'password' => 'secret',
-                    'port' => 22,
-                    'internal_ip' => '10.55.88.9',
-                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)),
-                'os' => 'Debian-12-x64',
             ],
             'expires_at' => now()->addMonth(),
             'auto_renew' => 1,
         ]);
 
         $invoice->forceFill(['service_id' => (int) $service->id])->save();
+        $this->attachRuntimeSnapshotsToService($service, $suffix);
 
         $keywords = [
             'service id' => (string) $service->id,
@@ -495,7 +481,7 @@ class AdminServiceListInvoiceOnlyTest extends TestCase
             'custom hostname' => 'custom-host-'.$suffix.'.example.net',
             'assigned ip' => '203.0.113.77',
             'internal ip' => '10.55.77.4',
-            'host username' => 'runtime-user-'.$suffix,
+            'host username' => 'console-user-'.$suffix,
             'connection hostname' => 'console-host-'.$suffix.'.example.net',
             'connection username' => 'console-user-'.$suffix,
             'upstream host id list' => 'runtime-array-'.$suffix,
@@ -523,15 +509,84 @@ class AdminServiceListInvoiceOnlyTest extends TestCase
         $this->assertSame('custom-host-'.$suffix.'.example.net', $matched['custom_hostname'] ?? null);
         $this->assertSame('runtime-host-'.$suffix, $matched['upstream_host_id_text'] ?? null);
         $this->assertSame(['runtime-array-'.$suffix], $matched['upstream_host_ids'] ?? null);
-        $this->assertSame('runtime-user-'.$suffix, $matched['host_username'] ?? null);
+        $this->assertSame('console-user-'.$suffix, $matched['host_username'] ?? null);
         $this->assertSame('console-host-'.$suffix.'.example.net', $matched['connection']['hostname'] ?? null);
         $this->assertSame('console-user-'.$suffix, $matched['connection']['username'] ?? null);
         $this->assertSame('10.55.88.9', $matched['connection']['internal_ip'] ?? null);
         $this->assertContains('198.51.100.61', $matched['host_ips'] ?? []);
         $this->assertContains('203.0.113.77', $matched['host_ips'] ?? []);
-        $this->assertContains('10.55.77.4', $matched['host_ips'] ?? []);
+        $this->assertContains('10.55.88.9', $matched['host_ips'] ?? []);
         $this->assertSame((int) $invoice->id, (int) ($matched['invoice']['id'] ?? 0));
         $this->assertSame((string) $invoice->invoice_no, $matched['invoice']['invoice_no'] ?? null);
         $this->assertSame((int) $user->id, (int) ($matched['user']['id'] ?? 0));
+    }
+
+    private function attachRuntimeSnapshotsToService(Service $service, string $suffix): void
+    {
+        $this->activateIntegrationPluginForTest('upstream', 'mofang_finance');
+        Artisan::call('migrate', [
+            '--path' => 'database/migrations/2026_07_03_130000_create_plugin_binding_runtime_and_audit_tables.php',
+            '--force' => true,
+        ]);
+
+        $pluginId = (int) DB::table('integration_plugins')
+            ->where('domain', 'upstream')
+            ->where('plugin_key', ProviderKey::MOFANG_FINANCE_API)
+            ->value('id');
+
+        $this->assertGreaterThan(0, $pluginId);
+
+        $bindingId = DB::table('service_upstream_bindings')->insertGetId([
+            'service_id' => (int) $service->id,
+            'plugin_id' => $pluginId,
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'upstream_service_id' => 'runtime-host-'.$suffix,
+            'status_snapshot' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('service_runtime_snapshots')->insert([
+            'service_id' => (int) $service->id,
+            'service_upstream_binding_id' => $bindingId,
+            'plugin_id' => $pluginId,
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'status_key' => 'running',
+            'status_text' => 'Running',
+            'resource_json' => json_encode([
+                'upstream_host_ids' => ['runtime-array-'.$suffix],
+                'dedicated_ip' => '198.51.100.61',
+                'assigned_ips' => ['203.0.113.77', '2001:db8::77'],
+                'internal_ip' => '10.55.77.4',
+                'os' => 'Debian-12-x64',
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'synced_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('service_connection_snapshots')->insert([
+            'service_id' => (int) $service->id,
+            'service_upstream_binding_id' => $bindingId,
+            'plugin_id' => $pluginId,
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'connection_type' => 'default',
+            'hostname' => 'console-host-'.$suffix.'.example.net',
+            'ip_address' => '198.51.100.61',
+            'port' => 22,
+            'connection_json' => json_encode([
+                'hostname' => 'console-host-'.$suffix.'.example.net',
+                'username' => 'console-user-'.$suffix,
+                'internal_ip' => '10.55.88.9',
+                'requested_host' => 'requested-host-'.$suffix.'.example.net',
+                'custom_hostname' => 'custom-host-'.$suffix.'.example.net',
+                'assigned_ips' => ['203.0.113.77', '2001:db8::77'],
+                'dedicated_ip' => '198.51.100.61',
+                'os' => 'Debian-12-x64',
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'checked_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 }

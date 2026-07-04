@@ -123,11 +123,11 @@ class OrderZeroAmountPaymentFlowTest extends TestCase
 
         $this->assertDatabaseMissing('payments', [
             'order_id' => (int) $order->id,
-            'gateway' => 'free',
+            'gateway_key' => 'free',
         ]);
         $this->assertDatabaseMissing('payments', [
             'order_id' => (int) $order->id,
-            'gateway' => 'balance',
+            'gateway_key' => 'balance',
         ]);
 
         $this->assertDatabaseHas('orders', [
@@ -231,7 +231,7 @@ class OrderZeroAmountPaymentFlowTest extends TestCase
 
         $this->assertDatabaseMissing('payments', [
             'order_id' => (int) $order->id,
-            'gateway' => 'balance',
+            'gateway_key' => 'balance',
         ]);
 
         $this->assertSame('100.00', User::query()->findOrFail((int) $user->id)->balance);

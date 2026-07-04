@@ -19,6 +19,8 @@ class ScheduleRunLogService
     {
         $this->warnIfMutexDegraded();
 
+        $hookService = app(ScheduleHookService::class);
+
         $startedAt = Carbon::now();
         $startMs = (int) (microtime(true) * 1000);
         $hookContext = array_merge($context, [
@@ -26,7 +28,10 @@ class ScheduleRunLogService
             'started_at' => $startedAt->toDateTimeString(),
         ]);
 
-        app(ScheduleHookService::class)->run(ScheduleHookService::HOOK_TASK_BEFORE, $hookContext);
+        $hookService->runMany([
+            ScheduleHookService::HOOK_BEFORE_CRON,
+            ScheduleHookService::HOOK_TASK_BEFORE,
+        ], $hookContext);
 
         try {
             $result = $callback();
@@ -43,7 +48,12 @@ class ScheduleRunLogService
                 'finished_at' => $finishedAt,
             ]);
 
-            app(ScheduleHookService::class)->run(ScheduleHookService::HOOK_TASK_AFTER, array_merge($hookContext, [
+            $this->storeCronActivityLog($taskName, 'success', $durationMs, is_array($result) ? $result : null, null, $context);
+
+            $hookService->runMany([
+                ScheduleHookService::HOOK_TASK_AFTER,
+                ScheduleHookService::HOOK_AFTER_CRON,
+            ], array_merge($hookContext, [
                 'duration_ms' => $durationMs,
                 'finished_at' => $finishedAt->toDateTimeString(),
                 'summary' => is_array($result) ? $result : null,
@@ -64,7 +74,12 @@ class ScheduleRunLogService
                 'finished_at' => $finishedAt,
             ]);
 
-            app(ScheduleHookService::class)->run(ScheduleHookService::HOOK_TASK_FAILED, array_merge($hookContext, [
+            $this->storeCronActivityLog($taskName, 'failed', $durationMs, null, $e->getMessage(), $context);
+
+            $hookService->runMany([
+                ScheduleHookService::HOOK_TASK_FAILED,
+                ScheduleHookService::HOOK_AFTER_CRON,
+            ], array_merge($hookContext, [
                 'duration_ms' => $durationMs,
                 'finished_at' => $finishedAt->toDateTimeString(),
                 'error_message' => $e->getMessage(),
@@ -72,6 +87,47 @@ class ScheduleRunLogService
             ]));
 
             throw $e;
+        }
+    }
+
+    private function storeCronActivityLog(
+        string $taskName,
+        string $status,
+        int $durationMs,
+        ?array $summary,
+        ?string $errorMessage,
+        array $context
+    ): void {
+        if (! $this->activityLogTableIsReady()) {
+            return;
+        }
+
+        try {
+            $description = $status === 'success'
+                ? "Cron_{$taskName}执行完成"
+                : "Cron_{$taskName}执行失败：".mb_substr((string) $errorMessage, 0, 500);
+
+            app(ActivityLogService::class)->logSystem(
+                'cron',
+                $status,
+                $description,
+                'schedule_task',
+                null,
+                array_filter([
+                    'task_key' => $context['task_key'] ?? null,
+                    'source' => $context['source'] ?? null,
+                    'duration_ms' => $durationMs,
+                    'summary' => $summary,
+                    'error_message' => $errorMessage !== null ? mb_substr($errorMessage, 0, 2000) : null,
+                ], static fn ($value): bool => $value !== null)
+            );
+        } catch (Throwable $exception) {
+            Log::warning('[定时任务] Cron 活动日志写入失败，已跳过本次日志记录', [
+                'task_name' => $taskName,
+                'status' => $status,
+                'message' => $exception->getMessage(),
+                'exception' => $exception::class,
+            ]);
         }
     }
 
@@ -111,6 +167,20 @@ class ScheduleRunLogService
         }
 
         return $this->scheduleRunLogTableReady;
+    }
+
+    private function activityLogTableIsReady(): bool
+    {
+        try {
+            return Schema::hasTable('activity_logs');
+        } catch (Throwable $exception) {
+            Log::warning('[定时任务] 活动日志表检查失败，已跳过本次日志记录', [
+                'message' => $exception->getMessage(),
+                'exception' => $exception::class,
+            ]);
+
+            return false;
+        }
     }
 
     /**

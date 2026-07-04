@@ -11,7 +11,7 @@ class UpdateUserServiceMetaRequest extends AdminFormRequest
         return [
             'amount' => ['nullable', 'numeric', 'min:0', 'max:99999999.99'],
             'supplier_id' => ['nullable', 'integer', 'min:1'],
-            'supplier_product_id' => ['nullable', 'integer', 'min:1'],
+            'upstream_product_id' => ['nullable', 'integer', 'min:1'],
             'upstream_host_id' => ['nullable', 'integer', 'min:1'],
             'service_name' => ['nullable', 'string', 'max:120'],
             'custom_hostname' => ['nullable', 'string', 'max:200'],
@@ -69,8 +69,8 @@ class UpdateUserServiceMetaRequest extends AdminFormRequest
             'supplier_id' => isset($validated['supplier_id']) && $validated['supplier_id'] !== null
                 ? (int) $validated['supplier_id']
                 : null,
-            'supplier_product_id' => isset($validated['supplier_product_id']) && $validated['supplier_product_id'] !== null
-                ? (int) $validated['supplier_product_id']
+            'upstream_product_id' => isset($validated['upstream_product_id']) && $validated['upstream_product_id'] !== null
+                ? (int) $validated['upstream_product_id']
                 : null,
             'upstream_host_id' => isset($validated['upstream_host_id']) && $validated['upstream_host_id'] !== null
                 ? (int) $validated['upstream_host_id']

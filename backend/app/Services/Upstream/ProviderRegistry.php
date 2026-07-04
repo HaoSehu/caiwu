@@ -36,7 +36,7 @@ final class ProviderRegistry
     }
 
     /**
-     * @return array<int, array{value:string,label:string}>
+     * @return array<int, array{value:string,label:string,supplier_form:array<string, mixed>}>
      */
     public function options(): array
     {
@@ -76,5 +76,12 @@ final class ProviderRegistry
         }
 
         return $this->drivers[$normalizedKey] ?? null;
+    }
+
+    public function descriptor(?string $key): ?UpstreamProviderDescriptor
+    {
+        $driver = $this->find($key);
+
+        return $driver instanceof UpstreamDriver ? UpstreamProviderDescriptor::fromDriver($driver) : null;
     }
 }

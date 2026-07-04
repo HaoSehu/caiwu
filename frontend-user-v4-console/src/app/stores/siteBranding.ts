@@ -8,6 +8,7 @@ import { DEFAULT_SUPPORT_CONTACTS } from '@/data/supportContacts';
 const DEFAULT_SITE_NAME = import.meta.env.VITE_APP_TITLE || '创欧云';
 const DEFAULT_SITE_LOGO = '/uploads/logo/logo.svg';
 const DEFAULT_FAVICON = '/uploads/logo/logo1.svg';
+const DEFAULT_CLIENT_CONSOLE_ICON = DEFAULT_FAVICON;
 
 function normalizeBrandAsset(raw: unknown, fallback: string) {
   const value = String(raw ?? '').trim();
@@ -48,12 +49,23 @@ function pick(raw: Record<string, unknown> | undefined, keys: string[], fallback
   return fallback;
 }
 
+function pickOptional(raw: Record<string, unknown> | undefined, keys: string[]) {
+  for (const key of keys) {
+    const value = raw?.[key];
+    if (value !== undefined && value !== null && String(value).trim() !== '') {
+      return String(value).trim();
+    }
+  }
+  return undefined;
+}
+
 export const useSiteBrandingStore = defineStore('site-branding', () => {
   const sidebarCollapsed = ref(false);
   const siteName = ref(DEFAULT_SITE_NAME);
   const browserTitle = ref(DEFAULT_SITE_NAME);
   const siteLogo = ref(DEFAULT_SITE_LOGO);
   const siteFavicon = ref(DEFAULT_FAVICON);
+  const clientConsoleIcon = ref(DEFAULT_CLIENT_CONSOLE_ICON);
   const serviceQqGroup = ref<string>(DEFAULT_SUPPORT_CONTACTS.qqGroup);
   const serviceEmail = ref<string>(DEFAULT_SUPPORT_CONTACTS.email);
   const serviceHours = ref<string>(DEFAULT_SUPPORT_CONTACTS.hours);
@@ -85,6 +97,10 @@ export const useSiteBrandingStore = defineStore('site-branding', () => {
       pick(data, ['site_favicon'], siteFavicon.value || DEFAULT_FAVICON),
       DEFAULT_FAVICON,
     );
+    clientConsoleIcon.value = normalizeBrandAsset(
+      pickOptional(data, ['client_console_icon', 'clientConsoleIcon']) || siteFavicon.value || DEFAULT_CLIENT_CONSOLE_ICON,
+      siteFavicon.value || DEFAULT_CLIENT_CONSOLE_ICON,
+    );
     serviceQqGroup.value = pick(
       data,
       ['service_qq_group', 'serviceQqGroup', 'service_phone', 'servicePhone'],
@@ -114,6 +130,7 @@ export const useSiteBrandingStore = defineStore('site-branding', () => {
       .catch(() => {
         siteLogo.value = normalizeBrandAsset(siteLogo.value || DEFAULT_SITE_LOGO, DEFAULT_SITE_LOGO);
         siteFavicon.value = normalizeBrandAsset(siteFavicon.value || DEFAULT_FAVICON, DEFAULT_FAVICON);
+        clientConsoleIcon.value = normalizeBrandAsset(clientConsoleIcon.value || siteFavicon.value || DEFAULT_CLIENT_CONSOLE_ICON, siteFavicon.value || DEFAULT_CLIENT_CONSOLE_ICON);
       })
       .finally(() => {
         updateFavicon(siteFavicon.value || DEFAULT_FAVICON, DEFAULT_FAVICON);
@@ -129,6 +146,7 @@ export const useSiteBrandingStore = defineStore('site-branding', () => {
     browserTitle,
     siteLogo,
     siteFavicon,
+    clientConsoleIcon,
     serviceQqGroup,
     serviceEmail,
     serviceHours,

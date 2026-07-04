@@ -1,7 +1,6 @@
 <?php
 
 use App\Http\Controllers\Client\AuthController;
-use App\Http\Controllers\Client\BlackholeController;
 use App\Http\Controllers\Client\ContentController;
 use App\Http\Controllers\Client\CouponController;
 use App\Http\Controllers\Client\FinanceController;
@@ -30,8 +29,8 @@ Route::post('/register', [AuthController::class, 'register'])->middleware('throt
 Route::get('/auth/captcha-config', [AuthController::class, 'captchaConfig']);
 Route::get('/auth/captcha-script', [AuthController::class, 'captchaScript']);
 Route::post('/auth/login-as/exchange', [AuthController::class, 'exchangeLoginAsCode'])->middleware('throttle:10,1,client-auth-login-as');
-Route::post('/auth/phone-code', [AuthController::class, 'sendPhoneCode'])->middleware('throttle:6,1,client-auth-phone-code');
-Route::post('/auth/email-code', [AuthController::class, 'sendEmailCode'])->middleware('throttle:6,1,client-auth-email-code');
+Route::post('/auth/phone-code', [AuthController::class, 'sendPhoneCode'])->middleware('throttle:3,1,client-auth-phone-code');
+Route::post('/auth/email-code', [AuthController::class, 'sendEmailCode'])->middleware('throttle:3,1,client-auth-email-code');
 Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:5,1,client-auth-reset-password');
 Route::post('/auth/login-by-code', [AuthController::class, 'loginByCode'])->middleware('throttle:5,1,client-auth-login-by-code');
 Route::match(['GET', 'POST'], '/verification/callback', [VerificationController::class, 'callback'])->middleware('verify.callback');
@@ -42,7 +41,7 @@ Route::post('/payment/alipay/notify', [PaymentCallbackController::class, 'alipay
     ->middleware('verify.alipay.callback');
 
 // 第三方支付网关异步通知（通用入口）
-Route::post('/payment/notify/{gateway}', [PaymentCallbackController::class, 'notify'])
+Route::match(['GET', 'POST'], '/payment/notify/{gateway}', [PaymentCallbackController::class, 'notify'])
     ->middleware('verify.payment.callback');
 
 // VNC Token 验证（无需认证，供VNC页面独立访问）
@@ -178,10 +177,4 @@ Route::middleware(['auth:sanctum', 'ensure.client'])->group(function () {
     Route::post('/tickets/{id}/reply', [ClientTicketController::class, 'reply'])->middleware('throttle:10,1,client-ticket-reply');
     Route::post('/tickets/{id}/replies/{replyId}/recall', [ClientTicketController::class, 'recall'])->middleware('throttle:10,1,client-ticket-recall');
     Route::post('/tickets/{id}/close', [ClientTicketController::class, 'close'])->middleware('throttle:10,1,client-ticket-close');
-    // 管理工具
-    Route::post('/blackhole/query', [BlackholeController::class, 'query']);
-    Route::post('/blackhole/ningbo/whitelist', [BlackholeController::class, 'addNingboWhitelist'])->middleware('throttle:6,1,client-blackhole-write');
-    Route::post('/blackhole/shiyan/layer7/toggle', [BlackholeController::class, 'setShiyanLayer7Rule'])->middleware('throttle:6,1,client-blackhole-write');
-    Route::post('/blackhole/shiyan/layer4/add', [BlackholeController::class, 'addShiyanLayer4Rule'])->middleware('throttle:6,1,client-blackhole-write');
-    Route::post('/blackhole/shiyan/layer4/delete', [BlackholeController::class, 'deleteShiyanLayer4Rule'])->middleware('throttle:6,1,client-blackhole-write');
 });

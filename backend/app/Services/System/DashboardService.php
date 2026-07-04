@@ -9,6 +9,7 @@ use App\Models\Invoice;
 use App\Models\Service;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Support\AdminPrivacy;
 use Illuminate\Support\Facades\Cache;
 
 class DashboardService
@@ -42,8 +43,10 @@ class DashboardService
 
     public function recentInvoices(): array
     {
+        $privacy = AdminPrivacy::current();
+
         return Cache::remember(
-            self::OVERVIEW_RECENT_INVOICES_CACHE_KEY,
+            self::OVERVIEW_RECENT_INVOICES_CACHE_KEY.':raw:'.($privacy->allowsRaw() ? '1' : '0'),
             now()->addSeconds(self::OVERVIEW_RECENT_INVOICES_CACHE_TTL_SECONDS),
             fn () => $this->buildRecentInvoices()
         );
@@ -101,6 +104,8 @@ class DashboardService
 
     private function buildRecentInvoices(): array
     {
+        $privacy = AdminPrivacy::current();
+
         return Invoice::query()
             ->with('user:id,email,nickname')
             ->select([
@@ -132,7 +137,7 @@ class DashboardService
                     'created_at' => $invoice->created_at?->format('Y-m-d H:i:s'),
                     'user' => [
                         'nickname' => (string) ($invoice->user?->nickname ?? ''),
-                        'email' => (string) ($invoice->user?->email ?? ''),
+                        'email' => $privacy->email($invoice->user?->email ?? ''),
                     ],
                 ];
             })

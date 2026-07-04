@@ -218,6 +218,121 @@
   white-space: pre-wrap;
 }
 
+/* 平板端：筛选区缩小列数 */
+@media (max-width: 1024px) {
+  .log-filter-grid {
+    grid-template-columns: repeat(3, minmax(140px, 1fr)) auto auto;
+  }
+
+  .log-filter-grid--api {
+    grid-template-columns: 1fr 1fr 1fr auto auto;
+  }
+
+  .log-filter-grid--tasks {
+    grid-template-columns: 1fr 1fr 1fr auto auto;
+  }
+
+  .log-filter-grid--gateway {
+    grid-template-columns: 1fr 1fr 1fr auto auto;
+  }
+
+  .log-filter-grid--activity {
+    grid-template-columns: 1fr 1fr 1fr auto auto;
+  }
+}
+
+/* 手机端：筛选区单列，表格移除强制最小宽度 */
+@media (max-width: 768px) {
+  .logs-page .t-tabs__nav {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .logs-page .t-tabs__nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .log-filter-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .log-filter-grid .t-button {
+    grid-column: span 1;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .log-filter-grid--api,
+  .log-filter-grid--tasks,
+  .log-filter-grid--gateway,
+  .log-filter-grid--activity {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .logs-page .t-table {
+    min-width: 0;
+  }
+
+  .log-mobile-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .log-mobile-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    border: 1px solid var(--td-component-border);
+    border-radius: var(--td-radius-large, 8px);
+    background: var(--td-bg-color-container);
+    padding: 12px;
+  }
+
+  .log-mobile-card__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .log-mobile-card__time {
+    color: var(--td-text-color-placeholder);
+    font-size: var(--td-font-size-size-1, 12px);
+  }
+
+  .log-mobile-card__body {
+    color: var(--td-text-color-primary);
+    font-size: var(--td-font-size-size-3, 14px);
+    line-height: 1.5;
+    word-break: break-word;
+  }
+
+  .log-mobile-card__meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .log-mobile-card__actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .schedule-env-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cleanup-card-grid,
+  .file-meta-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .log-message__id-tag {
   cursor: pointer;
   font-family: Consolas, 'Courier New', monospace;

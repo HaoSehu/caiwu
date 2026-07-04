@@ -54,6 +54,7 @@ class ClientRecordResponsibilityBoundaryTest extends TestCase
             'order_id' => (int) $order->id,
             'invoice_id' => (int) $purchaseInvoice->id,
             'gateway' => 'alipay',
+            'gateway_key' => 'alipay',
             'trade_no' => 'TRADEBUY'.$suffix,
             'amount' => '99.00',
             'status' => PaymentStatus::SUCCESS,
@@ -76,6 +77,7 @@ class ClientRecordResponsibilityBoundaryTest extends TestCase
             'user_id' => (int) $user->id,
             'invoice_id' => (int) $rechargeInvoice->id,
             'gateway' => 'alipay',
+            'gateway_key' => 'alipay',
             'trade_no' => 'TRADEREC'.$suffix,
             'amount' => '200.00',
             'status' => PaymentStatus::SUCCESS,
@@ -86,7 +88,7 @@ class ClientRecordResponsibilityBoundaryTest extends TestCase
             'payment_no' => 'PAYWXR'.$suffix,
             'user_id' => (int) $user->id,
             'invoice_id' => null,
-            'gateway' => 'wechat',
+            'gateway_key' => 'wechat',
             'trade_no' => null,
             'amount' => '300.00',
             'status' => PaymentStatus::PENDING,
@@ -97,7 +99,7 @@ class ClientRecordResponsibilityBoundaryTest extends TestCase
             'payment_no' => $manualPaymentNo,
             'user_id' => (int) $user->id,
             'invoice_id' => (int) $rechargeInvoice->id,
-            'gateway' => 'manual',
+            'gateway_key' => 'manual',
             'amount' => '50.00',
             'status' => PaymentStatus::SUCCESS,
             'paid_at' => now(),
@@ -115,7 +117,10 @@ class ClientRecordResponsibilityBoundaryTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.total', 3)
             ->assertJsonPath('data.list.0.gateway', 'wechat')
+            ->assertJsonPath('data.list.0.gateway_key', 'wechat')
             ->assertJsonPath('data.list.1.payment_no', (string) $alipayRecharge->payment_no)
+            ->assertJsonPath('data.list.1.gateway_key', 'alipay')
+            ->assertJsonPath('data.list.1.gateway_label', '支付宝')
             ->assertJsonPath('data.list.1.invoice_type', 'recharge')
             ->assertJsonPath('data.list.2.payment_no', (string) $purchasePayment->payment_no)
             ->assertJsonPath('data.list.2.invoice_type', 'new')
@@ -139,6 +144,11 @@ class ClientRecordResponsibilityBoundaryTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.payment_no', (string) $purchasePayment->payment_no);
+
+        $this->getJson('/api/client/payments/'.$purchasePayment->id)
+            ->assertOk()
+            ->assertJsonPath('data.gateway_key', 'alipay')
+            ->assertJsonPath('data.gateway_label', '支付宝');
     }
 
     public function test_client_order_records_are_purchase_service_orders_not_recharge_invoices(): void

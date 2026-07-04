@@ -1811,24 +1811,24 @@ async function mockOrders(page: import('@playwright/test').Page) {
 }
 
 async function mockFinanceModeOrders(page: import('@playwright/test').Page) {
-  const modeOrderRow = (mode: 'renewals' | 'addons', variant: 'default' | 'filtered' | 'page2' = 'default'): Record<string, unknown> => ({
+  const modeOrderRow = (mode: 'renewals' | 'upgrade', variant: 'default' | 'filtered' | 'page2' = 'default'): Record<string, unknown> => ({
     id: mode === 'renewals' ? 820 : 830,
     order_no:
       variant === 'filtered'
         ? mode === 'renewals'
           ? 'REN-FILTERED-001'
-          : 'ADD-FILTERED-001'
+          : 'UPG-FILTERED-001'
         : variant === 'page2'
           ? mode === 'renewals'
             ? 'REN-PAGE-002'
-            : 'ADD-PAGE-002'
+            : 'UPG-PAGE-002'
           : mode === 'renewals'
             ? 'REN-20260606-001'
-            : 'ADD-20260606-001',
+            : 'UPG-20260606-001',
     type: mode === 'renewals' ? 'renew' : 'upgrade',
     type_label: mode === 'renewals' ? '续费' : '附加配置',
-    addon_kind_label: mode === 'addons' ? '流量包' : undefined,
-    addon_target_label: mode === 'addons' ? '100GB 流量包' : undefined,
+    upgrade_kind_label: mode === 'upgrade' ? '流量包' : undefined,
+    upgrade_target_label: mode === 'upgrade' ? '100GB 流量包' : undefined,
     amount: mode === 'renewals' ? 88 : 20,
     quantity: mode === 'renewals' ? 1 : 2,
     status: variant === 'page2' ? 3 : 1,
@@ -1837,15 +1837,15 @@ async function mockFinanceModeOrders(page: import('@playwright/test').Page) {
     user_id: 1,
     user: { id: 1, nickname: variant === 'filtered' ? '筛选用户' : '测试用户', email: '2908990438@qq.com' },
     product_name: mode === 'renewals' ? '标准云服务器' : '标准云服务器附加配置',
-    service: { id: 11, name: mode === 'renewals' ? 'renew-vm' : 'addon-vm' },
+    service: { id: 11, name: mode === 'renewals' ? 'renew-vm' : 'upgrade-vm' },
     invoice: {
       id: mode === 'renewals' ? 920 : 930,
-      invoice_no: mode === 'renewals' ? 'INV-RENEW-001' : 'INV-ADDON-001',
+      invoice_no: mode === 'renewals' ? 'INV-RENEW-001' : 'INV-UPGRADE-001',
       paid_at: '2026-06-06 10:02:00',
     },
   });
 
-  const fulfillList = async (route: import('@playwright/test').Route, mode: 'renewals' | 'addons') => {
+  const fulfillList = async (route: import('@playwright/test').Route, mode: 'renewals' | 'upgrade') => {
     const url = new URL(route.request().url());
     const keyword = url.searchParams.get('keyword') || '';
     const pageIndex = Number(url.searchParams.get('page') || 1);
@@ -1866,7 +1866,7 @@ async function mockFinanceModeOrders(page: import('@playwright/test').Page) {
   };
 
   await page.route('**/api/admin/finance/renewal-orders**', async (route) => fulfillList(route, 'renewals'));
-  await page.route('**/api/admin/finance/addon-orders**', async (route) => fulfillList(route, 'addons'));
+  await page.route('**/api/admin/finance/upgrade-orders**', async (route) => fulfillList(route, 'upgrade'));
 }
 
 async function mockRecharges(page: import('@playwright/test').Page) {
@@ -2628,19 +2628,17 @@ async function clickVisibleDropdownItem(page: import('@playwright/test').Page, a
 async function mockSettingsCenter(page: Page) {
   const settingGroups: Record<string, Record<string, string | number | boolean>> = {
     system: {
+      captcha_enabled: 0,
+      captcha_driver: 'geetest',
       geetest_enabled: 0,
       geetest_captcha_id: 'captcha-old',
       geetest_captcha_key: 'key-old',
     },
     message_limit: {
       email_rate_limit_enabled: 1,
-      email_cooldown_seconds: 60,
-      email_target_hourly_limit: 10,
-      email_ip_hourly_limit: 20,
+      email_ip_minute_limit: 6,
       sms_rate_limit_enabled: 1,
-      sms_cooldown_seconds: 90,
-      sms_target_hourly_limit: 8,
-      sms_ip_hourly_limit: 16,
+      sms_ip_minute_limit: 6,
     },
     basic: {
       site_name: '创欧云',
@@ -3818,12 +3816,11 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await page.goto('/admin/settings/basic', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/admin\/settings(?:\/basic)?(?:\?tab=system)?$/);
     await expect(page.locator('.page-tabs-toolbar').getByText('系统设置')).toBeVisible();
-    await expect(page.locator('.t-card__title').filter({ hasText: 'GeeTest 行为验证' })).toBeVisible();
+    await expect(page.locator('.t-card__title').filter({ hasText: '人机验证' })).toBeVisible();
     await expect(page.locator('.t-radio-button__label').filter({ hasText: '邮件短信限流' })).toBeVisible();
 
-    await page.locator('.field-card').filter({ hasText: 'Captcha ID' }).locator('input').fill('captcha-new');
     await page.locator('.t-radio-button__label').filter({ hasText: '邮件短信限流' }).click();
-    await page.locator('.field-card').filter({ hasText: '邮箱冷却时间' }).locator('input').fill('120');
+    await page.locator('.field-card').filter({ hasText: '邮箱单 IP 每分钟上限' }).locator('input').fill('120');
     const saveSystemRequest = page.waitForRequest((request) => {
       const body = request.postData() || '';
       return request.url().includes('/api/admin/settings') && request.method() === 'POST' && body.includes('"group":"system"');
@@ -3835,11 +3832,11 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await page.getByRole('button', { name: '保存设置' }).click();
     await expect((await saveSystemRequest).postDataJSON()).toMatchObject({
       group: 'system',
-      settings: { geetest_captcha_id: 'captcha-new' },
+      settings: { captcha_enabled: 0 },
     });
     await expect((await saveLimitRequest).postDataJSON()).toMatchObject({
       group: 'message_limit',
-      settings: { email_cooldown_seconds: 120 },
+      settings: { email_ip_minute_limit: 120 },
     });
     await expect(page.getByText('系统设置已保存')).toBeVisible();
   });
@@ -4117,7 +4114,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(page.getByText('REN-PAGE-002')).toBeVisible();
   });
 
-  test('opens finance addon orders and handles filters and pagination', async ({ page }) => {
+  test('opens finance upgrade orders and handles filters and pagination', async ({ page }) => {
     await mockAdminInfo(page);
     await mockFinanceModeOrders(page);
     await page.addInitScript(() => {
@@ -4125,29 +4122,29 @@ test.describe('frontend-admin-v3 shell smoke', () => {
       window.localStorage.setItem('admin_last_active_at', String(Date.now()));
     });
 
-    await page.goto('/admin/finance/addons', { waitUntil: 'domcontentloaded' });
+    await page.goto('/admin/finance/upgrades', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: '附加配置订单' })).toBeVisible();
-    await expect(page.getByText('ADD-20260606-001')).toBeVisible();
+    await expect(page.getByText('UPG-20260606-001')).toBeVisible();
     await expect(page.getByText('流量包', { exact: true })).toBeVisible();
     await expect(page.getByText('100GB 流量包')).toBeVisible();
 
     const filterRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/finance/addon-orders') && request.url().includes('keyword=filtered'),
+      (request) => request.url().includes('/api/admin/finance/upgrade-orders') && request.url().includes('keyword=filtered'),
     );
     await page.getByPlaceholder('搜索订单号 / 账单号 / 用户 / 服务').fill('filtered');
     await page.getByRole('button', { name: '搜索' }).click();
     await filterRequest;
-    await expect(page.getByText('ADD-FILTERED-001')).toBeVisible();
+    await expect(page.getByText('UPG-FILTERED-001')).toBeVisible();
 
     await page.getByRole('button', { name: '重置' }).click();
-    await expect(page.getByText('ADD-20260606-001')).toBeVisible();
+    await expect(page.getByText('UPG-20260606-001')).toBeVisible();
 
     const pageRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/finance/addon-orders') && request.url().includes('page=2'),
+      (request) => request.url().includes('/api/admin/finance/upgrade-orders') && request.url().includes('page=2'),
     );
     await page.locator('.t-pagination').getByText('2', { exact: true }).click();
     await pageRequest;
-    await expect(page.getByText('ADD-PAGE-002')).toBeVisible();
+    await expect(page.getByText('UPG-PAGE-002')).toBeVisible();
   });
 
   test('opens finance recharges and handles filters and pagination', async ({ page }) => {

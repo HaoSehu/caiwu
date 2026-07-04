@@ -6,10 +6,12 @@ use App\Models\EmailLog;
 use App\Models\NotificationLog;
 use App\Models\Setting;
 use App\Models\User;
+use App\Services\Integrations\Plugins\IntegrationDriverBindingResolver;
 use App\Services\Mail\MailDriverManager;
 use App\Support\EmailTemplateCatalog;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class NotificationService
 {
@@ -55,6 +57,7 @@ class NotificationService
 
     public function __construct(
         private readonly MailDriverManager $mailDriverManager,
+        private ?IntegrationDriverBindingResolver $driverBindingResolver = null,
     ) {}
 
     public function sendEmail(string $to, string $subject, string $content, ?string $templateCode = null): void
@@ -319,10 +322,11 @@ class NotificationService
     private function createEmailLog(string $to, string $subject, string $content, ?string $templateCode): array
     {
         $logContent = $this->buildEmailLogContent($content, $templateCode);
+        $traceId = $this->notificationTraceId('email', $templateCode);
 
         try {
             if (Schema::hasTable('notification_logs')) {
-                $log = NotificationLog::create([
+                $log = NotificationLog::create(array_merge([
                     'channel' => 'email',
                     'recipient' => $to,
                     'template_code' => $templateCode,
@@ -331,7 +335,7 @@ class NotificationService
                     'status' => 'pending',
                     'origin_type' => 'email_send',
                     'origin_id' => 0,
-                ]);
+                ], $this->mailAuditPayload('notification_logs', $traceId)));
 
                 return [
                     'table' => 'notification_logs',
@@ -340,7 +344,7 @@ class NotificationService
             }
 
             if (Schema::hasTable('email_logs')) {
-                $log = EmailLog::create([
+                $log = EmailLog::create(array_merge([
                     'template_code' => $templateCode,
                     'to_email' => $to,
                     'subject' => $subject,
@@ -348,7 +352,7 @@ class NotificationService
                     'status' => 'pending',
                     'error_msg' => null,
                     'sent_at' => null,
-                ]);
+                ], $this->mailAuditPayload('email_logs', $traceId)));
 
                 return [
                     'table' => 'email_logs',
@@ -367,6 +371,41 @@ class NotificationService
             'table' => null,
             'id' => null,
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function mailAuditPayload(string $table, string $traceId): array
+    {
+        $context = $this->driverBindingResolver()->mailContext();
+        $payload = [];
+
+        if (Schema::hasColumn($table, 'plugin_id')) {
+            $payload['plugin_id'] = $context['plugin_id'];
+        }
+
+        if (Schema::hasColumn($table, 'driver_key')) {
+            $payload['driver_key'] = $context['driver_key'];
+        }
+
+        if (Schema::hasColumn($table, 'trace_id')) {
+            $payload['trace_id'] = $traceId;
+        }
+
+        return $payload;
+    }
+
+    private function driverBindingResolver(): IntegrationDriverBindingResolver
+    {
+        return $this->driverBindingResolver ??= app(IntegrationDriverBindingResolver::class);
+    }
+
+    private function notificationTraceId(string $channel, ?string $templateCode): string
+    {
+        $template = trim((string) $templateCode) !== '' ? trim((string) $templateCode) : 'none';
+
+        return substr($channel.':'.$template.':'.str_replace('-', '', (string) Str::uuid()), 0, 64);
     }
 
     private function buildEmailLogContent(string $content, ?string $templateCode): string

@@ -6,10 +6,16 @@ namespace Tests\Feature;
 
 use App\Models\AdminUser;
 use App\Models\FirstProductGroup;
+use App\Models\IntegrationPlugin;
 use App\Models\Product;
 use App\Models\Role;
 use App\Models\SecondProductGroup;
+use App\Models\Supplier;
+use App\Services\Integrations\Plugins\PluginDomain;
+use App\Services\Integrations\Plugins\UpstreamBindingWriter;
+use App\Services\Upstream\ProviderKey;
 use App\Support\AdminPermissions;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -88,6 +94,107 @@ class AdminCatalogRegressionTest extends TestCase
         $this->getJson('/api/admin/products?keyword=&second_product_group_id='.$group->id.'&product_type=domain&status=&page=1&page_size=20')
             ->assertOk()
             ->assertJsonStructure(['code', 'message', 'data', 'timestamp']);
+    }
+
+    public function test_admin_product_create_accepts_upstream_binding_payload(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+        $role = Role::query()->create([
+            'name' => 'admin-product-upstream-binding-'.$suffix,
+            'label' => 'Admin Product Upstream Binding',
+            'permissions' => [AdminPermissions::ALL],
+        ]);
+
+        $admin = AdminUser::query()->create([
+            'username' => 'admin-product-upstream-binding-'.$suffix,
+            'password' => 'Temp@123456',
+            'role_id' => (int) $role->id,
+            'nickname' => 'Admin Product Upstream Binding',
+            'email' => 'admin-product-upstream-binding-'.$suffix.'@example.com',
+            'status' => 1,
+        ]);
+
+        IntegrationPlugin::query()->updateOrCreate(
+            [
+                'domain' => PluginDomain::UPSTREAM,
+                'plugin_key' => ProviderKey::MOFANG_FINANCE_API,
+            ],
+            [
+                'slug' => 'mofang_finance',
+                'name' => '魔方财务',
+                'version' => '1.0.0',
+                'entry_class' => 'Tests\\Fixtures\\MofangFinancePlugin',
+                'capabilities_json' => [],
+                'config_schema_json' => [],
+                'status' => IntegrationPlugin::STATUS_ENABLED,
+                'installed_at' => now(),
+            ]
+        );
+
+        $supplier = Supplier::query()->create([
+            'name' => '魔方财务 '.$suffix,
+            'code' => 'mofang-'.$suffix,
+            'status' => 1,
+            'sort_order' => 0,
+        ]);
+        app(UpstreamBindingWriter::class)->syncSupplierBinding($supplier, [
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'base_url' => 'https://panel.example.com',
+            'account_name' => 'demo',
+            'api_key' => 'secret',
+            'provider_config' => [],
+            'status' => 1,
+        ]);
+
+        $firstGroup = $this->firstGroupForType('vps', 'Binding root '.$suffix, 'admin-binding-root-'.$suffix);
+        $group = $this->createSecondGroup($firstGroup, 'Binding group '.$suffix, 'admin-binding-group-'.$suffix);
+
+        Sanctum::actingAs($admin);
+
+        $response = $this->postJson('/api/admin/products', [
+            'display_name' => 'Binding product '.$suffix,
+            'product_type' => 'vps',
+            'first_product_group_id' => (int) $firstGroup->id,
+            'second_product_group_id' => (int) $group->id,
+            'pricing' => ['monthly' => '12.00'],
+            'auto_setup' => 1,
+            'status' => 1,
+            'config_options' => [],
+            'upstream_binding' => [
+                'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+                'supplier_id' => (int) $supplier->id,
+                'upstream_product_id' => '900123',
+            ],
+        ]);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.upstream_binding.provider_key', ProviderKey::MOFANG_FINANCE_API)
+            ->assertJsonPath('data.upstream_binding.supplier_id', (int) $supplier->id)
+            ->assertJsonPath('data.upstream_binding.upstream_product_id', '900123');
+
+        $productId = (int) $response->json('data.id');
+        $this->assertGreaterThan(0, $productId);
+        $this->assertDatabaseHas('products', ['id' => $productId]);
+        $this->assertDatabaseHas('supplier_plugin_bindings', [
+            'supplier_id' => (int) $supplier->id,
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+        ]);
+        $this->assertDatabaseHas('product_upstream_bindings', [
+            'product_id' => $productId,
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'upstream_product_id' => '900123',
+        ]);
+
+        $this->assertSame(
+            $productId,
+            (int) DB::table('product_upstream_bindings')
+                ->join('supplier_plugin_bindings', 'supplier_plugin_bindings.id', '=', 'product_upstream_bindings.supplier_plugin_binding_id')
+                ->where('supplier_plugin_bindings.supplier_id', (int) $supplier->id)
+                ->where('product_upstream_bindings.provider_key', ProviderKey::MOFANG_FINANCE_API)
+                ->where('upstream_product_id', '900123')
+                ->value('product_id')
+        );
     }
 
     public function test_admin_can_batch_move_products_to_another_category(): void

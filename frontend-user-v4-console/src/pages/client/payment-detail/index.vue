@@ -38,7 +38,7 @@
             </div>
             <div class="detail-kv-item">
               <span>支付渠道</span>
-              <strong>{{ detail.gateway_label || detail.gateway || '--' }}</strong>
+              <strong>{{ detail.gateway_label || detail.gateway_key || detail.gateway || '--' }}</strong>
             </div>
             <div class="detail-kv-item">
               <span>支付状态</span>

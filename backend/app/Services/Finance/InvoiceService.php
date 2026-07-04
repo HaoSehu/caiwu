@@ -5,6 +5,7 @@ namespace App\Services\Finance;
 use App\Constants\InvoiceStatus;
 use App\Constants\InvoiceType;
 use App\Constants\OrderStatus;
+use App\Constants\OrderType;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Constants\ProductType;
@@ -16,6 +17,7 @@ use App\Models\Payment;
 use App\Models\Product;
 use App\Models\User;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
+use App\Support\AdminPrivacy;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -43,7 +45,7 @@ class InvoiceService
             'coupon_id' => $order->coupon_id,
             'user_coupon_id' => $order->user_coupon_id,
             'coupon_code' => $order->coupon_code,
-            'type' => $order->type === 'renew' ? 'renew' : 'normal',
+            'type' => $order->type === OrderType::RENEW ? InvoiceType::RENEW : 'normal',
             'amount' => $order->amount - $order->discount,
             'discount' => $order->discount ?? 0,
             'billing_cycle' => $order->billing_cycle,
@@ -113,7 +115,7 @@ class InvoiceService
             'paid_amount' => $amount,
             'status' => InvoiceStatus::PAID,
             'paid_at' => now(),
-            'due_date' => now(),
+            'due_date' => null,  // 充值账单已立即付清，截止日期无意义
             'config_snapshot' => array_filter([
                 'remark' => $remark,
                 'payment_no' => $payment?->payment_no,
@@ -141,7 +143,7 @@ class InvoiceService
             'paid_amount' => $amount,
             'status' => InvoiceStatus::PAID,
             'paid_at' => now(),
-            'due_date' => now(),
+            'due_date' => null,  // 推广返利账单已立即入账，截止日期无意义
             'config_snapshot' => $remark ? ['remark' => $remark] : null,
             'trace_id' => $traceId,
         ]);
@@ -160,7 +162,7 @@ class InvoiceService
             'paid_amount' => $amount,
             'status' => InvoiceStatus::PAID,
             'paid_at' => now(),
-            'due_date' => now(),
+            'due_date' => null,  // 扣款账单已立即扣清，截止日期无意义
             'config_snapshot' => $remark ? ['remark' => $remark] : null,
             'trace_id' => $traceId,
         ]);
@@ -216,16 +218,7 @@ class InvoiceService
         if (! empty($filters['product_id'])) {
             $query->where('product_id', $filters['product_id']);
         }
-        if (! empty($filters['date_range']) && is_array($filters['date_range']) && count($filters['date_range']) >= 2) {
-            $start = trim((string) ($filters['date_range'][0] ?? ''));
-            $end = trim((string) ($filters['date_range'][1] ?? ''));
-            if ($start !== '' && $end !== '') {
-                $query->whereBetween('created_at', [
-                    CarbonImmutable::parse($start)->startOfDay(),
-                    CarbonImmutable::parse($end)->endOfDay(),
-                ]);
-            }
-        }
+        $this->applyDateFilter($query, $filters);
 
         $paginator = $query->orderByDesc('id')->paginate($perPage);
         $paginator->setCollection(
@@ -238,7 +231,7 @@ class InvoiceService
     public function adminDetail(int $id): array
     {
         $invoice = Invoice::with([
-            'user:id,email,nickname',
+            'user:id,email,nickname,phone',
             'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle',
             'order.product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
             'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
@@ -262,11 +255,7 @@ class InvoiceService
             'product_spec_display' => $productSpecDisplay,
             'product_display_name' => $productDisplayName,
             'combined_display_name' => $combinedDisplayName,
-            'user' => $invoice->user ? [
-                'id' => (int) $invoice->user->id,
-                'email' => (string) $invoice->user->email,
-                'nickname' => (string) ($invoice->user->nickname ?? ''),
-            ] : null,
+            'user' => $this->adminUserPayload($invoice->user),
             'order_id' => (int) ($invoice->order_id ?? 0),
             'order' => $invoice->order ? [
                 'id' => (int) $invoice->order->id,
@@ -320,8 +309,9 @@ class InvoiceService
             'payments' => $this->thirdPartyPayments($invoice->payments)->map(fn ($p) => [
                 'id' => (int) $p->id,
                 'payment_no' => (string) $p->payment_no,
-                'gateway' => (string) $p->gateway,
-                'gateway_label' => $this->resolvePaymentGatewayLabel((string) $p->gateway),
+                'gateway' => $this->paymentGatewayKey($p),
+                'gateway_key' => $this->paymentGatewayKey($p),
+                'gateway_label' => $this->resolvePaymentGatewayLabel($this->paymentGatewayKey($p)),
                 'amount' => number_format((float) $p->amount, 2, '.', ''),
                 'status' => (int) $p->status,
                 'status_label' => $this->resolvePaymentStatusLabel((int) $p->status),
@@ -336,6 +326,49 @@ class InvoiceService
             'items' => $this->buildInvoiceItems($invoice, $scene),
             'logs' => $this->buildInvoiceLogs($invoice, $scene),
             'can_cancel' => in_array((int) $invoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE], true),
+        ];
+    }
+
+    private function applyDateFilter($query, array $filters): void
+    {
+        $start = trim((string) ($filters['start_date'] ?? ''));
+        $end = trim((string) ($filters['end_date'] ?? ''));
+
+        if ($start === '' && $end === '') {
+            return;
+        }
+
+        if ($start !== '' && $end !== '') {
+            $query->whereBetween('created_at', [
+                CarbonImmutable::parse($start)->startOfDay(),
+                CarbonImmutable::parse($end)->endOfDay(),
+            ]);
+
+            return;
+        }
+
+        if ($start !== '') {
+            $query->where('created_at', '>=', CarbonImmutable::parse($start)->startOfDay());
+
+            return;
+        }
+
+        $query->where('created_at', '<=', CarbonImmutable::parse($end)->endOfDay());
+    }
+
+    private function adminUserPayload(?User $user): ?array
+    {
+        if (! $user instanceof User) {
+            return null;
+        }
+
+        $privacy = AdminPrivacy::current();
+
+        return [
+            'id' => (int) $user->id,
+            'email' => $privacy->email($user->email),
+            'nickname' => (string) ($user->nickname ?? ''),
+            'phone' => $privacy->phone($user->phone ?? ''),
         ];
     }
 
@@ -402,8 +435,9 @@ class InvoiceService
             'payments' => $this->thirdPartyPayments($invoice->payments)->map(fn ($p) => [
                 'id' => (int) $p->id,
                 'payment_no' => (string) $p->payment_no,
-                'gateway' => (string) $p->gateway,
-                'gateway_label' => $this->resolvePaymentGatewayLabel((string) $p->gateway),
+                'gateway' => $this->paymentGatewayKey($p),
+                'gateway_key' => $this->paymentGatewayKey($p),
+                'gateway_label' => $this->resolvePaymentGatewayLabel($this->paymentGatewayKey($p)),
                 'amount' => number_format((float) $p->amount, 2, '.', ''),
                 'status' => (int) $p->status,
                 'status_label' => $this->resolvePaymentStatusLabel((int) $p->status),
@@ -422,7 +456,7 @@ class InvoiceService
     public function adminListItem(Invoice $invoice): array
     {
         $invoice->loadMissing([
-            'user:id,email,nickname',
+            'user:id,email,nickname,phone',
             'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle',
             'order.product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
             'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
@@ -450,11 +484,7 @@ class InvoiceService
             'product_spec_display' => $productSpecDisplay,
             'product_display_name' => $productDisplayName,
             'combined_display_name' => $combinedDisplayName,
-            'user' => $invoice->user ? [
-                'id' => (int) $invoice->user->id,
-                'email' => (string) $invoice->user->email,
-                'nickname' => (string) ($invoice->user->nickname ?? ''),
-            ] : null,
+            'user' => $this->adminUserPayload($invoice->user),
             'order_id' => (int) ($invoice->order_id ?? 0),
             'order' => $invoice->order ? [
                 'id' => (int) $invoice->order->id,
@@ -721,8 +751,9 @@ class InvoiceService
             'id' => (int) $payment->id,
             'payment_no' => (string) $payment->payment_no,
             'trade_no' => (string) ($payment->trade_no ?? ''),
-            'gateway' => (string) $payment->gateway,
-            'gateway_label' => $this->resolvePaymentGatewayLabel((string) $payment->gateway),
+            'gateway' => $this->paymentGatewayKey($payment),
+            'gateway_key' => $this->paymentGatewayKey($payment),
+            'gateway_label' => $this->resolvePaymentGatewayLabel($this->paymentGatewayKey($payment)),
             'amount' => number_format((float) $payment->amount, 2, '.', ''),
             'status' => (int) $payment->status,
             'status_label' => $this->resolvePaymentStatusLabel((int) $payment->status),
@@ -747,8 +778,13 @@ class InvoiceService
     private function thirdPartyPayments(iterable $payments): Collection
     {
         return collect($payments)
-            ->filter(fn (Payment $payment) => PaymentGatewayCode::isThirdParty((string) $payment->gateway))
+            ->filter(fn (Payment $payment) => $payment->isThirdPartyGateway())
             ->values();
+    }
+
+    private function paymentGatewayKey(Payment $payment): string
+    {
+        return $payment->gatewayKey();
     }
 
     private function resolveInvoiceDisplayStatus(Invoice $invoice, ?array $paymentSummary): array
@@ -895,6 +931,7 @@ class InvoiceService
     {
         return match ($gateway) {
             PaymentGatewayCode::ALIPAY => PaymentGatewayCode::label(PaymentGatewayCode::ALIPAY),
+            PaymentGatewayCode::YIPAY => PaymentGatewayCode::label(PaymentGatewayCode::YIPAY),
             'wechat' => '微信支付',
             'balance' => '余额支付',
             'free' => '免支付',

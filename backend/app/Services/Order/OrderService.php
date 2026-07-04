@@ -6,6 +6,7 @@ namespace App\Services\Order;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
+use App\Constants\OrderType;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Exceptions\BusinessException;
@@ -35,34 +36,7 @@ class OrderService
 {
     use HandlesOrderCalculation;
 
-    private const RANGE_TYPES = [4, 7, 9, 11, 14, 15, 16, 17, 18, 19];
-
-    private const OS_TYPES = [5];
-
-    private const BILLING_CYCLE_MONTHS = [
-        'monthly' => 1,
-        'quarterly' => 3,
-        'semiannually' => 6,
-        'annually' => 12,
-    ];
-
-    private const TYPE_FIELD_MAP = [
-        4 => 'ip_num',
-        5 => 'os',
-        6 => 'cpu',
-        7 => 'cpu',
-        8 => 'memory',
-        9 => 'memory',
-        10 => 'bw',
-        11 => 'bw',
-        12 => 'area',
-        13 => 'system_disk_size',
-        14 => 'system_disk_size',
-        16 => 'cpu',
-        17 => 'memory',
-        18 => 'bw',
-        19 => 'system_disk_size',
-    ];
+    // RANGE_TYPES / OS_TYPES / BILLING_CYCLE_MONTHS / TYPE_FIELD_MAP 已移入 HandlesOrderCalculation Trait
 
     public function __construct(
         private InvoiceService $invoiceService,
@@ -77,7 +51,11 @@ class OrderService
     ) {}
 
     /**
-     * 创建新购订单
+     * 创建新购订单（旧入口，Order-first 路径）
+     *
+     * @deprecated 新功能请使用 CheckoutService::create()（Invoice-first 路径）。
+     *             OrderService::create() 保留兼容旧调用；两套路径共享
+     *             HandlesOrderCalculation Trait 的计算逻辑，语义上以 Invoice 为财务主体。
      */
     public function create(int $userId, array $data, array $context = []): Order
     {
@@ -188,7 +166,7 @@ class OrderService
                     $orderConfigSnapshot = $this->withProductDisplaySnapshot($product, $normalizedConfig, $productDisplayName);
                     throw_if($amount <= 0, new BusinessException('无效的计费周期'));
                     $stepStartedAt = microtime(true);
-                    $couponPayload = $this->couponService->reserveOwnedCouponForOrder($userCouponId, $userId, $product, $billingCycle, $amount, 'new');
+                    $couponPayload = $this->couponService->reserveOwnedCouponForOrder($userCouponId, $userId, $product, $billingCycle, $amount, OrderType::NEW);
                     $latency['coupon_reserve_ms'] = $this->elapsedMilliseconds($stepStartedAt);
                     $discountAmount = (float) ($couponPayload['discount_amount'] ?? 0);
                     $payableAmount = max($amount - $discountAmount, 0);
@@ -216,7 +194,7 @@ class OrderService
                         'coupon_id' => $couponPayload['id'] ?? null,
                         'user_coupon_id' => $couponPayload['user_coupon_id'] ?? null,
                         'coupon_code' => $couponPayload['code'] ?? null,
-                        'type' => 'new',
+                        'type' => OrderType::NEW,
                         'amount' => $amount,
                         'discount' => $discountAmount,
                         'billing_cycle' => $billingCycle,
@@ -375,7 +353,7 @@ class OrderService
             }
 
             // 仅新购订单在创建时预扣库存，取消时恢复库存。
-            if ((string) $lockedOrder->type === 'new' && $lockedOrder->product_id) {
+            if ((string) $lockedOrder->type === OrderType::NEW && $lockedOrder->product_id) {
                 $product = Product::query()
                     ->lockForUpdate()
                     ->find($lockedOrder->product_id);
@@ -575,7 +553,7 @@ class OrderService
                     ->orWhere('invoice_id', $invoice->id);
             })
             ->where('status', PaymentStatus::SUCCESS)
-            ->whereIn('gateway', PaymentGatewayCode::thirdPartyGateways())
+            ->whereGatewayKeyIn(PaymentGatewayCode::thirdPartyGateways())
             ->exists();
 
         throw_if($hasRealSuccessPayment, new BusinessException('存在真实支付记录，不能直接恢复为未支付'));
@@ -585,7 +563,7 @@ class OrderService
                 $query->where('order_id', $order->id)
                     ->orWhere('invoice_id', $invoice->id);
             })
-            ->where('gateway', 'manual')
+            ->whereGatewayKey(PaymentGatewayCode::MANUAL)
             ->where('status', PaymentStatus::SUCCESS);
 
         throw_if(
@@ -762,6 +740,7 @@ class OrderService
     {
         return match ($gateway) {
             'alipay' => '支付宝支付',
+            'yipay' => '易支付',
             'wechat' => '微信支付',
             'balance' => '余额支付',
             'free' => '免支付',
@@ -800,7 +779,7 @@ class OrderService
         }
 
         $payments = collect($payments)
-            ->filter(fn (Payment $payment) => PaymentGatewayCode::isThirdParty((string) $payment->gateway))
+            ->filter(fn (Payment $payment) => $payment->isThirdPartyGateway())
             ->values();
 
         $payment = $payments
@@ -818,8 +797,9 @@ class OrderService
             'id' => (int) $payment->id,
             'payment_no' => (string) $payment->payment_no,
             'trade_no' => (string) ($payment->trade_no ?? ''),
-            'gateway' => (string) $payment->gateway,
-            'gateway_label' => $this->resolvePaymentGatewayLabel((string) $payment->gateway),
+            'gateway' => $payment->gatewayKey(),
+            'gateway_key' => $payment->gatewayKey(),
+            'gateway_label' => $this->resolvePaymentGatewayLabel($payment->gatewayKey()),
             'amount' => number_format((float) $payment->amount, 2, '.', ''),
             'status' => (int) $payment->status,
             'paid_at' => $payment->paid_at?->format('Y-m-d H:i:s'),

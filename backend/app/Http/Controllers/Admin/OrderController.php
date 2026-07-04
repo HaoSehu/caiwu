@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\Finance\OrderListRequest;
 use App\Services\Finance\AdminFinanceQueryService;
-use Illuminate\Http\Request;
 
 class OrderController extends Controller
 {
@@ -14,13 +14,10 @@ class OrderController extends Controller
         private readonly AdminFinanceQueryService $financeQueryService,
     ) {}
 
-    public function index(Request $request)
+    public function index(OrderListRequest $request)
     {
-        $filters = $request->only(['keyword', 'status', 'type', 'date_range']);
-        $perPage = max(1, min((int) $request->input('page_size', 20), 100));
-
         return $this->paginate(
-            $this->financeQueryService->paginateOrders($filters, $perPage)
+            $this->financeQueryService->paginateOrders($request->validated(), $request->perPage())
         );
     }
 

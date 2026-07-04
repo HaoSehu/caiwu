@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Mail;
 
 use App\Exceptions\BusinessException;
-use App\Models\Setting;
+use App\Services\Integrations\Plugins\IntegrationDriverBindingResolver;
 use App\Services\Mail\Contracts\MailDriver;
 use InvalidArgumentException;
 
@@ -17,8 +17,10 @@ final class MailDriverManager
     /**
      * @param  iterable<int, MailDriver>  $drivers
      */
-    public function __construct(iterable $drivers = [])
-    {
+    public function __construct(
+        iterable $drivers = [],
+        private ?IntegrationDriverBindingResolver $bindingResolver = null,
+    ) {
         foreach ($drivers as $driver) {
             $this->register($driver);
         }
@@ -41,7 +43,16 @@ final class MailDriverManager
 
     public function resolve(?string $key = null): MailDriver
     {
-        $resolvedKey = $key ?? $this->getConfiguredKey();
+        $resolvedKey = trim((string) ($key ?? ''));
+        if ($resolvedKey === '') {
+            foreach ($this->bindingResolver()->mailDriverCandidates() as $candidate) {
+                if (isset($this->drivers[$candidate])) {
+                    return $this->drivers[$candidate];
+                }
+            }
+
+            $resolvedKey = $this->getConfiguredKey();
+        }
 
         if (isset($this->drivers[$resolvedKey])) {
             return $this->drivers[$resolvedKey];
@@ -63,13 +74,11 @@ final class MailDriverManager
 
     private function getConfiguredKey(): string
     {
-        $key = trim((string) Setting::getValue('notification', 'mail_driver', ''));
-        if ($key !== '') {
-            return $key;
-        }
+        return $this->bindingResolver()->mailDriverKey();
+    }
 
-        $default = trim((string) config('integrations.mail.default', 'smtp'));
-
-        return $default !== '' ? $default : 'smtp';
+    private function bindingResolver(): IntegrationDriverBindingResolver
+    {
+        return $this->bindingResolver ??= app(IntegrationDriverBindingResolver::class);
     }
 }

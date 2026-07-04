@@ -13,12 +13,14 @@ use App\Support\AdminPermissions;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 
 class AdminStaffService
 {
     public function __construct(
         private readonly AdminRoleBridgeService $adminRoleBridgeService,
         private readonly OperationLogService $operationLogService,
+        private readonly BuiltinAdminRoleService $builtinAdminRoleService,
     ) {}
 
     /**
@@ -49,6 +51,8 @@ class AdminStaffService
      */
     public function roleOptions(): Collection
     {
+        $this->builtinAdminRoleService->sync();
+
         return Role::query()
             ->orderBy('id')
             ->get(['id', 'name', 'label']);
@@ -87,6 +91,16 @@ class AdminStaffService
      */
     public function update(AdminUser $staff, array $data, AdminUser $operator, ?string $ipAddress = null): AdminUser
     {
+        if (
+            ! in_array(AdminPermissions::ALL, $operator->resolvedPermissions(), true)
+            && (
+                array_key_exists('username', $data)
+                || array_key_exists('email', $data)
+            )
+        ) {
+            throw new BusinessException('只有超级管理员可以修改员工账号和邮箱', 40300, 403);
+        }
+
         $targetStatus = (int) ($data['status'] ?? $staff->status);
         if ((int) $staff->id === (int) $operator->id && $targetStatus !== 1) {
             throw new BusinessException('不能停用当前登录管理员');
@@ -107,13 +121,21 @@ class AdminStaffService
         }
 
         $updated = DB::transaction(function () use ($staff, $data, $targetStatus): AdminUser {
-            $staff->update([
-                'username' => trim((string) $data['username']),
+            $updates = [
                 'nickname' => $this->nullableString($data['nickname'] ?? null),
-                'email' => $this->nullableString($data['email'] ?? null),
                 'role_id' => (int) $data['role_id'],
                 'status' => $targetStatus,
-            ]);
+            ];
+
+            if (array_key_exists('username', $data)) {
+                $updates['username'] = trim((string) $data['username']);
+            }
+
+            if (array_key_exists('email', $data)) {
+                $updates['email'] = $this->nullableString($data['email'] ?? null);
+            }
+
+            $staff->update($updates);
 
             $this->adminRoleBridgeService->syncPrimaryRole($staff, (int) $data['role_id']);
 
@@ -155,6 +177,8 @@ class AdminStaffService
 
     public function resetPassword(AdminUser $staff, string $password, AdminUser $operator, ?string $ipAddress = null): void
     {
+        $this->ensureSuperAdmin($operator, '只有超级管理员可以重置员工密码');
+
         DB::transaction(function () use ($staff, $password): void {
             $staff->update(['password' => $password]);
             $staff->tokens()->delete();
@@ -163,6 +187,57 @@ class AdminStaffService
         $this->writeLog($operator, 'admin.staff.password_reset', $staff, [
             'username' => (string) $staff->username,
         ], $ipAddress);
+    }
+
+    public function updateOwnPassword(AdminUser $staff, string $currentPassword, string $password, ?string $ipAddress = null): void
+    {
+        if (! Hash::check($currentPassword, (string) $staff->password)) {
+            throw new BusinessException('当前密码不正确');
+        }
+
+        DB::transaction(function () use ($staff, $password): void {
+            $currentTokenId = $staff->currentAccessToken()?->id;
+
+            $staff->update(['password' => $password]);
+
+            $staff->tokens()
+                ->when($currentTokenId !== null, fn ($query) => $query->where('id', '!=', $currentTokenId))
+                ->delete();
+        });
+
+        $this->writeLog($staff, 'admin.auth.password_update', $staff, [
+            'username' => (string) $staff->username,
+        ], $ipAddress);
+    }
+
+    public function deleteDisabled(AdminUser $staff, AdminUser $operator, ?string $ipAddress = null): void
+    {
+        $this->ensureSuperAdmin($operator, '只有超级管理员可以删除员工');
+
+        if ((int) $staff->id === (int) $operator->id) {
+            throw new BusinessException('不能删除当前登录管理员');
+        }
+
+        if ((int) $staff->status === 1) {
+            throw new BusinessException('只能删除已停用的员工');
+        }
+
+        if ($this->isLastSuperAdmin($staff)) {
+            throw new BusinessException('不能删除最后一个超级管理员');
+        }
+
+        $detail = [
+            'username' => (string) $staff->username,
+            'role_id' => (int) ($staff->role_id ?? 0),
+        ];
+
+        DB::transaction(function () use ($staff): void {
+            $staff->tokens()->delete();
+            $staff->roles()->detach();
+            $staff->delete();
+        });
+
+        $this->writeLog($operator, 'admin.staff.delete', $staff, $detail, $ipAddress);
     }
 
     private function isLastSuperAdmin(AdminUser $staff): bool
@@ -198,6 +273,13 @@ class AdminStaffService
         }
 
         return in_array(AdminPermissions::ALL, $role->resolvedPermissions(), true);
+    }
+
+    private function ensureSuperAdmin(AdminUser $operator, string $message): void
+    {
+        if (! in_array(AdminPermissions::ALL, $operator->resolvedPermissions(), true)) {
+            throw new BusinessException($message, 40300, 403);
+        }
     }
 
     /**

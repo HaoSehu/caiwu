@@ -112,20 +112,21 @@ class MofangServiceProviderTest extends TestCase
 
         $this->assertSame(ProviderKey::MOFANG_FINANCE_API, ProviderKey::label(ProviderKey::MOFANG_FINANCE_API));
         $this->assertContains(ProviderKey::MOFANG_FINANCE_API, $registry->keys());
-        $this->assertContains([
-            'value' => ProviderKey::MOFANG_FINANCE_API,
-            'label' => '魔方财务接口',
-        ], $registry->options());
+        $option = collect($registry->options())
+            ->firstWhere('value', ProviderKey::MOFANG_FINANCE_API);
+        $this->assertIsArray($option);
+        $this->assertSame('魔方财务接口', $option['label']);
+        $this->assertArrayHasKey('supplier_form', $option);
 
         $descriptor = collect($registry->descriptors())
             ->first(fn (UpstreamProviderDescriptor $item): bool => $item->key === ProviderKey::MOFANG_FINANCE_API);
 
         $this->assertInstanceOf(UpstreamProviderDescriptor::class, $descriptor);
-        $this->assertSame([
-            'key' => ProviderKey::MOFANG_FINANCE_API,
-            'label' => '魔方财务接口',
-            'capabilities' => $descriptor->capabilities,
-        ], $descriptor->toArray());
+        $descriptorPayload = $descriptor->toArray();
+        $this->assertSame(ProviderKey::MOFANG_FINANCE_API, $descriptorPayload['key']);
+        $this->assertSame('魔方财务接口', $descriptorPayload['label']);
+        $this->assertSame($descriptor->capabilities, $descriptorPayload['capabilities']);
+        $this->assertArrayHasKey('supplier_form', $descriptorPayload);
         $this->assertContains(ProvidesConsoleCatalog::class, $descriptor->capabilities);
     }
 

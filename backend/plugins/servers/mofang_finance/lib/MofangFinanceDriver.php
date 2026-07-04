@@ -13,10 +13,11 @@ use App\Services\Upstream\Contracts\ProvidesProvisioning;
 use App\Services\Upstream\Contracts\ProvidesRenewal;
 use App\Services\Upstream\Contracts\ProvidesScheduledAuthRefresh;
 use App\Services\Upstream\Contracts\ProvidesStatusSync;
+use App\Services\Upstream\Contracts\ProvidesSupplierFormSchema;
 use App\Services\Upstream\Contracts\UpstreamDriver;
 use App\Services\Upstream\ProviderKey;
 
-final class MofangFinanceDriver implements UpstreamDriver
+final class MofangFinanceDriver implements ProvidesSupplierFormSchema, UpstreamDriver
 {
     private const CAPABILITIES = [
         ProvidesConsoleAccess::class,
@@ -58,5 +59,35 @@ final class MofangFinanceDriver implements UpstreamDriver
     public function resolve(string $capability): ?object
     {
         return $this->supports($capability) ? $this->adapter : null;
+    }
+
+    public function supplierFormSchema(): array
+    {
+        return [
+            'help' => '魔方财务插件使用供应商后台地址、账号和密码/API 密钥登录并刷新 JWT。',
+            'fields' => [
+                [
+                    'key' => 'api_url',
+                    'label' => '魔方财务地址',
+                    'type' => 'url',
+                    'required' => true,
+                    'placeholder' => 'https://finance.example.com',
+                ],
+                [
+                    'key' => 'api_username',
+                    'label' => '登录账号',
+                    'type' => 'text',
+                    'required' => true,
+                ],
+                [
+                    'key' => 'api_key',
+                    'label' => '登录密码/API 密钥',
+                    'type' => 'password',
+                    'required' => true,
+                    'secret' => true,
+                    'placeholder' => '编辑时留空则保持原密钥',
+                ],
+            ],
+        ];
     }
 }

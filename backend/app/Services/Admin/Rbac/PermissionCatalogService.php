@@ -90,17 +90,21 @@ class PermissionCatalogService
             AdminPermissions::ROLE_LIST, AdminPermissions::ROLE_MANAGE => 'organization_role',
             AdminPermissions::PERMISSION_LIST => 'organization_permission',
             AdminPermissions::DASHBOARD_VIEW => 'dashboard_workbench',
-            AdminPermissions::USER_LIST, AdminPermissions::USER_DETAIL, AdminPermissions::USER_MANAGE, AdminPermissions::USER_LOGIN_AS => 'customer_profile',
+            AdminPermissions::USER_LIST, AdminPermissions::USER_DETAIL, AdminPermissions::USER_MANAGE, AdminPermissions::USER_LOGIN_AS, AdminPermissions::PRIVACY_VIEW_RAW => 'customer_profile',
             AdminPermissions::VERIFICATION_LIST, AdminPermissions::VERIFICATION_UNBIND => 'customer_verification',
             AdminPermissions::ORDER_LIST, AdminPermissions::ORDER_DETAIL, AdminPermissions::ORDER_MANAGE => 'finance_order',
             AdminPermissions::INVOICE_LIST, AdminPermissions::INVOICE_DETAIL, AdminPermissions::INVOICE_MANAGE => 'finance_invoice',
             AdminPermissions::USER_RECHARGE, AdminPermissions::FINANCE_WITHDRAW => 'finance_funds',
             AdminPermissions::FINANCE_REPORT => 'finance_report',
             AdminPermissions::TICKET_LIST, AdminPermissions::TICKET_REPLY, AdminPermissions::TICKET_MANAGE => 'support_ticket',
-            AdminPermissions::PRODUCT_LIST, AdminPermissions::PRODUCT_MANAGE => 'product_catalog',
+            AdminPermissions::PRODUCT_LIST, AdminPermissions::PRODUCT_MANAGE, AdminPermissions::PRODUCT_SYNC => 'product_catalog',
+            AdminPermissions::SUPPLIER_LIST, AdminPermissions::SUPPLIER_DETAIL, AdminPermissions::SUPPLIER_MANAGE, AdminPermissions::SUPPLIER_SYNC, AdminPermissions::SUPPLIER_SECRET_REVEAL => 'product_supplier',
             AdminPermissions::CONTENT_LIST, AdminPermissions::CONTENT_MANAGE => 'content_ops',
-            AdminPermissions::REFERRAL_LIST, AdminPermissions::MEMBER_LEVEL_MANAGE => 'marketing_growth',
-            AdminPermissions::SETTINGS_MANAGE => 'system_config',
+            AdminPermissions::REFERRAL_LIST, AdminPermissions::REFERRAL_WITHDRAWAL_LIST, AdminPermissions::MEMBER_LEVEL_LIST, AdminPermissions::MEMBER_LEVEL_MANAGE => 'marketing_growth',
+            AdminPermissions::SETTINGS_VIEW, AdminPermissions::SETTINGS_MANAGE, AdminPermissions::SETTINGS_SECRET_REVEAL => 'system_config',
+            AdminPermissions::INTEGRATION_PLUGIN_VIEW, AdminPermissions::INTEGRATION_PLUGIN_MANAGE, AdminPermissions::INTEGRATION_PLUGIN_TEST, AdminPermissions::INTEGRATION_PLUGIN_SECRET_REVEAL => 'system_integration',
+            AdminPermissions::SCHEDULE_VIEW, AdminPermissions::SCHEDULE_TRIGGER => 'system_schedule',
+            AdminPermissions::SITE_VIEW, AdminPermissions::SITE_MANAGE => 'site_ops',
             AdminPermissions::LOG_LIST, AdminPermissions::LOG_MANAGE => 'system_audit',
             default => $this->detectModule($permission),
         };
@@ -118,15 +122,21 @@ class PermissionCatalogService
             'invoice' => '账单',
             'ticket' => '工单',
             'product' => '商品',
+            'supplier' => '供应商',
             'settings' => '设置',
+            'integration_plugin' => '插件',
+            'schedule' => '自动化',
+            'site' => '站点',
             'log' => '日志',
             'referral' => '推广',
+            'referral_withdrawal' => '推荐提现',
             'finance' => '财务',
             'member_level' => '会员',
             'content' => '内容',
             'staff' => '员工',
             'role' => '角色',
             'permission' => '权限',
+            'privacy' => '隐私',
             'system' => '系统',
         ][$module] ?? $module;
     }
@@ -147,9 +157,13 @@ class PermissionCatalogService
             'finance_report' => '财务报表',
             'support_ticket' => '工单支持',
             'product_catalog' => '商品配置',
+            'product_supplier' => '供应商接口',
             'content_ops' => '内容运营',
             'marketing_growth' => '推广会员',
             'system_config' => '系统设置',
+            'system_integration' => '集成插件',
+            'system_schedule' => '自动化任务',
+            'site_ops' => '站点展示',
             'system_audit' => '日志审计',
         ][$group] ?? $group;
     }
@@ -173,6 +187,11 @@ class PermissionCatalogService
             'delete' => '删除',
             'report' => '报表',
             'withdraw' => '提现',
+            'sync' => '同步',
+            'trigger' => '触发',
+            'test' => '测试',
+            'secret_reveal' => '查看密钥',
+            'view_raw' => '查看原始隐私',
         ][$this->detectAction($permission)] ?? $this->detectAction($permission);
     }
 
@@ -186,11 +205,21 @@ class PermissionCatalogService
             AdminPermissions::ROLE_MANAGE,
             AdminPermissions::STAFF_MANAGE,
             AdminPermissions::SETTINGS_MANAGE,
+            AdminPermissions::SETTINGS_SECRET_REVEAL,
+            AdminPermissions::SUPPLIER_SECRET_REVEAL,
+            AdminPermissions::INTEGRATION_PLUGIN_SECRET_REVEAL,
+            AdminPermissions::PRIVACY_VIEW_RAW,
             AdminPermissions::FINANCE_WITHDRAW,
             AdminPermissions::USER_RECHARGE,
             AdminPermissions::VERIFICATION_UNBIND,
             AdminPermissions::USER_LOGIN_AS => 'high',
-            default => str_ends_with($permission, '.manage') || str_ends_with($permission, '.reply') ? 'medium' : 'low',
+            default => (
+                str_ends_with($permission, '.manage')
+                || str_ends_with($permission, '.reply')
+                || str_ends_with($permission, '.sync')
+                || str_ends_with($permission, '.trigger')
+                || str_ends_with($permission, '.test')
+            ) ? 'medium' : 'low',
         };
     }
 
@@ -202,8 +231,8 @@ class PermissionCatalogService
             'dashboard_workbench',
             'customer_profile', 'customer_verification',
             'finance_invoice', 'finance_order', 'finance_funds', 'finance_report',
-            'support_ticket', 'product_catalog', 'content_ops', 'marketing_growth',
-            'system_config', 'system_audit',
+            'support_ticket', 'product_catalog', 'product_supplier', 'content_ops', 'marketing_growth',
+            'site_ops', 'system_config', 'system_integration', 'system_schedule', 'system_audit',
         ];
 
         $index = array_search($group, $order, true);
@@ -226,6 +255,11 @@ class PermissionCatalogService
             'unbind' => 60,
             'report' => 70,
             'withdraw' => 80,
+            'sync' => 82,
+            'trigger' => 84,
+            'test' => 86,
+            'secret_reveal' => 88,
+            'view_raw' => 89,
             'manage' => 90,
         ][$this->detectAction($permission)] ?? 99;
     }
@@ -253,12 +287,30 @@ class PermissionCatalogService
             AdminPermissions::TICKET_MANAGE => '管理工单',
             AdminPermissions::PRODUCT_LIST => '查看商品',
             AdminPermissions::PRODUCT_MANAGE => '管理商品',
+            AdminPermissions::PRODUCT_SYNC => '同步商品',
+            AdminPermissions::SUPPLIER_LIST => '查看供应商列表',
+            AdminPermissions::SUPPLIER_DETAIL => '查看供应商详情',
+            AdminPermissions::SUPPLIER_MANAGE => '管理供应商',
+            AdminPermissions::SUPPLIER_SYNC => '同步供应商数据',
+            AdminPermissions::SUPPLIER_SECRET_REVEAL => '查看供应商密钥',
+            AdminPermissions::SETTINGS_VIEW => '查看系统设置',
             AdminPermissions::SETTINGS_MANAGE => '管理系统设置',
+            AdminPermissions::SETTINGS_SECRET_REVEAL => '查看系统密钥',
+            AdminPermissions::INTEGRATION_PLUGIN_VIEW => '查看集成插件',
+            AdminPermissions::INTEGRATION_PLUGIN_MANAGE => '管理集成插件',
+            AdminPermissions::INTEGRATION_PLUGIN_TEST => '测试集成插件',
+            AdminPermissions::INTEGRATION_PLUGIN_SECRET_REVEAL => '查看插件密钥',
+            AdminPermissions::SCHEDULE_VIEW => '查看自动化任务',
+            AdminPermissions::SCHEDULE_TRIGGER => '触发自动化任务',
+            AdminPermissions::SITE_VIEW => '查看站点展示',
+            AdminPermissions::SITE_MANAGE => '管理站点展示',
             AdminPermissions::LOG_LIST => '查看日志',
             AdminPermissions::LOG_MANAGE => '管理日志',
             AdminPermissions::REFERRAL_LIST => '查看推广返利',
             AdminPermissions::FINANCE_REPORT => '查看财务报表',
             AdminPermissions::FINANCE_WITHDRAW => '处理提现',
+            AdminPermissions::REFERRAL_WITHDRAWAL_LIST => '查看推荐提现',
+            AdminPermissions::MEMBER_LEVEL_LIST => '查看会员等级',
             AdminPermissions::MEMBER_LEVEL_MANAGE => '管理会员等级',
             AdminPermissions::CONTENT_LIST => '查看内容',
             AdminPermissions::CONTENT_MANAGE => '管理内容',
@@ -267,6 +319,7 @@ class PermissionCatalogService
             AdminPermissions::ROLE_LIST => '查看角色',
             AdminPermissions::ROLE_MANAGE => '管理角色',
             AdminPermissions::PERMISSION_LIST => '查看权限目录',
+            AdminPermissions::PRIVACY_VIEW_RAW => '查看原始隐私信息',
         ][$permission] ?? str_replace('.', ' / ', $permission);
     }
 
