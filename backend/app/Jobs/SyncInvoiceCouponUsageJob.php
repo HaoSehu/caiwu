@@ -21,6 +21,8 @@ class SyncInvoiceCouponUsageJob implements ShouldQueue
 
     public int $tries = 3;
 
+    public int $timeout = 300;
+
     public int $backoff = 5;
 
     public function __construct(public int $invoiceId) {}

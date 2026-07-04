@@ -23,7 +23,7 @@
         <router-link class="auth-brand" to="/client/login">
           <img
             v-if="showLogo"
-            :src="siteBranding.siteLogo"
+            :src="authLogoSrc"
             :alt="siteBranding.siteName"
             class="auth-brand__logo"
             @error="handleLogoError"
@@ -107,7 +107,8 @@ const siteBranding = useSiteBrandingStore();
 const router = useRouter();
 const currentYear = computed(() => new Date().getFullYear());
 const logoLoadFailed = ref(false);
-const showLogo = computed(() => Boolean(siteBranding.siteLogo) && !logoLoadFailed.value);
+const authLogoSrc = computed(() => siteBranding.clientConsoleIcon || siteBranding.siteLogo);
+const showLogo = computed(() => Boolean(authLogoSrc.value) && !logoLoadFailed.value);
 
 function handleLogoError() {
   logoLoadFailed.value = true;
@@ -122,7 +123,7 @@ function handleBack() {
 }
 
 watch(
-  () => siteBranding.siteLogo,
+  authLogoSrc,
   () => {
     logoLoadFailed.value = false;
   },

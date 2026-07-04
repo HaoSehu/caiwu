@@ -37,4 +37,9 @@ class SettingController extends Controller
 
         return $this->success(null, '配置已更新');
     }
+
+    public function revealSecret(string $group, string $key)
+    {
+        return $this->success($this->settingService->revealSensitiveSetting($group, $key));
+    }
 }

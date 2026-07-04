@@ -13,6 +13,7 @@ use App\Models\ThirdProductGroup;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * 服务概览/列表子服务
@@ -61,8 +62,28 @@ class ServiceOverviewService
             $query->where(function ($builder) use ($keyword) {
                 $builder->where('name', 'like', '%'.$keyword.'%')
                     ->orWhere('domain', 'like', '%'.$keyword.'%')
-                    ->orWhere('provision_data->custom_hostname', 'like', '%'.$keyword.'%')
                     ->orWhereHas('invoice', fn ($q) => $q->where('invoice_no', 'like', '%'.$keyword.'%'));
+
+                if ($this->hasConnectionSnapshotTable()) {
+                    $likeKeyword = '%'.$keyword.'%';
+                    $builder->orWhereExists(function ($subQuery) use ($likeKeyword): void {
+                        $subQuery
+                            ->selectRaw('1')
+                            ->from('service_connection_snapshots as scs')
+                            ->whereColumn('scs.service_id', 'services.id')
+                            ->where(function ($connectionQuery) use ($likeKeyword): void {
+                                $connectionQuery
+                                    ->where('scs.hostname', 'like', $likeKeyword)
+                                    ->orWhere('scs.ip_address', 'like', $likeKeyword)
+                                    ->orWhere('scs.connection_json->custom_hostname', 'like', $likeKeyword)
+                                    ->orWhere('scs.connection_json->default_service_name', 'like', $likeKeyword)
+                                    ->orWhere('scs.connection_json->username', 'like', $likeKeyword)
+                                    ->orWhere('scs.connection_json->internal_ip', 'like', $likeKeyword);
+                            });
+                    });
+                } else {
+                    $builder->orWhere('provision_data->custom_hostname', 'like', '%'.$keyword.'%');
+                }
             });
         }
 
@@ -129,6 +150,15 @@ class ServiceOverviewService
             now()->addSeconds(self::SUMMARY_CACHE_TTL_SECONDS),
             fn () => $this->buildSummary($user)
         );
+    }
+
+    private function hasConnectionSnapshotTable(): bool
+    {
+        try {
+            return Schema::hasTable('service_connection_snapshots');
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     public function forgetGroupedOverviewCache(int $userId): void

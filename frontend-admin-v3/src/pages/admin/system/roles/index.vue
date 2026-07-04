@@ -38,6 +38,7 @@
           <div class="role-cell">
             <strong>{{ row.label || row.name || '-' }}</strong>
             <span>{{ row.name || '-' }}</span>
+            <t-tag v-if="row.is_builtin" theme="primary" variant="light" size="small">系统默认</t-tag>
           </div>
         </template>
         <template #permissions="{ row }">
@@ -54,7 +55,7 @@
           <t-space size="small">
             <t-button theme="primary" variant="text" @click="openEditDialog(row)">{{ canManage ? '权限' : '查看' }}</t-button>
             <t-button v-if="canManage" theme="default" variant="text" @click="handleCopy(row)">复制</t-button>
-            <t-button v-if="canManage" theme="danger" variant="text" @click="handleDelete(row)">删除</t-button>
+            <t-button v-if="canManage && canDeleteRole(row)" theme="danger" variant="text" @click="handleDelete(row)">删除</t-button>
           </t-space>
         </template>
       </t-table>
@@ -93,29 +94,44 @@
       <t-form ref="formRef" :data="form" :rules="rules" label-align="top">
         <div class="role-form-grid">
           <t-form-item label="角色编码" name="name">
-            <t-input v-model="form.name" :disabled="!canManage || isReadonlySuperRole" placeholder="例如：operator" />
+            <t-input v-model="form.name" :disabled="!canManage || currentRoleLocked || isReadonlySuperRole" placeholder="例如：operator" />
           </t-form-item>
           <t-form-item label="角色名称" name="label">
-            <t-input v-model="form.label" :disabled="!canManage" placeholder="例如：运营人员" />
+            <t-input v-model="form.label" :disabled="!canManage || currentRoleLocked" placeholder="例如：运营人员" />
           </t-form-item>
         </div>
 
         <section class="permission-panel">
+          <t-alert
+            v-if="currentRoleLocked"
+            theme="info"
+            message="系统默认角色权限由后台固定维护，如需调整请复制后创建自定义角色。"
+          />
           <div class="permission-panel__head">
             <div class="permission-panel__title">
               <strong>权限目录</strong>
               <span>已选 {{ selectedPermissionCount }} / {{ permissions.length }}</span>
             </div>
             <t-space size="small">
-              <t-button v-if="canManage" variant="text" theme="primary" @click="selectNoDangerousDefaults">常用权限</t-button>
-              <t-button v-if="canManage" variant="text" @click="clearAllPermissions">清空全部</t-button>
+              <template v-if="canEditCurrentRole">
+                <t-button
+                  v-for="preset in rolePermissionPresets"
+                  :key="preset.code"
+                  variant="text"
+                  :theme="preset.theme"
+                  @click="applyRolePermissionPreset(preset)"
+                >
+                  {{ preset.label }}
+                </t-button>
+              </template>
+              <t-button v-if="canEditCurrentRole" variant="text" @click="clearAllPermissions">清空全部</t-button>
             </t-space>
           </div>
 
           <div class="permission-toolbar">
             <t-input v-model="permissionKeyword" clearable placeholder="搜索权限名称/权限码/模块" />
             <t-checkbox v-model="showDangerousOnly">只看高危</t-checkbox>
-            <t-space v-if="canManage" size="small">
+            <t-space v-if="canEditCurrentRole" size="small">
               <t-button size="small" variant="base" @click="selectVisiblePermissions">选中当前结果</t-button>
               <t-button size="small" variant="base" @click="clearVisiblePermissions">清空当前结果</t-button>
             </t-space>
@@ -128,7 +144,7 @@
                   <h4>{{ group.label }}</h4>
                   <span>{{ group.parentLabel }} · {{ group.selectedCount }} / {{ group.items.length }}</span>
                 </div>
-                <t-space v-if="canManage" size="small">
+                <t-space v-if="canEditCurrentRole" size="small">
                   <t-button size="small" variant="text" theme="primary" @click="selectGroupPermissions(group)">全选</t-button>
                   <t-button size="small" variant="text" @click="clearGroupPermissions(group)">清空</t-button>
                 </t-space>
@@ -138,7 +154,7 @@
                   v-for="item in group.items"
                   :key="item.key"
                   :value="item.key"
-                  :disabled="!canManage || (hasAllPermissionSelected && item.key !== AdminPermissions.ALL)"
+                  :disabled="!canEditCurrentRole || (hasAllPermissionSelected && item.key !== AdminPermissions.ALL)"
                 >
                   <span class="permission-name">
                     {{ item.name || item.key }}
@@ -169,7 +185,13 @@ import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { errorMessage } from '@/utils/userMessage';
 import { required } from '@/utils/formRules';
-import { AdminPermissions } from '@/constants/permissions';
+import {
+  ADMIN_DEFAULT_PERMISSION_CODES,
+  AdminPermissions,
+  BUILTIN_ROLE_LABELS,
+  VISITOR_PERMISSION_CODES,
+  hasPermissionInList,
+} from '@/constants/permissions';
 import { useUserStore } from '@/store';
 
 import './index.less';
@@ -193,6 +215,13 @@ interface PermissionGroup {
   selectedCount: number;
 }
 
+interface RolePermissionPreset {
+  code: 'super_admin' | 'admin' | 'visitor';
+  label: string;
+  permissions: string[];
+  theme: 'primary' | 'default' | 'danger';
+}
+
 const userStore = useUserStore();
 const loading = ref(false);
 const saving = ref(false);
@@ -204,13 +233,36 @@ const showDangerousOnly = ref(false);
 const roles = ref<RoleRecord[]>([]);
 const permissions = ref<PermissionItem[]>([]);
 const form = reactive<RoleForm>(createDefaultForm());
+const rolePermissionPresets: RolePermissionPreset[] = [
+  {
+    code: 'super_admin',
+    label: BUILTIN_ROLE_LABELS.super_admin,
+    permissions: [AdminPermissions.ALL],
+    theme: 'danger',
+  },
+  {
+    code: 'admin',
+    label: BUILTIN_ROLE_LABELS.admin,
+    permissions: [...ADMIN_DEFAULT_PERMISSION_CODES],
+    theme: 'primary',
+  },
+  {
+    code: 'visitor',
+    label: BUILTIN_ROLE_LABELS.visitor,
+    permissions: [...VISITOR_PERMISSION_CODES],
+    theme: 'default',
+  },
+] as const;
 
 const canManage = computed(() => hasPermission(AdminPermissions.ROLE_MANAGE));
 const isMobile = useMediaQuery('(max-width: 768px)');
 const hasAllPermissionSelected = computed(() => form.permissions.includes(AdminPermissions.ALL));
 const isReadonlySuperRole = computed(() => hasAllPermissionSelected.value);
+const currentRole = computed(() => roles.value.find((item) => String(item.id) === String(form.id)) || null);
+const currentRoleLocked = computed(() => Boolean(currentRole.value?.is_locked || currentRole.value?.is_builtin));
+const canEditCurrentRole = computed(() => canManage.value && !currentRoleLocked.value);
 const selectedPermissionCount = computed(() => (hasAllPermissionSelected.value ? permissions.value.length : form.permissions.length));
-const dialogConfirmBtn = computed(() => (canManage.value ? { content: '保存', theme: 'primary' } : null));
+const dialogConfirmBtn = computed(() => (canEditCurrentRole.value ? { content: '保存', theme: 'primary' } : null));
 const permissionMap = computed(() => new Map(permissions.value.map((item) => [item.key, item])));
 const filteredPermissions = computed(() => {
   const keywordValue = permissionKeyword.value.trim().toLowerCase();
@@ -313,7 +365,9 @@ function rolesMobileActions(row: RoleRecord) {
   const actions = [{ content: canManage.value ? '权限' : '查看', value: 'edit' }];
   if (canManage.value) {
     actions.push({ content: '复制', value: 'copy' });
-    actions.push({ content: '删除', value: 'delete' });
+    if (canDeleteRole(row)) {
+      actions.push({ content: '删除', value: 'delete' });
+    }
   }
   return actions;
 }
@@ -341,6 +395,10 @@ function openEditDialog(row: RoleRecord) {
 async function submitForm() {
   if (!canManage.value) {
     MessagePlugin.warning('当前账号无角色管理权限');
+    return;
+  }
+  if (currentRoleLocked.value) {
+    MessagePlugin.warning('系统默认角色不可直接编辑，请复制后自定义');
     return;
   }
 
@@ -390,6 +448,11 @@ function handleCopy(row: RoleRecord) {
 }
 
 function handleDelete(row: RoleRecord) {
+  if (!canDeleteRole(row)) {
+    MessagePlugin.warning('系统默认角色不可删除');
+    return;
+  }
+
   const dialog = DialogPlugin.confirm({
     header: '删除角色',
     body: `确认删除角色「${row.label || row.name || row.id}」？已分配员工的角色无法删除。`,
@@ -408,16 +471,9 @@ function handleDelete(row: RoleRecord) {
   });
 }
 
-function selectNoDangerousDefaults() {
-  form.permissions = [
-    AdminPermissions.DASHBOARD_VIEW,
-    AdminPermissions.USER_LIST,
-    AdminPermissions.USER_DETAIL,
-    AdminPermissions.TICKET_LIST,
-    AdminPermissions.TICKET_REPLY,
-    AdminPermissions.PRODUCT_LIST,
-    AdminPermissions.CONTENT_LIST,
-  ];
+function applyRolePermissionPreset(preset: RolePermissionPreset) {
+  if (!canEditCurrentRole.value) return;
+  form.permissions = normalizePermissionSelection([...preset.permissions]);
 }
 
 function selectGroupPermissions(group: PermissionGroup) {
@@ -441,14 +497,18 @@ function clearAllPermissions() {
 }
 
 function mergePermissions(keys: string[]) {
-  if (!canManage.value) return;
+  if (!canEditCurrentRole.value) return;
   form.permissions = normalizePermissionSelection([...form.permissions, ...keys]);
 }
 
 function clearPermissions(keys: string[]) {
-  if (!canManage.value) return;
+  if (!canEditCurrentRole.value) return;
   const keySet = new Set(keys);
   form.permissions = form.permissions.filter((key) => !keySet.has(key));
+}
+
+function canDeleteRole(row: RoleRecord) {
+  return row.can_delete !== false && !row.is_locked && !row.is_builtin;
 }
 
 function buildPayload(): RolePayload {
@@ -529,7 +589,7 @@ function confirmAllPermission() {
 
 function hasPermission(permission: string) {
   const userPermissions = userStore.userInfo?.permissions || [];
-  return userPermissions.includes(AdminPermissions.ALL) || userPermissions.includes(permission);
+  return hasPermissionInList(userPermissions, permission);
 }
 
 </script>

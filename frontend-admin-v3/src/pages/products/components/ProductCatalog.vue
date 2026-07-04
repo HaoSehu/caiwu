@@ -418,10 +418,10 @@
                         </t-option>
                       </t-select>
                     </t-form-item>
-                    <t-form-item label="提供商商品" name="supplier_product_id">
+                    <t-form-item label="提供商商品" name="upstream_product_id">
                       <div class="supplier-product-row">
                         <t-cascader
-                        v-model="productForm.supplier_product_id"
+                        v-model="productForm.upstream_product_id"
                         :options="supplierProductCascaderOptions"
                         filterable
                         clearable
@@ -935,7 +935,7 @@ const productForm = reactive({
   auto_setup: 1,
   status: 1,
   supplier_id: '' as number | string,
-  supplier_product_id: '' as number | string,
+  upstream_product_id: '' as number | string,
   config_options: [] as ProductConfigOptionRecord[],
 });
 const configOptionDialogVisible = ref(false);
@@ -1943,6 +1943,7 @@ function handleProductPageChange(pageInfo: PageInfo) {
 async function openProductDialog(row?: ProductRecord) {
   const [detail] = await Promise.all([row?.id ? loadProductDetail(row) : null, ensureProductSupplierOptions()]);
   const source = detail || row;
+  const upstreamBinding = toPlainRecord(source?.upstream_binding);
   editingProduct.value = source || null;
   activeProductDrawerSection.value = 'basic';
   Object.assign(productForm, {
@@ -1956,8 +1957,8 @@ async function openProductDialog(row?: ProductRecord) {
     annually_price: productPricingValue(source, 'annually'),
     auto_setup: Number(source?.auto_setup ?? 1),
     status: Number(source?.status ?? 1),
-    supplier_id: source?.supplier_id || '',
-    supplier_product_id: source?.supplier_product_id || '',
+    supplier_id: upstreamBinding.supplier_id || '',
+    upstream_product_id: upstreamBinding.upstream_product_id || '',
     config_options: normalizeConfigOptions(source?.config_options),
   });
   supplierProductOptions.value = [];
@@ -2050,8 +2051,10 @@ async function submitProduct() {
       auto_setup: productForm.auto_setup,
       status: productForm.status,
       product_type: catalogFilters.product_type,
-      supplier_id: productForm.supplier_id || undefined,
-      supplier_product_id: productForm.supplier_product_id || undefined,
+      upstream_binding: {
+        supplier_id: productForm.supplier_id || undefined,
+        upstream_product_id: productForm.upstream_product_id || undefined,
+      },
       config_options: serializeConfigOptions(productForm.config_options),
     };
     if (editingProduct.value?.id) {
@@ -2332,15 +2335,15 @@ function removeConfigOption(index: number) {
 
 async function pullProductConfigTemplate() {
   const supplierId = productForm.supplier_id;
-  const supplierProductId = productForm.supplier_product_id;
-  if (!supplierId || !supplierProductId) {
+  const upstreamProductId = productForm.upstream_product_id;
+  if (!supplierId || !upstreamProductId) {
     MessagePlugin.warning('请先绑定提供商和提供商商品 ID');
     return;
   }
 
   configTemplateLoading.value = true;
   try {
-    const response = await supplierApi.productConfigTemplate(supplierId, supplierProductId);
+    const response = await supplierApi.productConfigTemplate(supplierId, upstreamProductId);
     const options = Array.isArray(response.config_options) ? response.config_options : [];
     productForm.config_options = normalizeConfigOptions(options);
     MessagePlugin.success('配置项模板已拉取');
@@ -2537,9 +2540,10 @@ function supplierOptionLabel(row: SupplierRecord) {
 }
 
 function supplierInterfaceTypeLabel(row: SupplierRecord) {
-  const rawType = String(row.interface_type || '').trim();
+  const upstreamBinding = toPlainRecord(row.upstream_binding);
+  const rawType = String(upstreamBinding.provider_key || row.provider_key || '').trim();
   if (rawType && providerTypeFallbackLabels[rawType]) return providerTypeFallbackLabels[rawType];
-  return row.interface_type_label || providerTypeLabel(rawType, providerTypeOptions.value);
+  return row.provider_label || providerTypeLabel(rawType, providerTypeOptions.value);
 }
 
 function supplierProductOptionLabel(row: SupplierBatchProduct) {
@@ -2553,7 +2557,7 @@ function canSupplierBatchConnect(row: SupplierRecord) {
 
 function handleProductSupplierChange(value: string | number) {
   productForm.supplier_id = value || '';
-  productForm.supplier_product_id = '';
+  productForm.upstream_product_id = '';
   supplierProductOptions.value = [];
   if (value) {
     void loadProductSupplierProducts(value, true);
@@ -2574,12 +2578,12 @@ async function loadProductSupplierProducts(supplierId: string | number, notify =
   try {
     const response = await supplierApi.products(supplierId, { silent: true });
     supplierProductOptions.value = buildSupplierBatchProducts(response);
-    if (productForm.supplier_product_id) {
-      const hasCurrent = supplierProductOptions.value.some((item) => String(item.id) === String(productForm.supplier_product_id));
+    if (productForm.upstream_product_id) {
+      const hasCurrent = supplierProductOptions.value.some((item) => String(item.id) === String(productForm.upstream_product_id));
       if (!hasCurrent) {
         supplierProductOptions.value.unshift({
-          id: Number(productForm.supplier_product_id),
-          name: `已绑定商品 #${productForm.supplier_product_id}`,
+          id: Number(productForm.upstream_product_id),
+          name: `已绑定商品 #${productForm.upstream_product_id}`,
           type_label: '当前绑定',
           remote_group_name: '',
           is_connected: true,

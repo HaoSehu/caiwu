@@ -7,6 +7,7 @@ namespace App\Services\ClientServiceConsole;
 use App\Exceptions\BusinessException;
 use App\Models\Service;
 use App\Models\User;
+use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\System\OperationLogService;
 use App\Support\CacheKey;
 use Illuminate\Support\Facades\Cache;
@@ -32,7 +33,7 @@ class ServiceVncService
     public function getVncUrlForUser(User $user, int $serviceId, array $context = []): array
     {
         $service = $this->detailService->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -268,7 +269,9 @@ class ServiceVncService
 
     private function withCachedVncCredentials(Service $service, array $vncParams): array
     {
-        $provisionData = (array) ($service->provision_data ?? []);
+        $legacy = (array) ($service->provision_data ?? []);
+        $projection = app(PluginBindingResolver::class)->serviceProvisionProjection($service, includeSecrets: true);
+        $provisionData = $projection === [] ? $legacy : array_replace($legacy, $projection);
         $cachedConnection = $this->transformService->readCachedConnection($provisionData);
 
         if (trim((string) ($vncParams['username'] ?? '')) === '') {

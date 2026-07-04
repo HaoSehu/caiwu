@@ -7,11 +7,12 @@ namespace App\Services\ClientServiceConsole\Concerns;
 use App\Models\Service;
 use App\Models\Supplier;
 use App\Models\User;
-use App\Services\Upstream\ProviderKey;
+use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Support\SensitiveDataSanitizer;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 trait HandlesClientServiceConsoleMonitoring
 {
@@ -22,7 +23,7 @@ trait HandlesClientServiceConsoleMonitoring
     public function getMonitorForUser(User $user, int $serviceId, array $filters = []): array
     {
         $service = $this->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -175,7 +176,7 @@ trait HandlesClientServiceConsoleMonitoring
     public function getMonitorBatchForUser(User $user, int $serviceId, array $filters = []): array
     {
         $service = $this->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -1387,16 +1388,19 @@ trait HandlesClientServiceConsoleMonitoring
     private function buildMonitorChartCacheKey(Supplier $supplier, int $hostId, string $type, int $start, int $end): string
     {
         $normalizedRange = $this->normalizeMonitorCacheRange($start, $end);
-        $providerKey = trim((string) ($supplier->interface_type ?? '')) ?: ProviderKey::HOSTING_PANEL_API;
+        $providerKey = app(PluginBindingResolver::class)->providerKeyForSupplier($supplier);
+        $providerKey = trim((string) $providerKey) !== '' ? trim((string) $providerKey) : 'unbound';
 
         return "upstream:{$providerKey}:host_chart:".self::MONITOR_CACHE_SCHEMA_VERSION.":{$supplier->id}:{$hostId}:{$type}:{$normalizedRange['start']}:{$normalizedRange['end']}";
     }
 
-    private function buildLegacyMonitorChartCacheKey(Supplier $supplier, int $hostId, string $type, int $start, int $end): string
+    private function hasMonitorSupplierBindingTable(): bool
     {
-        $normalizedRange = $this->normalizeMonitorCacheRange($start, $end);
-
-        return 'upstream:'.ProviderKey::HOSTING_PANEL_API.':host_chart:'.self::MONITOR_CACHE_SCHEMA_VERSION.":{$supplier->id}:{$hostId}:{$type}:{$normalizedRange['start']}:{$normalizedRange['end']}";
+        try {
+            return Schema::hasTable('supplier_plugin_bindings');
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     private function normalizeMonitorResponseCachePayload(array $payload): array
@@ -1435,7 +1439,6 @@ trait HandlesClientServiceConsoleMonitoring
 
     private function getCachedMonitorChart(Supplier $supplier, int $hostId, string $type, int $start, int $end): ?array
     {
-        $primaryCacheKey = $this->buildMonitorChartCacheKey($supplier, $hostId, $type, $start, $end);
         $cacheKeys = $this->buildMonitorChartCacheLookupKeys($supplier, $hostId, $type, $start, $end);
         $cachedValues = Cache::many($cacheKeys);
 
@@ -1444,10 +1447,6 @@ trait HandlesClientServiceConsoleMonitoring
 
             if (! is_array($cached) || ! is_array($cached['chart'] ?? null)) {
                 continue;
-            }
-
-            if ($cacheKey !== $primaryCacheKey) {
-                Cache::put($primaryCacheKey, $cached, now()->addSeconds(self::MONITOR_CHART_CACHE_TTL_SECONDS));
             }
 
             return [
@@ -1466,12 +1465,10 @@ trait HandlesClientServiceConsoleMonitoring
         }
 
         $keyMap = [];
-        $primaryKeyMap = [];
         $allCacheKeys = [];
         foreach ($types as $type) {
             $lookupKeys = $this->buildMonitorChartCacheLookupKeys($supplier, $hostId, (string) $type, $start, $end);
             $keyMap[(string) $type] = $lookupKeys;
-            $primaryKeyMap[(string) $type] = $this->buildMonitorChartCacheKey($supplier, $hostId, (string) $type, $start, $end);
             $allCacheKeys = array_merge($allCacheKeys, $lookupKeys);
         }
 
@@ -1483,11 +1480,6 @@ trait HandlesClientServiceConsoleMonitoring
                 $cached = $cachedValues[$cacheKey] ?? null;
                 if (! is_array($cached) || ! is_array($cached['chart'] ?? null)) {
                     continue;
-                }
-
-                $primaryCacheKey = $primaryKeyMap[$type] ?? '';
-                if ($primaryCacheKey !== '' && $cacheKey !== $primaryCacheKey) {
-                    Cache::put($primaryCacheKey, $cached, now()->addSeconds(self::MONITOR_CHART_CACHE_TTL_SECONDS));
                 }
 
                 $result[$type] = [
@@ -1518,7 +1510,6 @@ trait HandlesClientServiceConsoleMonitoring
         foreach ($ranges as $range) {
             foreach ([
                 $this->buildMonitorChartCacheKey($supplier, $hostId, $type, $range['start'], $range['end']),
-                $this->buildLegacyMonitorChartCacheKey($supplier, $hostId, $type, $range['start'], $range['end']),
             ] as $cacheKey) {
                 if (! in_array($cacheKey, $keys, true)) {
                     $keys[] = $cacheKey;

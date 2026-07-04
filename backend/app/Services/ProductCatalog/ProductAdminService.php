@@ -13,6 +13,8 @@ use App\Models\Service;
 use App\Models\Supplier;
 use App\Models\ThirdProductGroup;
 use App\Models\User;
+use App\Services\Integrations\Plugins\PluginBindingResolver;
+use App\Services\Integrations\Plugins\UpstreamBindingWriter;
 use App\Services\ProductCatalog\Concerns\HandlesProductCatalogHelpers;
 use App\Services\System\OperationLogService;
 use App\Services\System\SettingService;
@@ -20,6 +22,7 @@ use App\Support\ProductProvisionHostname;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class ProductAdminService
 {
@@ -32,6 +35,7 @@ class ProductAdminService
         private readonly OperationLogService $operationLogService,
         ?ProductGroupHierarchyService $hierarchyService = null,
         private readonly ?ProductDisplayNameResolver $productDisplayNameResolver = null,
+        private ?UpstreamBindingWriter $upstreamBindingWriter = null,
     ) {
         $this->hierarchyService = $hierarchyService ?? app(ProductGroupHierarchyService::class);
     }
@@ -51,10 +55,7 @@ class ProductAdminService
                     'stock',
                     'status',
                     'sort_order',
-                    'provision_module',
                     'auto_setup',
-                    'supplier_id',
-                    'supplier_product_id',
                     'deleted_at',
                     ...Product::optionalSelectColumns([
                         'custom_display_name',
@@ -271,6 +272,11 @@ class ProductAdminService
             $product = Product::withoutEvents(
                 fn () => Product::query()->create($prepared['base'])
             );
+            $this->upstreamBindingWriter()->syncProductBinding(
+                $product,
+                $prepared['binding_supplier'],
+                $prepared['upstream_product_id'],
+            );
 
             return $this->loadProductSnapshot($product);
         });
@@ -287,6 +293,12 @@ class ProductAdminService
                 'id' => (int) $product->id,
             ]));
             Product::withoutEvents(fn () => $product->update($prepared['base']));
+            $product->refresh()->loadMissing('supplier');
+            $this->upstreamBindingWriter()->syncProductBinding(
+                $product,
+                $prepared['binding_supplier'],
+                $prepared['upstream_product_id'],
+            );
 
             return $this->loadProductSnapshot($product);
         });
@@ -509,10 +521,12 @@ class ProductAdminService
                     if ($existing instanceof Product) {
                         Product::withoutEvents(fn () => $existing->forceFill($payload)->save());
                         $product = $existing->refresh();
+                        $this->syncSplitProductBinding($source, $product);
                         $action = 'updated';
                         $result['updated_count']++;
                     } else {
                         $product = Product::withoutEvents(fn () => Product::query()->create($payload));
+                        $this->syncSplitProductBinding($source, $product);
                         $action = 'created';
                         $result['created_count']++;
                     }
@@ -684,19 +698,30 @@ class ProductAdminService
     private function applyAdminProductFilters(Builder $query, array $filters): Builder
     {
         $lifecycleStatus = $this->normalizeLifecycleStatus($filters['lifecycle_status'] ?? null);
+        $hasProductUpstreamBindings = Schema::hasTable('product_upstream_bindings');
 
         return $query
-            ->when(! empty($filters['keyword']), function (Builder $builder) use ($filters, $lifecycleStatus) {
+            ->when(! empty($filters['keyword']), function (Builder $builder) use ($filters, $lifecycleStatus, $hasProductUpstreamBindings) {
                 $keyword = trim((string) $filters['keyword']);
                 $matchedProductIds = $this->resolveDisplayNameMatchedProductIds($keyword, $lifecycleStatus);
 
-                $builder->where(function (Builder $keywordQuery) use ($keyword, $matchedProductIds) {
-                    $keywordQuery
-                        ->where('provision_module', 'like', "%{$keyword}%");
+                $builder->where(function (Builder $keywordQuery) use ($keyword, $matchedProductIds, $hasProductUpstreamBindings) {
+                    $keywordQuery->whereIn('products.id', $matchedProductIds !== [] ? $matchedProductIds : [-1]);
 
-                    if ($matchedProductIds !== []) {
-                        $keywordQuery->orWhereIn('products.id', $matchedProductIds);
+                    if ($hasProductUpstreamBindings) {
+                        $keywordQuery->orWhereExists(function ($query) use ($keyword): void {
+                            $query
+                                ->select(DB::raw(1))
+                                ->from('product_upstream_bindings as pub')
+                                ->whereColumn('pub.product_id', 'products.id')
+                                ->where(function ($bindingQuery) use ($keyword): void {
+                                    $bindingQuery
+                                        ->where('pub.provider_key', 'like', "%{$keyword}%")
+                                        ->orWhere('pub.upstream_product_id', 'like', "%{$keyword}%");
+                                });
+                        });
                     }
+
                 });
             })
             ->when(
@@ -866,10 +891,7 @@ class ProductAdminService
             'stock' => (int) ($source->stock ?? -1),
             'status' => (int) ($source->status ?? 1),
             'sort_order' => (int) ($source->sort_order ?? 0),
-            'provision_module' => $source->provision_module,
             'auto_setup' => (int) ($source->auto_setup ?? 0),
-            'supplier_id' => $source->supplier_id,
-            'supplier_product_id' => $source->supplier_product_id,
         ];
     }
 
@@ -896,6 +918,19 @@ class ProductAdminService
         }
 
         return null;
+    }
+
+    private function syncSplitProductBinding(Product $source, Product $target): void
+    {
+        $resolver = app(PluginBindingResolver::class);
+        $supplier = $resolver->supplierForProduct($source);
+        $upstreamProductId = $resolver->upstreamProductIdForProduct($source);
+
+        if (! $supplier instanceof Supplier || $upstreamProductId === null) {
+            return;
+        }
+
+        $this->upstreamBindingWriter()->syncProductBinding($target, $supplier, $upstreamProductId);
     }
 
     private function isSplitSourceVariant(Product $source, array $variant): bool
@@ -1476,23 +1511,28 @@ class ProductAdminService
         $pricing = $this->normalizePricing($data['pricing'] ?? []);
         throw_if($pricing === [], new BusinessException('请至少配置一个计费周期价格'));
 
-        $supplierId = $this->normalizeNullableInt($data['supplier_id'] ?? null);
-        $supplierProductId = $this->normalizeNullableInt($data['supplier_product_id'] ?? null);
-        $provisionModule = $this->normalizeNullableString($data['provision_module'] ?? null);
+        $upstreamBinding = is_array($data['upstream_binding'] ?? null) ? $data['upstream_binding'] : [];
+        $supplierId = $this->normalizeNullableInt($upstreamBinding['supplier_id'] ?? null);
+        $upstreamProductId = $this->normalizeNullableString(
+            $upstreamBinding['upstream_product_id'] ?? null
+        );
         $supplier = null;
 
-        if ($supplierProductId !== null && $supplierId === null) {
+        if ($upstreamProductId !== null && $supplierId === null) {
             throw new BusinessException('选择供应商商品前请先选择供应商');
         }
 
         if ($supplierId !== null) {
             $supplier = Supplier::query()->enabled()->find($supplierId);
             throw_if(! $supplier, new BusinessException('供应商接口不存在或已停用'));
-            $provisionModule = $this->normalizeNullableString($supplier->interface_type);
+            throw_if(
+                app(PluginBindingResolver::class)->providerKeyForSupplier($supplier) === null,
+                new BusinessException('供应商未配置插件绑定，无法绑定上游商品')
+            );
         }
 
         if ($supplierId === null) {
-            $supplierProductId = null;
+            $upstreamProductId = null;
         }
 
         $derivedDisplayName = $this->deriveInternalProductName($data);
@@ -1512,15 +1552,14 @@ class ProductAdminService
                 'stock' => (int) ($data['stock'] ?? -1),
                 'status' => (int) (($data['status'] ?? 1) ? 1 : 0),
                 'sort_order' => max((int) ($data['sort_order'] ?? 0), 0),
-                'provision_module' => $provisionModule,
                 'auto_setup' => (int) (($data['auto_setup'] ?? 0) ? 1 : 0),
-                'supplier_id' => $supplierId,
-                'supplier_product_id' => $supplierProductId,
             ],
             'category' => $targetHierarchy,
             'pricing' => $pricing,
             'config_options' => $this->normalizeConfigOptions($data['config_options'] ?? []),
             'purchase_requires' => $this->normalizePurchaseRequires($data['purchase_requires'] ?? []),
+            'binding_supplier' => $supplier,
+            'upstream_product_id' => $upstreamProductId,
         ];
     }
 
@@ -1749,5 +1788,10 @@ class ProductAdminService
     private function resolveProductDisplayNameResolver(): ProductDisplayNameResolver
     {
         return $this->productDisplayNameResolver ?? new ProductDisplayNameResolver;
+    }
+
+    private function upstreamBindingWriter(): UpstreamBindingWriter
+    {
+        return $this->upstreamBindingWriter ??= app(UpstreamBindingWriter::class);
     }
 }

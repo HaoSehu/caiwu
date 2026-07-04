@@ -7,12 +7,18 @@ namespace App\Services\Upstream;
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\Supplier;
+use App\Services\Integrations\Plugins\PluginBindingResolver;
 
 final class ProviderResolver
 {
+    private readonly PluginBindingResolver $bindingResolver;
+
     public function __construct(
         private readonly ProviderRegistry $registry,
-    ) {}
+        ?PluginBindingResolver $bindingResolver = null,
+    ) {
+        $this->bindingResolver = $bindingResolver ?? new PluginBindingResolver;
+    }
 
     public function normalizeKey(string $raw): ?string
     {
@@ -26,29 +32,23 @@ final class ProviderResolver
 
     public function resolveForSupplier(Supplier $supplier): ResolvedProvider
     {
-        return $this->resolveByRawKey((string) ($supplier->interface_type ?? ''));
+        return $this->resolveByRawKey(
+            $this->bindingResolver->providerKeyForSupplier($supplier)
+        );
     }
 
     public function resolveForProduct(Product $product): ResolvedProvider
     {
-        $product->loadMissing('supplier');
-
         return $this->resolveByRawKey(
-            (string) ($product->provision_module ?: ($product->supplier?->interface_type ?? ''))
+            $this->bindingResolver->providerKeyForProduct($product)
         );
     }
 
     public function resolveForService(Service $service): ResolvedProvider
     {
-        $service->loadMissing('product.supplier');
-
-        $provisionData = is_array($service->provision_data ?? null) ? $service->provision_data : [];
-        $rawKey = (string) (
-            $provisionData['provider']
-            ?? ($service->product?->provision_module ?: ($service->product?->supplier?->interface_type ?? ''))
+        return $this->resolveByRawKey(
+            $this->bindingResolver->providerKeyForService($service)
         );
-
-        return $this->resolveByRawKey($rawKey);
     }
 
     public function resolveByRawKey(?string $rawKey): ResolvedProvider

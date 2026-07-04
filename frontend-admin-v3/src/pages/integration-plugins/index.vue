@@ -10,7 +10,7 @@
             <template #icon><refresh-icon /></template>
             刷新
           </t-button>
-          <t-button theme="primary" :loading="scanning" @click="scanPlugins">
+          <t-button v-if="canManagePlugins" theme="primary" :loading="scanning" @click="scanPlugins">
             扫描插件
           </t-button>
         </t-space>
@@ -39,17 +39,23 @@
               <span>{{ domainLabel(plugin.domain) }}</span>
               <span>v{{ plugin.version || '-' }}</span>
             </div>
+            <div class="plugin-observability">
+              <t-tag size="small" variant="light">{{ bindingCountText(plugin) }}</t-tag>
+              <t-tag v-if="plugin.latest_runtime_log" size="small" variant="light" :theme="runtimeStatusTheme(plugin)">
+                {{ latestRuntimeText(plugin) }}
+              </t-tag>
+            </div>
           </div>
         </div>
 
         <div class="plugin-actions">
-          <t-button v-if="!plugin.is_installed" theme="primary" :loading="actionLoading === actionKey(plugin, 'install')" @click="installPlugin(plugin)">
+          <t-button v-if="!plugin.is_installed && canManagePlugins" theme="primary" :loading="actionLoading === actionKey(plugin, 'install')" @click="installPlugin(plugin)">
             安装
           </t-button>
           <template v-else>
-            <t-button variant="outline" @click="openConfig(plugin)">管理</t-button>
+            <t-button variant="outline" @click="openConfig(plugin)">{{ canManagePlugins ? '管理' : '查看' }}</t-button>
             <t-button
-              v-if="plugin.is_enabled"
+              v-if="plugin.is_enabled && canManagePlugins"
               theme="warning"
               variant="outline"
               :loading="actionLoading === actionKey(plugin, 'disable')"
@@ -58,7 +64,7 @@
               停用
             </t-button>
             <t-button
-              v-else
+              v-else-if="canManagePlugins"
               theme="success"
               variant="outline"
               :loading="actionLoading === actionKey(plugin, 'enable')"
@@ -66,11 +72,14 @@
             >
               启用
             </t-button>
-            <t-button variant="text" :loading="actionLoading === actionKey(plugin, 'health')" @click="healthCheck(plugin)">
+            <t-button v-if="canTestPlugins" variant="text" :loading="actionLoading === actionKey(plugin, 'health')" @click="healthCheck(plugin)">
               检测
             </t-button>
-            <t-button theme="danger" variant="text" :loading="actionLoading === actionKey(plugin, 'delete')" @click="deletePlugin(plugin)">
-              删除
+            <t-button v-if="plugin.id" variant="text" @click="openRuntimeLogs(plugin)">
+              日志
+            </t-button>
+            <t-button v-if="canManagePlugins" theme="danger" variant="text" :loading="actionLoading === actionKey(plugin, 'delete')" @click="deletePlugin(plugin)">
+              {{ deleteButtonText(plugin) }}
             </t-button>
           </template>
         </div>
@@ -81,7 +90,7 @@
       v-model:visible="configVisible"
       size="560px"
       :header="currentPlugin ? `${currentPlugin.name} 管理` : '插件管理'"
-      :confirm-btn="{ content: '保存配置', loading: savingConfig }"
+      :confirm-btn="canManagePlugins ? { content: '保存配置', loading: savingConfig } : null"
       cancel-btn="关闭"
       @confirm="saveConfig"
     >
@@ -105,21 +114,21 @@
               :message="field.content || field.description || fieldLabel(field)"
             />
             <t-form-item v-else :label="fieldLabel(field)" :class="fieldWidthClass(field)">
-              <t-switch v-if="field.type === 'switch'" v-model="configForm[field.key]" :disabled="field.disabled" />
+              <t-switch v-if="field.type === 'switch'" v-model="configForm[field.key]" :disabled="!canManagePlugins || field.disabled" />
               <t-select
                 v-else-if="field.type === 'select' || field.type === 'multi_select'"
                 v-model="configForm[field.key]"
                 :multiple="field.type === 'multi_select'"
                 :placeholder="fieldPlaceholder(field)"
-                :disabled="field.disabled"
+                :disabled="!canManagePlugins || field.disabled"
                 clearable
               >
                 <t-option v-for="option in fieldOptions(field)" :key="String(option.value)" :label="option.label" :value="option.value" />
               </t-select>
-              <t-radio-group v-else-if="field.type === 'radio'" v-model="configForm[field.key]" :disabled="field.disabled">
+              <t-radio-group v-else-if="field.type === 'radio'" v-model="configForm[field.key]" :disabled="!canManagePlugins || field.disabled">
                 <t-radio-button v-for="option in fieldOptions(field)" :key="String(option.value)" :value="option.value" :label="option.label" />
               </t-radio-group>
-              <t-checkbox-group v-else-if="field.type === 'checkbox'" v-model="configForm[field.key]" :disabled="field.disabled">
+              <t-checkbox-group v-else-if="field.type === 'checkbox'" v-model="configForm[field.key]" :disabled="!canManagePlugins || field.disabled">
                 <t-checkbox v-for="option in fieldOptions(field)" :key="String(option.value)" :value="option.value">
                   {{ option.label }}
                 </t-checkbox>
@@ -131,7 +140,7 @@
                 :max="field.max"
                 :step="field.step"
                 :placeholder="fieldPlaceholder(field)"
-                :disabled="field.disabled"
+                :disabled="!canManagePlugins || field.disabled"
                 theme="column"
               />
               <t-input v-else-if="field.type === 'readonly'" :model-value="readonlyValue(field)" readonly />
@@ -152,7 +161,7 @@
                         <span>{{ account.password_configured || account.password ? '密码已配置' : '密码未配置' }}</span>
                       </div>
                     </div>
-                    <t-dropdown trigger="click" placement="bottom-right" :options="smtpAccountActionOptions(account)" @click="(data: { value: unknown }) => handleSmtpAccountAction(String(data.value), index)">
+                    <t-dropdown v-if="smtpAccountActionOptions(account).length" trigger="click" placement="bottom-right" :options="smtpAccountActionOptions(account)" @click="(data: { value: unknown }) => handleSmtpAccountAction(String(data.value), index)">
                       <t-button variant="text" shape="square">
                         <more-icon />
                       </t-button>
@@ -160,31 +169,59 @@
                   </div>
                 </div>
                 <t-empty v-else description="暂无 SMTP 账号" />
-                <t-button variant="outline" class="smtp-account-add" @click="openSmtpAccountDialog()">
+                <t-button v-if="canManagePlugins" variant="outline" class="smtp-account-add" @click="openSmtpAccountDialog()">
                   添加账号
                 </t-button>
               </div>
+              <secret-input
+                v-else-if="isSecretTextareaField(field)"
+                v-model="configForm[field.key]"
+                multiline
+                :autosize="{ minRows: textareaMinRows(field), maxRows: 10 }"
+                :has-value="fieldHasSecretValue(field)"
+                :placeholder="fieldPlaceholder(field)"
+                :disabled="!canManagePlugins || field.disabled"
+                :reset-key="`plugin:${currentPlugin?.id || 'new'}:${field.key}`"
+                :can-reveal="canRevealPluginSecrets"
+                :reveal="() => revealPluginSecret(field)"
+                @edited-change="(value: boolean) => (editedSecretKeys[field.key] = value)"
+                @reveal-error="(error: unknown) => MessagePlugin.error(errorMessage(error, '读取密钥失败'))"
+              />
               <t-textarea
                 v-else-if="field.type === 'textarea' || field.type === 'json'"
                 v-model="configForm[field.key]"
                 :autosize="{ minRows: textareaMinRows(field), maxRows: 10 }"
                 :placeholder="fieldPlaceholder(field)"
-                :disabled="field.disabled"
+                :disabled="!canManagePlugins || field.disabled"
               />
+              <t-input
+                v-else-if="isSecretInputField(field)"
+                :model-value="secretInputDisplayValue(field)"
+                :type="secretInputType(field)"
+                :placeholder="fieldPlaceholder(field)"
+                :disabled="!canManagePlugins || field.disabled"
+                @focus="handleSecretFocus(field)"
+                @update:model-value="(value: string) => handleSecretInput(field, value)"
+              >
+                <template v-if="fieldHasSecretValue(field) && canRevealPluginSecrets" #suffix-icon>
+                  <span class="plugin-secret-toggle" @click.stop="toggleSecretVisibility(field)">
+                    <browse-off-icon v-if="isSecretVisible(field)" />
+                    <browse-icon v-else />
+                  </span>
+                </template>
+              </t-input>
               <t-input
                 v-else
                 v-model="configForm[field.key]"
                 :type="inputType(field)"
                 :placeholder="fieldPlaceholder(field)"
-                :disabled="field.disabled"
+                :disabled="!canManagePlugins || field.disabled"
               />
-              <p v-if="field.description" class="plugin-field-description">{{ field.description }}</p>
-              <p v-if="fieldHasSecretValue(field) && !isSmtpAccountsField(field)" class="plugin-secret-hint">已配置，留空表示不修改；填写新值会覆盖原配置。</p>
             </t-form-item>
           </template>
         </t-form>
 
-        <div v-if="currentPlugin.domain === 'sms'" class="plugin-test-section">
+        <div v-if="canTestPlugins && currentPlugin.domain === 'sms'" class="plugin-test-section">
           <t-divider />
           <div class="plugin-test-section__header">
             <strong>发送测试短信</strong>
@@ -218,7 +255,18 @@
           <t-input v-model="smtpAccountForm.username" placeholder="请输入账号" />
         </t-form-item>
         <t-form-item label="密码">
-          <t-input v-model="smtpAccountForm.password" type="password" :placeholder="editingSmtpAccountIndex >= 0 ? '已配置，留空表示不修改' : '请输入密码'" />
+          <secret-input
+            v-if="editingSmtpAccountIndex >= 0 && smtpAccountForm.password_configured"
+            v-model="smtpAccountForm.password"
+            :has-value="smtpAccountForm.password_configured"
+            placeholder="已配置，留空表示不修改"
+            :reset-key="`smtp:${currentPlugin?.id || 'new'}:${smtpAccountForm.__index ?? editingSmtpAccountIndex}`"
+            :can-reveal="canRevealPluginSecrets"
+            :reveal="revealSmtpAccountPassword"
+            @edited-change="(value: boolean) => (smtpAccountPasswordEdited = value)"
+            @reveal-error="(error: unknown) => MessagePlugin.error(errorMessage(error, '读取 SMTP 密码失败'))"
+          />
+          <t-input v-else v-model="smtpAccountForm.password" type="password" :placeholder="editingSmtpAccountIndex >= 0 ? '已配置，留空表示不修改' : '请输入密码'" />
         </t-form-item>
         <t-form-item label="发件名称">
           <t-input v-model="smtpAccountForm.from_name" placeholder="请输入发件名称" />
@@ -244,14 +292,14 @@
       @confirm="sendTestEmail"
     >
       <t-form label-align="top" class="email-test-form">
-        <t-form-item label="收件人邮箱">
-          <t-input v-model="emailTestForm.to" type="email" placeholder="请输入收件人邮箱" />
+        <t-form-item label="收件人邮箱" :status="emailTestErrors.to ? 'error' : undefined" :help="emailTestErrors.to">
+          <t-input v-model="emailTestForm.to" placeholder="请输入收件人邮箱" @change="clearEmailTestError('to')" />
         </t-form-item>
-        <t-form-item label="邮件主题">
-          <t-input v-model="emailTestForm.subject" placeholder="请输入邮件主题" />
+        <t-form-item label="邮件主题" :status="emailTestErrors.subject ? 'error' : undefined" :help="emailTestErrors.subject">
+          <t-input v-model="emailTestForm.subject" placeholder="请输入邮件主题" @change="clearEmailTestError('subject')" />
         </t-form-item>
-        <t-form-item label="邮件正文（可选）">
-          <t-textarea v-model="emailTestForm.body" placeholder="可选邮件正文" :autosize="{ minRows: 3, maxRows: 8 }" />
+        <t-form-item label="邮件正文（可选）" :status="emailTestErrors.body ? 'error' : undefined" :help="emailTestErrors.body">
+          <t-textarea v-model="emailTestForm.body" placeholder="可选邮件正文" :autosize="{ minRows: 3, maxRows: 8 }" @change="clearEmailTestError('body')" />
         </t-form-item>
       </t-form>
     </t-dialog>
@@ -260,13 +308,19 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { MessagePlugin } from 'tdesign-vue-next';
-import { MoreIcon, RefreshIcon } from 'tdesign-icons-vue-next';
+import { BrowseIcon, BrowseOffIcon, MoreIcon, RefreshIcon } from 'tdesign-icons-vue-next';
 
+import SecretInput from '@/components/secret-input/index.vue';
 import { pluginsApi, type IntegrationPluginConfigSchema, type IntegrationPluginDomain, type IntegrationPluginRecord } from '@/api/admin/plugins';
+import { AdminPermissions } from '@/constants/permissions';
+import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
 
 import './index.less';
+
+const router = useRouter();
 
 interface SmtpAccountForm {
   __index: number | null;
@@ -281,6 +335,7 @@ interface SmtpAccountForm {
 }
 
 const domainTabs: Array<{ value: IntegrationPluginDomain; label: string }> = [
+  { value: 'captcha', label: '人机验证' },
   { value: 'verification', label: '实名认证' },
   { value: 'payment', label: '支付渠道' },
   { value: 'mail', label: '邮件发送' },
@@ -288,7 +343,7 @@ const domainTabs: Array<{ value: IntegrationPluginDomain; label: string }> = [
   { value: 'upstream', label: '上游开通' },
 ];
 
-const activeDomain = ref<IntegrationPluginDomain>('verification');
+const activeDomain = ref<IntegrationPluginDomain>('captcha');
 const plugins = ref<IntegrationPluginRecord[]>([]);
 const loading = ref(false);
 const scanning = ref(false);
@@ -319,9 +374,24 @@ const emailTestVisible = ref(false);
 const emailTesting = ref(false);
 const testingAccountIndex = ref(-1);
 const emailTestForm = reactive({ to: '', subject: 'SMTP 发送测试', body: '' });
+const emailTestErrors = reactive<Record<'to' | 'subject' | 'body', string>>({
+  to: '',
+  subject: '',
+  body: '',
+});
+const canManagePlugins = computed(() => hasAdminPermission(AdminPermissions.INTEGRATION_PLUGIN_MANAGE));
+const canTestPlugins = computed(() => hasAdminPermission(AdminPermissions.INTEGRATION_PLUGIN_TEST));
+const canRevealPluginSecrets = computed(() => hasAdminPermission(AdminPermissions.INTEGRATION_PLUGIN_SECRET_REVEAL));
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const smsTestPhone = ref('');
 const smsTesting = ref(false);
+const smtpAccountPasswordEdited = ref(false);
+const MASKED_SECRET_VALUE = '********';
+const visibleSecretKeys = reactive<Record<string, boolean>>({});
+const loadedSecretValues = reactive<Record<string, string>>({});
+const editedSecretKeys = reactive<Record<string, boolean>>({});
+const loadingSecretKeys = reactive<Record<string, boolean>>({});
 
 onMounted(loadPlugins);
 
@@ -343,6 +413,11 @@ async function loadPlugins() {
 }
 
 async function scanPlugins() {
+  if (!canManagePlugins.value) {
+    MessagePlugin.warning('当前账号无插件管理权限');
+    return;
+  }
+
   scanning.value = true;
   try {
     const response = await pluginsApi.scan({ domain: activeDomain.value });
@@ -356,6 +431,8 @@ async function scanPlugins() {
 }
 
 async function installPlugin(plugin: IntegrationPluginRecord) {
+  if (!canManagePlugins.value) return;
+
   await runAction(plugin, 'install', async () => {
     const installed = await pluginsApi.install({ domain: plugin.domain, slug: plugin.slug });
     MessagePlugin.success('插件安装成功');
@@ -365,6 +442,7 @@ async function installPlugin(plugin: IntegrationPluginRecord) {
 }
 
 async function enablePlugin(plugin: IntegrationPluginRecord) {
+  if (!canManagePlugins.value) return;
   if (!plugin.id) return;
   await runAction(plugin, 'enable', async () => {
     await pluginsApi.enable(plugin.id as string | number);
@@ -374,6 +452,7 @@ async function enablePlugin(plugin: IntegrationPluginRecord) {
 }
 
 async function disablePlugin(plugin: IntegrationPluginRecord) {
+  if (!canManagePlugins.value) return;
   if (!plugin.id) return;
   await runAction(plugin, 'disable', async () => {
     await pluginsApi.disable(plugin.id as string | number);
@@ -383,18 +462,25 @@ async function disablePlugin(plugin: IntegrationPluginRecord) {
 }
 
 async function deletePlugin(plugin: IntegrationPluginRecord) {
+  if (!canManagePlugins.value) return;
   if (!plugin.id) return;
-  if (!window.confirm(`确定删除插件「${plugin.name}」的安装记录和配置吗？插件目录文件不会被删除。`)) return;
+  const archiveMode = isArchiveDeleteMode(plugin);
+  const actionText = archiveMode ? '归档停用' : '删除';
+  const confirmText = archiveMode
+    ? `插件「${plugin.name}」已有业务引用，将改为归档停用并保留记录。确定继续吗？`
+    : `确定删除插件「${plugin.name}」的安装记录和配置吗？插件目录文件不会被删除。`;
+  if (!window.confirm(confirmText)) return;
 
   await runAction(plugin, 'delete', async () => {
     await pluginsApi.remove(plugin.id as string | number);
-    MessagePlugin.success('插件已删除');
+    MessagePlugin.success(`插件已${actionText}`);
     await loadPlugins();
     if (currentPlugin.value?.id === plugin.id) configVisible.value = false;
   });
 }
 
 async function healthCheck(plugin: IntegrationPluginRecord) {
+  if (!canTestPlugins.value) return;
   if (!plugin.id) return;
   await runAction(plugin, 'health', async () => {
     const result = await pluginsApi.healthCheck(plugin.id as string | number);
@@ -415,6 +501,11 @@ async function openConfig(plugin: IntegrationPluginRecord) {
 }
 
 async function saveConfig() {
+  if (!canManagePlugins.value) {
+    MessagePlugin.warning('当前账号无插件管理权限');
+    return;
+  }
+
   if (!currentPlugin.value?.id) return;
   savingConfig.value = true;
   try {
@@ -444,6 +535,7 @@ async function runAction(plugin: IntegrationPluginRecord, action: string, callba
 
 function fillConfigForm(plugin: IntegrationPluginRecord) {
   Object.keys(configForm).forEach((key) => delete configForm[key]);
+  resetSecretState();
   const config = plugin.config || {};
   (plugin.config_schema || []).forEach((field) => {
     if (isDisplayOnlyField(field) && field.type !== 'readonly') {
@@ -498,8 +590,8 @@ function buildConfigPayload() {
       return;
     }
 
-    if (fieldHasSecretValue(field) && isBlankSecretValue(value)) {
-      return;
+    if (fieldHasSecretValue(field)) {
+      if (!editedSecretKeys[field.key] || isBlankSecretValue(value)) return;
     }
 
     if (field.type === 'json') {
@@ -539,6 +631,93 @@ function inputType(field: IntegrationPluginConfigSchema) {
   if (field.type === 'url') return 'url';
   if (field.type === 'phone') return 'tel';
   return 'text';
+}
+
+function isSecretInputField(field: IntegrationPluginConfigSchema) {
+  return !isSmtpAccountsField(field) && Boolean(field.secret || field.type === 'password');
+}
+
+function isSecretTextareaField(field: IntegrationPluginConfigSchema) {
+  return !isSmtpAccountsField(field) && Boolean(field.secret) && (field.type === 'textarea' || field.type === 'json');
+}
+
+function secretInputDisplayValue(field: IntegrationPluginConfigSchema) {
+  if (!fieldHasSecretValue(field)) return configForm[field.key] ?? '';
+  if (isSecretVisible(field)) return configForm[field.key] ?? loadedSecretValues[field.key] ?? '';
+  if (editedSecretKeys[field.key]) return configForm[field.key] ?? '';
+  return MASKED_SECRET_VALUE;
+}
+
+function secretInputType(field: IntegrationPluginConfigSchema) {
+  if (fieldHasSecretValue(field) && !isSecretVisible(field) && !editedSecretKeys[field.key]) return 'text';
+  if (fieldHasSecretValue(field) && isSecretVisible(field)) return 'text';
+  return inputType(field);
+}
+
+function handleSecretFocus(field: IntegrationPluginConfigSchema) {
+  if (!fieldHasSecretValue(field) || isSecretVisible(field) || editedSecretKeys[field.key]) return;
+  configForm[field.key] = '';
+  editedSecretKeys[field.key] = true;
+}
+
+function handleSecretInput(field: IntegrationPluginConfigSchema, value: string) {
+  if (fieldHasSecretValue(field) && !isSecretVisible(field) && !editedSecretKeys[field.key] && value === MASKED_SECRET_VALUE) {
+    return;
+  }
+
+  configForm[field.key] = value;
+  if (fieldHasSecretValue(field)) {
+    editedSecretKeys[field.key] = true;
+  }
+}
+
+function isSecretVisible(field: IntegrationPluginConfigSchema) {
+  return Boolean(visibleSecretKeys[field.key]);
+}
+
+async function toggleSecretVisibility(field: IntegrationPluginConfigSchema) {
+  if (!canRevealPluginSecrets.value) return;
+  if (!currentPlugin.value?.id || loadingSecretKeys[field.key]) return;
+
+  if (isSecretVisible(field)) {
+    visibleSecretKeys[field.key] = false;
+    editedSecretKeys[field.key] = false;
+    return;
+  }
+
+  if (loadedSecretValues[field.key] !== undefined) {
+    configForm[field.key] = loadedSecretValues[field.key];
+    visibleSecretKeys[field.key] = true;
+    editedSecretKeys[field.key] = false;
+    return;
+  }
+
+  loadingSecretKeys[field.key] = true;
+  try {
+    const response = await pluginsApi.revealSecret(currentPlugin.value.id, field.key);
+    const value = response.value;
+    loadedSecretValues[field.key] = typeof value === 'string' ? value : JSON.stringify(value ?? '');
+    configForm[field.key] = loadedSecretValues[field.key];
+    visibleSecretKeys[field.key] = true;
+    editedSecretKeys[field.key] = false;
+  } catch (error) {
+    MessagePlugin.error(errorMessage(error, '读取密钥失败'));
+  } finally {
+    loadingSecretKeys[field.key] = false;
+  }
+}
+
+async function revealPluginSecret(field: IntegrationPluginConfigSchema) {
+  if (!canRevealPluginSecrets.value) return '';
+  if (!currentPlugin.value?.id) return '';
+  const response = await pluginsApi.revealSecret(currentPlugin.value.id, field.key);
+  return response.value;
+}
+
+function resetSecretState() {
+  [visibleSecretKeys, loadedSecretValues, editedSecretKeys, loadingSecretKeys].forEach((store) => {
+    Object.keys(store).forEach((key) => delete store[key]);
+  });
 }
 
 function textareaMinRows(field: IntegrationPluginConfigSchema) {
@@ -616,12 +795,18 @@ function smtpAccountPreview(field: IntegrationPluginConfigSchema, plugin = curre
 }
 
 function smtpAccountActionOptions(account: SmtpAccountForm) {
-  return [
-    { content: account.enabled === false ? '开启' : '暂停', value: 'toggle' },
-    { content: '编辑', value: 'edit' },
-    { content: '发送测试邮件', value: 'test' },
-    { content: '删除', value: 'delete' },
-  ];
+  const actions = [];
+  if (canManagePlugins.value) {
+    actions.push({ content: account.enabled === false ? '开启' : '暂停', value: 'toggle' });
+    actions.push({ content: '编辑', value: 'edit' });
+  }
+  if (canTestPlugins.value) {
+    actions.push({ content: '发送测试邮件', value: 'test' });
+  }
+  if (canManagePlugins.value) {
+    actions.push({ content: '删除', value: 'delete' });
+  }
+  return actions;
 }
 
 async function handleSmtpAccountAction(action: string, index: number) {
@@ -631,15 +816,18 @@ async function handleSmtpAccountAction(action: string, index: number) {
   }
 
   if (action === 'test') {
+    if (!canTestPlugins.value) return;
     testingAccountIndex.value = index;
     emailTestForm.to = '';
     emailTestForm.subject = 'SMTP 发送测试';
     emailTestForm.body = '';
+    clearEmailTestErrors();
     emailTestVisible.value = true;
     return;
   }
 
   if (action === 'toggle') {
+    if (!canManagePlugins.value) return;
     const account = smtpAccounts.value[index];
     if (!account) return;
     account.enabled = account.enabled === false;
@@ -648,6 +836,7 @@ async function handleSmtpAccountAction(action: string, index: number) {
   }
 
   if (action === 'delete') {
+    if (!canManagePlugins.value) return;
     if (!window.confirm('确定删除这个 SMTP 账号吗？')) return;
     smtpAccounts.value.splice(index, 1);
     await saveConfig();
@@ -655,7 +844,10 @@ async function handleSmtpAccountAction(action: string, index: number) {
 }
 
 function openSmtpAccountDialog(index = -1) {
+  if (!canManagePlugins.value) return;
+
   editingSmtpAccountIndex.value = index;
+  smtpAccountPasswordEdited.value = false;
   const account = index >= 0 ? smtpAccounts.value[index] : null;
   Object.assign(smtpAccountForm, {
     __index: account?.__index ?? null,
@@ -672,6 +864,8 @@ function openSmtpAccountDialog(index = -1) {
 }
 
 async function confirmSmtpAccount() {
+  if (!canManagePlugins.value) return;
+
   if (smtpAccountForm.host.trim() === '' || smtpAccountForm.username.trim() === '') {
     MessagePlugin.error('请填写 SMTP 主机和账号');
     return;
@@ -687,7 +881,7 @@ async function confirmSmtpAccount() {
     host: smtpAccountForm.host.trim(),
     port: Number(smtpAccountForm.port || 465),
     username: smtpAccountForm.username.trim(),
-    password: smtpAccountForm.password,
+    password: editingSmtpAccountIndex.value >= 0 && !smtpAccountPasswordEdited.value ? '' : smtpAccountForm.password,
     from_name: smtpAccountForm.from_name.trim(),
     encryption: smtpAccountForm.encryption,
     enabled: smtpAccountForm.enabled,
@@ -704,35 +898,89 @@ async function confirmSmtpAccount() {
   await saveConfig();
 }
 
+async function revealSmtpAccountPassword() {
+  if (!canRevealPluginSecrets.value) return '';
+  if (!currentPlugin.value?.id) return '';
+  const response = await pluginsApi.revealSecret(currentPlugin.value.id, 'accounts');
+  const accounts = Array.isArray(response.value) ? response.value : [];
+  const index = smtpAccountForm.__index ?? editingSmtpAccountIndex.value;
+  const account = accounts[Number(index)];
+  return account && typeof account === 'object' ? String((account as Record<string, unknown>).password || '') : '';
+}
+
 async function sendTestEmail() {
-  if (!emailTestForm.to.trim()) {
-    MessagePlugin.error('请输入收件人邮箱');
+  if (!canTestPlugins.value) return;
+
+  clearEmailTestErrors();
+
+  const to = emailTestForm.to.trim();
+  const subject = emailTestForm.subject.trim();
+
+  if (!to) {
+    emailTestErrors.to = '请输入收件人邮箱';
     return;
   }
-  if (!emailTestForm.subject.trim()) {
-    MessagePlugin.error('请输入邮件主题');
+
+  if (!EMAIL_PATTERN.test(to)) {
+    emailTestErrors.to = '请输入正确的邮箱地址';
     return;
   }
+
+  if (!subject) {
+    emailTestErrors.subject = '请输入邮件主题';
+    return;
+  }
+
   if (!currentPlugin.value?.id) return;
 
   emailTesting.value = true;
   try {
     await pluginsApi.testEmail(currentPlugin.value.id, {
       account_index: testingAccountIndex.value,
-      to: emailTestForm.to.trim(),
-      subject: emailTestForm.subject.trim(),
+      to,
+      subject,
       body: emailTestForm.body.trim(),
     });
     MessagePlugin.success('测试邮件发送成功');
     emailTestVisible.value = false;
   } catch (error) {
+    const fieldErrors = extractFieldErrors(error);
+    if (fieldErrors.to || fieldErrors.subject || fieldErrors.body) {
+      Object.assign(emailTestErrors, fieldErrors);
+    }
     MessagePlugin.error(errorMessage(error, '测试邮件发送失败'));
   } finally {
     emailTesting.value = false;
   }
 }
 
+function clearEmailTestError(field: keyof typeof emailTestErrors) {
+  emailTestErrors[field] = '';
+}
+
+function clearEmailTestErrors() {
+  Object.keys(emailTestErrors).forEach((field) => {
+    emailTestErrors[field as keyof typeof emailTestErrors] = '';
+  });
+}
+
+function extractFieldErrors(error: unknown) {
+  const errors = (error as { response?: { data?: { data?: { errors?: Record<string, string[]> } } } })?.response?.data?.data?.errors;
+  return {
+    to: firstError(errors?.to),
+    subject: firstError(errors?.subject),
+    body: firstError(errors?.body),
+  };
+}
+
+function firstError(messages: unknown): string {
+  if (Array.isArray(messages)) return String(messages[0] || '');
+  return '';
+}
+
 async function sendTestSms() {
+  if (!canTestPlugins.value) return;
+
   const phone = smsTestPhone.value.trim();
   if (!phone) {
     MessagePlugin.error('请输入手机号码');
@@ -771,6 +1019,55 @@ function pluginStatusText(plugin: IntegrationPluginRecord) {
   if (plugin.is_enabled) return '已启用';
   if (plugin.is_installed) return '已安装';
   return '未安装';
+}
+
+function businessReferenceCount(plugin: IntegrationPluginRecord) {
+  const directTotal = Number(plugin.business_reference_count ?? 0);
+  if (Number.isFinite(directTotal) && directTotal > 0) return directTotal;
+
+  return Object.values(plugin.binding_counts || {}).reduce((total, value) => {
+    const numeric = Number(value || 0);
+    return total + (Number.isFinite(numeric) ? numeric : 0);
+  }, 0);
+}
+
+function bindingCountText(plugin: IntegrationPluginRecord) {
+  const total = businessReferenceCount(plugin);
+  return total > 0 ? `业务引用 ${total}` : '暂无业务引用';
+}
+
+function latestRuntimeText(plugin: IntegrationPluginRecord) {
+  const log = plugin.latest_runtime_log;
+  if (!log) return '暂无运行记录';
+  const status = String(log.status || '').toLowerCase();
+  const statusText = status === 'failed' ? '失败' : status === 'success' ? '成功' : status || '未知';
+  return `最近运行 ${statusText}`;
+}
+
+function runtimeStatusTheme(plugin: IntegrationPluginRecord) {
+  const status = String(plugin.latest_runtime_log?.status || '').toLowerCase();
+  if (status === 'failed') return 'danger';
+  if (status === 'success') return 'success';
+  return 'default';
+}
+
+function isArchiveDeleteMode(plugin: IntegrationPluginRecord) {
+  return plugin.delete_mode === 'disable_archive';
+}
+
+function deleteButtonText(plugin: IntegrationPluginRecord) {
+  return isArchiveDeleteMode(plugin) ? '归档' : '删除';
+}
+
+function openRuntimeLogs(plugin: IntegrationPluginRecord) {
+  if (!plugin.id) return;
+  router.push({
+    path: '/admin/logs',
+    query: {
+      tab: 'runtime',
+      plugin_id: String(plugin.id),
+    },
+  });
 }
 
 function actionKey(plugin: IntegrationPluginRecord, action: string) {

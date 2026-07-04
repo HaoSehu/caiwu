@@ -159,17 +159,6 @@ class Stay33Client
             CURLOPT_CONNECTTIMEOUT => 10,
         ]);
 
-        if (str_starts_with($api, 'https://')) {
-            $sslVerify = $this->resolveSslVerify();
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $sslVerify);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, $sslVerify ? 2 : 0);
-
-            $caBundle = $this->resolveCaBundle();
-            if ($caBundle !== '' && is_file($caBundle)) {
-                curl_setopt($ch, CURLOPT_CAINFO, $caBundle);
-            }
-        }
-
         $output = curl_exec($ch);
         $curlErrno = curl_errno($ch);
         $curlError = curl_error($ch);
@@ -178,10 +167,6 @@ class Stay33Client
         if ($output === false) {
             $this->lastRequestFailure = ['type' => 'curl', 'errno' => $curlErrno, 'error' => $curlError];
             Log::error('[实名认证] CURL请求失败', $this->lastRequestFailure);
-
-            if ($this->isSslCertificateError($curlError)) {
-                throw new BusinessException('实名认证接口 SSL 证书校验失败', 42200);
-            }
 
             return null;
         }
@@ -223,32 +208,5 @@ class Stay33Client
         }
 
         return $text;
-    }
-
-    private function isSslCertificateError(string $curlError): bool
-    {
-        $message = strtolower($curlError);
-
-        return str_contains($message, 'ssl certificate problem')
-            || str_contains($message, 'certificate verify failed');
-    }
-
-    private function resolveSslVerify(): bool
-    {
-        if (array_key_exists('ssl_verify', $this->config) && $this->config['ssl_verify'] !== null && $this->config['ssl_verify'] !== '') {
-            return filter_var($this->config['ssl_verify'], FILTER_VALIDATE_BOOL);
-        }
-
-        return filter_var(config('idc.verification.ssl_verify', true), FILTER_VALIDATE_BOOL);
-    }
-
-    private function resolveCaBundle(): string
-    {
-        $pluginValue = trim((string) ($this->config['ca_bundle'] ?? ''));
-        if ($pluginValue !== '') {
-            return $pluginValue;
-        }
-
-        return trim((string) config('idc.verification.ca_bundle', ''));
     }
 }

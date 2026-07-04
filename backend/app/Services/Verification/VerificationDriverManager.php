@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Verification;
 
 use App\Exceptions\BusinessException;
-use App\Models\Setting;
+use App\Services\Integrations\Plugins\IntegrationDriverBindingResolver;
 use App\Services\Verification\Contracts\VerificationDriver;
 use InvalidArgumentException;
 
@@ -19,8 +19,10 @@ final class VerificationDriverManager
      *
      * @param  iterable<int, VerificationDriver>  $drivers
      */
-    public function __construct(iterable $drivers = [])
-    {
+    public function __construct(
+        iterable $drivers = [],
+        private ?IntegrationDriverBindingResolver $bindingResolver = null,
+    ) {
         foreach ($drivers as $driver) {
             $this->register($driver);
         }
@@ -43,7 +45,16 @@ final class VerificationDriverManager
 
     public function resolve(?string $key = null): VerificationDriver
     {
-        $resolvedKey = $key ?? $this->getConfiguredKey();
+        $resolvedKey = trim((string) ($key ?? ''));
+        if ($resolvedKey === '') {
+            foreach ($this->bindingResolver()->verificationDriverCandidates() as $candidate) {
+                if (isset($this->drivers[$candidate])) {
+                    return $this->drivers[$candidate];
+                }
+            }
+
+            $resolvedKey = $this->getConfiguredKey();
+        }
 
         if (isset($this->drivers[$resolvedKey])) {
             return $this->drivers[$resolvedKey];
@@ -65,14 +76,11 @@ final class VerificationDriverManager
 
     private function getConfiguredKey(): string
     {
-        $key = trim((string) Setting::getValue('verification', 'verification_driver', ''));
+        return $this->bindingResolver()->verificationDriverKey();
+    }
 
-        if ($key !== '') {
-            return $key;
-        }
-
-        $default = trim((string) config('integrations.identity.default', 'stay33'));
-
-        return $default !== '' ? $default : 'stay33';
+    private function bindingResolver(): IntegrationDriverBindingResolver
+    {
+        return $this->bindingResolver ??= app(IntegrationDriverBindingResolver::class);
     }
 }

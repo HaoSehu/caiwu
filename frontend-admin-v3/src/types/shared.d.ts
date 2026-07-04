@@ -1,4 +1,6 @@
 declare module '@shared/statusConfig' {
+  export const INVOICE_TYPE_MAP: Record<string, string>;
+  export const ORDER_TYPE_MAP: Record<string, string>;
   export const INVOICE_STATUS_MAP: Record<string | number, { label: string; tagType: string }>;
   export const ORDER_STATUS_MAP: Record<string | number, { label: string; tagType: string }>;
   export const PAYMENT_STATUS_MAP: Record<string | number, { label: string; tagType: string }>;

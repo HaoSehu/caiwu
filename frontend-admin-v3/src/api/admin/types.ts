@@ -50,7 +50,8 @@ export interface MonthlyRevenue {
 export interface InvoiceListParams extends PagedListParams {
   type?: string;
   status?: string | number;
-  date_range?: string[] | null;
+  start_date?: string;
+  end_date?: string;
 }
 
 export interface InvoiceRecord {
@@ -90,9 +91,10 @@ export interface InvoiceDetailResponse extends InvoiceRecord {
 // ─── Order ────────────────────────────────────────────────────
 export interface OrderListParams extends PagedListParams {
   type?: string;
-  kind?: string;
+  upgrade_kind?: string;
   status?: string | number;
-  date_range?: string[] | null;
+  start_date?: string;
+  end_date?: string;
 }
 
 export interface OrderRecord {
@@ -105,9 +107,10 @@ export interface OrderRecord {
   service?: Record<string, unknown> | null;
   type?: string;
   type_label?: string;
-  addon_kind_label?: string;
-  addon_target_label?: string;
-  addon_mode?: string;
+  upgrade_kind?: string;
+  upgrade_kind_label?: string;
+  upgrade_target_label?: string;
+  upgrade_mode?: string;
   amount?: number | string;
   quantity?: number | string;
   status?: number | string;
@@ -119,7 +122,8 @@ export interface OrderRecord {
 // ─── Finance Menu ─────────────────────────────────────────────
 export interface RechargeListParams extends PagedListParams {
   status?: string | number;
-  date_range?: string[] | null;
+  start_date?: string;
+  end_date?: string;
 }
 
 export interface RechargeRecord {
@@ -181,6 +185,9 @@ export interface LogListParams {
   page?: number;
   per_page?: number;
   keyword?: string;
+  actor_keyword?: string;
+  description_keyword?: string;
+  ip_address?: string;
   start_date?: string;
   end_date?: string;
   level?: string;
@@ -192,6 +199,10 @@ export interface LogListParams {
   phone?: string;
   email?: string;
   gateway?: string;
+  gateway_key?: string;
+  driver_key?: string;
+  plugin_id?: string | number;
+  trace_id?: string;
   action?: string;
   result_status?: string;
   actor_type?: string;
@@ -729,15 +740,6 @@ export interface VerificationRecord {
   updated_at?: string;
   verified_at?: string;
   submitted_at?: string;
-}
-
-export interface VerificationSettingsPayload {
-  verification_api?: string;
-  verification_key?: string;
-  verification_biz_code?: string;
-  free_attempts?: number;
-  retry_fee?: number;
-  [key: string]: unknown;
 }
 
 // ─── Member Level ─────────────────────────────────────────────

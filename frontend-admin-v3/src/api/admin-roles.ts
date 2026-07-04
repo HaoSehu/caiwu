@@ -23,6 +23,10 @@ export interface RoleRecord {
   permissions?: string[];
   stored_permissions?: string[];
   admin_count?: number | string;
+  is_builtin?: boolean;
+  is_locked?: boolean;
+  can_edit_permissions?: boolean;
+  can_delete?: boolean;
   created_at?: string | null;
   updated_at?: string | null;
 }

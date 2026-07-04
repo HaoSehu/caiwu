@@ -3,10 +3,11 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\Finance\InvoiceListRequest;
+use App\Http\Requests\Admin\Invoice\CancelRequest;
 use App\Models\Invoice;
 use App\Services\Finance\CheckoutService;
 use App\Services\Finance\InvoiceService;
-use Illuminate\Http\Request;
 
 class InvoiceController extends Controller
 {
@@ -15,12 +16,9 @@ class InvoiceController extends Controller
         private CheckoutService $checkoutService,
     ) {}
 
-    public function index(Request $request)
+    public function index(InvoiceListRequest $request)
     {
-        $filters = $request->only(['keyword', 'invoice_no', 'user_id', 'status', 'type', 'product_id', 'date_range']);
-        $perPage = max(1, min((int) $request->input('page_size', 20), 100));
-
-        return $this->paginate($this->invoiceService->adminList($filters, $perPage));
+        return $this->paginate($this->invoiceService->adminList($request->validated(), $request->perPage()));
     }
 
     public function show(int $id)
@@ -28,7 +26,7 @@ class InvoiceController extends Controller
         return $this->success($this->invoiceService->adminDetail($id));
     }
 
-    public function cancel(Request $request, int $id)
+    public function cancel(CancelRequest $request, int $id)
     {
         $invoice = Invoice::findOrFail($id);
         $updated = $this->checkoutService->cancel($invoice, [

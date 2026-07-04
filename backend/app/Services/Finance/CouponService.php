@@ -750,7 +750,7 @@ class CouponService
             ->where('id', $userCouponId)
             ->update([
                 'last_used_at' => $currentOrderUsed ? ($order->paid_at ?? now()) : null,
-        ]);
+            ]);
     }
 
     /**
@@ -1321,7 +1321,6 @@ class CouponService
         }
 
         throw new BusinessException($reason.'不允许修改');
-
         foreach ($lockedFields as $field) {
             if (! array_key_exists($field, $payload)) {
                 continue;

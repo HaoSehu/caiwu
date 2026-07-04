@@ -6,6 +6,7 @@ use App\Models\Concerns\NormalizesTraceId;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Service extends Model
 {
@@ -369,6 +370,26 @@ class Service extends Model
     public function tickets(): HasMany
     {
         return $this->hasMany(Ticket::class);
+    }
+
+    public function upstreamBinding(): HasOne
+    {
+        return $this->hasOne(ServiceUpstreamBinding::class, 'service_id');
+    }
+
+    public function runtimeSnapshot(): HasOne
+    {
+        return $this->hasOne(ServiceRuntimeSnapshot::class, 'service_id');
+    }
+
+    public function connectionSnapshots(): HasMany
+    {
+        return $this->hasMany(ServiceConnectionSnapshot::class, 'service_id');
+    }
+
+    public function provisionAttempts(): HasMany
+    {
+        return $this->hasMany(ServiceProvisionAttempt::class, 'service_id');
     }
 
     public function scopeActive($query)

@@ -7,6 +7,7 @@ namespace App\Services\Integrations\Plugins;
 use App\Contracts\Integrations\Payments\PaymentGatewayInterface;
 use App\Exceptions\BusinessException;
 use App\Models\IntegrationPlugin;
+use App\Models\IntegrationPluginRuntimeLog;
 use App\Services\Integrations\Plugins\Adapters\PluginMailDriver;
 use App\Services\Integrations\Plugins\Adapters\PluginPaymentGateway;
 use App\Services\Integrations\Plugins\Adapters\PluginSmsDriver;
@@ -16,9 +17,11 @@ use App\Services\Mail\Contracts\MailDriver;
 use App\Services\Sms\Contracts\SmsDriver;
 use App\Services\Upstream\Contracts\UpstreamDriver;
 use App\Services\Verification\Contracts\VerificationDriver;
+use App\Support\SensitiveDataSanitizer;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class PluginRuntimeRegistry
 {
@@ -62,6 +65,8 @@ class PluginRuntimeRegistry
 
         $manifest = $this->scanner->requireManifest((string) $plugin->domain, (string) $plugin->slug);
         $entry = $this->makeExecutableEntry($manifest);
+        $startedAt = microtime(true);
+        $traceId = $this->resolveTraceId($context);
         $request = [
             'domain' => $manifest->domain,
             'slug' => $manifest->slug,
@@ -69,12 +74,31 @@ class PluginRuntimeRegistry
             'action' => $resolvedAction,
             'payload' => $payload,
             'config' => $this->configRepository->resolvedConfig($plugin),
-            'context' => $context,
+            'context' => array_merge($context, ['trace_id' => $traceId]),
         ];
 
         try {
             $raw = $entry->execute($request);
+            $result = is_array($raw) ? $raw : ['data' => $raw];
+            $response = array_merge([
+                'success' => (bool) ($result['success'] ?? true),
+                'action' => $resolvedAction,
+                'plugin' => [
+                    'domain' => $manifest->domain,
+                    'slug' => $manifest->slug,
+                    'key' => $manifest->key,
+                    'name' => $manifest->name,
+                ],
+                'message' => (string) ($result['message'] ?? ''),
+                'data' => $result['data'] ?? [],
+                'raw' => $result['raw'] ?? [],
+            ], $result);
+
+            $this->recordRuntimeLog($plugin, $manifest, $resolvedAction, $payload, $context, $response, 'success', $startedAt, $traceId);
+
+            return $response;
         } catch (BusinessException $exception) {
+            $this->recordRuntimeLog($plugin, $manifest, $resolvedAction, $payload, $context, null, 'failed', $startedAt, $traceId, $exception);
             Log::warning('[plugins] business exception', [
                 'domain' => $manifest->domain,
                 'slug' => $manifest->slug,
@@ -84,6 +108,7 @@ class PluginRuntimeRegistry
 
             throw $exception;
         } catch (\Throwable $exception) {
+            $this->recordRuntimeLog($plugin, $manifest, $resolvedAction, $payload, $context, null, 'failed', $startedAt, $traceId, $exception);
             Log::error('[plugins] execute failed', [
                 'domain' => $manifest->domain,
                 'slug' => $manifest->slug,
@@ -95,21 +120,101 @@ class PluginRuntimeRegistry
             throw new BusinessException('插件执行失败', 42200);
         }
 
-        $result = is_array($raw) ? $raw : ['data' => $raw];
+    }
 
-        return array_merge([
-            'success' => (bool) ($result['success'] ?? true),
-            'action' => $resolvedAction,
-            'plugin' => [
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>  $context
+     * @param  array<string, mixed>|null  $response
+     */
+    private function recordRuntimeLog(
+        IntegrationPlugin $plugin,
+        PluginManifest $manifest,
+        string $action,
+        array $payload,
+        array $context,
+        ?array $response,
+        string $status,
+        float $startedAt,
+        string $traceId,
+        ?\Throwable $exception = null,
+    ): void {
+        if (! Schema::hasTable('integration_plugin_runtime_logs')) {
+            return;
+        }
+
+        try {
+            IntegrationPluginRuntimeLog::query()->create([
+                'trace_id' => $traceId !== '' ? $traceId : null,
+                'domain' => $manifest->domain,
+                'plugin_id' => (int) $plugin->id,
+                'plugin_key' => $manifest->key,
+                'slug' => $manifest->slug,
+                'action' => $action,
+                'binding_id' => $this->positiveInt($context['binding_id'] ?? null),
+                'bindable_type' => $this->nullableString($context['bindable_type'] ?? null, 120),
+                'bindable_id' => $this->positiveInt($context['bindable_id'] ?? null),
+                'actor_type' => $this->nullableString($context['actor_type'] ?? null, 50),
+                'actor_id' => $this->positiveInt($context['actor_id'] ?? null),
+                'status' => $status,
+                'duration_ms' => (int) max(0, round((microtime(true) - $startedAt) * 1000)),
+                'error_code' => $exception === null ? null : $this->nullableString((string) $exception->getCode(), 80),
+                'error_message' => $exception === null ? null : $this->nullableString($exception->getMessage(), 500),
+                'request_meta_json' => $this->runtimeMeta([
+                    'payload' => $payload,
+                    'context' => $context,
+                ]),
+                'response_meta_json' => $response === null ? null : $this->runtimeMeta($response),
+                'created_at' => now(),
+            ]);
+        } catch (\Throwable $logException) {
+            Log::warning('[plugins] runtime log write failed', [
                 'domain' => $manifest->domain,
                 'slug' => $manifest->slug,
-                'key' => $manifest->key,
-                'name' => $manifest->name,
-            ],
-            'message' => (string) ($result['message'] ?? ''),
-            'data' => $result['data'] ?? [],
-            'raw' => $result['raw'] ?? [],
-        ], $result);
+                'action' => $action,
+                'message' => $logException->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     */
+    private function resolveTraceId(array $context): string
+    {
+        $traceId = trim((string) ($context['trace_id'] ?? ''));
+
+        return $traceId !== ''
+            ? substr($traceId, 0, 64)
+            : substr('plugin:'.str_replace('-', '', (string) Str::uuid()), 0, 64);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function runtimeMeta(array $payload): array
+    {
+        $sanitized = SensitiveDataSanitizer::sanitize($payload);
+
+        return is_array($sanitized) ? $sanitized : [];
+    }
+
+    private function positiveInt(mixed $value): ?int
+    {
+        $int = (int) ($value ?? 0);
+
+        return $int > 0 ? $int : null;
+    }
+
+    private function nullableString(mixed $value, int $limit): ?string
+    {
+        $string = trim((string) ($value ?? ''));
+        if ($string === '') {
+            return null;
+        }
+
+        return mb_substr($string, 0, $limit);
     }
 
     /**
@@ -146,9 +251,10 @@ class PluginRuntimeRegistry
 
             $manifest = $this->scanner->find((string) $plugin->domain, (string) $plugin->slug);
             if (! $manifest instanceof PluginManifest) {
-                Log::warning('[plugins] enabled plugin manifest missing', [
-                    'domain' => $plugin->domain,
-                    'slug' => $plugin->slug,
+                Log::error('[plugins] enabled plugin manifest missing — plugin is enabled but files not found', [
+                    'domain'    => $plugin->domain,
+                    'slug'      => $plugin->slug,
+                    'plugin_id' => $plugin->id,
                 ]);
 
                 continue;
@@ -180,18 +286,29 @@ class PluginRuntimeRegistry
     public function healthCheck(IntegrationPlugin $plugin): array
     {
         $manifest = $this->scanner->requireManifest((string) $plugin->domain, (string) $plugin->slug);
-        $entry = $this->makeExecutableEntry($manifest);
+        $entry    = $this->makeExecutableEntry($manifest);
+
         $result = [
-            'healthy' => true,
-            'message' => '插件加载正常',
-            'entry_class' => $manifest->entryClass,
+            'healthy'        => true,
+            'message'        => '插件加载正常',
+            'entry_class'    => $manifest->entryClass,
             'provider_class' => $manifest->providerClass,
+            'details'        => [],
         ];
 
         if (method_exists($entry, 'healthCheck')) {
             $raw = $entry->healthCheck();
             if (is_array($raw)) {
-                $result = array_merge($result, $raw);
+                if (isset($raw['healthy'])) {
+                    $result['healthy'] = (bool) $raw['healthy'];
+                }
+                if (isset($raw['message']) && is_string($raw['message'])) {
+                    $result['message'] = $raw['message'];
+                }
+                // 插件额外信息统一放入 details，不污染顶层结构
+                $result['details'] = isset($raw['details']) && is_array($raw['details'])
+                    ? $raw['details']
+                    : array_diff_key($raw, array_flip(['healthy', 'message']));
             }
         }
 

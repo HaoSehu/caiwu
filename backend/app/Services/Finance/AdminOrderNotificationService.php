@@ -126,7 +126,7 @@ class AdminOrderNotificationService
                     'product_name' => $this->resolveOrderProductDisplayText($order),
                     'billing_cycle_label' => $this->resolveBillingCycleLabel((string) $order->billing_cycle),
                     'paid_amount' => number_format((float) ($order->paid_amount ?? $order->amount ?? 0), 2, '.', ''),
-                    'payment_method' => $this->resolvePaymentGatewayLabel((string) ($payment?->gateway ?? '')),
+                    'payment_method' => $this->resolvePaymentGatewayLabel($payment?->gatewayKey() ?? ''),
                     'trade_no' => (string) ($payment?->trade_no ?? ''),
                     'paid_at' => $order->paid_at?->format('Y-m-d H:i:s')
                         ?? $order->invoice?->paid_at?->format('Y-m-d H:i:s')
@@ -274,11 +274,17 @@ class AdminOrderNotificationService
 
         $payment = Payment::query()
             ->where('invoice_id', $invoice->id)
-            ->whereIn('gateway', PaymentGatewayCode::thirdPartyGateways())
+            ->whereGatewayKeyIn(PaymentGatewayCode::thirdPartyGateways())
             ->where('status', 1)
             ->orderByDesc('paid_at')
             ->orderByDesc('id')
-            ->first(['id', 'invoice_id', 'gateway', 'trade_no', 'paid_at']);
+            ->first(Payment::gatewayProjectionColumns([
+                'id',
+                'invoice_id',
+                'plugin_id',
+                'trade_no',
+                'paid_at',
+            ]));
 
         $recipients = $this->resolveRecipients();
         if ($recipients->isEmpty()) {
@@ -306,7 +312,7 @@ class AdminOrderNotificationService
                         'product_name' => $this->resolveInvoiceProductDisplayText($invoice, $invoice->order),
                         'billing_cycle_label' => $this->resolveBillingCycleLabel((string) ($invoice->billing_cycle ?? '')),
                         'paid_amount' => number_format((float) ($invoice->paid_amount ?? $invoice->amount ?? 0), 2, '.', ''),
-                        'payment_method' => $this->resolvePaymentGatewayLabel((string) ($payment?->gateway ?? '')),
+                        'payment_method' => $this->resolvePaymentGatewayLabel($payment?->gatewayKey() ?? ''),
                         'trade_no' => (string) ($payment?->trade_no ?? ''),
                         'paid_at' => $invoice->paid_at?->format('Y-m-d H:i:s')
                             ?? $payment?->paid_at?->format('Y-m-d H:i:s')
@@ -375,11 +381,18 @@ class AdminOrderNotificationService
                     $query->orWhere('invoice_id', $invoiceId);
                 }
             })
-            ->whereIn('gateway', PaymentGatewayCode::thirdPartyGateways())
+            ->whereGatewayKeyIn(PaymentGatewayCode::thirdPartyGateways())
             ->where('status', 1)
             ->orderByDesc('paid_at')
             ->orderByDesc('id')
-            ->first(['id', 'order_id', 'invoice_id', 'gateway', 'trade_no', 'paid_at']);
+            ->first(Payment::gatewayProjectionColumns([
+                'id',
+                'order_id',
+                'invoice_id',
+                'plugin_id',
+                'trade_no',
+                'paid_at',
+            ]));
     }
 
     private function scheduleNotificationAfterResponse(int $orderId, string $event): void
@@ -441,6 +454,7 @@ class AdminOrderNotificationService
     {
         return match ($gateway) {
             'alipay' => '支付宝',
+            'yipay' => '易支付',
             'balance' => '余额支付',
             'manual' => '手动入账',
             'wechat' => '微信支付',

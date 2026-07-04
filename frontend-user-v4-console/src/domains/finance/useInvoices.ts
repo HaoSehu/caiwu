@@ -1,7 +1,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import { useRoute, useRouter } from 'vue-router';
-import { INVOICE_STATUS_MAP, getStatusLabel, toSelectOptions } from '@shared/statusConfig';
+import { INVOICE_STATUS_MAP, INVOICE_TYPE_MAP, getStatusLabel, toSelectOptions } from '@shared/statusConfig';
 
 import clientApi from '@/api/client';
 import { formatMoney } from '@/utils/format';
@@ -12,21 +12,19 @@ import type {
   InvoicePaymentMethod,
   InvoicePaymentSecurity,
   InvoiceRecord,
+  ClientFinanceListParams,
 } from '@/types/client';
+
+import { resolveQuickDateRange } from './dateFilters';
 
 export type PayMethodKey = 'balance' | 'alipay' | 'free';
 
 export const INVOICE_STATUS_OPTIONS = toSelectOptions(INVOICE_STATUS_MAP, false);
 
-export const INVOICE_TYPE_OPTIONS = [
-  { label: '新购账单', value: 'new' },
-  { label: '续费账单', value: 'renew' },
-  { label: '升级账单', value: 'upgrade' },
-  { label: '充值账单', value: 'recharge' },
-  { label: '扣款账单', value: 'deduction' },
-  { label: '推荐奖励账单', value: 'referral_credit' },
-  { label: '手工账单', value: 'manual' },
-];
+export const INVOICE_TYPE_OPTIONS = ['new', 'renew', 'upgrade', 'recharge', 'deduction', 'referral_credit', 'manual'].map((value) => ({
+  label: INVOICE_TYPE_MAP[value] || value,
+  value,
+}));
 
 function normalizeText(value: unknown) {
   if (typeof value === 'string') return value.trim();
@@ -164,40 +162,16 @@ export function useInvoiceList(options: { fixedTypes?: unknown; pageSize?: numbe
     keyword: '',
     status: '' as string | number,
     type: '',
+    start_date: '',
+    end_date: '',
     quickFilter: '' as string,
   });
 
   const showTypeSelector = computed(() => !normalizeTypeFilter(options.fixedTypes));
-  const metricCards = computed(() => [
-    {
-      key: 'unpaid_amount',
-      label: '待付金额',
-      value: `¥${formatMoney(summary.value.unpaid_amount || 0)}`,
-      copy: '尚未支付的账单金额',
-    },
-    {
-      key: 'unpaid',
-      label: '待付账单数',
-      value: Number(summary.value.unpaid_count || 0),
-      copy: '需要支付的账单',
-    },
-    {
-      key: 'paid',
-      label: '已支付',
-      value: Number(summary.value.paid_count || 0),
-      copy: `累计 ¥${formatMoney(summary.value.paid_amount || summary.value.paid_total || 0)}`,
-    },
-    {
-      key: 'total',
-      label: '账单总数',
-      value: Number(summary.value.total_count ?? total.value ?? 0),
-      copy: '所有状态的账单',
-    },
-  ]);
 
   function buildParams() {
     const fixedTypes = normalizeTypeFilter(options.fixedTypes);
-    const params: Record<string, string | number> = {
+    const params: ClientFinanceListParams = {
       page: filters.page,
       page_size: filters.page_size,
     };
@@ -208,6 +182,8 @@ export function useInvoiceList(options: { fixedTypes?: unknown; pageSize?: numbe
     } else if (normalizeText(filters.type)) {
       params.type = normalizeText(filters.type);
     }
+    if (filters.start_date) params.start_date = filters.start_date;
+    if (filters.end_date) params.end_date = filters.end_date;
     return params;
   }
 
@@ -257,6 +233,8 @@ export function useInvoiceList(options: { fixedTypes?: unknown; pageSize?: numbe
     filters.keyword = '';
     filters.status = '';
     filters.type = '';
+    filters.start_date = '';
+    filters.end_date = '';
     filters.quickFilter = '';
     void loadData();
   }
@@ -266,10 +244,15 @@ export function useInvoiceList(options: { fixedTypes?: unknown; pageSize?: numbe
     filters.page = 1;
     filters.status = '';
     filters.type = '';
+    filters.start_date = '';
+    filters.end_date = '';
 
     if (key === 'pending') {
       filters.status = 0;
     }
+    const range = resolveQuickDateRange(key);
+    filters.start_date = range.start_date || '';
+    filters.end_date = range.end_date || '';
     void loadData();
   }
 
@@ -380,7 +363,6 @@ export function useInvoiceList(options: { fixedTypes?: unknown; pageSize?: numbe
     detailVisible,
     currentRow,
     showTypeSelector,
-    metricCards,
     loadList,
     loadData,
     loadSummary,

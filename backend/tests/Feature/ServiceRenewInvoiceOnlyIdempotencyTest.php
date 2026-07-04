@@ -24,6 +24,7 @@ use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiTransport;
 use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use PHPUnit\Framework\Attributes\Test;
@@ -190,6 +191,11 @@ class ServiceRenewInvoiceOnlyIdempotencyTest extends TestCase
     {
         $suffix = bin2hex(random_bytes(4));
 
+        Artisan::call('migrate', [
+            '--path' => 'database/migrations/2026_07_03_130000_create_plugin_binding_runtime_and_audit_tables.php',
+            '--force' => true,
+        ]);
+
         $user = User::query()->create([
             'email' => 'renew-bind-'.$suffix.'@example.com',
             'password' => 'Temp@123456',
@@ -247,6 +253,7 @@ class ServiceRenewInvoiceOnlyIdempotencyTest extends TestCase
             'status' => InvoiceStatus::PAID,
             'paid_at' => now(),
             'due_date' => now()->addDay(),
+            'trace_id' => 'renew-bind-'.$suffix,
         ]);
 
         DB::connection()->table('invoices')->updateOrInsert(
@@ -295,6 +302,12 @@ class ServiceRenewInvoiceOnlyIdempotencyTest extends TestCase
         $this->assertSame((int) $invoice->id, (int) ($result->invoice_id ?? 0));
         $this->assertSame((int) $invoice->id, (int) ($service->fresh()?->invoice_id ?? 0));
         $this->assertSame((int) $invoice->id, (int) (($result->provision_data ?? [])['last_renew_invoice_id'] ?? 0));
+        $this->assertDatabaseHas('service_provision_attempts', [
+            'service_id' => (int) $service->id,
+            'action' => 'renew',
+            'attempt_status' => 'success',
+            'trace_id' => 'renew-bind-'.$suffix,
+        ]);
     }
 
     #[Test]

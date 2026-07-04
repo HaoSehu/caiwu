@@ -33,14 +33,6 @@ final class MofangAuthManager
             return $cachedJwt;
         }
 
-        $legacyCacheKey = $this->legacyJwtCacheKey($supplier);
-        $cachedJwt = trim((string) $this->jwtCache()->get($legacyCacheKey, ''));
-        if ($cachedJwt !== '') {
-            $this->jwtCache()->put($cacheKey, $cachedJwt, now()->addSeconds(self::DEFAULT_JWT_CACHE_TTL_SECONDS));
-
-            return $cachedJwt;
-        }
-
         $startedAt = microtime(true);
         $response = $this->loginResponse($supplier);
         $jwt = trim((string) ($response['jwt'] ?? ''));
@@ -112,7 +104,6 @@ final class MofangAuthManager
     public function forget(Supplier $supplier): void
     {
         $this->jwtCache()->forget($this->jwtCacheKey($supplier));
-        $this->jwtCache()->forget($this->legacyJwtCacheKey($supplier));
     }
 
     public function forgetIfUnauthorizedResponse(Supplier $supplier, int $httpCode, mixed $decoded, ?string $jwt): void
@@ -129,11 +120,6 @@ final class MofangAuthManager
     public function jwtCacheKey(Supplier $supplier): string
     {
         return 'upstream:'.ProviderKey::MOFANG_FINANCE_API.':jwt:'.$supplier->id;
-    }
-
-    private function legacyJwtCacheKey(Supplier $supplier): string
-    {
-        return 'upstream:'.ProviderKey::HOSTING_PANEL_API.':jwt:'.$supplier->id;
     }
 
     private function jwtCache(): CacheRepository

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-use App\Services\ProductCatalog\ProductDisplayNameResolver;
+use App\Models\Concerns\HandlesProductSnapshot;
 use App\Support\OrderInvoiceNoGenerator;
 use App\Support\VersionedJson;
 use Carbon\CarbonInterface;
@@ -12,9 +12,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Order extends Model
 {
+    use HandlesProductSnapshot, SoftDeletes;
+
     public const PROJECTION_TYPE_PROVISIONING = 'provisioning';
 
     protected $fillable = [
@@ -58,44 +61,6 @@ class Order extends Model
             'coupon_snapshot' => 'array',
             'paid_at' => 'datetime',
         ];
-    }
-
-    public function getProductSpecSnapshotAttribute(mixed $value): ?string
-    {
-        $resolved = trim((string) $value);
-        if ($resolved !== '') {
-            return $resolved;
-        }
-
-        return null;
-    }
-
-    public function getProductNameSnapshotAttribute(mixed $value): ?string
-    {
-        $resolved = trim((string) ($this->product_spec_snapshot ?? $value));
-        if ($resolved !== '') {
-            return $resolved;
-        }
-
-        $product = $this->product;
-        if ($product instanceof Product) {
-            $displayName = trim((string) ((new ProductDisplayNameResolver)->resolveForProduct($product)['product_display_name'] ?? ''));
-
-            return $displayName !== '' ? $displayName : null;
-        }
-
-        return null;
-    }
-
-    public function setProductNameSnapshotAttribute(mixed $value): void
-    {
-        $normalized = trim((string) $value);
-
-        if ($normalized !== '' && trim((string) ($this->attributes['product_spec_snapshot'] ?? '')) === '') {
-            $this->attributes['product_spec_snapshot'] = $normalized;
-        }
-
-        unset($this->attributes['product_name_snapshot']);
     }
 
     public function getProductTypeSnapshotAttribute(mixed $value): ?string
@@ -180,6 +145,12 @@ class Order extends Model
         return $this->belongsTo(Service::class);
     }
 
+    /**
+     * 关联的账单（Invoice-first 架构下，Invoice 是财务主体；Order 是开通投影）。
+     *
+     * 注意：在 CheckoutService 新路径中，Invoice 先于 Order 创建，
+     * 访问此关联前请确认 Invoice 已与 Order 完成双向绑定。
+     */
     public function invoice(): HasOne
     {
         return $this->hasOne(Invoice::class);

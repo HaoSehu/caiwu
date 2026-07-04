@@ -40,7 +40,7 @@ import { ChevronLeftIcon } from 'tdesign-icons-vue-next';
 
 import { fieldValue } from '@/utils/format';
 
-type LogTab = 'system' | 'admin-logins' | 'api' | 'sms' | 'email' | 'tasks' | 'gateway' | 'activity';
+type LogTab = 'system' | 'runtime' | 'admin-logins' | 'api' | 'sms' | 'email' | 'tasks' | 'gateway';
 type RecordRow = Record<string, unknown>;
 
 const props = defineProps<{
@@ -62,9 +62,10 @@ const headerTitle = computed(() => {
   if (props.activeTab === 'api') return `API 日志 · ${fieldValue(row.request_id) || '详情'}`;
   if (props.activeTab === 'sms') return `短信日志 · ${fieldValue(row.phone) || '详情'}`;
   if (props.activeTab === 'email') return `邮件日志 · ${fieldValue(row.to_email) || '详情'}`;
-  if (props.activeTab === 'tasks') return `任务日志 · ${fieldValue(row.task_key) || '详情'}`;
+  if (props.activeTab === 'tasks') return `自动任务日志 · ${fieldValue(row.task_key) || '详情'}`;
   if (props.activeTab === 'gateway') return `网关日志 · ${fieldValue(row.gateway) || ''} ${fieldValue(row.action) || ''}`;
-  if (props.activeTab === 'activity') return `活动日志 · ${fieldValue(row.actor_name) || '详情'}`;
+  if (props.activeTab === 'system') return `系统日志 · ${fieldValue(row.actor_name) || '详情'}`;
+  if (props.activeTab === 'runtime') return `运行日志 · ${fieldValue(row.id) || '详情'}`;
   return `系统日志 · ${fieldValue(row.id) || '详情'}`;
 });
 
@@ -98,6 +99,9 @@ const detailFields = computed(() => {
       { label: '发送状态', value: statusLabel(row.status) },
       { label: '模板编号', value: fieldValue(row.template_code) },
       { label: '供应商', value: fieldValue(row.provider) },
+      { label: '插件 ID', value: fieldValue(row.plugin_id) },
+      { label: '驱动 key', value: fieldValue(row.driver_key) },
+      { label: 'Trace ID', value: fieldValue(row.trace_id) },
       { label: '请求号', value: fieldValue(row.request_id) },
       { label: '发送时间', value: formatDate(row.sent_at) },
       { label: '创建时间', value: formatDate(row.created_at) },
@@ -110,6 +114,9 @@ const detailFields = computed(() => {
       { label: '发送状态', value: statusLabel(row.status) },
       { label: '主题', value: fieldValue(row.subject) },
       { label: '模板编号', value: fieldValue(row.template_code) },
+      { label: '插件 ID', value: fieldValue(row.plugin_id) },
+      { label: '驱动 key', value: fieldValue(row.driver_key) },
+      { label: 'Trace ID', value: fieldValue(row.trace_id) },
       { label: '发送时间', value: formatDate(row.sent_at) },
       { label: '创建时间', value: formatDate(row.created_at) },
       { label: '错误信息', value: fieldValue(row.error_msg) },
@@ -119,8 +126,12 @@ const detailFields = computed(() => {
     return [
       { label: '任务名称', value: fieldValue(row.task_title || row.task_key) },
       { label: '任务键', value: fieldValue(row.task_key) },
+      { label: '状态', value: taskStatusLabel(row.status) },
       { label: '日志级别', value: fieldValue(row.level) },
-      { label: '记录时间', value: formatDate(row.time) },
+      { label: '开始时间', value: formatDate(row.started_at || row.time) },
+      { label: '结束时间', value: formatDate(row.finished_at) },
+      { label: '耗时(ms)', value: fieldValue(row.duration_ms) },
+      { label: '数据来源', value: taskSourceLabel(row.source) },
     ];
   }
   if (props.activeTab === 'gateway') {
@@ -128,13 +139,16 @@ const detailFields = computed(() => {
       { label: '网关', value: gatewayLabel(row.gateway) },
       { label: '操作', value: fieldValue(row.action) },
       { label: '结果状态', value: fieldValue(row.result_status) },
+      { label: '插件 ID', value: fieldValue(row.plugin_id) },
+      { label: '业务 key', value: fieldValue(row.gateway_key) },
+      { label: 'Trace ID', value: fieldValue(row.trace_id) },
       { label: '商户单号', value: fieldValue(row.out_trade_no) },
       { label: '交易号', value: fieldValue(row.trade_no) },
       { label: '账单 ID', value: fieldValue(row.invoice_id) },
       { label: '记录时间', value: formatDate(row.created_at) },
     ];
   }
-  if (props.activeTab === 'activity') {
+  if (props.activeTab === 'system') {
     return [
       { label: '操作人', value: fieldValue(row.actor_name) },
       { label: '操作人类型', value: fieldValue(row.actor_type) },
@@ -149,6 +163,9 @@ const detailFields = computed(() => {
   }
   return [
     { label: '日志级别', value: fieldValue(row.level) },
+    { label: '插件 ID', value: fieldValue(row.plugin_id) },
+    { label: '插件 key', value: fieldValue(row.plugin_key) },
+    { label: 'Trace ID', value: fieldValue(row.trace_id) },
     { label: '记录时间', value: formatDate(row.time) },
   ];
 });
@@ -184,7 +201,14 @@ const detailBlocks = computed(() => {
       { label: '错误信息', value: fieldValue(row.error_msg) },
     ];
   }
-  if (props.activeTab === 'activity') {
+  if (props.activeTab === 'tasks') {
+    return [
+      { label: '摘要 JSON', value: formatJson(row.summary) },
+      { label: '错误信息', value: fieldValue(row.error_msg) },
+      { label: '原始日志', value: fieldValue(row.raw || row.message) },
+    ];
+  }
+  if (props.activeTab === 'system') {
     return [
       { label: '描述', value: fieldValue(row.description) },
       { label: '上下文', value: formatJson(row.context) },
@@ -192,6 +216,8 @@ const detailBlocks = computed(() => {
   }
   return [
     { label: '格式化内容', value: fieldValue(row.message) },
+    { label: '请求上下文', value: formatJson(row.request_meta) },
+    { label: '响应上下文', value: formatJson(row.response_meta) },
     { label: '原始日志', value: fieldValue(row.raw) },
   ];
 });
@@ -202,8 +228,29 @@ function formatDate(value: unknown) {
 
 function statusLabel(status: unknown) {
   if (props.activeTab === 'admin-logins') return sourceLabel(status);
+  if (props.activeTab === 'tasks') return taskStatusLabel(status);
   const statusKey = String(status || '').toLowerCase();
   return String({ success: '发送成功', failed: '发送失败', pending: '待发送' }[statusKey] || fieldValue(status));
+}
+
+function taskStatusLabel(status: unknown) {
+  return (
+    {
+      success: '成功',
+      failed: '失败',
+      skipped: '跳过',
+    }[String(status || '').toLowerCase()] || fieldValue(status)
+  );
+}
+
+function taskSourceLabel(value: unknown) {
+  return (
+    {
+      schedule_run_logs: '调度执行日志',
+      activity_logs: '活动日志',
+      laravel_log: '运行日志',
+    }[String(value || '').toLowerCase()] || fieldValue(value)
+  );
 }
 
 function userTypeLabel(value: unknown) {
@@ -229,7 +276,9 @@ function activitySourceLabel(value: unknown) {
   return (
     {
       activity_log: '活动日志',
+      activity_logs: '活动日志',
       operation_log: '操作日志',
+      operation_logs: '操作日志',
     }[String(value || '').toLowerCase()] || fieldValue(value)
   );
 }

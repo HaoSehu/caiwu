@@ -4,14 +4,19 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\Auth\LoginRequest;
+use App\Http\Requests\Admin\Auth\UpdatePasswordRequest;
 use App\Http\Requests\Admin\Auth\UpdateProfileRequest;
+use App\Services\Admin\Rbac\AdminStaffService;
 use App\Services\Auth\AuthService;
 use App\Support\TextSanitizer;
 use Illuminate\Http\Request;
 
 class AuthController extends Controller
 {
-    public function __construct(private AuthService $authService) {}
+    public function __construct(
+        private AuthService $authService,
+        private AdminStaffService $adminStaffService,
+    ) {}
 
     /**
      * 管理员登录
@@ -49,12 +54,25 @@ class AuthController extends Controller
 
         $admin->update([
             'nickname' => $nickname !== '' ? $nickname : null,
-            'email' => $data['email'] ?? null,
         ]);
 
         $admin->load('role');
 
         return $this->success($this->serializeAdmin($admin), '资料更新成功');
+    }
+
+    public function updatePassword(UpdatePasswordRequest $request)
+    {
+        $payload = $request->payload();
+
+        $this->adminStaffService->updateOwnPassword(
+            staff: $request->user(),
+            currentPassword: (string) $payload['current_password'],
+            password: (string) $payload['password'],
+            ipAddress: $request->ip(),
+        );
+
+        return $this->success(null, '密码已更新');
     }
 
     /**

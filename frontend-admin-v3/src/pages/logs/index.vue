@@ -28,6 +28,9 @@
           <t-select v-if="showFilter('method')" v-model="filters.method" clearable placeholder="请求方法">
             <t-option v-for="item in methodOptions" :key="item" :label="item" :value="item" />
           </t-select>
+          <t-input v-if="showFilter('actor_keyword')" v-model="filters.actor_keyword" clearable placeholder="操作人" @enter="handleLogSearch" />
+          <t-input v-if="showFilter('description_keyword')" v-model="filters.description_keyword" clearable placeholder="描述关键词" @enter="handleLogSearch" />
+          <t-input v-if="showFilter('ip_address')" v-model="filters.ip_address" clearable placeholder="IP 地址" @enter="handleLogSearch" />
           <t-input v-if="showFilter('module')" v-model="filters.module" clearable placeholder="模块，例如 auth / order" @enter="handleLogSearch" />
           <t-select v-if="showFilter('user_type')" v-model="filters.user_type" clearable placeholder="调用端">
             <t-option label="管理员" value="admin" />
@@ -42,6 +45,10 @@
           <t-select v-if="showFilter('gateway')" v-model="filters.gateway" clearable placeholder="支付网关">
             <t-option v-for="item in gatewayOptions" :key="item.value" :label="item.label" :value="item.value" />
           </t-select>
+          <t-input v-if="showFilter('plugin_id')" v-model="filters.plugin_id" clearable placeholder="插件 ID" @enter="handleLogSearch" />
+          <t-input v-if="showFilter('gateway_key')" v-model="filters.gateway_key" clearable placeholder="业务网关 key" @enter="handleLogSearch" />
+          <t-input v-if="showFilter('driver_key')" v-model="filters.driver_key" clearable placeholder="驱动 key" @enter="handleLogSearch" />
+          <t-input v-if="showFilter('trace_id')" v-model="filters.trace_id" clearable placeholder="Trace ID" @enter="handleLogSearch" />
           <t-select v-if="showFilter('action')" v-model="filters.action" clearable placeholder="网关操作">
             <t-option v-for="item in gatewayActionOptions" :key="item.value" :label="item.label" :value="item.value" />
           </t-select>
@@ -86,7 +93,7 @@
           <t-button variant="outline" @click="resetLogFilters">重置</t-button>
         </div>
 
-        <div class="table-scroll">
+        <div v-if="!isMobile" class="table-scroll">
           <t-table row-key="id" :data="logRows" :columns="logTableColumns" :loading="logLoading" hover table-layout="fixed">
             <template #time="{ row }">{{ formatDate(row.time || row.created_at || row.sent_at) }}</template>
             <template #primary="{ row }">
@@ -113,6 +120,9 @@
             <template #httpStatus="{ row }">
               <t-tag :theme="httpStatusTheme(row.status)" variant="light">{{ fieldValue(row.status) }}</t-tag>
             </template>
+            <template #subject_type="{ row }">
+              {{ subjectText(row) }}
+            </template>
             <template #message="{ row }">
               <div v-if="isTextLog" class="log-message">
                 <t-tag v-if="messageTag(row)" size="small" variant="light" class="log-message__tag">{{ messageTag(row) }}</t-tag>
@@ -124,7 +134,7 @@
                       size="small"
                       variant="outline"
                       class="log-message__id-tag"
-                      :title="`点击复制 ${seg.label}:${seg.id}`"
+                      :title="idSegmentTitle(seg)"
                       @click="copyId(seg.label, seg.id)"
                     >{{ seg.label }}:{{ seg.id }}</t-tag>
                   </template>
@@ -145,6 +155,47 @@
               <t-button theme="primary" variant="text" @click="openDetail(row)">详情</t-button>
             </template>
           </t-table>
+        </div>
+
+        <div v-else class="table-scroll">
+          <t-loading :loading="logLoading" size="small">
+            <div v-if="logRows.length" class="log-mobile-stack">
+              <article v-for="row in logRows" :key="String(row.id || row.order_no || row.sent_no)" class="log-mobile-card">
+                <div class="log-mobile-card__head">
+                  <span class="log-mobile-card__time">{{ formatDate(row.time || row.created_at || row.sent_at) }}</span>
+                  <t-tag v-if="row.level" :theme="levelTheme(row.level)" variant="light" size="small">{{ fieldValue(row.level) }}</t-tag>
+                  <t-tag v-if="isTextLog && messageTag(row)" size="small" variant="light">{{ messageTag(row) }}</t-tag>
+                  <t-tag
+                    v-if="logStatusValue(row)"
+                    :theme="statusTheme(logStatusValue(row))"
+                    variant="light"
+                    size="small"
+                  >{{ statusLabel(logStatusValue(row)) }}</t-tag>
+                  <t-tag
+                    v-if="row.result_status"
+                    :theme="gatewayResultStatusTheme(row.result_status)"
+                    variant="light"
+                    size="small"
+                  >{{ gatewayResultStatusLabel(row.result_status) }}</t-tag>
+                </div>
+                <div class="log-mobile-card__body">{{ logCardMessage(row) }}</div>
+                <div class="log-mobile-card__meta">
+                  <t-tag v-if="row.method" variant="outline" size="small">{{ fieldValue(row.method) }}</t-tag>
+                  <span v-if="row.path" class="muted-text">{{ fieldValue(row.path) }}</span>
+                  <span v-if="row.gateway" class="muted-text">网关: {{ gatewayLabel(row.gateway) }}</span>
+                  <span v-if="row.gateway_key" class="muted-text">业务 key: {{ fieldValue(row.gateway_key) }}</span>
+                  <span v-if="row.driver_key" class="muted-text">驱动 key: {{ fieldValue(row.driver_key) }}</span>
+                  <span v-if="row.plugin_key" class="muted-text">插件: {{ fieldValue(row.plugin_key) }}</span>
+                  <span v-if="row.trace_id" class="muted-text">Trace: {{ fieldValue(row.trace_id) }}</span>
+                  <span v-if="row.status" class="muted-text">HTTP {{ fieldValue(row.status) }}</span>
+                </div>
+                <div class="log-mobile-card__actions">
+                  <t-button theme="primary" variant="text" size="small" @click="openDetail(row)">详情</t-button>
+                </div>
+              </article>
+            </div>
+            <t-empty v-else description="暂无日志" />
+          </t-loading>
         </div>
 
         <div v-if="logPagination.total > 0" class="pagination-row">
@@ -354,21 +405,22 @@ import { adminApi, type LaravelPagination, type LogListParams } from '@/api/admi
 import { fieldValue } from '@/utils/format';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { errorMessage } from '@/utils/userMessage';
-import { AdminPermissions } from '@/constants/permissions';
+import { AdminPermissions, hasPermissionInList } from '@/constants/permissions';
 import { useUserStore } from '@/store';
 
 import LogDetailDrawer from './components/LogDetailDrawer.vue';
 
 import './index.less';
 
-type LogTab = 'system' | 'admin-logins' | 'api' | 'sms' | 'email' | 'tasks' | 'gateway' | 'activity';
+type LogTab = 'system' | 'runtime' | 'admin-logins' | 'api' | 'sms' | 'email' | 'tasks' | 'gateway';
 type LogsTab = LogTab | 'schedules' | 'cleanup';
 type RecordRow = Record<string, unknown>;
 
 const route = useRoute();
 const router = useRouter();
 const userStore = useUserStore();
-const validTabs: LogsTab[] = ['system', 'admin-logins', 'api', 'sms', 'email', 'tasks', 'gateway', 'activity', 'schedules', 'cleanup'];
+const isMobile = useMediaQuery('(max-width: 768px)');
+const validTabs: LogsTab[] = ['system', 'runtime', 'admin-logins', 'api', 'sms', 'email', 'tasks', 'gateway', 'schedules', 'cleanup'];
 const activeTab = ref<LogsTab>(normalizeTab(route.query.tab));
 const logLoading = ref(false);
 const scheduleLoading = ref(false);
@@ -384,6 +436,9 @@ const lastCleanupResult = ref<Record<string, unknown> | null>(null);
 
 const filters = reactive({
   keyword: '',
+  actor_keyword: '',
+  description_keyword: '',
+  ip_address: '',
   level: '',
   task_key: '',
   method: '',
@@ -395,11 +450,16 @@ const filters = reactive({
   start_date: '',
   end_date: '',
   gateway: '',
+  gateway_key: '',
+  driver_key: '',
+  plugin_id: '',
+  trace_id: '',
   action: '',
   result_status: '',
   actor_type: '',
   subject_type: '',
 });
+type LogFilterKey = keyof typeof filters;
 
 const logPagination = reactive({
   page: 1,
@@ -418,13 +478,13 @@ const tabGroups: Array<{ group: string; label: string; tabs: Array<{ value: Logs
     label: '日志查看',
     tabs: [
       { value: 'system', label: '系统日志' },
+      { value: 'runtime', label: '运行日志' },
       { value: 'admin-logins', label: '管理员登录' },
       { value: 'api', label: 'API 日志' },
       { value: 'sms', label: '短信日志' },
       { value: 'email', label: '邮件日志' },
-      { value: 'tasks', label: '任务日志' },
+      { value: 'tasks', label: '自动任务日志' },
       { value: 'gateway', label: '网关日志' },
-      { value: 'activity', label: '活动日志' },
     ],
   },
   {
@@ -492,9 +552,15 @@ const taskLogOptions = [
 const logMeta: Record<LogTab, { title: string; description: string; filters: string[]; keyword: string }> = {
   system: {
     title: '系统日志',
+    description: '业务操作审计日志，记录谁在什么时间、什么 IP 做了什么操作。',
+    filters: ['actor_keyword', 'description_keyword', 'ip_address', 'module', 'actor_type', 'subject_type', 'date'],
+    keyword: '操作人、模块或描述',
+  },
+  runtime: {
+    title: '运行日志',
     description: '查看应用运行日志、警告与错误信息。',
-    filters: ['level', 'keyword', 'date'],
-    keyword: '日志内容关键词',
+    filters: ['level', 'plugin_id', 'gateway_key', 'driver_key', 'trace_id', 'keyword', 'date'],
+    keyword: '日志内容、插件 key 或 Trace ID',
   },
   'admin-logins': {
     title: '管理员登录日志',
@@ -511,39 +577,44 @@ const logMeta: Record<LogTab, { title: string; description: string; filters: str
   sms: {
     title: '短信日志',
     description: '查看短信发送状态、请求号与失败原因。',
-    filters: ['phone', 'keyword', 'status'],
+    filters: ['phone', 'plugin_id', 'driver_key', 'trace_id', 'keyword', 'status'],
     keyword: '搜索模板编号、请求号或内容',
   },
   email: {
     title: '邮件日志',
     description: '查看邮件发送状态、失败原因与内容摘要。',
-    filters: ['email', 'keyword', 'status'],
+    filters: ['email', 'plugin_id', 'driver_key', 'trace_id', 'keyword', 'status'],
     keyword: '搜索模板编号、主题或正文关键词',
   },
   tasks: {
-    title: '定时任务日志',
+    title: '自动任务日志',
     description: '聚合展示调度任务执行结果、错误级别和原始日志内容。',
-    filters: ['task_key', 'level', 'keyword', 'date'],
+    filters: ['task_key', 'status', 'level', 'keyword', 'date'],
     keyword: '任务名称或日志内容',
   },
   gateway: {
     title: '网关日志',
     description: '支付网关请求/响应日志，含交易号、状态与错误信息。',
-    filters: ['keyword', 'gateway', 'action', 'result_status', 'date'],
-    keyword: '交易号、网关名或错误信息',
-  },
-  activity: {
-    title: '活动日志',
-    description: '业务活动审计日志，记录谁在什么模块做了什么操作。',
-    filters: ['keyword', 'module', 'actor_type', 'subject_type', 'date'],
-    keyword: '操作人姓名 / 邮箱 / 手机号 / ID、模块或描述',
+    filters: ['keyword', 'gateway', 'gateway_key', 'plugin_id', 'trace_id', 'action', 'result_status', 'date'],
+    keyword: '交易号、网关名、Trace ID 或错误信息',
   },
 };
 
 const baseLogColumns: Record<LogTab, PrimaryTableCol<RecordRow>[]> = {
   system: [
+    { colKey: 'time', title: '时间', width: 170 },
+    { colKey: 'primary', title: '操作人', minWidth: 180 },
+    { colKey: 'actor_type', title: '操作人类型', width: 120 },
+    { colKey: 'message', title: '描述', minWidth: 320 },
+    { colKey: 'ip_address', title: 'IP 地址', width: 150 },
+    { colKey: 'subject_type', title: '关联对象', width: 140 },
+    { colKey: 'actions', title: '操作', fixed: 'right', width: 90 },
+  ],
+  runtime: [
     { colKey: 'time', title: '记录时间', width: 170 },
     { colKey: 'level', title: '级别', width: 100 },
+    { colKey: 'plugin_key', title: '插件 key', minWidth: 120, ellipsis: true },
+    { colKey: 'trace_id', title: 'Trace ID', minWidth: 180, ellipsis: true },
     { colKey: 'message', title: '日志内容', minWidth: 520 },
     { colKey: 'actions', title: '操作', fixed: 'right', width: 90 },
   ],
@@ -570,6 +641,8 @@ const baseLogColumns: Record<LogTab, PrimaryTableCol<RecordRow>[]> = {
     { colKey: 'template_code', title: '模板编号', minWidth: 130 },
     { colKey: 'message', title: '内容摘要', minWidth: 260 },
     { colKey: 'status', title: '状态', width: 110 },
+    { colKey: 'driver_key', title: '驱动 key', minWidth: 120, ellipsis: true },
+    { colKey: 'trace_id', title: 'Trace ID', minWidth: 170, ellipsis: true },
     { colKey: 'request_id', title: '请求号', minWidth: 170, ellipsis: true },
     { colKey: 'error', title: '错误信息', minWidth: 210 },
     { colKey: 'time', title: '创建时间', width: 170 },
@@ -582,6 +655,8 @@ const baseLogColumns: Record<LogTab, PrimaryTableCol<RecordRow>[]> = {
     { colKey: 'subject', title: '主题', minWidth: 220, ellipsis: true },
     { colKey: 'message', title: '正文摘要', minWidth: 260 },
     { colKey: 'status', title: '状态', width: 110 },
+    { colKey: 'driver_key', title: '驱动 key', minWidth: 120, ellipsis: true },
+    { colKey: 'trace_id', title: 'Trace ID', minWidth: 170, ellipsis: true },
     { colKey: 'error', title: '错误信息', minWidth: 210 },
     { colKey: 'time', title: '创建时间', width: 170 },
     { colKey: 'actions', title: '操作', fixed: 'right', width: 90 },
@@ -589,27 +664,22 @@ const baseLogColumns: Record<LogTab, PrimaryTableCol<RecordRow>[]> = {
   tasks: [
     { colKey: 'time', title: '记录时间', width: 170 },
     { colKey: 'primary', title: '任务', minWidth: 220 },
+    { colKey: 'status', title: '状态', width: 110 },
     { colKey: 'level', title: '级别', width: 100 },
-    { colKey: 'message', title: '日志内容', minWidth: 420 },
+    { colKey: 'duration_ms', title: '耗时(ms)', width: 110 },
+    { colKey: 'message', title: '摘要', minWidth: 360 },
     { colKey: 'actions', title: '操作', fixed: 'right', width: 90 },
   ],
   gateway: [
     { colKey: 'time', title: '记录时间', width: 170 },
     { colKey: 'gateway', title: '网关', width: 110 },
+    { colKey: 'gateway_key', title: '业务 key', minWidth: 120, ellipsis: true },
     { colKey: 'action', title: '操作', width: 110 },
     { colKey: 'out_trade_no', title: '商户单号', minWidth: 180, ellipsis: true },
     { colKey: 'trade_no', title: '交易号', minWidth: 180, ellipsis: true },
+    { colKey: 'trace_id', title: 'Trace ID', minWidth: 170, ellipsis: true },
     { colKey: 'result_status', title: '结果', width: 90 },
     { colKey: 'error_msg', title: '错误信息', minWidth: 150, ellipsis: true },
-    { colKey: 'actions', title: '操作', fixed: 'right', width: 90 },
-  ],
-  activity: [
-    { colKey: 'time', title: '记录时间', width: 170 },
-    { colKey: 'primary', title: '操作人', minWidth: 180 },
-    { colKey: 'module', title: '模块', width: 120 },
-    { colKey: 'action', title: '动作', minWidth: 150 },
-    { colKey: 'message', title: '描述', minWidth: 300 },
-    { colKey: 'subject_type', title: '关联类型', width: 120 },
     { colKey: 'actions', title: '操作', fixed: 'right', width: 90 },
   ],
 };
@@ -630,11 +700,23 @@ const scheduleLogColumns: PrimaryTableCol<RecordRow>[] = [
 const currentLoading = computed(() => logLoading.value || scheduleLoading.value || cleanupLoading.value || cleanupSubmitting.value);
 const currentLogMeta = computed(() => (isLogTab(activeTab.value) ? logMeta[activeTab.value] : logMeta.system));
 const logTableColumns = computed(() => (isLogTab(activeTab.value) ? baseLogColumns[activeTab.value] : []));
-const isTextLog = computed(() => activeTab.value === 'system' || activeTab.value === 'tasks' || activeTab.value === 'activity');
+const isTextLog = computed(() => activeTab.value === 'system' || activeTab.value === 'runtime' || activeTab.value === 'tasks');
 const keywordPlaceholder = computed(() => currentLogMeta.value.keyword);
-const statusPlaceholder = computed(() => (activeTab.value === 'api' ? '全部状态码' : '全部发送状态'));
-const statusOptions = computed(() => (activeTab.value === 'api' ? httpStatusOptions : notifyStatusOptions));
-const isMobile = useMediaQuery('(max-width: 768px)');
+const statusPlaceholder = computed(() => {
+  if (activeTab.value === 'api') return '全部状态码';
+  if (activeTab.value === 'tasks') return '全部任务状态';
+  return '全部发送状态';
+});
+const taskStatusOptions = [
+  { label: '成功', value: 'success' },
+  { label: '失败', value: 'failed' },
+  { label: '跳过', value: 'skipped' },
+];
+const statusOptions = computed(() => {
+  if (activeTab.value === 'api') return httpStatusOptions;
+  if (activeTab.value === 'tasks') return taskStatusOptions;
+  return notifyStatusOptions;
+});
 const drawerSize = computed(() => (isMobile.value ? '100%' : '700px'));
 const scheduleTasks = computed(() => asArray(scheduleOverview.value.tasks));
 const scheduleLogs = computed(() => asArray(scheduleOverview.value.recent_logs));
@@ -693,7 +775,7 @@ const scheduleEnvAlerts = computed(() => {
 
   return alerts;
 });
-const canManageSchedules = computed(() => hasPermission(AdminPermissions.SETTINGS_MANAGE));
+const canManageSchedules = computed(() => hasPermission(AdminPermissions.SCHEDULE_TRIGGER));
 const canManageLogCleanup = computed(() => hasPermission(AdminPermissions.LOG_MANAGE));
 const cleanupSubmitDisabled = computed(
   () =>
@@ -720,8 +802,8 @@ const fileCards = computed(() => {
   return [
     { key: 'exists', label: '日志文件状态', value: file.exists ? '存在' : '缺失' },
     { key: 'size_bytes', label: '文件大小', value: formatBytes(file.size_bytes) },
-    { key: 'task_log_count', label: '任务日志条数', value: numberText(file.task_log_count) },
-    { key: 'system_log_count', label: '系统日志条数', value: numberText(file.system_log_count) },
+    { key: 'task_log_count', label: '自动任务日志条数', value: numberText(file.task_log_count) },
+    { key: 'runtime_log_count', label: '运行日志条数', value: numberText(file.runtime_log_count ?? file.system_log_count) },
   ];
 });
 const affectedCountText = computed(() => {
@@ -735,7 +817,7 @@ function normalizeTab(value: unknown): LogsTab {
 }
 
 function isLogTab(value: LogsTab): value is LogTab {
-  return ['system', 'admin-logins', 'api', 'sms', 'email', 'tasks', 'gateway', 'activity'].includes(value);
+  return ['system', 'runtime', 'admin-logins', 'api', 'sms', 'email', 'tasks', 'gateway'].includes(value);
 }
 
 function showFilter(name: string) {
@@ -774,6 +856,19 @@ function buildLogParams(): LogListParams {
   return params;
 }
 
+function applyRouteFilterQuery() {
+  for (const key of currentLogMeta.value.filters) {
+    if (key === 'date') continue;
+    const queryValue = route.query[key];
+    if (queryValue === undefined) continue;
+
+    const normalizedValue = Array.isArray(queryValue) ? queryValue[0] : queryValue;
+    if (normalizedValue !== null && key in filters) {
+      (filters as Record<LogFilterKey, string | number>)[key as LogFilterKey] = String(normalizedValue);
+    }
+  }
+}
+
 async function loadLogs() {
   if (!isLogTab(activeTab.value)) return;
   logLoading.value = true;
@@ -796,13 +891,13 @@ async function loadLogs() {
 function requestLogList(tab: LogTab, params: LogListParams): Promise<LaravelPagination> {
   const map = {
     system: adminApi.logs.system,
+    runtime: adminApi.logs.runtime,
     'admin-logins': adminApi.logs.adminLogins,
     api: adminApi.logs.api,
     sms: adminApi.logs.sms,
     email: adminApi.logs.email,
     tasks: adminApi.logs.tasks,
     gateway: adminApi.logs.gateway,
-    activity: adminApi.logs.activity,
   };
   return map[tab](params);
 }
@@ -815,6 +910,9 @@ function handleLogSearch() {
 function resetLogFilters(shouldLoad = true) {
   Object.assign(filters, {
     keyword: '',
+    actor_keyword: '',
+    description_keyword: '',
+    ip_address: '',
     level: '',
     task_key: '',
     method: '',
@@ -826,6 +924,10 @@ function resetLogFilters(shouldLoad = true) {
     start_date: '',
     end_date: '',
     gateway: '',
+    gateway_key: '',
+    driver_key: '',
+    plugin_id: '',
+    trace_id: '',
     action: '',
     result_status: '',
     actor_type: '',
@@ -933,28 +1035,37 @@ function closeDetailDrawer() {
 }
 
 function primaryTitle(row: RecordRow) {
+  if (activeTab.value === 'system') return fieldValue(row.actor_name || '系统');
   if (activeTab.value === 'admin-logins') return fieldValue(row.admin_username);
   if (activeTab.value === 'api') return fieldValue(row.actor_name || userTypeLabel(row.user_type));
   if (activeTab.value === 'sms') return fieldValue(row.phone);
   if (activeTab.value === 'email') return fieldValue(row.to_email);
   if (activeTab.value === 'tasks') return fieldValue(row.task_title || row.task_key);
-  if (activeTab.value === 'activity') return fieldValue(row.actor_name || '系统');
   return fieldValue(row.id);
 }
 
 function primarySubText(row: RecordRow) {
+  if (activeTab.value === 'system') return fieldValue(row.actor_type === 'system' ? '系统操作' : `ID: ${row.actor_id || '-'}`);
   if (activeTab.value === 'admin-logins') return fieldValue(row.admin_nickname || row.actor_name || '未设置昵称');
   if (activeTab.value === 'api') return userTypeLabel(row.user_type);
   if (activeTab.value === 'sms' || activeTab.value === 'email') return `发送时间：${formatDate(row.sent_at)}`;
   if (activeTab.value === 'tasks') return fieldValue(row.task_key);
-  if (activeTab.value === 'activity') return fieldValue(row.actor_type === 'system' ? '系统操作' : `ID: ${row.actor_id || '-'}`);
   return '';
 }
 
 function messageText(row: RecordRow) {
   if (activeTab.value === 'email') return contentPreview(row.content);
-  if (activeTab.value === 'activity') return fieldValue(row.description);
+  if (activeTab.value === 'system') return fieldValue(row.description);
   return fieldValue(row.message || row.content);
+}
+
+function subjectText(row: RecordRow) {
+  const type = fieldValue(row.subject_type);
+  const id = fieldValue(row.subject_id);
+  if (type === '-' && id === '-') return '-';
+  if (id === '-') return type;
+  if (type === '-') return id;
+  return `${type} #${id}`;
 }
 
 function messageTag(row: RecordRow): string {
@@ -981,6 +1092,7 @@ const ID_PATTERNS: Array<{ label: string; regex: RegExp }> = [
   { label: 'Product ID', regex: /Product\s*ID\s*[:：]\s*(\d+)/gi },
   { label: 'Supplier ID', regex: /Supplier\s*ID\s*[:：]\s*(\d+)/gi },
   { label: 'Admin ID', regex: /Admin\s*ID\s*[:：]\s*(\d+)/gi },
+  { label: 'Transaction ID', regex: /Transaction\s*ID\s*[:：]\s*(\d+)/gi },
 ];
 
 function parseMessageSegments(row: RecordRow): MessageSegment[] {
@@ -1030,16 +1142,58 @@ function copyId(label: string, id: string) {
     () => MessagePlugin.success(`已复制 ${value}`),
     () => MessagePlugin.warning('复制失败，请手动选择'),
   );
+  const routePath = routeForIdSegment(label, id);
+  if (routePath) {
+    router.push(routePath);
+  }
+}
+
+function idSegmentTitle(seg: Extract<MessageSegment, { type: 'id' }>) {
+  return routeForIdSegment(seg.label, seg.id) ? `点击复制并跳转 ${seg.label}:${seg.id}` : `点击复制 ${seg.label}:${seg.id}`;
+}
+
+function routeForIdSegment(label: string, id: string) {
+  const cleanId = String(id || '').trim();
+  if (!cleanId) return '';
+  const routes: Record<string, string> = {
+    'Order ID': `/admin/finance/orders/${cleanId}`,
+    'User ID': `/admin/users/${cleanId}`,
+    'Ticket ID': `/admin/ticket-conversations/${cleanId}`,
+    'Host ID': `/admin/services?id=${encodeURIComponent(cleanId)}`,
+    'Service ID': `/admin/services?id=${encodeURIComponent(cleanId)}`,
+    'Product ID': `/admin/products?product_id=${encodeURIComponent(cleanId)}`,
+  };
+  return routes[label] || '';
 }
 
 function statusLabel(status: unknown) {
   if (activeTab.value === 'admin-logins') return sourceLabel(status);
   const statusKey = String(status || '').toLowerCase();
+  if (activeTab.value === 'tasks') {
+    return String({ success: '成功', failed: '失败', skipped: '跳过' }[statusKey] || fieldValue(status));
+  }
   return String({ success: '发送成功', failed: '发送失败', pending: '待发送' }[statusKey] || fieldValue(status));
 }
 
 function statusValue(row: RecordRow) {
   return activeTab.value === 'admin-logins' ? row.source : row.status;
+}
+
+/** 为移动端卡片提取状态值（兼容多种日志类型） */
+function logStatusValue(row: RecordRow) {
+  if (activeTab.value === 'admin-logins') return row.source;
+  if (row.result_status) return row.result_status;
+  return row.status;
+}
+
+/** 为移动端卡片提取核心消息文本 */
+function logCardMessage(row: RecordRow) {
+  const text = messageText(row);
+  if (text) {
+    const cleaned = String(text).replace(/\n+/g, ' ').trim();
+    return cleaned.length > 160 ? cleaned.slice(0, 160) + '…' : cleaned;
+  }
+  return primaryTitle(row) || primarySubText(row) || '-';
 }
 
 function statusTheme(status: unknown) {
@@ -1049,6 +1203,7 @@ function statusTheme(status: unknown) {
       success: 'success',
       failed: 'danger',
       pending: 'warning',
+      skipped: 'warning',
     }[String(status || '').toLowerCase()] || 'default'
   );
 }
@@ -1098,7 +1253,7 @@ function sourceLabel(value: unknown) {
 
 function hasPermission(permission: string) {
   const permissions = userStore.userInfo?.permissions || [];
-  return permissions.includes(AdminPermissions.ALL) || permissions.includes(permission);
+  return hasPermissionInList(permissions, permission);
 }
 
 function formatDate(value: unknown) {
@@ -1207,9 +1362,13 @@ watch(
     if (nextTab === activeTab.value) return;
     activeTab.value = nextTab;
     resetLogFilters(false);
+    applyRouteFilterQuery();
     refreshCurrentTab();
   },
 );
 
-onMounted(() => refreshCurrentTab());
+onMounted(() => {
+  applyRouteFilterQuery();
+  refreshCurrentTab();
+});
 </script>

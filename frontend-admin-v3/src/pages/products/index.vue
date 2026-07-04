@@ -12,12 +12,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { defineAsyncComponent, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-
-import ProductCatalog from './components/ProductCatalog.vue';
-import Suppliers from './components/Suppliers.vue';
-import TrafficPackages from './components/TrafficPackages.vue';
 
 import './index.less';
 
@@ -28,6 +24,10 @@ type ProductTab = (typeof VALID_TABS)[number];
 
 const route = useRoute();
 const router = useRouter();
+
+const ProductCatalog = defineAsyncComponent(() => import('./components/ProductCatalog.vue'));
+const TrafficPackages = defineAsyncComponent(() => import('./components/TrafficPackages.vue'));
+const Suppliers = defineAsyncComponent(() => import('./components/Suppliers.vue'));
 
 const activeTab = ref<ProductTab>(resolveRouteProductTab());
 

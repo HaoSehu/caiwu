@@ -13,7 +13,7 @@ class SettingTableBindingTest extends TestCase
 {
     public function test_site_config_endpoint_reads_basic_settings_from_settings_table(): void
     {
-        $keys = ['site_name', 'browser_title', 'site_logo', 'site_favicon', 'service_phone', 'service_email', 'service_hours', 'support_group_title', 'support_group_text', 'support_group_qr'];
+        $keys = ['site_name', 'browser_title', 'site_logo', 'site_favicon', 'client_console_icon', 'service_phone', 'service_email', 'service_hours', 'support_group_title', 'support_group_text', 'support_group_qr'];
         $originalRows = DB::table('settings')
             ->where('group_key', 'basic')
             ->whereIn('item_key', $keys)
@@ -30,6 +30,7 @@ class SettingTableBindingTest extends TestCase
         $browserTitle = '娴忚鍣ㄦ爣棰?'.$suffix;
         $siteLogo = '/branding/test-logo-'.$suffix.'.png';
         $siteFavicon = '/branding/test-favicon-'.$suffix.'.png';
+        $clientConsoleIcon = '/branding/test-client-console-icon-'.$suffix.'.png';
         $serviceQqGroup = 'qq-'.random_int(100000, 999999);
         $serviceEmail = 'support-'.$suffix.'@example.com';
         $serviceHours = '宸ヤ綔鏃?10:00 - 21:00';
@@ -47,6 +48,7 @@ class SettingTableBindingTest extends TestCase
             Setting::setValue('basic', 'browser_title', $browserTitle);
             Setting::setValue('basic', 'site_logo', $siteLogo);
             Setting::setValue('basic', 'site_favicon', $siteFavicon);
+            Setting::setValue('basic', 'client_console_icon', $clientConsoleIcon);
             Setting::setValue('basic', 'service_phone', $serviceQqGroup);
             Setting::setValue('basic', 'service_email', $serviceEmail);
             Setting::setValue('basic', 'service_hours', $serviceHours);
@@ -60,6 +62,7 @@ class SettingTableBindingTest extends TestCase
                 ->assertJsonPath('data.browser_title', $browserTitle)
                 ->assertJsonPath('data.site_logo', $siteLogo)
                 ->assertJsonPath('data.site_favicon', $siteFavicon)
+                ->assertJsonPath('data.client_console_icon', $clientConsoleIcon)
                 ->assertJsonPath('data.service_phone', $serviceQqGroup)
                 ->assertJsonPath('data.service_qq_group', $serviceQqGroup)
                 ->assertJsonPath('data.service_email', $serviceEmail)
@@ -110,7 +113,7 @@ class SettingTableBindingTest extends TestCase
                 'is_visible' => 1,
             ]);
 
-            $productId = DB::table('products')->insertGetId([
+            $productId = $this->insertProduct([
                 'first_product_group_id' => $firstGroupId,
                 'second_product_group_id' => $secondGroupId,
                 'third_product_group_id' => null,
@@ -173,6 +176,17 @@ class SettingTableBindingTest extends TestCase
         ]);
     }
 
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function insertProduct(array $payload): int
+    {
+        $columns = DB::getSchemaBuilder()->getColumnListing('products');
+        $filteredPayload = array_intersect_key($payload, array_fill_keys($columns, true));
+
+        return (int) DB::table('products')->insertGetId($filteredPayload);
+    }
+
     public function test_site_product_detail_endpoint_returns_group_name_and_slogan(): void
     {
         $suffix = bin2hex(random_bytes(4));
@@ -204,7 +218,7 @@ class SettingTableBindingTest extends TestCase
                 'is_visible' => 1,
             ]);
 
-            $productId = DB::table('products')->insertGetId([
+            $productId = $this->insertProduct([
                 'first_product_group_id' => $firstGroupId,
                 'second_product_group_id' => $parentGroupId,
                 'third_product_group_id' => $childGroupId,
@@ -272,7 +286,7 @@ class SettingTableBindingTest extends TestCase
                 'is_visible' => 1,
             ]);
 
-            $productId = DB::table('products')->insertGetId([
+            $productId = $this->insertProduct([
                 'first_product_group_id' => $firstGroupId,
                 'second_product_group_id' => $secondGroupId,
                 'third_product_group_id' => null,

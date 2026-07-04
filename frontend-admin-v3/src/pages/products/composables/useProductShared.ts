@@ -189,15 +189,10 @@ export function providerTypeLabel(value: unknown, providerTypeOptions: ProviderT
  * Merge provider type options with fallbacks
  */
 export function mergeProviderTypeOptions(options: ProviderTypeRecord[]): ProviderTypeRecord[] {
-  const map = new Map<string, ProviderTypeRecord>();
-  fallbackProviderTypeOptions.forEach((item) => map.set(item.value, item));
-  normalizeProviderTypeOptions(options).forEach((item) => {
-    map.set(item.value, {
-      ...item,
-      label: providerTypeFallbackLabels[item.value] || item.label,
-    });
-  });
-  return Array.from(map.values());
+  return normalizeProviderTypeOptions(options).map((item) => ({
+    ...item,
+    label: providerTypeFallbackLabels[item.value] || item.label,
+  }));
 }
 
 /**
@@ -233,7 +228,7 @@ export function normalizeProviderTypeOptions(value: unknown): ProviderTypeRecord
 
       const rawLabel = rec.label ?? rec.name ?? rec.title;
       const label = providerTypeFallbackLabels[val] || (typeof rawLabel === 'string' ? rawLabel : String(rawLabel || val));
-      return { value: val, label };
+      return { ...rec, value: val, label };
     })
     .filter((item): item is ProviderTypeRecord => !!item);
 }

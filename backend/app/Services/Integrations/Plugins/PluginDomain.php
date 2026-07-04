@@ -12,6 +12,8 @@ final class PluginDomain
 
     public const VERIFICATION = 'verification';
 
+    public const CAPTCHA = 'captcha';
+
     public const MAIL = 'mail';
 
     public const SMS = 'sms';

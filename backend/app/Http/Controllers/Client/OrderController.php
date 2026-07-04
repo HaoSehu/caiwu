@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Client;
 
 use App\Constants\OrderStatus;
+use App\Constants\OrderType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Client\Order\IndexRequest;
 use App\Models\Order;
 use App\Services\Order\OrderService;
 use App\Services\ProductCatalog\ProductFullPathResolver;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 
 class OrderController extends Controller
@@ -47,6 +49,7 @@ class OrderController extends Controller
             $keyword = trim((string) $filters['keyword']);
             $query->where('order_no', 'like', '%'.$keyword.'%');
         }
+        $this->applyDateFilter($query, $filters);
 
         $perPage = (int) ($filters['page_size'] ?? 15);
         $paginator = $query->paginate($perPage);
@@ -201,12 +204,34 @@ class OrderController extends Controller
 
     private function orderTypeLabel(string $type): string
     {
-        return match ($type) {
-            'new' => '新购',
-            'renew' => '续费',
-            'addon' => '附加配置',
-            default => $type,
-        };
+        return OrderType::label($type);
+    }
+
+    private function applyDateFilter($query, array $filters): void
+    {
+        $start = trim((string) ($filters['start_date'] ?? ''));
+        $end = trim((string) ($filters['end_date'] ?? ''));
+
+        if ($start === '' && $end === '') {
+            return;
+        }
+
+        if ($start !== '' && $end !== '') {
+            $query->whereBetween('created_at', [
+                CarbonImmutable::parse($start)->startOfDay(),
+                CarbonImmutable::parse($end)->endOfDay(),
+            ]);
+
+            return;
+        }
+
+        if ($start !== '') {
+            $query->where('created_at', '>=', CarbonImmutable::parse($start)->startOfDay());
+
+            return;
+        }
+
+        $query->where('created_at', '<=', CarbonImmutable::parse($end)->endOfDay());
     }
 
     private function productFullPathResolver(): ProductFullPathResolver

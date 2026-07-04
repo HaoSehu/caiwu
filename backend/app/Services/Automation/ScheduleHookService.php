@@ -10,6 +10,18 @@ use Throwable;
 
 class ScheduleHookService
 {
+    public const HOOK_BEFORE_CRON = 'before_cron';
+
+    public const HOOK_AFTER_CRON = 'after_cron';
+
+    public const HOOK_BEFORE_DAILY_CRON = 'before_daily_cron';
+
+    public const HOOK_AFTER_DAILY_CRON = 'after_daily_cron';
+
+    public const HOOK_AFTER_FIVE_MINUTE_CRON = 'after_five_minute_cron';
+
+    public const HOOK_AFTER_HALF_HOUR_MINUTE_CRON = 'after_half_hour_minute_cron';
+
     public const HOOK_TASK_BEFORE = 'task.before';
 
     public const HOOK_TASK_AFTER = 'task.after';
@@ -62,6 +74,17 @@ class ScheduleHookService
                     'message' => $exception->getMessage(),
                 ];
             }
+        }
+
+        return $results;
+    }
+
+    public function runMany(array $hooks, array $context = []): array
+    {
+        $results = [];
+
+        foreach (array_values(array_unique(array_filter($hooks))) as $hook) {
+            $results[$hook] = $this->run((string) $hook, $context);
         }
 
         return $results;

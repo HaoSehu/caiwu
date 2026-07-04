@@ -2,20 +2,21 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HandlesProductSnapshot;
 use App\Models\Concerns\NormalizesTraceId;
-use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Support\OrderInvoiceNoGenerator;
 use App\Support\VersionedJson;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class Invoice extends Model
 {
-    use NormalizesTraceId;
+    use HandlesProductSnapshot, NormalizesTraceId, SoftDeletes;
 
     protected $fillable = [
         'invoice_no', 'user_id', 'order_id', 'type',
@@ -53,6 +54,13 @@ class Invoice extends Model
         return $this->belongsTo(User::class);
     }
 
+    /**
+     * 关联的内部开通投影订单（Order）。
+     *
+     * Invoice 是财务主体；Order 是开通侧的内部投影，
+     * 充值/扣款/返利类账单（type=recharge/deduction/referral_credit）不产生 Order，
+     * 此关联对这类账单返回 null，查询前请先判断 invoice->order_id 是否非空。
+     */
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);
@@ -81,44 +89,6 @@ class Invoice extends Model
     public function items(): HasMany
     {
         return $this->hasMany(InvoiceItem::class, 'invoice_id');
-    }
-
-    public function getProductSpecSnapshotAttribute(mixed $value): ?string
-    {
-        $resolved = trim((string) $value);
-        if ($resolved !== '') {
-            return $resolved;
-        }
-
-        return null;
-    }
-
-    public function getProductNameSnapshotAttribute(mixed $value): ?string
-    {
-        $resolved = trim((string) ($this->product_spec_snapshot ?? $value));
-        if ($resolved !== '') {
-            return $resolved;
-        }
-
-        $product = $this->product;
-        if ($product instanceof Product) {
-            $displayName = trim((string) ((new ProductDisplayNameResolver)->resolveForProduct($product)['product_display_name'] ?? ''));
-
-            return $displayName !== '' ? $displayName : null;
-        }
-
-        return null;
-    }
-
-    public function setProductNameSnapshotAttribute(mixed $value): void
-    {
-        $normalized = trim((string) $value);
-
-        if ($normalized !== '' && trim((string) ($this->attributes['product_spec_snapshot'] ?? '')) === '') {
-            $this->attributes['product_spec_snapshot'] = $normalized;
-        }
-
-        unset($this->attributes['product_name_snapshot']);
     }
 
     public function getDisplayProductNameAttribute(): string
@@ -169,6 +139,17 @@ class Invoice extends Model
         return VersionedJson::tradeSnapshot($value, 'invoice.coupon_snapshot');
     }
 
+    /**
+     * `product_snapshot_json` 是 `config_snapshot` 列的虚拟属性别名。
+     *
+     * 历史原因：旧版本以 config_snapshot 列同时承担"商品快照"与"账单配置"两种语义，
+     * product_snapshot_json 提供了更具可读性的访问入口，底层写入仍指向 config_snapshot。
+     * 读取时，getProductSnapshotJsonAttribute 优先解析字段自身值，
+     * 若为空则回退读取 config_snapshot，保持向后兼容。
+     *
+     * @see getProductSnapshotJsonAttribute
+     * @see getConfigSnapshotAttribute
+     */
     public function setProductSnapshotJsonAttribute(mixed $value): void
     {
         $payload = is_array($value) ? $value : [];

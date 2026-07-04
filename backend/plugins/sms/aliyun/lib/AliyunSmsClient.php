@@ -47,7 +47,7 @@ class AliyunSmsClient
             'CodeType' => 1,
         ];
 
-        $apiEndpoint = (string) (config('idc.sms.api_endpoint') ?? 'https://dypnsapi.aliyuncs.com/');
+        $apiEndpoint = $this->configString('api_endpoint', (string) (config('idc.sms.api_endpoint') ?? 'https://dypnsapi.aliyuncs.com/'));
         $result = $this->request($apiEndpoint, $params, $accessKeyId, $accessKeySecret, $phone);
 
         if (! is_array($result)) {
@@ -112,17 +112,6 @@ class AliyunSmsClient
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         curl_setopt($ch, CURLOPT_HTTPHEADER, ['x-sdk-client: php/2.0.0']);
 
-        if (str_starts_with($url, 'https')) {
-            $sslVerify = app()->environment('production') ? true : (bool) config('idc.sms.ssl_verify', true);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $sslVerify);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, $sslVerify ? 2 : 0);
-
-            $caBundle = (string) config('idc.sms.ca_bundle', '');
-            if ($caBundle !== '' && is_file($caBundle)) {
-                curl_setopt($ch, CURLOPT_CAINFO, $caBundle);
-            }
-        }
-
         $result = curl_exec($ch);
         if ($result === false) {
             Log::error('[短信] CURL 请求失败', [
@@ -146,6 +135,13 @@ class AliyunSmsClient
         $encoded = str_replace('*', '%2A', $encoded);
 
         return str_replace('%7E', '~', $encoded);
+    }
+
+    private function configString(string $key, string $default = ''): string
+    {
+        $value = $this->config[$key] ?? null;
+
+        return trim((string) (($value !== null && $value !== '') ? $value : $default));
     }
 
     private function maskPhone(string $phone): string

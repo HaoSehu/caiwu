@@ -20,7 +20,7 @@ use Tests\TestCase;
 
 class AdminFinanceMenuControllerTest extends TestCase
 {
-    public function test_finance_menu_order_recharge_renewal_and_addon_lists_use_expected_sources(): void
+    public function test_finance_menu_order_recharge_renewal_and_upgrade_lists_use_expected_sources(): void
     {
         $suffix = bin2hex(random_bytes(4));
         $admin = $this->createAdminUser([
@@ -62,7 +62,7 @@ class AdminFinanceMenuControllerTest extends TestCase
             'paid_at' => now()->subDay(),
         ]);
 
-        $addonOrder = $this->createOrder($user, $product, [
+        $upgradeOrder = $this->createOrder($user, $product, [
             'order_no' => 'ORDADDON'.strtoupper($suffix),
             'type' => 'upgrade',
             'status' => 3,
@@ -78,7 +78,7 @@ class AdminFinanceMenuControllerTest extends TestCase
 
         $this->createInvoice($user, $product, [
             'invoice_no' => 'INVADDON'.strtoupper($suffix),
-            'order_id' => (int) $addonOrder->id,
+            'order_id' => (int) $upgradeOrder->id,
             'type' => 'upgrade',
             'status' => 1,
             'amount' => '19.90',
@@ -132,12 +132,12 @@ class AdminFinanceMenuControllerTest extends TestCase
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.type', 'renew');
 
-        $this->getJson('/api/admin/finance/addon-orders?kind=traffic_package&keyword=ORDADDON'.strtoupper($suffix))
+        $this->getJson('/api/admin/finance/upgrade-orders?upgrade_kind=traffic_package&keyword=ORDADDON'.strtoupper($suffix))
             ->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.type', 'upgrade')
-            ->assertJsonPath('data.list.0.addon_kind', 'traffic_package')
-            ->assertJsonPath('data.list.0.addon_kind_label', '流量包');
+            ->assertJsonPath('data.list.0.upgrade_kind', 'traffic_package')
+            ->assertJsonPath('data.list.0.upgrade_kind_label', '流量包');
     }
 
     public function test_finance_reports_use_daily_and_product_income_contracts(): void

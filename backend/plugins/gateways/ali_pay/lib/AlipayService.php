@@ -6,8 +6,6 @@ namespace Caiwu\Plugins\Gateways\AliPay\Lib;
 
 class AlipayService
 {
-    private ?AlipayClient $client = null;
-
     public function key(): string
     {
         return 'alipay';
@@ -56,15 +54,14 @@ class AlipayService
     }
 
     /**
+     * 每次调用都新建客户端，确保长进程（queue worker）中配置更新后立即生效。
+     * 性能开销由 AlipayClient 构造时的 Redis 配置缓存（60s）抵消。
+     *
      * @param  array<string, mixed>  $config
      */
     private function client(array $config): AlipayClient
     {
-        if ($this->client === null) {
-            $this->client = new AlipayClient($config);
-        }
-
-        return $this->client;
+        return new AlipayClient($config);
     }
 
     private function success(string $action, array $data): array

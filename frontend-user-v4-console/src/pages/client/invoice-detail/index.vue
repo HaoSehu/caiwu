@@ -100,7 +100,7 @@
               <div class="payment-record-grid">
                 <div>
                   <span>支付方式</span>
-                  <strong>{{ detail.payment_summary.gateway || '--' }}</strong>
+                  <strong>{{ detail.payment_summary.gateway_label || detail.payment_summary.gateway_key || detail.payment_summary.gateway || '--' }}</strong>
                 </div>
                 <div>
                   <span>支付状态</span>

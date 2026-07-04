@@ -79,13 +79,13 @@ export const financeRoutes: RouteRecordRaw[] = [
     },
   },
   {
-    path: 'finance/addons',
-    name: 'AdminFinanceAddons',
-    redirect: { path: '/admin/finance/orders', query: { tab: 'addons' } },
+    path: 'finance/upgrades',
+    name: 'AdminFinanceUpgrades',
+    redirect: { path: '/admin/finance/orders', query: { tab: 'upgrade' } },
     meta: {
       title: {
         zh_CN: '附加配置订单',
-        en_US: 'Addon Orders',
+        en_US: 'Upgrade Orders',
       },
       permission: 'invoice.list',
       hidden: true,

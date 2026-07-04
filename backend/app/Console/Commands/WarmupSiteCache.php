@@ -2,8 +2,8 @@
 
 namespace App\Console\Commands;
 
-use App\Services\Site\SiteHomeService;
 use App\Services\ProductCatalog\ProductCatalogService;
+use App\Services\Site\SiteHomeService;
 use Illuminate\Console\Command;
 
 class WarmupSiteCache extends Command

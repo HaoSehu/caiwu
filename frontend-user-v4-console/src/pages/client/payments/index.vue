@@ -1,5 +1,18 @@
 <template>
   <section class="record-page">
+    <div class="quick-filter-tags">
+      <t-tag
+        v-for="item in quickFilters"
+        :key="item.key"
+        :variant="filters.quickFilter === item.key ? 'outline' : 'light'"
+        :theme="filters.quickFilter === item.key ? 'primary' : 'default'"
+        class="quick-filter-tag"
+        @click="applyQuickFilter(item.key)"
+      >
+        {{ item.label }}
+      </t-tag>
+    </div>
+
     <t-card class="record-card" :bordered="false">
       <div class="record-toolbar">
         <t-input v-model="filters.keyword" clearable placeholder="搜索商家订单号或第三方订单号" @enter="handleSearch" @clear="handleSearch">
@@ -8,7 +21,7 @@
         <t-select v-model="filters.status" clearable placeholder="全部状态" @change="handleSearch">
           <t-option v-for="item in PAYMENT_STATUS_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
         </t-select>
-        <t-select v-model="filters.gateway" clearable placeholder="全部渠道" @change="handleSearch">
+        <t-select v-model="filters.type" clearable placeholder="全部渠道" @change="handleSearch">
           <t-option v-for="item in PAYMENT_GATEWAY_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
         </t-select>
         <div class="record-actions">
@@ -30,7 +43,7 @@
                 <span>第三方：{{ row.trade_no || '--' }}</span>
               </div>
             </template>
-            <template #gateway="{ row }">{{ row.gateway || '--' }}</template>
+            <template #gateway="{ row }">{{ gatewayDisplay(row) }}</template>
             <template #amount="{ row }">¥{{ formatMoney(row.amount) }}</template>
             <template #status="{ row }">
               <StatusTag :status-map="PAYMENT_STATUS_MAP" :status="Number(row.status)" />
@@ -49,7 +62,7 @@
               </div>
               <div class="stack-cell">
                 <strong>¥{{ formatMoney(row.amount) }}</strong>
-                <span>{{ row.gateway || '--' }}</span>
+                <span>{{ gatewayDisplay(row) }}</span>
               </div>
               <div class="record-mobile-card__meta">
                 <span>第三方：{{ row.trade_no || '等待渠道回调' }}</span>
@@ -103,10 +116,22 @@ const {
   handleSearch,
   handlePageSizeChange,
   resetFilters,
+  applyQuickFilter,
 } = useRecordList(recordApi.payments, '第三方支付记录加载失败');
+
+const quickFilters = [
+  { key: '', label: '全部' },
+  { key: 'week', label: '最近7天' },
+  { key: 'month', label: '本月' },
+  { key: 'pending', label: '待支付' },
+];
 
 function goToDetail(row: PaymentRecord) {
   router.push(`/client/payments/${row.id}`);
+}
+
+function gatewayDisplay(row: PaymentRecord) {
+  return row.gateway_label || row.gateway_key || row.gateway || '--';
 }
 
 const columns: PrimaryTableCol[] = [
@@ -121,4 +146,16 @@ const columns: PrimaryTableCol[] = [
 
 <style scoped lang="less">
 @import '../record-page.less';
+
+.quick-filter-tags {
+  display: flex;
+  gap: var(--td-comp-margin-s);
+  margin-bottom: var(--td-comp-margin-m);
+  flex-wrap: wrap;
+}
+
+.quick-filter-tag {
+  cursor: pointer;
+  user-select: none;
+}
 </style>

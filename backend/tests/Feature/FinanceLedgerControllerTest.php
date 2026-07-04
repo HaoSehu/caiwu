@@ -386,7 +386,11 @@ class FinanceLedgerControllerTest extends TestCase
 
     private function createClientUser(string $prefix, array $overrides = []): User
     {
-        return User::query()->create(array_merge([
+        // balance 已从 $fillable 移出（安全修复），需通过 forceFill+save 触发 booted hook 同步到 user_accounts
+        $balance = $overrides['balance'] ?? '0.00';
+        $attrs = array_diff_key($overrides, ['balance' => true]);
+
+        $user = User::query()->create(array_merge([
             'email' => "{$prefix}@example.com",
             'password' => 'secret123',
             'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
@@ -401,8 +405,14 @@ class FinanceLedgerControllerTest extends TestCase
             'total_sales_amount' => '0.00',
             'referrer_user_id' => null,
             'verified_at' => null,
-            'balance' => '0.00',
-        ], $overrides));
+        ], $attrs));
+
+        if ((float) $balance !== 0.0) {
+            $user->forceFill(['balance' => $balance])->save();
+            $user->refresh();
+        }
+
+        return $user;
     }
 
     private function createAdminUser(array $permissions): AdminUser

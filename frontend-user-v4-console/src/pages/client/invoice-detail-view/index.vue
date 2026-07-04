@@ -129,6 +129,7 @@
                   <template #status="{ row }">
                     <StatusTag :status-map="PAYMENT_STATUS_MAP" :status="Number(row.status)" />
                   </template>
+                  <template #gateway="{ row }">{{ paymentGatewayDisplay(row) }}</template>
                 </t-table>
               </div>
               <div v-else class="related-empty">暂无支付记录</div>
@@ -203,6 +204,10 @@ const paymentRecords = computed(() => {
   if (!Array.isArray(payments)) return [];
   return payments;
 });
+
+function paymentGatewayDisplay(row: Record<string, unknown>) {
+  return String(row.gateway_label || row.gateway_key || row.gateway || '--');
+}
 
 const paymentColumns: PrimaryTableCol[] = [
   { colKey: 'payment_no', title: '商家订单号', minWidth: '10rem' },

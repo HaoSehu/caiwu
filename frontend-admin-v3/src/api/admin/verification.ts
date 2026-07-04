@@ -2,8 +2,6 @@ import { request } from '@/utils/request';
 import type {
   VerificationListParams,
   VerificationRecord,
-  SettingItem,
-  VerificationSettingsPayload,
 } from './types';
 
 export const verificationsApi = {
@@ -25,8 +23,4 @@ export const verificationsApi = {
     }),
   unbind: (id: number | string, data: { reject_reason: string }) =>
     request.post({ url: `/admin/verifications/${id}/unbind`, data }),
-  settings: () =>
-    request.get<SettingItem[]>({ url: '/admin/settings', params: { group: 'verification' } }),
-  saveSettings: (settings: VerificationSettingsPayload) =>
-    request.post({ url: '/admin/settings', data: { group: 'verification', settings } }),
 };

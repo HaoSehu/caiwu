@@ -4,7 +4,9 @@ namespace App\Http\Resources\Admin;
 
 use App\Constants\ProductType;
 use App\Models\Product;
+use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
+use App\Services\Upstream\ProviderRegistry;
 use App\Support\ProductGroupHierarchyFields;
 use App\Support\ProductProvisionHostname;
 use Illuminate\Http\Request;
@@ -15,6 +17,10 @@ class AdminProductListResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $bindingResolver = app(PluginBindingResolver::class);
+        $providerKey = $bindingResolver->providerKeyForProduct($this->resource) ?? '';
+        $supplierId = (int) (($bindingResolver->supplierIdForProduct($this->resource) ?? 0) ?: 0);
+        $upstreamProductId = $bindingResolver->upstreamProductIdForProduct($this->resource);
         $productType = (string) $this->product_type;
         $hierarchyFields = ProductGroupHierarchyFields::fromProduct($this->resource);
         $pricing = (array) ($this->pricing ?? []);
@@ -51,13 +57,16 @@ class AdminProductListResource extends JsonResource
             'lifecycle_status' => $this->resource->trashed() ? 'deleted' : 'active',
             'deleted_at' => $this->resource->deleted_at?->format('Y-m-d H:i:s'),
             'sort_order' => (int) ($this->sort_order ?? 0),
-            'provision_module' => (string) ($this->provision_module ?? ''),
             'auto_setup' => (int) ($this->auto_setup ?? 0),
             'provision_hostname' => $provisionHostname,
             'provision_hostname_mode' => (string) ($provisionHostname['mode'] ?? ProductProvisionHostname::MODE_SYSTEM),
             'provision_hostname_summary' => ProductProvisionHostname::summary($provisionHostname),
-            'supplier_id' => $this->resource->getAttribute('supplier_id') ? (int) $this->resource->getAttribute('supplier_id') : null,
-            'supplier_product_id' => $this->resource->getAttribute('supplier_product_id') ? (int) $this->resource->getAttribute('supplier_product_id') : null,
+            'upstream_binding' => [
+                'provider_key' => $providerKey,
+                'provider_label' => $this->providerLabel($providerKey),
+                'supplier_id' => $supplierId > 0 ? $supplierId : null,
+                'upstream_product_id' => $upstreamProductId,
+            ],
             'orders_count' => (int) ($this->orders_count ?? 0),
             'total_services_count' => (int) ($this->total_services_count ?? 0),
             'services_count' => (int) ($this->services_count ?? 0),
@@ -76,6 +85,15 @@ class AdminProductListResource extends JsonResource
             ->map(fn ($value): string => trim((string) $value))
             ->filter()
             ->implode(' / ');
+    }
+
+    private function providerLabel(string $providerKey): string
+    {
+        if ($providerKey === '') {
+            return '';
+        }
+
+        return app(ProviderRegistry::class)->descriptor($providerKey)?->label ?? $providerKey;
     }
 
     private function resolveAdminProductDisplayName(array $displayName, string $specDisplay, string $customDisplayName): string

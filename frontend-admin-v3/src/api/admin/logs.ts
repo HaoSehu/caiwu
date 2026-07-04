@@ -18,6 +18,10 @@ export const logsApi = {
     request.get<LaravelPagination>({ url: '/admin/logs/system', params }),
   systemSummary: (params: LogListParams) =>
     request.get<Record<string, unknown>>({ url: '/admin/logs/system/summary', params }),
+  runtime: (params: LogListParams) =>
+    request.get<LaravelPagination>({ url: '/admin/logs/runtime', params }),
+  runtimeSummary: (params: LogListParams) =>
+    request.get<Record<string, unknown>>({ url: '/admin/logs/runtime/summary', params }),
   adminLogins: (params: LogListParams) =>
     request.get<LaravelPagination>({ url: '/admin/logs/admin-logins', params }),
   gateway: (params: LogListParams) =>

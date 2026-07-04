@@ -15,39 +15,17 @@ class MessageRateLimitService
             return ['ok' => true];
         }
 
-        $normalizedTarget = $this->normalizeTarget($channel, $target);
         $ip = $ip ? trim($ip) : null;
-
-        if ($config['cooldown_seconds'] > 0) {
-            $cooldownKey = $this->key($channel, 'cooldown', $normalizedTarget);
-            if (RateLimiter::tooManyAttempts($cooldownKey, 1)) {
-                $seconds = RateLimiter::availableIn($cooldownKey);
-
-                return [
-                    'ok' => false,
-                    'message' => "发送过于频繁，请 {$seconds} 秒后重试",
-                ];
-            }
+        if (! $ip || $config['ip_minute_limit'] <= 0) {
+            return ['ok' => true];
         }
 
-        if ($config['target_hourly_limit'] > 0) {
-            $targetHourlyKey = $this->key($channel, 'target-hourly', $normalizedTarget);
-            if (RateLimiter::tooManyAttempts($targetHourlyKey, $config['target_hourly_limit'])) {
-                return [
-                    'ok' => false,
-                    'message' => '当前接收目标发送次数已达上限，请稍后再试',
-                ];
-            }
-        }
-
-        if ($ip && $config['ip_hourly_limit'] > 0) {
-            $ipHourlyKey = $this->key($channel, 'ip-hourly', $ip);
-            if (RateLimiter::tooManyAttempts($ipHourlyKey, $config['ip_hourly_limit'])) {
-                return [
-                    'ok' => false,
-                    'message' => '当前 IP 发送次数已达上限，请稍后再试',
-                ];
-            }
+        $ipMinuteKey = $this->key($channel, 'ip-minute', $ip);
+        if (RateLimiter::tooManyAttempts($ipMinuteKey, $config['ip_minute_limit'])) {
+            return [
+                'ok' => false,
+                'message' => '当前 IP 每分钟发送次数已达上限，请稍后再试',
+            ];
         }
 
         return ['ok' => true];
@@ -61,27 +39,11 @@ class MessageRateLimitService
             return;
         }
 
-        $normalizedTarget = $this->normalizeTarget($channel, $target);
         $ip = $ip ? trim($ip) : null;
-
-        if ($config['cooldown_seconds'] > 0) {
+        if ($ip && $config['ip_minute_limit'] > 0) {
             RateLimiter::hit(
-                $this->key($channel, 'cooldown', $normalizedTarget),
-                $config['cooldown_seconds']
-            );
-        }
-
-        if ($config['target_hourly_limit'] > 0) {
-            RateLimiter::hit(
-                $this->key($channel, 'target-hourly', $normalizedTarget),
-                3600
-            );
-        }
-
-        if ($ip && $config['ip_hourly_limit'] > 0) {
-            RateLimiter::hit(
-                $this->key($channel, 'ip-hourly', $ip),
-                3600
+                $this->key($channel, 'ip-minute', $ip),
+                60
             );
         }
     }
@@ -90,24 +52,13 @@ class MessageRateLimitService
     {
         return [
             'enabled' => $this->boolValue("{$channel}_rate_limit_enabled", false),
-            'cooldown_seconds' => $this->intValue("{$channel}_cooldown_seconds", 60),
-            'target_hourly_limit' => $this->intValue("{$channel}_target_hourly_limit", 10),
-            'ip_hourly_limit' => $this->intValue("{$channel}_ip_hourly_limit", 20),
+            'ip_minute_limit' => $this->intValue("{$channel}_ip_minute_limit", 6),
         ];
     }
 
     private function key(string $channel, string $scope, string $identifier): string
     {
         return 'message-rate-limit:'.$channel.':'.$scope.':'.sha1($identifier);
-    }
-
-    private function normalizeTarget(string $channel, string $target): string
-    {
-        return match ($channel) {
-            'email' => mb_strtolower(trim($target)),
-            'sms' => preg_replace('/\D+/', '', $target) ?: trim($target),
-            default => trim($target),
-        };
     }
 
     private function intValue(string $key, int $default): int

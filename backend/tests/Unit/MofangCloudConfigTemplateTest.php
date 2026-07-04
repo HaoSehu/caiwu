@@ -115,7 +115,7 @@ class MofangCloudConfigTemplateTest extends TestCase
 
     private function makeSupplier(): Supplier
     {
-        return new Supplier([
+        return (new Supplier)->forceFill([
             'id' => 1,
             'interface_type' => 'mofang_finance_api',
             'api_url' => 'https://mofang.example.test',

@@ -17,8 +17,10 @@ use App\Models\Ticket;
 use App\Models\User;
 use App\Services\ClientServiceConsole\ServiceDetailService;
 use App\Services\Finance\InvoiceService;
+use App\Services\Integrations\Plugins\PluginBindingResolver;
+use App\Services\Integrations\Plugins\ServiceUpstreamBindingWriter;
+use App\Services\Integrations\Plugins\UpstreamBindingWriter;
 use App\Services\Upstream\Contracts\ProvidesConsoleRuntime;
-use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderResolver;
 use App\Support\ServiceHostname;
 use App\Support\TextSanitizer;
@@ -96,20 +98,20 @@ trait HandlesAdminUserServices
             ->where('user_id', $user->id)
             ->findOrFail($serviceId);
 
-        $currentProvisionData = is_array($service->provision_data ?? null) ? $service->provision_data : [];
+        $currentProvisionData = $this->serviceProvisionData($service);
         $previousCustomHostname = ServiceHostname::custom($currentProvisionData);
         $previousAmount = round((float) ($service->amount ?? 0), 2);
-        $previousSupplierId = (int) (($currentProvisionData['supplier_id'] ?? ($service->product?->supplier_id ?? 0)) ?: 0);
-        $previousSupplierProductId = (int) (($currentProvisionData['supplier_product_id'] ?? ($service->product?->supplier_product_id ?? 0)) ?: 0);
-        $previousUpstreamHostId = (int) (($currentProvisionData['upstream_host_id'] ?? 0) ?: 0);
+        $previousSupplierId = $this->resolveServiceSupplierId($service, $currentProvisionData);
+        $previousUpstreamProductId = $this->resolveServiceUpstreamProductId($service, $currentProvisionData);
+        $previousUpstreamHostId = $this->resolveServiceUpstreamHostId($service, $currentProvisionData);
         $supportsUpstream = $this->supportsManagedUpstream($service->product);
-        $hasUpstreamBinding = (int) (($currentProvisionData['supplier_id'] ?? ($service->product?->supplier_id ?? 0)) ?: 0) > 0;
+        $hasUpstreamBinding = $previousSupplierId > 0 || $this->bindingResolver()->upstreamServiceIdForService($service) !== null;
         $rawAmount = $data['amount'] ?? null;
         $newAmount = $rawAmount === null ? null : round((float) $rawAmount, 2);
         $rawSupplierId = $data['supplier_id'] ?? null;
         $supplierId = $rawSupplierId === null ? null : (int) $rawSupplierId;
-        $rawSupplierProductId = $data['supplier_product_id'] ?? null;
-        $supplierProductId = $rawSupplierProductId === null ? null : (int) $rawSupplierProductId;
+        $rawUpstreamProductId = $data['upstream_product_id'] ?? null;
+        $upstreamProductId = $rawUpstreamProductId === null ? null : (int) $rawUpstreamProductId;
         $rawUpstreamHostId = $data['upstream_host_id'] ?? null;
         $upstreamHostId = $rawUpstreamHostId === null ? null : (int) $rawUpstreamHostId;
         $selectedSupplier = null;
@@ -124,18 +126,19 @@ trait HandlesAdminUserServices
                 ->find($supplierId);
 
             throw_if(! $selectedSupplier instanceof Supplier, new BusinessException('请选择有效的上游接口'));
+            app(UpstreamBindingWriter::class)->syncSupplierBinding($selectedSupplier);
             throw_if(
                 ! app(ProviderResolver::class)->resolveForSupplier($selectedSupplier)->supports(ProvidesConsoleRuntime::class),
                 new BusinessException('当前上游接口不支持实例控制')
             );
             throw_if(
-                $upstreamHostId === null && $supplierProductId === null,
+                $upstreamHostId === null && $upstreamProductId === null,
                 new BusinessException('重新绑定上游接口时必须填写新的上游产品 ID 或上游实例 ID')
             );
         }
 
-        if ($supplierProductId !== null) {
-            throw_if($supplierProductId <= 0, new BusinessException('请输入有效的上游产品 ID'));
+        if ($upstreamProductId !== null) {
+            throw_if($upstreamProductId <= 0, new BusinessException('请输入有效的上游产品 ID'));
             throw_if(
                 $supplierId === null && $upstreamHostId === null,
                 new BusinessException('更换上游产品 ID 时必须同时绑定上游接口或上游实例 ID')
@@ -226,7 +229,7 @@ trait HandlesAdminUserServices
             $newAmount,
             $selectedSupplier,
             $upstreamHostId,
-            $supplierProductId,
+            $upstreamProductId,
             $currentProvisionData,
             $traceId,
             $operatorId,
@@ -240,7 +243,7 @@ trait HandlesAdminUserServices
             &$upstreamHostChanged,
             $previousAmount,
             $previousSupplierId,
-            $previousSupplierProductId,
+            $previousUpstreamProductId,
             $previousUpstreamHostId
         ) {
             $provisionData = $currentProvisionData;
@@ -252,24 +255,31 @@ trait HandlesAdminUserServices
             }
 
             if ($selectedSupplier instanceof Supplier) {
+                $providerKey = $this->resolveSupplierProviderKey($selectedSupplier);
+                throw_if($providerKey === '', new BusinessException('供应商未配置上游插件绑定，无法绑定上游实例'));
+
                 $provisionData['source_type'] = 'upstream';
-                $provisionData['provider'] = trim((string) $selectedSupplier->interface_type) ?: ProviderKey::HOSTING_PANEL_API;
+                $provisionData['provider_key'] = $providerKey;
                 $provisionData['supplier_id'] = (int) $selectedSupplier->id;
-                $provisionData['supplier_product_id'] = $supplierProductId ?? (int) ($service->product?->supplier_product_id ?? 0);
+                $provisionData['upstream_product_id'] = $upstreamProductId ?? $this->resolveProductUpstreamProductId($service->product);
                 $supplierChanged = (int) $selectedSupplier->id !== $previousSupplierId;
-                $supplierProductChanged = (int) $provisionData['supplier_product_id'] !== $previousSupplierProductId;
+                $supplierProductChanged = (int) $provisionData['upstream_product_id'] !== $previousUpstreamProductId;
             }
 
             if ($upstreamHostId !== null) {
                 $provisionData['source_type'] = 'upstream';
-                $existingProvider = trim((string) ($provisionData['provider'] ?? ''));
-                if ($existingProvider === '') {
-                    $existingProvider = trim((string) ($service->product?->supplier?->interface_type ?? ''));
-                }
-                $provisionData['provider'] = $existingProvider !== '' ? $existingProvider : ProviderKey::HOSTING_PANEL_API;
-                $provisionData['supplier_id'] = (int) (($provisionData['supplier_id'] ?? ($service->product?->supplier_id ?? 0)) ?: 0);
-                $provisionData['supplier_product_id'] = $supplierProductId ?? (int) (($provisionData['supplier_product_id'] ?? ($service->product?->supplier_product_id ?? 0)) ?: 0);
-                $supplierProductChanged = (int) $provisionData['supplier_product_id'] !== $previousSupplierProductId;
+                $existingProvider = $selectedSupplier instanceof Supplier
+                    ? $this->resolveSupplierProviderKey($selectedSupplier)
+                    : $this->resolveServiceProviderKey($service, $provisionData);
+                throw_if($existingProvider === '', new BusinessException('服务未配置上游插件绑定，无法绑定上游实例'));
+
+                $provisionData['provider_key'] = $existingProvider;
+                $provisionData['supplier_id'] = $selectedSupplier instanceof Supplier
+                    ? (int) $selectedSupplier->id
+                    : $this->resolveServiceSupplierId($service, $provisionData);
+                $provisionData['upstream_product_id'] = $upstreamProductId
+                    ?? $this->resolveServiceUpstreamProductId($service, $provisionData);
+                $supplierProductChanged = (int) $provisionData['upstream_product_id'] !== $previousUpstreamProductId;
                 $provisionData['upstream_host_id'] = $upstreamHostId;
                 $provisionData['last_manual_linked_at'] = now()->format('Y-m-d H:i:s');
                 $upstreamHostChanged = $upstreamHostId !== $previousUpstreamHostId;
@@ -293,7 +303,6 @@ trait HandlesAdminUserServices
                     $provisionData['nat_remote_port'],
                     $provisionData['nat_remote_checked_at'],
                     $provisionData['upstream_status'],
-                    $provisionData['upstream_product_id'],
                     $provisionData['upstream_product_name'],
                     $provisionData['os'],
                     $provisionData['provision_error']
@@ -338,6 +347,13 @@ trait HandlesAdminUserServices
         });
 
         $service = $service->refresh()->loadMissing(['product', 'order']);
+        if ($supplierChanged || $supplierProductChanged || $upstreamHostChanged || $newServiceName !== 'skip' || $newCustomHostname !== 'skip') {
+            app(ServiceUpstreamBindingWriter::class)->syncServiceState(
+                $service,
+                $service->product,
+                $this->serviceProvisionData($service)
+            );
+        }
         app(ServiceDetailService::class)->forgetDetailCaches($service);
 
         if ($newCustomHostname !== 'skip' && $previousCustomHostname !== $newCustomHostname) {
@@ -403,18 +419,19 @@ trait HandlesAdminUserServices
                     }
                 }
 
+                $latestProvisionData = $this->serviceProvisionData($service);
                 $this->operationLogService->writeServiceConsoleLog($service, 'service.console.meta.update', [
                     'category' => 'service',
                     'summary' => '管理员更新实例业务信息',
                     'previous_amount' => number_format($previousAmount, 2, '.', ''),
                     'amount' => number_format((float) $service->amount, 2, '.', ''),
                     'previous_supplier_id' => $previousSupplierId > 0 ? $previousSupplierId : null,
-                    'supplier_id' => (int) (($service->provision_data['supplier_id'] ?? 0) ?: 0),
+                    'supplier_id' => (int) (($latestProvisionData['supplier_id'] ?? 0) ?: 0),
                     'supplier_name' => $selectedSupplier?->name,
-                    'previous_supplier_product_id' => $previousSupplierProductId > 0 ? $previousSupplierProductId : null,
-                    'supplier_product_id' => (int) (($service->provision_data['supplier_product_id'] ?? 0) ?: 0),
+                    'previous_upstream_product_id' => $previousUpstreamProductId > 0 ? $previousUpstreamProductId : null,
+                    'upstream_product_id' => (int) (($latestProvisionData['upstream_product_id'] ?? 0) ?: 0),
                     'previous_upstream_host_id' => $previousUpstreamHostId > 0 ? $previousUpstreamHostId : null,
-                    'upstream_host_id' => (int) (($service->provision_data['upstream_host_id'] ?? 0) ?: 0),
+                    'upstream_host_id' => (int) (($latestProvisionData['upstream_host_id'] ?? 0) ?: 0),
                     'clear_locked_pricing' => ! empty($data['clear_locked_pricing']),
                     'renew_pricing_changes' => $renewPricingChanges,
                 ], [
@@ -530,6 +547,13 @@ trait HandlesAdminUserServices
         $autoRenew = (int) ($data['auto_renew'] ?? 1);
         $remark = trim((string) ($data['remark'] ?? ''));
         $upstreamStatus = trim((string) ($data['upstream_status'] ?? ''));
+        $upstreamProviderKey = $sourceType === 'upstream'
+            ? $this->resolveProductProviderKey($product)
+            : '';
+        throw_if($sourceType === 'upstream' && $upstreamProviderKey === '', new BusinessException('商品未配置上游插件绑定，无法创建上游服务'));
+
+        $upstreamSupplierId = $sourceType === 'upstream' ? $this->resolveProductSupplierId($product) : 0;
+        $upstreamProductId = $sourceType === 'upstream' ? $this->resolveProductUpstreamProductId($product) : 0;
         $dedicatedIp = trim((string) ($data['dedicated_ip'] ?? ''));
         $internalIp = trim((string) ($data['internal_ip'] ?? ''));
         $username = trim((string) ($data['username'] ?? ''));
@@ -555,6 +579,9 @@ trait HandlesAdminUserServices
             $remark,
             $upstreamHostId,
             $upstreamStatus,
+            $upstreamProviderKey,
+            $upstreamSupplierId,
+            $upstreamProductId,
             $dedicatedIp,
             $internalIp,
             $username,
@@ -598,11 +625,9 @@ trait HandlesAdminUserServices
 
             $provisionData = array_filter([
                 'source_type' => $sourceType,
-                'provider' => $sourceType === 'upstream'
-                    ? (trim((string) ($product->supplier?->interface_type ?? '')) ?: ProviderKey::HOSTING_PANEL_API)
-                    : '',
-                'supplier_id' => $sourceType === 'upstream' ? (int) ($product->supplier_id ?? 0) : 0,
-                'supplier_product_id' => $sourceType === 'upstream' ? (int) ($product->supplier_product_id ?? 0) : 0,
+                'provider_key' => $upstreamProviderKey,
+                'supplier_id' => $upstreamSupplierId,
+                'upstream_product_id' => $upstreamProductId,
                 'upstream_host_id' => $sourceType === 'upstream' ? $upstreamHostId : 0,
                 'upstream_status' => $sourceType === 'upstream'
                     ? ($upstreamStatus !== '' ? $upstreamStatus : ($status === ServiceStatus::ACTIVE ? 'active' : 'pending'))
@@ -668,6 +693,14 @@ trait HandlesAdminUserServices
         });
 
         $service->loadMissing('order.invoice');
+        if ($sourceType === 'upstream') {
+            $service->loadMissing('product.supplier');
+            app(ServiceUpstreamBindingWriter::class)->syncServiceState(
+                $service,
+                $service->product,
+                $this->serviceProvisionData($service, includeSecrets: true)
+            );
+        }
 
         try {
             $this->operationLogService->write(
@@ -727,7 +760,7 @@ trait HandlesAdminUserServices
         $product = $service->product;
         throw_if(! $product, new BusinessException('服务未关联商品，暂不支持重新提交上游开通'));
 
-        $currentProvisionData = is_array($service->provision_data ?? null) ? $service->provision_data : [];
+        $currentProvisionData = $this->serviceProvisionData($service);
         $provisionError = trim((string) ($currentProvisionData['provision_error'] ?? ''));
 
         throw_if($provisionError === '', new BusinessException('当前服务不存在上游开通失败记录，无需重新提交'));
@@ -893,13 +926,134 @@ trait HandlesAdminUserServices
         }
     }
 
-    private function supportsManagedUpstream(Product $product): bool
+    private function supportsManagedUpstream(?Product $product): bool
     {
-        $supplier = $product->supplier;
+        if (! $product instanceof Product) {
+            return false;
+        }
 
-        return (int) ($product->supplier_id ?? 0) > 0
-            && $supplier instanceof Supplier
+        $supplier = $this->bindingResolver()->supplierForProduct($product);
+
+        if ($supplier instanceof Supplier) {
+            $supplier = $this->bindingResolver()->supplierWithRuntimeCredentials($supplier);
+            app(UpstreamBindingWriter::class)->syncSupplierBinding($supplier);
+            app(UpstreamBindingWriter::class)->syncProductBinding($product, $supplier);
+        }
+
+        return $supplier instanceof Supplier
             && app(ProviderResolver::class)->resolveForSupplier($supplier)->supports(ProvidesConsoleRuntime::class);
+    }
+
+    /**
+     * @param  array<string, mixed>  $provisionData
+     */
+    private function resolveServiceProviderKey(Service $service, array $provisionData): string
+    {
+        $providerKey = $this->bindingResolver()->providerKeyForService($service);
+        $providerKey ??= $service->product instanceof Product ? $this->resolveProductProviderKey($service->product) : null;
+
+        return trim((string) $providerKey);
+    }
+
+    private function resolveProductProviderKey(?Product $product): string
+    {
+        if (! $product instanceof Product) {
+            return '';
+        }
+
+        $providerKey = $this->bindingResolver()->providerKeyForProduct($product);
+
+        return trim((string) $providerKey);
+    }
+
+    private function resolveSupplierProviderKey(Supplier $supplier): string
+    {
+        $providerKey = $this->bindingResolver()->providerKeyForSupplier($supplier);
+
+        return trim((string) ($providerKey ?? ''));
+    }
+
+    /**
+     * @param  array<string, mixed>  $provisionData
+     */
+    private function resolveServiceSupplierId(Service $service, array $provisionData): int
+    {
+        $supplierId = $this->bindingResolver()->supplierIdForService($service);
+        $supplierId ??= $service->product instanceof Product ? $this->resolveProductSupplierId($service->product) : null;
+
+        return (int) ($supplierId ?? 0);
+    }
+
+    private function resolveProductSupplierId(?Product $product): int
+    {
+        if (! $product instanceof Product) {
+            return 0;
+        }
+
+        $supplierId = $this->bindingResolver()->supplierIdForProduct($product);
+
+        return (int) ($supplierId ?? 0);
+    }
+
+    /**
+     * @param  array<string, mixed>  $provisionData
+     */
+    private function resolveServiceUpstreamProductId(Service $service, array $provisionData): int
+    {
+        $upstreamProductId = $this->bindingResolver()->upstreamProductIdForService($service);
+        $upstreamProductId ??= $service->product instanceof Product ? $this->resolveProductUpstreamProductId($service->product) : null;
+
+        return (int) ($upstreamProductId ?? 0);
+    }
+
+    private function resolveProductUpstreamProductId(?Product $product): int
+    {
+        if (! $product instanceof Product) {
+            return 0;
+        }
+
+        $upstreamProductId = $this->positiveInt($this->bindingResolver()->upstreamProductIdForProduct($product));
+
+        return (int) ($upstreamProductId ?? 0);
+    }
+
+    /**
+     * @param  array<string, mixed>  $provisionData
+     */
+    private function resolveServiceUpstreamHostId(Service $service, array $provisionData): int
+    {
+        return (int) ($this->positiveInt($this->bindingResolver()->upstreamServiceIdForService($service)) ?? 0);
+    }
+
+    private function positiveInt(mixed $value): ?int
+    {
+        if ($value === null || $value === '' || ! is_numeric($value)) {
+            return null;
+        }
+
+        $normalized = (int) $value;
+
+        return $normalized > 0 ? $normalized : null;
+    }
+
+    private function nonBlank(mixed $value): ?string
+    {
+        $normalized = trim((string) ($value ?? ''));
+
+        return $normalized !== '' ? $normalized : null;
+    }
+
+    private function bindingResolver(): PluginBindingResolver
+    {
+        return app(PluginBindingResolver::class);
+    }
+
+    private function serviceProvisionData(Service $service, bool $includeSecrets = false): array
+    {
+        $legacy = is_array($service->provision_data ?? null) ? $service->provision_data : [];
+        $projection = $this->bindingResolver()->serviceProvisionProjection($service, $includeSecrets);
+
+        return $projection === [] ? $legacy : array_replace($legacy, $projection);
     }
 
     private function resolveManualServiceExpiresAt(mixed $expiresAt, string $billingCycle, int $status): ?Carbon

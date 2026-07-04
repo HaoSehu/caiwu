@@ -4,6 +4,7 @@ namespace App\Services\Auth;
 
 use App\Models\User;
 use App\Models\VerificationHistory;
+use App\Support\AdminPrivacy;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Schema;
 
@@ -86,17 +87,21 @@ class AdminVerificationQueryService
 
     public function detail(User $user): array
     {
+        $privacy = AdminPrivacy::current();
         $config = $this->verificationService->getConfigSummary();
         $bizCode = (string) ($config['verification_biz_code'] ?? 'FACE');
         $idCard = trim((string) $user->id_card);
+        $email = (string) $user->email;
+        $phone = (string) $user->phone;
+        $realName = (string) $user->real_name;
 
         return [
             'id' => (int) $user->id,
-            'display_name' => (string) $user->display_name,
-            'email' => (string) $user->email,
-            'phone' => (string) $user->phone,
-            'real_name' => (string) $user->real_name,
-            'id_card_masked' => $this->maskIdCard($idCard),
+            'display_name' => $privacy->displayName($user->display_name, $email, $phone, $realName),
+            'email' => $privacy->email($email),
+            'phone' => $privacy->phone($phone),
+            'real_name' => $privacy->name($realName),
+            'id_card_masked' => $privacy->idCard($idCard),
             'verification_status' => (int) $user->verification_status,
             'verification_message' => (string) $user->verification_message,
             'verification_certify_id' => $user->verification_certify_id,
@@ -113,6 +118,7 @@ class AdminVerificationQueryService
 
     public function history(User $user): array
     {
+        $privacy = AdminPrivacy::current();
         $list = collect();
 
         if ($this->verificationHistoryTableAvailable()) {
@@ -129,11 +135,12 @@ class AdminVerificationQueryService
             $config = $this->verificationService->getConfigSummary();
             $bizCode = (string) ($config['verification_biz_code'] ?? 'FACE');
             $idCard = trim((string) $user->id_card);
+            $realName = (string) $user->real_name;
 
             $list = collect([[
                 'id' => 0,
-                'real_name' => (string) $user->real_name,
-                'id_card_masked' => $this->maskIdCard($idCard),
+                'real_name' => $privacy->name($realName),
+                'id_card_masked' => $privacy->idCard($idCard),
                 'verification_status' => (int) $user->verification_status,
                 'verification_message' => (string) $user->verification_message,
                 'verification_certify_id' => $user->verification_certify_id,
@@ -145,23 +152,9 @@ class AdminVerificationQueryService
         }
 
         return [
-            'user_name' => (string) $user->display_name,
+            'user_name' => $privacy->displayName($user->display_name, $user->email, $user->phone, $user->real_name),
             'list' => $list->values()->all(),
         ];
-    }
-
-    private function maskIdCard(string $idCard): string
-    {
-        if ($idCard === '') {
-            return '-';
-        }
-
-        $length = mb_strlen($idCard);
-        if ($length <= 8) {
-            return $idCard;
-        }
-
-        return mb_substr($idCard, 0, 6).str_repeat('*', max($length - 10, 1)).mb_substr($idCard, -4);
     }
 
     private function bizCodeLabel(string $bizCode): string
@@ -176,12 +169,13 @@ class AdminVerificationQueryService
 
     private function transformHistory(VerificationHistory $history): array
     {
+        $privacy = AdminPrivacy::current();
         $idCard = trim((string) $history->id_card);
 
         return [
             'id' => (int) $history->id,
-            'real_name' => (string) $history->real_name,
-            'id_card_masked' => $this->maskIdCard($idCard),
+            'real_name' => $privacy->name($history->real_name),
+            'id_card_masked' => $privacy->idCard($idCard),
             'verification_status' => (int) $history->verification_status,
             'verification_message' => (string) $history->verification_message,
             'verification_certify_id' => $history->verification_certify_id,

@@ -14,7 +14,10 @@ use Illuminate\Support\Str;
 
 class AdminRoleService
 {
-    public function __construct(private readonly PermissionCatalogService $permissionCatalogService) {}
+    public function __construct(
+        private readonly PermissionCatalogService $permissionCatalogService,
+        private readonly BuiltinAdminRoleService $builtinAdminRoleService,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $filters
@@ -22,6 +25,8 @@ class AdminRoleService
      */
     public function list(array $filters = []): Collection
     {
+        $this->builtinAdminRoleService->sync();
+
         $keyword = trim((string) ($filters['keyword'] ?? ''));
 
         return Role::query()
@@ -39,6 +44,8 @@ class AdminRoleService
 
     public function detail(Role $role): Role
     {
+        $this->builtinAdminRoleService->sync();
+
         return $role->loadCount('adminUsers');
     }
 
@@ -48,8 +55,13 @@ class AdminRoleService
     public function create(array $data): Role
     {
         return DB::transaction(function () use ($data): Role {
+            $name = $this->normalizeName($data['name'] ?? '');
+            if (AdminPermissions::isBuiltInRoleName($name)) {
+                throw new BusinessException('系统默认角色编码不可用于自定义角色');
+            }
+
             $role = Role::query()->create([
-                'name' => $this->normalizeName($data['name'] ?? ''),
+                'name' => $name,
                 'label' => $this->normalizeLabel($data['label'] ?? ''),
                 'permissions' => $this->normalizePermissions((array) ($data['permissions'] ?? [])),
             ]);
@@ -63,14 +75,23 @@ class AdminRoleService
      */
     public function update(Role $role, array $data): Role
     {
+        if ($role->isLocked()) {
+            throw new BusinessException('系统默认角色不可直接编辑，请复制后自定义');
+        }
+
+        $name = $this->normalizeName($data['name'] ?? '');
+        if (AdminPermissions::isBuiltInRoleName($name)) {
+            throw new BusinessException('系统默认角色编码不可用于自定义角色');
+        }
+
         $permissions = $this->normalizePermissions((array) ($data['permissions'] ?? []));
         if ($this->roleHasAllPermission($role) && ! in_array(AdminPermissions::ALL, $permissions, true)) {
             throw new BusinessException('不能移除超级角色的全部权限');
         }
 
-        return DB::transaction(function () use ($role, $data, $permissions): Role {
+        return DB::transaction(function () use ($role, $data, $name, $permissions): Role {
             $role->update([
-                'name' => $this->normalizeName($data['name'] ?? ''),
+                'name' => $name,
                 'label' => $this->normalizeLabel($data['label'] ?? ''),
                 'permissions' => $permissions,
             ]);
@@ -98,6 +119,10 @@ class AdminRoleService
 
     public function delete(Role $role): void
     {
+        if ($role->isLocked()) {
+            throw new BusinessException('系统默认角色不可删除');
+        }
+
         $adminCount = $this->assignedAdminCount($role);
         if ($adminCount > 0) {
             throw new BusinessException('当前角色仍有员工使用，无法删除');

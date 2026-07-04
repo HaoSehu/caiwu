@@ -87,7 +87,7 @@ class PaymentBoundaryAuditCommandTest extends BaseTestCase
 
         $this->assertDatabaseHas('payments', [
             'payment_no' => 'PAY-ALIPAY-OK',
-            'gateway' => PaymentGatewayCode::ALIPAY,
+            'gateway_key' => PaymentGatewayCode::ALIPAY,
         ]);
 
         $this->expectException(InvalidArgumentException::class);
@@ -112,7 +112,7 @@ class PaymentBoundaryAuditCommandTest extends BaseTestCase
             $table->unsignedBigInteger('user_id');
             $table->unsignedBigInteger('order_id')->nullable();
             $table->unsignedBigInteger('invoice_id')->nullable();
-            $table->string('gateway', 30);
+            $table->string('gateway_key', 30)->nullable();
             $table->string('trade_no')->nullable();
             $table->decimal('amount', 12, 2);
             $table->tinyInteger('status')->default(PaymentStatus::PENDING);
@@ -128,7 +128,7 @@ class PaymentBoundaryAuditCommandTest extends BaseTestCase
         DB::table('payments')->insert([
             'payment_no' => $paymentNo,
             'user_id' => 1,
-            'gateway' => $gateway,
+            'gateway_key' => $gateway,
             'amount' => '10.00',
             'status' => PaymentStatus::SUCCESS,
             'paid_at' => now(),

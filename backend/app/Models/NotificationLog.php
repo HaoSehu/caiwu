@@ -8,6 +8,9 @@ class NotificationLog extends Model
 {
     protected $fillable = [
         'channel',
+        'plugin_id',
+        'driver_key',
+        'trace_id',
         'recipient',
         'template_code',
         'subject',
@@ -27,6 +30,7 @@ class NotificationLog extends Model
         return [
             'params_json' => 'array',
             'sent_at' => 'datetime',
+            'plugin_id' => 'integer',
         ];
     }
 }

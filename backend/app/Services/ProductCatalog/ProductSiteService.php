@@ -9,6 +9,7 @@ use App\Models\FirstProductGroup;
 use App\Models\Product;
 use App\Models\SecondProductGroup;
 use App\Models\ThirdProductGroup;
+use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\ProductCatalog\Concerns\HandlesProductCatalogHelpers;
 use App\Support\ProductGroupHierarchyFields;
 use Illuminate\Database\Eloquent\Builder;
@@ -30,6 +31,7 @@ class ProductSiteService
         private readonly CpuModelCatalogService $cpuModelCatalogService,
         private readonly InstanceSpecCatalogService $instanceSpecCatalogService,
         private readonly ?ProductDisplayNameResolver $productDisplayNameResolver = null,
+        private ?PluginBindingResolver $bindingResolver = null,
     ) {}
 
     public function siteProductTypes(): array
@@ -397,7 +399,6 @@ class ProductSiteService
         return $this->saleProductQuery()
             ->select([
                 'id',
-                'supplier_id',
                 'product_type',
                 ...Product::optionalSelectColumns([
                     'custom_display_name',
@@ -412,7 +413,6 @@ class ProductSiteService
                 'purchase_requires',
                 'stock',
                 'auto_setup',
-                'provision_module',
             ])
             ->with([
                 'firstProductGroup',
@@ -651,7 +651,7 @@ class ProductSiteService
                 'full_name' => $this->resolveHierarchyFullName($hierarchyFields),
             ],
             'config_options' => $this->trimSiteProductConfigOptions($product->config_options),
-            'provision_module' => (string) ($product->provision_module ?? ''),
+            'provider_key' => $this->providerKeyForProduct($product),
             'siblings' => $siblings
                 ->map(function (Product $item) use ($siblingsSpecMap) {
                     $itemSpecItem = $siblingsSpecMap[(int) $item->id] ?? [];
@@ -758,6 +758,18 @@ class ProductSiteService
             'second' => $secondIds,
             'third' => $thirdIds,
         ];
+    }
+
+    private function bindingResolver(): PluginBindingResolver
+    {
+        return $this->bindingResolver ??= app(PluginBindingResolver::class);
+    }
+
+    private function providerKeyForProduct(Product $product): string
+    {
+        $providerKey = $this->bindingResolver()->providerKeyForProduct($product);
+
+        return trim((string) $providerKey);
     }
 
     private function resolveHierarchyFullName(array $hierarchyFields): string

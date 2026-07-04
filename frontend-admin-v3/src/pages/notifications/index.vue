@@ -9,74 +9,7 @@
       </div>
     </t-card>
 
-    <template v-if="activeTab === 'interfaces'">
-      <section class="channel-grid">
-        <t-card :bordered="false" :loading="settingsLoading">
-          <template #title>
-            <span class="card-title"><mail-icon /> 邮件接口</span>
-          </template>
-          <t-form ref="emailFormRef" :data="emailForm" label-align="top">
-            <t-form-item label="启用邮件" name="enabled">
-              <t-switch v-model="emailForm.enabled" />
-            </t-form-item>
-            <t-form-item label="SMTP 主机" name="host">
-              <t-input v-model="emailForm.host" placeholder="例如 smtp.qq.com" />
-            </t-form-item>
-            <t-form-item label="SMTP 端口" name="port">
-              <t-input v-model="emailForm.port" placeholder="例如 465 / 587" />
-            </t-form-item>
-            <t-form-item label="发件邮箱" name="username">
-              <t-input v-model="emailForm.username" placeholder="请输入发件邮箱" />
-            </t-form-item>
-            <t-form-item label="授权密码" name="password">
-              <t-input
-                v-model="emailForm.password"
-                type="password"
-                :placeholder="secretPlaceholder('email_password', '请输入邮箱授权码')"
-              />
-            </t-form-item>
-            <t-form-item label="发件名称" name="from_name">
-              <t-input v-model="emailForm.from_name" placeholder="例如 创欧云" />
-            </t-form-item>
-          </t-form>
-          <div class="form-actions">
-            <t-button theme="primary" :loading="savingEmail" @click="saveEmailSettings">保存邮件配置</t-button>
-          </div>
-        </t-card>
-
-        <t-card :bordered="false" :loading="settingsLoading">
-          <template #title>
-            <span class="card-title"><mobile-icon /> 短信接口</span>
-          </template>
-          <t-form ref="smsFormRef" :data="smsForm" label-align="top">
-            <t-form-item label="启用短信" name="enabled">
-              <t-switch v-model="smsForm.enabled" />
-            </t-form-item>
-            <t-form-item label="Access Key" name="access_key">
-              <t-input v-model="smsForm.access_key" :placeholder="secretPlaceholder('sms_access_key', '请输入 Access Key')" />
-            </t-form-item>
-            <t-form-item label="Secret Key" name="secret_key">
-              <t-input
-                v-model="smsForm.secret_key"
-                type="password"
-                :placeholder="secretPlaceholder('sms_secret_key', '请输入 Secret Key')"
-              />
-            </t-form-item>
-            <t-form-item label="签名" name="sign_name">
-              <t-input v-model="smsForm.sign_name" placeholder="请输入短信签名" />
-            </t-form-item>
-            <t-form-item label="验证码模板" name="template_code">
-              <t-input v-model="smsForm.template_code" placeholder="请输入模板编号" />
-            </t-form-item>
-          </t-form>
-          <div class="form-actions">
-            <t-button theme="primary" :loading="savingSms" @click="saveSmsSettings">保存短信配置</t-button>
-          </div>
-        </t-card>
-      </section>
-    </template>
-
-    <template v-else-if="activeTab === 'email-templates'">
+    <template v-if="activeTab === 'email-templates'">
       <t-card :bordered="false" :loading="templatesLoading">
         <div class="template-toolbar">
           <div>
@@ -251,9 +184,9 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ApiIcon, MailIcon, MobileIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
+import { SearchIcon } from 'tdesign-icons-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
-import type { FormInstanceFunctions, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
+import type { PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 
 import { adminApi, type SettingItem } from '@/api/admin';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -262,26 +195,8 @@ import apiCatalogData from '@/data/apiCatalog.generated.json';
 
 import './index.less';
 
-type NotificationTab = 'interfaces' | 'email-templates' | 'api-directory';
+type NotificationTab = 'email-templates' | 'api-directory';
 type TemplateAudience = 'user' | 'admin';
-
-interface NotificationForm {
-  enabled: boolean;
-  host: string;
-  port: string;
-  username: string;
-  password: string;
-  from_name: string;
-}
-
-interface SmsForm {
-  enabled: boolean;
-  provider: string;
-  access_key: string;
-  secret_key: string;
-  sign_name: string;
-  template_code: string;
-}
 
 interface TemplateSummary {
   code: string;
@@ -330,33 +245,10 @@ interface ApiCatalogMeta {
 const route = useRoute();
 const router = useRouter();
 const activeTab = ref<NotificationTab>(normalizeTab(route.query.tab));
-const settingsLoading = ref(false);
 const templatesLoading = ref(false);
-const savingEmail = ref(false);
-const savingSms = ref(false);
-const emailFormRef = ref<FormInstanceFunctions>();
-const smsFormRef = ref<FormInstanceFunctions>();
 const settingsMap = ref<Record<string, unknown>>({});
-const settingsMetaMap = ref<Record<string, SettingItem>>({});
 const templateAudience = ref<TemplateAudience>('user');
 const selectedApiModule = ref('all');
-
-const emailForm = reactive<NotificationForm>({
-  enabled: false,
-  host: '',
-  port: '',
-  username: '',
-  password: '',
-  from_name: '',
-});
-const smsForm = reactive<SmsForm>({
-  enabled: false,
-  provider: 'aliyun',
-  access_key: '',
-  secret_key: '',
-  sign_name: '',
-  template_code: '',
-});
 const apiFilters = reactive({
   keyword: '',
   access: 'all',
@@ -392,11 +284,6 @@ const apiItems = (apiCatalog.items || []).map((item) => ({
 }));
 
 const isMobile = useMediaQuery('(max-width: 768px)');
-const currentLoading = computed(() => {
-  if (activeTab.value === 'interfaces') return settingsLoading.value || savingEmail.value || savingSms.value;
-  if (activeTab.value === 'email-templates') return templatesLoading.value;
-  return false;
-});
 const templateAudienceOptions = computed(() => [
   { label: `用户模板（${templateRows.value.filter((item) => item.audience === 'user').length}）`, value: 'user' },
   { label: `管理员模板（${templateRows.value.filter((item) => item.audience === 'admin').length}）`, value: 'admin' },
@@ -489,131 +376,16 @@ function refreshCurrentTab() {
   return undefined;
 }
 
-async function loadSettings() {
-  settingsLoading.value = true;
-  try {
-    const response = await adminApi.settings.list({ group: 'notification' });
-    settingsMap.value = normalizeSettings(response);
-    settingsMetaMap.value = normalizeSettingItems(response);
-    fillNotificationForms();
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '加载通知配置失败'));
-  } finally {
-    settingsLoading.value = false;
-  }
-}
-
 async function loadTemplates() {
   templatesLoading.value = true;
   try {
     const response = await adminApi.settings.list({ group: 'notification' });
     settingsMap.value = normalizeSettings(response);
-    settingsMetaMap.value = normalizeSettingItems(response);
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '加载邮件模板列表失败'));
   } finally {
     templatesLoading.value = false;
   }
-}
-
-function fillNotificationForms() {
-  emailForm.enabled = toBool(settingsMap.value.email_enabled);
-  emailForm.host = stringValue(settingsMap.value.email_host);
-  emailForm.port = stringValue(settingsMap.value.email_port);
-  emailForm.username = stringValue(settingsMap.value.email_username);
-  emailForm.password = '';
-  emailForm.from_name = stringValue(settingsMap.value.email_from_name);
-  smsForm.enabled = toBool(settingsMap.value.sms_enabled);
-  smsForm.provider = stringValue(settingsMap.value.sms_driver) || stringValue(settingsMap.value.sms_provider) || 'aliyun';
-  smsForm.access_key = '';
-  smsForm.secret_key = '';
-  smsForm.sign_name = stringValue(settingsMap.value.sms_sign_name);
-  smsForm.template_code = stringValue(settingsMap.value.sms_template_code);
-}
-
-async function saveEmailSettings() {
-  if (!validateEmailForm()) return;
-  savingEmail.value = true;
-  try {
-    const settings: Record<string, unknown> = {
-      email_enabled: emailForm.enabled ? 1 : 0,
-      email_host: emailForm.host.trim(),
-      email_port: emailForm.port.trim(),
-      email_username: emailForm.username.trim(),
-      email_from_name: emailForm.from_name.trim(),
-    };
-    if (emailForm.password.trim()) {
-      settings.email_password = emailForm.password.trim();
-    }
-
-    await adminApi.settings.save({
-      group: 'notification',
-      settings,
-    });
-    MessagePlugin.success('邮件配置已保存');
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '保存邮件配置失败'));
-  } finally {
-    savingEmail.value = false;
-  }
-}
-
-async function saveSmsSettings() {
-  if (!validateSmsForm()) return;
-  savingSms.value = true;
-  try {
-    const settings: Record<string, unknown> = {
-      sms_enabled: smsForm.enabled ? 1 : 0,
-      sms_driver: smsForm.provider,
-      sms_provider: smsForm.provider,
-      sms_sign_name: smsForm.sign_name.trim(),
-      sms_template_code: smsForm.template_code.trim(),
-    };
-    if (smsForm.access_key.trim()) {
-      settings.sms_access_key = smsForm.access_key.trim();
-    }
-    if (smsForm.secret_key.trim()) {
-      settings.sms_secret_key = smsForm.secret_key.trim();
-    }
-
-    await adminApi.settings.save({
-      group: 'notification',
-      settings,
-    });
-    MessagePlugin.success('短信配置已保存');
-  } catch (error) {
-    MessagePlugin.error(errorMessage(error, '保存短信配置失败'));
-  } finally {
-    savingSms.value = false;
-  }
-}
-
-function validateEmailForm() {
-  if (!emailForm.enabled) return true;
-  if (!emailForm.host.trim()) return warnRequired('SMTP 主机');
-  const port = Number(emailForm.port);
-  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
-    MessagePlugin.warning('SMTP 端口必须是 1-65535 的整数');
-    return false;
-  }
-  if (!emailForm.username.trim()) return warnRequired('发件邮箱');
-  if (!hasSecretInputOrStored('email_password', emailForm.password)) return warnRequired('授权密码');
-  if (!emailForm.from_name.trim()) return warnRequired('发件名称');
-  return true;
-}
-
-function validateSmsForm() {
-  if (!smsForm.enabled) return true;
-  if (!hasSecretInputOrStored('sms_access_key', smsForm.access_key)) return warnRequired('Access Key');
-  if (!hasSecretInputOrStored('sms_secret_key', smsForm.secret_key)) return warnRequired('Secret Key');
-  if (!smsForm.sign_name.trim()) return warnRequired('签名');
-  if (!smsForm.template_code.trim()) return warnRequired('验证码模板');
-  return true;
-}
-
-function warnRequired(label: string) {
-  MessagePlugin.warning(`启用后必须填写${label}`);
-  return false;
 }
 
 function openTemplate(row: TemplateRow | TableRowData) {
@@ -647,27 +419,11 @@ function normalizeSettings(response: SettingItem[] | Record<string, unknown>) {
   return record;
 }
 
-function normalizeSettingItems(response: SettingItem[] | Record<string, unknown>) {
-  return Object.fromEntries(extractSettingItems(response).map((item) => [item.key, item]));
-}
-
 function extractSettingItems(response: SettingItem[] | Record<string, unknown>) {
   if (Array.isArray(response)) return response;
 
   const record = toRecord(response);
   return Array.isArray(record.list) ? (record.list as SettingItem[]) : [];
-}
-
-function hasStoredSecret(key: string) {
-  return settingsMetaMap.value[key]?.has_value === true;
-}
-
-function hasSecretInputOrStored(key: string, value: string) {
-  return value.trim() !== '' || hasStoredSecret(key);
-}
-
-function secretPlaceholder(key: string, fallback: string) {
-  return hasStoredSecret(key) ? '已配置，留空表示不修改' : fallback;
 }
 
 function methodTheme(method: string) {
@@ -692,10 +448,6 @@ function stripHtml(value: string) {
     .replace(/&nbsp;/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-}
-
-function toBool(value: unknown) {
-  return value === true || value === 1 || value === '1' || value === 'true';
 }
 
 function stringValue(value: unknown) {

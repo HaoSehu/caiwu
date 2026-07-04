@@ -6,6 +6,7 @@ namespace App\Services\Finance;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
+use App\Constants\OrderType;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Models\Invoice;
@@ -14,6 +15,7 @@ use App\Models\Payment;
 use App\Models\Product;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\ProductCatalog\ProductFullPathResolver;
+use App\Support\AdminPrivacy;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -21,7 +23,7 @@ use Illuminate\Support\Facades\DB;
 
 class AdminFinanceQueryService
 {
-    private const ADDON_KIND_LABELS = [
+    private const UPGRADE_KIND_LABELS = [
         'traffic_package' => '流量包',
     ];
 
@@ -45,7 +47,7 @@ class AdminFinanceQueryService
 
         $type = $forcedType ?: trim((string) ($filters['type'] ?? ''));
         if ($type !== '') {
-            $query->where('type', $type === 'normal' ? 'new' : $type);
+            $query->where('type', $type);
         }
 
         if (isset($filters['status']) && $filters['status'] !== '') {
@@ -53,7 +55,7 @@ class AdminFinanceQueryService
         }
 
         $this->applyKeywordFilter($query, trim((string) ($filters['keyword'] ?? '')));
-        $this->applyDateRangeFilter($query, 'created_at', $filters['date_range'] ?? null);
+        $this->applyDateFilter($query, 'created_at', $filters);
 
         $paginator = $query->orderByDesc('id')->paginate($perPage);
         $paginator->setCollection(
@@ -72,7 +74,7 @@ class AdminFinanceQueryService
                 'invoice.order:id,order_no,type,status',
                 'order:id,order_no,type,status',
             ])
-            ->where('gateway', PaymentGatewayCode::ALIPAY);
+            ->whereGatewayKey(PaymentGatewayCode::ALIPAY);
 
         if (isset($filters['status']) && $filters['status'] !== '') {
             $query->where('status', (int) $filters['status']);
@@ -98,7 +100,7 @@ class AdminFinanceQueryService
             });
         }
 
-        $this->applyDateRangeFilter($query, 'created_at', $filters['date_range'] ?? null);
+        $this->applyDateFilter($query, 'created_at', $filters);
 
         $paginator = $query->orderByDesc('id')->paginate($perPage);
         $paginator->setCollection(
@@ -151,7 +153,7 @@ class AdminFinanceQueryService
             ])
             ->where('status', InvoiceStatus::PAID)
             ->whereDoesntHave('payments', fn ($query) => $query
-                ->whereIn('gateway', PaymentGatewayCode::thirdPartyGateways())
+                ->whereGatewayKeyIn(PaymentGatewayCode::thirdPartyGateways())
                 ->where('status', PaymentStatus::REFUNDED))
             ->whereNotNull('product_id')
             ->whereBetween('paid_at', [$start, $end])
@@ -214,7 +216,7 @@ class AdminFinanceQueryService
         ];
     }
 
-    public function paginateAddonOrders(array $filters, int $perPage = 20): LengthAwarePaginator
+    public function paginateUpgradeOrders(array $filters, int $perPage = 20): LengthAwarePaginator
     {
         $query = Order::query()
             ->with([
@@ -223,9 +225,9 @@ class AdminFinanceQueryService
                 'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
                 'service:id,name,domain,status,expires_at',
             ])
-            ->where('type', 'upgrade');
+            ->where('type', OrderType::UPGRADE);
 
-        $kind = trim((string) ($filters['kind'] ?? ''));
+        $kind = trim((string) ($filters['upgrade_kind'] ?? ''));
         if ($kind !== '' && $kind !== 'all') {
             $query->where('config_pricing_snapshot->meta->kind', $kind);
         }
@@ -235,17 +237,17 @@ class AdminFinanceQueryService
         }
 
         $this->applyKeywordFilter($query, trim((string) ($filters['keyword'] ?? '')));
-        $this->applyDateRangeFilter($query, 'created_at', $filters['date_range'] ?? null);
+        $this->applyDateFilter($query, 'created_at', $filters);
 
         $paginator = $query->orderByDesc('id')->paginate($perPage);
         $paginator->setCollection(
             $paginator->getCollection()->map(function (Order $order): array {
                 $item = $this->transformOrder($order);
-                $kind = $this->resolveAddonKind($order);
-                $item['addon_kind'] = $kind;
-                $item['addon_kind_label'] = self::ADDON_KIND_LABELS[$kind] ?? ($kind !== '' ? $kind : '附加配置');
-                $item['addon_target_label'] = (string) data_get($order->config_pricing_snapshot ?? [], 'meta.target_label', '');
-                $item['addon_mode'] = (string) data_get($order->config_pricing_snapshot ?? [], 'meta.mode', '');
+                $kind = $this->resolveUpgradeKind($order);
+                $item['upgrade_kind'] = $kind;
+                $item['upgrade_kind_label'] = self::UPGRADE_KIND_LABELS[$kind] ?? ($kind !== '' ? $kind : '附加配置');
+                $item['upgrade_target_label'] = (string) data_get($order->config_pricing_snapshot ?? [], 'meta.target_label', '');
+                $item['upgrade_mode'] = (string) data_get($order->config_pricing_snapshot ?? [], 'meta.mode', '');
 
                 return $item;
             })
@@ -356,22 +358,31 @@ class AdminFinanceQueryService
         });
     }
 
-    private function applyDateRangeFilter(Builder $query, string $column, mixed $dateRange): void
+    private function applyDateFilter(Builder $query, string $column, array $filters): void
     {
-        if (! is_array($dateRange) || count($dateRange) < 2) {
+        $start = trim((string) ($filters['start_date'] ?? ''));
+        $end = trim((string) ($filters['end_date'] ?? ''));
+
+        if ($start === '' && $end === '') {
             return;
         }
 
-        $start = trim((string) ($dateRange[0] ?? ''));
-        $end = trim((string) ($dateRange[1] ?? ''));
-        if ($start === '' || $end === '') {
+        if ($start !== '' && $end !== '') {
+            $query->whereBetween($column, [
+                CarbonImmutable::parse($start)->startOfDay(),
+                CarbonImmutable::parse($end)->endOfDay(),
+            ]);
+
             return;
         }
 
-        $query->whereBetween($column, [
-            CarbonImmutable::parse($start)->startOfDay(),
-            CarbonImmutable::parse($end)->endOfDay(),
-        ]);
+        if ($start !== '') {
+            $query->where($column, '>=', CarbonImmutable::parse($start)->startOfDay());
+
+            return;
+        }
+
+        $query->where($column, '<=', CarbonImmutable::parse($end)->endOfDay());
     }
 
     public function getOrderDetail(int $id): array
@@ -380,7 +391,17 @@ class AdminFinanceQueryService
             ->with([
                 'user:id,email,nickname,phone',
                 'invoice:id,invoice_no,order_id,type,status,amount,paid_amount,paid_at,due_date,created_at,trace_id,refund_trace_id',
-                'invoice.payments:id,invoice_id,payment_no,gateway,trade_no,amount,status,paid_at,trace_id',
+                'invoice.payments' => fn ($query) => $query->select(Payment::gatewayProjectionColumns([
+                    'id',
+                    'invoice_id',
+                    'payment_no',
+                    'plugin_id',
+                    'trade_no',
+                    'amount',
+                    'status',
+                    'paid_at',
+                    'trace_id',
+                ])),
                 'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
                 'product.firstProductGroup:id,code,name',
                 'product.secondProductGroup:id,first_product_group_id,name',
@@ -402,11 +423,12 @@ class AdminFinanceQueryService
         $data['coupon_snapshot'] = (array) ($order->coupon_snapshot ?? []);
         $data['remark'] = (string) ($order->remark ?? '');
         $data['payments'] = $order->invoice?->payments
-            ?->filter(fn (Payment $payment) => PaymentGatewayCode::isThirdParty((string) $payment->gateway))
+            ?->filter(fn (Payment $payment) => $payment->isThirdPartyGateway())
             ?->map(fn ($payment) => [
                 'id' => (int) $payment->id,
                 'payment_no' => (string) $payment->payment_no,
-                'gateway' => (string) $payment->gateway,
+                'gateway' => $payment->gatewayKey(),
+                'gateway_key' => $payment->gatewayKey(),
                 'trade_no' => (string) ($payment->trade_no ?? ''),
                 'amount' => $this->money($payment->amount),
                 'status' => (int) $payment->status,
@@ -419,15 +441,17 @@ class AdminFinanceQueryService
 
     private function transformOrder(Order $order): array
     {
+        $privacy = AdminPrivacy::current();
+
         return [
             'id' => (int) $order->id,
             'order_no' => (string) $order->order_no,
             'user_id' => (int) $order->user_id,
             'user' => $order->user ? [
                 'id' => (int) $order->user->id,
-                'email' => (string) $order->user->email,
+                'email' => $privacy->email($order->user->email),
                 'nickname' => (string) ($order->user->nickname ?? ''),
-                'phone' => (string) ($order->user->phone ?? ''),
+                'phone' => $privacy->phone($order->user->phone),
             ] : null,
             'invoice' => $order->invoice ? [
                 'id' => (int) $order->invoice->id,
@@ -470,20 +494,23 @@ class AdminFinanceQueryService
 
     private function transformRechargePayment(Payment $payment): array
     {
+        $privacy = AdminPrivacy::current();
         $invoice = $payment->invoice;
         $order = $payment->order ?? $invoice?->order;
+        $gateway = $payment->gatewayKey();
 
         return [
             'id' => (int) $payment->id,
             'payment_no' => (string) $payment->payment_no,
-            'gateway' => (string) $payment->gateway,
-            'gateway_label' => $this->paymentGatewayLabel((string) $payment->gateway),
+            'gateway' => $gateway,
+            'gateway_key' => $gateway,
+            'gateway_label' => $this->paymentGatewayLabel($gateway),
             'trade_no' => (string) ($payment->trade_no ?? ''),
             'user' => $payment->user ? [
                 'id' => (int) $payment->user->id,
-                'email' => (string) $payment->user->email,
+                'email' => $privacy->email($payment->user->email),
                 'nickname' => (string) ($payment->user->nickname ?? ''),
-                'phone' => (string) ($payment->user->phone ?? ''),
+                'phone' => $privacy->phone($payment->user->phone),
             ] : null,
             'invoice_id' => $invoice ? (int) $invoice->id : null,
             'invoice_no' => $invoice ? (string) $invoice->invoice_no : '',
@@ -510,8 +537,9 @@ class AdminFinanceQueryService
             'payment' => [
                 'id' => (int) $payment->id,
                 'payment_no' => (string) $payment->payment_no,
-                'gateway' => (string) $payment->gateway,
-                'gateway_label' => $this->paymentGatewayLabel((string) $payment->gateway),
+                'gateway' => $gateway,
+                'gateway_key' => $gateway,
+                'gateway_label' => $this->paymentGatewayLabel($gateway),
                 'trade_no' => (string) ($payment->trade_no ?? ''),
                 'amount' => $this->money($payment->amount),
                 'status' => (int) $payment->status,
@@ -536,7 +564,7 @@ class AdminFinanceQueryService
         return $productId > 0 ? "产品 #{$productId}" : '未配置产品';
     }
 
-    private function resolveAddonKind(Order $order): string
+    private function resolveUpgradeKind(Order $order): string
     {
         return trim((string) data_get($order->config_pricing_snapshot ?? [], 'meta.kind', ''));
     }
@@ -544,9 +572,9 @@ class AdminFinanceQueryService
     private function orderTypeLabel(string $type): string
     {
         return match ($type) {
-            'new', 'normal' => '新购',
-            'renew' => '续费',
-            'upgrade' => '附加配置',
+            OrderType::NEW, 'normal' => '新购',
+            OrderType::RENEW => '续费',
+            OrderType::UPGRADE => '附加配置',
             default => $type !== '' ? $type : '普通',
         };
     }
@@ -591,6 +619,7 @@ class AdminFinanceQueryService
     {
         return match ($gateway) {
             PaymentGatewayCode::ALIPAY => '支付宝',
+            PaymentGatewayCode::YIPAY => '易支付',
             default => $gateway !== '' ? $gateway : '-',
         };
     }

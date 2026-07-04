@@ -75,7 +75,8 @@ class ClientFinanceQueryService
                 'admin_deduct' => 'manual_deduction',
                 default => $eventType !== '' ? $eventType : null,
             },
-            'date_range' => $filters['date_range'] ?? null,
+            'start_date' => $filters['start_date'] ?? null,
+            'end_date' => $filters['end_date'] ?? null,
         ], static fn ($value) => $value !== null && $value !== '');
     }
 }

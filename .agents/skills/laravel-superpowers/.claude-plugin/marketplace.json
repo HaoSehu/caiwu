@@ -1,0 +1,20 @@
+{
+  "name": "superpowers-laravel-marketplace",
+  "description": "Development marketplace for Laravel Superpowers.",
+  "owner": {
+    "name": "JP Caparas",
+    "email": "jp@jpcaparas.com"
+  },
+  "plugins": [
+    {
+      "name": "superpowers-laravel",
+      "description": "Laravel-focused skills for Claude Code: TDD (Pest/PHPUnit), migrations, queues, quality checks (Pint/Insights), and pragmatic architecture patterns — Sail and non-Sail compatible.",
+      "version": "0.1.6",
+      "source": "./",
+      "author": {
+        "name": "JP Caparas",
+        "email": "jp@jpcaparas.com"
+      }
+    }
+  ]
+}

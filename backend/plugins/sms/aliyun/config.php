@@ -13,19 +13,9 @@ return [
         'entry' => AliyunPlugin::class,
         'capabilities' => ['verify_code'],
         'extra' => [
-            'legacy_settings' => [
-                'group' => 'notification',
-                'map' => [
-                    'access_key' => 'sms_access_key',
-                    'secret_key' => 'sms_secret_key',
-                    'sign_name' => 'sms_sign_name',
-                    'template_code' => 'sms_template_code',
-                ],
-            ],
-            'selection_setting' => [
-                'group' => 'notification',
-                'key' => 'sms_driver',
-                'value' => 'aliyun',
+            'driver_binding' => [
+                'binding_key' => 'sms_driver',
+                'provider_key' => 'aliyun',
             ],
         ],
     ],
@@ -36,5 +26,7 @@ return [
         'template_divider' => ['title' => '短信模板', 'type' => 'divider'],
         'sign_name' => ['title' => '短信签名', 'type' => 'text', 'value' => '', 'required' => true, 'placeholder' => '请输入短信签名'],
         'template_code' => ['title' => '模板编号', 'type' => 'text', 'value' => '', 'required' => true, 'placeholder' => '请输入短信模板编号', 'description' => '发送验证码时使用的模板编号。'],
+        'network_divider' => ['title' => '接口设置', 'type' => 'divider'],
+        'api_endpoint' => ['title' => '接口地址', 'type' => 'url', 'value' => 'https://dypnsapi.aliyuncs.com/', 'required' => false, 'placeholder' => '请输入阿里云短信接口地址'],
     ],
 ];

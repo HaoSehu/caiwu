@@ -7,6 +7,8 @@ namespace App\Services\ClientServiceConsole;
 use App\Exceptions\BusinessException;
 use App\Models\Service;
 use App\Models\User;
+use App\Services\Integrations\Plugins\PluginBindingResolver;
+use App\Services\Integrations\Plugins\ServiceUpstreamBindingWriter;
 use App\Services\System\OperationLogService;
 use App\Support\SensitiveDataSanitizer;
 use Illuminate\Support\Facades\Cache;
@@ -24,12 +26,14 @@ class ServicePowerService
         private readonly OperationLogService $operationLogService,
         private readonly ServiceDetailService $detailService,
         private readonly ServiceTransformService $transformService,
+        private ?PluginBindingResolver $bindingResolver = null,
+        private ?ServiceUpstreamBindingWriter $bindingWriter = null,
     ) {}
 
     public function powerActionForUser(User $user, int $serviceId, string $action, array $context = []): array
     {
         $service = $this->detailService->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -82,7 +86,7 @@ class ServicePowerService
             return;
         }
 
-        $provisionData = (array) ($service->provision_data ?? []);
+        $provisionData = $this->serviceProvisionData($service);
         $provisionData['runtime_status'] = (string) ($snapshot['runtime_status'] ?? '');
         $provisionData['runtime_description'] = (string) ($snapshot['runtime_description'] ?? '');
         $provisionData['last_power_action'] = $action;
@@ -91,6 +95,27 @@ class ServicePowerService
         $service->forceFill([
             'provision_data' => $provisionData,
         ])->save();
+
+        $service->refresh()->loadMissing('product.supplier');
+        $this->bindingWriter()->syncServiceState($service, $service->product, $provisionData);
+    }
+
+    private function serviceProvisionData(Service $service): array
+    {
+        $legacy = is_array($service->provision_data ?? null) ? $service->provision_data : [];
+        $projection = $this->bindingResolver()->serviceProvisionProjection($service);
+
+        return $projection === [] ? $legacy : array_replace($legacy, $projection);
+    }
+
+    private function bindingResolver(): PluginBindingResolver
+    {
+        return $this->bindingResolver ??= app(PluginBindingResolver::class);
+    }
+
+    private function bindingWriter(): ServiceUpstreamBindingWriter
+    {
+        return $this->bindingWriter ??= app(ServiceUpstreamBindingWriter::class);
     }
 
     private function resolvePendingPowerSnapshot(string $action): array
@@ -115,7 +140,7 @@ class ServicePowerService
     public function getModuleStatusForUser(User $user, int $serviceId, string $type = 'host'): array
     {
         $service = $this->detailService->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -143,7 +168,7 @@ class ServicePowerService
     public function getReinstallOptionsForUser(User $user, int $serviceId, bool $forceRefresh = false): array
     {
         $service = $this->detailService->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -151,7 +176,7 @@ class ServicePowerService
         ]);
 
         [$runtime, $supplier, $hostId, $jwt] = $this->detailService->resolveUpstreamContext($service);
-        $cacheKey = $this->detailService->buildReinstallOptionsCacheKey($supplier->id, $hostId);
+        $cacheKey = $this->detailService->buildReinstallOptionsCacheKey($supplier, $hostId);
 
         if (! $forceRefresh) {
             $cached = Cache::get($cacheKey);
@@ -196,7 +221,7 @@ class ServicePowerService
     public function resetPasswordForUser(User $user, int $serviceId, array $data, array $context = []): array
     {
         $service = $this->detailService->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -218,7 +243,7 @@ class ServicePowerService
         if ($secondVerify === [] && $password !== '') {
             $this->transformService->cacheSubmittedPasswordForService($service, $password);
             $service->refresh()->loadMissing([
-                'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,purchase_requires',
+                'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
                 'product.firstProductGroup:id,code,name,description,slug',
                 'product.secondProductGroup:id,first_product_group_id,name,description,slug',
                 'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -248,7 +273,7 @@ class ServicePowerService
     public function reinstallForUser(User $user, int $serviceId, array $data, array $context = []): array
     {
         $service = $this->detailService->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',

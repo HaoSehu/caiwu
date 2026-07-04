@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\Staff\DeleteAdminStaffRequest;
 use App\Http\Requests\Admin\Staff\ListAdminStaffRequest;
 use App\Http\Requests\Admin\Staff\ResetAdminStaffPasswordRequest;
 use App\Http\Requests\Admin\Staff\StoreAdminStaffRequest;
@@ -77,6 +78,17 @@ class AdminStaffController extends Controller
         );
 
         return $this->success(null, '员工密码已重置');
+    }
+
+    public function destroy(DeleteAdminStaffRequest $request, AdminUser $staff)
+    {
+        $this->adminStaffService->deleteDisabled(
+            staff: $staff,
+            operator: $request->user(),
+            ipAddress: $request->ip(),
+        );
+
+        return $this->success(null, '员工已删除');
     }
 
     public function roles()

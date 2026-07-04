@@ -41,11 +41,10 @@
           <div class="media-preview">
             <video
               v-if="isVideo(row)"
-              :ref="(el) => handleVideoPreviewRef(el)"
               class="media-preview__asset"
               :src="String(row.url || '')"
               muted
-              preload="auto"
+              preload="metadata"
               playsinline
             ></video>
             <img v-else class="media-preview__asset" :src="String(row.url || '')" :alt="String(row.filename || 'media')" loading="lazy" />
@@ -101,7 +100,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, type ComponentPublicInstance } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { MessagePlugin, type PageInfo, type PrimaryTableCol } from 'tdesign-vue-next';
 import { RefreshIcon, SearchIcon, UploadIcon } from 'tdesign-icons-vue-next';
 
@@ -148,21 +147,6 @@ const pagination = computed(() => ({
 
 function isVideo(row: MediaFileRecord) {
   return String(row.type || '').toLowerCase() === 'video' || String(row.mime_type || '').startsWith('video/');
-}
-
-function handleVideoPreviewRef(el: Element | ComponentPublicInstance | null) {
-  if (!(el instanceof HTMLVideoElement)) return;
-  const video = el;
-  const onReady = () => {
-    video.play()
-      .then(() => { video.pause(); })
-      .catch(() => { /* autoplay blocked */ });
-  };
-  if (video.readyState >= 2) {
-    onReady();
-  } else {
-    video.addEventListener('loadeddata', onReady, { once: true });
-  }
 }
 
 function canDelete(row: MediaFileRecord) {

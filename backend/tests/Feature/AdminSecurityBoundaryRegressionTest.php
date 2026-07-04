@@ -162,15 +162,11 @@ class AdminSecurityBoundaryRegressionTest extends TestCase
         $supplier = Supplier::query()->create([
             'name' => 'Delete Guard Supplier '.$suffix,
             'code' => 'delete_guard_'.$suffix,
-            'interface_type' => 'hosting_panel_api',
-            'api_url' => 'https://provider.example.test',
-            'api_username' => 'provider-user',
-            'api_key' => 'provider-secret',
             'status' => 1,
             'sort_order' => 1,
         ]);
 
-        Product::query()->create([
+        $product = Product::query()->create([
             'name' => 'Delete Guard Product '.$suffix,
             'product_type' => 'cloud',
             'remark' => 'Delete Guard Product',
@@ -180,12 +176,41 @@ class AdminSecurityBoundaryRegressionTest extends TestCase
             'stock' => 10,
             'status' => 1,
             'sort_order' => 1,
-            'supplier_id' => (int) $supplier->id,
-            'supplier_product_id' => 10001,
-            'provision_module' => 'hosting_panel_api',
         ]);
 
-        Sanctum::actingAs($this->createAdminUser([AdminPermissions::PRODUCT_MANAGE]));
+        $pluginId = (int) DB::table('integration_plugins')->insertGetId([
+            'domain' => 'upstream',
+            'slug' => 'delete_guard_'.$suffix,
+            'plugin_key' => 'hosting_panel_api_delete_guard_'.$suffix,
+            'name' => 'Delete Guard',
+            'version' => '1.0.0',
+            'entry_class' => 'Tests\\Fixtures\\DeleteGuardPlugin',
+            'status' => 1,
+            'installed_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $supplierBindingId = (int) DB::table('supplier_plugin_bindings')->insertGetId([
+            'supplier_id' => (int) $supplier->id,
+            'plugin_id' => $pluginId,
+            'provider_key' => 'hosting_panel_api',
+            'environment' => 'production',
+            'status' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('product_upstream_bindings')->insert([
+            'product_id' => (int) $product->id,
+            'supplier_plugin_binding_id' => $supplierBindingId,
+            'plugin_id' => $pluginId,
+            'provider_key' => 'hosting_panel_api',
+            'upstream_product_id' => '10001',
+            'status' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        Sanctum::actingAs($this->createAdminUser([AdminPermissions::SUPPLIER_MANAGE]));
 
         $this->deleteJson('/api/admin/suppliers/'.$supplier->id)
             ->assertStatus(409)

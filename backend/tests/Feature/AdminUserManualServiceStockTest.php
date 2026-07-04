@@ -11,6 +11,7 @@ use App\Models\Supplier;
 use App\Models\User;
 use App\Services\Upstream\ProviderKey;
 use App\Services\User\UserService;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class AdminUserManualServiceStockTest extends TestCase
@@ -136,6 +137,7 @@ class AdminUserManualServiceStockTest extends TestCase
             'supplier_product_id' => 60001,
             'provision_module' => ProviderKey::MOFANG_FINANCE_API,
         ]);
+        $this->createProductUpstreamBinding($supplier, $product, 60001);
 
         $result = app(UserService::class)->createManualService($user, [
             'product_id' => (int) $product->id,
@@ -159,10 +161,15 @@ class AdminUserManualServiceStockTest extends TestCase
         $service = Service::query()->find($serviceId);
         $provisionData = (array) $service->provision_data;
 
-        $this->assertSame(ProviderKey::MOFANG_FINANCE_API, $provisionData['provider'] ?? null);
-        $this->assertNotSame(ProviderKey::HOSTING_PANEL_API, $provisionData['provider'] ?? null);
+        $this->assertSame(ProviderKey::MOFANG_FINANCE_API, $provisionData['provider_key'] ?? null);
+        $this->assertNotSame(ProviderKey::HOSTING_PANEL_API, $provisionData['provider_key'] ?? null);
         $this->assertSame((int) $supplier->id, $provisionData['supplier_id'] ?? null);
         $this->assertSame(70001, $provisionData['upstream_host_id'] ?? null);
+        $this->assertDatabaseHas('service_upstream_bindings', [
+            'service_id' => $serviceId,
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'upstream_service_id' => '70001',
+        ]);
     }
 
     /**
@@ -208,5 +215,40 @@ class AdminUserManualServiceStockTest extends TestCase
         ]);
 
         return [$user, $product];
+    }
+
+    private function createProductUpstreamBinding(Supplier $supplier, Product $product, int $upstreamProductId): void
+    {
+        $pluginId = (int) DB::table('integration_plugins')
+            ->where('domain', 'upstream')
+            ->where('plugin_key', ProviderKey::MOFANG_FINANCE_API)
+            ->value('id');
+
+        $now = now();
+        $supplierBindingId = DB::table('supplier_plugin_bindings')->insertGetId([
+            'supplier_id' => (int) $supplier->id,
+            'plugin_id' => $pluginId,
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'environment' => 'production',
+            'status' => 1,
+            'priority' => 1,
+            'base_url' => 'https://binding-'.$supplier->id.'.example.com',
+            'account_name' => 'demo',
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+
+        DB::table('product_upstream_bindings')->insert([
+            'product_id' => (int) $product->id,
+            'supplier_plugin_binding_id' => $supplierBindingId,
+            'plugin_id' => $pluginId,
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'upstream_product_id' => (string) $upstreamProductId,
+            'auto_setup' => (int) ($product->auto_setup ?? 0) === 1 ? 1 : 0,
+            'status' => 1,
+            'last_synced_at' => $now,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
     }
 }

@@ -14,9 +14,13 @@ use App\Models\OperationLog;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\PaymentCallback;
+use App\Models\Service;
 use App\Models\User;
+use App\Services\Integrations\Plugins\PluginBindingResolver;
+use App\Support\AdminPrivacy;
 use App\Support\ServiceHostname;
 use App\Support\VersionedJson;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -140,12 +144,7 @@ class FinanceLedgerQueryService
         if (! empty($filters['user_id'])) {
             $invoiceQuery->where('user_id', (int) $filters['user_id']);
         }
-        if (! empty($filters['date_range']) && is_array($filters['date_range']) && count($filters['date_range']) === 2) {
-            $invoiceQuery->whereBetween('created_at', [
-                $filters['date_range'][0],
-                $filters['date_range'][1].' 23:59:59',
-            ]);
-        }
+        $this->applyDateFilter($invoiceQuery, $filters);
         $invoiceSummary = $invoiceQuery
             ->selectRaw('COUNT(*) as total_invoices')
             ->selectRaw('COALESCE(SUM(CASE WHEN status IN (0, 3) THEN amount - COALESCE(paid_amount, 0) ELSE 0 END), 0) as unpaid_amount')
@@ -197,9 +196,7 @@ class FinanceLedgerQueryService
     private function buildSummaryCacheKey(array $filters): string
     {
         $userId = (int) ($filters['user_id'] ?? 0);
-        $dateRange = isset($filters['date_range']) && is_array($filters['date_range'])
-            ? implode('_', $filters['date_range'])
-            : '';
+        $dateRange = trim((string) ($filters['start_date'] ?? '')).'_'.trim((string) ($filters['end_date'] ?? ''));
 
         return 'finance:ledger:summary:'.$userId.':'.md5($dateRange);
     }
@@ -250,12 +247,7 @@ class FinanceLedgerQueryService
             }
         }
 
-        if (! empty($filters['date_range']) && is_array($filters['date_range']) && count($filters['date_range']) === 2) {
-            $query->whereBetween('created_at', [
-                $filters['date_range'][0],
-                $filters['date_range'][1].' 23:59:59',
-            ]);
-        }
+        $this->applyDateFilter($query, $filters);
 
         if (! empty($filters['service_id'])) {
             $this->applyServiceFilter($query, (int) $filters['service_id']);
@@ -411,6 +403,33 @@ class FinanceLedgerQueryService
         });
     }
 
+    private function applyDateFilter(Builder $query, array $filters): void
+    {
+        $start = trim((string) ($filters['start_date'] ?? ''));
+        $end = trim((string) ($filters['end_date'] ?? ''));
+
+        if ($start === '' && $end === '') {
+            return;
+        }
+
+        if ($start !== '' && $end !== '') {
+            $query->whereBetween('created_at', [
+                CarbonImmutable::parse($start)->startOfDay(),
+                CarbonImmutable::parse($end)->endOfDay(),
+            ]);
+
+            return;
+        }
+
+        if ($start !== '') {
+            $query->where('created_at', '>=', CarbonImmutable::parse($start)->startOfDay());
+
+            return;
+        }
+
+        $query->where('created_at', '<=', CarbonImmutable::parse($end)->endOfDay());
+    }
+
     private function attachContextResolvers(Builder $query): void
     {
         $query->withCasts(['normalized_event_type' => 'string']);
@@ -542,7 +561,7 @@ class FinanceLedgerQueryService
             return null;
         }
 
-        $provisionData = (array) ($service?->provision_data ?? []);
+        $provisionData = $this->serviceProvisionData($service);
         $configItems = collect((array) data_get($pricingSnapshot, 'items', []))
             ->filter(fn ($item) => is_array($item))
             ->map(fn (array $item) => [
@@ -573,6 +592,21 @@ class FinanceLedgerQueryService
             'config_snapshot' => $configSnapshot,
             'config_items' => $configItems,
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serviceProvisionData(?Service $service): array
+    {
+        if (! $service instanceof Service) {
+            return [];
+        }
+
+        $legacy = is_array($service->provision_data ?? null) ? $service->provision_data : [];
+        $projection = app(PluginBindingResolver::class)->serviceProvisionProjection($service);
+
+        return $projection === [] ? $legacy : array_replace($legacy, $projection);
     }
 
     private function buildSourceChain(AccountTransaction $record, ?Invoice $invoice, ?Payment $payment, ?Order $order): array
@@ -619,7 +653,7 @@ class FinanceLedgerQueryService
                 'status' => (int) $payment->status,
                 'status_label' => PaymentStatus::$labels[(int) $payment->status] ?? (string) $payment->status,
                 'occurred_at' => ($payment->paid_at ?? $payment->created_at)?->format('Y-m-d H:i:s'),
-                'description' => trim((string) $payment->gateway) !== '' ? (string) $payment->gateway : '支付记录',
+                'description' => $payment->gatewayKey() !== '' ? $payment->gatewayKey() : '支付记录',
             ];
         }
 
@@ -678,7 +712,7 @@ class FinanceLedgerQueryService
                 'status_label' => PaymentStatus::$labels[(int) $payment->status] ?? (string) $payment->status,
                 'occurred_at' => ($payment->paid_at ?? $payment->updated_at ?? $payment->created_at)?->format('Y-m-d H:i:s'),
                 'source' => $payment->payment_no,
-                'description' => trim((string) ($payment->gateway ?? '')),
+                'description' => $payment->gatewayKey(),
             ]);
         }
 
@@ -891,7 +925,8 @@ class FinanceLedgerQueryService
 
     private function transformOperationLog(OperationLog $log): array
     {
-        $detail = (array) ($log->detail ?? []);
+        $privacy = AdminPrivacy::current();
+        $detail = (array) $privacy->payload((array) ($log->detail ?? []));
 
         return [
             'id' => (int) $log->id,
@@ -901,7 +936,7 @@ class FinanceLedgerQueryService
             'user_id' => $log->user_id !== null ? (int) $log->user_id : null,
             'subject_id' => $log->subject_id !== null ? (int) $log->subject_id : null,
             'created_at' => $log->created_at?->format('Y-m-d H:i:s'),
-            'ip_address' => (string) ($log->ip_address ?? ''),
+            'ip_address' => $privacy->ip($log->ip_address ?? ''),
             'trace_id' => trim((string) ($detail['trace_id'] ?? '')),
             'operator_name' => trim((string) ($detail['operator_name'] ?? $detail['actor_name'] ?? '')),
             'summary' => $this->stringifyDetail($detail),

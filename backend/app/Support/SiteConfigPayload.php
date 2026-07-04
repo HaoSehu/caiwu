@@ -36,6 +36,7 @@ class SiteConfigPayload
         $browserTitle = self::read(self::SETTING_GROUP_BASIC, 'browser_title', $siteName);
         $siteLogo = self::read(self::SETTING_GROUP_BASIC, 'site_logo', self::DEFAULT_SITE_LOGO);
         $siteFavicon = self::read(self::SETTING_GROUP_BASIC, 'site_favicon', self::DEFAULT_SITE_FAVICON);
+        $clientConsoleIcon = self::read(self::SETTING_GROUP_BASIC, 'client_console_icon', $siteFavicon);
         $serviceQqGroup = self::readFirstAvailable(
             self::SETTING_GROUP_BASIC,
             ['service_qq_group', 'service_phone'],
@@ -47,6 +48,7 @@ class SiteConfigPayload
             'browser_title' => $browserTitle !== '' ? $browserTitle : ($siteName !== '' ? $siteName : $defaultSiteName),
             'site_logo' => $siteLogo !== '' ? $siteLogo : self::DEFAULT_SITE_LOGO,
             'site_favicon' => $siteFavicon !== '' ? $siteFavicon : self::DEFAULT_SITE_FAVICON,
+            'client_console_icon' => $clientConsoleIcon !== '' ? $clientConsoleIcon : $siteFavicon,
             'service_qq_group' => $serviceQqGroup !== '' ? $serviceQqGroup : self::DEFAULT_SERVICE_QQ_GROUP,
             'service_phone' => $serviceQqGroup !== '' ? $serviceQqGroup : self::DEFAULT_SERVICE_QQ_GROUP,
             'service_email' => self::read(self::SETTING_GROUP_BASIC, 'service_email', ''),

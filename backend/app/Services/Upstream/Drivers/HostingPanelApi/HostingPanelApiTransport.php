@@ -125,16 +125,6 @@ class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsole
             return $cachedJwt;
         }
 
-        $legacyCacheKey = $this->legacyJwtCacheKey($supplier);
-        if ($legacyCacheKey !== $cacheKey) {
-            $cachedJwt = trim((string) $this->jwtCache()->get($legacyCacheKey, ''));
-            if ($cachedJwt !== '') {
-                $this->jwtCache()->put($cacheKey, $cachedJwt, now()->addSeconds(self::DEFAULT_JWT_CACHE_TTL_SECONDS));
-
-                return $cachedJwt;
-            }
-        }
-
         $startedAt = microtime(true);
         $response = $this->loginResponse($supplier);
         $jwt = trim((string) ($response['jwt'] ?? ''));
@@ -168,7 +158,6 @@ class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsole
     {
         $cacheKey = $this->jwtCacheKey($supplier);
         $this->jwtCache()->forget($cacheKey);
-        $this->jwtCache()->forget($this->legacyJwtCacheKey($supplier));
 
         $startedAt = microtime(true);
         $response = $this->loginResponse($supplier);
@@ -535,6 +524,7 @@ class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsole
             'duration_ms' => $totalMs,
             'status_codes' => $statusCodes,
         ];
+
         return $normalized;
     }
 
@@ -1313,14 +1303,9 @@ PHP;
 
     private function jwtCacheKey(Supplier $supplier): string
     {
-        $providerKey = trim((string) ($supplier->interface_type ?? '')) ?: ProviderKey::HOSTING_PANEL_API;
+        $providerKey = trim((string) ($supplier->provider_key ?? '')) ?: ProviderKey::HOSTING_PANEL_API;
 
         return "upstream:{$providerKey}:jwt:".$supplier->id;
-    }
-
-    private function legacyJwtCacheKey(Supplier $supplier): string
-    {
-        return 'upstream:hosting_panel_api:jwt:'.$supplier->id;
     }
 
     private function jwtCache(): CacheRepository
@@ -1370,7 +1355,6 @@ PHP;
     private function forgetJwtCache(Supplier $supplier): void
     {
         $this->jwtCache()->forget($this->jwtCacheKey($supplier));
-        $this->jwtCache()->forget($this->legacyJwtCacheKey($supplier));
     }
 
     private function resolveRequestJwt(Supplier $supplier, ?string $jwt, string $uri, array $headers = []): ?string

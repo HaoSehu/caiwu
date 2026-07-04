@@ -10,6 +10,10 @@ return [
                 'name' => '支付宝当面付',
                 'provider' => PaymentGatewayCode::ALIPAY,
             ],
+            PaymentGatewayCode::YIPAY => [
+                'name' => '易支付',
+                'provider' => PaymentGatewayCode::YIPAY,
+            ],
         ],
     ],
     'identity' => [

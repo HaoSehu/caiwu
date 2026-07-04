@@ -50,6 +50,28 @@ export interface IntegrationPluginRecord {
   config?: Record<string, unknown>;
   has_secret_values?: Record<string, boolean>;
   secret_previews?: Record<string, IntegrationPluginSecretPreview>;
+  binding_counts?: Record<string, number>;
+  business_reference_count?: number;
+  delete_mode?: 'delete' | 'disable_archive' | 'not_installed' | string;
+  manifest_missing?: boolean;
+  latest_runtime_log?: IntegrationPluginRuntimeLog | null;
+}
+
+export interface IntegrationPluginRuntimeLog {
+  id?: number | string;
+  trace_id?: string;
+  action?: string;
+  status?: string;
+  error_message?: string;
+  created_at?: string | null;
+}
+
+export interface IntegrationPluginHealthCheckResult {
+  healthy: boolean;
+  message: string;
+  entry_class?: string;
+  provider_class?: string | null;
+  details?: Record<string, unknown>;
 }
 
 export interface IntegrationPluginSecretPreview {
@@ -57,6 +79,11 @@ export interface IntegrationPluginSecretPreview {
   configured?: boolean;
   count?: number;
   items?: Array<Record<string, unknown>>;
+}
+
+export interface IntegrationPluginSecretValueResponse {
+  key: string;
+  value: unknown;
 }
 
 export interface IntegrationPluginListResponse {
@@ -76,12 +103,14 @@ export const pluginsApi = {
   detail: (id: number | string) => request.get<IntegrationPluginRecord>({ url: `/admin/integration-plugins/${id}` }),
   updateConfig: (id: number | string, config: Record<string, unknown>) =>
     request.put<IntegrationPluginRecord>({ url: `/admin/integration-plugins/${id}/config`, data: { config } }),
+  revealSecret: (id: number | string, key: string) =>
+    request.get<IntegrationPluginSecretValueResponse>({ url: `/admin/integration-plugins/${id}/config-secret/${encodeURIComponent(key)}` }),
   enable: (id: number | string) => request.post<IntegrationPluginRecord>({ url: `/admin/integration-plugins/${id}/enable` }),
   disable: (id: number | string) =>
     request.post<IntegrationPluginRecord>({ url: `/admin/integration-plugins/${id}/disable` }),
   remove: (id: number | string) => request.delete({ url: `/admin/integration-plugins/${id}` }),
   healthCheck: (id: number | string) =>
-    request.post<Record<string, unknown>>({ url: `/admin/integration-plugins/${id}/health-check` }),
+    request.post<IntegrationPluginHealthCheckResult>({ url: `/admin/integration-plugins/${id}/health-check` }),
   testEmail: (id: number | string, data: { account_index: number; to: string; subject: string; body?: string }) =>
     request.post<Record<string, unknown>>({ url: `/admin/integration-plugins/${id}/test-email`, data }),
   testSms: (id: number | string, data: { phone: string }) =>

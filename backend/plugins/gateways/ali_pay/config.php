@@ -1,6 +1,7 @@
 <?php
 
 declare(strict_types=1);
+
 use Caiwu\Plugins\Gateways\AliPay\AliPayPlugin;
 
 return [
@@ -67,39 +68,6 @@ return [
             'secret' => true,
             'rows' => 6,
             'placeholder' => '请输入支付宝公钥 PEM 内容',
-        ],
-        'network_divider' => [
-            'title' => '网关与证书',
-            'type' => 'divider',
-        ],
-        'gateway' => [
-            'title' => '网关地址',
-            'type' => 'url',
-            'value' => 'https://openapi.alipay.com/gateway.do',
-            'required' => false,
-            'placeholder' => '请输入支付宝网关地址',
-            'description' => '正式环境通常为 https://openapi.alipay.com/gateway.do，沙箱为 https://openapi-sandbox.dl.alipaydev.com/gateway.do。',
-        ],
-        'notify_url' => [
-            'title' => '异步通知地址',
-            'type' => 'url',
-            'value' => '',
-            'required' => false,
-            'placeholder' => '留空时使用系统 APP/前端地址生成',
-        ],
-        'ssl_verify' => [
-            'title' => 'SSL 证书校验',
-            'type' => 'switch',
-            'value' => true,
-            'description' => '生产环境会强制开启；证书链问题请优先配置 CA Bundle。',
-        ],
-        'ca_bundle' => [
-            'title' => 'CA Bundle 路径',
-            'type' => 'text',
-            'value' => '',
-            'required' => false,
-            'placeholder' => '例如 C:\\php\\extras\\ssl\\cacert.pem',
-            'description' => 'Windows/PHP cURL 缺少根证书时填写 cacert.pem 绝对路径。',
         ],
     ],
 ];

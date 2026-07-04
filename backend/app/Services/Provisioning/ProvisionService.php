@@ -10,10 +10,12 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\Supplier;
+use App\Services\Integrations\Plugins\PluginBindingResolver;
+use App\Services\Integrations\Plugins\ServiceUpstreamBindingWriter;
+use App\Services\Integrations\Plugins\UpstreamBindingWriter;
 use App\Services\Integrations\Support\ProviderErrorMapper;
 use App\Services\System\SettingService;
 use App\Services\Upstream\Contracts\ProvidesProvisioning;
-use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderResolver;
 use App\Support\ProductProvisionHostname;
 use App\Support\SensitiveDataSanitizer;
@@ -47,9 +49,12 @@ class ProvisionService
         19 => 'system_disk_size',
     ];
 
+    private ?ServiceUpstreamBindingWriter $serviceBindingWriter = null;
+
     public function __construct(
         private ProviderResolver $providerResolver,
         private SettingService $settingService,
+        private ?PluginBindingResolver $bindingResolver = null,
     ) {}
 
     public function processPaidOrder(Order $order): ?Service
@@ -68,7 +73,7 @@ class ProvisionService
             return $service;
         }
 
-        if ($service->status === ServiceStatus::ACTIVE && ! empty($service->provision_data['upstream_host_id'])) {
+        if ($service->status === ServiceStatus::ACTIVE && $this->resolveServiceUpstreamServiceId($service) !== null) {
             $order->forceFill([
                 'service_id' => $service->id,
                 'status' => OrderStatus::COMPLETED,
@@ -144,7 +149,7 @@ class ProvisionService
             throw new BusinessException('当前商品未接入自动开通上游，无法重新提交上游购买');
         }
 
-        if ($service->status === ServiceStatus::ACTIVE && ! empty($service->provision_data['upstream_host_id'])) {
+        if ($service->status === ServiceStatus::ACTIVE && $this->resolveServiceUpstreamServiceId($service) !== null) {
             return $service;
         }
 
@@ -175,7 +180,7 @@ class ProvisionService
             throw new BusinessException('订单未关联商品，无法发起上游开通');
         }
 
-        if (! $order->product->supplier instanceof Supplier) {
+        if (! $this->resolveProductSupplier($order->product) instanceof Supplier) {
             throw new BusinessException('当前商品未配置供应商，无法发起上游开通');
         }
 
@@ -200,15 +205,14 @@ class ProvisionService
                 'domain' => (string) ($hostDetail['domain'] ?? $result['requested_host']),
                 'expires_at' => $this->resolveServiceExpiry($hostDetail, $order),
                 'suspended_reason' => null,
-                'provision_data' => array_merge((array) ($service->provision_data ?? []), [
-                    'provider' => $providerKey,
-                    'supplier_id' => $order->product->supplier_id,
-                    'supplier_product_id' => $order->product->supplier_product_id,
+                'provision_data' => array_merge($this->serviceProvisionData($service), [
+                    'provider_key' => $providerKey,
+                    'supplier_id' => $this->resolveProductSupplierId($order->product),
                     'requested_host' => $result['requested_host'],
                     'upstream_invoice_id' => $result['upstream_invoice_id'],
                     'upstream_host_id' => $result['upstream_host_id'],
                     'upstream_host_ids' => $result['upstream_host_ids'],
-                    'upstream_product_id' => (int) (($hostDetail['product_id'] ?? 0) ?: 0),
+                    'upstream_product_id' => $this->resolveUpstreamProductId($order->product),
                     'upstream_product_name' => trim((string) ($hostDetail['product_name'] ?? '')),
                     'upstream_status' => (string) ($hostDetail['domainstatus'] ?? ''),
                     'dedicated_ip' => (string) ($hostDetail['dedicatedip'] ?? ''),
@@ -227,6 +231,25 @@ class ProvisionService
                     'provision_error' => null,
                 ]),
             ])->save();
+            $this->serviceBindingWriter()->recordProvisionAttempt(
+                $service,
+                $order->product,
+                (array) ($service->provision_data ?? []),
+                'success',
+                null,
+                [
+                    'order_id' => (int) $order->id,
+                    'order_no' => (string) $order->order_no,
+                    'supplier_id' => $this->resolveProductSupplierId($order->product),
+                    'upstream_product_id' => $this->resolveUpstreamProductId($order->product),
+                    'requested_host' => $result['requested_host'] ?? null,
+                ],
+                [
+                    'upstream_invoice_id' => $result['upstream_invoice_id'] ?? null,
+                    'upstream_host_id' => $result['upstream_host_id'] ?? null,
+                    'upstream_host_ids' => $result['upstream_host_ids'] ?? null,
+                ]
+            );
 
             $order->forceFill([
                 'service_id' => $service->id,
@@ -242,14 +265,27 @@ class ProvisionService
             $service->forceFill([
                 'status' => ServiceStatus::PENDING,
                 'suspended_reason' => mb_substr($message, 0, 200),
-                'provision_data' => array_merge((array) ($service->provision_data ?? []), [
-                    'provider' => $providerKey,
-                    'supplier_id' => $order->product->supplier_id,
-                    'supplier_product_id' => $order->product->supplier_product_id,
+                'provision_data' => array_merge($this->serviceProvisionData($service), [
+                    'provider_key' => $providerKey,
+                    'supplier_id' => $this->resolveProductSupplierId($order->product),
+                    'upstream_product_id' => $this->resolveUpstreamProductId($order->product),
                     'last_provision_attempt_at' => now()->format('Y-m-d H:i:s'),
                     'provision_error' => $message,
                 ]),
             ])->save();
+            $this->serviceBindingWriter()->recordProvisionAttempt(
+                $service,
+                $order->product,
+                (array) ($service->provision_data ?? []),
+                'failed',
+                $message,
+                [
+                    'order_id' => (int) $order->id,
+                    'order_no' => (string) $order->order_no,
+                    'supplier_id' => $this->resolveProductSupplierId($order->product),
+                    'upstream_product_id' => $this->resolveUpstreamProductId($order->product),
+                ]
+            );
 
             $order->forceFill([
                 'service_id' => $service->id,
@@ -260,8 +296,8 @@ class ProvisionService
                 'order_id' => $order->id,
                 'order_no' => $order->order_no,
                 'service_id' => $service->id,
-                'supplier_id' => $order->product->supplier_id,
-                'supplier_product_id' => $order->product->supplier_product_id,
+                'supplier_id' => $this->resolveProductSupplierId($order->product),
+                'upstream_product_id' => $this->resolveUpstreamProductId($order->product),
                 'message' => $message,
                 'exception' => $exception::class,
             ]);
@@ -339,28 +375,31 @@ class ProvisionService
 
     private function shouldAutoProvision(Product $product): bool
     {
+        $this->ensureProductBinding($product);
+
         return (int) $product->auto_setup === 1
-            && (int) ($product->supplier_id ?? 0) > 0
-            && (int) ($product->supplier_product_id ?? 0) > 0
+            && $this->resolveProductSupplierId($product) > 0
+            && $this->resolveUpstreamProductId($product) > 0
             && $this->providerResolver->resolveForProduct($product)->supports(ProvidesProvisioning::class);
     }
 
     private function resolveProviderKeyForProduct(?Product $product): string
     {
         if ($product instanceof Product) {
+            $this->ensureProductBinding($product);
             $resolved = $this->providerResolver->resolveForProduct($product);
             if ($resolved->key() !== null && trim($resolved->key()) !== '') {
                 return (string) $resolved->key();
             }
         }
 
-        return ProviderKey::HOSTING_PANEL_API;
+        return '';
     }
 
     private function provisionViaUpstream(Order $order): array
     {
         $product = $order->product;
-        $supplier = $product->supplier;
+        $supplier = $this->resolveProductSupplier($product);
 
         if (! $supplier instanceof Supplier) {
             throw new BusinessException('供应商信息不存在，无法自动开通');
@@ -379,8 +418,9 @@ class ProvisionService
         // 幂等键回查：如果 service 已有 upstream_host_id，先查上游确认 host 存在且 Active，
         // 直接返回而不重新走购物车流程，避免重复开通。
         $existingService = $order->service;
-        if ($existingService && ! empty($existingService->provision_data['upstream_host_id'])) {
-            $existingHostId = (int) $existingService->provision_data['upstream_host_id'];
+        $existingHostId = $existingService instanceof Service ? $this->resolveReusableServiceUpstreamServiceId($existingService) : null;
+        if ($existingService instanceof Service && $existingHostId !== null) {
+            $existingHostValue = $this->upstreamServiceIdPayloadValue($existingHostId);
             try {
                 $jwt = $provisioning->login($supplier);
                 $detailResponse = $provisioning->get($supplier, "/v1/hosts/{$existingHostId}", $jwt);
@@ -392,11 +432,13 @@ class ProvisionService
                         'upstream_host_id' => $existingHostId,
                     ]);
 
+                    $existingProvisionData = $this->serviceProvisionData($existingService);
+
                     return [
-                        'requested_host' => (string) ($existingService->provision_data['requested_host'] ?? ''),
-                        'upstream_invoice_id' => (int) ($existingService->provision_data['upstream_invoice_id'] ?? 0),
-                        'upstream_host_ids' => $existingService->provision_data['upstream_host_ids'] ?? [$existingHostId],
-                        'upstream_host_id' => $existingHostId,
+                        'requested_host' => (string) ($existingProvisionData['requested_host'] ?? ''),
+                        'upstream_invoice_id' => (int) ($existingProvisionData['upstream_invoice_id'] ?? 0),
+                        'upstream_host_ids' => $existingProvisionData['upstream_host_ids'] ?? [$existingHostValue],
+                        'upstream_host_id' => $existingHostValue,
                         'host_detail' => $hostDetail,
                     ];
                 }
@@ -452,12 +494,12 @@ class ProvisionService
                 $stepStartedAt = microtime(true);
                 $addCartResponse = $this->addProductToUpstreamCart($provisioning, $supplier, $jwt, $payload);
                 $latency['add_cart_ms'] = $this->elapsedMilliseconds($stepStartedAt);
-                $this->assertUpstreamSuccess($addCartResponse, [200], '加入上游购物车');
+                $this->assertUpstreamSuccess($addCartResponse, [200], '加入上游购物车', $this->resolveProviderKeyForProduct($product));
 
                 $stepStartedAt = microtime(true);
                 $cartResponse = $provisioning->get($supplier, '/v1/cart', $jwt);
                 $latency['get_cart_ms'] = $this->elapsedMilliseconds($stepStartedAt);
-                $this->assertUpstreamSuccess($cartResponse, [200], '读取上游购物车');
+                $this->assertUpstreamSuccess($cartResponse, [200], '读取上游购物车', $this->resolveProviderKeyForProduct($product));
                 $cartPayload = $this->extractPayload($cartResponse);
                 $gateway = $this->resolveGateway($cartPayload);
 
@@ -467,7 +509,7 @@ class ProvisionService
                     'position' => [0],
                 ], $jwt);
                 $latency['checkout_ms'] = $this->elapsedMilliseconds($stepStartedAt);
-                $this->assertUpstreamSuccess($checkoutResponse, [200, 1001], '上游购物车结算');
+                $this->assertUpstreamSuccess($checkoutResponse, [200, 1001], '上游购物车结算', $this->resolveProviderKeyForProduct($product));
 
                 $checkoutPayload = $this->extractPayload($checkoutResponse);
                 $invoiceId = $this->extractInvoiceId($checkoutResponse, $checkoutPayload);
@@ -477,7 +519,7 @@ class ProvisionService
                     $stepStartedAt = microtime(true);
                     $fundResponse = $provisioning->post($supplier, "/v1/invoices/{$invoiceId}/fund", [], $jwt);
                     $latency['fund_invoice_ms'] = $this->elapsedMilliseconds($stepStartedAt);
-                    $this->assertUpstreamSuccess($fundResponse, [200, 1001], '使用供应商余额支付上游账单');
+                    $this->assertUpstreamSuccess($fundResponse, [200, 1001], '使用供应商余额支付上游账单', $this->resolveProviderKeyForProduct($product));
                     $fundPayload = $this->extractPayload($fundResponse);
                     $hostIds = $this->extractHostIds($fundResponse, $fundPayload);
 
@@ -504,7 +546,7 @@ class ProvisionService
                 $stepStartedAt = microtime(true);
                 $detailResponse = $provisioning->get($supplier, "/v1/hosts/{$hostId}", $jwt);
                 $latency['host_detail_ms'] = $this->elapsedMilliseconds($stepStartedAt);
-                $this->assertUpstreamSuccess($detailResponse, [200], '读取上游产品详情');
+                $this->assertUpstreamSuccess($detailResponse, [200], '读取上游产品详情', $this->resolveProviderKeyForProduct($product));
                 $detailPayload = $this->extractPayload($detailResponse);
                 $hostDetail = is_array($detailPayload['host'] ?? null) ? $detailPayload['host'] : [];
 
@@ -544,7 +586,7 @@ class ProvisionService
                     'order_id' => (int) $order->id,
                     'order_no' => (string) $order->order_no,
                     'supplier_id' => (int) $supplier->id,
-                    'supplier_product_id' => (int) ($product->supplier_product_id ?? 0),
+                    'upstream_product_id' => $this->resolveUpstreamProductId($product),
                     'requested_host' => $requestedHost,
                     'upstream_invoice_id' => $invoiceId,
                     'upstream_host_id' => $hostId,
@@ -579,7 +621,7 @@ class ProvisionService
         $configOptionMap = $this->buildUpstreamConfigOptionMap($product, $configSnapshot);
 
         return [
-            'product_id' => (int) $product->supplier_product_id,
+            'product_id' => $this->resolveUpstreamProductId($product),
             'billingcycle' => (string) $order->billing_cycle,
             'qty' => 1,
             'host' => $hostname,
@@ -738,7 +780,7 @@ class ProvisionService
         )));
     }
 
-    private function assertUpstreamSuccess(array $response, array $allowedStatuses, string $action): void
+    private function assertUpstreamSuccess(array $response, array $allowedStatuses, string $action, string $providerKey = ''): void
     {
         $hasStatus = array_key_exists('status', $response)
             || array_key_exists('code', $response)
@@ -760,7 +802,7 @@ class ProvisionService
             'message' => SensitiveDataSanitizer::sanitizeText($message),
         ]);
 
-        throw new BusinessException(app(ProviderErrorMapper::class)->toUserMessage(ProviderKey::HOSTING_PANEL_API, $action, $message));
+        throw new BusinessException(app(ProviderErrorMapper::class)->toUserMessage($providerKey, $action, $message));
     }
 
     private function addProductToUpstreamCart(object $provisioning, Supplier $supplier, string $jwt, array $payload): array
@@ -863,12 +905,11 @@ class ProvisionService
     private function prepareServiceForProvisionRetry(Order $order, Service $service): void
     {
         $hostname = $this->resolveProvisionHostname($order);
-        $provisionData = (array) ($service->provision_data ?? []);
+        $provisionData = $this->serviceProvisionData($service, includeSecrets: true);
 
         foreach ([
-            'provider',
+            'provider_key',
             'supplier_id',
-            'supplier_product_id',
             'requested_host',
             'upstream_invoice_id',
             'upstream_host_id',
@@ -998,7 +1039,7 @@ class ProvisionService
     private function resolveUpstreamProvisionHostnameRule(Order $order): array
     {
         $product = $order->product;
-        $supplier = $product?->supplier;
+        $supplier = $product instanceof Product ? $this->resolveProductSupplier($product) : null;
 
         if (! $product instanceof Product || ! $supplier instanceof Supplier) {
             return [];
@@ -1008,7 +1049,7 @@ class ProvisionService
             return [];
         }
 
-        $supplierProductId = (int) ($product->supplier_product_id ?? 0);
+        $supplierProductId = $this->resolveUpstreamProductId($product);
         if ($supplierProductId <= 0) {
             return [];
         }
@@ -1037,7 +1078,7 @@ class ProvisionService
             } catch (\Throwable $exception) {
                 Log::warning('[自动开通] 读取上游商品主机名规则失败，将回退本地主机名规则', [
                     'supplier_id' => (int) $supplier->id,
-                    'supplier_product_id' => $supplierProductId,
+                    'upstream_product_id' => $supplierProductId,
                     'message' => $exception->getMessage(),
                     'exception' => $exception::class,
                 ]);
@@ -1332,5 +1373,100 @@ class ProvisionService
     private function elapsedMilliseconds(float $startedAt): int
     {
         return (int) round((microtime(true) - $startedAt) * 1000);
+    }
+
+    private function resolveProductSupplierId(Product $product): int
+    {
+        $this->ensureProductBinding($product);
+
+        $supplierId = (int) (($this->pluginBindingResolver()->supplierIdForProduct($product) ?? 0) ?: 0);
+        if ($supplierId > 0) {
+            return $supplierId;
+        }
+
+        return 0;
+    }
+
+    private function resolveProductSupplier(Product $product): ?Supplier
+    {
+        $this->ensureProductBinding($product);
+
+        $supplier = $this->pluginBindingResolver()->supplierForProduct($product);
+        if ($supplier instanceof Supplier) {
+            return $this->pluginBindingResolver()->supplierWithRuntimeCredentials($supplier);
+        }
+
+        return null;
+    }
+
+    private function resolveUpstreamProductId(Product $product): int
+    {
+        $this->ensureProductBinding($product);
+
+        $upstreamProductId = $this->pluginBindingResolver()->upstreamProductIdForProduct($product);
+        if ($upstreamProductId !== null) {
+            return (int) $upstreamProductId;
+        }
+
+        return 0;
+    }
+
+    private function resolveServiceUpstreamServiceId(Service $service): ?string
+    {
+        $upstreamServiceId = $this->nonBlank($this->pluginBindingResolver()->upstreamServiceIdForService($service));
+        if ($upstreamServiceId !== null) {
+            return $upstreamServiceId;
+        }
+
+        return null;
+    }
+
+    private function resolveReusableServiceUpstreamServiceId(Service $service): ?string
+    {
+        $bindingHostId = $this->nonBlank($this->pluginBindingResolver()->upstreamServiceIdForService($service));
+        if ($bindingHostId !== null) {
+            return $bindingHostId;
+        }
+
+        if ((int) ($service->status ?? 0) !== ServiceStatus::ACTIVE) {
+            return null;
+        }
+
+        return null;
+    }
+
+    private function upstreamServiceIdPayloadValue(string $upstreamServiceId): int|string
+    {
+        return ctype_digit($upstreamServiceId) ? (int) $upstreamServiceId : $upstreamServiceId;
+    }
+
+    private function nonBlank(mixed $value): ?string
+    {
+        $normalized = trim((string) ($value ?? ''));
+
+        return $normalized !== '' ? $normalized : null;
+    }
+
+    private function pluginBindingResolver(): PluginBindingResolver
+    {
+        return $this->bindingResolver ??= new PluginBindingResolver;
+    }
+
+    private function serviceBindingWriter(): ServiceUpstreamBindingWriter
+    {
+        return $this->serviceBindingWriter ??= app(ServiceUpstreamBindingWriter::class);
+    }
+
+    private function ensureProductBinding(Product $product): void
+    {
+        app(UpstreamBindingWriter::class)->syncProductBinding($product);
+    }
+
+    private function serviceProvisionData(Service $service, bool $includeSecrets = false): array
+    {
+        $legacy = (array) ($service->provision_data ?? []);
+        $projection = $this->pluginBindingResolver()->serviceProvisionProjection($service, $includeSecrets);
+
+        return $projection === [] ? $legacy : array_replace($legacy, $projection);
     }
 }

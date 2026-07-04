@@ -4,7 +4,7 @@ namespace App\Http\Requests\Admin\Supplier;
 
 use App\Http\Requests\Admin\Common\AdminFormRequest;
 use App\Models\Supplier;
-use App\Services\Upstream\ProviderKey;
+use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
 use Closure;
@@ -14,31 +14,52 @@ class UpsertRequest extends AdminFormRequest
 {
     protected function prepareForValidation(): void
     {
-        $normalizedInterfaceType = app(ProviderResolver::class)->normalizeKey(
-            (string) $this->input('interface_type', '')
+        $upstreamBinding = is_array($this->input('upstream_binding')) ? $this->input('upstream_binding') : [];
+        if ($upstreamBinding !== []) {
+            $this->merge([
+                'provider_key' => $upstreamBinding['provider_key'] ?? $this->input('provider_key', ''),
+                'api_url' => $upstreamBinding['base_url'] ?? $this->input('api_url', ''),
+                'api_username' => $upstreamBinding['account_name'] ?? $this->input('api_username', ''),
+            ]);
+        }
+
+        $normalizedProviderKey = app(ProviderResolver::class)->normalizeKey(
+            (string) $this->input('provider_key', '')
         ) ?? '';
 
         $this->merge([
-            'interface_type' => $normalizedInterfaceType,
+            'provider_key' => $normalizedProviderKey,
         ]);
     }
 
     public function rules(): array
     {
         $supplier = $this->supplier();
-        $hasExistingApiUrl = $supplier !== null && trim((string) $supplier->api_url) !== '';
-        $hasExistingApiKey = $supplier !== null && trim((string) $supplier->api_key) !== '';
+        $existingBinding = $this->existingBindingProjection();
+        $hasExistingApiUrl = trim((string) ($existingBinding['base_url'] ?? '')) !== '';
+        $hasExistingApiKey = (bool) ($existingBinding['has_api_key'] ?? false);
+        $fields = $this->providerFormFields();
+        $usesApiUrl = $this->hasProviderField($fields, 'api_url');
+        $usesApiUsername = $this->hasProviderField($fields, 'api_username');
+        $usesApiKey = $this->hasProviderField($fields, 'api_key');
 
-        return [
+        $rules = [
             'name' => ['required', 'string', 'max:120'],
-            'interface_type' => ['required', Rule::in(app(ProviderRegistry::class)->keys())],
-            'api_url' => $hasExistingApiUrl
-                ? ['nullable', 'url:http,https', 'max:255', fn (string $attribute, mixed $value, Closure $fail) => $this->validateApiUrl($value, $fail)]
-                : ['required', 'url:http,https', 'max:255', fn (string $attribute, mixed $value, Closure $fail) => $this->validateApiUrl($value, $fail)],
-            'api_username' => ['required', 'string', 'max:100'],
-            'api_key' => $hasExistingApiKey
-                ? ['nullable', 'string', 'max:255']
-                : ['required', 'string', 'max:255'],
+            'provider_key' => ['required', Rule::in(app(ProviderRegistry::class)->keys())],
+            'api_url' => $usesApiUrl && ! $hasExistingApiUrl && $this->isProviderFieldRequired($fields, 'api_url')
+                ? ['required', 'url:http,https', 'max:255', fn (string $attribute, mixed $value, Closure $fail) => $this->validateApiUrl($value, $fail)]
+                : ['nullable', 'url:http,https', 'max:255', fn (string $attribute, mixed $value, Closure $fail) => $this->validateApiUrl($value, $fail)],
+            'api_username' => $usesApiUsername && $this->isProviderFieldRequired($fields, 'api_username')
+                ? ['required', 'string', 'max:100']
+                : ['nullable', 'string', 'max:100'],
+            'api_key' => $usesApiKey && ! $hasExistingApiKey && $this->isProviderFieldRequired($fields, 'api_key')
+                ? ['required', 'string', 'max:255']
+                : ['nullable', 'string', 'max:255'],
+            'upstream_binding' => ['nullable', 'array'],
+            'upstream_binding.provider_key' => ['nullable', Rule::in(app(ProviderRegistry::class)->keys())],
+            'upstream_binding.base_url' => ['nullable', 'url:http,https', 'max:255', fn (string $attribute, mixed $value, Closure $fail) => $this->validateApiUrl($value, $fail)],
+            'upstream_binding.account_name' => ['nullable', 'string', 'max:100'],
+            'provider_config' => ['nullable', 'array'],
             'contact_name' => ['nullable', 'string', 'max:60'],
             'contact_phone' => ['nullable', 'string', 'max:30'],
             'contact_email' => ['nullable', 'email', 'max:100'],
@@ -47,27 +68,43 @@ class UpsertRequest extends AdminFormRequest
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:999999'],
             'notes' => ['nullable', 'string', 'max:4000'],
         ];
+
+        foreach ($this->providerConfigFields($fields) as $field) {
+            $key = $this->fieldKey($field);
+            $rules["provider_config.{$key}"] = $this->rulesForProviderConfigField($field, $supplier);
+        }
+
+        return $rules;
     }
 
     public function payload(): array
     {
         $supplier = $this->supplier();
         $validated = $this->validated();
+        $existingBinding = $this->existingBindingProjection();
 
         $validated['status'] = (int) ($validated['status'] ?? $this->input('status', 1));
         $validated['sort_order'] = (int) ($validated['sort_order'] ?? $this->input('sort_order', 0));
-        $validated['interface_type'] = (string) ($validated['interface_type'] ?? ProviderKey::HOSTING_PANEL_API);
+        $validated['provider_key'] = (string) ($validated['provider_key'] ?? '');
         $validated['api_url'] = $this->normalizeApiUrl((string) ($validated['api_url'] ?? ''));
         $validated['api_username'] = trim((string) ($validated['api_username'] ?? ''));
         $validated['api_key'] = trim((string) ($validated['api_key'] ?? ''));
+        $validated['provider_config'] = $this->normalizeProviderConfig(
+            (array) ($validated['provider_config'] ?? []),
+            is_array($existingBinding['provider_config'] ?? null) ? (array) $existingBinding['provider_config'] : []
+        );
 
         if ($supplier !== null) {
             if ($validated['api_url'] === '') {
-                $validated['api_url'] = trim((string) $supplier->api_url);
+                $validated['api_url'] = trim((string) ($existingBinding['base_url'] ?? ''));
+            }
+
+            if ($validated['api_username'] === '') {
+                $validated['api_username'] = trim((string) ($existingBinding['account_name'] ?? ''));
             }
 
             if ($validated['api_key'] === '') {
-                $validated['api_key'] = trim((string) $supplier->api_key);
+                $validated['api_key'] = trim((string) ($existingBinding['api_key'] ?? ''));
             }
         }
 
@@ -76,11 +113,43 @@ class UpsertRequest extends AdminFormRequest
         $validated['contact_email'] = null;
         $validated['website'] = null;
         $validated['notes'] = trim((string) ($validated['notes'] ?? '')) ?: null;
-        $validated['interface_type'] = app(ProviderResolver::class)->normalizeKey(
-            (string) ($validated['interface_type'] ?? '')
-        ) ?? ProviderKey::HOSTING_PANEL_API;
+        $validated['provider_key'] = app(ProviderResolver::class)->normalizeKey(
+            (string) ($validated['provider_key'] ?? '')
+        ) ?? '';
 
         return $validated;
+    }
+
+    public function supplierPayload(): array
+    {
+        $payload = $this->payload();
+
+        return [
+            'name' => $payload['name'],
+            'code' => $payload['code'] ?? null,
+            'contact_name' => $payload['contact_name'],
+            'contact_phone' => $payload['contact_phone'],
+            'contact_email' => $payload['contact_email'],
+            'website' => $payload['website'],
+            'status' => $payload['status'],
+            'sort_order' => $payload['sort_order'],
+            'notes' => $payload['notes'],
+        ];
+    }
+
+    public function upstreamBindingPayload(): array
+    {
+        $payload = $this->payload();
+
+        return [
+            'provider_key' => $payload['provider_key'],
+            'base_url' => $payload['api_url'],
+            'account_name' => $payload['api_username'],
+            'api_key' => $payload['api_key'],
+            'provider_config' => $payload['provider_config'],
+            'status' => $payload['status'],
+            'priority' => $payload['sort_order'],
+        ];
     }
 
     private function supplier(): ?Supplier
@@ -161,5 +230,134 @@ class UpsertRequest extends AdminFormRequest
         $url = trim($url);
 
         return $url !== '' ? rtrim($url, '/') : '';
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function providerFormFields(): array
+    {
+        $providerKey = (string) $this->input('provider_key', '');
+        $descriptor = app(ProviderRegistry::class)->descriptor($providerKey);
+        if ($descriptor === null) {
+            return [];
+        }
+
+        $form = (array) $descriptor->supplierForm;
+
+        return array_values(array_filter(
+            (array) ($form['fields'] ?? []),
+            fn (mixed $field): bool => is_array($field) && $this->fieldKey($field) !== ''
+        ));
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $fields
+     */
+    private function hasProviderField(array $fields, string $key): bool
+    {
+        return collect($fields)->contains(fn (array $field): bool => $this->fieldKey($field) === $key);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $fields
+     */
+    private function isProviderFieldRequired(array $fields, string $key): bool
+    {
+        $field = collect($fields)->first(fn (array $item): bool => $this->fieldKey($item) === $key);
+
+        return is_array($field) && (bool) ($field['required'] ?? false);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $fields
+     * @return array<int, array<string, mixed>>
+     */
+    private function providerConfigFields(array $fields): array
+    {
+        return array_values(array_filter(
+            $fields,
+            fn (array $field): bool => ! in_array($this->fieldKey($field), ['api_url', 'api_username', 'api_key'], true)
+        ));
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    private function rulesForProviderConfigField(array $field, ?Supplier $supplier): array
+    {
+        $key = $this->fieldKey($field);
+        $required = (bool) ($field['required'] ?? false);
+        $secret = (bool) ($field['secret'] ?? false);
+        $existingBinding = $this->existingBindingProjection();
+        $existingConfig = is_array($existingBinding['provider_config'] ?? null) ? (array) $existingBinding['provider_config'] : [];
+        $existingValue = $existingConfig[$key] ?? null;
+        $rules = $required && ! ($secret && $this->filledValue($existingValue))
+            ? ['required']
+            : ['nullable'];
+
+        return array_merge($rules, match ((string) ($field['type'] ?? 'text')) {
+            'switch', 'boolean' => ['boolean'],
+            'number' => ['numeric'],
+            'url' => ['url:http,https', 'max:500'],
+            default => ['string', 'max:1000'],
+        });
+    }
+
+    /**
+     * @param  array<string, mixed>  $input
+     * @param  array<string, mixed>  $existing
+     * @return array<string, mixed>
+     */
+    private function normalizeProviderConfig(array $input, array $existing): array
+    {
+        $config = [];
+
+        foreach ($this->providerConfigFields($this->providerFormFields()) as $field) {
+            $key = $this->fieldKey($field);
+            $value = $input[$key] ?? null;
+            $secret = (bool) ($field['secret'] ?? false);
+
+            if ($secret && ! $this->filledValue($value) && $this->filledValue($existing[$key] ?? null)) {
+                $config[$key] = $existing[$key];
+
+                continue;
+            }
+
+            $config[$key] = match ((string) ($field['type'] ?? 'text')) {
+                'switch', 'boolean' => filter_var($value, FILTER_VALIDATE_BOOLEAN),
+                'number' => is_numeric($value) ? (float) $value : null,
+                default => trim((string) ($value ?? '')),
+            };
+        }
+
+        return array_filter($config, fn (mixed $value): bool => $this->filledValue($value));
+    }
+
+    private function fieldKey(array $field): string
+    {
+        return trim((string) ($field['key'] ?? ''));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function existingBindingProjection(): array
+    {
+        $supplier = $this->supplier();
+        if (! $supplier instanceof Supplier) {
+            return [];
+        }
+
+        return app(PluginBindingResolver::class)->supplierBindingProjection($supplier, includeSecrets: true);
+    }
+
+    private function filledValue(mixed $value): bool
+    {
+        if (is_bool($value) || is_int($value) || is_float($value)) {
+            return true;
+        }
+
+        return trim((string) ($value ?? '')) !== '';
     }
 }

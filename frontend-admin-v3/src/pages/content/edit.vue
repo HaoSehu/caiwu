@@ -144,11 +144,10 @@
         >
           <video
             v-if="item.isVideo"
-            :ref="(el) => handleCoverVideoPreviewRef(el)"
             class="cover-drawer-card__img"
             :src="item.url"
             muted
-            preload="auto"
+            preload="metadata"
             playsinline
           ></video>
           <img v-else class="cover-drawer-card__img" :src="item.url" :alt="item.filename" loading="lazy" />
@@ -166,7 +165,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, type ComponentPublicInstance } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   ArrowLeftIcon,
@@ -202,21 +201,6 @@ function isMediaVideo(row: MediaFileRecord): boolean {
 function isUrlVideo(url: string): boolean {
   const lower = url.toLowerCase();
   return lower.endsWith('.mp4') || lower.endsWith('.webm') || lower.endsWith('.ogg') || lower.endsWith('.mov') || lower.endsWith('.m4v');
-}
-
-function handleCoverVideoPreviewRef(el: Element | ComponentPublicInstance | null) {
-  if (!(el instanceof HTMLVideoElement)) return;
-  const video = el;
-  const onReady = () => {
-    video.play()
-      .then(() => { video.pause(); })
-      .catch(() => { /* autoplay blocked */ });
-  };
-  if (video.readyState >= 2) {
-    onReady();
-  } else {
-    video.addEventListener('loadeddata', onReady, { once: true });
-  }
 }
 
 interface ArticleForm {

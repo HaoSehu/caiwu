@@ -6,6 +6,7 @@ import type { RouteRecordRaw } from 'vue-router';
 
 import router from '@/router';
 import { getPermissionStore, useUserStore } from '@/store';
+import { hasPermissionInList } from '@/constants/permissions';
 import { PAGE_NOT_FOUND_ROUTE } from '@/utils/route/constant';
 import { toUserMessage } from '@/utils/userMessage';
 
@@ -53,7 +54,7 @@ router.beforeEach(async (to, from, next) => {
       const requiredPermission = to.meta?.permission as string | undefined;
       if (requiredPermission && requiredPermission !== '') {
         const userPermissions = userStore.userInfo?.permissions || [];
-        const hasPermission = userPermissions.includes('*') || userPermissions.includes(requiredPermission);
+        const hasPermission = hasPermissionInList(userPermissions, requiredPermission);
         if (!hasPermission) {
           MessagePlugin.warning('您没有访问该页面的权限');
           next({ path: '/admin/dashboard', replace: true });

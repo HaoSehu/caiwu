@@ -1,7 +1,7 @@
 {
   "meta": {
-    "generatedAt": "2026-04-07 18:33:31",
-    "total": 256,
+    "generatedAt": "2026-07-02 19:41:45",
+    "total": 253,
     "baseURL": "/api",
     "dataSource": "php artisan route:list --json + frontend source scan",
     "scopeLabels": {
@@ -21,16 +21,16 @@
     },
     "scopeCounts": {
       "admin": 147,
-      "client": 91,
+      "client": 90,
       "site": 17,
       "system": 1
     },
     "accessCounts": {
-      "auth": 82,
+      "auth": 81,
       "public": 31,
       "permission": 143
     },
-    "moduleCount": 47
+    "moduleCount": 46
   },
   "items": [
     {
@@ -179,15 +179,9 @@
       "throttle": "",
       "guards": [],
       "handler": "ContentArticleController@index",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "POST:/api/admin/content/articles",
@@ -208,15 +202,9 @@
       "throttle": "",
       "guards": [],
       "handler": "ContentArticleController@store",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/content/articles/{article}",
@@ -237,15 +225,9 @@
       "throttle": "",
       "guards": [],
       "handler": "ContentArticleController@show",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "PUT:/api/admin/content/articles/{article}",
@@ -266,15 +248,9 @@
       "throttle": "",
       "guards": [],
       "handler": "ContentArticleController@update",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "DELETE:/api/admin/content/articles/{article}",
@@ -295,15 +271,9 @@
       "throttle": "",
       "guards": [],
       "handler": "ContentArticleController@destroy",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/content/categories",
@@ -324,15 +294,9 @@
       "throttle": "",
       "guards": [],
       "handler": "ContentCategoryController@index",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "POST:/api/admin/content/categories",
@@ -353,15 +317,9 @@
       "throttle": "",
       "guards": [],
       "handler": "ContentCategoryController@store",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "PUT:/api/admin/content/categories/{category}",
@@ -382,15 +340,9 @@
       "throttle": "",
       "guards": [],
       "handler": "ContentCategoryController@update",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "DELETE:/api/admin/content/categories/{category}",
@@ -411,15 +363,9 @@
       "throttle": "",
       "guards": [],
       "handler": "ContentCategoryController@destroy",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/content/summary",
@@ -440,15 +386,9 @@
       "throttle": "",
       "guards": [],
       "handler": "ContentArticleController@summary",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/coupon-campaigns",
@@ -469,15 +409,9 @@
       "throttle": "",
       "guards": [],
       "handler": "CouponCampaignController@index",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "POST:/api/admin/coupon-campaigns",
@@ -498,15 +432,9 @@
       "throttle": "",
       "guards": [],
       "handler": "CouponCampaignController@store",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "PUT:/api/admin/coupon-campaigns/{couponCampaign}",
@@ -527,15 +455,9 @@
       "throttle": "",
       "guards": [],
       "handler": "CouponCampaignController@update",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "DELETE:/api/admin/coupon-campaigns/{couponCampaign}",
@@ -556,15 +478,9 @@
       "throttle": "",
       "guards": [],
       "handler": "CouponCampaignController@destroy",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "POST:/api/admin/coupon-campaigns/{couponCampaign}/toggle-status",
@@ -585,15 +501,9 @@
       "throttle": "",
       "guards": [],
       "handler": "CouponCampaignController@toggleStatus",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "POST:/api/admin/coupon-campaigns/{couponCampaign}/trigger",
@@ -614,15 +524,9 @@
       "throttle": "",
       "guards": [],
       "handler": "CouponCampaignController@trigger",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/coupon-campaigns/summary",
@@ -643,15 +547,9 @@
       "throttle": "",
       "guards": [],
       "handler": "CouponCampaignController@summary",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/coupons",
@@ -672,15 +570,9 @@
       "throttle": "",
       "guards": [],
       "handler": "CouponController@index",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "POST:/api/admin/coupons",
@@ -701,15 +593,9 @@
       "throttle": "",
       "guards": [],
       "handler": "CouponController@store",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "PUT:/api/admin/coupons/{coupon}",
@@ -730,15 +616,9 @@
       "throttle": "",
       "guards": [],
       "handler": "CouponController@update",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "DELETE:/api/admin/coupons/{coupon}",
@@ -759,15 +639,9 @@
       "throttle": "",
       "guards": [],
       "handler": "CouponController@destroy",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "POST:/api/admin/coupons/{coupon}/toggle-status",
@@ -788,15 +662,9 @@
       "throttle": "",
       "guards": [],
       "handler": "CouponController@toggleStatus",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/coupons/product-tree",
@@ -817,15 +685,9 @@
       "throttle": "",
       "guards": [],
       "handler": "CouponController@productTree",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/coupons/summary",
@@ -846,15 +708,9 @@
       "throttle": "",
       "guards": [],
       "handler": "CouponController@summary",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/dashboard",
@@ -876,15 +732,12 @@
       "guards": [],
       "handler": "DashboardController@index",
       "sourceApps": [
-        "frontend-admin-v3",
         "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "管理端前端",
         "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js",
         "frontend-user-v3-www/src/api/admin.js"
       ]
     },
@@ -907,15 +760,9 @@
       "throttle": "",
       "guards": [],
       "handler": "DashboardController@recentOrders",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/dashboard/stats",
@@ -936,15 +783,9 @@
       "throttle": "",
       "guards": [],
       "handler": "DashboardController@stats",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/logs/admin-logins",
@@ -965,15 +806,9 @@
       "throttle": "",
       "guards": [],
       "handler": "LogController@adminLoginLogs",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/logs/api",
@@ -994,15 +829,9 @@
       "throttle": "",
       "guards": [],
       "handler": "LogController@apiLogs",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "POST:/api/admin/logs/cleanup",
@@ -1023,15 +852,9 @@
       "throttle": "",
       "guards": [],
       "handler": "LogController@cleanup",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/logs/cleanup/overview",
@@ -1052,15 +875,9 @@
       "throttle": "",
       "guards": [],
       "handler": "LogController@cleanupOverview",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/logs/email",
@@ -1081,15 +898,9 @@
       "throttle": "",
       "guards": [],
       "handler": "LogController@emailLogs",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/logs/email/summary",
@@ -1110,15 +921,9 @@
       "throttle": "",
       "guards": [],
       "handler": "LogController@emailLogsSummary",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/logs/sms",
@@ -1139,15 +944,9 @@
       "throttle": "",
       "guards": [],
       "handler": "LogController@smsLogs",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/logs/sms/summary",
@@ -1168,15 +967,9 @@
       "throttle": "",
       "guards": [],
       "handler": "LogController@smsLogsSummary",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/logs/system",
@@ -1197,15 +990,9 @@
       "throttle": "",
       "guards": [],
       "handler": "LogController@systemLogs",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/logs/system/summary",
@@ -1226,15 +1013,9 @@
       "throttle": "",
       "guards": [],
       "handler": "LogController@systemLogsSummary",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/logs/tasks",
@@ -1255,15 +1036,9 @@
       "throttle": "",
       "guards": [],
       "handler": "LogController@taskLogs",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/logs/tasks/summary",
@@ -1284,15 +1059,9 @@
       "throttle": "",
       "guards": [],
       "handler": "LogController@taskLogsSummary",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/member-levels",
@@ -1313,15 +1082,9 @@
       "throttle": "",
       "guards": [],
       "handler": "MemberLevelController@index",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "POST:/api/admin/member-levels",
@@ -1342,15 +1105,9 @@
       "throttle": "",
       "guards": [],
       "handler": "MemberLevelController@store",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "PUT:/api/admin/member-levels/{memberLevel}",
@@ -1371,15 +1128,9 @@
       "throttle": "",
       "guards": [],
       "handler": "MemberLevelController@update",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "DELETE:/api/admin/member-levels/{memberLevel}",
@@ -1400,15 +1151,9 @@
       "throttle": "",
       "guards": [],
       "handler": "MemberLevelController@destroy",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/orders",
@@ -1430,15 +1175,12 @@
       "guards": [],
       "handler": "OrderController@index",
       "sourceApps": [
-        "frontend-admin-v3",
         "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "管理端前端",
         "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js",
         "frontend-user-v3-www/src/api/admin.js"
       ]
     },
@@ -1462,77 +1204,13 @@
       "guards": [],
       "handler": "OrderController@show",
       "sourceApps": [
-        "frontend-admin-v3",
         "frontend-user-v3-www"
       ],
       "sourceAppLabels": [
-        "管理端前端",
         "官网/用户入口"
       ],
       "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js",
         "frontend-user-v3-www/src/api/admin.js"
-      ]
-    },
-    {
-      "id": "POST:/api/admin/orders/{id}/cancel",
-      "scope": "admin",
-      "scopeLabel": "管理端",
-      "module": "orders",
-      "moduleLabel": "订单",
-      "method": "POST",
-      "methods": [
-        "POST"
-      ],
-      "callPath": "/admin/orders/{id}/cancel",
-      "backendPath": "/api/admin/orders/{id}/cancel",
-      "normalizedPath": "/admin/orders/{param}/cancel",
-      "access": "permission",
-      "accessLabel": "登录 + 权限",
-      "permission": "order.manage",
-      "throttle": "",
-      "guards": [],
-      "handler": "OrderController@cancel",
-      "sourceApps": [
-        "frontend-admin-v3",
-        "frontend-user-v3-www"
-      ],
-      "sourceAppLabels": [
-        "管理端前端",
-        "官网/用户入口"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js",
-        "frontend-user-v3-www/src/api/admin.js"
-      ]
-    },
-    {
-      "id": "POST:/api/admin/orders/{id}/payment-status",
-      "scope": "admin",
-      "scopeLabel": "管理端",
-      "module": "orders",
-      "moduleLabel": "订单",
-      "method": "POST",
-      "methods": [
-        "POST"
-      ],
-      "callPath": "/admin/orders/{id}/payment-status",
-      "backendPath": "/api/admin/orders/{id}/payment-status",
-      "normalizedPath": "/admin/orders/{param}/payment-status",
-      "access": "permission",
-      "accessLabel": "登录 + 权限",
-      "permission": "order.manage",
-      "throttle": "",
-      "guards": [],
-      "handler": "OrderController@updatePaymentStatus",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
       ]
     },
     {
@@ -2318,15 +1996,9 @@
       "throttle": "",
       "guards": [],
       "handler": "ReferralController@overview",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/referral/rewards",
@@ -2347,15 +2019,9 @@
       "throttle": "",
       "guards": [],
       "handler": "ReferralRewardController@index",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/referral-withdrawals",
@@ -2376,15 +2042,9 @@
       "throttle": "",
       "guards": [],
       "handler": "ReferralWithdrawalController@index",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "POST:/api/admin/referral-withdrawals/{withdrawal}/approve",
@@ -2405,15 +2065,9 @@
       "throttle": "",
       "guards": [],
       "handler": "ReferralWithdrawalController@approve",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "POST:/api/admin/referral-withdrawals/{withdrawal}/reject",
@@ -2434,15 +2088,9 @@
       "throttle": "",
       "guards": [],
       "handler": "ReferralWithdrawalController@reject",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/schedules/overview",
@@ -2463,15 +2111,9 @@
       "throttle": "",
       "guards": [],
       "handler": "ScheduleTaskController@overview",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "POST:/api/admin/schedules/trigger",
@@ -2492,15 +2134,9 @@
       "throttle": "",
       "guards": [],
       "handler": "ScheduleTaskController@trigger",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/services",
@@ -2579,15 +2215,9 @@
       "throttle": "",
       "guards": [],
       "handler": "SettingController@index",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "POST:/api/admin/settings",
@@ -2608,15 +2238,9 @@
       "throttle": "",
       "guards": [],
       "handler": "SettingController@update",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/suppliers",
@@ -2950,15 +2574,9 @@
       "throttle": "",
       "guards": [],
       "handler": "TicketController@index",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/tickets/{ticket}",
@@ -2979,15 +2597,9 @@
       "throttle": "",
       "guards": [],
       "handler": "TicketController@show",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "POST:/api/admin/tickets/{ticket}/assign",
@@ -3008,15 +2620,9 @@
       "throttle": "",
       "guards": [],
       "handler": "TicketController@assign",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "POST:/api/admin/tickets/{ticket}/close",
@@ -3037,15 +2643,9 @@
       "throttle": "",
       "guards": [],
       "handler": "TicketController@close",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "POST:/api/admin/tickets/{ticket}/reply",
@@ -3066,15 +2666,9 @@
       "throttle": "",
       "guards": [],
       "handler": "TicketController@reply",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/tickets/admin-users",
@@ -3095,15 +2689,9 @@
       "throttle": "",
       "guards": [],
       "handler": "TicketController@adminUsers",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/tickets/summary",
@@ -3124,15 +2712,9 @@
       "throttle": "",
       "guards": [],
       "handler": "TicketController@summary",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "POST:/api/admin/tickets/upload-image",
@@ -3153,15 +2735,9 @@
       "throttle": "",
       "guards": [],
       "handler": "TicketController@uploadImage",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/users",
@@ -4148,15 +3724,9 @@
       "throttle": "",
       "guards": [],
       "handler": "VerificationController@index",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/verifications/{user}",
@@ -4177,15 +3747,9 @@
       "throttle": "",
       "guards": [],
       "handler": "VerificationController@show",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/verifications/{user}/history",
@@ -4206,15 +3770,9 @@
       "throttle": "",
       "guards": [],
       "handler": "VerificationController@history",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "POST:/api/admin/verifications/{user}/unbind",
@@ -4235,15 +3793,9 @@
       "throttle": "",
       "guards": [],
       "handler": "VerificationController@unbind",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/admin/verifications/summary",
@@ -4264,15 +3816,9 @@
       "throttle": "",
       "guards": [],
       "handler": "VerificationController@summary",
-      "sourceApps": [
-        "frontend-admin-v3"
-      ],
-      "sourceAppLabels": [
-        "管理端前端"
-      ],
-      "sourceFiles": [
-        "frontend-admin-v3/src/api/admin.js"
-      ]
+      "sourceApps": [],
+      "sourceAppLabels": [],
+      "sourceFiles": []
     },
     {
       "id": "GET:/api/client/auth/alipay-account",
@@ -4798,35 +4344,6 @@
       "throttle": "",
       "guards": [],
       "handler": "FinanceController@balanceLogsSummary",
-      "sourceApps": [
-        "frontend-user-v3-www"
-      ],
-      "sourceAppLabels": [
-        "官网/用户入口"
-      ],
-      "sourceFiles": [
-        "frontend-user-v3-www/src/api/client.js"
-      ]
-    },
-    {
-      "id": "POST:/api/client/blackhole/query",
-      "scope": "client",
-      "scopeLabel": "客户端",
-      "module": "blackhole",
-      "moduleLabel": "黑洞查询",
-      "method": "POST",
-      "methods": [
-        "POST"
-      ],
-      "callPath": "/client/blackhole/query",
-      "backendPath": "/api/client/blackhole/query",
-      "normalizedPath": "/client/blackhole/query",
-      "access": "auth",
-      "accessLabel": "仅登录",
-      "permission": "",
-      "throttle": "",
-      "guards": [],
-      "handler": "BlackholeController@query",
       "sourceApps": [
         "frontend-user-v3-www"
       ],

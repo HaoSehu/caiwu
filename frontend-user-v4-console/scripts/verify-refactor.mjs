@@ -27,7 +27,6 @@ const expectedRoutes = [
   '/client/tickets',
   '/client/tickets/:id',
   '/client/ticket-conversations/:id',
-  '/client/tools',
   '/client/notices',
   '/client/notices/:id',
   '/client/help',

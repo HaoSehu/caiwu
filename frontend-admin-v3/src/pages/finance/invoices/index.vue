@@ -163,23 +163,12 @@ import { errorMessage } from '@/utils/userMessage';
 import InvoiceDetailDrawer from '@/components/finance-record-detail/InvoiceDetailDrawer.vue';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import StatusTag from '@/components/status-tag/index.vue';
-import { AdminPermissions } from '@/constants/permissions';
+import { AdminPermissions, hasPermissionInList } from '@/constants/permissions';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserStore } from '@/store';
-import { INVOICE_STATUS_MAP, toLabelMap, toTagTypeMap } from '@shared/statusConfig';
+import { INVOICE_STATUS_MAP, INVOICE_TYPE_MAP, toLabelMap, toTagTypeMap } from '@shared/statusConfig';
 
 import './index.less';
-
-const INVOICE_TYPE_MAP: Record<string, string> = {
-  new: '新购',
-  normal: '新购',
-  renew: '续费',
-  recharge: '充值',
-  upgrade: '附加配置',
-  deduction: '扣款',
-  referral_credit: '推荐奖励账单',
-  manual: '手工账单',
-};
 
 const loading = ref(false);
 const invoices = ref<InvoiceRecord[]>([]);
@@ -250,7 +239,7 @@ function userPermissions() {
 
 function hasPermission(permission: string) {
   const permissions = userPermissions();
-  return permissions.includes(AdminPermissions.ALL) || permissions.includes(permission);
+  return hasPermissionInList(permissions, permission);
 }
 
 function buildParams() {
@@ -261,7 +250,8 @@ function buildParams() {
   if (filters.keyword) params.keyword = filters.keyword;
   if (filters.type) params.type = filters.type;
   if (filters.status !== '') params.status = filters.status;
-  if (filters.start_date || filters.end_date) params.date_range = [filters.start_date, filters.end_date].filter(Boolean);
+  if (filters.start_date) params.start_date = filters.start_date;
+  if (filters.end_date) params.end_date = filters.end_date;
   return params;
 }
 

@@ -75,7 +75,7 @@ class HostingPanelApiTransportTest extends TestCase
             }
         };
 
-        $supplier = new Supplier(['api_url' => 'https://panel.example.test']);
+        $supplier = (new Supplier)->forceFill(['api_url' => 'https://panel.example.test']);
 
         $transport->getHostUpgradePromoPreview($supplier, 12, 'PROMO', 'jwt-token');
         $transport->removeHostUpgradePromoCode($supplier, 12, 'jwt-token');

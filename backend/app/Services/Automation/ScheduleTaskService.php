@@ -102,6 +102,18 @@ class ScheduleTaskService
             'category' => '调度扩展',
             'log_keywords' => ['调度扩展 Hook（每五分钟）', 'schedule-hook-every-five-minutes'],
         ],
+        'schedule-hook-after-five-minute-cron' => [
+            'title' => '调度扩展 Hook（旧系统每五分钟后）',
+            'description' => '兼容旧系统 after_five_minute_cron 钩子，仅在配置了对应监听器时注册。',
+            'category' => '调度扩展',
+            'log_keywords' => ['调度扩展 Hook（旧系统每五分钟后）', 'schedule-hook-after-five-minute-cron', 'after_five_minute_cron'],
+        ],
+        'schedule-hook-after-half-hour-minute-cron' => [
+            'title' => '调度扩展 Hook（旧系统半小时后）',
+            'description' => '兼容旧系统 after_half_hour_minute_cron 钩子，仅在配置了对应监听器时注册。',
+            'category' => '调度扩展',
+            'log_keywords' => ['调度扩展 Hook（旧系统半小时后）', 'schedule-hook-after-half-hour-minute-cron', 'after_half_hour_minute_cron'],
+        ],
         'schedule-hook-hourly' => [
             'title' => '调度扩展 Hook（每小时）',
             'description' => '仅在配置了 tick.hourly 监听器时注册，用于小时级扩展任务。',
@@ -113,6 +125,18 @@ class ScheduleTaskService
             'description' => '仅在配置了 tick.daily 监听器时注册，用于日级维护和旧系统 DailyCron 类职责的增量承接。',
             'category' => '调度扩展',
             'log_keywords' => ['调度扩展 Hook（每日）', 'schedule-hook-daily'],
+        ],
+        'schedule-hook-before-daily-cron' => [
+            'title' => '调度扩展 Hook（旧系统每日前）',
+            'description' => '兼容旧系统 before_daily_cron 钩子，仅在配置了对应监听器时注册。',
+            'category' => '调度扩展',
+            'log_keywords' => ['调度扩展 Hook（旧系统每日前）', 'schedule-hook-before-daily-cron', 'before_daily_cron'],
+        ],
+        'schedule-hook-after-daily-cron' => [
+            'title' => '调度扩展 Hook（旧系统每日后）',
+            'description' => '兼容旧系统 after_daily_cron 钩子，仅在配置了对应监听器时注册。',
+            'category' => '调度扩展',
+            'log_keywords' => ['调度扩展 Hook（旧系统每日后）', 'schedule-hook-after-daily-cron', 'after_daily_cron'],
         ],
     ];
 

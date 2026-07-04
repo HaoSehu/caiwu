@@ -24,6 +24,7 @@ use App\Services\ClientServiceConsole\ServiceUpgradeService;
 use App\Services\Integrations\Payments\Data\PaymentPrecreateRequest;
 use App\Services\Integrations\Payments\Data\PaymentRefundRequest;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
+use App\Services\Integrations\Plugins\PaymentGatewayBindingResolver;
 use App\Services\Notification\UserNotificationService;
 use App\Services\Order\PaidOrderBusinessFlowDispatcher;
 use App\Services\Provisioning\ProvisionService;
@@ -50,6 +51,7 @@ class PaymentService
         private CouponService $couponService,
         private InvoiceService $invoiceService,
         private ?AccountService $accountService = null,
+        private ?PaymentGatewayBindingResolver $paymentGatewayBindingResolver = null,
     ) {}
 
     /**
@@ -281,7 +283,7 @@ class PaymentService
                 $payment = Payment::query()
                     ->where('user_id', $user->id)
                     ->whereNull('invoice_id')
-                    ->where('gateway', PaymentGatewayCode::ALIPAY)
+                    ->whereGatewayKey(PaymentGatewayCode::ALIPAY)
                     ->where('status', PaymentStatus::PENDING)
                     ->where('amount', $normalizedAmount)
                     ->where('created_at', '>=', now()->subMinutes(15))
@@ -290,14 +292,12 @@ class PaymentService
                     ->first();
 
                 if ($payment) {
-                    if (trim((string) ($payment->trace_id ?? '')) === '') {
-                        $payment->forceFill(['trace_id' => $traceId])->save();
-                    }
+                    $this->ensurePaymentGatewayAudit($payment, PaymentGatewayCode::ALIPAY, $traceId);
 
                     return $payment;
                 }
 
-                return Payment::query()->create([
+                return Payment::query()->create($this->paymentCreatePayload([
                     'payment_no' => Payment::generatePaymentNo(),
                     'user_id' => $user->id,
                     'invoice_id' => null,
@@ -305,7 +305,7 @@ class PaymentService
                     'amount' => $normalizedAmount,
                     'status' => PaymentStatus::PENDING,
                     'trace_id' => $traceId,
-                ]);
+                ]));
             });
         }, '充值请求处理中，请勿重复提交');
 
@@ -351,7 +351,7 @@ class PaymentService
                 $payment = Payment::query()
                     ->where('user_id', $user->id)
                     ->whereNull('invoice_id')
-                    ->where('gateway', $gateway)
+                    ->whereGatewayKey($gateway)
                     ->where('status', PaymentStatus::PENDING)
                     ->where('amount', $normalizedAmount)
                     ->where('created_at', '>=', now()->subMinutes(15))
@@ -360,14 +360,12 @@ class PaymentService
                     ->first();
 
                 if ($payment) {
-                    if (trim((string) ($payment->trace_id ?? '')) === '') {
-                        $payment->forceFill(['trace_id' => $traceId])->save();
-                    }
+                    $this->ensurePaymentGatewayAudit($payment, $gateway, $traceId);
 
                     return $payment;
                 }
 
-                return Payment::query()->create([
+                return Payment::query()->create($this->paymentCreatePayload([
                     'payment_no' => Payment::generatePaymentNo(),
                     'user_id' => $user->id,
                     'invoice_id' => null,
@@ -375,7 +373,7 @@ class PaymentService
                     'amount' => $normalizedAmount,
                     'status' => PaymentStatus::PENDING,
                     'trace_id' => $traceId,
-                ]);
+                ]));
             });
         }, '充值请求处理中，请勿重复提交');
 
@@ -416,9 +414,10 @@ class PaymentService
             return ['paid' => true, 'trade_no' => $payment->trade_no];
         }
 
-        $result = $this->queryAlipayPayment($payment->payment_no);
+        $gateway = $payment->gatewayKey();
+        $result = $this->queryGatewayPayment($gateway, $payment->payment_no);
 
-        if (in_array($result['trade_status'], ['TRADE_SUCCESS', 'TRADE_FINISHED'])) {
+        if (in_array($result['trade_status'], ['TRADE_SUCCESS', 'TRADE_FINISHED', 'SUCCESS'], true)) {
             $this->completeRechargePayment($payment, $result['trade_no'], $result['raw']);
 
             return ['paid' => true, 'trade_no' => $result['trade_no']];
@@ -517,13 +516,13 @@ class PaymentService
 
                 $payment = Payment::query()
                     ->where('invoice_id', $lockedInvoice->id)
-                    ->where('gateway', PaymentGatewayCode::ALIPAY)
+                    ->whereGatewayKey(PaymentGatewayCode::ALIPAY)
                     ->where('status', PaymentStatus::PENDING)
                     ->latest('id')
                     ->first();
 
                 if (! $payment) {
-                    $payment = Payment::query()->create([
+                    $payment = Payment::query()->create($this->paymentCreatePayload([
                         'payment_no' => Payment::generatePaymentNo(),
                         'user_id' => $user->id,
                         'order_id' => (int) ($lockedInvoice->order?->id ?? 0) ?: null,
@@ -536,10 +535,10 @@ class PaymentService
                             'source' => 'alipay_precreate',
                             'trace_id' => $traceId,
                         ],
-                    ]);
+                    ]));
                     $this->syncProjection($payment);
-                } elseif (trim((string) ($payment->trace_id ?? '')) === '') {
-                    $payment->forceFill(['trace_id' => $traceId])->save();
+                } else {
+                    $this->ensurePaymentGatewayAudit($payment, PaymentGatewayCode::ALIPAY, $traceId);
                 }
 
                 return [
@@ -600,13 +599,13 @@ class PaymentService
 
                 $payment = Payment::query()
                     ->where('invoice_id', $lockedInvoice->id)
-                    ->where('gateway', $gateway)
+                    ->whereGatewayKey($gateway)
                     ->where('status', PaymentStatus::PENDING)
                     ->latest('id')
                     ->first();
 
                 if (! $payment) {
-                    $payment = Payment::query()->create([
+                    $payment = Payment::query()->create($this->paymentCreatePayload([
                         'payment_no' => Payment::generatePaymentNo(),
                         'user_id' => $user->id,
                         'order_id' => (int) ($lockedInvoice->order?->id ?? 0) ?: null,
@@ -619,10 +618,10 @@ class PaymentService
                             'source' => "{$gateway}_precreate",
                             'trace_id' => $traceId,
                         ],
-                    ]);
+                    ]));
                     $this->syncProjection($payment);
-                } elseif (trim((string) ($payment->trace_id ?? '')) === '') {
-                    $payment->forceFill(['trace_id' => $traceId])->save();
+                } else {
+                    $this->ensurePaymentGatewayAudit($payment, $gateway, $traceId);
                 }
 
                 return [
@@ -684,13 +683,13 @@ class PaymentService
 
                 $payment = Payment::query()
                     ->where('order_id', $lockedOrder->id)
-                    ->where('gateway', $gateway)
+                    ->whereGatewayKey($gateway)
                     ->where('status', PaymentStatus::PENDING)
                     ->latest('id')
                     ->first();
 
                 if (! $payment) {
-                    $payment = Payment::query()->create([
+                    $payment = Payment::query()->create($this->paymentCreatePayload([
                         'payment_no' => Payment::generatePaymentNo(),
                         'user_id' => $user->id,
                         'order_id' => (int) $lockedOrder->id,
@@ -703,10 +702,10 @@ class PaymentService
                             'source' => "{$gateway}_precreate",
                             'trace_id' => $traceId,
                         ],
-                    ]);
+                    ]));
                     $this->syncProjection($payment);
-                } elseif (trim((string) ($payment->trace_id ?? '')) === '') {
-                    $payment->forceFill(['trace_id' => $traceId])->save();
+                } else {
+                    $this->ensurePaymentGatewayAudit($payment, $gateway, $traceId);
                 }
 
                 return [
@@ -808,21 +807,19 @@ class PaymentService
         $alipayPayment = DB::transaction(function () use ($lockedInvoice, $user, $remainingAmount, $traceId, $normalizedBalanceAmount) {
             $existingPayment = Payment::query()
                 ->where('invoice_id', $lockedInvoice->id)
-                ->where('gateway', PaymentGatewayCode::ALIPAY)
+                ->whereGatewayKey(PaymentGatewayCode::ALIPAY)
                 ->where('status', PaymentStatus::PENDING)
                 ->where('amount', $remainingAmount)
                 ->latest('id')
                 ->first();
 
             if ($existingPayment) {
-                if (trim((string) ($existingPayment->trace_id ?? '')) === '') {
-                    $existingPayment->forceFill(['trace_id' => $traceId])->save();
-                }
+                $this->ensurePaymentGatewayAudit($existingPayment, PaymentGatewayCode::ALIPAY, $traceId);
 
                 return $existingPayment;
             }
 
-            $payment = Payment::query()->create([
+            $payment = Payment::query()->create($this->paymentCreatePayload([
                 'payment_no' => Payment::generatePaymentNo(),
                 'user_id' => $user->id,
                 'order_id' => (int) ($lockedInvoice->order?->id ?? 0) ?: null,
@@ -837,7 +834,7 @@ class PaymentService
                     'mix_payment' => true,
                     'balance_amount' => $normalizedBalanceAmount,
                 ],
-            ]);
+            ]));
             $this->syncProjection($payment);
 
             return $payment;
@@ -944,21 +941,19 @@ class PaymentService
         $gatewayPayment = DB::transaction(function () use ($lockedInvoice, $user, $remainingAmount, $traceId, $normalizedBalanceAmount, $gateway) {
             $existingPayment = Payment::query()
                 ->where('invoice_id', $lockedInvoice->id)
-                ->where('gateway', $gateway)
+                ->whereGatewayKey($gateway)
                 ->where('status', PaymentStatus::PENDING)
                 ->where('amount', $remainingAmount)
                 ->latest('id')
                 ->first();
 
             if ($existingPayment) {
-                if (trim((string) ($existingPayment->trace_id ?? '')) === '') {
-                    $existingPayment->forceFill(['trace_id' => $traceId])->save();
-                }
+                $this->ensurePaymentGatewayAudit($existingPayment, $gateway, $traceId);
 
                 return $existingPayment;
             }
 
-            $payment = Payment::query()->create([
+            $payment = Payment::query()->create($this->paymentCreatePayload([
                 'payment_no' => Payment::generatePaymentNo(),
                 'user_id' => $user->id,
                 'order_id' => (int) ($lockedInvoice->order?->id ?? 0) ?: null,
@@ -973,7 +968,7 @@ class PaymentService
                     'mix_payment' => true,
                     'balance_amount' => $normalizedBalanceAmount,
                 ],
-            ]);
+            ]));
             $this->syncProjection($payment);
 
             return $payment;
@@ -1035,13 +1030,13 @@ class PaymentService
 
                 $payment = Payment::query()
                     ->where('order_id', $lockedOrder->id)
-                    ->where('gateway', PaymentGatewayCode::ALIPAY)
+                    ->whereGatewayKey(PaymentGatewayCode::ALIPAY)
                     ->where('status', PaymentStatus::PENDING)
                     ->latest('id')
                     ->first();
 
                 if (! $payment) {
-                    $payment = Payment::query()->create([
+                    $payment = Payment::query()->create($this->paymentCreatePayload([
                         'payment_no' => Payment::generatePaymentNo(),
                         'user_id' => $user->id,
                         'order_id' => (int) $lockedOrder->id,
@@ -1054,10 +1049,10 @@ class PaymentService
                             'source' => 'alipay_precreate',
                             'trace_id' => $traceId,
                         ],
-                    ]);
+                    ]));
                     $this->syncProjection($payment);
-                } elseif (trim((string) ($payment->trace_id ?? '')) === '') {
-                    $payment->forceFill(['trace_id' => $traceId])->save();
+                } else {
+                    $this->ensurePaymentGatewayAudit($payment, PaymentGatewayCode::ALIPAY, $traceId);
                 }
 
                 return [
@@ -1112,8 +1107,8 @@ class PaymentService
             return false;
         }
 
-        // 商户号校验（支付宝: app_id, 微信: mch_id）
-        $merchantId = $params['app_id'] ?? $params['mch_id'] ?? '';
+        // 商户号校验（支付宝: app_id, 微信: mch_id, 易支付: pid）
+        $merchantId = $params['app_id'] ?? $params['mch_id'] ?? $params['pid'] ?? '';
         if ($merchantId !== '' && ! $resolvedGateway->matchesMerchantId($merchantId)) {
             Log::warning("[{$gatewayLabel}回调] 商户号不匹配", [
                 'payment_no' => $paymentNo,
@@ -1123,7 +1118,7 @@ class PaymentService
             return false;
         }
 
-        $notifyAmount = round((float) ($params['total_amount'] ?? $params['amount'] ?? 0), 2);
+        $notifyAmount = round((float) ($params['total_amount'] ?? $params['amount'] ?? $params['money'] ?? 0), 2);
         $expectedAmount = round((float) $payment->amount, 2);
         if ($notifyAmount <= 0 || abs($notifyAmount - $expectedAmount) > 0.0001) {
             Log::warning("[{$gatewayLabel}回调] 金额校验失败", [
@@ -1601,7 +1596,7 @@ class PaymentService
             return ['paid' => true, 'trade_no' => $payment->trade_no];
         }
 
-        $gateway = (string) $payment->gateway;
+        $gateway = $payment->gatewayKey();
         $result = $this->queryGatewayPayment($gateway, $payment->payment_no);
 
         if (in_array($result['trade_status'], ['TRADE_SUCCESS', 'TRADE_FINISHED', 'SUCCESS'], true)) {
@@ -2118,8 +2113,8 @@ class PaymentService
                     'refund_amount' => number_format($refundAmount, 2, '.', ''),
                     'refund_reason' => $refundReason,
                     'trade_no' => (string) ($payment->trade_no ?? ''),
-                    'original_gateway' => (string) $payment->gateway,
-                    'original_gateway_label' => $this->resolvePaymentGatewayLabel((string) $payment->gateway),
+                    'original_gateway' => $payment->gatewayKey(),
+                    'original_gateway_label' => $this->resolvePaymentGatewayLabel($payment->gatewayKey()),
                     'operator_id' => (int) ($context['operator_id'] ?? 0),
                     'operator_name' => (string) ($context['operator_name'] ?? ''),
                     'trace_id' => (string) ($context['trace_id'] ?? ''),
@@ -2729,6 +2724,69 @@ class PaymentService
     }
 
     /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function paymentCreatePayload(array $payload): array
+    {
+        $gateway = (string) ($payload['gateway_key'] ?? $payload['gateway'] ?? '');
+        unset($payload['gateway']);
+
+        return array_merge(
+            $payload,
+            $this->paymentGatewayAuditColumns($gateway)
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function paymentGatewayAuditColumns(string $gateway): array
+    {
+        $context = $this->paymentGatewayBindingResolver()->contextForGateway($gateway);
+        $columns = [];
+
+        if (Schema::hasColumn('payments', 'plugin_id')) {
+            $columns['plugin_id'] = $context['plugin_id'];
+        }
+
+        if (Schema::hasColumn('payments', 'gateway_key')) {
+            $columns['gateway_key'] = $context['gateway_key'];
+        }
+
+        return $columns;
+    }
+
+    private function ensurePaymentGatewayAudit(Payment $payment, string $gateway, ?string $traceId = null): void
+    {
+        $payload = [];
+        $context = $this->paymentGatewayBindingResolver()->contextForPayment($payment);
+
+        if ($context['plugin_id'] !== null && (int) ($payment->plugin_id ?? 0) <= 0 && Schema::hasColumn('payments', 'plugin_id')) {
+            $payload['plugin_id'] = $context['plugin_id'];
+        }
+
+        $gatewayKey = $context['gateway_key'] ?: $this->paymentGatewayBindingResolver()->normalizeGatewayKey($gateway);
+        if ($gatewayKey !== '' && trim((string) ($payment->gateway_key ?? '')) === '' && Schema::hasColumn('payments', 'gateway_key')) {
+            $payload['gateway_key'] = $gatewayKey;
+        }
+
+        $resolvedTraceId = trim((string) ($traceId ?? ''));
+        if ($resolvedTraceId !== '' && trim((string) ($payment->trace_id ?? '')) === '') {
+            $payload['trace_id'] = $resolvedTraceId;
+        }
+
+        if ($payload !== []) {
+            $payment->forceFill($payload)->save();
+        }
+    }
+
+    private function paymentGatewayBindingResolver(): PaymentGatewayBindingResolver
+    {
+        return $this->paymentGatewayBindingResolver ??= app(PaymentGatewayBindingResolver::class);
+    }
+
+    /**
      * @deprecated 使用 resolveGateway(PaymentGatewayCode::ALIPAY) 替代
      */
     private function alipayGateway(): PaymentGatewayInterface
@@ -2842,7 +2900,7 @@ class PaymentService
 
         if (is_array($gateways) && $gateways !== []) {
             $payments = $payments
-                ->filter(fn (Payment $payment) => in_array((string) $payment->gateway, $gateways, true))
+                ->filter(fn (Payment $payment) => in_array($payment->gatewayKey(), $gateways, true))
                 ->values();
         }
 
@@ -2984,7 +3042,7 @@ class PaymentService
             ? $this->resolvePrimaryRefundablePayment($order->invoice)
             : null;
 
-        return (string) ($payment?->gateway ?? '');
+        return $payment?->gatewayKey() ?? '';
     }
 
     private function restoreOrderProductStockIfNeeded(Order $order): void
@@ -3006,6 +3064,7 @@ class PaymentService
     {
         return match ($gateway) {
             PaymentGatewayCode::ALIPAY => PaymentGatewayCode::label(PaymentGatewayCode::ALIPAY),
+            PaymentGatewayCode::YIPAY => PaymentGatewayCode::label(PaymentGatewayCode::YIPAY),
             'wechat' => '微信支付',
             'balance' => '余额支付',
             'bank_transfer' => '银行转账',
@@ -3115,7 +3174,7 @@ class PaymentService
             return Invoice::query()->find((int) $payment->invoice_id);
         }
 
-        if ((int) $payment->status !== PaymentStatus::SUCCESS || (string) $payment->gateway !== PaymentGatewayCode::ALIPAY) {
+        if ((int) $payment->status !== PaymentStatus::SUCCESS || ! $payment->isThirdPartyGateway()) {
             return null;
         }
 
@@ -3131,7 +3190,7 @@ class PaymentService
                     return Invoice::query()->find((int) $lockedPayment->invoice_id);
                 }
 
-                if ((int) $lockedPayment->status !== PaymentStatus::SUCCESS || (string) $lockedPayment->gateway !== PaymentGatewayCode::ALIPAY) {
+                if ((int) $lockedPayment->status !== PaymentStatus::SUCCESS || ! $lockedPayment->isThirdPartyGateway()) {
                     return null;
                 }
 
@@ -3219,6 +3278,15 @@ class PaymentService
             'received_at' => $payload['send_pay_date'] ?? $payload['refunded_at'] ?? $payload['gmt_refund_pay'] ?? $now,
             'updated_at' => $now,
         ];
+        $gatewayContext = $this->paymentGatewayBindingResolver()->contextForPayment($payment);
+
+        if (Schema::hasColumn('payment_callbacks', 'plugin_id')) {
+            $row['plugin_id'] = $gatewayContext['plugin_id'];
+        }
+
+        if (Schema::hasColumn('payment_callbacks', 'gateway_key')) {
+            $row['gateway_key'] = $gatewayContext['gateway_key'];
+        }
 
         if (Schema::hasColumn('payment_callbacks', 'trace_id')) {
             $row['trace_id'] = $this->nullableString($resolvedTraceId);

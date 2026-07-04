@@ -77,8 +77,10 @@ class ClientFinanceBalanceLogRegressionTest extends TestCase
             'total_sales_amount' => '0.00',
             'referrer_user_id' => null,
             'verified_at' => null,
-            'balance' => '65.00',
         ]);
+        // balance 已从 $fillable 移出，通过 forceFill+save 触发 booted hook 同步到 user_accounts
+        $user->forceFill(['balance' => '65.00'])->save();
+        $user->refresh();
 
         AccountTransaction::query()->create([
             'user_id' => (int) $user->id,

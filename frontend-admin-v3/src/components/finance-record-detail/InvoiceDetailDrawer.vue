@@ -128,18 +128,7 @@ import { computed, ref } from 'vue';
 import type { InvoiceRecord } from '@/api/admin';
 import RecordDetailPage, { type RecordDetailMetric, type RecordDetailTab } from '@/components/record-detail-page/index.vue';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { PAYMENT_STATUS_MAP, getStatusLabel, getStatusTagType } from '@shared/statusConfig';
-
-const INVOICE_TYPE_MAP: Record<string, string> = {
-  new: '新购',
-  normal: '新购',
-  renew: '续费',
-  recharge: '充值',
-  upgrade: '附加配置',
-  deduction: '扣款',
-  referral_credit: '推荐奖励账单',
-  manual: '手工账单',
-};
+import { INVOICE_TYPE_MAP, PAYMENT_STATUS_MAP, getStatusLabel, getStatusTagType } from '@shared/statusConfig';
 
 const props = withDefaults(
   defineProps<{

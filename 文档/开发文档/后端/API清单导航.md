@@ -3,7 +3,7 @@
 ## 文档用途
 
 - 给 `文档/开发文档/后端/后端API清单.md` 这份自动生成清单提供一份人类可读的业务导航
-- 对齐时间：`2026-04-22`
+- 对齐时间：`2026-07-02`
 - 本文手工维护，不会被导出脚本覆盖
 - 具体方法、控制器动作、中间件和鉴权仍以 `文档/开发文档/后端/后端API清单.md` 为准
 
@@ -29,6 +29,7 @@
 | 商品 | `/api/admin/products*`、`/api/admin/product-categories*`、`/api/admin/product-groups*`、`/api/admin/product-types*` | 商品、分类、分组、类型、批量同步与排序 |
 | 服务实例 | `/api/admin/services*`、`/api/admin/users/{user}/services*` | 管理端实例概览与用户下实例操作 |
 | 供应商 | `/api/admin/suppliers*` | 供应商余额、商品拉取、批量对接 |
+| 集成插件 | `/api/admin/integration-plugins*` | 支付、实名、短信、邮件、上游插件扫描、安装、配置、启停、健康检查 |
 | 优惠券 | `/api/admin/coupons*`、`/api/admin/coupon-campaigns*` | 优惠券与活动发券 |
 | 推荐返佣 | `/api/admin/referral*`、`/api/admin/referral-withdrawals*` | 返佣概览、奖励、账变、提现审核 |
 | 实名认证 | `/api/admin/verifications*` | 实名审核、详情、历史、解绑 |
@@ -53,7 +54,6 @@
 | 推荐返佣 | `/api/client/referral*` | 概览、奖励、账变、提现申请 |
 | 工单 | `/api/client/tickets*` | 列表、详情、回复、关闭、上传图片 |
 | 内容 | `/api/client/content/overview`、`/api/client/notices*`、`/api/client/help-articles*` | 用户侧公告与帮助中心 |
-| 管理工具 | `/api/client/blackhole/query` | 当前已落地的客户端工具接口 |
 | 支付回调 | `/api/client/payment/alipay/notify` | 支付宝异步通知 |
 
 ### 公开站点与其他公开接口

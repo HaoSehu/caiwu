@@ -4,9 +4,12 @@ namespace App\Services\Auth;
 
 use App\Casts\LegacyEncrypted;
 use App\Exceptions\BusinessException;
-use App\Models\Setting;
+use App\Models\IntegrationPlugin;
 use App\Models\User;
 use App\Models\VerificationHistory;
+use App\Services\Integrations\Plugins\IntegrationDriverBindingResolver;
+use App\Services\Integrations\Plugins\PluginConfigRepository;
+use App\Services\Integrations\Plugins\PluginDomain;
 use App\Services\Verification\Contracts\ProvidesVerificationFeeConfig;
 use App\Services\Verification\Contracts\VerificationDriver;
 use App\Services\Verification\Data\VerificationInitializeRequest;
@@ -48,8 +51,13 @@ class VerificationService
 
     private ?bool $verificationHistoryTableAvailable = null;
 
-    public function __construct(VerificationDriverManager $driverManager)
-    {
+    private ?array $verificationPluginConfigCache = null;
+
+    public function __construct(
+        VerificationDriverManager $driverManager,
+        private ?PluginConfigRepository $pluginConfigRepository = null,
+        private ?IntegrationDriverBindingResolver $driverBindingResolver = null,
+    ) {
         $this->driverManager = $driverManager;
     }
 
@@ -219,14 +227,22 @@ class VerificationService
 
     public function getConfigSummary(): array
     {
-        $defaultConfig = (array) config('idc.verification', []);
-        $api = (string) Setting::getValue('verification', 'verification_api', $defaultConfig['api'] ?? '');
-        $key = (string) Setting::getValue('verification', 'verification_key', $defaultConfig['key'] ?? '');
+        $config = $this->activeVerificationPluginConfig();
+        $api = (string) ($config['api'] ?? '');
+        $key = (string) ($config['key'] ?? '');
+        $feeConfig = $this->safeFeeConfig();
+        $context = $this->driverBindingResolver()->verificationContext();
 
         return [
             'verification_api_masked' => $this->maskConfigValue($api),
             'verification_biz_code' => $this->resolvedBizCode(),
             'configured' => trim($api) !== '' && trim($key) !== '',
+            'driver_key' => $context['driver_key'],
+            'plugin_id' => $context['plugin_id'],
+            'free_attempts' => $feeConfig['free_attempts'],
+            'retry_fee' => $feeConfig['retry_fee'],
+            'charge_enabled' => $feeConfig['charge_enabled'],
+            'amount' => $feeConfig['amount'],
         ];
     }
 
@@ -501,9 +517,84 @@ class VerificationService
 
     private function resolvedBizCode(): string
     {
-        $defaultConfig = (array) config('idc.verification', []);
+        $bizCode = trim((string) ($this->activeVerificationPluginConfig()['biz_code'] ?? ''));
 
-        return (string) Setting::getValue('verification', 'verification_biz_code', $defaultConfig['biz_code'] ?? 'FACE');
+        return $bizCode !== '' ? $bizCode : 'FACE';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function activeVerificationPluginConfig(): array
+    {
+        if ($this->verificationPluginConfigCache !== null) {
+            return $this->verificationPluginConfigCache;
+        }
+
+        $plugin = $this->activeVerificationPlugin();
+        if (! $plugin instanceof IntegrationPlugin) {
+            return $this->verificationPluginConfigCache = [];
+        }
+
+        return $this->verificationPluginConfigCache = $this->pluginConfigRepository()->resolvedConfig($plugin);
+    }
+
+    private function activeVerificationPlugin(): ?IntegrationPlugin
+    {
+        if (! Schema::hasTable('integration_plugins')) {
+            return null;
+        }
+
+        $context = $this->driverBindingResolver()->verificationContext();
+        $pluginId = (int) ($context['plugin_id'] ?? 0);
+        if ($pluginId > 0) {
+            $plugin = IntegrationPlugin::query()->whereKey($pluginId)->first();
+            if ($plugin instanceof IntegrationPlugin) {
+                return $plugin;
+            }
+        }
+
+        $driverKey = trim((string) ($context['driver_key'] ?? ''));
+        if ($driverKey === '') {
+            return null;
+        }
+
+        return IntegrationPlugin::query()
+            ->where('domain', PluginDomain::VERIFICATION)
+            ->where('status', IntegrationPlugin::STATUS_ENABLED)
+            ->where(static function ($query) use ($driverKey): void {
+                $query->where('plugin_key', $driverKey)
+                    ->orWhere('slug', $driverKey);
+            })
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    /**
+     * @return array{free_attempts: int, retry_fee: float, charge_enabled: bool, amount: float}
+     */
+    private function safeFeeConfig(): array
+    {
+        try {
+            return $this->feeConfig();
+        } catch (\Throwable) {
+            return [
+                'free_attempts' => 0,
+                'retry_fee' => 0.0,
+                'charge_enabled' => false,
+                'amount' => 0.0,
+            ];
+        }
+    }
+
+    private function pluginConfigRepository(): PluginConfigRepository
+    {
+        return $this->pluginConfigRepository ??= app(PluginConfigRepository::class);
+    }
+
+    private function driverBindingResolver(): IntegrationDriverBindingResolver
+    {
+        return $this->driverBindingResolver ??= app(IntegrationDriverBindingResolver::class);
     }
 
     private function buildQrCodeUrlCacheKey(string $certifyId): string

@@ -113,7 +113,6 @@ servers 域常见配置：
 - `api_url`：上游 API 地址。
 - `username` / `app_id`：上游账号或应用标识。
 - `password` / `secret_key`：上游密钥，必须标记为敏感字段。
-- `ssl_verify` / `ca_bundle`：TLS 校验配置。
 - `enabled`：插件内部启用开关。
 
 魔方财务真实插件的 API 地址、账号、密钥目前来自供应商配置；`demo_servers` 自身只演示插件配置和能力解析。

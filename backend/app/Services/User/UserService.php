@@ -311,7 +311,7 @@ class UserService
         if (($filters['status'] ?? '') === '5') {
             $query->where(function ($builder) {
                 $builder->whereHas('payments', fn ($paymentQuery) => $paymentQuery
-                    ->whereIn('gateway', PaymentGatewayCode::thirdPartyGateways())
+                    ->whereGatewayKeyIn(PaymentGatewayCode::thirdPartyGateways())
                     ->where('status', PaymentStatus::REFUNDED))
                     ->orWhereHas('order', fn ($orderQuery) => $orderQuery->where('status', OrderStatus::REFUNDED));
             });
@@ -371,7 +371,7 @@ class UserService
         throw_if(trim((string) $user->email) === '', new BusinessException('用户未绑定邮箱，无法发送账单邮件'));
 
         $thirdPartyPayments = $invoice->payments
-            ->filter(fn (Payment $payment) => PaymentGatewayCode::isThirdParty((string) $payment->gateway))
+            ->filter(fn (Payment $payment) => $payment->isThirdPartyGateway())
             ->values();
         $latestPayment = $thirdPartyPayments->first(fn (Payment $payment) => (int) $payment->status === PaymentStatus::SUCCESS)
             ?? $thirdPartyPayments->first();
@@ -386,7 +386,7 @@ class UserService
             'status_label' => (string) (InvoiceStatus::$labels[$invoice->status] ?? (string) $invoice->status),
             'due_at' => $invoice->due_date ? ($invoice->due_date?->format('Y-m-d H:i:s') ?? $invoice->due_date?->format('Y-m-d')) : '',
             'paid_at' => $invoice->paid_at ? $invoice->paid_at->format('Y-m-d H:i:s') : '',
-            'payment_method' => $latestPayment ? $this->resolvePaymentGatewayLabel((string) $latestPayment->gateway) : '',
+            'payment_method' => $latestPayment ? $this->resolvePaymentGatewayLabel($latestPayment->gatewayKey()) : '',
             'trade_no' => (string) ($latestPayment?->trade_no ?? ''),
             'notice_message' => (int) $invoice->status === InvoiceStatus::PAID
                 ? '该账单已支付完成，如有疑问请联系管理员。'
@@ -840,6 +840,7 @@ class UserService
     {
         return match ($gateway) {
             PaymentGatewayCode::ALIPAY => PaymentGatewayCode::label(PaymentGatewayCode::ALIPAY),
+            PaymentGatewayCode::YIPAY => PaymentGatewayCode::label(PaymentGatewayCode::YIPAY),
             'wechat' => '微信支付',
             'balance' => '余额支付',
             'bank_transfer' => '银行转账',
@@ -881,8 +882,9 @@ class UserService
         return [
             'id' => (int) $payment->id,
             'payment_no' => (string) $payment->payment_no,
-            'gateway' => (string) $payment->gateway,
-            'gateway_label' => $this->resolvePaymentGatewayLabel((string) $payment->gateway),
+            'gateway' => $payment->gatewayKey(),
+            'gateway_key' => $payment->gatewayKey(),
+            'gateway_label' => $this->resolvePaymentGatewayLabel($payment->gatewayKey()),
             'trade_no' => (string) ($payment->trade_no ?? ''),
             'amount' => number_format((float) $payment->amount, 2, '.', ''),
             'status' => (int) $payment->status,
@@ -898,7 +900,7 @@ class UserService
     private function resolvePrimaryInvoicePayment(iterable $payments): ?Payment
     {
         $collection = collect($payments)
-            ->filter(fn (Payment $payment) => PaymentGatewayCode::isThirdParty((string) $payment->gateway))
+            ->filter(fn (Payment $payment) => $payment->isThirdPartyGateway())
             ->values();
 
         return $collection
@@ -1065,7 +1067,7 @@ class UserService
         $payment = null;
         if ($invoice->relationLoaded('payments')) {
             $payment = collect($invoice->payments)
-                ->filter(fn (Payment $item) => PaymentGatewayCode::isThirdParty((string) $item->gateway))
+                ->filter(fn (Payment $item) => $item->isThirdPartyGateway())
                 ->first(fn (Payment $item) => (int) $item->status === PaymentStatus::REFUNDED
                     || is_array(data_get((array) ($item->callback_raw ?? []), 'refund')));
         }

@@ -10,6 +10,9 @@ class SmsLog extends Model
 {
     protected $fillable = [
         'phone',
+        'plugin_id',
+        'driver_key',
+        'trace_id',
         'template_code',
         'params',
         'content',
@@ -23,6 +26,7 @@ class SmsLog extends Model
     protected $casts = [
         'params' => 'array',
         'sent_at' => 'datetime',
+        'plugin_id' => 'integer',
     ];
 
     protected static function booted(): void
@@ -38,28 +42,42 @@ class SmsLog extends Model
             return;
         }
 
+        $payload = [
+            'channel' => 'sms',
+            'recipient' => trim((string) ($this->phone ?? '')),
+            'template_code' => trim((string) ($this->template_code ?? '')) ?: null,
+            'subject' => null,
+            'content' => (string) ($this->content ?? ''),
+            'params_json' => is_array($this->params ?? null)
+                ? json_encode($this->params, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+                : null,
+            'provider' => trim((string) ($this->provider ?? '')) ?: null,
+            'request_id' => trim((string) ($this->request_id ?? '')) ?: null,
+            'status' => trim((string) ($this->status ?? 'pending')),
+            'error_msg' => trim((string) ($this->error_msg ?? '')) ?: null,
+            'sent_at' => $this->sent_at,
+            'created_at' => $this->created_at ?? now(),
+            'updated_at' => $this->updated_at ?? now(),
+        ];
+
+        if (Schema::hasColumn('notification_logs', 'plugin_id')) {
+            $payload['plugin_id'] = $this->plugin_id;
+        }
+
+        if (Schema::hasColumn('notification_logs', 'driver_key')) {
+            $payload['driver_key'] = trim((string) ($this->driver_key ?? '')) ?: null;
+        }
+
+        if (Schema::hasColumn('notification_logs', 'trace_id')) {
+            $payload['trace_id'] = trim((string) ($this->trace_id ?? '')) ?: null;
+        }
+
         DB::table('notification_logs')->updateOrInsert(
             [
                 'origin_type' => 'sms_log',
                 'origin_id' => (int) $this->id,
             ],
-            [
-                'channel' => 'sms',
-                'recipient' => trim((string) ($this->phone ?? '')),
-                'template_code' => trim((string) ($this->template_code ?? '')) ?: null,
-                'subject' => null,
-                'content' => (string) ($this->content ?? ''),
-                'params_json' => is_array($this->params ?? null)
-                    ? json_encode($this->params, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
-                    : null,
-                'provider' => trim((string) ($this->provider ?? '')) ?: null,
-                'request_id' => trim((string) ($this->request_id ?? '')) ?: null,
-                'status' => trim((string) ($this->status ?? 'pending')),
-                'error_msg' => trim((string) ($this->error_msg ?? '')) ?: null,
-                'sent_at' => $this->sent_at,
-                'created_at' => $this->created_at ?? now(),
-                'updated_at' => $this->updated_at ?? now(),
-            ]
+            $payload
         );
     }
 }

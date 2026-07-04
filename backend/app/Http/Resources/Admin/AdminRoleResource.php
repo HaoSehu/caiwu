@@ -20,6 +20,10 @@ class AdminRoleResource extends JsonResource
             'permissions' => $this->resolvedPermissions(),
             'stored_permissions' => array_values((array) ($this->permissions ?? [])),
             'admin_count' => (int) ($this->admin_users_count ?? 0),
+            'is_builtin' => $this->isBuiltIn(),
+            'is_locked' => $this->isLocked(),
+            'can_edit_permissions' => ! $this->isLocked(),
+            'can_delete' => ! $this->isLocked(),
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at?->format('Y-m-d H:i:s'),
         ];

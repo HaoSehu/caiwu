@@ -11,47 +11,53 @@ class PreviewProviderMismatchCommand extends Command
 {
     protected $signature = 'upstream:preview-provider-mismatch';
 
-    protected $description = '只读预览 services.provision_data.provider 与 suppliers.interface_type 不一致的记录';
+    protected $description = '只读预览服务绑定与供应商/商品绑定 provider_key 不一致的记录';
 
     public function handle(): int
     {
         $rows = DB::select(<<<'SQL'
             SELECT
                 s.id AS service_id,
-                JSON_UNQUOTE(JSON_EXTRACT(s.provision_data, '$.provider')) AS old_provider,
-                sup.interface_type AS new_provider,
-                sup.id AS supplier_id,
-                sup.interface_type AS supplier_interface_type,
+                sub.provider_key AS service_provider_key,
+                COALESCE(spb.provider_key, pub.provider_key) AS expected_provider_key,
+                COALESCE(spb.supplier_id, pub_spb.supplier_id) AS supplier_id,
                 s.product_id,
-                p.provision_module AS product_provision_module
-            FROM idc.services s
-            JOIN idc.suppliers sup
-                ON sup.id = CAST(JSON_UNQUOTE(JSON_EXTRACT(s.provision_data, '$.supplier_id')) AS UNSIGNED)
-            LEFT JOIN idc.products p ON p.id = s.product_id
-            WHERE JSON_UNQUOTE(JSON_EXTRACT(s.provision_data, '$.provider')) != sup.interface_type
-              AND sup.interface_type IS NOT NULL
-              AND sup.interface_type != ''
+                pub.upstream_product_id,
+                sub.upstream_service_id
+            FROM services s
+            JOIN service_upstream_bindings sub
+                ON sub.service_id = s.id
+            LEFT JOIN supplier_plugin_bindings spb
+                ON spb.id = sub.supplier_plugin_binding_id
+            LEFT JOIN product_upstream_bindings pub
+                ON pub.id = sub.product_upstream_binding_id
+            LEFT JOIN supplier_plugin_bindings pub_spb
+                ON pub_spb.id = pub.supplier_plugin_binding_id
+            WHERE sub.provider_key IS NOT NULL
+              AND sub.provider_key != ''
+              AND COALESCE(spb.provider_key, pub.provider_key, '') != ''
+              AND sub.provider_key != COALESCE(spb.provider_key, pub.provider_key)
             ORDER BY s.id
         SQL);
 
         if (empty($rows)) {
-            $this->info('未发现 provider 错配记录。');
+            $this->info('未发现 provider_key 错配记录。');
 
             return self::SUCCESS;
         }
 
-        $this->warn(sprintf('发现 %d 条 provider 错配记录（只读，未执行任何写库操作）：', count($rows)));
+        $this->warn(sprintf('发现 %d 条 provider_key 错配记录（只读，未执行任何写库操作）：', count($rows)));
         $this->newLine();
 
-        $headers = ['service_id', 'old_provider', 'new_provider', 'supplier_id', 'supplier_interface_type', 'product_id', 'product_provision_module'];
+        $headers = ['service_id', 'service_provider_key', 'expected_provider_key', 'supplier_id', 'product_id', 'upstream_product_id', 'upstream_service_id'];
         $tableRows = array_map(fn ($row) => [
             $row->service_id,
-            $row->old_provider,
-            $row->new_provider,
+            $row->service_provider_key,
+            $row->expected_provider_key,
             $row->supplier_id,
-            $row->supplier_interface_type,
             $row->product_id,
-            $row->product_provision_module,
+            $row->upstream_product_id,
+            $row->upstream_service_id,
         ], $rows);
 
         $this->table($headers, $tableRows);

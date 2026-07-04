@@ -2,43 +2,37 @@
 
 namespace App\Services\Auth;
 
+use App\Exceptions\BusinessException;
 use App\Models\Setting;
-use App\Support\CacheKey;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
+use App\Services\Integrations\Plugins\IntegrationDriverBindingResolver;
+use App\Services\Integrations\Plugins\PluginDomain;
+use App\Services\Integrations\Plugins\PluginRuntimeRegistry;
 use Illuminate\Support\Facades\Log;
 
 class GeeTestService
 {
-    private const API_SERVER = 'https://gcaptcha4.geetest.com';
-
     private const SCRIPT_PROXY_PATH = '/api/client/auth/captcha-script';
 
-    private const SCRIPT_UPSTREAM_URL = 'https://static.geetest.com/v4/gt4.js';
+    private ?array $captchaConfigCache = null;
 
-    private const SCRIPT_CACHE_TTL_SECONDS = 43200;
-
-    private ?array $settingCache = null;
-
-    private array $serviceConfig;
-
-    public function __construct()
-    {
-        $defaultConfig = config('idc.geetest', []);
-        $this->serviceConfig = [
-            'ssl_verify' => $this->normalizeBoolean($defaultConfig['ssl_verify'] ?? true),
-            'ca_bundle' => (string) ($defaultConfig['ca_bundle'] ?? ''),
-        ];
-    }
+    public function __construct(
+        private ?PluginRuntimeRegistry $runtimeRegistry = null,
+        private ?IntegrationDriverBindingResolver $bindingResolver = null,
+    ) {}
 
     public function isEnabled(): bool
     {
-        return $this->config('enabled') && $this->getCaptchaId() !== '' && $this->getCaptchaKey() !== '';
+        $config = $this->captchaConfig();
+
+        return $this->isCaptchaGloballyEnabled()
+            && $this->activeDriver() !== ''
+            && (bool) ($config['enabled'] ?? false)
+            && $this->getCaptchaId() !== '';
     }
 
     public function getCaptchaId(): string
     {
-        return (string) $this->config('captcha_id', '');
+        return (string) ($this->captchaConfig()['captcha_id'] ?? '');
     }
 
     public function getScriptUrl(): string
@@ -48,19 +42,17 @@ class GeeTestService
 
     public function getScriptContent(): string
     {
-        $cachedScript = Cache::get(CacheKey::geeTestScript());
-        if (is_string($cachedScript) && $cachedScript !== '') {
-            return $cachedScript;
+        $result = $this->executePlugin('captcha.script');
+        if (! (bool) ($result['success'] ?? false)) {
+            throw new \RuntimeException((string) ($result['message'] ?? '行为验证脚本暂时不可用'));
         }
 
-        $scriptContent = $this->fetchScriptContent();
-        Cache::put(
-            CacheKey::geeTestScript(),
-            $scriptContent,
-            now()->addSeconds(self::SCRIPT_CACHE_TTL_SECONDS)
-        );
+        $content = (string) ($result['data']['content'] ?? '');
+        if ($content === '') {
+            throw new \RuntimeException('行为验证脚本内容为空');
+        }
 
-        return $scriptContent;
+        return $content;
     }
 
     public function getFallbackScriptContent(): string
@@ -87,7 +79,7 @@ window.initGeetest4 = window.initGeetest4 || function (options, callback) {
 JS;
     }
 
-    public function verify(?array $payload): array
+    public function verify(mixed $payload): array
     {
         if (! $this->isEnabled()) {
             return ['ok' => true];
@@ -97,111 +89,95 @@ JS;
             return ['ok' => false, 'message' => '请先完成行为验证'];
         }
 
-        $lotNumber = (string) ($payload['lot_number'] ?? '');
-        $captchaOutput = (string) ($payload['captcha_output'] ?? '');
-        $passToken = (string) ($payload['pass_token'] ?? '');
-        $genTime = (string) ($payload['gen_time'] ?? '');
-
-        if ($lotNumber === '' || $captchaOutput === '' || $passToken === '' || $genTime === '') {
-            return ['ok' => false, 'message' => '行为验证参数不完整'];
+        $result = $this->executePlugin('captcha.verify', $payload);
+        if (! (bool) ($result['success'] ?? false) || ! (bool) ($result['data']['verified'] ?? false)) {
+            return [
+                'ok' => false,
+                'message' => (string) ($result['message'] ?? '行为验证未通过，请重试'),
+            ];
         }
 
-        $signToken = hash_hmac('sha256', $lotNumber, $this->getCaptchaKey());
-        $endpoint = self::API_SERVER.'/validate';
+        return ['ok' => true];
+    }
+
+    private function captchaConfig(): array
+    {
+        if ($this->captchaConfigCache !== null) {
+            return $this->captchaConfigCache;
+        }
+
+        if ($this->activeDriver() === '') {
+            return $this->captchaConfigCache = [
+                'enabled' => false,
+                'captcha_id' => '',
+                'script_url' => $this->getScriptUrl(),
+            ];
+        }
+
+        $result = $this->executePlugin('captcha.config');
+        $data = is_array($result['data'] ?? null) ? $result['data'] : [];
+
+        return $this->captchaConfigCache = [
+            'enabled' => (bool) ($result['success'] ?? false) && (bool) ($data['enabled'] ?? false),
+            'captcha_id' => (string) ($data['captcha_id'] ?? ''),
+            'script_url' => $this->getScriptUrl(),
+        ];
+    }
+
+    private function executePlugin(string $action, array $payload = []): array
+    {
+        $driver = $this->activeDriver();
+        if ($driver === '') {
+            return [
+                'success' => false,
+                'message' => '未启用人机验证插件',
+                'data' => [],
+            ];
+        }
 
         try {
-            $http = Http::asForm()
-                ->timeout(10);
-
-            $verifyOption = app()->environment('production') ? true : $this->serviceConfig['ssl_verify'];
-            if ($this->serviceConfig['ca_bundle'] !== '' && is_file($this->serviceConfig['ca_bundle'])) {
-                $verifyOption = $this->serviceConfig['ca_bundle'];
-            }
-
-            $response = $http
-                ->withOptions(['verify' => $verifyOption])
-                ->post($endpoint, [
-                    'lot_number' => $lotNumber,
-                    'captcha_output' => $captchaOutput,
-                    'pass_token' => $passToken,
-                    'gen_time' => $genTime,
-                    'captcha_id' => $this->getCaptchaId(),
-                    'sign_token' => $signToken,
-                ]);
-
-            if (! $response->successful()) {
-                return $this->handleFailure('GeeTest validate request failed', [
-                    'status' => $response->status(),
-                    'body' => $response->body(),
-                ]);
-            }
-
-            $data = $response->json();
-            $result = ($data['result'] ?? '') === 'success';
-
-            if (! $result) {
-                return ['ok' => false, 'message' => '行为验证未通过，请重试'];
-            }
-
-            return ['ok' => true];
-        } catch (\Throwable $exception) {
-            if ($this->isSslCertificateError($exception->getMessage())) {
-                $message = $this->serviceConfig['ssl_verify']
-                    ? '行为验证服务证书校验失败，请配置 CA 证书，或在本地环境关闭 GEETEST_SSL_VERIFY'
-                    : '行为验证服务连接失败，请检查本机代理或证书链配置';
-
-                return $this->handleFailure('GeeTest validate exception', [
-                    'message' => $exception->getMessage(),
-                ], $message);
-            }
-
-            return $this->handleFailure('GeeTest validate exception', [
+            return $this->runtime()->execute(
+                domain: PluginDomain::CAPTCHA,
+                slugOrKey: $driver,
+                action: $action,
+                payload: $payload,
+            );
+        } catch (BusinessException $exception) {
+            Log::warning('[captcha] plugin business exception', [
+                'driver' => $driver,
+                'action' => $action,
                 'message' => $exception->getMessage(),
             ]);
+
+            return [
+                'success' => false,
+                'message' => '行为验证服务暂时不可用，请稍后重试',
+                'data' => [],
+            ];
+        } catch (\Throwable $exception) {
+            Log::error('[captcha] plugin execute failed', [
+                'driver' => $driver,
+                'action' => $action,
+                'message' => $exception->getMessage(),
+                'exception' => $exception::class,
+            ]);
+
+            return [
+                'success' => false,
+                'message' => '行为验证服务暂时不可用，请稍后重试',
+                'data' => [],
+            ];
         }
     }
 
-    private function handleFailure(string $message, array $context = [], ?string $userMessage = null): array
+    private function activeDriver(): string
     {
-        Log::warning($message, $context);
-
-        return ['ok' => false, 'message' => $userMessage ?? '行为验证服务暂时不可用，请稍后重试'];
+        return $this->bindingResolver()->captchaDriverKey();
     }
 
-    private function getCaptchaKey(): string
+    private function isCaptchaGloballyEnabled(): bool
     {
-        return (string) $this->config('captcha_key', '');
-    }
-
-    private function config(string $key, mixed $default = null): mixed
-    {
-        $settingKey = "geetest_{$key}";
-        $settingValue = $this->getSettingValue($settingKey);
-
-        if ($settingValue === null || $settingValue === '') {
-            $settingValue = config("idc.geetest.{$key}", $default);
-        }
-
-        if ($key === 'enabled') {
-            return $this->normalizeBoolean($settingValue);
-        }
-
-        return $settingValue;
-    }
-
-    private function getSettingValue(string $key): mixed
-    {
-        if ($this->settingCache === null) {
-            $this->settingCache = collect([
-                'geetest_enabled',
-                'geetest_captcha_id',
-                'geetest_captcha_key',
-            ])->mapWithKeys(fn (string $settingKey) => [
-                $settingKey => Setting::getValue('system', $settingKey, null),
-            ])->all();
-        }
-
-        return $this->settingCache[$key] ?? null;
+        return $this->normalizeBoolean(Setting::getValue('system', 'captcha_enabled', false));
     }
 
     private function normalizeBoolean(mixed $value): bool
@@ -211,43 +187,23 @@ JS;
         }
 
         if (is_string($value)) {
-            return in_array(strtolower($value), ['1', 'true', 'on', 'yes'], true);
+            return in_array(strtolower(trim($value)), ['1', 'true', 'on', 'yes'], true);
         }
 
         return (bool) $value;
     }
 
-    private function isSslCertificateError(string $message): bool
+    private function runtime(): PluginRuntimeRegistry
     {
-        $message = strtolower($message);
+        if (! $this->runtimeRegistry instanceof PluginRuntimeRegistry) {
+            $this->runtimeRegistry = app(PluginRuntimeRegistry::class);
+        }
 
-        return str_contains($message, 'ssl certificate problem')
-            || str_contains($message, 'certificate verify failed')
-            || str_contains($message, 'self-signed certificate');
+        return $this->runtimeRegistry;
     }
 
-    private function fetchScriptContent(): string
+    private function bindingResolver(): IntegrationDriverBindingResolver
     {
-        $http = Http::timeout(10);
-
-        $verifyOption = app()->environment('production') ? true : $this->serviceConfig['ssl_verify'];
-        if ($this->serviceConfig['ca_bundle'] !== '' && is_file($this->serviceConfig['ca_bundle'])) {
-            $verifyOption = $this->serviceConfig['ca_bundle'];
-        }
-
-        $response = $http
-            ->withOptions(['verify' => $verifyOption])
-            ->get(self::SCRIPT_UPSTREAM_URL);
-
-        if (! $response->successful()) {
-            throw new \RuntimeException('GeeTest 脚本拉取失败，状态码：'.$response->status());
-        }
-
-        $scriptContent = (string) $response->body();
-        if ($scriptContent === '') {
-            throw new \RuntimeException('GeeTest 脚本内容为空');
-        }
-
-        return $scriptContent;
+        return $this->bindingResolver ??= app(IntegrationDriverBindingResolver::class);
     }
 }

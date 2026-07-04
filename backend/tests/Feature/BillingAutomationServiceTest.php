@@ -74,6 +74,7 @@ class BillingAutomationServiceTest extends TestCase
             $table->unsignedTinyInteger('status')->default(InvoiceStatus::UNPAID);
             $table->date('due_date')->nullable();
             $table->timestamps();
+            $table->softDeletes();
         });
     }
 

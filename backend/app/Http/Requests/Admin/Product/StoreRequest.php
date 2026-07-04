@@ -36,10 +36,10 @@ class StoreRequest extends AdminFormRequest
             'stock' => ['nullable', 'integer', 'min:-1'],
             'status' => ['nullable', 'in:0,1'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:999999'],
-            'provision_module' => ['nullable', 'string', 'max:50'],
             'auto_setup' => ['nullable', 'in:0,1'],
-            'supplier_id' => ['nullable', 'integer', 'exists:suppliers,id'],
-            'supplier_product_id' => ['nullable', 'integer'],
+            'upstream_binding' => ['nullable', 'array'],
+            'upstream_binding.supplier_id' => ['nullable', 'integer', 'exists:suppliers,id'],
+            'upstream_binding.upstream_product_id' => ['nullable'],
         ];
     }
 }

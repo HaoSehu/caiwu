@@ -8,7 +8,6 @@ use App\Exceptions\BusinessException;
 use App\Models\AdminUser;
 use App\Models\IntegrationPlugin;
 use App\Models\IntegrationPluginConfig;
-use App\Models\Setting;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -92,6 +91,7 @@ class PluginConfigRepository
 
             if ($key === 'accounts' && is_array($value)) {
                 $previews[$key] = $this->smtpAccountsPreview($value);
+
                 continue;
             }
 
@@ -105,6 +105,37 @@ class PluginConfigRepository
     }
 
     /**
+     * @return array{key: string, value: mixed}
+     */
+    public function revealSecret(IntegrationPlugin $plugin, PluginManifest $manifest, string $key): array
+    {
+        $schemaKey = trim($key);
+        if ($schemaKey === '') {
+            throw new BusinessException('密钥字段不存在', 42200);
+        }
+
+        $schemaItem = collect($manifest->configSchema)->first(function (array $item) use ($schemaKey): bool {
+            return trim((string) ($item['key'] ?? '')) === $schemaKey;
+        });
+
+        if (! is_array($schemaItem) || $this->isDisplayOnlySchemaItem($schemaItem) || ! (bool) ($schemaItem['secret'] ?? false)) {
+            throw new BusinessException('密钥字段不存在', 42200);
+        }
+
+        $resolvedConfig = $this->resolvedConfig($plugin);
+        $value = $resolvedConfig[$schemaKey] ?? null;
+
+        if ($this->isBlankConfigValue($value)) {
+            throw new BusinessException('密钥尚未配置', 42200);
+        }
+
+        return [
+            'key' => $schemaKey,
+            'value' => $value,
+        ];
+    }
+
+    /**
      * @param  array<string, mixed>  $input
      * @return array{config: array<string, mixed>, has_secret_values: array<string, bool>}
      */
@@ -114,7 +145,7 @@ class PluginConfigRepository
         $hasSecretValues = array_map(static fn (mixed $value): bool => $value !== null && $value !== '', $secretPayload);
         $this->assertRequiredFields($manifest, array_merge($nonSecretPayload, $secretPayload));
 
-        DB::transaction(function () use ($plugin, $nonSecretPayload, $secretPayload, $hasSecretValues, $admin, $manifest): void {
+        DB::transaction(function () use ($plugin, $nonSecretPayload, $secretPayload, $hasSecretValues, $admin): void {
             $plugin->config()->updateOrCreate(
                 ['plugin_id' => (int) $plugin->id],
                 [
@@ -124,8 +155,6 @@ class PluginConfigRepository
                     'updated_by' => $admin?->id,
                 ]
             );
-
-            $this->syncLegacySettings($manifest, array_merge($nonSecretPayload, $secretPayload));
         });
 
         return $this->displayConfig($plugin->fresh('config') ?? $plugin);
@@ -216,6 +245,11 @@ class PluginConfigRepository
     private function isDisplayOnlySchemaItem(array $item): bool
     {
         return in_array((string) ($item['type'] ?? ''), ['notice', 'divider', 'readonly'], true);
+    }
+
+    private function isBlankConfigValue(mixed $value): bool
+    {
+        return $value === null || $value === '' || $value === [];
     }
 
     /**
@@ -314,37 +348,5 @@ class PluginConfigRepository
         }
 
         return is_array($decoded) ? $decoded : [];
-    }
-
-    /**
-     * @param  array<string, mixed>  $resolvedConfig
-     */
-    private function syncLegacySettings(PluginManifest $manifest, array $resolvedConfig): void
-    {
-        $legacy = is_array($manifest->extra['legacy_settings'] ?? null) ? $manifest->extra['legacy_settings'] : [];
-        $group = trim((string) ($legacy['group'] ?? ''));
-        $map = is_array($legacy['map'] ?? null) ? $legacy['map'] : [];
-
-        if ($group === '' || $map === []) {
-            return;
-        }
-
-        $settingsPayload = [];
-        foreach ($map as $pluginKey => $settingKey) {
-            $resolvedPluginKey = is_string($pluginKey) ? trim($pluginKey) : '';
-            $resolvedSettingKey = is_string($settingKey) ? trim($settingKey) : '';
-
-            if ($resolvedPluginKey === '' || $resolvedSettingKey === '') {
-                continue;
-            }
-
-            if (array_key_exists($resolvedPluginKey, $resolvedConfig)) {
-                $settingsPayload[$resolvedSettingKey] = $resolvedConfig[$resolvedPluginKey];
-            }
-        }
-
-        if ($settingsPayload !== []) {
-            Setting::setValues($group, $settingsPayload);
-        }
     }
 }

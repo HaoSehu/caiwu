@@ -100,8 +100,13 @@ class SecureAsset
         $realRoot = realpath($root);
         $realPath = realpath($path);
 
-        if ($realRoot === false || $realPath === false) {
-            return $path;
+        if ($realRoot === false) {
+            throw new InvalidArgumentException('Invalid asset root.');
+        }
+
+        if ($realPath === false) {
+            // 文件不存在或路径无法解析——拒绝访问，不回退到未经 realpath 验证的原始路径
+            throw new InvalidArgumentException('Invalid asset path.');
         }
 
         $realRoot = str_replace('\\', '/', $realRoot);

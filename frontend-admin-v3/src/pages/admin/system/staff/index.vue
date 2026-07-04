@@ -75,7 +75,7 @@
         <template #actions="{ row }">
           <t-space size="small">
             <t-button v-if="canManage" theme="primary" variant="text" @click="openEditDialog(row)">编辑</t-button>
-            <t-button v-if="canManage" theme="warning" variant="text" @click="openResetDialog(row)">重置密码</t-button>
+            <t-button v-if="canEditStaffIdentity" theme="warning" variant="text" @click="openResetDialog(row)">重置密码</t-button>
             <t-button
               v-if="canManage"
               :theme="Number(row.status) === 1 ? 'danger' : 'success'"
@@ -84,6 +84,7 @@
             >
               {{ Number(row.status) === 1 ? '停用' : '启用' }}
             </t-button>
+            <t-button v-if="canDeleteStaff(row)" theme="danger" variant="text" @click="handleDelete(row)">删除</t-button>
           </t-space>
         </template>
       </t-table>
@@ -133,13 +134,13 @@
       <t-form ref="formRef" :data="form" :rules="formRules" label-align="top">
         <div class="staff-form-grid">
           <t-form-item label="登录账号" name="username">
-            <t-input v-model="form.username" placeholder="字母、数字、下划线、点或横线" />
+            <t-input v-model="form.username" :disabled="form.id ? !canEditStaffIdentity : false" placeholder="字母、数字、下划线、点、横线或 @" />
           </t-form-item>
           <t-form-item label="昵称" name="nickname">
             <t-input v-model="form.nickname" />
           </t-form-item>
           <t-form-item label="邮箱" name="email">
-            <t-input v-model="form.email" />
+            <t-input v-model="form.email" :disabled="form.id ? !canEditStaffIdentity : false" />
           </t-form-item>
           <t-form-item label="角色" name="role_id">
             <t-select v-model="form.role_id" placeholder="请选择角色">
@@ -187,7 +188,7 @@ import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { errorMessage } from '@/utils/userMessage';
 import { required } from '@/utils/formRules';
-import { AdminPermissions } from '@/constants/permissions';
+import { AdminPermissions, hasPermissionInList } from '@/constants/permissions';
 import { useUserStore } from '@/store';
 
 import './index.less';
@@ -230,6 +231,7 @@ const form = reactive<StaffForm>(createDefaultForm());
 const resetForm = reactive({ password: '', password_confirmation: '' });
 
 const canManage = computed(() => hasPermission(AdminPermissions.STAFF_MANAGE));
+const canEditStaffIdentity = computed(() => hasPermission(AdminPermissions.ALL));
 const isMobile = useMediaQuery('(max-width: 768px)');
 const pagination = computed(() => ({
   current: page.value,
@@ -240,7 +242,15 @@ const pagination = computed(() => ({
 }));
 
 const formRules = computed<Record<string, FormRule[]>>(() => ({
-  username: [required('请输入登录账号')],
+  username: [
+    required('请输入登录账号'),
+    {
+      pattern: /^[A-Za-z0-9_.@-]+$/,
+      message: '登录账号仅支持字母、数字、下划线、点、横线和 @',
+      type: 'error',
+      trigger: 'blur',
+    },
+  ],
   role_id: [required('请选择角色')],
   password: form.id
     ? []
@@ -334,17 +344,24 @@ function handlePageChange(pageInfo: PageInfo) {
 
 function staffMobileActions(row: StaffRecord) {
   if (!canManage.value) return [];
-  return [
+  const actions = [
     { content: '编辑', value: 'edit' },
-    { content: '重置密码', value: 'reset' },
     { content: Number(row.status) === 1 ? '停用' : '启用', value: 'toggle' },
   ];
+  if (canEditStaffIdentity.value) {
+    actions.splice(1, 0, { content: '重置密码', value: 'reset' });
+  }
+  if (canDeleteStaff(row)) {
+    actions.push({ content: '删除', value: 'delete' });
+  }
+  return actions;
 }
 
 function handleStaffMobileAction(value: unknown, row: StaffRecord) {
   if (value === 'edit') openEditDialog(row);
   else if (value === 'reset') openResetDialog(row);
   else if (value === 'toggle') handleToggleStatus(row);
+  else if (value === 'delete') handleDelete(row);
 }
 
 function openCreateDialog() {
@@ -449,6 +466,25 @@ function handleToggleStatus(row: StaffRecord) {
   });
 }
 
+function handleDelete(row: StaffRecord) {
+  const dialog = DialogPlugin.confirm({
+    header: '删除员工',
+    body: `确认删除已停用员工「${row.username || row.nickname || row.id}」？删除后该员工将无法登录。`,
+    confirmBtn: { content: '删除', theme: 'danger' },
+    cancelBtn: '取消',
+    onConfirm: async () => {
+      try {
+        await adminStaffApi.delete(row.id);
+        MessagePlugin.success('员工已删除');
+        await loadList();
+        dialog.destroy();
+      } catch (error) {
+        MessagePlugin.error(errorMessage(error, '删除员工失败'));
+      }
+    },
+  });
+}
+
 function buildCreatePayload(): CreateStaffPayload {
   return {
     ...buildUpdatePayload(),
@@ -457,13 +493,18 @@ function buildCreatePayload(): CreateStaffPayload {
 }
 
 function buildUpdatePayload(): StaffPayload {
-  return {
-    username: form.username.trim(),
+  const payload: StaffPayload = {
     nickname: form.nickname.trim() || null,
-    email: form.email.trim() || null,
     role_id: form.role_id,
     status: Number(form.status),
   };
+
+  if (!form.id || canEditStaffIdentity.value) {
+    payload.username = form.username.trim();
+    payload.email = form.email.trim() || null;
+  }
+
+  return payload;
 }
 
 function roleLabel(role: StaffRoleOption) {
@@ -477,7 +518,11 @@ function fieldValue(value: unknown) {
 
 function hasPermission(permission: string) {
   const permissions = userStore.userInfo?.permissions || [];
-  return permissions.includes(AdminPermissions.ALL) || permissions.includes(permission);
+  return hasPermissionInList(permissions, permission);
+}
+
+function canDeleteStaff(row: StaffRecord) {
+  return canEditStaffIdentity.value && Number(row.status) !== 1 && Number(row.id) !== Number(userStore.userInfo?.id);
 }
 
 </script>

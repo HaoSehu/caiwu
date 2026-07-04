@@ -20,6 +20,16 @@ class PaymentGatewayCallbackRouteTest extends TestCase
         $this->assertContains('verify.payment.callback', $route->gatherMiddleware());
     }
 
+    public function test_generic_payment_notify_route_accepts_get_callbacks(): void
+    {
+        $route = Route::getRoutes()->match(
+            Request::create('/api/client/payment/notify/yipay', 'GET')
+        );
+
+        $this->assertNotContains('verify.alipay.callback', $route->gatherMiddleware());
+        $this->assertContains('verify.payment.callback', $route->gatherMiddleware());
+    }
+
     public function test_legacy_alipay_notify_route_keeps_alipay_signature_middleware(): void
     {
         $route = Route::getRoutes()->match(

@@ -1,18 +1,19 @@
-import { computed, onMounted, reactive, ref, shallowRef } from 'vue';
+import { onMounted, reactive, ref, shallowRef } from 'vue';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
-import { ORDER_STATUS_MAP, getStatusLabel, toSelectOptions } from '@caiwu/shared/statusConfig';
+import { ORDER_STATUS_MAP, ORDER_TYPE_MAP, getStatusLabel, toSelectOptions } from '@caiwu/shared/statusConfig';
 
 import clientApi from '@/api/client';
 import { formatMoney } from '@/utils/format';
-import type { OrderListSummary, OrderRecord } from '@/types/client';
+import type { ClientFinanceListParams, OrderListSummary, OrderRecord } from '@/types/client';
+
+import { resolveQuickDateRange } from './dateFilters';
 
 export const ORDER_STATUS_OPTIONS = toSelectOptions(ORDER_STATUS_MAP, false);
 
-export const ORDER_TYPE_OPTIONS = [
-  { label: '新购', value: 'new' },
-  { label: '续费', value: 'renew' },
-  { label: '附加配置', value: 'addon' },
-];
+export const ORDER_TYPE_OPTIONS = ['new', 'renew', 'upgrade'].map((value) => ({
+  label: ORDER_TYPE_MAP[value] || value,
+  value,
+}));
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
@@ -37,38 +38,21 @@ export function useOrderList(options: { pageSize?: number } = {}) {
     keyword: '',
     status: '' as string | number,
     type: '',
+    start_date: '',
+    end_date: '',
     quickFilter: '' as string,
   });
 
-  const metricCards = computed(() => [
-    {
-      key: 'pending',
-      label: '待支付订单',
-      value: Number(summary.value.pending || 0),
-      copy: `待付 ¥${formatMoney(summary.value.unpaid_amount || 0)}`,
-    },
-    {
-      key: 'month',
-      label: '本月订单金额',
-      value: `¥${formatMoney(summary.value.month_amount || 0)}`,
-      copy: '当月创建的订单金额',
-    },
-    {
-      key: 'total',
-      label: '订单总数',
-      value: Number(summary.value.total || 0),
-      copy: '所有状态的订单',
-    },
-  ]);
-
   function buildParams() {
-    const params: Record<string, string | number> = {
+    const params: ClientFinanceListParams = {
       page: filters.page,
       page_size: filters.page_size,
     };
     if (filters.keyword?.trim()) params.keyword = filters.keyword.trim();
     if (filters.status !== '' && filters.status !== null && filters.status !== undefined) params.status = filters.status;
     if (filters.type?.trim()) params.type = filters.type.trim();
+    if (filters.start_date) params.start_date = filters.start_date;
+    if (filters.end_date) params.end_date = filters.end_date;
     return params;
   }
 
@@ -118,6 +102,8 @@ export function useOrderList(options: { pageSize?: number } = {}) {
     filters.keyword = '';
     filters.status = '';
     filters.type = '';
+    filters.start_date = '';
+    filters.end_date = '';
     filters.quickFilter = '';
     void loadData();
   }
@@ -127,10 +113,15 @@ export function useOrderList(options: { pageSize?: number } = {}) {
     filters.page = 1;
     filters.status = '';
     filters.type = '';
+    filters.start_date = '';
+    filters.end_date = '';
 
     if (key === 'pending') {
       filters.status = 0;
     }
+    const range = resolveQuickDateRange(key);
+    filters.start_date = range.start_date || '';
+    filters.end_date = range.end_date || '';
     void loadData();
   }
 
@@ -171,7 +162,6 @@ export function useOrderList(options: { pageSize?: number } = {}) {
     total,
     summary,
     filters,
-    metricCards,
     loadList,
     loadData,
     loadSummary,

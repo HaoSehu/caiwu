@@ -1,5 +1,7 @@
 declare module '@shared/statusConfig' {
   export const SERVICE_STATUS: Record<string, number>;
+  export const ORDER_TYPE_MAP: Record<string, string>;
+  export const INVOICE_TYPE_MAP: Record<string, string>;
   export const INVOICE_STATUS_MAP: Record<string | number, StatusConfig>;
   export const PAYMENT_STATUS_MAP: Record<string | number, StatusConfig>;
   export const ACCOUNT_TRANSACTION_EVENT_MAP: Record<string | number, StatusConfig>;
@@ -31,6 +33,8 @@ declare module '@shared/statusConfig' {
 
 declare module '@caiwu/shared/statusConfig' {
   export const SERVICE_STATUS: Record<string, number>;
+  export const ORDER_TYPE_MAP: Record<string, string>;
+  export const INVOICE_TYPE_MAP: Record<string, string>;
   export const ORDER_STATUS_MAP: Record<string | number, StatusConfig>;
   export const INVOICE_STATUS_MAP: Record<string | number, StatusConfig>;
   export const PAYMENT_STATUS_MAP: Record<string | number, StatusConfig>;

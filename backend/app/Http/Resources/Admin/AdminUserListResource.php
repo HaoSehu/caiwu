@@ -3,6 +3,7 @@
 namespace App\Http\Resources\Admin;
 
 use App\Models\User;
+use App\Support\AdminPrivacy;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -11,21 +12,24 @@ class AdminUserListResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $privacy = AdminPrivacy::fromRequest($request);
         $profile = $this->resource->relationLoaded('profile') ? $this->resource->getRelation('profile') : null;
         $nickname = trim((string) ($profile?->nickname ?? $this->resource->getRawOriginal('nickname') ?? ''));
+        $phone = $this->resolvePhone();
+        $realName = (string) ($this->real_name ?? '');
 
         return [
             'id' => (int) $this->id,
-            'email' => (string) $this->email,
-            'phone' => $this->resolvePhone(),
+            'email' => $privacy->email($this->email),
+            'phone' => $privacy->phone($phone),
             'nickname' => $nickname,
-            'display_name' => $this->resolveDisplayName($nickname),
+            'display_name' => $privacy->displayName($this->resolveDisplayName($nickname), $this->email, $phone, $realName),
             'company' => trim((string) ($profile?->company ?? $this->resource->getRawOriginal('company') ?? '')),
             'qq' => trim((string) ($profile?->qq ?? $this->resource->getRawOriginal('qq') ?? '')),
             'referral_code' => (string) ($this->referral_code ?? ''),
             'member_level_id' => $this->member_level_id !== null ? (int) $this->member_level_id : null,
             'verification_status' => (int) ($this->verification_status ?? 0),
-            'real_name' => (string) ($this->real_name ?? ''),
+            'real_name' => $privacy->name($realName),
             'cash_balance' => (float) ($this->resource->balance ?? 0),
             'credit_limit' => (float) ($this->resource->credit_limit ?? 0),
             'referral_frozen_balance' => (float) ($this->resource->referral_frozen_amount ?? 0),

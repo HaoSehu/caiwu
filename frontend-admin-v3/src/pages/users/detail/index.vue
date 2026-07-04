@@ -365,7 +365,7 @@
           <t-descriptions-item label="计费周期">{{ fieldValue(serviceDrawer.detail.billing_cycle_label) }}</t-descriptions-item>
           <t-descriptions-item label="金额">{{ formatMoney(serviceDrawer.detail.amount) }}</t-descriptions-item>
           <t-descriptions-item label="账单号">{{ fieldValue(serviceDrawer.detail.invoice?.invoice_no || serviceDrawer.detail.order?.invoice_no) }}</t-descriptions-item>
-          <t-descriptions-item label="上游">{{ fieldValue(serviceDrawer.detail.upstream?.provider) }}<template v-if="serviceDrawer.detail.upstream?.host_id"> / host #{{ serviceDrawer.detail.upstream.host_id }}</template></t-descriptions-item>
+          <t-descriptions-item label="上游">{{ fieldValue(serviceDrawer.detail.upstream?.provider_key) }}<template v-if="serviceDrawer.detail.upstream?.host_id"> / host #{{ serviceDrawer.detail.upstream.host_id }}</template></t-descriptions-item>
           <t-descriptions-item label="公网 IP">{{ fieldValue(serviceDrawer.detail.connection?.dedicated_ip || serviceDrawer.detail.upstream?.dedicated_ip) }}</t-descriptions-item>
           <t-descriptions-item label="登录账号">{{ fieldValue(serviceDrawer.detail.connection?.username) }}</t-descriptions-item>
           <t-descriptions-item label="登录端口">{{ fieldValue(serviceDrawer.detail.connection?.port) }}</t-descriptions-item>
@@ -657,6 +657,7 @@ import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
 import { required } from '@/utils/formRules';
 import { hasAdminPermission } from '@/utils/permission';
 import { toUserMessage, errorMessage } from '@/utils/userMessage';
+import { useMediaQuery } from '@/hooks';
 import { INVOICE_STATUS_MAP, SERVICE_STATUS_MAP, toLabelMap, toSelectOptions, toTagTypeMap } from '@shared/statusConfig';
 
 import './index.less';
@@ -878,7 +879,8 @@ const userId = computed(() => String(route.params.id || ''));
 const isEnabled = computed(() => Number(user.value.status) === 1);
 const isVerified = computed(() => Number(user.value.is_verified || 0) === 1 || Number(user.value.verification_status || 0) === 2);
 const pageTitle = computed(() => user.value.nickname || user.value.display_name || user.value.email || `用户 #${userId.value}`);
-const descriptionColumn = computed(() => (window.innerWidth <= 768 ? 1 : 2));
+const isSmallScreen = useMediaQuery('(max-width: 768px)');
+const descriptionColumn = computed(() => (isSmallScreen.value ? 1 : 2));
 const recentReferrals = computed(() => (Array.isArray(referral.value.recent_referrals) ? referral.value.recent_referrals : []));
 const addServiceBillingOptions = computed(() => resolveBillingOptions(addServiceProductDetail.value));
 const addServiceOsFlatOptions = computed(() => flattenOptionTree(addServiceOsOptions.value));
@@ -1491,7 +1493,10 @@ async function loadServiceUpstreamOptions() {
     serviceUpstreamOptions.value = (Array.isArray(response.list) ? response.list : [])
       .map((item) => {
         const id = Number(item.id || 0);
-        const type = item.interface_type_label || item.interface_type || '上游';
+        const upstreamBinding = item.upstream_binding && typeof item.upstream_binding === 'object'
+          ? (item.upstream_binding as Row)
+          : {};
+        const type = item.provider_label || upstreamBinding.provider_key || '上游';
         return { id, label: `${item.name || `接口 #${item.id}`} · ${type}` };
       })
       .filter((item) => item.id > 0);
@@ -1513,9 +1518,9 @@ async function submitServiceUpstream() {
       upstream_host_id: serviceUpstreamForm.upstream_host_id ? Number(serviceUpstreamForm.upstream_host_id) : null,
     });
     serviceDrawer.detail = mergeServiceDetail(serviceDrawer.detail, detail);
+    patchServiceListItem(serviceDrawer.detail);
     serviceUpstreamVisible.value = false;
     MessagePlugin.success('上游绑定已更新');
-    await Promise.all([loadServices(), loadDetail()]);
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '更新上游绑定失败'));
   } finally {
@@ -1552,9 +1557,9 @@ async function submitServicePricing() {
   try {
     const detail = await userApi.updateServiceMeta(userId.value, serviceDrawer.serviceId, payload);
     serviceDrawer.detail = mergeServiceDetail(serviceDrawer.detail, detail);
+    patchServiceListItem(serviceDrawer.detail);
     servicePricingVisible.value = false;
     MessagePlugin.success('价格信息已更新');
-    await Promise.all([loadServices(), loadDetail()]);
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '更新价格信息失败'));
   } finally {
@@ -1577,9 +1582,9 @@ async function submitServiceName() {
       service_name: serviceNameForm.service_name,
     });
     serviceDrawer.detail = mergeServiceDetail(serviceDrawer.detail, detail);
+    patchServiceListItem(serviceDrawer.detail);
     serviceNameVisible.value = false;
     MessagePlugin.success('实例名称已更新');
-    await Promise.all([loadServices(), loadDetail()]);
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '更新实例名称失败'));
   } finally {

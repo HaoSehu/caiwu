@@ -17,6 +17,7 @@ use App\Models\VerificationHistory;
 use App\Services\Auth\AdminVerificationQueryService;
 use App\Services\Finance\ClientFinanceQueryService;
 use App\Services\Referral\AdminReferralOverviewService;
+use App\Support\AdminPermissions;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\Sanctum;
@@ -81,7 +82,8 @@ class ReadControllerQueryServiceBoundaryTest extends TestCase
 
         $filters = [
             'tab' => 'recharge',
-            'date_range' => [now()->subDays(2)->toDateString(), now()->toDateString()],
+            'start_date' => now()->subDays(2)->toDateString(),
+            'end_date' => now()->toDateString(),
         ];
 
         $balancePage = $service->paginateBalanceLogs($user, $filters, 15);
@@ -384,7 +386,10 @@ class ReadControllerQueryServiceBoundaryTest extends TestCase
 
     public function test_admin_verification_controller_uses_query_service(): void
     {
-        $admin = $this->createAdminUser(['verification.list']);
+        $admin = $this->createAdminUser([
+            AdminPermissions::VERIFICATION_LIST,
+            AdminPermissions::PRIVACY_VIEW_RAW,
+        ]);
         $user = $this->createClientUser('verification-controller-'.bin2hex(random_bytes(4)), [
             'real_name' => 'Verification User',
             'id_card' => '110101199305056789',

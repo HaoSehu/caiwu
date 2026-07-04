@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Admin\Common;
 
+use App\Support\AdminPrivacy;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 abstract class AdminFormRequest extends FormRequest
 {
@@ -25,5 +27,16 @@ abstract class AdminFormRequest extends FormRequest
         $pageSize = (int) ($validated['page_size'] ?? $default);
 
         return max(1, min($pageSize, $max));
+    }
+
+    /**
+     * @param  array<string, string>  $sensitiveFields
+     * @param  array<string, string>  $keywordFields
+     */
+    protected function rejectPrivacyFilters(Validator $validator, array $sensitiveFields = [], array $keywordFields = []): void
+    {
+        foreach (AdminPrivacy::forbiddenFilterMessages($this->all(), $sensitiveFields, $keywordFields, $this->user()) as $field => $message) {
+            $validator->errors()->add($field, $message);
+        }
     }
 }

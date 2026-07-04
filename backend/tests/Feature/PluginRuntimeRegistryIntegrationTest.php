@@ -6,6 +6,8 @@ namespace Tests\Feature;
 
 use App\Constants\PaymentGatewayCode;
 use App\Models\IntegrationPlugin;
+use App\Models\Setting;
+use App\Services\Auth\GeeTestService;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
 use App\Services\Integrations\Payments\PaymentGatewayRegistry;
 use App\Services\Integrations\Plugins\Adapters\PluginPaymentGateway;
@@ -13,7 +15,6 @@ use App\Services\Integrations\Plugins\Adapters\PluginSmsDriver;
 use App\Services\Integrations\Plugins\Adapters\PluginUpstreamDriver;
 use App\Services\Integrations\Plugins\Adapters\PluginVerificationDriver;
 use App\Services\Integrations\Plugins\PluginConfigRepository;
-use App\Services\Integrations\Plugins\PluginFileLoader;
 use App\Services\Integrations\Plugins\PluginInstaller;
 use App\Services\Integrations\Plugins\PluginRuntimeRegistry;
 use App\Services\Integrations\Plugins\PluginScanner;
@@ -25,25 +26,37 @@ use App\Services\Verification\Contracts\ProvidesVerificationFeeConfig;
 use App\Services\Verification\Contracts\VerifiesVerificationCallbacks;
 use App\Services\Verification\Data\VerificationCallbackRequest;
 use App\Services\Verification\VerificationDriverManager;
+use Caiwu\Plugins\Captcha\Geetest\GeetestPlugin;
+use Caiwu\Plugins\Captcha\Geetest\Lib\GeetestCaptchaService;
 use Caiwu\Plugins\Certification\Stay33\Logic\Stay33;
-use Caiwu\Plugins\Certification\Stay33\Logic\Stay33Client;
 use Caiwu\Plugins\Certification\Stay33\Stay33Plugin;
 use Caiwu\Plugins\Gateways\AliPay\AliPayPlugin;
 use Caiwu\Plugins\Gateways\AliPay\Controller\IndexController;
-use Caiwu\Plugins\Gateways\AliPay\Lib\AlipayClient;
-use Caiwu\Plugins\Servers\HostingPanelApi\HostingPanelApiPlugin;
-use Caiwu\Plugins\Servers\HostingPanelApi\Logic\HostingPanelApi;
 use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangFinanceAdapter;
 use Caiwu\Plugins\Servers\MofangFinance\Logic\MofangFinance;
 use Caiwu\Plugins\Servers\MofangFinance\MofangFinancePlugin;
 use Caiwu\Plugins\Sms\Aliyun\AliyunPlugin;
 use Caiwu\Plugins\Sms\Aliyun\Lib\AliyunSmsService;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class PluginRuntimeRegistryIntegrationTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->cleanPluginTables();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->cleanPluginTables();
+        parent::tearDown();
+    }
+
     public function test_runtime_executes_enabled_plugin_through_standard_execute_entry(): void
     {
         $this->ensurePluginTables();
@@ -75,48 +88,78 @@ class PluginRuntimeRegistryIntegrationTest extends TestCase
         );
     }
 
-    public function test_real_payment_and_verification_plugins_expose_ssl_configuration(): void
+    public function test_plugin_manifests_do_not_expose_ssl_configuration(): void
     {
         $scanner = app(PluginScanner::class);
 
-        $stay33ConfigKeys = collect($scanner->requireManifest('verification', 'stay33')->configSchema)
-            ->pluck('key')
-            ->all();
         $alipayConfigKeys = collect($scanner->requireManifest('payment', 'ali_pay')->configSchema)
             ->pluck('key')
             ->all();
+        $yipayConfigKeys = collect($scanner->requireManifest('payment', 'yi_pay')->configSchema)
+            ->pluck('key')
+            ->all();
+        $geetestConfigKeys = collect($scanner->requireManifest('captcha', 'geetest')->configSchema)
+            ->pluck('key')
+            ->all();
+        $aliyunConfigKeys = collect($scanner->requireManifest('sms', 'aliyun')->configSchema)
+            ->pluck('key')
+            ->all();
 
-        $this->assertContains('ssl_verify', $stay33ConfigKeys);
-        $this->assertContains('ca_bundle', $stay33ConfigKeys);
-        $this->assertContains('gateway', $alipayConfigKeys);
-        $this->assertContains('notify_url', $alipayConfigKeys);
-        $this->assertContains('ssl_verify', $alipayConfigKeys);
-        $this->assertContains('ca_bundle', $alipayConfigKeys);
+        $this->assertContains('api_endpoint', $aliyunConfigKeys);
+
+        $this->assertNotContains('gateway', $alipayConfigKeys);
+        $this->assertNotContains('notify_url', $alipayConfigKeys);
+        $this->assertNotContains('api_base_url', $yipayConfigKeys);
+        $this->assertNotContains('notify_url', $yipayConfigKeys);
+
+        foreach ([$alipayConfigKeys, $yipayConfigKeys, $geetestConfigKeys, $aliyunConfigKeys] as $configKeys) {
+            $this->assertNotContains('ssl_verify', $configKeys);
+            $this->assertNotContains('ca_bundle', $configKeys);
+        }
     }
 
-    public function test_stay33_client_prefers_plugin_ssl_config_and_falls_back_to_legacy_config(): void
+    public function test_geetest_captcha_plugin_drives_auth_captcha_service(): void
     {
-        $manifest = app(PluginScanner::class)->requireManifest('verification', 'stay33');
-        app(PluginFileLoader::class)->ensureLoaded($manifest);
-
-        config([
-            'idc.verification.ssl_verify' => true,
-            'idc.verification.ca_bundle' => 'C:\\php\\extras\\ssl\\legacy-cacert.pem',
+        $this->ensurePluginTables();
+        Setting::setValues('system', [
+            'captcha_enabled' => '1',
         ]);
 
-        $pluginConfiguredClient = new Stay33Client([
-            'ssl_verify' => false,
-            'ca_bundle' => 'C:\\php\\extras\\ssl\\plugin-cacert.pem',
+        $this->activatePlugin('captcha', 'geetest', [
+            'captcha_id' => 'captcha-id',
+            'captcha_key' => 'captcha-key',
         ]);
-        $fallbackClient = new Stay33Client([]);
 
-        $this->assertFalse($this->invokePrivate($pluginConfiguredClient, 'resolveSslVerify'));
-        $this->assertSame('C:\\php\\extras\\ssl\\plugin-cacert.pem', $this->invokePrivate($pluginConfiguredClient, 'resolveCaBundle'));
-        $this->assertTrue($this->invokePrivate($fallbackClient, 'resolveSslVerify'));
-        $this->assertSame('C:\\php\\extras\\ssl\\legacy-cacert.pem', $this->invokePrivate($fallbackClient, 'resolveCaBundle'));
+        Http::fake([
+            'https://gcaptcha4.geetest.com/validate' => Http::response(['result' => 'success'], 200),
+        ]);
 
-        app(PluginFileLoader::class)->ensureLoaded(app(PluginScanner::class)->requireManifest('payment', 'ali_pay'));
-        $this->assertTrue(class_exists(AlipayClient::class));
+        $service = new GeeTestService(app(PluginRuntimeRegistry::class));
+
+        $this->assertTrue($service->isEnabled());
+        $this->assertSame('captcha-id', $service->getCaptchaId());
+        $this->assertSame('/api/client/auth/captcha-script', $service->getScriptUrl());
+
+        $result = $service->verify([
+            'lot_number' => 'lot-number',
+            'captcha_output' => 'captcha-output',
+            'pass_token' => 'pass-token',
+            'gen_time' => '1234567890',
+        ]);
+
+        $this->assertSame(['ok' => true], $result);
+        $this->assertDatabaseHas('integration_plugin_bindings', [
+            'domain' => 'captcha',
+            'binding_key' => 'captcha_driver',
+            'provider_key' => 'geetest',
+            'status' => 1,
+        ]);
+        $this->assertTrue(class_exists(GeetestPlugin::class));
+        $this->assertTrue(class_exists(GeetestCaptchaService::class));
+
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://gcaptcha4.geetest.com/validate'
+            && $request['captcha_id'] === 'captcha-id'
+            && $request['sign_token'] === hash_hmac('sha256', 'lot-number', 'captcha-key'));
     }
 
     public function test_payment_manager_prefers_enabled_payment_plugin_without_duplicate_registration(): void
@@ -239,21 +282,12 @@ class PluginRuntimeRegistryIntegrationTest extends TestCase
     public function test_upstream_registry_prefers_enabled_upstream_plugin_without_duplicate_registration(): void
     {
         $this->ensurePluginTables();
-        $this->activatePlugin('upstream', 'hosting_panel_api', []);
         $this->activatePlugin('upstream', 'mofang_finance', []);
 
         $this->app->forgetInstance(ProviderRegistry::class);
 
         $registry = app(ProviderRegistry::class);
-        $hostingDriver = $registry->find(ProviderKey::HOSTING_PANEL_API);
         $mofangDriver = $registry->find(ProviderKey::MOFANG_FINANCE_API);
-
-        $this->assertNotNull($hostingDriver);
-        $this->assertSame(PluginUpstreamDriver::class, $hostingDriver::class);
-        $this->assertTrue(class_exists(HostingPanelApiPlugin::class));
-        $this->assertTrue(class_exists(HostingPanelApi::class));
-        $this->assertContains(ProvidesConsoleCatalog::class, $hostingDriver->capabilities());
-        $this->assertInstanceOf(ProvidesConsoleCatalog::class, $hostingDriver->resolve(ProvidesConsoleCatalog::class));
 
         $this->assertNotNull($mofangDriver);
         $this->assertSame(PluginUpstreamDriver::class, $mofangDriver::class);
@@ -263,7 +297,7 @@ class PluginRuntimeRegistryIntegrationTest extends TestCase
         $mofangCatalog = $mofangDriver->resolve(ProvidesConsoleCatalog::class);
         $this->assertInstanceOf(ProvidesConsoleCatalog::class, $mofangCatalog);
         $this->assertInstanceOf(MofangFinanceAdapter::class, $mofangCatalog);
-        $this->assertSame([ProviderKey::HOSTING_PANEL_API, ProviderKey::MOFANG_FINANCE_API], $registry->keys());
+        $this->assertSame([ProviderKey::MOFANG_FINANCE_API], $registry->keys());
     }
 
     /**
@@ -318,6 +352,47 @@ class PluginRuntimeRegistryIntegrationTest extends TestCase
                 $table->unique('plugin_id');
             });
         }
+
+        if (! Schema::hasTable('integration_plugin_bindings')) {
+            Schema::create('integration_plugin_bindings', function (Blueprint $table): void {
+                $table->id();
+                $table->string('domain', 32);
+                $table->unsignedBigInteger('plugin_id');
+                $table->string('binding_type', 50);
+                $table->string('bindable_type', 120)->default('global');
+                $table->unsignedBigInteger('bindable_id')->default(0);
+                $table->string('binding_key', 120);
+                $table->string('provider_key', 120)->nullable();
+                $table->integer('priority')->default(0);
+                $table->unsignedTinyInteger('status')->default(1);
+                $table->json('config_json')->nullable();
+                $table->longText('secret_json')->nullable();
+                $table->json('has_secret_json')->nullable();
+                $table->json('runtime_policy_json')->nullable();
+                $table->unsignedBigInteger('created_by')->nullable();
+                $table->unsignedBigInteger('updated_by')->nullable();
+                $table->string('backfill_batch_id', 64)->nullable();
+                $table->timestamps();
+                $table->unique(['domain', 'binding_type', 'bindable_type', 'bindable_id', 'binding_key'], 'plugin_bindings_unique');
+            });
+        }
+    }
+
+    private function cleanPluginTables(): void
+    {
+        if (! Schema::hasTable('integration_plugins')) {
+            return;
+        }
+
+        DB::statement('SET FOREIGN_KEY_CHECKS=0');
+        if (Schema::hasTable('integration_plugin_bindings')) {
+            DB::table('integration_plugin_bindings')->truncate();
+        }
+        if (Schema::hasTable('integration_plugin_configs')) {
+            DB::table('integration_plugin_configs')->truncate();
+        }
+        DB::table('integration_plugins')->truncate();
+        DB::statement('SET FOREIGN_KEY_CHECKS=1');
     }
 
     /**
@@ -343,14 +418,5 @@ class PluginRuntimeRegistryIntegrationTest extends TestCase
                 $this->ksortRecursive($value);
             }
         }
-    }
-
-    private function invokePrivate(object $instance, string $method): mixed
-    {
-        $reflection = new \ReflectionClass($instance);
-        $methodRef = $reflection->getMethod($method);
-        $methodRef->setAccessible(true);
-
-        return $methodRef->invoke($instance);
     }
 }

@@ -7,11 +7,12 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\IntegrationPlugin\IndexIntegrationPluginRequest;
 use App\Http\Requests\Admin\IntegrationPlugin\InstallIntegrationPluginRequest;
+use App\Http\Requests\Admin\IntegrationPlugin\TestEmailRequest;
+use App\Http\Requests\Admin\IntegrationPlugin\TestSmsRequest;
 use App\Http\Requests\Admin\IntegrationPlugin\UpdateIntegrationPluginConfigRequest;
 use App\Models\AdminUser;
 use App\Models\IntegrationPlugin;
 use App\Services\Integrations\Plugins\IntegrationPluginService;
-use Illuminate\Http\Request;
 
 class IntegrationPluginController extends Controller
 {
@@ -72,6 +73,11 @@ class IntegrationPluginController extends Controller
         );
     }
 
+    public function revealConfigSecret(IntegrationPlugin $plugin, string $key)
+    {
+        return $this->success($this->pluginService->revealConfigSecret($plugin, $key));
+    }
+
     public function enable(IntegrationPlugin $plugin)
     {
         return $this->success($this->pluginService->enable($plugin), '插件已启用');
@@ -84,39 +90,31 @@ class IntegrationPluginController extends Controller
 
     public function destroy(IntegrationPlugin $plugin)
     {
-        $this->pluginService->uninstall($plugin);
+        $result = $this->pluginService->uninstall($plugin);
 
-        return $this->success(null, '插件已删除');
+        return $this->success(
+            $result,
+            ! empty($result['archived']) ? '插件已停用并保留业务引用' : '插件已删除'
+        );
     }
 
-    public function healthCheck(Request $request, IntegrationPlugin $plugin)
+    public function healthCheck(IntegrationPlugin $plugin)
     {
         return $this->success($this->pluginService->healthCheck($plugin));
     }
 
-    public function testEmail(Request $request, IntegrationPlugin $plugin)
+    public function testEmail(TestEmailRequest $request, IntegrationPlugin $plugin)
     {
-        $validated = $request->validate([
-            'account_index' => 'required|integer|min:0',
-            'to' => 'required|email',
-            'subject' => 'required|string|max:255',
-            'body' => 'nullable|string|max:5000',
-        ]);
-
         return $this->success(
-            $this->pluginService->testEmail($plugin, $validated),
+            $this->pluginService->testEmail($plugin, $request->validated()),
             '测试邮件发送成功'
         );
     }
 
-    public function testSms(Request $request, IntegrationPlugin $plugin)
+    public function testSms(TestSmsRequest $request, IntegrationPlugin $plugin)
     {
-        $validated = $request->validate([
-            'phone' => 'required|string|max:20',
-        ]);
-
         return $this->success(
-            $this->pluginService->testSms($plugin, $validated),
+            $this->pluginService->testSms($plugin, $request->validated()),
             '测试短信发送成功'
         );
     }

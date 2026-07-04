@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Exceptions\BusinessException;
 use App\Models\IntegrationPlugin;
+use App\Models\Supplier;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
 use App\Services\Integrations\Payments\PaymentGatewayRegistry;
 use App\Services\Integrations\Plugins\IntegrationPluginService;
@@ -615,9 +616,9 @@ class PluginSimulationTest extends TestCase
         }
     }
 
-    private function makeDemoSupplier(): \App\Models\Supplier
+    private function makeDemoSupplier(): Supplier
     {
-        $supplier = new \App\Models\Supplier;
+        $supplier = new Supplier;
         $supplier->id = 100;
         $supplier->name = 'Demo 上游供应商';
         $supplier->interface_type = 'demo_servers';

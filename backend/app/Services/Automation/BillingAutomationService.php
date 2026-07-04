@@ -3,6 +3,7 @@
 namespace App\Services\Automation;
 
 use App\Constants\InvoiceStatus;
+use App\Constants\OrderType;
 use App\Constants\ServiceStatus;
 use App\Constants\UserNotificationType;
 use App\Models\AutomationLog;
@@ -586,7 +587,7 @@ class BillingAutomationService
         $stuckInvoices = Invoice::query()
             ->with(['service.product.supplier'])
             ->where('status', InvoiceStatus::PAID)
-            ->where('type', 'renew')
+            ->where('type', OrderType::RENEW)
             ->whereNotNull('config_snapshot')
             ->get()
             ->filter(function (Invoice $invoice): bool {

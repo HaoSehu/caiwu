@@ -17,10 +17,6 @@ class AdminUser extends Authenticatable
 
     private static ?bool $adminUserRolesTableAvailable = null;
 
-    private static ?bool $rolePermissionsTableAvailable = null;
-
-    private static ?bool $permissionsTableAvailable = null;
-
     protected $table = 'admin_users';
 
     protected $fillable = [
@@ -82,7 +78,7 @@ class AdminUser extends Authenticatable
     public function scopeWithResolvedPermissionRelations(Builder $query): Builder
     {
         $relations = self::hasAdminPermissionTables()
-            ? ['roles.permissionItems', 'role.permissionItems']
+            ? ['roles', 'role']
             : ['role'];
 
         return $query->with($relations);
@@ -148,10 +144,6 @@ class AdminUser extends Authenticatable
 
         $query = $this->role();
 
-        if (self::rolePermissionsTableAvailable() && self::permissionsTableAvailable()) {
-            $query->with('permissionItems');
-        }
-
         return $query->first();
     }
 
@@ -172,7 +164,6 @@ class AdminUser extends Authenticatable
         }
 
         return $this->roles()
-            ->with('permissionItems')
             ->orderBy('roles.id')
             ->get()
             ->all();
@@ -180,9 +171,7 @@ class AdminUser extends Authenticatable
 
     private static function hasAdminPermissionTables(): bool
     {
-        return self::adminUserRolesTableAvailable()
-            && self::rolePermissionsTableAvailable()
-            && self::permissionsTableAvailable();
+        return self::adminUserRolesTableAvailable();
     }
 
     private static function adminUserRolesTableAvailable(): bool
@@ -192,23 +181,5 @@ class AdminUser extends Authenticatable
         }
 
         return self::$adminUserRolesTableAvailable;
-    }
-
-    private static function rolePermissionsTableAvailable(): bool
-    {
-        if (self::$rolePermissionsTableAvailable === null) {
-            self::$rolePermissionsTableAvailable = Schema::hasTable('role_permissions');
-        }
-
-        return self::$rolePermissionsTableAvailable;
-    }
-
-    private static function permissionsTableAvailable(): bool
-    {
-        if (self::$permissionsTableAvailable === null) {
-            self::$permissionsTableAvailable = Schema::hasTable('permissions');
-        }
-
-        return self::$permissionsTableAvailable;
     }
 }

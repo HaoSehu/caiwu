@@ -4,16 +4,18 @@
 
 ## 一键脚本
 
-默认迁移仓库根目录下的 `idc_2026-06-07_15-31-26_mysql_data_R5FN2.sql`：
-
-```bat
-python backend\scripts\reset_init_and_migrate_idc_dump.py
-```
-
-迁移其他 dump：
+迁移指定 dump：
 
 ```bat
 python backend\scripts\reset_init_and_migrate_idc_dump.py --dump C:\path\to\idc_dump.sql
+```
+
+如果脚本支持默认 dump，也必须先确认该 dump 文件在当前工作区真实存在；不要在文档中固定引用已清理的本地 dump 文件名。
+
+仅初始化当前库结构，不导入旧 dump：
+
+```bat
+python backend\scripts\install_db.py --reset
 ```
 
 只检查不写库：
@@ -25,8 +27,10 @@ python backend\scripts\reset_init_and_migrate_idc_dump.py --dump C:\path\to\idc_
 迁移记录默认写入：
 
 ```text
-文档\数据库\迁移记录\idc-local-migration-YYYYMMDDHHMMSS.log
+控制台输出或脚本指定的本地日志位置
 ```
+
+一次性迁移日志不进入长期文档树；如需保留结论，应提炼为本文件中的兼容规则。
 
 ## 执行顺序
 
@@ -51,18 +55,10 @@ python backend\scripts\reset_init_and_migrate_idc_dump.py --dump C:\path\to\idc_
 - `products.name` 等旧字段不会被恢复。
 - `orders`、`invoices` 的商品规格快照会优先映射 `product_spec_snapshot`，缺失时兼容旧的 `product_name_snapshot`。
 
-## 本次 dump
+## 迁移后检查
 
-```text
-C:\Users\USER125536\Desktop\caiwu\idc_2026-06-09_12-16-17_mysql_data_lvxMt.sql
-```
-
-## 本次执行结果
-
-- 执行时间：2026-06-09 12:22
-- 成功日志：`文档\数据库\迁移记录\idc-local-migration-20260609122244.log`
-- 核心行数：`users=453`、`products=143`、`invoices=1844`、`services=138`、`payments=234`、`operation_logs=94929`
-- 运行态表：`jobs=0`、`sessions=0`
-- 临时表残留：`legacy_temp_tables=0`
-- 新增日志表：`activity_logs=0`、`gateway_logs=0`、`schedule_run_logs=0`
-- 字段检查：`products.custom_display_name` 存在，`products.name` 不存在
+- 核心表行数符合预期：`users`、`products`、`invoices`、`services`、`payments`、`operation_logs`。
+- 运行态表保持清空：`jobs`、`sessions`、`password_reset_tokens`、`personal_access_tokens`。
+- 临时库或临时前缀表已清理。
+- 当前结构与 `文档/开发文档/数据库/当前数据库结构.md` 一致。
+- 前后端能使用迁移后的管理员、用户、商品和服务数据完成最小冒烟。

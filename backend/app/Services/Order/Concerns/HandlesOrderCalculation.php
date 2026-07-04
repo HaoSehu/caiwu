@@ -10,6 +10,40 @@ use Illuminate\Support\Str;
 
 trait HandlesOrderCalculation
 {
+    // ────────── 配置类型常量（OrderService / CheckoutService 共用） ──────────
+
+    /** 范围选择类型（ip_num / memory / bw / cpu / disk）—— 支持 min/max 区间 */
+    private const RANGE_TYPES = [4, 7, 9, 11, 14, 15, 16, 17, 18, 19];
+
+    /** OS 选择类型 —— 不参与数值计算 */
+    private const OS_TYPES = [5];
+
+    /** 计费周期 → 月数映射 */
+    private const BILLING_CYCLE_MONTHS = [
+        'monthly'      => 1,
+        'quarterly'    => 3,
+        'semiannually' => 6,
+        'annually'     => 12,
+    ];
+
+    /** 配置项 type → 字段名映射 */
+    private const TYPE_FIELD_MAP = [
+        4  => 'ip_num',
+        5  => 'os',
+        6  => 'cpu',
+        7  => 'cpu',
+        8  => 'memory',
+        9  => 'memory',
+        10 => 'bw',
+        11 => 'bw',
+        12 => 'area',
+        13 => 'system_disk_size',
+        14 => 'system_disk_size',
+        16 => 'cpu',
+        17 => 'memory',
+        18 => 'bw',
+        19 => 'system_disk_size',
+    ];
     public function calculateAmount(Product $product, string $billingCycle, array $config = []): float
     {
         $config = $this->normalizeConfig($product, $config);

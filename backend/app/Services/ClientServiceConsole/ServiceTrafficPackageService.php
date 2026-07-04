@@ -6,6 +6,7 @@ namespace App\Services\ClientServiceConsole;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
+use App\Constants\OrderType;
 use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
 use App\Models\Invoice;
@@ -16,14 +17,18 @@ use App\Models\Supplier;
 use App\Models\User;
 use App\Services\Finance\CheckoutService;
 use App\Services\Finance\InvoiceService;
+use App\Services\Integrations\Plugins\PluginBindingResolver;
+use App\Services\Integrations\Plugins\ServiceUpstreamBindingWriter;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\System\OperationLogService;
 use App\Services\System\SettingService;
 use App\Services\Upstream\Contracts\ProvidesConsoleCatalog;
 use App\Services\Upstream\ProviderResolver;
 use App\Support\OrderInvoiceNoGenerator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class ServiceTrafficPackageService
 {
@@ -37,6 +42,8 @@ class ServiceTrafficPackageService
         private readonly OperationLogService $operationLogService,
         private readonly SettingService $settingService,
         private readonly ProviderResolver $providerResolver,
+        private readonly ?PluginBindingResolver $bindingResolver = null,
+        private ?ServiceUpstreamBindingWriter $serviceBindingWriter = null,
     ) {}
 
     public function previewForUser(User $user, int $serviceId): array
@@ -76,7 +83,7 @@ class ServiceTrafficPackageService
         ?int $thirdProductGroupId = null,
         string $productType = '',
         int $supplierId = 0,
-        int $supplierProductId = 0,
+        int $upstreamProductId = 0,
         int $sourceProductId = 0,
     ): array {
         throw_if($secondProductGroupId <= 0, new BusinessException('请选择有效的商品分类'));
@@ -85,8 +92,8 @@ class ServiceTrafficPackageService
             return $this->pullCatalogTemplateFromLocalProduct($sourceProductId);
         }
 
-        if ($supplierId > 0 && $supplierProductId > 0) {
-            return $this->pullCatalogTemplateFromSupplierProduct($supplierId, $supplierProductId);
+        if ($supplierId > 0 && $upstreamProductId > 0) {
+            return $this->pullCatalogTemplateFromSupplierProduct($supplierId, $upstreamProductId);
         }
 
         try {
@@ -168,7 +175,7 @@ class ServiceTrafficPackageService
         $existingInvoice = Invoice::query()
             ->where('user_id', (int) $user->id)
             ->where('service_id', (int) $service->id)
-            ->where('type', 'upgrade')
+            ->where('type', OrderType::UPGRADE)
             ->where('status', InvoiceStatus::UNPAID)
             ->latest('id')
             ->first();
@@ -216,7 +223,7 @@ class ServiceTrafficPackageService
                 'product_spec_snapshot' => $productSpecDisplay,
                 'product_type_snapshot' => (string) $product->product_type,
                 'service_id' => (int) $service->id,
-                'type' => 'upgrade',
+                'type' => OrderType::UPGRADE,
                 'amount' => (string) $quote['pricing']['amount'],
                 'discount' => '0.00',
                 'paid_amount' => '0.00',
@@ -326,7 +333,7 @@ class ServiceTrafficPackageService
             'product_spec_snapshot' => $productSpecDisplay !== '' ? $productSpecDisplay : (string) ($invoice->product_spec_snapshot ?? ''),
             'product_type_snapshot' => (string) $product->product_type,
             'service_id' => (int) $service->id,
-            'type' => 'upgrade',
+            'type' => OrderType::UPGRADE,
             'amount' => (string) $invoice->amount,
             'discount' => (string) ($invoice->discount ?? '0.00'),
             'paid_amount' => (string) ($invoice->paid_amount ?? '0.00'),
@@ -369,8 +376,12 @@ class ServiceTrafficPackageService
             throw_if($flowPacketId <= 0, new BusinessException('流量包订单缺少 flow_packet_id，无法继续执行'));
         }
 
+        $attemptRequestMeta = $this->trafficPackageAttemptRequestMeta($order, $mode, $configOption, $flowPacketId);
+        $resolvedHostId = 0;
+
         try {
             [$catalog, $supplier, $hostId, $jwt] = $this->detailService->resolveUpstreamContext($service);
+            $resolvedHostId = (int) $hostId;
             $invoiceId = 0;
             $hostDetail = [];
 
@@ -387,37 +398,37 @@ class ServiceTrafficPackageService
                 $invoiceId = (int) ($purchaseResult['upstream_invoice_id'] ?? 0);
                 $hostDetail = is_array($purchaseResult['host_detail'] ?? null) ? $purchaseResult['host_detail'] : [];
             } else {
-            if ($mode === 'flowpacket') {
-                $rootUrl = $this->detailService->resolveSupplierRootUrl($supplier);
-                $buyResponse = $catalog->buyFlowPacket($supplier, $rootUrl, $flowPacketId, $hostId, $jwt);
-                $buyCode = (int) ($buyResponse['code'] ?? -1);
-                throw_if($buyCode !== 0, new BusinessException(
-                    '上游流量包购买失败：'.(string) ($buyResponse['msg'] ?? $buyResponse['message'] ?? '未知错误')
-                ));
-                $invoiceId = (int) ($buyResponse['data']['invoiceid'] ?? $buyResponse['invoiceid'] ?? 0);
-            } else {
-                $previewResponse = $catalog->previewHostConfigUpgrade($supplier, $hostId, $configOption, $jwt);
-                $this->detailService->assertSuccess($previewResponse, '提交流量包升级配置');
+                if ($mode === 'flowpacket') {
+                    $rootUrl = $this->detailService->resolveSupplierRootUrl($supplier);
+                    $buyResponse = $catalog->buyFlowPacket($supplier, $rootUrl, $flowPacketId, $hostId, $jwt);
+                    $buyCode = (int) ($buyResponse['code'] ?? -1);
+                    throw_if($buyCode !== 0, new BusinessException(
+                        '上游流量包购买失败：'.(string) ($buyResponse['msg'] ?? $buyResponse['message'] ?? '未知错误')
+                    ));
+                    $invoiceId = (int) ($buyResponse['data']['invoiceid'] ?? $buyResponse['invoiceid'] ?? 0);
+                } else {
+                    $previewResponse = $catalog->previewHostConfigUpgrade($supplier, $hostId, $configOption, $jwt);
+                    $this->detailService->assertSuccess($previewResponse, '提交流量包升级配置');
 
-                $checkoutResponse = $catalog->checkoutHostConfigUpgrade($supplier, $hostId, $jwt);
-                $this->detailService->assertSuccess($checkoutResponse, '生成流量包账单');
-                $checkoutPayload = $this->detailService->extractPayload($checkoutResponse);
-                $invoiceId = (int) ($checkoutPayload['invoiceid'] ?? $checkoutResponse['invoiceid'] ?? 0);
+                    $checkoutResponse = $catalog->checkoutHostConfigUpgrade($supplier, $hostId, $jwt);
+                    $this->detailService->assertSuccess($checkoutResponse, '生成流量包账单');
+                    $checkoutPayload = $this->detailService->extractPayload($checkoutResponse);
+                    $invoiceId = (int) ($checkoutPayload['invoiceid'] ?? $checkoutResponse['invoiceid'] ?? 0);
 
-                throw_if($invoiceId <= 0, new BusinessException('上游未返回流量包账单 ID'));
+                    throw_if($invoiceId <= 0, new BusinessException('上游未返回流量包账单 ID'));
 
-                $fundResponse = $catalog->post($supplier, "/v1/invoices/{$invoiceId}/fund", [], $jwt);
-                $this->detailService->assertSuccess($fundResponse, '使用供应商余额支付流量包账单');
-            }
+                    $fundResponse = $catalog->post($supplier, "/v1/invoices/{$invoiceId}/fund", [], $jwt);
+                    $this->detailService->assertSuccess($fundResponse, '使用供应商余额支付流量包账单');
+                }
 
-            $detailResponse = $catalog->getHostDetail(
-                $supplier,
-                $hostId,
-                $jwt
-            );
-            $this->detailService->assertSuccess($detailResponse, '读取流量包购买结果');
-            $detailPayload = $this->detailService->extractPayload($detailResponse);
-            $hostDetail = is_array($detailPayload['host'] ?? null) ? $detailPayload['host'] : [];
+                $detailResponse = $catalog->getHostDetail(
+                    $supplier,
+                    $hostId,
+                    $jwt
+                );
+                $this->detailService->assertSuccess($detailResponse, '读取流量包购买结果');
+                $detailPayload = $this->detailService->extractPayload($detailResponse);
+                $hostDetail = is_array($detailPayload['host'] ?? null) ? $detailPayload['host'] : [];
             }
 
             if ($hostDetail !== []) {
@@ -425,7 +436,7 @@ class ServiceTrafficPackageService
                 $service->refresh();
             }
 
-            $provisionData = is_array($service->provision_data ?? null) ? $service->provision_data : [];
+            $provisionData = $this->serviceProvisionData($service);
             $provisionData['last_upgrade_kind'] = self::TRAFFIC_ORDER_KIND;
             $provisionData['last_upgrade_order_id'] = (int) $order->id;
             $provisionData['last_upgrade_order_no'] = (string) $order->order_no;
@@ -443,6 +454,20 @@ class ServiceTrafficPackageService
                     'status' => OrderStatus::COMPLETED,
                 ])->save();
             });
+            $this->serviceBindingWriter()->syncServiceState($service, $service->product, $provisionData);
+            $this->serviceBindingWriter()->recordProvisionAttempt(
+                $service,
+                $service->product,
+                $provisionData,
+                'success',
+                null,
+                $attemptRequestMeta,
+                [
+                    'upstream_host_id' => $resolvedHostId > 0 ? $resolvedHostId : null,
+                    'upstream_invoice_id' => $invoiceId > 0 ? $invoiceId : null,
+                ],
+                self::TRAFFIC_ORDER_KIND
+            );
 
             $this->operationLogService->writeServiceConsoleLog($service, 'service.console.traffic_package.purchase', [
                 'category' => 'upgrade',
@@ -464,7 +489,7 @@ class ServiceTrafficPackageService
                 ? $exception->getMessage()
                 : '流量包购买失败，请联系管理员处理';
 
-            $provisionData = is_array($service->provision_data ?? null) ? $service->provision_data : [];
+            $provisionData = $this->serviceProvisionData($service);
             $provisionData['upgrade_error'] = $message;
             $provisionData['last_upgrade_attempt_at'] = now()->format('Y-m-d H:i:s');
             $provisionData['last_upgrade_kind'] = self::TRAFFIC_ORDER_KIND;
@@ -478,6 +503,19 @@ class ServiceTrafficPackageService
                     'status' => OrderStatus::PROCESSING,
                 ])->save();
             });
+            $this->serviceBindingWriter()->syncServiceState($service, $service->product, $provisionData);
+            $this->serviceBindingWriter()->recordProvisionAttempt(
+                $service,
+                $service->product,
+                $provisionData,
+                'failed',
+                $message,
+                $attemptRequestMeta,
+                [
+                    'upstream_host_id' => $resolvedHostId > 0 ? $resolvedHostId : null,
+                ],
+                self::TRAFFIC_ORDER_KIND
+            );
 
             Log::error('[流量包购买] 上游执行失败', [
                 'order_id' => (int) $order->id,
@@ -616,7 +654,7 @@ class ServiceTrafficPackageService
     private function findManagedService(User $user, int $serviceId): Service
     {
         return $this->detailService->findUserService($user, $serviceId, [
-            'product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,supplier_id,config_options,purchase_requires',
+            'product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,config_options,purchase_requires',
             'product.supplier',
             'order:id,order_no,status,paid_at,created_at',
         ]);
@@ -718,17 +756,18 @@ class ServiceTrafficPackageService
             ->tap(fn ($query) => $this->applyProductGroupScope($query, $secondProductGroupId, $thirdProductGroupId))
             ->when(trim($productType) !== '', fn ($query) => $query->where('product_type', trim($productType)))
             ->where('status', 1)
-            ->whereNotNull('supplier_id')
-            ->whereNotNull('supplier_product_id')
-            ->where('supplier_product_id', '>', 0)
+            ->tap(fn (Builder $query) => $this->applyHasUpstreamProductBindingScope($query))
             ->orderByDesc('id')
             ->first();
 
         throw_if(! $product instanceof Product, new BusinessException('该分类下暂无已绑定上游商品的商品记录，无法从上游接口拉取流量包配置'));
 
-        $supplier = $product->supplier;
+        $supplier = $this->resolveProductSupplier($product);
         throw_if(! $supplier instanceof Supplier, new BusinessException('商品未绑定有效的供应商配置'));
-        $template = $this->resolveCatalogCapability($supplier)->getProductConfigTemplate($supplier, (int) $product->supplier_product_id);
+        $upstreamProductId = $this->resolveProductUpstreamProductId($product);
+        throw_if($upstreamProductId <= 0, new BusinessException('商品尚未绑定有效的上游商品 ID'));
+
+        $template = $this->resolveCatalogCapability($supplier)->getProductConfigTemplate($supplier, $upstreamProductId);
         $config = $this->settingService->getTrafficPackageConfig();
         $trafficOption = $this->findTrafficPackageOption((array) ($template['config_options'] ?? []), $config);
 
@@ -764,12 +803,13 @@ class ServiceTrafficPackageService
         ];
     }
 
-    private function pullCatalogTemplateFromSupplierProduct(int $supplierId, int $supplierProductId): array
+    private function pullCatalogTemplateFromSupplierProduct(int $supplierId, int $upstreamProductId): array
     {
         $supplier = Supplier::query()->find($supplierId);
         throw_if(! $supplier instanceof Supplier, new BusinessException('供应商不存在'));
+        $supplier = $this->bindingResolver()->supplierWithRuntimeCredentials($supplier);
 
-        $template = $this->resolveCatalogCapability($supplier)->getProductConfigTemplate($supplier, $supplierProductId);
+        $template = $this->resolveCatalogCapability($supplier)->getProductConfigTemplate($supplier, $upstreamProductId);
         $config = $this->settingService->getTrafficPackageConfig();
         $trafficOption = $this->findTrafficPackageOption((array) ($template['config_options'] ?? []), $config);
 
@@ -789,7 +829,7 @@ class ServiceTrafficPackageService
                 'supplier_id' => (int) $supplier->id,
                 'supplier_name' => (string) ($supplier->name ?? ''),
                 'upstream_host_id' => 0,
-                'supplier_product_id' => $supplierProductId,
+                'upstream_product_id' => $upstreamProductId,
             ],
             'traffic' => [
                 'usage' => '0.00',
@@ -818,18 +858,18 @@ class ServiceTrafficPackageService
 
         throw_if(! $product instanceof Product, new BusinessException('来源商品不存在'));
 
-        $supplier = $product->supplier;
+        $supplier = $this->resolveProductSupplier($product);
         throw_if(! $supplier instanceof Supplier, new BusinessException('来源商品未绑定有效的供应商配置'));
 
-        $supplierProductId = (int) ($product->supplier_product_id ?? 0);
-        throw_if($supplierProductId <= 0, new BusinessException('来源商品尚未绑定上游商品 ID，无法拉取流量包'));
+        $upstreamProductId = $this->resolveProductUpstreamProductId($product);
+        throw_if($upstreamProductId <= 0, new BusinessException('来源商品尚未绑定上游商品 ID，无法拉取流量包'));
 
         $serviceResult = $this->tryPullFromLocalProductService($product, $supplier);
         if ($serviceResult !== null) {
             return $serviceResult;
         }
 
-        $template = $this->resolveCatalogCapability($supplier)->getProductConfigTemplate($supplier, $supplierProductId);
+        $template = $this->resolveCatalogCapability($supplier)->getProductConfigTemplate($supplier, $upstreamProductId);
         $config = $this->settingService->getTrafficPackageConfig();
         $trafficOption = $this->findTrafficPackageOption((array) ($template['config_options'] ?? []), $config);
 
@@ -849,7 +889,7 @@ class ServiceTrafficPackageService
                 'supplier_id' => (int) $supplier->id,
                 'supplier_name' => (string) ($supplier->name ?? ''),
                 'upstream_host_id' => 0,
-                'supplier_product_id' => $supplierProductId,
+                'upstream_product_id' => $upstreamProductId,
             ],
             'traffic' => [
                 'usage' => '0.00',
@@ -882,7 +922,7 @@ class ServiceTrafficPackageService
 
                 $query
                     ->where('product_type', (string) $product->product_type)
-                    ->where('supplier_id', (int) $supplier->id);
+                    ->tap(fn (Builder $query) => $this->applyBoundSupplierScope($query, $supplier));
             })
             ->whereIn('status', [ServiceStatus::ACTIVE, ServiceStatus::PENDING, ServiceStatus::SUSPENDED])
             ->orderByRaw('CASE WHEN product_id = ? THEN 0 ELSE 1 END', [(int) $product->id])
@@ -930,7 +970,7 @@ class ServiceTrafficPackageService
                             'supplier_id' => (int) $serviceSupplier->id,
                             'supplier_name' => (string) ($serviceSupplier->name ?? ''),
                             'upstream_host_id' => $hostId,
-                            'supplier_product_id' => (int) ($product->supplier_product_id ?? 0),
+                            'upstream_product_id' => $this->resolveProductUpstreamProductId($product),
                         ],
                         'traffic' => $this->buildTrafficUsagePayload($host),
                         'packages' => $flowPacketPackages,
@@ -967,7 +1007,7 @@ class ServiceTrafficPackageService
                         'supplier_id' => (int) $serviceSupplier->id,
                         'supplier_name' => (string) ($serviceSupplier->name ?? ''),
                         'upstream_host_id' => $hostId,
-                        'supplier_product_id' => (int) ($product->supplier_product_id ?? 0),
+                        'upstream_product_id' => $this->resolveProductUpstreamProductId($product),
                     ],
                     'traffic' => $this->buildTrafficUsagePayload($host),
                     'packages' => $packages,
@@ -1061,6 +1101,8 @@ class ServiceTrafficPackageService
 
     private function resolveCatalogCapability(Supplier $supplier): object
     {
+        $supplier = $this->bindingResolver()->supplierWithRuntimeCredentials($supplier);
+
         return $this->providerResolver
             ->resolveForSupplier($supplier)
             ->require(ProvidesConsoleCatalog::class, '当前供应商不支持流量包能力');
@@ -1379,10 +1421,118 @@ class ServiceTrafficPackageService
             return true;
         }
 
-        $provisionData = is_array($service->provision_data ?? null) ? $service->provision_data : [];
+        $provisionData = $this->serviceProvisionData($service);
 
         return (int) ($provisionData['last_upgrade_order_id'] ?? 0) === (int) $order->id
             && (string) ($provisionData['last_upgrade_kind'] ?? '') === self::TRAFFIC_ORDER_KIND;
+    }
+
+    private function applyHasUpstreamProductBindingScope(Builder $query): void
+    {
+        if ($this->hasProductBindingTables()) {
+            $query->whereExists(function ($subQuery): void {
+                $subQuery
+                    ->selectRaw('1')
+                    ->from('product_upstream_bindings as pub')
+                    ->whereColumn('pub.product_id', 'products.id')
+                    ->where('pub.status', 1);
+            });
+
+            return;
+        }
+
+        $query->whereRaw('0 = 1');
+    }
+
+    private function applyBoundSupplierScope(Builder $query, Supplier $supplier): void
+    {
+        if ($this->hasProductBindingTables()) {
+            $query->whereExists(function ($subQuery) use ($supplier): void {
+                $subQuery
+                    ->selectRaw('1')
+                    ->from('product_upstream_bindings as pub')
+                    ->join('supplier_plugin_bindings as spb', 'spb.id', '=', 'pub.supplier_plugin_binding_id')
+                    ->whereColumn('pub.product_id', 'products.id')
+                    ->where('spb.supplier_id', (int) $supplier->id);
+            });
+
+            return;
+        }
+
+        $query->whereRaw('0 = 1');
+    }
+
+    private function resolveProductSupplier(Product $product): ?Supplier
+    {
+        $boundSupplier = $this->bindingResolver()->supplierForProduct($product);
+        if ($boundSupplier instanceof Supplier) {
+            return $boundSupplier;
+        }
+
+        return null;
+    }
+
+    private function resolveProductUpstreamProductId(Product $product): int
+    {
+        $bindingUpstreamProductId = $this->bindingResolver()->upstreamProductIdForProduct($product);
+        if ($bindingUpstreamProductId !== null) {
+            return (int) $bindingUpstreamProductId;
+        }
+
+        return 0;
+    }
+
+    private function bindingResolver(): PluginBindingResolver
+    {
+        return $this->bindingResolver ?? app(PluginBindingResolver::class);
+    }
+
+    private function serviceBindingWriter(): ServiceUpstreamBindingWriter
+    {
+        return $this->serviceBindingWriter ??= app(ServiceUpstreamBindingWriter::class);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serviceProvisionData(Service $service): array
+    {
+        $legacy = is_array($service->provision_data ?? null) ? $service->provision_data : [];
+        $projection = $this->bindingResolver()->serviceProvisionProjection($service);
+
+        return $projection === [] ? $legacy : array_replace($legacy, $projection);
+    }
+
+    /**
+     * @param  array<string, mixed>  $configOption
+     * @return array<string, mixed>
+     */
+    private function trafficPackageAttemptRequestMeta(Order $order, string $mode, array $configOption, int $flowPacketId): array
+    {
+        $traceId = trim((string) ($order->trace_id ?? ''));
+        if ($traceId === '' && (int) $order->id > 0 && Schema::hasColumn('orders', 'trace_id')) {
+            $traceId = trim((string) DB::table('orders')->where('id', (int) $order->id)->value('trace_id'));
+        }
+
+        return array_filter([
+            'kind' => self::TRAFFIC_ORDER_KIND,
+            'order_id' => (int) $order->id,
+            'order_no' => (string) $order->order_no,
+            'trace_id' => $traceId,
+            'mode' => $mode,
+            'flow_packet_id' => $flowPacketId > 0 ? $flowPacketId : null,
+            'configoption_keys' => array_keys($configOption),
+            'target_label' => (string) data_get($order->config_pricing_snapshot ?? [], 'meta.target_label', ''),
+        ], static fn (mixed $value): bool => $value !== null && $value !== '' && $value !== []);
+    }
+
+    private function hasProductBindingTables(): bool
+    {
+        try {
+            return Schema::hasTable('product_upstream_bindings') && Schema::hasTable('supplier_plugin_bindings');
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**

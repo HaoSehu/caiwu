@@ -2,15 +2,10 @@
 
 namespace App\Http\Requests\Admin\Log;
 
-use Illuminate\Foundation\Http\FormRequest;
+use App\Http\Requests\Admin\Common\AdminFormRequest;
 
-abstract class LogListRequest extends FormRequest
+abstract class LogListRequest extends AdminFormRequest
 {
-    public function authorize(): bool
-    {
-        return true;
-    }
-
     protected function paginationRules(int $maxPageSize = 50): array
     {
         return [

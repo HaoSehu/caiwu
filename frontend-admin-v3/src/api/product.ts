@@ -12,6 +12,15 @@ export interface ProductListParams extends PagedListParams {
   [key: string]: unknown;
 }
 
+export interface ProductUpstreamBindingRecord {
+  provider_key?: string;
+  provider_label?: string;
+  supplier_id?: number | string | null;
+  supplier_name?: string | null;
+  upstream_product_id?: number | string | null;
+  [key: string]: unknown;
+}
+
 export interface ProductRecord {
   id: number | string;
   name?: string;
@@ -48,8 +57,7 @@ export interface ProductRecord {
   active_services_count?: number | string;
   total_services_count?: number | string;
   pricing?: Record<string, number | string>;
-  supplier_id?: number | string;
-  supplier_product_id?: number | string;
+  upstream_binding?: ProductUpstreamBindingRecord | null;
   sort_order?: number | string;
   [key: string]: unknown;
 }

@@ -4,18 +4,23 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Constants\ServiceStatus;
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\Supplier;
+use App\Models\User;
 use App\Services\ClientServiceConsole\ServiceDetailService;
 use App\Services\ClientServiceConsole\ServiceResolverService;
 use App\Services\ClientServiceConsole\ServiceTransformService;
 use App\Services\Integrations\Plugins\PluginInstaller;
 use App\Services\Integrations\Plugins\PluginScanner;
 use App\Services\System\OperationLogService;
+use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -26,36 +31,103 @@ class ServiceConsoleSupplierBindingTest extends TestCase
     {
         parent::setUp();
 
-        $this->ensureHostingPanelPluginEnabled();
+        $this->ensureMofangFinancePluginEnabled();
+        Artisan::call('migrate', [
+            '--path' => 'database/migrations/2026_07_03_130000_create_plugin_binding_runtime_and_audit_tables.php',
+            '--force' => true,
+        ]);
     }
 
     #[Test]
     public function it_prefers_the_service_bound_supplier_over_the_product_supplier(): void
     {
-        $boundSupplier = new Supplier;
-        $boundSupplier->id = 9;
-        $boundSupplier->interface_type = 'hosting_panel_api';
+        $suffix = bin2hex(random_bytes(4));
+        $pluginId = (int) DB::table('integration_plugins')
+            ->where('domain', 'upstream')
+            ->where('plugin_key', ProviderKey::MOFANG_FINANCE_API)
+            ->value('id');
 
-        $productSupplier = new Supplier;
-        $productSupplier->id = 3;
-        $productSupplier->interface_type = 'hosting_panel_api';
+        $this->assertGreaterThan(0, $pluginId);
 
-        $product = new Product;
-        $product->supplier_id = 3;
-        $product->setRelation('supplier', $productSupplier);
+        $user = User::query()->create([
+            'email' => 'service-console-prefer-'.$suffix.'@example.com',
+            'password' => 'Temp@123456',
+            'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
+            'status' => 1,
+        ]);
 
-        $service = new Service;
-        $service->provision_data = [
-            'supplier_id' => 9,
-            'upstream_host_id' => 456,
-        ];
-        $service->setRelation('product', $product);
+        $boundSupplier = Supplier::query()->create([
+            'name' => 'Mofang Bound Supplier '.$suffix,
+            'code' => 'mofang-bound-'.$suffix,
+            'interface_type' => ProviderKey::MOFANG_FINANCE_API,
+            'status' => 1,
+            'sort_order' => 1,
+        ]);
+
+        $productSupplier = Supplier::query()->create([
+            'name' => 'Mofang Product Supplier '.$suffix,
+            'code' => 'mofang-product-'.$suffix,
+            'interface_type' => ProviderKey::MOFANG_FINANCE_API,
+            'status' => 1,
+            'sort_order' => 1,
+        ]);
+
+        $product = Product::query()->create([
+            'name' => 'Mofang Console Product '.$suffix,
+            'product_type' => 'server',
+            'pricing' => ['monthly' => '99.00'],
+            'setup_fee' => '0.00',
+            'config_options' => [],
+            'purchase_requires' => [],
+            'stock' => -1,
+            'status' => 1,
+            'auto_setup' => 0,
+            'supplier_id' => (int) $productSupplier->id,
+        ]);
+
+        $service = Service::query()->create([
+            'user_id' => (int) $user->id,
+            'product_id' => (int) $product->id,
+            'name' => 'Console Bound Service '.$suffix,
+            'domain' => 'console-bound-'.$suffix.'.example.com',
+            'billing_cycle' => 'monthly',
+            'amount' => '99.00',
+            'status' => ServiceStatus::ACTIVE,
+            'locked_pricing' => [],
+            'provision_data' => [],
+            'expires_at' => now()->addMonth(),
+            'auto_renew' => 1,
+        ]);
+
+        $supplierBindingId = DB::table('supplier_plugin_bindings')->insertGetId([
+            'supplier_id' => (int) $boundSupplier->id,
+            'plugin_id' => $pluginId,
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'environment' => 'production',
+            'status' => 1,
+            'priority' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('service_upstream_bindings')->insert([
+            'service_id' => (int) $service->id,
+            'supplier_plugin_binding_id' => $supplierBindingId,
+            'plugin_id' => $pluginId,
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'upstream_service_id' => '456',
+            'status_snapshot' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $service->setRelation('product', $product->setRelation('supplier', $productSupplier));
 
         $detailService = $this->makeDetailService($boundSupplier);
 
         [$resolvedSupplier, $hostId] = $detailService->resolveManagedSupplierAndHost($service);
 
-        $this->assertSame($boundSupplier, $resolvedSupplier);
+        $this->assertSame((int) $boundSupplier->id, (int) $resolvedSupplier->id);
         $this->assertSame(456, $hostId);
     }
 
@@ -64,21 +136,82 @@ class ServiceConsoleSupplierBindingTest extends TestCase
     {
         $transformService = new ServiceTransformService(new ServiceResolverService);
 
-        $service = new Service;
-        $service->provision_data = [
-            'provider' => 'hosting_panel_api',
-            'upstream_host_id' => 456,
-        ];
+        $suffix = bin2hex(random_bytes(4));
+        $pluginId = (int) DB::table('integration_plugins')
+            ->where('domain', 'upstream')
+            ->where('plugin_key', ProviderKey::MOFANG_FINANCE_API)
+            ->value('id');
+
+        $user = User::query()->create([
+            'email' => 'service-console-binding-'.$suffix.'@example.com',
+            'password' => 'Temp@123456',
+            'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
+            'status' => 1,
+        ]);
+
+        $supplier = Supplier::query()->create([
+            'name' => 'Mofang Console Supplier '.$suffix,
+            'code' => 'mofang-console-'.$suffix,
+            'interface_type' => ProviderKey::MOFANG_FINANCE_API,
+            'api_url' => 'https://supplier-'.$suffix.'.example.com',
+            'api_username' => 'demo',
+            'api_key' => 'secret',
+            'status' => 1,
+            'sort_order' => 1,
+        ]);
+
+        $product = Product::query()->create([
+            'name' => 'Mofang Console Product '.$suffix,
+            'product_type' => 'server',
+            'pricing' => ['monthly' => '99.00'],
+            'setup_fee' => '0.00',
+            'config_options' => [],
+            'purchase_requires' => [],
+            'stock' => -1,
+            'status' => 1,
+            'auto_setup' => 0,
+            'supplier_id' => (int) $supplier->id,
+        ]);
+
+        $service = Service::query()->create([
+            'user_id' => (int) $user->id,
+            'product_id' => (int) $product->id,
+            'name' => 'Console Service '.$suffix,
+            'domain' => 'console-'.$suffix.'.example.com',
+            'billing_cycle' => 'monthly',
+            'amount' => '99.00',
+            'status' => ServiceStatus::ACTIVE,
+            'locked_pricing' => [],
+            'provision_data' => [],
+            'expires_at' => now()->addMonth(),
+            'auto_renew' => 1,
+        ]);
 
         $this->assertFalse($transformService->canManageService($service));
 
-        $service->provision_data = [
-            'provider' => 'hosting_panel_api',
-            'upstream_host_id' => 456,
-            'supplier_id' => 9,
-        ];
+        $supplierBindingId = DB::table('supplier_plugin_bindings')->insertGetId([
+            'supplier_id' => (int) $supplier->id,
+            'plugin_id' => $pluginId,
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'environment' => 'production',
+            'status' => 1,
+            'priority' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
-        $this->assertTrue($transformService->canManageService($service));
+        DB::table('service_upstream_bindings')->insert([
+            'service_id' => (int) $service->id,
+            'supplier_plugin_binding_id' => $supplierBindingId,
+            'plugin_id' => $pluginId,
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'upstream_service_id' => '456',
+            'status_snapshot' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->assertTrue($transformService->canManageService($service->refresh()));
     }
 
     #[Test]
@@ -88,7 +221,8 @@ class ServiceConsoleSupplierBindingTest extends TestCase
 
         $this->assertStringNotContainsString('product:id,name,type,', $source);
         $this->assertStringNotContainsString('product:id,product_type,product_group_id,supplier_id,provision_module', $source);
-        $this->assertStringContainsString('product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module', $source);
+        $this->assertStringNotContainsString('supplier_id,provision_module', $source);
+        $this->assertStringContainsString('product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires', $source);
     }
 
     private function makeDetailService(?Supplier $resolvedSupplier): ServiceDetailService
@@ -111,14 +245,14 @@ class ServiceConsoleSupplierBindingTest extends TestCase
         };
     }
 
-    private function ensureHostingPanelPluginEnabled(): void
+    private function ensureMofangFinancePluginEnabled(): void
     {
         $this->ensurePluginTables();
 
         $scanner = app(PluginScanner::class);
         $installer = app(PluginInstaller::class);
-        $scanner->requireManifest('upstream', 'hosting_panel_api');
-        $plugin = $installer->install('upstream', 'hosting_panel_api');
+        $scanner->requireManifest('upstream', 'mofang_finance');
+        $plugin = $installer->install('upstream', 'mofang_finance');
         $installer->enable($plugin);
 
         $this->app->forgetInstance(ProviderRegistry::class);

@@ -22,7 +22,11 @@
         <t-option :value="0" label="已停用" />
       </t-select>
       <div class="supplier-filter-actions">
-        <t-button theme="primary" @click="handleSupplierSearch">
+        <t-button v-if="canManageSuppliers" theme="primary" @click="openSupplierDialog()">
+          <template #icon><add-icon /></template>
+          新增提供商
+        </t-button>
+        <t-button theme="primary" variant="outline" @click="handleSupplierSearch">
           <template #icon><search-icon /></template>
           搜索
         </t-button>
@@ -59,14 +63,14 @@
           </div>
         </dl>
         <div class="supplier-card__actions">
-          <t-button size="small" variant="text" theme="primary" @click="openSupplierDialog(row)">编辑</t-button>
-          <t-button size="small" variant="text" :disabled="!canSupplierBatchConnect(row)" @click="openSupplierBatchDialog(row)">
+          <t-button size="small" variant="text" theme="primary" @click="openSupplierDialog(row)">{{ canManageSuppliers ? '编辑' : '查看' }}</t-button>
+          <t-button v-if="canSyncSuppliers" size="small" variant="text" :disabled="!canSupplierBatchConnect(row)" @click="openSupplierBatchDialog(row)">
             批量对接
           </t-button>
-          <t-button size="small" variant="text" :loading="supplierActionLoading === row.id" @click="handleToggleSupplier(row)">
+          <t-button v-if="canManageSuppliers" size="small" variant="text" :loading="supplierActionLoading === row.id" @click="handleToggleSupplier(row)">
             {{ Number(row.status) === 1 ? '停用' : '启用' }}
           </t-button>
-          <t-button size="small" variant="text" theme="danger" @click="handleDeleteSupplier(row)">删除</t-button>
+          <t-button v-if="canManageSuppliers" size="small" variant="text" theme="danger" @click="handleDeleteSupplier(row)">删除</t-button>
         </div>
       </article>
       <t-empty v-if="!supplierLoading && suppliers.length === 0" description="暂无提供商" />
@@ -88,7 +92,7 @@
     v-model:visible="supplierBatchDialogVisible"
     :header="supplierBatchSupplier?.name ? `批量对接 · ${supplierBatchSupplier.name}` : '批量对接'"
     width="780px"
-    :confirm-btn="{ content: '执行对接', loading: supplierBatchSubmitting }"
+    :confirm-btn="canSyncSuppliers ? { content: '执行对接', loading: supplierBatchSubmitting } : null"
     @confirm="submitSupplierBatchConnect"
   >
     <div class="split-dialog-intro">
@@ -176,32 +180,85 @@
     v-model:visible="supplierDialogVisible"
     :header="editingSupplier ? '编辑提供商' : '新增提供商'"
     width="620px"
-    :confirm-btn="{ content: '保存', loading: supplierSubmitting }"
+    :confirm-btn="canManageSuppliers ? { content: '保存', loading: supplierSubmitting } : null"
     @confirm="submitSupplier"
   >
-    <t-form ref="supplierFormRef" :data="supplierForm" :rules="supplierRules" label-width="110px">
-      <t-form-item label="接口种类" name="interface_type">
-        <t-select v-model="supplierForm.interface_type" filterable>
+    <t-form ref="supplierFormRef" :data="supplierForm" :rules="supplierRules" label-width="110px" :disabled="!canManageSuppliers">
+      <t-form-item label="插件提供商" name="provider_key">
+        <t-select v-model="supplierForm.provider_key" filterable @change="handleSupplierProviderChange">
           <t-option v-for="item in providerTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
         </t-select>
       </t-form-item>
       <t-form-item label="接口名称" name="name"><t-input v-model="supplierForm.name" /></t-form-item>
-      <t-form-item label="接口地址" name="api_url"><t-input v-model="supplierForm.api_url" /></t-form-item>
-      <t-form-item label="用户名" name="api_username"><t-input v-model="supplierForm.api_username" /></t-form-item>
-      <t-form-item label="API 密钥" name="api_key"><t-input v-model="supplierForm.api_key" type="password" /></t-form-item>
+      <div v-if="selectedSupplierFormHelp" class="supplier-form-help">{{ selectedSupplierFormHelp }}</div>
+      <t-form-item v-for="field in supplierCredentialFields" :key="field.key" :label="field.label" :name="field.key">
+        <t-select
+          v-if="field.type === 'select'"
+          v-model="supplierCredentialValues[field.key]"
+          :placeholder="field.placeholder || `请选择${field.label}`"
+          clearable
+          filterable
+        >
+          <t-option
+            v-for="option in field.options || []"
+            :key="String(option.value)"
+            :label="option.label"
+            :value="option.value"
+          />
+        </t-select>
+        <t-switch
+          v-else-if="field.type === 'switch' || field.type === 'boolean'"
+          v-model="supplierCredentialValues[field.key]"
+        />
+        <t-input-number
+          v-else-if="field.type === 'number'"
+          v-model="supplierCredentialValues[field.key]"
+          :placeholder="field.placeholder || `请输入${field.label}`"
+          style="width: 100%"
+        />
+        <t-textarea
+          v-else-if="field.type === 'textarea'"
+          v-model="supplierCredentialValues[field.key]"
+          :autosize="{ minRows: 3, maxRows: 6 }"
+          :placeholder="field.placeholder || `请输入${field.label}`"
+        />
+        <secret-input
+          v-else-if="field.secret"
+          :model-value="secretSupplierFieldValue(field)"
+          :has-value="hasExistingSupplierSecret(field)"
+          :placeholder="supplierFieldPlaceholder(field)"
+          :reset-key="supplierSecretResetKey(field)"
+          :can-reveal="canRevealSupplierSecrets"
+          :reveal="() => revealSupplierSecret(field)"
+          @update:model-value="(value: string) => (supplierCredentialValues[field.key] = value)"
+          @edited-change="(value: boolean) => (supplierSecretEdited[field.key] = value)"
+          @reveal-error="(error: unknown) => MessagePlugin.error(errorMessage(error, '读取敏感配置失败'))"
+        />
+        <t-input
+          v-else
+          v-model="supplierCredentialValues[field.key]"
+          :type="field.type === 'password' ? 'password' : 'text'"
+          clearable
+          :placeholder="supplierFieldPlaceholder(field)"
+        />
+        <p v-if="field.description" class="supplier-field-tip">{{ field.description }}</p>
+      </t-form-item>
       <t-form-item label="状态" name="status"><t-switch v-model="supplierForm.status" :custom-value="[1, 0]" /></t-form-item>
     </t-form>
   </t-dialog>
 </template>
 
 <script setup lang="ts">
-import { RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
+import { AddIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import type { PageInfo, PrimaryTableCol } from 'tdesign-vue-next';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref } from 'vue';
 
+import SecretInput from '@/components/secret-input/index.vue';
 import { productApi, type ProductCategoryRecord, type ProductTypeRecord } from '@/api/product';
-import { supplierApi, type ProviderTypeRecord, type SupplierRecord } from '@/api/supplier';
+import { supplierApi, type ProviderTypeRecord, type SupplierFormField, type SupplierFormSchema, type SupplierRecord, type SupplierUpsertPayload } from '@/api/supplier';
+import { AdminPermissions } from '@/constants/permissions';
+import { hasAdminPermission } from '@/utils/permission';
 
 import {
   errorMessage,
@@ -267,21 +324,44 @@ const supplierBatchForm = reactive({
   sync_config_options: 1,
 });
 const supplierForm = reactive({
-  interface_type: 'hosting_panel_api',
+  provider_key: '',
   name: '',
-  api_url: '',
-  api_username: '',
-  api_key: '',
   status: 1,
 });
+const supplierCredentialValues = reactive<Record<string, unknown>>({});
+const supplierSecretEdited = reactive<Record<string, boolean>>({});
+const canManageSuppliers = computed(() => hasAdminPermission(AdminPermissions.SUPPLIER_MANAGE));
+const canSyncSuppliers = computed(() => hasAdminPermission(AdminPermissions.SUPPLIER_SYNC));
+const canRevealSupplierSecrets = computed(() => hasAdminPermission(AdminPermissions.SUPPLIER_SECRET_REVEAL));
 
 const supplierRules = {
-  interface_type: [{ required: true, message: '请选择接口种类', trigger: 'change' }],
+  provider_key: [{ required: true, message: '请选择插件提供商', trigger: 'change' }],
   name: [{ required: true, message: '请输入接口名称', trigger: 'blur' }],
-  api_url: [{ required: true, message: '请输入接口地址', trigger: 'blur' }],
-  api_username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-  api_key: [{ required: true, message: '请输入 API 密钥', trigger: 'blur' }],
 };
+
+const fallbackSupplierCredentialFields: SupplierFormField[] = [
+  {
+    key: 'api_url',
+    label: '接口地址',
+    type: 'url',
+    required: true,
+    placeholder: 'https://panel.example.com',
+  },
+  {
+    key: 'api_username',
+    label: '接口账号',
+    type: 'text',
+    required: true,
+  },
+  {
+    key: 'api_key',
+    label: '接口密钥',
+    type: 'password',
+    required: true,
+    secret: true,
+    placeholder: '编辑时留空则保持原密钥',
+  },
+];
 
 const supplierBatchColumns: PrimaryTableCol<SupplierBatchProduct>[] = [
   { colKey: 'row-select', type: 'multiple', width: 54, fixed: 'left' },
@@ -295,15 +375,61 @@ const providerTypeOptions = computed(() => {
   return mergeProviderTypeOptions(providerTypes.value);
 });
 
+const selectedProviderType = computed(() => {
+  return providerTypeOptions.value.find((item) => item.value === supplierForm.provider_key) || null;
+});
+
+const selectedSupplierForm = computed<SupplierFormSchema>(() => {
+  const schema = toPlainRecord(selectedProviderType.value?.supplier_form);
+  const fields = normalizeSupplierFormFields(schema.fields);
+
+  return {
+    fields: fields.length > 0 ? fields : fallbackSupplierCredentialFields,
+    help: String(schema.help || '').trim(),
+  };
+});
+
+const selectedSupplierFormHelp = computed(() => selectedSupplierForm.value.help || '');
+
+const supplierCredentialFields = computed(() => selectedSupplierForm.value.fields || []);
+
 // --- Methods ---
 function canSupplierBatchConnect(row: SupplierRecord) {
-  return Boolean((row.has_api_url || row.api_url) && row.api_username && (row.has_api_key || row.api_key));
+  if (!canSyncSuppliers.value) return false;
+
+  const upstreamBinding = toPlainRecord(row.upstream_binding);
+  const providerKey = String(upstreamBinding.provider_key || row.provider_key || '').trim();
+  const schema = providerTypeOptions.value.find((item) => item.value === providerKey)?.supplier_form;
+  const fields = normalizeSupplierFormFields(toPlainRecord(schema).fields);
+  if (!fields.length) {
+    return Boolean(
+      (upstreamBinding.has_base_url || row.has_api_url || row.api_url) &&
+        (upstreamBinding.account_name || row.api_username) &&
+        (row.has_api_key || row.api_key),
+    );
+  }
+
+  return fields.every((field) => {
+    if (!field.required) return true;
+    if (field.key === 'api_url') return Boolean(upstreamBinding.has_base_url || row.has_api_url || row.api_url);
+    if (field.key === 'api_username') return Boolean(upstreamBinding.account_name || row.api_username);
+    if (field.key === 'api_key') return Boolean(row.has_api_key || row.api_key);
+    if (field.secret) return Boolean(toPlainRecord(upstreamBinding.has_secret_values)[field.key] || row.has_provider_secret_values?.[field.key]);
+    return hasSupplierCredentialValue(toPlainRecord(row.provider_config)[field.key]);
+  });
+}
+
+function hasSupplierCredentialValue(value: unknown) {
+  if (typeof value === 'boolean') return true;
+  if (typeof value === 'number') return Number.isFinite(value);
+  return String(value ?? '').trim() !== '';
 }
 
 function supplierInterfaceTypeLabel(row: SupplierRecord) {
-  const rawType = String(row.interface_type || '').trim();
+  const upstreamBinding = toPlainRecord(row.upstream_binding);
+  const rawType = String(upstreamBinding.provider_key || row.provider_key || '').trim();
   if (rawType && providerTypeFallbackLabels[rawType]) return providerTypeFallbackLabels[rawType];
-  return row.interface_type_label || providerTypeLabel(rawType, providerTypeOptions.value);
+  return row.provider_label || providerTypeLabel(rawType, providerTypeOptions.value);
 }
 
 function balanceStatusLabel(row: SupplierRecord) {
@@ -366,7 +492,9 @@ async function loadSuppliers() {
     supplierTotal.value = Number(response.total || 0);
     supplierPage.value = Number(response.page || supplierPage.value);
     supplierPageSize.value = Number(response.page_size || supplierPageSize.value);
-    void syncSupplierBalances(rows);
+    if (canSyncSuppliers.value) {
+      void syncSupplierBalances(rows);
+    }
   } catch (error) {
     supplierBalanceBatchId += 1;
     suppliers.value = [];
@@ -501,6 +629,8 @@ async function loadSupplierBatchProducts() {
 }
 
 async function openSupplierBatchDialog(row: SupplierRecord) {
+  if (!canSyncSuppliers.value) return;
+
   if (!canSupplierBatchConnect(row)) {
     MessagePlugin.warning('接口配置不完整，暂时无法批量对接商品');
     return;
@@ -532,6 +662,8 @@ function selectPendingSupplierBatchProducts() {
 }
 
 function reloadSupplierBatchProducts() {
+  if (!canSyncSuppliers.value) return;
+
   void loadSupplierBatchProducts();
 }
 
@@ -540,6 +672,7 @@ function resolveSupplierBatchCategoryPayload() {
 }
 
 async function submitSupplierBatchConnect() {
+  if (!canSyncSuppliers.value) return;
   if (!supplierBatchSupplier.value?.id) return;
   if (!supplierBatchForm.product_type) {
     MessagePlugin.warning('请选择商品种类');
@@ -579,17 +712,20 @@ function selectedProductIdsFromKeys(keys: Array<string | number>) {
 }
 
 async function openSupplierDialog(row?: SupplierRecord) {
+  if (!providerTypeOptions.value.length) {
+    await loadProviderTypes();
+  }
+
   const detail = row?.id ? await loadSupplierDetail(row) : null;
   const source = detail || row;
+  const upstreamBinding = toPlainRecord(source?.upstream_binding);
   editingSupplier.value = source || null;
   Object.assign(supplierForm, {
-    interface_type: source?.interface_type || providerTypeOptions.value[0]?.value || 'hosting_panel_api',
+    provider_key: upstreamBinding.provider_key || source?.provider_key || providerTypeOptions.value[0]?.value || '',
     name: source?.name || '',
-    api_url: source?.api_url || '',
-    api_username: source?.api_username || '',
-    api_key: '',
     status: Number(source?.status ?? 1),
   });
+  resetSupplierCredentialValues(source || null);
   supplierDialogVisible.value = true;
 }
 
@@ -602,15 +738,27 @@ async function loadSupplierDetail(row: SupplierRecord) {
 }
 
 async function submitSupplier() {
+  if (!canManageSuppliers.value) {
+    MessagePlugin.warning('当前账号无供应商管理权限');
+    return;
+  }
+
   const validateResult = await supplierFormRef.value?.validate?.();
   if (validateResult !== true) return;
+  const credentialValidationMessage = validateSupplierCredentialValues();
+  if (credentialValidationMessage) {
+    MessagePlugin.warning(credentialValidationMessage);
+    return;
+  }
+
   supplierSubmitting.value = true;
   try {
+    const payload = buildSupplierPayload();
     if (editingSupplier.value?.id) {
-      await supplierApi.update(editingSupplier.value.id, { ...supplierForm });
+      await supplierApi.update(editingSupplier.value.id, payload);
       MessagePlugin.success('提供商已更新');
     } else {
-      await supplierApi.create({ ...supplierForm });
+      await supplierApi.create(payload);
       MessagePlugin.success('提供商已创建');
     }
     supplierDialogVisible.value = false;
@@ -623,6 +771,8 @@ async function submitSupplier() {
 }
 
 async function handleToggleSupplier(row: SupplierRecord) {
+  if (!canManageSuppliers.value) return;
+
   supplierActionLoading.value = row.id;
   try {
     await supplierApi.toggleStatus(row.id);
@@ -636,6 +786,8 @@ async function handleToggleSupplier(row: SupplierRecord) {
 }
 
 function handleDeleteSupplier(row: SupplierRecord) {
+  if (!canManageSuppliers.value) return;
+
   const dialog = DialogPlugin.confirm({
     header: '删除提供商',
     body: `确认删除「${row.name || row.id}」吗？`,
@@ -688,9 +840,171 @@ function normalizeProviderTypeOptions(value: unknown): ProviderTypeRecord[] {
 
       const rawLabel = rec.label ?? rec.name ?? rec.title;
       const label = providerTypeFallbackLabels[val] || (typeof rawLabel === 'string' ? rawLabel : String(rawLabel || val));
-      return { value: val, label };
+      return { ...rec, value: val, label };
     })
     .filter((item): item is ProviderTypeRecord => !!item);
+}
+
+function handleSupplierProviderChange() {
+  resetSupplierCredentialValues(editingSupplier.value);
+}
+
+function resetSupplierCredentialValues(source: SupplierRecord | null) {
+  Object.keys(supplierCredentialValues).forEach((key) => {
+    delete supplierCredentialValues[key];
+  });
+  Object.keys(supplierSecretEdited).forEach((key) => {
+    delete supplierSecretEdited[key];
+  });
+
+  const providerConfig = toPlainRecord(source?.provider_config);
+  const upstreamBinding = toPlainRecord(source?.upstream_binding);
+  supplierCredentialFields.value.forEach((field) => {
+    if (field.key === 'api_url') {
+      supplierCredentialValues[field.key] = upstreamBinding.base_url || source?.api_url || field.default || '';
+      return;
+    }
+    if (field.key === 'api_username') {
+      supplierCredentialValues[field.key] = upstreamBinding.account_name || source?.api_username || field.default || '';
+      return;
+    }
+    if (field.key === 'api_key') {
+      supplierCredentialValues[field.key] = '';
+      return;
+    }
+    supplierCredentialValues[field.key] = providerConfig[field.key] ?? field.default ?? defaultSupplierFieldValue(field);
+  });
+}
+
+function defaultSupplierFieldValue(field: SupplierFormField) {
+  if (field.type === 'switch' || field.type === 'boolean') return false;
+  if (field.type === 'number') return null;
+  return '';
+}
+
+function supplierFieldPlaceholder(field: SupplierFormField) {
+  if (field.placeholder) return field.placeholder;
+  if (field.secret && editingSupplier.value) return '留空则保持原值';
+  return `请输入${field.label}`;
+}
+
+function hasExistingSupplierSecret(field: SupplierFormField) {
+  if (!field.secret || !editingSupplier.value) return false;
+  if (field.key === 'api_key') return Boolean(editingSupplier.value.has_api_key);
+  return Boolean(editingSupplier.value.has_provider_secret_values?.[field.key]);
+}
+
+function secretSupplierFieldValue(field: SupplierFormField) {
+  const value = supplierCredentialValues[field.key];
+  return value === null || value === undefined ? '' : String(value);
+}
+
+function supplierSecretResetKey(field: SupplierFormField) {
+  return `${editingSupplier.value?.id || 'new'}:${supplierForm.provider_key}:${field.key}`;
+}
+
+async function revealSupplierSecret(field: SupplierFormField) {
+  if (!canRevealSupplierSecrets.value) return '';
+  if (!editingSupplier.value?.id) return '';
+  const response = await supplierApi.revealSecret(editingSupplier.value.id, field.key);
+  return response.value;
+}
+
+function validateSupplierCredentialValues() {
+  for (const field of supplierCredentialFields.value) {
+    if (!field.required) continue;
+    const value = supplierCredentialValues[field.key];
+    const hasExistingSecret = hasExistingSupplierSecret(field);
+    if (hasExistingSecret && String(value || '').trim() === '') continue;
+    if (String(value ?? '').trim() === '') return `请填写${field.label}`;
+  }
+  return '';
+}
+
+function buildSupplierPayload(): SupplierUpsertPayload {
+  const providerConfig: SupplierUpsertPayload['provider_config'] = {};
+  const providerKey = String(supplierForm.provider_key || '').trim();
+  const payload: SupplierUpsertPayload = {
+    name: supplierForm.name,
+    status: Number(supplierForm.status),
+    api_url: '',
+    api_username: '',
+    api_key: '',
+    provider_config: providerConfig,
+    upstream_binding: {
+      provider_key: providerKey,
+      base_url: '',
+      account_name: '',
+    },
+  };
+
+  supplierCredentialFields.value.forEach((field) => {
+    const value = field.secret && hasExistingSupplierSecret(field) && !supplierSecretEdited[field.key]
+      ? ''
+      : supplierCredentialValues[field.key];
+    if (field.key === 'api_url') {
+      payload.api_url = value;
+      if (payload.upstream_binding) payload.upstream_binding.base_url = value;
+      return;
+    }
+    if (field.key === 'api_username') {
+      payload.api_username = value;
+      if (payload.upstream_binding) payload.upstream_binding.account_name = value;
+      return;
+    }
+    if (field.key === 'api_key') {
+      payload.api_key = value;
+      return;
+    }
+    providerConfig[field.key] = value;
+  });
+
+  return payload;
+}
+
+function normalizeSupplierFormFields(value: unknown): SupplierFormField[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      const record = toPlainRecord(item);
+      const key = String(record.key || '').trim();
+      if (!key) return null;
+      const label = String(record.label || record.title || key).trim();
+      const type = normalizeSupplierFieldType(record.type);
+      const options = Array.isArray(record.options)
+        ? record.options.map((option) => {
+            const optionRecord = toPlainRecord(option);
+            return {
+              label: String(optionRecord.label ?? optionRecord.name ?? optionRecord.value ?? '').trim(),
+              value: (optionRecord.value ?? optionRecord.key ?? optionRecord.label ?? '') as string | number | boolean,
+            };
+          })
+        : [];
+
+      const field: SupplierFormField = {
+        key,
+        label,
+        type,
+        required: Boolean(record.required),
+        secret: Boolean(record.secret),
+        placeholder: String(record.placeholder || '').trim(),
+        description: String(record.description || '').trim(),
+        default: record.default,
+        options,
+      };
+
+      return field;
+    })
+    .filter((item): item is SupplierFormField => Boolean(item));
+}
+
+function normalizeSupplierFieldType(value: unknown): SupplierFormField['type'] {
+  const type = String(value || 'text').trim();
+  if (['text', 'url', 'password', 'select', 'switch', 'boolean', 'number', 'textarea'].includes(type)) {
+    return type as SupplierFormField['type'];
+  }
+
+  return 'text';
 }
 
 // --- Init ---

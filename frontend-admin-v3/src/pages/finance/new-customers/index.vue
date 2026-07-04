@@ -36,8 +36,31 @@
     </t-card>
 
     <t-card :bordered="false">
-      <div class="table-scroll">
+      <div v-if="!isMobile" class="table-scroll">
         <t-table row-key="date" :data="dailyList" :columns="columns" :loading="loading" hover table-layout="fixed" />
+      </div>
+
+      <div v-else class="new-customers-mobile-list">
+        <t-loading :loading="loading" size="small">
+          <div v-if="dailyList.length" class="new-customers-mobile-stack">
+            <MobileRecordCard
+              v-for="row in dailyList"
+              :key="row.date"
+              :title="String(row.date || '-')"
+              eyebrow="日报"
+              :highlight-label="'新增客户'"
+              :highlight-value="row.new_customers ?? 0"
+              :rows="[
+                { label: '新订单', value: row.new_orders ?? 0 },
+                { label: '完成', value: row.completed_orders ?? 0 },
+                { label: '新建工单', value: row.new_tickets ?? 0 },
+                { label: '回复工单', value: row.ticket_replies ?? 0 },
+                { label: '取消请求', value: row.cancel_requests ?? 0 },
+              ]"
+            />
+          </div>
+          <t-empty v-else description="暂无数据" />
+        </t-loading>
       </div>
     </t-card>
   </div>
@@ -50,9 +73,13 @@ import { MessagePlugin } from 'tdesign-vue-next';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
 
 import { adminApi, type NewCustomerDailyRecord } from '@/api/admin';
+import MobileRecordCard from '@/components/mobile-record-card/index.vue';
+import { useMediaQuery } from '@/hooks';
 import { errorMessage } from '@/utils/userMessage';
 
 import './index.less';
+
+const isMobile = useMediaQuery('(max-width: 768px)');
 
 const loading = ref(false);
 const dailyList = ref<NewCustomerDailyRecord[]>([]);

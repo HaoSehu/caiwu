@@ -16,7 +16,7 @@
         <template v-if="currentSection" #title>{{ currentSection.title }}</template>
         <template v-if="currentSection?.description" #subtitle>{{ currentSection.description }}</template>
 
-        <t-form :data="form" label-align="top" class="settings-form">
+        <t-form :data="form" label-align="top" class="settings-form" :disabled="!canManageCurrentTab">
           <div class="settings-field-grid">
             <article
               v-for="field in currentSection?.fields || []"
@@ -58,12 +58,23 @@
                   format="HH:mm:ss"
                   :placeholder="field.placeholder || `请选择${field.label}`"
                 />
-                <div v-if="field.type === 'image'" class="cover-image-selector" @click="selectImage(field)">
+                <div v-else-if="field.type === 'image'" class="cover-image-selector" @click="selectImage(field)">
                   <image-icon />
                   <span v-if="form[field.key]" class="cover-image-selector__name">{{ String(form[field.key]).split('/').pop() }}</span>
                   <span v-else class="cover-image-selector__placeholder">点击选择{{ field.label }}</span>
                   <chevron-right-icon />
                 </div>
+                <secret-input
+                  v-else-if="isSecretSettingField(field)"
+                  v-model="form[field.key]"
+                  :has-value="hasSettingSecretValue(field)"
+                  :placeholder="field.placeholder || `请输入${field.label}`"
+                  :reset-key="settingSecretResetKey(field)"
+                  :can-reveal="canRevealSettingsSecret"
+                  :reveal="() => revealSettingSecret(field)"
+                  @edited-change="(value: boolean) => (settingsSecretEdited[settingSecretEditKey(field)] = value)"
+                  @reveal-error="(error: unknown) => MessagePlugin.error(errorMessage(error, '读取敏感配置失败'))"
+                />
                 <t-input
                   v-else
                   v-model="form[field.key]"
@@ -78,7 +89,7 @@
       </t-card>
 
       <div class="settings-bottom-actions">
-        <t-button theme="primary" :loading="currentSaving" @click="saveCurrentTab">
+        <t-button theme="primary" :loading="currentSaving" :disabled="!canManageCurrentTab" @click="saveCurrentTab">
           <template #icon><check-icon /></template>
           保存设置
         </t-button>
@@ -204,7 +215,7 @@
       </t-card>
 
       <div class="settings-bottom-actions">
-        <t-button theme="primary" :loading="currentSaving" @click="saveCurrentTab">
+        <t-button theme="primary" :loading="currentSaving" :disabled="!canManageCurrentTab" @click="saveCurrentTab">
           <template #icon><check-icon /></template>
           保存设置
         </t-button>
@@ -218,7 +229,7 @@
     <t-drawer
       :visible="mediaDrawerVisible"
       header="选择媒体"
-      :size="520"
+      :size="'520px'"
       placement="right"
       :footer="null"
       @close="closeMediaDrawer"
@@ -245,9 +256,8 @@
             class="cover-drawer-card__img"
             :src="item.url"
             muted
-            preload="auto"
+            preload="metadata"
             playsinline
-            @loadeddata="(e: Event) => { const v = e.target as HTMLVideoElement; v.play().then(() => v.pause()).catch(() => {}); }"
           ></video>
           <img v-else class="cover-drawer-card__img" :src="item.url" :alt="item.filename" loading="lazy" />
           <div class="cover-drawer-card__label">
@@ -262,7 +272,7 @@
     <t-drawer
       :visible="videoDrawerVisible"
       :header="videoDrawerTitle"
-      :size="560"
+      :size="'560px'"
       placement="right"
       :footer="null"
       @close="closeVideoDrawer"
@@ -342,7 +352,10 @@ import {
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import type { TableRowData } from 'tdesign-vue-next';
 
+import SecretInput from '@/components/secret-input/index.vue';
 import { adminApi, type HomeHeroFeature, type HomeHeroPayload, type HomeHeroSlide, type MediaFileRecord, type SettingItem } from '@/api/admin';
+import { AdminPermissions } from '@/constants/permissions';
+import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
 
 import './index.less';
@@ -404,6 +417,9 @@ const heroLoading = ref(false);
 const heroSaving = ref(false);
 const activeSection = ref('');
 const form = reactive<Record<string, FieldValue>>({});
+const settingsGroupCache = reactive<Record<string, Record<string, unknown>>>({});
+const settingsMetaCache = reactive<Record<string, Record<string, SettingItem>>>({});
+const settingsSecretEdited = reactive<Record<string, boolean>>({});
 const fileInputRef = ref<HTMLInputElement>();
 const pendingImageField = ref<SettingField | null>(null);
 const mediaDrawerVisible = ref(false);
@@ -464,29 +480,23 @@ const configs: Record<Exclude<SettingsTab, 'site_hero'>, SettingsConfig> = {
   system: {
     group: 'system',
     title: '系统设置',
-    description: '集中配置 GeeTest 行为验证与邮件短信限流策略。',
+    description: '集中配置人机验证与邮件短信限流策略。',
     sections: [
       {
-        title: 'GeeTest 行为验证',
-        description: '用于登录、注册和验证码发送前的人机验证。',
+        title: '人机验证',
+        description: '服务商接入通过插件管理维护；此处控制登录、注册和验证码发送前是否启用校验。',
         fields: [
-          { key: 'geetest_enabled', label: '启用 GeeTest', type: 'switch', default: false, help: '开启后高风险操作将要求完成行为验证。' },
-          { key: 'geetest_captcha_id', label: 'Captcha ID', type: 'input', default: '', requiredWhen: (model) => Boolean(model.geetest_enabled), help: '来自 GeeTest 控制台的 captcha_id。' },
-          { key: 'geetest_captcha_key', label: 'Captcha Key', type: 'password', default: '', requiredWhen: (model) => Boolean(model.geetest_enabled), help: '来自 GeeTest 控制台的 captcha_key。' },
+          { key: 'captcha_enabled', label: '启用人机验证', type: 'switch', default: false, help: '开启后登录风控、注册和验证码发送会调用已启用的人机验证插件。' },
         ],
       },
       {
         title: '邮件短信限流',
-        description: '控制验证码发送频率，避免接口被恶意刷取。',
+        description: '仅按单个 IP 的每分钟验证码发送频率进行限制。',
         fields: [
           { key: 'email_rate_limit_enabled', group: 'message_limit', label: '启用邮箱限流', type: 'switch', default: false },
-          { key: 'email_cooldown_seconds', group: 'message_limit', label: '邮箱冷却时间（秒）', type: 'number', default: 60, min: 0 },
-          { key: 'email_target_hourly_limit', group: 'message_limit', label: '邮箱每小时上限', type: 'number', default: 10, min: 0 },
-          { key: 'email_ip_hourly_limit', group: 'message_limit', label: 'IP 每小时上限', type: 'number', default: 20, min: 0 },
+          { key: 'email_ip_minute_limit', group: 'message_limit', label: '邮箱单 IP 每分钟上限', type: 'number', default: 6, min: 0, help: '设为 0 表示不限制；不再按邮箱地址累计总量。' },
           { key: 'sms_rate_limit_enabled', group: 'message_limit', label: '启用短信限流', type: 'switch', default: false },
-          { key: 'sms_cooldown_seconds', group: 'message_limit', label: '手机号冷却时间（秒）', type: 'number', default: 60, min: 0 },
-          { key: 'sms_target_hourly_limit', group: 'message_limit', label: '手机号每小时上限', type: 'number', default: 10, min: 0 },
-          { key: 'sms_ip_hourly_limit', group: 'message_limit', label: '短信 IP 每小时上限', type: 'number', default: 20, min: 0 },
+          { key: 'sms_ip_minute_limit', group: 'message_limit', label: '短信单 IP 每分钟上限', type: 'number', default: 6, min: 0, help: '设为 0 表示不限制；不再按手机号累计总量。' },
         ],
       },
     ],
@@ -567,6 +577,7 @@ const configs: Record<Exclude<SettingsTab, 'site_hero'>, SettingsConfig> = {
           { key: 'browser_title', label: '浏览器标题', type: 'input', default: '', maxlength: 80, placeholder: '留空则默认使用站点名称' },
           { key: 'site_logo', label: '站点 Logo', type: 'image', default: '', maxlength: 255, placeholder: '/branding/logo.svg' },
           { key: 'site_favicon', label: '站点 Favicon', type: 'image', default: '', maxlength: 255, placeholder: '/branding/logo1.svg' },
+          { key: 'client_console_icon', label: '用户控制台图标', type: 'image', default: '', maxlength: 255, placeholder: '/branding/logo1.svg', help: '用于用户控制台侧边栏与登录页 Logo，留空则使用站点 Favicon。' },
           { key: 'service_phone', label: '官方QQ群', type: 'input', default: '', maxlength: 40 },
           { key: 'support_group_qr', label: '官方群聊二维码', type: 'image', default: '', maxlength: 255 },
           { key: 'support_group_link', label: '入群链接', type: 'input', default: '', maxlength: 255 },
@@ -613,6 +624,10 @@ function resolveInitialTab(): SettingsTab {
 }
 
 const activeTab = ref<SettingsTab>(resolveInitialTab());
+const canManageSettings = computed(() => hasAdminPermission(AdminPermissions.SETTINGS_MANAGE));
+const canManageSite = computed(() => hasAdminPermission(AdminPermissions.SITE_MANAGE));
+const canRevealSettingsSecret = computed(() => hasAdminPermission(AdminPermissions.SETTINGS_SECRET_REVEAL));
+const canManageCurrentTab = computed(() => (activeTab.value === 'site_hero' ? canManageSite.value : canManageSettings.value));
 
 function refreshCurrentTab() {
   if (activeTab.value === 'site_hero') return loadHero();
@@ -631,12 +646,18 @@ watch(
 );
 
 function saveCurrentTab() {
+  if (!canManageCurrentTab.value) {
+    MessagePlugin.warning('当前账号无保存权限');
+    return undefined;
+  }
+
   if (activeTab.value === 'site_hero') return saveHero();
   return saveSettings();
 }
 
 function resetFormDefaults() {
   Object.keys(form).forEach((key) => delete form[key]);
+  Object.keys(settingsSecretEdited).forEach((key) => delete settingsSecretEdited[key]);
   allFields.value.forEach((field) => {
     form[field.key] = field.default ?? (field.type === 'switch' ? false : '');
   });
@@ -647,8 +668,9 @@ async function loadSettings() {
   settingsLoading.value = true;
   resetFormDefaults();
   try {
-    const responses = await Promise.all(activeGroups.value.map((group) => adminApi.settings.list({ group })));
-    const maps = Object.fromEntries(activeGroups.value.map((group, index) => [group, normalizeSettings(responses[index])]));
+    const maps = Object.fromEntries(await Promise.all(
+      activeGroups.value.map(async (group): Promise<[string, Record<string, unknown>]> => [group, await loadSettingsGroup(group)]),
+    ));
     allFields.value.forEach((field) => {
       const group = field.group || pageConfig.value?.group || 'system';
       form[field.key] = parseFieldValue(field, maps[group]?.[field.key]);
@@ -661,11 +683,19 @@ async function loadSettings() {
 }
 
 async function saveSettings() {
+  if (!canManageSettings.value) {
+    MessagePlugin.warning('当前账号无系统配置管理权限');
+    return;
+  }
+
   if (!validateSettings()) return;
   settingsSaving.value = true;
   try {
     const payload = buildSettingsPayload();
     await Promise.all(Object.entries(payload).map(([group, settings]) => adminApi.settings.save({ group, settings })));
+    Object.entries(payload).forEach(([group, settings]) => {
+      settingsGroupCache[group] = { ...(settingsGroupCache[group] || {}), ...settings };
+    });
     MessagePlugin.success(`${pageConfig.value?.title || '设置'}已保存`);
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '保存设置失败'));
@@ -709,10 +739,19 @@ function buildSettingsPayload() {
     const group = field.group || pageConfig.value?.group || 'system';
     let value = form[field.key];
     if (field.type === 'switch') value = value ? 1 : 0;
+    if (isSecretSettingField(field) && hasSettingSecretValue(field) && !settingsSecretEdited[settingSecretEditKey(field)]) value = '';
     if (!payload[group]) payload[group] = {};
     payload[group][field.key] = value;
     return payload;
   }, {});
+}
+
+async function loadSettingsGroup(group: string) {
+  if (settingsGroupCache[group]) return settingsGroupCache[group];
+  const response = await adminApi.settings.list({ group });
+  settingsGroupCache[group] = normalizeSettings(response);
+  settingsMetaCache[group] = normalizeSettingItems(response);
+  return settingsGroupCache[group];
 }
 
 function normalizeSettings(response: SettingItem[] | Record<string, unknown>) {
@@ -720,6 +759,49 @@ function normalizeSettings(response: SettingItem[] | Record<string, unknown>) {
   const record = toRecord(response);
   if (Array.isArray(record.list)) return Object.fromEntries((record.list as SettingItem[]).map((item) => [item.key, item.value]));
   return record;
+}
+
+function normalizeSettingItems(response: SettingItem[] | Record<string, unknown>) {
+  if (Array.isArray(response)) return Object.fromEntries(response.map((item) => [item.key, item]));
+  const record = toRecord(response);
+  if (Array.isArray(record.list)) return Object.fromEntries((record.list as SettingItem[]).map((item) => [item.key, item]));
+  return {};
+}
+
+function settingFieldGroup(field: SettingField) {
+  return field.group || pageConfig.value?.group || 'system';
+}
+
+function settingSecretEditKey(field: SettingField) {
+  return `${settingFieldGroup(field)}:${field.key}`;
+}
+
+function settingSecretResetKey(field: SettingField) {
+  return `${activeTab.value}:${settingSecretEditKey(field)}`;
+}
+
+function settingMeta(field: SettingField) {
+  return settingsMetaCache[settingFieldGroup(field)]?.[field.key];
+}
+
+function isSecretSettingField(field: SettingField) {
+  return field.type === 'password' && settingMeta(field)?.is_secret === true;
+}
+
+function hasSettingSecretValue(field: SettingField) {
+  return settingMeta(field)?.has_value === true;
+}
+
+function secretSettingFieldValue(field: SettingField) {
+  const value = form[field.key];
+  return value === null || value === undefined ? '' : String(value);
+}
+
+async function revealSettingSecret(field: SettingField) {
+  if (!canRevealSettingsSecret.value) return '';
+
+  const response = await adminApi.settings.revealSecret(settingFieldGroup(field), field.key);
+  return response.value;
 }
 
 function parseFieldValue(field: SettingField, raw: unknown): FieldValue {
@@ -857,6 +939,11 @@ function applyHeroPayload(payload: HomeHeroPayload = {}) {
 }
 
 async function saveHero() {
+  if (!canManageSite.value) {
+    MessagePlugin.warning('当前账号无站点管理权限');
+    return;
+  }
+
   if (!validateHero()) return;
   heroSaving.value = true;
   try {

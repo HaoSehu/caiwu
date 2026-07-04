@@ -8,13 +8,15 @@ use App\Constants\ProductType;
 use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
 use App\Models\OperationLog;
+use App\Models\Product;
 use App\Models\Service;
 use App\Models\Supplier;
 use App\Models\User;
+use App\Services\Integrations\Plugins\PluginBindingResolver;
+use App\Services\Integrations\Plugins\ServiceUpstreamBindingWriter;
 use App\Services\Integrations\Support\ProviderErrorMapper;
 use App\Services\System\OperationLogService;
 use App\Services\Upstream\Contracts\ProvidesConsoleRuntime;
-use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderResolver;
 use App\Services\Upstream\Support\WebSessionCookieParser;
 use App\Support\SensitiveDataSanitizer;
@@ -34,19 +36,31 @@ use Illuminate\Support\Facades\Log;
 class ServiceDetailService
 {
     private const DETAIL_REMOTE_SNAPSHOT_TTL_SECONDS = 120; // 2分钟：远程快照
+
     private const DETAIL_RESPONSE_CACHE_TTL_SECONDS = 30; // 30秒：服务详情请求频繁，降低后端压力
+
     private const REMOTE_STATUS_CACHE_TTL_SECONDS = 30; // 30秒：远程状态
+
     private const SERVICE_CONFIG_CACHE_TTL_SECONDS = 120; // 2分钟：服务配置
+
     private const PRODUCT_CONFIG_OPTIONS_CACHE_TTL_SECONDS = 604800; // 1周：产品配置选项 rarely change
+
     private const MONITOR_MODULE_CACHE_TTL_SECONDS = 600; // 10分钟：监控模块
+
+    private readonly PluginBindingResolver $bindingResolver;
+
+    private ?ServiceUpstreamBindingWriter $serviceBindingWriter = null;
 
     public function __construct(
         private readonly ProviderResolver $providerResolver,
         private readonly OperationLogService $operationLogService,
         private readonly ServiceResolverService $resolverService,
         private readonly ServiceTransformService $transformService,
+        ?PluginBindingResolver $bindingResolver = null,
         private readonly ?WebSessionCookieParser $webSessionCookieParser = null,
-    ) {}
+    ) {
+        $this->bindingResolver = $bindingResolver ?? new PluginBindingResolver;
+    }
 
     // ── Public API ─────────────────────────────────────────────────────────
 
@@ -65,7 +79,7 @@ class ServiceDetailService
             return $cached;
         }
 
-        $provisionData = (array) ($service->provision_data ?? []);
+        $provisionData = $this->serviceProvisionData($service);
         $catalogProductType = $this->resolverService->resolveGroupedOverviewTypeValue($service);
         $consoleMode = $this->resolverService->resolveConsoleMode($service, $provisionData);
 
@@ -90,7 +104,7 @@ class ServiceDetailService
     public function getDetailForUser(User $user, int $serviceId, bool $refreshRemote = false): array
     {
         $service = $this->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,pricing,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,pricing,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -123,7 +137,7 @@ class ServiceDetailService
                 if (! empty($remote['host']) || ! empty($remote['runtime']) || ! empty($remote['nat'])) {
                     $this->syncServiceFromRemote($service, $remote['host'] ?? [], $remote['runtime'] ?? [], $remote['nat'] ?? []);
                     $service->refresh()->loadMissing([
-                        'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,pricing,purchase_requires',
+                        'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,pricing,purchase_requires',
                         'product.firstProductGroup:id,code,name,description,slug',
                         'product.secondProductGroup:id,first_product_group_id,name,description,slug',
                         'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -158,7 +172,7 @@ class ServiceDetailService
     public function getBaseDetailForUser(User $user, int $serviceId): array
     {
         $service = $this->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,pricing,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,pricing,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -183,7 +197,7 @@ class ServiceDetailService
     public function getRemoteStatusPatchForUser(User $user, int $serviceId): array
     {
         $service = $this->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,pricing,purchase_requires',
+            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,pricing,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -208,7 +222,7 @@ class ServiceDetailService
                 if (! empty($remote['host']) || ! empty($remote['runtime']) || ! empty($remote['nat'])) {
                     $this->syncServiceFromRemote($service, $remote['host'] ?? [], $remote['runtime'] ?? [], $remote['nat'] ?? []);
                     $service->refresh()->loadMissing([
-                        'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,supplier_id,provision_module,config_options,pricing,purchase_requires',
+                        'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,pricing,purchase_requires',
                         'product.firstProductGroup:id,code,name,description,slug',
                         'product.secondProductGroup:id,first_product_group_id,name,description,slug',
                         'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -322,10 +336,11 @@ class ServiceDetailService
         ]);
 
         $cleanRemark = TextSanitizer::clean($remark);
-        $provisionData = (array) ($service->provision_data ?? []);
+        $provisionData = $this->serviceProvisionData($service);
         $provisionData['client_remark'] = $cleanRemark;
 
         $service->forceFill(['provision_data' => $provisionData])->save();
+        $this->serviceBindingWriter()->syncServiceState($service, null, $provisionData);
 
         $this->operationLogService->writeServiceConsoleLog($service, 'service.console.remark.update', [
             'category' => 'service',
@@ -348,7 +363,7 @@ class ServiceDetailService
         ]);
 
         $cleanServiceName = mb_substr(TextSanitizer::clean($serviceName), 0, 120);
-        $provisionData = (array) ($service->provision_data ?? []);
+        $provisionData = $this->serviceProvisionData($service);
         $provisionData = ServiceHostname::rememberDefaultServiceName($provisionData, (string) ($service->name ?? ''));
         $provisionData = ServiceHostname::writeCustomServiceName($provisionData, $cleanServiceName);
 
@@ -356,6 +371,8 @@ class ServiceDetailService
             'name' => ServiceHostname::resolveInstanceName($service, $provisionData),
             'provision_data' => $provisionData,
         ])->save();
+
+        $this->serviceBindingWriter()->syncServiceState($service, null, $provisionData);
 
         $this->forgetDetailCaches($service);
 
@@ -383,7 +400,7 @@ class ServiceDetailService
             return;
         }
 
-        $currentProvisionData = (array) ($service->provision_data ?? []);
+        $currentProvisionData = $this->serviceProvisionData($service, includeSecrets: true);
         $cachedConnection = $this->transformService->readCachedConnection($currentProvisionData);
         $natRemote = $this->transformService->resolveNatRemoteSnapshot($currentProvisionData, $nat);
         $normalizedHostStatus = strtolower(trim((string) ($host['domainstatus'] ?? '')));
@@ -442,6 +459,7 @@ class ServiceDetailService
             'suspended_reason' => null,
             'provision_data' => $provisionData,
         ])->save();
+        $this->serviceBindingWriter()->syncServiceState($service, null, $provisionData);
     }
 
     public function fetchRemoteState(Service $service, ?Supplier $supplier = null, ?string $jwt = null): array
@@ -452,7 +470,7 @@ class ServiceDetailService
             [$supplier, $hostId] = $this->resolveManagedSupplierAndHost($service);
             $runtime = $this->resolveRuntimeCapabilityForSupplier($supplier);
         } else {
-            $provisionData = (array) ($service->provision_data ?? []);
+            $provisionData = $this->serviceProvisionData($service);
             $hostId = (int) (($provisionData['upstream_host_id'] ?? 0) ?: 0);
             $runtime = $this->resolveRuntimeCapabilityForSupplier($supplier);
         }
@@ -468,7 +486,7 @@ class ServiceDetailService
             $detailResponse = is_callable([$runtime, 'getHostDetail'])
                 ? $runtime->getHostDetail($supplier, $hostId, $resolvedJwt)
                 : $runtime->get($supplier, "/v1/hosts/{$hostId}", $resolvedJwt);
-            $this->assertSuccess($detailResponse, '读取主机详情');
+            $this->assertSuccess($detailResponse, '读取主机详情', $this->providerKeyForSupplier($supplier));
             $detailPayload = $this->extractPayload($detailResponse);
         } catch (\Throwable $exception) {
             Log::info('[实例详情] 上游 API 详情不可用，尝试网页登录详情接口', [
@@ -526,10 +544,12 @@ class ServiceDetailService
     {
         $headers = $this->buildSupplierWebSessionHeaders($supplier);
         throw_if($headers === [], new BusinessException('供应商 API 登录失败，且未配置网页登录会话 Cookie', 42200));
+        $baseUrl = $this->resolveSupplierBaseUrl($supplier);
+        throw_if($baseUrl === '', new BusinessException('供应商未配置上游插件 API 地址', 42200));
 
         $responseText = $runtime->getText(
             $supplier,
-            rtrim((string) $supplier->api_url, '/').'/host/dedicatedserver',
+            rtrim($baseUrl, '/').'/host/dedicatedserver',
             null,
             ['host_id' => $hostId],
             $headers
@@ -568,20 +588,8 @@ class ServiceDetailService
     public function fetchSupportedModules(Supplier $supplier, int $hostId, string $jwt): array
     {
         $cacheKey = $this->buildMonitorModuleCacheKey($supplier, $hostId);
-        $legacyCacheKey = $this->buildLegacyMonitorModuleCacheKey($supplier, $hostId);
-        $cacheKeys = array_values(array_unique([$cacheKey, $legacyCacheKey]));
-        $cachedValues = Cache::many($cacheKeys);
-
-        foreach ($cacheKeys as $lookupKey) {
-            $cachedModules = $cachedValues[$lookupKey] ?? null;
-            if (! is_array($cachedModules)) {
-                continue;
-            }
-
-            if ($lookupKey !== $cacheKey) {
-                Cache::put($cacheKey, $cachedModules, now()->addSeconds(self::MONITOR_MODULE_CACHE_TTL_SECONDS));
-            }
-
+        $cachedModules = Cache::get($cacheKey);
+        if (is_array($cachedModules)) {
             return $cachedModules;
         }
 
@@ -589,7 +597,7 @@ class ServiceDetailService
         $response = is_callable([$runtime, 'getSupportedModules'])
             ? $runtime->getSupportedModules($supplier, $hostId, $jwt)
             : $runtime->get($supplier, "/v1/hosts/{$hostId}/module", $jwt);
-        $this->assertSuccess($response, '读取监控模块');
+        $this->assertSuccess($response, '读取监控模块', $this->providerKeyForSupplier($supplier));
 
         $payload = $this->extractPayload($response);
 
@@ -639,37 +647,30 @@ class ServiceDetailService
 
         if ($supplierId > 0) {
             $service->loadMissing('product.supplier');
-            $supplier = null;
+            $supplier = $this->bindingResolver->supplierForService($service);
 
-            if ((int) ($service->product?->supplier_id ?? 0) === $supplierId && $service->product?->supplier instanceof Supplier) {
-                $supplier = $service->product->supplier;
-            } else {
+            if (! $supplier instanceof Supplier && (int) ($this->bindingResolver->supplierIdForProduct($service->product) ?? 0) === $supplierId) {
+                $supplier = $this->bindingResolver->supplierForProduct($service->product);
+            }
+
+            if (! $supplier instanceof Supplier) {
                 $supplier = $this->findSupplierById($supplierId);
             }
 
             throw_if(! $supplier instanceof Supplier, new BusinessException('当前服务绑定的供应商配置不存在', 42200));
+            $supplier = $this->bindingResolver->supplierWithRuntimeCredentials($supplier);
             throw_if(
                 ! $this->providerResolver->resolveForSupplier($supplier)->supports(ProvidesConsoleRuntime::class),
                 new BusinessException('当前服务绑定的上游类型不支持实例控制', 42200)
             );
 
-            $provisionData = (array) ($service->provision_data ?? []);
-            $hostId = (int) (($provisionData['upstream_host_id'] ?? 0) ?: 0);
+            $hostId = (int) (($this->bindingResolver->upstreamServiceIdForService($service) ?? '') ?: 0);
             throw_if($hostId <= 0, new BusinessException('当前服务未绑定有效的上游主机', 42200));
 
             return [$supplier, $hostId];
         }
 
-        $service->loadMissing('product.supplier');
-        $supplier = $service->product?->supplier;
-
-        throw_if(! $supplier instanceof Supplier, new BusinessException('供应商配置不存在', 42200));
-
-        $provisionData = (array) ($service->provision_data ?? []);
-        $hostId = (int) (($provisionData['upstream_host_id'] ?? 0) ?: 0);
-        throw_if($hostId <= 0, new BusinessException('当前服务未绑定有效的上游主机', 42200));
-
-        return [$supplier, $hostId];
+        throw new BusinessException('当前服务未绑定有效的上游供应商', 42200);
     }
 
     public function findUserService(User $user, int $serviceId, array $relations = []): Service
@@ -686,12 +687,14 @@ class ServiceDetailService
 
     protected function findSupplierById(int $supplierId): ?Supplier
     {
-        return Supplier::query()->find($supplierId);
+        $supplier = Supplier::query()->find($supplierId);
+
+        return $supplier instanceof Supplier ? $this->bindingResolver->supplierWithRuntimeCredentials($supplier) : null;
     }
 
     // ── Module status helpers ──────────────────────────────────────────────
 
-    public function assertSuccess(array $response, string $action): void
+    public function assertSuccess(array $response, string $action, string $providerKey = ''): void
     {
         $status = (int) ($response['status'] ?? $response['code'] ?? 0);
         if (in_array($status, [200, 1001], true)) {
@@ -705,7 +708,7 @@ class ServiceDetailService
             'message' => SensitiveDataSanitizer::sanitizeText($message),
         ]);
 
-        throw new BusinessException(app(ProviderErrorMapper::class)->toUserMessage(ProviderKey::HOSTING_PANEL_API, $action, $message), 42200);
+        throw new BusinessException(app(ProviderErrorMapper::class)->toUserMessage($providerKey, $action, $message), 42200);
     }
 
     public function extractPayload(array $response): array
@@ -729,7 +732,7 @@ class ServiceDetailService
             : $runtime->get($supplier, "/v1/hosts/{$hostId}/module/status", $jwt, [
                 'type' => $normalizedType,
             ]);
-        $this->assertSuccess($response, ClientServiceConsoleService::MODULE_STATUS_TYPES[$normalizedType] ?? '读取状态');
+        $this->assertSuccess($response, ClientServiceConsoleService::MODULE_STATUS_TYPES[$normalizedType] ?? '读取状态', $this->providerKeyForSupplier($supplier));
 
         return $this->extractPayload($response);
     }
@@ -790,9 +793,9 @@ class ServiceDetailService
         ];
     }
 
-    public function buildReinstallOptionsCacheKey(int $supplierId, int $hostId): string
+    public function buildReinstallOptionsCacheKey(Supplier $supplier, int $hostId): string
     {
-        return 'upstream:'.ProviderKey::HOSTING_PANEL_API.":reinstall_options:{$supplierId}:{$hostId}";
+        return 'upstream:'.$this->providerKeyForSupplier($supplier).":reinstall_options:{$supplier->id}:{$hostId}";
     }
 
     // ── Cache key helpers ──────────────────────────────────────────────────
@@ -809,14 +812,14 @@ class ServiceDetailService
 
     public function buildMonitorModuleCacheKey(Supplier $supplier, int $hostId): string
     {
-        $providerKey = trim((string) ($supplier->interface_type ?? '')) ?: ProviderKey::HOSTING_PANEL_API;
-
-        return "upstream:{$providerKey}:host_modules:{$supplier->id}:{$hostId}";
+        return 'upstream:'.$this->providerKeyForSupplier($supplier).":host_modules:{$supplier->id}:{$hostId}";
     }
 
-    private function buildLegacyMonitorModuleCacheKey(Supplier $supplier, int $hostId): string
+    private function providerKeyForSupplier(Supplier $supplier): string
     {
-        return 'upstream:'.ProviderKey::HOSTING_PANEL_API.":host_modules:{$supplier->id}:{$hostId}";
+        $providerKey = $this->bindingResolver->providerKeyForSupplier($supplier);
+
+        return trim((string) $providerKey) !== '' ? trim((string) $providerKey) : 'unbound';
     }
 
     public function forgetDetailCaches(Service $service): void
@@ -830,7 +833,7 @@ class ServiceDetailService
 
     private function needsRemoteSnapshotRefresh(Service $service): bool
     {
-        $provisionData = (array) ($service->provision_data ?? []);
+        $provisionData = $this->serviceProvisionData($service);
         $lastSyncedAt = trim((string) ($provisionData['last_synced_at'] ?? ''));
 
         if ($lastSyncedAt === '') {
@@ -848,7 +851,7 @@ class ServiceDetailService
 
     private function needsConnectionHydration(Service $service): bool
     {
-        $provisionData = (array) ($service->provision_data ?? []);
+        $provisionData = $this->serviceProvisionData($service);
         $hasRemoteSnapshot = trim((string) ($provisionData['last_synced_at'] ?? '')) !== ''
             || trim((string) ($provisionData['connection_cached_at'] ?? '')) !== '';
         $hasConnectionCache = trim((string) ($provisionData['connection_cached_at'] ?? '')) !== '';
@@ -874,7 +877,7 @@ class ServiceDetailService
 
     private function needsRuntimeStatusRefresh(Service $service): bool
     {
-        $provisionData = (array) ($service->provision_data ?? []);
+        $provisionData = $this->serviceProvisionData($service);
         $runtimeStatus = strtolower(trim((string) ($provisionData['runtime_status'] ?? '')));
         $runtimeDescription = trim((string) ($provisionData['runtime_description'] ?? ''));
 
@@ -925,6 +928,19 @@ class ServiceDetailService
     private function webSessionCookieParser(): WebSessionCookieParser
     {
         return $this->webSessionCookieParser ?? new WebSessionCookieParser;
+    }
+
+    private function serviceBindingWriter(): ServiceUpstreamBindingWriter
+    {
+        return $this->serviceBindingWriter ??= app(ServiceUpstreamBindingWriter::class);
+    }
+
+    private function serviceProvisionData(Service $service, bool $includeSecrets = false): array
+    {
+        $legacy = (array) ($service->provision_data ?? []);
+        $projection = $this->bindingResolver->serviceProvisionProjection($service, $includeSecrets);
+
+        return $projection === [] ? $legacy : array_replace($legacy, $projection);
     }
 
     private function parseFlowPacketPage(string $html): array
@@ -1122,7 +1138,7 @@ class ServiceDetailService
 
     private function needsNatRemoteHydration(Service $service): bool
     {
-        $provisionData = (array) ($service->provision_data ?? []);
+        $provisionData = $this->serviceProvisionData($service);
 
         return trim((string) ($provisionData['nat_remote_checked_at'] ?? '')) === '';
     }
@@ -1148,14 +1164,17 @@ class ServiceDetailService
 
     private function resolveManagedSupplierId(Service $service): int
     {
-        $provisionData = (array) ($service->provision_data ?? []);
-        $supplierId = (int) (($provisionData['supplier_id'] ?? 0) ?: 0);
+        $supplierId = (int) (($this->bindingResolver->supplierIdForService($service) ?? 0) ?: 0);
 
-        if ($supplierId <= 0) {
-            $supplierId = (int) ($service->product?->supplier_id ?? 0);
+        if ($supplierId <= 0 && $service->product instanceof Product) {
+            $supplierId = (int) (($this->bindingResolver->supplierIdForProduct($service->product) ?? 0) ?: 0);
         }
 
-        return $supplierId;
+        if ($supplierId > 0) {
+            return $supplierId;
+        }
+
+        return 0;
     }
 
     private function parseNatServiceDetailPage(string $html): array
@@ -1242,7 +1261,7 @@ class ServiceDetailService
 
     public function resolveSupplierRootUrl(Supplier $supplier): string
     {
-        $baseUrl = trim((string) $supplier->api_url);
+        $baseUrl = $this->resolveSupplierBaseUrl($supplier);
         $parts = parse_url($baseUrl);
 
         if (! is_array($parts) || empty($parts['scheme']) || empty($parts['host'])) {
@@ -1255,6 +1274,13 @@ class ServiceDetailService
         }
 
         return $rootUrl;
+    }
+
+    private function resolveSupplierBaseUrl(Supplier $supplier): string
+    {
+        $projection = $this->bindingResolver->supplierBindingProjection($supplier);
+
+        return trim((string) ($projection['base_url'] ?? ''));
     }
 
     private function resolveNatRemoteDetailRootUrl(Supplier $supplier): string

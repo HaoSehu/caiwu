@@ -7,6 +7,7 @@ use App\Constants\InvoiceStatus;
 use App\Constants\InvoiceType;
 use App\Constants\PaymentStatus;
 use App\Models\AccountTransaction;
+use App\Support\AdminPrivacy;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /** @mixin AccountTransaction */
@@ -14,6 +15,7 @@ class FinanceLedgerResource extends JsonResource
 {
     public function toArray($request): array
     {
+        $privacy = AdminPrivacy::fromRequest($request);
         $amount = (float) ($this->change_amount ?? 0);
         $normalizedEventType = FinanceLedgerEventType::normalize((string) ($this->event_type ?? ''));
         $invoice = $this->whenLoaded('invoice');
@@ -21,6 +23,7 @@ class FinanceLedgerResource extends JsonResource
         $user = $this->whenLoaded('user');
         $display = $this->displayMeta($normalizedEventType, $amount, $invoice, $payment);
         $businessScene = $this->businessScene($normalizedEventType, $invoice, $payment);
+        $paymentGatewayKey = $payment && method_exists($payment, 'gatewayKey') ? $payment->gatewayKey() : '';
 
         return [
             'ledger_id' => (int) $this->id,
@@ -59,7 +62,8 @@ class FinanceLedgerResource extends JsonResource
             'payment' => $payment ? [
                 'id' => (int) $payment->id,
                 'payment_no' => (string) $payment->payment_no,
-                'gateway' => (string) $payment->gateway,
+                'gateway' => $paymentGatewayKey,
+                'gateway_key' => $paymentGatewayKey,
                 'gateway_label' => $display['channel_label'],
                 'status' => (int) $payment->status,
                 'status_label' => PaymentStatus::$labels[(int) $payment->status] ?? (string) $payment->status,
@@ -69,9 +73,9 @@ class FinanceLedgerResource extends JsonResource
             ] : null,
             'user' => $user ? [
                 'id' => (int) $user->id,
-                'email' => (string) $user->email,
+                'email' => $privacy->email($user->email),
                 'nickname' => (string) ($user->nickname ?? ''),
-                'display_name' => (string) ($user->display_name ?? ''),
+                'display_name' => $privacy->displayName($user->display_name ?? '', $user->email ?? '', $user->phone ?? '', $user->real_name ?? ''),
             ] : null,
             'display' => array_merge($display, [
                 'business_scene_label' => $businessScene['label'],
@@ -147,7 +151,8 @@ class FinanceLedgerResource extends JsonResource
     {
         $title = FinanceLedgerEventType::label($eventType);
         $subtitle = trim((string) ($this->remark ?? ''));
-        $channelLabel = $this->gatewayLabel((string) ($payment?->gateway ?? ''));
+        $paymentGatewayKey = $payment && method_exists($payment, 'gatewayKey') ? $payment->gatewayKey() : '';
+        $channelLabel = $this->gatewayLabel($paymentGatewayKey);
         $status = null;
         $statusLabel = '--';
 
@@ -210,6 +215,7 @@ class FinanceLedgerResource extends JsonResource
     {
         return match ($gateway) {
             'alipay' => '支付宝支付',
+            'yipay' => '易支付',
             'wechat' => '微信支付',
             'balance' => '余额支付',
             'bank_transfer' => '银行转账',

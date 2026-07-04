@@ -214,6 +214,22 @@ $registerScheduleHook(
 );
 
 $registerScheduleHook(
+    'schedule-hook-after-five-minute-cron',
+    '调度扩展 Hook（旧系统每五分钟后）',
+    ScheduleHookService::HOOK_AFTER_FIVE_MINUTE_CRON,
+    static fn ($event) => $event->everyFiveMinutes(),
+    5
+);
+
+$registerScheduleHook(
+    'schedule-hook-after-half-hour-minute-cron',
+    '调度扩展 Hook（旧系统半小时后）',
+    ScheduleHookService::HOOK_AFTER_HALF_HOUR_MINUTE_CRON,
+    static fn ($event) => $event->cron('*/30 * * * *'),
+    10
+);
+
+$registerScheduleHook(
     'schedule-hook-hourly',
     '调度扩展 Hook（每小时）',
     ScheduleHookService::HOOK_HOURLY,
@@ -225,6 +241,22 @@ $registerScheduleHook(
     'schedule-hook-daily',
     '调度扩展 Hook（每日）',
     ScheduleHookService::HOOK_DAILY,
+    static fn ($event) => $event->dailyAt('03:10'),
+    30
+);
+
+$registerScheduleHook(
+    'schedule-hook-before-daily-cron',
+    '调度扩展 Hook（旧系统每日前）',
+    ScheduleHookService::HOOK_BEFORE_DAILY_CRON,
+    static fn ($event) => $event->dailyAt('03:10'),
+    30
+);
+
+$registerScheduleHook(
+    'schedule-hook-after-daily-cron',
+    '调度扩展 Hook（旧系统每日后）',
+    ScheduleHookService::HOOK_AFTER_DAILY_CRON,
     static fn ($event) => $event->dailyAt('03:10'),
     30
 );
@@ -520,3 +552,14 @@ $applyScheduleMutex(Schedule::call(function () use ($recordArtisanScheduleRun, $
     ]);
     $writeScheduleOutput('首页缓存预热执行完成');
 })->everyFiveMinutes()->name('首页缓存预热'), 10);
+
+// 充值悬空 Invoice 补偿：扫描 status=SUCCESS 且 invoice_id=NULL 的充值 Payment，补建 Invoice
+// 保障充值回调丢失或服务重启时财务数据完整性
+$applyScheduleMutex(Schedule::call(function () use ($recordArtisanScheduleRun, $writeScheduleOutput, $withAdvisoryLock) {
+    $withAdvisoryLock('compensate-recharge-invoices', 1800, function () use ($recordArtisanScheduleRun, $writeScheduleOutput) {
+        $recordArtisanScheduleRun('充值账单补偿', 'payment:compensate-recharge-invoices', ['--limit' => 200], [
+            'task_key' => 'compensate-recharge-invoices',
+        ]);
+        $writeScheduleOutput('充值账单补偿执行完成');
+    });
+})->hourly()->name('充值账单补偿'), 30);

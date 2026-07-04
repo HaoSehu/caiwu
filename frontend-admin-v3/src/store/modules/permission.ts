@@ -15,6 +15,7 @@ import type { RouteRecordRaw } from 'vue-router';
 
 import router, { fixedRouterList, homepageRouterList } from '@/router';
 import { store } from '@/store';
+import { hasPermissionInList } from '@/constants/permissions';
 
 interface MenuGroupConfig {
   path: string;
@@ -208,5 +209,5 @@ function canAccessMenuRoute(route: RouteRecordRaw, permissions: string[]) {
   const permission = route.meta?.permission;
   if (typeof permission !== 'string' || permission === '') return true;
 
-  return permissions.includes('*') || permissions.includes(permission);
+  return hasPermissionInList(permissions, permission);
 }

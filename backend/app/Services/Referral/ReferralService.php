@@ -22,6 +22,7 @@ use App\Services\Finance\InvoiceService;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\System\OperationLogService;
 use App\Services\User\AccountService;
+use App\Support\AdminPrivacy;
 use App\Support\TextSanitizer;
 use Carbon\CarbonInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -762,7 +763,7 @@ class ReferralService
     {
         $query = AccountTransaction::query()
             ->with([
-                'user:id,email,nickname',
+                'user:id,email,phone,nickname,real_name,verification_status,is_verified',
             ])
             ->whereIn('event_type', self::ACCOUNT_LOG_EVENT_TYPES);
 
@@ -1369,7 +1370,7 @@ class ReferralService
      */
     private function referralUserWithRelations(string $relation): array
     {
-        return ["{$relation}:id,email,nickname"];
+        return ["{$relation}:id,email,phone,nickname,real_name,verification_status,is_verified"];
     }
 
     private function resolveFrontendBaseUrl(string $origin): string
@@ -1450,6 +1451,7 @@ class ReferralService
 
     public function transformAccountLogRecord(mixed $transaction): array
     {
+        $privacy = AdminPrivacy::current();
         $frozenBalance = round((float) data_get($transaction, 'frozen_balance', 0), 2);
         $availableBalance = round((float) data_get($transaction, 'available_balance', 0), 2);
         $pendingWithdrawalBalance = round((float) data_get($transaction, 'pending_withdrawal_balance', 0), 2);
@@ -1487,9 +1489,9 @@ class ReferralService
             'created_at' => $createdAt?->format('Y-m-d H:i:s'),
             'user' => $transaction instanceof AccountTransaction && $transaction->relationLoaded('user') && $transaction->user ? [
                 'id' => (int) $transaction->user->id,
-                'email' => (string) $transaction->user->email,
+                'email' => $privacy->email($transaction->user->email),
                 'nickname' => (string) $transaction->user->nickname,
-                'display_name' => (string) $transaction->user->display_name,
+                'display_name' => $privacy->displayName($transaction->user->display_name, $transaction->user->email, $transaction->user->phone, $transaction->user->real_name),
             ] : null,
         ];
     }

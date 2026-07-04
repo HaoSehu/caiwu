@@ -11,6 +11,16 @@ export interface PagedList<T> {
   page_size?: number;
 }
 
+export interface ClientFinanceListParams {
+  page?: number;
+  page_size?: number;
+  keyword?: string;
+  status?: string | number;
+  type?: string;
+  start_date?: string;
+  end_date?: string;
+}
+
 export interface SummaryRecord {
   [key: string]: unknown;
 }
@@ -103,12 +113,6 @@ export interface ClientVerificationPayload {
   [key: string]: unknown;
 }
 
-export interface ToolActionPayload {
-  success?: boolean;
-  message?: string;
-  [key: string]: unknown;
-}
-
 export interface ServiceSpecItem {
   label?: string;
   value?: string | number | null;
@@ -134,7 +138,7 @@ export interface ServiceInvoiceLink {
 }
 
 export interface ServiceUpstreamInfo {
-  provider?: string;
+  provider_key?: string;
   host_id?: number | string;
   status?: string;
   remote_error?: string;
@@ -850,6 +854,7 @@ export interface FinanceLedgerPayment {
   id?: number;
   payment_no?: string;
   gateway?: string;
+  gateway_key?: string;
   gateway_label?: string;
   status?: number | string;
   status_label?: string;
@@ -1008,6 +1013,8 @@ export interface InvoicePaymentSecurity {
 
 export interface PaymentSummary {
   gateway?: string;
+  gateway_key?: string;
+  gateway_label?: string;
   status?: number | string;
   payment_no?: string;
   trade_no?: string;
@@ -1103,6 +1110,7 @@ export interface PaymentRecord {
   payment_no?: string;
   trade_no?: string;
   gateway?: string;
+  gateway_key?: string;
   gateway_label?: string;
   amount?: number | string;
   status?: number | string;

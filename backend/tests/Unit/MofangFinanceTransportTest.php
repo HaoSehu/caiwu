@@ -28,7 +28,7 @@ class MofangFinanceTransportTest extends TestCase
     {
         config(['mofang.finance_api.jwt_cache_store' => 'array']);
 
-        $supplier = new Supplier([
+        $supplier = (new Supplier)->forceFill([
             'id' => 321,
             'interface_type' => 'mofang_finance_api',
             'api_url' => 'https://mofang.example.test',
@@ -68,7 +68,7 @@ class MofangFinanceTransportTest extends TestCase
     {
         config(['mofang.finance_api.jwt_cache_store' => 'array']);
 
-        $supplier = new Supplier([
+        $supplier = (new Supplier)->forceFill([
             'id' => 654,
             'interface_type' => 'mofang_finance_api',
             'api_url' => 'https://mofang.example.test',

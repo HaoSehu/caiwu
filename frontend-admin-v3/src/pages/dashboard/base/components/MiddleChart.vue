@@ -62,7 +62,7 @@ import { LineChart, PieChart } from 'echarts/charts';
 import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components';
 import * as echarts from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
-import { computed, nextTick, onDeactivated, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue';
 
 import { t } from '@/locales';
 import { useSettingStore } from '@/store';
@@ -108,6 +108,7 @@ const renderMonitorChart = () => {
 // monitorChart
 let countContainer: HTMLElement;
 let countChart: echarts.ECharts;
+let resizeFrame = 0;
 const renderCountChart = () => {
   if (!countContainer) {
     countContainer = document.getElementById('countContainer');
@@ -160,16 +161,31 @@ const updateContainer = () => {
   });
 };
 
+function scheduleUpdateContainer() {
+  if (resizeFrame) return;
+  resizeFrame = window.requestAnimationFrame(() => {
+    resizeFrame = 0;
+    updateContainer();
+  });
+}
+
 onMounted(() => {
   renderCharts();
   nextTick(() => {
-    updateContainer();
+    scheduleUpdateContainer();
   });
 });
 
 const { width, height } = useWindowSize();
 watch([width, height], () => {
-  updateContainer();
+  scheduleUpdateContainer();
+});
+
+onBeforeUnmount(() => {
+  if (resizeFrame) {
+    window.cancelAnimationFrame(resizeFrame);
+    resizeFrame = 0;
+  }
 });
 
 onDeactivated(() => {
@@ -192,11 +208,11 @@ const storeSidebarCompactWatch = watch(
   () => {
     if (store.isSidebarCompact) {
       nextTick(() => {
-        updateContainer();
+        scheduleUpdateContainer();
       });
     } else {
       setTimeout(() => {
-        updateContainer();
+        scheduleUpdateContainer();
       }, 180);
     }
   },
