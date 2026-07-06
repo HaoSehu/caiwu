@@ -7,6 +7,8 @@ namespace App\Services\Integrations\Plugins;
 use App\Exceptions\BusinessException;
 use App\Models\AdminUser;
 use App\Models\IntegrationPlugin;
+use App\Services\System\NotificationService;
+use App\Support\SmsTemplateCatalog;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -29,6 +31,10 @@ class IntegrationPluginService
             fn (PluginManifest $manifest): bool => ! $this->isDemoManifest($manifest),
         ));
         $installedMap = $this->installedPluginMap($domain);
+        $enabledPluginMap = $this->enabledPluginMap($domain);
+        $installedPlugins = array_values($installedMap);
+        $referenceCountsByPluginId = $this->pluginReferenceCountsByPlugin($installedPlugins);
+        $latestRuntimeLogsByPluginId = $this->latestRuntimeLogsByPlugin($installedPlugins);
 
         // 已在文件系统中找到的 domain:slug 键集合
         $scannedKeys = array_flip(array_map(
@@ -37,17 +43,32 @@ class IntegrationPluginService
         ));
 
         $items = array_map(
-            fn (PluginManifest $manifest): array => $this->manifestPayload(
-                $manifest,
-                $installedMap[$manifest->domain.':'.$manifest->slug] ?? null,
-            ),
+            function (PluginManifest $manifest) use (
+                $installedMap,
+                $enabledPluginMap,
+                $referenceCountsByPluginId,
+                $latestRuntimeLogsByPluginId,
+            ): array {
+                return $this->manifestPayload(
+                    $manifest,
+                    $installedMap[$manifest->domain.':'.$manifest->slug] ?? null,
+                    $enabledPluginMap[$manifest->domain] ?? null,
+                    $referenceCountsByPluginId,
+                    $latestRuntimeLogsByPluginId,
+                );
+            },
             $manifests,
         );
 
         // 将已安装但文件目录已丢失的插件追加到列表末尾，带 manifest_missing 标志
         foreach ($installedMap as $key => $plugin) {
             if (! isset($scannedKeys[$key])) {
-                $items[] = $this->missingManifestPayload($plugin);
+                $items[] = $this->missingManifestPayload(
+                    $plugin,
+                    $enabledPluginMap[(string) $plugin->domain] ?? null,
+                    $referenceCountsByPluginId,
+                    $latestRuntimeLogsByPluginId,
+                );
             }
         }
 
@@ -113,29 +134,16 @@ class IntegrationPluginService
     {
         $result = [
             'deleted' => false,
-            'archived' => false,
             'plugin_id' => (int) $plugin->id,
             'plugin' => null,
         ];
 
         DB::transaction(function () use ($plugin, &$result): void {
-            if ($this->pluginHasBusinessReferences($plugin)) {
-                if ($plugin->isEnabled()) {
-                    $this->installer->disable($plugin);
-                } elseif (Schema::hasColumn('integration_plugins', 'disabled_at') && $plugin->disabled_at === null) {
-                    $plugin->forceFill(['disabled_at' => now()])->save();
-                }
-
-                $fresh = $plugin->fresh('config') ?? $plugin;
-                $result['archived'] = true;
-                $result['plugin'] = $this->detail($fresh);
-
-                return;
-            }
-
             if ($plugin->isEnabled()) {
                 $this->installer->disable($plugin);
             }
+            $plugin->bindings()->delete();
+            $plugin->supplierBindings()->delete();
             $plugin->config()->delete();
             $plugin->delete();
             $result['deleted'] = true;
@@ -195,7 +203,7 @@ class IntegrationPluginService
             domain: (string) $plugin->domain,
             slugOrKey: (string) $plugin->slug,
             action: 'mail.test_smtp',
-            payload: $payload,
+            payload: $this->verificationEmailPayload($payload),
         );
     }
 
@@ -217,8 +225,56 @@ class IntegrationPluginService
             domain: (string) $plugin->domain,
             slugOrKey: (string) $plugin->slug,
             action: 'sms.test',
-            payload: $payload,
+            payload: $this->verificationSmsPayload($payload),
         );
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function verificationEmailPayload(array $payload): array
+    {
+        $code = $this->verificationCode();
+        $expireMinutes = '10';
+        $templateCode = NotificationService::TEMPLATE_EMAIL_CODE;
+        $body = "您的邮箱验证码为：{$code}，{$expireMinutes}分钟内有效。如非本人操作，请忽略此邮件。";
+        $context = is_array($payload['context'] ?? null) ? $payload['context'] : [];
+
+        return array_merge($payload, [
+            'subject' => '邮箱验证码',
+            'body' => $body,
+            'html' => $body,
+            'template_code' => $templateCode,
+            'code' => $code,
+            'context' => array_merge($context, [
+                'template_code' => $templateCode,
+                'code' => $code,
+                'expire_minutes' => $expireMinutes,
+            ]),
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function verificationSmsPayload(array $payload): array
+    {
+        $code = $this->verificationCode();
+        $options = is_array($payload['options'] ?? null) ? $payload['options'] : [];
+        $options['template_code'] = SmsTemplateCatalog::TEMPLATE_VERIFY_CODE;
+
+        return array_merge($payload, [
+            'template_code' => SmsTemplateCatalog::TEMPLATE_VERIFY_CODE,
+            'code' => $code,
+            'options' => $options,
+        ]);
+    }
+
+    private function verificationCode(): string
+    {
+        return (string) random_int(100000, 999999);
     }
 
     /**
@@ -237,35 +293,58 @@ class IntegrationPluginService
             ->all();
     }
 
-    private function manifestPayload(PluginManifest $manifest, ?IntegrationPlugin $plugin = null): array
+    /**
+     * @return array<string, IntegrationPlugin>
+     */
+    private function enabledPluginMap(?string $domain = null): array
     {
-        $referenceCounts = $this->pluginReferenceCounts($plugin);
-        $hasReferences = array_sum($referenceCounts) > 0;
+        if (! Schema::hasTable('integration_plugins')) {
+            return [];
+        }
+
+        return IntegrationPlugin::query()
+            ->where('status', IntegrationPlugin::STATUS_ENABLED)
+            ->when($domain !== null && trim($domain) !== '', fn ($query) => $query->where('domain', trim($domain)))
+            ->orderBy('id')
+            ->get()
+            ->groupBy(fn (IntegrationPlugin $plugin): string => (string) $plugin->domain)
+            ->map(fn ($plugins): IntegrationPlugin => $plugins->first())
+            ->all();
+    }
+
+    private function manifestPayload(
+        PluginManifest $manifest,
+        ?IntegrationPlugin $plugin = null,
+        ?IntegrationPlugin $enabledPlugin = null,
+        array $referenceCountsByPluginId = [],
+        array $latestRuntimeLogsByPluginId = [],
+    ): array {
+        $referenceCounts = $this->resolvedPluginReferenceCounts($plugin, $referenceCountsByPluginId);
+        $enableDisabledReason = $this->enableDisabledReason($manifest->domain, $plugin, $enabledPlugin);
 
         return [
-            'id'                       => $plugin?->id,
-            'domain'                   => $manifest->domain,
-            'slug'                     => $manifest->slug,
-            'key'                      => $manifest->key,
-            'name'                     => $manifest->name,
-            'version'                  => $manifest->version,
-            'entry_class'              => $manifest->entryClass,
-            'provider_class'           => $manifest->providerClass,
-            'capabilities'             => $manifest->capabilities,
-            'config_schema'            => $manifest->configSchema,
-            'base_path'                => $manifest->basePath,
-            'is_installed'             => $plugin instanceof IntegrationPlugin,
-            'is_enabled'               => $plugin?->isEnabled() ?? false,
-            'status'                   => (int) ($plugin?->status ?? IntegrationPlugin::STATUS_DISABLED),
-            'installed_at'             => $plugin?->installed_at?->format('Y-m-d H:i:s'),
-            'updated_at'               => $plugin?->updated_at?->format('Y-m-d H:i:s'),
-            'binding_counts'           => $referenceCounts,
+            'id' => $plugin?->id,
+            'domain' => $manifest->domain,
+            'slug' => $manifest->slug,
+            'key' => $manifest->key,
+            'name' => $manifest->name,
+            'version' => $manifest->version,
+            'entry_class' => $manifest->entryClass,
+            'provider_class' => $manifest->providerClass,
+            'capabilities' => $manifest->capabilities,
+            'config_schema' => $manifest->configSchema,
+            'base_path' => $manifest->basePath,
+            'is_installed' => $plugin instanceof IntegrationPlugin,
+            'is_enabled' => $plugin?->isEnabled() ?? false,
+            'can_enable' => $plugin instanceof IntegrationPlugin && ! $plugin->isEnabled() && $enableDisabledReason === null,
+            'enable_disabled_reason' => $enableDisabledReason,
+            'status' => (int) ($plugin?->status ?? IntegrationPlugin::STATUS_DISABLED),
+            'installed_at' => $plugin?->installed_at?->format('Y-m-d H:i:s'),
+            'updated_at' => $plugin?->updated_at?->format('Y-m-d H:i:s'),
+            'binding_counts' => $referenceCounts,
             'business_reference_count' => array_sum($referenceCounts),
-            'delete_mode'              => $plugin instanceof IntegrationPlugin
-                ? ($hasReferences ? 'disable_archive' : 'delete')
-                : 'not_installed',
-            'latest_runtime_log'       => $this->latestRuntimeLog($plugin),
-            'manifest_missing'         => false,
+            'latest_runtime_log' => $this->resolvedLatestRuntimeLog($plugin, $latestRuntimeLogsByPluginId),
+            'manifest_missing' => false,
         ];
     }
 
@@ -274,32 +353,38 @@ class IntegrationPluginService
      *
      * @return array<string, mixed>
      */
-    private function missingManifestPayload(IntegrationPlugin $plugin): array
-    {
-        $referenceCounts = $this->pluginReferenceCounts($plugin);
+    private function missingManifestPayload(
+        IntegrationPlugin $plugin,
+        ?IntegrationPlugin $enabledPlugin = null,
+        array $referenceCountsByPluginId = [],
+        array $latestRuntimeLogsByPluginId = [],
+    ): array {
+        $referenceCounts = $this->resolvedPluginReferenceCounts($plugin, $referenceCountsByPluginId);
+        $enableDisabledReason = $this->enableDisabledReason((string) $plugin->domain, $plugin, $enabledPlugin);
 
         return [
-            'id'                       => $plugin->id,
-            'domain'                   => $plugin->domain,
-            'slug'                     => $plugin->slug,
-            'key'                      => $plugin->plugin_key,
-            'name'                     => $plugin->name,
-            'version'                  => $plugin->version,
-            'entry_class'              => $plugin->entry_class,
-            'provider_class'           => $plugin->provider_class,
-            'capabilities'             => $plugin->capabilities_json ?? [],
-            'config_schema'            => [],
-            'base_path'                => null,
-            'is_installed'             => true,
-            'is_enabled'               => $plugin->isEnabled(),
-            'status'                   => (int) ($plugin->status ?? IntegrationPlugin::STATUS_DISABLED),
-            'installed_at'             => $plugin->installed_at?->format('Y-m-d H:i:s'),
-            'updated_at'               => $plugin->updated_at?->format('Y-m-d H:i:s'),
-            'binding_counts'           => $referenceCounts,
+            'id' => $plugin->id,
+            'domain' => $plugin->domain,
+            'slug' => $plugin->slug,
+            'key' => $plugin->plugin_key,
+            'name' => $plugin->name,
+            'version' => $plugin->version,
+            'entry_class' => $plugin->entry_class,
+            'provider_class' => $plugin->provider_class,
+            'capabilities' => $plugin->capabilities_json ?? [],
+            'config_schema' => [],
+            'base_path' => null,
+            'is_installed' => true,
+            'is_enabled' => $plugin->isEnabled(),
+            'can_enable' => ! $plugin->isEnabled() && $enableDisabledReason === null,
+            'enable_disabled_reason' => $enableDisabledReason,
+            'status' => (int) ($plugin->status ?? IntegrationPlugin::STATUS_DISABLED),
+            'installed_at' => $plugin->installed_at?->format('Y-m-d H:i:s'),
+            'updated_at' => $plugin->updated_at?->format('Y-m-d H:i:s'),
+            'binding_counts' => $referenceCounts,
             'business_reference_count' => array_sum($referenceCounts),
-            'delete_mode'              => array_sum($referenceCounts) > 0 ? 'disable_archive' : 'delete',
-            'latest_runtime_log'       => $this->latestRuntimeLog($plugin),
-            'manifest_missing'         => true,
+            'latest_runtime_log' => $this->resolvedLatestRuntimeLog($plugin, $latestRuntimeLogsByPluginId),
+            'manifest_missing' => true,
         ];
     }
 
@@ -315,24 +400,30 @@ class IntegrationPluginService
         return str_starts_with(strtolower(trim($manifest->name)), 'demo ');
     }
 
-    private function pluginHasBusinessReferences(IntegrationPlugin $plugin): bool
+    private function enableDisabledReason(string $domain, ?IntegrationPlugin $plugin, ?IntegrationPlugin $enabledPlugin): ?string
     {
-        $pluginId = (int) $plugin->id;
-        if ($pluginId <= 0) {
-            return false;
+        if (! $plugin instanceof IntegrationPlugin || $plugin->isEnabled()) {
+            return null;
         }
 
-        foreach ($this->pluginReferenceTables() as $table) {
-            if (! Schema::hasTable($table) || ! Schema::hasColumn($table, 'plugin_id')) {
-                continue;
-            }
-
-            if (DB::table($table)->where('plugin_id', $pluginId)->exists()) {
-                return true;
-            }
+        if (! PluginDomain::requiresSingleEnabledPlugin($domain)) {
+            return null;
         }
 
-        return false;
+        if (! $enabledPlugin instanceof IntegrationPlugin || (int) $enabledPlugin->id === (int) $plugin->id) {
+            return null;
+        }
+
+        return $this->singleEnabledDomainMessage($enabledPlugin);
+    }
+
+    private function singleEnabledDomainMessage(IntegrationPlugin $enabledPlugin): string
+    {
+        $pluginName = trim((string) $enabledPlugin->name) !== ''
+            ? (string) $enabledPlugin->name
+            : ((string) $enabledPlugin->slug ?: '其他插件');
+
+        return "当前功能域已启用「{$pluginName}」，请先停用后再启用其他插件";
     }
 
     /**
@@ -346,11 +437,7 @@ class IntegrationPluginService
         }
 
         $counts = [];
-        foreach ($this->pluginReferenceTables() as $table) {
-            if (! Schema::hasTable($table) || ! Schema::hasColumn($table, 'plugin_id')) {
-                continue;
-            }
-
+        foreach ($this->availablePluginReferenceTables() as $table) {
             $count = DB::table($table)->where('plugin_id', $pluginId)->count();
             if ($count > 0) {
                 $counts[$table] = (int) $count;
@@ -358,6 +445,104 @@ class IntegrationPluginService
         }
 
         return $counts;
+    }
+
+    /**
+     * @param  array<int, IntegrationPlugin>  $plugins
+     * @return array<int, array<string, int>>
+     */
+    private function pluginReferenceCountsByPlugin(array $plugins): array
+    {
+        $pluginIds = $this->pluginIds($plugins);
+        if ($pluginIds === []) {
+            return [];
+        }
+
+        $countsByPluginId = array_fill_keys($pluginIds, []);
+        foreach ($this->availablePluginReferenceTables() as $table) {
+            $counts = DB::table($table)
+                ->select('plugin_id', DB::raw('COUNT(*) as aggregate'))
+                ->whereIn('plugin_id', $pluginIds)
+                ->groupBy('plugin_id')
+                ->pluck('aggregate', 'plugin_id');
+
+            foreach ($counts as $pluginId => $count) {
+                $pluginId = (int) $pluginId;
+                $count = (int) $count;
+                if ($pluginId > 0 && $count > 0) {
+                    $countsByPluginId[$pluginId][$table] = $count;
+                }
+            }
+        }
+
+        return $countsByPluginId;
+    }
+
+    /**
+     * @param  array<int, IntegrationPlugin>  $plugins
+     * @return array<int, array<string, mixed>|null>
+     */
+    private function latestRuntimeLogsByPlugin(array $plugins): array
+    {
+        $pluginIds = $this->pluginIds($plugins);
+        if ($pluginIds === []) {
+            return [];
+        }
+
+        $logsByPluginId = array_fill_keys($pluginIds, null);
+        if (! Schema::hasTable('integration_plugin_runtime_logs')) {
+            return $logsByPluginId;
+        }
+
+        $rows = DB::table('integration_plugin_runtime_logs')
+            ->whereIn('plugin_id', $pluginIds)
+            ->orderBy('plugin_id')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->get(['plugin_id', 'id', 'trace_id', 'action', 'status', 'error_message', 'created_at']);
+
+        foreach ($rows as $row) {
+            $pluginId = (int) ($row->plugin_id ?? 0);
+            if ($pluginId > 0 && $logsByPluginId[$pluginId] === null) {
+                $logsByPluginId[$pluginId] = $this->formatRuntimeLog($row);
+            }
+        }
+
+        return $logsByPluginId;
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function resolvedPluginReferenceCounts(?IntegrationPlugin $plugin, array $referenceCountsByPluginId): array
+    {
+        $pluginId = (int) ($plugin?->id ?? 0);
+        if ($pluginId <= 0) {
+            return [];
+        }
+
+        if (array_key_exists($pluginId, $referenceCountsByPluginId)) {
+            return $referenceCountsByPluginId[$pluginId];
+        }
+
+        return $this->pluginReferenceCounts($plugin);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function resolvedLatestRuntimeLog(?IntegrationPlugin $plugin, array $latestRuntimeLogsByPluginId): ?array
+    {
+        $pluginId = (int) ($plugin?->id ?? 0);
+        if ($pluginId <= 0) {
+            return null;
+        }
+
+        if (array_key_exists($pluginId, $latestRuntimeLogsByPluginId)) {
+            return $latestRuntimeLogsByPluginId[$pluginId];
+        }
+
+        return $this->latestRuntimeLog($plugin);
     }
 
     /**
@@ -380,6 +565,14 @@ class IntegrationPluginService
             return null;
         }
 
+        return $this->formatRuntimeLog($row);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function formatRuntimeLog(object $row): array
+    {
         return [
             'id' => (int) $row->id,
             'trace_id' => (string) ($row->trace_id ?? ''),
@@ -388,6 +581,32 @@ class IntegrationPluginService
             'error_message' => (string) ($row->error_message ?? ''),
             'created_at' => $row->created_at === null ? null : (string) $row->created_at,
         ];
+    }
+
+    /**
+     * @param  array<int, IntegrationPlugin>  $plugins
+     * @return array<int, int>
+     */
+    private function pluginIds(array $plugins): array
+    {
+        return array_values(array_unique(array_filter(
+            array_map(
+                fn (IntegrationPlugin $plugin): int => (int) $plugin->id,
+                $plugins,
+            ),
+            fn (int $pluginId): bool => $pluginId > 0,
+        )));
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function availablePluginReferenceTables(): array
+    {
+        return array_values(array_filter(
+            $this->pluginReferenceTables(),
+            fn (string $table): bool => Schema::hasTable($table) && Schema::hasColumn($table, 'plugin_id'),
+        ));
     }
 
     /**

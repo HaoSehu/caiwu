@@ -13,8 +13,13 @@ class SettingService
 {
     private const FIXED_RENEW_NOTICE_DAYS = [7, 3, 1];
 
+    private const PLUGIN_OWNED_SETTING_GROUPS = [
+        'message_limit',
+    ];
+
     private const PLUGIN_SETTING_KEYS = [
         'system' => [
+            'captcha_enabled',
             'captcha_driver',
             'geetest_enabled',
             'geetest_captcha_id',
@@ -74,7 +79,7 @@ class SettingService
             'expire_unsuspend_notify_enabled' => true,
             'expire_terminate_enabled' => false,
             'expire_terminate_after_days' => 7,
-            'service_lifecycle_schedule_mode' => AutomationScheduleExpression::MODE_EVERY_FIVE_MINUTES,
+            'service_lifecycle_schedule_mode' => AutomationScheduleExpression::MODE_EVERY_FIFTEEN_MINUTES,
             'service_lifecycle_schedule_time' => '00:05:00',
             'renew_notice_enabled' => true,
             'renew_notice_days_before' => self::FIXED_RENEW_NOTICE_DAYS,
@@ -93,13 +98,17 @@ class SettingService
             'pending_order_cleanup_after_hours' => 1,
             'pending_recharge_cleanup_enabled' => true,
             'pending_recharge_cleanup_after_days' => 3,
-            'order_cleanup_schedule_mode' => AutomationScheduleExpression::MODE_EVERY_FIVE_MINUTES,
+            'order_cleanup_schedule_mode' => AutomationScheduleExpression::MODE_EVERY_FIFTEEN_MINUTES,
             'order_cleanup_schedule_time' => '00:00:00',
         ];
     }
 
     public function getGroupSettings(string $group): Collection
     {
+        if ($this->isPluginOwnedSettingGroup($group)) {
+            return collect();
+        }
+
         $fallbackSettingMap = $this->getGroupFallbackSettings($group);
         $storedSettings = $this->getStoredSettings($group);
 
@@ -113,6 +122,7 @@ class SettingService
         $dynamicSettings = $storedSettings
             ->reject(fn ($setting, string $key) => array_key_exists($key, $fallbackSettingMap))
             ->reject(fn ($setting, string $key) => $this->isPluginSettingKey($group, $key))
+            ->reject(fn ($setting, string $key) => $this->isNotificationTemplateSettingKey($group, $key))
             ->map(fn (SystemSetting $setting) => $this->formatSettingPayload(
                 (string) ($setting->group_key ?? $group),
                 (string) ($setting->item_key ?? ''),
@@ -126,10 +136,16 @@ class SettingService
 
     public function saveGroupSettings(string $group, array $settings): void
     {
-        Setting::setValues(
-            $group,
-            $this->filterPluginSettings($group, $this->prepareSettingsForSave($settings))
-        );
+        if ($this->isPluginOwnedSettingGroup($group)) {
+            return;
+        }
+
+        $prepared = $this->prepareSettingsForSave($settings);
+        if (trim($group) === 'notification') {
+            $prepared = app(NotificationTemplateService::class)->extractTemplateSettings($prepared);
+        }
+
+        Setting::setValues($group, $this->filterPluginSettings($group, $prepared));
     }
 
     public function revealSensitiveSetting(string $group, string $key): array
@@ -217,7 +233,9 @@ class SettingService
             'expire_unsuspend_notify_enabled' => $this->getBool('automation', 'expire_unsuspend_notify_enabled', $defaults['expire_unsuspend_notify_enabled']),
             'expire_terminate_enabled' => $this->getBool('automation', 'expire_terminate_enabled', $defaults['expire_terminate_enabled']),
             'expire_terminate_after_days' => $this->getInt('automation', 'expire_terminate_after_days', $defaults['expire_terminate_after_days'], 1, 365),
-            'service_lifecycle_schedule_mode' => $this->getScheduleMode('automation', 'service_lifecycle_schedule_mode', $defaults['service_lifecycle_schedule_mode']),
+            'service_lifecycle_schedule_mode' => $this->normalizeMinimumFifteenMinuteScheduleMode(
+                $this->getScheduleMode('automation', 'service_lifecycle_schedule_mode', $defaults['service_lifecycle_schedule_mode'])
+            ),
             'service_lifecycle_schedule_time' => $this->getScheduleTime('automation', 'service_lifecycle_schedule_time', $defaults['service_lifecycle_schedule_time']),
             'renew_notice_enabled' => $this->getBool('automation', 'renew_notice_enabled', $defaults['renew_notice_enabled']),
             'renew_notice_days_before' => self::FIXED_RENEW_NOTICE_DAYS,
@@ -236,7 +254,9 @@ class SettingService
             'pending_order_cleanup_after_hours' => $this->getInt('automation', 'pending_order_cleanup_after_hours', $defaults['pending_order_cleanup_after_hours'], 1, 720),
             'pending_recharge_cleanup_enabled' => $this->getBool('automation', 'pending_recharge_cleanup_enabled', $defaults['pending_recharge_cleanup_enabled']),
             'pending_recharge_cleanup_after_days' => $this->getInt('automation', 'pending_recharge_cleanup_after_days', $defaults['pending_recharge_cleanup_after_days'], 0, 365),
-            'order_cleanup_schedule_mode' => $this->getScheduleMode('automation', 'order_cleanup_schedule_mode', $defaults['order_cleanup_schedule_mode']),
+            'order_cleanup_schedule_mode' => $this->normalizeMinimumFifteenMinuteScheduleMode(
+                $this->getScheduleMode('automation', 'order_cleanup_schedule_mode', $defaults['order_cleanup_schedule_mode'])
+            ),
             'order_cleanup_schedule_time' => $this->getScheduleTime('automation', 'order_cleanup_schedule_time', $defaults['order_cleanup_schedule_time']),
         ];
     }
@@ -406,9 +426,7 @@ class SettingService
     private function getGroupFallbackSettings(string $group): array
     {
         return match ($group) {
-            'system' => [
-                'captcha_enabled' => $this->defaultCaptchaEnabled() ? '1' : '0',
-            ],
+            'system' => [],
             'traffic_package' => [
                 'traffic_package_enabled' => '1',
                 'traffic_package_display_threshold_percent' => '0',
@@ -417,12 +435,6 @@ class SettingService
                 'traffic_package_option_keyword' => '流量',
                 'traffic_package_allow_choice_mode' => '1',
                 'traffic_package_allow_quantity_mode' => '1',
-            ],
-            'message_limit' => [
-                'email_rate_limit_enabled' => '1',
-                'email_ip_minute_limit' => '6',
-                'sms_rate_limit_enabled' => '1',
-                'sms_ip_minute_limit' => '6',
             ],
             default => [],
         };
@@ -459,16 +471,7 @@ class SettingService
 
     private function shouldPersistEmptyFallback(string $group, string $key): bool
     {
-        return in_array($group.':'.$key, [
-            'system:captcha_enabled',
-        ], true);
-    }
-
-    private function defaultCaptchaEnabled(): bool
-    {
-        return $this->normalizeBooleanConfigValue(
-            config('idc.captcha.enabled', false)
-        );
+        return false;
     }
 
     private function resolveSettingValue(string $group, string $key, mixed $fallbackValue = ''): mixed
@@ -539,6 +542,20 @@ class SettingService
         return $key !== '' && in_array($key, self::PLUGIN_SETTING_KEYS[$group] ?? [], true);
     }
 
+    private function isNotificationTemplateSettingKey(string $group, string $key): bool
+    {
+        if (trim($group) !== 'notification') {
+            return false;
+        }
+
+        return preg_match('/^(email_template_(subject|content)|sms_template_(content|provider_template_id))_.+$/', trim($key)) === 1;
+    }
+
+    private function isPluginOwnedSettingGroup(string $group): bool
+    {
+        return in_array(trim($group), self::PLUGIN_OWNED_SETTING_GROUPS, true);
+    }
+
     private function maskSecretValue(mixed $value): string
     {
         return $this->hasSettingValue($value) ? '******' : '';
@@ -588,17 +605,14 @@ class SettingService
         );
     }
 
-    private function normalizeBooleanConfigValue(mixed $value): bool
+    private function normalizeMinimumFifteenMinuteScheduleMode(string $mode): string
     {
-        if (is_bool($value)) {
-            return $value;
-        }
-
-        if (is_string($value)) {
-            return in_array(strtolower(trim($value)), ['1', 'true', 'on', 'yes'], true);
-        }
-
-        return (bool) $value;
+        return in_array($mode, [
+            AutomationScheduleExpression::MODE_EVERY_FIVE_MINUTES,
+            AutomationScheduleExpression::MODE_EVERY_TEN_MINUTES,
+        ], true)
+            ? AutomationScheduleExpression::MODE_EVERY_FIFTEEN_MINUTES
+            : $mode;
     }
 
     private function parseProvisionHostnameCharsets(string $value): array

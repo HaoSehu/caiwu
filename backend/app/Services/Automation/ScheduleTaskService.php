@@ -2,187 +2,32 @@
 
 namespace App\Services\Automation;
 
+use App\Models\ScheduleRunLog;
+use App\Services\Automation\Heartbeat\Contracts\ScheduledTask;
+use App\Services\Automation\Heartbeat\HeartbeatTaskRegistry;
+use App\Services\Automation\Heartbeat\ScheduleTaskRunRepository;
 use App\Services\System\SettingService;
 use App\Support\AutomationScheduleExpression;
-use Illuminate\Console\Scheduling\Schedule;
-use Illuminate\Contracts\Console\Kernel as ConsoleKernelContract;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use SplFileObject;
 
 class ScheduleTaskService
 {
     public function __construct(
         private SettingService $settingService,
         private ScheduleTaskTriggerService $scheduleTaskTriggerService,
+        private HeartbeatTaskRegistry $registry,
+        private ScheduleTaskRunRepository $taskRuns,
     ) {}
-
-    private const TASK_META = [
-        'refresh-hosting-panel-auth' => [
-            'title' => '接口认证刷新',
-            'description' => '定时刷新主机面板接口认证会话，减少上游登录态过期导致的请求失败。',
-            'category' => '供应商接口',
-            'log_keywords' => ['JWT刷新', '接口认证刷新', 'refresh-hosting-panel-auth'],
-        ],
-        'service-auto-renew' => [
-            'title' => '服务自动续费',
-            'description' => '扫描开启自动续费的服务，余额充足时自动创建续费账单并完成支付处理。',
-            'category' => '服务续费',
-            'log_keywords' => ['自动续费执行完成', '[自动续费]', 'service-auto-renew'],
-        ],
-        'referral-release-rewards' => [
-            'title' => '推荐奖励释放',
-            'description' => '把已过冻结期的推荐奖励转入可提现余额，并记录推荐账户流水。',
-            'category' => '推荐奖励',
-            'log_keywords' => ['推荐奖励释放执行完成', '推荐奖励', 'referral-release-rewards'],
-        ],
-        'service-lifecycle-maintenance' => [
-            'title' => '服务生命周期维护',
-            'description' => '处理服务到期暂停、暂停通知和到期后自动取消。',
-            'category' => '服务生命周期',
-            'log_keywords' => ['服务生命周期维护执行完成', 'service-lifecycle-maintenance'],
-        ],
-        'service-status-sync' => [
-            'title' => '用户产品状态同步',
-            'description' => '定时拉取上游实例详情与运行状态，并同步回本地用户服务状态。',
-            'category' => '服务状态',
-            'log_keywords' => ['用户产品状态同步执行完成', 'service-status-sync'],
-        ],
-        'billing-maintenance' => [
-            'title' => '账单自动化维护',
-            'description' => '处理续费提醒、自动生成账单、账单到期提醒和逾期标记。',
-            'category' => '账单提醒',
-            'log_keywords' => ['账单自动化维护执行完成', 'billing-maintenance'],
-        ],
-        'product-upstream-config-sync' => [
-            'title' => '上游产品配置同步',
-            'description' => '每 24 小时拉取已绑定上游商品的配置项，并自动保存到本地商品配置，不同步商品定价。',
-            'category' => '商品同步',
-            'log_keywords' => ['上游产品配置同步执行完成', 'product-upstream-config-sync'],
-        ],
-        'coupon-campaign-dispatch' => [
-            'title' => '优惠券活动发放',
-            'description' => '按活动配置的星期与时间自动生成一批公开优惠券，例如每周五 18:00 发放周五特惠。',
-            'category' => '营销活动',
-            'log_keywords' => ['优惠券活动自动发放执行完成', 'coupon-campaign-dispatch'],
-        ],
-        'ticket-auto-close' => [
-            'title' => '工单自动关闭',
-            'description' => '关闭超过阈值且长期无客户回复的工单。',
-            'category' => '工单管理',
-            'log_keywords' => ['工单自动关闭执行完成', 'ticket-auto-close'],
-        ],
-        'order-cleanup' => [
-            'title' => '账单与充值清理',
-            'description' => '自动取消超时未付款账单，并失效超时未付款充值单。',
-            'category' => '账单清理',
-            'log_keywords' => ['账单与充值清理执行完成', '订单与充值清理执行完成', 'order-cleanup'],
-        ],
-        'sync-processing-order-status' => [
-            'title' => '账单状态同步（兼容）',
-            'description' => '保留兼容历史开通过程状态校准，现行流程以账单为准。',
-            'category' => '账单状态',
-            'log_keywords' => ['处理中订单状态同步执行完成', 'sync-processing-order-status', 'orders:sync-processing-status'],
-        ],
-        'queue-backlog-drain' => [
-            'title' => '队列积压消费',
-            'description' => '每分钟拉起一轮限时队列消费，处理支付后开通、返佣等异步任务，无需额外常驻守护进程。',
-            'category' => '异步队列',
-            'log_keywords' => ['队列积压消费', 'queue:work'],
-        ],
-        'schedule-hook-every-minute' => [
-            'title' => '调度扩展 Hook（每分钟）',
-            'description' => '仅在配置了 tick.every_minute 监听器时注册，用于承载不应直接写进 routes/console.php 的轻量扩展逻辑。',
-            'category' => '调度扩展',
-            'log_keywords' => ['调度扩展 Hook（每分钟）', 'schedule-hook-every-minute'],
-        ],
-        'schedule-hook-every-five-minutes' => [
-            'title' => '调度扩展 Hook（每五分钟）',
-            'description' => '仅在配置了 tick.every_five_minutes 监听器时注册，用于旧系统 FiveMinuteCron 类职责的增量承接。',
-            'category' => '调度扩展',
-            'log_keywords' => ['调度扩展 Hook（每五分钟）', 'schedule-hook-every-five-minutes'],
-        ],
-        'schedule-hook-after-five-minute-cron' => [
-            'title' => '调度扩展 Hook（旧系统每五分钟后）',
-            'description' => '兼容旧系统 after_five_minute_cron 钩子，仅在配置了对应监听器时注册。',
-            'category' => '调度扩展',
-            'log_keywords' => ['调度扩展 Hook（旧系统每五分钟后）', 'schedule-hook-after-five-minute-cron', 'after_five_minute_cron'],
-        ],
-        'schedule-hook-after-half-hour-minute-cron' => [
-            'title' => '调度扩展 Hook（旧系统半小时后）',
-            'description' => '兼容旧系统 after_half_hour_minute_cron 钩子，仅在配置了对应监听器时注册。',
-            'category' => '调度扩展',
-            'log_keywords' => ['调度扩展 Hook（旧系统半小时后）', 'schedule-hook-after-half-hour-minute-cron', 'after_half_hour_minute_cron'],
-        ],
-        'schedule-hook-hourly' => [
-            'title' => '调度扩展 Hook（每小时）',
-            'description' => '仅在配置了 tick.hourly 监听器时注册，用于小时级扩展任务。',
-            'category' => '调度扩展',
-            'log_keywords' => ['调度扩展 Hook（每小时）', 'schedule-hook-hourly'],
-        ],
-        'schedule-hook-daily' => [
-            'title' => '调度扩展 Hook（每日）',
-            'description' => '仅在配置了 tick.daily 监听器时注册，用于日级维护和旧系统 DailyCron 类职责的增量承接。',
-            'category' => '调度扩展',
-            'log_keywords' => ['调度扩展 Hook（每日）', 'schedule-hook-daily'],
-        ],
-        'schedule-hook-before-daily-cron' => [
-            'title' => '调度扩展 Hook（旧系统每日前）',
-            'description' => '兼容旧系统 before_daily_cron 钩子，仅在配置了对应监听器时注册。',
-            'category' => '调度扩展',
-            'log_keywords' => ['调度扩展 Hook（旧系统每日前）', 'schedule-hook-before-daily-cron', 'before_daily_cron'],
-        ],
-        'schedule-hook-after-daily-cron' => [
-            'title' => '调度扩展 Hook（旧系统每日后）',
-            'description' => '兼容旧系统 after_daily_cron 钩子，仅在配置了对应监听器时注册。',
-            'category' => '调度扩展',
-            'log_keywords' => ['调度扩展 Hook（旧系统每日后）', 'schedule-hook-after-daily-cron', 'after_daily_cron'],
-        ],
-    ];
 
     public function overview(): array
     {
-        $schedule = $this->resolveSchedule();
-        $taskLogs = $this->loadTaskLogs();
-        $recentLogs = collect($taskLogs)->take(24)->values()->all();
         $jobsTableReady = Schema::hasTable('jobs');
         $failedJobsTableReady = Schema::hasTable('failed_jobs');
         $appTimezone = (string) config('app.timezone', date_default_timezone_get());
         $phpBinary = PHP_BINARY;
         $artisanPath = base_path('artisan');
         $runtimeState = $this->resolveScheduleRuntimeState();
-
-        $tasks = collect($schedule->events())
-            ->values()
-            ->map(function ($event, int $index) use ($appTimezone) {
-                $eventDescription = trim((string) ($event->description ?? ''));
-                $summary = method_exists($event, 'getSummaryForDisplay')
-                    ? trim((string) $event->getSummaryForDisplay())
-                    : $eventDescription;
-                $taskKey = $this->resolveTaskKeyFromEvent($eventDescription, $summary);
-                $meta = self::TASK_META[$taskKey] ?? $this->buildFallbackTaskMeta($taskKey, $summary);
-                $resolvedTaskKey = $taskKey !== '' ? $taskKey : 'schedule-task-'.($index + 1);
-
-                $lastLog = $this->findLatestTaskLog($taskKey);
-
-                return [
-                    'key' => $resolvedTaskKey,
-                    'title' => $meta['title'],
-                    'category' => $meta['category'],
-                    'description' => $meta['description'],
-                    'manual_triggerable' => $this->scheduleTaskTriggerService->supports($resolvedTaskKey),
-                    'expression' => (string) $event->expression,
-                    'summary' => $summary !== '' ? $summary : $resolvedTaskKey,
-                    'timezone' => (string) ($event->timezone ?: $appTimezone),
-                    'next_run_at' => $event->nextRunDate('now')->format('Y-m-d H:i:s'),
-                    'without_overlapping' => (bool) $event->withoutOverlapping,
-                    'run_in_background' => (bool) $event->runInBackground,
-                    'overlap_expires_minutes' => (int) ($event->expiresAt ?? 0),
-                    'last_log' => $lastLog,
-                ];
-            })
-            ->values()
-            ->all();
 
         return [
             'environment' => [
@@ -201,9 +46,42 @@ class ScheduleTaskService
                 'automation_config' => $runtimeState['automation_config'],
             ],
             'commands' => $this->buildCommands($phpBinary, $artisanPath),
-            'tasks' => $tasks,
-            'recent_logs' => $recentLogs,
+            'tasks' => collect($this->registry->enabledTasks())
+                ->map(fn (ScheduledTask $task): array => $this->serializeTask($task, $appTimezone))
+                ->values()
+                ->all(),
+            'recent_logs' => $this->recentLogs(),
             'settings_snapshot' => $this->buildSettingsSnapshot(),
+        ];
+    }
+
+    private function serializeTask(ScheduledTask $task, string $appTimezone): array
+    {
+        $now = now($appTimezone);
+        $nextRunAt = collect($task->triggers())
+            ->map(fn ($rule) => $rule->nextDueAfter($now))
+            ->filter()
+            ->sortBy(fn ($date) => $date->getTimestamp())
+            ->first();
+        $expression = collect($task->triggers())
+            ->map(fn ($rule): string => $rule->describe())
+            ->filter()
+            ->implode('；');
+
+        return [
+            'key' => $task->key(),
+            'title' => $task->title(),
+            'category' => $task->category(),
+            'description' => $task->description(),
+            'manual_triggerable' => $this->scheduleTaskTriggerService->supports($task->key()),
+            'expression' => $expression !== '' ? $expression : '手动触发',
+            'summary' => $expression !== '' ? $expression : '手动触发',
+            'timezone' => $appTimezone,
+            'next_run_at' => $nextRunAt?->setTimezone($appTimezone)->format('Y-m-d H:i:s'),
+            'without_overlapping' => true,
+            'run_in_background' => false,
+            'overlap_expires_minutes' => max(1, (int) ceil($task->lockTtlSeconds() / 60)),
+            'last_log' => $this->taskRuns->latestRunForTask($task->key()) ?? $this->latestLegacyLogForTask($task->title(), $task->key()),
         ];
     }
 
@@ -247,8 +125,14 @@ class ScheduleTaskService
             [
                 'key' => 'schedule_run',
                 'title' => '调度入口',
-                'description' => '宝塔生产环境请仅保留这一条，每 1 分钟运行一次；调度内已包含一轮队列消费。',
+                'description' => '宝塔生产环境请仅保留这一条，每 1 分钟运行一次；Laravel Schedule 内只有 15 分钟心跳源。',
                 'command' => "{$quotedPhp} {$quotedArtisan} schedule:run",
+            ],
+            [
+                'key' => 'scheduler_heartbeat',
+                'title' => '心跳命令',
+                'description' => '由 schedule:run 自动触发；排查时可手动执行一次心跳。',
+                'command' => "{$quotedPhp} {$quotedArtisan} scheduler:heartbeat",
             ],
             [
                 'key' => 'schedule_work',
@@ -265,151 +149,60 @@ class ScheduleTaskService
         ];
     }
 
-    private function resolveSchedule(): Schedule
+    private function recentLogs(): array
     {
-        app(ConsoleKernelContract::class)->bootstrap();
+        $runs = $this->taskRuns->recentRuns(24);
+        if ($runs !== []) {
+            return $runs;
+        }
 
-        return app(Schedule::class);
-    }
-
-    private function loadTaskLogs(int $lineSample = 2000): array
-    {
-        $logPath = storage_path('logs/laravel.log');
-
-        if (! is_file($logPath)) {
+        if (! Schema::hasTable('schedule_run_logs')) {
             return [];
         }
 
-        return collect($this->readLastLines($logPath, $lineSample))
-            ->reverse()
-            ->map(fn (string $line) => $this->parseLogLine($line))
-            ->filter(fn (?array $item) => is_array($item) && $this->resolveTaskKeyFromMessage((string) $item['message']) !== null)
+        return ScheduleRunLog::query()
+            ->latest('id')
+            ->limit(24)
+            ->get()
+            ->map(fn (ScheduleRunLog $log): array => [
+                'time' => $log->finished_at?->toDateTimeString() ?? $log->created_at?->toDateTimeString(),
+                'level' => strtoupper((string) $log->status),
+                'message' => (string) $log->task_name,
+                'task_key' => null,
+                'status' => (string) $log->status,
+                'duration_ms' => $log->duration_ms,
+                'summary' => $log->summary,
+                'error_msg' => $log->error_msg,
+            ])
             ->values()
             ->all();
     }
 
-    private function buildFallbackTaskMeta(string $taskKey, string $summary): array
+    private function latestLegacyLogForTask(string $taskName, string $taskKey): ?array
     {
-        $title = trim($summary) !== '' ? trim($summary) : trim($taskKey);
+        if (! Schema::hasTable('schedule_run_logs')) {
+            return null;
+        }
+
+        $log = ScheduleRunLog::query()
+            ->where('task_name', $taskName)
+            ->latest('id')
+            ->first();
+
+        if (! $log instanceof ScheduleRunLog) {
+            return null;
+        }
 
         return [
-            'title' => $title !== '' ? $title : '未命名调度任务',
-            'description' => '已在 Laravel Schedule 中注册，当前页面按运行时调度配置实时展示。',
-            'category' => '系统调度',
-        ];
-    }
-
-    private function resolveTaskKeyFromEvent(string $description, string $summary): string
-    {
-        $description = trim($description);
-        $summary = trim($summary);
-
-        if ($description !== '' && isset(self::TASK_META[$description])) {
-            return $description;
-        }
-
-        foreach (self::TASK_META as $taskKey => $meta) {
-            $title = trim((string) ($meta['title'] ?? ''));
-            if ($title !== '' && ($description === $title || $summary === $title)) {
-                return $taskKey;
-            }
-        }
-
-        return $description !== '' ? $description : $summary;
-    }
-
-    private function findLatestTaskLog(string $taskKey): ?array
-    {
-        $taskKey = trim($taskKey);
-        if ($taskKey === '' || ! isset(self::TASK_META[$taskKey])) {
-            return null;
-        }
-
-        $logPath = storage_path('logs/laravel.log');
-        if (! is_file($logPath)) {
-            return null;
-        }
-
-        $keywords = array_values(array_filter((array) (self::TASK_META[$taskKey]['log_keywords'] ?? [])));
-        if ($keywords === []) {
-            return null;
-        }
-
-        foreach (array_reverse($this->readLastLines($logPath, 20000)) as $line) {
-            foreach ($keywords as $keyword) {
-                if ($keyword !== '' && str_contains($line, $keyword)) {
-                    $parsed = $this->parseLogLine($line);
-                    if (is_array($parsed) && ($parsed['task_key'] ?? null) === $taskKey) {
-                        return $parsed;
-                    }
-                }
-            }
-        }
-
-        return null;
-    }
-
-    private function parseLogLine(string $line): ?array
-    {
-        $line = trim($line);
-        if ($line === '') {
-            return null;
-        }
-
-        if (! preg_match('/^\[(?<time>[^\]]+)\]\s+\w+\.(?<level>[A-Z]+):\s+(?<message>.+)$/u', $line, $matches)) {
-            return null;
-        }
-
-        $message = trim((string) $matches['message']);
-        $taskKey = $this->resolveTaskKeyFromMessage($message);
-
-        if ($taskKey === null) {
-            return null;
-        }
-
-        $displayMessage = preg_replace('/\s+\{.*$/u', '', $message) ?: $message;
-
-        return [
-            'time' => trim((string) $matches['time']),
-            'level' => trim((string) $matches['level']),
-            'message' => $displayMessage,
-            'raw' => $message,
+            'time' => $log->finished_at?->toDateTimeString() ?? $log->created_at?->toDateTimeString(),
+            'level' => strtoupper((string) $log->status),
+            'message' => (string) $log->task_name,
             'task_key' => $taskKey,
+            'status' => (string) $log->status,
+            'duration_ms' => $log->duration_ms,
+            'summary' => $log->summary,
+            'error_msg' => $log->error_msg,
         ];
-    }
-
-    private function resolveTaskKeyFromMessage(string $message): ?string
-    {
-        foreach (self::TASK_META as $taskKey => $meta) {
-            foreach ((array) ($meta['log_keywords'] ?? []) as $keyword) {
-                if ($keyword !== '' && str_contains($message, $keyword)) {
-                    return $taskKey;
-                }
-            }
-        }
-
-        return null;
-    }
-
-    private function readLastLines(string $path, int $limit): array
-    {
-        $file = new SplFileObject($path, 'r');
-        $file->seek(PHP_INT_MAX);
-        $lastLine = $file->key();
-        $startLine = max($lastLine - $limit, 0);
-        $lines = [];
-
-        $file->seek($startLine);
-
-        while (! $file->eof()) {
-            $line = rtrim((string) $file->current(), "\r\n");
-            if ($line !== '') {
-                $lines[] = $line;
-            }
-            $file->next();
-        }
-
-        return $lines;
     }
 
     private function resolveQueueRuntimeMode(bool $jobsTableReady): string
@@ -417,7 +210,7 @@ class ScheduleTaskService
         $driver = (string) config('queue.default', 'sync');
 
         return match ($driver) {
-            'database' => $jobsTableReady ? 'database_queue' : 'after_response_fallback',
+            'database' => $jobsTableReady ? 'database_queue_heartbeat_drained' : 'after_response_fallback',
             'redis' => 'redis_queue',
             'sync' => 'sync_inline',
             default => $driver,
@@ -442,7 +235,7 @@ class ScheduleTaskService
                         .AutomationScheduleExpression::describe(
                             (string) $config['service_lifecycle_schedule_mode'],
                             (string) $config['service_lifecycle_schedule_time'],
-                            AutomationScheduleExpression::MODE_EVERY_FIVE_MINUTES,
+                            AutomationScheduleExpression::MODE_EVERY_FIFTEEN_MINUTES,
                             '00:05:00'
                         )
                     : '不会自动暂停到期服务',
@@ -477,11 +270,11 @@ class ScheduleTaskService
                 'label' => '未付款账单清理',
                 'value' => $config['pending_order_cleanup_enabled'] ? '已开启' : '已关闭',
                 'note' => $config['pending_order_cleanup_enabled']
-                    ? "未付款账单保留 {$config['pending_order_cleanup_after_hours']} 小时，任务周期："
+                    ? '未付款订单、账单和充值 5 分钟后自动取消，任务周期：'
                         .AutomationScheduleExpression::describe(
                             (string) $config['order_cleanup_schedule_mode'],
                             (string) $config['order_cleanup_schedule_time'],
-                            AutomationScheduleExpression::MODE_EVERY_FIVE_MINUTES,
+                            AutomationScheduleExpression::MODE_EVERY_FIFTEEN_MINUTES,
                             '00:00:00'
                         )
                     : '不会自动取消未付款账单',

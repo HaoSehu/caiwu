@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models\Concerns;
 
-use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Models\Product;
+use App\Services\ProductCatalog\ProductDisplayNameResolver;
 
 /**
  * Order 和 Invoice 共用的商品快照读写逻辑。

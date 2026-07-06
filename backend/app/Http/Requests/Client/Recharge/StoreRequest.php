@@ -13,6 +13,7 @@ class StoreRequest extends ClientFormRequest
         return [
             'amount' => ['required', 'numeric', 'min:1', 'max:50000'],
             'gateway' => ['nullable', 'string', Rule::in(PaymentGatewayCode::thirdPartyGateways())],
+            'payment_type' => ['nullable', 'string', Rule::in(['alipay', 'wxpay'])],
         ];
     }
 }

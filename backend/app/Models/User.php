@@ -29,10 +29,7 @@ class User extends Authenticatable
         'login_email_alert', 'login_notify', 'login_location_alert', 'password_change_alert', 'phone_change_alert', 'email_change_alert', 'marketing_alert', 'last_login_ip', 'last_login_at',
     ];
 
-    // balance/credit_limit 真源已迁移到 user_accounts，必须通过 AccountService 写入，禁止批量赋值
-    // 其余敏感字段（real_name/id_card/is_verified 等）由各自 Service 的 forceFill() 写入，
-    // 保留在 $fillable 是为了兼容工厂和测试创建，生产接口层通过 FormRequest 在参数层面过滤
-    protected $guarded = ['balance', 'credit_limit'];
+    protected $guarded = [];
 
     // id_card 是加密存储的身份证号，序列化时不返回原文（通过脱敏专用端点按需读取）
     protected $hidden = ['password', 'id_card'];
@@ -57,47 +54,6 @@ class User extends Authenticatable
             'referrer_user_id' => 'integer',
             'password' => 'hashed',
         ];
-    }
-
-    /** @var array<int, string> 本次保存中显式写入的账户投影字段 */
-    protected array $pendingAccountProjection = [];
-
-    protected static function booted(): void
-    {
-        // 现金余额/信用额度的真源已迁移到 user_accounts；
-        // 当通过 Eloquent 显式写入 balance/credit_limit 时，同步投影到账户表，
-        // 直接 DB::update(users) 不触发该钩子，符合账户读写边界约定。
-        static::saving(function (User $user): void {
-            $user->pendingAccountProjection = [];
-            foreach (['balance', 'credit_limit'] as $field) {
-                if (array_key_exists($field, $user->getDirty())) {
-                    $user->pendingAccountProjection[] = $field;
-                }
-            }
-        });
-
-        static::saved(function (User $user): void {
-            if ($user->pendingAccountProjection === []) {
-                return;
-            }
-
-            $attributes = $user->getAttributes();
-            $payload = [];
-            if (in_array('balance', $user->pendingAccountProjection, true) && array_key_exists('balance', $attributes)) {
-                $payload['cash_balance'] = $attributes['balance'];
-            }
-            if (in_array('credit_limit', $user->pendingAccountProjection, true) && array_key_exists('credit_limit', $attributes)) {
-                $payload['credit_limit'] = $attributes['credit_limit'];
-            }
-            $user->pendingAccountProjection = [];
-
-            if ($payload === []) {
-                return;
-            }
-
-            app(AccountService::class)->updateAccount($user, $payload);
-            $user->unsetRelation('account');
-        });
     }
 
     public function getNicknameAttribute(mixed $value): string
@@ -129,9 +85,25 @@ class User extends Authenticatable
         return $this->normalizeDecimalString($this->resolveAccountValue('cash_balance'));
     }
 
+    public function setBalanceAttribute(string|float|int $value): void
+    {
+        // 写入真源 user_accounts，不写 users 表（该列已删除）
+        if ($this->exists) {
+            app(AccountService::class)->setCashBalance($this, (float) $value);
+        }
+    }
+
     public function getCreditLimitAttribute(mixed $value): string
     {
         return $this->normalizeDecimalString($this->resolveAccountValue('credit_limit'));
+    }
+
+    public function setCreditLimitAttribute(string|float|int $value): void
+    {
+        // 写入真源 user_accounts，不写 users 表（该列已删除）
+        if ($this->exists) {
+            app(AccountService::class)->updateAccount($this, ['credit_limit' => $value]);
+        }
     }
 
     public function getRealNameAttribute(mixed $value): string

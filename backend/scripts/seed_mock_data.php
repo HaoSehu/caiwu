@@ -110,7 +110,7 @@ $summary = DB::transaction(function () use ($now, $json, $money): array {
         'updated_at' => $now,
     ]);
 
-    $vpsGroupId = DB::table('product_groups')->insertGetId([
+    DB::table('product_groups')->insert([
         'product_type' => 'vps',
         'name' => '云服务器',
         'slogan' => '适合网站、开发测试与轻量业务',
@@ -121,7 +121,7 @@ $summary = DB::transaction(function () use ($now, $json, $money): array {
         'updated_at' => $now,
     ]);
 
-    $dedicatedGroupId = DB::table('product_groups')->insertGetId([
+    DB::table('product_groups')->insert([
         'product_type' => 'dedicated',
         'name' => '独立服务器',
         'slogan' => '高性能独享资源',
@@ -133,7 +133,6 @@ $summary = DB::transaction(function () use ($now, $json, $money): array {
     ]);
 
     $vpsProductId = DB::table('products')->insertGetId([
-        'product_group_id' => $vpsGroupId,
         'product_type' => 'vps',
         'remark' => '2C4G 云服务器',
         'meta_title' => '2C4G 云服务器',
@@ -159,7 +158,6 @@ $summary = DB::transaction(function () use ($now, $json, $money): array {
     ]);
 
     $dedicatedProductId = DB::table('products')->insertGetId([
-        'product_group_id' => $dedicatedGroupId,
         'product_type' => 'dedicated',
         'remark' => 'E5 独立服务器',
         'meta_title' => 'E5 独立服务器',

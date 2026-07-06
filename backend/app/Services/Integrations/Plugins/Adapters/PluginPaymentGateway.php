@@ -55,6 +55,8 @@ final readonly class PluginPaymentGateway implements PaymentGatewayInterface
             'amount' => $request->amount,
             'subject' => $request->subject,
             'timeout_express' => $request->timeoutExpress,
+            'context' => $request->context,
+            ...$request->context,
         ]);
 
         return new PaymentPrecreateResult(
@@ -62,6 +64,29 @@ final readonly class PluginPaymentGateway implements PaymentGatewayInterface
             outTradeNo: (string) ($data['out_trade_no'] ?? $request->outTradeNo),
             raw: is_array($data['raw'] ?? null) ? $data['raw'] : $data,
         );
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function paymentOptions(): array
+    {
+        try {
+            $data = $this->executeData('payment.options', []);
+        } catch (BusinessException $exception) {
+            if ($exception->getMessage() !== 'Unsupported plugin action') {
+                throw $exception;
+            }
+
+            return [];
+        }
+
+        $list = $data['list'] ?? $data['options'] ?? [];
+
+        return collect(is_array($list) ? $list : [])
+            ->filter(fn ($item): bool => is_array($item))
+            ->values()
+            ->all();
     }
 
     public function query(string $outTradeNo): PaymentQueryResult

@@ -66,7 +66,12 @@ class ProductAdminService
                     ]),
                     'updated_at',
                 ])
-                ->with(['firstProductGroup', 'secondProductGroup', 'thirdProductGroup'])
+                ->with([
+                    'firstProductGroup',
+                    'secondProductGroup',
+                    'thirdProductGroup',
+                    'upstreamBindings.supplierPluginBinding',
+                ])
                 ->withCount([
                     'orders',
                     'services as total_services_count',
@@ -1708,7 +1713,7 @@ class ProductAdminService
             'firstProductGroup',
             'secondProductGroup',
             'thirdProductGroup',
-            'supplier',
+            'upstreamBindings.supplierPluginBinding.supplier',
         ]);
     }
 

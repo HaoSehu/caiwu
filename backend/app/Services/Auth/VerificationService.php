@@ -45,7 +45,7 @@ class VerificationService
 
     private const QR_CODE_URL_CACHE_PREFIX = 'verification:qrcode_url:';
 
-    private const QR_CODE_URL_CACHE_TTL_SECONDS = 7200;
+    private const QR_CODE_URL_CACHE_TTL_SECONDS = 300;
 
     private VerificationDriverManager $driverManager;
 
@@ -119,10 +119,15 @@ class VerificationService
             throw new BusinessException('生成认证链接失败', 42200);
         }
 
-        $this->cacheQrCodeUrl($certifyId, $remoteUrl);
+        $expiresAt = now()->addSeconds(self::QR_CODE_URL_CACHE_TTL_SECONDS);
+        $proxyUrl = $this->buildQrCodeProxyUrl($certifyId);
+        $this->cacheQrCodeUrl($certifyId, $remoteUrl, $expiresAt);
 
         return [
-            'url' => $remoteUrl,
+            'url' => $proxyUrl,
+            'qrcode_url' => $proxyUrl,
+            'expires_at' => $expiresAt->toIso8601String(),
+            'expires_in_seconds' => self::QR_CODE_URL_CACHE_TTL_SECONDS,
         ];
     }
 
@@ -138,17 +143,19 @@ class VerificationService
             return $cachedUrl;
         }
 
-        $response = $this->generateScanForm($certifyId);
-        $this->assertSourceResponseSuccess($response, '获取认证链接失败');
+        $this->forgetQrCodeUrlCache($certifyId);
 
-        $remoteUrl = trim($response->url);
-        if (! $this->isValidRemoteUrl($remoteUrl)) {
-            throw new BusinessException('生成认证链接失败', 42200);
+        throw new BusinessException('认证二维码已失效，请重新生成', 42200);
+    }
+
+    public function closeQrCodeSession(string $certifyId): void
+    {
+        $certifyId = trim($certifyId);
+        if ($certifyId === '') {
+            return;
         }
 
-        $this->cacheQrCodeUrl($certifyId, $remoteUrl);
-
-        return $remoteUrl;
+        $this->forgetQrCodeUrlCache($certifyId);
     }
 
     public function queryStatus(string $certifyId): array
@@ -485,18 +492,18 @@ class VerificationService
     {
         $frontendUrl = trim((string) config('app.frontend_url', ''));
         if ($frontendUrl !== '') {
-            return rtrim($frontendUrl, '/').'/api/client/verification/callback';
+            return rtrim($frontendUrl, '/').'/api/v2/client/verification/callback';
         }
 
-        return rtrim((string) config('app.url', ''), '/').'/api/client/verification/callback';
+        return rtrim((string) config('app.url', ''), '/').'/api/v2/client/verification/callback';
     }
 
-    private function cacheQrCodeUrl(string $certifyId, string $remoteUrl): void
+    private function cacheQrCodeUrl(string $certifyId, string $remoteUrl, ?\DateTimeInterface $expiresAt = null): void
     {
         Cache::put(
             $this->buildQrCodeUrlCacheKey($certifyId),
             $remoteUrl,
-            now()->addSeconds(self::QR_CODE_URL_CACHE_TTL_SECONDS)
+            $expiresAt ?? now()->addSeconds(self::QR_CODE_URL_CACHE_TTL_SECONDS)
         );
     }
 
@@ -509,10 +516,10 @@ class VerificationService
     {
         $frontendUrl = trim((string) config('app.frontend_url', ''));
         if ($frontendUrl !== '') {
-            return rtrim($frontendUrl, '/').'/api/client/verification/scan?certify_id='.rawurlencode($certifyId);
+            return rtrim($frontendUrl, '/').'/api/v2/client/verification/scan?certify_id='.rawurlencode($certifyId);
         }
 
-        return rtrim((string) config('app.url', ''), '/').'/api/client/verification/scan?certify_id='.rawurlencode($certifyId);
+        return rtrim((string) config('app.url', ''), '/').'/api/v2/client/verification/scan?certify_id='.rawurlencode($certifyId);
     }
 
     private function resolvedBizCode(): string

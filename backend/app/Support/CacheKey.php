@@ -118,6 +118,14 @@ final class CacheKey
     }
 
     /**
+     * VAPTCHA 已通过 token 防复用缓存。
+     */
+    public static function vaptchaVerifiedToken(string $fingerprint): string
+    {
+        return 'vaptcha:verified_token:'.$fingerprint;
+    }
+
+    /**
      * 上传资产引用缓存。
      */
     public static function uploadedAssetReference(string $token): string

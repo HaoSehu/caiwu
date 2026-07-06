@@ -50,6 +50,7 @@ class CompensateRechargeInvoicesCommand extends Command
 
         if ($candidates->isEmpty()) {
             $this->line('[充值补偿] 无需处理的悬空记录');
+
             return self::SUCCESS;
         }
 
@@ -88,7 +89,7 @@ class CompensateRechargeInvoicesCommand extends Command
                     );
                 });
 
-                $this->line("    ✓ 已补建 Invoice");
+                $this->line('    ✓ 已补建 Invoice');
                 Log::info('[充值补偿] 已补建充值 Invoice', [
                     'payment_id' => $payment->id,
                     'payment_no' => $payment->payment_no,

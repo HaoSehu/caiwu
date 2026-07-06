@@ -21,6 +21,8 @@ class ProductTypeService
 
     public function list(): array
     {
+        $this->hierarchyService->syncProductTypes();
+
         $items = ProductType::items();
         $values = array_values(array_map(fn (array $item): string => (string) $item['value'], $items));
         $firstGroups = Schema::hasTable('first_product_groups')

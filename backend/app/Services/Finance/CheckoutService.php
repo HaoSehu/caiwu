@@ -276,6 +276,13 @@ class CheckoutService
 
             $lockedInvoice->forceFill(['status' => InvoiceStatus::CANCELLED])->save();
 
+            $linkedOrder = $lockedInvoice->order_id
+                ? Order::query()->lockForUpdate()->find((int) $lockedInvoice->order_id)
+                : null;
+            if ($linkedOrder instanceof Order && (int) $linkedOrder->status === OrderStatus::PENDING) {
+                $linkedOrder->forceFill(['status' => OrderStatus::CANCELLED])->save();
+            }
+
             $this->couponService->releaseInvoiceCoupon($lockedInvoice);
 
             // 新购账单取消时恢复库存

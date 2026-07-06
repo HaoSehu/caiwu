@@ -28,10 +28,29 @@ final class PluginDomain
         return [
             self::PAYMENT,
             self::VERIFICATION,
+            self::CAPTCHA,
             self::MAIL,
             self::SMS,
             self::UPSTREAM,
         ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public static function singleEnabledDomains(): array
+    {
+        return [
+            self::CAPTCHA,
+            self::VERIFICATION,
+            self::MAIL,
+            self::SMS,
+        ];
+    }
+
+    public static function requiresSingleEnabledPlugin(string $domain): bool
+    {
+        return in_array(self::assertValid($domain), self::singleEnabledDomains(), true);
     }
 
     public static function assertValid(string $domain): string
@@ -50,6 +69,7 @@ final class PluginDomain
         return match (self::assertValid($domain)) {
             self::PAYMENT => 'gateways',
             self::VERIFICATION => 'certification',
+            self::CAPTCHA => 'captcha',
             self::MAIL => 'mail',
             self::SMS => 'sms',
             self::UPSTREAM => 'servers',

@@ -3,7 +3,6 @@
 namespace App\Services\Auth;
 
 use App\Exceptions\BusinessException;
-use App\Models\Setting;
 use App\Services\Integrations\Plugins\IntegrationDriverBindingResolver;
 use App\Services\Integrations\Plugins\PluginDomain;
 use App\Services\Integrations\Plugins\PluginRuntimeRegistry;
@@ -11,7 +10,7 @@ use Illuminate\Support\Facades\Log;
 
 class GeeTestService
 {
-    private const SCRIPT_PROXY_PATH = '/api/client/auth/captcha-script';
+    private const SCRIPT_PROXY_PATH = '/api/v2/client/auth/captcha-script';
 
     private ?array $captchaConfigCache = null;
 
@@ -22,11 +21,13 @@ class GeeTestService
 
     public function isEnabled(): bool
     {
+        if ($this->activeDriver() === '') {
+            return false;
+        }
+
         $config = $this->captchaConfig();
 
-        return $this->isCaptchaGloballyEnabled()
-            && $this->activeDriver() !== ''
-            && (bool) ($config['enabled'] ?? false)
+        return (bool) ($config['enabled'] ?? false)
             && $this->getCaptchaId() !== '';
     }
 
@@ -59,12 +60,17 @@ class GeeTestService
     {
         return <<<'JS'
 window.initGeetest4 = window.initGeetest4 || function (options, callback) {
+    var errorCallbacks = [];
     var instance = {
         appendTo: function () { return instance; },
         onReady: function (fn) { if (typeof fn === 'function') { fn(); } return instance; },
         onSuccess: function () { return instance; },
-        onError: function (fn) { if (typeof fn === 'function') { fn(new Error('GeeTest script unavailable')); } return instance; },
+        onError: function (fn) { if (typeof fn === 'function') { errorCallbacks.push(fn); } return instance; },
         onClose: function () { return instance; },
+        showCaptcha: function () {
+            errorCallbacks.forEach(function (fn) { fn(new Error('行为验证脚本暂时不可用')); });
+            return instance;
+        },
         getValidate: function () { return null; },
         reset: function () { return instance; },
         destroy: function () { return instance; }
@@ -79,7 +85,7 @@ window.initGeetest4 = window.initGeetest4 || function (options, callback) {
 JS;
     }
 
-    public function verify(mixed $payload): array
+    public function verify(mixed $payload, ?string $clientIp = null): array
     {
         if (! $this->isEnabled()) {
             return ['ok' => true];
@@ -88,6 +94,8 @@ JS;
         if (! is_array($payload)) {
             return ['ok' => false, 'message' => '请先完成行为验证'];
         }
+
+        $payload['_client_ip'] = trim((string) ($clientIp ?? ''));
 
         $result = $this->executePlugin('captcha.verify', $payload);
         if (! (bool) ($result['success'] ?? false) || ! (bool) ($result['data']['verified'] ?? false)) {
@@ -173,24 +181,6 @@ JS;
     private function activeDriver(): string
     {
         return $this->bindingResolver()->captchaDriverKey();
-    }
-
-    private function isCaptchaGloballyEnabled(): bool
-    {
-        return $this->normalizeBoolean(Setting::getValue('system', 'captcha_enabled', false));
-    }
-
-    private function normalizeBoolean(mixed $value): bool
-    {
-        if (is_bool($value)) {
-            return $value;
-        }
-
-        if (is_string($value)) {
-            return in_array(strtolower(trim($value)), ['1', 'true', 'on', 'yes'], true);
-        }
-
-        return (bool) $value;
     }
 
     private function runtime(): PluginRuntimeRegistry

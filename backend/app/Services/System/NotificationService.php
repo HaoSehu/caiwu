@@ -8,7 +8,6 @@ use App\Models\Setting;
 use App\Models\User;
 use App\Services\Integrations\Plugins\IntegrationDriverBindingResolver;
 use App\Services\Mail\MailDriverManager;
-use App\Support\EmailTemplateCatalog;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -58,6 +57,7 @@ class NotificationService
     public function __construct(
         private readonly MailDriverManager $mailDriverManager,
         private ?IntegrationDriverBindingResolver $driverBindingResolver = null,
+        private ?NotificationTemplateService $notificationTemplateService = null,
     ) {}
 
     public function sendEmail(string $to, string $subject, string $content, ?string $templateCode = null): void
@@ -90,29 +90,13 @@ class NotificationService
 
     public function sendTemplateEmail(string $to, string $templateCode, array $params = []): void
     {
-        $template = EmailTemplateCatalog::find($templateCode);
+        $template = $this->notificationTemplates()->find('email', $templateCode);
         if (! is_array($template)) {
             throw new \RuntimeException('邮件模板不存在');
         }
 
-        $subjectTemplate = (string) Setting::getValue(
-            'notification',
-            EmailTemplateCatalog::subjectSettingKey($templateCode),
-            (string) ($template['subject'] ?? '')
-        );
-        $contentTemplate = (string) Setting::getValue(
-            'notification',
-            EmailTemplateCatalog::contentSettingKey($templateCode),
-            (string) ($template['content'] ?? '')
-        );
-
-        if (trim($subjectTemplate) === '') {
-            $subjectTemplate = (string) ($template['subject'] ?? '');
-        }
-
-        if (trim($contentTemplate) === '') {
-            $contentTemplate = (string) ($template['content'] ?? '');
-        }
+        $subjectTemplate = (string) ($template['subject'] ?? '');
+        $contentTemplate = (string) ($template['content'] ?? '');
 
         $siteName = $this->resolveSiteName();
         $renderParams = array_merge([
@@ -127,6 +111,11 @@ class NotificationService
         );
 
         $this->sendEmail($to, $subject, $content, $templateCode);
+    }
+
+    private function notificationTemplates(): NotificationTemplateService
+    {
+        return $this->notificationTemplateService ??= app(NotificationTemplateService::class);
     }
 
     public function sendEmailCode(string $to, string $code): void

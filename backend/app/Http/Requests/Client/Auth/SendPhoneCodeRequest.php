@@ -23,7 +23,7 @@ class SendPhoneCodeRequest extends ClientFormRequest
                     $fail('请输入正确的手机号');
                 }
             }],
-            'purpose' => 'nullable|string|in:login,register,reset,generic',
+            'purpose' => 'nullable|string|in:login,register,reset,reset_password,password_reset,change_phone,phone_change,update_phone,bind_phone,new_phone,verify_bound_phone,verify_phone,generic',
         ];
     }
 }

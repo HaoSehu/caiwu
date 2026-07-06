@@ -965,6 +965,7 @@ class UserService
             PaymentStatus::SUCCESS => '已支付',
             PaymentStatus::FAILED => '失败',
             PaymentStatus::REFUNDED => '已退款',
+            PaymentStatus::CANCELLED => '已取消',
             default => '未支付',
         };
     }

@@ -9,6 +9,7 @@ use App\Constants\UserNotificationType;
 use App\Exceptions\BusinessException;
 use App\Jobs\SendTicketNotificationEmailJob;
 use App\Models\AdminUser;
+use App\Models\Product;
 use App\Models\Service;
 use App\Models\Ticket;
 use App\Models\TicketReply;
@@ -18,6 +19,7 @@ use App\Services\Notification\UserNotificationService;
 use App\Services\System\NotificationService;
 use App\Services\System\UploadedAssetReferenceService;
 use App\Support\AdminPermissions;
+use App\Support\AdminPrivacy;
 use App\Support\SecureAsset;
 use App\Support\ServiceHostname;
 use App\Support\TextSanitizer;
@@ -373,6 +375,118 @@ class TicketService
     }
 
     /**
+     * 工单 v2 详情，不内嵌回复列表，也不构造服务连接凭据。
+     *
+     * @return array<string, mixed>
+     */
+    public function v2Detail(Ticket $ticket): array
+    {
+        $productColumns = Product::optionalSelectColumns([
+            'id',
+            'custom_display_name',
+            'product_type',
+            'service_type_code',
+            'first_product_group_id',
+            'second_product_group_id',
+            'third_product_group_id',
+            'config_options',
+            'purchase_requires',
+        ]);
+
+        if (! in_array('id', $productColumns, true)) {
+            array_unshift($productColumns, 'id');
+        }
+
+        $ticket->load([
+            'user:id,email,nickname',
+            'service:id,name,domain,product_id,billing_cycle,amount,status,provision_data,expires_at',
+            'service.product:'.implode(',', $productColumns),
+            'assignee:id,username,nickname',
+        ]);
+
+        return [
+            'id' => (int) $ticket->id,
+            'user_id' => (int) $ticket->user_id,
+            'department' => (string) $ticket->department,
+            'department_label' => self::DEPT_LABELS[$ticket->department] ?? (string) $ticket->department,
+            'subject' => (string) $ticket->subject,
+            'priority' => (int) $ticket->priority,
+            'priority_label' => self::PRIORITIES[(int) $ticket->priority] ?? (string) $ticket->priority,
+            'status' => (int) $ticket->status,
+            'status_label' => self::STATUS_LABELS[(int) $ticket->status] ?? (string) $ticket->status,
+            'service_id' => $ticket->service_id ? (int) $ticket->service_id : null,
+            'assignee_id' => $ticket->assignee_id ? (int) $ticket->assignee_id : null,
+            'close_reason' => $ticket->close_reason,
+            'close_reason_label' => self::CLOSE_REASON_LABELS[$ticket->close_reason ?? ''] ?? null,
+            'created_at' => $ticket->created_at?->format('Y-m-d H:i:s'),
+            'updated_at' => $ticket->updated_at?->format('Y-m-d H:i:s'),
+            'user' => $ticket->user ? [
+                'id' => (int) $ticket->user->id,
+                'email' => $ticket->user->email,
+                'nickname' => $ticket->user->nickname,
+                'display_name' => $ticket->user->display_name,
+            ] : null,
+            'service' => $ticket->service ? $this->resolveLinkedServiceSummaryPayload($ticket->service) : null,
+            'assignee' => $ticket->assignee ? [
+                'id' => (int) $ticket->assignee->id,
+                'username' => $ticket->assignee->username,
+                'nickname' => trim((string) $ticket->assignee->nickname) !== '' ? $ticket->assignee->nickname : $ticket->assignee->username,
+            ] : null,
+            'replies_summary' => [
+                'total' => $this->countReplies($ticket),
+                'default_page_size' => 20,
+            ],
+        ];
+    }
+
+    public function v2Replies(Ticket $ticket, int $perPage = 20): LengthAwarePaginator
+    {
+        $ticket->loadMissing('user:id,email,nickname');
+        $clientName = $ticket->user?->display_name ?: '客户';
+        $perPage = max(1, min($perPage, 100));
+
+        if (self::tableExists('ticket_replies')) {
+            $paginator = TicketReply::query()
+                ->where('ticket_id', (int) $ticket->id)
+                ->orderBy('created_at')
+                ->orderBy('id')
+                ->paginate($perPage);
+
+            $items = collect($paginator->items());
+            $staffMap = AdminUser::query()
+                ->whereIn('id', $items->where('is_staff', 1)->pluck('user_id')->unique()->values())
+                ->get(['id', 'username', 'nickname'])
+                ->mapWithKeys(fn (AdminUser $admin) => [
+                    (int) $admin->id => trim((string) $admin->nickname) !== '' ? $admin->nickname : $admin->username,
+                ])
+                ->all();
+
+            $paginator->setCollection($items
+                ->map(fn (TicketReply $reply) => $this->formatReply(
+                    $reply,
+                    $reply->is_staff ? ($staffMap[(int) $reply->user_id] ?? '员工') : $clientName
+                ))
+                ->values());
+
+            return $paginator;
+        }
+
+        $replies = collect($this->resolveTicketReplies($ticket, $clientName));
+        $page = LengthAwarePaginator::resolveCurrentPage();
+
+        return new LengthAwarePaginator(
+            $replies->slice(($page - 1) * $perPage, $perPage)->values(),
+            $replies->count(),
+            $perPage,
+            $page,
+            [
+                'path' => request()->url(),
+                'query' => request()->query(),
+            ]
+        );
+    }
+
+    /**
      * 管理端统计
      */
     public function adminSummary(): array
@@ -384,6 +498,35 @@ class TicketService
                 ->whereDate('updated_at', today())->count(),
             'total' => Ticket::count(),
         ];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function adminAssignableUsers(): array
+    {
+        $privacy = AdminPrivacy::current();
+        $columns = ['id', 'username', 'nickname', 'role_id'];
+        $hasEmailColumn = Schema::hasColumn('admin_users', 'email');
+
+        if ($hasEmailColumn) {
+            $columns[] = 'email';
+        }
+
+        return AdminUser::query()
+            ->withResolvedPermissionRelations()
+            ->where('status', 1)
+            ->orderBy('id')
+            ->get($columns)
+            ->filter(fn (AdminUser $admin): bool => $admin->hasPermission(AdminPermissions::TICKET_REPLY))
+            ->map(fn (AdminUser $admin): array => [
+                'id' => (int) $admin->id,
+                'username' => (string) $admin->username,
+                'nickname' => (string) $admin->display_name,
+                'email' => $hasEmailColumn ? $privacy->email((string) ($admin->email ?? '')) : '',
+            ])
+            ->values()
+            ->all();
     }
 
     public function clientServiceOptions(int $userId, string $keyword = '', int $limit = 20): array
@@ -913,6 +1056,45 @@ class TicketService
             'connection' => $connection,
             'specs' => is_array($specs) ? $specs : [],
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function resolveLinkedServiceSummaryPayload(Service $service): array
+    {
+        $service->loadMissing('product');
+        $listItem = $this->serviceTransformService->transformListItem($service);
+        $specs = is_array($listItem['specs'] ?? null) ? $listItem['specs'] : [];
+
+        return [
+            'id' => (int) $service->id,
+            'name' => (string) $service->name,
+            'display_name' => $this->resolveServiceDisplayName($service),
+            'domain' => (string) ($listItem['domain'] ?? $service->domain ?? ''),
+            'status' => (int) $service->status,
+            'status_label' => (string) ($listItem['status_label'] ?? ''),
+            'billing_cycle' => (string) ($service->billing_cycle ?? ''),
+            'billing_cycle_label' => (string) ($listItem['billing_cycle_label'] ?? ''),
+            'amount' => number_format((float) $service->amount, 2, '.', ''),
+            'expires_at' => $service->expires_at?->format('Y-m-d H:i:s'),
+            'specs' => $specs,
+        ];
+    }
+
+    private function countReplies(Ticket $ticket): int
+    {
+        if (self::tableExists('ticket_replies')) {
+            return TicketReply::query()->where('ticket_id', (int) $ticket->id)->count();
+        }
+
+        if (! self::tableExists('ticket_messages')) {
+            return 0;
+        }
+
+        return DB::table('ticket_messages')
+            ->where('ticket_id', (int) $ticket->id)
+            ->count();
     }
 
     /**

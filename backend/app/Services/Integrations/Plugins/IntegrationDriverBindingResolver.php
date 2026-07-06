@@ -94,6 +94,7 @@ class IntegrationDriverBindingResolver
     {
         return $this->uniqueKeys([
             $this->selectedBindingProviderKey(PluginDomain::CAPTCHA, 'captcha_driver'),
+            $this->firstEnabledPluginKey(PluginDomain::CAPTCHA),
         ]);
     }
 
@@ -179,6 +180,25 @@ class IntegrationDriverBindingResolver
             ->first(['id']);
 
         return $plugin === null ? null : (int) $plugin->id;
+    }
+
+    private function firstEnabledPluginKey(string $domain): string
+    {
+        if (! Schema::hasTable('integration_plugins')) {
+            return '';
+        }
+
+        $plugin = DB::table('integration_plugins')
+            ->where('domain', $domain)
+            ->where('status', IntegrationPlugin::STATUS_ENABLED)
+            ->orderBy('id')
+            ->first(['plugin_key', 'slug']);
+
+        if ($plugin === null) {
+            return '';
+        }
+
+        return trim((string) ($plugin->plugin_key ?? '')) ?: trim((string) ($plugin->slug ?? ''));
     }
 
     /**

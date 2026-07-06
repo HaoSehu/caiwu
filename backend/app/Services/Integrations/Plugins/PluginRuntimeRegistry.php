@@ -63,6 +63,16 @@ class PluginRuntimeRegistry
             throw new BusinessException('插件未安装或未启用', 42200);
         }
 
+        return $this->executePlugin($plugin, $resolvedAction, $payload, $context);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>  $context
+     * @return array<string, mixed>
+     */
+    private function executePlugin(IntegrationPlugin $plugin, string $resolvedAction, array $payload = [], array $context = []): array
+    {
         $manifest = $this->scanner->requireManifest((string) $plugin->domain, (string) $plugin->slug);
         $entry = $this->makeExecutableEntry($manifest);
         $startedAt = microtime(true);
@@ -119,7 +129,6 @@ class PluginRuntimeRegistry
 
             throw new BusinessException('插件执行失败', 42200);
         }
-
     }
 
     /**
@@ -252,8 +261,8 @@ class PluginRuntimeRegistry
             $manifest = $this->scanner->find((string) $plugin->domain, (string) $plugin->slug);
             if (! $manifest instanceof PluginManifest) {
                 Log::error('[plugins] enabled plugin manifest missing — plugin is enabled but files not found', [
-                    'domain'    => $plugin->domain,
-                    'slug'      => $plugin->slug,
+                    'domain' => $plugin->domain,
+                    'slug' => $plugin->slug,
                     'plugin_id' => $plugin->id,
                 ]);
 
@@ -286,14 +295,14 @@ class PluginRuntimeRegistry
     public function healthCheck(IntegrationPlugin $plugin): array
     {
         $manifest = $this->scanner->requireManifest((string) $plugin->domain, (string) $plugin->slug);
-        $entry    = $this->makeExecutableEntry($manifest);
+        $entry = $this->makeExecutableEntry($manifest);
 
         $result = [
-            'healthy'        => true,
-            'message'        => '插件加载正常',
-            'entry_class'    => $manifest->entryClass,
+            'healthy' => true,
+            'message' => '插件加载正常',
+            'entry_class' => $manifest->entryClass,
             'provider_class' => $manifest->providerClass,
-            'details'        => [],
+            'details' => [],
         ];
 
         if (method_exists($entry, 'healthCheck')) {

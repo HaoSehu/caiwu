@@ -92,7 +92,7 @@ class LogOperation
             return false;
         }
 
-        if ($request->is('api/admin/logs') || $request->is('api/admin/logs/*')) {
+        if ($request->is('api/v2/admin/logs') || $request->is('api/v2/admin/logs/*')) {
             return false;
         }
 
@@ -109,9 +109,9 @@ class LogOperation
             return false;
         }
 
-        return $request->is('api/client/verification/status')
-            || $request->is('api/client/recharge/*/status')
-            || $request->is('api/client/invoices/*/pay/alipay/status');
+        return $request->is('api/v2/client/verification/status')
+            || $request->is('api/v2/client/recharge/*/status')
+            || $request->is('api/v2/client/invoices/*/pay/alipay/status');
     }
 
     private function resolveUserType(mixed $user): string
@@ -132,6 +132,10 @@ class LogOperation
         $segments = array_values(array_filter(explode('/', trim($request->path(), '/'))));
 
         if (($segments[0] ?? '') === 'api') {
+            array_shift($segments);
+        }
+
+        if (($segments[0] ?? '') === 'v2') {
             array_shift($segments);
         }
 

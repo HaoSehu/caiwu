@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Services\Finance\PaymentService;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -11,7 +12,7 @@ use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 
-class ProcessPaidOrderReferralRewardJob implements ShouldQueue
+class ProcessPaidOrderReferralRewardJob implements ShouldBeUnique, ShouldQueue
 {
     use Dispatchable;
     use InteractsWithQueue;
@@ -21,6 +22,8 @@ class ProcessPaidOrderReferralRewardJob implements ShouldQueue
     public int $tries = 3;
 
     public int $timeout = 300;
+
+    public int $uniqueFor = 600;
 
     public array $backoff = [30, 120, 300];
 
@@ -39,6 +42,11 @@ class ProcessPaidOrderReferralRewardJob implements ShouldQueue
                 ->releaseAfter(10)
                 ->expireAfter(600),
         ];
+    }
+
+    public function uniqueId(): string
+    {
+        return (string) $this->orderId;
     }
 
     public function handle(PaymentService $paymentService): void

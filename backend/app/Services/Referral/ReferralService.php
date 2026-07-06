@@ -815,6 +815,77 @@ class ReferralService
             ->paginate($perPage);
     }
 
+    /**
+     * @return array<string, mixed>
+     */
+    public function adminRewardProjection(ReferralReward $item, ?AdminPrivacy $privacy = null): array
+    {
+        $privacy ??= AdminPrivacy::current();
+
+        return [
+            'id' => (int) $item->id,
+            'status' => (int) $item->status,
+            'order_amount' => number_format((float) $item->order_amount, 2, '.', ''),
+            'reward_rate' => number_format((float) $item->reward_rate, 2, '.', ''),
+            'reward_amount' => number_format((float) $item->reward_amount, 2, '.', ''),
+            'available_at' => $item->available_at?->format('Y-m-d H:i:s'),
+            'released_at' => $item->released_at?->format('Y-m-d H:i:s'),
+            'rewarded_at' => $item->rewarded_at?->format('Y-m-d H:i:s'),
+            'remark' => $item->remark,
+            'referrer' => $this->adminReferralUserProjection($item->referrer, $privacy),
+            'referred_user' => $this->adminReferralUserProjection($item->referredUser, $privacy),
+            'order' => $item->order ? [
+                'id' => (int) $item->order->id,
+                'order_no' => (string) $item->order->order_no,
+                'product_display_name' => $this->resolveRewardProductDisplayName($item),
+            ] : null,
+            'product' => $item->product ? [
+                'id' => (int) $item->product->id,
+                'name' => (string) $item->product->name,
+                'display_name' => $this->resolveRewardProductDisplayName($item),
+            ] : null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function adminWithdrawalProjection(ReferralWithdrawal $item, ?AdminPrivacy $privacy = null): array
+    {
+        $privacy ??= AdminPrivacy::current();
+
+        return [
+            'id' => (int) $item->id,
+            'amount' => number_format((float) $item->amount, 2, '.', ''),
+            'method' => (string) $item->method,
+            'account_name' => $privacy->name($item->account_name_display),
+            'account_no' => $privacy->account($item->account_no),
+            'status' => (int) $item->status,
+            'remark' => $item->remark,
+            'operator' => $item->operator,
+            'created_at' => $item->created_at?->format('Y-m-d H:i:s'),
+            'processed_at' => $item->processed_at?->format('Y-m-d H:i:s'),
+            'user' => $this->adminReferralUserProjection($item->user, $privacy),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function adminReferralUserProjection(?User $user, AdminPrivacy $privacy): ?array
+    {
+        if (! $user) {
+            return null;
+        }
+
+        return [
+            'id' => (int) $user->id,
+            'email' => $privacy->email($user->email),
+            'nickname' => (string) $user->nickname,
+            'display_name' => $privacy->displayName($user->display_name, $user->email, $user->phone, $user->real_name),
+        ];
+    }
+
     public function assertOrderRewardRefundable(Order $order): void
     {
         $reward = ReferralReward::query()

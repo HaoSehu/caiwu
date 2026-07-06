@@ -2,7 +2,9 @@
 
 namespace App\Services\Automation;
 
-use App\Jobs\RunScheduleTaskJob;
+use App\Jobs\RunHeartbeatTaskJob;
+use App\Services\Automation\Heartbeat\HeartbeatTaskRegistry;
+use App\Services\Automation\Heartbeat\ScheduleTaskRunRepository;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use InvalidArgumentException;
@@ -12,28 +14,14 @@ class ScheduleTaskTriggerService
 {
     private ?bool $databaseQueueReady = null;
 
-    private const INLINE_ONLY_TASKS = [
-        'queue-backlog-drain',
-    ];
-
-    private const SUPPORTED_TASKS = [
-        'refresh-hosting-panel-auth' => '接口认证刷新',
-        'service-auto-renew' => '服务自动续费',
-        'referral-release-rewards' => '推荐奖励释放',
-        'billing-maintenance' => '账单自动化维护',
-        'coupon-campaign-dispatch' => '优惠券活动发放',
-        'product-upstream-config-sync' => '上游产品配置同步',
-        'service-lifecycle-maintenance' => '服务生命周期维护',
-        'service-status-sync' => '用户产品状态同步',
-        'ticket-auto-close' => '工单自动关闭',
-        'order-cleanup' => '账单与充值清理',
-        'sync-processing-order-status' => '账单状态同步（兼容）',
-        'queue-backlog-drain' => '队列积压消费',
-    ];
+    public function __construct(
+        private HeartbeatTaskRegistry $registry,
+        private ScheduleTaskRunRepository $taskRuns,
+    ) {}
 
     public function supports(string $taskKey): bool
     {
-        return isset(self::SUPPORTED_TASKS[trim($taskKey)]);
+        return $this->registry->supportsManualTrigger(trim($taskKey));
     }
 
     public function dispatch(string $taskKey, ?int $adminUserId = null): array
@@ -44,43 +32,39 @@ class ScheduleTaskTriggerService
             throw new InvalidArgumentException('不支持的任务：'.$taskKey);
         }
 
-        if (app()->runningInConsole()) {
-            RunScheduleTaskJob::dispatchSync($taskKey, $adminUserId);
+        $task = $this->registry->get($taskKey);
+        $run = $this->taskRuns->markManualQueued($task, $adminUserId);
+
+        if (app()->runningInConsole() && ! app()->runningUnitTests()) {
+            RunHeartbeatTaskJob::dispatchSync($taskKey, null, $run?->id ? (int) $run->id : null, $adminUserId, 'manual_trigger');
 
             return [
                 'task' => $taskKey,
-                'title' => self::SUPPORTED_TASKS[$taskKey],
+                'title' => $task->title(),
                 'execution_mode' => 'sync',
             ];
         }
 
-        if ($this->shouldDispatchThroughQueue($taskKey)) {
-            RunScheduleTaskJob::dispatch($taskKey, $adminUserId);
+        if ($this->shouldUseQueue()) {
+            RunHeartbeatTaskJob::dispatch($taskKey, null, $run?->id ? (int) $run->id : null, $adminUserId, 'manual_trigger')
+                ->onQueue($task->queue());
 
             return [
                 'task' => $taskKey,
-                'title' => self::SUPPORTED_TASKS[$taskKey],
+                'title' => $task->title(),
                 'execution_mode' => 'queue',
             ];
         }
 
         $this->logFallbackDispatch($taskKey, $adminUserId);
-        RunScheduleTaskJob::dispatchAfterResponse($taskKey, $adminUserId);
+        RunHeartbeatTaskJob::dispatchAfterResponse($taskKey, null, $run?->id ? (int) $run->id : null, $adminUserId, 'manual_trigger')
+            ->onQueue($task->queue());
 
         return [
             'task' => $taskKey,
-            'title' => self::SUPPORTED_TASKS[$taskKey],
+            'title' => $task->title(),
             'execution_mode' => 'after_response',
         ];
-    }
-
-    private function shouldDispatchThroughQueue(string $taskKey): bool
-    {
-        if (in_array($taskKey, self::INLINE_ONLY_TASKS, true)) {
-            return false;
-        }
-
-        return $this->shouldUseQueue();
     }
 
     private function shouldUseQueue(): bool

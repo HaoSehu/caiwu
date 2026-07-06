@@ -196,17 +196,6 @@ class PaymentService
             $this->handlePaidInvoice($order->invoice, $traceId !== '' ? 'balance:'.$traceId : 'balance:'.$order->id);
         }
 
-        // 履约完成后清除 pending 标记
-        if ($order->invoice instanceof Invoice) {
-            $configSnapshot = is_array($order->invoice->config_snapshot ?? null)
-                ? $order->invoice->config_snapshot : [];
-            if (! empty($configSnapshot['fulfillment_pending'])) {
-                $configSnapshot['fulfillment_pending'] = false;
-                $configSnapshot['fulfillment_cleared_at'] = now()->toDateTimeString();
-                $order->invoice->forceFill(['config_snapshot' => $configSnapshot])->saveQuietly();
-            }
-        }
-
         return $paidInvoice?->fresh() ?? $paidInvoice ?? $order->invoice;
     }
 
@@ -286,7 +275,7 @@ class PaymentService
                     ->whereGatewayKey(PaymentGatewayCode::ALIPAY)
                     ->where('status', PaymentStatus::PENDING)
                     ->where('amount', $normalizedAmount)
-                    ->where('created_at', '>=', now()->subMinutes(15))
+                    ->where('created_at', '>=', now()->subSeconds(CheckoutSecurityService::paymentSessionTtlSeconds()))
                     ->lockForUpdate()
                     ->latest('id')
                     ->first();
@@ -310,7 +299,12 @@ class PaymentService
         }, '充值请求处理中，请勿重复提交');
 
         $subject = config('app.name', 'IDC').' - 账户充值 ¥'.number_format($normalizedAmount, 2, '.', '');
-        $result = $this->precreateAlipayPayment($payment->payment_no, $normalizedAmount, $subject);
+        $result = $this->precreateAlipayPayment(
+            $payment->payment_no,
+            $normalizedAmount,
+            $subject,
+            $this->resolvePaymentTimeoutExpress($payment)
+        );
 
         $payment->forceFill([
             'callback_raw' => array_merge((array) ($payment->callback_raw ?? []), [
@@ -344,20 +338,26 @@ class PaymentService
         throw_if($amount > 50000, new BusinessException('单笔充值不能超过 50000 元'));
 
         $normalizedAmount = round($amount, 2);
-        $lockKey = "lock:recharge:create:{$user->id}:".md5(number_format($normalizedAmount, 2, '.', ''));
+        $gatewayContext = $this->rechargeGatewayContext($context);
+        $lockKey = "lock:recharge:create:{$user->id}:".md5(implode('|', [
+            $gateway,
+            $this->rechargeGatewayContextKey($gatewayContext),
+            number_format($normalizedAmount, 2, '.', ''),
+        ]));
 
-        $payment = $this->withLock($lockKey, 20, function () use ($user, $normalizedAmount, $traceId, $gateway) {
-            return DB::transaction(function () use ($user, $normalizedAmount, $traceId, $gateway) {
+        $payment = $this->withLock($lockKey, 20, function () use ($user, $normalizedAmount, $traceId, $gateway, $gatewayContext) {
+            return DB::transaction(function () use ($user, $normalizedAmount, $traceId, $gateway, $gatewayContext) {
                 $payment = Payment::query()
                     ->where('user_id', $user->id)
                     ->whereNull('invoice_id')
                     ->whereGatewayKey($gateway)
                     ->where('status', PaymentStatus::PENDING)
                     ->where('amount', $normalizedAmount)
-                    ->where('created_at', '>=', now()->subMinutes(15))
+                    ->where('created_at', '>=', now()->subSeconds(CheckoutSecurityService::paymentSessionTtlSeconds()))
                     ->lockForUpdate()
                     ->latest('id')
-                    ->first();
+                    ->get()
+                    ->first(fn (Payment $payment): bool => $this->rechargePaymentMatchesGatewayContext($payment, $gatewayContext));
 
                 if ($payment) {
                     $this->ensurePaymentGatewayAudit($payment, $gateway, $traceId);
@@ -372,19 +372,27 @@ class PaymentService
                     'gateway' => $gateway,
                     'amount' => $normalizedAmount,
                     'status' => PaymentStatus::PENDING,
+                    'callback_raw' => $this->rechargeGatewayCallbackRaw($gatewayContext),
                     'trace_id' => $traceId,
                 ]));
             });
         }, '充值请求处理中，请勿重复提交');
 
         $subject = config('app.name', 'IDC').' - 账户充值 ¥'.number_format($normalizedAmount, 2, '.', '');
-        $result = $this->precreateGatewayPayment($gateway, $payment->payment_no, $normalizedAmount, $subject);
+        $result = $this->precreateGatewayPayment(
+            $gateway,
+            $payment->payment_no,
+            $normalizedAmount,
+            $subject,
+            $this->resolvePaymentTimeoutExpress($payment),
+            $context
+        );
 
         $payment->forceFill([
             'callback_raw' => array_merge((array) ($payment->callback_raw ?? []), [
                 'source' => "{$gateway}_recharge_precreate",
                 'trace_id' => $traceId,
-            ]),
+            ], $this->rechargeGatewayCallbackRaw($gatewayContext)),
         ])->save();
         $this->syncProjection($payment);
 
@@ -393,6 +401,57 @@ class PaymentService
             'qr_code' => $result['qr_code'],
             'amount' => number_format($normalizedAmount, 2, '.', ''),
         ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function rechargeGatewayContext(array $context): array
+    {
+        $paymentType = trim((string) ($context['payment_type'] ?? ''));
+
+        return $paymentType !== '' ? ['payment_type' => $paymentType] : [];
+    }
+
+    /**
+     * @param  array<string, string>  $gatewayContext
+     */
+    private function rechargeGatewayContextKey(array $gatewayContext): string
+    {
+        if ($gatewayContext === []) {
+            return 'default';
+        }
+
+        ksort($gatewayContext, SORT_STRING);
+
+        return md5(json_encode($gatewayContext, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]');
+    }
+
+    /**
+     * @param  array<string, string>  $gatewayContext
+     */
+    private function rechargePaymentMatchesGatewayContext(Payment $payment, array $gatewayContext): bool
+    {
+        $callbackRaw = (array) ($payment->callback_raw ?? []);
+        $storedContext = $callbackRaw['payment_context'] ?? null;
+        $storedContext = is_array($storedContext) ? $storedContext : $callbackRaw;
+
+        return $this->rechargeGatewayContext($storedContext) === $gatewayContext;
+    }
+
+    /**
+     * @param  array<string, string>  $gatewayContext
+     * @return array<string, mixed>
+     */
+    private function rechargeGatewayCallbackRaw(array $gatewayContext): array
+    {
+        if ($gatewayContext === []) {
+            return [];
+        }
+
+        return array_merge($gatewayContext, [
+            'payment_context' => $gatewayContext,
+        ]);
     }
 
     private function assertVerifiedUser(User $user): void
@@ -423,7 +482,73 @@ class PaymentService
             return ['paid' => true, 'trade_no' => $result['trade_no']];
         }
 
-        return ['paid' => false, 'trade_status' => $result['trade_status']];
+        $payment = $this->cancelExpiredPendingRecharge($payment, [
+            'reason' => 'payment_window_expired',
+            'actor_name' => 'recharge-status-poll',
+        ]);
+
+        return [
+            'paid' => false,
+            'trade_status' => $result['trade_status'],
+            'status' => (int) $payment->status,
+            'status_label' => PaymentStatus::$labels[(int) $payment->status] ?? '未知',
+        ];
+    }
+
+    public function cancelExpiredPendingRecharge(Payment $payment, array $context = []): Payment
+    {
+        return DB::transaction(function () use ($payment, $context): Payment {
+            $lockedPayment = Payment::query()
+                ->lockForUpdate()
+                ->findOrFail((int) $payment->id);
+
+            if ((int) ($lockedPayment->invoice_id ?? 0) > 0 || (int) $lockedPayment->status !== PaymentStatus::PENDING) {
+                return $lockedPayment;
+            }
+
+            if (! $this->isPaymentWindowExpired($lockedPayment)) {
+                return $lockedPayment;
+            }
+
+            $callbackRaw = (array) ($lockedPayment->callback_raw ?? []);
+            $callbackRaw['closed_reason'] = (string) ($context['reason'] ?? 'payment_window_expired');
+            $callbackRaw['closed_by'] = (string) ($context['actor_type'] ?? 'system');
+            $callbackRaw['closed_at'] = now()->toDateTimeString();
+            $callbackRaw['trace_id'] = (string) ($context['trace_id'] ?? ($lockedPayment->trace_id ?? ''));
+            $callbackRaw['payment_window_expired'] = true;
+
+            $lockedPayment->forceFill([
+                'status' => PaymentStatus::CANCELLED,
+                'callback_raw' => $callbackRaw,
+            ])->save();
+            $this->syncProjection($lockedPayment);
+
+            return $lockedPayment;
+        });
+    }
+
+    public function cancelExpiredPendingRechargesForUser(?int $userId = null, array $context = []): int
+    {
+        $threshold = now()->subSeconds(CheckoutSecurityService::paymentSessionTtlSeconds());
+        $query = Payment::query()
+            ->whereNull('invoice_id')
+            ->where('status', PaymentStatus::PENDING)
+            ->where('created_at', '<=', $threshold);
+
+        if ($userId !== null && $userId > 0) {
+            $query->where('user_id', $userId);
+        }
+
+        $count = 0;
+
+        foreach ($query->get() as $payment) {
+            $updated = $this->cancelExpiredPendingRecharge($payment, $context);
+            if ((int) $updated->status === PaymentStatus::CANCELLED) {
+                $count++;
+            }
+        }
+
+        return $count;
     }
 
     /**
@@ -642,7 +767,8 @@ class PaymentService
             $payment->payment_no,
             (float) $payment->amount,
             $subject,
-            $this->resolveInvoicePaymentTimeoutExpress($lockedInvoice)
+            $this->resolveInvoicePaymentTimeoutExpress($lockedInvoice),
+            $context
         );
 
         return [
@@ -721,11 +847,16 @@ class PaymentService
         $payment = $payload['payment'];
 
         $subject = config('app.name', 'IDC').' - 订单 '.$lockedOrder->order_no;
+        $timeoutExpress = $lockedOrder->invoice instanceof Invoice
+            ? $this->resolveInvoicePaymentTimeoutExpress($lockedOrder->invoice)
+            : $this->resolveOrderPaymentTimeoutExpress($lockedOrder);
         $result = $this->precreateGatewayPayment(
             $gateway,
             $payment->payment_no,
             (float) $payment->amount,
-            $subject
+            $subject,
+            $timeoutExpress,
+            $context
         );
 
         return [
@@ -981,7 +1112,8 @@ class PaymentService
                 $gatewayPayment->payment_no,
                 $remainingAmount,
                 $subject,
-                $this->resolveInvoicePaymentTimeoutExpress($lockedInvoice)
+                $this->resolveInvoicePaymentTimeoutExpress($lockedInvoice),
+                $context
             );
         } catch (\Throwable $exception) {
             $this->restoreReservedMixBalance($gatewayPayment, [
@@ -1068,7 +1200,10 @@ class PaymentService
         $payment = $payload['payment'];
 
         $subject = config('app.name', 'IDC').' - 订单 '.$lockedOrder->order_no;
-        $result = $this->precreateAlipayPayment($payment->payment_no, (float) $payment->amount, $subject);
+        $timeoutExpress = $lockedOrder->invoice instanceof Invoice
+            ? $this->resolveInvoicePaymentTimeoutExpress($lockedOrder->invoice)
+            : $this->resolveOrderPaymentTimeoutExpress($lockedOrder);
+        $result = $this->precreateAlipayPayment($payment->payment_no, (float) $payment->amount, $subject, $timeoutExpress);
 
         return [
             'payment_no' => $payment->payment_no,
@@ -2198,17 +2333,12 @@ class PaymentService
 
         // 开通 / 履约：优先走 Order 路径（包含完整上游开通链路），降级走 Invoice-only
         $stepStartedAt = microtime(true);
-        if (in_array($invoiceType, ['renew', 'upgrade'], true)) {
-            if ($orderId > 0) {
-                $this->processPaidOrderFulfillmentById($orderId);
-            } else {
-                $this->provisionPaidInvoice($invoice);
-            }
+        if ($orderId > 0) {
+            $this->paidOrderBusinessFlowDispatcher->dispatchPaidInvoice($invoice, $traceId);
         } else {
-            if ($orderId > 0) {
-                $this->paidOrderBusinessFlowDispatcher->dispatchPaidInvoice($invoice, $traceId);
-            } else {
-                $this->provisionPaidInvoice($invoice);
+            $this->provisionPaidInvoice($invoice);
+
+            if (! in_array($invoiceType, ['renew', 'upgrade'], true)) {
                 $this->dispatchInvoiceOnlyReferralReward($invoice, $traceId);
             }
         }
@@ -2349,6 +2479,7 @@ class PaymentService
         }
 
         $this->provisionPaidOrder($order->invoice);
+        $this->clearFulfillmentPending($order->invoice);
     }
 
     public function processPaidInvoiceAdminNotifyById(int $invoiceId): void
@@ -2416,6 +2547,27 @@ class PaymentService
 
             throw $exception;
         }
+    }
+
+    private function clearFulfillmentPending(Invoice $invoice): void
+    {
+        $freshInvoice = $invoice->fresh();
+        if (! $freshInvoice instanceof Invoice) {
+            return;
+        }
+
+        $configSnapshot = is_array($freshInvoice->config_snapshot ?? null)
+            ? $freshInvoice->config_snapshot
+            : [];
+
+        if (empty($configSnapshot['fulfillment_pending'])) {
+            return;
+        }
+
+        $configSnapshot['fulfillment_pending'] = false;
+        $configSnapshot['fulfillment_cleared_at'] = now()->toDateTimeString();
+
+        $freshInvoice->forceFill(['config_snapshot' => $configSnapshot])->saveQuietly();
     }
 
     /**
@@ -2527,6 +2679,7 @@ class PaymentService
         }
 
         $invoice->forceFill(['status' => InvoiceStatus::CANCELLED])->save();
+        $this->cancelLinkedPendingOrderForInvoice($invoice);
         $this->couponService->releaseInvoiceCoupon($invoice);
         $this->restoreStockForCancelledInvoice($invoice);
         $this->closeOtherPendingPayments($invoice, (int) $payment->id, 'payment_window_expired');
@@ -2535,6 +2688,7 @@ class PaymentService
     private function cancelExpiredInvoiceAfterCapturedPayment(Invoice $invoice, Payment $payment): void
     {
         $invoice->forceFill(['status' => InvoiceStatus::CANCELLED])->save();
+        $this->cancelLinkedPendingOrderForInvoice($invoice);
         $this->couponService->releaseInvoiceCoupon($invoice);
         $this->restoreStockForCancelledInvoice($invoice);
         $this->closeOtherPendingPayments($invoice, (int) $payment->id, 'payment_window_expired');
@@ -2646,6 +2800,16 @@ class PaymentService
         $product = Product::query()->lockForUpdate()->find((int) $invoice->product_id);
         if ($product instanceof Product && (int) $product->stock >= 0) {
             $product->increment('stock', max((int) ($invoice->quantity ?? 1), 1));
+        }
+    }
+
+    private function cancelLinkedPendingOrderForInvoice(Invoice $invoice): void
+    {
+        $orderId = (int) ($invoice->order_id ?? $invoice->order?->id ?? 0);
+        $order = $orderId > 0 ? Order::query()->lockForUpdate()->find($orderId) : null;
+
+        if ($order instanceof Order && (int) $order->status === OrderStatus::PENDING) {
+            $order->forceFill(['status' => OrderStatus::CANCELLED])->save();
         }
     }
 
@@ -2794,7 +2958,7 @@ class PaymentService
         return $this->resolveGateway(PaymentGatewayCode::ALIPAY);
     }
 
-    private function precreateGatewayPayment(string $gateway, string $outTradeNo, float $amount, string $subject, ?string $timeoutExpress = null): array
+    private function precreateGatewayPayment(string $gateway, string $outTradeNo, float $amount, string $subject, ?string $timeoutExpress = null, array $context = []): array
     {
         return $this->resolveGateway($gateway)
             ->precreate(new PaymentPrecreateRequest(
@@ -2802,6 +2966,7 @@ class PaymentService
                 amount: $amount,
                 subject: $subject,
                 timeoutExpress: $timeoutExpress,
+                context: $context,
             ))
             ->toArray();
     }
@@ -2812,6 +2977,52 @@ class PaymentService
     private function precreateAlipayPayment(string $outTradeNo, float $amount, string $subject, ?string $timeoutExpress = null): array
     {
         return $this->precreateGatewayPayment(PaymentGatewayCode::ALIPAY, $outTradeNo, $amount, $subject, $timeoutExpress);
+    }
+
+    private function resolvePaymentTimeoutExpress(Payment $payment): string
+    {
+        throw_if($this->isPaymentWindowExpired($payment), new BusinessException('支付时间已过期，请重新发起支付'));
+
+        $remainingSeconds = $this->paymentDeadline($payment)->diffInSeconds(CarbonImmutable::now(), true);
+
+        return max(1, (int) ceil($remainingSeconds / 60)).'m';
+    }
+
+    private function isPaymentWindowExpired(Payment $payment): bool
+    {
+        return $this->paymentDeadline($payment)->lessThanOrEqualTo(CarbonImmutable::now());
+    }
+
+    private function paymentDeadline(Payment $payment): CarbonImmutable
+    {
+        $createdAt = $payment->created_at;
+        $base = $createdAt instanceof \DateTimeInterface
+            ? CarbonImmutable::instance($createdAt)
+            : ($createdAt ? CarbonImmutable::parse((string) $createdAt) : CarbonImmutable::now());
+
+        return $base->addSeconds(CheckoutSecurityService::paymentSessionTtlSeconds());
+    }
+
+    private function resolveOrderPaymentTimeoutExpress(Order $order): string
+    {
+        throw_if(
+            $this->orderPaymentDeadline($order)->lessThanOrEqualTo(CarbonImmutable::now()),
+            new BusinessException('支付时间已过期，请重新发起支付')
+        );
+
+        $remainingSeconds = $this->orderPaymentDeadline($order)->diffInSeconds(CarbonImmutable::now(), true);
+
+        return max(1, (int) ceil($remainingSeconds / 60)).'m';
+    }
+
+    private function orderPaymentDeadline(Order $order): CarbonImmutable
+    {
+        $createdAt = $order->created_at;
+        $base = $createdAt instanceof \DateTimeInterface
+            ? CarbonImmutable::instance($createdAt)
+            : ($createdAt ? CarbonImmutable::parse((string) $createdAt) : CarbonImmutable::now());
+
+        return $base->addSeconds(CheckoutSecurityService::paymentSessionTtlSeconds());
     }
 
     private function resolveInvoicePaymentTimeoutExpress(Invoice $invoice): string

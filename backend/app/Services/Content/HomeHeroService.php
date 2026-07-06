@@ -361,7 +361,12 @@ class HomeHeroService
             return $libraryPath;
         }
 
-        return self::LEGACY_HERO_VIDEO_PREFIX.$filename;
+        $legacyPath = self::LEGACY_HERO_VIDEO_PREFIX.$filename;
+        if (@is_file(public_path(ltrim($legacyPath, '/')))) {
+            return $legacyPath;
+        }
+
+        return '';
     }
 
     /**

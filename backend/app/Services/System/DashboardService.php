@@ -126,7 +126,7 @@ class DashboardService
             ->orderByDesc('id')
             ->limit(10)
             ->get()
-            ->map(function (Invoice $invoice) {
+            ->map(function (Invoice $invoice) use ($privacy) {
                 return [
                     'id' => (int) $invoice->id,
                     'invoice_no' => (string) $invoice->invoice_no,
