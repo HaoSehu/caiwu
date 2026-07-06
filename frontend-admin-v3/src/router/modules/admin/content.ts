@@ -130,7 +130,7 @@ export const contentRoutes: RouteRecordRaw[] = [
         zh_CN: '通知管理',
         en_US: 'Notifications',
       },
-      permission: 'content.list',
+      permission: 'settings.view',
     },
   },
   {
@@ -142,7 +142,20 @@ export const contentRoutes: RouteRecordRaw[] = [
         zh_CN: '邮件模板详情',
         en_US: 'Email Template Detail',
       },
-      permission: 'content.list',
+      permission: 'settings.view',
+      hidden: true,
+    },
+  },
+  {
+    path: 'notifications/sms-templates/:code',
+    name: 'AdminNotificationSmsTemplateDetail',
+    component: () => import('@/pages/notifications/email-template-detail/index.vue'),
+    meta: {
+      title: {
+        zh_CN: '短信模板详情',
+        en_US: 'SMS Template Detail',
+      },
+      permission: 'settings.view',
       hidden: true,
     },
   },

@@ -65,7 +65,6 @@ export function useConsolePower(options: UseConsolePowerOptions) {
         try {
           const res = await clientApi.servicePower(serviceId.value, { action });
           const payload = res.data || {};
-          if (payload.detail) detail.value = normalizeConsoleDetail(payload.detail);
           MessagePlugin.success(payload.message || `${label}指令已下发`);
           dialog.hide();
           clearStatusSyncTimer();

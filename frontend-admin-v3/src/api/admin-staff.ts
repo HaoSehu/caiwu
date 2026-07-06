@@ -44,16 +44,17 @@ export interface CreateStaffPayload extends StaffPayload {
 export const adminStaffApi = {
   list: (params: StaffListParams) =>
     request.get<{ list?: StaffRecord[]; total?: number; page?: number; page_size?: number }>({
-      url: '/admin/staff',
+      url: '/v2/admin/staff',
       params,
     }),
-  detail: (id: number | string) => request.get<StaffRecord>({ url: `/admin/staff/${id}` }),
-  roles: () => request.get<{ list?: StaffRoleOption[] }>({ url: '/admin/staff/roles' }),
-  create: (data: CreateStaffPayload) => request.post<StaffRecord>({ url: '/admin/staff', data }),
+  detail: (id: number | string) => request.get<StaffRecord>({ url: `/v2/admin/staff/${id}` }),
+  roles: () => request.get<{ list?: StaffRoleOption[] }>({ url: '/v2/admin/staff/roles' }),
+  create: (data: CreateStaffPayload) => request.post<StaffRecord>({ url: '/v2/admin/staff', data }),
   update: (id: number | string, data: StaffPayload) =>
-    request.put<StaffRecord>({ url: `/admin/staff/${id}`, data }),
-  toggleStatus: (id: number | string) => request.post<StaffRecord>({ url: `/admin/staff/${id}/toggle-status` }),
+    request.put<StaffRecord>({ url: `/v2/admin/staff/${id}`, data }),
+  toggleStatus: (id: number | string, enabled: boolean) =>
+    request.patch({ url: `/v2/admin/staff/${id}/status`, data: { enabled } }),
   resetPassword: (id: number | string, data: { password: string; password_confirmation: string }) =>
-    request.post({ url: `/admin/staff/${id}/reset-password`, data }),
-  delete: (id: number | string) => request.delete({ url: `/admin/staff/${id}` }),
+    request.post({ url: `/v2/admin/staff/${id}/password-resets`, data }),
+  delete: (id: number | string) => request.delete({ url: `/v2/admin/staff/${id}` }),
 };

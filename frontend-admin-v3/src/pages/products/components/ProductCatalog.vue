@@ -28,9 +28,9 @@
             <t-button shape="square" variant="text" :loading="categoryLoading" @click="loadCategories">
               <template #icon><refresh-icon /></template>
             </t-button>
-            <t-button theme="primary" size="small" @click="openCategoryDialog()">
+            <t-button theme="primary" size="small" @click="openSecondCategoryDialog()">
               <template #icon><add-icon /></template>
-              新增
+              新增二级
             </t-button>
           </t-space>
         </div>
@@ -274,9 +274,9 @@
               <t-button shape="square" variant="text" :loading="categoryLoading" @click="loadCategories">
                 <template #icon><refresh-icon /></template>
               </t-button>
-              <t-button theme="primary" size="small" @click="openCategoryDialog()">
+              <t-button theme="primary" size="small" @click="openSecondCategoryDialog()">
                 <template #icon><add-icon /></template>
-                新增
+                新增二级
               </t-button>
             </t-space>
           </div>
@@ -688,30 +688,36 @@
 
     <t-dialog
       v-model:visible="categoryDialogVisible"
-      :header="editingCategory ? '编辑分类' : '新增分类'"
+      :header="categoryDialogHeader"
       width="560px"
       :confirm-btn="{ content: '保存', loading: categorySubmitting }"
       @confirm="submitCategory"
     >
       <t-form ref="categoryFormRef" :data="categoryForm" :rules="categoryRules" label-width="110px">
         <t-form-item label="分类名称" name="name"><t-input v-model="categoryForm.name" /></t-form-item>
-        <t-form-item label="二级分类父级" name="product_type">
-          <t-select v-model="categoryForm.product_type" filterable placeholder="请选择一级分类" @change="handleCategoryProductTypeChange">
+        <t-form-item label="一级分类" name="product_type">
+          <t-select
+            v-model="categoryForm.product_type"
+            filterable
+            placeholder="请选择一级分类"
+            :disabled="categoryProductTypeDisabled"
+            @change="handleCategoryProductTypeChange"
+          >
             <t-option v-for="item in categoryProductTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
           </t-select>
         </t-form-item>
-        <t-form-item label="三级分类父级" name="parent_id">
+        <t-form-item v-if="categoryParentFieldVisible" label="二级分类父级" name="parent_id">
           <t-select
             v-model="categoryForm.parent_id"
             clearable
             filterable
-            placeholder="不选择则作为二级分类"
-            :disabled="editingCategoryHasChildren || !categoryParentCategoryOptions.length"
+            placeholder="不选择则新增二级分类，选择后新增三级分类"
+            :disabled="categoryParentSelectDisabled"
           >
             <t-option
               v-for="item in categoryParentCategoryOptions"
               :key="item.id"
-              :label="item.label || item.name"
+              :label="categoryParentOptionLabel(item)"
               :value="item.id"
             />
           </t-select>
@@ -778,7 +784,7 @@ import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref } from 'vue';
 
 import { productApi, type ProductCategoryRecord, type ProductRecord, type ProductTypeRecord } from '@/api/product';
-import { supplierApi, type ProviderTypeRecord, type SupplierRecord } from '@/api/supplier';
+import { supplierApi, type ProviderTypeRecord, type SupplierFormField, type SupplierRecord } from '@/api/supplier';
 
 import {
   errorMessage,
@@ -853,7 +859,6 @@ interface ConfigOptionSubItemFormRow {
 type ProductLifecycleStatus = 'active' | 'deleted' | 'all';
 
 // --- State ---
-const summaryLoading = ref(false);
 const typeLoading = ref(false);
 const typeSubmitting = ref(false);
 const categoryLoading = ref(false);
@@ -861,14 +866,6 @@ const productLoading = ref(false);
 const productSubmitting = ref(false);
 const productActionLoading = ref<number | string | null>(null);
 
-const productSummary = reactive({
-  groups_total: 0,
-  root_groups_total: 0,
-  sub_groups_total: 0,
-  products_total: 0,
-  products_active: 0,
-  products_low_stock: 0,
-});
 const productTypes = ref<ProductTypeRecord[]>([]);
 const categoryOptions = ref<ProductCategoryRecord[]>([]);
 const products = ref<ProductRecord[]>([]);
@@ -958,6 +955,7 @@ const configOptionForm = reactive({
 const configOptionSubItemRows = ref<ConfigOptionSubItemFormRow[]>([]);
 const categoryDialogVisible = ref(false);
 const editingCategory = ref<ProductCategoryRecord | null>(null);
+const creatingThirdCategoryParent = ref<ProductCategoryRecord | null>(null);
 const categoryFormRef = ref();
 const categorySubmitting = ref(false);
 const categorySortLoadingId = ref('');
@@ -1009,13 +1007,13 @@ const productRules = {
 };
 const categoryRules = {
   name: [{ required: true, message: '请输入分类名称', trigger: 'blur' }],
-  product_type: [{ required: true, message: '请选择二级分类父级', trigger: 'change' }],
+  product_type: [{ required: true, message: '请选择一级分类', trigger: 'change' }],
 };
 
 // --- Computeds ---
 const productTypeOptions = computed(() => {
   if (productTypes.value.length) return productTypes.value;
-  return [{ value: '', label: '全部商品', usage_count: productSummary.products_total }];
+  return [{ value: '', label: '全部商品', usage_count: productTotal.value }];
 });
 const selectedProductTypeLabel = computed(() => {
   const current = productTypeOptions.value.find((item) => String(item.value) === String(catalogFilters.product_type));
@@ -1049,6 +1047,19 @@ const editingCategoryHasChildren = computed(() => {
   if (!current) return false;
   if (Array.isArray(current.children) && current.children.length > 0) return true;
   return Number(current.children_count || 0) > 0;
+});
+const categoryDialogHeader = computed(() => {
+  if (editingCategory.value) return '编辑分类';
+  return creatingThirdCategoryParent.value ? '新增三级分类' : '新增二级分类';
+});
+const categoryParentFieldVisible = computed(() => {
+  if (creatingThirdCategoryParent.value) return true;
+  return Boolean(editingCategory.value && productGroupLevel(editingCategory.value) === 3);
+});
+const categoryProductTypeDisabled = computed(() => Boolean(creatingThirdCategoryParent.value));
+const categoryParentSelectDisabled = computed(() => {
+  if (creatingThirdCategoryParent.value) return true;
+  return editingCategoryHasChildren.value || !categoryParentCategoryOptions.value.length;
 });
 const categoryParentCategoryOptions = computed(() => {
   const editingCategoryKey = editingCategory.value ? productGroupOptionKey(editingCategory.value) : '';
@@ -1354,13 +1365,13 @@ function textValue(value: unknown) {
 function productSpecDisplayName(row: ProductRecord) {
   return (
     [
+      row.product_display_name,
+      row.display_name,
+      row.name,
+      row.combined_display_name,
       row.custom_display_name,
       row.product_spec_display,
       row.cpu_memory_display,
-      row.product_display_name,
-      row.display_name,
-      row.combined_display_name,
-      row.name,
     ]
       .map(textValue)
       .find(Boolean) || '-'
@@ -1405,18 +1416,28 @@ function canMoveCategory(row: ProductCategoryRecord, direction: 'up' | 'down') {
 }
 
 function categoryMenuOptions(row: ProductCategoryRecord): DropdownOption[] {
-  return [
+  const options: DropdownOption[] = [
     { content: '上移', value: 'up', disabled: !canMoveCategory(row, 'up') },
     { content: '下移', value: 'down', disabled: !canMoveCategory(row, 'down') },
-    { content: '编辑', value: 'edit', divider: true },
-    { content: '删除', value: 'delete', theme: 'error' },
   ];
+  if (productGroupLevel(row) === 2) {
+    options.push({ content: '新增三级分类', value: 'create-child', divider: true });
+  }
+  options.push(
+    { content: '编辑', value: 'edit', divider: productGroupLevel(row) !== 2 },
+    { content: '删除', value: 'delete', theme: 'error' },
+  );
+  return options;
 }
 
 function handleCategoryMenuClick(row: ProductCategoryRecord, option: DropdownOption) {
   const action = String(option.value || '');
   if (action === 'up' || action === 'down') {
     void handleMoveCategory(row, action);
+    return;
+  }
+  if (action === 'create-child') {
+    openThirdCategoryDialog(row);
     return;
   }
   if (action === 'edit') {
@@ -1429,7 +1450,9 @@ function handleCategoryMenuClick(row: ProductCategoryRecord, option: DropdownOpt
 }
 
 function handleCategoryProductTypeChange(value: unknown) {
-  const selectedParent = categoryOptions.value.find((item) => String(item.id) === String(categoryForm.parent_id));
+  const selectedParent = categoryOptions.value.find(
+    (item) => productGroupLevel(item) === 2 && String(productGroupEffectiveId(item)) === String(categoryForm.parent_id),
+  );
   if (selectedParent && String(selectedParent.product_type || '') !== String(value || '')) {
     categoryForm.parent_id = '';
   }
@@ -1443,19 +1466,14 @@ function resolveFirstProductGroupId(productType: string) {
 function resolveSelectedParentCategory() {
   const parentId = String(categoryForm.parent_id || '');
   if (!parentId) return null;
-  return categoryOptions.value.find((item) => String(item.id) === parentId) || null;
+  return categoryOptions.value.find((item) => productGroupLevel(item) === 2 && String(productGroupEffectiveId(item)) === parentId) || null;
+}
+
+function categoryParentOptionLabel(item: ProductCategoryRecord) {
+  return String(item.second_product_group_name || item.name || item.label || `二级分类 #${productGroupEffectiveId(item)}`).trim();
 }
 
 // --- Data loading ---
-async function loadProductSummary() {
-  summaryLoading.value = true;
-  try {
-    Object.assign(productSummary, await productApi.summary());
-  } finally {
-    summaryLoading.value = false;
-  }
-}
-
 async function loadProductTypes() {
   typeLoading.value = true;
   try {
@@ -1687,6 +1705,11 @@ async function loadProviderTypes() {
   }
 }
 
+async function ensureProviderTypes() {
+  if (providerTypes.value.length) return;
+  await loadProviderTypes();
+}
+
 // --- Event handlers ---
 function handleProductTypeChange(value: string) {
   catalogFilters.product_type = value;
@@ -1892,7 +1915,7 @@ async function submitSplitProducts() {
     splitProductDialogVisible.value = false;
     splitProductTargetKeys.value = [];
     selectedProductKeys.value = [];
-    await Promise.all([loadProductSummary(), loadCategories(), loadProducts()]);
+    await Promise.all([loadCategories(), loadProducts()]);
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '拆分商品失败'));
   } finally {
@@ -1941,7 +1964,7 @@ function handleProductPageChange(pageInfo: PageInfo) {
 
 // --- Product dialog ---
 async function openProductDialog(row?: ProductRecord) {
-  const [detail] = await Promise.all([row?.id ? loadProductDetail(row) : null, ensureProductSupplierOptions()]);
+  const [detail] = await Promise.all([row?.id ? loadProductDetail(row) : null, ensureProductSupplierOptions(), ensureProviderTypes()]);
   const source = detail || row;
   const upstreamBinding = toPlainRecord(source?.upstream_binding);
   editingProduct.value = source || null;
@@ -2357,7 +2380,7 @@ async function pullProductConfigTemplate() {
 async function handleToggleProduct(row: ProductRecord) {
   productActionLoading.value = row.id;
   try {
-    await productApi.toggleStatus(row.id);
+    await productApi.toggleStatus(row.id, Number(row.status) !== 1);
     MessagePlugin.success('状态已更新');
     await loadProducts();
   } catch (error) {
@@ -2383,7 +2406,7 @@ function handleDeleteProduct(row: ProductRecord) {
         if (catalogFilters.lifecycle_status === 'all') {
           MessagePlugin.info('当前筛选为“全部商品”，已删除商品仍会显示在列表中');
         }
-        await Promise.all([loadProductSummary(), loadProducts()]);
+        await loadProducts();
       } catch (error) {
         MessagePlugin.error(errorMessage(error, '删除商品失败'));
       } finally {
@@ -2405,7 +2428,7 @@ function handleRestoreProduct(row: ProductRecord) {
         await productApi.restore(row.id);
         MessagePlugin.success('商品已恢复');
         dialog.hide();
-        await Promise.all([loadProductSummary(), loadProducts()]);
+        await loadProducts();
       } catch (error) {
         MessagePlugin.error(errorMessage(error, '恢复商品失败'));
       } finally {
@@ -2428,7 +2451,7 @@ function handleForceDeleteProduct(row: ProductRecord) {
         await productApi.forceDelete(row.id);
         MessagePlugin.success('商品已彻底删除');
         dialog.hide();
-        await Promise.all([loadProductSummary(), loadProducts()]);
+        await loadProducts();
       } catch (error) {
         MessagePlugin.error(errorMessage(error, '彻底删除商品失败'));
       } finally {
@@ -2438,13 +2461,23 @@ function handleForceDeleteProduct(row: ProductRecord) {
   });
 }
 
-function openCategoryDialog(row?: ProductCategoryRecord) {
+function openSecondCategoryDialog() {
+  openCategoryDialog();
+}
+
+function openThirdCategoryDialog(parent: ProductCategoryRecord) {
+  openCategoryDialog(undefined, parent);
+}
+
+function openCategoryDialog(row?: ProductCategoryRecord, thirdCategoryParent?: ProductCategoryRecord) {
   editingCategory.value = row || null;
-  const level = row ? productGroupLevel(row) : 2;
+  creatingThirdCategoryParent.value = !row && thirdCategoryParent ? thirdCategoryParent : null;
+  const level = row ? productGroupLevel(row) : (thirdCategoryParent ? 3 : 2);
+  const parentProductType = thirdCategoryParent?.product_type || thirdCategoryParent?.first_product_group_code || '';
   Object.assign(categoryForm, {
     name: row?.name || row?.label || '',
-    product_type: String(row?.product_type || row?.first_product_group_code || catalogFilters.product_type || categoryProductTypeOptions.value[0]?.value || ''),
-    parent_id: level === 3 ? row?.second_product_group_id || '' : '',
+    product_type: String(row?.product_type || row?.first_product_group_code || parentProductType || catalogFilters.product_type || categoryProductTypeOptions.value[0]?.value || ''),
+    parent_id: level === 3 ? row?.second_product_group_id || productGroupEffectiveId(thirdCategoryParent) || '' : '',
     slogan: String(row?.slogan || ''),
     sort_order: Number(row?.sort_order || 0),
     is_visible: Number(row?.is_visible ?? 1),
@@ -2460,7 +2493,11 @@ async function submitCategory() {
     const productType = categoryForm.product_type || catalogFilters.product_type || '';
     const firstProductGroupId = resolveFirstProductGroupId(productType);
     const selectedParent = resolveSelectedParentCategory();
-    const targetLevel = editingCategory.value ? productGroupLevel(editingCategory.value) : (selectedParent ? 3 : 2);
+    const targetLevel = editingCategory.value ? productGroupLevel(editingCategory.value) : (creatingThirdCategoryParent.value ? 3 : 2);
+    if (targetLevel === 3 && !selectedParent) {
+      MessagePlugin.warning('请选择二级分类父级');
+      return;
+    }
     const payload: Record<string, unknown> = {
       name: categoryForm.name,
       service_type_code: productType || undefined,
@@ -2482,7 +2519,6 @@ async function submitCategory() {
     categoryDialogVisible.value = false;
     await loadCategories();
     await loadProducts();
-    await loadProductSummary();
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '保存分类失败'));
   } finally {
@@ -2552,7 +2588,67 @@ function supplierProductOptionLabel(row: SupplierBatchProduct) {
 }
 
 function canSupplierBatchConnect(row: SupplierRecord) {
-  return Boolean((row.has_api_url || row.api_url) && row.api_username && (row.has_api_key || row.api_key));
+  const upstreamBinding = toPlainRecord(row.upstream_binding);
+  const providerKey = String(upstreamBinding.provider_key || row.provider_key || '').trim();
+  const schema = providerTypeOptions.value.find((item) => item.value === providerKey)?.supplier_form;
+  const fields = normalizeSupplierCredentialFields(toPlainRecord(schema).fields);
+  if (!fields.length) {
+    return Boolean(
+      (upstreamBinding.has_base_url || row.has_api_url || row.api_url) &&
+        (upstreamBinding.account_name || row.api_username) &&
+        (row.has_api_key || row.api_key),
+    );
+  }
+
+  return fields.every((field) => {
+    if (!field.required) return true;
+    if (field.key === 'api_url') return Boolean(upstreamBinding.has_base_url || row.has_api_url || row.api_url);
+    if (field.key === 'api_username') return Boolean(upstreamBinding.account_name || row.api_username);
+    if (field.key === 'api_key') return Boolean(toPlainRecord(upstreamBinding.has_secret_values).api_key || row.has_api_key || row.api_key);
+    if (field.secret) {
+      return Boolean(toPlainRecord(upstreamBinding.has_secret_values)[field.key] || row.has_provider_secret_values?.[field.key]);
+    }
+
+    return hasSupplierCredentialValue(toPlainRecord(row.provider_config)[field.key]);
+  });
+}
+
+function normalizeSupplierCredentialFields(value: unknown): SupplierFormField[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => {
+      const record = toPlainRecord(item);
+      const key = String(record.key || '').trim();
+      if (!key) return null;
+
+      const type = normalizeSupplierCredentialFieldType(record.type);
+      const field: SupplierFormField = {
+        key,
+        label: String(record.label || record.title || key).trim(),
+        type,
+        required: Boolean(record.required),
+        secret: Boolean(record.secret),
+      };
+
+      return field;
+    })
+    .filter((item): item is SupplierFormField => Boolean(item));
+}
+
+function normalizeSupplierCredentialFieldType(value: unknown): SupplierFormField['type'] {
+  const type = String(value || 'text').trim();
+  if (['text', 'url', 'password', 'select', 'switch', 'boolean', 'number', 'textarea'].includes(type)) {
+    return type as SupplierFormField['type'];
+  }
+
+  return 'text';
+}
+
+function hasSupplierCredentialValue(value: unknown) {
+  if (typeof value === 'boolean') return true;
+  if (typeof value === 'number') return Number.isFinite(value);
+  return String(value ?? '').trim() !== '';
 }
 
 function handleProductSupplierChange(value: string | number) {
@@ -2566,6 +2662,7 @@ function handleProductSupplierChange(value: string | number) {
 
 async function loadProductSupplierProducts(supplierId: string | number, notify = false) {
   if (!supplierId) return;
+  await ensureProviderTypes();
 
   const supplier = productSupplierOptions.value.find((item) => String(item.id) === String(supplierId));
   if (supplier && !canSupplierBatchConnect(supplier)) {
@@ -2634,12 +2731,12 @@ function formatSplitAction(action: string) {
 }
 
 // --- Init ---
-function loadCatalog() {
-  void Promise.all([loadProductSummary(), loadProductTypes().then(loadCategories).then(loadProducts)]);
+async function loadCatalog() {
+  await loadProductTypes();
+  await Promise.all([loadCategories(), loadProducts()]);
 }
 
 onMounted(() => {
-  void loadProviderTypes();
-  loadCatalog();
+  void loadCatalog();
 });
 </script>

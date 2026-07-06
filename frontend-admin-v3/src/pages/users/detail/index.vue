@@ -1270,7 +1270,7 @@ function handleToggleStatus() {
     async onConfirm() {
       actionLoading.value = true;
       try {
-        await userApi.toggleStatus(userId.value);
+        await userApi.toggleStatus(userId.value, !isEnabled.value);
         MessagePlugin.success(`用户已${label}`);
         dialog.hide();
         await loadDetail();

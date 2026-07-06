@@ -213,7 +213,7 @@ async function handleSendCode() {
   try {
     await runWithCaptcha(async (captcha: unknown) => {
       if (accountPayload.accountType === 'phone') {
-        await clientAuthApi.sendPhoneCode({ phone: accountPayload.phone, captcha });
+        await clientAuthApi.sendPhoneCode({ phone: accountPayload.phone, purpose: 'register', captcha });
       } else {
         await clientAuthApi.sendEmailCode({ email: accountPayload.email, captcha });
       }

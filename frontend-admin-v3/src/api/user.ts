@@ -41,7 +41,7 @@ export interface AdminUser {
 export interface UserCreatePayload {
   email?: string;
   nickname?: string;
-  phone?: string;
+  phone: string;
   password?: string;
 }
 
@@ -66,6 +66,7 @@ export interface UserDetailResponse {
 export interface UserServicePayload {
   product_id: number;
   billing_cycle: string;
+  source_type?: 'manual' | 'upstream';
   status: number | string;
   name?: string;
   amount: number;
@@ -91,81 +92,134 @@ export interface RefundPayload {
   remark: string;
 }
 
+type UserServiceV2DetailPayload = {
+  service?: Record<string, unknown> | null;
+};
+
+type UserServiceV2ConnectionPayload = {
+  connection?: Record<string, unknown> | null;
+};
+
+function normalizeV2ServicePayload(payload: UserServiceV2DetailPayload | Record<string, unknown> | null | undefined) {
+  const service = ((payload as UserServiceV2DetailPayload | undefined)?.service || payload || {}) as Record<string, unknown>;
+  const renewal = (service.renewal || {}) as Record<string, unknown>;
+
+  return {
+    ...service,
+    renew_pricing_cycles: Array.isArray(service.renew_pricing_cycles)
+      ? service.renew_pricing_cycles
+      : Array.isArray(renewal.cycles)
+        ? renewal.cycles
+        : [],
+  };
+}
+
+async function v2UserServiceDetail(id: number | string, serviceId: number | string) {
+  const [detailPayload, connectionPayload] = await Promise.all([
+    request.get<UserServiceV2DetailPayload>({ url: `/v2/admin/users/${id}/services/${serviceId}` }),
+    request.get<UserServiceV2ConnectionPayload>({ url: `/v2/admin/users/${id}/services/${serviceId}/connection` }),
+  ]);
+  const service = normalizeV2ServicePayload(detailPayload);
+
+  return {
+    ...service,
+    connection: connectionPayload.connection || null,
+  };
+}
+
 export const userApi = {
   list: (params: UserListParams) =>
     request.get<{ list?: AdminUser[]; total?: number; page?: number; page_size?: number }>({
-      url: '/admin/users',
+      url: '/v2/admin/users',
       params,
     }),
-  detail: (id: number | string) => request.get<UserDetailResponse>({ url: `/admin/users/${id}` }),
-  create: (data: UserCreatePayload) => request.post({ url: '/admin/users', data }),
-  update: (id: number | string, data: UserUpdatePayload) => request.put({ url: `/admin/users/${id}`, data }),
-  delete: (id: number | string) => request.delete({ url: `/admin/users/${id}` }),
-  toggleStatus: (id: number | string) => request.post({ url: `/admin/users/${id}/toggle-status` }),
+  detail: (id: number | string) => request.get<UserDetailResponse>({ url: `/v2/admin/users/${id}` }),
+  create: (data: UserCreatePayload) => request.post({ url: '/v2/admin/users', data }),
+  update: (id: number | string, data: UserUpdatePayload) => request.put({ url: `/v2/admin/users/${id}`, data }),
+  delete: (id: number | string) => request.delete({ url: `/v2/admin/users/${id}` }),
+  toggleStatus: (id: number | string, enabled: boolean) =>
+    request.patch({ url: `/v2/admin/users/${id}/status`, data: { enabled } }),
   recharge: (id: number | string, data: UserRechargePayload) =>
-    request.post({ url: `/admin/users/${id}/recharge`, data }),
-  loginAs: (id: number | string) => request.post<{ login_code?: string; target_url?: string }>({ url: `/admin/users/${id}/login-as` }),
+    request.post({ url: `/v2/admin/users/${id}/recharges`, data }),
+  loginAs: (id: number | string) =>
+    request.post<{ login_code?: string; target_url?: string }>({ url: `/v2/admin/users/${id}/login-as` }),
   services: (id: number | string, params: PageParams) =>
     request.get<{ list?: Record<string, unknown>[]; total?: number; page?: number; page_size?: number }>({
-      url: `/admin/users/${id}/services`,
+      url: `/v2/admin/users/${id}/services`,
       params,
     }),
   storeService: (id: number | string, data: UserServicePayload) =>
-    request.post({ url: `/admin/users/${id}/services`, data }),
+    request
+      .post<UserServiceV2DetailPayload>({
+        url: `/v2/admin/users/${id}/services`,
+        data: { source_type: 'manual', ...data },
+      })
+      .then(normalizeV2ServicePayload),
   invoices: (id: number | string, params: PageParams) =>
     request.get<{ list?: Record<string, unknown>[]; total?: number; page?: number; page_size?: number }>({
-      url: `/admin/users/${id}/invoices`,
+      url: `/v2/admin/users/${id}/invoices`,
       params,
     }),
   invoiceDetail: (id: number | string, invoiceId: number | string) =>
-    request.get<Record<string, unknown>>({ url: `/admin/users/${id}/invoices/${invoiceId}` }),
+    request.get<Record<string, unknown>>({ url: `/v2/admin/users/${id}/invoices/${invoiceId}` }),
   refundInvoice: (id: number | string, invoiceId: number | string, data: RefundPayload) =>
-    request.post({ url: `/admin/users/${id}/invoices/${invoiceId}/refund`, data }),
+    request.post({ url: `/v2/admin/users/${id}/invoices/${invoiceId}/refunds`, data }),
   balanceLogs: (id: number | string, params: PageParams) =>
     request.get<{ list?: Record<string, unknown>[]; total?: number; page?: number; page_size?: number; summary?: unknown }>({
-      url: `/admin/users/${id}/balance-logs`,
+      url: `/v2/admin/users/${id}/balance-logs`,
       params,
     }),
   tickets: (id: number | string, params: PageParams) =>
     request.get<{ list?: Record<string, unknown>[]; total?: number; page?: number; page_size?: number; summary?: unknown }>({
-      url: `/admin/users/${id}/tickets`,
+      url: `/v2/admin/users/${id}/tickets`,
       params,
     }),
   operationLogs: (id: number | string, params: PageParams) =>
     request.get<{ list?: Record<string, unknown>[]; total?: number; page?: number; page_size?: number }>({
-      url: `/admin/users/${id}/operation-logs`,
+      url: `/v2/admin/users/${id}/operation-logs`,
       params,
     }),
   smsLogs: (id: number | string, params: PageParams) =>
     request.get<{ list?: Record<string, unknown>[]; total?: number; page?: number; page_size?: number }>({
-      url: `/admin/users/${id}/sms-logs`,
+      url: `/v2/admin/users/${id}/sms-logs`,
       params,
     }),
   emailLogs: (id: number | string, params: PageParams) =>
     request.get<{ list?: Record<string, unknown>[]; total?: number; page?: number; page_size?: number }>({
-      url: `/admin/users/${id}/email-logs`,
+      url: `/v2/admin/users/${id}/email-logs`,
       params,
     }),
-  serviceDetail: (id: number | string, serviceId: number | string) =>
-    request.get<Record<string, unknown>>({ url: `/admin/users/${id}/services/${serviceId}` }),
+  serviceDetail: (id: number | string, serviceId: number | string) => v2UserServiceDetail(id, serviceId),
   serviceRemoteStatus: (id: number | string, serviceId: number | string) =>
-    request.get<Record<string, unknown>>({ url: `/admin/users/${id}/services/${serviceId}/remote-status` }),
+    request
+      .get<UserServiceV2DetailPayload>({ url: `/v2/admin/users/${id}/services/${serviceId}/remote-status` })
+      .then(normalizeV2ServicePayload),
   refreshServiceStatuses: (id: number | string, data: { service_ids: Array<number | string> }) =>
-    request.post({ url: `/admin/users/${id}/services/refresh-statuses`, data }),
+    request.post({ url: `/v2/admin/users/${id}/services/refresh-statuses`, data }),
   servicePower: (id: number | string, serviceId: number | string, data: { action: string }) =>
     request.post<{ detail?: Record<string, unknown>; message?: string }>({
-      url: `/admin/users/${id}/services/${serviceId}/power`,
+      url: `/v2/admin/users/${id}/services/${serviceId}/power-actions`,
       data,
     }),
-  serviceResetPassword: (id: number | string, serviceId: number | string, data: { password: string }) =>
-    request.put({ url: `/admin/users/${id}/services/${serviceId}/password/reset`, data }),
+  serviceResetPassword: (id: number | string, serviceId: number | string, data: { password: string; password_confirmation?: string }) =>
+    request.post({
+      url: `/v2/admin/users/${id}/services/${serviceId}/password-resets`,
+      data: {
+        ...data,
+        password_confirmation: data.password_confirmation || data.password,
+      },
+    }),
   serviceDelete: (id: number | string, serviceId: number | string) =>
-    request.delete({ url: `/admin/users/${id}/services/${serviceId}` }),
+    request.delete({ url: `/v2/admin/users/${id}/services/${serviceId}` }),
   updateServiceMeta: (id: number | string, serviceId: number | string, data: ServiceMetaPayload) =>
-    request.put<Record<string, unknown>>({ url: `/admin/users/${id}/services/${serviceId}/meta`, data }),
+    request
+      .put<UserServiceV2DetailPayload>({ url: `/v2/admin/users/${id}/services/${serviceId}/meta`, data })
+      .then(normalizeV2ServicePayload),
   manualProvisionService: (id: number | string, serviceId: number | string, data: { upstream_host_id: number }) =>
-    request.put({ url: `/admin/users/${id}/services/${serviceId}/manual-provision`, data }),
+    request
+      .put<UserServiceV2DetailPayload>({ url: `/v2/admin/users/${id}/services/${serviceId}/manual-provision`, data })
+      .then(normalizeV2ServicePayload),
   refundService: (id: number | string, serviceId: number | string, data: RefundPayload) =>
-    request.post<{ message?: string }>({ url: `/admin/users/${id}/services/${serviceId}/refund`, data }),
-  osOptions: () => request.get<{ groups?: Record<string, unknown>[] }>({ url: '/admin/os-options' }),
+    request.post<{ message?: string }>({ url: `/v2/admin/users/${id}/services/${serviceId}/refunds`, data }),
+  osOptions: () => request.get<{ groups?: Record<string, unknown>[] }>({ url: '/v2/admin/os-options' }),
 };

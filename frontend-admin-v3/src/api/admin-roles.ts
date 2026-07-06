@@ -38,11 +38,11 @@ export interface RolePayload {
 }
 
 export const adminRoleApi = {
-  permissions: () => request.get<{ list?: PermissionItem[] }>({ url: '/admin/permissions' }),
-  list: (params?: { keyword?: string }) => request.get<{ list?: RoleRecord[] }>({ url: '/admin/roles', params }),
-  detail: (id: number | string) => request.get<RoleRecord>({ url: `/admin/roles/${id}` }),
-  create: (data: RolePayload) => request.post<RoleRecord>({ url: '/admin/roles', data }),
-  update: (id: number | string, data: RolePayload) => request.put<RoleRecord>({ url: `/admin/roles/${id}`, data }),
-  delete: (id: number | string) => request.delete({ url: `/admin/roles/${id}` }),
-  copy: (id: number | string) => request.post<RoleRecord>({ url: `/admin/roles/${id}/copy` }),
+  permissions: () => request.get<{ list?: PermissionItem[] }>({ url: '/v2/admin/permissions' }),
+  list: (params?: { keyword?: string }) => request.get<{ list?: RoleRecord[] }>({ url: '/v2/admin/roles', params }),
+  detail: (id: number | string) => request.get<RoleRecord>({ url: `/v2/admin/roles/${id}` }),
+  create: (data: RolePayload) => request.post<RoleRecord>({ url: '/v2/admin/roles', data }),
+  update: (id: number | string, data: RolePayload) => request.put<RoleRecord>({ url: `/v2/admin/roles/${id}`, data }),
+  delete: (id: number | string) => request.delete({ url: `/v2/admin/roles/${id}` }),
+  copy: (id: number | string) => request.post({ url: `/v2/admin/roles/${id}/copies` }),
 };

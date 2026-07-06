@@ -19,7 +19,7 @@
         <t-input
           v-model="filters.keyword"
           clearable
-          placeholder="搜索账单号、商家订单号或第三方订单号"
+          placeholder="搜索账单号、关联订单号或充值单号"
           @enter="handleSearch"
           @clear="handleSearch"
         >
@@ -61,11 +61,41 @@
               <template #paid="{ row }">
                 <span class="invoice-money">¥{{ formatMoney(row.paid_amount) }}</span>
               </template>
-              <template #payment="{ row }">
+              <template #related_refs="{ row }">
                 <div class="stack-cell">
-                  <strong>商家：{{ paymentRecordNo(row) }}</strong>
-                  <span>第三方：{{ paymentTradeNo(row) }}</span>
-                  <span>{{ paymentRecordSummary(row) }}</span>
+                  <div class="related-ref-line">
+                    <span class="related-ref-label">订单</span>
+                    <t-button
+                      v-if="row.order"
+                      variant="text"
+                      theme="primary"
+                      size="small"
+                      @click="goToOrder(row)"
+                    >
+                      {{ invoiceOrderNo(row) }}
+                    </t-button>
+                    <span v-else>--</span>
+                    <StatusTag v-if="row.order" :status-map="ORDER_STATUS_MAP" :status="Number(row.order.status)" size="small" />
+                  </div>
+                  <div class="related-ref-line">
+                    <span class="related-ref-label">充值</span>
+                    <t-button
+                      v-if="isRechargeInvoice(row) && row.payment_summary?.id"
+                      variant="text"
+                      theme="primary"
+                      size="small"
+                      @click="goToPayment(row)"
+                    >
+                      {{ rechargePaymentNo(row) }}
+                    </t-button>
+                    <span v-else>{{ rechargePaymentNo(row) }}</span>
+                    <StatusTag
+                      v-if="isRechargeInvoice(row) && row.payment_summary"
+                      :status-map="PAYMENT_STATUS_MAP"
+                      :status="Number(row.payment_summary.status)"
+                      size="small"
+                    />
+                  </div>
                 </div>
               </template>
               <template #status="{ row }">
@@ -101,8 +131,8 @@
               </div>
 
               <div class="record-mobile-card__meta">
-                <span>商家：{{ paymentRecordNo(row) }}</span>
-                <span>第三方：{{ paymentTradeNo(row) }}</span>
+                <span>订单：{{ invoiceOrderNo(row) }}</span>
+                <span>充值：{{ rechargePaymentNo(row) }}</span>
                 <span>{{ row.created_at || '--' }}</span>
               </div>
 
@@ -139,7 +169,7 @@ import { useRouter } from 'vue-router';
 
 import DataState from '@shared/user-v3/components/DataState.vue';
 import StatusTag from '@shared/user-v3/components/StatusTag.vue';
-import { INVOICE_STATUS_MAP } from '@shared/statusConfig';
+import { INVOICE_STATUS_MAP, ORDER_STATUS_MAP, PAYMENT_STATUS_MAP } from '@caiwu/shared/statusConfig';
 import {
   formatMoney,
   INVOICE_STATUS_OPTIONS,
@@ -177,34 +207,40 @@ function goToDetail(row: InvoiceRecord) {
   router.push(`/client/invoices/${row.id}`);
 }
 
+function goToOrder(row: InvoiceRecord) {
+  const orderId = Number(row.order?.id || 0);
+  if (!orderId) return;
+  router.push(`/client/orders/${orderId}`);
+}
+
+function goToPayment(row: InvoiceRecord) {
+  const paymentId = Number(row.payment_summary?.id || 0);
+  if (!paymentId) return;
+  router.push(`/client/payments/${paymentId}`);
+}
+
 const columns: PrimaryTableCol[] = [
   { colKey: 'invoice', title: '账单号', minWidth: '12rem' },
   { colKey: 'amount', title: '账单金额', width: '9rem' },
   { colKey: 'paid', title: '已付金额', width: '9rem' },
-  { colKey: 'payment', title: '关联支付', minWidth: '14rem' },
+  { colKey: 'related_refs', title: '关联单据', minWidth: '14rem' },
   { colKey: 'status', title: '状态', width: '8rem' },
   { colKey: 'created_at', title: '创建时间', minWidth: '12rem' },
   { colKey: 'operation', title: '操作', width: '10rem', fixed: 'right', align: 'right' },
 ];
 
-function paymentRecord(row: InvoiceRecord): Record<string, unknown> {
-  return row.payment_summary && typeof row.payment_summary === 'object' ? row.payment_summary : {};
+function invoiceOrderNo(row: InvoiceRecord) {
+  return String(row.order?.order_no || '--');
 }
 
-function paymentRecordNo(row: InvoiceRecord) {
-  const payment = paymentRecord(row);
-  return String(payment.payment_no || '--');
+function isRechargeInvoice(row: InvoiceRecord) {
+  return String(row.type || '').trim() === 'recharge';
 }
 
-function paymentTradeNo(row: InvoiceRecord) {
-  const payment = paymentRecord(row);
-  return String(payment.trade_no || '--');
-}
+function rechargePaymentNo(row: InvoiceRecord) {
+  if (!isRechargeInvoice(row)) return '--';
 
-function paymentRecordSummary(row: InvoiceRecord) {
-  const payment = paymentRecord(row);
-  const parts = [payment.gateway_label || payment.gateway_key || payment.gateway].filter(Boolean);
-  return parts.length ? parts.map((item) => String(item)).join(' / ') : '--';
+  return String(row.payment_summary?.payment_no || '--');
 }
 </script>
 
@@ -227,5 +263,18 @@ function paymentRecordSummary(row: InvoiceRecord) {
   color: var(--td-text-color-primary);
   font: var(--td-font-body-medium);
   font-weight: 600;
+}
+
+.related-ref-line {
+  display: flex;
+  align-items: center;
+  min-height: 1.75rem;
+  gap: var(--td-comp-margin-xs);
+}
+
+.related-ref-label {
+  color: var(--td-text-color-secondary);
+  font: var(--td-font-body-small);
+  min-width: 2rem;
 }
 </style>

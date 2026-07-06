@@ -17,7 +17,7 @@ import type {
 
 import { resolveQuickDateRange } from './dateFilters';
 
-export type PayMethodKey = 'balance' | 'alipay' | 'free';
+export type PayMethodKey = string;
 
 export const INVOICE_STATUS_OPTIONS = toSelectOptions(INVOICE_STATUS_MAP, false);
 
@@ -131,9 +131,14 @@ export function isPayableInvoice(row: InvoiceRecord | null | undefined) {
 }
 
 function coercePayMethodKey(value: unknown): PayMethodKey {
-  const key = String(value || 'balance').trim();
-  if (key === 'alipay' || key === 'free') return key;
-  return 'balance';
+  return String(value || '').trim();
+}
+
+function payMethodOptionKey(method: InvoicePaymentMethod | null | undefined) {
+  const optionKey = normalizeText(method?.option_key);
+  if (optionKey) return optionKey;
+
+  return normalizeText(method?.key);
 }
 
 function resolveListPayload(response: unknown) {
@@ -387,21 +392,31 @@ export function useInvoiceDetail() {
   const paying = ref(false);
   const polling = ref(false);
   const detail = shallowRef<InvoiceRecord | null>(null);
-  const selectedPayMethod = ref<PayMethodKey>('balance');
+  const selectedPayMethod = ref<PayMethodKey>('');
   const allowBalanceDeduction = ref(false);
   const alipayDialogVisible = ref(false);
   const alipayQrCode = ref('');
   const alipayPaymentNo = ref('');
   const alipayPollToken = ref('');
+  const alipayGateway = ref('');
   const appliedDeductionAmount = ref('0.00');
   const alipayAmount = ref('0.00');
   const pollTimer = ref<number | null>(null);
 
   const invoiceId = computed(() => Number(route.params.id || 0));
   const payMethods = computed<InvoicePaymentMethod[]>(() => (Array.isArray(detail.value?.pay_methods) ? detail.value?.pay_methods : []));
+  const hasPayMethods = computed(() => payMethods.value.length > 0);
+  const selectedPayMethodRecord = computed(
+    () => payMethods.value.find((item) => payMethodOptionKey(item) === selectedPayMethod.value) || null,
+  );
+  const selectedGatewayKey = computed(() => normalizeText(selectedPayMethodRecord.value?.key));
+  const selectedPaymentType = computed(() => normalizeText(selectedPayMethodRecord.value?.payment_type));
+  const selectedPayMethodName = computed(
+    () => normalizeText(selectedPayMethodRecord.value?.name) || normalizeText(selectedPayMethodRecord.value?.label) || '支付',
+  );
   const paySecurity = computed<InvoicePaymentSecurity>(() => detail.value?.payment_security || {});
   const canPay = computed(() => Boolean(paySecurity.value.can_pay) && isPayableInvoice(detail.value));
-  const alipayAvailable = computed(() => payMethods.value.some((item) => item.key === 'alipay'));
+  const selectedIsAlipay = computed(() => selectedGatewayKey.value === 'alipay' || selectedPaymentType.value === 'alipay');
   const alipayPollingReady = computed(() => Boolean(alipayPaymentNo.value && alipayPollToken.value));
   const balanceAmount = computed(() => normalizeMoney(userStore.info?.cash_balance || 0));
   const payableAmount = computed(() => normalizeMoney(detail.value?.payable_amount || 0));
@@ -414,14 +429,16 @@ export function useInvoiceDetail() {
   const appliedDeductionAmountText = computed(() => formatMoney(appliedDeductionAmount.value));
   const hasAppliedBalanceDeduction = computed(() => Number(appliedDeductionAmount.value || 0) > 0);
   const alipayPayableAmount = computed(() => alipayAmount.value || formatMoney(payableAmount.value));
-  const showBalanceDeductionOption = computed(() => selectedPayMethod.value === 'alipay' && canDeductBalance.value);
+  const showBalanceDeductionOption = computed(() => selectedIsAlipay.value && canDeductBalance.value);
   const showPayActions = computed(() => Boolean(detail.value && isPayableInvoice(detail.value)));
   const payTip = computed(() => {
     if (!canPay.value) return '当前账单状态不支持继续支付。';
-    if (selectedPayMethod.value === 'alipay' && allowBalanceDeduction.value) {
+    if (selectedIsAlipay.value && allowBalanceDeduction.value) {
       return `将自动抵扣余额 ¥${autoDeductionAmountText.value}，支付宝支付剩余 ¥${estimatedAlipayAmountText.value}。`;
     }
-    if (selectedPayMethod.value === 'alipay') return '生成二维码后请使用支付宝扫码完成支付，系统会自动轮询状态。';
+    if (selectedGatewayKey.value && !['balance', 'free'].includes(selectedGatewayKey.value)) {
+      return `生成二维码后请使用${selectedPayMethodName.value}完成支付，系统会自动轮询状态。`;
+    }
     if (selectedPayMethod.value === 'balance') return '余额支付会直接扣减账户余额并完成账单。';
     return '零元账单无需额外支付。';
   });
@@ -438,15 +455,20 @@ export function useInvoiceDetail() {
     alipayQrCode.value = '';
     alipayPaymentNo.value = '';
     alipayPollToken.value = '';
+    alipayGateway.value = '';
     appliedDeductionAmount.value = '0.00';
     alipayAmount.value = formatMoney(payableAmount.value);
     clearPollingTimer();
   }
 
   function syncPayMethod() {
-    if (!payMethods.value.length) return;
-    if (payMethods.value.some((item) => item.key === selectedPayMethod.value)) return;
-    selectedPayMethod.value = coercePayMethodKey(payMethods.value[0]?.key);
+    if (!payMethods.value.length) {
+      selectedPayMethod.value = '';
+      return;
+    }
+
+    if (payMethods.value.some((item) => payMethodOptionKey(item) === selectedPayMethod.value)) return;
+    selectedPayMethod.value = coercePayMethodKey(payMethodOptionKey(payMethods.value[0]));
   }
 
   function selectPayMethod(value: unknown) {
@@ -472,6 +494,7 @@ export function useInvoiceDetail() {
     alipayQrCode.value = String(data.qr_code || '');
     alipayPaymentNo.value = String(data.payment_no || '');
     alipayPollToken.value = String(data.poll_token || '');
+    alipayGateway.value = String(data.gateway || data.gateway_key || selectedGatewayKey.value || '');
     appliedDeductionAmount.value = usedBalanceDeduction ? String(data.balance_amount || autoDeductionAmountText.value) : '0.00';
     alipayAmount.value = String(data.amount || estimatedAlipayAmountText.value || detail.value?.payable_amount || '0.00');
     alipayDialogVisible.value = Boolean(alipayQrCode.value);
@@ -580,12 +603,26 @@ export function useInvoiceDetail() {
       return;
     }
 
-    if (allowBalanceDeduction.value && balanceAmount.value >= payableAmount.value) {
+    const gateway = selectedGatewayKey.value;
+    if (!gateway || ['balance', 'free'].includes(gateway)) {
+      MessagePlugin.warning('请选择可用支付方式');
+      return;
+    }
+
+    if (selectedIsAlipay.value && allowBalanceDeduction.value && balanceAmount.value >= payableAmount.value) {
       handlePayByBalance();
       return;
     }
 
-    const shouldUseBalanceDeduction = allowBalanceDeduction.value && canDeductBalance.value;
+    const gatewayPayload: Record<string, unknown> = {
+      payment_session_token: sessionToken,
+      gateway,
+    };
+    if (selectedPaymentType.value) {
+      gatewayPayload.payment_type = selectedPaymentType.value;
+    }
+
+    const shouldUseBalanceDeduction = selectedIsAlipay.value && allowBalanceDeduction.value && canDeductBalance.value;
     paying.value = true;
     try {
       const res = shouldUseBalanceDeduction
@@ -593,14 +630,12 @@ export function useInvoiceDetail() {
             payment_session_token: sessionToken,
             balance_amount: autoDeductionAmount.value,
           })
-        : await clientApi.payInvoiceByAlipay(invoiceId.value, {
-            payment_session_token: sessionToken,
-          });
+        : await clientApi.payInvoiceByAlipay(invoiceId.value, gatewayPayload);
       const payload = res.data;
       applyAlipayPayload(payload, shouldUseBalanceDeduction);
 
       if (alipayQrCode.value) {
-        MessagePlugin.success('支付宝二维码已生成');
+        MessagePlugin.success(`${selectedPayMethodName.value}二维码已生成`);
         clearPollingTimer();
         pollTimer.value = window.setInterval(() => {
           if (!polling.value && alipayPollingReady.value) {
@@ -609,7 +644,7 @@ export function useInvoiceDetail() {
         }, 5000);
       }
     } catch (error: unknown) {
-      MessagePlugin.error(getErrorMessage(error, '生成支付宝二维码失败'));
+      MessagePlugin.error(getErrorMessage(error, `生成${selectedPayMethodName.value}二维码失败`));
     } finally {
       paying.value = false;
     }
@@ -623,6 +658,7 @@ export function useInvoiceDetail() {
       const res = await clientApi.queryInvoiceAlipayStatus(invoiceId.value, {
         payment_no: alipayPaymentNo.value,
         poll_token: alipayPollToken.value,
+        ...(alipayGateway.value ? { gateway: alipayGateway.value } : {}),
       });
       const payload = res.data || {};
       if (payload.paid) {
@@ -690,14 +726,15 @@ export function useInvoiceDetail() {
     alipayPayableAmount,
     invoiceId,
     payMethods,
+    hasPayMethods,
     canPay,
-    alipayAvailable,
     alipayPollingReady,
     balanceAmount,
     payableAmount,
     balanceText,
     autoDeductionAmountText,
     estimatedAlipayAmountText,
+    selectedPayMethodName,
     showBalanceDeductionOption,
     showPayActions,
     payTip,

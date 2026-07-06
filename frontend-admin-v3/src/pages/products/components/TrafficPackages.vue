@@ -493,7 +493,11 @@ function getSettingValue(response: unknown, key: string) {
     return response.find((item) => String((item as Record<string, unknown>).key || '') === key)?.value;
   }
   if (response && typeof response === 'object') {
-    return (response as Record<string, unknown>)[key];
+    const record = response as Record<string, unknown>;
+    if (Array.isArray(record.list)) {
+      return record.list.find((item) => String((item as Record<string, unknown>).key || '') === key)?.value;
+    }
+    return record[key];
   }
   return undefined;
 }

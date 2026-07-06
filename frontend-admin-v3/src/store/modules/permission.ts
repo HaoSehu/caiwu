@@ -99,14 +99,13 @@ const ADMIN_MENU_GROUPS: MenuGroupConfig[] = [
     orderNo: 60,
     children: ['/admin/member-levels', '/admin/coupons', '/admin/referral', '/admin/referral-settings'],
   },
-  // ── 平台管理：系统配置 / 自动化 / 通知 / 日志 / 员工 / 角色 ──
+  // ── 平台管理：自动化 / 插件 / 通知 / 日志 / 员工 / 角色 ──
   {
     path: '/admin/menu/system',
     title: { zh_CN: '平台管理', en_US: 'Platform' },
     icon: shallowRef(ToolsIcon),
     orderNo: 70,
     children: [
-      '/admin/settings',
       '/admin/automation',
       '/admin/integration-plugins',
       '/admin/notifications',

@@ -53,13 +53,16 @@ export const useUserStore = defineStore('user', {
         throw new Error('未登录');
       }
       this.token = token;
-      const res = (await adminAuthApi.info()) as Partial<UserInfo> & { permissions?: string[] };
-      const role = typeof res.role === 'string' && res.role ? res.role : '';
+      const res = (await adminAuthApi.info()) as {
+        admin?: Partial<UserInfo> & { permissions?: string[] };
+      };
+      const admin = res.admin || {};
+      const role = typeof admin.role === 'string' && admin.role ? admin.role : '';
       this.userInfo = {
-        name: res.nickname || res.username || res.email || '管理员',
+        name: admin.nickname || admin.username || admin.email || '管理员',
         roles: role ? [role] : [],
-        permissions: res.permissions || [],
-        ...res,
+        permissions: admin.permissions || [],
+        ...admin,
       };
       // 与 Cookie 中的最新 token 保持一致，避免 localStorage 残留旧值
       this.syncTokenFromSession();

@@ -1,4 +1,4 @@
-import { computed, onUnmounted, watch } from 'vue';
+import { computed, onUnmounted, ref, watch } from 'vue';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { useRouter } from 'vue-router';
 
@@ -16,6 +16,7 @@ import { useConsoleTrafficPackages } from './console/useConsoleTrafficPackages';
 
 export function useServiceConsole() {
   const router = useRouter();
+  const showPassword = ref(true);
 
   // Core detail state
   const detailComposable = useConsoleDetail();
@@ -25,7 +26,6 @@ export function useServiceConsole() {
     statusSyncing,
     actionLoading,
     autoRenewLoading,
-    showPassword,
     activeTab,
     operationStatus,
     serviceId,
@@ -206,13 +206,21 @@ export function useServiceConsole() {
   const serviceRegion = computed(() => String(detail.value.machine_category?.label || '').trim() || findSpecValue(detail, ['区域', '地区', '机房', 'region'], '--'));
   const serviceOs = computed(() => String(detail.value.upstream?.os || '').trim() || findSpecValue(detail, ['操作系统', 'os'], '--'));
   const primaryConnectionLabel = computed(() => (isNatConsole(detail.value) ? '远程地址' : '公网 IP'));
-  const primaryConnectionText = computed(() => {
+  const publicIpValues = computed(() => {
     const connection = detail.value.connection || {};
-    if (isNatConsole(detail.value)) {
-      return String(connection.nat_remote_address || connection.nat_remote_host || '').trim() || '--';
-    }
-    return String(connection.dedicated_ip || detail.value.upstream?.dedicated_ip || '').trim() || '--';
+
+    return normalizeConnectionValues([connection.dedicated_ip, detail.value.upstream?.dedicated_ip, connection.assigned_ips]);
   });
+  const primaryConnectionValues = computed(() => {
+    const connection = detail.value.connection || {};
+
+    if (isNatConsole(detail.value)) {
+      return normalizeConnectionValues([connection.nat_remote_address || connection.nat_remote_host]);
+    }
+
+    return publicIpValues.value;
+  });
+  const primaryConnectionText = computed(() => (primaryConnectionValues.value.length ? primaryConnectionValues.value.join(' / ') : '--'));
   const connectionEndpointText = computed(() => String(detail.value.connection?.hostname || detail.value.domain || '').trim() || '--');
   const connectionPortText = computed(() => {
     const port = Number(detail.value.connection?.nat_remote_port || detail.value.connection?.port || 0);
@@ -236,16 +244,20 @@ export function useServiceConsole() {
     return resolveTdesignStatusTheme(detail.value);
   });
   const serviceIpCount = computed(() => {
-    const assigned = Array.isArray(detail.value.connection?.assigned_ips) ? detail.value.connection.assigned_ips : [];
-    if (assigned.length) return `${assigned.length} 个`;
+    if (publicIpValues.value.length) return `${publicIpValues.value.length} 个`;
     return findSpecValue(detail, ['IP数量', 'IP 数量', 'ip'], primaryConnectionText.value !== '--' ? '1 个' : '--');
   });
   const bandwidthText = computed(() => findSpecValue(detail, ['带宽', '宽带', 'bandwidth'], '--'));
   const renewPriceText = computed(() => `¥${formatMoney(detail.value.amount)}`);
   const autoRenewLabel = computed(() => (Number(detail.value.auto_renew) === 1 ? '已开启' : '未开启'));
   const resolvedPassword = computed(() => {
-    if (!detail.value.connection?.has_password) return '--';
-    return showPassword.value ? String(detail.value.connection?.password || '--') : '••••••••';
+    const password = String(detail.value.connection?.password || '').trim();
+
+    if (password !== '') {
+      return showPassword.value ? password : '••••••••';
+    }
+
+    return detail.value.connection?.has_password ? '已设置' : '--';
   });
 
   // Copy helper with toast
@@ -351,6 +363,7 @@ export function useServiceConsole() {
     serviceRegion,
     serviceOs,
     primaryConnectionLabel,
+    primaryConnectionValues,
     primaryConnectionText,
     connectionEndpointText,
     connectionPortText,
@@ -418,3 +431,22 @@ export function useServiceConsole() {
 
 // Re-export utilities for external use
 export { normalizeConsoleDetail, mergeConsoleDetail } from './console/useConsoleCore';
+
+function normalizeConnectionValues(values: unknown[]): string[] {
+  const normalized: string[] = [];
+
+  for (const value of values) {
+    const items = Array.isArray(value) ? value : [value];
+    for (const item of items) {
+      const candidates = String(item || '').split(/[\s,，;；、]+/);
+      for (const candidate of candidates) {
+        const text = candidate.trim();
+        if (text !== '' && text !== '--' && !normalized.includes(text)) {
+          normalized.push(text);
+        }
+      }
+    }
+  }
+
+  return normalized;
+}

@@ -29,7 +29,6 @@ export function useConsoleReinstall(options: UseConsoleReinstallOptions) {
     loadRemoteStatus,
     clearStatusSyncTimer,
     scheduleStatusSync,
-    mergeDetail,
   } = options;
 
   const reinstallVisible = ref(false);
@@ -91,7 +90,6 @@ export function useConsoleReinstall(options: UseConsoleReinstallOptions) {
     try {
       const res = await clientApi.serviceReinstall(serviceId.value, { os_id: reinstallState.os_id });
       const payload = res.data || {};
-      if (payload.detail) mergeDetail(payload.detail);
       setOperationStatus('reinstall', '重装系统中');
       reinstallVisible.value = false;
       MessagePlugin.success(String(payload.message || '重装系统任务已提交'));

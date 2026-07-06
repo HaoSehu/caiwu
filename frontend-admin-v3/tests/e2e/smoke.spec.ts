@@ -2627,19 +2627,6 @@ async function clickVisibleDropdownItem(page: import('@playwright/test').Page, a
 
 async function mockSettingsCenter(page: Page) {
   const settingGroups: Record<string, Record<string, string | number | boolean>> = {
-    system: {
-      captcha_enabled: 0,
-      captcha_driver: 'geetest',
-      geetest_enabled: 0,
-      geetest_captcha_id: 'captcha-old',
-      geetest_captcha_key: 'key-old',
-    },
-    message_limit: {
-      email_rate_limit_enabled: 1,
-      email_ip_minute_limit: 6,
-      sms_rate_limit_enabled: 1,
-      sms_ip_minute_limit: 6,
-    },
     basic: {
       site_name: '创欧云',
       browser_title: '创欧云控制台',
@@ -2826,7 +2813,8 @@ test.describe('frontend-admin-v3 shell smoke', () => {
 
     await menuText('系统运维').click();
     await expect(menuText('日志中心')).toBeVisible();
-    await expect(menuText('系统设置')).toBeVisible();
+    await expect(menuText('系统设置')).toHaveCount(0);
+    await expect(menuText('自动化策略')).toBeVisible();
 
     await expect(sidebar.getByText('User Detail', { exact: true })).toHaveCount(0);
     await expect(sidebar.getByText('Orders Redirect', { exact: true })).toHaveCount(0);
@@ -3083,12 +3071,10 @@ test.describe('frontend-admin-v3 shell smoke', () => {
       second_product_group_ids: [13, 12],
     });
 
-    await page.getByRole('button', { name: '新增分类' }).click();
+    await page.getByRole('button', { name: '新增二级' }).click();
     const categoryCreateDialog = page.locator('.t-dialog:visible');
-    await expect(categoryCreateDialog.getByText('分类名称')).toBeVisible();
+    await expect(categoryCreateDialog.getByText('新增二级分类')).toBeVisible();
     await categoryCreateDialog.locator('.t-form__item').filter({ hasText: '分类名称' }).locator('input').fill('存储型');
-    await categoryCreateDialog.locator('.t-form__item').filter({ hasText: '二级分类父级' }).locator('.t-select').click();
-    await page.locator('.t-popup:visible .t-select-option').filter({ hasText: '云服务器' }).last().click();
     const createCategoryRequest = page.waitForRequest(
       (request) => request.url().includes('/api/admin/product-categories') && request.method() === 'POST',
     );
@@ -3098,6 +3084,22 @@ test.describe('frontend-admin-v3 shell smoke', () => {
       service_type_code: 'cloud_server',
       effective_product_group_level: 2,
       first_product_group_id: 11,
+    });
+
+    await page.locator('.category-tree-row').filter({ hasText: '通用型' }).locator('.category-menu-trigger').click();
+    await page.locator('.t-popup:visible .t-dropdown__item').filter({ hasText: '新增三级分类' }).click();
+    const thirdCategoryCreateDialog = page.locator('.t-dialog:visible');
+    await expect(thirdCategoryCreateDialog.getByText('新增三级分类')).toBeVisible();
+    await thirdCategoryCreateDialog.locator('.t-form__item').filter({ hasText: '分类名称' }).locator('input').fill('高性能');
+    const createThirdCategoryRequest = page.waitForRequest(
+      (request) => request.url().includes('/api/admin/product-categories') && request.method() === 'POST',
+    );
+    await thirdCategoryCreateDialog.getByRole('button', { name: '保存' }).click();
+    await expect((await createThirdCategoryRequest).postDataJSON()).toMatchObject({
+      name: '高性能',
+      service_type_code: 'cloud_server',
+      effective_product_group_level: 3,
+      second_product_group_id: 12,
     });
 
     await page.locator('.category-tree-row').filter({ hasText: '通用型' }).locator('.category-menu-trigger').click();
@@ -3805,40 +3807,16 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(page.getByText('服务状态同步')).toBeVisible();
   });
 
-  test('opens settings center compatibility route and saves system groups', async ({ page }) => {
+  test('does not expose removed system settings page', async ({ page }) => {
     await mockAdminInfo(page);
-    await mockSettingsCenter(page);
     await page.addInitScript(() => {
       window.localStorage.setItem('admin_token', 'test-token');
       window.localStorage.setItem('admin_last_active_at', String(Date.now()));
     });
 
-    await page.goto('/admin/settings/basic', { waitUntil: 'domcontentloaded' });
-    await expect(page).toHaveURL(/\/admin\/settings(?:\/basic)?(?:\?tab=system)?$/);
-    await expect(page.locator('.page-tabs-toolbar').getByText('系统设置')).toBeVisible();
-    await expect(page.locator('.t-card__title').filter({ hasText: '人机验证' })).toBeVisible();
-    await expect(page.locator('.t-radio-button__label').filter({ hasText: '邮件短信限流' })).toBeVisible();
-
-    await page.locator('.t-radio-button__label').filter({ hasText: '邮件短信限流' }).click();
-    await page.locator('.field-card').filter({ hasText: '邮箱单 IP 每分钟上限' }).locator('input').fill('120');
-    const saveSystemRequest = page.waitForRequest((request) => {
-      const body = request.postData() || '';
-      return request.url().includes('/api/admin/settings') && request.method() === 'POST' && body.includes('"group":"system"');
-    });
-    const saveLimitRequest = page.waitForRequest((request) => {
-      const body = request.postData() || '';
-      return request.url().includes('/api/admin/settings') && request.method() === 'POST' && body.includes('"group":"message_limit"');
-    });
-    await page.getByRole('button', { name: '保存设置' }).click();
-    await expect((await saveSystemRequest).postDataJSON()).toMatchObject({
-      group: 'system',
-      settings: { captcha_enabled: 0 },
-    });
-    await expect((await saveLimitRequest).postDataJSON()).toMatchObject({
-      group: 'message_limit',
-      settings: { email_ip_minute_limit: 120 },
-    });
-    await expect(page.getByText('系统设置已保存')).toBeVisible();
+    await page.goto('/admin/settings', { waitUntil: 'domcontentloaded' });
+    await expect(page).toHaveURL(/\/admin\/settings/);
+    await expect(page.locator('.result-title')).toHaveText('页面不存在');
   });
 
   test('uploads site image and saves site basic settings', async ({ page }) => {

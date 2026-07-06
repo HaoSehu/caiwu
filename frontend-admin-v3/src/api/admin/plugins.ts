@@ -1,6 +1,6 @@
 import { request } from '@/utils/request';
 
-export type IntegrationPluginDomain = 'verification' | 'payment' | 'mail' | 'sms' | 'upstream';
+export type IntegrationPluginDomain = 'captcha' | 'verification' | 'payment' | 'mail' | 'sms' | 'upstream';
 
 export interface IntegrationPluginConfigSchema {
   key: string;
@@ -44,6 +44,8 @@ export interface IntegrationPluginRecord {
   base_path?: string;
   is_installed?: boolean;
   is_enabled?: boolean;
+  can_enable?: boolean;
+  enable_disabled_reason?: string | null;
   status?: number;
   installed_at?: string | null;
   updated_at?: string | null;
@@ -86,6 +88,14 @@ export interface IntegrationPluginSecretValueResponse {
   value: unknown;
 }
 
+export interface IntegrationPluginActionResult {
+  id?: number | string;
+  status?: string;
+  task_id?: string;
+  message?: string;
+  detail?: Record<string, unknown>;
+}
+
 export interface IntegrationPluginListResponse {
   list?: IntegrationPluginRecord[];
   total?: number;
@@ -93,26 +103,88 @@ export interface IntegrationPluginListResponse {
   page_size?: number;
 }
 
+type V2IntegrationPluginRecord = IntegrationPluginRecord & {
+  configured_credentials?: Record<string, boolean>;
+  credential_previews?: Record<string, IntegrationPluginSecretPreview>;
+};
+
+type V2IntegrationPluginDetailResponse = {
+  plugin?: V2IntegrationPluginRecord;
+};
+
+type V2IntegrationPluginSchemaResponse = {
+  schema?: Array<IntegrationPluginConfigSchema & { sensitive?: boolean }>;
+};
+
+function normalizeV2PluginSchemaField(field: IntegrationPluginConfigSchema & { sensitive?: boolean }): IntegrationPluginConfigSchema {
+  return {
+    ...field,
+    secret: Boolean(field.secret ?? field.sensitive),
+  };
+}
+
+function normalizeV2PluginRecord(record?: V2IntegrationPluginRecord, schema?: V2IntegrationPluginSchemaResponse): IntegrationPluginRecord {
+  const plugin = record || ({} as V2IntegrationPluginRecord);
+
+  return {
+    ...plugin,
+    config_schema: Array.isArray(schema?.schema)
+      ? schema.schema.map((field) => normalizeV2PluginSchemaField(field))
+      : plugin.config_schema || [],
+    has_secret_values: plugin.has_secret_values || plugin.configured_credentials || {},
+    secret_previews: plugin.secret_previews || plugin.credential_previews || {},
+  };
+}
+
 export const pluginsApi = {
   list: (params?: { domain?: IntegrationPluginDomain | '' }) =>
-    request.get<IntegrationPluginListResponse>({ url: '/admin/integration-plugins', params }),
-  scan: (params?: { domain?: IntegrationPluginDomain | '' }) =>
-    request.post<IntegrationPluginListResponse>({ url: '/admin/integration-plugins/scan', data: params || {} }),
-  install: (data: { domain: IntegrationPluginDomain; slug: string }) =>
-    request.post<IntegrationPluginRecord>({ url: '/admin/integration-plugins/install', data }),
-  detail: (id: number | string) => request.get<IntegrationPluginRecord>({ url: `/admin/integration-plugins/${id}` }),
-  updateConfig: (id: number | string, config: Record<string, unknown>) =>
-    request.put<IntegrationPluginRecord>({ url: `/admin/integration-plugins/${id}/config`, data: { config } }),
+    request.get<IntegrationPluginListResponse>({ url: '/v2/admin/integration-plugins', params }),
+  scan: async (params?: { domain?: IntegrationPluginDomain | '' }) => {
+    await request.post<IntegrationPluginActionResult>({ url: '/v2/admin/integration-plugin-scans', data: params || {} });
+
+    return request.get<IntegrationPluginListResponse>({ url: '/v2/admin/integration-plugins', params });
+  },
+  install: async (data: { domain: IntegrationPluginDomain; slug: string }) => {
+    const detail = await request.post<V2IntegrationPluginDetailResponse>({ url: '/v2/admin/integration-plugins', data });
+
+    return normalizeV2PluginRecord(detail.plugin);
+  },
+  detail: async (id: number | string) => {
+    const [detail, schema] = await Promise.all([
+      request.get<V2IntegrationPluginDetailResponse>({ url: `/v2/admin/integration-plugins/${id}` }),
+      request.get<V2IntegrationPluginSchemaResponse>({ url: `/v2/admin/integration-plugins/${id}/schema` }),
+    ]);
+
+    return normalizeV2PluginRecord(detail.plugin, schema);
+  },
+  updateConfig: async (id: number | string, config: Record<string, unknown>) => {
+    const [detail, schema] = await Promise.all([
+      request.put<V2IntegrationPluginDetailResponse>({ url: `/v2/admin/integration-plugins/${id}/config`, data: { config } }),
+      request.get<V2IntegrationPluginSchemaResponse>({ url: `/v2/admin/integration-plugins/${id}/schema` }),
+    ]);
+
+    return normalizeV2PluginRecord(detail.plugin, schema);
+  },
   revealSecret: (id: number | string, key: string) =>
-    request.get<IntegrationPluginSecretValueResponse>({ url: `/admin/integration-plugins/${id}/config-secret/${encodeURIComponent(key)}` }),
-  enable: (id: number | string) => request.post<IntegrationPluginRecord>({ url: `/admin/integration-plugins/${id}/enable` }),
+    request.get<IntegrationPluginSecretValueResponse>({ url: `/v2/admin/integration-plugins/${id}/secrets/${encodeURIComponent(key)}` }),
+  enable: (id: number | string) =>
+    request.patch<IntegrationPluginActionResult>({ url: `/v2/admin/integration-plugins/${id}/status`, data: { enabled: true } }),
   disable: (id: number | string) =>
-    request.post<IntegrationPluginRecord>({ url: `/admin/integration-plugins/${id}/disable` }),
-  remove: (id: number | string) => request.delete({ url: `/admin/integration-plugins/${id}` }),
+    request.patch<IntegrationPluginActionResult>({ url: `/v2/admin/integration-plugins/${id}/status`, data: { enabled: false } }),
+  remove: (id: number | string) => request.delete<IntegrationPluginActionResult>({ url: `/v2/admin/integration-plugins/${id}` }),
   healthCheck: (id: number | string) =>
-    request.post<IntegrationPluginHealthCheckResult>({ url: `/admin/integration-plugins/${id}/health-check` }),
-  testEmail: (id: number | string, data: { account_index: number; to: string; subject: string; body?: string }) =>
-    request.post<Record<string, unknown>>({ url: `/admin/integration-plugins/${id}/test-email`, data }),
+    request.post<IntegrationPluginActionResult>({
+      url: `/v2/admin/integration-plugins/${id}/tasks`,
+      data: { type: 'health_check' },
+    }),
+  testEmail: (id: number | string, data: { account_index: number; to: string }) =>
+    request.post<IntegrationPluginActionResult>({
+      url: `/v2/admin/integration-plugins/${id}/tasks`,
+      data: { type: 'test_email', payload: data },
+    }),
   testSms: (id: number | string, data: { phone: string }) =>
-    request.post<Record<string, unknown>>({ url: `/admin/integration-plugins/${id}/test-sms`, data }),
+    request.post<IntegrationPluginActionResult>({
+      url: `/v2/admin/integration-plugins/${id}/tasks`,
+      data: { type: 'test_sms', payload: data },
+    }),
 };

@@ -7,20 +7,20 @@ import type {
 export const verificationsApi = {
   list: (params: VerificationListParams) =>
     request.get<{ list?: VerificationRecord[]; total?: number; page?: number; page_size?: number }>({
-      url: '/admin/verifications',
+      url: '/v2/admin/verifications',
       params,
     }),
   summary: () =>
     request.get<{
       stats?: Record<string, number>;
       config?: Record<string, unknown>;
-    }>({ url: '/admin/verifications/summary' }),
+    }>({ url: '/v2/admin/verifications/summary' }),
   detail: (id: number | string) =>
-    request.get<VerificationRecord>({ url: `/admin/verifications/${id}` }),
+    request.get<VerificationRecord>({ url: `/v2/admin/verifications/${id}` }),
   history: (id: number | string) =>
     request.get<{ user_name?: string; list?: VerificationRecord[] }>({
-      url: `/admin/verifications/${id}/history`,
+      url: `/v2/admin/verifications/${id}/history`,
     }),
   unbind: (id: number | string, data: { reject_reason: string }) =>
-    request.post({ url: `/admin/verifications/${id}/unbind`, data }),
+    request.post({ url: `/v2/admin/verifications/${id}/unbindings`, data }),
 };

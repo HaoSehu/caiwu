@@ -18,9 +18,9 @@ export interface AdminPasswordPayload {
 }
 
 export const adminAuthApi = {
-  login: (data: AdminLoginPayload) => request.post({ url: '/admin/login', data }),
-  info: () => request.get({ url: '/admin/auth/info' }),
-  updateProfile: (data: AdminProfilePayload) => request.put({ url: '/admin/auth/profile', data }),
-  updatePassword: (data: AdminPasswordPayload) => request.put({ url: '/admin/auth/password', data }),
-  logout: () => request.post({ url: '/admin/auth/logout' }),
+  login: (data: AdminLoginPayload) => request.post({ url: '/v2/admin/login', data }),
+  info: () => request.get({ url: '/v2/admin/auth/info' }),
+  updateProfile: (data: AdminProfilePayload) => request.put({ url: '/v2/admin/auth/profile', data }),
+  updatePassword: (data: AdminPasswordPayload) => request.put({ url: '/v2/admin/auth/password', data }),
+  logout: () => request.post({ url: '/v2/admin/auth/logout' }),
 };

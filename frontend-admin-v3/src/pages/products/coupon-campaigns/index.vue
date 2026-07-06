@@ -40,7 +40,7 @@
               <div class="campaign-title-row">
                 <strong>{{ row.name || '-' }}</strong>
                 <t-tag size="small" variant="light">自动发放</t-tag>
-                <t-tag v-if="row.can_update === false" size="small" theme="default" variant="light">已锁定</t-tag>
+                <t-tag v-if="Number(row.generated_coupon_count || 0) > 0" size="small" theme="default" variant="light">已生成</t-tag>
               </div>
               <span>{{ row.description || '暂无描述' }}</span>
             </div>
@@ -419,7 +419,7 @@ function campaignDeleteDisabled(row: CouponCampaignRecord) {
 }
 
 function campaignLockReason(row: CouponCampaignRecord) {
-  return String(row.lock_reason || '活动已生成优惠券批次，不允许修改');
+  return String(row.lock_reason || '活动已生成优惠券批次，不允许删除；编辑仅影响后续批次');
 }
 
 
@@ -466,10 +466,6 @@ function handlePageChange(data: { current: number; pageSize: number }) {
 async function openCampaignDialog(row?: CouponCampaignRecord) {
   if (!canManage.value) {
     MessagePlugin.warning('您没有管理优惠券活动的权限');
-    return;
-  }
-  if (row && row.can_update === false) {
-    MessagePlugin.warning(campaignLockReason(row));
     return;
   }
   resetForm();
@@ -618,7 +614,7 @@ async function handleToggleStatus(row: CouponCampaignRecord) {
     return;
   }
   await runRowAction(row, 'toggle', '更新活动状态失败', async () => {
-    await adminApi.couponCampaigns.toggleStatus(row.id);
+    await adminApi.couponCampaigns.toggleStatus(row.id, Number(row.status) !== 1);
     MessagePlugin.success('活动状态已更新');
     await loadData();
   });

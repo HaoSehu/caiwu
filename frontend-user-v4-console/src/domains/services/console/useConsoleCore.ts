@@ -48,7 +48,6 @@ export function emptyDetail(): ConsoleServiceDetail {
     connection: {
       hostname: '',
       username: '',
-      password: '',
       has_password: false,
       port: 0,
       dedicated_ip: '',

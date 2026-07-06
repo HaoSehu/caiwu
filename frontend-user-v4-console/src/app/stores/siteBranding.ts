@@ -6,8 +6,8 @@ import siteApi from '@/api/site';
 import { DEFAULT_SUPPORT_CONTACTS } from '@/data/supportContacts';
 
 const DEFAULT_SITE_NAME = import.meta.env.VITE_APP_TITLE || '创欧云';
-const DEFAULT_SITE_LOGO = '/uploads/logo/logo.svg';
-const DEFAULT_FAVICON = '/uploads/logo/logo1.svg';
+const DEFAULT_SITE_LOGO = '/favicon.ico';
+const DEFAULT_FAVICON = '/favicon.ico';
 const DEFAULT_CLIENT_CONSOLE_ICON = DEFAULT_FAVICON;
 
 function normalizeBrandAsset(raw: unknown, fallback: string) {
