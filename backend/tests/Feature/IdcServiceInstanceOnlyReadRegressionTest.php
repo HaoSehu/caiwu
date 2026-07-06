@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Constants\ServiceStatus;
+use App\Models\FirstProductGroup;
 use App\Models\Product;
-use App\Models\ProductCategory;
+use App\Models\SecondProductGroup;
 use App\Models\Service;
 use App\Models\User;
 use App\Services\ProductCatalog\ProductAdminService;
@@ -37,18 +38,11 @@ class IdcServiceInstanceOnlyReadRegressionTest extends TestCase
             'verified_at' => null,
         ]);
 
-        $group = ProductCategory::query()->create([
-            'parent_id' => null,
-            'product_type' => 'server',
-            'name' => 'Dashboard Group '.$suffix,
-            'slug' => 'dashboard-group-'.$suffix,
-            'slogan' => '',
-            'is_visible' => 1,
-            'sort_order' => 0,
-        ]);
+        $groupIds = $this->createProductGroupIds('dashboard-group-'.$suffix, 'Dashboard Group '.$suffix);
 
         $product = Product::query()->create([
-            'product_group_id' => (int) $group->id,
+            'first_product_group_id' => $groupIds['first'],
+            'second_product_group_id' => $groupIds['second'],
             'name' => 'Dashboard Product '.$suffix,
             'product_type' => 'server',
             'pricing' => ['monthly' => '12.00'],
@@ -120,18 +114,11 @@ class IdcServiceInstanceOnlyReadRegressionTest extends TestCase
             ]
         );
 
-        $group = ProductCategory::query()->create([
-            'parent_id' => null,
-            'product_type' => 'server',
-            'name' => 'Owner Group '.$suffix,
-            'slug' => 'owner-group-'.$suffix,
-            'slogan' => '',
-            'is_visible' => 1,
-            'sort_order' => 0,
-        ]);
+        $groupIds = $this->createProductGroupIds('owner-group-'.$suffix, 'Owner Group '.$suffix);
 
         $product = Product::query()->create([
-            'product_group_id' => (int) $group->id,
+            'first_product_group_id' => $groupIds['first'],
+            'second_product_group_id' => $groupIds['second'],
             'name' => 'Owner Product '.$suffix,
             'product_type' => 'server',
             'pricing' => ['monthly' => '23.00'],
@@ -162,5 +149,41 @@ class IdcServiceInstanceOnlyReadRegressionTest extends TestCase
         $this->assertSame(1, (int) ($payload['summary']['services_total'] ?? 0));
         $this->assertCount(1, $payload['list'] ?? []);
         $this->assertSame((int) $user->id, (int) ($payload['list'][0]['id'] ?? 0));
+    }
+
+    /**
+     * @return array{first:int,second:int}
+     */
+    private function createProductGroupIds(string $slug, string $name): array
+    {
+        $first = FirstProductGroup::query()->firstOrCreate(
+            ['code' => 'server'],
+            [
+                'name' => 'Server',
+                'slug' => 'service-instance-first-server',
+                'sort_order' => 0,
+                'is_visible' => 1,
+                'is_system' => 0,
+                'legacy_product_type' => 'server',
+            ]
+        );
+
+        if ((int) $first->is_visible !== 1) {
+            $first->update(['is_visible' => 1]);
+        }
+
+        $second = SecondProductGroup::query()->create([
+            'first_product_group_id' => (int) $first->id,
+            'name' => $name,
+            'slug' => $slug,
+            'description' => '',
+            'sort_order' => 0,
+            'is_visible' => 1,
+        ]);
+
+        return [
+            'first' => (int) $first->id,
+            'second' => (int) $second->id,
+        ];
     }
 }

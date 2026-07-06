@@ -62,12 +62,12 @@ class ClientReferralRegressionTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $this->getJson('/api/client/referral/overview')
+        $this->getJson('/api/v2/client/referral/overview')
             ->assertOk()
             ->assertJsonPath('data.referral_code', fn ($value) => is_string($value) && $value !== '')
             ->assertJsonPath('data.referral_frozen_amount', '0.00');
 
-        $this->getJson('/api/client/referral/account-logs?per_page=30')
+        $this->getJson('/api/v2/client/referral/account-logs?per_page=30')
             ->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.event_type', 'reward_frozen')

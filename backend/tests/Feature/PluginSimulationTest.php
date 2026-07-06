@@ -14,9 +14,11 @@ use App\Services\Integrations\Plugins\PluginConfigRepository;
 use App\Services\Integrations\Plugins\PluginInstaller;
 use App\Services\Integrations\Plugins\PluginRuntimeRegistry;
 use App\Services\Integrations\Plugins\PluginScanner;
+use App\Services\System\NotificationService;
 use App\Services\Upstream\Contracts\ProvidesConsoleCatalog;
 use App\Services\Upstream\Contracts\ProvidesConsoleRuntime;
 use App\Services\Upstream\ProviderRegistry;
+use App\Support\SmsTemplateCatalog;
 use Caiwu\Plugins\Certification\DemoVerification\DemoVerificationPlugin;
 use Caiwu\Plugins\Gateways\DemoPay\DemoPayPlugin;
 use Caiwu\Plugins\Mail\DemoMail\DemoMailPlugin;
@@ -217,7 +219,7 @@ class PluginSimulationTest extends TestCase
         $this->activatePlugin('sms', 'demo_sms', [
             'access_key' => 'demo_ak',
             'sign_name' => '测试签名',
-            'template_code' => 'SMS_001',
+            'template_code' => SmsTemplateCatalog::TEMPLATE_VERIFY_CODE,
         ]);
 
         $result = app(PluginRuntimeRegistry::class)->execute(
@@ -227,14 +229,14 @@ class PluginSimulationTest extends TestCase
             payload: [
                 'phone' => '13800138000',
                 'code' => '654321',
-                'options' => ['sign_name' => '测试签名', 'template_code' => 'SMS_001'],
+                'options' => ['sign_name' => '测试签名', 'template_code' => SmsTemplateCatalog::TEMPLATE_VERIFY_CODE],
             ],
         );
 
         $this->assertTrue($result['success']);
         $this->assertSame('success', $result['data']['status'] ?? '');
         $this->assertStringStartsWith('demo-sms-', $result['data']['request_id'] ?? '');
-        $this->assertSame('SMS_001', $result['data']['template_code'] ?? '');
+        $this->assertSame(SmsTemplateCatalog::TEMPLATE_VERIFY_CODE, $result['data']['template_code'] ?? '');
         $this->assertArrayHasKey('code', $result['data']['template_params'] ?? []);
         $this->assertSame('654321', $result['data']['template_params']['code'] ?? '');
     }
@@ -245,7 +247,7 @@ class PluginSimulationTest extends TestCase
         $plugin = $this->activatePlugin('sms', 'demo_sms', [
             'access_key' => 'demo_ak',
             'sign_name' => 'Demo Sign',
-            'template_code' => 'SMS_TEST',
+            'template_code' => SmsTemplateCatalog::TEMPLATE_VERIFY_CODE,
         ]);
 
         $result = app(IntegrationPluginService::class)->testSms($plugin, [
@@ -255,7 +257,8 @@ class PluginSimulationTest extends TestCase
         $this->assertTrue($result['success']);
         $this->assertSame('sms.test', $result['action']);
         $this->assertSame('success', $result['data']['status'] ?? '');
-        $this->assertSame('888888', $result['data']['template_params']['code'] ?? '');
+        $this->assertSame(SmsTemplateCatalog::TEMPLATE_VERIFY_CODE, $result['data']['template_code'] ?? '');
+        $this->assertMatchesRegularExpression('/^\d{6}$/', $result['data']['template_params']['code'] ?? '');
     }
 
     public function test_demo_sms_unsupported_action_returns_failure(): void
@@ -264,7 +267,7 @@ class PluginSimulationTest extends TestCase
         $this->activatePlugin('sms', 'demo_sms', [
             'access_key' => 'demo_ak',
             'sign_name' => '测试签名',
-            'template_code' => 'SMS_002',
+            'template_code' => SmsTemplateCatalog::TEMPLATE_VERIFY_CODE,
         ]);
 
         $result = app(PluginRuntimeRegistry::class)->execute(
@@ -319,14 +322,14 @@ class PluginSimulationTest extends TestCase
         $result = app(IntegrationPluginService::class)->testEmail($plugin, [
             'account_index' => 0,
             'to' => 'user@example.com',
-            'subject' => 'Plugin mail test',
-            'body' => 'Hello from demo mail',
         ]);
 
         $this->assertTrue($result['success']);
         $this->assertSame('mail.test_smtp', $result['action']);
         $this->assertTrue($result['data']['sent'] ?? false);
         $this->assertSame('user@example.com', $result['data']['to'] ?? '');
+        $this->assertSame(NotificationService::TEMPLATE_EMAIL_CODE, $result['data']['template_code'] ?? '');
+        $this->assertSame('邮箱验证码', $result['data']['subject'] ?? '');
     }
 
     public function test_demo_mail_unsupported_action_returns_failure(): void
@@ -477,7 +480,7 @@ class PluginSimulationTest extends TestCase
                 'payload' => $payload,
                 'headers' => [],
                 'method' => 'POST',
-                'path' => 'api/client/verification/callback',
+                'path' => 'api/v2/client/verification/callback',
                 'raw_body' => '',
             ],
         );

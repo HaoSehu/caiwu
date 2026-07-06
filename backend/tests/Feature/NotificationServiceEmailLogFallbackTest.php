@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Models\IntegrationPlugin;
 use App\Models\Setting;
 use App\Services\Integrations\Plugins\PluginConfigRepository;
 use App\Services\Integrations\Plugins\PluginInstaller;
@@ -269,6 +270,7 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
         $installer = app(PluginInstaller::class);
         $configRepository = app(PluginConfigRepository::class);
         $manifest = $scanner->requireManifest('mail', 'smtp');
+        $this->disableEnabledMailPluginsForTest();
         $plugin = $installer->install('mail', 'smtp');
         $configRepository->save($plugin, $manifest, [
             'host' => 'smtp.example.com',
@@ -281,6 +283,14 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
         $installer->enable($plugin);
 
         $this->app->forgetInstance(MailDriverManager::class);
+    }
+
+    private function disableEnabledMailPluginsForTest(): void
+    {
+        IntegrationPlugin::query()
+            ->where('domain', 'mail')
+            ->where('status', IntegrationPlugin::STATUS_ENABLED)
+            ->update(['status' => IntegrationPlugin::STATUS_DISABLED]);
     }
 
     private function ensurePluginTables(): void

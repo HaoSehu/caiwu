@@ -77,18 +77,18 @@ class FinanceLedgerControllerTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $this->getJson('/api/client/finance/ledger?page_size=20')
+        $this->getJson('/api/v2/client/finance/ledger?page_size=20')
             ->assertOk()
             ->assertJsonPath('data.total', 2)
             ->assertJsonPath('data.list.0.event_type', 'manual_deduction')
             ->assertJsonPath('data.list.1.event_type', 'invoice_payment');
 
-        $this->getJson('/api/client/finance/ledger?event_type=invoice_payment&page_size=20')
+        $this->getJson('/api/v2/client/finance/ledger?event_type=invoice_payment&page_size=20')
             ->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.event_type', 'invoice_payment');
 
-        $this->getJson('/api/client/finance/ledger/summary')
+        $this->getJson('/api/v2/client/finance/ledger/summary')
             ->assertOk()
             ->assertJsonPath('data.cash_balance', '128.80')
             ->assertJsonMissingPath('data.balance')
@@ -156,18 +156,42 @@ class FinanceLedgerControllerTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $this->getJson('/api/client/finance/ledger?page_size=20')
+        $this->getJson('/api/v2/client/finance/ledger?page_size=20')
             ->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.payment.payment_no', (string) $payment->payment_no)
             ->assertJsonPath('data.list.0.payment.trade_no', (string) $payment->trade_no)
             ->assertJsonMissingPath('data.list.0.trace_id');
 
-        $this->getJson('/api/client/finance/ledger/'.$ledger->id)
+        $this->getJson('/api/v2/client/finance/ledger/'.$ledger->id)
             ->assertOk()
             ->assertJsonPath('data.payment.payment_no', (string) $payment->payment_no)
             ->assertJsonPath('data.payment.trade_no', (string) $payment->trade_no)
             ->assertJsonMissingPath('data.trace_id');
+    }
+
+    public function test_client_finance_ledger_v2_rejects_legacy_and_non_list_pagination_parameters(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+        $user = $this->createClientUser('ledger-client-validation-'.$suffix);
+
+        Sanctum::actingAs($user);
+
+        $this->getJson('/api/v2/client/finance/ledger?per_page=20')
+            ->assertStatus(422)
+            ->assertJsonStructure(['data' => ['errors' => ['per_page']]]);
+
+        $this->getJson('/api/v2/client/finance/ledger?pageSize=20')
+            ->assertStatus(422)
+            ->assertJsonStructure(['data' => ['errors' => ['pageSize']]]);
+
+        $this->getJson('/api/v2/client/finance/ledger/summary?page=1')
+            ->assertStatus(422)
+            ->assertJsonStructure(['data' => ['errors' => ['page']]]);
+
+        $this->getJson('/api/v2/client/finance/ledger/1?pageSize=20')
+            ->assertStatus(422)
+            ->assertJsonStructure(['data' => ['errors' => ['pageSize']]]);
     }
 
     public function test_admin_finance_ledger_returns_all_records_and_supports_filters(): void
@@ -229,23 +253,42 @@ class FinanceLedgerControllerTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/admin/finance/ledger?page_size=20&user_id='.$user->id)
+        $this->getJson('/api/v2/admin/finance/ledger?page_size=20&user_id='.$user->id)
             ->assertOk()
             ->assertJsonPath('data.total', 3)
             ->assertJsonPath('data.list.0.event_type', 'system_adjustment')
             ->assertJsonPath('data.list.1.event_type', 'invoice_refund')
             ->assertJsonPath('data.list.2.event_type', 'recharge');
 
-        $this->getJson('/api/admin/finance/ledger?tab=adjustment&page_size=20&user_id='.$user->id)
+        $this->getJson('/api/v2/admin/finance/ledger?tab=adjustment&page_size=20&user_id='.$user->id)
             ->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.event_type', 'system_adjustment');
 
-        $this->getJson('/api/admin/finance/ledger/summary?user_id='.$user->id)
+        $this->getJson('/api/v2/admin/finance/ledger/summary?user_id='.$user->id)
             ->assertOk()
             ->assertJsonPath('data.total_in', '112.00')
             ->assertJsonPath('data.total_out', '24.00')
             ->assertJsonPath('data.refund_in', '12.00');
+    }
+
+    public function test_admin_finance_ledger_v2_rejects_legacy_and_non_list_pagination_parameters(): void
+    {
+        $admin = $this->createAdminUser(['invoice.list', 'invoice.detail']);
+
+        Sanctum::actingAs($admin);
+
+        $this->getJson('/api/v2/admin/finance/ledger?per_page=20&pageSize=20')
+            ->assertStatus(422)
+            ->assertJsonStructure(['data' => ['errors' => ['per_page', 'pageSize']]]);
+
+        $this->getJson('/api/v2/admin/finance/ledger/summary?page_size=20')
+            ->assertStatus(422)
+            ->assertJsonStructure(['data' => ['errors' => ['page_size']]]);
+
+        $this->getJson('/api/v2/admin/finance/ledger/1?page=1')
+            ->assertStatus(422)
+            ->assertJsonStructure(['data' => ['errors' => ['page']]]);
     }
 
     public function test_admin_finance_ledger_detail_returns_audit_chain_payload(): void
@@ -357,7 +400,7 @@ class FinanceLedgerControllerTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $response = $this->getJson('/api/admin/finance/ledger/'.$ledger->id);
+        $response = $this->getJson('/api/v2/admin/finance/ledger/'.$ledger->id);
 
         $response
             ->assertOk()

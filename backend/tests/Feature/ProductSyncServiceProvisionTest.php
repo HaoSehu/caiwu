@@ -14,6 +14,7 @@ use App\Models\Supplier;
 use App\Models\User;
 use App\Services\Integrations\Plugins\PluginFileLoader;
 use App\Services\Integrations\Plugins\PluginScanner;
+use App\Services\Integrations\Plugins\UpstreamBindingWriter;
 use App\Services\ProductCatalog\ProductSyncService;
 use App\Services\Upstream\Contracts\ProvidesConsoleCatalog;
 use App\Services\Upstream\Contracts\UpstreamDriver;
@@ -138,6 +139,78 @@ class ProductSyncServiceProvisionTest extends TestCase
         $this->expectExceptionMessage('该商品库存不足，无法继续下单');
 
         $service->assertProductCanBeProvisioned($product, 2);
+    }
+
+    public function test_assert_product_can_be_provisioned_uses_plugin_binding_runtime_credentials(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+        $supplier = Supplier::query()->create([
+            'name' => 'Provision Runtime Supplier '.$suffix,
+            'code' => 'provision-runtime-'.$suffix,
+            'status' => 1,
+            'sort_order' => 1,
+        ]);
+
+        $baseUrl = 'https://runtime-'.$suffix.'.example.com';
+        $accountName = 'runtime-account-'.$suffix;
+        $apiKey = 'runtime-secret-'.$suffix;
+        $supplierBindingId = app(UpstreamBindingWriter::class)->syncSupplierBinding($supplier, [
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'base_url' => $baseUrl,
+            'account_name' => $accountName,
+            'api_key' => $apiKey,
+            'status' => 1,
+            'priority' => 0,
+        ]);
+        $this->assertNotNull($supplierBindingId);
+
+        $supplierProductId = random_int(10000, 99999);
+        $product = Product::query()->create([
+            'name' => 'Provision Runtime Stock '.$suffix,
+            'product_type' => 'server',
+            'pricing' => ['monthly' => '99.00'],
+            'setup_fee' => '0.00',
+            'config_options' => [],
+            'purchase_requires' => [],
+            'stock' => -1,
+            'status' => 1,
+            'auto_setup' => 1,
+        ]);
+
+        DB::table('product_upstream_bindings')->insert([
+            'product_id' => (int) $product->id,
+            'supplier_plugin_binding_id' => $supplierBindingId,
+            'plugin_id' => (int) DB::table('integration_plugins')
+                ->where('domain', 'upstream')
+                ->where('plugin_key', ProviderKey::MOFANG_FINANCE_API)
+                ->value('id'),
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'upstream_product_id' => (string) $supplierProductId,
+            'auto_setup' => 1,
+            'status' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $transport = $this->createMock(HostingPanelApiTransport::class);
+        $transport->expects($this->once())
+            ->method('fetchBatchProductStocks')
+            ->with(
+                $this->callback(fn (Supplier $candidate): bool => (int) $candidate->id === (int) $supplier->id
+                    && (string) $candidate->api_url === $baseUrl
+                    && (string) $candidate->api_username === $accountName
+                    && (string) $candidate->api_key === $apiKey),
+                [$supplierProductId]
+            )
+            ->willReturn([
+                $supplierProductId => ['stock' => 4],
+            ]);
+
+        $service = new ProductSyncService($this->makeProviderResolver($transport));
+
+        $service->assertProductCanBeProvisioned($product, 2);
+
+        $this->assertTrue(true);
     }
 
     public function test_assert_product_can_be_provisioned_keeps_inventory_reserved_when_order_service_is_still_pending(): void

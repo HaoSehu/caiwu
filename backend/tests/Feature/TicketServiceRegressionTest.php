@@ -205,14 +205,14 @@ class TicketServiceRegressionTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $response = $this->getJson('/api/client/tickets/'.$ticket->id);
+        $response = $this->getJson('/api/v2/client/tickets/'.$ticket->id);
 
         $response->assertOk()
             ->assertJsonPath('code', 0)
-            ->assertJsonPath('data.service.id', (int) $linkedService->id)
-            ->assertJsonPath('data.service.name', '实例 B');
+            ->assertJsonPath('data.ticket.service.id', (int) $linkedService->id)
+            ->assertJsonPath('data.ticket.service.name', '实例 B');
 
-        $this->assertArrayNotHasKey('product_name', $response->json('data.service') ?? []);
+        $this->assertArrayNotHasKey('product_name', $response->json('data.ticket.service') ?? []);
     }
 
     public function test_ticket_create_schedules_notification_email_without_direct_mail_send(): void

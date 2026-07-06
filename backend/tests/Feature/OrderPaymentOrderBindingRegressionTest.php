@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Constants\FinanceLedgerEventType;
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
+use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Contracts\Integrations\Payments\PaymentGatewayInterface;
 use App\Exceptions\BusinessException;
@@ -22,6 +23,7 @@ use App\Services\Finance\CheckoutService;
 use App\Services\Finance\CouponService;
 use App\Services\Finance\InvoiceService;
 use App\Services\Finance\PaymentService;
+use App\Services\Integrations\Payments\Data\PaymentPrecreateRequest;
 use App\Services\Order\OrderService;
 use App\Services\Order\PaidOrderBusinessFlowDispatcher;
 use App\Services\Provisioning\ProvisionService;
@@ -141,7 +143,7 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
 
     public function test_checkout_service_cancels_expired_unpaid_invoice(): void
     {
-        [, , $invoice] = $this->createUserOrderInvoice('autocancel');
+        [, $order, $invoice] = $this->createUserOrderInvoice('autocancel');
         $createdAt = now()->subMinutes(6)->startOfSecond();
         $invoice->forceFill([
             'created_at' => $createdAt,
@@ -156,11 +158,12 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
 
         $this->assertSame(InvoiceStatus::CANCELLED, (int) $updated->status);
         $this->assertSame(InvoiceStatus::CANCELLED, (int) $invoice->refresh()->status);
+        $this->assertSame(OrderStatus::CANCELLED, (int) $order->refresh()->status);
     }
 
     public function test_invoice_cleanup_task_cancels_invoices_after_payment_window(): void
     {
-        [, , $invoice] = $this->createUserOrderInvoice('taskcancel');
+        [, $order, $invoice] = $this->createUserOrderInvoice('taskcancel');
         $createdAt = now()->subMinutes(6)->startOfSecond();
         $invoice->forceFill([
             'created_at' => $createdAt,
@@ -177,10 +180,80 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
                 'pending_recharge_cleanup_after_days' => 0,
             ]);
 
-        $summary = (new InvoiceCleanupAutomationService($settingService, app(CheckoutService::class)))->handle();
+        $summary = (new InvoiceCleanupAutomationService(
+            $settingService,
+            app(CheckoutService::class),
+            app(PaymentService::class),
+            app(OrderService::class),
+        ))->handle();
 
         $this->assertGreaterThanOrEqual(1, $summary['invoices_cancelled']);
         $this->assertSame(InvoiceStatus::CANCELLED, (int) $invoice->refresh()->status);
+        $this->assertSame(OrderStatus::CANCELLED, (int) $order->refresh()->status);
+    }
+
+    public function test_order_service_cancels_expired_pending_order_after_payment_window(): void
+    {
+        [, $order, $invoice] = $this->createUserOrderInvoice('orderwindow');
+        $createdAt = now()->subMinutes(6)->startOfSecond();
+        $order->forceFill([
+            'created_at' => $createdAt,
+            'updated_at' => $createdAt,
+        ])->save();
+        $invoice->forceFill([
+            'created_at' => $createdAt,
+            'updated_at' => $createdAt,
+        ])->save();
+
+        $updated = app(OrderService::class)->cancelExpiredPendingOrder($order, [
+            'actor_type' => 'system',
+            'actor_name' => 'test',
+            'reason' => 'payment_window_expired',
+        ]);
+
+        $this->assertSame(OrderStatus::CANCELLED, (int) $updated->status);
+        $this->assertSame(OrderStatus::CANCELLED, (int) $order->refresh()->status);
+        $this->assertSame(InvoiceStatus::CANCELLED, (int) $invoice->refresh()->status);
+    }
+
+    public function test_order_payment_qr_uses_remaining_five_minute_window(): void
+    {
+        [$user, $order, $invoice] = $this->createUserOrderInvoice('orderqrttl');
+        $createdAt = now()->subMinutes(2)->startOfSecond();
+        $order->forceFill([
+            'created_at' => $createdAt,
+            'updated_at' => $createdAt,
+        ])->save();
+        $invoice->forceFill([
+            'created_at' => $createdAt,
+            'updated_at' => $createdAt,
+        ])->save();
+
+        $precreateRequests = [];
+        $alipayGateway = $this->makeFakePaymentGateway([
+            'precreate' => function (PaymentPrecreateRequest $request) use (&$precreateRequests): array {
+                $precreateRequests[] = [
+                    'out_trade_no' => $request->outTradeNo,
+                    'timeout_express' => $request->timeoutExpress,
+                ];
+
+                return [
+                    'qr_code' => 'https://qr.alipay.test/order-window',
+                    'out_trade_no' => $request->outTradeNo,
+                ];
+            },
+        ]);
+
+        $result = $this->makePaymentService($alipayGateway)->payOrderByAlipay($order->refresh(), $user);
+
+        $this->assertSame([
+            ['out_trade_no' => $result['payment_no'], 'timeout_express' => '3m'],
+        ], $precreateRequests);
+        $this->assertDatabaseHas('payments', [
+            'payment_no' => $result['payment_no'],
+            'gateway_key' => PaymentGatewayCode::ALIPAY,
+            'status' => PaymentStatus::PENDING,
+        ]);
     }
 
     private function makePaymentService(?PaymentGatewayInterface $alipayGateway = null): PaymentService
@@ -673,6 +746,7 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
         ]);
         $this->assertDatabaseHas('orders', [
             'id' => (int) $order->id,
+            'status' => OrderStatus::CANCELLED,
             'paid_amount' => '0.00',
         ]);
         $this->assertDatabaseHas('payments', [

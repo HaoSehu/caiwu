@@ -34,7 +34,7 @@ class AdminIntegrationPluginControllerTest extends TestCase
         $this->ensurePluginTables();
         Sanctum::actingAs($this->createAdmin());
 
-        $listResponse = $this->getJson('/api/admin/integration-plugins')
+        $listResponse = $this->getJson('/api/v2/admin/integration-plugins')
             ->assertOk()
             ->assertJsonPath('data.total', fn (int $total): bool => $total >= 6)
             ->assertJsonPath('data.list.0.domain', fn (string $domain): bool => in_array($domain, ['captcha', 'mail', 'payment', 'sms', 'upstream', 'verification'], true));
@@ -43,20 +43,25 @@ class AdminIntegrationPluginControllerTest extends TestCase
             fn (array $plugin): bool => str_starts_with((string) ($plugin['slug'] ?? ''), 'demo_')
         ));
 
-        $installResponse = $this->postJson('/api/admin/integration-plugins/install', [
+        $installResponse = $this->postJson('/api/v2/admin/integration-plugins', [
             'domain' => 'verification',
             'slug' => 'stay33',
         ])->assertOk();
 
-        $pluginId = (int) $installResponse->json('data.id');
+        $pluginId = (int) $installResponse->json('data.plugin.id');
         $this->assertGreaterThan(0, $pluginId);
-        $installResponse
-            ->assertJsonPath('data.config_schema.0.type', 'notice')
-            ->assertJsonPath('data.config_schema.1.placeholder', '请输入 API 标识')
-            ->assertJsonPath('data.config_schema.2.type', 'password')
-            ->assertJsonPath('data.config_schema.7.visible_when.field', 'charge_enabled');
+        $schema = $this->getJson("/api/v2/admin/integration-plugins/{$pluginId}/schema")
+            ->assertOk()
+            ->assertJsonPath('data.schema.0.type', 'notice')
+            ->assertJsonPath('data.schema.1.placeholder', '请输入 API 标识')
+            ->assertJsonPath('data.schema.2.type', 'password')
+            ->json('data.schema');
+        $this->assertTrue(collect($schema)->contains(
+            fn (array $field): bool => ($field['key'] ?? '') === 'amount'
+                && ($field['visible_when']['field'] ?? null) === 'charge_enabled'
+        ));
 
-        $this->putJson("/api/admin/integration-plugins/{$pluginId}/config", [
+        $this->putJson("/api/v2/admin/integration-plugins/{$pluginId}/config", [
             'config' => [
                 'api' => 'stay33-api',
                 'key' => 'stay33-secret',
@@ -66,20 +71,21 @@ class AdminIntegrationPluginControllerTest extends TestCase
                 'free_times' => 1,
             ],
         ])->assertOk()
-            ->assertJsonPath('data.config.api', 'stay33-api')
-            ->assertJsonMissingPath('data.config.basic_notice')
-            ->assertJsonPath('data.has_secret_values.key', true);
+            ->assertJsonPath('data.plugin.config.api', 'stay33-api')
+            ->assertJsonMissingPath('data.plugin.config.basic_notice')
+            ->assertJsonPath('data.plugin.configured_credentials.key', true);
 
-        $this->postJson("/api/admin/integration-plugins/{$pluginId}/enable")
+        $this->patchJson("/api/v2/admin/integration-plugins/{$pluginId}/status", ['enabled' => true])
             ->assertOk()
-            ->assertJsonPath('data.is_enabled', true);
+            ->assertJsonPath('data.status', 'enabled')
+            ->assertJsonPath('data.detail.plugin.is_enabled', true);
 
-        $this->getJson("/api/admin/integration-plugins/{$pluginId}")
+        $this->getJson("/api/v2/admin/integration-plugins/{$pluginId}")
             ->assertOk()
-            ->assertJsonPath('data.domain', 'verification')
-            ->assertJsonPath('data.slug', 'stay33')
-            ->assertJsonPath('data.is_enabled', true)
-            ->assertJsonMissingPath('data.config.key');
+            ->assertJsonPath('data.plugin.domain', 'verification')
+            ->assertJsonPath('data.plugin.slug', 'stay33')
+            ->assertJsonPath('data.plugin.is_enabled', true)
+            ->assertJsonMissingPath('data.plugin.config.key');
 
         $this->assertDatabaseHas('integration_plugin_bindings', [
             'domain' => 'verification',
@@ -89,28 +95,16 @@ class AdminIntegrationPluginControllerTest extends TestCase
             'status' => 1,
         ]);
 
-        $this->deleteJson("/api/admin/integration-plugins/{$pluginId}")
-            ->assertOk();
-
-        $verificationList = $this->getJson('/api/admin/integration-plugins?domain=verification')
+        $verificationList = $this->getJson('/api/v2/admin/integration-plugins?domain=verification')
             ->assertOk()
             ->json('data.list');
+
+        $this->assertNull(collect($verificationList)->firstWhere('slug', 'demo_verification'));
 
         $stay33 = collect($verificationList)->firstWhere('slug', 'stay33');
         $this->assertIsArray($stay33);
         $this->assertTrue((bool) ($stay33['is_installed'] ?? false));
-        $this->assertFalse((bool) ($stay33['is_enabled'] ?? true));
-        $this->assertSame('disable_archive', (string) ($stay33['delete_mode'] ?? ''));
-        $this->assertGreaterThan(0, (int) ($stay33['business_reference_count'] ?? 0));
-        $this->assertNull(collect($verificationList)->firstWhere('slug', 'demo_verification'));
-
-        $this->assertDatabaseHas('integration_plugin_bindings', [
-            'domain' => 'verification',
-            'plugin_id' => $pluginId,
-            'binding_key' => 'verification_driver',
-            'provider_key' => 'stay33',
-            'status' => 0,
-        ]);
+        $this->assertTrue((bool) ($stay33['is_enabled'] ?? false));
     }
 
     public function test_admin_can_configure_and_enable_captcha_plugin(): void
@@ -118,32 +112,33 @@ class AdminIntegrationPluginControllerTest extends TestCase
         $this->ensurePluginTables();
         Sanctum::actingAs($this->createAdmin());
 
-        $installResponse = $this->postJson('/api/admin/integration-plugins/install', [
+        $installResponse = $this->postJson('/api/v2/admin/integration-plugins', [
             'domain' => 'captcha',
             'slug' => 'geetest',
         ])->assertOk();
 
-        $pluginId = (int) $installResponse->json('data.id');
+        $pluginId = (int) $installResponse->json('data.plugin.id');
         $this->assertGreaterThan(0, $pluginId);
 
-        $this->putJson("/api/admin/integration-plugins/{$pluginId}/config", [
+        $this->putJson("/api/v2/admin/integration-plugins/{$pluginId}/config", [
             'config' => [
                 'captcha_id' => 'captcha-id',
                 'captcha_key' => 'captcha-secret',
             ],
         ])->assertOk()
-            ->assertJsonPath('data.config.captcha_id', 'captcha-id')
-            ->assertJsonMissingPath('data.config.captcha_key')
-            ->assertJsonPath('data.has_secret_values.captcha_key', true);
+            ->assertJsonPath('data.plugin.config.captcha_id', 'captcha-id')
+            ->assertJsonMissingPath('data.plugin.config.captcha_key')
+            ->assertJsonPath('data.plugin.configured_credentials.captcha_key', true);
 
-        $this->getJson("/api/admin/integration-plugins/{$pluginId}/config-secret/captcha_key")
+        $this->getJson("/api/v2/admin/integration-plugins/{$pluginId}/secrets/captcha_key")
             ->assertOk()
             ->assertJsonPath('data.key', 'captcha_key')
             ->assertJsonPath('data.value', 'captcha-secret');
 
-        $this->postJson("/api/admin/integration-plugins/{$pluginId}/enable")
+        $this->patchJson("/api/v2/admin/integration-plugins/{$pluginId}/status", ['enabled' => true])
             ->assertOk()
-            ->assertJsonPath('data.is_enabled', true);
+            ->assertJsonPath('data.status', 'enabled')
+            ->assertJsonPath('data.detail.plugin.is_enabled', true);
 
         $this->assertDatabaseHas('integration_plugin_bindings', [
             'domain' => 'captcha',
@@ -151,6 +146,62 @@ class AdminIntegrationPluginControllerTest extends TestCase
             'binding_key' => 'captcha_driver',
             'provider_key' => 'geetest',
             'status' => 1,
+        ]);
+    }
+
+    public function test_single_enabled_domain_blocks_enabling_another_plugin(): void
+    {
+        $this->ensurePluginTables();
+        Sanctum::actingAs($this->createAdmin());
+
+        $smtpResponse = $this->postJson('/api/v2/admin/integration-plugins', [
+            'domain' => 'mail',
+            'slug' => 'smtp',
+        ])->assertOk();
+        $smtpId = (int) $smtpResponse->json('data.plugin.id');
+
+        $this->patchJson("/api/v2/admin/integration-plugins/{$smtpId}/status", ['enabled' => true])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'enabled')
+            ->assertJsonPath('data.detail.plugin.is_enabled', true);
+
+        $multiSmtpResponse = $this->postJson('/api/v2/admin/integration-plugins', [
+            'domain' => 'mail',
+            'slug' => 'multi_smtp_round_robin',
+        ])->assertOk();
+        $multiSmtpId = (int) $multiSmtpResponse->json('data.plugin.id');
+
+        $this->putJson("/api/v2/admin/integration-plugins/{$multiSmtpId}/config", [
+            'config' => [
+                'accounts' => [[
+                    'host' => 'smtp.example.test',
+                    'port' => 465,
+                    'username' => 'notice@example.test',
+                    'password' => 'secret',
+                    'from_name' => 'Caiwu',
+                    'encryption' => 'ssl',
+                    'enabled' => true,
+                ]],
+            ],
+        ])->assertOk();
+
+        $mailList = collect($this->getJson('/api/v2/admin/integration-plugins?domain=mail')
+            ->assertOk()
+            ->json('data.list'));
+        $multiSmtp = $mailList->firstWhere('slug', 'multi_smtp_round_robin');
+
+        $this->assertIsArray($multiSmtp);
+        $this->assertFalse((bool) ($multiSmtp['can_enable'] ?? true));
+        $this->assertStringContainsString('Single SMTP', (string) ($multiSmtp['enable_disabled_reason'] ?? ''));
+
+        $this->patchJson("/api/v2/admin/integration-plugins/{$multiSmtpId}/status", ['enabled' => true])
+            ->assertStatus(422)
+            ->assertJsonPath('code', 42200)
+            ->assertJsonPath('message', fn (string $message): bool => str_contains($message, 'Single SMTP'));
+
+        $this->assertDatabaseHas('integration_plugins', [
+            'id' => $multiSmtpId,
+            'status' => IntegrationPlugin::STATUS_DISABLED,
         ]);
     }
 
@@ -167,17 +218,17 @@ class AdminIntegrationPluginControllerTest extends TestCase
         ]);
 
         try {
-            $installResponse = $this->postJson('/api/admin/integration-plugins/install', [
+            $installResponse = $this->postJson('/api/v2/admin/integration-plugins', [
                 'domain' => 'captcha',
                 'slug' => 'geetest',
             ])->assertOk()
-                ->assertJsonPath('data.config', [])
-                ->assertJsonPath('data.has_secret_values', []);
+                ->assertJsonPath('data.plugin.config', [])
+                ->assertJsonPath('data.plugin.configured_credentials', []);
 
-            $pluginId = (int) $installResponse->json('data.id');
+            $pluginId = (int) $installResponse->json('data.plugin.id');
             $this->assertGreaterThan(0, $pluginId);
 
-            $this->postJson("/api/admin/integration-plugins/{$pluginId}/enable")
+            $this->patchJson("/api/v2/admin/integration-plugins/{$pluginId}/status", ['enabled' => true])
                 ->assertStatus(422)
                 ->assertJsonPath('code', 42200);
         } finally {
@@ -194,15 +245,16 @@ class AdminIntegrationPluginControllerTest extends TestCase
         Sanctum::actingAs($this->createAdmin());
         $plugin = $this->createPlugin('mail', 'smtp');
 
-        $this->postJson("/api/admin/integration-plugins/{$plugin->id}/test-email", [
-            'account_index' => 0,
-            'to' => 'not-an-email',
-            'subject' => '测试邮件',
-            'body' => 'hello',
+        $this->postJson("/api/v2/admin/integration-plugins/{$plugin->id}/tasks", [
+            'type' => 'test_email',
+            'payload' => [
+                'account_index' => 0,
+                'to' => 'not-an-email',
+            ],
         ])->assertStatus(422)
             ->assertJsonPath('code', 42200)
             ->assertJsonPath('message', '参数验证失败')
-            ->assertJsonStructure(['data' => ['errors' => ['to']]]);
+            ->assertJsonStructure(['data' => ['errors' => ['payload.to']]]);
     }
 
     public function test_test_sms_rejects_invalid_payload_with_unified_validation_error(): void
@@ -211,12 +263,15 @@ class AdminIntegrationPluginControllerTest extends TestCase
         Sanctum::actingAs($this->createAdmin());
         $plugin = $this->createPlugin('sms', 'aliyun_sms');
 
-        $this->postJson("/api/admin/integration-plugins/{$plugin->id}/test-sms", [
-            'phone' => str_repeat('1', 21),
+        $this->postJson("/api/v2/admin/integration-plugins/{$plugin->id}/tasks", [
+            'type' => 'test_sms',
+            'payload' => [
+                'phone' => str_repeat('1', 21),
+            ],
         ])->assertStatus(422)
             ->assertJsonPath('code', 42200)
             ->assertJsonPath('message', '参数验证失败')
-            ->assertJsonStructure(['data' => ['errors' => ['phone']]]);
+            ->assertJsonStructure(['data' => ['errors' => ['payload.phone']]]);
     }
 
     private function createAdmin(): AdminUser

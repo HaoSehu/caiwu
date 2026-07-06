@@ -39,7 +39,7 @@ class AdminUserLoginAsPermissionTest extends TestCase
         $token = $admin->createToken('login-as-manage-only')->plainTextToken;
 
         $this->withHeader('Authorization', 'Bearer '.$token)
-            ->postJson('/api/admin/users/'.$user->id.'/login-as')
+            ->postJson('/api/v2/admin/users/'.$user->id.'/login-as')
             ->assertForbidden();
     }
 
@@ -75,7 +75,7 @@ class AdminUserLoginAsPermissionTest extends TestCase
         $token = $admin->createToken('login-as-allowed')->plainTextToken;
 
         $this->withHeader('Authorization', 'Bearer '.$token)
-            ->postJson('/api/admin/users/'.$user->id.'/login-as')
+            ->postJson('/api/v2/admin/users/'.$user->id.'/login-as')
             ->assertOk()
             ->assertJsonPath('data.target_url', 'https://console.example.test/client/login-as')
             ->assertJsonMissingPath('data.redirect_url');

@@ -6,10 +6,10 @@ namespace Tests\Feature;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\ServiceStatus;
+use App\Models\FirstProductGroup;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Product;
-use App\Models\ProductCategory;
 use App\Models\Service;
 use App\Models\User;
 use App\Services\Provisioning\AdminServiceListService;
@@ -42,12 +42,6 @@ class AdminServiceListInvoiceOnlyTest extends TestCase
             'referrer_user_id' => null,
             'member_level_id' => null,
             'total_sales_amount' => '0.00',
-            'referral_frozen_amount' => '0.00',
-            'referral_available_amount' => '0.00',
-            'referral_withdrawing_amount' => '0.00',
-            'referral_withdrawn_amount' => '0.00',
-            'balance' => '0.00',
-            'credit_limit' => '0.00',
             'login_email_alert' => 1,
             'login_notify' => 1,
             'login_location_alert' => 1,
@@ -106,18 +100,17 @@ class AdminServiceListInvoiceOnlyTest extends TestCase
         ]);
         $this->mirrorUserToIdc($user, $suffix);
 
-        $group = ProductCategory::query()->create([
-            'parent_id' => null,
-            'product_type' => 'server',
+        $group = FirstProductGroup::query()->create([
+            'code' => 'server-'.$suffix,
             'name' => 'Admin Service Group '.$suffix,
             'slug' => 'admin-service-group-'.$suffix,
-            'slogan' => '',
+            'description' => '',
             'is_visible' => 1,
             'sort_order' => 0,
         ]);
 
         $product = Product::query()->create([
-            'product_group_id' => (int) $group->id,
+            'first_product_group_id' => (int) $group->id,
             'name' => '旧产品名 '.$suffix,
             'product_type' => 'server',
             'description' => '',
@@ -203,18 +196,17 @@ class AdminServiceListInvoiceOnlyTest extends TestCase
         ]);
         $this->mirrorUserToIdc($user, $suffix.'-snapshot');
 
-        $group = ProductCategory::query()->create([
-            'parent_id' => null,
-            'product_type' => 'server',
+        $group = FirstProductGroup::query()->create([
+            'code' => 'server-'.$suffix,
             'name' => 'Admin Snapshot Group '.$suffix,
             'slug' => 'admin-snapshot-group-'.$suffix,
-            'slogan' => '',
+            'description' => '',
             'is_visible' => 1,
             'sort_order' => 0,
         ]);
 
         $product = Product::query()->create([
-            'product_group_id' => (int) $group->id,
+            'first_product_group_id' => (int) $group->id,
             'name' => '旧产品名快照 '.$suffix,
             'product_type' => 'server',
             'description' => '',
@@ -298,18 +290,17 @@ class AdminServiceListInvoiceOnlyTest extends TestCase
         ]);
         $this->mirrorUserToIdc($user, $suffix.'-legacy-order');
 
-        $group = ProductCategory::query()->create([
-            'parent_id' => null,
-            'product_type' => 'server',
+        $group = FirstProductGroup::query()->create([
+            'code' => 'server-'.$suffix,
             'name' => 'Admin Fallback Group '.$suffix,
             'slug' => 'admin-fallback-group-'.$suffix,
-            'slogan' => '',
+            'description' => '',
             'is_visible' => 1,
             'sort_order' => 0,
         ]);
 
         $product = Product::query()->create([
-            'product_group_id' => (int) $group->id,
+            'first_product_group_id' => (int) $group->id,
             'name' => '回退产品 '.$suffix,
             'product_type' => 'server',
             'description' => '',
@@ -412,18 +403,17 @@ class AdminServiceListInvoiceOnlyTest extends TestCase
         ]);
         $this->mirrorUserToIdc($user, $suffix.'-runtime');
 
-        $group = ProductCategory::query()->create([
-            'parent_id' => null,
-            'product_type' => 'server',
+        $group = FirstProductGroup::query()->create([
+            'code' => 'server-'.$suffix,
             'name' => 'Admin Runtime Group '.$suffix,
             'slug' => 'admin-runtime-group-'.$suffix,
-            'slogan' => '',
+            'description' => '',
             'is_visible' => 1,
             'sort_order' => 0,
         ]);
 
         $product = Product::query()->create([
-            'product_group_id' => (int) $group->id,
+            'first_product_group_id' => (int) $group->id,
             'name' => '运行态搜索产品 '.$suffix,
             'product_type' => 'server',
             'description' => '',

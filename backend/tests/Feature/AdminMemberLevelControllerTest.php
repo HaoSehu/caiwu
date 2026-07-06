@@ -22,7 +22,7 @@ class AdminMemberLevelControllerTest extends TestCase
         $this->actingAsMemberLevelManager($suffix);
         MemberLevel::query()->delete();
 
-        $createResponse = $this->postJson('/api/admin/member-levels', [
+        $createResponse = $this->postJson('/api/v2/admin/member-levels', [
             'name' => '治理等级 '.$suffix,
             'code' => 'govern_member_'.$suffix,
             'sales_amount_min' => '987654.00',
@@ -40,7 +40,7 @@ class AdminMemberLevelControllerTest extends TestCase
 
         $levelId = (int) $createResponse->json('data.id');
 
-        $updateResponse = $this->putJson('/api/admin/member-levels/'.$levelId, [
+        $updateResponse = $this->putJson('/api/v2/admin/member-levels/'.$levelId, [
             'name' => '治理等级更新 '.$suffix,
             'code' => 'govern_member_'.$suffix,
             'sales_amount_min' => '987654.00',

@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
+use App\Exceptions\BusinessException;
 use App\Models\AccountTransaction;
 use App\Models\IntegrationPlugin;
 use App\Models\Invoice;
@@ -17,9 +18,11 @@ use App\Services\Integrations\Payments\PaymentGatewayRegistry;
 use App\Services\Integrations\Plugins\PluginConfigRepository;
 use App\Services\Integrations\Plugins\PluginFileLoader;
 use App\Services\Integrations\Plugins\PluginInstaller;
+use App\Services\Integrations\Plugins\PluginRuntimeRegistry;
 use App\Services\Integrations\Plugins\PluginScanner;
 use Caiwu\Plugins\Gateways\YiPay\Lib\YiPayClient;
 use Caiwu\Plugins\Gateways\YiPay\YiPayPlugin;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
@@ -31,9 +34,15 @@ class YiPayGatewayPluginTest extends TestCase
     {
         parent::setUp();
 
+        $this->ensurePluginTables();
         $this->cleanPluginTables();
         $this->forgetPaymentRuntime();
-        config(['app.frontend_url' => 'https://pay.example.test']);
+        config([
+            'app.name' => '财务测试',
+            'app.url' => 'https://api.example.test',
+            'app.frontend_url' => 'https://pay.example.test',
+            'app.client_console_url' => 'https://console.example.test',
+        ]);
     }
 
     protected function tearDown(): void
@@ -54,13 +63,38 @@ class YiPayGatewayPluginTest extends TestCase
         $this->assertContains('notify_verify', $manifest->capabilities);
 
         $configKeys = collect($manifest->configSchema)->pluck('key')->all();
+        $this->assertContains('api_endpoint', $configKeys);
         $this->assertContains('merchant_id', $configKeys);
+        $this->assertContains('sign_type', $configKeys);
         $this->assertContains('merchant_key', $configKeys);
-        $this->assertContains('payment_type', $configKeys);
+        $this->assertContains('merchant_private_key', $configKeys);
+        $this->assertContains('platform_public_key', $configKeys);
+        $this->assertContains('payment_types', $configKeys);
+        $this->assertNotContains('payment_type', $configKeys);
+        $this->assertNotContains('channel_id', $configKeys);
+        $this->assertNotContains('device', $configKeys);
         $this->assertNotContains('api_base_url', $configKeys);
         $this->assertNotContains('notify_url', $configKeys);
         $this->assertNotContains('ssl_verify', $configKeys);
         $this->assertNotContains('ca_bundle', $configKeys);
+
+        $schemaByKey = collect($manifest->configSchema)->keyBy('key');
+        $this->assertNotSame('https://zpayz.cn', $schemaByKey->get('api_endpoint')['value'] ?? null);
+        $this->assertSame([
+            'field' => 'sign_type',
+            'operator' => 'eq',
+            'value' => 'MD5',
+        ], $schemaByKey->get('merchant_key')['visible_when'] ?? null);
+        $this->assertSame([
+            'field' => 'sign_type',
+            'operator' => 'eq',
+            'value' => 'RSA',
+        ], $schemaByKey->get('merchant_private_key')['visible_when'] ?? null);
+        $this->assertSame([
+            'field' => 'sign_type',
+            'operator' => 'eq',
+            'value' => 'RSA',
+        ], $schemaByKey->get('platform_public_key')['visible_when'] ?? null);
     }
 
     public function test_yipay_precreate_signs_form_payload_and_normalizes_qrcode(): void
@@ -89,11 +123,151 @@ class YiPayGatewayPluginTest extends TestCase
         $this->assertSame('alipay', $sentPayload['type'] ?? null);
         $this->assertSame('PAY202607020001', $sentPayload['out_trade_no'] ?? null);
         $this->assertSame('12.30', $sentPayload['money'] ?? null);
-        $this->assertSame('https://pay.example.test/api/client/payment/notify/yipay', $sentPayload['notify_url'] ?? null);
+        $this->assertSame('https://api.example.test/api/v2/client/payment/notify/yipay', $sentPayload['notify_url'] ?? null);
+        $this->assertSame('https://console.example.test/client/recharge', $sentPayload['return_url'] ?? null);
+        $this->assertSame('财务测试', $sentPayload['sitename'] ?? null);
+        $this->assertSame('pc', $sentPayload['device'] ?? null);
         $this->assertSame('MD5', $sentPayload['sign_type'] ?? null);
         $this->assertSame($this->sign($sentPayload), $sentPayload['sign'] ?? null);
+        $this->assertArrayNotHasKey('cid', $sentPayload);
 
         Http::assertSent(fn ($request): bool => $request->url() === 'https://zpayz.cn/mapi.php');
+    }
+
+    public function test_yipay_precreate_uses_requested_enabled_payment_type(): void
+    {
+        $this->loadYiPayPlugin();
+        $sentPayload = [];
+
+        Http::fake(function ($request) use (&$sentPayload) {
+            parse_str($request->body(), $sentPayload);
+
+            return Http::response([
+                'code' => 1,
+                'msg' => 'ok',
+                'qrcode' => 'https://zpayz.cn/pay/wxpay/ZPAY123/',
+            ]);
+        });
+
+        $client = new YiPayClient(array_merge($this->config(), [
+            'payment_types' => ['alipay', 'wxpay'],
+        ]));
+        $result = $client->precreate('PAY202607020002', 20, 'Caiwu 微信测试订单', 'wxpay');
+
+        $this->assertSame('https://zpayz.cn/pay/wxpay/ZPAY123/', $result['qr_code']);
+        $this->assertSame('wxpay', $sentPayload['type'] ?? null);
+        $this->assertSame($this->sign($sentPayload), $sentPayload['sign'] ?? null);
+    }
+
+    public function test_yipay_precreate_accepts_api_success_code_200(): void
+    {
+        $this->loadYiPayPlugin();
+
+        Http::fake(fn () => Http::response([
+            'code' => 200,
+            'msg' => 'ok',
+            'payurl' => 'https://zpayz.cn/pay/alipay/ZPAY200/',
+        ]));
+
+        $client = new YiPayClient($this->config());
+        $result = $client->precreate('PAY202607020200', 20, 'Caiwu 支付宝测试订单', 'alipay');
+
+        $this->assertSame('https://zpayz.cn/pay/alipay/ZPAY200/', $result['qr_code']);
+    }
+
+    public function test_yipay_rsa_precreate_signs_payload_and_resolves_custom_endpoint(): void
+    {
+        $this->loadYiPayPlugin();
+        $keys = $this->rsaKeyPair();
+        $sentPayload = [];
+        $sentUrl = '';
+
+        Http::fake(function ($request) use (&$sentPayload, &$sentUrl) {
+            $sentUrl = $request->url();
+            parse_str($request->body(), $sentPayload);
+
+            return Http::response([
+                'code' => 1,
+                'msg' => 'ok',
+                'qrcode' => 'https://gateway.example.test/pay/wxpay/ZPAY123/',
+            ]);
+        });
+
+        $client = new YiPayClient(array_merge($this->config(), [
+            'api_endpoint' => 'https://gateway.example.test/pay/mapi.php',
+            'merchant_key' => '',
+            'sign_type' => 'RSA',
+            'merchant_private_key' => $keys['private_key'],
+            'platform_public_key' => $keys['public_key'],
+            'payment_types' => ['wxpay'],
+        ]));
+
+        $result = $client->precreate('PAY202607020004', 20, 'Caiwu RSA 测试订单', 'wxpay');
+
+        $this->assertSame('https://gateway.example.test/pay/wxpay/ZPAY123/', $result['qr_code']);
+        $this->assertSame('https://gateway.example.test/pay/mapi.php', $sentUrl);
+        $this->assertSame('RSA', $sentPayload['sign_type'] ?? null);
+        $this->assertSame('wxpay', $sentPayload['type'] ?? null);
+        $this->assertNotEmpty($sentPayload['sign'] ?? '');
+        $this->assertSame(1, openssl_verify(
+            $this->canonicalString($sentPayload),
+            base64_decode((string) $sentPayload['sign'], true),
+            $keys['public_key'],
+            OPENSSL_ALGO_SHA256
+        ));
+    }
+
+    public function test_yipay_rejects_unselected_payment_type(): void
+    {
+        $this->loadYiPayPlugin();
+
+        $client = new YiPayClient(array_merge($this->config(), [
+            'payment_types' => ['wxpay'],
+        ]));
+
+        $this->expectException(BusinessException::class);
+        $this->expectExceptionMessage('当前易支付未启用该支付方式');
+
+        $client->precreate('PAY202607020003', 20, 'Caiwu 支付宝测试订单', 'alipay');
+    }
+
+    public function test_yipay_is_disabled_when_api_endpoint_missing(): void
+    {
+        $this->loadYiPayPlugin();
+
+        $client = new YiPayClient(array_merge($this->config(), [
+            'api_endpoint' => '',
+        ]));
+
+        $this->assertFalse($client->isEnabled());
+
+        $result = (new YiPayPlugin)->execute([
+            'action' => 'payment.options',
+            'config' => array_merge($this->config(), [
+                'api_endpoint' => '',
+            ]),
+        ]);
+
+        $this->assertSame([], $result['data']['list'] ?? null);
+    }
+
+    public function test_yipay_payment_options_follow_enabled_payment_types(): void
+    {
+        $this->loadYiPayPlugin();
+
+        $client = new YiPayClient(array_merge($this->config(), [
+            'payment_types' => ['wxpay'],
+        ]));
+
+        $this->assertSame([
+            [
+                'key' => 'yipay',
+                'name' => '易支付 - 微信支付',
+                'label' => '微信支付',
+                'option_key' => 'yipay:wxpay',
+                'payment_type' => 'wxpay',
+            ],
+        ], $client->paymentOptions());
     }
 
     public function test_yipay_query_and_refund_map_provider_responses(): void
@@ -172,6 +346,36 @@ class YiPayGatewayPluginTest extends TestCase
         $this->assertFalse($client->verifyNotify($payload));
     }
 
+    public function test_yipay_notify_verification_supports_rsa_signature(): void
+    {
+        $this->loadYiPayPlugin();
+        $keys = $this->rsaKeyPair();
+        $client = new YiPayClient(array_merge($this->config(), [
+            'merchant_key' => '',
+            'sign_type' => 'RSA',
+            'merchant_private_key' => $keys['private_key'],
+            'platform_public_key' => $keys['public_key'],
+        ]));
+        $payload = [
+            'pid' => 'merchant-10001',
+            'name' => 'Caiwu RSA 测试订单',
+            'money' => '12.30',
+            'out_trade_no' => 'PAY202607020004',
+            'trade_no' => 'YIPAY202607020004',
+            'param' => '',
+            'trade_status' => 'TRADE_SUCCESS',
+            'type' => 'wxpay',
+            'sign_type' => 'RSA',
+        ];
+        openssl_sign($this->canonicalString($payload), $signature, $keys['private_key'], OPENSSL_ALGO_SHA256);
+        $payload['sign'] = base64_encode($signature);
+
+        $this->assertTrue($client->verifyNotify($payload));
+
+        $payload['money'] = '13.30';
+        $this->assertFalse($client->verifyNotify($payload));
+    }
+
     public function test_yipay_get_notify_callback_completes_recharge_idempotently(): void
     {
         $this->activateYiPayPlugin();
@@ -218,7 +422,7 @@ class YiPayGatewayPluginTest extends TestCase
             'sign_type' => 'MD5',
         ];
         $payload['sign'] = $this->sign($payload);
-        $url = '/api/client/payment/notify/yipay?'.http_build_query($payload);
+        $url = '/api/v2/client/payment/notify/yipay?'.http_build_query($payload);
 
         $this->get($url)
             ->assertOk()
@@ -249,10 +453,11 @@ class YiPayGatewayPluginTest extends TestCase
     {
         return [
             'enabled' => true,
+            'api_endpoint' => 'https://zpayz.cn',
             'merchant_id' => 'merchant-10001',
+            'sign_type' => 'MD5',
             'merchant_key' => 'secret-key',
-            'payment_type' => 'alipay',
-            'device' => 'pc',
+            'payment_types' => ['alipay'],
         ];
     }
 
@@ -271,6 +476,7 @@ class YiPayGatewayPluginTest extends TestCase
         $manifest = $scanner->requireManifest('payment', 'yi_pay');
         $plugin = $installer->install('payment', 'yi_pay');
         $configRepository->save($plugin, $manifest, $this->config());
+        $plugin = $plugin->fresh('config') ?? $plugin;
 
         $enabled = $installer->enable($plugin);
         $this->forgetPaymentRuntime();
@@ -292,8 +498,45 @@ class YiPayGatewayPluginTest extends TestCase
         DB::statement('SET FOREIGN_KEY_CHECKS=1');
     }
 
+    private function ensurePluginTables(): void
+    {
+        if (! Schema::hasTable('integration_plugins')) {
+            Schema::create('integration_plugins', function (Blueprint $table): void {
+                $table->id();
+                $table->string('domain', 32);
+                $table->string('slug', 120);
+                $table->string('plugin_key', 120);
+                $table->string('name', 120);
+                $table->string('version', 32)->default('1.0.0');
+                $table->string('provider_class', 255)->nullable();
+                $table->string('entry_class', 255);
+                $table->json('capabilities_json')->nullable();
+                $table->json('config_schema_json')->nullable();
+                $table->unsignedTinyInteger('status')->default(0);
+                $table->timestamp('installed_at')->nullable();
+                $table->timestamps();
+                $table->unique(['domain', 'slug']);
+                $table->unique(['domain', 'plugin_key']);
+            });
+        }
+
+        if (! Schema::hasTable('integration_plugin_configs')) {
+            Schema::create('integration_plugin_configs', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('plugin_id');
+                $table->json('config_json')->nullable();
+                $table->longText('secret_json')->nullable();
+                $table->json('has_secret_json')->nullable();
+                $table->unsignedBigInteger('updated_by')->nullable();
+                $table->timestamps();
+                $table->unique('plugin_id');
+            });
+        }
+    }
+
     private function forgetPaymentRuntime(): void
     {
+        $this->app->forgetInstance(PluginRuntimeRegistry::class);
         $this->app->forgetInstance(PaymentGatewayRegistry::class);
         $this->app->forgetInstance(PaymentGatewayManager::class);
     }
@@ -302,6 +545,14 @@ class YiPayGatewayPluginTest extends TestCase
      * @param  array<string, mixed>  $payload
      */
     private function sign(array $payload): string
+    {
+        return md5($this->canonicalString($payload).'secret-key');
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function canonicalString(array $payload): string
     {
         unset($payload['sign'], $payload['sign_type']);
         ksort($payload, SORT_STRING);
@@ -315,6 +566,54 @@ class YiPayGatewayPluginTest extends TestCase
             $pairs[] = $key.'='.(string) $value;
         }
 
-        return md5(implode('&', $pairs).'secret-key');
+        return implode('&', $pairs);
+    }
+
+    /**
+     * @return array{private_key:string, public_key:string}
+     */
+    private function rsaKeyPair(): array
+    {
+        return [
+            'private_key' => <<<'PEM'
+-----BEGIN RSA PRIVATE KEY-----
+MIIEogIBAAKCAQEAvcqGjgbvfqhoHnrq8HlHaTk1canPYMAVBRTZwNhrlOVI6VS2
+4dBWOhGEW7hdFRroZa8oJ8w9TdzyvS2asbpwesUVL1PwpY244pdgi/HHVxjEOJrC
+PbR9IQgejwEdKLzVpMXz6F9RO8/smGpoLoTIU5kqD6ol0Mp+NNuSBPqZN2gHPMV3
+3f7ysu0hHzxuV5i4rI2w6JOnHHKcTGvti1113koLAUMRLNSLFvbIqbeKJk31yQCF
+qeTdKVJFeMPzss3DAJ21ndIvisQBfcz/1THNVkSE2U8gGCghFiVBMtxAqWhONfAV
+N6kT51ViC1nIaPP8P9aLxihQo334psCqEADDxwIDAQABAoIBADMR40Emhp17bYD+
+LGgHCns7BLGQMxhit4VFhg7JbbGEPSlkPU3oRLudaRNROeLq+awbBOAoqjpggQT8
+14qJk6jFjZzNpoy15RE8EKO3rJ84L9zXb/swrRcNW0O51gHXRlnvVmGp/G7u1Uhy
+IZSa8FjmdxX9/+z+ABXzG4ixcjchFNHrefSjKL4AMOvU3qZdjbu+2TR2JZA+2fQQ
+3h7vh/Ui70zJaKJw4eEDdJLEII9mSNsdmy76KjAX5eM/11SWGsYGGpFm3r/XV5pT
+nBo2pJ2wNZcaoFYPv3m9eeZ6K6JZlsUJy+iJJUy28F8iZRQtrlhP3riXW/uis+MI
+kWveEikCgYEA84hAem0jfgRBh6jQ5zsp9GLnMyJYFMhBKOaZc/DLnds9rTLIsRa2
+5n+hkm979o65h6Eh/mH4bPXf5nTzm3+D8TWbd5+kY3JmD486jQQCZnB+foPDgEO7
++YNifVwJtZJLJyz0Ku8polAwoIo5dfM16UALnW/IcHoRpyOfnK7lrP0CgYEAx4Hw
+fLTDoOl6XD7tGIjphH9acIuUoWfqSZ7F+TjR76KdvmOywGuu/iystZQJY1EaoebM
+mJr0ElU9eRWk5wmPti47PX3ykT/HNn+iGw1rDZYyNnsrVFVi+OjulM5btXxVtRXW
+Z7OhI5v9GGZNkTTxpOBgLPDUb3vwoSdvjSXisRMCgYBblkdhg4AQmXsnkMaX37lE
+jpmSsnzbvAA9aJQXdVyuTlCgvXOangdFIoTaNJEzRbPinSfSqneqSsHcwukG9urh
+IR8J2wEQ4Woeuef0NqjMa8w2ukkhCNg92zqEGMQSBCW9Yvuk1fMbdvsCtVks0b3Z
+rdtwZyTDoDTZXd1eKKx55QKBgFXAgyaG5+MdF6vYnD5EcuKxfqULSbpKmQhFx2BE
+zO+MXPL9lVJhtpiniSCO3a4jqSfXtS8Ow0OyAbcu1286y9uJaYsXvJAz8qN5Hqs0
+DESNv01tiYU5Ik5MiGfLft218HziQwLV0bgljxbSuhpkwEyW6J/Ib/bvNdF+ytLH
+avWjAoGAO19k/8x+aIUyxvS5c5gvYVgnk8SNoDi3RGamidRoYAy2CREmsNZydQzI
+lZz1ApLwzRS25ocdQHdnjD3MYDNaAPPi5TF8IlnhMcJZLQE2qdrWxeK1yPDP92IJ
+RZejljBXSihbtQvNR1GTm3cpShSXeq2szY6n0h35W57xedGxedY=
+-----END RSA PRIVATE KEY-----
+PEM,
+            'public_key' => <<<'PEM'
+-----BEGIN RSA PUBLIC KEY-----
+MIIBCgKCAQEAvcqGjgbvfqhoHnrq8HlHaTk1canPYMAVBRTZwNhrlOVI6VS24dBW
+OhGEW7hdFRroZa8oJ8w9TdzyvS2asbpwesUVL1PwpY244pdgi/HHVxjEOJrCPbR9
+IQgejwEdKLzVpMXz6F9RO8/smGpoLoTIU5kqD6ol0Mp+NNuSBPqZN2gHPMV33f7y
+su0hHzxuV5i4rI2w6JOnHHKcTGvti1113koLAUMRLNSLFvbIqbeKJk31yQCFqeTd
+KVJFeMPzss3DAJ21ndIvisQBfcz/1THNVkSE2U8gGCghFiVBMtxAqWhONfAVN6kT
+51ViC1nIaPP8P9aLxihQo334psCqEADDxwIDAQAB
+-----END RSA PUBLIC KEY-----
+PEM,
+        ];
     }
 }

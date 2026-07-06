@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\Supplier;
 use App\Services\Integrations\Plugins\PluginFileLoader;
 use App\Services\Integrations\Plugins\PluginScanner;
+use App\Services\ProductCatalog\InstanceSpecCatalogService;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\ProductCatalog\ProductSyncService;
 use App\Services\Upstream\Contracts\ProvidesConsoleCatalog;
@@ -172,6 +173,79 @@ class SupplierBatchConnectRegressionTest extends TestCase
         $this->assertSame('4 vCPU 4G', $display['product_display_name'] ?? null);
         $this->assertSame('4 vCPU 4G', $display['product_spec_display'] ?? null);
         $this->assertSame('4 vCPU 4G', $display['cpu_memory_display'] ?? null);
+    }
+
+    public function test_display_name_resolver_combines_custom_base_name_with_cpu_memory_slug(): void
+    {
+        $product = new Product([
+            'id' => 999002,
+            'custom_display_name' => 'gscs',
+            'product_type' => 'vps',
+            'purchase_requires' => [
+                'upstream_default_config' => [
+                    'cpu' => '2',
+                    'memory' => '2048',
+                ],
+            ],
+            'config_options' => [],
+        ]);
+
+        $display = (new ProductDisplayNameResolver)->resolveForProduct($product);
+
+        $this->assertSame('gscs-2vcpu-2gib', $display['product_display_name'] ?? null);
+        $this->assertSame('gscs-2vcpu-2gib', $display['combined_display_name'] ?? null);
+        $this->assertSame('2 vCPU 2G', $display['product_spec_display'] ?? null);
+        $this->assertSame('2vcpu-2gib', $display['cpu_memory_slug_display'] ?? null);
+    }
+
+    public function test_display_name_resolver_combines_instance_spec_base_name_with_cpu_memory_slug(): void
+    {
+        $specCatalog = $this->createMock(InstanceSpecCatalogService::class);
+        $specCatalog->method('resolveProductSpecMap')->willReturn([
+            999003 => ['instance_spec_text' => 'gscs'],
+        ]);
+        $product = new Product([
+            'product_type' => 'vps',
+            'purchase_requires' => [
+                'upstream_default_config' => [
+                    'cpu' => '32',
+                    'memory' => '65536',
+                ],
+            ],
+            'config_options' => [],
+        ]);
+        $product->setAttribute('id', 999003);
+
+        $display = (new ProductDisplayNameResolver($specCatalog))->resolveForProduct($product);
+
+        $this->assertSame('gscs-32vcpu-64gib', $display['product_display_name'] ?? null);
+        $this->assertSame('gscs-32vcpu-64gib', $display['combined_display_name'] ?? null);
+        $this->assertSame('gscs', $display['product_spec_display'] ?? null);
+    }
+
+    public function test_display_name_resolver_does_not_duplicate_compact_cpu_memory_in_instance_spec_name(): void
+    {
+        $specCatalog = $this->createMock(InstanceSpecCatalogService::class);
+        $specCatalog->method('resolveProductSpecMap')->willReturn([
+            999004 => ['instance_spec_text' => 'ecs.g9i.2c2g'],
+        ]);
+        $product = new Product([
+            'product_type' => 'vps',
+            'purchase_requires' => [
+                'upstream_default_config' => [
+                    'cpu' => '2',
+                    'memory' => '2048',
+                ],
+            ],
+            'config_options' => [],
+        ]);
+        $product->setAttribute('id', 999004);
+
+        $display = (new ProductDisplayNameResolver($specCatalog))->resolveForProduct($product);
+
+        $this->assertSame('ecs.g9i.2c2g', $display['product_display_name'] ?? null);
+        $this->assertSame('ecs.g9i.2c2g', $display['combined_display_name'] ?? null);
+        $this->assertSame('ecs.g9i.2c2g', $display['product_spec_display'] ?? null);
     }
 
     private function makeProviderResolver(HostingPanelApiTransport $transport): ProviderResolver

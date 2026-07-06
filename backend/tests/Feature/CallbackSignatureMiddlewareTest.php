@@ -27,7 +27,7 @@ class CallbackSignatureMiddlewareTest extends TestCase
         Cache::flush();
 
         $payload = $this->signedPayload(['certify_id' => 'CERT-HMAC-001'], 'nonce-001');
-        $request = Request::create('/api/client/verification/callback', 'POST', $payload);
+        $request = Request::create('/api/v2/client/verification/callback', 'POST', $payload);
 
         $response = $this->makeMiddleware()->handle($request, fn () => response('ok'));
 
@@ -42,8 +42,8 @@ class CallbackSignatureMiddlewareTest extends TestCase
         $payload = $this->signedPayload(['certify_id' => 'CERT-HMAC-REPLAY'], 'nonce-replay');
         $middleware = $this->makeMiddleware();
 
-        $middleware->handle(Request::create('/api/client/verification/callback', 'POST', $payload), fn () => response('ok'));
-        $response = $middleware->handle(Request::create('/api/client/verification/callback', 'POST', $payload), fn () => response('ok'));
+        $middleware->handle(Request::create('/api/v2/client/verification/callback', 'POST', $payload), fn () => response('ok'));
+        $response = $middleware->handle(Request::create('/api/v2/client/verification/callback', 'POST', $payload), fn () => response('ok'));
 
         $this->assertSame(409, $response->getStatusCode());
         $this->assertSame('回调请求已处理，请勿重复提交', $response->getData(true)['message'] ?? '');
@@ -56,7 +56,7 @@ class CallbackSignatureMiddlewareTest extends TestCase
 
         $payload = $this->signedPayload(['certify_id' => 'CERT-HMAC-EXPIRED'], 'nonce-expired', now()->subMinutes(10)->timestamp);
         $response = $this->makeMiddleware()->handle(
-            Request::create('/api/client/verification/callback', 'POST', $payload),
+            Request::create('/api/v2/client/verification/callback', 'POST', $payload),
             fn () => response('ok')
         );
 
@@ -72,7 +72,7 @@ class CallbackSignatureMiddlewareTest extends TestCase
         $payload = $this->signedPayload(['certify_id' => 'CERT-HMAC-BAD'], 'nonce-bad');
         $payload['sign'] = str_repeat('0', 64);
         $response = $this->makeMiddleware()->handle(
-            Request::create('/api/client/verification/callback', 'POST', $payload),
+            Request::create('/api/v2/client/verification/callback', 'POST', $payload),
             fn () => response('ok')
         );
 

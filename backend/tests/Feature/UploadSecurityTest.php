@@ -57,7 +57,7 @@ class UploadSecurityTest extends TestCase
     {
         Sanctum::actingAs($this->createAdmin());
 
-        $response = $this->post('/api/admin/media-files', [
+        $response = $this->post('/api/v2/admin/media-files', [
             'file' => UploadedFile::fake()->image('normal.jpg', 16, 16)->size(8),
             'group' => 'content',
         ]);
@@ -77,7 +77,7 @@ class UploadSecurityTest extends TestCase
     {
         Sanctum::actingAs($this->createAdmin());
 
-        $response = $this->post('/api/admin/media-files', [
+        $response = $this->post('/api/v2/admin/media-files', [
             'file' => UploadedFile::fake()->create('hero.mp4', 128, 'video/mp4'),
             'group' => MediaFileService::HERO_VIDEO_GROUP,
         ]);
@@ -97,7 +97,7 @@ class UploadSecurityTest extends TestCase
     {
         Sanctum::actingAs($this->createAdmin());
 
-        $this->post('/api/admin/media-files', [
+        $this->post('/api/v2/admin/media-files', [
             'file' => UploadedFile::fake()->image('safe.jpg', 16, 16)->size(8),
             'group' => '../escape',
         ])->assertStatus(422);

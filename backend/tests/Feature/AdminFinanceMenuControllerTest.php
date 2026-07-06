@@ -115,24 +115,24 @@ class AdminFinanceMenuControllerTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/admin/orders?keyword=ORDNEW'.strtoupper($suffix))
+        $this->getJson('/api/v2/admin/orders?keyword=ORDNEW'.strtoupper($suffix))
             ->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.order_no', 'ORDNEW'.strtoupper($suffix));
 
-        $this->getJson('/api/admin/finance/recharges?keyword=PAYRECHARGE'.strtoupper($suffix))
+        $this->getJson('/api/v2/admin/finance/recharges?keyword=PAYRECHARGE'.strtoupper($suffix))
             ->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.payment_no', 'PAYRECHARGE'.strtoupper($suffix))
             ->assertJsonPath('data.list.0.invoice_no', 'INVRECHARGE'.strtoupper($suffix))
             ->assertJsonPath('data.list.0.amount', '200.00');
 
-        $this->getJson('/api/admin/finance/renewal-orders?keyword=ORDREN'.strtoupper($suffix))
+        $this->getJson('/api/v2/admin/finance/renewal-orders?keyword=ORDREN'.strtoupper($suffix))
             ->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.type', 'renew');
 
-        $this->getJson('/api/admin/finance/upgrade-orders?upgrade_kind=traffic_package&keyword=ORDADDON'.strtoupper($suffix))
+        $this->getJson('/api/v2/admin/finance/upgrade-orders?upgrade_kind=traffic_package&keyword=ORDADDON'.strtoupper($suffix))
             ->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.type', 'upgrade')
@@ -255,7 +255,7 @@ class AdminFinanceMenuControllerTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/admin/finance/new-customer-daily-summary?month='.$reportMonth)
+        $this->getJson('/api/v2/admin/finance/new-customer-daily-summary?month='.$reportMonth)
             ->assertOk()
             ->assertJsonPath('data.summary.new_customers', (int) ($baselineDaily['new_customers'] ?? 0) + 1)
             ->assertJsonPath('data.summary.new_orders', (int) ($baselineDaily['new_orders'] ?? 0) + 3)
@@ -264,7 +264,7 @@ class AdminFinanceMenuControllerTest extends TestCase
             ->assertJsonPath('data.summary.ticket_replies', (int) ($baselineDaily['ticket_replies'] ?? 0) + 1)
             ->assertJsonPath('data.summary.cancel_requests', (int) ($baselineDaily['cancel_requests'] ?? 0) + 1);
 
-        $this->getJson('/api/admin/finance/product-income-summary?month='.$reportMonth)
+        $this->getJson('/api/v2/admin/finance/product-income-summary?month='.$reportMonth)
             ->assertOk()
             ->assertJsonPath('data.summary.new_income', $this->money((float) ($baselineIncome['new_income'] ?? 0) + 100))
             ->assertJsonPath('data.summary.new_quantity', (int) ($baselineIncome['new_quantity'] ?? 0) + 2)
@@ -272,7 +272,7 @@ class AdminFinanceMenuControllerTest extends TestCase
             ->assertJsonPath('data.summary.renew_quantity', (int) ($baselineIncome['renew_quantity'] ?? 0) + 1)
             ->assertJsonPath('data.summary.total_amount', $this->money((float) ($baselineIncome['total_amount'] ?? 0) + 180));
 
-        $this->getJson('/api/admin/finance/new-customer-daily-summary?start_date=2037-05-03&end_date=2037-05-03')
+        $this->getJson('/api/v2/admin/finance/new-customer-daily-summary?start_date=2037-05-03&end_date=2037-05-03')
             ->assertOk()
             ->assertJsonPath('data.start_date', '2037-05-03')
             ->assertJsonPath('data.end_date', '2037-05-03')
@@ -281,7 +281,7 @@ class AdminFinanceMenuControllerTest extends TestCase
             ->assertJsonPath('data.summary.completed_orders', (int) ($baselineRangeDaily['completed_orders'] ?? 0) + 1)
             ->assertJsonPath('data.summary.cancel_requests', (int) ($baselineRangeDaily['cancel_requests'] ?? 0) + 1);
 
-        $this->getJson('/api/admin/finance/product-income-summary?start_date=2037-05-03&end_date=2037-05-04')
+        $this->getJson('/api/v2/admin/finance/product-income-summary?start_date=2037-05-03&end_date=2037-05-04')
             ->assertOk()
             ->assertJsonPath('data.start_date', '2037-05-03')
             ->assertJsonPath('data.end_date', '2037-05-04')

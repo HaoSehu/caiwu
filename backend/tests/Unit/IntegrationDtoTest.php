@@ -59,6 +59,80 @@ class IntegrationDtoTest extends TestCase
         );
     }
 
+    public function test_aliyun_verify_code_uses_builtin_template_codes_by_purpose(): void
+    {
+        $this->loadPluginFile('sms/aliyun/lib/AliyunSmsClient.php');
+
+        $client = new AliyunSmsClient([]);
+
+        $this->assertSame('100001', $this->invokePrivate($client, 'resolveVerifyTemplateCode', [['purpose' => 'login']]));
+        $this->assertSame('100001', $this->invokePrivate($client, 'resolveVerifyTemplateCode', [['purpose' => 'register']]));
+        $this->assertSame('100002', $this->invokePrivate($client, 'resolveVerifyTemplateCode', [['purpose' => 'change_phone']]));
+        $this->assertSame('100003', $this->invokePrivate($client, 'resolveVerifyTemplateCode', [['purpose' => 'reset_password']]));
+        $this->assertSame('100004', $this->invokePrivate($client, 'resolveVerifyTemplateCode', [['purpose' => 'bind_phone']]));
+        $this->assertSame('100005', $this->invokePrivate($client, 'resolveVerifyTemplateCode', [['purpose' => 'verify_bound_phone']]));
+        $this->assertSame('100001', $this->invokePrivate($client, 'resolveVerifyTemplateCode', [['purpose' => 'unknown']]));
+    }
+
+    public function test_aliyun_sign_name_accepts_dynamic_options(): void
+    {
+        $this->loadPluginFile('sms/aliyun/lib/AliyunSmsClient.php');
+
+        $this->assertSame(
+            '运营商新签名',
+            $this->invokePrivate(new AliyunSmsClient(['sign_name' => '运营商新签名']), 'resolveSignName', [[]])
+        );
+        $this->assertSame(
+            '恒创联众',
+            $this->invokePrivate(new AliyunSmsClient(['sign_name' => '']), 'resolveSignName', [[]])
+        );
+    }
+
+    public function test_aliyun_sign_name_parser_reads_nested_provider_response(): void
+    {
+        $this->loadPluginFile('sms/aliyun/lib/AliyunSmsClient.php');
+
+        $payload = [
+            'Code' => 'OK',
+            'SmsSignList' => [
+                'SmsSign' => [
+                    ['SignName' => '恒创联众', 'AuditStatus' => 'AUDIT_STATE_PASS'],
+                    ['SignName' => '北京恒锐创岳'],
+                    ['SignName' => '待审核签名', 'AuditStatus' => 'AUDIT_STATE_INIT'],
+                    ['sign_name' => '恒锐创岳科技'],
+                ],
+            ],
+        ];
+
+        $this->assertSame(
+            ['恒创联众', '北京恒锐创岳', '恒锐创岳科技'],
+            $this->invokePrivate(new AliyunSmsClient([]), 'extractSignNames', [$payload])
+        );
+    }
+
+    public function test_aliyun_sms_client_resolves_ssl_options_and_curl_errors(): void
+    {
+        $this->loadPluginFile('sms/aliyun/lib/AliyunSmsClient.php');
+
+        $client = new AliyunSmsClient([
+            'ssl_verify' => '0',
+            'ca_bundle' => ' C:/certs/cacert.pem ',
+        ]);
+
+        $this->assertFalse($this->invokePrivate($client, 'resolveSslVerify', []));
+        $this->assertSame('C:/certs/cacert.pem', $this->invokePrivate($client, 'resolveCaBundle', []));
+
+        $this->setPrivateProperty($client, 'lastCurlError', [
+            'errno' => 60,
+            'error' => 'SSL certificate problem: unable to get local issuer certificate',
+        ]);
+
+        $this->assertSame(
+            '短信接口 SSL 证书校验失败，请检查服务器 CA 证书或 SMS_CA_BUNDLE 配置',
+            $this->invokePrivate($client, 'resolveCurlFailureMessage', [])
+        );
+    }
+
     private function invokePrivate(object $instance, string $method, array $args): mixed
     {
         $reflection = new ReflectionClass($instance);
@@ -66,6 +140,14 @@ class IntegrationDtoTest extends TestCase
         $methodRef->setAccessible(true);
 
         return $methodRef->invokeArgs($instance, $args);
+    }
+
+    private function setPrivateProperty(object $instance, string $property, mixed $value): void
+    {
+        $reflection = new ReflectionClass($instance);
+        $propertyRef = $reflection->getProperty($property);
+        $propertyRef->setAccessible(true);
+        $propertyRef->setValue($instance, $value);
     }
 
     private function loadPluginFile(string $relativePath): void

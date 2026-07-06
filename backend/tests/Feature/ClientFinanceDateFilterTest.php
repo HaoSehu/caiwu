@@ -57,17 +57,17 @@ class ClientFinanceDateFilterTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $this->getJson('/api/client/orders?keyword=CORDDATE'.$suffix.'&start_date=2037-03-03')
+        $this->getJson('/api/v2/client/orders?keyword=CORDDATE'.$suffix.'&start_date=2037-03-03')
             ->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.id', (int) $newOrder->id);
 
-        $this->getJson('/api/client/invoices?keyword=CINVDATE'.$suffix.'&start_date=2037-03-03')
+        $this->getJson('/api/v2/client/invoices?keyword=CINVDATE'.$suffix.'&start_date=2037-03-03')
             ->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.id', (int) $newInvoice->id);
 
-        $this->getJson('/api/client/payments?keyword=CPAYDATE'.$suffix.'&end_date=2037-03-03')
+        $this->getJson('/api/v2/client/payments?keyword=CPAYDATE'.$suffix.'&end_date=2037-03-03')
             ->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.id', (int) $oldPayment->id);
@@ -105,7 +105,7 @@ class ClientFinanceDateFilterTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $this->getJson('/api/client/balance-logs?event_type=system_adjustment&end_date=2037-04-03')
+        $this->getJson('/api/v2/client/balance-logs?event_type=system_adjustment&end_date=2037-04-03')
             ->assertOk()
             ->assertJsonPath('data.total', 1);
 
@@ -113,15 +113,15 @@ class ClientFinanceDateFilterTest extends TestCase
             'date_range' => ['2037-04-01', '2037-04-06'],
         ]);
 
-        $this->getJson('/api/client/orders?'.$legacyQuery)
+        $this->getJson('/api/v2/client/orders?'.$legacyQuery)
             ->assertStatus(422)
             ->assertJsonPath('code', 42200);
 
-        $this->getJson('/api/client/invoices?start_date=2037-04-06&end_date=2037-04-01')
+        $this->getJson('/api/v2/client/invoices?start_date=2037-04-06&end_date=2037-04-01')
             ->assertStatus(422)
             ->assertJsonPath('code', 42200);
 
-        $this->getJson('/api/client/invoices?per_page=50')
+        $this->getJson('/api/v2/client/invoices?per_page=50')
             ->assertStatus(422)
             ->assertJsonPath('code', 42200);
     }

@@ -43,7 +43,7 @@ class AdminUserListRegressionTest extends TestCase
         $token = $admin->createToken('admin-user-list-regression')->plainTextToken;
 
         $this->withHeader('Authorization', 'Bearer '.$token)
-            ->getJson('/api/admin/users?page=1&page_size=20')
+            ->getJson('/api/v2/admin/users?page=1&page_size=20')
             ->assertOk()
             ->assertJsonPath('data.list.0.id', (int) $user->id)
             ->assertJsonPath('data.list.0.phone', $phone);

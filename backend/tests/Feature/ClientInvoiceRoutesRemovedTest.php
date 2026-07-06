@@ -31,11 +31,11 @@ class ClientInvoiceRoutesRemovedTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $this->getJson('/api/client/invoices')
+        $this->getJson('/api/v2/client/invoices')
             ->assertOk()
             ->assertJsonPath('code', 0);
 
-        $this->getJson('/api/client/invoices/summary')
+        $this->getJson('/api/v2/client/invoices/summary')
             ->assertOk()
             ->assertJsonPath('code', 0);
     }

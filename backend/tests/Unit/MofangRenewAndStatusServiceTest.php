@@ -133,7 +133,7 @@ final class MofangRenewAndStatusServiceTest extends TestCase
                                     'product_id' => '9001',
                                     'product_name' => 'Mofang VPS',
                                     'dedicatedip' => '203.0.113.10',
-                                    'assignedips' => ['203.0.113.11'],
+                                    'assignedips' => ['203.0.113.10', '203.0.113.11'],
                                     'config_option' => ['cpu' => 2],
                                     'os' => 'CentOS',
                                     'username' => 'root',
@@ -171,6 +171,7 @@ final class MofangRenewAndStatusServiceTest extends TestCase
         $this->assertSame('/v1/hosts/7788/module/status', $fakeTransport->batchRequests['runtime_501']['uri'] ?? null);
         $this->assertSame('Active', $result['services'][501]['host']['domainstatus'] ?? null);
         $this->assertSame(9001, $result['services'][501]['host']['product_id'] ?? null);
+        $this->assertSame(['203.0.113.10', '203.0.113.11'], $result['services'][501]['host']['assignedips'] ?? null);
         $this->assertSame('running', $result['services'][501]['runtime']['status'] ?? null);
     }
 

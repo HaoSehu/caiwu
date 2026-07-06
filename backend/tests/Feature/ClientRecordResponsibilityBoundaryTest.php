@@ -113,7 +113,7 @@ class ClientRecordResponsibilityBoundaryTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $response = $this->getJson('/api/client/payments?page_size=20')
+        $response = $this->getJson('/api/v2/client/payments?page_size=20')
             ->assertOk()
             ->assertJsonPath('data.total', 3)
             ->assertJsonPath('data.list.0.gateway', 'wechat')
@@ -134,21 +134,61 @@ class ClientRecordResponsibilityBoundaryTest extends TestCase
         $this->assertContains((string) $wechatPendingRecharge->payment_no, $paymentNos);
         $this->assertNotContains((string) $manualPayment->payment_no, $paymentNos);
 
-        $this->getJson('/api/client/payments/summary')
+        $this->getJson('/api/v2/client/payments/summary')
             ->assertOk()
             ->assertJsonPath('data.total', 3)
             ->assertJsonPath('data.pending', 1)
             ->assertJsonPath('data.success', 2);
 
-        $this->getJson('/api/client/payments?keyword='.$purchasePayment->trade_no.'&page_size=20')
+        $this->getJson('/api/v2/client/payments?keyword='.$purchasePayment->trade_no.'&page_size=20')
             ->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.payment_no', (string) $purchasePayment->payment_no);
 
-        $this->getJson('/api/client/payments/'.$purchasePayment->id)
+        $this->getJson('/api/v2/client/payments/'.$purchasePayment->id)
             ->assertOk()
             ->assertJsonPath('data.gateway_key', 'alipay')
             ->assertJsonPath('data.gateway_label', '支付宝');
+    }
+
+    public function test_client_order_and_payment_v2_endpoints_reject_legacy_and_non_list_pagination_parameters(): void
+    {
+        $suffix = strtoupper(bin2hex(random_bytes(4)));
+        $user = $this->createClientUser('record-validation-'.$suffix);
+
+        Sanctum::actingAs($user);
+
+        $this->getJson('/api/v2/client/payments?per_page=20')
+            ->assertStatus(422)
+            ->assertJsonStructure(['data' => ['errors' => ['per_page']]]);
+
+        $this->getJson('/api/v2/client/payments?pageSize=20')
+            ->assertStatus(422)
+            ->assertJsonStructure(['data' => ['errors' => ['pageSize']]]);
+
+        $this->getJson('/api/v2/client/payments/summary?page=1')
+            ->assertStatus(422)
+            ->assertJsonStructure(['data' => ['errors' => ['page']]]);
+
+        $this->getJson('/api/v2/client/payments/1?pageSize=20')
+            ->assertStatus(422)
+            ->assertJsonStructure(['data' => ['errors' => ['pageSize']]]);
+
+        $this->getJson('/api/v2/client/orders?per_page=20')
+            ->assertStatus(422)
+            ->assertJsonStructure(['data' => ['errors' => ['per_page']]]);
+
+        $this->getJson('/api/v2/client/orders?pageSize=20')
+            ->assertStatus(422)
+            ->assertJsonStructure(['data' => ['errors' => ['pageSize']]]);
+
+        $this->getJson('/api/v2/client/orders/summary?page_size=20')
+            ->assertStatus(422)
+            ->assertJsonStructure(['data' => ['errors' => ['page_size']]]);
+
+        $this->getJson('/api/v2/client/orders/1?page=1')
+            ->assertStatus(422)
+            ->assertJsonStructure(['data' => ['errors' => ['page']]]);
     }
 
     public function test_client_order_records_are_purchase_service_orders_not_recharge_invoices(): void
@@ -247,9 +287,9 @@ class ClientRecordResponsibilityBoundaryTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        // 使用 /api/client/invoices 替代已删除的 /api/client/orders
+        // 使用 /api/v2/client/invoices 替代已删除的 /api/v2/client/orders
         // invoices 按 id DESC 排序，所以 recharge invoice (id 较大) 排在前面
-        $this->getJson('/api/client/invoices?page_size=20')
+        $this->getJson('/api/v2/client/invoices?page_size=20')
             ->assertOk()
             ->assertJsonPath('data.total', 2)
             ->assertJsonPath('data.list.0.type', 'recharge')
@@ -257,12 +297,12 @@ class ClientRecordResponsibilityBoundaryTest extends TestCase
             ->assertJsonPath('data.list.1.type', 'new')
             ->assertJsonPath('data.list.1.product_spec_display', '边界测试云服务器');
 
-        $this->getJson('/api/client/invoices/'.$invoice->id)
+        $this->getJson('/api/v2/client/invoices/'.$invoice->id)
             ->assertOk()
-            ->assertJsonPath('data.id', (int) $invoice->id)
-            ->assertJsonPath('data.invoice_no', (string) $invoice->invoice_no)
-            ->assertJsonPath('data.payments.0.payment_no', (string) $payment->payment_no)
-            ->assertJsonPath('data.payments.0.trade_no', (string) $payment->trade_no);
+            ->assertJsonPath('data.invoice.id', (int) $invoice->id)
+            ->assertJsonPath('data.invoice.basic.invoice_no', (string) $invoice->invoice_no)
+            ->assertJsonPath('data.invoice.payment_chain.payments.0.payment_no', (string) $payment->payment_no)
+            ->assertJsonPath('data.invoice.payment_chain.payments.0.trade_no', (string) $payment->trade_no);
     }
 
     private function createClientUser(string $seed): User

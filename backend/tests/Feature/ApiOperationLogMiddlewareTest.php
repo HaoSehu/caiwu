@@ -21,7 +21,7 @@ class ApiOperationLogMiddlewareTest extends TestCase
             ->with(
                 null,
                 'guest',
-                'GET api/site/config',
+                'GET api/v2/site/config',
                 'config',
                 null,
                 $this->callback(function (array $detail): bool {
@@ -36,7 +36,7 @@ class ApiOperationLogMiddlewareTest extends TestCase
             );
 
         $middleware = new LogOperation($operationLogService);
-        $request = Request::create('/api/site/config', 'GET', ['scene' => 'home']);
+        $request = Request::create('/api/v2/site/config', 'GET', ['scene' => 'home']);
         $request->headers->set('X-Request-Id', 'trace-get-001');
         $request->headers->set('User-Agent', 'CodexTest/1.0');
         $request->server->set('REMOTE_ADDR', '127.0.0.1');
@@ -54,7 +54,7 @@ class ApiOperationLogMiddlewareTest extends TestCase
             ->with(
                 null,
                 'guest',
-                'POST api/client/login',
+                'POST api/v2/client/login',
                 'login',
                 null,
                 $this->callback(function (array $detail): bool {
@@ -70,7 +70,7 @@ class ApiOperationLogMiddlewareTest extends TestCase
             );
 
         $middleware = new LogOperation($operationLogService);
-        $request = Request::create('/api/client/login', 'POST', [
+        $request = Request::create('/api/v2/client/login', 'POST', [
             'account' => 'guest@example.com',
             'password' => 'plain-secret',
         ]);
@@ -91,9 +91,9 @@ class ApiOperationLogMiddlewareTest extends TestCase
 
         $middleware = new LogOperation($operationLogService);
         $pollingUris = [
-            '/api/client/verification/status?certify_id=cert-001',
-            '/api/client/recharge/PAY202607012124408903XS43L8N/status?poll_token=poll-001',
-            '/api/client/invoices/1433/pay/alipay/status?payment_no=PAY202607012124408903XS43L8N&poll_token=poll-002',
+            '/api/v2/client/verification/status?certify_id=cert-001',
+            '/api/v2/client/recharge/PAY202607012124408903XS43L8N/status?poll_token=poll-001',
+            '/api/v2/client/invoices/1433/pay/alipay/status?payment_no=PAY202607012124408903XS43L8N&poll_token=poll-002',
         ];
 
         foreach ($pollingUris as $uri) {
@@ -113,7 +113,7 @@ class ApiOperationLogMiddlewareTest extends TestCase
             ->with(
                 null,
                 'guest',
-                'GET api/client/verification/status',
+                'GET api/v2/client/verification/status',
                 'verification',
                 null,
                 $this->callback(function (array $detail): bool {
@@ -125,7 +125,7 @@ class ApiOperationLogMiddlewareTest extends TestCase
             );
 
         $middleware = new LogOperation($operationLogService);
-        $request = Request::create('/api/client/verification/status', 'GET', ['certify_id' => 'cert-001']);
+        $request = Request::create('/api/v2/client/verification/status', 'GET', ['certify_id' => 'cert-001']);
         $request->server->set('REMOTE_ADDR', '127.0.0.1');
 
         $response = $middleware->handle($request, static fn () => new JsonResponse(['code' => 40300], 403));

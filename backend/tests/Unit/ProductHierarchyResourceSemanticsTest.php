@@ -118,8 +118,8 @@ class ProductHierarchyResourceSemanticsTest extends TestCase
             app_path('Services/Ticket/TicketService.php'),
             app_path('Services/User/UserService.php'),
             app_path('Console/Commands/SyncUpstreamServicesCommand.php'),
-            app_path('Http/Controllers/Admin/ProductCategoryController.php'),
-            app_path('Http/Controllers/Admin/SupplierController.php'),
+            app_path('Http/Controllers/Admin/V2/ProductGroupController.php'),
+            app_path('Http/Controllers/Admin/V2/SupplierController.php'),
             app_path('Services/Site/SiteProductQuoteService.php'),
         ] as $sourcePath) {
             $source = (string) file_get_contents($sourcePath);

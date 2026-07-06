@@ -67,14 +67,14 @@ class AdminUserDetailRegressionTest extends TestCase
         $token = $admin->createToken('admin-user-detail-regression')->plainTextToken;
 
         $this->withHeader('Authorization', 'Bearer '.$token)
-            ->getJson('/api/admin/users/'.$user->id)
+            ->getJson('/api/v2/admin/users/'.$user->id)
             ->assertOk()
             ->assertJsonPath('data.user.id', (int) $user->id)
             ->assertJsonPath('data.stats.total_income', 88)
             ->assertJsonPath('data.stats.total_expense', 0);
 
         $this->withHeader('Authorization', 'Bearer '.$token)
-            ->getJson('/api/admin/users/'.$user->id.'/balance-logs?page=1&page_size=15')
+            ->getJson('/api/v2/admin/users/'.$user->id.'/balance-logs?page=1&page_size=15')
             ->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.event_type', 'recharge')

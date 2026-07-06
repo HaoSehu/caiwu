@@ -6,6 +6,7 @@ namespace Tests\Unit;
 
 use App\Exceptions\BusinessException;
 use App\Services\Sms\Contracts\SmsDriver;
+use App\Services\Sms\Data\SmsMessageRequest;
 use App\Services\Sms\Data\SmsSendRequest;
 use App\Services\Sms\Data\SmsSendResult;
 use App\Services\Sms\SmsDriverManager;
@@ -127,6 +128,11 @@ final readonly class FakeSmsDriver implements SmsDriver
     public function label(): string
     {
         return '测试短信';
+    }
+
+    public function sendMessage(SmsMessageRequest $request): SmsSendResult
+    {
+        return new SmsSendResult('success');
     }
 
     public function sendVerifyCode(SmsSendRequest $request): SmsSendResult

@@ -402,14 +402,14 @@ class OrderQuantityCheckoutFlowTest extends TestCase
         ]);
 
         $serviceRenewService = $this->createMock(ServiceRenewService::class);
-        $serviceRenewService->expects($this->once())
-            ->method('processPaidRenewOrder')
-            ->with($this->callback(fn (Order $candidate): bool => (int) $candidate->id === (int) $order->id))
-            ->willReturn($service);
 
         $dispatcher = $this->createMock(PaidOrderBusinessFlowDispatcher::class);
-        $dispatcher->expects($this->never())
-            ->method('dispatchPaidInvoice');
+        $dispatcher->expects($this->once())
+            ->method('dispatchPaidInvoice')
+            ->with(
+                $this->callback(fn (Invoice $candidate): bool => (int) $candidate->id === (int) $invoice->id),
+                'trace-renew-sync-'.$suffix
+            );
 
         $couponService = $this->createMock(CouponService::class);
         $couponService->expects($this->once())

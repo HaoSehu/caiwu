@@ -63,7 +63,7 @@ class AdminMediaLibraryControllerTest extends TestCase
 
         $this->mediaFileIds = [(int) $image->id, (int) $video->id];
 
-        $this->getJson('/api/admin/media-files?type=video&page_size=50&keyword=filter-'.$suffix)
+        $this->getJson('/api/v2/admin/media-files?type=video&page_size=50&keyword=filter-'.$suffix)
             ->assertOk()
             ->assertJsonPath('code', 0)
             ->assertJsonCount(1, 'data.list')
@@ -94,12 +94,13 @@ class AdminMediaLibraryControllerTest extends TestCase
         $expectedTotal = $supportedFiles->count();
         $beforeIds = MediaFile::query()->pluck('id')->all();
 
-        $this->postJson('/api/admin/media-files/reindex')
+        $this->postJson('/api/v2/admin/media-file-reindexes')
             ->assertOk()
             ->assertJsonPath('code', 0)
-            ->assertJsonPath('data.created', $expectedCreated)
-            ->assertJsonPath('data.skipped', $expectedTotal - $expectedCreated)
-            ->assertJsonPath('data.total', $expectedTotal);
+            ->assertJsonPath('data.status', 'completed')
+            ->assertJsonPath('data.detail.media.created', $expectedCreated)
+            ->assertJsonPath('data.detail.media.skipped', $expectedTotal - $expectedCreated)
+            ->assertJsonPath('data.detail.media.total', $expectedTotal);
 
         $newIds = MediaFile::query()
             ->whereNotIn('id', $beforeIds)
@@ -117,12 +118,13 @@ class AdminMediaLibraryControllerTest extends TestCase
         $this->assertSame(1, (int) $mediaFile->width);
         $this->assertSame(1, (int) $mediaFile->height);
 
-        $this->postJson('/api/admin/media-files/reindex')
+        $this->postJson('/api/v2/admin/media-file-reindexes')
             ->assertOk()
             ->assertJsonPath('code', 0)
-            ->assertJsonPath('data.created', 0)
-            ->assertJsonPath('data.skipped', $expectedTotal)
-            ->assertJsonPath('data.total', $expectedTotal);
+            ->assertJsonPath('data.status', 'completed')
+            ->assertJsonPath('data.detail.media.created', 0)
+            ->assertJsonPath('data.detail.media.skipped', $expectedTotal)
+            ->assertJsonPath('data.detail.media.total', $expectedTotal);
     }
 
     private function createAdmin(): AdminUser

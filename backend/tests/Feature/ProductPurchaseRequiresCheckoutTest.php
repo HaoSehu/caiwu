@@ -73,10 +73,11 @@ class ProductPurchaseRequiresCheckoutTest extends TestCase
     public function test_order_creation_requires_phone_when_product_demands_phone_binding(): void
     {
         $suffix = bin2hex(random_bytes(4));
+        User::withTrashed()->where('phone', '')->forceDelete();
         $user = User::query()->create([
             'email' => "purchase-phone-{$suffix}@example.com",
             'password' => 'secret123',
-            'phone' => null,
+            'phone' => '',
             'status' => 1,
             'is_verified' => 1,
         ]);
@@ -117,6 +118,8 @@ class ProductPurchaseRequiresCheckoutTest extends TestCase
         } catch (BusinessException $exception) {
             $this->assertSame(40302, $exception->getErrorCode());
             $this->assertStringContainsString('手机号', $exception->getMessage());
+        } finally {
+            User::withTrashed()->whereKey((int) $user->id)->forceDelete();
         }
     }
 

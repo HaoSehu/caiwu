@@ -22,7 +22,7 @@ class AdminSecurityBoundaryRegressionTest extends TestCase
     {
         Sanctum::actingAs($this->createAdminUser([AdminPermissions::ORDER_LIST]));
 
-        $this->getJson('/api/admin/orders/1')
+        $this->getJson('/api/v2/admin/orders/1')
             ->assertForbidden()
             ->assertJsonPath('code', 40300);
     }
@@ -31,7 +31,7 @@ class AdminSecurityBoundaryRegressionTest extends TestCase
     {
         Sanctum::actingAs($this->createAdminUser([AdminPermissions::LOG_LIST]));
 
-        $this->postJson('/api/admin/logs/cleanup', [
+        $this->postJson('/api/v2/admin/log-cleanups', [
             'type' => 'api',
             'keep_days' => 30,
             'confirm_text' => '立即清理',
@@ -66,7 +66,7 @@ class AdminSecurityBoundaryRegressionTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $response = $this->postJson('/api/admin/logs/cleanup', [
+        $response = $this->postJson('/api/v2/admin/log-cleanups', [
             'type' => 'schedule_run',
             'keep_days' => 3650,
             'confirm_text' => '立即清理',
@@ -76,7 +76,7 @@ class AdminSecurityBoundaryRegressionTest extends TestCase
             ->assertOk()
             ->assertJsonPath('code', 0);
 
-        $this->assertGreaterThanOrEqual(1, (int) $response->json('data.affected.schedule_run'));
+        $this->assertGreaterThanOrEqual(1, (int) $response->json('data.detail.cleanup.affected.schedule_run'));
 
         $this->assertDatabaseMissing('schedule_run_logs', ['id' => (int) $oldLogId]);
         $this->assertDatabaseHas('schedule_run_logs', ['id' => (int) $recentLogId]);
@@ -101,17 +101,17 @@ class AdminSecurityBoundaryRegressionTest extends TestCase
             'updated_at' => now()->subYears(20),
         ]);
 
-        $before = $this->getJson('/api/admin/logs/cleanup/overview')
+        $before = $this->getJson('/api/v2/admin/log-cleanups/overview')
             ->assertOk()
             ->json('data.database.sms');
 
-        $this->postJson('/api/admin/logs/cleanup', [
+        $this->postJson('/api/v2/admin/log-cleanups', [
             'type' => 'sms',
             'keep_days' => 3650,
             'confirm_text' => '立即清理',
         ])->assertOk();
 
-        $after = $this->getJson('/api/admin/logs/cleanup/overview')
+        $after = $this->getJson('/api/v2/admin/log-cleanups/overview')
             ->assertOk()
             ->json('data.database.sms');
 
@@ -212,10 +212,9 @@ class AdminSecurityBoundaryRegressionTest extends TestCase
 
         Sanctum::actingAs($this->createAdminUser([AdminPermissions::SUPPLIER_MANAGE]));
 
-        $this->deleteJson('/api/admin/suppliers/'.$supplier->id)
+        $this->deleteJson('/api/v2/admin/suppliers/'.$supplier->id)
             ->assertStatus(409)
-            ->assertJsonPath('code', 40900)
-            ->assertJsonPath('data.usage.products', 1);
+            ->assertJsonPath('code', 40900);
 
         $this->assertDatabaseHas('suppliers', ['id' => (int) $supplier->id]);
     }

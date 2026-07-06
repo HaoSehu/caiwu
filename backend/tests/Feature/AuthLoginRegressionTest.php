@@ -30,7 +30,7 @@ class AuthLoginRegressionTest extends TestCase
             'verified_at' => null,
         ]);
 
-        $this->postJson('/api/client/login', [
+        $this->postJson('/api/v2/client/login', [
             'account' => $user->email,
             'password' => 'Temp@123456',
         ])
@@ -42,7 +42,7 @@ class AuthLoginRegressionTest extends TestCase
 
     public function test_client_login_returns_not_found_reason_for_unknown_account(): void
     {
-        $this->postJson('/api/client/login', [
+        $this->postJson('/api/v2/client/login', [
             'account' => 'missing-'.bin2hex(random_bytes(4)).'@example.com',
             'password' => 'Temp@123456',
         ])
@@ -70,7 +70,7 @@ class AuthLoginRegressionTest extends TestCase
             'verified_at' => null,
         ]);
 
-        $this->postJson('/api/client/login', [
+        $this->postJson('/api/v2/client/login', [
             'account' => $user->email,
             'password' => 'Temp@123456-wrong',
         ])
@@ -96,7 +96,7 @@ class AuthLoginRegressionTest extends TestCase
             'status' => 1,
         ]);
 
-        $this->postJson('/api/admin/login', [
+        $this->postJson('/api/v2/admin/login', [
             'username' => $admin->username,
             'password' => 'Temp@123456',
         ])

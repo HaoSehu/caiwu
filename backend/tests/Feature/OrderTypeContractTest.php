@@ -40,7 +40,7 @@ class OrderTypeContractTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $this->getJson('/api/client/orders?type=upgrade&page_size=20')
+        $this->getJson('/api/v2/client/orders?type=upgrade&page_size=20')
             ->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.id', (int) $order->id)
@@ -54,7 +54,7 @@ class OrderTypeContractTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $this->getJson('/api/client/orders?type=addon')
+        $this->getJson('/api/v2/client/orders?type=addon')
             ->assertStatus(422)
             ->assertJsonPath('code', 42200);
     }

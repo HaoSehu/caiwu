@@ -86,6 +86,7 @@ class MultiSmtpRoundRobinPluginTest extends TestCase
         $scanner = app(PluginScanner::class);
         $configRepository = app(PluginConfigRepository::class);
         $manifest = $scanner->requireManifest('mail', 'multi_smtp_round_robin');
+        $this->disableEnabledMailPluginsForTest();
         $plugin = $installer->install('mail', 'multi_smtp_round_robin');
 
         try {
@@ -116,11 +117,13 @@ class MultiSmtpRoundRobinPluginTest extends TestCase
             app()->instance('mail.manager', $fakeMailManager);
             Mail::swap($fakeMailManager);
 
+            $code = (string) random_int(100000, 999999);
+
             app(NotificationService::class)->sendEmail(
                 'plugin-mail@example.com',
-                'Plugin Mail Test',
-                '<p>plugin mail</p>',
-                NotificationService::TEMPLATE_INVOICE_NOTICE
+                '邮箱验证码',
+                "<p>您的邮箱验证码为：{$code}，10分钟内有效。如非本人操作，请忽略此邮件。</p>",
+                NotificationService::TEMPLATE_EMAIL_CODE
             );
 
             $this->assertCount(1, $fakeMailManager->messages);
@@ -157,6 +160,14 @@ class MultiSmtpRoundRobinPluginTest extends TestCase
         } finally {
             DB::statement('SET FOREIGN_KEY_CHECKS=1');
         }
+    }
+
+    private function disableEnabledMailPluginsForTest(): void
+    {
+        IntegrationPlugin::query()
+            ->where('domain', 'mail')
+            ->where('status', IntegrationPlugin::STATUS_ENABLED)
+            ->update(['status' => IntegrationPlugin::STATUS_DISABLED]);
     }
 
     private function ensurePluginTables(): void

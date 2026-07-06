@@ -8,11 +8,13 @@ use Tests\TestCase;
 
 class ScheduleConsoleHookCoverageTest extends TestCase
 {
-    public function test_console_schedule_does_not_register_commands_that_bypass_hooks(): void
+    public function test_console_schedule_registers_only_heartbeat_command(): void
     {
         $source = file_get_contents(base_path('routes/console.php'));
 
         $this->assertIsString($source);
-        $this->assertStringNotContainsString('Schedule::command(', $source);
+        $this->assertStringContainsString("Schedule::command('scheduler:heartbeat')", $source);
+        $this->assertStringNotContainsString('queue:work', $source);
+        $this->assertStringNotContainsString('db:archive-logs', $source);
     }
 }

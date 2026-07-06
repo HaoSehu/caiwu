@@ -6,10 +6,11 @@ namespace Tests\Feature;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\PaymentStatus;
+use App\Models\FirstProductGroup;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Product;
-use App\Models\ProductCategory;
+use App\Models\SecondProductGroup;
 use App\Models\Service;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -62,6 +63,9 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
     {
         $payload = [
             'product_group_id' => (int) ($product->product_group_id ?: 0) ?: null,
+            'first_product_group_id' => (int) ($product->first_product_group_id ?: 0) ?: null,
+            'second_product_group_id' => (int) ($product->second_product_group_id ?: 0) ?: null,
+            'third_product_group_id' => (int) ($product->third_product_group_id ?: 0) ?: null,
             'product_type' => (string) ($product->product_type ?: 'other'),
             'remark' => null,
             'pricing' => json_encode($product->pricing ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
@@ -159,7 +163,7 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $this->getJson('/api/client/invoices/summary')
+        $this->getJson('/api/v2/client/invoices/summary')
             ->assertOk()
             ->assertJsonPath('data.total', 2)
             ->assertJsonPath('data.unpaid', 1)
@@ -190,18 +194,11 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
         ]);
         $this->mirrorUserToIdc($user, $suffix);
 
-        $group = ProductCategory::query()->create([
-            'parent_id' => null,
-            'product_type' => 'server',
-            'name' => 'Client Invoice Group '.$suffix,
-            'slug' => 'client-invoice-group-'.$suffix,
-            'slogan' => '',
-            'is_visible' => 1,
-            'sort_order' => 0,
-        ]);
+        $groupIds = $this->createProductGroupIds('client-invoice-group-'.$suffix, 'Client Invoice Group '.$suffix);
 
         $product = Product::query()->create([
-            'product_group_id' => (int) $group->id,
+            'first_product_group_id' => $groupIds['first'],
+            'second_product_group_id' => $groupIds['second'],
             'name' => 'Client Invoice Product '.$suffix,
             'product_type' => 'server',
             'description' => '',
@@ -265,16 +262,16 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $this->getJson('/api/client/invoices/'.$invoice->id)
+        $this->getJson('/api/v2/client/invoices/'.$invoice->id)
             ->assertOk()
-            ->assertJsonPath('data.product.id', (int) $product->id)
-            ->assertJsonPath('data.product.config_options.0.field', 'cpu')
-            ->assertJsonPath('data.service.id', (int) $service->id)
-            ->assertJsonPath('data.product_display_name', '客户端云主机 2核4G')
+            ->assertJsonPath('data.invoice.product.id', (int) $product->id)
+            ->assertJsonPath('data.invoice.product.config_options.0.field', 'cpu')
+            ->assertJsonPath('data.invoice.service.id', (int) $service->id)
+            ->assertJsonPath('data.invoice.display.product_display_name', '客户端云主机 2核4G')
             ->assertJsonMissingPath('data.raw_status')
-            ->assertJsonPath('data.payments.0.trade_no', 'TRADE-CLIENT-VISIBLE-'.$suffix);
+            ->assertJsonPath('data.invoice.payment_chain.payments.0.trade_no', 'TRADE-CLIENT-VISIBLE-'.$suffix);
 
-        $this->getJson('/api/client/invoices?keyword=TRADE-CLIENT-VISIBLE-'.$suffix.'&page_size=20')
+        $this->getJson('/api/v2/client/invoices?keyword=TRADE-CLIENT-VISIBLE-'.$suffix.'&page_size=20')
             ->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.invoice_no', (string) $invoice->invoice_no);
@@ -349,7 +346,7 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $this->getJson('/api/client/invoices?status=5&page_size=20')
+        $this->getJson('/api/v2/client/invoices?status=5&page_size=20')
             ->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.invoice_no', (string) $refundedInvoice->invoice_no)
@@ -379,18 +376,11 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
         ]);
         $this->mirrorUserToIdc($user, $suffix);
 
-        $group = ProductCategory::query()->create([
-            'parent_id' => null,
-            'product_type' => 'server',
-            'name' => 'Client Invoice Display Group '.$suffix,
-            'slug' => 'client-invoice-display-group-'.$suffix,
-            'slogan' => '',
-            'is_visible' => 1,
-            'sort_order' => 0,
-        ]);
+        $groupIds = $this->createProductGroupIds('client-invoice-display-group-'.$suffix, 'Client Invoice Display Group '.$suffix);
 
         $product = Product::query()->create([
-            'product_group_id' => (int) $group->id,
+            'first_product_group_id' => $groupIds['first'],
+            'second_product_group_id' => $groupIds['second'],
             'name' => 'Name Attribute Is Not Persisted '.$suffix,
             'product_type' => 'server',
             'description' => '',
@@ -435,7 +425,7 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $response = $this->getJson('/api/client/invoices?page_size=20')
+        $response = $this->getJson('/api/v2/client/invoices?page_size=20')
             ->assertOk()
             ->assertJsonPath('data.total', 2);
 
@@ -518,7 +508,7 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $orderPanelResponse = $this->getJson('/api/client/invoices?type=new,normal,renew,upgrade&page_size=20')
+        $orderPanelResponse = $this->getJson('/api/v2/client/invoices?type=new,normal,renew,upgrade&page_size=20')
             ->assertOk()
             ->assertJsonPath('data.total', 2);
 
@@ -527,10 +517,46 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
         $this->assertContains((string) $renewInvoice->invoice_no, $orderPanelInvoiceNos);
         $this->assertNotContains((string) $rechargeInvoice->invoice_no, $orderPanelInvoiceNos);
 
-        $rechargePanelResponse = $this->getJson('/api/client/invoices?type=recharge&page_size=20')
+        $rechargePanelResponse = $this->getJson('/api/v2/client/invoices?type=recharge&page_size=20')
             ->assertOk()
             ->assertJsonPath('data.total', 1);
 
         $this->assertSame((string) $rechargeInvoice->invoice_no, $rechargePanelResponse->json('data.list.0.invoice_no'));
+    }
+
+    /**
+     * @return array{first:int,second:int}
+     */
+    private function createProductGroupIds(string $slug, string $name): array
+    {
+        $first = FirstProductGroup::query()->firstOrCreate(
+            ['code' => 'server'],
+            [
+                'name' => 'Server',
+                'slug' => 'client-invoice-first-server',
+                'sort_order' => 0,
+                'is_visible' => 1,
+                'is_system' => 0,
+                'legacy_product_type' => 'server',
+            ]
+        );
+
+        if ((int) $first->is_visible !== 1) {
+            $first->update(['is_visible' => 1]);
+        }
+
+        $second = SecondProductGroup::query()->create([
+            'first_product_group_id' => (int) $first->id,
+            'name' => $name,
+            'slug' => $slug,
+            'description' => '',
+            'sort_order' => 0,
+            'is_visible' => 1,
+        ]);
+
+        return [
+            'first' => (int) $first->id,
+            'second' => (int) $second->id,
+        ];
     }
 }

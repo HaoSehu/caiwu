@@ -27,26 +27,25 @@ class AdminProductDeletedVisibilityTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/admin/product-categories?product_type=vps')
+        $this->getJson('/api/v2/admin/product-groups/'.$root->id.'/children?level=1&page=1&page_size=50')
             ->assertOk()
             ->assertJsonFragment([
                 'id' => (int) $category->id,
                 'products_count' => 0,
-                'products_with_trashed_count' => 1,
             ]);
 
-        $this->getJson('/api/admin/products?keyword=&second_product_group_id='.$category->id.'&product_type=vps&lifecycle_status=deleted&status=&page=1&page_size=20')
+        $this->getJson('/api/v2/admin/products?second_product_group_id='.$category->id.'&product_type=vps&lifecycle_status=deleted&page=1&page_size=20')
             ->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.id', (int) $product->id)
             ->assertJsonPath('data.list.0.is_deleted', true)
             ->assertJsonPath('data.list.0.lifecycle_status', 'deleted');
 
-        $this->postJson('/api/admin/products/'.$product->id.'/restore')
+        $this->postJson('/api/v2/admin/products/'.$product->id.'/restorations')
             ->assertOk()
-            ->assertJsonPath('data.id', (int) $product->id)
-            ->assertJsonPath('data.is_deleted', false)
-            ->assertJsonPath('data.lifecycle_status', 'active');
+            ->assertJsonPath('data.product.id', (int) $product->id)
+            ->assertJsonPath('data.product.lifecycle.lifecycle_status', 'active')
+            ->assertJsonPath('data.product.lifecycle.deleted_at', null);
 
         $this->assertDatabaseHas('products', [
             'id' => (int) $product->id,
@@ -55,9 +54,11 @@ class AdminProductDeletedVisibilityTest extends TestCase
 
         $product->refresh()->delete();
 
-        $this->deleteJson('/api/admin/products/'.$product->id.'/force')
+        $this->deleteJson('/api/v2/admin/products/'.$product->id.'/force')
             ->assertOk()
-            ->assertJsonPath('data', null);
+            ->assertJsonPath('data.status', 'completed')
+            ->assertJsonPath('data.detail.product.id', (int) $product->id)
+            ->assertJsonPath('data.detail.product.lifecycle_status', 'purged');
 
         $this->assertDatabaseMissing('products', [
             'id' => (int) $product->id,

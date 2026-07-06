@@ -160,7 +160,7 @@ class CouponLifecycleRegressionTest extends TestCase
         $this->assertNull($userCoupon->fresh()->last_used_at);
     }
 
-    public function test_update_issued_private_coupon_is_rejected(): void
+    public function test_update_issued_private_coupon_allows_unlocked_fields(): void
     {
         $suffix = bin2hex(random_bytes(4));
         $userA = $this->createUser('a', $suffix);
@@ -175,22 +175,36 @@ class CouponLifecycleRegressionTest extends TestCase
 
         $coupon = Coupon::query()->findOrFail((int) $created['id']);
 
-        $this->expectException(BusinessException::class);
-        $this->expectExceptionMessage('已发放的优惠券不允许修改');
-
-        $service->updateCoupon(
+        $updated = $service->updateCoupon(
             $coupon,
             $this->privateCouponPayload($suffix, [(int) $userA->id], [
                 'name' => 'Private Coupon Updated '.$suffix,
+                'discount_value' => 8,
             ]),
             [
                 'operator' => 'coupon-regression',
                 'trace_id' => 'coupon-update-'.$suffix,
             ]
         );
+
+        $coupon->refresh();
+
+        $this->assertSame('Private Coupon Updated '.$suffix, (string) $coupon->name);
+        $this->assertSame('8.00', number_format((float) $coupon->discount_value, 2, '.', ''));
+        $this->assertTrue((bool) $updated['can_update']);
+        $this->assertSame('已发放的优惠券', $updated['lock_reason']);
+        $this->assertSame(['distribution_type', 'discount_type', 'discount_scope'], $updated['locked_fields']);
+        $this->assertDatabaseHas('user_coupons', [
+            'coupon_id' => (int) $coupon->id,
+            'user_id' => (int) $userA->id,
+        ]);
+        $this->assertDatabaseMissing('user_coupons', [
+            'coupon_id' => (int) $coupon->id,
+            'user_id' => (int) $userB->id,
+        ]);
     }
 
-    public function test_update_claimed_public_coupon_is_rejected(): void
+    public function test_update_claimed_public_coupon_rejects_locked_field_changes(): void
     {
         $suffix = bin2hex(random_bytes(4));
         $claimUser = $this->createUser('claim', $suffix);
@@ -218,7 +232,7 @@ class CouponLifecycleRegressionTest extends TestCase
         ]);
 
         $this->expectException(BusinessException::class);
-        $this->expectExceptionMessage('已发放的优惠券不允许修改');
+        $this->expectExceptionMessage('已发放的优惠券，无法修改「distribution_type」');
 
         $service->updateCoupon(
             $coupon,

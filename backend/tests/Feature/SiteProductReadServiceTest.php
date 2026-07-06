@@ -98,18 +98,10 @@ class SiteProductReadServiceTest extends TestCase
             'auto_setup' => 0,
         ]);
 
-        $response = $this->getJson('/api/site/product-categories/'.$rootGroup->id.'/catalog')
-            ->assertOk();
-
-        $products = collect((array) $response->json('data.items_by_group'))
-            ->flatMap(fn (array $group): array => (array) ($group['products'] ?? []))
-            ->values();
-
-        $matchedProduct = $products->firstWhere('id', (int) $product->id);
-
-        $this->assertIsArray($matchedProduct);
-        $this->assertSame('monthly', data_get($matchedProduct, 'pricing_entries.0.cycle'));
-        $this->assertSame('20.00', data_get($matchedProduct, 'pricing_entries.0.amount'));
+        $this->getJson('/api/v2/site/products/'.$product->id)
+            ->assertOk()
+            ->assertJsonPath('data.product.pricing_entries.0.cycle', 'monthly')
+            ->assertJsonPath('data.product.pricing_entries.0.amount', '20.00');
     }
 
     public function test_site_group_catalog_checks_product_columns_once_per_request(): void
@@ -156,7 +148,7 @@ class SiteProductReadServiceTest extends TestCase
         DB::flushQueryLog();
         DB::enableQueryLog();
 
-        $this->getJson('/api/site/product-categories/'.$rootGroup->id.'/catalog')
+        $this->getJson('/api/v2/site/products?effective_product_group_id='.$childGroup->id.'&page=1&page_size=20')
             ->assertOk();
 
         $productColumnLookups = collect(DB::getQueryLog())
@@ -353,22 +345,25 @@ class SiteProductReadServiceTest extends TestCase
             ],
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 
-        $catalogResponse = $this->getJson('/api/site/product-categories/'.$rootGroup->id.'/catalog')
+        $catalogResponse = $this->getJson('/api/v2/site/products?effective_product_group_id='.$childGroup->id.'&page=1&page_size=20')
             ->assertOk();
 
-        $catalogProduct = collect((array) $catalogResponse->json('data.items_by_group'))
-            ->flatMap(fn (array $group): array => (array) ($group['products'] ?? []))
+        $catalogProduct = collect((array) $catalogResponse->json('data.list'))
             ->firstWhere('id', (int) $product->id);
 
-        $this->assertSame('Intel Xeon Gold 6133', data_get($catalogProduct, 'cpu_model_name'));
-        $this->assertSame('2.40GHz', data_get($catalogProduct, 'cpu_base_frequency'));
-        $this->assertSame('3.10GHz', data_get($catalogProduct, 'cpu_turbo_frequency'));
+        $this->assertIsArray($catalogProduct);
+        $this->assertSame('Intel Xeon Gold 6133', $catalogProduct['cpu_model_name'] ?? null);
+        $this->assertSame('2.40GHz', $catalogProduct['cpu_base_frequency'] ?? null);
+        $this->assertSame('3.10GHz', $catalogProduct['cpu_turbo_frequency'] ?? null);
 
-        $this->getJson('/api/site/products/'.$product->id)
+        $detail = $this->getJson('/api/v2/site/products/'.$product->id)
             ->assertOk()
-            ->assertJsonPath('data.product.cpu_model_name', 'Intel Xeon Gold 6133')
-            ->assertJsonPath('data.product.cpu_base_frequency', '2.40GHz')
-            ->assertJsonPath('data.product.cpu_turbo_frequency', '3.10GHz');
+            ->json('data.product');
+
+        $this->assertIsArray($detail);
+        $this->assertSame('Intel Xeon Gold 6133', $detail['cpu_model_name'] ?? null);
+        $this->assertSame('2.40GHz', $detail['cpu_base_frequency'] ?? null);
+        $this->assertSame('3.10GHz', $detail['cpu_turbo_frequency'] ?? null);
     }
 
     public function test_site_group_catalog_and_product_detail_include_bound_instance_spec_text(): void
@@ -434,22 +429,18 @@ class SiteProductReadServiceTest extends TestCase
             ],
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 
-        $catalogResponse = $this->getJson('/api/site/product-categories/'.$rootGroup->id.'/catalog')
+        $catalogResponse = $this->getJson('/api/v2/site/products?effective_product_group_id='.$childGroup->id.'&page=1&page_size=20')
             ->assertOk();
 
-        $catalogProduct = collect((array) $catalogResponse->json('data.items_by_group'))
-            ->flatMap(fn (array $group): array => (array) ($group['products'] ?? []))
+        $catalogProduct = collect((array) $catalogResponse->json('data.list'))
             ->firstWhere('id', (int) $product->id);
 
         $this->assertSame('ecs.g9i.2c2g', data_get($catalogProduct, 'display_name'));
-        $this->assertSame('ecs.g9i.2c2g', data_get($catalogProduct, 'instance_spec_text'));
-        $this->assertSame('2 核 2G', data_get($catalogProduct, 'instance_spec_alias'));
 
-        $this->getJson('/api/site/products/'.$product->id)
+        $this->getJson('/api/v2/site/products/'.$product->id)
             ->assertOk()
             ->assertJsonPath('data.product.display_name', 'ecs.g9i.2c2g')
-            ->assertJsonPath('data.product.instance_spec_text', 'ecs.g9i.2c2g')
-            ->assertJsonPath('data.product.instance_spec_alias', '2 核 2G')
+            ->assertJsonPath('data.product.product_spec_display', 'ecs.g9i.2c2g')
             ->assertJsonPath('data.product.group.display_name', 'ecs.g9i.2c2g');
     }
 
@@ -622,22 +613,13 @@ class SiteProductReadServiceTest extends TestCase
             ->willReturn([
                 'list' => [['id' => 1, 'label' => '云服务器']],
             ]);
-        $readService->expects($this->once())
-            ->method('products')
-            ->with([
-                'effective_product_group_id' => 12,
-                'effective_product_group_ids' => [13, 14],
-            ])
-            ->willReturn([
-                'items_by_group' => [['effective_product_group_id' => 12, 'products' => []]],
-            ]);
-
         $quoteService = $this->createMock(SiteProductQuoteService::class);
         $quoteService->expects($this->once())
             ->method('resolveQuotePayload')
             ->with(
                 501,
                 [
+                    'product' => 501,
                     'billing_cycle' => 'monthly',
                     'config' => ['region' => 'cn-hk'],
                     'quantity' => 2,
@@ -653,15 +635,16 @@ class SiteProductReadServiceTest extends TestCase
         $this->app->instance(SiteProductReadService::class, $readService);
         $this->app->instance(SiteProductQuoteService::class, $quoteService);
 
-        $this->getJson('/api/site/product-types')
+        $this->getJson('/api/v2/site/product-types')
             ->assertOk()
             ->assertJsonPath('data.list.0.label', '云服务器');
 
-        $this->getJson('/api/site/products?effective_product_group_id=12&effective_product_group_ids[0]=13&effective_product_group_ids[1]=14')
+        $this->getJson('/api/v2/site/products?effective_product_group_id=12&page=1&page_size=20')
             ->assertOk()
-            ->assertJsonPath('data.items_by_group.0.effective_product_group_id', 12);
+            ->assertJsonPath('data.total', 0)
+            ->assertJsonPath('data.list', []);
 
-        $this->postJson('/api/site/products/501/quote', [
+        $this->postJson('/api/v2/site/products/501/quote', [
             'billing_cycle' => 'monthly',
             'config' => ['region' => 'cn-hk'],
             'quantity' => 2,
@@ -698,6 +681,7 @@ class SiteProductReadServiceTest extends TestCase
             ->with(
                 501,
                 [
+                    'product' => 501,
                     'billing_cycle' => 'monthly',
                     'config' => ['region' => 'cn-hk'],
                     'quantity' => 2,
@@ -714,7 +698,7 @@ class SiteProductReadServiceTest extends TestCase
 
         $this->withHeaders([
             'Authorization' => 'Bearer '.$token,
-        ])->postJson('/api/site/products/501/quote', [
+        ])->postJson('/api/v2/site/products/501/quote', [
             'billing_cycle' => 'monthly',
             'config' => ['region' => 'cn-hk'],
             'quantity' => 2,

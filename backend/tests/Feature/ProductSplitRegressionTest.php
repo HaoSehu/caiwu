@@ -8,7 +8,6 @@ use App\Models\AdminUser;
 use App\Models\FirstProductGroup;
 use App\Models\Order;
 use App\Models\Product;
-use App\Models\ProductCategory;
 use App\Models\Role;
 use App\Models\SecondProductGroup;
 use App\Models\Setting;
@@ -50,15 +49,6 @@ class ProductSplitRegressionTest extends TestCase
             'api_username' => 'tester',
             'api_key' => 'secret',
             'status' => 1,
-            'sort_order' => 0,
-        ]);
-        $category = ProductCategory::query()->create([
-            'parent_id' => null,
-            'product_type' => 'vps',
-            'name' => 'Split category '.$suffix,
-            'slug' => 'split-category-'.$suffix,
-            'slogan' => '',
-            'is_visible' => 1,
             'sort_order' => 0,
         ]);
         $secondGroupId = $this->createSecondGroupId('cpumem-'.$suffix);
@@ -140,7 +130,7 @@ class ProductSplitRegressionTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $previewResponse = $this->postJson('/api/admin/products/split-preview', [
+        $previewResponse = $this->postJson('/api/v2/admin/products/split-previews', [
             'product_ids' => [(int) $source->id],
         ]);
         $previewResponse
@@ -158,7 +148,7 @@ class ProductSplitRegressionTest extends TestCase
             ->assertJsonPath('data.items.0.variants.3.cpu', '4')
             ->assertJsonPath('data.items.0.variants.3.memory', '4');
 
-        $this->postJson('/api/admin/products/split', [
+        $this->postJson('/api/v2/admin/products/splits', [
             'product_ids' => [(int) $source->id],
         ])
             ->assertOk()
@@ -215,15 +205,6 @@ class ProductSplitRegressionTest extends TestCase
             'nickname' => 'Product Split Alias Spec',
             'email' => 'product-split-alias-spec-'.$suffix.'@example.com',
             'status' => 1,
-        ]);
-        $category = ProductCategory::query()->create([
-            'parent_id' => null,
-            'product_type' => 'vps',
-            'name' => 'Split alias category '.$suffix,
-            'slug' => 'split-alias-category-'.$suffix,
-            'slogan' => '',
-            'is_visible' => 1,
-            'sort_order' => 0,
         ]);
         $secondGroupId = $this->createSecondGroupId('alias-'.$suffix);
         $firstGroupId = (int) SecondProductGroup::query()->findOrFail($secondGroupId)->first_product_group_id;
@@ -301,7 +282,7 @@ class ProductSplitRegressionTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->postJson('/api/admin/products/split-preview', [
+        $this->postJson('/api/v2/admin/products/split-previews', [
             'product_ids' => [(int) $source->id],
         ])
             ->assertOk()
@@ -310,7 +291,7 @@ class ProductSplitRegressionTest extends TestCase
             ->assertJsonPath('data.items.0.variants.3.cpu', '4')
             ->assertJsonPath('data.items.0.variants.3.memory', '4096');
 
-        $this->postJson('/api/admin/products/split', [
+        $this->postJson('/api/v2/admin/products/splits', [
             'product_ids' => [(int) $source->id],
         ])
             ->assertOk()
@@ -332,7 +313,7 @@ class ProductSplitRegressionTest extends TestCase
         $this->assertSame('4', (string) (($splitProduct->config_options[0]['sub'][0]['option_name_first'] ?? '')));
         $this->assertSame('4096', (string) (($splitProduct->config_options[1]['sub'][0]['option_name_first'] ?? '')));
 
-        $this->getJson('/api/site/products/'.$splitProduct->id)
+        $this->getJson('/api/v2/site/products/'.$splitProduct->id)
             ->assertOk()
             ->assertJsonPath('data.product.cpu_display', '4 vCPU')
             ->assertJsonPath('data.product.memory_display', '4G')
@@ -357,15 +338,6 @@ class ProductSplitRegressionTest extends TestCase
             'nickname' => 'Product Split Idempotent',
             'email' => 'product-split-idempotent-'.$suffix.'@example.com',
             'status' => 1,
-        ]);
-        $category = ProductCategory::query()->create([
-            'parent_id' => null,
-            'product_type' => 'vps',
-            'name' => 'Split idem category '.$suffix,
-            'slug' => 'split-idem-category-'.$suffix,
-            'slogan' => '',
-            'is_visible' => 1,
-            'sort_order' => 0,
         ]);
         $secondGroupId = $this->createSecondGroupId('idem-'.$suffix);
         $source = Product::query()->create([
@@ -394,8 +366,8 @@ class ProductSplitRegressionTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->postJson('/api/admin/products/split', ['product_ids' => [(int) $source->id]])->assertOk();
-        $this->postJson('/api/admin/products/split', ['product_ids' => [(int) $source->id]])
+        $this->postJson('/api/v2/admin/products/splits', ['product_ids' => [(int) $source->id]])->assertOk();
+        $this->postJson('/api/v2/admin/products/splits', ['product_ids' => [(int) $source->id]])
             ->assertOk()
             ->assertJsonPath('data.created_count', 0)
             ->assertJsonPath('data.updated_count', 0)
@@ -518,15 +490,6 @@ class ProductSplitRegressionTest extends TestCase
             'email' => 'product-split-mb-memory-'.$suffix.'@example.com',
             'status' => 1,
         ]);
-        $category = ProductCategory::query()->create([
-            'parent_id' => null,
-            'product_type' => 'vps',
-            'name' => 'Split MB category '.$suffix,
-            'slug' => 'split-mb-category-'.$suffix,
-            'slogan' => '',
-            'is_visible' => 1,
-            'sort_order' => 0,
-        ]);
         $secondGroupId = $this->createSecondGroupId('mb-'.$suffix);
         $source = Product::query()->create([
             'second_product_group_id' => $secondGroupId,
@@ -555,7 +518,7 @@ class ProductSplitRegressionTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->postJson('/api/admin/products/split-preview', [
+        $this->postJson('/api/v2/admin/products/split-previews', [
             'product_ids' => [(int) $source->id],
         ])
             ->assertOk()
@@ -581,15 +544,6 @@ class ProductSplitRegressionTest extends TestCase
             'nickname' => 'Product Split Generic Name',
             'email' => 'product-split-generic-name-'.$suffix.'@example.com',
             'status' => 1,
-        ]);
-        $category = ProductCategory::query()->create([
-            'parent_id' => null,
-            'product_type' => 'vps',
-            'name' => 'Split generic category '.$suffix,
-            'slug' => 'split-generic-category-'.$suffix,
-            'slogan' => '',
-            'is_visible' => 1,
-            'sort_order' => 0,
         ]);
         $secondGroupId = $this->createSecondGroupId('generic-'.$suffix);
         $source = Product::query()->create([
@@ -618,7 +572,7 @@ class ProductSplitRegressionTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->postJson('/api/admin/products/split-preview', [
+        $this->postJson('/api/v2/admin/products/split-previews', [
             'product_ids' => [(int) $source->id],
         ])
             ->assertOk()
@@ -627,7 +581,7 @@ class ProductSplitRegressionTest extends TestCase
             ->assertJsonPath('data.items.0.variants.0.action', 'update')
             ->assertJsonPath('data.items.0.variants.1.action', 'create');
 
-        $this->postJson('/api/admin/products/split', [
+        $this->postJson('/api/v2/admin/products/splits', [
             'product_ids' => [(int) $source->id],
         ])
             ->assertOk()
@@ -663,15 +617,6 @@ class ProductSplitRegressionTest extends TestCase
             'nickname' => 'Product Split Flow Limit',
             'email' => 'product-split-flow-limit-'.$suffix.'@example.com',
             'status' => 1,
-        ]);
-        $category = ProductCategory::query()->create([
-            'parent_id' => null,
-            'product_type' => 'vps',
-            'name' => 'Split flow category '.$suffix,
-            'slug' => 'split-flow-category-'.$suffix,
-            'slogan' => '',
-            'is_visible' => 1,
-            'sort_order' => 0,
         ]);
         $secondGroupId = $this->createSecondGroupId('flow-'.$suffix);
         $source = Product::query()->create([
@@ -718,7 +663,7 @@ class ProductSplitRegressionTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $previewResponse = $this->postJson('/api/admin/products/split-preview', [
+        $previewResponse = $this->postJson('/api/v2/admin/products/split-previews', [
             'product_ids' => [(int) $source->id],
         ]);
         $previewResponse
@@ -729,7 +674,7 @@ class ProductSplitRegressionTest extends TestCase
             ->assertJsonPath('data.items.0.variants.0.memory', '2048')
             ->assertJsonPath('data.items.0.variants.1.memory', '4096');
 
-        $this->postJson('/api/admin/products/split', [
+        $this->postJson('/api/v2/admin/products/splits', [
             'product_ids' => [(int) $source->id],
         ])->assertOk();
 

@@ -38,7 +38,7 @@ class ClientVerificationQrcodeOwnershipTest extends TestCase
         $token = $attacker->createToken('client-verification-qrcode-ownership')->plainTextToken;
 
         $this->withHeader('Authorization', 'Bearer '.$token)
-            ->postJson('/api/client/verification/qrcode', [
+            ->postJson('/api/v2/client/verification/qrcode', [
                 'certify_id' => (string) $owner->verification_certify_id,
             ])
             ->assertForbidden()
@@ -46,6 +46,73 @@ class ClientVerificationQrcodeOwnershipTest extends TestCase
             ->assertJsonPath('message', '认证会话与当前账户不匹配');
 
         $this->assertFalse($fakeService->called);
+    }
+
+    public function test_qrcode_close_rejects_certify_id_that_belongs_to_another_user(): void
+    {
+        $suffix = strtoupper(bin2hex(random_bytes(4)));
+
+        $owner = $this->createClientUserForVerification('owner-close-'.$suffix, 'CERT-OWNER-CLOSE-'.$suffix);
+        $attacker = $this->createClientUserForVerification('attacker-close-'.$suffix, 'CERT-ATTACKER-CLOSE-'.$suffix);
+
+        $fakeService = new class extends VerificationService
+        {
+            public bool $called = false;
+
+            public function __construct() {}
+
+            public function closeQrCodeSession(string $certifyId): void
+            {
+                $this->called = true;
+            }
+        };
+
+        $this->app->instance(VerificationService::class, $fakeService);
+
+        $token = $attacker->createToken('client-verification-close-ownership')->plainTextToken;
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/v2/client/verification/close', [
+                'certify_id' => (string) $owner->verification_certify_id,
+            ])
+            ->assertForbidden()
+            ->assertJsonPath('code', 40300)
+            ->assertJsonPath('message', '认证会话与当前账户不匹配');
+
+        $this->assertFalse($fakeService->called);
+    }
+
+    public function test_qrcode_close_accepts_current_users_session(): void
+    {
+        $suffix = strtoupper(bin2hex(random_bytes(4)));
+        $user = $this->createClientUserForVerification('owner-close-ok-'.$suffix, 'CERT-CLOSE-'.$suffix);
+
+        $fakeService = new class extends VerificationService
+        {
+            public string $closedCertifyId = '';
+
+            public function __construct() {}
+
+            public function closeQrCodeSession(string $certifyId): void
+            {
+                $this->closedCertifyId = $certifyId;
+            }
+        };
+
+        $this->app->instance(VerificationService::class, $fakeService);
+
+        $token = $user->createToken('client-verification-close-current')->plainTextToken;
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/v2/client/verification/close', [
+                'certify_id' => (string) $user->verification_certify_id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('code', 0)
+            ->assertJsonPath('data.closed', true)
+            ->assertJsonPath('data.certify_id', (string) $user->verification_certify_id);
+
+        $this->assertSame((string) $user->verification_certify_id, $fakeService->closedCertifyId);
     }
 
     private function createClientUserForVerification(string $label, string $certifyId): User
