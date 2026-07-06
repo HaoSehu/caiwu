@@ -33,7 +33,7 @@ class ClientVerificationInitValidationTest extends TestCase
         $token = $user->createToken('client-verification-init-test')->plainTextToken;
 
         $this->withHeader('Authorization', 'Bearer '.$token)
-            ->postJson('/api/client/verification/init', [
+            ->postJson('/api/v2/client/verification/init', [
                 'idcard' => '320505199001010012',
             ])
             ->assertStatus(422)
@@ -48,7 +48,7 @@ class ClientVerificationInitValidationTest extends TestCase
         $token = $user->createToken('client-verification-init-test')->plainTextToken;
 
         $this->withHeader('Authorization', 'Bearer '.$token)
-            ->postJson('/api/client/verification/init', [
+            ->postJson('/api/v2/client/verification/init', [
                 'realname' => '张三',
             ])
             ->assertStatus(422)
@@ -63,7 +63,7 @@ class ClientVerificationInitValidationTest extends TestCase
         $token = $user->createToken('client-verification-init-test')->plainTextToken;
 
         $this->withHeader('Authorization', 'Bearer '.$token)
-            ->postJson('/api/client/verification/init', [
+            ->postJson('/api/v2/client/verification/init', [
                 'realname' => '张三',
                 'idcard' => '320505199001010012',
                 'cert_type' => 'INVALID_TYPE',
@@ -92,7 +92,7 @@ class ClientVerificationInitValidationTest extends TestCase
         $this->app->instance(VerificationService::class, $fakeService);
 
         $response = $this->withHeader('Authorization', 'Bearer '.$token)
-            ->postJson('/api/client/verification/init', [
+            ->postJson('/api/v2/client/verification/init', [
                 'realname' => '张三',
                 'idcard' => '320505199001010012',
                 'cert_type' => 'HOME_VISIT_PERMIT_HK_MC',
@@ -124,7 +124,7 @@ class ClientVerificationInitValidationTest extends TestCase
         $this->app->instance(VerificationService::class, $fakeService);
 
         $this->withHeader('Authorization', 'Bearer '.$token)
-            ->postJson('/api/client/verification/init', [
+            ->postJson('/api/v2/client/verification/init', [
                 'realname' => '张三',
                 'idcard' => '320505199001010012',
             ])
@@ -157,7 +157,7 @@ class ClientVerificationInitValidationTest extends TestCase
         $this->app->forgetInstance(VerificationService::class);
 
         $this->withHeader('Authorization', 'Bearer '.$token)
-            ->getJson('/api/client/verification/fee-config')
+            ->getJson('/api/v2/client/verification/fee-config')
             ->assertOk()
             ->assertJsonPath('data.free_attempts', 5)
             ->assertJsonPath('data.retry_fee', 8.5)

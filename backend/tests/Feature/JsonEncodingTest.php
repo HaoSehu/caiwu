@@ -20,7 +20,7 @@ class JsonEncodingTest extends TestCase
 
     public function test_api_middleware_keeps_exception_message_unescaped(): void
     {
-        $response = $this->getJson('/api/admin/auth/info');
+        $response = $this->getJson('/api/v2/admin/auth/info');
         $content = $response->getContent();
 
         $response->assertStatus(401);

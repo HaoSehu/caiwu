@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Models\AccountTransaction;
+use App\Models\FirstProductGroup;
 use App\Models\Order;
 use App\Models\Product;
-use App\Models\ProductCategory;
 use App\Models\ReferralReward;
 use App\Models\ReferralWithdrawal;
+use App\Models\SecondProductGroup;
 use App\Models\User;
 use App\Services\Referral\ReferralService;
 use Tests\TestCase;
@@ -99,18 +100,11 @@ class ReferralServiceKeywordSearchRegressionTest extends TestCase
         $referrer = $this->createReferralUser('referrer-'.$suffix);
         $referred = $this->createReferralUser('referred-'.$suffix);
 
-        $group = ProductCategory::query()->create([
-            'parent_id' => null,
-            'product_type' => 'server',
-            'name' => 'Referral Group '.$suffix,
-            'slug' => 'referral-group-'.$suffix,
-            'slogan' => '',
-            'is_visible' => 1,
-            'sort_order' => 0,
-        ]);
+        $groupIds = $this->createProductGroupIds('referral-group-'.$suffix, 'Referral Group '.$suffix);
 
         $product = Product::query()->create([
-            'product_group_id' => (int) $group->id,
+            'first_product_group_id' => $groupIds['first'],
+            'second_product_group_id' => $groupIds['second'],
             'name' => 'Referral Product '.$suffix,
             'product_type' => 'server',
             'description' => '',
@@ -164,5 +158,41 @@ class ReferralServiceKeywordSearchRegressionTest extends TestCase
             'referrer_user_id' => null,
             'verified_at' => null,
         ]);
+    }
+
+    /**
+     * @return array{first:int,second:int}
+     */
+    private function createProductGroupIds(string $slug, string $name): array
+    {
+        $first = FirstProductGroup::query()->firstOrCreate(
+            ['code' => 'server'],
+            [
+                'name' => 'Server',
+                'slug' => 'referral-first-server',
+                'sort_order' => 0,
+                'is_visible' => 1,
+                'is_system' => 0,
+                'legacy_product_type' => 'server',
+            ]
+        );
+
+        if ((int) $first->is_visible !== 1) {
+            $first->update(['is_visible' => 1]);
+        }
+
+        $second = SecondProductGroup::query()->create([
+            'first_product_group_id' => (int) $first->id,
+            'name' => $name,
+            'slug' => $slug,
+            'description' => '',
+            'sort_order' => 0,
+            'is_visible' => 1,
+        ]);
+
+        return [
+            'first' => (int) $first->id,
+            'second' => (int) $second->id,
+        ];
     }
 }

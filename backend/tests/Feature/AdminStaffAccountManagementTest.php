@@ -22,7 +22,7 @@ class AdminStaffAccountManagementTest extends TestCase
 
         Sanctum::actingAs($operator);
 
-        $this->putJson('/api/admin/staff/'.$staff->id, [
+        $this->putJson('/api/v2/admin/staff/'.$staff->id, [
             'username' => 'staff-renamed-'.$suffix,
             'nickname' => 'Renamed Staff',
             'email' => 'staff-renamed-'.$suffix.'@example.com',
@@ -34,7 +34,7 @@ class AdminStaffAccountManagementTest extends TestCase
             ->assertJsonPath('data.username', 'staff-renamed-'.$suffix)
             ->assertJsonPath('data.email', 'staff-renamed-'.$suffix.'@example.com');
 
-        $this->postJson('/api/admin/staff/'.$staff->id.'/reset-password', [
+        $this->postJson('/api/v2/admin/staff/'.$staff->id.'/password-resets', [
             'password' => 'NewPass@123',
             'password_confirmation' => 'NewPass@123',
         ])
@@ -55,7 +55,7 @@ class AdminStaffAccountManagementTest extends TestCase
 
         Sanctum::actingAs($operator);
 
-        $this->postJson('/api/admin/staff', [
+        $this->postJson('/api/v2/admin/staff', [
             'username' => 'staff@'.$suffix,
             'nickname' => 'At Sign Staff',
             'email' => null,
@@ -77,7 +77,7 @@ class AdminStaffAccountManagementTest extends TestCase
 
         Sanctum::actingAs($operator);
 
-        $this->putJson('/api/admin/staff/'.$staff->id, [
+        $this->putJson('/api/v2/admin/staff/'.$staff->id, [
             'username' => 'staff-hacked',
             'nickname' => 'Allowed Nickname',
             'email' => 'staff-hacked@example.com',
@@ -87,7 +87,7 @@ class AdminStaffAccountManagementTest extends TestCase
             ->assertStatus(422)
             ->assertJsonPath('code', 42200);
 
-        $this->postJson('/api/admin/staff/'.$staff->id.'/reset-password', [
+        $this->postJson('/api/v2/admin/staff/'.$staff->id.'/password-resets', [
             'password' => 'NewPass@123',
             'password_confirmation' => 'NewPass@123',
         ])
@@ -110,11 +110,11 @@ class AdminStaffAccountManagementTest extends TestCase
 
         Sanctum::actingAs($operator);
 
-        $this->deleteJson('/api/admin/staff/'.$activeStaff->id)
+        $this->deleteJson('/api/v2/admin/staff/'.$activeStaff->id)
             ->assertStatus(422)
             ->assertJsonPath('code', 42200);
 
-        $this->deleteJson('/api/admin/staff/'.$disabledStaff->id)
+        $this->deleteJson('/api/v2/admin/staff/'.$disabledStaff->id)
             ->assertOk()
             ->assertJsonPath('code', 0);
 
@@ -128,7 +128,7 @@ class AdminStaffAccountManagementTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->putJson('/api/admin/auth/password', [
+        $this->putJson('/api/v2/admin/auth/password', [
             'current_password' => 'wrong-password',
             'password' => 'NewPass@123',
             'password_confirmation' => 'NewPass@123',
@@ -136,7 +136,7 @@ class AdminStaffAccountManagementTest extends TestCase
             ->assertStatus(422)
             ->assertJsonPath('code', 42200);
 
-        $this->putJson('/api/admin/auth/password', [
+        $this->putJson('/api/v2/admin/auth/password', [
             'current_password' => 'OldPass@123',
             'password' => 'NewPass@123',
             'password_confirmation' => 'NewPass@123',

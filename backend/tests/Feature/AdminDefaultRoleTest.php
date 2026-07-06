@@ -56,7 +56,7 @@ class AdminDefaultRoleTest extends TestCase
         app(BuiltinAdminRoleService::class)->sync();
         Sanctum::actingAs($this->createAdmin([AdminPermissions::ROLE_LIST]));
 
-        $response = $this->getJson('/api/admin/roles')
+        $response = $this->getJson('/api/v2/admin/roles')
             ->assertOk()
             ->assertJsonPath('code', 0);
 
@@ -75,7 +75,7 @@ class AdminDefaultRoleTest extends TestCase
 
         Sanctum::actingAs($this->createAdmin([AdminPermissions::ROLE_MANAGE]));
 
-        $this->putJson('/api/admin/roles/'.$visitor->id, [
+        $this->putJson('/api/v2/admin/roles/'.$visitor->id, [
             'name' => 'visitor',
             'label' => 'Visitor Changed',
             'permissions' => [AdminPermissions::USER_MANAGE],
@@ -83,7 +83,7 @@ class AdminDefaultRoleTest extends TestCase
             ->assertStatus(422)
             ->assertJsonPath('code', 42200);
 
-        $this->deleteJson('/api/admin/roles/'.$visitor->id)
+        $this->deleteJson('/api/v2/admin/roles/'.$visitor->id)
             ->assertStatus(422)
             ->assertJsonPath('code', 42200);
 

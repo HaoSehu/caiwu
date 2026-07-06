@@ -38,7 +38,7 @@ class SanctumIdleTimeoutTest extends TestCase
 
         $this->withHeaders([
             'Authorization' => 'Bearer '.$plainTextToken,
-        ])->getJson('/api/client/auth/info')
+        ])->getJson('/api/v2/client/auth/info')
             ->assertStatus(401)
             ->assertJsonPath('code', 40100);
 
@@ -72,8 +72,8 @@ class SanctumIdleTimeoutTest extends TestCase
 
         $this->withHeaders([
             'Authorization' => 'Bearer '.$plainTextToken,
-        ])->getJson('/api/admin/auth/info')
+        ])->getJson('/api/v2/admin/auth/info')
             ->assertOk()
-            ->assertJsonPath('data.id', (int) $admin->id);
+            ->assertJsonPath('data.admin.id', (int) $admin->id);
     }
 }

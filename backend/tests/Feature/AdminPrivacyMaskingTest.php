@@ -19,7 +19,7 @@ class AdminPrivacyMaskingTest extends TestCase
         $user = $this->createTargetUser();
         Sanctum::actingAs($this->createVisitorAdmin());
 
-        $response = $this->getJson('/api/admin/users?user_id='.$user->id)
+        $response = $this->getJson('/api/v2/admin/users?user_id='.$user->id)
             ->assertOk()
             ->assertJsonPath('code', 0);
 
@@ -29,7 +29,7 @@ class AdminPrivacyMaskingTest extends TestCase
         $this->assertStringContainsString('***', (string) ($row['email'] ?? ''));
         $this->assertStringContainsString('****', (string) ($row['phone'] ?? ''));
 
-        $this->getJson('/api/admin/users?keyword='.urlencode((string) $user->email))
+        $this->getJson('/api/v2/admin/users?keyword='.urlencode((string) $user->email))
             ->assertStatus(422)
             ->assertJsonPath('code', 42200);
     }
@@ -42,7 +42,7 @@ class AdminPrivacyMaskingTest extends TestCase
             AdminPermissions::PRIVACY_VIEW_RAW,
         ]));
 
-        $this->getJson('/api/admin/users?user_id='.$user->id)
+        $this->getJson('/api/v2/admin/users?user_id='.$user->id)
             ->assertOk()
             ->assertJsonPath('data.list.0.email', $user->email)
             ->assertJsonPath('data.list.0.phone', $user->phone);
@@ -55,7 +55,7 @@ class AdminPrivacyMaskingTest extends TestCase
             AdminPermissions::PRIVACY_VIEW_RAW,
         ]));
 
-        $this->getJson('/api/admin/settings/system/secret/app_key')
+        $this->getJson('/api/v2/admin/settings/system/secrets/app_key')
             ->assertForbidden()
             ->assertJsonPath('code', 40300);
     }

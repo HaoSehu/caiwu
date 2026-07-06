@@ -87,7 +87,7 @@ class ContentSystemMigrationServiceTest extends TestCase
             'id' => 22,
             'user_id' => 14,
             'user_type' => 'client',
-            'action' => 'POST api/client/invoices',
+            'action' => 'POST api/v2/client/invoices',
             'module' => 'invoices',
             'subject_id' => null,
             'context' => '{"request_id":"invoice-trace-22","status":403}',

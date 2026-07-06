@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Exceptions\BusinessException;
-use App\Http\Controllers\Admin\SupplierController;
 use App\Http\Resources\Product\SupplierResource;
 use App\Jobs\ProcessPaidOrderFulfillmentJob;
 use App\Jobs\ProcessPaidOrderReferralRewardJob;
@@ -18,6 +17,7 @@ use App\Jobs\SyncInvoiceCouponUsageJob;
 use App\Jobs\SyncPaidInvoiceCouponUsageJob;
 use App\Models\Setting;
 use App\Models\Supplier;
+use App\Services\Admin\V2\AdminConfigurationV2QueryService;
 use App\Services\ClientServiceConsole\ServiceDetailService;
 use App\Services\ClientServiceConsole\ServiceTransformService;
 use App\Services\Integrations\Plugins\UpstreamBindingWriter;
@@ -99,11 +99,10 @@ class BackendHealthFixRegressionTest extends TestCase
         ]);
         $this->syncSupplierBinding($supplier, 'secret-value');
 
-        $response = (new SupplierController)->show($supplier);
-        $payload = $response->getData(true);
+        $payload = app(AdminConfigurationV2QueryService::class)->supplierDetail($supplier);
 
-        $this->assertArrayNotHasKey('api_key', $payload['data']);
-        $this->assertTrue($payload['data']['has_api_key']);
+        $this->assertArrayNotHasKey('api_key', $payload['supplier']);
+        $this->assertTrue($payload['supplier']['credentials']['api_credential_configured']);
     }
 
     public function test_supplier_api_key_can_be_revealed_on_demand(): void
@@ -116,11 +115,10 @@ class BackendHealthFixRegressionTest extends TestCase
         ]);
         $this->syncSupplierBinding($supplier, 'supplier-secret');
 
-        $response = (new SupplierController)->revealSecret($supplier, 'api_key');
-        $payload = $response->getData(true);
+        $payload = app(AdminConfigurationV2QueryService::class)->supplierSecret($supplier, 'api_key');
 
-        $this->assertSame('api_key', $payload['data']['key']);
-        $this->assertSame('supplier-secret', $payload['data']['value']);
+        $this->assertSame('api_key', $payload['key']);
+        $this->assertSame('supplier-secret', $payload['value']);
     }
 
     public function test_provider_aware_cache_keys_keep_mofang_independent(): void
@@ -226,7 +224,7 @@ class BackendHealthFixRegressionTest extends TestCase
         $jobs = [
             new ProcessPaidOrderFulfillmentJob(1),
             new ProcessPaidOrderReferralRewardJob(1),
-            new RunScheduleTaskJob('queue-backlog-drain'),
+            new RunScheduleTaskJob('service-status-sync'),
             new SendClientLoginEmailAlertJob(1, 'client@example.test', '客户', '2026-07-02 12:00:00', '127.0.0.1'),
             new SendClientLoginFailureEmailAlertJob(1, 'client@example.test', '客户', 'client@example.test', '2026-07-02 12:00:00', '127.0.0.1'),
             new SendPaidInvoiceAdminNotificationJob(1),
@@ -243,7 +241,7 @@ class BackendHealthFixRegressionTest extends TestCase
 
     public function test_schedule_worker_consumes_declared_queues_with_timeout(): void
     {
-        $source = file_get_contents(base_path('routes/console.php'));
+        $source = file_get_contents(app_path('Services/Automation/Heartbeat/QueueDrainService.php'));
 
         $this->assertIsString($source);
         $this->assertSame('provision,referral,notification,coupon,default', config('queue.caiwu_worker_queues'));

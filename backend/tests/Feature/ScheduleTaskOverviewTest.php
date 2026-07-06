@@ -50,16 +50,35 @@ class ScheduleTaskOverviewTest extends TestCase
         $this->assertTrue((bool) ($task['manual_triggerable'] ?? false));
     }
 
-    public function test_schedule_task_overview_marks_queue_backlog_drain_as_manual_triggerable(): void
+    public function test_schedule_task_overview_does_not_expose_internal_or_deprecated_tasks_as_business_tasks(): void
     {
         $service = app(ScheduleTaskService::class);
 
         $overview = $service->overview();
         $tasks = collect($overview['tasks'] ?? []);
-        $task = $tasks->firstWhere('key', 'queue-backlog-drain');
 
-        $this->assertIsArray($task);
-        $this->assertSame('队列积压消费', $task['title'] ?? null);
-        $this->assertTrue((bool) ($task['manual_triggerable'] ?? false));
+        $this->assertNull($tasks->firstWhere('key', 'queue-backlog-drain'));
+        $this->assertNull($tasks->firstWhere('key', 'sync-processing-order-status'));
+    }
+
+    public function test_high_frequency_schedule_tasks_run_every_fifteen_minutes(): void
+    {
+        $service = app(ScheduleTaskService::class);
+
+        $overview = $service->overview();
+        $tasks = collect($overview['tasks'] ?? []);
+
+        foreach ([
+            'referral-release-rewards',
+            'coupon-campaign-dispatch',
+            'provision-retry-failed',
+            'vnc-ensure-relay',
+            'site-cache-warmup',
+        ] as $taskKey) {
+            $task = $tasks->firstWhere('key', $taskKey);
+
+            $this->assertIsArray($task, 'Missing schedule task key: '.$taskKey);
+            $this->assertSame('每次心跳', $task['expression'] ?? null, 'Unexpected schedule expression for '.$taskKey);
+        }
     }
 }

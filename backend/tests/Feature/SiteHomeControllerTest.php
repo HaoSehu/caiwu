@@ -41,7 +41,7 @@ class SiteHomeControllerTest extends TestCase
 
         $this->app->instance(SiteHomeService::class, $service);
 
-        $this->getJson('/api/site/home')
+        $this->getJson('/api/v2/site/home')
             ->assertOk()
             ->assertJsonPath('data.site_config.site_name', 'Cloud Console')
             ->assertJsonPath('data.notices.0.title', 'System notice')

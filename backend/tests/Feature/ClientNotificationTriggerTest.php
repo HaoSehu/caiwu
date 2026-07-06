@@ -39,7 +39,7 @@ class ClientNotificationTriggerTest extends TestCase
             });
         $this->app->instance(NotificationService::class, $mock);
 
-        $this->postJson('/api/client/login', [
+        $this->postJson('/api/v2/client/login', [
             'account' => 'login-notify@example.com',
             'password' => 'secret123',
         ])->assertOk();
@@ -79,7 +79,7 @@ class ClientNotificationTriggerTest extends TestCase
         $this->withServerVariables([
             'REMOTE_ADDR' => '203.0.113.8',
             'HTTP_USER_AGENT' => 'ClientNotificationTriggerTest/1.0',
-        ])->postJson('/api/client/login', [
+        ])->postJson('/api/v2/client/login', [
             'account' => 'location-alert@example.com',
             'password' => 'secret123',
         ])->assertOk();
@@ -107,7 +107,7 @@ class ClientNotificationTriggerTest extends TestCase
             });
         $this->app->instance(NotificationService::class, $mock);
 
-        $this->putJson('/api/client/password', [
+        $this->putJson('/api/v2/client/password', [
             'oldPassword' => 'secret123',
             'newPassword' => 'newSecret456',
             'confirmPassword' => 'newSecret456',
@@ -148,7 +148,7 @@ class ClientNotificationTriggerTest extends TestCase
             });
         $this->app->instance(NotificationService::class, $mock);
 
-        $this->putJson('/api/client/auth/phone', [
+        $this->putJson('/api/v2/client/auth/phone', [
             'phone' => '13800000099',
             'code' => '123456',
         ])->assertOk();
@@ -185,7 +185,7 @@ class ClientNotificationTriggerTest extends TestCase
             });
         $this->app->instance(NotificationService::class, $mock);
 
-        $this->putJson('/api/client/auth/email', [
+        $this->putJson('/api/v2/client/auth/email', [
             'email' => 'new-email-alert@example.com',
             'code' => '654321',
         ])->assertOk();

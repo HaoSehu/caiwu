@@ -34,7 +34,7 @@ class ClientProfileRegressionTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $this->putJson('/api/client/auth/profile', [
+        $this->putJson('/api/v2/client/auth/profile', [
             'nickname' => 'Updated Nickname',
         ])
             ->assertOk()
@@ -74,7 +74,7 @@ class ClientProfileRegressionTest extends TestCase
         $this->withHeaders([
             'X-Request-Id' => $traceId,
             'User-Agent' => $userAgent,
-        ])->putJson('/api/client/auth/profile', [
+        ])->putJson('/api/v2/client/auth/profile', [
             'nickname' => 'Logged Nickname',
         ])
             ->assertOk()
@@ -107,6 +107,7 @@ class ClientProfileRegressionTest extends TestCase
         $result = app(AuthService::class)->clientRegister([
             'account' => $email,
             'email' => $email,
+            'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
             'password' => 'Temp@123456',
             'nickname' => 'Registered Nickname',
         ], '127.0.0.1');
@@ -148,7 +149,7 @@ class ClientProfileRegressionTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $this->putJson('/api/client/auth/alipay-account', [
+        $this->putJson('/api/v2/client/auth/alipay-account', [
             'real_name' => '张三',
             'account' => $phone,
             'code' => '123456',

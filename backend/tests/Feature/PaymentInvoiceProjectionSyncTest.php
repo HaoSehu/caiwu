@@ -49,6 +49,41 @@ class PaymentInvoiceProjectionSyncTest extends TestCase
         $this->assertSame('90.00', number_format((float) $invoice->items[0]->line_amount, 2, '.', ''));
     }
 
+    public function test_invoice_client_detail_loads_order_without_selecting_virtual_display_column(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+        $user = User::query()->create([
+            'email' => 'invoice-detail-'.$suffix.'@example.com',
+            'password' => 'Temp@123456',
+            'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
+            'status' => 1,
+            'nickname' => 'Invoice Detail',
+        ]);
+
+        $order = Order::query()->create([
+            'order_no' => 'INVDET'.strtoupper($suffix),
+            'user_id' => (int) $user->id,
+            'product_id' => null,
+            'product_spec_snapshot' => '详情测试配置',
+            'product_type_snapshot' => 'server',
+            'type' => 'new',
+            'amount' => '48.00',
+            'discount' => '0.00',
+            'paid_amount' => '48.00',
+            'billing_cycle' => 'monthly',
+            'quantity' => 1,
+            'status' => 2,
+            'paid_at' => now(),
+        ]);
+
+        $invoice = app(InvoiceService::class)->createFromOrder($order);
+        $detail = app(InvoiceService::class)->clientDetail($invoice->refresh());
+
+        $this->assertSame((int) $invoice->id, (int) $detail['id']);
+        $this->assertSame('详情测试配置', $detail['product_display_name']);
+        $this->assertSame('详情测试配置', $detail['combined_display_name']);
+    }
+
     public function test_payment_service_sync_projection_materializes_payment_callbacks_without_model_hook(): void
     {
         $suffix = bin2hex(random_bytes(4));

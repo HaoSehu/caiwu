@@ -163,14 +163,14 @@ class ClientServiceConsoleCategoryTitleFallbackTest extends TestCase
 
             Sanctum::actingAs($user);
 
-            $this->getJson('/api/client/services?page=1&page_size=10&status='.ServiceStatus::ACTIVE)
+            $this->getJson('/api/v2/client/services?page=1&page_size=10&status='.ServiceStatus::ACTIVE)
                 ->assertOk()
                 ->assertJsonPath('code', 0)
                 ->assertJsonPath('data.total', 1)
                 ->assertJsonPath('data.list.0.id', $serviceId)
                 ->assertJsonPath('data.list.0.product.group_name', 'Child Group '.$suffix);
 
-            $defaultStatusResponse = $this->getJson('/api/client/services?page=1&page_size=10&status_scope=active_pending')
+            $defaultStatusResponse = $this->getJson('/api/v2/client/services?page=1&page_size=10&status_scope=active_pending')
                 ->assertOk()
                 ->assertJsonPath('code', 0)
                 ->assertJsonPath('data.total', 2);
@@ -183,7 +183,7 @@ class ClientServiceConsoleCategoryTitleFallbackTest extends TestCase
                     ->all()
             );
 
-            $overviewResponse = $this->getJson('/api/client/services/grouped-overview')
+            $overviewResponse = $this->getJson('/api/v2/client/services/grouped-overview')
                 ->assertOk()
                 ->assertJsonPath('code', 0)
                 ->assertJsonPath('data.total', 3);

@@ -8,10 +8,10 @@ use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
 use App\Constants\ServiceStatus;
 use App\Models\AdminUser;
+use App\Models\FirstProductGroup;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Product;
-use App\Models\ProductCategory;
 use App\Models\Role;
 use App\Models\Service;
 use App\Models\User;
@@ -77,7 +77,7 @@ class AdminUserServiceDeletionRetentionTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->deleteJson('/api/admin/users/'.$user->id.'/services/'.$service->id)
+        $this->deleteJson('/api/v2/admin/users/'.$user->id.'/services/'.$service->id)
             ->assertOk()
             ->assertJsonPath('code', 0);
 
@@ -137,18 +137,17 @@ class AdminUserServiceDeletionRetentionTest extends TestCase
 
     private function createProduct(string $suffix): Product
     {
-        $group = ProductCategory::query()->create([
-            'parent_id' => null,
-            'product_type' => 'server',
+        $group = FirstProductGroup::query()->create([
+            'code' => 'server-'.$suffix,
             'name' => 'Delete Service Group '.$suffix,
             'slug' => 'delete-service-group-'.$suffix,
-            'slogan' => '',
+            'description' => '',
             'is_visible' => 1,
             'sort_order' => 0,
         ]);
 
         return Product::query()->create([
-            'product_group_id' => (int) $group->id,
+            'first_product_group_id' => (int) $group->id,
             'name' => 'Delete Service Product '.$suffix,
             'product_type' => 'server',
             'description' => '',

@@ -47,16 +47,50 @@ class ClientFinanceBalanceLogRegressionTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $this->getJson('/api/client/balance-logs?page=1&page_size=15')
+        $this->getJson('/api/v2/client/balance-logs?page=1&page_size=15')
             ->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.event_type', 'recharge')
             ->assertJsonPath('data.list.0.change_amount', '88.00');
 
-        $this->getJson('/api/client/balance-logs/summary')
+        $this->getJson('/api/v2/client/balance-logs/summary')
             ->assertOk()
             ->assertJsonPath('data.total_in', '88.00')
             ->assertJsonPath('data.total_out', '0.00');
+    }
+
+    public function test_balance_logs_v2_rejects_legacy_and_summary_pagination_parameters(): void
+    {
+        $user = User::query()->create([
+            'email' => 'finance-balance-validation-'.bin2hex(random_bytes(4)).'@example.com',
+            'password' => 'Temp@123456',
+            'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
+            'status' => 1,
+            'nickname' => 'Finance Balance Validation',
+            'real_name' => '',
+            'id_card' => '',
+            'verification_status' => 0,
+            'verification_message' => '',
+            'verification_certify_id' => null,
+            'member_level_id' => null,
+            'total_sales_amount' => '0.00',
+            'referrer_user_id' => null,
+            'verified_at' => null,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->getJson('/api/v2/client/balance-logs?per_page=20')
+            ->assertStatus(422)
+            ->assertJsonStructure(['data' => ['errors' => ['per_page']]]);
+
+        $this->getJson('/api/v2/client/balance-logs?pageSize=20')
+            ->assertStatus(422)
+            ->assertJsonStructure(['data' => ['errors' => ['pageSize']]]);
+
+        $this->getJson('/api/v2/client/balance-logs/summary?page=1')
+            ->assertStatus(422)
+            ->assertJsonStructure(['data' => ['errors' => ['page']]]);
     }
 
     public function test_balance_logs_endpoints_do_not_default_to_balance_tab_when_account_transactions_table_exists(): void
@@ -129,7 +163,7 @@ class ClientFinanceBalanceLogRegressionTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $this->getJson('/api/client/balance-logs?page=1&page_size=15')
+        $this->getJson('/api/v2/client/balance-logs?page=1&page_size=15')
             ->assertOk()
             ->assertJsonPath('data.total', 3)
             ->assertJsonPath('data.list.0.event_type', 'recharge')
@@ -139,7 +173,7 @@ class ClientFinanceBalanceLogRegressionTest extends TestCase
             ->assertJsonPath('data.list.2.event_type', 'consume')
             ->assertJsonPath('data.list.2.event_type_label', '账单支付');
 
-        $this->getJson('/api/client/balance-logs/summary')
+        $this->getJson('/api/v2/client/balance-logs/summary')
             ->assertOk()
             ->assertJsonPath('data.cash_balance', '65.00')
             ->assertJsonMissingPath('data.balance')

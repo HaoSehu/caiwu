@@ -48,7 +48,7 @@ class CouponControllerTest extends TestCase
 
         $token = $user->createToken('coupon-controller-test')->plainTextToken;
         $response = $this->withHeader('Authorization', 'Bearer '.$token)
-            ->getJson('/api/client/coupons?status=all&page=1&page_size=10');
+            ->getJson('/api/v2/client/coupons?status=all&page=1&page_size=10');
 
         $response->assertOk()->assertJsonPath('code', 0);
         $items = collect($response->json('data.list'));

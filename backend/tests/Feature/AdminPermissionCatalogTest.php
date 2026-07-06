@@ -72,7 +72,7 @@ class AdminPermissionCatalogTest extends TestCase
     {
         Sanctum::actingAs($this->createAdmin([AdminPermissions::PERMISSION_LIST]));
 
-        $response = $this->getJson('/api/admin/permissions')
+        $response = $this->getJson('/api/v2/admin/permissions')
             ->assertOk()
             ->assertJsonPath('code', 0);
 

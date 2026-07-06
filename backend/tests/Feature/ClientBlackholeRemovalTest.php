@@ -13,7 +13,7 @@ class ClientBlackholeRemovalTest extends TestCase
     {
         $uris = collect(Route::getRoutes())
             ->map(static fn ($route): string => $route->uri())
-            ->filter(static fn (string $uri): bool => str_starts_with($uri, 'api/client/blackhole'))
+            ->filter(static fn (string $uri): bool => str_starts_with($uri, 'api/v2/client/blackhole'))
             ->values()
             ->all();
 

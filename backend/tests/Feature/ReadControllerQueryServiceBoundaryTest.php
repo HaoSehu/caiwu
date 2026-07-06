@@ -333,11 +333,11 @@ class ReadControllerQueryServiceBoundaryTest extends TestCase
         $this->app->instance(ClientFinanceQueryService::class, $service);
         Sanctum::actingAs($user);
 
-        $this->getJson('/api/client/balance-logs?event_type=consume&page_size=20')
+        $this->getJson('/api/v2/client/balance-logs?event_type=consume&page_size=20')
             ->assertOk()
             ->assertJsonPath('data.total', 0);
 
-        $this->getJson('/api/client/balance-logs/summary?event_type=consume')
+        $this->getJson('/api/v2/client/balance-logs/summary?event_type=consume')
             ->assertOk()
             ->assertJsonPath('data.total_out', 0);
     }
@@ -378,7 +378,7 @@ class ReadControllerQueryServiceBoundaryTest extends TestCase
         $this->app->instance(AdminReferralOverviewService::class, $service);
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/admin/referral/overview')
+        $this->getJson('/api/v2/admin/referral/overview')
             ->assertOk()
             ->assertJsonPath('data.summary.rewards_total', 1)
             ->assertJsonPath('data.top_referrers.0.display_name', 'Delegate');
@@ -469,20 +469,20 @@ class ReadControllerQueryServiceBoundaryTest extends TestCase
         $this->app->instance(AdminVerificationQueryService::class, $service);
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/admin/verifications?keyword=Verification%20User&page_size=20')
+        $this->getJson('/api/v2/admin/verifications?keyword=Verification%20User&page_size=20')
             ->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.real_name', 'Verification User');
 
-        $this->getJson('/api/admin/verifications/summary')
+        $this->getJson('/api/v2/admin/verifications/summary')
             ->assertOk()
             ->assertJsonPath('data.stats.verified', 1);
 
-        $this->getJson('/api/admin/verifications/'.$user->id)
+        $this->getJson('/api/v2/admin/verifications/'.$user->id)
             ->assertOk()
             ->assertJsonPath('data.id', (int) $user->id);
 
-        $this->getJson('/api/admin/verifications/'.$user->id.'/history')
+        $this->getJson('/api/v2/admin/verifications/'.$user->id.'/history')
             ->assertOk()
             ->assertJsonPath('data.user_name', 'Verification User');
     }

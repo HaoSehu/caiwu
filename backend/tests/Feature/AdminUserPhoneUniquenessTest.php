@@ -19,6 +19,7 @@ class AdminUserPhoneUniquenessTest extends TestCase
         $user = app(UserService::class)->create([
             'email' => "user-empty-nickname-{$suffix}@example.com",
             'password' => 'secret123',
+            'phone' => '138'.str_pad((string) random_int(0, 99999999), 8, '0', STR_PAD_LEFT),
             'status' => 1,
         ]);
 

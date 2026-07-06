@@ -123,7 +123,7 @@ class AdminCpuModelCatalogControllerTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/admin/cpu-model-catalog')
+        $this->getJson('/api/v2/admin/cpu-model-catalog')
             ->assertOk()
             ->assertJsonPath('code', 0);
 
@@ -187,7 +187,7 @@ class AdminCpuModelCatalogControllerTest extends TestCase
             ],
         ];
 
-        $this->postJson('/api/admin/cpu-model-catalog', $payload)
+        $this->postJson('/api/v2/admin/cpu-model-catalog', $payload)
             ->assertOk()
             ->assertJsonPath('code', 0)
             ->assertJsonPath('data.list.0.name', 'Intel Xeon')
@@ -214,7 +214,7 @@ class AdminCpuModelCatalogControllerTest extends TestCase
         $this->assertSame('35.00', $decoded[0]['models'][0]['bindings'][0]['primary_price']['amount'] ?? null);
         $this->assertSame(1, $decoded[0]['models'][0]['bindings'][0]['status'] ?? null);
 
-        $this->getJson('/api/admin/cpu-model-catalog')
+        $this->getJson('/api/v2/admin/cpu-model-catalog')
             ->assertOk()
             ->assertJsonPath('data.list.0.name', 'Intel Xeon')
             ->assertJsonPath('data.list.0.models.1.name', 'Intel Xeon Gold 6248')

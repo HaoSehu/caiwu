@@ -27,9 +27,11 @@ class AdminProductDeleteDeletedProductTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->deleteJson('/api/admin/products/'.$product->id)
+        $this->deleteJson('/api/v2/admin/products/'.$product->id)
             ->assertOk()
-            ->assertJsonPath('data', null);
+            ->assertJsonPath('data.status', 'completed')
+            ->assertJsonPath('data.detail.product.id', (int) $product->id)
+            ->assertJsonPath('data.detail.product.lifecycle_status', 'deleted');
 
         $this->assertDatabaseHas('products', [
             'id' => (int) $product->id,

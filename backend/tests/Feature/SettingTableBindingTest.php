@@ -56,7 +56,7 @@ class SettingTableBindingTest extends TestCase
             Setting::setValue('basic', 'support_group_text', $supportGroupText);
             Setting::setValue('basic', 'support_group_qr', $supportGroupQr);
 
-            $this->getJson('/api/site/config')
+            $this->getJson('/api/v2/site/config')
                 ->assertOk()
                 ->assertJsonPath('data.site_name', $siteName)
                 ->assertJsonPath('data.browser_title', $browserTitle)
@@ -84,7 +84,7 @@ class SettingTableBindingTest extends TestCase
 
     public function test_site_product_types_endpoint_reads_current_product_group_tables(): void
     {
-        $this->getJson('/api/site/product-types')
+        $this->getJson('/api/v2/site/product-types')
             ->assertOk()
             ->assertJsonStructure([
                 'code',
@@ -135,7 +135,7 @@ class SettingTableBindingTest extends TestCase
                 'updated_at' => now(),
             ]);
 
-            $this->getJson('/api/site/products/'.$productId.'/stock')
+            $this->getJson('/api/v2/site/products/'.$productId.'/stock')
                 ->assertOk()
                 ->assertJsonPath('data.product_id', $productId)
                 ->assertJsonPath('data.stock', 7);
@@ -240,7 +240,7 @@ class SettingTableBindingTest extends TestCase
                 'updated_at' => now(),
             ]);
 
-            $response = $this->getJson('/api/site/products/'.$productId)
+            $response = $this->getJson('/api/v2/site/products/'.$productId)
                 ->assertOk()
                 ->assertJsonPath('data.product.group.name', '子级分类-'.$suffix)
                 ->assertJsonPath('data.product.group.slogan', $childSlogan)
@@ -308,7 +308,7 @@ class SettingTableBindingTest extends TestCase
                 'updated_at' => now(),
             ]);
 
-            $this->postJson('/api/site/products/'.$productId.'/quote', [
+            $this->postJson('/api/v2/site/products/'.$productId.'/quote', [
                 'billing_cycle' => 'monthly',
                 'config' => [],
                 'quantity' => 1,
@@ -362,5 +362,118 @@ class SettingTableBindingTest extends TestCase
         $this->assertTrue($settings->has($key));
         $this->assertSame($group, $settings[$key]['group']);
         $this->assertSame($value, $settings[$key]['value']);
+    }
+
+    public function test_captcha_runtime_settings_are_plugin_owned_and_not_exposed_by_setting_service(): void
+    {
+        $keys = [
+            'captcha_enabled',
+            'captcha_driver',
+            'geetest_enabled',
+            'geetest_captcha_id',
+            'geetest_captcha_key',
+        ];
+        $originalRows = DB::table('settings')
+            ->where('group_key', 'system')
+            ->whereIn('item_key', $keys)
+            ->get()
+            ->map(fn (object $row): array => (array) $row)
+            ->all();
+
+        try {
+            DB::table('settings')
+                ->where('group_key', 'system')
+                ->whereIn('item_key', $keys)
+                ->delete();
+
+            Setting::setValues('system', [
+                'captcha_enabled' => '0',
+                'captcha_driver' => 'geetest',
+                'geetest_enabled' => '1',
+                'geetest_captcha_id' => 'legacy-captcha-id',
+                'geetest_captcha_key' => 'legacy-captcha-key',
+            ]);
+
+            $service = app(SettingService::class);
+            $settings = $service->getGroupSettings('system')->keyBy('key');
+
+            foreach ($keys as $key) {
+                $this->assertFalse($settings->has($key));
+            }
+
+            $service->saveGroupSettings('system', [
+                'captcha_enabled' => '1',
+                'captcha_driver' => 'other-captcha',
+            ]);
+
+            $this->assertSame(
+                '0',
+                (string) DB::table('settings')
+                    ->where('group_key', 'system')
+                    ->where('item_key', 'captcha_enabled')
+                    ->value('item_value')
+            );
+            $this->assertSame(
+                'geetest',
+                (string) DB::table('settings')
+                    ->where('group_key', 'system')
+                    ->where('item_key', 'captcha_driver')
+                    ->value('item_value')
+            );
+        } finally {
+            DB::table('settings')
+                ->where('group_key', 'system')
+                ->whereIn('item_key', $keys)
+                ->delete();
+
+            if ($originalRows !== []) {
+                DB::table('settings')->insert($originalRows);
+            }
+        }
+    }
+
+    public function test_message_limit_settings_are_plugin_owned_and_not_exposed_by_setting_service(): void
+    {
+        $originalRows = DB::table('settings')
+            ->where('group_key', 'message_limit')
+            ->get()
+            ->map(fn (object $row): array => (array) $row)
+            ->all();
+
+        try {
+            DB::table('settings')->where('group_key', 'message_limit')->delete();
+            Setting::setValues('message_limit', [
+                'email_rate_limit_enabled' => '1',
+                'email_ip_minute_limit' => '2',
+            ]);
+
+            $service = app(SettingService::class);
+
+            $this->assertCount(0, $service->getGroupSettings('message_limit'));
+
+            $service->saveGroupSettings('message_limit', [
+                'email_ip_minute_limit' => '9',
+                'sms_ip_minute_limit' => '9',
+            ]);
+
+            $this->assertSame(
+                '2',
+                (string) DB::table('settings')
+                    ->where('group_key', 'message_limit')
+                    ->where('item_key', 'email_ip_minute_limit')
+                    ->value('item_value')
+            );
+            $this->assertFalse(
+                DB::table('settings')
+                    ->where('group_key', 'message_limit')
+                    ->where('item_key', 'sms_ip_minute_limit')
+                    ->exists()
+            );
+        } finally {
+            DB::table('settings')->where('group_key', 'message_limit')->delete();
+            if ($originalRows !== []) {
+                DB::table('settings')->insert($originalRows);
+            }
+        }
     }
 }

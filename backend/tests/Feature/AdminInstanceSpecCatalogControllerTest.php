@@ -89,7 +89,7 @@ class AdminInstanceSpecCatalogControllerTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/admin/instance-spec-catalog')
+        $this->getJson('/api/v2/admin/instance-spec-catalog')
             ->assertOk()
             ->assertJsonPath('code', 0);
 
@@ -126,7 +126,7 @@ class AdminInstanceSpecCatalogControllerTest extends TestCase
             ],
         ];
 
-        $this->postJson('/api/admin/instance-spec-catalog', $payload)
+        $this->postJson('/api/v2/admin/instance-spec-catalog', $payload)
             ->assertOk()
             ->assertJsonPath('code', 0)
             ->assertJsonPath('data.list.0.text', 'ecs.g9i.2c2g')

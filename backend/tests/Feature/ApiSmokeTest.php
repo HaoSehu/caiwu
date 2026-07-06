@@ -160,7 +160,7 @@ class ApiSmokeTest extends TestCase
     {
         $uri = $route->uri();
 
-        if ($uri === 'api/site/products/{productId}/quote') {
+        if ($uri === 'api/v2/site/products/{productId}/quote') {
             return [
                 'billing_cycle' => 'monthly',
                 'config' => [],
@@ -168,7 +168,7 @@ class ApiSmokeTest extends TestCase
             ];
         }
 
-        if ($uri === 'api/client/verification/callback') {
+        if ($uri === 'api/v2/client/verification/callback') {
             return $this->signVerificationCallbackPayload([
                 'certify_id' => 'smoke-certify-id',
             ]);

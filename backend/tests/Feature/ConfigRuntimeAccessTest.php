@@ -15,12 +15,12 @@ use Tests\TestCase;
 
 class ConfigRuntimeAccessTest extends TestCase
 {
-    public function test_verification_qrcode_payload_returns_provider_url_without_proxy_url(): void
+    public function test_verification_qrcode_payload_returns_proxy_url_without_extra_proxy_field(): void
     {
         $content = file_get_contents(base_path('app/Services/Auth/VerificationService.php'));
 
         $this->assertIsString($content);
-        $this->assertStringContainsString("'url' => \$remoteUrl", $content);
+        $this->assertStringContainsString("'url' => \$proxyUrl", $content);
         $this->assertStringNotContainsString("'proxy_url' =>", $content);
     }
 
@@ -37,11 +37,11 @@ class ConfigRuntimeAccessTest extends TestCase
         $proxyUrl = $this->invokePrivateMethod($service, 'buildQrCodeProxyUrl', ['cert-123']);
 
         $this->assertSame(
-            'https://frontend.example.com/api/client/verification/callback',
+            'https://frontend.example.com/api/v2/client/verification/callback',
             $callbackUrl
         );
         $this->assertSame(
-            'https://frontend.example.com/api/client/verification/scan?certify_id=cert-123',
+            'https://frontend.example.com/api/v2/client/verification/scan?certify_id=cert-123',
             $proxyUrl
         );
     }
@@ -59,11 +59,11 @@ class ConfigRuntimeAccessTest extends TestCase
         $proxyUrl = $this->invokePrivateMethod($service, 'buildQrCodeProxyUrl', ['cert-456']);
 
         $this->assertSame(
-            'https://backend.example.com/api/client/verification/callback',
+            'https://backend.example.com/api/v2/client/verification/callback',
             $callbackUrl
         );
         $this->assertSame(
-            'https://backend.example.com/api/client/verification/scan?certify_id=cert-456',
+            'https://backend.example.com/api/v2/client/verification/scan?certify_id=cert-456',
             $proxyUrl
         );
     }

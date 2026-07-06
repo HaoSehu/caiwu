@@ -32,7 +32,7 @@ class ClientNotificationPreferencesTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $response = $this->getJson('/api/client/auth/notification-preferences');
+        $response = $this->getJson('/api/v2/client/auth/notification-preferences');
 
         $response->assertOk()
             ->assertJson([
@@ -67,7 +67,7 @@ class ClientNotificationPreferencesTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $response = $this->putJson('/api/client/auth/notification-preferences', [
+        $response = $this->putJson('/api/v2/client/auth/notification-preferences', [
             'login_notify' => false,
             'login_location_alert' => true,
             'password_change_alert' => false,

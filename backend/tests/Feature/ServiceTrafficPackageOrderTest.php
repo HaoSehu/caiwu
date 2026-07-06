@@ -452,14 +452,15 @@ class ServiceTrafficPackageOrderTest extends TestCase
             $invoiceId = (int) $invoice->id;
 
             $trafficPackageProcessor = $this->createMock(ServiceTrafficPackageService::class);
-            $trafficPackageProcessor->expects($this->once())
-                ->method('processPaidTrafficPackageOrder')
-                ->with($this->callback(fn (Order $candidate): bool => (int) $candidate->id === (int) $order->id))
-                ->willReturn($service);
             $this->app->instance(ServiceTrafficPackageService::class, $trafficPackageProcessor);
 
             $dispatcher = $this->createMock(PaidOrderBusinessFlowDispatcher::class);
-            $dispatcher->expects($this->never())->method('dispatchPaidInvoice');
+            $dispatcher->expects($this->once())
+                ->method('dispatchPaidInvoice')
+                ->with(
+                    $this->callback(fn (Invoice $candidate): bool => (int) $candidate->id === (int) $invoice->id),
+                    'trace-upgrade-sync-'.$suffix
+                );
 
             $couponService = $this->createMock(CouponService::class);
             $couponService->expects($this->once())

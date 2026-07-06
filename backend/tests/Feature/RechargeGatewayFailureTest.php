@@ -19,7 +19,7 @@ class RechargeGatewayFailureTest extends TestCase
     {
         config([
             'alipay.gateway' => 'https://openapi.alipay.com/gateway.do',
-            'alipay.notify_url' => 'https://example.com/api/client/payment/alipay/notify',
+            'alipay.notify_url' => 'https://example.com/api/v2/client/payment/alipay/notify',
             'alipay.app_id' => 'test-app-id',
             'alipay.private_key' => str_repeat('A', 200),
         ]);
@@ -56,24 +56,58 @@ class RechargeGatewayFailureTest extends TestCase
 
         $client = new AlipayClient([
             'gateway' => 'https://plugin-gateway.example.test/gateway.do',
-            'notify_url' => 'https://pay.example.test/api/client/payment/alipay/notify',
+            'notify_url' => 'https://pay.example.test/api/v2/client/payment/alipay/notify',
         ]);
 
         $this->assertSame('https://openapi.alipay.com/gateway.do', $this->getPrivateProperty($client, 'gateway'));
-        $this->assertSame('https://console.example.test/api/client/payment/alipay/notify', $this->getPrivateProperty($client, 'notifyUrl'));
+        $this->assertSame('https://console.example.test/api/v2/client/payment/alipay/notify', $this->getPrivateProperty($client, 'notifyUrl'));
+    }
+
+    public function test_alipay_client_passes_configured_ca_bundle_to_http_client(): void
+    {
+        $caBundle = tempnam(sys_get_temp_dir(), 'alipay-ca-');
+        $this->assertIsString($caBundle);
+        file_put_contents($caBundle, "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n");
+
+        try {
+            config([
+                'alipay.ssl_verify' => true,
+                'alipay.ca_bundle' => $caBundle,
+            ]);
+
+            $client = $this->makeAlipayClient();
+            $pendingRequest = $this->invokePrivateMethod($client, 'buildHttpClient');
+
+            $this->assertSame($caBundle, $pendingRequest->getOptions()['verify'] ?? null);
+        } finally {
+            @unlink($caBundle);
+        }
+    }
+
+    public function test_alipay_client_can_disable_ssl_verification_from_config(): void
+    {
+        config([
+            'alipay.ssl_verify' => false,
+            'alipay.ca_bundle' => '',
+        ]);
+
+        $client = $this->makeAlipayClient();
+        $pendingRequest = $this->invokePrivateMethod($client, 'buildHttpClient');
+
+        $this->assertFalse($pendingRequest->getOptions()['verify'] ?? null);
     }
 
     public function test_precreate_notify_url_accepts_public_https_address(): void
     {
         config([
-            'alipay.notify_url' => 'https://pay.example.com/api/client/payment/alipay/notify',
+            'alipay.notify_url' => 'https://pay.example.com/api/v2/client/payment/alipay/notify',
             'app.url' => 'http://127.0.0.1:8000',
         ]);
 
         $service = $this->makeAlipayClient();
 
         $this->assertSame(
-            'https://pay.example.com/api/client/payment/alipay/notify',
+            'https://pay.example.com/api/v2/client/payment/alipay/notify',
             $this->invokePrivateMethod($service, 'resolvePrecreateNotifyUrl')
         );
     }
@@ -81,14 +115,14 @@ class RechargeGatewayFailureTest extends TestCase
     public function test_precreate_notify_url_accepts_public_http_address(): void
     {
         config([
-            'alipay.notify_url' => 'http://47.109.144.223:6107/api/client/payment/alipay/notify',
+            'alipay.notify_url' => 'http://47.109.144.223:6107/api/v2/client/payment/alipay/notify',
             'app.url' => 'http://127.0.0.1:8000',
         ]);
 
         $service = $this->makeAlipayClient();
 
         $this->assertSame(
-            'http://47.109.144.223:6107/api/client/payment/alipay/notify',
+            'http://47.109.144.223:6107/api/v2/client/payment/alipay/notify',
             $this->invokePrivateMethod($service, 'resolvePrecreateNotifyUrl')
         );
     }
@@ -104,7 +138,7 @@ class RechargeGatewayFailureTest extends TestCase
         $service = $this->makeAlipayClient();
 
         $this->assertSame(
-            'http://47.109.144.223:6107/api/client/payment/alipay/notify',
+            'http://47.109.144.223:6107/api/v2/client/payment/alipay/notify',
             $this->invokePrivateMethod($service, 'resolvePrecreateNotifyUrl')
         );
     }

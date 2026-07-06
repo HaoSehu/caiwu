@@ -18,13 +18,13 @@ class AdminVisitorPermissionTest extends TestCase
         Sanctum::actingAs($this->createVisitorAdmin());
 
         foreach ([
-            '/api/admin/users',
-            '/api/admin/roles',
-            '/api/admin/permissions',
-            '/api/admin/settings',
-            '/api/admin/integration-plugins',
-            '/api/admin/schedules/overview',
-            '/api/admin/referral-withdrawals',
+            '/api/v2/admin/users',
+            '/api/v2/admin/roles',
+            '/api/v2/admin/permissions',
+            '/api/v2/admin/settings',
+            '/api/v2/admin/integration-plugins',
+            '/api/v2/admin/schedules/overview',
+            '/api/v2/admin/referral-withdrawals',
         ] as $uri) {
             $this->getJson($uri)
                 ->assertOk()
@@ -49,12 +49,12 @@ class AdminVisitorPermissionTest extends TestCase
         ]);
 
         foreach ([
-            ['postJson', '/api/admin/roles', ['name' => 'visitor-denied', 'label' => 'Denied', 'permissions' => []]],
-            ['postJson', '/api/admin/settings', ['group' => 'system', 'settings' => []]],
-            ['postJson', '/api/admin/integration-plugins/scan', []],
-            ['postJson', "/api/admin/integration-plugins/{$plugin->id}/health-check", []],
-            ['postJson', '/api/admin/schedules/trigger', ['task' => 'test']],
-            ['getJson', '/api/admin/settings/system/secret/app_key', []],
+            ['postJson', '/api/v2/admin/roles', ['name' => 'visitor-denied', 'label' => 'Denied', 'permissions' => []]],
+            ['postJson', '/api/v2/admin/settings', ['group' => 'system', 'settings' => []]],
+            ['postJson', '/api/v2/admin/integration-plugin-scans', []],
+            ['postJson', "/api/v2/admin/integration-plugins/{$plugin->id}/tasks", ['type' => 'health_check']],
+            ['postJson', '/api/v2/admin/schedule-triggers', ['task' => 'test']],
+            ['getJson', '/api/v2/admin/settings/system/secrets/app_key', []],
         ] as [$method, $uri, $payload]) {
             $this->{$method}($uri, $payload)
                 ->assertForbidden()

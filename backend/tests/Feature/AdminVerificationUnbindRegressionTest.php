@@ -65,7 +65,7 @@ class AdminVerificationUnbindRegressionTest extends TestCase
         $token = $admin->createToken('verification-unbind-regression')->plainTextToken;
 
         $this->withHeader('Authorization', 'Bearer '.$token)
-            ->postJson('/api/admin/verifications/'.$user->id.'/unbind', [
+            ->postJson('/api/v2/admin/verifications/'.$user->id.'/unbindings', [
                 'reject_reason' => $rejectReason,
             ])
             ->assertOk()

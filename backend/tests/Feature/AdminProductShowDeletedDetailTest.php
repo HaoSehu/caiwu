@@ -27,11 +27,11 @@ class AdminProductShowDeletedDetailTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/admin/products/'.$product->id)
+        $this->getJson('/api/v2/admin/products/'.$product->id)
             ->assertOk()
-            ->assertJsonPath('data.id', (int) $product->id)
-            ->assertJsonPath('data.is_deleted', true)
-            ->assertJsonPath('data.lifecycle_status', 'deleted');
+            ->assertJsonPath('data.product.id', (int) $product->id)
+            ->assertJsonPath('data.product.lifecycle.lifecycle_status', 'deleted')
+            ->assertJsonPath('data.product.lifecycle.deleted_at', $product->deleted_at?->format('Y-m-d H:i:s'));
     }
 
     private function createAdmin(string $suffix): AdminUser

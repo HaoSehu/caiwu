@@ -36,17 +36,17 @@ class AdminFinanceDateFilterTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/admin/orders?keyword=ORDDATE'.$suffix.'&start_date=2037-01-03')
+        $this->getJson('/api/v2/admin/orders?keyword=ORDDATE'.$suffix.'&start_date=2037-01-03')
             ->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.id', (int) $newOrder->id);
 
-        $this->getJson('/api/admin/orders?keyword=ORDDATE'.$suffix.'&end_date=2037-01-03')
+        $this->getJson('/api/v2/admin/orders?keyword=ORDDATE'.$suffix.'&end_date=2037-01-03')
             ->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.order_no', 'ORDDATE'.$suffix.'OLD');
 
-        $this->getJson('/api/admin/orders?start_date=2037-01-06&end_date=2037-01-01')
+        $this->getJson('/api/v2/admin/orders?start_date=2037-01-06&end_date=2037-01-01')
             ->assertStatus(422)
             ->assertJsonPath('code', 42200);
 
@@ -54,7 +54,7 @@ class AdminFinanceDateFilterTest extends TestCase
             'date_range' => ['2037-01-01', '2037-01-06'],
         ]);
 
-        $this->getJson('/api/admin/orders?'.$legacyQuery)
+        $this->getJson('/api/v2/admin/orders?'.$legacyQuery)
             ->assertStatus(422)
             ->assertJsonPath('code', 42200);
     }
@@ -90,17 +90,17 @@ class AdminFinanceDateFilterTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/admin/invoices?keyword=INVDATE'.$suffix.'&start_date=2037-02-03')
+        $this->getJson('/api/v2/admin/invoices?keyword=INVDATE'.$suffix.'&start_date=2037-02-03')
             ->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.id', (int) $newInvoice->id);
 
-        $this->getJson('/api/admin/invoices?keyword=INVDATE'.$suffix.'&end_date=2037-02-03')
+        $this->getJson('/api/v2/admin/invoices?keyword=INVDATE'.$suffix.'&end_date=2037-02-03')
             ->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.id', (int) $oldInvoice->id);
 
-        $this->getJson('/api/admin/finance/recharges?keyword=PAYDATE'.$suffix.'&end_date=2037-02-03')
+        $this->getJson('/api/v2/admin/finance/recharges?keyword=PAYDATE'.$suffix.'&end_date=2037-02-03')
             ->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.id', (int) $oldPayment->id);

@@ -45,7 +45,7 @@ class AdminHomeHeroControllerTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/admin/site/home-hero')
+        $this->getJson('/api/v2/admin/site/home-hero')
             ->assertOk()
             ->assertJsonPath('code', 0)
             ->assertJsonStructure([
@@ -88,7 +88,7 @@ class AdminHomeHeroControllerTest extends TestCase
             ],
         ];
 
-        $this->postJson('/api/admin/site/home-hero', $payload)
+        $this->postJson('/api/v2/admin/site/home-hero', $payload)
             ->assertOk()
             ->assertJsonPath('code', 0)
             ->assertJsonPath('data.slides.0.rail_title', '官网换新')
@@ -100,7 +100,7 @@ class AdminHomeHeroControllerTest extends TestCase
         $this->assertSame('官网焕新 · 新版本上线', $stored['slides'][0]['title'] ?? '');
         $this->assertSame('产品动态', $stored['features'][0]['kicker'] ?? '');
 
-        $this->getJson('/api/site/home-hero')
+        $this->getJson('/api/v2/site/home-hero')
             ->assertOk()
             ->assertJsonPath('code', 0)
             ->assertJsonPath('data.slides.0.title', '官网焕新 · 新版本上线')
@@ -127,7 +127,7 @@ class AdminHomeHeroControllerTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->postJson('/api/admin/site/home-hero', [
+        $this->postJson('/api/v2/admin/site/home-hero', [
             'slides' => [
                 [
                     'key' => 'refresh',
@@ -179,7 +179,7 @@ class AdminHomeHeroControllerTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $response = $this->postJson('/api/admin/site/home-hero', [
+        $response = $this->postJson('/api/v2/admin/site/home-hero', [
             'slides' => [
                 [
                     'rail_title' => '第一屏',
@@ -239,7 +239,7 @@ class AdminHomeHeroControllerTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->postJson('/api/admin/site/home-hero', [
+        $this->postJson('/api/v2/admin/site/home-hero', [
             'slides' => [],
             'features' => [],
         ])->assertStatus(422);
@@ -278,7 +278,7 @@ class AdminHomeHeroControllerTest extends TestCase
             ];
         }
 
-        $this->postJson('/api/admin/site/home-hero', [
+        $this->postJson('/api/v2/admin/site/home-hero', [
             'slides' => $slides,
             'features' => [
                 [
@@ -323,7 +323,7 @@ class AdminHomeHeroControllerTest extends TestCase
             ];
         }
 
-        $this->postJson('/api/admin/site/home-hero', [
+        $this->postJson('/api/v2/admin/site/home-hero', [
             'slides' => [
                 [
                     'rail_title' => '第一屏',

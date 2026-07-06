@@ -114,14 +114,14 @@ class ClientOrderProductFullPathTest extends TestCase
 
         $expectedPath = '云服务器/轻量云/香港/gscs-2vcpu-2gib';
 
-        $this->getJson('/api/client/orders?page_size=20')
+        $this->getJson('/api/v2/client/orders?page_size=20')
             ->assertOk()
             ->assertJsonPath('data.list.0.id', (int) $order->id)
             ->assertJsonPath('data.list.0.product_name', 'gscs-2vcpu-2gib')
             ->assertJsonPath('data.list.0.product_full_path', $expectedPath)
             ->assertJsonPath('data.list.0.invoice.invoice_no', (string) $invoice->invoice_no);
 
-        $this->getJson('/api/client/orders/'.$order->id)
+        $this->getJson('/api/v2/client/orders/'.$order->id)
             ->assertOk()
             ->assertJsonPath('data.id', (int) $order->id)
             ->assertJsonPath('data.product_name', 'gscs-2vcpu-2gib')

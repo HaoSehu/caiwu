@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Constants\OrderStatus;
 use App\Constants\ServiceStatus;
+use App\Jobs\RunHeartbeatTaskJob;
 use App\Models\Order;
 use App\Models\Service;
 use App\Models\Supplier;
@@ -13,14 +14,11 @@ use App\Services\Automation\AutoRenewService;
 use App\Services\Automation\BillingAutomationService;
 use App\Services\Automation\InvoiceCleanupAutomationService;
 use App\Services\Automation\ScheduleTaskService;
-use App\Services\Automation\ScheduleTaskTriggerService;
 use App\Services\Automation\ServiceLifecycleAutomationService;
 use App\Services\Automation\ServiceStatusSyncService;
-use App\Services\Finance\CheckoutService;
 use App\Services\Finance\CouponCampaignService;
 use App\Services\ProductCatalog\ProductCatalogService;
 use App\Services\Referral\ReferralService;
-use App\Services\System\SettingService;
 use App\Services\Ticket\TicketAutomationService;
 use App\Services\Upstream\Contracts\ProvidesScheduledAuthRefresh;
 use App\Services\Upstream\Contracts\UpstreamDriver;
@@ -28,7 +26,6 @@ use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -71,7 +68,6 @@ class ScheduleTaskExecutionCoverageTest extends TestCase
             'coupon-campaign-dispatch',
             'ticket-auto-close',
             'order-cleanup',
-            'queue-backlog-drain',
         ] as $expectedKey) {
             $this->assertTrue(
                 $tasks->contains(fn (array $task): bool => ($task['key'] ?? null) === $expectedKey),
@@ -80,8 +76,12 @@ class ScheduleTaskExecutionCoverageTest extends TestCase
         }
 
         $this->assertTrue(
-            $tasks->contains(fn (array $task): bool => ($task['key'] ?? null) === 'VNC Relay 守护' && ($task['manual_triggerable'] ?? true) === false),
-            'Missing VNC Relay 守护 schedule entry.'
+            $tasks->contains(fn (array $task): bool => ($task['key'] ?? null) === 'vnc-ensure-relay' && ($task['title'] ?? null) === 'VNC Relay 守护'),
+            'Missing vnc-ensure-relay schedule entry.'
+        );
+        $this->assertFalse(
+            $tasks->contains(fn (array $task): bool => ($task['key'] ?? null) === 'sync-processing-order-status'),
+            'Deprecated sync-processing-order-status must not be exposed as a current schedule task.'
         );
 
         $cleanupTask = $tasks->firstWhere('key', 'order-cleanup');
@@ -184,39 +184,12 @@ class ScheduleTaskExecutionCoverageTest extends TestCase
             ->willReturn(['closed' => 0]);
         app()->instance(TicketAutomationService::class, $ticketAutomationService);
 
-        $settingService = $this->createMock(SettingService::class);
-        $settingService->expects($this->once())
-            ->method('getAutomationConfig')
-            ->willReturn([
-                'pending_order_cleanup_enabled' => false,
-                'pending_order_cleanup_after_hours' => 1,
-                'pending_recharge_cleanup_enabled' => false,
-                'pending_recharge_cleanup_after_days' => 0,
-            ]);
-        $invoiceCleanupAutomationService = new InvoiceCleanupAutomationService(
-            $settingService,
-            $this->createMock(CheckoutService::class),
-        );
+        $invoiceCleanupAutomationService = $this->createMock(InvoiceCleanupAutomationService::class);
+        $invoiceCleanupAutomationService->expects($this->once())
+            ->method('handle')
+            ->with()
+            ->willReturn(['invoices_cancelled' => 0, 'orders_cancelled' => 0, 'recharges_expired' => 0]);
         app()->instance(InvoiceCleanupAutomationService::class, $invoiceCleanupAutomationService);
-
-        Artisan::shouldReceive('call')
-            ->once()
-            ->with('orders:sync-processing-status')
-            ->andReturn(0);
-        Artisan::shouldReceive('call')
-            ->once()
-            ->withArgs(function (string $command, array $parameters = []): bool {
-                return $command === 'queue:work'
-                    && ($parameters['--queue'] ?? null) === 'provision,referral,notification,coupon,default'
-                    && ($parameters['--sleep'] ?? null) === 1
-                    && ($parameters['--tries'] ?? null) === 3
-                    && ($parameters['--timeout'] ?? null) === 1200
-                    && ($parameters['--stop-when-empty'] ?? null) === true
-                    && ($parameters['--max-time'] ?? null) === 50;
-            })
-            ->andReturn(0);
-
-        $service = app(ScheduleTaskTriggerService::class);
 
         foreach ([
             'refresh-hosting-panel-auth',
@@ -229,13 +202,8 @@ class ScheduleTaskExecutionCoverageTest extends TestCase
             'service-status-sync',
             'ticket-auto-close',
             'order-cleanup',
-            'sync-processing-order-status',
-            'queue-backlog-drain',
         ] as $taskKey) {
-            $result = $service->dispatch($taskKey, 1);
-
-            $this->assertSame($taskKey, $result['task'] ?? null);
-            $this->assertSame('sync', $result['execution_mode'] ?? null);
+            RunHeartbeatTaskJob::dispatchSync($taskKey, null, null, 1, 'manual_trigger');
         }
 
         $this->assertSame([1], $scheduledAuthRefresh->supplierStatuses);

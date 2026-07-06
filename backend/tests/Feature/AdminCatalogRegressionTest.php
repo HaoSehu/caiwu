@@ -13,6 +13,8 @@ use App\Models\SecondProductGroup;
 use App\Models\Supplier;
 use App\Services\Integrations\Plugins\PluginDomain;
 use App\Services\Integrations\Plugins\UpstreamBindingWriter;
+use App\Services\ProductCatalog\ProductCategoryService;
+use App\Services\ProductCatalog\ProductTypeService;
 use App\Services\Upstream\ProviderKey;
 use App\Support\AdminPermissions;
 use Illuminate\Support\Facades\DB;
@@ -41,27 +43,27 @@ class AdminCatalogRegressionTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/admin/services?page=1&page_size=20')
+        $this->getJson('/api/v2/admin/services?page=1&page_size=20')
             ->assertOk()
             ->assertJsonStructure(['code', 'message', 'data', 'timestamp']);
 
-        $this->getJson('/api/admin/products/summary')
+        $this->getJson('/api/v2/admin/products/summary')
             ->assertOk()
             ->assertJsonStructure(['code', 'message', 'data', 'timestamp']);
 
-        $this->getJson('/api/admin/product-types')
+        $this->getJson('/api/v2/admin/product-types')
             ->assertOk()
             ->assertJsonStructure(['code', 'message', 'data', 'timestamp']);
 
-        $this->getJson('/api/admin/coupons/product-tree')
+        $this->getJson('/api/v2/admin/coupon-product-groups?page=1&page_size=20')
             ->assertOk()
-            ->assertJsonStructure(['code', 'message', 'data' => ['tree'], 'timestamp']);
+            ->assertJsonStructure(['code', 'message', 'data' => ['list', 'total', 'page', 'page_size'], 'timestamp']);
 
-        $this->getJson('/api/admin/coupon-campaigns?page=1&page_size=20')
+        $this->getJson('/api/v2/admin/coupon-campaigns?page=1&page_size=20')
             ->assertOk()
             ->assertJsonStructure(['code', 'message', 'data', 'timestamp']);
 
-        $this->getJson('/api/admin/coupon-campaigns/summary')
+        $this->getJson('/api/v2/admin/coupon-campaigns/summary')
             ->assertOk()
             ->assertJsonStructure(['code', 'message', 'data', 'timestamp']);
     }
@@ -84,16 +86,207 @@ class AdminCatalogRegressionTest extends TestCase
             'status' => 1,
         ]);
 
-        $firstGroup = $this->firstGroupForType('domain', 'Filter root '.$suffix, 'admin-filter-root-'.$suffix);
+        $type = app(ProductTypeService::class)->create('Filter type '.$suffix, '');
+        $productType = (string) $type['value'];
+        $firstGroup = FirstProductGroup::query()->findOrFail((int) $type['first_product_group_id']);
         $group = $this->createSecondGroup($firstGroup, 'Filter group '.$suffix, 'admin-filter-group-'.$suffix);
 
         Product::query()->create($this->productPayload($group, 'Domain product '.$suffix, '10.00', 0));
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/admin/products?keyword=&second_product_group_id='.$group->id.'&product_type=domain&status=&page=1&page_size=20')
+        $this->getJson('/api/v2/admin/products?second_product_group_id='.$group->id.'&product_type='.$productType.'&page=1&page_size=20')
             ->assertOk()
             ->assertJsonStructure(['code', 'message', 'data', 'timestamp']);
+    }
+
+    public function test_admin_category_crud_uses_three_level_hierarchy(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+        $role = Role::query()->create([
+            'name' => 'admin-category-crud-'.$suffix,
+            'label' => 'Admin Category Crud',
+            'permissions' => [AdminPermissions::ALL],
+        ]);
+
+        $admin = AdminUser::query()->create([
+            'username' => 'admin-category-crud-'.$suffix,
+            'password' => 'Temp@123456',
+            'role_id' => (int) $role->id,
+            'nickname' => 'Admin Category Crud',
+            'email' => 'admin-category-crud-'.$suffix.'@example.com',
+            'status' => 1,
+        ]);
+
+        $firstGroup = $this->firstGroupForType(
+            'category-crud-'.$suffix,
+            '云服务器 '.$suffix,
+            'admin-category-crud-root-'.$suffix
+        );
+
+        Sanctum::actingAs($admin);
+
+        $secondResponse = $this->postJson('/api/v2/admin/product-groups', [
+            'effective_product_group_level' => 2,
+            'service_type_code' => (string) $firstGroup->code,
+            'first_product_group_id' => (int) $firstGroup->id,
+            'name' => '襄阳 '.$suffix,
+            'sort_order' => 1,
+            'is_visible' => 1,
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.group.effective_product_group_level', 2)
+            ->assertJsonPath('data.group.first_product_group_id', (int) $firstGroup->id)
+            ->assertJsonPath('data.group.second_product_group_name', '襄阳 '.$suffix);
+
+        $secondGroupId = (int) $secondResponse->json('data.group.second_product_group_id');
+        $this->assertGreaterThan(0, $secondGroupId);
+
+        $thirdResponse = $this->postJson('/api/v2/admin/product-groups', [
+            'effective_product_group_level' => 3,
+            'second_product_group_id' => $secondGroupId,
+            'name' => '三网精品 '.$suffix,
+            'sort_order' => 1,
+            'is_visible' => 1,
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.group.effective_product_group_level', 3)
+            ->assertJsonPath('data.group.second_product_group_id', $secondGroupId)
+            ->assertJsonPath('data.group.third_product_group_name', '三网精品 '.$suffix);
+
+        $thirdGroupId = (int) $thirdResponse->json('data.group.third_product_group_id');
+        $this->assertGreaterThan(0, $thirdGroupId);
+
+        $this->putJson('/api/v2/admin/product-groups/'.$thirdGroupId, [
+            'effective_product_group_level' => 3,
+            'second_product_group_id' => $secondGroupId,
+            'name' => '高性能 '.$suffix,
+            'is_visible' => 1,
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.group.third_product_group_name', '高性能 '.$suffix);
+
+        $rootResponse = $this->getJson('/api/v2/admin/product-groups?'.http_build_query([
+            'keyword' => $suffix,
+            'page' => 1,
+            'page_size' => 20,
+        ]))
+            ->assertOk();
+        $rootGroup = $rootResponse->json('data.list.0');
+        $this->assertSame('云服务器 '.$suffix, $rootGroup['first_product_group_name']);
+
+        $childrenResponse = $this->getJson('/api/v2/admin/product-groups/'.$firstGroup->id.'/children?'.http_build_query([
+            'level' => 1,
+            'page' => 1,
+            'page_size' => 20,
+        ]))
+            ->assertOk();
+        $this->assertSame('襄阳 '.$suffix, $childrenResponse->json('data.list.0.second_product_group_name'));
+
+        $thirdChildrenResponse = $this->getJson('/api/v2/admin/product-groups/'.$secondGroupId.'/children?'.http_build_query([
+            'level' => 2,
+            'page' => 1,
+            'page_size' => 20,
+        ]))
+            ->assertOk();
+        $this->assertSame('高性能 '.$suffix, $thirdChildrenResponse->json('data.list.0.third_product_group_name'));
+
+        $this->deleteJson('/api/v2/admin/product-groups/'.$thirdGroupId, [
+            'effective_product_group_level' => 3,
+        ])
+            ->assertOk()
+            ->assertJsonPath('data', null);
+        $this->assertDatabaseMissing('third_product_groups', ['id' => $thirdGroupId]);
+
+        $this->deleteJson('/api/v2/admin/product-groups/'.$secondGroupId, [
+            'effective_product_group_level' => 2,
+        ])
+            ->assertOk()
+            ->assertJsonPath('data', null);
+        $this->assertDatabaseMissing('second_product_groups', ['id' => $secondGroupId]);
+    }
+
+    public function test_numeric_product_type_label_can_create_second_level_category(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+
+        $label = (string) random_int(10000000, 99999999);
+        $type = app(ProductTypeService::class)->create($label, '');
+
+        $productType = (string) $type['value'];
+        $firstGroupId = (int) $type['first_product_group_id'];
+
+        $this->assertMatchesRegularExpression('/^type_\d+$/', $productType);
+        $this->assertGreaterThan(0, $firstGroupId);
+        $this->assertDatabaseHas('first_product_groups', [
+            'id' => $firstGroupId,
+            'code' => $productType,
+            'name' => $label,
+        ]);
+
+        $category = app(ProductCategoryService::class)->createCategory([
+            'effective_product_group_level' => 2,
+            'service_type_code' => $productType,
+            'first_product_group_id' => $firstGroupId,
+            'name' => '西安 '.$suffix,
+            'sort_order' => 0,
+            'is_visible' => 1,
+        ]);
+
+        $this->assertSame($firstGroupId, (int) $category['first_product_group_id']);
+        $this->assertSame('西安 '.$suffix, $category['second_product_group_name']);
+    }
+
+    public function test_admin_category_reorder_accepts_current_hierarchy_payload(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+        $role = Role::query()->create([
+            'name' => 'admin-category-reorder-'.$suffix,
+            'label' => 'Admin Category Reorder',
+            'permissions' => [AdminPermissions::ALL],
+        ]);
+
+        $admin = AdminUser::query()->create([
+            'username' => 'admin-category-reorder-'.$suffix,
+            'password' => 'Temp@123456',
+            'role_id' => (int) $role->id,
+            'nickname' => 'Admin Category Reorder',
+            'email' => 'admin-category-reorder-'.$suffix.'@example.com',
+            'status' => 1,
+        ]);
+
+        $firstGroup = $this->firstGroupForType(
+            'category-reorder-'.$suffix,
+            '游戏云 '.$suffix,
+            'admin-category-reorder-root-'.$suffix
+        );
+        $firstSecondGroup = $this->createSecondGroup($firstGroup, '美国 '.$suffix, 'admin-category-reorder-us-'.$suffix, 1);
+        $secondSecondGroup = $this->createSecondGroup($firstGroup, '香港 '.$suffix, 'admin-category-reorder-hk-'.$suffix, 2);
+
+        Sanctum::actingAs($admin);
+
+        $this->postJson('/api/v2/admin/product-groups/reorders', [
+            'effective_product_group_level' => 2,
+            'first_product_group_id' => (int) $firstGroup->id,
+            'second_product_group_ids' => [(int) $secondSecondGroup->id, (int) $firstSecondGroup->id],
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.updated_count', 2)
+            ->assertJsonPath('data.level', 2)
+            ->assertJsonPath('data.parent_id', (int) $firstGroup->id);
+
+        $orderedSecondGroupIds = SecondProductGroup::query()
+            ->where('first_product_group_id', (int) $firstGroup->id)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $this->assertSame([
+            (int) $secondSecondGroup->id,
+            (int) $firstSecondGroup->id,
+        ], $orderedSecondGroupIds);
     }
 
     public function test_admin_product_create_accepts_upstream_binding_payload(): void
@@ -151,7 +344,7 @@ class AdminCatalogRegressionTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $response = $this->postJson('/api/admin/products', [
+        $response = $this->postJson('/api/v2/admin/products', [
             'display_name' => 'Binding product '.$suffix,
             'product_type' => 'vps',
             'first_product_group_id' => (int) $firstGroup->id,
@@ -169,11 +362,11 @@ class AdminCatalogRegressionTest extends TestCase
 
         $response
             ->assertOk()
-            ->assertJsonPath('data.upstream_binding.provider_key', ProviderKey::MOFANG_FINANCE_API)
-            ->assertJsonPath('data.upstream_binding.supplier_id', (int) $supplier->id)
-            ->assertJsonPath('data.upstream_binding.upstream_product_id', '900123');
+            ->assertJsonPath('data.product.upstream_binding.provider_key', ProviderKey::MOFANG_FINANCE_API)
+            ->assertJsonPath('data.product.upstream_binding.supplier_id', (int) $supplier->id)
+            ->assertJsonPath('data.product.upstream_binding.upstream_product_id', '900123');
 
-        $productId = (int) $response->json('data.id');
+        $productId = (int) $response->json('data.product.id');
         $this->assertGreaterThan(0, $productId);
         $this->assertDatabaseHas('products', ['id' => $productId]);
         $this->assertDatabaseHas('supplier_plugin_bindings', [
@@ -225,7 +418,7 @@ class AdminCatalogRegressionTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->postJson('/api/admin/products/category/batch', [
+        $this->postJson('/api/v2/admin/products/category-batches', [
             'product_ids' => [(int) $firstSourceProduct->id, (int) $secondSourceProduct->id],
             'target_second_product_group_id' => (int) $targetCategory->id,
         ])
@@ -286,7 +479,7 @@ class AdminCatalogRegressionTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->postJson('/api/admin/products/reorder', [
+        $this->postJson('/api/v2/admin/products/reorders', [
             'product_id' => (int) $thirdProduct->id,
             'target_second_product_group_id' => (int) $category->id,
             'reference_product_id' => (int) $secondProduct->id,
@@ -339,17 +532,17 @@ class AdminCatalogRegressionTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $adminResponse = $this->getJson('/api/admin/products/'.$product->id)
+        $adminResponse = $this->getJson('/api/v2/admin/products/'.$product->id)
             ->assertOk()
-            ->assertJsonPath('data.id', (int) $product->id)
-            ->assertJsonPath('data.name', (string) $product->name);
+            ->assertJsonPath('data.product.id', (int) $product->id)
+            ->assertJsonPath('data.product.display.display_name', (string) $product->name);
 
-        $siteResponse = $this->getJson('/api/site/products/'.$product->id)
+        $siteResponse = $this->getJson('/api/v2/site/products/'.$product->id)
             ->assertOk()
             ->assertJsonPath('data.product.id', (int) $product->id)
             ->assertJsonPath('data.product.name', (string) $product->name);
 
-        $this->assertArrayNotHasKey('description', $adminResponse->json('data'));
+        $this->assertArrayNotHasKey('description', $adminResponse->json('data.product'));
         $this->assertArrayNotHasKey('description', $siteResponse->json('data.product'));
     }
 
@@ -378,12 +571,12 @@ class AdminCatalogRegressionTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $response = $this->getJson('/api/admin/products/'.$product->id)
+        $response = $this->getJson('/api/v2/admin/products/'.$product->id)
             ->assertOk()
-            ->assertJsonPath('data.id', (int) $product->id);
+            ->assertJsonPath('data.product.id', (int) $product->id);
 
-        $this->assertArrayNotHasKey('description', $response->json('data'));
-        $this->assertArrayHasKey('remark', $response->json('data'));
+        $this->assertArrayNotHasKey('description', $response->json('data.product'));
+        $this->assertArrayHasKey('remark', $response->json('data.product.display'));
     }
 
     private function firstGroupForType(string $code, string $name, string $slug): FirstProductGroup

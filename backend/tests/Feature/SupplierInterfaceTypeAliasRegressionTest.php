@@ -34,7 +34,7 @@ class SupplierInterfaceTypeAliasRegressionTest extends TestCase
 
         $this->actingAsProductManager($suffix);
 
-        $response = $this->postJson('/api/admin/suppliers', [
+        $response = $this->postJson('/api/v2/admin/suppliers', [
             'name' => 'Mofang Alias '.$suffix,
             'upstream_binding' => [
                 'provider_key' => 'mofang_finance_api',
@@ -47,8 +47,16 @@ class SupplierInterfaceTypeAliasRegressionTest extends TestCase
 
         $response
             ->assertOk()
-            ->assertJsonPath('data.provider_key', 'mofang_finance_api')
-            ->assertJsonPath('data.upstream_binding.provider_key', 'mofang_finance_api');
+            ->assertJsonPath('data.supplier.provider_key', 'mofang_finance_api')
+            ->assertJsonPath('data.supplier.upstream_binding.provider_key', 'mofang_finance_api')
+            ->assertJsonPath('data.supplier.card.title', 'Mofang Alias '.$suffix)
+            ->assertJsonPath('data.supplier.card.fields.0.label', '用户名')
+            ->assertJsonPath('data.supplier.card.fields.1.label', '上游余额');
+
+        $this->assertTrue(collect($response->json('data.supplier.card.actions'))->contains(
+            fn (array $action): bool => ($action['action'] ?? '') === 'supplier.batch_connect'
+                && ($action['request_action'] ?? '') === 'server.supplier.bulk_connect'
+        ));
 
         $supplier = Supplier::query()
             ->where('name', 'Mofang Alias '.$suffix)
@@ -83,7 +91,7 @@ class SupplierInterfaceTypeAliasRegressionTest extends TestCase
             'priority' => 0,
         ]);
 
-        $response = $this->putJson('/api/admin/suppliers/'.$supplier->id, [
+        $response = $this->putJson('/api/v2/admin/suppliers/'.$supplier->id, [
             'name' => 'Mofang Preserve Updated '.$suffix,
             'upstream_binding' => [
                 'provider_key' => 'mofang_finance_api',
@@ -96,9 +104,9 @@ class SupplierInterfaceTypeAliasRegressionTest extends TestCase
 
         $response
             ->assertOk()
-            ->assertJsonPath('data.has_api_key', true);
+            ->assertJsonPath('data.supplier.credentials.api_credential_configured', true);
 
-        $payload = $response->json('data');
+        $payload = $response->json('data.supplier');
         $this->assertIsArray($payload);
         $this->assertArrayNotHasKey('api_key', $payload);
         $binding = app(PluginBindingResolver::class)->supplierBindingProjection($supplier->fresh(), includeSecrets: true);
@@ -109,7 +117,7 @@ class SupplierInterfaceTypeAliasRegressionTest extends TestCase
     {
         $this->actingAsProductManager(bin2hex(random_bytes(4)));
 
-        $payload = $this->getJson('/api/admin/suppliers/provider-types')
+        $payload = $this->getJson('/api/v2/admin/suppliers/provider-types')
             ->assertOk()
             ->json('data.list');
 
@@ -119,7 +127,7 @@ class SupplierInterfaceTypeAliasRegressionTest extends TestCase
         $this->assertSame('魔方财务接口', $mofang['label'] ?? null);
         $this->assertSame('魔方财务地址', $mofang['supplier_form']['fields'][0]['label'] ?? null);
         $this->assertSame('api_key', $mofang['supplier_form']['fields'][2]['key'] ?? null);
-        $this->assertTrue((bool) ($mofang['supplier_form']['fields'][2]['secret'] ?? false));
+        $this->assertArrayNotHasKey('secret', $mofang['supplier_form']['fields'][2]);
         $this->assertFalse(collect($payload)->contains(fn (array $item): bool => ($item['value'] ?? null) === 'hosting_panel_api'));
     }
 
@@ -130,7 +138,7 @@ class SupplierInterfaceTypeAliasRegressionTest extends TestCase
 
         $this->actingAsProductManager($suffix);
 
-        $response = $this->postJson('/api/admin/suppliers', [
+        $response = $this->postJson('/api/v2/admin/suppliers', [
             'name' => 'Demo Provider '.$suffix,
             'upstream_binding' => [
                 'provider_key' => 'demo_servers',
@@ -143,9 +151,11 @@ class SupplierInterfaceTypeAliasRegressionTest extends TestCase
 
         $response
             ->assertOk()
-            ->assertJsonPath('data.provider_key', 'demo_servers')
-            ->assertJsonPath('data.upstream_binding.provider_key', 'demo_servers')
-            ->assertJsonPath('data.provider_config.demo_region', 'ap-demo-custom');
+            ->assertJsonPath('data.supplier.provider_key', 'demo_servers')
+            ->assertJsonPath('data.supplier.upstream_binding.provider_key', 'demo_servers')
+            ->assertJsonPath('data.supplier.provider_config.demo_region', 'ap-demo-custom')
+            ->assertJsonPath('data.supplier.card.provided', false)
+            ->assertJsonPath('data.supplier.card.empty_text', '插件未提供信息');
 
         $supplier = Supplier::query()
             ->where('name', 'Demo Provider '.$suffix)
@@ -161,16 +171,16 @@ class SupplierInterfaceTypeAliasRegressionTest extends TestCase
         $this->assertNotSame('', $rawProviderConfig);
         $this->assertStringNotContainsString('ap-demo-custom', $rawProviderConfig);
 
-        $this->getJson('/api/admin/suppliers/'.$supplier->id)
+        $this->getJson('/api/v2/admin/suppliers/'.$supplier->id)
             ->assertOk()
-            ->assertJsonPath('data.provider_config.demo_region', 'ap-demo-custom')
-            ->assertJsonPath('data.has_provider_secret_values', [])
-            ->assertJsonMissingPath('data.api_key');
+            ->assertJsonPath('data.supplier.provider_config.demo_region', 'ap-demo-custom')
+            ->assertJsonPath('data.supplier.credentials.provider_values_configured', [])
+            ->assertJsonMissingPath('data.supplier.api_key');
 
-        $this->getJson('/api/admin/suppliers?keyword=Demo%20Provider%20'.$suffix)
+        $this->getJson('/api/v2/admin/suppliers?keyword=Demo%20Provider%20'.$suffix)
             ->assertOk()
             ->assertJsonPath('data.list.0.provider_config.demo_region', 'ap-demo-custom')
-            ->assertJsonPath('data.list.0.has_provider_secret_values', [])
+            ->assertJsonPath('data.list.0.credentials.provider_values_configured', [])
             ->assertJsonMissingPath('data.list.0.api_key');
     }
 
