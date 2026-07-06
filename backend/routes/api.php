@@ -1,9 +1,9 @@
 <?php
 
-use App\Http\Controllers\SiteConfigController;
-use App\Http\Controllers\SiteContentController;
-use App\Http\Controllers\SiteHomeController;
-use App\Http\Controllers\SiteProductController;
+use App\Http\Controllers\Site\V2\ContentController as V2SiteContentController;
+use App\Http\Controllers\Site\V2\HomeController as V2SiteHomeController;
+use App\Http\Controllers\Site\V2\ProductController as V2SiteProductController;
+use App\Http\Controllers\Site\V2\ProductGroupController as V2SiteProductGroupController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -12,26 +12,23 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 
-Route::get('/site/config', [SiteConfigController::class, 'index']);
-Route::get('/site/home', [SiteHomeController::class, 'index']);
-Route::get('/site/home-hero', [SiteHomeController::class, 'hero']);
-Route::get('/site/products/init', [SiteProductController::class, 'init']);
-Route::get('/site/product-types', [SiteProductController::class, 'productTypes']);
-Route::get('/site/product-groups', [SiteProductController::class, 'productGroups']);
-Route::get('/site/product-groups/{groupId}/children', [SiteProductController::class, 'childGroups']);
-Route::get('/site/product-groups/{groupId}/catalog', [SiteProductController::class, 'groupCatalog']);
-Route::get('/site/product-categories', [SiteProductController::class, 'productGroups']);
-Route::get('/site/product-categories/{groupId}/children', [SiteProductController::class, 'childGroups']);
-Route::get('/site/product-categories/{groupId}/catalog', [SiteProductController::class, 'groupCatalog']);
-Route::get('/site/products', [SiteProductController::class, 'index']);
-Route::get('/site/products/{productId}/stock', [SiteProductController::class, 'stock']);
-Route::get('/site/products/{productId}', [SiteProductController::class, 'show']);
-Route::post('/site/products/{productId}/quote', [SiteProductController::class, 'quote'])->middleware('throttle:60,1');
-Route::get('/site/content/overview', [SiteContentController::class, 'overview']);
-Route::get('/site/notices', [SiteContentController::class, 'notices']);
-Route::get('/site/notices/{articleId}', [SiteContentController::class, 'noticeDetail']);
-Route::get('/site/help-articles', [SiteContentController::class, 'helpArticles']);
-Route::get('/site/help-articles/{articleId}', [SiteContentController::class, 'helpDetail']);
+Route::get('/v2/site/product-groups', [V2SiteProductGroupController::class, 'index']);
+Route::get('/v2/site/product-groups/{group}/children', [V2SiteProductGroupController::class, 'children']);
+Route::get('/v2/site/product-groups/{group}/products', [V2SiteProductGroupController::class, 'products']);
+Route::get('/v2/site/product-types', [V2SiteProductController::class, 'types']);
+Route::get('/v2/site/products', [V2SiteProductController::class, 'index']);
+Route::get('/v2/site/products/{product}/stock', [V2SiteProductController::class, 'stock']);
+Route::post('/v2/site/products/{product}/quote', [V2SiteProductController::class, 'quote'])->middleware('throttle:60,1');
+Route::get('/v2/site/products/{product}', [V2SiteProductController::class, 'show']);
+Route::get('/v2/site/product-purchase-context', [V2SiteProductController::class, 'purchaseContext']);
+Route::get('/v2/site/config', [V2SiteHomeController::class, 'config']);
+Route::get('/v2/site/home', [V2SiteHomeController::class, 'home']);
+Route::get('/v2/site/home-hero', [V2SiteHomeController::class, 'hero']);
+Route::get('/v2/site/content/overview', [V2SiteContentController::class, 'overview']);
+Route::get('/v2/site/notices', [V2SiteContentController::class, 'notices']);
+Route::get('/v2/site/notices/{article}', [V2SiteContentController::class, 'noticeDetail']);
+Route::get('/v2/site/help-articles', [V2SiteContentController::class, 'helpArticles']);
+Route::get('/v2/site/help-articles/{article}', [V2SiteContentController::class, 'helpDetail']);
 // 健康检查
 Route::get('/health', function () {
     return response()->json([
