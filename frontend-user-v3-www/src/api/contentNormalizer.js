@@ -121,14 +121,14 @@ export function normalizeContentListPayload(data = {}) {
     ...data,
     list: normalizeContentArticleList(pickFirst(data.list, data.items, data.rows)),
     categories: normalizeContentCategoryList(pickFirst(data.categories, data.category_list, data.categoryList)),
-    page: toNumber(pickFirst(data.page, data.current_page, data.currentPage), 1),
-    page_size: toNumber(pickFirst(data.page_size, data.pageSize, data.per_page, data.perPage), 10),
+    page: toNumber(data.page, 1),
+    page_size: toNumber(data.page_size, 10),
     total: toNumber(pickFirst(data.total, data.count), 0),
   }
 }
 
 export function normalizeContentDetailPayload(data = {}) {
-  return normalizeContentArticle(data)
+  return normalizeContentArticle(pickFirst(data.article, data.item, data.record, data))
 }
 
 export function normalizeSiteHomePayload(data = {}) {

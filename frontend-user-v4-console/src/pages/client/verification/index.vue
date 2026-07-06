@@ -41,7 +41,7 @@
           <h2>认证流程</h2>
           <ol>
             <li>填写真实姓名与身份证号。</li>
-            <li>使用支付宝扫码完成实名校验。</li>
+            <li>使用手机扫码打开认证页面并完成人脸校验。</li>
             <li>认证成功后自动刷新账户状态。</li>
           </ol>
         </t-card>
@@ -64,7 +64,7 @@
       cancel-btn="取消"
       destroy-on-close
       @confirm="submitVerification"
-      @close="stopPolling"
+      @close="handleVerificationDialogClose"
     >
       <t-form v-if="!verificationUrl" label-align="top" class="verification-form">
         <t-form-item label="真实姓名" required-mark>
@@ -77,11 +77,15 @@
 
       <div v-else class="verification-qrcode-panel">
         <qrcode-vue :value="verificationUrl" :size="260" level="H" render-as="svg" />
-        <p>请使用支付宝扫描二维码完成认证</p>
+        <p>请使用手机扫描二维码完成认证</p>
+        <p class="verification-countdown" :class="{ expired: isVerificationQrExpired }">
+          {{ isVerificationQrExpired ? '二维码已失效' : `二维码 ${verificationCountdownText} 后失效` }}
+        </p>
         <p v-if="verificationMessage" class="verification-message">{{ verificationMessage }}</p>
         <div class="verification-link-actions">
           <t-button variant="outline" :loading="verificationLoading" @click="refreshVerificationLink">刷新二维码</t-button>
           <t-button theme="primary" :loading="checkingStatus" @click="checkVerificationStatus(false)">查询认证状态</t-button>
+          <t-button variant="outline" :loading="closingSession" @click="closeVerificationSession(false)">关闭会话</t-button>
           <t-button
             v-if="canRestartVerification"
             theme="warning"
@@ -124,9 +128,12 @@ const {
   loading,
   verificationLoading,
   checkingStatus,
+  closingSession,
   showVerificationDialog,
   showVerifiedInfoDialog,
   verificationUrl,
+  verificationCountdownText,
+  isVerificationQrExpired,
   canRestartVerification,
   verificationMessage,
   form,
@@ -143,8 +150,9 @@ const {
   refreshVerificationLink,
   checkVerificationStatus,
   restartVerification,
+  closeVerificationSession,
   handleCallbackQuery,
-  stopPolling,
+  handleVerificationDialogClose,
 } = useVerification();
 
 onMounted(async () => {
@@ -279,6 +287,15 @@ onMounted(async () => {
 
 .verification-message {
   color: var(--td-warning-color);
+}
+
+.verification-countdown {
+  color: var(--td-text-color-secondary);
+  font: var(--td-font-body-small);
+
+  &.expired {
+    color: var(--td-error-color);
+  }
 }
 
 .verification-link-actions {

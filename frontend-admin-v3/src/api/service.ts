@@ -40,12 +40,12 @@ export interface CustomHostnamePayload {
 export const serviceApi = {
   list: (params: ServiceListParams) =>
     request.get<{ list?: ServiceRecord[]; total?: number; page?: number; page_size?: number }>({
-      url: '/admin/services',
+      url: '/v2/admin/services',
       params,
     }),
   batchUpdateCustomHostnames: (data: CustomHostnamePayload) =>
     request.post<{ message?: string }>({
-      url: '/admin/services/custom-hostnames/batch',
+      url: '/v2/admin/services/custom-hostnames/batch',
       data,
     }),
 };

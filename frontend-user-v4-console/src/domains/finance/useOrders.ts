@@ -59,7 +59,7 @@ export function useOrderList(options: { pageSize?: number } = {}) {
   async function loadSummary() {
     summaryLoading.value = true;
     try {
-      const res = await clientApi.orderSummary(buildParams());
+      const res = await clientApi.orderSummary();
       summary.value = res.data || {};
     } catch {
       summary.value = {};

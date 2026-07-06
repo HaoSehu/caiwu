@@ -198,6 +198,19 @@ function resolveEnterpriseCategoryDesc(group, summary, primaryProduct) {
 
 function resolveEnterpriseCategoryPath(group, primaryProduct) {
   if (!primaryProduct?.product) {
+    const typeId = Number(group?.product_type_id || 0)
+    const groupId = Number(group?.id || 0)
+
+    if (typeId > 0 && groupId > 0) {
+      return {
+        path: '/products',
+        query: {
+          type: String(typeId),
+          group: String(groupId),
+        },
+      }
+    }
+
     return '/products'
   }
 

@@ -175,7 +175,7 @@
               </div>
             </t-card>
 
-            <t-card class="pay-work-card" :bordered="false">
+            <t-card v-if="showPayActions && hasPayMethods" class="pay-work-card" :bordered="false">
               <div class="pay-work-head">
                 <div>
                   <h2>选择支付方式</h2>
@@ -186,22 +186,27 @@
               <div class="pay-method-list">
                 <button
                   v-for="method in payMethods"
-                  :key="method.key"
+                  :key="paymentOptionKey(method)"
                   type="button"
                   class="pay-method-card"
-                  :class="{ 'is-active': selectedPayMethod === method.key }"
-                  :disabled="!canPay || paying || (method.key === 'alipay' && !alipayAvailable)"
-                  :aria-pressed="selectedPayMethod === method.key"
+                  :class="{ 'is-active': selectedPayMethod === paymentOptionKey(method) }"
+                  :disabled="!canPay || paying"
+                  :aria-pressed="selectedPayMethod === paymentOptionKey(method)"
                   :aria-label="method.name"
                   :title="method.name"
-                  @click="selectPayMethod(method.key)"
+                  @click="selectPayMethod(paymentOptionKey(method))"
                 >
                   <span class="pay-method-card__icon">
-                    <WalletIcon v-if="method.key === 'balance'" />
-                    <LogoAlipayFilledIcon v-else-if="method.key === 'alipay'" />
-                    <CheckCircleIcon v-else />
+                    <component :is="paymentMethodIcon(method)" />
                   </span>
-                  <span class="pay-method-card__check" />
+                  <span class="pay-method-card__text">
+                    <strong>{{ method.name || method.label || '支付' }}</strong>
+                    <small>{{ method.label || method.key || '扫码支付' }}</small>
+                  </span>
+                  <span class="pay-method-card__check">
+                    <CheckCircleIcon v-if="selectedPayMethod === paymentOptionKey(method)" />
+                    <span v-else />
+                  </span>
                 </button>
               </div>
 
@@ -232,14 +237,14 @@
                   确认余额支付
                 </t-button>
                 <t-button
-                  v-else-if="selectedPayMethod === 'alipay'"
+                  v-else-if="selectedPayMethod && selectedPayMethod !== 'free'"
                   theme="primary"
                   size="large"
                   :loading="paying"
-                  :disabled="!canPay || !alipayAvailable"
+                  :disabled="!canPay"
                   @click="handlePayByAlipay"
                 >
-                  {{ allowBalanceDeduction && balanceAmount >= payableAmount ? '使用余额完成支付' : '生成支付宝二维码' }}
+                  {{ allowBalanceDeduction && balanceAmount >= payableAmount ? '使用余额完成支付' : `生成${selectedPayMethodName}二维码` }}
                 </t-button>
                 <t-button v-else-if="selectedPayMethod === 'free'" theme="primary" size="large" disabled>
                   零元账单无需操作
@@ -285,7 +290,14 @@
 
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { CheckCircleIcon, LogoAlipayFilledIcon, RefreshIcon, WalletIcon } from 'tdesign-icons-vue-next';
+import {
+  CheckCircleIcon,
+  CreditcardIcon,
+  LogoAlipayFilledIcon,
+  LogoWechatpayFilledIcon,
+  RefreshIcon,
+  WalletIcon,
+} from 'tdesign-icons-vue-next';
 
 const QrcodeVue = defineAsyncComponent(() => import('qrcode.vue'));
 
@@ -298,7 +310,7 @@ import {
   useInvoiceDetail,
 } from '@/domains/finance/useInvoices';
 import { resolvePaymentStatusLabel } from '@/domains/finance/useRecords';
-import type { InvoiceRecord } from '@/types/client';
+import type { InvoicePaymentMethod, InvoiceRecord } from '@/types/client';
 
 const {
   router,
@@ -316,14 +328,15 @@ const {
   hasAppliedBalanceDeduction,
   alipayPayableAmount,
   payMethods,
+  hasPayMethods,
   canPay,
-  alipayAvailable,
   alipayPollingReady,
   balanceAmount,
   payableAmount,
   balanceText,
   autoDeductionAmountText,
   estimatedAlipayAmountText,
+  selectedPayMethodName,
   showBalanceDeductionOption,
   showPayActions,
   payTip,
@@ -372,6 +385,19 @@ const renewFlowItems = [
     description: '处理完成后可在服务控制台查看新的到期时间。',
   },
 ];
+
+function paymentOptionKey(method: InvoicePaymentMethod) {
+  return String(method.option_key || method.key || '').trim();
+}
+
+function paymentMethodIcon(method: InvoicePaymentMethod) {
+  const key = String(method.key || '').trim();
+  const paymentType = String(method.payment_type || '').trim();
+  if (key === 'balance') return WalletIcon;
+  if (key === 'alipay' || paymentType === 'alipay') return LogoAlipayFilledIcon;
+  if (key === 'wechat' || paymentType === 'wxpay') return LogoWechatpayFilledIcon;
+  return CreditcardIcon;
+}
 
 function serviceRecord(row: InvoiceRecord | null | undefined) {
   return row?.service || null;
@@ -791,10 +817,11 @@ onBeforeUnmount(() => {
 .pay-method-card {
   position: relative;
   display: flex;
+  gap: var(--td-comp-margin-s);
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   min-height: 4.25rem;
-  padding: var(--td-comp-paddingTB-s) var(--td-comp-paddingLR-s);
+  padding: var(--td-comp-paddingTB-s) var(--td-comp-paddingLR-m);
   color: var(--td-text-color-primary);
   cursor: pointer;
   background: var(--td-bg-color-container);
@@ -874,15 +901,27 @@ onBeforeUnmount(() => {
 
 .pay-method-card__check {
   position: absolute;
-  right: 0.5rem;
-  bottom: 0.5rem;
-  width: 0.625rem;
-  height: 0.625rem;
-  border: thin solid var(--td-border-color);
-  border-radius: 50%;
+  right: var(--td-comp-paddingLR-s);
+  bottom: var(--td-comp-paddingTB-s);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--td-brand-color);
+
+  > span {
+    width: 0.625rem;
+    height: 0.625rem;
+    border: thin solid var(--td-border-color);
+    border-radius: 50%;
+  }
+
+  svg {
+    width: 1rem;
+    height: 1rem;
+  }
 }
 
-.pay-method-card.is-active .pay-method-card__check {
+.pay-method-card.is-active .pay-method-card__check > span {
   background: var(--td-brand-color);
   border-color: var(--td-brand-color);
   box-shadow: inset 0 0 0 0.1875rem var(--td-bg-color-container);

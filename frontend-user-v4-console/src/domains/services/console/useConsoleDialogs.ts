@@ -3,7 +3,7 @@ import { MessagePlugin } from 'tdesign-vue-next';
 
 import clientApi from '@/api/client';
 import type { ConsoleServiceDetail } from '@/types/client';
-import { normalizeConsoleDetail, resolveErrorMessage } from './useConsoleCore';
+import { resolveErrorMessage } from './useConsoleCore';
 
 export interface UseConsoleDialogsOptions {
   serviceId: { value: number };
@@ -136,7 +136,6 @@ export function useConsoleDialogs(options: UseConsoleDialogsOptions) {
         password_confirmation: passwordForm.password_confirmation,
       });
       const payload = res.data || {};
-      if (payload.detail) detail.value = normalizeConsoleDetail(payload.detail);
       setOperationStatus('repassword', '重置密码中');
       passwordVisible.value = false;
       passwordForm.password = '';

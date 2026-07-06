@@ -8,8 +8,6 @@ export interface ListPageResponse<T> {
   page?: number;
   /** 后端回传的每页条数（可选，用于同步分页器） */
   page_size?: number;
-  /** 兼容 Laravel 分页的 per_page 字段 */
-  per_page?: number;
 }
 
 export interface UseListPageOptions<F, T> {
@@ -50,7 +48,6 @@ export function useListPage<F extends Record<string, any>, T>(options: UseListPa
       total.value = Number(res.total || 0);
       if (res.page) pagination.page = Number(res.page);
       if (res.page_size) pagination.page_size = Number(res.page_size);
-      else if (res.per_page) pagination.page_size = Number(res.per_page);
     } catch (error) {
       if (onError) onError(error);
     } finally {

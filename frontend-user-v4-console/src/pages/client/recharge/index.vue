@@ -58,23 +58,37 @@
               </div>
             </section>
 
-            <section class="recharge-mobile__section">
+            <section v-if="hasPaymentGateways" class="recharge-mobile__section">
               <label class="field-label recharge-mobile__label">支付方式</label>
               <div class="mobile-method-list">
-                <button type="button" class="pay-method-card pay-method-card--mobile is-active" aria-pressed="true">
+                <button
+                  v-for="method in paymentGateways"
+                  :key="paymentOptionKey(method)"
+                  type="button"
+                  class="pay-method-card pay-method-card--mobile"
+                  :class="{ 'is-active': selectedGateway === paymentOptionKey(method) }"
+                  :aria-pressed="selectedGateway === paymentOptionKey(method)"
+                  @click="selectPaymentGateway(paymentOptionKey(method))"
+                >
                   <span class="pay-method-card__icon">
-                    <LogoAlipayFilledIcon />
+                    <component :is="paymentMethodIcon(method)" />
                   </span>
                   <span class="pay-method-card__text">
-                    <strong>支付宝</strong>
-                    <small>拉起 App 或复制链接继续支付</small>
+                    <strong>{{ method.name || method.label }}</strong>
+                    <small>{{ method.label || '扫码支付' }}</small>
                   </span>
-                  <span class="pay-method-card__check">
+                  <span v-if="selectedGateway === paymentOptionKey(method)" class="pay-method-card__check">
                     <CheckIcon />
                   </span>
                 </button>
               </div>
             </section>
+            <t-alert
+              v-else
+              class="recharge-empty-payment"
+              theme="warning"
+              :message="paymentGatewaysLoading ? '支付方式加载中' : '暂无可用支付方式，请联系管理员开启支付渠道'"
+            />
 
             <div class="mobile-agreement">
               <t-checkbox v-model="mobileAgreementChecked">我已了解充值说明</t-checkbox>
@@ -87,7 +101,7 @@
               block
               class="mobile-submit-button"
               :loading="submitting"
-              :disabled="!mobileAgreementChecked"
+              :disabled="!mobileAgreementChecked || !hasPaymentGateways || paymentGatewaysLoading"
               @click="handleCreateOrder(true)"
             >
               {{ mobileSubmitText }}
@@ -109,7 +123,7 @@
             </div>
 
             <div v-if="qrCodeValue && !rechargePaid" class="mobile-pay-helper">
-              <p>若未能自动打开支付宝，请复制支付链接后在手机浏览器中继续支付。</p>
+              <p>{{ mobilePayHelperText }}</p>
               <t-button size="small" theme="primary" variant="outline" @click="copyPayUrl">复制支付链接</t-button>
             </div>
           </div>
@@ -151,15 +165,30 @@
               </div>
             </div>
 
-            <div class="field-block">
+            <div v-if="hasPaymentGateways" class="field-block">
               <label class="field-label">选择支付方式</label>
               <div class="pay-methods">
-                <t-button theme="primary" class="pay-method" :loading="submitting" @click="handleCreateOrder(false)">
-                  <template #icon><CreditcardIcon /></template>
-                  {{ paymentButtonText }}
+                <t-button
+                  v-for="method in paymentGateways"
+                  :key="paymentOptionKey(method)"
+                  :theme="selectedGateway === paymentOptionKey(method) ? 'primary' : 'default'"
+                  :variant="selectedGateway === paymentOptionKey(method) ? 'base' : 'outline'"
+                  class="pay-method"
+                  :loading="submitting && selectedGateway === paymentOptionKey(method)"
+                  :disabled="submitting || paymentGatewaysLoading"
+                  @click="handleGatewayCreate(method)"
+                >
+                  <template #icon><component :is="paymentMethodIcon(method)" /></template>
+                  {{ selectedGateway === paymentOptionKey(method) ? paymentButtonText : `生成${method.name || method.label || '支付'}二维码` }}
                 </t-button>
               </div>
             </div>
+            <t-alert
+              v-else
+              class="recharge-empty-payment"
+              theme="warning"
+              :message="paymentGatewaysLoading ? '支付方式加载中' : '暂无可用支付方式，请联系管理员开启支付渠道'"
+            />
           </div>
 
           <aside class="qrcode-panel">
@@ -184,7 +213,7 @@
               </transition>
               <div v-if="!qrCodeValue" class="qrcode-empty">
                 <span class="empty-icon">¥</span>
-                <p>选择金额后点击支付宝生成二维码</p>
+                <p>选择金额后生成支付二维码</p>
               </div>
             </div>
 
@@ -208,12 +237,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, ref } from 'vue';
-import { CheckCircleIcon, CheckIcon, CreditcardIcon, LogoAlipayFilledIcon } from 'tdesign-icons-vue-next';
+import { computed, defineAsyncComponent, onMounted, ref } from 'vue';
+import {
+  CheckCircleIcon,
+  CheckIcon,
+  CreditcardIcon,
+  LogoAlipayFilledIcon,
+  LogoWechatpayFilledIcon,
+} from 'tdesign-icons-vue-next';
+import { formatMoney, RECHARGE_PRESET_AMOUNTS, useRecharge } from '@/domains/finance/useRecharge';
+import type { RechargeGatewayOption } from '@/types/client';
 
 const QrcodeVue = defineAsyncComponent(() => import('qrcode.vue'));
-
-import { formatMoney, RECHARGE_PRESET_AMOUNTS, useRecharge } from '@/domains/finance/useRecharge';
 
 const isMobileScreen = computed(() => {
   if (typeof window === 'undefined') return false;
@@ -229,6 +264,9 @@ const {
   activePreset,
   submitting,
   rechargePaid,
+  paymentGatewaysLoading,
+  selectedGateway,
+  paymentGateways,
   rechargeSummary,
   amountText,
   qrCodeValue,
@@ -236,14 +274,25 @@ const {
   paymentButtonText,
   qrCodeTitle,
   qrCodeSubtitle,
+  hasPaymentGateways,
+  selectedPaymentGateway,
   selectPreset,
+  selectPaymentGateway,
   handleAmountChange,
+  loadPaymentGateways,
   handleCreateOrder,
   copyPayUrl,
 } = useRecharge();
 
 const mobileCustomSelected = computed(() => mobileCustomMode.value || activePreset.value === null);
 const mobileSubmitText = computed(() => (rechargePaid.value ? '继续充值' : '立即充值'));
+const mobilePayHelperText = computed(() => {
+  if (selectedPaymentGateway.value?.payment_type === 'wxpay') {
+    return '请复制支付链接后在微信或手机浏览器中继续支付。';
+  }
+
+  return '若未能自动打开支付宝，请复制支付链接后在手机浏览器中继续支付。';
+});
 
 const mobileBalanceText = computed(() => {
   if (rechargePaid.value) {
@@ -266,6 +315,25 @@ function handleMobilePresetSelect(value: number) {
 function activateMobileCustomAmount() {
   mobileCustomMode.value = true;
 }
+
+function paymentOptionKey(method: RechargeGatewayOption) {
+  return String(method.option_key || method.key || '').trim();
+}
+
+function paymentMethodIcon(method: RechargeGatewayOption) {
+  if (method.key === 'alipay' || method.payment_type === 'alipay') return LogoAlipayFilledIcon;
+  if (method.key === 'wechat' || method.payment_type === 'wxpay') return LogoWechatpayFilledIcon;
+  return CreditcardIcon;
+}
+
+async function handleGatewayCreate(method: RechargeGatewayOption) {
+  selectPaymentGateway(paymentOptionKey(method));
+  await handleCreateOrder(false);
+}
+
+onMounted(() => {
+  void loadPaymentGateways();
+});
 </script>
 
 <style scoped lang="less">
@@ -347,6 +415,10 @@ function activateMobileCustomAmount() {
 
 .pay-method {
   min-width: 13rem;
+}
+
+.recharge-empty-payment {
+  max-width: 30rem;
 }
 
 .recharge-mobile {

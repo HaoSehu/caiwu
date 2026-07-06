@@ -110,6 +110,7 @@ export const PAYMENT_STATUS = {
   PAID:     1,  // 成功
   FAILED:   2,  // 失败
   REFUNDED: 3,  // 已退款
+  CANCELLED: 4, // 已取消
 }
 
 export const PAYMENT_STATUS_MAP = {
@@ -117,6 +118,7 @@ export const PAYMENT_STATUS_MAP = {
   [PAYMENT_STATUS.PAID]:     { label: '成功',   color: STATUS_COLORS.success, tagType: 'success', icon: 'Select'      },
   [PAYMENT_STATUS.FAILED]:   { label: '失败',   color: STATUS_COLORS.danger,  tagType: 'danger',  icon: 'CircleClose' },
   [PAYMENT_STATUS.REFUNDED]: { label: '已退款', color: STATUS_COLORS.info,    tagType: 'info',    icon: 'RefreshLeft' },
+  [PAYMENT_STATUS.CANCELLED]: { label: '已取消', color: STATUS_COLORS.info, tagType: 'info', icon: 'CircleClose' },
 }
 
 // ===================== 服务/产品实例状态 =====================

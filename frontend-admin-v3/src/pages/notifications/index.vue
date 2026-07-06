@@ -4,19 +4,20 @@
       <div class="page-tabs-toolbar">
         <t-tabs :value="activeTab" @change="handleTabChange">
           <t-tab-panel value="email-templates" label="邮件模板" />
+          <t-tab-panel value="sms-templates" label="短信模板" />
           <t-tab-panel value="api-directory" label="API 接口" />
         </t-tabs>
       </div>
     </t-card>
 
-    <template v-if="activeTab === 'email-templates'">
+    <template v-if="isTemplateTab">
       <t-card :bordered="false" :loading="templatesLoading">
         <div class="template-toolbar">
           <div>
-            <h2>邮件模板</h2>
-            <p>点击查看进入独立详情页编辑主题、正文和变量预览。</p>
+            <h2>{{ templateTitle }}</h2>
+            <p>{{ templateDescription }}</p>
           </div>
-          <t-radio-group v-model="templateAudience" variant="default-filled">
+          <t-radio-group v-if="templateChannel === 'email'" v-model="templateAudience" variant="default-filled">
             <t-radio-button v-for="item in templateAudienceOptions" :key="item.value" :value="item.value">
               {{ item.label }}
             </t-radio-button>
@@ -40,6 +41,7 @@
               </t-space>
             </template>
             <template #preview="{ row }">{{ row.preview }}</template>
+            <template #subject="{ row }">{{ row.channel === 'email' ? fieldValue(row.subject) : row.preview }}</template>
             <template #variables="{ row }">{{ row.variables.length }}</template>
             <template #bodyType="{ row }">
               <t-tag :theme="row.isHtml ? 'primary' : 'default'" variant="light">{{ row.isHtml ? 'HTML' : '文本' }}</t-tag>
@@ -58,10 +60,10 @@
             </div>
             <p>{{ row.description }}</p>
             <dl>
-              <div><dt>主题</dt><dd>{{ fieldValue(row.subject) }}</dd></div>
+              <div><dt>{{ row.channel === 'email' ? '主题' : '正文' }}</dt><dd>{{ row.channel === 'email' ? fieldValue(row.subject) : row.preview }}</dd></div>
               <div><dt>变量数</dt><dd>{{ row.variables.length }}</dd></div>
               <div><dt>正文类型</dt><dd>{{ row.isHtml ? 'HTML' : '文本' }}</dd></div>
-              <div><dt>面向对象</dt><dd>{{ row.audience === 'admin' ? '管理员' : '用户' }}</dd></div>
+              <div v-if="row.channel === 'email'"><dt>面向对象</dt><dd>{{ row.audience === 'admin' ? '管理员' : '用户' }}</dd></div>
             </dl>
             <t-button theme="primary" variant="outline" @click="openTemplate(row)">查看</t-button>
           </article>
@@ -188,30 +190,21 @@ import { SearchIcon } from 'tdesign-icons-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import type { PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 
-import { adminApi, type SettingItem } from '@/api/admin';
+import { adminApi, type NotificationTemplateItem, type SettingItem } from '@/api/admin';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { errorMessage } from '@/utils/userMessage';
 import apiCatalogData from '@/data/apiCatalog.generated.json';
 
 import './index.less';
 
-type NotificationTab = 'email-templates' | 'api-directory';
+type NotificationTab = 'email-templates' | 'sms-templates' | 'api-directory';
+type TemplateChannel = 'email' | 'sms';
 type TemplateAudience = 'user' | 'admin';
 
-interface TemplateSummary {
-  code: string;
-  name: string;
-  description: string;
-  variables: string[];
-  defaultSubject: string;
-  defaultContent: string;
-}
-
-interface TemplateRow extends TemplateSummary {
+interface TemplateRow extends NotificationTemplateItem {
   subject: string;
   preview: string;
   isHtml: boolean;
-  audience: TemplateAudience;
 }
 
 interface ApiCatalogItem extends Record<string, unknown> {
@@ -244,10 +237,11 @@ interface ApiCatalogMeta {
 
 const route = useRoute();
 const router = useRouter();
+const templateAudience = ref<TemplateAudience>(normalizeTemplateAudience(route.query.tab) || 'user');
 const activeTab = ref<NotificationTab>(normalizeTab(route.query.tab));
 const templatesLoading = ref(false);
 const settingsMap = ref<Record<string, unknown>>({});
-const templateAudience = ref<TemplateAudience>('user');
+const templateSummaries = ref<NotificationTemplateItem[]>([]);
 const selectedApiModule = ref('all');
 const apiFilters = reactive({
   keyword: '',
@@ -255,24 +249,6 @@ const apiFilters = reactive({
   method: 'all',
   source: 'all',
 });
-
-const adminTemplateCodes = new Set(['100010', '100011', '100013', '100014']);
-const templateSummaries: TemplateSummary[] = [
-  { code: '100001', name: '邮箱验证码', description: '发送邮箱验证码时使用。', variables: ['code', 'expire_minutes'], defaultSubject: '邮箱验证码', defaultContent: '邮箱验证码与时效提醒。' },
-  { code: '100002', name: '登录提醒', description: '客户登录成功后发送安全提醒。', variables: ['site_name', 'display_name', 'email', 'login_at', 'ip', 'device'], defaultSubject: '{{site_name}} 登录提醒', defaultContent: '登录设备、IP、时间等安全提醒。' },
-  { code: '100003', name: '服务续费提醒', description: '服务到期前自动发送续费提醒。', variables: ['site_name', 'display_name', 'service_name', 'days_left', 'expires_at', 'billing_cycle_label', 'urgency_message'], defaultSubject: '【{{site_name}}】服务续费提醒（{{days_left}} 天后到期）', defaultContent: '服务名称、到期时间和续费提示。' },
-  { code: '100004', name: '账单付款提醒', description: '账单到期前发送付款提醒。', variables: ['site_name', 'display_name', 'invoice_no', 'order_no', 'product_name', 'amount', 'due_date', 'notice_message'], defaultSubject: '【{{site_name}}】账单付款提醒 #{{invoice_no}}', defaultContent: '账单到期前付款提醒。' },
-  { code: '100005', name: '账单逾期催款', description: '账单逾期后自动发送催缴提醒。', variables: ['site_name', 'display_name', 'invoice_no', 'order_no', 'product_name', 'amount', 'due_date', 'notice_message'], defaultSubject: '【{{site_name}}】账单逾期催款 #{{invoice_no}}', defaultContent: '逾期账单催缴提醒。' },
-  { code: '100006', name: '服务到期暂停通知', description: '服务因过期被系统暂停时发送通知。', variables: ['site_name', 'display_name', 'service_name', 'expires_at'], defaultSubject: '【{{site_name}}】服务到期暂停通知', defaultContent: '服务暂停原因与恢复方式。' },
-  { code: '100007', name: '服务恢复通知', description: '服务续费成功恢复后发送通知。', variables: ['display_name', 'service_name', 'expires_at'], defaultSubject: '服务恢复通知', defaultContent: '服务恢复成功通知。' },
-  { code: '100008', name: '账单通知', description: '管理员主动发送账单提醒或账单确认时使用。', variables: ['site_name', 'display_name', 'notice_title', 'invoice_no', 'order_no', 'product_name', 'amount', 'status_label', 'due_at', 'paid_at', 'payment_method', 'trade_no', 'notice_message'], defaultSubject: '【{{site_name}}】{{notice_title}} #{{invoice_no}}', defaultContent: '通用账单状态通知。' },
-  { code: '100009', name: '手动入账通知', description: '管理员手动设为已支付后发送通知。', variables: ['invoice_no', 'order_no', 'paid_amount', 'payment_method', 'paid_at', 'trade_no', 'remark'], defaultSubject: '账单支付确认通知', defaultContent: '手动入账确认通知。' },
-  { code: '100010', name: '新工单提醒', description: '客户提交新工单后通知管理员。', variables: ['site_name', 'recipient_name', 'ticket_id', 'ticket_subject', 'department', 'priority', 'status', 'client_name', 'client_email', 'message_preview'], defaultSubject: '【{{site_name}}】新工单提醒 #{{ticket_id}}', defaultContent: '新工单提交提醒。' },
-  { code: '100011', name: '工单待回复提醒', description: '客户补充工单回复后通知管理员。', variables: ['site_name', 'recipient_name', 'ticket_id', 'ticket_subject', 'department', 'priority', 'status', 'client_name', 'client_email', 'message_preview'], defaultSubject: '【{{site_name}}】工单待回复提醒 #{{ticket_id}}', defaultContent: '工单追加回复提醒。' },
-  { code: '100012', name: '工单回复通知', description: '管理员回复工单后通知用户。', variables: ['site_name', 'display_name', 'ticket_id', 'ticket_subject', 'status', 'staff_name', 'message_preview', 'tickets_url', 'login_tip'], defaultSubject: '【{{site_name}}】工单回复通知 #{{ticket_id}}', defaultContent: '工单回复通知与跳转入口。' },
-  { code: '100013', name: '用户下单提醒', description: '用户创建新订单后通知管理员。', variables: ['site_name', 'recipient_name', 'user_name', 'user_email', 'order_no', 'invoice_no', 'order_type_label', 'product_name', 'billing_cycle_label', 'order_amount', 'order_status_label', 'created_at'], defaultSubject: '【{{site_name}}】用户下单提醒 #{{order_no}}', defaultContent: '用户提交新订单后的管理员提醒，包含配置名称。' },
-  { code: '100014', name: '用户支付完成提醒', description: '用户订单支付完成后通知管理员。', variables: ['site_name', 'recipient_name', 'user_name', 'user_email', 'order_no', 'invoice_no', 'product_name', 'billing_cycle_label', 'paid_amount', 'payment_method', 'trade_no', 'paid_at'], defaultSubject: '【{{site_name}}】用户支付完成 #{{order_no}}', defaultContent: '用户订单支付完成后的管理员提醒，包含配置名称。' },
-];
 
 const apiCatalog = apiCatalogData as { meta?: ApiCatalogMeta; items?: ApiCatalogItem[] };
 const apiMeta = apiCatalog.meta || {};
@@ -284,25 +260,34 @@ const apiItems = (apiCatalog.items || []).map((item) => ({
 }));
 
 const isMobile = useMediaQuery('(max-width: 768px)');
+const isTemplateTab = computed(() => activeTab.value === 'email-templates' || activeTab.value === 'sms-templates');
+const templateChannel = computed<TemplateChannel>(() => (activeTab.value === 'sms-templates' ? 'sms' : 'email'));
+const templateTitle = computed(() => (templateChannel.value === 'sms' ? '短信模板' : '邮件模板'));
+const templateDescription = computed(() =>
+  templateChannel.value === 'sms' ? '短信模板用于验证码、账单、服务、工单和安全提醒等短信内容管理。' : '点击查看进入独立详情页编辑主题、正文和变量预览。',
+);
 const templateAudienceOptions = computed(() => [
   { label: `用户模板（${templateRows.value.filter((item) => item.audience === 'user').length}）`, value: 'user' },
   { label: `管理员模板（${templateRows.value.filter((item) => item.audience === 'admin').length}）`, value: 'admin' },
 ]);
 const templateRows = computed<TemplateRow[]>(() =>
-  templateSummaries.map((template) => {
-    const subject = stringValue(settingsMap.value[`email_template_subject_${template.code}`]) || template.defaultSubject;
-    const content = stringValue(settingsMap.value[`email_template_content_${template.code}`]) || template.defaultContent;
+  templateSummaries.value.map((template) => {
+    const subjectKey = stringValue(template.setting_keys?.subject) || `email_template_subject_${template.code}`;
+    const contentKey = stringValue(template.setting_keys?.content) || `${template.channel}_template_content_${template.code}`;
+    const subject = stringValue(settingsMap.value[subjectKey]) || stringValue(template.subject);
+    const content = stringValue(settingsMap.value[contentKey]) || template.content;
     const preview = stripHtml(content);
     return {
       ...template,
       subject,
       preview: preview ? (preview.length > 88 ? `${preview.slice(0, 88)}...` : preview) : '-',
       isHtml: /<([a-z][a-z0-9]*)(\s|>)/i.test(content.trim()),
-      audience: adminTemplateCodes.has(template.code) ? 'admin' : 'user',
     };
   }),
 );
-const filteredTemplates = computed(() => templateRows.value.filter((item) => item.audience === templateAudience.value));
+const filteredTemplates = computed(() =>
+  templateChannel.value === 'email' ? templateRows.value.filter((item) => item.audience === templateAudience.value) : templateRows.value,
+);
 const apiModules = computed(() => {
   const moduleMap = new Map<string, { key: string; label: string; count: number }>();
   apiItems.forEach((item) => {
@@ -362,7 +347,15 @@ const apiColumns: PrimaryTableCol<ApiCatalogItem>[] = [
 
 function normalizeTab(value: unknown): NotificationTab {
   const tab = Array.isArray(value) ? value[0] : value;
-  return tab === 'api-directory' ? tab : 'email-templates';
+  if (tab === 'admin' || tab === 'user') return 'email-templates';
+  if (tab === 'api-directory' || tab === 'sms-templates') return tab;
+  return 'email-templates';
+}
+
+function normalizeTemplateAudience(value: unknown): TemplateAudience | null {
+  const tab = Array.isArray(value) ? value[0] : value;
+  if (tab === 'admin' || tab === 'user') return tab;
+  return null;
 }
 
 function handleTabChange(value: string | number) {
@@ -372,17 +365,21 @@ function handleTabChange(value: string | number) {
 }
 
 function refreshCurrentTab() {
-  if (activeTab.value === 'email-templates') return loadTemplates();
+  if (isTemplateTab.value) return loadTemplates();
   return undefined;
 }
 
 async function loadTemplates() {
   templatesLoading.value = true;
   try {
-    const response = await adminApi.settings.list({ group: 'notification' });
+    const [templateResponse, response] = await Promise.all([
+      adminApi.settings.notificationTemplates({ channel: templateChannel.value }),
+      adminApi.settings.list({ group: 'notification' }),
+    ]);
+    templateSummaries.value = templateResponse.list || [];
     settingsMap.value = normalizeSettings(response);
   } catch (error) {
-    MessagePlugin.error(errorMessage(error, '加载邮件模板列表失败'));
+    MessagePlugin.error(errorMessage(error, `加载${templateTitle.value}列表失败`));
   } finally {
     templatesLoading.value = false;
   }
@@ -391,7 +388,9 @@ async function loadTemplates() {
 function openTemplate(row: TemplateRow | TableRowData) {
   const code = String((row as TemplateRow).code || '');
   if (!code) return;
-  router.push({ path: `/admin/notifications/email-templates/${code}`, query: { tab: templateAudience.value } });
+  const channel = ((row as TemplateRow).channel || templateChannel.value) === 'sms' ? 'sms' : 'email';
+  const audience = channel === 'email' ? templateAudience.value : 'user';
+  router.push({ path: `/admin/notifications/${channel}-templates/${code}`, query: { tab: audience } });
 }
 
 function resetApiFilters() {
@@ -468,8 +467,10 @@ function toRecord(value: unknown): Record<string, unknown> {
 watch(
   () => route.query.tab,
   (value) => {
+    const audience = normalizeTemplateAudience(value);
+    if (audience) templateAudience.value = audience;
     activeTab.value = normalizeTab(value);
-    if (activeTab.value === 'email-templates' && !Object.keys(settingsMap.value).length) loadTemplates();
+    if (isTemplateTab.value) loadTemplates();
   },
 );
 

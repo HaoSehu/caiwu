@@ -112,7 +112,7 @@ httpClient.interceptors.request.use(
     const safeRequest = isSafeRequest(method);
     const writeRequest = isWriteRequest(method);
     const requestUrl = String(runtimeConfig.url || '');
-    const isPublicSiteGetRequest = method === 'get' && requestUrl.startsWith('/site/');
+    const isPublicSiteGetRequest = method === 'get' && requestUrl.startsWith('/v2/site/');
     const token = getClientToken();
 
     runtimeConfig.headers = runtimeConfig.headers;
@@ -194,7 +194,13 @@ httpClient.interceptors.response.use(
     if (error.response?.status === 422) {
       const errors = extractValidationErrors(error.response?.data);
       const trustedErrors = errors.map((item) => toUserMessage(item, '')).filter(Boolean);
-      msg = trustedErrors.length > 0 ? trustedErrors.join(', ') : '参数填写有误，请检查后重试';
+      if (trustedErrors.length > 0) {
+        msg = trustedErrors.join(', ');
+      } else {
+        // 业务异常（BusinessException）也走 422，message 里有真实原因，优先展示
+        const serverMsg = toUserMessage(error.response?.data?.message, '');
+        msg = serverMsg || '参数填写有误，请检查后重试';
+      }
     }
 
     if (error.response?.status === 429) {

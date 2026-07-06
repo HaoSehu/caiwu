@@ -30,15 +30,19 @@ export function useWebsiteProductCheckout({
   const productStockError = ref('')
   const selectedCouponId = ref(getPendingWebsiteCouponId())
   const productDetailCache = {}
+  const productDetailPending = {}
+  const PRODUCT_DETAIL_PREFETCH_CONCURRENCY = 2
 
   let currentProductId = 0
   let detailToken = 0
   let stockToken = 0
   let quoteTokenId = 0
+  let prefetchToken = 0
   let quoteTimer = null
   let detailAbortController = null
   let stockAbortController = null
   let quoteAbortController = null
+  let prefetchAbortController = null
   let quoteWatchSuspendCount = 0
 
   const selectedProduct = computed(() => productDetail.value)
@@ -123,6 +127,71 @@ export function useWebsiteProductCheckout({
     quoteResult.value = payload || null
     quoteToken.value = String(payload?.quote_token || '')
     selectedCouponId.value = Number(nextCouponId || payload?.user_coupon_id || 0)
+  }
+
+  function normalizeProductId(id) {
+    const productId = Number(id || 0)
+    return Number.isFinite(productId) && productId > 0 ? productId : 0
+  }
+
+  function isCanceledError(error) {
+    return error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError'
+  }
+
+  function getCachedProductDetail(id) {
+    return productDetailCache[normalizeProductId(id)] || null
+  }
+
+  function cacheProductDetail(id, product) {
+    const productId = normalizeProductId(id)
+    if (productId > 0 && product) {
+      productDetailCache[productId] = product
+    }
+  }
+
+  function fetchProductDetail(id, options = {}) {
+    const productId = normalizeProductId(id)
+    if (!productId) {
+      return Promise.resolve(null)
+    }
+
+    const cached = getCachedProductDetail(productId)
+    if (cached) {
+      return Promise.resolve(cached)
+    }
+
+    if (productDetailPending[productId]) {
+      return productDetailPending[productId]
+    }
+
+    const request = siteApi.product(productId, options.signal ? { signal: options.signal } : undefined)
+      .then((res) => {
+        const product = res.data.product || null
+        cacheProductDetail(productId, product)
+        return product
+      })
+      .finally(() => {
+        if (productDetailPending[productId] === request) {
+          delete productDetailPending[productId]
+        }
+      })
+
+    productDetailPending[productId] = request
+    return request
+  }
+
+  function applyProductDetail(product) {
+    productDetail.value = product
+    suspendQuoteWatch()
+    try {
+      initProductDefaults({
+        selectedCycleRef: selectedCycle,
+        quantityRef: quantity,
+        resetQuoteState,
+      })
+    } finally {
+      resumeQuoteWatch(true)
+    }
   }
 
   function resetSelection() {
@@ -325,101 +394,142 @@ export function useWebsiteProductCheckout({
   }
 
   async function loadProductDetail(id) {
-    if (!id) {
+    const productId = normalizeProductId(id)
+    if (!productId) {
       return false
     }
 
     const token = ++detailToken
     detailAbortController?.abort()
-    detailAbortController = new AbortController()
-    const cached = productDetailCache[id]
+    detailAbortController = null
+    const cached = getCachedProductDetail(productId)
     if (cached) {
-      if (token !== detailToken || currentProductId !== id) {
+      if (token !== detailToken || currentProductId !== productId) {
         return false
       }
 
-      suspendQuoteWatch()
-      try {
-        productDetail.value = cached
-        initProductDefaults({
-          selectedCycleRef: selectedCycle,
-          quantityRef: quantity,
-          resetQuoteState,
-        })
-      } finally {
-        resumeQuoteWatch(true)
-      }
-
+      applyProductDetail(cached)
       return true
     }
 
+    detailAbortController = new AbortController()
     configLoading.value = true
     try {
-      const res = await siteApi.product(id, {
+      const product = await fetchProductDetail(productId, {
         signal: detailAbortController.signal,
       })
-      if (token !== detailToken || currentProductId !== id) {
+      if (token !== detailToken || currentProductId !== productId) {
         return false
       }
 
-      const product = res.data.product || null
-      productDetail.value = product
-
       if (product) {
-        productDetailCache[id] = product
-        suspendQuoteWatch()
-        try {
-          initProductDefaults({
-            selectedCycleRef: selectedCycle,
-            quantityRef: quantity,
-            resetQuoteState,
-          })
-        } finally {
-          resumeQuoteWatch(true)
-        }
-
+        applyProductDetail(product)
         return true
       }
 
+      productDetail.value = null
+      resetConfigForm()
+      selectedCycle.value = ''
+      quantity.value = 1
+      resetQuoteState()
       return false
     } catch (error) {
-      if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') {
+      if (isCanceledError(error)) {
         return false
+      }
+
+      if (token === detailToken && currentProductId === productId) {
+        productDetail.value = null
+        resetConfigForm()
+        selectedCycle.value = ''
+        quantity.value = 1
+        resetQuoteState()
       }
 
       return false
     } finally {
-      if (token === detailToken && currentProductId === id) {
+      if (token === detailToken && currentProductId === productId) {
         configLoading.value = false
       }
     }
   }
 
   function loadSelectedProduct(id, options = {}) {
-    currentProductId = Number(id || 0)
+    currentProductId = normalizeProductId(id)
 
     if (options.refreshStockOnly) {
       refreshProductStock(currentProductId)
       return
     }
 
+    const cached = getCachedProductDetail(currentProductId)
     detailAbortController?.abort()
     stockAbortController?.abort()
     quoteAbortController?.abort()
-    productDetail.value = null
+    if (!cached) {
+      productDetail.value = null
+      resetConfigForm()
+      selectedCycle.value = ''
+      quantity.value = 1
+    }
     resetQuoteState()
     productStock.value = null
     productStockLoading.value = false
     productStockError.value = ''
     void loadProductDetail(currentProductId).finally(() => {
-      if (currentProductId === Number(id || 0)) {
+      if (currentProductId === normalizeProductId(id)) {
         refreshProductStock(currentProductId)
       }
     })
   }
 
+  function cancelProductDetailPrefetch() {
+    prefetchToken += 1
+    prefetchAbortController?.abort()
+    prefetchAbortController = null
+  }
+
+  function prefetchProductDetails(products = []) {
+    cancelProductDetailPrefetch()
+
+    const ids = Array.from(new Set((Array.isArray(products) ? products : [])
+      .map((product) => normalizeProductId(product?.id || product))
+      .filter((id) => id > 0 && id !== currentProductId && !getCachedProductDetail(id) && !productDetailPending[id])))
+
+    if (!ids.length) {
+      return
+    }
+
+    const token = ++prefetchToken
+    prefetchAbortController = new AbortController()
+    let cursor = 0
+
+    const runWorker = async () => {
+      while (token === prefetchToken && cursor < ids.length) {
+        const productId = ids[cursor]
+        cursor += 1
+
+        try {
+          await fetchProductDetail(productId, {
+            signal: prefetchAbortController?.signal,
+          })
+        } catch (error) {
+          if (isCanceledError(error)) {
+            return
+          }
+        }
+      }
+    }
+
+    const workerCount = Math.min(PRODUCT_DETAIL_PREFETCH_CONCURRENCY, ids.length)
+    for (let index = 0; index < workerCount; index += 1) {
+      void runWorker()
+    }
+  }
+
   async function refreshProductStock(id) {
-    if (!id) {
+    const productId = normalizeProductId(id)
+    if (!productId) {
       return
     }
 
@@ -431,26 +541,26 @@ export function useWebsiteProductCheckout({
     productStock.value = null
 
     try {
-      const res = await siteApi.productStock(id, {
+      const res = await siteApi.productStock(productId, {
         signal: stockAbortController.signal,
       })
-      if (token !== stockToken || currentProductId !== id) {
+      if (token !== stockToken || currentProductId !== productId) {
         return
       }
 
       productStock.value = Number(res.data?.stock ?? 0)
     } catch (error) {
-      if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') {
+      if (isCanceledError(error)) {
         return
       }
 
-      if (token !== stockToken || currentProductId !== id) {
+      if (token !== stockToken || currentProductId !== productId) {
         return
       }
 
       productStockError.value = error?.response?.data?.message || '库存同步失败'
     } finally {
-      if (token === stockToken && currentProductId === id) {
+      if (token === stockToken && currentProductId === productId) {
         productStockLoading.value = false
       }
     }
@@ -464,6 +574,7 @@ export function useWebsiteProductCheckout({
     detailAbortController?.abort()
     stockAbortController?.abort()
     quoteAbortController?.abort()
+    cancelProductDetailPrefetch()
     clearPendingWebsiteCoupon()
   })
 
@@ -496,6 +607,7 @@ export function useWebsiteProductCheckout({
     clearCoupon,
     handleSubmit: submitOrder,
     loadSelectedProduct,
+    prefetchProductDetails,
     resetSelection,
   }
 }

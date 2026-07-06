@@ -37,6 +37,7 @@ export interface SupplierUpstreamBindingRecord {
   id?: number | string | null;
   provider_key?: string;
   base_url?: string;
+  has_base_url?: boolean;
   account_name?: string;
   status?: number | string;
   last_checked_at?: string | null;
@@ -44,6 +45,40 @@ export interface SupplierUpstreamBindingRecord {
   last_check_error?: string | null;
   config?: SupplierProviderConfig;
   has_secret_values?: Record<string, boolean>;
+}
+
+export interface SupplierCardStatus {
+  label?: string;
+  theme?: string;
+  variant?: string;
+}
+
+export interface SupplierCardField {
+  key?: string;
+  label?: string;
+  value?: unknown;
+  theme?: string;
+}
+
+export interface SupplierCardAction {
+  key: string;
+  label: string;
+  action: string;
+  request_action?: string;
+  theme?: string;
+  variant?: string;
+  disabled?: boolean;
+  disabled_reason?: string;
+}
+
+export interface SupplierCardRecord {
+  provided?: boolean;
+  title?: string;
+  subtitle?: string;
+  status?: SupplierCardStatus | null;
+  fields?: SupplierCardField[];
+  actions?: SupplierCardAction[];
+  empty_text?: string;
 }
 
 export interface SupplierRecord {
@@ -62,6 +97,7 @@ export interface SupplierRecord {
   remote_balance_status?: string;
   status?: number | string;
   updated_at?: string;
+  card?: SupplierCardRecord;
   [key: string]: unknown;
 }
 
@@ -86,6 +122,17 @@ export interface SupplierSummary {
   [key: string]: unknown;
 }
 
+export interface SupplierActionResult {
+  id?: number | string;
+  status?: string;
+  message?: string;
+  detail?: {
+    type?: string;
+    result?: Record<string, unknown>;
+    [key: string]: unknown;
+  };
+}
+
 export interface ProviderTypeRecord {
   value: string;
   label: string;
@@ -93,33 +140,102 @@ export interface ProviderTypeRecord {
   [key: string]: unknown;
 }
 
+type V2SupplierRecord = SupplierRecord & {
+  connection?: {
+    base_url?: string;
+    base_url_configured?: boolean;
+    account_name?: string;
+  };
+  credentials?: {
+    api_credential_configured?: boolean;
+    provider_values_configured?: Record<string, boolean>;
+  };
+  upstream_binding?: SupplierUpstreamBindingRecord & {
+    base_url_configured?: boolean;
+    credentials_configured?: Record<string, boolean>;
+  };
+};
+
+type V2SupplierDetailResponse = {
+  supplier?: V2SupplierRecord;
+};
+
+type V2SupplierListResponse = {
+  list?: V2SupplierRecord[];
+  total?: number;
+  page?: number;
+  page_size?: number;
+};
+
+function normalizeV2Supplier(record: V2SupplierRecord): SupplierRecord {
+  const connection = record.connection || {};
+  const credentials = record.credentials || {};
+  const upstreamBinding = record.upstream_binding || {};
+  const baseUrl = record.api_url || connection.base_url || upstreamBinding.base_url || '';
+
+  return {
+    ...record,
+    api_url: baseUrl,
+    has_api_url: Boolean(record.has_api_url ?? connection.base_url_configured ?? upstreamBinding.base_url_configured),
+    api_username: record.api_username || connection.account_name || upstreamBinding.account_name || '',
+    has_api_key: Boolean(record.has_api_key ?? credentials.api_credential_configured),
+    has_provider_secret_values: record.has_provider_secret_values || credentials.provider_values_configured || {},
+    upstream_binding: {
+      ...upstreamBinding,
+      base_url: baseUrl,
+      has_base_url: Boolean(upstreamBinding.has_base_url ?? upstreamBinding.base_url_configured),
+      has_secret_values: upstreamBinding.has_secret_values || upstreamBinding.credentials_configured || {},
+    },
+  };
+}
+
+function normalizeV2SupplierList(response: V2SupplierListResponse) {
+  return {
+    ...response,
+    list: Array.isArray(response.list) ? response.list.map((item) => normalizeV2Supplier(item)) : [],
+  };
+}
+
 export const supplierApi = {
   list: (params: SupplierListParams) =>
-    request.get<{ list?: SupplierRecord[]; total?: number; page?: number; page_size?: number }>({
-      url: '/admin/suppliers',
+    request.get<V2SupplierListResponse>({
+      url: '/v2/admin/suppliers',
       params,
-    }),
-  summary: () => request.get<SupplierSummary>({ url: '/admin/suppliers/summary' }),
-  providerTypes: () => request.get<ProviderTypeRecord[] | Record<string, string>>({ url: '/admin/suppliers/provider-types' }),
-  detail: (id: number | string) => request.get<SupplierRecord>({ url: `/admin/suppliers/${id}` }),
+    }).then((response) => normalizeV2SupplierList(response)),
+  summary: () => request.get<SupplierSummary>({ url: '/v2/admin/suppliers/summary' }),
+  providerTypes: () => request.get<ProviderTypeRecord[] | Record<string, string>>({ url: '/v2/admin/suppliers/provider-types' }),
+  detail: async (id: number | string) => {
+    const response = await request.get<V2SupplierDetailResponse>({ url: `/v2/admin/suppliers/${id}` });
+    return normalizeV2Supplier((response.supplier || {}) as V2SupplierRecord);
+  },
   revealSecret: (id: number | string, key: string) =>
-    request.get<{ key: string; value: unknown }>({ url: `/admin/suppliers/${id}/secret/${encodeURIComponent(key)}` }),
-  create: (data: SupplierUpsertPayload) => request.post({ url: '/admin/suppliers', data }),
-  update: (id: number | string, data: SupplierUpsertPayload) => request.put({ url: `/admin/suppliers/${id}`, data }),
-  delete: (id: number | string) => request.delete({ url: `/admin/suppliers/${id}` }),
-  toggleStatus: (id: number | string) => request.post({ url: `/admin/suppliers/${id}/toggle-status` }),
+    request.get<{ key: string; value: unknown }>({ url: `/v2/admin/suppliers/${id}/secrets/${encodeURIComponent(key)}` }),
+  create: async (data: SupplierUpsertPayload) => {
+    const response = await request.post<V2SupplierDetailResponse>({ url: '/v2/admin/suppliers', data });
+    return normalizeV2Supplier((response.supplier || {}) as V2SupplierRecord);
+  },
+  update: async (id: number | string, data: SupplierUpsertPayload) => {
+    const response = await request.put<V2SupplierDetailResponse>({ url: `/v2/admin/suppliers/${id}`, data });
+    return normalizeV2Supplier((response.supplier || {}) as V2SupplierRecord);
+  },
+  delete: (id: number | string) => request.delete<SupplierActionResult>({ url: `/v2/admin/suppliers/${id}` }),
+  toggleStatus: (id: number | string, enabled: boolean) =>
+    request.patch<SupplierActionResult>({ url: `/v2/admin/suppliers/${id}/status`, data: { enabled } }),
   balance: (id: number | string, config: Record<string, unknown> = {}) =>
-    request.get<Record<string, unknown>>({ url: `/admin/suppliers/${id}/balance`, ...config }),
+    request.get<Record<string, unknown>>({ url: `/v2/admin/suppliers/${id}/balance`, ...config }),
   products: (id: number | string, config: Record<string, unknown> = {}) =>
     request.get<{ list?: Record<string, unknown>[]; groups?: Record<string, unknown>[] } | Record<string, unknown>[]>({
-      url: `/admin/suppliers/${id}/products`,
+      url: `/v2/admin/suppliers/${id}/products`,
       ...config,
     }),
-  batchConnectProducts: (id: number | string, data: Record<string, unknown>) =>
-    request.post({ url: `/admin/suppliers/${id}/products/batch-connect`, data }),
+  executeAction: (id: number | string, action: string, payload: Record<string, unknown> = {}) =>
+    request.post<SupplierActionResult>({
+      url: `/v2/admin/suppliers/${id}/tasks`,
+      data: { type: action, payload },
+    }).then((response) => response.detail?.result || {}),
   productConfigTemplate: (supplierId: number | string, productId: number | string, config: Record<string, unknown> = {}) =>
     request.get<Record<string, unknown>>({
-      url: `/admin/suppliers/${supplierId}/products/${productId}/config-template`,
+      url: `/v2/admin/suppliers/${supplierId}/products/${productId}/config-template`,
       ...config,
     }),
 };

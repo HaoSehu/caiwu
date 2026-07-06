@@ -5,7 +5,7 @@ import { useRouter } from 'vue-router';
 import clientApi from '@/api/client';
 import { copyText, formatMoney } from '@/utils/format';
 import { useUserStore } from '@/store';
-import type { RechargeOrderPayload, RechargeStatusPayload, ServiceInstance } from '@/types/client';
+import type { RechargeGatewayOption, RechargeOrderPayload, RechargeStatusPayload, ServiceInstance } from '@/types/client';
 
 const ACTIVE_SERVICE_STATUS = 1;
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -55,6 +55,32 @@ function resolveAlipayLaunchUrl(rawUrl: unknown) {
   return '';
 }
 
+function normalizePaymentGatewayOption(item: RechargeGatewayOption): RechargeGatewayOption | null {
+  const key = String(item?.key || '').trim();
+  if (!key) return null;
+
+  const paymentType = String(item.payment_type || '').trim();
+  const optionKey = String(item.option_key || (paymentType ? `${key}:${paymentType}` : key)).trim();
+  const name = String(item.name || item.label || key).trim();
+  const label = String(item.label || name).trim();
+
+  return {
+    key,
+    option_key: optionKey || key,
+    name: name || key,
+    label: label || name || key,
+    ...(paymentType ? { payment_type: paymentType } : {}),
+  };
+}
+
+function gatewayOptionKey(item: RechargeGatewayOption) {
+  return String(item.option_key || item.key || '').trim();
+}
+
+function isAlipayGateway(option: RechargeGatewayOption | null) {
+  return option?.key === 'alipay' || option?.payment_type === 'alipay';
+}
+
 export function useRecharge() {
   const router = useRouter();
   const userStore = useUserStore();
@@ -65,6 +91,9 @@ export function useRecharge() {
   const polling = ref(false);
   const rechargePaid = ref(false);
   const summaryLoading = ref(false);
+  const paymentGatewaysLoading = ref(true);
+  const selectedGateway = ref('');
+  const paymentGateways = ref<RechargeGatewayOption[]>([]);
   const paymentPayload = shallowRef<RechargeOrderPayload | (RechargeOrderPayload & RechargeStatusPayload) | null>(null);
   const rechargeSummary = reactive({
     cashBalance: '0.00',
@@ -77,19 +106,24 @@ export function useRecharge() {
   const amountText = computed(() => formatMoney(inputAmount.value).replace(/\.00$/, ''));
   const qrCodeValue = computed(() => String(paymentPayload.value?.qr_code || ''));
   const paymentNo = computed(() => String(paymentPayload.value?.payment_no || ''));
+  const hasPaymentGateways = computed(() => paymentGateways.value.length > 0);
+  const selectedPaymentGateway = computed(() => paymentGateways.value.find((item) => gatewayOptionKey(item) === selectedGateway.value) || null);
+  const selectedPaymentGatewayName = computed(() => selectedPaymentGateway.value?.name || selectedPaymentGateway.value?.label || '支付');
   const paymentButtonText = computed(() => {
+    if (paymentGatewaysLoading.value) return '正在加载支付方式';
+    if (!hasPaymentGateways.value) return '暂无可用支付方式';
     if (submitting.value) return '正在生成二维码';
     if (rechargePaid.value) return '继续充值';
-    return paymentPayload.value ? '刷新支付宝二维码' : '生成支付宝二维码';
+    return paymentPayload.value ? '刷新支付二维码' : `生成${selectedPaymentGatewayName.value}二维码`;
   });
   const qrCodeTitle = computed(() => {
     if (rechargePaid.value) return '充值成功，余额已刷新';
-    return qrCodeValue.value ? '请使用支付宝扫码支付' : '支付二维码待生成';
+    return qrCodeValue.value ? `请使用${selectedPaymentGatewayName.value}扫码支付` : '支付二维码待生成';
   });
   const qrCodeSubtitle = computed(() => {
     if (rechargePaid.value) return '到账完成后，可继续购买或续费服务。';
     if (qrCodeValue.value && polling.value) return '正在自动确认支付状态，请勿重复支付。';
-    return qrCodeValue.value ? '' : '当前充值接口仅支持支付宝扫码支付。';
+    return qrCodeValue.value ? '' : '选择金额和支付方式后生成二维码。';
   });
   const summaryCards = computed(() => [
     {
@@ -110,6 +144,11 @@ export function useRecharge() {
 
   function selectPreset(value: number) {
     inputAmount.value = value;
+  }
+
+  function selectPaymentGateway(optionKey: string) {
+    if (!paymentGateways.value.some((item) => gatewayOptionKey(item) === optionKey)) return;
+    selectedGateway.value = optionKey;
   }
 
   function handleAmountChange(value: unknown) {
@@ -135,17 +174,32 @@ export function useRecharge() {
 
   async function createRechargeOrder(overrideAmount?: number) {
     const targetAmount = normalizeRechargeAmount(overrideAmount ?? amount.value);
+    const gateway = selectedPaymentGateway.value;
+    if (!gateway) {
+      MessagePlugin.warning('暂无可用支付方式');
+      return null;
+    }
+
     submitting.value = true;
     rechargePaid.value = false;
     try {
-      const response = await clientApi.recharge({ amount: targetAmount });
+      const payload: Record<string, unknown> = { amount: targetAmount, gateway: gateway.key };
+      if (gateway.payment_type) {
+        payload.payment_type = gateway.payment_type;
+      }
+
+      const response = await clientApi.recharge(payload);
       amount.value = targetAmount;
       inputAmount.value = targetAmount;
       paymentPayload.value = response.data || null;
       MessagePlugin.success('充值二维码已生成');
       return paymentPayload.value;
     } catch (error: unknown) {
-      MessagePlugin.error(getErrorMessage(error, '创建充值账单失败'));
+      // interceptor 对 HTTP 错误已调用 showError，避免重复弹窗
+      const alreadyHandled = typeof error === 'object' && error !== null && (error as Record<string, unknown>).__handled === true;
+      if (!alreadyHandled) {
+        MessagePlugin.error(getErrorMessage(error, '创建充值账单失败'));
+      }
       return null;
     } finally {
       submitting.value = false;
@@ -271,6 +325,33 @@ export function useRecharge() {
     }
   }
 
+  async function loadPaymentGateways() {
+    paymentGatewaysLoading.value = true;
+
+    try {
+      const response = await clientApi.rechargeGateways();
+      const list = Array.isArray(response.data?.list) ? response.data.list : [];
+      paymentGateways.value = list
+        .map((item) => normalizePaymentGatewayOption(item))
+        .filter((item): item is RechargeGatewayOption => item !== null);
+
+      if (!paymentGateways.value.some((item) => gatewayOptionKey(item) === selectedGateway.value)) {
+        selectedGateway.value = paymentGateways.value[0] ? gatewayOptionKey(paymentGateways.value[0]) : '';
+      }
+
+      if (!selectedGateway.value) {
+        clearPaymentPayload();
+      }
+    } catch (error: unknown) {
+      paymentGateways.value = [];
+      selectedGateway.value = '';
+      clearPaymentPayload();
+      MessagePlugin.error(getErrorMessage(error, '加载支付方式失败'));
+    } finally {
+      paymentGatewaysLoading.value = false;
+    }
+  }
+
   async function handleCreateOrder(isMobileScreen = false) {
     const targetAmount = normalizeRechargeAmount(inputAmount.value);
     inputAmount.value = targetAmount;
@@ -279,7 +360,7 @@ export function useRecharge() {
     const result = await createRechargeOrder(targetAmount);
     if (!result?.qr_code) return;
 
-    if (isMobileScreen) {
+    if (isMobileScreen && isAlipayGateway(selectedPaymentGateway.value)) {
       const launchUrl = resolveAlipayLaunchUrl(result.qr_code);
       if (launchUrl) {
         const iframe = document.createElement('iframe');
@@ -325,6 +406,12 @@ export function useRecharge() {
     { immediate: true },
   );
 
+  watch(selectedGateway, (value, oldValue) => {
+    if (oldValue && value !== oldValue) {
+      clearPaymentPayload();
+    }
+  });
+
   onBeforeUnmount(() => {
     clearPollingTimer();
   });
@@ -339,6 +426,9 @@ export function useRecharge() {
     polling,
     rechargePaid,
     summaryLoading,
+    paymentGatewaysLoading,
+    selectedGateway,
+    paymentGateways,
     paymentPayload,
     rechargeSummary,
     amountText,
@@ -347,14 +437,19 @@ export function useRecharge() {
     paymentButtonText,
     qrCodeTitle,
     qrCodeSubtitle,
+    hasPaymentGateways,
+    selectedPaymentGateway,
+    selectedPaymentGatewayName,
     summaryCards,
     selectPreset,
+    selectPaymentGateway,
     handleAmountChange,
     createRechargeOrder,
     pollRechargeStatus,
     startAutoPolling,
     clearPaymentPayload,
     loadRechargeSummary,
+    loadPaymentGateways,
     handleCreateOrder,
     copyPayUrl,
     openServiceQuickFilter,

@@ -140,7 +140,7 @@ export function useProfile() {
     try {
       await runWithCaptcha(async (captcha: unknown) => {
         if (resetForm.type === 'phone') {
-          await clientAuthApi.sendPhoneCode({ phone: profileForm.phone, captcha });
+          await clientAuthApi.sendPhoneCode({ phone: profileForm.phone, purpose: 'reset_password', captcha });
         } else {
           await clientAuthApi.sendEmailCode({ email: profileForm.email, captcha });
         }
@@ -201,7 +201,11 @@ export function useProfile() {
     if (!phoneForm.phone) { MessagePlugin.warning('请输入新手机号'); return; }
     try {
       await runWithCaptcha(async (captcha: unknown) => {
-        await clientAuthApi.sendPhoneCode({ phone: phoneForm.phone, captcha });
+        await clientAuthApi.sendPhoneCode({
+          phone: phoneForm.phone,
+          purpose: profileForm.phone ? 'change_phone' : 'bind_phone',
+          captcha,
+        });
       });
       MessagePlugin.success('验证码已发送');
       phoneCountdown.value = 60;

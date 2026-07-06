@@ -27,7 +27,6 @@ export function useConsoleDetail(_options?: UseConsoleDetailOptions) {
   const statusSyncing = ref(false);
   const actionLoading = ref(false);
   const autoRenewLoading = ref(false);
-  const showPassword = ref(false);
   const activeTab = ref(DEFAULT_TAB);
   const operationStatus = reactive({ type: '', label: '' });
 
@@ -115,7 +114,6 @@ export function useConsoleDetail(_options?: UseConsoleDetailOptions) {
     statusSyncing,
     actionLoading,
     autoRenewLoading,
-    showPassword,
     activeTab,
     operationStatus,
     serviceId,

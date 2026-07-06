@@ -70,7 +70,7 @@
                 <t-tag v-if="row.coupon_campaign_name" size="small" theme="warning" variant="light">
                   活动：{{ row.coupon_campaign_name }}
                 </t-tag>
-                <t-tag v-if="row.can_update === false" size="small" theme="default" variant="light">已锁定</t-tag>
+                <t-tag v-if="couponHasLockedFields(row)" size="small" theme="default" variant="light">部分锁定</t-tag>
               </div>
               <span>{{ row.description || '暂无描述' }}</span>
             </div>
@@ -191,7 +191,7 @@
         <t-alert
           v-if="lockedFields.length"
           theme="warning"
-          :message="`${lockReason}，部分字段不允许修改`"
+          :message="`${lockReason}，部分关键字段不允许修改`"
           style="margin-bottom: 16px"
         />
         <t-form ref="formRef" class="coupon-drawer-form" :data="form" :rules="formRules" label-align="top">
@@ -536,7 +536,7 @@ function closeCouponDrawer() {
 }
 
 function couponEditDisabled(row: CouponRecord) {
-  return !couponFeatureEnabled.value || !canManage.value;
+  return !couponFeatureEnabled.value || !canManage.value || row.can_update === false;
 }
 
 function couponDeleteDisabled(row: CouponRecord) {
@@ -553,6 +553,10 @@ function couponDeleteDisabledReason(row: CouponRecord) {
 
 function isFieldLocked(field: string): boolean {
   return lockedFields.value.includes(field);
+}
+
+function couponHasLockedFields(row: CouponRecord): boolean {
+  return Array.isArray(row.locked_fields) && row.locked_fields.length > 0;
 }
 
 
@@ -676,6 +680,10 @@ async function openCouponDialog(row?: CouponRecord) {
     MessagePlugin.warning('当前环境未启用优惠券功能');
     return;
   }
+  if (row?.can_update === false) {
+    MessagePlugin.warning(couponEditDisabledReason(row));
+    return;
+  }
   resetForm();
   if (row) {
     lockedFields.value = Array.isArray(row.locked_fields) ? [...row.locked_fields] : [];
@@ -786,7 +794,7 @@ async function handleToggleStatus(row: CouponRecord) {
   }
   actionLoading.value = row.id;
   try {
-    await adminApi.coupons.toggleStatus(row.id);
+    await adminApi.coupons.toggleStatus(row.id, Number(row.status) !== 1);
     MessagePlugin.success('优惠券状态已更新');
     await loadData();
   } catch (error) {

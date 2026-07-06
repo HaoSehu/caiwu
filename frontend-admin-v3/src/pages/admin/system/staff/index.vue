@@ -455,7 +455,7 @@ function handleToggleStatus(row: StaffRecord) {
     cancelBtn: '取消',
     onConfirm: async () => {
       try {
-        await adminStaffApi.toggleStatus(row.id);
+        await adminStaffApi.toggleStatus(row.id, enabling);
         MessagePlugin.success('员工状态已更新');
         await loadList();
         dialog.destroy();

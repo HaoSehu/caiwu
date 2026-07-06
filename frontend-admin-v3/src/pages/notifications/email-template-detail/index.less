@@ -124,6 +124,27 @@
   background: var(--td-bg-color-page);
 }
 
+.sms-preview {
+  flex: 1;
+  min-height: 490px;
+  padding: 24px;
+  background: var(--td-bg-color-page);
+}
+
+.sms-preview p {
+  max-width: 360px;
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--td-component-border);
+  border-radius: var(--td-radius-medium, 6px);
+  background: var(--td-bg-color-container);
+  color: var(--td-text-color-primary);
+  font-size: var(--td-font-size-size-3, 14px);
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 @media (max-width: 1024px) {
   .editor-grid {
     grid-template-columns: 1fr;

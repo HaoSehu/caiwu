@@ -107,6 +107,11 @@ export interface ClientVerificationPayload {
   qrcode_url?: string;
   qr_code_url?: string;
   scan_url?: string;
+  expires_at?: string;
+  qrcode_expires_at?: string;
+  qr_code_expires_at?: string;
+  expires_in?: number | string;
+  expires_in_seconds?: number | string;
   user_verification_status?: number | string;
   is_verified?: number | string;
   can_restart?: boolean | number;
@@ -225,8 +230,8 @@ export interface ServiceTrafficPackageOrderPayload {
 export interface ConsoleConnectionInfo {
   hostname?: string;
   username?: string;
-  password?: string;
   has_password?: boolean;
+  password?: string;
   port?: number;
   dedicated_ip?: string;
   internal_ip?: string;
@@ -560,8 +565,26 @@ export interface RechargeOrderPayload {
   payment_no?: string;
   qr_code?: string;
   amount?: number | string;
+  gateway?: string;
+  gateway_key?: string;
+  gateway_label?: string;
+  payment_type?: string;
+  payment_type_label?: string;
   poll_token?: string;
   poll_expires_at?: string;
+  [key: string]: unknown;
+}
+
+export interface RechargeGatewayOption {
+  key: string;
+  option_key?: string;
+  name?: string;
+  label?: string;
+  payment_type?: string;
+}
+
+export interface RechargeGatewayOptionsPayload {
+  list?: RechargeGatewayOption[];
   [key: string]: unknown;
 }
 
@@ -582,17 +605,26 @@ export interface ServiceNameUpdatePayload {
 
 export interface ServiceRemarkUpdatePayload extends ServiceInstance {}
 
-export interface ServicePowerActionPayload {
+export interface ClientActionDetailPayload {
+  action?: string;
+  action_label?: string;
   message?: string;
-  detail?: ConsoleServiceDetail | null;
+  second_verify_required?: boolean;
+  status?: SummaryRecord | null;
   [key: string]: unknown;
 }
 
-export interface ServicePasswordResetPayload {
+export interface ClientActionResultPayload {
+  id?: number | string;
+  status?: string;
   message?: string;
-  detail?: ConsoleServiceDetail | null;
+  detail?: ClientActionDetailPayload | null;
   [key: string]: unknown;
 }
+
+export interface ServicePowerActionPayload extends ClientActionResultPayload {}
+
+export interface ServicePasswordResetPayload extends ClientActionResultPayload {}
 
 export interface ServiceVncCredentials {
   username?: string;
@@ -822,13 +854,7 @@ export interface SecurityRulePayload {
   [key: string]: unknown;
 }
 
-export interface ServiceReinstallPayload {
-  message?: string;
-  second_verify?: SummaryRecord | null;
-  status?: SummaryRecord | null;
-  detail?: ConsoleServiceDetail | null;
-  [key: string]: unknown;
-}
+export interface ServiceReinstallPayload extends ClientActionResultPayload {}
 
 export interface FinanceLedgerDisplayMeta {
   badge_type?: string;
@@ -1000,7 +1026,10 @@ export interface InvoiceSummaryInfo {
 
 export interface InvoicePaymentMethod {
   key?: 'balance' | 'alipay' | 'free' | string;
+  option_key?: string;
   name?: string;
+  label?: string;
+  payment_type?: string;
   [key: string]: unknown;
 }
 
@@ -1094,6 +1123,11 @@ export interface InvoiceAlipayPaymentPayload {
   poll_token?: string;
   balance_amount?: number | string;
   amount?: number | string;
+  gateway?: string;
+  gateway_key?: string;
+  gateway_label?: string;
+  payment_type?: string;
+  payment_type_label?: string;
   invoice?: InvoiceRecord | null;
   [key: string]: unknown;
 }

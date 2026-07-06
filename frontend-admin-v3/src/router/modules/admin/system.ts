@@ -39,19 +39,6 @@ export const systemRoutes: RouteRecordRaw[] = [
     },
   },
   {
-    path: 'settings',
-    name: 'AdminSettings',
-    component: () => import('@/pages/settings/index.vue'),
-    meta: {
-      title: {
-        zh_CN: '系统配置',
-        en_US: 'System Settings',
-      },
-      permission: 'settings.view',
-      settingsTab: 'system',
-    },
-  },
-  {
     path: 'automation',
     name: 'AdminAutomation',
     component: () => import('@/pages/settings/index.vue'),

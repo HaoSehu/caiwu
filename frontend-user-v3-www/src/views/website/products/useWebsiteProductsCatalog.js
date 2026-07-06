@@ -36,6 +36,28 @@ function invalidateCatalogCache(groupId) {
   catalogCache.delete(groupId)
 }
 
+function groupMatchesType(group, typeValue) {
+  if (!typeValue) {
+    return true
+  }
+
+  return [group?.product_type, group?.first_product_group_code, group?.service_type_code]
+    .map((value) => String(value || '').trim())
+    .includes(typeValue)
+}
+
+function filterGroupsByType(groups = [], typeValue = '') {
+  if (!Array.isArray(groups)) {
+    return []
+  }
+
+  return groups.filter((group) => groupMatchesType(group, typeValue))
+}
+
+function catalogBelongsToGroup(catalog, groupId) {
+  return Number(catalog?.effective_product_group_id || 0) === Number(groupId || 0)
+}
+
 export function useWebsiteProductsCatalog({ onProductSelect, onResetSelection }) {
   const route = useRoute()
   const router = useRouter()
@@ -324,7 +346,7 @@ export function useWebsiteProductsCatalog({ onProductSelect, onResetSelection })
 
     try {
       const res = await siteApi.productGroups({ product_type: activeTypeValue.value || undefined })
-      rootGroups.value = res.data.list || []
+      rootGroups.value = filterGroupsByType(res.data.list || [], activeTypeValue.value)
 
       if (rootGroups.value.length) {
         const targetGroupId = Number(options.targetGroupId || 0)
@@ -522,12 +544,9 @@ export function useWebsiteProductsCatalog({ onProductSelect, onResetSelection })
   async function initWithAggregatedApi() {
     const routePayload = readWebsiteProductRouteParams(route)
     const hasRouteTarget = hasWebsiteProductRouteParams(routePayload)
-    const requestType = hasRouteTarget ? undefined : undefined
 
     try {
-      const res = await siteApi.productsInit(
-        requestType ? { product_type: requestType } : undefined,
-      )
+      const res = await siteApi.productsInit()
       const data = res.data || {}
       productTypes.value = data.types || []
 
@@ -543,9 +562,9 @@ export function useWebsiteProductsCatalog({ onProductSelect, onResetSelection })
       const types = productTypes.value
       const firstTypeValue = types[0]?.value || ''
       activeTypeValue.value = firstTypeValue
-      rootGroups.value = data.root_groups || []
+      rootGroups.value = filterGroupsByType(data.root_groups || [], firstTypeValue)
 
-      if (rootGroups.value.length && data.catalog) {
+      if (rootGroups.value.length && data.catalog && catalogBelongsToGroup(data.catalog, rootGroups.value[0].id)) {
         const firstGroupId = rootGroups.value[0].id
         activeGroupId.value = firstGroupId
         setCachedCatalog(firstGroupId, data.catalog)

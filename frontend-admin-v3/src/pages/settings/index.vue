@@ -88,7 +88,7 @@
         </t-form>
       </t-card>
 
-      <div class="settings-bottom-actions">
+      <div v-if="allFields.length > 0" class="settings-bottom-actions">
         <t-button theme="primary" :loading="currentSaving" :disabled="!canManageCurrentTab" @click="saveCurrentTab">
           <template #icon><check-icon /></template>
           保存设置
@@ -361,7 +361,6 @@ import { errorMessage } from '@/utils/userMessage';
 import './index.less';
 
 type SettingsTab =
-  | 'system'
   | 'referral'
   | 'automation'
   | 'site_basic'
@@ -460,7 +459,6 @@ const tabGroups: Array<{ group: string; label: string; tabs: Array<{ label: stri
     group: 'config',
     label: '基础配置',
     tabs: [
-      { label: '系统设置', value: 'system' },
       { label: '推荐奖励', value: 'referral' },
       { label: '自动化策略', value: 'automation' },
     ],
@@ -477,30 +475,6 @@ const tabGroups: Array<{ group: string; label: string; tabs: Array<{ label: stri
 const tabOptions = tabGroups.flatMap((g) => g.tabs);
 
 const configs: Record<Exclude<SettingsTab, 'site_hero'>, SettingsConfig> = {
-  system: {
-    group: 'system',
-    title: '系统设置',
-    description: '集中配置人机验证与邮件短信限流策略。',
-    sections: [
-      {
-        title: '人机验证',
-        description: '服务商接入通过插件管理维护；此处控制登录、注册和验证码发送前是否启用校验。',
-        fields: [
-          { key: 'captcha_enabled', label: '启用人机验证', type: 'switch', default: false, help: '开启后登录风控、注册和验证码发送会调用已启用的人机验证插件。' },
-        ],
-      },
-      {
-        title: '邮件短信限流',
-        description: '仅按单个 IP 的每分钟验证码发送频率进行限制。',
-        fields: [
-          { key: 'email_rate_limit_enabled', group: 'message_limit', label: '启用邮箱限流', type: 'switch', default: false },
-          { key: 'email_ip_minute_limit', group: 'message_limit', label: '邮箱单 IP 每分钟上限', type: 'number', default: 6, min: 0, help: '设为 0 表示不限制；不再按邮箱地址累计总量。' },
-          { key: 'sms_rate_limit_enabled', group: 'message_limit', label: '启用短信限流', type: 'switch', default: false },
-          { key: 'sms_ip_minute_limit', group: 'message_limit', label: '短信单 IP 每分钟上限', type: 'number', default: 6, min: 0, help: '设为 0 表示不限制；不再按手机号累计总量。' },
-        ],
-      },
-    ],
-  },
   referral: {
     group: 'referral',
     title: '推荐奖励配置',
@@ -612,7 +586,7 @@ const videoDrawerTitle = computed(() => {
 function normalizeTab(value: unknown): SettingsTab {
   const tab = Array.isArray(value) ? value[0] : value;
   if (tab === 'site') return 'site_basic';
-  return tabOptions.some((item) => item.value === tab) ? (tab as SettingsTab) : 'system';
+  return tabOptions.some((item) => item.value === tab) ? (tab as SettingsTab) : 'automation';
 }
 
 function resolveInitialTab(): SettingsTab {

@@ -201,7 +201,7 @@
         <div v-if="logPagination.total > 0" class="pagination-row">
           <t-pagination
             :current="logPagination.page"
-            :page-size="logPagination.per_page"
+            :page-size="logPagination.page_size"
             :total="logPagination.total"
             :page-size-options="[10, 15, 20, 50, 100]"
             show-jumper
@@ -401,7 +401,7 @@ import { RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import type { PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 
-import { adminApi, type LaravelPagination, type LogListParams } from '@/api/admin';
+import { adminApi, type PaginatedList, type LogListParams } from '@/api/admin';
 import { fieldValue } from '@/utils/format';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { errorMessage } from '@/utils/userMessage';
@@ -463,7 +463,7 @@ type LogFilterKey = keyof typeof filters;
 
 const logPagination = reactive({
   page: 1,
-  per_page: 15,
+  page_size: 15,
   total: 0,
 });
 const cleanupForm = reactive({
@@ -546,8 +546,6 @@ const taskLogOptions = [
   { value: 'coupon-campaign-dispatch', label: '优惠券活动发放' },
   { value: 'ticket-auto-close', label: '工单自动关闭' },
   { value: 'order-cleanup', label: '账单与充值清理' },
-  { value: 'sync-processing-order-status', label: '账单状态同步（兼容）' },
-  { value: 'queue-backlog-drain', label: '队列积压消费' },
 ];
 const logMeta: Record<LogTab, { title: string; description: string; filters: string[]; keyword: string }> = {
   system: {
@@ -840,7 +838,7 @@ function refreshCurrentTab() {
 function buildLogParams(): LogListParams {
   const params: LogListParams = {
     page: logPagination.page,
-    per_page: logPagination.per_page,
+    page_size: logPagination.page_size,
   };
   for (const key of currentLogMeta.value.filters) {
     if (key === 'date') {
@@ -875,10 +873,10 @@ async function loadLogs() {
   try {
     const params = buildLogParams();
     const response = await requestLogList(activeTab.value, params);
-    logRows.value = response.data || [];
+    logRows.value = response.list || [];
     logPagination.total = Number(response.total || 0);
-    logPagination.page = Number(response.current_page || logPagination.page);
-    logPagination.per_page = Number(response.per_page || logPagination.per_page);
+    logPagination.page = Number(response.page || logPagination.page);
+    logPagination.page_size = Number(response.page_size || logPagination.page_size);
   } catch (error) {
     logRows.value = [];
     logPagination.total = 0;
@@ -888,7 +886,7 @@ async function loadLogs() {
   }
 }
 
-function requestLogList(tab: LogTab, params: LogListParams): Promise<LaravelPagination> {
+function requestLogList(tab: LogTab, params: LogListParams): Promise<PaginatedList> {
   const map = {
     system: adminApi.logs.system,
     runtime: adminApi.logs.runtime,
@@ -939,7 +937,7 @@ function resetLogFilters(shouldLoad = true) {
 
 function handleLogPageChange(data: PageInfo) {
   logPagination.page = data.current;
-  logPagination.per_page = data.pageSize;
+  logPagination.page_size = data.pageSize;
   loadLogs();
 }
 
@@ -1024,9 +1022,20 @@ async function handleCleanup() {
   }
 }
 
-function openDetail(row: TableRowData) {
+async function openDetail(row: TableRowData) {
   currentLog.value = row as RecordRow;
   detailVisible.value = true;
+
+  if (!isLogTab(activeTab.value) || row.id === undefined || row.id === null || row.id === '') {
+    return;
+  }
+
+  try {
+    const detail = await adminApi.logs.detail(activeTab.value, row.id as string | number);
+    currentLog.value = { ...(row as RecordRow), ...detail };
+  } catch (error) {
+    MessagePlugin.error(errorMessage(error, '加载日志详情失败'));
+  }
 }
 
 function closeDetailDrawer() {

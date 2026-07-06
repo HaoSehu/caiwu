@@ -175,6 +175,20 @@ export interface SettingItem {
   masked_value?: string | number | boolean | null;
 }
 
+export interface NotificationTemplateItem {
+  channel: 'email' | 'sms';
+  code: string;
+  name: string;
+  description: string;
+  audience: 'user' | 'admin';
+  subject?: string | null;
+  content: string;
+  provider_template_id?: string;
+  variables: string[];
+  provider_variables?: string[];
+  setting_keys?: Record<string, string>;
+}
+
 export interface ScheduleOverview {
   tasks?: Record<string, unknown>[];
   recent_logs?: Record<string, unknown>[];
@@ -183,7 +197,7 @@ export interface ScheduleOverview {
 // ─── Logs ─────────────────────────────────────────────────────
 export interface LogListParams {
   page?: number;
-  per_page?: number;
+  page_size?: number;
   keyword?: string;
   actor_keyword?: string;
   description_keyword?: string;
@@ -209,11 +223,11 @@ export interface LogListParams {
   subject_type?: string;
 }
 
-export interface LaravelPagination<T extends Record<string, unknown> = Record<string, unknown>> {
-  data?: T[];
+export interface PaginatedList<T extends Record<string, unknown> = Record<string, unknown>> {
+  list?: T[];
   total?: number;
-  current_page?: number;
-  per_page?: number;
+  page?: number;
+  page_size?: number;
   summary?: Record<string, unknown>;
 }
 
@@ -386,6 +400,66 @@ export interface ProductBindingRecord {
   third_product_group_name?: string | null;
   effective_product_group_id?: number;
   effective_product_group_level?: number;
+}
+
+export interface CouponProductGroupListParams {
+  page?: number;
+  page_size?: number;
+  keyword?: string;
+  status?: number | string;
+}
+
+export interface CouponProductGroupChildrenParams extends CouponProductGroupListParams {
+  level: 1 | 2;
+}
+
+export interface CouponProductGroupProductsParams extends CouponProductGroupListParams {
+  level: 1 | 2 | 3;
+}
+
+export interface CouponProductGroupRecord {
+  id: number;
+  node_key?: string;
+  node_type?: string;
+  name?: string;
+  label?: string;
+  parent_id?: number | null;
+  parent_level?: number | null;
+  level: 1 | 2 | 3;
+  service_type_code?: string;
+  service_type_label?: string;
+  first_product_group_id?: number | null;
+  first_product_group_name?: string | null;
+  second_product_group_id?: number | null;
+  second_product_group_name?: string | null;
+  third_product_group_id?: number | null;
+  third_product_group_name?: string | null;
+  effective_product_group_id?: number | null;
+  effective_product_group_level?: number | null;
+  group_path?: string;
+  children_count?: number;
+  products_count?: number;
+  direct_products_count?: number;
+  has_children?: boolean;
+  has_products?: boolean;
+  status?: number;
+  sort_order?: number;
+}
+
+export interface CouponProductRecord extends ProductBindingRecord {
+  id: number;
+  product_id: number;
+  node_type?: 'product';
+  label?: string;
+  leaf?: boolean;
+  disabled?: boolean;
+  name?: string;
+  product_type?: string;
+  service_type_code?: string;
+  service_type_label?: string;
+  group_path?: string;
+  effective_product_group_full_name?: string;
+  updated_at?: string | null;
 }
 
 export interface InstanceSpecRecord {

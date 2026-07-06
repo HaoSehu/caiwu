@@ -19,7 +19,7 @@
   <title>创欧云 - 稳定、安全、高性价比的云服务器与 IDC 服务平台</title>
   <link rel="icon" type="image/svg+xml" href="/branding/logo1.svg" fetchpriority="high" />
   <link rel="alternate" hreflang="zh-CN" href="/" />
-  <link rel="prefetch" href="/api/site/config" as="fetch" crossorigin="anonymous" />
+  <link rel="prefetch" href="/api/v2/site/config" as="fetch" crossorigin="anonymous" />
   
   <!-- 关键第三方域名预连接，减少 DNS + TLS 握手开销 -->
   <link rel="preconnect" href="//api.geetest.com" crossorigin />
@@ -29,18 +29,6 @@
   <link rel="dns-prefetch" href="//mclient.alipay.com" />
 </head>
 <body>
-  <!-- 首页 Hero 视频：仅预载元数据，避免与主 JS 包抢带宽；Vue 挂载后真实视频走同源 HTTP 缓存命中。
-       onerror 自动移除节点，避免资源缺失时控制台报错与残破视频节点。 -->
-  <video
-    aria-hidden="true"
-    preload="metadata"
-    muted
-    playsinline
-    onerror="this.remove()"
-    style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:-10px;top:-10px;z-index:-1;"
-  >
-    <source src="/uploads/hero-videos/hero-1.mp4" type="video/mp4" />
-  </video>
   <div id="app">
     <!-- 初始加载动画：JS 解析完成前展示，Vue 挂载后自动替换 -->
     <div id="app-splash" aria-label="页面加载中">

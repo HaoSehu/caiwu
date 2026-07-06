@@ -40,7 +40,6 @@
               <span>v{{ plugin.version || '-' }}</span>
             </div>
             <div class="plugin-observability">
-              <t-tag size="small" variant="light">{{ bindingCountText(plugin) }}</t-tag>
               <t-tag v-if="plugin.latest_runtime_log" size="small" variant="light" :theme="runtimeStatusTheme(plugin)">
                 {{ latestRuntimeText(plugin) }}
               </t-tag>
@@ -68,6 +67,8 @@
               theme="success"
               variant="outline"
               :loading="actionLoading === actionKey(plugin, 'enable')"
+              :disabled="isEnableDisabled(plugin)"
+              :title="enableDisabledReason(plugin)"
               @click="enablePlugin(plugin)"
             >
               启用
@@ -75,11 +76,11 @@
             <t-button v-if="canTestPlugins" variant="text" :loading="actionLoading === actionKey(plugin, 'health')" @click="healthCheck(plugin)">
               检测
             </t-button>
-            <t-button v-if="plugin.id" variant="text" @click="openRuntimeLogs(plugin)">
+            <t-button v-if="plugin.id && plugin.is_enabled" variant="text" @click="openRuntimeLogs(plugin)">
               日志
             </t-button>
-            <t-button v-if="canManagePlugins" theme="danger" variant="text" :loading="actionLoading === actionKey(plugin, 'delete')" @click="deletePlugin(plugin)">
-              {{ deleteButtonText(plugin) }}
+            <t-button v-if="canManagePlugins && !plugin.is_enabled" theme="danger" variant="text" :loading="actionLoading === actionKey(plugin, 'delete')" @click="deletePlugin(plugin)">
+              删除
             </t-button>
           </template>
         </div>
@@ -295,12 +296,6 @@
         <t-form-item label="收件人邮箱" :status="emailTestErrors.to ? 'error' : undefined" :help="emailTestErrors.to">
           <t-input v-model="emailTestForm.to" placeholder="请输入收件人邮箱" @change="clearEmailTestError('to')" />
         </t-form-item>
-        <t-form-item label="邮件主题" :status="emailTestErrors.subject ? 'error' : undefined" :help="emailTestErrors.subject">
-          <t-input v-model="emailTestForm.subject" placeholder="请输入邮件主题" @change="clearEmailTestError('subject')" />
-        </t-form-item>
-        <t-form-item label="邮件正文（可选）" :status="emailTestErrors.body ? 'error' : undefined" :help="emailTestErrors.body">
-          <t-textarea v-model="emailTestForm.body" placeholder="可选邮件正文" :autosize="{ minRows: 3, maxRows: 8 }" @change="clearEmailTestError('body')" />
-        </t-form-item>
       </t-form>
     </t-dialog>
   </div>
@@ -343,6 +338,7 @@ const domainTabs: Array<{ value: IntegrationPluginDomain; label: string }> = [
   { value: 'upstream', label: '上游开通' },
 ];
 
+const singleEnabledDomains = new Set<IntegrationPluginDomain>(['captcha', 'verification', 'mail', 'sms']);
 const activeDomain = ref<IntegrationPluginDomain>('captcha');
 const plugins = ref<IntegrationPluginRecord[]>([]);
 const loading = ref(false);
@@ -373,11 +369,9 @@ const smtpAccounts = computed<SmtpAccountForm[]>(() => (Array.isArray(configForm
 const emailTestVisible = ref(false);
 const emailTesting = ref(false);
 const testingAccountIndex = ref(-1);
-const emailTestForm = reactive({ to: '', subject: 'SMTP 发送测试', body: '' });
-const emailTestErrors = reactive<Record<'to' | 'subject' | 'body', string>>({
+const emailTestForm = reactive({ to: '' });
+const emailTestErrors = reactive<Record<'to', string>>({
   to: '',
-  subject: '',
-  body: '',
 });
 const canManagePlugins = computed(() => hasAdminPermission(AdminPermissions.INTEGRATION_PLUGIN_MANAGE));
 const canTestPlugins = computed(() => hasAdminPermission(AdminPermissions.INTEGRATION_PLUGIN_TEST));
@@ -444,6 +438,12 @@ async function installPlugin(plugin: IntegrationPluginRecord) {
 async function enablePlugin(plugin: IntegrationPluginRecord) {
   if (!canManagePlugins.value) return;
   if (!plugin.id) return;
+  const disabledReason = enableDisabledReason(plugin);
+  if (disabledReason) {
+    MessagePlugin.warning(disabledReason);
+    return;
+  }
+
   await runAction(plugin, 'enable', async () => {
     await pluginsApi.enable(plugin.id as string | number);
     MessagePlugin.success('插件已启用');
@@ -464,16 +464,11 @@ async function disablePlugin(plugin: IntegrationPluginRecord) {
 async function deletePlugin(plugin: IntegrationPluginRecord) {
   if (!canManagePlugins.value) return;
   if (!plugin.id) return;
-  const archiveMode = isArchiveDeleteMode(plugin);
-  const actionText = archiveMode ? '归档停用' : '删除';
-  const confirmText = archiveMode
-    ? `插件「${plugin.name}」已有业务引用，将改为归档停用并保留记录。确定继续吗？`
-    : `确定删除插件「${plugin.name}」的安装记录和配置吗？插件目录文件不会被删除。`;
-  if (!window.confirm(confirmText)) return;
+  if (!window.confirm(`确定删除插件「${plugin.name}」的安装记录和配置吗？插件目录文件不会被删除。`)) return;
 
   await runAction(plugin, 'delete', async () => {
     await pluginsApi.remove(plugin.id as string | number);
-    MessagePlugin.success(`插件已${actionText}`);
+    MessagePlugin.success('插件已删除');
     await loadPlugins();
     if (currentPlugin.value?.id === plugin.id) configVisible.value = false;
   });
@@ -819,8 +814,6 @@ async function handleSmtpAccountAction(action: string, index: number) {
     if (!canTestPlugins.value) return;
     testingAccountIndex.value = index;
     emailTestForm.to = '';
-    emailTestForm.subject = 'SMTP 发送测试';
-    emailTestForm.body = '';
     clearEmailTestErrors();
     emailTestVisible.value = true;
     return;
@@ -914,7 +907,6 @@ async function sendTestEmail() {
   clearEmailTestErrors();
 
   const to = emailTestForm.to.trim();
-  const subject = emailTestForm.subject.trim();
 
   if (!to) {
     emailTestErrors.to = '请输入收件人邮箱';
@@ -926,11 +918,6 @@ async function sendTestEmail() {
     return;
   }
 
-  if (!subject) {
-    emailTestErrors.subject = '请输入邮件主题';
-    return;
-  }
-
   if (!currentPlugin.value?.id) return;
 
   emailTesting.value = true;
@@ -938,14 +925,12 @@ async function sendTestEmail() {
     await pluginsApi.testEmail(currentPlugin.value.id, {
       account_index: testingAccountIndex.value,
       to,
-      subject,
-      body: emailTestForm.body.trim(),
     });
     MessagePlugin.success('测试邮件发送成功');
     emailTestVisible.value = false;
   } catch (error) {
     const fieldErrors = extractFieldErrors(error);
-    if (fieldErrors.to || fieldErrors.subject || fieldErrors.body) {
+    if (fieldErrors.to) {
       Object.assign(emailTestErrors, fieldErrors);
     }
     MessagePlugin.error(errorMessage(error, '测试邮件发送失败'));
@@ -968,8 +953,6 @@ function extractFieldErrors(error: unknown) {
   const errors = (error as { response?: { data?: { data?: { errors?: Record<string, string[]> } } } })?.response?.data?.data?.errors;
   return {
     to: firstError(errors?.to),
-    subject: firstError(errors?.subject),
-    body: firstError(errors?.body),
   };
 }
 
@@ -1015,25 +998,28 @@ function domainLabel(domain: string) {
   return domainTabs.find((item) => item.value === domain)?.label || domain;
 }
 
+function isEnableDisabled(plugin: IntegrationPluginRecord) {
+  return enableDisabledReason(plugin) !== '';
+}
+
+function enableDisabledReason(plugin: IntegrationPluginRecord) {
+  const apiReason = typeof plugin.enable_disabled_reason === 'string' ? plugin.enable_disabled_reason.trim() : '';
+  if (apiReason) return apiReason;
+  if (plugin.is_enabled || !singleEnabledDomains.has(plugin.domain)) return '';
+
+  const currentPluginId = String(plugin.id ?? '');
+  const enabledPlugin = plugins.value.find(
+    (item) => item.domain === plugin.domain && item.is_enabled && String(item.id ?? '') !== currentPluginId,
+  );
+  if (!enabledPlugin) return '';
+
+  return `当前功能域已启用「${enabledPlugin.name}」，请先停用后再启用其他插件`;
+}
+
 function pluginStatusText(plugin: IntegrationPluginRecord) {
   if (plugin.is_enabled) return '已启用';
   if (plugin.is_installed) return '已安装';
   return '未安装';
-}
-
-function businessReferenceCount(plugin: IntegrationPluginRecord) {
-  const directTotal = Number(plugin.business_reference_count ?? 0);
-  if (Number.isFinite(directTotal) && directTotal > 0) return directTotal;
-
-  return Object.values(plugin.binding_counts || {}).reduce((total, value) => {
-    const numeric = Number(value || 0);
-    return total + (Number.isFinite(numeric) ? numeric : 0);
-  }, 0);
-}
-
-function bindingCountText(plugin: IntegrationPluginRecord) {
-  const total = businessReferenceCount(plugin);
-  return total > 0 ? `业务引用 ${total}` : '暂无业务引用';
 }
 
 function latestRuntimeText(plugin: IntegrationPluginRecord) {
@@ -1049,14 +1035,6 @@ function runtimeStatusTheme(plugin: IntegrationPluginRecord) {
   if (status === 'failed') return 'danger';
   if (status === 'success') return 'success';
   return 'default';
-}
-
-function isArchiveDeleteMode(plugin: IntegrationPluginRecord) {
-  return plugin.delete_mode === 'disable_archive';
-}
-
-function deleteButtonText(plugin: IntegrationPluginRecord) {
-  return isArchiveDeleteMode(plugin) ? '归档' : '删除';
 }
 
 function openRuntimeLogs(plugin: IntegrationPluginRecord) {
