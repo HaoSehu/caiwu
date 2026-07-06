@@ -8,6 +8,7 @@ use App\Exceptions\BusinessException;
 use App\Services\Integrations\Plugins\PluginConfigRepository;
 use App\Services\Integrations\Plugins\PluginDomain;
 use App\Services\Mail\SmtpMailTransport;
+use App\Services\System\NotificationService;
 use Illuminate\Support\Facades\Cache;
 
 class MultiSmtpRoundRobinService
@@ -80,9 +81,10 @@ class MultiSmtpRoundRobinService
             throw new BusinessException('SMTP 账号配置无效', 42200);
         }
 
+        $fallbackCode = (string) random_int(100000, 999999);
         $html = $body !== ''
             ? nl2br(htmlspecialchars($body, ENT_QUOTES, 'UTF-8'))
-            : '<p>这是一封来自 Caiwu 的 SMTP 发送测试邮件。</p>';
+            : '<p>'.htmlspecialchars($this->verificationBody($fallbackCode), ENT_QUOTES, 'UTF-8').'</p>';
 
         $this->transport->sendHtml($account, $to, $subject, $html);
     }
@@ -95,8 +97,10 @@ class MultiSmtpRoundRobinService
         if ($action === 'mail.test_smtp') {
             $accountIndex = (int) ($payload['account_index'] ?? -1);
             $to = trim((string) ($payload['to'] ?? ''));
-            $subject = trim((string) ($payload['subject'] ?? ''));
-            $body = trim((string) ($payload['body'] ?? ''));
+            $subject = trim((string) ($payload['subject'] ?? '邮箱验证码'));
+            $code = $this->verificationCode($payload);
+            $body = trim((string) ($payload['body'] ?? $this->verificationBody($code)));
+            $templateCode = (string) ($payload['template_code'] ?? NotificationService::TEMPLATE_EMAIL_CODE);
 
             if ($accountIndex < 0 || $to === '' || $subject === '') {
                 return [
@@ -113,7 +117,7 @@ class MultiSmtpRoundRobinService
                 'success' => true,
                 'action' => $action,
                 'message' => '测试邮件发送成功',
-                'data' => ['sent' => true],
+                'data' => ['sent' => true, 'template_code' => $templateCode],
             ];
         }
 
@@ -157,5 +161,20 @@ class MultiSmtpRoundRobinService
     private function cooldownKey(int $index): string
     {
         return 'plugin:mail:multi_smtp_round_robin:cooldown:'.$index;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function verificationCode(array $payload): string
+    {
+        $code = trim((string) ($payload['code'] ?? ''));
+
+        return preg_match('/^\d{6}$/', $code) === 1 ? $code : (string) random_int(100000, 999999);
+    }
+
+    private function verificationBody(string $code): string
+    {
+        return "您的邮箱验证码为：{$code}，10分钟内有效。如非本人操作，请忽略此邮件。";
     }
 }

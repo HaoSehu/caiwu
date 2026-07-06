@@ -11,6 +11,36 @@ use Illuminate\Support\Facades\Log;
  */
 class AliyunSmsClient
 {
+    private const VERIFY_ENDPOINT = 'https://dypnsapi.aliyuncs.com/';
+
+    private const DEFAULT_SIGN_NAME = '恒创联众';
+
+    private const VERIFY_TEMPLATE_LOGIN_REGISTER = '100001';
+
+    private const VERIFY_TEMPLATE_CHANGE_PHONE = '100002';
+
+    private const VERIFY_TEMPLATE_RESET_PASSWORD = '100003';
+
+    private const VERIFY_TEMPLATE_BIND_PHONE = '100004';
+
+    private const VERIFY_TEMPLATE_VERIFY_BOUND_PHONE = '100005';
+
+    private const VERIFY_TEMPLATE_CODES = [
+        'login' => self::VERIFY_TEMPLATE_LOGIN_REGISTER,
+        'register' => self::VERIFY_TEMPLATE_LOGIN_REGISTER,
+        'generic' => self::VERIFY_TEMPLATE_LOGIN_REGISTER,
+        'change_phone' => self::VERIFY_TEMPLATE_CHANGE_PHONE,
+        'phone_change' => self::VERIFY_TEMPLATE_CHANGE_PHONE,
+        'update_phone' => self::VERIFY_TEMPLATE_CHANGE_PHONE,
+        'reset' => self::VERIFY_TEMPLATE_RESET_PASSWORD,
+        'reset_password' => self::VERIFY_TEMPLATE_RESET_PASSWORD,
+        'password_reset' => self::VERIFY_TEMPLATE_RESET_PASSWORD,
+        'bind_phone' => self::VERIFY_TEMPLATE_BIND_PHONE,
+        'new_phone' => self::VERIFY_TEMPLATE_BIND_PHONE,
+        'verify_bound_phone' => self::VERIFY_TEMPLATE_VERIFY_BOUND_PHONE,
+        'verify_phone' => self::VERIFY_TEMPLATE_VERIFY_BOUND_PHONE,
+    ];
+
     /**
      * @param  array<string, mixed>  $config  插件配置（来自 execute() 的 $request['config']）
      */
@@ -19,13 +49,19 @@ class AliyunSmsClient
     ) {}
 
     /**
+     * @var array{errno: int, error: string}|null
+     */
+    private ?array $lastCurlError = null;
+
+    /**
      * @return array{success: bool, request_id?: string, raw?: array}
      */
     public function sendVerifyCode(string $phone, string $code, array $options = []): array
     {
-        $signName = (string) ($options['sign_name'] ?? $this->config['sign_name'] ?? '速通互联验证码');
-        $templateCode = (string) ($options['template_code'] ?? $this->config['template_code'] ?? '100001');
-        $templateParams = ['code' => $code, 'min' => '5'];
+        $signName = $this->resolveSignName($options);
+        $templateCode = $this->resolveVerifyTemplateCode($options);
+        $expireMinutes = trim((string) ($options['min'] ?? '5'));
+        $templateParams = ['code' => $code, 'min' => $expireMinutes !== '' ? $expireMinutes : '5'];
 
         $accessKeyId = (string) ($this->config['access_key'] ?? '');
         $accessKeySecret = (string) ($this->config['secret_key'] ?? '');
@@ -39,19 +75,22 @@ class AliyunSmsClient
             'SchemeName' => '默认方案',
             'CountryCode' => '86',
             'PhoneNumber' => trim($phone),
-            'SignName' => $signName !== '' ? $signName : '速通互联验证码',
-            'TemplateCode' => $templateCode !== '' ? $templateCode : '100001',
+            'SignName' => $signName,
+            'TemplateCode' => $templateCode,
             'TemplateParam' => json_encode($templateParams, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             'CodeLength' => 6,
             'ValidTime' => 300,
             'CodeType' => 1,
         ];
 
-        $apiEndpoint = $this->configString('api_endpoint', (string) (config('idc.sms.api_endpoint') ?? 'https://dypnsapi.aliyuncs.com/'));
-        $result = $this->request($apiEndpoint, $params, $accessKeyId, $accessKeySecret, $phone);
+        $result = $this->request(self::VERIFY_ENDPOINT, $params, $accessKeyId, $accessKeySecret, $phone);
 
         if (! is_array($result)) {
-            return ['success' => false, 'message' => '短信接口请求失败，请稍后重试'];
+            return [
+                'success' => false,
+                'message' => $this->resolveCurlFailureMessage(),
+                'raw' => $this->lastCurlError ?? [],
+            ];
         }
 
         if (($result['Code'] ?? '') !== 'OK' || ($result['Success'] ?? false) !== true) {
@@ -66,14 +105,28 @@ class AliyunSmsClient
         return [
             'success' => true,
             'request_id' => isset($result['RequestId']) ? (string) $result['RequestId'] : null,
-            'template_code' => (string) $templateCode,
+            'template_code' => $templateCode,
             'template_params' => $templateParams,
             'raw' => $result,
         ];
     }
 
-    private function request(string $url, array $params, string $accessKeyId, string $accessKeySecret, string $phone): array|false
+    /**
+     * @param  array<string, mixed>  $options
+     * @return array{success: bool, request_id?: string, raw?: array}
+     */
+    public function sendMessage(string $phone, string $templateCode, string $content, array $options = []): array
     {
+        return [
+            'success' => false,
+            'message' => '阿里云号码认证短信插件仅支持内置验证码模板，不支持系统短信模板正文发送',
+        ];
+    }
+
+    private function request(string $url, array $params, string $accessKeyId, string $accessKeySecret, string $phone = ''): array|false
+    {
+        $this->lastCurlError = null;
+
         $fixedParams = [
             'Format' => 'json',
             'RegionId' => 'cn-hangzhou',
@@ -98,11 +151,15 @@ class AliyunSmsClient
         $sign = base64_encode(hash_hmac('sha1', $stringToSign, $accessKeySecret.'&', true));
         $body = 'Signature='.$this->encode($sign).$sortedQuery;
 
-        Log::info('[短信] 请求阿里云短信接口', [
+        $logContext = [
             'url' => $url,
             'action' => $params['Action'] ?? null,
-            'phone' => $this->maskPhone($phone),
-        ]);
+        ];
+        if ($phone !== '') {
+            $logContext['phone'] = $this->maskPhone($phone);
+        }
+
+        Log::info('[短信] 请求阿里云短信接口', $logContext);
 
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_POST, 1);
@@ -111,12 +168,19 @@ class AliyunSmsClient
         curl_setopt($ch, CURLOPT_TIMEOUT, 10);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         curl_setopt($ch, CURLOPT_HTTPHEADER, ['x-sdk-client: php/2.0.0']);
+        $this->configureCurlSsl($ch);
 
         $result = curl_exec($ch);
         if ($result === false) {
-            Log::error('[短信] CURL 请求失败', [
+            $this->lastCurlError = [
                 'errno' => curl_errno($ch),
                 'error' => curl_error($ch),
+            ];
+            Log::error('[短信] CURL 请求失败', [
+                'errno' => $this->lastCurlError['errno'],
+                'error' => $this->lastCurlError['error'],
+                'ssl_verify' => $this->resolveSslVerify(),
+                'has_ca_bundle' => $this->resolveCaBundle() !== '',
             ]);
             curl_close($ch);
 
@@ -128,6 +192,38 @@ class AliyunSmsClient
         return json_decode($result, true) ?: false;
     }
 
+    private function configureCurlSsl($ch): void
+    {
+        $sslVerify = $this->resolveSslVerify();
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $sslVerify);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, $sslVerify ? 2 : 0);
+
+        $caBundle = $this->resolveCaBundle();
+        if ($sslVerify && $caBundle !== '' && is_file($caBundle)) {
+            curl_setopt($ch, CURLOPT_CAINFO, $caBundle);
+        }
+    }
+
+    private function resolveSslVerify(): bool
+    {
+        $value = $this->config['ssl_verify'] ?? null;
+        if ($value !== null && $value !== '') {
+            return filter_var($value, FILTER_VALIDATE_BOOL);
+        }
+
+        return filter_var(config('idc.sms.ssl_verify', true), FILTER_VALIDATE_BOOL);
+    }
+
+    private function resolveCaBundle(): string
+    {
+        $value = $this->config['ca_bundle'] ?? null;
+        if ($value !== null && $value !== '') {
+            return trim((string) $value);
+        }
+
+        return trim((string) config('idc.sms.ca_bundle', ''));
+    }
+
     private function encode(string $value): string
     {
         $encoded = urlencode($value);
@@ -137,11 +233,26 @@ class AliyunSmsClient
         return str_replace('%7E', '~', $encoded);
     }
 
-    private function configString(string $key, string $default = ''): string
+    private function resolveVerifyTemplateCode(array $options): string
     {
-        $value = $this->config[$key] ?? null;
+        $purpose = strtolower(trim((string) (
+            $options['purpose']
+            ?? $options['scene']
+            ?? $options['type']
+            ?? 'generic'
+        )));
 
-        return trim((string) (($value !== null && $value !== '') ? $value : $default));
+        return self::VERIFY_TEMPLATE_CODES[$purpose] ?? self::VERIFY_TEMPLATE_LOGIN_REGISTER;
+    }
+
+    /**
+     * @param  array<string, mixed>  $options
+     */
+    private function resolveSignName(array $options): string
+    {
+        $signName = trim((string) ($options['sign_name'] ?? $this->config['sign_name'] ?? ''));
+
+        return $signName !== '' ? $signName : self::DEFAULT_SIGN_NAME;
     }
 
     private function maskPhone(string $phone): string
@@ -165,5 +276,29 @@ class AliyunSmsClient
         }
 
         return $text;
+    }
+
+    private function resolveCurlFailureMessage(): string
+    {
+        $errno = (int) ($this->lastCurlError['errno'] ?? 0);
+        $error = strtolower((string) ($this->lastCurlError['error'] ?? ''));
+
+        if ($errno === 60 || str_contains($error, 'certificate')) {
+            return '短信接口 SSL 证书校验失败，请检查服务器 CA 证书或 SMS_CA_BUNDLE 配置';
+        }
+
+        if ($errno === 6 || str_contains($error, 'resolve host')) {
+            return '短信接口域名解析失败，请检查服务器网络 DNS';
+        }
+
+        if ($errno === 7 || str_contains($error, 'connect')) {
+            return '短信接口连接失败，请检查服务器外网访问';
+        }
+
+        if ($errno === 28 || str_contains($error, 'timeout')) {
+            return '短信接口请求超时，请稍后重试';
+        }
+
+        return '短信接口请求失败，请稍后重试';
     }
 }

@@ -100,6 +100,7 @@ final class MofangProvisionService
         $errorMessage = '';
         $errorClass = '';
         $jwt = null;
+        $cartCookieJar = [];
 
         try {
             $stepStartedAt = microtime(true);
@@ -107,29 +108,29 @@ final class MofangProvisionService
             $latency['login_ms'] = $this->elapsedMilliseconds($stepStartedAt);
 
             $stepStartedAt = microtime(true);
-            $this->transport->delete($supplier, '/v1/cart/clear', [], $jwt);
+            $this->requestCartWithSession($supplier, 'DELETE', '/v1/cart/clear', [], $jwt, $cartCookieJar);
             $latency['clear_cart_before_ms'] = $this->elapsedMilliseconds($stepStartedAt);
 
             $payload = $this->buildCartPayload($order, $product);
             $requestedHost = (string) ($payload['host'] ?? '');
 
             $stepStartedAt = microtime(true);
-            $addCartResponse = $this->addProductToCart($supplier, $jwt, $payload);
+            $addCartResponse = $this->addProductToCart($supplier, $jwt, $payload, $cartCookieJar);
             $latency['add_cart_ms'] = $this->elapsedMilliseconds($stepStartedAt);
             $this->assertUpstreamSuccess($addCartResponse, [200], '加入上游购物车');
 
             $stepStartedAt = microtime(true);
-            $cartResponse = $this->transport->get($supplier, '/v1/cart', $jwt);
+            $cartResponse = $this->requestCartWithSession($supplier, 'GET', '/v1/cart', [], $jwt, $cartCookieJar);
             $latency['get_cart_ms'] = $this->elapsedMilliseconds($stepStartedAt);
             $this->assertUpstreamSuccess($cartResponse, [200], '读取上游购物车');
             $cartPayload = $this->extractPayload($cartResponse);
             $gateway = $this->resolveGateway($cartPayload);
 
             $stepStartedAt = microtime(true);
-            $checkoutResponse = $this->transport->post($supplier, '/v1/cart/checkout', [
+            $checkoutResponse = $this->requestCartWithSession($supplier, 'POST', '/v1/cart/checkout', [
                 'payment' => $gateway,
                 'position' => [0],
-            ], $jwt);
+            ], $jwt, $cartCookieJar);
             $latency['checkout_ms'] = $this->elapsedMilliseconds($stepStartedAt);
             $this->assertUpstreamSuccess($checkoutResponse, [200, 1001], '上游购物车结算');
 
@@ -139,7 +140,14 @@ final class MofangProvisionService
 
             if ($hostIds === [] && $invoiceId > 0 && ! $this->isCompletedCheckoutResponse($checkoutResponse)) {
                 $stepStartedAt = microtime(true);
-                $fundResponse = $this->transport->post($supplier, "/v1/invoices/{$invoiceId}/fund", [], $jwt);
+                $fundResponse = $this->requestCartWithSession(
+                    $supplier,
+                    'POST',
+                    "/v1/invoices/{$invoiceId}/fund",
+                    [],
+                    $jwt,
+                    $cartCookieJar
+                );
                 $latency['fund_invoice_ms'] = $this->elapsedMilliseconds($stepStartedAt);
                 $this->assertUpstreamSuccess($fundResponse, [200, 1001], '使用供应商余额支付上游账单');
                 $fundPayload = $this->extractPayload($fundResponse);
@@ -191,7 +199,7 @@ final class MofangProvisionService
 
             try {
                 if (is_string($jwt) && trim($jwt) !== '') {
-                    $this->transport->delete($supplier, '/v1/cart/clear', [], $jwt);
+                    $this->requestCartWithSession($supplier, 'DELETE', '/v1/cart/clear', [], $jwt, $cartCookieJar);
                 }
             } catch (\Throwable $exception) {
                 Log::warning('[魔方财务开通] 清理供应商购物车失败', [
@@ -387,24 +395,103 @@ final class MofangProvisionService
         return trim((string) ($parts[0] ?? ''));
     }
 
-    private function addProductToCart(Supplier $supplier, string $jwt, array $payload): array
+    private function addProductToCart(Supplier $supplier, string $jwt, array $payload, array &$cookieJar): array
     {
         $requestPayload = $payload;
         if (($requestPayload['configoption'] ?? []) === []) {
             $requestPayload['configoption'] = (object) [];
         }
 
-        return $this->transport->request(
+        return $this->requestCartWithSession(
             $supplier,
             'POST',
             '/v1/cart/products',
             (string) json_encode($requestPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             $jwt,
+            $cookieJar,
             [
                 'Content-Type: application/json',
                 'Accept: application/json',
             ]
         );
+    }
+
+    private function requestCartWithSession(
+        Supplier $supplier,
+        string $method,
+        string $uri,
+        array|string $payload,
+        string $jwt,
+        array &$cookieJar,
+        array $headers = [],
+        array $query = []
+    ): array {
+        $meta = $this->transport->requestWithMeta(
+            $supplier,
+            $method,
+            $uri,
+            $payload,
+            $jwt,
+            $this->buildCartSessionHeaders($cookieJar, $headers),
+            $query
+        );
+
+        $this->mergeResponseCookies($cookieJar, (array) ($meta['headers'] ?? []));
+
+        return is_array($meta['response'] ?? null) ? $meta['response'] : [];
+    }
+
+    private function buildCartSessionHeaders(array $cookieJar, array $headers = []): array
+    {
+        if ($cookieJar === []) {
+            return $headers;
+        }
+
+        return array_merge($headers, ['Cookie: '.$this->formatCookieJar($cookieJar)]);
+    }
+
+    private function formatCookieJar(array $cookieJar): string
+    {
+        $pairs = [];
+
+        foreach ($cookieJar as $name => $value) {
+            $name = trim((string) $name);
+            $value = trim((string) $value);
+
+            if ($name !== '' && $value !== '') {
+                $pairs[] = "{$name}={$value}";
+            }
+        }
+
+        return implode('; ', $pairs);
+    }
+
+    private function mergeResponseCookies(array &$cookieJar, array $responseHeaders): void
+    {
+        foreach ($responseHeaders as $header) {
+            $line = trim((string) $header);
+            if (! str_starts_with(strtolower($line), 'set-cookie:')) {
+                continue;
+            }
+
+            $cookie = trim(substr($line, strlen('set-cookie:')));
+            [$pair, $attributes] = array_pad(explode(';', $cookie, 2), 2, '');
+            [$name, $value] = array_pad(explode('=', trim($pair), 2), 2, '');
+            $name = trim($name);
+            $value = trim($value);
+
+            if ($name === '') {
+                continue;
+            }
+
+            if ($value === '' || str_contains(strtolower($attributes), 'max-age=0')) {
+                unset($cookieJar[$name]);
+
+                continue;
+            }
+
+            $cookieJar[$name] = $value;
+        }
     }
 
     private function resolveGateway(array $cartPayload): string

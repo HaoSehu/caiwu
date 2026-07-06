@@ -158,6 +158,7 @@ class Stay33Client
             CURLOPT_TIMEOUT => 30,
             CURLOPT_CONNECTTIMEOUT => 10,
         ]);
+        $this->applySslOptions($ch);
 
         $output = curl_exec($ch);
         $curlErrno = curl_errno($ch);
@@ -190,10 +191,62 @@ class Stay33Client
         }
 
         if (($this->lastRequestFailure['type'] ?? '') === 'curl') {
+            if ($this->isSslFailure($this->lastRequestFailure)) {
+                return '实名认证接口 SSL 证书校验失败，请检查插件 CA 证书配置';
+            }
+
             return '实名认证接口请求失败，请稍后重试';
         }
 
         return '实名认证接口返回异常';
+    }
+
+    private function applySslOptions($ch): void
+    {
+        $sslVerify = $this->resolveSslVerify();
+
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $sslVerify);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, $sslVerify ? 2 : 0);
+
+        $caBundle = $this->resolveCaBundle();
+        if ($sslVerify && $caBundle !== '' && is_file($caBundle)) {
+            curl_setopt($ch, CURLOPT_CAINFO, $caBundle);
+        }
+    }
+
+    private function resolveSslVerify(): bool
+    {
+        $value = $this->config['ssl_verify'] ?? null;
+        if ($value !== null && $value !== '') {
+            return filter_var($value, FILTER_VALIDATE_BOOL);
+        }
+
+        return filter_var(config('idc.verification.ssl_verify', true), FILTER_VALIDATE_BOOL);
+    }
+
+    private function resolveCaBundle(): string
+    {
+        $value = $this->config['ca_bundle'] ?? null;
+        if ($value !== null && $value !== '') {
+            return trim((string) $value);
+        }
+
+        return trim((string) config('idc.verification.ca_bundle', ''));
+    }
+
+    /**
+     * @param  array<string, mixed>  $failure
+     */
+    private function isSslFailure(array $failure): bool
+    {
+        $errno = (int) ($failure['errno'] ?? 0);
+        if (in_array($errno, [35, 51, 58, 59, 60, 77, 83], true)) {
+            return true;
+        }
+
+        $message = strtolower((string) ($failure['error'] ?? ''));
+
+        return str_contains($message, 'ssl') || str_contains($message, 'certificate');
     }
 
     private function safeProviderMessage(mixed $message, string $fallback): string

@@ -15,7 +15,7 @@ class AliyunSmsService
 
     public function label(): string
     {
-        return '阿里云短信';
+        return '阿里云号码认证短信';
     }
 
     public function execute(array $request): array
@@ -39,14 +39,31 @@ class AliyunSmsService
             $client = $this->client($config);
             $result = $client->sendVerifyCode(
                 phone: $phone,
-                code: '888888',
-                options: [],
+                code: $this->verificationCode($payload),
+                options: is_array($payload['options'] ?? null) ? $payload['options'] : [],
             );
 
             return [
                 'success' => $result['success'] ?? false,
                 'action' => $action,
                 'message' => ($result['success'] ?? false) ? '测试短信发送成功' : ($result['message'] ?? '发送失败'),
+                'data' => $result,
+            ];
+        }
+
+        if ($action === 'sms.send_message') {
+            $client = $this->client($config);
+            $result = $client->sendMessage(
+                phone: (string) ($payload['phone'] ?? ''),
+                templateCode: '',
+                content: (string) ($payload['content'] ?? ''),
+                options: is_array($payload['options'] ?? null) ? $payload['options'] : [],
+            );
+
+            return [
+                'success' => $result['success'] ?? false,
+                'action' => $action,
+                'message' => $result['message'] ?? '',
                 'data' => $result,
             ];
         }
@@ -82,5 +99,15 @@ class AliyunSmsService
         }
 
         return $this->client;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function verificationCode(array $payload): string
+    {
+        $code = trim((string) ($payload['code'] ?? ''));
+
+        return preg_match('/^\d{6}$/', $code) === 1 ? $code : (string) random_int(100000, 999999);
     }
 }

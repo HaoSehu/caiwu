@@ -17,21 +17,42 @@ use Illuminate\Support\Facades\Schema;
 
 class YiPayClient
 {
-    private const API_BASE_URL = 'https://zpayz.cn';
+    private const PAYMENT_TYPE_LABELS = [
+        'alipay' => '支付宝',
+        'wxpay' => '微信支付',
+    ];
+
+    private const SIGN_TYPE_MD5 = 'MD5';
+
+    private const SIGN_TYPE_RSA = 'RSA';
+
+    private const SUPPORTED_SIGN_TYPES = [
+        self::SIGN_TYPE_MD5,
+        self::SIGN_TYPE_RSA,
+    ];
 
     private string $merchantId;
 
     private string $merchantKey;
 
-    private string $paymentType;
+    private string $merchantPrivateKey;
 
-    private string $channelId;
+    private string $platformPublicKey;
+
+    private string $signType;
+
+    /**
+     * @var array<int, string>
+     */
+    private array $paymentTypes;
 
     private string $apiBaseUrl;
 
     private string $notifyUrl;
 
-    private string $device;
+    private string $returnUrl;
+
+    private string $siteName;
 
     private bool $enabled;
 
@@ -42,11 +63,14 @@ class YiPayClient
     {
         $this->merchantId = $this->configString('merchant_id');
         $this->merchantKey = $this->configString('merchant_key');
-        $this->paymentType = $this->normalizePaymentType($this->configString('payment_type', 'alipay'));
-        $this->channelId = $this->configString('channel_id');
-        $this->apiBaseUrl = self::API_BASE_URL;
+        $this->merchantPrivateKey = $this->configString('merchant_private_key');
+        $this->platformPublicKey = $this->configString('platform_public_key');
+        $this->signType = $this->normalizeSignType($this->configString('sign_type', self::SIGN_TYPE_MD5));
+        $this->paymentTypes = $this->resolvePaymentTypes();
+        $this->apiBaseUrl = $this->resolveApiBaseUrl();
         $this->notifyUrl = $this->resolveNotifyUrl();
-        $this->device = $this->configString('device', 'pc') === 'mobile' ? 'mobile' : 'pc';
+        $this->returnUrl = $this->resolveReturnUrl();
+        $this->siteName = $this->resolveSiteName();
         $this->enabled = $this->configBool('enabled', true);
     }
 
@@ -54,9 +78,11 @@ class YiPayClient
     {
         return $this->enabled
             && $this->merchantId !== ''
-            && $this->merchantKey !== ''
+            && $this->hasSigningCredentials()
+            && $this->apiBaseUrl !== ''
             && $this->notifyUrl !== ''
-            && in_array($this->paymentType, ['alipay', 'wxpay'], true);
+            && $this->returnUrl !== ''
+            && $this->paymentTypes !== [];
     }
 
     public function matchesMerchantId(?string $merchantId): bool
@@ -69,34 +95,36 @@ class YiPayClient
     /**
      * @return array<string, mixed>
      */
-    public function precreate(string $outTradeNo, float $amount, string $subject): array
+    public function precreate(string $outTradeNo, float $amount, string $subject, ?string $paymentType = null): array
     {
+        $selectedPaymentType = $this->selectPaymentType($paymentType);
         $payload = [
             'pid' => $this->merchantId,
-            'type' => $this->paymentType,
+            'type' => $selectedPaymentType,
             'out_trade_no' => $outTradeNo,
             'notify_url' => $this->notifyUrl,
+            'return_url' => $this->returnUrl,
             'name' => mb_substr($subject !== '' ? $subject : $outTradeNo, 0, 100),
             'money' => number_format($amount, 2, '.', ''),
             'clientip' => $this->resolveClientIp(),
-            'device' => $this->device,
+            'device' => 'pc',
             'param' => $outTradeNo,
-            'sign_type' => 'MD5',
+            'sign_type' => $this->signType,
         ];
 
-        if ($this->channelId !== '') {
-            $payload['cid'] = $this->channelId;
+        if ($this->siteName !== '') {
+            $payload['sitename'] = $this->siteName;
         }
 
         $payload['sign'] = $this->sign($payload);
         $result = $this->request('post', $this->endpoint('mapi.php'), $payload);
 
-        if ((string) ($result['code'] ?? '') !== '1') {
+        if (! $this->isSuccessCode($result['code'] ?? null)) {
             $this->recordFailure('precreate', (string) ($result['msg'] ?? '预下单失败'), $outTradeNo, $payload, $result);
             throw new BusinessException('易支付预下单失败，请稍后重试');
         }
 
-        $qrCode = $this->firstString($result, ['qrcode', 'img', 'payurl']);
+        $qrCode = $this->firstString($result, ['qrcode', 'img', 'payurl', 'urlscheme']);
         if ($qrCode === '') {
             $this->recordFailure('precreate', '预下单响应缺少支付链接', $outTradeNo, $payload, $result);
             throw new BusinessException('易支付预下单响应异常，请联系管理员处理');
@@ -112,6 +140,23 @@ class YiPayClient
     }
 
     /**
+     * @return array<int, array<string, string>>
+     */
+    public function paymentOptions(): array
+    {
+        return collect($this->paymentTypes)
+            ->map(fn (string $paymentType): array => [
+                'key' => PaymentGatewayCode::YIPAY,
+                'name' => '易支付 - '.self::PAYMENT_TYPE_LABELS[$paymentType],
+                'label' => self::PAYMENT_TYPE_LABELS[$paymentType],
+                'option_key' => PaymentGatewayCode::YIPAY.':'.$paymentType,
+                'payment_type' => $paymentType,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function query(string $outTradeNo): array
@@ -119,9 +164,9 @@ class YiPayClient
         $payload = [
             'act' => 'order',
             'pid' => $this->merchantId,
-            'key' => $this->merchantKey,
             'out_trade_no' => $outTradeNo,
         ];
+        $payload = $this->withApiCredentials($payload);
 
         $result = $this->request('get', $this->endpoint('api.php'), $payload);
 
@@ -149,7 +194,6 @@ class YiPayClient
         $payload = [
             'act' => 'refund',
             'pid' => $this->merchantId,
-            'key' => $this->merchantKey,
             'out_trade_no' => $request->outTradeNo,
             'money' => number_format($request->refundAmount, 2, '.', ''),
         ];
@@ -157,6 +201,7 @@ class YiPayClient
         if ($request->tradeNo !== null && trim($request->tradeNo) !== '') {
             $payload['trade_no'] = trim($request->tradeNo);
         }
+        $payload = $this->withApiCredentials($payload);
 
         $result = $this->request('post', $this->endpoint('api.php'), $payload);
 
@@ -182,14 +227,18 @@ class YiPayClient
      */
     public function verifyNotify(array $payload): bool
     {
-        $sign = strtolower(trim((string) ($payload['sign'] ?? '')));
-        $signType = strtoupper(trim((string) ($payload['sign_type'] ?? 'MD5')));
+        $sign = trim((string) ($payload['sign'] ?? ''));
+        $signType = $this->normalizeSignType((string) ($payload['sign_type'] ?? $this->signType));
 
-        if ($sign === '' || $this->merchantKey === '' || ($signType !== '' && $signType !== 'MD5')) {
+        if ($sign === '') {
             return false;
         }
 
-        return hash_equals($sign, $this->sign($payload));
+        if ($signType === self::SIGN_TYPE_MD5) {
+            return $this->merchantKey !== '' && hash_equals(strtolower($sign), $this->sign($payload, self::SIGN_TYPE_MD5));
+        }
+
+        return $this->platformPublicKey !== '' && $this->verifyRsaSignature($payload, $sign);
     }
 
     private function configString(string $key, string $default = ''): string
@@ -209,21 +258,124 @@ class YiPayClient
         return $default;
     }
 
-    private function normalizePaymentType(string $paymentType): string
+    private function normalizeSignType(string $signType): string
+    {
+        $normalized = strtoupper(trim($signType));
+
+        return in_array($normalized, self::SUPPORTED_SIGN_TYPES, true) ? $normalized : self::SIGN_TYPE_MD5;
+    }
+
+    private function hasSigningCredentials(): bool
+    {
+        if ($this->signType === self::SIGN_TYPE_MD5) {
+            return $this->merchantKey !== '';
+        }
+
+        return $this->merchantPrivateKey !== '' && $this->platformPublicKey !== '';
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function resolvePaymentTypes(): array
+    {
+        if (array_key_exists('payment_types', $this->config)) {
+            return $this->normalizePaymentTypes($this->config['payment_types']);
+        }
+
+        $legacyPaymentType = $this->normalizePaymentType($this->configString('payment_type', 'alipay'));
+
+        return $legacyPaymentType !== null ? [$legacyPaymentType] : ['alipay'];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function normalizePaymentTypes(mixed $value): array
+    {
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            $value = is_array($decoded) ? $decoded : explode(',', $value);
+        }
+
+        if (! is_array($value)) {
+            return [];
+        }
+
+        return collect($value)
+            ->map(fn ($item): ?string => $this->normalizePaymentType((string) $item))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function selectPaymentType(?string $paymentType): string
+    {
+        $requestedPaymentType = $this->normalizePaymentType((string) $paymentType);
+        if ($requestedPaymentType !== null) {
+            if (in_array($requestedPaymentType, $this->paymentTypes, true)) {
+                return $requestedPaymentType;
+            }
+
+            throw new BusinessException('当前易支付未启用该支付方式');
+        }
+
+        $selectedPaymentType = $this->paymentTypes[0] ?? null;
+        if ($selectedPaymentType !== null) {
+            return $selectedPaymentType;
+        }
+
+        throw new BusinessException('当前易支付未配置可用支付方式');
+    }
+
+    private function normalizePaymentType(string $paymentType): ?string
     {
         $normalized = strtolower(trim($paymentType));
 
-        return in_array($normalized, ['alipay', 'wxpay'], true) ? $normalized : 'alipay';
+        return array_key_exists($normalized, self::PAYMENT_TYPE_LABELS) ? $normalized : null;
     }
 
     private function resolveNotifyUrl(): string
     {
-        $baseUrl = trim((string) config('app.frontend_url', ''));
+        $baseUrl = trim((string) config('app.url', ''));
+
+        return $baseUrl !== '' ? rtrim($baseUrl, '/').'/api/v2/client/payment/notify/yipay' : '';
+    }
+
+    private function resolveReturnUrl(): string
+    {
+        $baseUrl = trim((string) config('app.client_console_url', ''));
+        if ($baseUrl === '') {
+            $baseUrl = trim((string) config('app.frontend_url', ''));
+        }
         if ($baseUrl === '') {
             $baseUrl = trim((string) config('app.url', ''));
         }
 
-        return $baseUrl !== '' ? rtrim($baseUrl, '/').'/api/client/payment/notify/yipay' : '';
+        return $baseUrl !== '' ? rtrim($baseUrl, '/').'/client/recharge' : '';
+    }
+
+    private function resolveSiteName(): string
+    {
+        return mb_substr(trim((string) config('app.name', 'Caiwu')), 0, 50);
+    }
+
+    private function resolveApiBaseUrl(): string
+    {
+        $apiEndpoint = $this->configString('api_endpoint', $this->configString('api_base_url'));
+        if ($apiEndpoint === '') {
+            return '';
+        }
+
+        $parts = parse_url($apiEndpoint);
+        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+        $host = trim((string) ($parts['host'] ?? ''));
+        if (! in_array($scheme, ['http', 'https'], true) || $host === '') {
+            return '';
+        }
+
+        return rtrim($apiEndpoint, '/');
     }
 
     private function resolveClientIp(): string
@@ -239,6 +391,10 @@ class YiPayClient
 
     private function endpoint(string $path): string
     {
+        if (preg_match('#/[^/]+\.php$#i', $this->apiBaseUrl) === 1) {
+            return preg_replace('#/[^/]+$#', '/'.ltrim($path, '/'), $this->apiBaseUrl) ?: $this->apiBaseUrl;
+        }
+
         return $this->apiBaseUrl.'/'.ltrim($path, '/');
     }
 
@@ -253,13 +409,34 @@ class YiPayClient
                 ? $this->buildHttpClient()->get($url, $payload)
                 : $this->buildHttpClient()->post($url, $payload);
         } catch (ConnectionException $exception) {
-            Log::error('[易支付] 网关请求失败', [
+            if (! $this->shouldRetryWithoutSslVerification($exception)) {
+                Log::error('[易支付] 网关请求失败', [
+                    'url' => $url,
+                    'message' => $exception->getMessage(),
+                    'exception' => $exception::class,
+                ]);
+
+                throw new BusinessException('易支付网关暂时不可用，请稍后重试', 42200, 422);
+            }
+
+            Log::warning('[易支付] SSL 证书错误，非生产环境降级重试', [
                 'url' => $url,
                 'message' => $exception->getMessage(),
-                'exception' => $exception::class,
             ]);
 
-            throw new BusinessException('易支付网关暂时不可用，请稍后重试', 42200, 422);
+            try {
+                $response = $method === 'get'
+                    ? $this->buildHttpClient(verifySsl: false)->get($url, $payload)
+                    : $this->buildHttpClient(verifySsl: false)->post($url, $payload);
+            } catch (ConnectionException $retryException) {
+                Log::error('[易支付] 网关请求失败', [
+                    'url' => $url,
+                    'message' => $retryException->getMessage(),
+                    'exception' => $retryException::class,
+                ]);
+
+                throw new BusinessException('易支付网关暂时不可用，请稍后重试', 42200, 422);
+            }
         }
 
         $result = $response->json();
@@ -286,19 +463,108 @@ class YiPayClient
         return $result;
     }
 
-    private function buildHttpClient(): PendingRequest
+    private function isSuccessCode(mixed $code): bool
+    {
+        return in_array((string) $code, ['1', '200'], true);
+    }
+
+    private function shouldRetryWithoutSslVerification(ConnectionException $exception): bool
+    {
+        return ! app()->environment('production')
+            && str_contains($exception->getMessage(), 'SSL certificate problem');
+    }
+
+    private function buildHttpClient(bool $verifySsl = true): PendingRequest
     {
         return Http::asForm()
+            ->withOptions(['verify' => $verifySsl])
             ->timeout(15)
             ->retry(1, 200);
     }
 
     /**
      * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
      */
-    private function sign(array $payload): string
+    private function withApiCredentials(array $payload): array
     {
-        return md5($this->canonicalString($payload).$this->merchantKey);
+        if ($this->merchantKey !== '') {
+            $payload['key'] = $this->merchantKey;
+        }
+
+        if ($this->signType === self::SIGN_TYPE_RSA) {
+            $payload['sign_type'] = $this->signType;
+            $payload['sign'] = $this->sign($payload);
+        }
+
+        return $payload;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function sign(array $payload, ?string $signType = null): string
+    {
+        $selectedSignType = $this->normalizeSignType($signType ?? (string) ($payload['sign_type'] ?? $this->signType));
+        $content = $this->canonicalString($payload);
+
+        return $selectedSignType === self::SIGN_TYPE_RSA
+            ? $this->signRsa($content)
+            : md5($content.$this->merchantKey);
+    }
+
+    private function signRsa(string $content): string
+    {
+        $privateKey = openssl_pkey_get_private($this->normalizePrivateKey($this->merchantPrivateKey));
+        if ($privateKey === false) {
+            throw new BusinessException('易支付 RSA 商户私钥无效');
+        }
+
+        $signature = '';
+        $signed = openssl_sign($content, $signature, $privateKey, OPENSSL_ALGO_SHA256);
+        if (! $signed) {
+            throw new BusinessException('易支付 RSA 签名失败');
+        }
+
+        return base64_encode($signature);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function verifyRsaSignature(array $payload, string $sign): bool
+    {
+        $publicKey = openssl_pkey_get_public($this->normalizePublicKey($this->platformPublicKey));
+        if ($publicKey === false) {
+            return false;
+        }
+
+        $decodedSign = base64_decode($sign, true);
+        if ($decodedSign === false) {
+            return false;
+        }
+
+        return openssl_verify($this->canonicalString($payload), $decodedSign, $publicKey, OPENSSL_ALGO_SHA256) === 1;
+    }
+
+    private function normalizePrivateKey(string $key): string
+    {
+        $key = trim($key);
+        if ($key === '' || str_contains($key, '-----BEGIN')) {
+            return $key;
+        }
+
+        return "-----BEGIN PRIVATE KEY-----\n".chunk_split($key, 64, "\n").'-----END PRIVATE KEY-----';
+    }
+
+    private function normalizePublicKey(string $key): string
+    {
+        $key = trim($key);
+        if ($key === '' || str_contains($key, '-----BEGIN')) {
+            return $key;
+        }
+
+        return "-----BEGIN PUBLIC KEY-----\n".chunk_split($key, 64, "\n").'-----END PUBLIC KEY-----';
     }
 
     /**
