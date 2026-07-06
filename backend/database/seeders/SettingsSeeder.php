@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Database\Seeders;
 
 use App\Models\Setting;
+use App\Support\SmsTemplateCatalog;
 use Illuminate\Support\Facades\DB;
 
 class SettingsSeeder
@@ -16,7 +17,6 @@ class SettingsSeeder
     public static function seed(): void
     {
         static::seedGroup('system', [
-            'captcha_enabled' => '1',
             'provision_hostname_enforce' => '0',
             'provision_hostname_prefix' => 'srv',
             'provision_hostname_charsets' => 'number',
@@ -38,17 +38,13 @@ class SettingsSeeder
             'privacy_url' => '',
         ]);
 
-        static::seedGroup('notification', [
+        $notificationDefaults = [
             'email_enabled' => '0',
             'sms_enabled' => '0',
-        ]);
+            'sms_template_code' => SmsTemplateCatalog::TEMPLATE_VERIFY_CODE,
+        ];
 
-        static::seedGroup('message_limit', [
-            'email_rate_limit_enabled' => '1',
-            'email_ip_minute_limit' => '6',
-            'sms_rate_limit_enabled' => '1',
-            'sms_ip_minute_limit' => '6',
-        ]);
+        static::seedGroup('notification', $notificationDefaults);
 
         static::seedGroup('automation', [
             'expire_suspend_enabled' => '1',

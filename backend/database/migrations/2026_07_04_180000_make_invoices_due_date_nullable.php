@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -26,8 +27,8 @@ return new class extends Migration
     public function down(): void
     {
         // 回滚：将 NULL 值置为账单创建日，再改回 NOT NULL
-        \Illuminate\Support\Facades\DB::statement(
-            "UPDATE invoices SET due_date = DATE(created_at) WHERE due_date IS NULL"
+        DB::statement(
+            'UPDATE invoices SET due_date = DATE(created_at) WHERE due_date IS NULL'
         );
 
         if (Schema::hasColumn('invoices', 'due_date')) {
