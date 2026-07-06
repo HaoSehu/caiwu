@@ -1,4 +1,0 @@
-interface:
-  display_name: "Caiwu Project Orientation"
-  short_description: "Orient work in the current Caiwu repository."
-  default_prompt: "Use $caiwu-project-orientation to inspect the Caiwu repository before making changes."

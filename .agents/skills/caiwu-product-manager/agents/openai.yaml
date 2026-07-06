@@ -1,4 +1,0 @@
-interface:
-  display_name: "Caiwu Product Manager"
-  short_description: "Design Caiwu product plans and AI execution docs."
-  default_prompt: "Use $caiwu-product-manager to clarify a Caiwu feature request and produce product and agent execution plans."
