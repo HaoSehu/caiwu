@@ -3,13 +3,14 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ContentArticle extends Model
 {
-    use SoftDeletes;
+    use HasFactory, SoftDeletes;
 
     public const TYPE_NOTICE = 'notice';
 
@@ -83,7 +84,38 @@ class ContentArticle extends Model
         ];
     }
 
-    protected static function booted(): void {}
+    protected static function booted(): void
+    {
+        // M2 修复：软删除前将 slug 改为 {slug}_deleted_{id}，释放唯一约束占用
+        // 使 deleted_at IS NOT NULL 的行不再占用原始 slug，允许同 slug 新文章创建
+        static::deleting(function (self $article): void {
+            if ($article->isForceDeleting()) {
+                return; // 物理删除无需处理
+            }
+
+            $originalSlug = $article->slug;
+            if ($originalSlug === null || $originalSlug === '') {
+                return;
+            }
+
+            // 避免重复后缀（幂等）
+            $suffix = '_deleted_'.$article->getKey();
+            if (str_ends_with($originalSlug, $suffix)) {
+                return;
+            }
+
+            $article->slug = $originalSlug.$suffix;
+            $article->saveQuietly(); // 不触发事件循环
+        });
+
+        // 恢复（restore）时清理后缀，恢复原始 slug
+        static::restoring(function (self $article): void {
+            $suffix = '_deleted_'.$article->getKey();
+            if (str_ends_with((string) $article->slug, $suffix)) {
+                $article->slug = substr($article->slug, 0, -strlen($suffix));
+            }
+        });
+    }
 
     public function creator(): BelongsTo
     {

@@ -10,13 +10,15 @@ class ReorderRequest extends AdminFormRequest
     public function rules(): array
     {
         return [
-            'effective_product_group_id' => ['required', 'integer', 'min:1'],
-            'effective_product_group_level' => ['required', 'integer', Rule::in([2, 3])],
-            'target_first_product_group_id' => ['nullable', 'integer', 'min:1', 'required_if:effective_product_group_level,2'],
-            'target_second_product_group_id' => ['nullable', 'integer', 'min:1', 'required_if:effective_product_group_level,3'],
-            'reference_second_product_group_id' => ['nullable', 'integer', 'min:1'],
-            'reference_third_product_group_id' => ['nullable', 'integer', 'min:1'],
-            'position' => ['required', 'string', Rule::in(['before', 'after', 'append'])],
+            'effective_product_group_level' => ['required', 'integer', Rule::in([1, 2, 3])],
+            'first_product_group_id' => ['nullable', 'integer', 'min:1', 'required_if:effective_product_group_level,2'],
+            'second_product_group_id' => ['nullable', 'integer', 'min:1', 'required_if:effective_product_group_level,3'],
+            'first_product_group_ids' => ['nullable', 'array', 'min:2', 'required_if:effective_product_group_level,1'],
+            'first_product_group_ids.*' => ['integer', 'min:1'],
+            'second_product_group_ids' => ['nullable', 'array', 'min:2', 'required_if:effective_product_group_level,2'],
+            'second_product_group_ids.*' => ['integer', 'min:1'],
+            'third_product_group_ids' => ['nullable', 'array', 'min:2', 'required_if:effective_product_group_level,3'],
+            'third_product_group_ids.*' => ['integer', 'min:1'],
         ];
     }
 }

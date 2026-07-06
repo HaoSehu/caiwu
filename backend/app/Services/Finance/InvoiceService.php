@@ -17,6 +17,7 @@ use App\Models\Payment;
 use App\Models\Product;
 use App\Models\User;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
+use App\Services\System\OperationLogService;
 use App\Support\AdminPrivacy;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Carbon;
@@ -275,6 +276,7 @@ class InvoiceService
                 'id' => (int) $invoice->product->id,
                 'name' => (string) $invoice->product->name,
                 'product_type' => (string) ($invoice->product->product_type ?? ''),
+                'config_options' => (array) ($invoice->product->config_options ?? []),
             ] : null,
             'service' => $invoice->service ? [
                 'id' => (int) $invoice->service->id,
@@ -375,7 +377,7 @@ class InvoiceService
     public function clientDetail(Invoice $invoice): array
     {
         $invoice->loadMissing([
-            'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle,amount,discount,paid_amount,quantity,product_spec_snapshot,product_type_snapshot,display_product_name,config_snapshot,config_pricing_snapshot',
+            'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle,amount,discount,paid_amount,quantity,product_spec_snapshot,product_type_snapshot,config_snapshot,config_pricing_snapshot',
             'order.product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
             'order.product.firstProductGroup:id,code,name',
             'order.product.secondProductGroup:id,first_product_group_id,name',
@@ -408,6 +410,7 @@ class InvoiceService
                 'id' => (int) $invoice->product->id,
                 'name' => (string) $invoice->product->name,
                 'product_type' => (string) ($invoice->product->product_type ?? ''),
+                'config_options' => (array) ($invoice->product->config_options ?? []),
             ] : null,
             'service' => $invoice->service ? [
                 'id' => (int) $invoice->service->id,
@@ -948,6 +951,7 @@ class InvoiceService
             PaymentStatus::SUCCESS => '已支付',
             PaymentStatus::FAILED => '失败',
             PaymentStatus::REFUNDED => '已退款',
+            PaymentStatus::CANCELLED => '已取消',
             default => '未支付',
         };
     }
@@ -1179,14 +1183,13 @@ class InvoiceService
             app(PaymentService::class)->handlePaidInvoice($updatedInvoice, $traceId !== '' ? 'manual:'.$traceId : 'manual:invoice:'.$updatedInvoice->id);
         }
 
-        OperationLog::query()->create([
-            'user_id' => ((int) ($context['operator_id'] ?? 0)) ?: null,
-            'user_type' => 'admin',
-            'action' => 'invoice.payment.mark_paid',
-            'module' => 'invoice',
-            'subject_id' => (int) $updatedInvoice->id,
-            'subject_type' => Invoice::class,
-            'detail' => [
+        app(OperationLogService::class)->write(
+            userId: ((int) ($context['operator_id'] ?? 0)) ?: null,
+            userType: 'admin',
+            action: 'invoice.payment.mark_paid',
+            module: 'invoice',
+            targetId: (int) $updatedInvoice->id,
+            detail: [
                 'invoice_no' => (string) $updatedInvoice->invoice_no,
                 'paid_amount' => number_format((float) $updatedInvoice->paid_amount, 2, '.', ''),
                 'paid_at' => $paidAt->format('Y-m-d H:i:s'),
@@ -1195,11 +1198,11 @@ class InvoiceService
                 'send_email' => $sendEmail,
                 'sync_business_flow' => $syncBusinessFlow,
                 'remark' => $remark,
-                'operator_name' => (string) ($context['operator_name'] ?? ''),
+                'actor_name' => (string) ($context['operator_name'] ?? ''),
                 'trace_id' => $traceId,
             ],
-            'ip_address' => (string) ($context['ip_address'] ?? ''),
-        ]);
+            ipAddress: (string) ($context['ip_address'] ?? '') ?: null,
+        );
 
         return $updatedInvoice;
     }
@@ -1221,13 +1224,13 @@ class InvoiceService
         if (($result['already_refunded'] ?? false) !== true) {
             $refund = (array) ($result['refund'] ?? []);
 
-            OperationLog::query()->create([
-                'user_id' => ((int) ($context['operator_id'] ?? 0)) ?: null,
-                'user_type' => 'admin',
-                'action' => 'invoice.payment.refund',
-                'module' => 'invoice',
-                'subject_id' => (int) $invoice->id,
-                'detail' => [
+            app(OperationLogService::class)->write(
+                userId: ((int) ($context['operator_id'] ?? 0)) ?: null,
+                userType: 'admin',
+                action: 'invoice.payment.refund',
+                module: 'invoice',
+                targetId: (int) $invoice->id,
+                detail: [
                     'invoice_no' => (string) $invoice->invoice_no,
                     'order_id' => (int) ($invoice->order_id ?? 0),
                     'payment_id' => (int) ($result['payment_id'] ?? 0),
@@ -1237,11 +1240,11 @@ class InvoiceService
                     'refund_reason' => (string) ($refund['refund_reason'] ?? $payload['remark'] ?? ''),
                     'out_request_no' => (string) ($refund['out_request_no'] ?? ''),
                     'trade_no' => (string) ($refund['trade_no'] ?? ''),
-                    'operator_name' => (string) ($context['operator_name'] ?? ''),
+                    'actor_name' => (string) ($context['operator_name'] ?? ''),
                     'trace_id' => (string) ($context['trace_id'] ?? ''),
                 ],
-                'ip_address' => (string) ($context['ip_address'] ?? ''),
-            ]);
+                ipAddress: (string) ($context['ip_address'] ?? '') ?: null,
+            );
         }
 
         return array_merge($result, [

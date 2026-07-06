@@ -8,6 +8,7 @@ use App\Exceptions\BusinessException;
 use App\Services\Integrations\Plugins\PluginManifest;
 use App\Services\Integrations\Plugins\PluginRuntimeRegistry;
 use App\Services\Sms\Contracts\SmsDriver;
+use App\Services\Sms\Data\SmsMessageRequest;
 use App\Services\Sms\Data\SmsSendRequest;
 use App\Services\Sms\Data\SmsSendResult;
 
@@ -28,6 +29,18 @@ final readonly class PluginSmsDriver implements SmsDriver
         return $this->manifest->name;
     }
 
+    public function sendMessage(SmsMessageRequest $request): SmsSendResult
+    {
+        $result = $this->runtime->execute($this->manifest->domain, $this->manifest->slug, 'sms.send_message', [
+            'phone' => $request->phone,
+            'template_code' => $request->templateCode,
+            'content' => $request->content,
+            'options' => $request->options,
+        ]);
+
+        return $this->normalizeResult($result);
+    }
+
     public function sendVerifyCode(SmsSendRequest $request): SmsSendResult
     {
         $result = $this->runtime->execute($this->manifest->domain, $this->manifest->slug, 'sms.send_verify_code', [
@@ -35,6 +48,15 @@ final readonly class PluginSmsDriver implements SmsDriver
             'code' => $request->code,
             'options' => $request->options,
         ]);
+
+        return $this->normalizeResult($result);
+    }
+
+    /**
+     * @param  array<string, mixed>  $result
+     */
+    private function normalizeResult(array $result): SmsSendResult
+    {
         $data = is_array($result['data'] ?? null) ? $result['data'] : [];
 
         if (($result['success'] ?? true) === false || ($data['success'] ?? true) === false) {

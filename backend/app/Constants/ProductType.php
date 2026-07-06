@@ -198,6 +198,10 @@ class ProductType
             $slug = 'type_'.Str::lower(Str::random(6));
         }
 
+        if (! preg_match('/^[a-z][a-z0-9_]*$/', $slug)) {
+            $slug = 'type_'.$slug;
+        }
+
         return Str::limit($slug, 50, '');
     }
 

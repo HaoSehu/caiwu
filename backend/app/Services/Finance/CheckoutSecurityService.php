@@ -24,10 +24,6 @@ class CheckoutSecurityService
 
     private const PAYMENT_SESSION_TTL_SECONDS = 300;
 
-    private const PAYMENT_POLL_TTL_SECONDS = 1800;
-
-    private const RECHARGE_POLL_TTL_SECONDS = 1800;
-
     /**
      * 所有 checkout 临时数据使用 volatile store（Redis DB 2），与业务缓存隔离。
      */
@@ -191,6 +187,16 @@ class CheckoutSecurityService
         return $base->addSeconds(self::PAYMENT_SESSION_TTL_SECONDS);
     }
 
+    public function paymentRecordExpiresAt(Payment $payment): CarbonImmutable
+    {
+        $createdAt = $payment->created_at;
+        $base = $createdAt instanceof \DateTimeInterface
+            ? CarbonImmutable::instance($createdAt)
+            : ($createdAt ? CarbonImmutable::parse((string) $createdAt) : CarbonImmutable::now());
+
+        return $base->addSeconds(self::PAYMENT_SESSION_TTL_SECONDS);
+    }
+
     public function isPaymentSessionExpired(Invoice|Order $record): bool
     {
         return $this->paymentSessionExpiresAt($record)->lessThanOrEqualTo(CarbonImmutable::now());
@@ -318,7 +324,7 @@ class CheckoutSecurityService
     public function issueInvoicePaymentPollToken(Payment $payment, Invoice $invoice, int $userId, string $clientIp = ''): array
     {
         $now = CarbonImmutable::now();
-        $expiresAt = $now->addSeconds(self::PAYMENT_POLL_TTL_SECONDS);
+        $expiresAt = $this->paymentSessionExpiresAt($invoice);
         $token = $this->generateToken('inv_poll');
 
         $this->volatileStore()->put($this->invoicePaymentPollCacheKey($token), [
@@ -346,7 +352,7 @@ class CheckoutSecurityService
         }
 
         $now = CarbonImmutable::now();
-        $expiresAt = $now->addSeconds(self::PAYMENT_POLL_TTL_SECONDS);
+        $expiresAt = $this->paymentSessionExpiresAt($order);
         $token = $this->generateToken('ord_poll');
 
         $this->volatileStore()->put($this->orderPaymentPollCacheKey($token), [
@@ -410,7 +416,7 @@ class CheckoutSecurityService
     public function issueRechargePollToken(Payment $payment, int $userId, string $clientIp = ''): array
     {
         $now = CarbonImmutable::now();
-        $expiresAt = $now->addSeconds(self::RECHARGE_POLL_TTL_SECONDS);
+        $expiresAt = $this->paymentRecordExpiresAt($payment);
         $token = $this->generateToken('recharge_poll');
 
         $this->volatileStore()->put($this->rechargePollCacheKey($token), [

@@ -34,13 +34,13 @@ class AdminLogService
 
     private const LIST_SUMMARY_CACHE_TTL_SECONDS = 30;
 
-    private const FILE_LOG_CACHE_TTL_SECONDS = 20;
+    private const FILE_LOG_CACHE_TTL_SECONDS = 60;
 
-    private const CLEANUP_OVERVIEW_CACHE_TTL_SECONDS = 20;
+    private const CLEANUP_OVERVIEW_CACHE_TTL_SECONDS = 60;
 
     private const CLEANUP_OVERVIEW_CACHE_VERSION_KEY = 'admin_logs:cleanup_overview:version';
 
-    private const FILE_LOG_SUMMARY_CACHE_TTL_SECONDS = 20;
+    private const FILE_LOG_SUMMARY_CACHE_TTL_SECONDS = 60;
 
     private const TASK_META = [
         'refresh-hosting-panel-auth' => [
@@ -82,14 +82,6 @@ class AdminLogService
         'order-cleanup' => [
             'title' => '账单与充值清理',
             'log_keywords' => ['账单与充值清理执行完成', '订单与充值清理执行完成', 'order-cleanup'],
-        ],
-        'sync-processing-order-status' => [
-            'title' => '账单状态同步（兼容）',
-            'log_keywords' => ['处理中订单状态同步执行完成', 'sync-processing-order-status', 'orders:sync-processing-status'],
-        ],
-        'queue-backlog-drain' => [
-            'title' => '队列积压消费',
-            'log_keywords' => ['队列积压消费', 'queue:work'],
         ],
     ];
 
@@ -324,6 +316,18 @@ class AdminLogService
 
     public function getAdminLoginLogs(array $filters, int $page, int $perPage): array
     {
+        // 仅当 operation_logs 表中从未有过任何 admin.login 记录（全新部署）时，才降级到
+        // admin_users 快照。若表内有历史记录但当前过滤条件下为空，应返回空页而非降级，
+        // 否则前端会看到与实际日志不一致的"最后一次登录"快照数据。
+        $hasAnyLoginRecord = OperationLog::query()
+            ->where('module', 'auth')
+            ->where('action', 'admin.login')
+            ->exists();
+
+        if (! $hasAnyLoginRecord) {
+            return $this->getAdminLoginLogsFromSnapshot($filters, $page, $perPage);
+        }
+
         $query = OperationLog::query()
             ->where('module', 'auth')
             ->where('action', 'admin.login');
@@ -342,45 +346,46 @@ class AdminLogService
 
         $logs = (clone $query)->orderByDesc('created_at')->paginate($perPage, ['*'], 'page', $page);
 
-        if ($logs->total() > 0) {
-            $rows = $this->mapOperationLogs($logs->getCollection(), false)->map(function (array $item) {
-                $detail = is_array($item['detail'] ?? null) ? $item['detail'] : [];
-                $item['admin_username'] = trim((string) ($detail['admin_username'] ?? $item['actor_name'] ?? ''));
-                $item['admin_nickname'] = trim((string) ($detail['admin_nickname'] ?? ''));
-                $item['role_name'] = trim((string) ($detail['role_name'] ?? ''));
-                $item['source'] = 'operation_log';
+        $rows = $this->mapOperationLogs($logs->getCollection(), false)->map(function (array $item) {
+            $detail = is_array($item['detail'] ?? null) ? $item['detail'] : [];
+            $item['admin_username'] = trim((string) ($detail['admin_username'] ?? $item['actor_name'] ?? ''));
+            $item['admin_nickname'] = trim((string) ($detail['admin_nickname'] ?? ''));
+            $item['role_name'] = trim((string) ($detail['role_name'] ?? ''));
+            $item['source'] = 'operation_log';
 
-                return $item;
-            });
-            $logs->setCollection($rows);
+            return $item;
+        });
+        $logs->setCollection($rows);
 
-            return $this->buildPaginatorPayload($logs, [
-                'total' => $logs->total(),
-                'mode' => 'operation_log',
-            ]);
-        }
+        return $this->buildPaginatorPayload($logs, [
+            'total' => $logs->total(),
+            'mode' => 'operation_log',
+        ]);
+    }
 
-        $fallback = AdminUser::query()
+    private function getAdminLoginLogsFromSnapshot(array $filters, int $page, int $perPage): array
+    {
+        $query = AdminUser::query()
             ->with('role:id,name,label')
             ->whereNotNull('last_login_at')
             ->when(! empty($filters['keyword']), function ($builder) use ($filters) {
                 $keyword = trim((string) $filters['keyword']);
-                $builder->where(function ($query) use ($keyword) {
-                    $query->where('username', 'like', "%{$keyword}%")
+                $builder->where(function ($q) use ($keyword) {
+                    $q->where('username', 'like', "%{$keyword}%")
                         ->orWhere('nickname', 'like', "%{$keyword}%")
                         ->orWhere('last_login_ip', 'like', "%{$keyword}%");
                 });
             });
 
         if (! empty($filters['start_date'])) {
-            $fallback->where('last_login_at', '>=', Carbon::parse((string) $filters['start_date'])->startOfDay());
+            $query->where('last_login_at', '>=', Carbon::parse((string) $filters['start_date'])->startOfDay());
         }
 
         if (! empty($filters['end_date'])) {
-            $fallback->where('last_login_at', '<=', Carbon::parse((string) $filters['end_date'])->endOfDay());
+            $query->where('last_login_at', '<=', Carbon::parse((string) $filters['end_date'])->endOfDay());
         }
 
-        $admins = $fallback->orderByDesc('last_login_at')->paginate($perPage, ['*'], 'page', $page);
+        $admins = $query->orderByDesc('last_login_at')->paginate($perPage, ['*'], 'page', $page);
         $privacy = AdminPrivacy::current();
         $admins->setCollection($admins->getCollection()->map(function (AdminUser $admin) use ($privacy) {
             return [
@@ -393,9 +398,7 @@ class AdminLogService
                 'role_name' => trim((string) ($admin->role?->label ?: $admin->role?->name ?: '')),
                 'ip_address' => $privacy->ip($admin->last_login_ip ?? ''),
                 'created_at' => $admin->last_login_at?->format('Y-m-d H:i:s'),
-                'detail' => [
-                    'source' => 'admin_users.last_login_at',
-                ],
+                'detail' => ['source' => 'admin_users.last_login_at'],
                 'source' => 'admin_snapshot',
             ];
         }));
@@ -696,8 +699,17 @@ class AdminLogService
 
     private function buildTaskLogEntries(array $filters): Collection
     {
-        return $this->buildScheduleRunTaskLogEntries($filters)
-            ->merge($this->buildCronActivityTaskLogEntries($filters))
+        $scheduleEntries = $this->buildScheduleRunTaskLogEntries($filters);
+
+        // 当 schedule_run_logs 表存在并已有记录时，ScheduleRunLogService 同时会往 activity_logs
+        // (module=cron) 写一条镜像记录，二者代表同一次执行。此时跳过 activity_logs cron 源，
+        // 避免同一任务运行在列表中出现两行。
+        $cronActivityEntries = Schema::hasTable('schedule_run_logs') && ScheduleRunLog::query()->exists()
+            ? collect()
+            : $this->buildCronActivityTaskLogEntries($filters);
+
+        return $scheduleEntries
+            ->merge($cronActivityEntries)
             ->merge($this->buildFileTaskLogEntries($filters))
             ->sortByDesc(fn (array $item) => (string) ($item['time'] ?? $item['created_at'] ?? ''))
             ->values();
@@ -1289,7 +1301,9 @@ class AdminLogService
 
     public function getActivityLogs(array $filters, int $page, int $perPage): array
     {
-        if (! Schema::hasTable('activity_logs')) {
+        // 仅在表不存在，或表完全没有任何数据（刚迁移、尚未写入）时才降级到 operation_logs。
+        // 若表已存在并有历史数据，过滤条件导致的空结果不应降级，否则同一页面会混用两套数据源。
+        if (! Schema::hasTable('activity_logs') || ActivityLog::query()->doesntExist()) {
             return $this->getBusinessOperationLogsAsActivityLogs($filters, $page, $perPage);
         }
 
@@ -1297,10 +1311,6 @@ class AdminLogService
         $this->applyActivityLogFilters($query, $filters);
 
         $logs = (clone $query)->orderByDesc('created_at')->paginate($perPage, ['*'], 'page', $page);
-
-        if ($logs->total() === 0) {
-            return $this->getBusinessOperationLogsAsActivityLogs($filters, $page, $perPage);
-        }
 
         $privacy = AdminPrivacy::current();
         $logs->setCollection($logs->getCollection()->map(function (ActivityLog $log) use ($privacy) {
@@ -1329,7 +1339,9 @@ class AdminLogService
 
     public function getActivityLogsSummary(array $filters): array
     {
-        if (Schema::hasTable('activity_logs')) {
+        // 与 getActivityLogs 保持一致：仅当表不存在或完全无数据时才降级。
+        // 过滤条件导致的空结果不触发降级，否则 summary 与 list 的 source 不一致。
+        if (Schema::hasTable('activity_logs') && ActivityLog::query()->exists()) {
             $query = ActivityLog::query();
             $this->applyActivityLogFilters($query, $filters);
 
@@ -1338,13 +1350,11 @@ class AdminLogService
                 ->selectRaw('COUNT(DISTINCT module) as modules')
                 ->first();
 
-            if ((int) ($summary?->total ?? 0) > 0) {
-                return [
-                    'total' => (int) ($summary?->total ?? 0),
-                    'modules' => (int) ($summary?->modules ?? 0),
-                    'source' => 'activity_logs',
-                ];
-            }
+            return [
+                'total' => (int) ($summary?->total ?? 0),
+                'modules' => (int) ($summary?->modules ?? 0),
+                'source' => 'activity_logs',
+            ];
         }
 
         if (! Schema::hasTable('operation_logs')) {

@@ -5,25 +5,33 @@ declare(strict_types=1);
 namespace App\Services\Integrations\Plugins;
 
 use App\Models\Product;
+use App\Models\ProductUpstreamBinding;
 use App\Models\Service;
 use App\Models\Supplier;
+use App\Models\SupplierPluginBinding;
 use App\Services\Upstream\ProviderRegistry;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class PluginBindingResolver
 {
+    /**
+     * @var array<int, object|null>
+     */
+    private array $productBindingCache = [];
+
     public function providerKeyForSupplier(Supplier $supplier): ?string
     {
-        $binding = $this->supplierBinding((int) $supplier->id);
+        $binding = $this->supplierBindingForSupplier($supplier);
 
         return $this->nullableString($binding->provider_key ?? null);
     }
 
     public function providerKeyForProduct(Product $product): ?string
     {
-        $binding = $this->productBinding((int) $product->id);
+        $binding = $this->productBindingForProduct($product);
 
         return $this->nullableString($binding->provider_key ?? null);
     }
@@ -89,7 +97,7 @@ class PluginBindingResolver
 
     public function upstreamProductIdForProduct(Product $product): ?string
     {
-        $binding = $this->productBinding((int) $product->id);
+        $binding = $this->productBindingForProduct($product);
 
         return $this->nullableString($binding->upstream_product_id ?? null);
     }
@@ -104,7 +112,7 @@ class PluginBindingResolver
             return [];
         }
 
-        $binding = $this->supplierBinding($supplierId);
+        $binding = $this->supplierBindingForSupplier($supplier);
         if ($binding === null) {
             return [];
         }
@@ -171,25 +179,27 @@ class PluginBindingResolver
 
     public function supplierIdForProduct(Product $product): ?int
     {
-        if (! $this->hasTable('supplier_plugin_bindings') || ! $this->hasTable('product_upstream_bindings')) {
-            return null;
-        }
-
-        $row = DB::table('product_upstream_bindings as pub')
-            ->leftJoin('supplier_plugin_bindings as spb', 'spb.id', '=', 'pub.supplier_plugin_binding_id')
-            ->where('pub.product_id', (int) $product->id)
-            ->orderByDesc('pub.status')
-            ->orderByDesc('pub.id')
-            ->first(['spb.supplier_id']);
-
-        $supplierId = (int) (($row->supplier_id ?? 0) ?: 0);
-
-        return $supplierId > 0 ? $supplierId : null;
+        return $this->supplierIdFromProductBinding($this->productBindingForProduct($product));
     }
 
     public function supplierForProduct(Product $product): ?Supplier
     {
-        $supplierId = $this->supplierIdForProduct($product);
+        $binding = $this->productBindingForProduct($product);
+        if ($binding instanceof ProductUpstreamBinding) {
+            $supplierBinding = $binding->relationLoaded('supplierPluginBinding')
+                ? $binding->supplierPluginBinding
+                : null;
+
+            if (
+                $supplierBinding instanceof SupplierPluginBinding
+                && $supplierBinding->relationLoaded('supplier')
+                && $supplierBinding->supplier instanceof Supplier
+            ) {
+                return $supplierBinding->supplier;
+            }
+        }
+
+        $supplierId = $this->supplierIdFromProductBinding($binding);
 
         return $supplierId === null ? null : Supplier::query()->find($supplierId);
     }
@@ -276,17 +286,108 @@ class PluginBindingResolver
             ->first();
     }
 
+    private function supplierBindingForSupplier(Supplier $supplier): ?object
+    {
+        if ($supplier->relationLoaded('pluginBindings')) {
+            $binding = $this->supplierBindingFromLoadedRelation($supplier);
+            if ($binding !== null) {
+                return $binding;
+            }
+        }
+
+        return $this->supplierBinding((int) $supplier->id);
+    }
+
+    private function supplierBindingFromLoadedRelation(Supplier $supplier): ?object
+    {
+        $bindings = $supplier->getRelation('pluginBindings');
+        if (! $bindings instanceof Collection || $bindings->isEmpty()) {
+            return null;
+        }
+
+        return $bindings
+            ->sort(function (object $left, object $right): int {
+                return [
+                    (int) ($right->status ?? 0),
+                    (int) ($right->priority ?? 0),
+                    (int) ($right->id ?? 0),
+                ] <=> [
+                    (int) ($left->status ?? 0),
+                    (int) ($left->priority ?? 0),
+                    (int) ($left->id ?? 0),
+                ];
+            })
+            ->first();
+    }
+
+    private function productBindingForProduct(Product $product): ?object
+    {
+        if ($product->relationLoaded('upstreamBindings')) {
+            return $this->productBindingFromLoadedRelation($product);
+        }
+
+        return $this->productBinding((int) $product->id);
+    }
+
+    private function productBindingFromLoadedRelation(Product $product): ?object
+    {
+        $bindings = $product->getRelation('upstreamBindings');
+        if (! $bindings instanceof Collection || $bindings->isEmpty()) {
+            return null;
+        }
+
+        $binding = $bindings
+            ->sort(function (object $left, object $right): int {
+                return [
+                    (int) ($right->status ?? 0),
+                    (int) ($right->id ?? 0),
+                ] <=> [
+                    (int) ($left->status ?? 0),
+                    (int) ($left->id ?? 0),
+                ];
+            })
+            ->first();
+
+        if (
+            $binding instanceof ProductUpstreamBinding
+            && $binding->relationLoaded('supplierPluginBinding')
+            && $binding->supplierPluginBinding instanceof SupplierPluginBinding
+        ) {
+            $binding->setAttribute('supplier_id', (int) $binding->supplierPluginBinding->supplier_id);
+        }
+
+        return $binding;
+    }
+
     private function productBinding(int $productId): ?object
     {
         if ($productId <= 0 || ! $this->hasTable('product_upstream_bindings')) {
             return null;
         }
 
-        return DB::table('product_upstream_bindings')
-            ->where('product_id', $productId)
-            ->orderByDesc('status')
-            ->orderByDesc('id')
-            ->first();
+        if (array_key_exists($productId, $this->productBindingCache)) {
+            return $this->productBindingCache[$productId];
+        }
+
+        $query = DB::table('product_upstream_bindings as pub')
+            ->where('pub.product_id', $productId)
+            ->orderByDesc('pub.status')
+            ->orderByDesc('pub.id');
+
+        $columns = ['pub.*'];
+        if ($this->hasTable('supplier_plugin_bindings')) {
+            $query->leftJoin('supplier_plugin_bindings as spb', 'spb.id', '=', 'pub.supplier_plugin_binding_id');
+            $columns[] = 'spb.supplier_id';
+        }
+
+        return $this->productBindingCache[$productId] = $query->first($columns);
+    }
+
+    private function supplierIdFromProductBinding(?object $binding): ?int
+    {
+        $supplierId = (int) (($binding->supplier_id ?? 0) ?: 0);
+
+        return $supplierId > 0 ? $supplierId : null;
     }
 
     private function serviceBinding(int $serviceId): ?object

@@ -94,10 +94,13 @@ class ProductDisplayNameResolver
             $cpuMemoryDisplay,
             $productSpecDisplay,
         ]);
-        $productDisplayName = $customDisplayName !== '' ? $customDisplayName : $productSpecDisplay;
+        $combinedSpecDisplayName = $this->buildCombinedDisplayName($productSpecDisplay, $cpuDisplay, $memoryDisplay);
+        $productDisplayName = $customDisplayName !== ''
+            ? $this->buildCustomDisplayName($customDisplayName, $cpuMemorySlugDisplay)
+            : ($combinedSpecDisplayName !== '' ? $combinedSpecDisplayName : $productSpecDisplay);
         $combinedDisplayName = $customDisplayName !== ''
-            ? $customDisplayName
-            : $this->buildCombinedDisplayName($productSpecDisplay, $cpuDisplay, $memoryDisplay);
+            ? $productDisplayName
+            : $productDisplayName;
 
         return [
             'product_display_name' => $productDisplayName,
@@ -902,6 +905,18 @@ class ProductDisplayNameResolver
         ], static fn (string $segment): bool => trim($segment) !== '')));
     }
 
+    private function buildCustomDisplayName(string $customDisplayName, string $cpuMemorySlugDisplay): string
+    {
+        $baseName = trim($customDisplayName);
+        $specSlug = trim($cpuMemorySlugDisplay);
+
+        if ($baseName === '' || $specSlug === '' || $this->containsSlugSegment($baseName, $specSlug)) {
+            return $baseName;
+        }
+
+        return $baseName.'-'.$specSlug;
+    }
+
     private function normalizeCpuSlug(string $value): string
     {
         $text = trim($value);
@@ -968,7 +983,7 @@ class ProductDisplayNameResolver
     private function normalizeSlugComparable(string $value): string
     {
         $normalized = Str::lower(preg_replace('/[\s_-]+/u', '', trim($value)) ?? trim($value));
-        $normalized = preg_replace('/(\d+(?:\.\d+)?)v?cpu/u', '$1vcpu', $normalized) ?? $normalized;
+        $normalized = preg_replace('/(\d+(?:\.\d+)?)(?:v?cpu|cores?|core|h|c|核)(?![a-z])/u', '$1vcpu', $normalized) ?? $normalized;
         $normalized = preg_replace('/(\d+(?:\.\d+)?)(?:gb|g)(?![a-z])/u', '$1gib', $normalized) ?? $normalized;
         $normalized = preg_replace('/(\d+(?:\.\d+)?)(?:mb|m)(?![a-z])/u', '$1mib', $normalized) ?? $normalized;
 

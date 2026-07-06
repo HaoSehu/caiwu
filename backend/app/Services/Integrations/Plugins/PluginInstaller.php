@@ -59,9 +59,11 @@ class PluginInstaller
     {
         $manifest = $this->scanner->requireManifest((string) $plugin->domain, (string) $plugin->slug);
         $this->assertManifestExecutable($manifest);
-        $this->configRepository->assertConfigReady($plugin, $manifest);
 
         DB::transaction(function () use ($plugin, $manifest): void {
+            $this->assertSingleEnabledDomainAvailable($plugin);
+            $this->configRepository->assertConfigReady($plugin, $manifest);
+
             $plugin->forceFill([
                 'status' => IntegrationPlugin::STATUS_ENABLED,
             ])->save();
@@ -72,6 +74,36 @@ class PluginInstaller
         $this->forgetDomainRuntime($manifest->domain);
 
         return $plugin->fresh('config') ?? $plugin;
+    }
+
+    private function assertSingleEnabledDomainAvailable(IntegrationPlugin $plugin): void
+    {
+        $domain = (string) $plugin->domain;
+        if (! PluginDomain::requiresSingleEnabledPlugin($domain)) {
+            return;
+        }
+
+        $enabledPlugin = IntegrationPlugin::query()
+            ->where('domain', $domain)
+            ->where('status', IntegrationPlugin::STATUS_ENABLED)
+            ->where('id', '<>', (int) $plugin->id)
+            ->lockForUpdate()
+            ->first(['id', 'name', 'slug']);
+
+        if (! $enabledPlugin instanceof IntegrationPlugin) {
+            return;
+        }
+
+        throw new BusinessException($this->singleEnabledDomainMessage($enabledPlugin), 42200);
+    }
+
+    private function singleEnabledDomainMessage(IntegrationPlugin $enabledPlugin): string
+    {
+        $pluginName = trim((string) $enabledPlugin->name) !== ''
+            ? (string) $enabledPlugin->name
+            : ((string) $enabledPlugin->slug ?: '其他插件');
+
+        return "当前功能域已启用「{$pluginName}」，请先停用后再启用其他插件";
     }
 
     public function disable(IntegrationPlugin $plugin): IntegrationPlugin
@@ -147,12 +179,12 @@ class PluginInstaller
     private function forgetDomainRuntime(string $domain): void
     {
         match ($domain) {
-            PluginDomain::PAYMENT      => $this->forgetInstances(PaymentGatewayRegistry::class, PaymentGatewayManager::class),
+            PluginDomain::PAYMENT => $this->forgetInstances(PaymentGatewayRegistry::class, PaymentGatewayManager::class),
             PluginDomain::VERIFICATION => $this->forgetInstances(VerificationDriverManager::class),
-            PluginDomain::MAIL         => $this->forgetInstances(MailDriverManager::class),
-            PluginDomain::SMS          => $this->forgetInstances(SmsDriverManager::class),
-            PluginDomain::UPSTREAM     => $this->forgetInstances(ProviderRegistry::class, ProviderResolver::class),
-            default                    => null,
+            PluginDomain::MAIL => $this->forgetInstances(MailDriverManager::class),
+            PluginDomain::SMS => $this->forgetInstances(SmsDriverManager::class),
+            PluginDomain::UPSTREAM => $this->forgetInstances(ProviderRegistry::class, ProviderResolver::class),
+            default => null,
         };
     }
 

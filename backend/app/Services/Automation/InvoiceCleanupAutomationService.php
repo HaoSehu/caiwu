@@ -8,11 +8,13 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Services\Finance\CheckoutSecurityService;
 use App\Services\Finance\CheckoutService;
+use App\Services\Finance\PaymentService;
+use App\Services\Order\OrderService;
 use App\Services\System\SettingService;
 use Illuminate\Support\Facades\Log;
 
 /**
- * 账单清理自动化服务：定时把超时未支付的账单、充值单置为失败。
+ * 账单清理自动化服务：定时把超时未支付的账单、订单、充值单关闭。
  * 替代旧的 OrderCleanupAutomationService。
  */
 class InvoiceCleanupAutomationService
@@ -20,6 +22,8 @@ class InvoiceCleanupAutomationService
     public function __construct(
         private SettingService $settingService,
         private CheckoutService $checkoutService,
+        private PaymentService $paymentService,
+        private OrderService $orderService,
     ) {}
 
     public function handle(): array
@@ -28,16 +32,13 @@ class InvoiceCleanupAutomationService
 
         return [
             'invoices_cancelled' => $this->cleanupPendingInvoices($config),
+            'orders_cancelled' => $this->cleanupPendingOrders($config),
             'recharges_expired' => $this->cleanupPendingRecharges($config),
         ];
     }
 
     private function cleanupPendingInvoices(array $config): int
     {
-        if (! $config['pending_order_cleanup_enabled']) {
-            return 0;
-        }
-
         $ttlSeconds = CheckoutSecurityService::paymentSessionTtlSeconds();
         $threshold = now()->subSeconds($ttlSeconds);
 
@@ -79,32 +80,43 @@ class InvoiceCleanupAutomationService
         return $count;
     }
 
+    private function cleanupPendingOrders(array $config): int
+    {
+        return $this->orderService->cancelExpiredPendingOrdersForUser(null, [
+            'actor_type' => 'system',
+            'actor_name' => 'schedule:order-cleanup',
+            'reason' => 'payment_window_expired',
+        ]);
+    }
+
     private function cleanupPendingRecharges(array $config): int
     {
-        if (! $config['pending_recharge_cleanup_enabled']) {
-            return 0;
-        }
+        $ttlSeconds = CheckoutSecurityService::paymentSessionTtlSeconds();
+        $threshold = now()->subSeconds($ttlSeconds);
 
-        $days = max(0, $config['pending_recharge_cleanup_after_days']);
-        $threshold = now()->subDays($days);
-
-        $updated = Payment::query()
+        $payments = Payment::query()
             ->whereNull('invoice_id')
             ->where('status', PaymentStatus::PENDING)
             ->where('created_at', '<=', $threshold)
-            ->update([
-                'status' => PaymentStatus::FAILED,
-                'callback_raw' => [
-                    'source' => 'automation',
-                    'reason' => 'pending_recharge_expired',
-                    'days' => $days,
-                ],
+            ->get();
+
+        $updated = 0;
+
+        foreach ($payments as $payment) {
+            $closed = $this->paymentService->cancelExpiredPendingRecharge($payment, [
+                'actor_type' => 'system',
+                'actor_name' => 'schedule:invoice-cleanup',
+                'reason' => 'payment_window_expired',
             ]);
+            if ((int) $closed->status === PaymentStatus::CANCELLED) {
+                $updated++;
+            }
+        }
 
         if ($updated > 0) {
-            Log::info('[定时任务] 超时未支付充值单失效', [
+            Log::info('[定时任务] 超时未支付充值单自动关闭', [
                 'count' => $updated,
-                'days_old' => $days,
+                'expire_after_seconds' => $ttlSeconds,
             ]);
         }
 

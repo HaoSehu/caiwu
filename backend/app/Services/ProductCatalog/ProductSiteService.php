@@ -884,6 +884,14 @@ class ProductSiteService
     /**
      * @return array{cpu_model_name: string, cpu_base_frequency: string, cpu_turbo_frequency: string}
      */
+    public function cpuModelPayloadForProduct(Product $product): array
+    {
+        return $this->resolveCpuModelPayload($product);
+    }
+
+    /**
+     * @return array{cpu_model_name: string, cpu_base_frequency: string, cpu_turbo_frequency: string}
+     */
     private function resolveCpuModelPayload(Product $product): array
     {
         $productId = (int) $product->id;

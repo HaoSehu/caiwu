@@ -88,12 +88,16 @@ fwrite(STDOUT, sprintf(
 
 function resolveGroup(string $uri): string
 {
-    if (str_starts_with($uri, '/api/admin/')) {
+    if (str_starts_with($uri, '/api/v2/admin/')) {
         return 'admin';
     }
 
-    if (str_starts_with($uri, '/api/client/')) {
+    if (str_starts_with($uri, '/api/v2/client/')) {
         return 'client';
+    }
+
+    if (str_starts_with($uri, '/api/v2/site/')) {
+        return 'site/public';
     }
 
     return 'site/public';

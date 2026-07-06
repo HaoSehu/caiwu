@@ -396,6 +396,55 @@ class OrderService
         return $updatedOrder;
     }
 
+    public function cancelExpiredPendingOrder(Order $order, array $context = []): Order
+    {
+        $freshOrder = $order->fresh(['invoice']) ?? $order;
+
+        if ((int) $freshOrder->status !== OrderStatus::PENDING) {
+            return $freshOrder;
+        }
+
+        if (! $this->checkoutSecurityService->isPaymentSessionExpired($freshOrder)) {
+            return $freshOrder;
+        }
+
+        if (
+            $freshOrder->invoice instanceof Invoice
+            && ! in_array((int) $freshOrder->invoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE, InvoiceStatus::CANCELLED], true)
+        ) {
+            return $freshOrder;
+        }
+
+        return $this->cancel($freshOrder, array_merge([
+            'actor_type' => 'system',
+            'actor_name' => 'payment-window-expired',
+            'reason' => 'payment_window_expired',
+        ], $context));
+    }
+
+    public function cancelExpiredPendingOrdersForUser(?int $userId = null, array $context = []): int
+    {
+        $threshold = now()->subSeconds(CheckoutSecurityService::paymentSessionTtlSeconds());
+        $query = Order::query()
+            ->where('status', OrderStatus::PENDING)
+            ->where('created_at', '<=', $threshold);
+
+        if ($userId !== null && $userId > 0) {
+            $query->where('user_id', $userId);
+        }
+
+        $count = 0;
+
+        foreach ($query->get() as $order) {
+            $updated = $this->cancelExpiredPendingOrder($order, $context);
+            if ((int) $updated->status === OrderStatus::CANCELLED) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
     /**
      * 查询订单列表 (管理端)
      */

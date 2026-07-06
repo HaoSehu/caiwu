@@ -1,5 +1,12 @@
 <?php
 
+/**
+ * @deprecated product_groups 表已于 2026-07-04 DROP（migration 2026_07_04_260000）。
+ *             商品分类体系已迁移至 first_product_groups / second_product_groups / third_product_groups。
+ *             此 Model 仅保留供历史迁移命令（MigrateCatalogProductGroupsCommand 等）引用，
+ *             新代码请使用 FirstProductGroup / SecondProductGroup / ThirdProductGroup。
+ */
+
 namespace App\Models;
 
 use App\Constants\ProductType as ProductTypeCatalog;

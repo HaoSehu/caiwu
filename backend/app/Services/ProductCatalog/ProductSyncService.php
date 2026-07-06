@@ -1856,7 +1856,7 @@ class ProductSyncService
     {
         $supplier = $this->bindingResolver()->supplierForProduct($product);
         if ($supplier instanceof Supplier) {
-            return $supplier;
+            return $this->bindingResolver()->supplierWithRuntimeCredentials($supplier);
         }
 
         return null;

@@ -2,8 +2,10 @@
 
 namespace App\Services\System;
 
+use App\Models\ActivityLog;
 use App\Models\OperationLog;
 use App\Models\Service;
+use Illuminate\Support\Facades\Log;
 
 class OperationLogService
 {
@@ -16,6 +18,7 @@ class OperationLogService
         array $detail = [],
         ?string $ipAddress = null,
     ): void {
+        // 写 operation_logs（当前主源，保留至 activity_logs 完成验收后停用）
         OperationLog::query()->create([
             'user_id' => $userId,
             'user_type' => $userType,
@@ -25,6 +28,18 @@ class OperationLogService
             'detail' => $detail,
             'ip_address' => $ipAddress,
         ]);
+
+        // L4 过渡期双写：同步写入 activity_logs（新日志真源）
+        // 待 activity_logs 数据经过一个完整账期验收后，移除上方 OperationLog 写入
+        $this->writeActivityLog(
+            userId: $userId,
+            userType: $userType,
+            action: $action,
+            module: $module,
+            targetId: $targetId,
+            detail: $detail,
+            ipAddress: $ipAddress,
+        );
     }
 
     public function writeServiceConsoleLog(
@@ -66,6 +81,59 @@ class OperationLogService
             detail: $payload,
             ipAddress: $ipAddress !== '' ? $ipAddress : null,
         );
+    }
+
+    /**
+     * L4 过渡期辅助写入 activity_logs。
+     * 将 operation_logs 语义映射到 activity_logs 字段，满足其 NOT NULL 约束。
+     * 写入失败时静默记录错误，不阻断主流程。
+     */
+    private function writeActivityLog(
+        ?int $userId,
+        string $userType,
+        string $action,
+        string $module,
+        ?int $targetId,
+        array $detail,
+        ?string $ipAddress,
+    ): void {
+        try {
+            $actorName = trim((string) ($detail['actor_name'] ?? ''));
+            if ($actorName === '') {
+                $actorName = match ($userType) {
+                    'admin' => 'admin',
+                    'client' => 'client',
+                    default => 'system',
+                };
+            }
+
+            $description = $action;
+            if ($module !== '' && $module !== $action) {
+                $description = "[{$module}] {$action}";
+            }
+            if ($targetId !== null) {
+                $description .= " #{$targetId}";
+            }
+
+            ActivityLog::query()->create([
+                'actor_type' => $userType,
+                'actor_id' => $userId,
+                'actor_name' => $actorName,
+                'module' => $module,
+                'action' => $action,
+                'description' => $description,
+                'subject_type' => $module ?: null,
+                'subject_id' => $targetId,
+                'context' => $detail !== [] ? $detail : null,
+                'ip_address' => $ipAddress,
+            ]);
+        } catch (\Throwable $e) {
+            // 双写失败不阻断主流程；待 activity_logs 稳定后改为强制抛出
+            Log::warning(
+                'activity_log double-write failed',
+                ['error' => $e->getMessage(), 'action' => $action, 'module' => $module]
+            );
+        }
     }
 
     private function filterDetail(array $detail): array

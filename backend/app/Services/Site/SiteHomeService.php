@@ -41,18 +41,18 @@ class SiteHomeService
             now()->addSeconds(self::HOME_CACHE_TTL_SECONDS),
             function () use ($groupLimit, $noticeLimit, $helpLimit): array {
                 $contentOverview = $this->contentArticleService->publishedOverview($noticeLimit, $helpLimit);
-                $rootGroups = collect($this->siteProductReadService->productGroups()['list'] ?? []);
+                $productTypes = $this->siteProductReadService->productTypes()['list'] ?? [];
+                $allRootGroups = collect($this->siteProductReadService->productGroups()['list'] ?? []);
 
-                if ($groupLimit > 0) {
-                    $rootGroups = $rootGroups->take($groupLimit);
-                }
-
-                $rootGroups = $rootGroups->values()->all();
+                $catalogRootGroups = $groupLimit > 0
+                    ? $this->selectRootGroupsForHome($allRootGroups, $productTypes, $groupLimit)
+                    : $allRootGroups->values()->all();
+                $rootGroups = $allRootGroups->values()->all();
 
                 $groupCatalogMap = $this->siteProductReadService->groupCatalogMap(
                     array_map(
                         static fn (array $group): int => (int) ($group['id'] ?? 0),
-                        $rootGroups
+                        $catalogRootGroups
                     )
                 );
 
@@ -94,6 +94,75 @@ class SiteHomeService
             ])
             ->values()
             ->all();
+    }
+
+    /**
+     * 首页 tab 来自产品类型，卡片来自二级分组；优先保证每个 tab 至少有一个可展示分组。
+     *
+     * @param  \Illuminate\Support\Collection<int, array<string, mixed>>  $rootGroups
+     * @param  array<int, array<string, mixed>>  $productTypes
+     * @return array<int, array<string, mixed>>
+     */
+    private function selectRootGroupsForHome($rootGroups, array $productTypes, int $groupLimit): array
+    {
+        $limit = max(0, $groupLimit);
+        if ($limit === 0 || $rootGroups->isEmpty()) {
+            return [];
+        }
+
+        $selected = collect();
+        $selectedIds = [];
+        $typeValues = collect($productTypes)
+            ->map(fn (array $type): string => $this->typeValue($type))
+            ->filter(fn (string $value): bool => $value !== '')
+            ->unique()
+            ->values();
+
+        foreach ($typeValues as $typeValue) {
+            if ($selected->count() >= $limit) {
+                break;
+            }
+
+            $matchedGroup = $rootGroups->first(
+                fn (array $group): bool => $this->groupProductType($group) === $typeValue
+                    && ! isset($selectedIds[(int) ($group['id'] ?? 0)])
+            );
+
+            if (is_array($matchedGroup)) {
+                $groupId = (int) ($matchedGroup['id'] ?? 0);
+                $selected->push($matchedGroup);
+                $selectedIds[$groupId] = true;
+            }
+        }
+
+        if ($selected->count() < $limit) {
+            $rootGroups
+                ->reject(fn (array $group): bool => isset($selectedIds[(int) ($group['id'] ?? 0)]))
+                ->take($limit - $selected->count())
+                ->each(function (array $group) use ($selected, &$selectedIds): void {
+                    $groupId = (int) ($group['id'] ?? 0);
+                    $selected->push($group);
+                    $selectedIds[$groupId] = true;
+                });
+        }
+
+        return $selected->take($limit)->values()->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $type
+     */
+    private function typeValue(array $type): string
+    {
+        return trim((string) ($type['value'] ?? $type['product_type'] ?? $type['first_product_group_code'] ?? ''));
+    }
+
+    /**
+     * @param  array<string, mixed>  $group
+     */
+    private function groupProductType(array $group): string
+    {
+        return trim((string) ($group['product_type'] ?? $group['first_product_group_code'] ?? ''));
     }
 
     /**

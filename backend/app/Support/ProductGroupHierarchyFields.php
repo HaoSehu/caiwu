@@ -120,6 +120,8 @@ class ProductGroupHierarchyFields
         $firstName = trim((string) ($first?->name ?? ProductType::labelOf($firstCode)));
         $secondName = trim((string) ($second?->name ?? ''));
         $thirdName = $thirdId !== null ? trim((string) ($third?->name ?? '')) : null;
+        $secondDescription = trim((string) ($second?->description ?? ''));
+        $thirdDescription = $thirdId !== null ? trim((string) ($third?->description ?? '')) : null;
 
         return [
             'first_product_group_id' => $firstId,
@@ -127,10 +129,12 @@ class ProductGroupHierarchyFields
             'first_product_group_name' => $firstName,
             'second_product_group_id' => $secondId,
             'second_product_group_name' => $secondName,
+            'second_product_group_description' => $secondDescription,
             'second_product_group_parent_id' => $firstId,
             'second_product_group_parent_name' => $firstName,
             'third_product_group_id' => $thirdId,
             'third_product_group_name' => $thirdName,
+            'third_product_group_description' => $thirdDescription,
             'effective_product_group_id' => $thirdId ?? $secondId,
             'effective_product_group_level' => $thirdId !== null ? 3 : ($secondId !== null ? 2 : null),
             'service_type_code' => $serviceTypeCode !== '' ? $serviceTypeCode : null,

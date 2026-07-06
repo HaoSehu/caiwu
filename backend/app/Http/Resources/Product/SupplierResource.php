@@ -4,6 +4,7 @@ namespace App\Http\Resources\Product;
 
 use App\Models\Supplier;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
+use App\Services\Integrations\Plugins\SupplierPluginCardRenderer;
 use App\Services\Upstream\ProviderRegistry;
 use App\Support\AdminPrivacy;
 use Illuminate\Http\Request;
@@ -31,7 +32,7 @@ class SupplierResource extends JsonResource
             'has_api_key' => (bool) ($binding['has_api_key'] ?? false),
             'has_provider_secret_values' => $this->providerSecretValues($providerKey, (array) ($binding['provider_config'] ?? [])),
             'provider_config' => $this->visibleProviderConfig($providerKey, (array) ($binding['provider_config'] ?? [])),
-            'upstream_binding' => $this->upstreamBindingPayload(),
+            'upstream_binding' => $this->upstreamBindingPayload($binding),
             'contact_name' => $privacy->name($this->contact_name),
             'contact_phone' => $privacy->phone($this->contact_phone),
             'contact_email' => $privacy->email($this->contact_email),
@@ -41,6 +42,9 @@ class SupplierResource extends JsonResource
             'notes' => $this->notes,
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at?->format('Y-m-d H:i:s'),
+            'card' => app(SupplierPluginCardRenderer::class)->render($this->resource, [
+                'binding' => $binding,
+            ]),
         ];
     }
 
@@ -88,13 +92,13 @@ class SupplierResource extends JsonResource
         return $values;
     }
 
-    private function upstreamBindingPayload(): ?array
+    private function upstreamBindingPayload(?array $binding = null): ?array
     {
         if (! Schema::hasTable('supplier_plugin_bindings')) {
             return null;
         }
 
-        $binding = $this->bindingProjection();
+        $binding ??= $this->bindingProjection();
         if ($binding === []) {
             return null;
         }
@@ -110,6 +114,9 @@ class SupplierResource extends JsonResource
             'has_base_url' => (bool) ($binding['has_base_url'] ?? false),
             'account_name' => (string) ($binding['account_name'] ?? ''),
             'has_secret_values' => is_array($binding['has_secret_values'] ?? null) ? $binding['has_secret_values'] : [],
+            'last_checked_at' => $binding['last_checked_at'] ?? null,
+            'last_check_status' => $binding['last_check_status'] ?? null,
+            'last_check_error' => $binding['last_check_error'] ?? null,
         ];
     }
 

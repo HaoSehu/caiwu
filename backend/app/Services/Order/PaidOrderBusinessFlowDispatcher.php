@@ -21,32 +21,51 @@ class PaidOrderBusinessFlowDispatcher
             return;
         }
 
+        $shouldDispatchReferralReward = $this->shouldDispatchReferralReward($invoice);
+
         if (app()->runningInConsole()) {
             if ($this->shouldUseQueue()) {
-                ProcessPaidOrderReferralRewardJob::dispatch($orderId, $traceId);
+                if ($shouldDispatchReferralReward) {
+                    ProcessPaidOrderReferralRewardJob::dispatch($orderId, $traceId);
+                }
+
                 ProcessPaidOrderFulfillmentJob::dispatch($orderId);
 
                 return;
             }
 
             $this->logFallbackDispatch($orderId);
-            ProcessPaidOrderReferralRewardJob::dispatchSync($orderId, $traceId);
+            if ($shouldDispatchReferralReward) {
+                ProcessPaidOrderReferralRewardJob::dispatchSync($orderId, $traceId);
+            }
+
             ProcessPaidOrderFulfillmentJob::dispatchSync($orderId);
 
             return;
         }
 
         if ($this->shouldUseQueue()) {
-            ProcessPaidOrderReferralRewardJob::dispatch($orderId, $traceId);
-            ProcessPaidOrderFulfillmentJob::dispatchAfterResponse($orderId);
+            if ($shouldDispatchReferralReward) {
+                ProcessPaidOrderReferralRewardJob::dispatch($orderId, $traceId);
+            }
+
+            ProcessPaidOrderFulfillmentJob::dispatch($orderId);
 
             return;
         }
 
         $this->logFallbackDispatch($orderId);
 
-        ProcessPaidOrderReferralRewardJob::dispatchAfterResponse($orderId, $traceId);
+        if ($shouldDispatchReferralReward) {
+            ProcessPaidOrderReferralRewardJob::dispatchAfterResponse($orderId, $traceId);
+        }
+
         ProcessPaidOrderFulfillmentJob::dispatchAfterResponse($orderId);
+    }
+
+    private function shouldDispatchReferralReward(Invoice $invoice): bool
+    {
+        return (string) ($invoice->order?->type ?? $invoice->type ?? '') === 'new';
     }
 
     private function shouldUseQueue(): bool

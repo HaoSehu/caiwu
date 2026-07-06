@@ -1,0 +1,30 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Http\Requests\Admin\V2\ProductGroup;
+
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+
+class ListProductGroupsRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return true;
+    }
+
+    public function rules(): array
+    {
+        return [
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'page_size' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'per_page' => ['prohibited'],
+            'pageSize' => ['prohibited'],
+            'keyword' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'service_type_code' => ['sometimes', 'nullable', 'string', 'max:50'],
+            'product_type' => ['sometimes', 'nullable', 'string', 'max:50'],
+            'status' => ['sometimes', 'nullable', 'integer', Rule::in([0, 1])],
+        ];
+    }
+}

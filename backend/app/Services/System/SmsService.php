@@ -2,15 +2,16 @@
 
 namespace App\Services\System;
 
-use App\Models\IntegrationPlugin;
 use App\Models\NotificationLog;
 use App\Models\Setting;
 use App\Models\SmsLog;
 use App\Services\Integrations\Plugins\IntegrationDriverBindingResolver;
 use App\Services\Integrations\Plugins\PluginConfigRepository;
 use App\Services\Sms\Contracts\SmsDriver;
+use App\Services\Sms\Data\SmsMessageRequest;
 use App\Services\Sms\Data\SmsSendRequest;
 use App\Services\Sms\SmsDriverManager;
+use App\Support\SmsTemplateCatalog;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -23,16 +24,122 @@ class SmsService
         SmsDriverManager $driverManager,
         private ?IntegrationDriverBindingResolver $driverBindingResolver = null,
         private ?PluginConfigRepository $pluginConfigRepository = null,
+        private ?NotificationTemplateService $notificationTemplateService = null,
     ) {
         $this->driverManager = $driverManager;
     }
 
-    public function sendVerifyCode(string $phone, string $code): void
+    /**
+     * @param  array<string, mixed>  $options
+     */
+    public function sendVerifyCode(string $phone, string $code, array $options = []): void
     {
-        $templateCode = $this->activeSmsTemplateCode();
-        $templateParams = ['code' => $code, 'min' => '5'];
         $driver = $this->resolveDriverForLog();
-        $logContext = $this->createSmsLog($phone, $templateCode, $templateParams, $driver?->key() ?? 'unconfigured');
+        if (($driver?->key() ?? '') === 'aliyun') {
+            $this->sendAliyunVerifyCode($phone, $code, $options, $driver);
+
+            return;
+        }
+
+        $this->sendTemplateSms($phone, SmsTemplateCatalog::TEMPLATE_VERIFY_CODE, [
+            'code' => $code,
+            'min' => '5',
+            'expire_minutes' => '5',
+        ], array_merge($options, [
+            'origin_type' => 'sms_verify',
+            'sensitive_params' => ['code'],
+            'fallback_provider_template_id' => $this->legacyVerificationProviderTemplateId(),
+        ]));
+    }
+
+    /**
+     * @param  array<string, mixed>  $options
+     */
+    private function sendAliyunVerifyCode(string $phone, string $code, array $options, ?SmsDriver $driver): void
+    {
+        $purpose = $this->normalizeVerifyCodePurpose($options);
+        $sendOptions = array_merge($options, [
+            'purpose' => $purpose,
+            'min' => (string) ($options['min'] ?? '5'),
+        ]);
+        $logParams = [
+            'code' => '***',
+            'min' => (string) $sendOptions['min'],
+            'purpose' => $purpose,
+        ];
+
+        $logContext = $this->createSmsLog(
+            $phone,
+            'aliyun_verify_code',
+            '阿里云短信验证码已发送（内容已脱敏）',
+            $logParams,
+            'aliyun',
+            'sms_verify'
+        );
+
+        try {
+            if (! $this->isEnabled()) {
+                throw new \RuntimeException('短信通知未启用');
+            }
+
+            $driver ??= $this->driverManager->resolve('aliyun');
+            $result = $driver->sendVerifyCode(new SmsSendRequest($phone, $code, $sendOptions));
+            $providerTemplateCode = trim($result->templateCode);
+            $updatedParams = $providerTemplateCode !== ''
+                ? array_merge($logParams, ['provider_template_id' => $providerTemplateCode])
+                : $logParams;
+
+            $this->updateSmsLog($logContext, [
+                'status' => 'success',
+                'request_id' => $result->requestId,
+                'sent_at' => now(),
+                'template_code' => $providerTemplateCode !== '' ? $providerTemplateCode : 'aliyun_verify_code',
+                'params_json' => $updatedParams,
+            ]);
+        } catch (\Exception $e) {
+            $this->updateSmsLog($logContext, [
+                'status' => 'failed',
+                'error_msg' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $params
+     * @param  array<string, mixed>  $options
+     */
+    public function sendTemplateSms(string $phone, string $templateCode, array $params = [], array $options = []): void
+    {
+        $templateCode = trim($templateCode);
+        $template = $this->notificationTemplates()->find('sms', $templateCode);
+        if (! is_array($template)) {
+            throw new \RuntimeException('短信模板不存在');
+        }
+
+        $contentTemplate = $this->resolveTemplateContent($template);
+        $renderParams = array_merge([
+            'site_name' => $this->resolveSiteName(),
+        ], $this->stringifyParams($params));
+        $content = $this->renderTemplateText($contentTemplate, $renderParams);
+
+        if ($content === '') {
+            throw new \RuntimeException('短信模板内容为空');
+        }
+
+        $providerTemplateId = $this->resolveProviderTemplateId($templateCode, $template, $options);
+        $driver = $this->resolveDriverForLog();
+        $provider = $driver?->key() ?? 'unconfigured';
+        $logParams = $this->buildLogParams($renderParams, $options, $providerTemplateId);
+        $logContent = $this->renderTemplateText($contentTemplate, $logParams);
+        $logContext = $this->createSmsLog(
+            $phone,
+            $templateCode,
+            $logContent !== '' ? $logContent : '短信已发送',
+            $logParams,
+            $provider,
+            (string) ($options['origin_type'] ?? 'sms_template')
+        );
 
         try {
             if (! $this->isEnabled()) {
@@ -40,7 +147,10 @@ class SmsService
             }
 
             $driver ??= $this->driverManager->resolve();
-            $result = $driver->sendVerifyCode(new SmsSendRequest($phone, $code));
+            $result = $driver->sendMessage(new SmsMessageRequest($phone, $providerTemplateId, $content, [
+                'business_template_code' => $templateCode,
+                'provider_template_id' => $providerTemplateId,
+            ]));
 
             $this->updateSmsLog($logContext, [
                 'status' => 'success',
@@ -68,17 +178,70 @@ class SmsService
         return in_array((string) $value, ['1', 'true', 'on'], true);
     }
 
-    private function buildVerificationLogContent(): string
+    /**
+     * @param  array<string, mixed>  $template
+     */
+    private function resolveTemplateContent(array $template): string
     {
-        return '短信验证码已发送（内容已脱敏）';
+        return (string) ($template['content'] ?? '');
     }
 
-    private function buildVerificationLogParams(array $templateParams): array
+    /**
+     * @param  array<string, mixed>  $template
+     * @param  array<string, mixed>  $options
+     */
+    private function resolveProviderTemplateId(string $templateCode, array $template, array $options): string
     {
-        return [
-            'code' => '***',
-            'min' => (string) ($templateParams['min'] ?? ''),
-        ];
+        $explicit = trim((string) ($options['provider_template_id'] ?? ''));
+        if ($explicit !== '') {
+            return $explicit;
+        }
+
+        $stored = trim((string) ($template['provider_template_id'] ?? ''));
+        if ($stored !== '') {
+            return $stored;
+        }
+
+        $fallback = trim((string) ($options['fallback_provider_template_id'] ?? ''));
+        if ($fallback !== '') {
+            return $fallback;
+        }
+
+        return $templateCode;
+    }
+
+    private function notificationTemplates(): NotificationTemplateService
+    {
+        return $this->notificationTemplateService ??= app(NotificationTemplateService::class);
+    }
+
+    /**
+     * @param  array<string, mixed>  $renderParams
+     * @param  array<string, mixed>  $options
+     * @return array<string, string>
+     */
+    private function buildLogParams(array $renderParams, array $options, string $providerTemplateId): array
+    {
+        $sensitive = array_values(array_filter(
+            array_map('strval', (array) ($options['sensitive_params'] ?? [])),
+            static fn (string $key): bool => trim($key) !== ''
+        ));
+        $logParams = [];
+
+        foreach ($renderParams as $key => $value) {
+            $normalizedKey = trim((string) $key);
+            if ($normalizedKey === '') {
+                continue;
+            }
+
+            $logParams[$normalizedKey] = in_array($normalizedKey, $sensitive, true)
+                ? '***'
+                : (string) $value;
+        }
+
+        $logParams['provider_template_id'] = $providerTemplateId;
+
+        return $logParams;
     }
 
     private function maskPhoneForLog(string $phone): string
@@ -92,9 +255,10 @@ class SmsService
     }
 
     /**
+     * @param  array<string, mixed>  $params
      * @return array{table: 'notification_logs'|'sms_logs'|null, id: int|null}
      */
-    private function createSmsLog(string $phone, string $templateCode, array $templateParams, string $provider): array
+    private function createSmsLog(string $phone, string $templateCode, string $content, array $params, string $provider, string $originType): array
     {
         $traceId = $this->notificationTraceId('sms', $templateCode);
 
@@ -104,11 +268,11 @@ class SmsService
                     'channel' => 'sms',
                     'recipient' => $phone,
                     'template_code' => $templateCode,
-                    'content' => $this->buildVerificationLogContent(),
-                    'params_json' => $this->buildVerificationLogParams($templateParams),
+                    'content' => $content,
+                    'params_json' => $params,
                     'provider' => $provider,
                     'status' => 'pending',
-                    'origin_type' => 'sms_verify',
+                    'origin_type' => $originType,
                     'origin_id' => 0,
                 ], $this->smsAuditPayload('notification_logs', $traceId, $provider)));
 
@@ -119,8 +283,8 @@ class SmsService
                 $log = SmsLog::create(array_merge([
                     'phone' => $phone,
                     'template_code' => $templateCode,
-                    'content' => $this->buildVerificationLogContent(),
-                    'params' => $this->buildVerificationLogParams($templateParams),
+                    'content' => $content,
+                    'params' => $params,
                     'provider' => $provider,
                     'status' => 'pending',
                     'error_msg' => null,
@@ -168,28 +332,14 @@ class SmsService
         return $this->driverBindingResolver ??= app(IntegrationDriverBindingResolver::class);
     }
 
-    private function activeSmsTemplateCode(): string
+    private function legacyVerificationProviderTemplateId(): string
     {
-        $context = $this->driverBindingResolver()->smsContext();
-        $pluginId = (int) ($context['plugin_id'] ?? 0);
-
-        if ($pluginId > 0 && Schema::hasTable('integration_plugins')) {
-            $plugin = IntegrationPlugin::query()->whereKey($pluginId)->first();
-            if ($plugin instanceof IntegrationPlugin) {
-                $config = $this->pluginConfigRepository()->resolvedConfig($plugin);
-                $templateCode = trim((string) ($config['template_code'] ?? ''));
-                if ($templateCode !== '') {
-                    return $templateCode;
-                }
-            }
+        $settingTemplateCode = trim((string) Setting::getValue('notification', 'sms_template_code', ''));
+        if ($settingTemplateCode !== '') {
+            return $settingTemplateCode;
         }
 
-        return '100001';
-    }
-
-    private function pluginConfigRepository(): PluginConfigRepository
-    {
-        return $this->pluginConfigRepository ??= app(PluginConfigRepository::class);
+        return SmsTemplateCatalog::TEMPLATE_VERIFY_CODE;
     }
 
     private function notificationTraceId(string $channel, string $templateCode): string
@@ -206,6 +356,101 @@ class SmsService
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $options
+     */
+    private function normalizeVerifyCodePurpose(array $options): string
+    {
+        $purpose = strtolower(trim((string) (
+            $options['purpose']
+            ?? $options['scene']
+            ?? $options['type']
+            ?? 'generic'
+        )));
+
+        return match ($purpose) {
+            'login', 'register', 'reset', 'reset_password', 'password_reset',
+            'change_phone', 'phone_change', 'update_phone', 'bind_phone', 'new_phone',
+            'verify_bound_phone', 'verify_phone' => $purpose,
+            default => 'generic',
+        };
+    }
+
+    /**
+     * @param  array<string, mixed>  $params
+     * @return array<string, string>
+     */
+    private function stringifyParams(array $params): array
+    {
+        $normalized = [];
+
+        foreach ($params as $key => $value) {
+            if (! is_string($key) || trim($key) === '') {
+                continue;
+            }
+
+            $normalized[trim($key)] = match (true) {
+                is_string($value) => $value,
+                is_int($value), is_float($value) => (string) $value,
+                is_bool($value) => $value ? '1' : '',
+                $value === null => '',
+                default => (string) $value,
+            };
+        }
+
+        return $normalized;
+    }
+
+    private function resolveSiteName(): string
+    {
+        $siteName = trim((string) Setting::getValue(
+            'basic',
+            'site_name',
+            config('idc.site_name', config('app.name', '创欧云'))
+        ));
+
+        return $siteName !== '' ? $siteName : (string) config('app.name', '创欧云');
+    }
+
+    /**
+     * @param  array<string, mixed>  $params
+     */
+    private function renderTemplateText(string $template, array $params): string
+    {
+        $rendered = preg_replace_callback(
+            '/\{\{#([a-zA-Z0-9_]+)\}\}(.*?)\{\{\/\1\}\}/su',
+            function (array $matches) use ($params) {
+                $key = (string) ($matches[1] ?? '');
+                $value = $params[$key] ?? '';
+
+                return $this->hasTemplateValue($value) ? (string) ($matches[2] ?? '') : '';
+            },
+            $template
+        );
+
+        $rendered = preg_replace_callback(
+            '/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/u',
+            static fn (array $matches): string => (string) ($params[(string) ($matches[1] ?? '')] ?? ''),
+            $rendered ?? $template
+        );
+
+        $rendered = preg_replace_callback(
+            '/(?<!\{)\{([a-zA-Z0-9_]+)\}(?!\})/u',
+            static fn (array $matches): string => (string) ($params[(string) ($matches[1] ?? '')] ?? ''),
+            (string) $rendered
+        );
+
+        $rendered = preg_replace("/[ \t]+\n/u", "\n", (string) $rendered) ?? (string) $rendered;
+        $rendered = preg_replace("/\n{3,}/u", "\n\n", (string) $rendered) ?? (string) $rendered;
+
+        return trim($rendered);
+    }
+
+    private function hasTemplateValue(mixed $value): bool
+    {
+        return ! in_array($value, [null, '', false], true);
     }
 
     /**
@@ -228,12 +473,26 @@ class SmsService
             }
 
             if ($table === 'sms_logs') {
-                SmsLog::query()->whereKey($id)->update([
+                $payload = [
                     'status' => $attributes['status'] ?? 'pending',
                     'request_id' => $attributes['request_id'] ?? null,
                     'error_msg' => $attributes['error_msg'] ?? null,
                     'sent_at' => $attributes['sent_at'] ?? null,
-                ]);
+                ];
+
+                if (array_key_exists('template_code', $attributes)) {
+                    $payload['template_code'] = $attributes['template_code'];
+                }
+
+                if (array_key_exists('params_json', $attributes)) {
+                    $payload['params'] = $attributes['params_json'];
+                }
+
+                if (array_key_exists('content', $attributes)) {
+                    $payload['content'] = $attributes['content'];
+                }
+
+                SmsLog::query()->whereKey($id)->update($payload);
             }
         } catch (\Throwable $exception) {
             Log::warning('短信日志状态更新失败，已忽略以避免阻断发送流程', [

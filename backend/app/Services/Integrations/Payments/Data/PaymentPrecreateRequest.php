@@ -11,5 +11,6 @@ final readonly class PaymentPrecreateRequest
         public float $amount,
         public string $subject,
         public ?string $timeoutExpress = null,
+        public array $context = [],
     ) {}
 }

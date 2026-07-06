@@ -10,6 +10,7 @@ use App\Models\IntegrationPlugin;
 use App\Models\IntegrationPluginConfig;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 class PluginConfigRepository
@@ -141,6 +142,7 @@ class PluginConfigRepository
      */
     public function save(IntegrationPlugin $plugin, PluginManifest $manifest, array $input, ?AdminUser $admin = null): array
     {
+        $previousResolvedConfig = $this->resolvedConfig($plugin);
         [$nonSecretPayload, $secretPayload] = $this->partitionConfigPayload($manifest, $input, $plugin);
         $hasSecretValues = array_map(static fn (mixed $value): bool => $value !== null && $value !== '', $secretPayload);
         $this->assertRequiredFields($manifest, array_merge($nonSecretPayload, $secretPayload));
@@ -156,6 +158,8 @@ class PluginConfigRepository
                 ]
             );
         });
+
+        $this->clearConfigSavedRuntimeCaches($manifest, $previousResolvedConfig, array_merge($nonSecretPayload, $secretPayload));
 
         return $this->displayConfig($plugin->fresh('config') ?? $plugin);
     }
@@ -236,6 +240,45 @@ class PluginConfigRepository
             if ($value === null || $value === '' || $value === []) {
                 throw new BusinessException("插件配置缺少必填项 [{$key}]", 42200);
             }
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $previousResolvedConfig
+     * @param  array<string, mixed>  $currentResolvedConfig
+     */
+    private function clearConfigSavedRuntimeCaches(
+        PluginManifest $manifest,
+        array $previousResolvedConfig,
+        array $currentResolvedConfig,
+    ): void {
+        $hook = is_array($manifest->extra['config_saved_cache_clear'] ?? null)
+            ? $manifest->extra['config_saved_cache_clear']
+            : [];
+        $class = trim((string) ($hook['class'] ?? ''));
+        $method = trim((string) ($hook['method'] ?? ''));
+
+        if ($class === '' || $method === '') {
+            return;
+        }
+
+        try {
+            app(PluginFileLoader::class)->ensureLoaded($manifest);
+
+            if (! class_exists($class) || ! method_exists($class, $method)) {
+                return;
+            }
+
+            $class::$method($previousResolvedConfig);
+            $class::$method($currentResolvedConfig);
+        } catch (\Throwable $exception) {
+            Log::warning('[plugins] config saved cache clear hook failed', [
+                'domain' => $manifest->domain,
+                'slug' => $manifest->slug,
+                'class' => $class,
+                'method' => $method,
+                'message' => $exception->getMessage(),
+            ]);
         }
     }
 

@@ -15,6 +15,21 @@ final class ProviderRegistry
     private array $drivers = [];
 
     /**
+     * @var array<string, UpstreamProviderDescriptor>
+     */
+    private array $descriptorCache = [];
+
+    /**
+     * @var array<int, UpstreamProviderDescriptor>|null
+     */
+    private ?array $descriptorsCache = null;
+
+    /**
+     * @var array<int, array{value:string,label:string,supplier_form:array<string, mixed>}>|null
+     */
+    private ?array $optionsCache = null;
+
+    /**
      * @param  iterable<int, UpstreamDriver>  $drivers
      */
     public function __construct(iterable $drivers)
@@ -40,7 +55,7 @@ final class ProviderRegistry
      */
     public function options(): array
     {
-        return array_map(
+        return $this->optionsCache ??= array_map(
             fn (UpstreamProviderDescriptor $descriptor): array => $descriptor->toOption(),
             $this->descriptors()
         );
@@ -51,11 +66,15 @@ final class ProviderRegistry
      */
     public function descriptors(): array
     {
+        if ($this->descriptorsCache !== null) {
+            return $this->descriptorsCache;
+        }
+
         $drivers = $this->drivers;
         ksort($drivers);
 
-        return array_map(
-            fn (UpstreamDriver $driver): UpstreamProviderDescriptor => UpstreamProviderDescriptor::fromDriver($driver),
+        return $this->descriptorsCache = array_map(
+            fn (UpstreamDriver $driver): UpstreamProviderDescriptor => $this->descriptorFromDriver($driver),
             array_values($drivers)
         );
     }
@@ -82,6 +101,13 @@ final class ProviderRegistry
     {
         $driver = $this->find($key);
 
-        return $driver instanceof UpstreamDriver ? UpstreamProviderDescriptor::fromDriver($driver) : null;
+        return $driver instanceof UpstreamDriver ? $this->descriptorFromDriver($driver) : null;
+    }
+
+    private function descriptorFromDriver(UpstreamDriver $driver): UpstreamProviderDescriptor
+    {
+        $key = $driver->key();
+
+        return $this->descriptorCache[$key] ??= UpstreamProviderDescriptor::fromDriver($driver);
     }
 }

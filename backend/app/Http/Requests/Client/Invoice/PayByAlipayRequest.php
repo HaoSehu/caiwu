@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Client\Invoice;
 
+use App\Constants\PaymentGatewayCode;
 use App\Http\Requests\Client\Common\ClientFormRequest;
+use Illuminate\Validation\Rule;
 
 class PayByAlipayRequest extends ClientFormRequest
 {
@@ -10,6 +12,8 @@ class PayByAlipayRequest extends ClientFormRequest
     {
         return [
             'payment_session_token' => ['required', 'string', 'min:20', 'max:120'],
+            'gateway' => ['nullable', 'string', Rule::in(PaymentGatewayCode::thirdPartyGateways())],
+            'payment_type' => ['nullable', 'string', Rule::in(['alipay', 'wxpay'])],
         ];
     }
 }

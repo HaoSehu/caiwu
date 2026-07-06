@@ -20,20 +20,20 @@ trait HandlesOrderCalculation
 
     /** 计费周期 → 月数映射 */
     private const BILLING_CYCLE_MONTHS = [
-        'monthly'      => 1,
-        'quarterly'    => 3,
+        'monthly' => 1,
+        'quarterly' => 3,
         'semiannually' => 6,
-        'annually'     => 12,
+        'annually' => 12,
     ];
 
     /** 配置项 type → 字段名映射 */
     private const TYPE_FIELD_MAP = [
-        4  => 'ip_num',
-        5  => 'os',
-        6  => 'cpu',
-        7  => 'cpu',
-        8  => 'memory',
-        9  => 'memory',
+        4 => 'ip_num',
+        5 => 'os',
+        6 => 'cpu',
+        7 => 'cpu',
+        8 => 'memory',
+        9 => 'memory',
         10 => 'bw',
         11 => 'bw',
         12 => 'area',
@@ -44,6 +44,7 @@ trait HandlesOrderCalculation
         18 => 'bw',
         19 => 'system_disk_size',
     ];
+
     public function calculateAmount(Product $product, string $billingCycle, array $config = []): float
     {
         $config = $this->normalizeConfig($product, $config);

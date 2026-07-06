@@ -627,6 +627,23 @@ class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsole
         array $headers = [],
         array $query = []
     ): array {
+        return $this->requestWithMeta($supplier, $method, $uri, $payload, $jwt, $headers, $query)['response'];
+    }
+
+    /**
+     * 发送主机面板接口请求，并返回响应头等元信息。
+     *
+     * @return array{response: array, headers: array<int, string>, http_code: int, content_type: string}
+     */
+    public function requestWithMeta(
+        Supplier $supplier,
+        string $method,
+        string $uri,
+        array|string $payload = [],
+        ?string $jwt = null,
+        array $headers = [],
+        array $query = []
+    ): array {
         $baseUrl = trim((string) $supplier->api_url);
 
         if ($baseUrl === '') {
@@ -687,7 +704,12 @@ class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsole
             throw new BusinessException($this->buildInvalidJsonMessage($httpCode, $contentType, $output), 50000);
         }
 
-        return $decoded;
+        return [
+            'response' => $decoded,
+            'headers' => $responseHeaders,
+            'http_code' => $httpCode,
+            'content_type' => $contentType,
+        ];
     }
 
     private function applyUserAgent(): void

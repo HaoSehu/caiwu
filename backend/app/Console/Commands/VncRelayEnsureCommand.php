@@ -12,7 +12,7 @@ use Throwable;
  * 确保 VNC Relay 进程在运行。
  *
  * 设计意图：
- *   - 由 schedule:run 每分钟调用一次
+ *   - 由 schedule:run 每 15 分钟调用一次
  *   - 检测目标端口是否有进程监听
  *   - 如果没有，以后台方式拉起 vnc:relay
  *   - 命令本身立即返回，不阻塞调度器

@@ -1320,8 +1320,7 @@ class CouponService
             return;
         }
 
-        throw new BusinessException($reason.'不允许修改');
-        foreach ($lockedFields as $field) {
+        foreach ($this->resolveCouponLockedFields($coupon) as $field) {
             if (! array_key_exists($field, $payload)) {
                 continue;
             }
@@ -1344,7 +1343,6 @@ class CouponService
             }
 
             if ($currentValue != $newValue) {
-                $reason = $this->resolveCouponLockReason($coupon) ?: '该字段不允许修改';
                 throw new BusinessException("{$reason}，无法修改「{$field}」");
             }
         }
@@ -1352,7 +1350,7 @@ class CouponService
 
     private function couponCanBeUpdatedForAdmin(Coupon $coupon): bool
     {
-        return $this->resolveCouponLockReason($coupon) === '';
+        return true;
     }
 
     private function couponCanBeDeletedForAdmin(Coupon $coupon): bool
@@ -1750,7 +1748,7 @@ class CouponService
         $toDelete = $replace ? array_values(array_diff($existingUserIds, $userIds)) : [];
         $toReactivate = $existing
             ->filter(fn (UserCoupon $userCoupon, int|string $userId) => in_array((int) $userId, $userIds, true))
-            ->filter(fn (UserCoupon $userCoupon) => (int) ($userCoupon->status ?? 0) !== 1);
+            ->filter(fn (UserCoupon $userCoupon) => (int) ($userCoupon->status ?? 0) !== UserCouponStatus::OWNED);
 
         if ($coupon->total_usage_limit) {
             $receivedCount = UserCoupon::query()->where('coupon_id', $coupon->id)->count();
@@ -1761,11 +1759,9 @@ class CouponService
                     ->filter(fn (UserCoupon $userCoupon, int|string $userId) => in_array((int) $userId, $toDelete, true))
                     ->values();
 
-                $boundUserCouponIds = Invoice::query()
-                    ->whereIn('user_coupon_id', $recordsToDelete->pluck('id')->map(fn ($id) => (int) $id)->all())
-                    ->pluck('user_coupon_id')
-                    ->map(fn ($id) => (int) $id)
-                    ->flip();
+                $boundUserCouponIds = $this->boundUserCouponIdSet(
+                    $recordsToDelete->pluck('id')->map(fn ($id) => (int) $id)->all()
+                );
 
                 $hardDeleteCount = $recordsToDelete
                     ->reject(function (UserCoupon $record) use ($boundUserCouponIds) {
@@ -1786,11 +1782,9 @@ class CouponService
                 ->filter(fn (UserCoupon $userCoupon, int|string $userId) => in_array((int) $userId, $toDelete, true))
                 ->values();
 
-            $boundUserCouponIds = Order::query()
-                ->whereIn('user_coupon_id', $recordsToDelete->pluck('id')->map(fn ($id) => (int) $id)->all())
-                ->pluck('user_coupon_id')
-                ->map(fn ($id) => (int) $id)
-                ->flip();
+            $boundUserCouponIds = $this->boundUserCouponIdSet(
+                $recordsToDelete->pluck('id')->map(fn ($id) => (int) $id)->all()
+            );
 
             foreach ($recordsToDelete as $record) {
                 $recordId = (int) $record->id;
@@ -1798,7 +1792,8 @@ class CouponService
 
                 if ($shouldPreserve) {
                     $record->forceFill([
-                        'status' => 0,
+                        'status' => UserCouponStatus::REVOKED,
+                        'revoked_at' => now(),
                         'operator' => (string) ($context['operator'] ?? $record->operator ?? ''),
                         'trace_id' => (string) ($context['trace_id'] ?? $record->trace_id ?? ''),
                     ])->save();
@@ -1812,7 +1807,8 @@ class CouponService
 
         foreach ($toReactivate as $userCoupon) {
             $userCoupon->forceFill([
-                'status' => 1,
+                'status' => UserCouponStatus::OWNED,
+                'revoked_at' => null,
                 'granted_at' => now(),
                 'operator' => (string) ($context['operator'] ?? $userCoupon->operator ?? ''),
                 'trace_id' => (string) ($context['trace_id'] ?? $userCoupon->trace_id ?? ''),
@@ -1830,12 +1826,40 @@ class CouponService
                 'coupon_id' => (int) $coupon->id,
                 'user_id' => $userId,
                 'receive_type' => 'grant',
-                'status' => 1,
+                'status' => UserCouponStatus::OWNED,
                 'granted_at' => now(),
                 'operator' => (string) ($context['operator'] ?? ''),
                 'trace_id' => (string) ($context['trace_id'] ?? ''),
             ]);
         }
+    }
+
+    private function boundUserCouponIdSet(array $userCouponIds): Collection
+    {
+        $ids = collect($userCouponIds)
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($ids === []) {
+            return collect();
+        }
+
+        $orderUserCouponIds = Order::query()
+            ->whereIn('user_coupon_id', $ids)
+            ->pluck('user_coupon_id');
+
+        $invoiceUserCouponIds = Invoice::query()
+            ->whereIn('user_coupon_id', $ids)
+            ->pluck('user_coupon_id');
+
+        return $orderUserCouponIds
+            ->merge($invoiceUserCouponIds)
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $id > 0)
+            ->flip();
     }
 
     private function hasUserCouponsTable(): bool
