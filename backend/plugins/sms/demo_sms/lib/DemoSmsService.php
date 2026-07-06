@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Caiwu\Plugins\Sms\DemoSms\Lib;
 
+use App\Services\Sms\Data\SmsMessageRequest;
 use App\Services\Sms\Data\SmsSendRequest;
 use App\Services\Sms\Data\SmsSendResult;
+use App\Support\SmsTemplateCatalog;
 
 class DemoSmsService
 {
@@ -19,12 +21,27 @@ class DemoSmsService
         return 'Demo 短信';
     }
 
+    public function sendMessage(SmsMessageRequest $request): SmsSendResult
+    {
+        return new SmsSendResult(
+            status: 'success',
+            requestId: 'demo-sms-'.date('YmdHis'),
+            templateCode: $request->templateCode,
+            templateParams: ['content' => $request->content],
+            raw: [
+                'demo' => true,
+                'phone' => $request->phone,
+                'content' => $request->content,
+            ],
+        );
+    }
+
     public function sendVerifyCode(SmsSendRequest $request): SmsSendResult
     {
         return new SmsSendResult(
             status: 'success',
             requestId: 'demo-sms-'.date('YmdHis'),
-            templateCode: (string) $request->option('template_code', 'DEMO_001'),
+            templateCode: (string) $request->option('template_code', SmsTemplateCatalog::TEMPLATE_VERIFY_CODE),
             templateParams: ['code' => $request->code],
             raw: ['demo' => true, 'phone' => $request->phone],
         );
@@ -37,6 +54,12 @@ class DemoSmsService
         $config = is_array($request['config'] ?? null) ? $request['config'] : [];
 
         return match ($action) {
+            'sms.send_message' => $this->success($action, $this->sendMessage(new SmsMessageRequest(
+                phone: (string) ($payload['phone'] ?? ''),
+                templateCode: (string) ($payload['template_code'] ?? ''),
+                content: (string) ($payload['content'] ?? ''),
+                options: $this->resolveOptions($payload, $config),
+            ))->toArray()),
             'sms.send_verify_code' => $this->success($action, $this->sendVerifyCode(new SmsSendRequest(
                 phone: (string) ($payload['phone'] ?? ''),
                 code: (string) ($payload['code'] ?? ''),
@@ -44,7 +67,7 @@ class DemoSmsService
             ))->toArray()),
             'sms.test' => $this->success($action, $this->sendVerifyCode(new SmsSendRequest(
                 phone: (string) ($payload['phone'] ?? ''),
-                code: '888888',
+                code: $this->verificationCode($payload),
                 options: $this->resolveOptions($payload, $config),
             ))->toArray()),
             default => ['success' => false, 'action' => $action, 'message' => 'Unsupported plugin action', 'data' => []],
@@ -58,6 +81,16 @@ class DemoSmsService
             'action' => $action,
             'data' => $data,
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function verificationCode(array $payload): string
+    {
+        $code = trim((string) ($payload['code'] ?? ''));
+
+        return preg_match('/^\d{6}$/', $code) === 1 ? $code : (string) random_int(100000, 999999);
     }
 
     /**

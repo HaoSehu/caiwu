@@ -8,8 +8,6 @@ use App\Services\Integrations\Payments\Data\PaymentRefundRequest;
 
 class YiPayService
 {
-    private ?YiPayClient $client = null;
-
     public function key(): string
     {
         return 'yipay';
@@ -29,7 +27,7 @@ class YiPayService
         $action = trim((string) ($request['action'] ?? ''));
         $payload = is_array($request['payload'] ?? null) ? $request['payload'] : [];
         $config = is_array($request['config'] ?? null) ? $request['config'] : [];
-        $client = $this->client($config);
+        $client = new YiPayClient($config);
 
         return match ($action) {
             'payment.is_enabled' => $this->success($action, [
@@ -38,10 +36,14 @@ class YiPayService
             'payment.matches_merchant' => $this->success($action, [
                 'matched' => $client->matchesMerchantId(isset($payload['merchant_id']) ? (string) $payload['merchant_id'] : null),
             ]),
+            'payment.options' => $this->success($action, [
+                'list' => $client->isEnabled() ? $client->paymentOptions() : [],
+            ]),
             'payment.precreate' => $this->success($action, $client->precreate(
                 outTradeNo: (string) ($payload['out_trade_no'] ?? ''),
                 amount: (float) ($payload['amount'] ?? 0),
                 subject: (string) ($payload['subject'] ?? ''),
+                paymentType: isset($payload['payment_type']) ? (string) $payload['payment_type'] : null,
             )),
             'payment.query' => $this->success($action, $client->query(
                 (string) ($payload['out_trade_no'] ?? '')
@@ -58,18 +60,6 @@ class YiPayService
             ]),
             default => ['success' => false, 'action' => $action, 'message' => 'Unsupported plugin action', 'data' => []],
         };
-    }
-
-    /**
-     * @param  array<string, mixed>  $config
-     */
-    private function client(array $config): YiPayClient
-    {
-        if ($this->client === null) {
-            $this->client = new YiPayClient($config);
-        }
-
-        return $this->client;
     }
 
     /**

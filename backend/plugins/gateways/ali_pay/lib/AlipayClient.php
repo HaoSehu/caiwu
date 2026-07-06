@@ -33,6 +33,10 @@ class AlipayClient
 
     private bool $enabled;
 
+    private bool $sslVerify;
+
+    private string $caBundle;
+
     /**
      * @param  array<string, mixed>  $config
      */
@@ -47,6 +51,8 @@ class AlipayClient
         $this->signType = 'RSA2';
         $this->charset = 'utf-8';
         $this->enabled = $this->configBool('alipay_enabled', 'alipay_enabled', false);
+        $this->sslVerify = $this->configBool('ssl_verify', null, (bool) config('alipay.ssl_verify', true));
+        $this->caBundle = $this->configString('ca_bundle', null, config('alipay.ca_bundle', ''));
     }
 
     /**
@@ -65,10 +71,10 @@ class AlipayClient
         // fallback 到后端 APP_URL
         $frontendUrl = trim((string) config('app.frontend_url', ''));
         if ($frontendUrl !== '') {
-            return rtrim($frontendUrl, '/').'/api/client/payment/alipay/notify';
+            return rtrim($frontendUrl, '/').'/api/v2/client/payment/alipay/notify';
         }
 
-        return rtrim(config('app.url', ''), '/').'/api/client/payment/alipay/notify';
+        return rtrim(config('app.url', ''), '/').'/api/v2/client/payment/alipay/notify';
     }
 
     public function isEnabled(): bool
@@ -92,10 +98,10 @@ class AlipayClient
     {
         $settings = Cache::remember('payment.alipay.settings', 60, function () {
             return [
-                'alipay_app_id'         => Setting::getValue('payment', 'alipay_app_id') ?? '',
-                'alipay_private_key'    => Setting::getValue('payment', 'alipay_private_key') ?? '',
-                'alipay_public_key'     => Setting::getValue('payment', 'alipay_public_key') ?? '',
-                'alipay_enabled'        => Setting::getValue('payment', 'alipay_enabled') ?? '',
+                'alipay_app_id' => Setting::getValue('payment', 'alipay_app_id') ?? '',
+                'alipay_private_key' => Setting::getValue('payment', 'alipay_private_key') ?? '',
+                'alipay_public_key' => Setting::getValue('payment', 'alipay_public_key') ?? '',
+                'alipay_enabled' => Setting::getValue('payment', 'alipay_enabled') ?? '',
             ];
         });
 
@@ -149,7 +155,20 @@ class AlipayClient
 
         $notifyUrlMeta = $this->describePrecreateNotifyUrl();
         $params = $this->buildRequestParams('alipay.trade.precreate', $bizContent);
-        $result = $this->request($params);
+
+        try {
+            $result = $this->request($params);
+        } catch (BusinessException $exception) {
+            app(GatewayLogService::class)->recordFailure(
+                gateway: PaymentGatewayCode::ALIPAY,
+                action: 'precreate',
+                errorMsg: $exception->getMessage(),
+                outTradeNo: $outTradeNo,
+                requestData: $bizContent,
+                responseData: [],
+            );
+            throw $exception;
+        }
 
         if (! $notifyUrlMeta['usable']) {
             Log::warning('[支付宝当面付] precreate 未附带异步回调地址，将依赖主动查询', [
@@ -241,7 +260,20 @@ class AlipayClient
         }
 
         $params = $this->buildRequestParams('alipay.trade.refund', $bizContent);
-        $result = $this->request($params);
+
+        try {
+            $result = $this->request($params);
+        } catch (BusinessException $exception) {
+            app(GatewayLogService::class)->recordFailure(
+                gateway: PaymentGatewayCode::ALIPAY,
+                action: 'refund',
+                errorMsg: $exception->getMessage(),
+                outTradeNo: $outTradeNo,
+                requestData: $bizContent,
+                responseData: [],
+            );
+            throw $exception;
+        }
 
         Log::info('[支付宝当面付] refund 响应', SensitiveDataSanitizer::sanitize([
             'out_trade_no' => $outTradeNo,
@@ -362,8 +394,22 @@ class AlipayClient
     private function buildHttpClient(): PendingRequest
     {
         return Http::asForm()
+            ->withOptions(['verify' => $this->httpVerifyOption()])
             ->timeout(15)
             ->retry(1, 200);
+    }
+
+    private function httpVerifyOption(): bool|string
+    {
+        if (! $this->sslVerify) {
+            return false;
+        }
+
+        if ($this->caBundle !== '' && is_file($this->caBundle)) {
+            return $this->caBundle;
+        }
+
+        return true;
     }
 
     /**

@@ -271,6 +271,31 @@ final class MofangFinanceTransport
         return $response;
     }
 
+    /**
+     * @return array{response: array, headers: array<int, string>, http_code: int, content_type: string}
+     */
+    public function requestWithMeta(
+        Supplier $supplier,
+        string $method,
+        string $uri,
+        array|string $payload = [],
+        ?string $jwt = null,
+        array $headers = [],
+        array $query = []
+    ): array {
+        $resolvedJwt = $this->resolveRequestJwt($supplier, $jwt, $uri, $headers);
+        $meta = $this->transport->requestWithMeta($supplier, $method, $uri, $payload, $resolvedJwt, $headers, $query);
+        $response = is_array($meta['response'] ?? null) ? $meta['response'] : [];
+        $this->authManager->forgetIfUnauthorizedResponse(
+            $supplier,
+            (int) ($meta['http_code'] ?? 0),
+            $response,
+            $resolvedJwt
+        );
+
+        return $meta;
+    }
+
     private function resolveJwt(Supplier $supplier, ?string $jwt): string
     {
         $jwt = trim((string) $jwt);

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Caiwu\Plugins\Mail\DemoMail\Lib;
 
+use App\Services\System\NotificationService;
 use Illuminate\Support\Facades\Log;
 
 class DemoMailService
@@ -61,21 +62,24 @@ class DemoMailService
     private function sendTestAction(string $action, array $payload): array
     {
         $to = (string) ($payload['to'] ?? '');
-        $subject = (string) ($payload['subject'] ?? 'Plugin mail test');
-        $body = (string) ($payload['body'] ?? $payload['html'] ?? '');
+        $subject = (string) ($payload['subject'] ?? '邮箱验证码');
+        $code = $this->verificationCode($payload);
+        $body = (string) ($payload['body'] ?? $payload['html'] ?? $this->verificationBody($code));
         $accountIndex = (int) ($payload['account_index'] ?? 0);
+        $templateCode = (string) ($payload['template_code'] ?? NotificationService::TEMPLATE_EMAIL_CODE);
 
         $this->sendHtml(
             to: $to,
             subject: $subject,
             html: $body,
-            context: ['test' => true, 'account_index' => $accountIndex],
+            context: ['test' => true, 'account_index' => $accountIndex, 'template_code' => $templateCode, 'code' => $code],
         );
 
         return $this->success($action, [
             'sent' => true,
             'to' => $to,
             'subject' => $subject,
+            'template_code' => $templateCode,
             'account_index' => $accountIndex,
         ]);
     }
@@ -83,5 +87,20 @@ class DemoMailService
     private function success(string $action, array $data): array
     {
         return ['success' => true, 'action' => $action, 'data' => $data];
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function verificationCode(array $payload): string
+    {
+        $code = trim((string) ($payload['code'] ?? ''));
+
+        return preg_match('/^\d{6}$/', $code) === 1 ? $code : (string) random_int(100000, 999999);
+    }
+
+    private function verificationBody(string $code): string
+    {
+        return "您的邮箱验证码为：{$code}，10分钟内有效。如非本人操作，请忽略此邮件。";
     }
 }
