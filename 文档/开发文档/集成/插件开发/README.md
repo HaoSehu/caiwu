@@ -386,6 +386,7 @@ return [
 | 短信发送 | `backend/plugins/sms/aliyun` | 阿里云短信插件 |
 | 短信发送 | `backend/plugins/sms/demo_sms` | 模拟短信插件 |
 | 上游开通/控制 | `backend/plugins/servers/mofang_finance` | 魔方财务上游插件 |
+| 上游开通/控制 | `backend/plugins/servers/kanghostx` | 康乐虚拟主机插件 |
 | 上游开通/控制 | `backend/plugins/servers/demo_servers` | 模拟上游插件 |
 
 每个 demo 包都包含：
@@ -399,6 +400,7 @@ return [
 ## 当前插件说明文档
 
 - [支付宝当面付插件 demo](./demo-ali-pay.md)
+- [康乐虚拟主机插件](./kanghostx.md)
 
 其他插件以各自目录内 `README.md` / `DEVELOPMENT.md` 和当前代码为准；不要在导航中保留不存在的说明文档链接。
 
