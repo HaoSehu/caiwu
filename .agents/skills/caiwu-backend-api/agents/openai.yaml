@@ -1,4 +1,0 @@
-interface:
-  display_name: "Caiwu Backend API"
-  short_description: "Work safely on Caiwu Laravel APIs."
-  default_prompt: "Use $caiwu-backend-api to implement a backend API change in Caiwu."
