@@ -325,6 +325,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
     });
 
     Route::middleware(['permission:'.AdminPermissions::SETTINGS_MANAGE])->group(function (): void {
+        Route::post('/notification-templates/test-send', [SettingController::class, 'testNotificationTemplate']);
         Route::post('/settings', [SettingController::class, 'update']);
     });
 
