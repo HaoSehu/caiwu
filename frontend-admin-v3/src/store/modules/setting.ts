@@ -25,7 +25,7 @@ export const useSettingStore = defineStore('setting', {
   getters: {
     showSidebar: (state) => state.layout !== 'top',
     showSidebarLogo: (state) => state.layout === 'side',
-    showHeaderLogo: (state) => state.layout !== 'side',
+    showHeaderLogo: (state) => state.layout !== 'side' && !state.hideHeaderLogo,
     displayMode: (state): ModeType => {
       if (state.mode === 'auto') {
         const media = window.matchMedia('(prefers-color-scheme:dark)');

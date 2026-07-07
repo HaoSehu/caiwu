@@ -15,4 +15,9 @@ final class EmailTemplateCatalog
     {
         return 'email_template_content_'.trim($code);
     }
+
+    public static function enabledSettingKey(string $code): string
+    {
+        return 'email_template_enabled_'.trim($code);
+    }
 }

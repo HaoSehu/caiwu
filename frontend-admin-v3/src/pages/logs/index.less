@@ -66,6 +66,110 @@
   background: var(--td-error-color-container, #fff0f0);
 }
 
+.schedule-task-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.schedule-task-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.schedule-task-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid var(--td-brand-color-2, #d9e8ff);
+  border-radius: var(--td-radius-medium, 6px);
+  background: var(--td-brand-color-light, #f2f7ff);
+  color: var(--td-text-color-secondary);
+  font-size: var(--td-font-size-size-1, 12px);
+  line-height: 1.5;
+}
+
+.schedule-task-stat strong {
+  color: var(--td-text-color-primary);
+  font-size: var(--td-font-size-size-4, 16px);
+  line-height: 1.25;
+}
+
+.schedule-task-stat--third-party {
+  border-color: var(--td-warning-color-2, #ed7b2c);
+  background: var(--td-warning-color-container, #fff3e0);
+}
+
+.schedule-task-filter {
+  flex-shrink: 0;
+}
+
+.schedule-task-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.schedule-task-group {
+  min-width: 0;
+}
+
+.schedule-task-group + .schedule-task-group {
+  padding-top: 18px;
+  border-top: 1px solid var(--td-border-level-1-color);
+}
+
+.schedule-task-group__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.schedule-task-group__head h3 {
+  margin: 0 0 4px;
+  color: var(--td-text-color-primary);
+  font-size: var(--td-font-size-size-3, 14px);
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.schedule-task-group__head p {
+  margin: 0;
+  color: var(--td-text-color-secondary);
+  font-size: var(--td-font-size-size-1, 12px);
+  line-height: 1.6;
+}
+
+.schedule-task-cell {
+  min-width: 0;
+}
+
+.schedule-task-cell__name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.schedule-task-cell__name strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schedule-task-cell__name .t-tag {
+  flex-shrink: 0;
+}
+
 .section-title h2 {
   margin: 4px 0 6px;
   color: var(--td-text-color-primary);
@@ -325,6 +429,21 @@
 
   .schedule-env-grid {
     grid-template-columns: 1fr;
+  }
+
+  .schedule-task-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .schedule-task-filter {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .schedule-task-group__head {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .cleanup-card-grid,

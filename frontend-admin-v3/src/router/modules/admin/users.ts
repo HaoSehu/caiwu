@@ -20,10 +20,24 @@ export const usersRoutes: RouteRecordRaw[] = [
     component: () => import('@/pages/users/verification/index.vue'),
     meta: {
       title: {
-        zh_CN: '实名管理',
-        en_US: 'Verification',
+        zh_CN: '实名列表',
+        en_US: 'Verification List',
       },
       permission: 'verification.list',
+      verificationPane: 'list',
+    },
+  },
+  {
+    path: 'users/verification/manage',
+    name: 'AdminUserVerificationManage',
+    component: () => import('@/pages/users/verification/index.vue'),
+    meta: {
+      title: {
+        zh_CN: '实名管理',
+        en_US: 'Verification Settings',
+      },
+      permission: 'verification.list',
+      verificationPane: 'manage',
     },
   },
   {

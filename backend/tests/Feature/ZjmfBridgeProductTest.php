@@ -12,11 +12,13 @@ use App\Models\ThirdProductGroup;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
+use Tests\Support\InstallsZjmfBridgeAddon;
 use Tests\TestCase;
 
 class ZjmfBridgeProductTest extends TestCase
 {
     use DatabaseTransactions;
+    use InstallsZjmfBridgeAddon;
 
     protected function setUp(): void
     {
@@ -31,6 +33,7 @@ class ZjmfBridgeProductTest extends TestCase
             'zjmf_bridge.signature_tolerance' => 300,
             'zjmf_bridge.system_scopes' => ['product.read'],
         ]);
+        $this->installZjmfBridgeAddon();
     }
 
     public function test_products_list_uses_fixed_business_product_type_not_menu_code(): void

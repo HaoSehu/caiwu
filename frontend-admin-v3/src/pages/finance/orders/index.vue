@@ -1,13 +1,6 @@
 <template>
   <div class="finance-orders-page">
     <t-card :bordered="false">
-      <t-tabs v-model="activeTab" @change="handleTabChange" class="order-tabs">
-        <t-tab-panel value="all" label="全部订单" />
-        <t-tab-panel value="orders" label="普通订单" />
-        <t-tab-panel value="renewals" label="续费订单" />
-        <t-tab-panel value="upgrade" label="附加配置" />
-      </t-tabs>
-
       <div class="order-filter">
         <t-input
           class="filter-keyword"
@@ -170,24 +163,22 @@ const route = useRoute();
 const router = useRouter();
 const isMobile = useMediaQuery('(max-width: 768px)');
 
-// Tab 状态同步 URL query—— ref 初始化即读取，确保 useListPage 首次加载使用正确模式
-function resolveTabFromQuery(): FinanceOrderMode {
+function normalizeMode(value: unknown): FinanceOrderMode | null {
+  return ORDER_TAB_OPTIONS.some((o) => o.value === value) ? (value as FinanceOrderMode) : null;
+}
+
+function resolveTabFromRoute(): FinanceOrderMode {
   const q = route.query.tab as string;
-  return q && ORDER_TAB_OPTIONS.some((o) => o.value === q) ? (q as FinanceOrderMode) : 'all';
+  return normalizeMode(q) || normalizeMode(route.meta.orderTab) || 'all';
 }
-const activeTab = ref<FinanceOrderMode>(resolveTabFromQuery());
+const activeTab = ref<FinanceOrderMode>(resolveTabFromRoute());
 
-function syncTabFromQuery() {
-  activeTab.value = resolveTabFromQuery();
-}
-
-function handleTabChange(val: string) {
-  activeTab.value = val as FinanceOrderMode;
-  router.replace({ query: { ...route.query, tab: val === 'all' ? undefined : val } });
+function syncTabFromRoute() {
+  activeTab.value = resolveTabFromRoute();
 }
 
-onMounted(syncTabFromQuery);
-watch(() => route.query.tab, syncTabFromQuery);
+onMounted(syncTabFromRoute);
+watch(() => [route.path, route.query.tab, route.meta.orderTab], syncTabFromRoute);
 
 const orderTypeOptions = Object.entries(ORDER_TYPE_MAP).map(([value, label]) => ({ value, label }));
 const mode = computed<FinanceOrderMode>(() => activeTab.value);

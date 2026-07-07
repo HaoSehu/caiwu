@@ -1,6 +1,6 @@
 import { request } from '@/utils/request';
 
-export type IntegrationPluginDomain = 'captcha' | 'verification' | 'payment' | 'mail' | 'sms' | 'upstream';
+export type IntegrationPluginDomain = 'captcha' | 'verification' | 'payment' | 'mail' | 'sms' | 'upstream' | 'addons';
 
 export interface IntegrationPluginConfigSchema {
   key: string;

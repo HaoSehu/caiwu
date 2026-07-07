@@ -15,11 +15,13 @@ use App\Services\User\AccountService;
 use App\Services\ZjmfBridge\ZjmfTokenService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Cache;
+use Tests\Support\InstallsZjmfBridgeAddon;
 use Tests\TestCase;
 
 class ZjmfBridgeFinanceTest extends TestCase
 {
     use DatabaseTransactions;
+    use InstallsZjmfBridgeAddon;
 
     protected function setUp(): void
     {
@@ -31,6 +33,7 @@ class ZjmfBridgeFinanceTest extends TestCase
             'zjmf_bridge.secret' => 'zjmf-test-secret',
             'zjmf_bridge.token_ttl' => 7200,
         ]);
+        $this->installZjmfBridgeAddon();
     }
 
     public function test_client_invoice_and_fund_transaction_routes_use_zjmf_token(): void

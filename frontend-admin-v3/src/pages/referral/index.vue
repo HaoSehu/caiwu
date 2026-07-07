@@ -1,15 +1,5 @@
 <template>
   <div class="referral-page">
-    <t-card :bordered="false">
-      <div class="page-tabs-toolbar">
-        <t-tabs :value="activeTab" @change="handleTabChange">
-          <t-tab-panel value="overview" label="概览" />
-          <t-tab-panel value="rewards" label="奖励" />
-          <t-tab-panel value="withdrawals" label="提现" />
-        </t-tabs>
-      </div>
-    </t-card>
-
     <template v-if="activeTab === 'overview'">
       <section class="referral-metrics">
         <t-card v-for="item in overviewMetrics" :key="item.label" :bordered="false">
@@ -256,7 +246,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 import { RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
@@ -278,19 +268,22 @@ type ReferralTab = 'overview' | 'rewards' | 'withdrawals';
 type WithdrawalMode = 'approve' | 'reject';
 
 const route = useRoute();
-const router = useRouter();
-const activeTab = ref<ReferralTab>('overview');
+const activeTab = ref<ReferralTab>(resolveRouteTab());
 
-// 初始化从 URL 同步 Tab
 const validTabs: ReferralTab[] = ['overview', 'rewards', 'withdrawals'];
-const initTab = route.query.tab as string;
-if (initTab && validTabs.includes(initTab as ReferralTab)) {
-  activeTab.value = initTab as ReferralTab;
+
+function normalizeTab(value: unknown): ReferralTab | null {
+  return validTabs.includes(value as ReferralTab) ? (value as ReferralTab) : null;
 }
-watch(() => route.query.tab, (val) => {
-  const q = val as string;
-  if (q && validTabs.includes(q as ReferralTab) && activeTab.value !== q) {
-    activeTab.value = q as ReferralTab;
+
+function resolveRouteTab(): ReferralTab {
+  return normalizeTab(route.query.tab) || normalizeTab(route.meta.referralTab) || 'overview';
+}
+
+watch(() => [route.path, route.query.tab, route.meta.referralTab], () => {
+  const next = resolveRouteTab();
+  if (activeTab.value !== next) {
+    activeTab.value = next;
     refreshCurrentTab();
   }
 });
@@ -394,12 +387,6 @@ const withdrawalColumns: PrimaryTableCol<ReferralWithdrawalRecord>[] = [
   { colKey: 'operator', title: '处理信息', minWidth: 200 },
   { colKey: 'actions', title: '操作', fixed: 'right', width: 130 },
 ];
-
-function handleTabChange(value: string | number) {
-  activeTab.value = String(value) as ReferralTab;
-  router.replace({ query: { ...route.query, tab: activeTab.value === 'overview' ? undefined : activeTab.value } });
-  refreshCurrentTab();
-}
 
 async function loadOverview() {
   overviewLoading.value = true;

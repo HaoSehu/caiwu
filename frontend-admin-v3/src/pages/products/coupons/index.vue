@@ -1,10 +1,5 @@
 <template>
   <div class="coupons-page">
-    <t-tabs v-model="activeTab" @change="handleTabChange" class="coupon-tabs">
-      <t-tab-panel value="coupons" label="优惠券列表" />
-      <t-tab-panel value="campaigns" label="活动券管理" />
-    </t-tabs>
-
     <!-- 优惠券列表 -->
     <template v-if="activeTab === 'coupons'">
     <t-alert
@@ -364,7 +359,7 @@
 
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onMounted, reactive, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 import { AddIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import type { FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
@@ -422,20 +417,18 @@ const billingCycleOptions = [
 
 // ── Tab 切换（优惠券 / 活动券）──
 const route = useRoute();
-const router = useRouter();
-const activeTab = ref<'coupons' | 'campaigns'>(route.query.tab === 'campaigns' ? 'campaigns' : 'coupons');
+const activeTab = ref<'coupons' | 'campaigns'>(resolveCouponTab());
 
-function syncTabFromQuery() {
-  activeTab.value = route.query.tab === 'campaigns' ? 'campaigns' : 'coupons';
+function resolveCouponTab() {
+  return route.query.tab === 'campaigns' || route.meta.couponTab === 'campaigns' ? 'campaigns' : 'coupons';
 }
 
-function handleTabChange(val: string) {
-  activeTab.value = val as 'coupons' | 'campaigns';
-  router.replace({ query: { ...route.query, tab: val === 'coupons' ? undefined : val } });
+function syncTabFromRoute() {
+  activeTab.value = resolveCouponTab();
 }
 
-onMounted(syncTabFromQuery);
-watch(() => route.query.tab, syncTabFromQuery);
+onMounted(syncTabFromRoute);
+watch(() => [route.path, route.query.tab, route.meta.couponTab], syncTabFromRoute);
 
 const loading = ref(false);
 const saving = ref(false);

@@ -58,6 +58,30 @@ class NotificationTemplateService
         return null;
     }
 
+    public function isEnabled(string $channel, string $code): bool
+    {
+        $channel = trim($channel);
+        $code = trim($code);
+        if ($channel === '' || $code === '') {
+            return true;
+        }
+
+        if (! Schema::hasTable('notification_templates')) {
+            return true;
+        }
+
+        $template = NotificationTemplate::query()
+            ->where('channel', $channel)
+            ->where('code', $code)
+            ->first(['id', 'is_enabled']);
+
+        if (! $template instanceof NotificationTemplate) {
+            return true;
+        }
+
+        return (bool) $template->is_enabled;
+    }
+
     /**
      * 将旧模板 setting key 写入数据库，并返回仍需保存为普通设置的配置项。
      *
@@ -98,8 +122,20 @@ class NotificationTemplateService
             return ['channel' => 'email', 'code' => trim((string) $matches[1]), 'field' => 'content'];
         }
 
+        if (preg_match('/^email_template_enabled_(.+)$/', $key, $matches) === 1) {
+            return ['channel' => 'email', 'code' => trim((string) $matches[1]), 'field' => 'is_enabled'];
+        }
+
+        if (preg_match('/^email_template_css_(.+)$/', $key, $matches) === 1) {
+            return ['channel' => 'email', 'code' => trim((string) $matches[1]), 'field' => 'ignored_css'];
+        }
+
         if (preg_match('/^sms_template_content_(.+)$/', $key, $matches) === 1) {
             return ['channel' => 'sms', 'code' => trim((string) $matches[1]), 'field' => 'content'];
+        }
+
+        if (preg_match('/^sms_template_enabled_(.+)$/', $key, $matches) === 1) {
+            return ['channel' => 'sms', 'code' => trim((string) $matches[1]), 'field' => 'is_enabled'];
         }
 
         if (preg_match('/^sms_template_provider_template_id_(.+)$/', $key, $matches) === 1) {
@@ -114,6 +150,10 @@ class NotificationTemplateService
      */
     private function updateTemplateField(array $parsed, mixed $value): bool
     {
+        if ($parsed['field'] === 'ignored_css') {
+            return true;
+        }
+
         if (! Schema::hasTable('notification_templates')) {
             return false;
         }
@@ -128,6 +168,13 @@ class NotificationTemplateService
         }
 
         $field = $parsed['field'];
+        if ($field === 'is_enabled') {
+            $template->is_enabled = $this->normalizeEnabledValue($value);
+            $template->save();
+
+            return true;
+        }
+
         $template->{$field} = is_string($value) ? $value : (string) $value;
         $template->is_custom = true;
         $template->save();
@@ -146,6 +193,7 @@ class NotificationTemplateService
             'subject' => $template->subject,
             'content' => (string) $template->content,
             'provider_template_id' => (string) ($template->provider_template_id ?? ''),
+            'is_enabled' => (bool) $template->is_enabled,
             'variables' => array_values((array) ($template->variables_json ?? [])),
             'provider_variables' => array_values((array) ($template->provider_variables_json ?? [])),
             'setting_keys' => $this->settingKeys((string) $template->channel, (string) $template->code),
@@ -161,12 +209,19 @@ class NotificationTemplateService
             return [
                 'subject' => EmailTemplateCatalog::subjectSettingKey($code),
                 'content' => EmailTemplateCatalog::contentSettingKey($code),
+                'enabled' => EmailTemplateCatalog::enabledSettingKey($code),
             ];
         }
 
         return [
             'content' => SmsTemplateCatalog::contentSettingKey($code),
             'provider_template_id' => SmsTemplateCatalog::providerTemplateIdSettingKey($code),
+            'enabled' => SmsTemplateCatalog::enabledSettingKey($code),
         ];
+    }
+
+    private function normalizeEnabledValue(mixed $value): bool
+    {
+        return in_array($value, [true, 1, '1', 'true', 'on', 'yes'], true);
     }
 }

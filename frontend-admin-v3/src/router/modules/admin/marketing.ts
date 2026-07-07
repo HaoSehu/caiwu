@@ -19,23 +19,24 @@ export const marketingRoutes: RouteRecordRaw[] = [
     component: () => import('@/pages/products/coupons/index.vue'),
     meta: {
       title: {
-        zh_CN: '优惠券',
+        zh_CN: '优惠券列表',
         en_US: 'Coupons',
       },
       permission: 'product.list',
+      couponTab: 'coupons',
     },
   },
   {
     path: 'coupon-campaigns',
     name: 'AdminCouponCampaigns',
-    redirect: { path: '/admin/coupons', query: { tab: 'campaigns' } },
+    component: () => import('@/pages/products/coupons/index.vue'),
     meta: {
       title: {
-        zh_CN: '活动券',
+        zh_CN: '活动券管理',
         en_US: 'Coupon Campaigns',
       },
       permission: 'product.list',
-      hidden: true,
+      couponTab: 'campaigns',
     },
   },
   {
@@ -44,10 +45,37 @@ export const marketingRoutes: RouteRecordRaw[] = [
     component: () => import('@/pages/referral/index.vue'),
     meta: {
       title: {
-        zh_CN: '推广返利',
-        en_US: 'Referral',
+        zh_CN: '推广概览',
+        en_US: 'Referral Overview',
       },
       permission: 'referral.list',
+      referralTab: 'overview',
+    },
+  },
+  {
+    path: 'referral/rewards',
+    name: 'AdminReferralRewards',
+    component: () => import('@/pages/referral/index.vue'),
+    meta: {
+      title: {
+        zh_CN: '奖励记录',
+        en_US: 'Referral Rewards',
+      },
+      permission: 'referral.list',
+      referralTab: 'rewards',
+    },
+  },
+  {
+    path: 'referral/withdrawals',
+    name: 'AdminReferralWithdrawals',
+    component: () => import('@/pages/referral/index.vue'),
+    meta: {
+      title: {
+        zh_CN: '提现审核',
+        en_US: 'Referral Withdrawals',
+      },
+      permission: 'referral_withdrawal.list',
+      referralTab: 'withdrawals',
     },
   },
 ];

@@ -16,43 +16,75 @@ class NotificationService
 {
     public const TEMPLATE_EMAIL_CODE = '100001';
 
-    public const TEMPLATE_LOGIN_ALERT = '100002';
+    public const TEMPLATE_REGISTRATION_SUCCESS = '100002';
 
-    public const TEMPLATE_SERVICE_RENEW_REMINDER = '100003';
+    public const TEMPLATE_LOGIN_ALERT = '100003';
 
-    public const TEMPLATE_AUTO_RENEW_UPCOMING = '100020';
+    public const TEMPLATE_ACCOUNT_BINDING_ALERT = '100004';
 
-    public const TEMPLATE_INVOICE_PAYMENT_REMINDER = '100004';
-
-    public const TEMPLATE_INVOICE_OVERDUE_REMINDER = '100005';
+    public const TEMPLATE_SERVICE_ACTIVATED = '100005';
 
     public const TEMPLATE_SERVICE_SUSPENDED = '100006';
 
     public const TEMPLATE_SERVICE_RESTORED = '100007';
 
-    public const TEMPLATE_INVOICE_NOTICE = '100008';
+    public const TEMPLATE_SERVICE_TERMINATED = '100008';
 
-    public const TEMPLATE_MANUAL_PAYMENT_CONFIRM = '100009';
+    public const TEMPLATE_SERVICE_REINSTALL_SUCCESS = '100009';
 
-    public const TEMPLATE_TICKET_CREATED = '100010';
+    public const TEMPLATE_CLIENT_ORDER_PENDING = '100010';
 
-    public const TEMPLATE_TICKET_CLIENT_REPLY = '100011';
+    public const TEMPLATE_INVOICE_NOTICE = '100010';
 
-    public const TEMPLATE_TICKET_STAFF_REPLY = '100012';
+    public const TEMPLATE_INVOICE_PAYMENT_REMINDER = '100011';
 
-    public const TEMPLATE_ADMIN_ORDER_CREATED = '100013';
+    public const TEMPLATE_INVOICE_SECOND_PAYMENT_REMINDER = '100012';
 
-    public const TEMPLATE_ADMIN_ORDER_PAID = '100014';
+    public const TEMPLATE_INVOICE_OVERDUE_REMINDER = '100013';
 
-    public const TEMPLATE_LOGIN_FAILURE_ALERT = '100015';
+    public const TEMPLATE_AUTO_RENEW_UPCOMING = '100014';
 
-    public const TEMPLATE_LOGIN_LOCATION_ALERT = '100016';
+    public const TEMPLATE_AUTO_RENEW_NOTICE = '100015';
 
-    public const TEMPLATE_PASSWORD_CHANGED_ALERT = '100017';
+    public const TEMPLATE_PAYMENT_SUCCESS = '100016';
 
-    public const TEMPLATE_PHONE_CHANGED_ALERT = '100018';
+    public const TEMPLATE_MANUAL_PAYMENT_CONFIRM = '100016';
 
-    public const TEMPLATE_EMAIL_CHANGED_ALERT = '100019';
+    public const TEMPLATE_INVOICE_REFUND = '100017';
+
+    public const TEMPLATE_SERVICE_RENEW_REMINDER = '100018';
+
+    public const TEMPLATE_SERVICE_SECOND_RENEW_REMINDER = '100019';
+
+    public const TEMPLATE_CREDIT_INVOICE_CREATED = '100020';
+
+    public const TEMPLATE_ADMIN_ORDER_CREATED = '100021';
+
+    public const TEMPLATE_ADMIN_ORDER_PAID = '100022';
+
+    public const TEMPLATE_TICKET_OPENED = '100023';
+
+    public const TEMPLATE_TICKET_STAFF_REPLY = '100024';
+
+    public const TEMPLATE_TICKET_AUTO_CLOSED = '100025';
+
+    public const TEMPLATE_TICKET_CREATED = '100026';
+
+    public const TEMPLATE_TICKET_CLIENT_REPLY = '100027';
+
+    public const TEMPLATE_ADMIN_LOGIN_ALERT = '100028';
+
+    public const TEMPLATE_SERVICE_UNSUSPEND_FAILED = '100029';
+
+    public const TEMPLATE_LOGIN_FAILURE_ALERT = '100003';
+
+    public const TEMPLATE_LOGIN_LOCATION_ALERT = '100003';
+
+    public const TEMPLATE_PASSWORD_CHANGED_ALERT = '100004';
+
+    public const TEMPLATE_PHONE_CHANGED_ALERT = '100004';
+
+    public const TEMPLATE_EMAIL_CHANGED_ALERT = '100004';
 
     public function __construct(
         private readonly MailDriverManager $mailDriverManager,
@@ -62,6 +94,10 @@ class NotificationService
 
     public function sendEmail(string $to, string $subject, string $content, ?string $templateCode = null): void
     {
+        if ($this->shouldSkipDisabledTemplate('email', $templateCode)) {
+            return;
+        }
+
         $logContext = $this->createEmailLog($to, $subject, $content, $templateCode);
 
         try {
@@ -95,6 +131,10 @@ class NotificationService
             throw new \RuntimeException('邮件模板不存在');
         }
 
+        if (! $this->templatePayloadIsEnabled($template)) {
+            return;
+        }
+
         $subjectTemplate = (string) ($template['subject'] ?? '');
         $contentTemplate = (string) ($template['content'] ?? '');
 
@@ -104,10 +144,9 @@ class NotificationService
         ], $this->stringifyParams($params));
 
         $subject = $this->renderTemplateText($subjectTemplate, $renderParams);
-        $content = $this->buildThemedEmailHtml(
+        $content = $this->buildTemplateEmailHtml(
             $subject,
-            $this->renderTemplateContent($contentTemplate, $renderParams),
-            $siteName
+            $this->renderTemplateContent($contentTemplate, $renderParams)
         );
 
         $this->sendEmail($to, $subject, $content, $templateCode);
@@ -116,6 +155,24 @@ class NotificationService
     private function notificationTemplates(): NotificationTemplateService
     {
         return $this->notificationTemplateService ??= app(NotificationTemplateService::class);
+    }
+
+    private function shouldSkipDisabledTemplate(string $channel, ?string $templateCode): bool
+    {
+        $templateCode = trim((string) $templateCode);
+        if ($templateCode === '') {
+            return false;
+        }
+
+        return ! $this->notificationTemplates()->isEnabled($channel, $templateCode);
+    }
+
+    /**
+     * @param  array<string, mixed>  $template
+     */
+    private function templatePayloadIsEnabled(array $template): bool
+    {
+        return ! array_key_exists('is_enabled', $template) || (bool) $template['is_enabled'];
     }
 
     public function sendEmailCode(string $to, string $code): void
@@ -232,6 +289,9 @@ class NotificationService
 
         $this->sendTemplateEmail($email, self::TEMPLATE_PASSWORD_CHANGED_ALERT, [
             'display_name' => $displayName,
+            'bind_type' => '登录密码',
+            'bind_account' => '已变更',
+            'bound_at' => $changedAt,
             'changed_at' => $changedAt,
             'ip' => $ip,
             'device' => $this->resolveUserAgentSummary($userAgent),
@@ -259,6 +319,9 @@ class NotificationService
 
         $this->sendTemplateEmail($email, self::TEMPLATE_PHONE_CHANGED_ALERT, [
             'display_name' => $displayName,
+            'bind_type' => '安全手机号',
+            'bind_account' => trim($newPhone) !== '' ? $this->maskPhone($newPhone) : '未设置',
+            'bound_at' => $changedAt,
             'old_phone' => trim($oldPhone) !== '' ? $this->maskPhone($oldPhone) : '未设置',
             'new_phone' => trim($newPhone) !== '' ? $this->maskPhone($newPhone) : '未设置',
             'changed_at' => $changedAt,
@@ -289,6 +352,9 @@ class NotificationService
         foreach ($recipients as $recipient) {
             $this->sendTemplateEmail($recipient, self::TEMPLATE_EMAIL_CHANGED_ALERT, [
                 'display_name' => $resolvedDisplayName,
+                'bind_type' => '安全邮箱',
+                'bind_account' => trim($newEmail) !== '' ? $this->maskEmail($newEmail) : '未设置',
+                'bound_at' => $changedAt,
                 'old_email' => trim($oldEmail) !== '' ? $this->maskEmail($oldEmail) : '未设置',
                 'new_email' => trim($newEmail) !== '' ? $this->maskEmail($newEmail) : '未设置',
                 'changed_at' => $changedAt,
@@ -534,60 +600,6 @@ class NotificationService
         return $siteName !== '' ? $siteName : (string) config('app.name', '创欧云');
     }
 
-    private function buildEmbeddedLogoSvgMarkup(): string
-    {
-        $baseUrl = rtrim((string) (config('app.frontend_url') ?: config('app.url', '')), '/');
-        $svgCandidates = $this->resolveLogoCandidates();
-
-        foreach ($svgCandidates as $candidate) {
-            if (is_file(public_path($candidate))) {
-                $logoUrl = $baseUrl.'/'.$candidate;
-
-                return '<img class="mail-logo" src="'.htmlspecialchars($logoUrl, ENT_QUOTES, 'UTF-8').'" alt="Logo" width="63" height="44" style="display:block;width:63px;height:44px;max-width:63px;">';
-            }
-        }
-
-        foreach ($svgCandidates as $candidate) {
-            $svg = @file_get_contents(public_path($candidate));
-            if (is_string($svg) && trim($svg) !== '' && strlen($svg) <= 20480) {
-                $svg = preg_replace('/<\?xml[\s\S]*?\?>\s*/i', '', $svg) ?? $svg;
-                $svg = preg_replace('/<svg\b([^>]*)>/i', '<svg class="mail-logo" aria-hidden="true"$1>', $svg, 1) ?? $svg;
-
-                return trim($svg);
-            }
-        }
-
-        return '';
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    private function resolveLogoCandidates(): array
-    {
-        $configured = trim((string) Setting::getValue('basic', 'site_logo', ''));
-        $candidates = [];
-
-        if ($configured !== '') {
-            $normalized = ltrim((string) (parse_url($configured, PHP_URL_PATH) ?: ''), '/');
-            if ($normalized !== '') {
-                $candidates[] = $normalized;
-            }
-        }
-
-        return array_values(array_unique(array_merge(
-            $candidates,
-            [
-                'media/logo1.svg',
-                'media/logo.svg',
-                'uploads/media/images/site-settings/logo1.svg',
-                'uploads/media/images/site-settings/logo.svg',
-                'uploads/logo/logo1.svg',
-                'uploads/logo/logo.svg',
-            ]
-        )));
-    }
-
     private function renderTemplateText(string $template, array $params): string
     {
         return $this->renderTemplateWithResolver(
@@ -670,252 +682,44 @@ class NotificationService
         return implode("\n", $htmlBlocks);
     }
 
-    private function buildThemedEmailHtml(string $subject, string $content, string $siteName): string
+    private function buildTemplateEmailHtml(string $subject, string $content): string
+    {
+        $content = trim($content);
+        if ($content === '') {
+            $content = '<p class="mail-empty">暂无邮件内容</p>';
+        }
+
+        if ($this->looksLikeFullHtmlDocument($content)) {
+            return $content;
+        }
+
+        return $this->wrapTemplateEmailHtml($subject, $content);
+    }
+
+    private function looksLikeFullHtmlDocument(string $content): bool
+    {
+        $normalized = ltrim(trim($content));
+
+        return preg_match('/^(<!doctype\s+html|<html\b)/iu', $normalized) === 1;
+    }
+
+    private function wrapTemplateEmailHtml(string $subject, string $content): string
     {
         $subjectHtml = htmlspecialchars($subject, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $siteNameHtml = htmlspecialchars($siteName, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $summaryHtml = htmlspecialchars($this->buildEmailSummaryText($subject, $siteName), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $logoHtml = $this->buildEmbeddedLogoSvgMarkup();
 
-        $template = <<<'HTML'
+        return <<<HTML
 <!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>__SUBJECT__</title>
-  <style>
-    body {
-      margin: 0;
-      padding: 0;
-      background: #f3f4f6;
-      font-family: "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
-      color: #1f2329;
-    }
-    .mail-shell {
-      width: 100%;
-      padding: 32px 12px;
-      box-sizing: border-box;
-      background: #f3f4f6;
-    }
-    .mail-card {
-      width: 100%;
-      max-width: 680px;
-      margin: 0 auto;
-      background: #ffffff;
-      border: 1px solid #cfd6e4;
-      overflow: hidden;
-    }
-    .mail-header {
-      display: flex;
-      align-items: center;
-      padding: 24px 28px 20px;
-      border-top: 4px solid #1f4b99;
-      border-bottom: 1px solid #d9e0ec;
-      background: #f8fafc;
-    }
-    .mail-branding {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      min-width: 0;
-    }
-    .mail-logo {
-      display: block;
-      flex: 0 0 auto;
-      width: auto;
-      height: 44px;
-      max-width: 63px;
-    }
-    .mail-brand {
-      min-width: 0;
-    }
-    .mail-brand strong {
-      display: block;
-      font-size: 18px;
-      line-height: 1.3;
-      letter-spacing: 0.02em;
-      color: #162033;
-    }
-    .mail-brand span {
-      display: block;
-      margin-top: 6px;
-      font-size: 12px;
-      color: #5b6575;
-    }
-    .mail-body {
-      padding: 28px;
-    }
-    .mail-title {
-      margin: 0;
-      font-size: 28px;
-      line-height: 1.4;
-      color: #162033;
-    }
-    .mail-summary {
-      margin: 12px 0 0;
-      font-size: 14px;
-      line-height: 1.8;
-      color: #4b5565;
-    }
-    .mail-divider {
-      height: 1px;
-      margin: 24px 0;
-      background: #d9e0ec;
-    }
-    .mail-content {
-      font-size: 14px;
-      line-height: 1.85;
-      color: #1f2329;
-    }
-    .mail-content p {
-      margin: 0 0 14px;
-    }
-    .mail-content p:last-child {
-      margin-bottom: 0;
-    }
-    .mail-content strong {
-      color: #162033;
-    }
-    .mail-content a {
-      color: #1f4b99;
-      text-decoration: underline;
-    }
-    .mail-content .mail-panel {
-      margin: 18px 0;
-      padding: 16px 18px;
-      border: 1px solid #d9e0ec;
-      background: #f8fafc;
-    }
-    .mail-content .mail-code {
-      display: inline-block;
-      margin: 8px 0 16px;
-      padding: 14px 18px;
-      border: 1px solid #1f4b99;
-      background: #eef4ff;
-      color: #1f4b99;
-      font-size: 28px;
-      line-height: 1;
-      font-weight: 700;
-      letter-spacing: 0.18em;
-    }
-    .mail-content .mail-kv {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 16px;
-      padding: 10px 0;
-      border-bottom: 1px solid #d9e0ec;
-    }
-    .mail-content .mail-kv:last-child {
-      border-bottom: none;
-      padding-bottom: 0;
-    }
-    .mail-content .mail-kv:first-child {
-      padding-top: 0;
-    }
-    .mail-content .mail-kv span {
-      color: #4e5969;
-      white-space: nowrap;
-    }
-    .mail-content .mail-kv strong {
-      text-align: right;
-      word-break: break-word;
-    }
-    .mail-content .mail-button {
-      display: inline-block;
-      margin-top: 12px;
-      padding: 12px 18px;
-      border: 1px solid #1f4b99;
-      background: #1f4b99;
-      color: #ffffff;
-      font-weight: 600;
-      text-decoration: none;
-    }
-    .mail-content .mail-muted,
-    .mail-footer {
-      color: #6b7280;
-      font-size: 12px;
-      line-height: 1.8;
-    }
-    .mail-footer {
-      padding: 0 28px 28px;
-    }
-    .mail-empty {
-      color: #86909c;
-    }
-    @media screen and (max-width: 640px) {
-      .mail-shell {
-        padding: 18px 10px;
-      }
-      .mail-header,
-      .mail-body,
-      .mail-footer {
-        padding-left: 18px;
-        padding-right: 18px;
-      }
-      .mail-title {
-        font-size: 22px;
-      }
-      .mail-branding {
-        gap: 12px;
-      }
-      .mail-logo {
-        height: 38px;
-        max-width: 54px;
-      }
-      .mail-content .mail-kv {
-        display: block;
-      }
-      .mail-content .mail-kv strong {
-        display: block;
-        margin-top: 6px;
-        text-align: left;
-      }
-    }
-  </style>
+  <title>{$subjectHtml}</title>
 </head>
 <body>
-  <div class="mail-shell">
-    <div class="mail-card">
-      <div class="mail-header">
-        <div class="mail-branding">
-          __LOGO__
-          <div class="mail-brand">
-            <strong>__SITE_NAME__</strong>
-            <span>自动通知邮件</span>
-          </div>
-        </div>
-      </div>
-      <div class="mail-body">
-        <h1 class="mail-title">__SUBJECT__</h1>
-        <p class="mail-summary">__SUMMARY__</p>
-        <div class="mail-divider"></div>
-        <div class="mail-content">__CONTENT__</div>
-      </div>
-      <div class="mail-footer">
-        此邮件由 __SITE_NAME__ 系统自动发送，请勿直接回复。如有疑问，请登录站点控制台或联系站内支持。
-      </div>
-    </div>
-  </div>
+{$content}
 </body>
 </html>
 HTML;
-
-        return strtr($template, [
-            '__SITE_NAME__' => $siteNameHtml,
-            '__SUBJECT__' => $subjectHtml,
-            '__SUMMARY__' => $summaryHtml,
-            '__CONTENT__' => $content,
-            '__LOGO__' => $logoHtml,
-        ]);
-    }
-
-    private function buildEmailSummaryText(string $subject, string $siteName): string
-    {
-        $subject = trim($subject);
-
-        return $subject !== '' ? "您收到一封来自 {$siteName} 的通知邮件，主题为：{$subject}。" : '您收到一封新的站点通知邮件。';
     }
 
     private function hasTemplateValue(mixed $value): bool

@@ -10,48 +10,6 @@
   >
     <div class="setting-container">
       <t-form :data="formData" label-align="left">
-        <div class="setting-group-title">{{ t('layout.setting.theme.mode') }}</div>
-        <t-radio-group v-model="formData.mode">
-          <div v-for="(item, index) in MODE_OPTIONS" :key="index" class="setting-layout-drawer">
-            <div>
-              <t-radio-button :key="index" :value="item.type"
-                ><component :is="getModeIcon(item.type)"
-              /></t-radio-button>
-              <p :style="{ textAlign: 'center', marginTop: '8px' }">{{ item.text }}</p>
-            </div>
-          </div>
-        </t-radio-group>
-        <div class="setting-group-title">{{ t('layout.setting.theme.color') }}</div>
-        <t-radio-group v-model="formData.brandTheme">
-          <div v-for="(item, index) in DEFAULT_COLOR_OPTIONS" :key="index" class="setting-layout-drawer">
-            <t-radio-button :key="index" :value="item" class="setting-layout-color-group">
-              <color-container :value="item" />
-            </t-radio-button>
-          </div>
-          <div class="setting-layout-drawer">
-            <t-popup
-              destroy-on-close
-              expand-animation
-              placement="bottom-right"
-              trigger="click"
-              :visible="isColoPickerDisplay"
-              :overlay-style="{ padding: 0 }"
-              @visible-change="onPopupVisibleChange"
-            >
-              <template #content>
-                <t-color-picker-panel
-                  :on-change="changeColor"
-                  :color-modes="['monochrome']"
-                  format="HEX"
-                  :swatch-colors="[]"
-                />
-              </template>
-              <t-radio-button :value="dynamicColor" class="setting-layout-color-group dynamic-color-btn">
-                <color-container :value="dynamicColor" />
-              </t-radio-button>
-            </t-popup>
-          </div>
-        </t-radio-group>
         <div class="setting-group-title">{{ t('layout.setting.navigationLayout') }}</div>
         <t-radio-group v-model="formData.layout">
           <div v-for="(item, index) in LAYOUT_OPTION" :key="index" class="setting-layout-drawer">
@@ -61,20 +19,14 @@
           </div>
         </t-radio-group>
 
-        <t-form-item v-show="formData.layout === 'mix'" :label="t('layout.setting.splitMenu')" name="splitMenu">
-          <t-switch v-model="formData.splitMenu" />
-        </t-form-item>
-        <t-form-item v-show="formData.layout === 'mix'" :label="t('layout.setting.fixedSidebar')" name="isSidebarFixed">
-          <t-switch v-model="formData.isSidebarFixed" />
+        <t-form-item
+          v-show="formData.layout !== 'side'"
+          :label="t('layout.setting.hideHeaderLogo')"
+          name="hideHeaderLogo"
+        >
+          <t-switch v-model="formData.hideHeaderLogo" />
         </t-form-item>
 
-        <div class="setting-group-title">{{ t('layout.setting.element.title') }}</div>
-        <t-form-item :label="t('layout.setting.sideMode')" name="sideMode">
-          <t-radio-group v-model="formData.sideMode" class="side-mode-radio">
-            <t-radio-button key="light" value="light" :label="t('layout.setting.theme.options.light')" />
-            <t-radio-button key="dark" value="dark" :label="t('layout.setting.theme.options.dark')" />
-          </t-radio-group>
-        </t-form-item>
         <t-form-item
           v-show="formData.layout === 'side'"
           :label="t('layout.setting.element.showHeader')"
@@ -95,41 +47,37 @@
           <t-switch v-model="formData.menuAutoCollapsed"></t-switch>
         </t-form-item>
       </t-form>
-      <div class="setting-info">
-        <p>{{ t('layout.setting.tips') }}</p>
-        <t-button theme="primary" variant="text" @click="handleCopy">
-          {{ t('layout.setting.copy.title') }}
-        </t-button>
-      </div>
     </div>
   </t-drawer>
 </template>
 <script setup lang="ts">
-import { useClipboard } from '@vueuse/core';
-import type { PopupVisibleChangeContext } from 'tdesign-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
-import { computed, onBeforeUnmount, onMounted, ref, watchEffect } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watchEffect } from 'vue';
 
-import SettingAutoIcon from '@/assets/assets-setting-auto.svg';
-import SettingDarkIcon from '@/assets/assets-setting-dark.svg';
-import SettingLightIcon from '@/assets/assets-setting-light.svg';
-import ColorContainer from '@/components/color/index.vue';
 import Thumbnail from '@/components/thumbnail/index.vue';
-import { DEFAULT_COLOR_OPTIONS } from '@/config/color';
 import STYLE_CONFIG from '@/config/style';
 import { t } from '@/locales';
 import { useSettingStore } from '@/store';
 
 const settingStore = useSettingStore();
 
-const LAYOUT_OPTION = ['side', 'top', 'mix'];
+const LAYOUT_OPTION = ['side', 'top'];
 const LAYOUT_THUMBNAILS = Object.fromEntries(LAYOUT_OPTION.map((item) => [item, createLayoutThumbnail(item)]));
 
-const MODE_OPTIONS = computed(() => [
-  { type: 'light', text: t('layout.setting.theme.options.light') },
-  { type: 'dark', text: t('layout.setting.theme.options.dark') },
-  { type: 'auto', text: t('layout.setting.theme.options.auto') },
-]);
+const MOBILE_POINT = 768;
+const isMobile = ref(false);
+
+const updateIsMobile = () => {
+  isMobile.value = window.innerWidth <= MOBILE_POINT;
+};
+
+onMounted(() => {
+  updateIsMobile();
+  window.addEventListener('resize', updateIsMobile);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updateIsMobile);
+});
 
 const initStyleConfig = () => {
   const styleConfig = STYLE_CONFIG;
@@ -142,12 +90,15 @@ const initStyleConfig = () => {
   return styleConfig;
 };
 
-const dynamicColor = computed(() => {
-  const isDynamic = DEFAULT_COLOR_OPTIONS.includes(formData.value.brandTheme);
-  return isDynamic ? formData.value.brandTheme : '';
-});
 const formData = ref({ ...initStyleConfig() });
-const isColoPickerDisplay = ref(false);
+
+// 手机端强制锁定为第一个布局（side），并禁用切换
+watchEffect(() => {
+  if (isMobile.value && formData.value.layout !== LAYOUT_OPTION[0]) {
+    formData.value.layout = LAYOUT_OPTION[0];
+    settingStore.updateConfig({ layout: LAYOUT_OPTION[0] });
+  }
+});
 
 const showSettingPanel = computed({
   get() {
@@ -159,51 +110,6 @@ const showSettingPanel = computed({
     });
   },
 });
-
-const changeColor = (hex: string) => {
-  formData.value.brandTheme = hex;
-};
-
-const handleDynamicColorClick = () => {
-  isColoPickerDisplay.value = true;
-};
-
-onMounted(() => {
-  document.querySelector('.dynamic-color-btn')?.addEventListener('click', handleDynamicColorClick);
-});
-
-onBeforeUnmount(() => {
-  document.querySelector('.dynamic-color-btn')?.removeEventListener('click', handleDynamicColorClick);
-});
-
-const onPopupVisibleChange = (visible: boolean, context: PopupVisibleChangeContext) => {
-  if (!visible && context.trigger === 'document') {
-    isColoPickerDisplay.value = visible;
-  }
-};
-
-const handleCopy = () => {
-  const sourceText = JSON.stringify(formData.value, null, 4);
-  const { copy } = useClipboard({ source: sourceText });
-  copy()
-    .then(() => {
-      MessagePlugin.closeAll();
-      MessagePlugin.success(t('components.copySuccess'));
-    })
-    .catch(() => {
-      MessagePlugin.closeAll();
-      MessagePlugin.error(t('components.copyFail'));
-    });
-};
-const getModeIcon = (mode: string) => {
-  if (mode === 'light') {
-    return SettingLightIcon;
-  }
-  if (mode === 'dark') {
-    return SettingDarkIcon;
-  }
-  return SettingAutoIcon;
-};
 
 const handleCloseDrawer = () => {
   settingStore.updateConfig({
@@ -218,8 +124,7 @@ function createLayoutThumbnail(type: string): string {
   const contentY = hasTop ? 21 : 8;
   const contentWidth = hasSide ? 48 : 72;
   const contentHeight = hasTop ? 19 : 32;
-  const sideWidth = type === 'mix' ? 18 : 20;
-  const side = hasSide ? `<rect x="8" y="8" width="${sideWidth}" height="32" rx="3" fill="#165DFF" fill-opacity="0.88"/>` : '';
+  const side = hasSide ? '<rect x="8" y="8" width="20" height="32" rx="3" fill="#165DFF" fill-opacity="0.88"/>' : '';
   const top = hasTop ? '<rect x="8" y="8" width="72" height="9" rx="3" fill="#165DFF" fill-opacity="0.18"/>' : '';
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="88" height="48" viewBox="0 0 88 48" fill="none"><rect x="1" y="1" width="86" height="46" rx="8" fill="#F8FAFC" stroke="#DCE6F5"/><rect x="${contentX}" y="${contentY}" width="${contentWidth}" height="${contentHeight}" rx="4" fill="#FFFFFF" stroke="#C8D7EE"/><rect x="${contentX + 7}" y="${contentY + 6}" width="${Math.max(16, contentWidth - 14)}" height="3" rx="1.5" fill="#A8B8D2"/><rect x="${contentX + 7}" y="${contentY + 12}" width="${Math.max(10, contentWidth - 28)}" height="3" rx="1.5" fill="#D2DCEE"/>${side}${top}</svg>`;
 
@@ -231,7 +136,7 @@ const getThumbnailUrl = (name: string): string => {
 };
 
 watchEffect(() => {
-  if (formData.value.brandTheme) settingStore.updateConfig(formData.value);
+  settingStore.updateConfig(formData.value);
 });
 </script>
 <!-- teleport导致drawer 内 scoped样式问题无法生效 先规避下 -->
@@ -322,8 +227,9 @@ watchEffect(() => {
   .t-radio-group.t-size-m {
     min-height: 32px;
     width: 100%;
-    justify-content: space-between;
+    justify-content: flex-start;
     align-items: center;
+    gap: var(--td-comp-margin-l);
 
     &.side-mode-radio {
       justify-content: end;
@@ -381,6 +287,27 @@ watchEffect(() => {
 
     &:last-child {
       margin-right: 0;
+    }
+  }
+}
+
+/* 手机端不提供导航布局切换，显示灰色不可用 */
+@media (max-width: 768px) {
+  .setting-drawer-container .setting-container .t-form {
+    > .setting-group-title {
+      color: var(--td-text-color-disabled);
+    }
+
+    > .t-radio-group.t-size-m {
+      pointer-events: none;
+      opacity: 0.4;
+      filter: grayscale(1);
+      cursor: not-allowed;
+    }
+
+    .setting-layout-drawer .t-radio-button {
+      border-color: var(--td-component-border) !important;
+      cursor: not-allowed;
     }
   }
 }

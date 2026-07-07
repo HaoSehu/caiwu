@@ -2,9 +2,6 @@
   <div class="integration-plugins-page">
     <t-card :bordered="false">
       <div class="plugins-toolbar">
-        <t-tabs :value="activeDomain" @change="handleDomainChange">
-          <t-tab-panel v-for="item in domainTabs" :key="item.value" :value="item.value" :label="item.label" />
-        </t-tabs>
         <t-space>
           <t-button variant="outline" :loading="loading" @click="loadPlugins">
             <template #icon><refresh-icon /></template>
@@ -302,8 +299,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { BrowseIcon, BrowseOffIcon, MoreIcon, RefreshIcon } from 'tdesign-icons-vue-next';
 
@@ -316,6 +313,7 @@ import { errorMessage } from '@/utils/userMessage';
 import './index.less';
 
 const router = useRouter();
+const route = useRoute();
 
 interface SmtpAccountForm {
   __index: number | null;
@@ -336,10 +334,11 @@ const domainTabs: Array<{ value: IntegrationPluginDomain; label: string }> = [
   { value: 'mail', label: '邮件发送' },
   { value: 'sms', label: '短信发送' },
   { value: 'upstream', label: '上游开通' },
+  { value: 'addons', label: '功能扩展' },
 ];
 
 const singleEnabledDomains = new Set<IntegrationPluginDomain>(['captcha', 'verification', 'mail', 'sms']);
-const activeDomain = ref<IntegrationPluginDomain>('captcha');
+const activeDomain = ref<IntegrationPluginDomain>(resolveRouteDomain());
 const plugins = ref<IntegrationPluginRecord[]>([]);
 const loading = ref(false);
 const scanning = ref(false);
@@ -389,10 +388,24 @@ const loadingSecretKeys = reactive<Record<string, boolean>>({});
 
 onMounted(loadPlugins);
 
-function handleDomainChange(value: string | number) {
-  activeDomain.value = value as IntegrationPluginDomain;
-  loadPlugins();
+function normalizeDomain(value: unknown): IntegrationPluginDomain | null {
+  const domain = Array.isArray(value) ? value[0] : value;
+  return domainTabs.some((item) => item.value === domain) ? (domain as IntegrationPluginDomain) : null;
 }
+
+function resolveRouteDomain(): IntegrationPluginDomain {
+  return normalizeDomain(route.query.domain) || normalizeDomain(route.meta.pluginDomain) || 'captcha';
+}
+
+watch(
+  () => [route.path, route.query.domain, route.meta.pluginDomain],
+  () => {
+    const nextDomain = resolveRouteDomain();
+    if (nextDomain === activeDomain.value) return;
+    activeDomain.value = nextDomain;
+    loadPlugins();
+  },
+);
 
 async function loadPlugins() {
   loading.value = true;
@@ -1040,9 +1053,8 @@ function runtimeStatusTheme(plugin: IntegrationPluginRecord) {
 function openRuntimeLogs(plugin: IntegrationPluginRecord) {
   if (!plugin.id) return;
   router.push({
-    path: '/admin/logs',
+    path: '/admin/logs/runtime',
     query: {
-      tab: 'runtime',
       plugin_id: String(plugin.id),
     },
   });

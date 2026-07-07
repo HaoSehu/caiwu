@@ -184,6 +184,7 @@ export interface NotificationTemplateItem {
   subject?: string | null;
   content: string;
   provider_template_id?: string;
+  is_enabled?: boolean;
   variables: string[];
   provider_variables?: string[];
   setting_keys?: Record<string, string>;

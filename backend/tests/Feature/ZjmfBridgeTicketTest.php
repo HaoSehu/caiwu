@@ -10,11 +10,13 @@ use App\Services\ZjmfBridge\ZjmfTokenService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Cache;
+use Tests\Support\InstallsZjmfBridgeAddon;
 use Tests\TestCase;
 
 class ZjmfBridgeTicketTest extends TestCase
 {
     use DatabaseTransactions;
+    use InstallsZjmfBridgeAddon;
 
     protected function setUp(): void
     {
@@ -27,6 +29,7 @@ class ZjmfBridgeTicketTest extends TestCase
             'zjmf_bridge.secret' => 'zjmf-test-secret',
             'zjmf_bridge.token_ttl' => 7200,
         ]);
+        $this->installZjmfBridgeAddon();
     }
 
     public function test_ticket_core_flow_uses_zjmf_token_scopes(): void

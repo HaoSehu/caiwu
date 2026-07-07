@@ -142,7 +142,9 @@ class SettingService
 
         $prepared = $this->prepareSettingsForSave($settings);
         if (trim($group) === 'notification') {
+            $templateSettingKeys = $this->notificationTemplateSettingKeys($group, $prepared);
             $prepared = app(NotificationTemplateService::class)->extractTemplateSettings($prepared);
+            $this->deleteStoredSettings($group, array_values(array_diff($templateSettingKeys, array_map('strval', array_keys($prepared)))));
         }
 
         Setting::setValues($group, $this->filterPluginSettings($group, $prepared));
@@ -548,7 +550,37 @@ class SettingService
             return false;
         }
 
-        return preg_match('/^(email_template_(subject|content)|sms_template_(content|provider_template_id))_.+$/', trim($key)) === 1;
+        return preg_match('/^(email_template_(subject|content|css|enabled)|sms_template_(content|provider_template_id|enabled))_.+$/', trim($key)) === 1;
+    }
+
+    /**
+     * @param  array<string, mixed>  $settings
+     * @return array<int, string>
+     */
+    private function notificationTemplateSettingKeys(string $group, array $settings): array
+    {
+        return array_values(array_filter(
+            array_map('strval', array_keys($settings)),
+            fn (string $key): bool => $this->isNotificationTemplateSettingKey($group, $key)
+        ));
+    }
+
+    /**
+     * @param  array<int, string>  $keys
+     */
+    private function deleteStoredSettings(string $group, array $keys): void
+    {
+        $keys = array_values(array_filter(array_map('trim', $keys), fn (string $key): bool => $key !== ''));
+        if ($keys === []) {
+            return;
+        }
+
+        SystemSetting::query()
+            ->where('group_key', trim($group))
+            ->whereIn('item_key', $keys)
+            ->delete();
+
+        Setting::forgetCachedGroup(trim($group));
     }
 
     private function isPluginOwnedSettingGroup(string $group): bool

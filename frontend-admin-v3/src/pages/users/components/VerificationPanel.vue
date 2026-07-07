@@ -1,10 +1,5 @@
 <template>
   <div class="verification-panel">
-    <t-tabs :value="activePane" @change="setActivePane">
-      <t-tab-panel value="list" label="实名列表" />
-      <t-tab-panel value="manage" label="实名管理" />
-    </t-tabs>
-
     <section v-if="activePane === 'list'" class="verification-section">
       <div class="verification-filter">
         <t-input v-model="filters.keyword" clearable placeholder="输入关键字" @enter="handleSearch" @clear="handleSearch">
@@ -183,7 +178,7 @@ import { ChevronLeftIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next
 import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 
 import { adminApi, type VerificationRecord } from '@/api/admin';
 import { formatDateTime } from '@/utils/format';
@@ -192,8 +187,9 @@ import { useUserStore } from '@/store';
 
 const userStore = useUserStore();
 const route = useRoute();
-const router = useRouter();
-const activePane = ref('list');
+const validPanes = ['list', 'manage'] as const;
+type VerificationPane = (typeof validPanes)[number];
+const activePane = ref<VerificationPane>(resolveRoutePane());
 const listLoading = ref(false);
 const feeLoading = ref(false);
 const actionLoadingId = ref<number | string | null>(null);
@@ -254,23 +250,21 @@ const feeRules: Record<string, FormRule[]> = {
   retry_fee: [required('请输入再次认证费用')],
 };
 
-function setActivePane(value: string | number) {
-  activePane.value = String(value);
-  router.replace({ query: { ...route.query, tab: activePane.value === 'list' ? undefined : activePane.value } });
+function normalizePane(value: unknown): VerificationPane | null {
+  const pane = Array.isArray(value) ? value[0] : value;
+  return validPanes.includes(pane as VerificationPane) ? (pane as VerificationPane) : null;
 }
 
-// 初始化从 URL 同步 Tab
-const validPanes = ['list', 'manage'];
-const initPane = route.query.tab as string;
-if (initPane && validPanes.includes(initPane)) {
-  activePane.value = initPane;
+function resolveRoutePane(): VerificationPane {
+  return normalizePane(route.query.tab) || normalizePane(route.meta.verificationPane) || 'list';
 }
-watch(() => route.query.tab, (val) => {
-  const q = val as string;
-  if (q && validPanes.includes(q) && activePane.value !== q) {
-    activePane.value = q;
+
+watch(
+  () => [route.path, route.query.tab, route.meta.verificationPane],
+  () => {
+    activePane.value = resolveRoutePane();
   }
-});
+);
 
 function buildListParams() {
   const params: Record<string, string | number> = {

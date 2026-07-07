@@ -160,6 +160,8 @@ class V2AdminSettingsScheduleApiTest extends TestCase
             ->assertJsonPath('code', 0)
             ->assertJsonPath('data.environment.app_env', 'testing')
             ->assertJsonPath('data.tasks.0.key', 'billing-maintenance')
+            ->assertJsonPath('data.tasks.0.source_type', 'system')
+            ->assertJsonPath('data.tasks.0.source_label', '系统任务')
             ->assertJsonPath('data.tasks.0.last_log.summary.processed', 1)
             ->assertJsonPath('data.recent_logs.0.summary.ok', true)
             ->assertJsonMissingPath('data.commands')

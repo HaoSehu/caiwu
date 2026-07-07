@@ -6,11 +6,16 @@ namespace Tests\Feature;
 
 use App\Services\ZjmfBridge\ZjmfErrorMapper;
 use App\Services\ZjmfBridge\ZjmfTokenService;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Cache;
+use Tests\Support\InstallsZjmfBridgeAddon;
 use Tests\TestCase;
 
 class ZjmfBridgeTest extends TestCase
 {
+    use DatabaseTransactions;
+    use InstallsZjmfBridgeAddon;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -24,6 +29,7 @@ class ZjmfBridgeTest extends TestCase
             'zjmf_bridge.signature_tolerance' => 300,
             'zjmf_bridge.system_scopes' => ['system.health'],
         ]);
+        $this->installZjmfBridgeAddon();
     }
 
     public function test_bridge_is_closed_by_default(): void

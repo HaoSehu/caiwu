@@ -86,6 +86,7 @@
         }
       },
       "navigationLayout": "Navigation Layout",
+      "hideHeaderLogo": "Hide Header Logo",
       "sideMode": "Side Menu Mode",
       "splitMenu": "Split Menu (Only Mix mode)",
       "fixedSidebar": "Fixed Sidebar",

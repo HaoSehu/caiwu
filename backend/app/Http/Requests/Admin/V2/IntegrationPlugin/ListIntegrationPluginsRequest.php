@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Admin\V2\IntegrationPlugin;
 
+use App\Services\Integrations\Plugins\PluginDomain;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -17,7 +18,7 @@ class ListIntegrationPluginsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'domain' => ['sometimes', 'nullable', 'string', Rule::in(['payment', 'verification', 'captcha', 'mail', 'sms', 'upstream'])],
+            'domain' => ['sometimes', 'nullable', 'string', Rule::in(PluginDomain::values())],
             'page' => ['sometimes', 'integer', 'min:1'],
             'page_size' => ['sometimes', 'integer', 'min:1', 'max:50'],
             'pageSize' => ['prohibited'],

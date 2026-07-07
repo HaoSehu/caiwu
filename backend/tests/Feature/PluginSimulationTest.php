@@ -11,14 +11,21 @@ use App\Services\Integrations\Payments\PaymentGatewayManager;
 use App\Services\Integrations\Payments\PaymentGatewayRegistry;
 use App\Services\Integrations\Plugins\IntegrationPluginService;
 use App\Services\Integrations\Plugins\PluginConfigRepository;
+use App\Services\Integrations\Plugins\PluginDomain;
+use App\Services\Integrations\Plugins\PluginFileLoader;
 use App\Services\Integrations\Plugins\PluginInstaller;
 use App\Services\Integrations\Plugins\PluginRuntimeRegistry;
 use App\Services\Integrations\Plugins\PluginScanner;
+use App\Services\Automation\Heartbeat\Providers\PluginScheduledTaskProvider;
+use App\Services\Automation\ScheduleHookService;
 use App\Services\System\NotificationService;
 use App\Services\Upstream\Contracts\ProvidesConsoleCatalog;
 use App\Services\Upstream\Contracts\ProvidesConsoleRuntime;
 use App\Services\Upstream\ProviderRegistry;
 use App\Support\SmsTemplateCatalog;
+use Caiwu\Plugins\Addons\DemoStyle\DemoStylePlugin;
+use Caiwu\Plugins\Addons\DemoStyle\Lib\DemoStyleScheduledTask;
+use Caiwu\Plugins\Addons\ZjmfBridge\ZjmfBridgePlugin;
 use Caiwu\Plugins\Certification\DemoVerification\DemoVerificationPlugin;
 use Caiwu\Plugins\Gateways\DemoPay\DemoPayPlugin;
 use Caiwu\Plugins\Mail\DemoMail\DemoMailPlugin;
@@ -404,6 +411,105 @@ class PluginSimulationTest extends TestCase
     }
 
     // ──────────────────────────────────────────────
+    //  Addons 模拟
+    // ──────────────────────────────────────────────
+
+    public function test_demo_style_addon_executes_standard_actions(): void
+    {
+        $this->ensurePluginTables();
+        $this->activatePlugin(PluginDomain::ADDONS, 'demo_style', [
+            'theme_name' => 'classic-blue',
+            'accent_color' => '#2563eb',
+            'enabled' => true,
+        ]);
+
+        $manifest = app(PluginScanner::class)->requireManifest(PluginDomain::ADDONS, 'demo_style');
+
+        $this->assertSame('addons', $manifest->domain);
+        $this->assertSame('addons', PluginDomain::directoryName(PluginDomain::ADDONS));
+        $this->assertContains('addon.admin_page', $manifest->capabilities);
+        $this->assertArrayHasKey('admin_entry', $manifest->extra);
+
+        $metadata = app(PluginRuntimeRegistry::class)->execute(
+            domain: PluginDomain::ADDONS,
+            slugOrKey: 'demo_style',
+            action: 'addon.metadata',
+        );
+
+        $this->assertTrue($metadata['success']);
+        $this->assertSame('demo_style', $metadata['data']['key'] ?? null);
+        $this->assertContains('template/admin', $metadata['data']['zjmf_shape'] ?? []);
+
+        $admin = app(PluginRuntimeRegistry::class)->execute(
+            domain: PluginDomain::ADDONS,
+            slugOrKey: 'demo_style',
+            action: 'addon.admin.index',
+        );
+
+        $this->assertTrue($admin['success']);
+        $this->assertSame('样式演示后台页', $admin['data']['title'] ?? null);
+    }
+
+    public function test_demo_style_addon_registers_hooks_and_scheduled_task(): void
+    {
+        $this->ensurePluginTables();
+        $this->activatePlugin(PluginDomain::ADDONS, 'demo_style', [
+            'theme_name' => 'classic-blue',
+            'accent_color' => '#2563eb',
+            'enabled' => true,
+        ]);
+
+        $hookResults = app(ScheduleHookService::class)->run(DemoStyleScheduledTask::HOOK, [
+            'source' => 'feature-test',
+            'task_key' => DemoStyleScheduledTask::KEY,
+        ]);
+
+        $this->assertSame('success', $hookResults[0]['status'] ?? null);
+        $this->assertSame('demo_style', $hookResults[0]['result']['addon'] ?? null);
+
+        $tasks = collect(app(PluginScheduledTaskProvider::class)->tasks());
+        $task = $tasks->first(fn ($task): bool => $task->key() === DemoStyleScheduledTask::KEY);
+
+        $this->assertNotNull($task);
+        $this->assertSame('Demo Style 扩展刷新', $task->title());
+        $this->assertTrue($task->manualTriggerable());
+    }
+
+    public function test_zjmf_bridge_addon_dispatches_bridge_response(): void
+    {
+        $this->ensurePluginTables();
+        $this->activatePlugin(PluginDomain::ADDONS, 'zjmf_bridge', [
+            'enabled' => true,
+        ]);
+
+        $manifest = app(PluginScanner::class)->requireManifest(PluginDomain::ADDONS, 'zjmf_bridge');
+
+        $this->assertSame('addons', $manifest->domain);
+        $this->assertContains('zjmf.dispatch', $manifest->capabilities);
+        $this->assertSame('routes/zjmf.php', $manifest->extra['core_boundary']['route_file'] ?? null);
+
+        $result = app(PluginRuntimeRegistry::class)->execute(
+            domain: PluginDomain::ADDONS,
+            slugOrKey: 'zjmf_bridge',
+            action: 'zjmf.dispatch',
+            payload: [
+                'route_name' => 'zjmf.v1.health',
+                'query' => [],
+                'body' => [],
+                'route_parameters' => [],
+            ],
+            context: [
+                'trace_id' => 'plugin-test-zjmf-bridge',
+            ],
+        );
+
+        $this->assertTrue($result['success']);
+        $this->assertSame(200, $result['data']['http_status'] ?? null);
+        $this->assertSame(200, $result['data']['body']['status'] ?? null);
+        $this->assertSame('zjmf_bridge', $result['data']['body']['data']['service'] ?? null);
+    }
+
+    // ──────────────────────────────────────────────
     //  边界：未安装/未启用
     // ──────────────────────────────────────────────
 
@@ -554,11 +660,18 @@ class PluginSimulationTest extends TestCase
     public function test_plugin_entry_classes_are_loadable(): void
     {
         // 确保三个 demo 插件的入口类和 config.php 可被扫描加载
+        $manifest = app(PluginScanner::class)->requireManifest(PluginDomain::ADDONS, 'demo_style');
+        app(PluginFileLoader::class)->ensureLoaded($manifest);
+        $zjmfBridgeManifest = app(PluginScanner::class)->requireManifest(PluginDomain::ADDONS, 'zjmf_bridge');
+        app(PluginFileLoader::class)->ensureLoaded($zjmfBridgeManifest);
+
         $this->assertTrue(class_exists(DemoPayPlugin::class));
         $this->assertTrue(class_exists(DemoSmsPlugin::class));
         $this->assertTrue(class_exists(DemoMailPlugin::class));
         $this->assertTrue(class_exists(DemoVerificationPlugin::class));
         $this->assertTrue(class_exists(DemoServersPlugin::class));
+        $this->assertTrue(class_exists(DemoStylePlugin::class));
+        $this->assertTrue(class_exists(ZjmfBridgePlugin::class));
     }
 
     // ──────────────────────────────────────────────

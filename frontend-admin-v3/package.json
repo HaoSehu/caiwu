@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev:mock": "vite --open --mode mock",
-    "dev": "vite --open --mode development",
+    "dev:mock": "vite --mode mock",
+    "dev": "vite --mode development",
     "dev:linux": "vite --mode development",
     "dev:ci": "vite --host 127.0.0.1 --mode development",
     "build:test": "vite build --mode test",

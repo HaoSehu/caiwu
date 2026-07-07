@@ -63,10 +63,14 @@ class AdminScheduleOverviewResource extends JsonResource
      */
     private function task(array $task): array
     {
+        $sourceType = $this->sourceType($task['source_type'] ?? null);
+
         return [
             'key' => $this->compactScalar($task['key'] ?? ''),
             'title' => $this->compactScalar($task['title'] ?? ''),
             'category' => $this->compactScalar($task['category'] ?? ''),
+            'source_type' => $sourceType,
+            'source_label' => $sourceType === 'third_party' ? '第三方任务' : '系统任务',
             'description' => $this->compactScalar($task['description'] ?? ''),
             'manual_triggerable' => (bool) ($task['manual_triggerable'] ?? false),
             'expression' => $this->compactScalar($task['expression'] ?? ''),
@@ -78,6 +82,11 @@ class AdminScheduleOverviewResource extends JsonResource
             'overlap_expires_minutes' => $task['overlap_expires_minutes'] ?? null,
             'last_log' => is_array($task['last_log'] ?? null) ? $this->log($task['last_log']) : null,
         ];
+    }
+
+    private function sourceType(mixed $value): string
+    {
+        return trim((string) $value) === 'third_party' ? 'third_party' : 'system';
     }
 
     /**

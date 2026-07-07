@@ -5,10 +5,19 @@
         <span v-if="showLogo" class="header-logo-container" @click="handleNav('/dashboard/base')">
           <logo-full class="t-logo" />
         </span>
-        <div v-else class="header-operate-left">
+        <div v-else-if="!isMobileSideHeader" class="header-operate-left">
           <t-button theme="default" shape="square" variant="text" @click="changeCollapsed">
             <t-icon class="collapsed-icon" name="view-list" />
           </t-button>
+        </div>
+        <!-- 手机端 side 布局：顶栏 logo + 菜单按钮 -->
+        <div v-if="isMobileSideHeader" class="header-mobile-logo-bar">
+          <t-button theme="default" shape="square" variant="text" @click="toggleMobileSidebar">
+            <t-icon name="view-list" />
+          </t-button>
+          <span class="header-mobile-logo" @click="handleNav('/dashboard/base')">
+            <logo-full class="t-logo" />
+          </span>
         </div>
       </template>
       <template v-if="layout !== 'side'" #default>
@@ -70,7 +79,7 @@
 <script setup lang="ts">
 import { ChevronDownIcon, PoweroffIcon, SettingIcon, UserCircleIcon } from 'tdesign-icons-vue-next';
 import type { PropType } from 'vue';
-import { computed, reactive, ref } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { MessagePlugin } from 'tdesign-vue-next';
 import type { FormInstanceFunctions, FormRule } from 'tdesign-vue-next';
@@ -143,6 +152,44 @@ const toggleSettingPanel = () => {
   });
 };
 
+const MOBILE_POINT = 768;
+const isMobile = ref(false);
+
+const updateIsMobile = () => {
+  isMobile.value = window.innerWidth <= MOBILE_POINT;
+};
+
+onMounted(() => {
+  updateIsMobile();
+  window.addEventListener('resize', updateIsMobile);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updateIsMobile);
+});
+
+// 手机端 side 布局：顶栏同时展示 logo 和菜单按钮
+const isMobileSideHeader = computed(() => isMobile.value && layout === 'side' && !showLogo);
+
+const changeCollapsed = () => {
+  if (window.innerWidth <= 768) {
+    settingStore.updateConfig({
+      isMobileSidebarVisible: !settingStore.isMobileSidebarVisible,
+    });
+    return;
+  }
+
+  settingStore.updateConfig({
+    isSidebarCompact: !settingStore.isSidebarCompact,
+  });
+};
+
+const toggleMobileSidebar = () => {
+  settingStore.updateConfig({
+    isMobileSidebarVisible: !settingStore.isMobileSidebarVisible,
+  });
+};
+
 const active = computed(() => getActive());
 
 const layoutCls = computed(() => [`${prefix}-header-layout`]);
@@ -158,19 +205,6 @@ const menuCls = computed(() => {
   ];
 });
 const menuTheme = computed(() => theme as ModeType);
-
-const changeCollapsed = () => {
-  if (window.innerWidth <= 768) {
-    settingStore.updateConfig({
-      isMobileSidebarVisible: !settingStore.isMobileSidebarVisible,
-    });
-    return;
-  }
-
-  settingStore.updateConfig({
-    isSidebarCompact: !settingStore.isSidebarCompact,
-  });
-};
 
 const handleNav = (url: string) => {
   router.push(url);
@@ -273,12 +307,6 @@ const handleLogout = () => {
   }
 }
 
-.header-operate-left {
-  display: flex;
-  align-items: normal;
-  line-height: 0;
-}
-
 .header-logo-container {
   width: 184px;
   height: 26px;
@@ -306,8 +334,42 @@ const handleLogout = () => {
   color: var(--td-text-color-primary);
 }
 
+.header-operate-left {
+  display: flex;
+  align-items: normal;
+  line-height: 0;
+}
+
+.header-mobile-logo-bar {
+  display: none;
+}
+
 :deep(.t-head-menu__inner) {
   border-bottom: 1px solid var(--td-component-stroke);
+}
+
+/* 手机端 side 布局：顶栏显示菜单按钮 + logo */
+@media (max-width: 768px) {
+  .header-mobile-logo-bar {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 8px;
+  }
+
+  .header-mobile-logo {
+    display: inline-flex;
+    align-items: center;
+    height: 26px;
+    width: 160px;
+    color: var(--td-text-color-primary);
+    cursor: pointer;
+
+    .t-logo {
+      width: 100%;
+      height: 100%;
+    }
+  }
 }
 
 .t-menu--light {

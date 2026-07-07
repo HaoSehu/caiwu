@@ -22,6 +22,7 @@ use App\Services\Referral\ReferralService;
 use App\Services\System\SettingService;
 use App\Services\Ticket\TicketAutomationService;
 use App\Services\Upstream\Contracts\ProvidesScheduledAuthRefresh;
+use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderResolver;
 use App\Support\AutomationScheduleExpression;
 use Closure;
@@ -47,7 +48,7 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 key: 'refresh-hosting-panel-auth',
                 title: '接口认证刷新',
                 category: '供应商接口',
-                description: '定时刷新主机面板接口认证会话，减少上游登录态过期导致的请求失败。',
+                description: '定时刷新系统内置主机面板接口认证会话；插件供应商由各自插件任务负责。',
                 triggers: [ScheduleRule::everyTicks(1)],
                 handler: fn (): array => $this->refreshHostingPanelAuth(),
                 timeout: 600,
@@ -395,6 +396,11 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
             ->get()
             ->each(function (Supplier $supplier) use ($providerResolver, &$summary): void {
                 $provider = $providerResolver->resolveForSupplier($supplier);
+                $providerKey = trim((string) ($provider->key() ?? $provider->rawKey() ?? ''));
+                if ($providerKey !== ProviderKey::HOSTING_PANEL_API) {
+                    return;
+                }
+
                 if (! $provider->supports(ProvidesScheduledAuthRefresh::class)) {
                     return;
                 }

@@ -83,4 +83,9 @@ final class SmsTemplateCatalog
     {
         return 'sms_template_provider_template_id_'.trim($code);
     }
+
+    public static function enabledSettingKey(string $code): string
+    {
+        return 'sms_template_enabled_'.trim($code);
+    }
 }
