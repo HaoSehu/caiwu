@@ -2,17 +2,19 @@ import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
 async function mockAdminInfo(page: import('@playwright/test').Page) {
-  await page.route('**/api/admin/auth/info**', async (route) => {
+  await page.route(/\/api\/(?:v2\/admin|admin)\/auth\/info(?:\?.*)?$/, async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
         code: 0,
         data: {
-          id: 1,
-          username: 'cerbo',
-          nickname: 'cerbo',
-          email: 'admin@example.com',
-          permissions: ['*'],
+          admin: {
+            id: 1,
+            username: 'cerbo',
+            nickname: 'cerbo',
+            email: 'admin@example.com',
+            permissions: ['*'],
+          },
         },
       }),
     });
@@ -1758,10 +1760,12 @@ async function mockNotifications(page: import('@playwright/test').Page) {
         contentType: 'application/json',
         body: JSON.stringify({
           code: 0,
-          data: [
-            { key: 'site_name', value: '创欧云' },
-            { key: 'site_logo', value: '/uploads/site/logo-new.png' },
-          ],
+          data: {
+            list: [
+              { key: 'site_name', value: '创欧云' },
+              { key: 'site_logo', value: '/uploads/site/logo-new.png' },
+            ],
+          },
         }),
       });
       return;
@@ -1771,24 +1775,26 @@ async function mockNotifications(page: import('@playwright/test').Page) {
       contentType: 'application/json',
       body: JSON.stringify({
         code: 0,
-        data: [
-          { key: 'email_enabled', value: 1 },
-          { key: 'email_host', value: 'smtp.example.test' },
-          { key: 'email_port', value: '465' },
-          { key: 'email_username', value: 'notice@example.test' },
-          { key: 'email_password', value: 'mail-secret' },
-          { key: 'email_from_name', value: '创欧云通知' },
-          { key: 'sms_enabled', value: 1 },
-          { key: 'sms_provider', value: 'aliyun' },
-          { key: 'sms_access_key', value: 'sms-ak' },
-          { key: 'sms_secret_key', value: 'sms-sk' },
-          { key: 'sms_sign_name', value: '创欧云' },
-          { key: 'sms_template_code', value: 'SMS_001' },
-          { key: 'email_template_subject_100001', value: '测试验证码邮件' },
-          { key: 'email_template_content_100001', value: emailContentOverride },
-          { key: 'email_template_subject_100026', value: '测试管理员新工单提示' },
-          { key: 'email_template_content_100026', value: '工单 #{{ticket_id}}' },
-        ],
+        data: {
+          list: [
+            { key: 'email_enabled', value: 1 },
+            { key: 'email_host', value: 'smtp.example.test' },
+            { key: 'email_port', value: '465' },
+            { key: 'email_username', value: 'notice@example.test' },
+            { key: 'email_password', value: 'mail-secret' },
+            { key: 'email_from_name', value: '创欧云通知' },
+            { key: 'sms_enabled', value: 1 },
+            { key: 'sms_provider', value: 'aliyun' },
+            { key: 'sms_access_key', value: 'sms-ak' },
+            { key: 'sms_secret_key', value: 'sms-sk' },
+            { key: 'sms_sign_name', value: '创欧云' },
+            { key: 'sms_template_code', value: 'SMS_001' },
+            { key: 'email_template_subject_100001', value: '测试验证码邮件' },
+            { key: 'email_template_content_100001', value: emailContentOverride },
+            { key: 'email_template_subject_100026', value: '测试管理员新工单提示' },
+            { key: 'email_template_content_100026', value: '工单 #{{ticket_id}}' },
+          ],
+        },
       }),
     });
   });
@@ -4076,7 +4082,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(htmlEditor).toHaveValue(notificationEmailContentDefault);
 
     await page.getByRole('button', { name: '返回列表' }).click();
-    await expect(page).toHaveURL(/\/admin\/notifications\?tab=email-templates/);
+    await expect(page).toHaveURL(/\/admin\/notifications\?tab=user/);
     await expect(page.getByText('测试验证码邮件')).toBeVisible();
   });
 

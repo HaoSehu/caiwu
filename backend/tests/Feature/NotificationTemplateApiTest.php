@@ -143,6 +143,10 @@ class NotificationTemplateApiTest extends TestCase
         $this->assertSame('admin', $emailTemplates->firstWhere('name', '管理员新订单通知')['audience'] ?? null);
         $this->assertFalse($emailTemplates->pluck('name')->contains('邮箱验证码'));
         $this->assertFalse($emailTemplates->pluck('name')->contains('新工单提醒'));
+        $this->assertTrue($emailTemplates->every(
+            fn (array $template): bool => ! str_contains((string) $template['content'], 'hero-visual')
+                && str_contains((string) $template['content'], '#1f5eff')
+        ));
         $this->assertTrue($emailTemplates->contains(
             fn (array $template): bool => $template['code'] === '100001'
                 && ! array_key_exists('css', $template)
