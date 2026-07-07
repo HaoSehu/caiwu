@@ -37,7 +37,9 @@ python backend\scripts\reset_init_and_migrate_idc_dump.py --dump C:\path\to\idc_
 1. `backend/scripts/install_db.py --reset`
    - 删除并重建 `.env` 指向的本地数据库。
    - 使用当前项目 schema 初始化表结构。
-   - 执行当前迁移并初始化默认管理员。
+   - 执行当前迁移。
+   - 初始化默认 `settings`、通知模板和默认管理员。
+   - schema baseline 只承载表结构和 `migrations` 状态，不承载业务行数据；默认运行数据由本脚本显式补齐。
 
 2. `backend/scripts/migrate_legacy_dump.py`
    - 将旧 dump 导入临时库；如果当前账号无建库权限，则退回到同库临时前缀表。
@@ -62,3 +64,14 @@ python backend\scripts\reset_init_and_migrate_idc_dump.py --dump C:\path\to\idc_
 - 临时库或临时前缀表已清理。
 - 当前结构与 `文档/开发文档/数据库/当前数据库结构.md` 一致。
 - 前后端能使用迁移后的管理员、用户、商品和服务数据完成最小冒烟。
+
+## 刷新当前结构基线
+
+当前库结构或数据迁移完成后，需要同步刷新空库初始化 baseline 和数据库结构快照：
+
+```bat
+php backend\scripts\export_schema_baseline.php
+php backend\scripts\export_database_structure.php
+```
+
+`export_schema_baseline.php` 只导出表结构和 `migrations` 记录；`install_db.py` 会在导入 baseline 后补默认配置、通知模板和管理员。
