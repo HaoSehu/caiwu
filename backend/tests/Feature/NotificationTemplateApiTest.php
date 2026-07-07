@@ -147,6 +147,8 @@ class NotificationTemplateApiTest extends TestCase
             fn (array $template): bool => $template['code'] === '100001'
                 && ! array_key_exists('css', $template)
                 && ! array_key_exists('css', $template['setting_keys'])
+                && in_array('site_logo', $template['variables'] ?? [], true)
+                && str_contains((string) $template['content'], 'class="email-logo"')
                 && ($template['setting_keys']['enabled'] ?? null) === EmailTemplateCatalog::enabledSettingKey('100001')
         ));
     }

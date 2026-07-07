@@ -8,6 +8,7 @@ use App\Models\Setting;
 use App\Models\User;
 use App\Services\Integrations\Plugins\IntegrationDriverBindingResolver;
 use App\Services\Mail\MailDriverManager;
+use App\Support\SiteConfigPayload;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -141,6 +142,7 @@ class NotificationService
         $siteName = $this->resolveSiteName();
         $renderParams = array_merge([
             'site_name' => $siteName,
+            'site_logo' => $this->resolveSiteLogo(),
         ], $this->stringifyParams($params));
 
         $subject = $this->renderTemplateText($subjectTemplate, $renderParams);
@@ -598,6 +600,20 @@ class NotificationService
         ));
 
         return $siteName !== '' ? $siteName : (string) config('app.name', '创欧云');
+    }
+
+    private function resolveSiteLogo(): string
+    {
+        $siteLogo = trim((string) Setting::getValue('basic', 'site_logo', SiteConfigPayload::DEFAULT_SITE_LOGO));
+        if ($siteLogo === '') {
+            $siteLogo = SiteConfigPayload::DEFAULT_SITE_LOGO;
+        }
+
+        if (preg_match('/^(https?:)?\/\//i', $siteLogo) === 1 || str_starts_with($siteLogo, 'data:')) {
+            return $siteLogo;
+        }
+
+        return url($siteLogo);
     }
 
     private function renderTemplateText(string $template, array $params): string
