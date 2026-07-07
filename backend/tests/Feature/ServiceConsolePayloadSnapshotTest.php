@@ -179,7 +179,7 @@ class ServiceConsolePayloadSnapshotTest extends TestCase
         $originalCatalog = Setting::getValue('traffic_package_catalog', 'items', '[]');
         Setting::setValue('traffic_package_catalog', 'items', json_encode([[
             'category_id' => (int) $fixture['category']->id,
-            'product_type' => 'vps',
+            'product_type' => 'cloud_server',
             'label' => '2TB',
             'target_value' => 2048,
             'price' => '39.90',
