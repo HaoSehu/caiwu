@@ -127,10 +127,37 @@ export const contentRoutes: RouteRecordRaw[] = [
     component: () => import('@/pages/notifications/index.vue'),
     meta: {
       title: {
-        zh_CN: '通知管理',
-        en_US: 'Notifications',
+        zh_CN: '邮件模板',
+        en_US: 'Email Templates',
       },
       permission: 'settings.view',
+      notificationTab: 'email-templates',
+    },
+  },
+  {
+    path: 'notifications/sms-templates',
+    name: 'AdminNotificationSmsTemplates',
+    component: () => import('@/pages/notifications/index.vue'),
+    meta: {
+      title: {
+        zh_CN: '短信模板',
+        en_US: 'SMS Templates',
+      },
+      permission: 'settings.view',
+      notificationTab: 'sms-templates',
+    },
+  },
+  {
+    path: 'notifications/api-directory',
+    name: 'AdminNotificationApiDirectory',
+    component: () => import('@/pages/notifications/index.vue'),
+    meta: {
+      title: {
+        zh_CN: 'API 接口',
+        en_US: 'API Directory',
+      },
+      permission: 'settings.view',
+      notificationTab: 'api-directory',
     },
   },
   {

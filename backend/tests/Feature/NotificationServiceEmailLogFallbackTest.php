@@ -4,29 +4,18 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Models\IntegrationPlugin;
+use App\Models\NotificationTemplate;
 use App\Models\Setting;
-use App\Services\Integrations\Plugins\PluginConfigRepository;
-use App\Services\Integrations\Plugins\PluginInstaller;
-use App\Services\Integrations\Plugins\PluginScanner;
+use App\Services\Mail\Contracts\MailDriver;
 use App\Services\Mail\MailDriverManager;
 use App\Services\System\AdminLogService;
 use App\Services\System\NotificationService;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class NotificationServiceEmailLogFallbackTest extends TestCase
 {
-    protected function setUp(): void
-    {
-        parent::setUp();
-
-        $this->ensureSmtpMailPluginEnabled();
-    }
-
     public function test_notification_service_no_longer_uses_plugin_placeholder_smtp_values(): void
     {
         $content = file_get_contents(base_path('app/Services/System/NotificationService.php'));
@@ -54,22 +43,19 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
             'email_enabled' => Setting::getValue('notification', 'email_enabled', '0'),
         ];
 
-        $fakeMailManager = $this->makeFakeMailManager();
-
-        $originalMailManager = app('mail.manager');
+        $fakeMailDriver = $this->makeFakeMailDriver();
 
         try {
             Setting::setValue('notification', 'email_enabled', '1');
 
-            app()->instance('mail.manager', $fakeMailManager);
-            Mail::swap($fakeMailManager);
+            $this->useFakeMailDriver($fakeMailDriver);
 
             app(NotificationService::class)->sendEmail($to, $subject, $content, NotificationService::TEMPLATE_INVOICE_NOTICE);
 
-            $this->assertCount(1, $fakeMailManager->messages);
-            $this->assertSame($to, $fakeMailManager->messages[0]['payload']['to'] ?? null);
-            $this->assertSame($subject, $fakeMailManager->messages[0]['payload']['subject'] ?? null);
-            $this->assertSame(['no-reply@example.com', 'Codex Test'], $fakeMailManager->messages[0]['payload']['from'] ?? null);
+            $this->assertCount(1, $fakeMailDriver->messages);
+            $this->assertSame($to, $fakeMailDriver->messages[0]['payload']['to'] ?? null);
+            $this->assertSame($subject, $fakeMailDriver->messages[0]['payload']['subject'] ?? null);
+            $this->assertSame(['no-reply@example.com', 'Codex Test'], $fakeMailDriver->messages[0]['payload']['from'] ?? null);
 
             $log = DB::table('email_logs')
                 ->where('to_email', $to)
@@ -91,15 +77,23 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
                 Setting::setValue('notification', $key, $value);
             }
 
-            app()->instance('mail.manager', $originalMailManager);
-            Mail::swap($originalMailManager);
+            $this->forgetFakeMailDriver();
         }
     }
 
-    public function test_send_template_email_includes_logo_in_themed_html(): void
+    public function test_send_template_email_uses_template_html_without_public_shell(): void
     {
         $suffix = bin2hex(random_bytes(4));
         $to = "codex-template-{$suffix}@example.com";
+        $template = NotificationTemplate::query()
+            ->where('channel', 'email')
+            ->where('code', NotificationService::TEMPLATE_EMAIL_CODE)
+            ->firstOrFail();
+        $templateSnapshot = [
+            'subject' => $template->subject,
+            'content' => $template->content,
+            'is_custom' => $template->is_custom,
+        ];
         $notificationSettings = [
             'email_enabled' => Setting::getValue('notification', 'email_enabled', '0'),
         ];
@@ -108,31 +102,38 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
             'site_logo' => Setting::getValue('basic', 'site_logo', ''),
         ];
 
-        $fakeMailManager = $this->makeFakeMailManager();
-        $originalMailManager = app('mail.manager');
+        $fakeMailDriver = $this->makeFakeMailDriver();
 
         try {
             Setting::setValue('notification', 'email_enabled', '1');
             Setting::setValue('basic', 'site_name', 'Codex Billing');
+            $template->forceFill([
+                'subject' => '测试验证码',
+                'content' => '<style>.email-test-code { color: #1f5eff; font-weight: 700; }</style><div class="email-test-code">{{code}}</div>',
+            ])->save();
 
-            app()->instance('mail.manager', $fakeMailManager);
-            Mail::swap($fakeMailManager);
+            $this->useFakeMailDriver($fakeMailDriver);
 
             app(NotificationService::class)->sendTemplateEmail($to, NotificationService::TEMPLATE_EMAIL_CODE, [
                 'code' => '482915',
                 'expire_minutes' => 10,
             ]);
 
-            $this->assertCount(1, $fakeMailManager->messages);
+            $this->assertCount(1, $fakeMailDriver->messages);
 
-            $html = (string) ($fakeMailManager->messages[0]['html'] ?? '');
+            $html = (string) ($fakeMailDriver->messages[0]['html'] ?? '');
 
-            $this->assertStringContainsString('<img class="mail-logo"', $html);
-            $this->assertMatchesRegularExpression('/<img class="mail-logo"[^>]*width="\d+"[^>]*height="44"[^>]*>/i', $html);
-            $this->assertStringNotContainsString('width="180"', $html);
-            $this->assertStringContainsString('<span>自动通知邮件</span>', $html);
+            $this->assertStringContainsString('<div class="email-test-code">482915</div>', $html);
+            $this->assertStringContainsString('.email-test-code { color: #1f5eff; font-weight: 700; }', $html);
+            $this->assertStringNotContainsString('mail-shell', $html);
+            $this->assertStringNotContainsString('mail-card', $html);
+            $this->assertStringNotContainsString('自动通知邮件', $html);
         } finally {
             $this->deleteEmailLogsByRecipient($to);
+
+            NotificationTemplate::query()
+                ->whereKey($template->getKey())
+                ->update($templateSnapshot);
 
             foreach ($notificationSettings as $key => $value) {
                 Setting::setValue('notification', $key, $value);
@@ -142,8 +143,7 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
                 Setting::setValue('basic', $key, $value);
             }
 
-            app()->instance('mail.manager', $originalMailManager);
-            Mail::swap($originalMailManager);
+            $this->forgetFakeMailDriver();
         }
     }
 
@@ -160,14 +160,12 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
             'email_enabled' => Setting::getValue('notification', 'email_enabled', '0'),
         ];
 
-        $fakeMailManager = $this->makeFakeMailManager();
-        $originalMailManager = app('mail.manager');
+        $fakeMailDriver = $this->makeFakeMailDriver();
 
         try {
             Setting::setValue('notification', 'email_enabled', '1');
 
-            app()->instance('mail.manager', $fakeMailManager);
-            Mail::swap($fakeMailManager);
+            $this->useFakeMailDriver($fakeMailDriver);
 
             app(NotificationService::class)->sendEmailCode($to, $code);
 
@@ -200,8 +198,7 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
                 Setting::setValue('notification', $key, $value);
             }
 
-            app()->instance('mail.manager', $originalMailManager);
-            Mail::swap($originalMailManager);
+            $this->forgetFakeMailDriver();
         }
     }
 
@@ -216,116 +213,47 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
         }
     }
 
-    private function makeFakeMailManager(): object
+    private function useFakeMailDriver(MailDriver $driver): void
     {
-        return new class
+        $this->app->forgetInstance(MailDriverManager::class);
+        $this->app->instance(MailDriverManager::class, new MailDriverManager([$driver]));
+        $this->app->forgetInstance(NotificationService::class);
+    }
+
+    private function forgetFakeMailDriver(): void
+    {
+        $this->app->forgetInstance(MailDriverManager::class);
+        $this->app->forgetInstance(NotificationService::class);
+    }
+
+    private function makeFakeMailDriver(): object
+    {
+        return new class implements MailDriver
         {
             public array $messages = [];
 
-            public function forgetMailers(): void {}
-
-            public function html(string $html, callable $callback): void
+            public function key(): string
             {
-                $message = new class
-                {
-                    public array $payload = [];
+                return 'smtp';
+            }
 
-                    public function to(string $value): self
-                    {
-                        $this->payload['to'] = $value;
+            public function label(): string
+            {
+                return 'Fake SMTP';
+            }
 
-                        return $this;
-                    }
-
-                    public function subject(string $value): self
-                    {
-                        $this->payload['subject'] = $value;
-
-                        return $this;
-                    }
-
-                    public function from(string $address, ?string $name = null): self
-                    {
-                        $this->payload['from'] = [$address, $name];
-
-                        return $this;
-                    }
-                };
-
-                $callback($message);
-
+            public function sendHtml(string $to, string $subject, string $html, array $context = []): void
+            {
                 $this->messages[] = [
                     'html' => $html,
-                    'payload' => $message->payload,
+                    'payload' => [
+                        'to' => $to,
+                        'subject' => $subject,
+                        'from' => ['no-reply@example.com', 'Codex Test'],
+                        'context' => $context,
+                    ],
                 ];
             }
         };
-    }
-
-    private function ensureSmtpMailPluginEnabled(): void
-    {
-        $this->ensurePluginTables();
-
-        $scanner = app(PluginScanner::class);
-        $installer = app(PluginInstaller::class);
-        $configRepository = app(PluginConfigRepository::class);
-        $manifest = $scanner->requireManifest('mail', 'smtp');
-        $this->disableEnabledMailPluginsForTest();
-        $plugin = $installer->install('mail', 'smtp');
-        $configRepository->save($plugin, $manifest, [
-            'host' => 'smtp.example.com',
-            'port' => 465,
-            'username' => 'no-reply@example.com',
-            'password' => 'test-secret',
-            'from_name' => 'Codex Test',
-            'timeout_seconds' => 8,
-        ]);
-        $installer->enable($plugin);
-
-        $this->app->forgetInstance(MailDriverManager::class);
-    }
-
-    private function disableEnabledMailPluginsForTest(): void
-    {
-        IntegrationPlugin::query()
-            ->where('domain', 'mail')
-            ->where('status', IntegrationPlugin::STATUS_ENABLED)
-            ->update(['status' => IntegrationPlugin::STATUS_DISABLED]);
-    }
-
-    private function ensurePluginTables(): void
-    {
-        if (! Schema::hasTable('integration_plugins')) {
-            Schema::create('integration_plugins', function (Blueprint $table): void {
-                $table->id();
-                $table->string('domain', 32);
-                $table->string('slug', 120);
-                $table->string('plugin_key', 120);
-                $table->string('name', 120);
-                $table->string('version', 32)->default('1.0.0');
-                $table->string('provider_class', 255)->nullable();
-                $table->string('entry_class', 255);
-                $table->json('capabilities_json')->nullable();
-                $table->json('config_schema_json')->nullable();
-                $table->unsignedTinyInteger('status')->default(0);
-                $table->timestamp('installed_at')->nullable();
-                $table->timestamps();
-                $table->unique(['domain', 'slug']);
-                $table->unique(['domain', 'plugin_key']);
-            });
-        }
-
-        if (! Schema::hasTable('integration_plugin_configs')) {
-            Schema::create('integration_plugin_configs', function (Blueprint $table): void {
-                $table->id();
-                $table->unsignedBigInteger('plugin_id');
-                $table->json('config_json')->nullable();
-                $table->longText('secret_json')->nullable();
-                $table->json('has_secret_json')->nullable();
-                $table->unsignedBigInteger('updated_by')->nullable();
-                $table->timestamps();
-                $table->unique('plugin_id');
-            });
-        }
     }
 }

@@ -34,6 +34,10 @@ class SmsService
      */
     public function sendVerifyCode(string $phone, string $code, array $options = []): void
     {
+        if (! $this->notificationTemplates()->isEnabled('sms', SmsTemplateCatalog::TEMPLATE_VERIFY_CODE)) {
+            return;
+        }
+
         $driver = $this->resolveDriverForLog();
         if (($driver?->key() ?? '') === 'aliyun') {
             $this->sendAliyunVerifyCode($phone, $code, $options, $driver);
@@ -115,6 +119,10 @@ class SmsService
         $template = $this->notificationTemplates()->find('sms', $templateCode);
         if (! is_array($template)) {
             throw new \RuntimeException('短信模板不存在');
+        }
+
+        if (! $this->templatePayloadIsEnabled($template)) {
+            return;
         }
 
         $contentTemplate = $this->resolveTemplateContent($template);
@@ -213,6 +221,14 @@ class SmsService
     private function notificationTemplates(): NotificationTemplateService
     {
         return $this->notificationTemplateService ??= app(NotificationTemplateService::class);
+    }
+
+    /**
+     * @param  array<string, mixed>  $template
+     */
+    private function templatePayloadIsEnabled(array $template): bool
+    {
+        return ! array_key_exists('is_enabled', $template) || (bool) $template['is_enabled'];
     }
 
     /**

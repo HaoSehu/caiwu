@@ -375,20 +375,26 @@ class UserService
             ->values();
         $latestPayment = $thirdPartyPayments->first(fn (Payment $payment) => (int) $payment->status === PaymentStatus::SUCCESS)
             ?? $thirdPartyPayments->first();
-        $this->notificationService->sendTemplateEmail((string) $user->email, NotificationService::TEMPLATE_INVOICE_NOTICE, [
+        $isPaidInvoice = (int) $invoice->status === InvoiceStatus::PAID;
+        $templateCode = $isPaidInvoice
+            ? NotificationService::TEMPLATE_PAYMENT_SUCCESS
+            : NotificationService::TEMPLATE_CLIENT_ORDER_PENDING;
+
+        $this->notificationService->sendTemplateEmail((string) $user->email, $templateCode, [
             'site_name' => (string) config('idc.site_name', config('app.name', '创欧云')),
             'display_name' => (string) $user->display_name,
-            'notice_title' => (int) $invoice->status === InvoiceStatus::PAID ? '账单支付确认' : '账单支付提醒',
+            'notice_title' => $isPaidInvoice ? '账单支付确认' : '账单支付提醒',
             'invoice_no' => (string) $invoice->invoice_no,
             'order_no' => (string) ($invoice->order?->order_no ?? ''),
             'product_name' => (string) ($invoice->order?->display_product_name ?? ''),
             'amount' => number_format((float) $invoice->amount, 2, '.', ''),
+            'paid_amount' => number_format((float) ($latestPayment?->amount ?? $invoice->amount), 2, '.', ''),
             'status_label' => (string) (InvoiceStatus::$labels[$invoice->status] ?? (string) $invoice->status),
             'due_at' => $invoice->due_date ? ($invoice->due_date?->format('Y-m-d H:i:s') ?? $invoice->due_date?->format('Y-m-d')) : '',
             'paid_at' => $invoice->paid_at ? $invoice->paid_at->format('Y-m-d H:i:s') : '',
             'payment_method' => $latestPayment ? $this->resolvePaymentGatewayLabel($latestPayment->gatewayKey()) : '',
             'trade_no' => (string) ($latestPayment?->trade_no ?? ''),
-            'notice_message' => (int) $invoice->status === InvoiceStatus::PAID
+            'notice_message' => $isPaidInvoice
                 ? '该账单已支付完成，如有疑问请联系管理员。'
                 : '该账单当前仍待支付，请尽快完成付款。',
         ]);

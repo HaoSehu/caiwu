@@ -1659,7 +1659,87 @@ async function mockContent(page: import('@playwright/test').Page) {
 }
 
 async function mockNotifications(page: import('@playwright/test').Page) {
-  await page.route(/\/api\/admin\/settings(?:\?.*)?$/, async (route) => {
+  const emailContentDefault = '<style>.cw-email-template-100001 { color: #1f5eff; }</style><div class="cw-email-template-100001">默认验证码 {{code}}</div>';
+  const emailContentOverride = '<p>验证码 {{code}}</p>';
+  type MockNotificationTemplate = {
+    channel: 'email' | 'sms';
+    code: string;
+    name: string;
+    description: string;
+    audience: 'admin' | 'user';
+    subject: string | null;
+    content: string;
+    provider_template_id: string;
+    variables: string[];
+    provider_variables: string[];
+    setting_keys: Record<string, string>;
+  };
+
+  await page.route(/\/api\/(?:v2\/admin|admin)\/notification-templates(?:\?.*)?$/, async (route) => {
+    const url = new URL(route.request().url());
+    const channel = url.searchParams.get('channel') || 'email';
+    const list: MockNotificationTemplate[] =
+      channel === 'sms'
+        ? [
+            {
+              channel: 'sms',
+              code: '100001',
+              name: '发送验证码',
+              description: '验证码短信模板。',
+              audience: 'user',
+              subject: null,
+              content: '验证码 {code}',
+              provider_template_id: 'SMS_001',
+              variables: ['code'],
+              provider_variables: ['code'],
+              setting_keys: {
+                content: 'sms_template_content_100001',
+                provider_template_id: 'sms_template_provider_template_id_100001',
+              },
+            },
+          ]
+        : [
+            {
+              channel: 'email',
+              code: '100001',
+              name: '验证码邮件',
+              description: '发送邮箱验证码时使用。',
+              audience: 'user',
+              subject: '验证码邮件',
+              content: emailContentDefault,
+              provider_template_id: '',
+              variables: ['code', 'expire_minutes'],
+              provider_variables: [],
+              setting_keys: {
+                subject: 'email_template_subject_100001',
+                content: 'email_template_content_100001',
+              },
+            },
+            {
+              channel: 'email',
+              code: '100026',
+              name: '管理员新工单提示',
+              description: '客户提交新工单后通知管理员。',
+              audience: 'admin',
+              subject: '管理员新工单提示',
+              content: '<style>.cw-email-template-100026 { color: #7c3aed; }</style><div>工单 #{{ticket_id}}</div>',
+              provider_template_id: '',
+              variables: ['ticket_id', 'ticket_subject'],
+              provider_variables: [],
+              setting_keys: {
+                subject: 'email_template_subject_100026',
+                content: 'email_template_content_100026',
+              },
+            },
+          ];
+
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ code: 0, data: { list, total: list.length } }),
+    });
+  });
+
+  await page.route(/\/api\/(?:v2\/admin|admin)\/settings(?:\?.*)?$/, async (route) => {
     const request = route.request();
     if (request.method() === 'POST') {
       await route.fulfill({
@@ -1686,10 +1766,10 @@ async function mockNotifications(page: import('@playwright/test').Page) {
           { key: 'sms_secret_key', value: 'sms-sk' },
           { key: 'sms_sign_name', value: '创欧云' },
           { key: 'sms_template_code', value: 'SMS_001' },
-          { key: 'email_template_subject_100001', value: '测试邮箱验证码' },
-          { key: 'email_template_content_100001', value: '<p>验证码 {{code}}</p>' },
-          { key: 'email_template_subject_100010', value: '测试新工单提醒' },
-          { key: 'email_template_content_100010', value: '工单 #{{ticket_id}}' },
+          { key: 'email_template_subject_100001', value: '测试验证码邮件' },
+          { key: 'email_template_content_100001', value: emailContentOverride },
+          { key: 'email_template_subject_100026', value: '测试管理员新工单提示' },
+          { key: 'email_template_content_100026', value: '工单 #{{ticket_id}}' },
         ],
       }),
     });
@@ -3898,7 +3978,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(page.getByPlaceholder('例如 smtp.qq.com')).toHaveValue('smtp.example.test');
 
     await page.getByPlaceholder('例如 smtp.qq.com').fill('smtp.updated.test');
-    const emailSaveRequest = page.waitForRequest((request) => request.url().includes('/api/admin/settings') && request.method() === 'POST');
+    const emailSaveRequest = page.waitForRequest((request) => request.url().includes('/settings') && request.method() === 'POST');
     await page.getByRole('button', { name: '保存邮件配置' }).click();
     await expect((await emailSaveRequest).postDataJSON()).toMatchObject({
       group: 'notification',
@@ -3911,11 +3991,12 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(page.getByText('邮件配置已保存')).toBeVisible();
 
     await page.locator('.t-tabs__nav-item-text-wrapper').filter({ hasText: '邮件模板' }).click();
-    await expect(page.getByText('测试邮箱验证码')).toBeVisible();
+    await expect(page.getByText('测试验证码邮件')).toBeVisible();
     await expect(page.getByText('HTML')).toBeVisible();
+    await expect(page.getByText('独立 CSS')).toHaveCount(0);
     await page.getByText(/管理员模板/).click();
-    await expect(page.getByText('测试新工单提醒')).toBeVisible();
-    await expect(page.getByRole('button', { name: '查看' }).first()).toBeVisible();
+    await expect(page.getByText('测试管理员新工单提示')).toBeVisible();
+    await expect(page.getByRole('button', { name: '编辑' }).first()).toBeVisible();
 
     await page.locator('.t-tabs__nav-item-text-wrapper').filter({ hasText: 'API 接口' }).click();
     await expect(page.getByRole('heading', { name: 'API 接口页' })).toBeVisible();
@@ -3932,7 +4013,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
 
     await page.goto('/admin/notifications/email-templates', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/admin\/notifications\?tab=email-templates/);
-    await expect(page.getByText('测试邮箱验证码')).toBeVisible();
+    await expect(page.getByText('测试验证码邮件')).toBeVisible();
 
     await page.goto('/admin/api-directory', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/admin\/notifications\?tab=api-directory/);
@@ -3949,31 +4030,35 @@ test.describe('frontend-admin-v3 shell smoke', () => {
 
     await page.goto('/admin/notifications/email-templates/100001?tab=user', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/admin\/notifications\/email-templates\/100001\?tab=user/);
-    await expect(page.getByRole('heading', { name: '邮箱验证码' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '验证码邮件' })).toBeVisible();
     await expect(page.locator('.token-list')).toContainText('code');
     await expect(page.getByText('482915')).toBeVisible();
     await expect(page.getByText('主题预览')).toBeVisible();
-    await expect(page.getByPlaceholder('请输入邮件主题')).toHaveValue('测试邮箱验证码');
+    await expect(page.getByPlaceholder('请输入邮件主题')).toHaveValue('测试验证码邮件');
+    const htmlEditor = page.locator('.editor-pane').filter({ hasText: 'HTML 正文' }).locator('textarea');
+    await expect(htmlEditor).toHaveValue('<p>验证码 {{code}}</p>');
+    await expect(page.getByText('模板 CSS')).toHaveCount(0);
 
     await page.getByPlaceholder('请输入邮件主题').fill('自动化验证码主题');
-    await page.locator('.template-code-input textarea').fill('<p>自动化正文 {{code}}</p>');
-    const saveRequest = page.waitForRequest((request) => request.url().includes('/api/admin/settings') && request.method() === 'POST');
+    await htmlEditor.fill('<style>.email-auto { color: #1f5eff; }</style><p>自动化正文 {{code}}</p>');
+    const saveRequest = page.waitForRequest((request) => request.url().includes('/settings') && request.method() === 'POST');
     await page.getByRole('button', { name: '保存模板' }).click();
     await expect((await saveRequest).postDataJSON()).toMatchObject({
       group: 'notification',
       settings: {
         email_template_subject_100001: '自动化验证码主题',
-        email_template_content_100001: '<p>自动化正文 {{code}}</p>',
+        email_template_content_100001: '<style>.email-auto { color: #1f5eff; }</style><p>自动化正文 {{code}}</p>',
       },
     });
     await expect(page.getByText('模板已保存')).toBeVisible();
 
     await page.getByRole('button', { name: '恢复默认' }).click();
-    await expect(page.getByPlaceholder('请输入邮件主题')).toHaveValue('邮箱验证码');
+    await expect(page.getByPlaceholder('请输入邮件主题')).toHaveValue('验证码邮件');
+    await expect(htmlEditor).toHaveValue('<style>.cw-email-template-100001 { color: #1f5eff; }</style><div class="cw-email-template-100001">默认验证码 {{code}}</div>');
 
     await page.getByRole('button', { name: '返回列表' }).click();
     await expect(page).toHaveURL(/\/admin\/notifications\?tab=email-templates/);
-    await expect(page.getByText('测试邮箱验证码')).toBeVisible();
+    await expect(page.getByText('测试验证码邮件')).toBeVisible();
   });
 
   test('opens finance invoices and handles detail and cancel', async ({ page }) => {

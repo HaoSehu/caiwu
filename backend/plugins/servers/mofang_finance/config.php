@@ -11,6 +11,10 @@ use App\Services\Upstream\Contracts\ProvidesProvisioning;
 use App\Services\Upstream\Contracts\ProvidesRenewal;
 use App\Services\Upstream\Contracts\ProvidesScheduledAuthRefresh;
 use App\Services\Upstream\Contracts\ProvidesStatusSync;
+use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangInventoryAndServiceSyncHook;
+use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangInventoryAndServiceSyncTask;
+use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangScheduledAuthRefreshHook;
+use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangScheduledAuthRefreshTask;
 use Caiwu\Plugins\Servers\MofangFinance\MofangFinancePlugin;
 
 return [
@@ -31,6 +35,20 @@ return [
             ProvidesRenewal::class,
             ProvidesScheduledAuthRefresh::class,
             ProvidesStatusSync::class,
+        ],
+        'extra' => [
+            'scheduled_tasks' => [
+                MofangScheduledAuthRefreshTask::class,
+                MofangInventoryAndServiceSyncTask::class,
+            ],
+            'schedule_hooks' => [
+                'plugins.mofang_finance.auth_refresh' => [
+                    MofangScheduledAuthRefreshHook::class,
+                ],
+                'plugins.mofang_finance.inventory_service_sync' => [
+                    MofangInventoryAndServiceSyncHook::class,
+                ],
+            ],
         ],
     ],
     'config' => [

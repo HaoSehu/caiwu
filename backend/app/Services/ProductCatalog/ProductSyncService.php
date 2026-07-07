@@ -576,6 +576,127 @@ class ProductSyncService
         return $summary;
     }
 
+    public function syncUpstreamProductStocks(?string $providerKey = null): array
+    {
+        $normalizedProviderKey = trim((string) $providerKey);
+        $summary = [
+            'matched_products' => 0,
+            'matched_suppliers' => 0,
+            'synced_products' => 0,
+            'skipped_products' => 0,
+            'failed_products' => 0,
+        ];
+
+        $products = Product::query()
+            ->tap(fn (Builder $query) => $this->applyHasUpstreamProductBindingScope(
+                $query,
+                $normalizedProviderKey !== '' ? $normalizedProviderKey : null,
+            ))
+            ->orderBy('id')
+            ->get();
+
+        $summary['matched_products'] = $products->count();
+
+        if ($products->isEmpty()) {
+            return $summary;
+        }
+
+        $hasChanges = false;
+
+        foreach ($products->groupBy(fn (Product $product) => (int) ($this->resolveProductSupplier($product)?->id ?? 0)) as $supplierProducts) {
+            $firstProduct = $supplierProducts->first();
+            $supplier = $firstProduct instanceof Product ? $this->resolveProductSupplier($firstProduct) : null;
+
+            if (! $supplier instanceof Supplier) {
+                $summary['skipped_products'] += $supplierProducts->count();
+
+                continue;
+            }
+
+            if ((int) ($supplier->status ?? 0) !== 1) {
+                $summary['skipped_products'] += $supplierProducts->count();
+
+                Log::info('[定时任务] 上游商品库存同步跳过：供应商未启用', [
+                    'supplier_id' => $supplier->id,
+                    'product_ids' => $supplierProducts->pluck('id')->values()->all(),
+                ]);
+
+                continue;
+            }
+
+            if (! $this->providerResolver->resolveForSupplier($supplier)->supports(ProvidesConsoleCatalog::class)) {
+                $summary['skipped_products'] += $supplierProducts->count();
+
+                continue;
+            }
+
+            $supplierProductIds = $supplierProducts
+                ->map(fn (Product $product) => $this->resolveProductUpstreamProductId($product))
+                ->filter(fn (int $supplierProductId) => $supplierProductId > 0)
+                ->unique()
+                ->values()
+                ->all();
+
+            if ($supplierProductIds === []) {
+                $summary['skipped_products'] += $supplierProducts->count();
+
+                continue;
+            }
+
+            $summary['matched_suppliers']++;
+
+            try {
+                $remoteStocks = $this->resolveSupplierRemoteStocks($supplier, $supplierProductIds);
+            } catch (\Throwable $exception) {
+                $summary['failed_products'] += $supplierProducts->count();
+
+                Log::error('[定时任务] 上游商品库存同步失败：供应商拉取异常', [
+                    'supplier_id' => $supplier->id,
+                    'supplier_name' => $supplier->name,
+                    'product_ids' => $supplierProducts->pluck('id')->values()->all(),
+                    'message' => $exception->getMessage(),
+                    'exception' => $exception::class,
+                ]);
+
+                continue;
+            }
+
+            foreach ($supplierProducts as $product) {
+                $supplierProductId = $this->resolveProductUpstreamProductId($product);
+                $remoteStock = array_key_exists($supplierProductId, $remoteStocks)
+                    ? $remoteStocks[$supplierProductId]
+                    : null;
+
+                if ($remoteStock === null) {
+                    $summary['skipped_products']++;
+
+                    continue;
+                }
+
+                if ($remoteStock === (int) ($product->stock ?? 0)) {
+                    $this->recordProductStockSnapshot($product, $supplier, $supplierProductId, $remoteStock);
+                    $summary['skipped_products']++;
+
+                    continue;
+                }
+
+                $this->persistProductWithStructuredSync($product, [
+                    'stock' => $remoteStock,
+                ]);
+                $this->recordProductStockSnapshot($product->fresh() ?? $product, $supplier, $supplierProductId, $remoteStock);
+
+                $summary['synced_products']++;
+                $hasChanges = true;
+            }
+        }
+
+        if ($hasChanges) {
+            $this->forgetSiteCatalogCache();
+        }
+
+        return $summary;
+    }
+
     public function siteProductStock(int $productId): ?array
     {
         $cacheKey = 'site_product_stock:'.$productId;
@@ -1813,15 +1934,21 @@ class ProductSyncService
         );
     }
 
-    private function applyHasUpstreamProductBindingScope(Builder $query): void
+    private function applyHasUpstreamProductBindingScope(Builder $query, ?string $providerKey = null): void
     {
         if (Schema::hasTable('product_upstream_bindings')) {
-            $query->whereExists(function ($subQuery): void {
+            $normalizedProviderKey = trim((string) $providerKey);
+
+            $query->whereExists(function ($subQuery) use ($normalizedProviderKey): void {
                 $subQuery
                     ->selectRaw('1')
                     ->from('product_upstream_bindings as pub')
                     ->whereColumn('pub.product_id', 'products.id')
                     ->where('pub.status', 1);
+
+                if ($normalizedProviderKey !== '') {
+                    $subQuery->where('pub.provider_key', $normalizedProviderKey);
+                }
             });
 
             return;
@@ -1879,6 +2006,15 @@ class ProductSyncService
     private function upstreamBindingWriter(): UpstreamBindingWriter
     {
         return $this->upstreamBindingWriter ??= app(UpstreamBindingWriter::class);
+    }
+
+    private function recordProductStockSnapshot(Product $product, Supplier $supplier, int $supplierProductId, int $remoteStock): void
+    {
+        $this->upstreamBindingWriter()->syncProductBinding($product, $supplier, (string) $supplierProductId, [
+            'stock' => $remoteStock,
+            'source' => 'scheduled_stock_sync',
+            'synced_at' => now()->format('Y-m-d H:i:s'),
+        ]);
     }
 
     private function bindingResolver(): PluginBindingResolver

@@ -17,11 +17,13 @@ use App\Services\ZjmfBridge\ZjmfTokenService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
+use Tests\Support\InstallsZjmfBridgeAddon;
 use Tests\TestCase;
 
 class ZjmfBridgeServiceTest extends TestCase
 {
     use DatabaseTransactions;
+    use InstallsZjmfBridgeAddon;
 
     protected function setUp(): void
     {
@@ -33,6 +35,7 @@ class ZjmfBridgeServiceTest extends TestCase
             'zjmf_bridge.secret' => 'zjmf-test-secret',
             'zjmf_bridge.token_ttl' => 7200,
         ]);
+        $this->installZjmfBridgeAddon();
     }
 
     public function test_hosts_list_and_detail_use_zjmf_token_and_remove_sensitive_data(): void

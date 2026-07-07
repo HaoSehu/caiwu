@@ -8,7 +8,7 @@ export const productsRoutes: RouteRecordRaw[] = [
     meta: {
       title: {
         zh_CN: '商品目录',
-        en_US: 'Products',
+        en_US: 'Product Catalog',
       },
       productTab: 'catalog',
       permission: 'product.list',
@@ -39,6 +39,32 @@ export const productsRoutes: RouteRecordRaw[] = [
     },
   },
   {
+    path: 'products/create',
+    name: 'AdminProductCreate',
+    component: () => import('@/pages/products/edit.vue'),
+    meta: {
+      title: {
+        zh_CN: '新增商品',
+        en_US: 'Create Product',
+      },
+      permission: 'product.list',
+      hidden: true,
+    },
+  },
+  {
+    path: 'products/:id/edit',
+    name: 'AdminProductEdit',
+    component: () => import('@/pages/products/edit.vue'),
+    meta: {
+      title: {
+        zh_CN: '编辑商品',
+        en_US: 'Edit Product',
+      },
+      permission: 'product.list',
+      hidden: true,
+    },
+  },
+  {
     path: 'products/traffic-packages',
     name: 'AdminTrafficPackages',
     component: () => import('@/pages/products/index.vue'),
@@ -49,20 +75,19 @@ export const productsRoutes: RouteRecordRaw[] = [
       },
       productTab: 'traffic-packages',
       permission: 'product.list',
-      hidden: true,
     },
   },
   {
     path: 'products/suppliers',
     name: 'AdminSuppliers',
-    redirect: { path: '/admin/products', query: { tab: 'suppliers' } },
+    component: () => import('@/pages/products/index.vue'),
     meta: {
       title: {
-        zh_CN: '提供商',
+        zh_CN: '上游提供商',
         en_US: 'Suppliers',
       },
+      productTab: 'suppliers',
       permission: 'supplier.list',
-      hidden: true,
     },
   },
 ];

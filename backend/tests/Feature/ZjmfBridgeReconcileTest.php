@@ -12,11 +12,13 @@ use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Cache;
+use Tests\Support\InstallsZjmfBridgeAddon;
 use Tests\TestCase;
 
 class ZjmfBridgeReconcileTest extends TestCase
 {
     use DatabaseTransactions;
+    use InstallsZjmfBridgeAddon;
 
     protected function setUp(): void
     {
@@ -31,6 +33,7 @@ class ZjmfBridgeReconcileTest extends TestCase
             'zjmf_bridge.signature_tolerance' => 300,
             'zjmf_bridge.system_scopes' => ['system.reconcile'],
         ]);
+        $this->installZjmfBridgeAddon();
     }
 
     public function test_reconcile_payment_and_invoice_queries_use_system_hmac_scope(): void

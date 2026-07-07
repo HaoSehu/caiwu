@@ -35,7 +35,12 @@ class PluginScheduledTaskProvider implements ScheduledTaskProvider
             ->orderBy('slug')
             ->get()
             ->each(function (IntegrationPlugin $plugin) use (&$tasks): void {
-                $manifest = $this->scanner->find((string) $plugin->domain, (string) $plugin->slug);
+                try {
+                    $manifest = $this->scanner->find((string) $plugin->domain, (string) $plugin->slug);
+                } catch (\Throwable) {
+                    return;
+                }
+
                 if ($manifest === null) {
                     return;
                 }

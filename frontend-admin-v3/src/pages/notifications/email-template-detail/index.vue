@@ -1,10 +1,16 @@
 <template>
   <div class="email-template-detail-page">
     <div class="template-toolbar">
-      <t-button theme="primary" variant="text" @click="goBack">
-        <template #icon><chevron-left-icon /></template>
-        返回列表
-      </t-button>
+      <div class="template-toolbar__left">
+        <t-button theme="primary" variant="text" @click="goBack">
+          <template #icon><chevron-left-icon /></template>
+          返回列表
+        </t-button>
+        <div v-if="templateDefinition" class="template-title">
+          <h2>{{ templateDefinition.name }}</h2>
+          <span>{{ templateDefinition.channel === 'sms' ? '短信模板' : '邮件模板' }} · {{ templateDefinition.code }} · {{ templateDefinition.isEnabled ? '启用' : '停用' }}</span>
+        </div>
+      </div>
       <t-space>
         <t-button variant="outline" :loading="loading" @click="loadSettings">
           <template #icon><refresh-icon /></template>
@@ -31,6 +37,11 @@
 
       <t-card :bordered="false" :loading="loading">
         <t-form :data="templateDefinition" label-align="top">
+          <t-form-item label="发送状态" name="isEnabled">
+            <div class="status-control">
+              <t-switch v-model="templateDefinition.isEnabled" :custom-value="[true, false]" :label="['启用', '停用']" />
+            </div>
+          </t-form-item>
           <t-form-item v-if="templateDefinition.channel === 'email'" label="邮件主题" name="subject">
             <t-input v-model="templateDefinition.subject" placeholder="请输入邮件主题" />
           </t-form-item>
@@ -43,23 +54,26 @@
           </div>
 
           <div class="editor-grid">
-            <section class="editor-pane">
-              <div class="pane-header">
-                <strong>{{ templateDefinition.channel === 'sms' ? '短信正文' : 'HTML 正文片段' }}</strong>
-                <span>{{ templateDefinition.channel === 'sms' ? '业务层会先渲染正文，再连同供应商模板 ID 一起交给短信插件发送。' : '未检测到 HTML 时会按段落转为预览。' }}</span>
-              </div>
-              <t-textarea
-                v-model="templateDefinition.content"
-                class="template-code-input"
-                :placeholder="templateDefinition.channel === 'sms' ? '请输入短信正文' : '请输入 HTML 正文片段'"
-                :autosize="{ minRows: 18, maxRows: 26 }"
-              />
-            </section>
+            <div class="editor-stack">
+              <section class="editor-pane">
+                <div class="pane-header">
+                  <strong>{{ templateDefinition.channel === 'sms' ? '短信正文' : 'HTML 正文' }}</strong>
+                  <span>{{ templateDefinition.channel === 'sms' ? '业务层会先渲染正文，再连同供应商模板 ID 一起交给短信插件发送。' : '可填写完整 HTML 文档或正文 HTML。' }}</span>
+                </div>
+                <t-textarea
+                  v-model="templateDefinition.content"
+                  class="template-code-input"
+                  :placeholder="templateDefinition.channel === 'sms' ? '请输入短信正文' : '请输入邮件 HTML 正文'"
+                  :autosize="{ minRows: templateDefinition.channel === 'sms' ? 18 : 14, maxRows: 26 }"
+                />
+              </section>
+
+            </div>
 
             <section class="preview-pane">
               <div class="pane-header">
                 <strong>实时预览</strong>
-                <span>{{ templateDefinition.channel === 'sms' ? '短信内容' : `${siteName} 站点风格` }}</span>
+                <span>{{ templateDefinition.channel === 'sms' ? '短信内容' : '按真实发送结构渲染' }}</span>
               </div>
               <iframe
                 v-if="templateDefinition.channel === 'email'"
@@ -183,18 +197,22 @@ function applySettings(template, settings) {
   const subjectKey = settingKeys.subject || `email_template_subject_${template.code}`;
   const contentKey = settingKeys.content || `${template.channel}_template_content_${template.code}`;
   const providerTemplateIdKey = settingKeys.provider_template_id || `sms_template_provider_template_id_${template.code}`;
+  const enabledKey = settingKeys.enabled || `${template.channel}_template_enabled_${template.code}`;
   const defaultSubject = template.subject || '';
   const defaultContent = template.content || '';
   const defaultProviderTemplateId = template.provider_template_id || '';
+  const defaultIsEnabled = toBooleanValue(template.is_enabled ?? true);
 
   return {
     ...template,
     defaultSubject,
     defaultContent,
     defaultProviderTemplateId,
-    subject: settings[subjectKey] || defaultSubject,
-    content: settings[contentKey] || defaultContent,
-    providerTemplateId: settings[providerTemplateIdKey] || defaultProviderTemplateId,
+    subject: settingValue(settings, subjectKey, defaultSubject),
+    content: settingValue(settings, contentKey, defaultContent),
+    providerTemplateId: settingValue(settings, providerTemplateIdKey, defaultProviderTemplateId),
+    defaultIsEnabled,
+    isEnabled: toBooleanValue(settingValue(settings, enabledKey, defaultIsEnabled)),
   };
 }
 
@@ -221,6 +239,7 @@ async function saveCurrentTemplate() {
     const settingKeys = templateDefinition.value.setting_keys || {};
     const settings = {
       [settingKeys.content || `${templateDefinition.value.channel}_template_content_${templateDefinition.value.code}`]: templateDefinition.value.content,
+      [settingKeys.enabled || `${templateDefinition.value.channel}_template_enabled_${templateDefinition.value.code}`]: templateDefinition.value.isEnabled ? 1 : 0,
     };
 
     if (templateDefinition.value.channel === 'email') {
@@ -251,6 +270,7 @@ function resetTemplate(template) {
   template.subject = template.defaultSubject || '';
   template.content = template.defaultContent;
   template.providerTemplateId = template.defaultProviderTemplateId || '';
+  template.isEnabled = template.defaultIsEnabled;
 }
 
 function goBack() {
@@ -282,9 +302,8 @@ function buildPreviewDocument(template) {
   const params = getPreviewParams(template);
   const subject = renderPreviewSubject(template);
   const content = renderTemplateContent(template.content, params);
-  return `<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${escapeHtml(subject)}</title><style>
-body{margin:0;background:#f3f4f6;font-family:"PingFang SC","Microsoft YaHei",Arial,sans-serif;color:#1f2329}.mail-shell{padding:32px 12px}.mail-card{max-width:680px;margin:0 auto;background:#fff;border:1px solid #cfd6e4}.mail-header{padding:24px 28px 20px;border-top:4px solid #1f4b99;border-bottom:1px solid #d9e0ec;background:#f8fafc}.mail-brand strong{display:block;font-size: var(--td-font-size-size-5, 18px);color:#162033}.mail-brand span{display:block;margin-top:6px;font-size: var(--td-font-size-size-1, 12px);color:#5b6575}.mail-body{padding:28px}.mail-title{margin:0;font-size:28px;line-height:1.4;color:#162033}.mail-summary{margin:12px 0 0;font-size: var(--td-font-size-size-3, 14px);line-height:1.8;color:#4b5565}.mail-divider{height:1px;margin:24px 0;background:#d9e0ec}.mail-content{font-size: var(--td-font-size-size-3, 14px);line-height:1.85}.mail-content p{margin:0 0 14px}.mail-panel{margin:18px 0;padding:16px 18px;border:1px solid #d9e0ec;background:#f8fafc}.mail-code{display:inline-block;margin:8px 0 16px;padding:14px 18px;border:1px solid #1f4b99;background:#eef4ff;color:#1f4b99;font-size:28px;font-weight:700;letter-spacing:.18em}.mail-kv{display:flex;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid #d9e0ec}.mail-kv:last-child{border-bottom:0}.mail-kv span{color:#4e5969}.mail-kv strong{text-align:right}.mail-button{display:inline-block;margin-top:12px;padding:12px 18px;background:#1f4b99;color:#fff;text-decoration:none}.mail-footer{padding:0 28px 28px;color:#6b7280;font-size: var(--td-font-size-size-1, 12px);line-height:1.8}@media(max-width:640px){.mail-body,.mail-footer,.mail-header{padding-left:18px;padding-right:18px}.mail-title{font-size: var(--td-font-size-size-7, 22px)}.mail-kv{display:block}.mail-kv strong{display:block;margin-top:6px;text-align:left}}
-</style></head><body><div class="mail-shell"><div class="mail-card"><div class="mail-header"><div class="mail-brand"><strong>${escapeHtml(siteName)}</strong><span>自动通知邮件</span></div></div><div class="mail-body"><h1 class="mail-title">${escapeHtml(subject)}</h1><p class="mail-summary">您当前看到的是模板预览效果，发送时会按同样的站点外壳渲染。</p><div class="mail-divider"></div><div class="mail-content">${content}</div></div><div class="mail-footer">此邮件由 ${escapeHtml(siteName)} 系统自动发送，请勿直接回复。</div></div></div></body></html>`;
+  if (looksLikeFullHtmlDocument(content)) return content;
+  return `<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${escapeHtml(subject)}</title></head><body>${content}</body></html>`;
 }
 
 function renderTemplateContent(template, params) {
@@ -311,8 +330,21 @@ function looksLikeHtml(template) {
   return /<([a-z][a-z0-9]*)(\s|>)/i.test(String(template || '').trim());
 }
 
+function looksLikeFullHtmlDocument(template) {
+  return /^(<!doctype\s+html|<html\b)/i.test(String(template || '').trim());
+}
+
 function hasValue(value) {
   return ![null, undefined, '', false].includes(value);
+}
+
+function settingValue(settings, key, fallback) {
+  return Object.prototype.hasOwnProperty.call(settings, key) ? settings[key] ?? '' : fallback;
+}
+
+function toBooleanValue(value) {
+  if (value === true || value === 1) return true;
+  return ['1', 'true', 'on', 'yes'].includes(String(value).trim().toLowerCase());
 }
 
 function escapeHtml(value) {

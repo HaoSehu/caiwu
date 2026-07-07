@@ -1,15 +1,5 @@
 <template>
   <div class="notifications-page">
-    <t-card :bordered="false">
-      <div class="page-tabs-toolbar">
-        <t-tabs :value="activeTab" @change="handleTabChange">
-          <t-tab-panel value="email-templates" label="邮件模板" />
-          <t-tab-panel value="sms-templates" label="短信模板" />
-          <t-tab-panel value="api-directory" label="API 接口" />
-        </t-tabs>
-      </div>
-    </t-card>
-
     <template v-if="isTemplateTab">
       <t-card :bordered="false" :loading="templatesLoading">
         <div class="template-toolbar">
@@ -43,11 +33,25 @@
             <template #preview="{ row }">{{ row.preview }}</template>
             <template #subject="{ row }">{{ row.channel === 'email' ? fieldValue(row.subject) : row.preview }}</template>
             <template #variables="{ row }">{{ row.variables.length }}</template>
+            <template #templateType="{ row }">
+              <t-tag :theme="row.channel === 'email' ? 'primary' : 'success'" variant="light">{{ row.channel === 'email' ? '邮件' : '短信' }}</t-tag>
+            </template>
             <template #bodyType="{ row }">
               <t-tag :theme="row.isHtml ? 'primary' : 'default'" variant="light">{{ row.isHtml ? 'HTML' : '文本' }}</t-tag>
             </template>
+            <template #status="{ row }">
+              <span class="template-status-switch" @click.stop>
+                <t-switch
+                  v-model="row.is_enabled"
+                  :custom-value="[true, false]"
+                  :label="['启用', '停用']"
+                  :loading="statusSavingKey === templateRowKey(row)"
+                  @change="(value: unknown) => updateTemplateEnabled(row, value)"
+                />
+              </span>
+            </template>
             <template #actions="{ row }">
-              <t-button theme="primary" variant="text" @click.stop="openTemplate(row)">查看</t-button>
+              <t-button theme="primary" variant="text" @click.stop="openTemplate(row)">编辑</t-button>
             </template>
           </t-table>
         </div>
@@ -61,11 +65,24 @@
             <p>{{ row.description }}</p>
             <dl>
               <div><dt>{{ row.channel === 'email' ? '主题' : '正文' }}</dt><dd>{{ row.channel === 'email' ? fieldValue(row.subject) : row.preview }}</dd></div>
+              <div><dt>模板类型</dt><dd>{{ row.channel === 'email' ? '邮件' : '短信' }}</dd></div>
               <div><dt>变量数</dt><dd>{{ row.variables.length }}</dd></div>
               <div><dt>正文类型</dt><dd>{{ row.isHtml ? 'HTML' : '文本' }}</dd></div>
+              <div>
+                <dt>发送状态</dt>
+                <dd>
+                  <t-switch
+                    v-model="row.is_enabled"
+                    :custom-value="[true, false]"
+                    :label="['启用', '停用']"
+                    :loading="statusSavingKey === templateRowKey(row)"
+                    @change="(value: unknown) => updateTemplateEnabled(row, value)"
+                  />
+                </dd>
+              </div>
               <div v-if="row.channel === 'email'"><dt>面向对象</dt><dd>{{ row.audience === 'admin' ? '管理员' : '用户' }}</dd></div>
             </dl>
-            <t-button theme="primary" variant="outline" @click="openTemplate(row)">查看</t-button>
+            <t-button theme="primary" variant="outline" @click="openTemplate(row)">编辑</t-button>
           </article>
         </div>
       </t-card>
@@ -205,6 +222,7 @@ interface TemplateRow extends NotificationTemplateItem {
   subject: string;
   preview: string;
   isHtml: boolean;
+  is_enabled: boolean;
 }
 
 interface ApiCatalogItem extends Record<string, unknown> {
@@ -238,8 +256,9 @@ interface ApiCatalogMeta {
 const route = useRoute();
 const router = useRouter();
 const templateAudience = ref<TemplateAudience>(normalizeTemplateAudience(route.query.tab) || 'user');
-const activeTab = ref<NotificationTab>(normalizeTab(route.query.tab));
+const activeTab = ref<NotificationTab>(resolveRouteTab());
 const templatesLoading = ref(false);
+const statusSavingKey = ref('');
 const settingsMap = ref<Record<string, unknown>>({});
 const templateSummaries = ref<NotificationTemplateItem[]>([]);
 const selectedApiModule = ref('all');
@@ -263,9 +282,13 @@ const isMobile = useMediaQuery('(max-width: 768px)');
 const isTemplateTab = computed(() => activeTab.value === 'email-templates' || activeTab.value === 'sms-templates');
 const templateChannel = computed<TemplateChannel>(() => (activeTab.value === 'sms-templates' ? 'sms' : 'email'));
 const templateTitle = computed(() => (templateChannel.value === 'sms' ? '短信模板' : '邮件模板'));
-const templateDescription = computed(() =>
-  templateChannel.value === 'sms' ? '短信模板用于验证码、账单、服务、工单和安全提醒等短信内容管理。' : '点击查看进入独立详情页编辑主题、正文和变量预览。',
-);
+const templateDescription = computed(() => {
+  if (templateChannel.value === 'sms') {
+    return '\u77ed\u4fe1\u6a21\u677f\u7528\u4e8e\u9a8c\u8bc1\u7801\u3001\u8d26\u5355\u3001\u670d\u52a1\u3001\u5de5\u5355\u548c\u5b89\u5168\u63d0\u9192\u7b49\u77ed\u4fe1\u5185\u5bb9\u7ba1\u7406\u3002';
+  }
+
+  return '点击编辑进入独立详情页，维护每封邮件自己的主题和 HTML 正文。';
+});
 const templateAudienceOptions = computed(() => [
   { label: `用户模板（${templateRows.value.filter((item) => item.audience === 'user').length}）`, value: 'user' },
   { label: `管理员模板（${templateRows.value.filter((item) => item.audience === 'admin').length}）`, value: 'admin' },
@@ -282,6 +305,7 @@ const templateRows = computed<TemplateRow[]>(() =>
       subject,
       preview: preview ? (preview.length > 88 ? `${preview.slice(0, 88)}...` : preview) : '-',
       isHtml: /<([a-z][a-z0-9]*)(\s|>)/i.test(content.trim()),
+      is_enabled: toBooleanValue(template.is_enabled ?? true),
     };
   }),
 );
@@ -332,7 +356,9 @@ const templateColumns: PrimaryTableCol<TemplateRow>[] = [
   { colKey: 'subject', title: '当前主题', minWidth: 220, ellipsis: true },
   { colKey: 'preview', title: '正文摘要', minWidth: 260, ellipsis: true },
   { colKey: 'variables', title: '变量数', width: 90 },
+  { colKey: 'templateType', title: '模板类型', width: 100 },
   { colKey: 'bodyType', title: '正文类型', width: 110 },
+  { colKey: 'status', title: '发送状态', width: 130 },
   { colKey: 'actions', title: '操作', fixed: 'right', width: 90 },
 ];
 const apiColumns: PrimaryTableCol<ApiCatalogItem>[] = [
@@ -352,16 +378,16 @@ function normalizeTab(value: unknown): NotificationTab {
   return 'email-templates';
 }
 
+function resolveRouteTab(): NotificationTab {
+  const tab = Array.isArray(route.query.tab) ? route.query.tab[0] : route.query.tab;
+  if (tab === 'api-directory' || tab === 'sms-templates' || tab === 'admin' || tab === 'user') return normalizeTab(tab);
+  return normalizeTab(route.meta.notificationTab);
+}
+
 function normalizeTemplateAudience(value: unknown): TemplateAudience | null {
   const tab = Array.isArray(value) ? value[0] : value;
   if (tab === 'admin' || tab === 'user') return tab;
   return null;
-}
-
-function handleTabChange(value: string | number) {
-  activeTab.value = normalizeTab(value);
-  router.replace({ path: '/admin/notifications', query: activeTab.value === 'email-templates' ? {} : { tab: activeTab.value } });
-  refreshCurrentTab();
 }
 
 function refreshCurrentTab() {
@@ -410,6 +436,46 @@ async function copyApiPath(path: string) {
   }
 }
 
+async function updateTemplateEnabled(row: TemplateRow | TableRowData, value: unknown) {
+  const template = row as TemplateRow;
+  const key = templateRowKey(template);
+  const previous = toBooleanValue(
+    templateSummaries.value.find((item) => item.channel === template.channel && item.code === template.code)?.is_enabled ?? template.is_enabled,
+  );
+  const enabled = toBooleanValue(value);
+
+  setTemplateEnabled(template, enabled);
+  statusSavingKey.value = key;
+  try {
+    await adminApi.settings.save({
+      group: 'notification',
+      settings: {
+        [templateEnabledSettingKey(template)]: enabled ? 1 : 0,
+      },
+    });
+    MessagePlugin.success(enabled ? '模板已启用' : '模板已停用');
+  } catch (error) {
+    setTemplateEnabled(template, previous);
+    MessagePlugin.error(errorMessage(error, '保存模板状态失败'));
+  } finally {
+    if (statusSavingKey.value === key) statusSavingKey.value = '';
+  }
+}
+
+function setTemplateEnabled(template: Pick<TemplateRow, 'channel' | 'code'>, enabled: boolean) {
+  templateSummaries.value = templateSummaries.value.map((item) =>
+    item.channel === template.channel && item.code === template.code ? { ...item, is_enabled: enabled } : item,
+  );
+}
+
+function templateEnabledSettingKey(template: Pick<NotificationTemplateItem, 'channel' | 'code' | 'setting_keys'>) {
+  return stringValue(template.setting_keys?.enabled) || `${template.channel}_template_enabled_${template.code}`;
+}
+
+function templateRowKey(row: Pick<NotificationTemplateItem, 'channel' | 'code'>) {
+  return `${row.channel}:${row.code}`;
+}
+
 function normalizeSettings(response: SettingItem[] | Record<string, unknown>) {
   const items = extractSettingItems(response);
   if (items.length) return Object.fromEntries(items.map((item) => [item.key, item.value]));
@@ -454,6 +520,11 @@ function stringValue(value: unknown) {
   return String(value);
 }
 
+function toBooleanValue(value: unknown) {
+  if (value === true || value === 1) return true;
+  return ['1', 'true', 'on', 'yes'].includes(String(value).trim().toLowerCase());
+}
+
 function fieldValue(value: unknown) {
   const normalized = stringValue(value);
   return normalized || '-';
@@ -465,11 +536,11 @@ function toRecord(value: unknown): Record<string, unknown> {
 
 
 watch(
-  () => route.query.tab,
-  (value) => {
-    const audience = normalizeTemplateAudience(value);
+  () => [route.path, route.query.tab, route.meta.notificationTab],
+  () => {
+    const audience = normalizeTemplateAudience(route.query.tab);
     if (audience) templateAudience.value = audience;
-    activeTab.value = normalizeTab(value);
+    activeTab.value = resolveRouteTab();
     if (isTemplateTab.value) loadTemplates();
   },
 );

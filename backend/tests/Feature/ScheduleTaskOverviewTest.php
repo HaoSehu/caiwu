@@ -47,6 +47,8 @@ class ScheduleTaskOverviewTest extends TestCase
 
         $this->assertIsArray($task);
         $this->assertSame('上游产品配置同步', $task['title'] ?? null);
+        $this->assertSame('system', $task['source_type'] ?? null);
+        $this->assertSame('系统任务', $task['source_label'] ?? null);
         $this->assertTrue((bool) ($task['manual_triggerable'] ?? false));
     }
 

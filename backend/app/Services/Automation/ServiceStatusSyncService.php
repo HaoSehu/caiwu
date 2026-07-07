@@ -21,6 +21,7 @@ use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class ServiceStatusSyncService
 {
@@ -69,6 +70,41 @@ class ServiceStatusSyncService
                 ServiceStatus::EXPIRED,
             ])
             ->tap(fn ($query) => $this->applySyncableUpstreamBindingScope($query))
+            ->chunkById(max(1, $serviceChunkSize), function (EloquentCollection $services) use (&$summary, $supplierRequestChunkSize) {
+                $summary['scanned'] += $services->count();
+                $this->syncChunk($services, max(1, $supplierRequestChunkSize), $summary);
+            }, 'services.id', 'id');
+
+        return $summary;
+    }
+
+    public function handleProvider(
+        string $providerKey,
+        int $serviceChunkSize = self::DEFAULT_SERVICE_CHUNK_SIZE,
+        int $supplierRequestChunkSize = self::DEFAULT_SUPPLIER_REQUEST_CHUNK_SIZE,
+    ): array {
+        $summary = [
+            'scanned' => 0,
+            'synced' => 0,
+            'failed' => 0,
+            'skipped' => 0,
+        ];
+
+        $normalizedProviderKey = trim($providerKey);
+        if ($normalizedProviderKey === '') {
+            return $summary;
+        }
+
+        Service::query()
+            ->select(['services.id', 'services.name', 'services.domain', 'services.status', 'services.provision_data', 'services.expires_at', 'services.product_id'])
+            ->join('products', 'services.product_id', '=', 'products.id')
+            ->whereIn('services.status', [
+                ServiceStatus::PENDING,
+                ServiceStatus::ACTIVE,
+                ServiceStatus::SUSPENDED,
+                ServiceStatus::EXPIRED,
+            ])
+            ->tap(fn ($query) => $this->applySyncableUpstreamBindingScope($query, $normalizedProviderKey))
             ->chunkById(max(1, $serviceChunkSize), function (EloquentCollection $services) use (&$summary, $supplierRequestChunkSize) {
                 $summary['scanned'] += $services->count();
                 $this->syncChunk($services, max(1, $supplierRequestChunkSize), $summary);
@@ -692,15 +728,27 @@ class ServiceStatusSyncService
         return 0;
     }
 
-    private function applySyncableUpstreamBindingScope($query): void
+    private function applySyncableUpstreamBindingScope($query, ?string $providerKey = null): void
     {
-        $query->whereExists(function ($subQuery): void {
+        if (! Schema::hasTable('service_upstream_bindings')) {
+            $query->whereRaw('0 = 1');
+
+            return;
+        }
+
+        $normalizedProviderKey = trim((string) $providerKey);
+
+        $query->whereExists(function ($subQuery) use ($normalizedProviderKey): void {
             $subQuery
                 ->selectRaw('1')
                 ->from('service_upstream_bindings as sub')
                 ->whereColumn('sub.service_id', 'services.id')
                 ->whereNotNull('sub.upstream_service_id')
                 ->where('sub.upstream_service_id', '<>', '');
+
+            if ($normalizedProviderKey !== '') {
+                $subQuery->where('sub.provider_key', $normalizedProviderKey);
+            }
         });
     }
 

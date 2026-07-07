@@ -87,6 +87,11 @@ class Setting extends Model
         static::forgetGroupCache($group);
     }
 
+    public static function forgetCachedGroup(string $group): void
+    {
+        static::forgetGroupCache($group);
+    }
+
     private static function writeValue(string $group, string $key, mixed $value): void
     {
         $encoded = static::encodeValue($key, static::normalizeDisplayValue($key, $value));

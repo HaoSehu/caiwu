@@ -8,11 +8,13 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Cache;
 use Laravel\Sanctum\PersonalAccessToken;
+use Tests\Support\InstallsZjmfBridgeAddon;
 use Tests\TestCase;
 
 class ZjmfBridgeAuthTest extends TestCase
 {
     use DatabaseTransactions;
+    use InstallsZjmfBridgeAddon;
 
     protected function setUp(): void
     {
@@ -28,6 +30,7 @@ class ZjmfBridgeAuthTest extends TestCase
             'zjmf_bridge.token_ttl' => 7200,
             'zjmf_bridge.system_scopes' => ['auth.login'],
         ]);
+        $this->installZjmfBridgeAddon();
     }
 
     public function test_login_api_issues_zjmf_jwt_without_exposing_sanctum_token(): void

@@ -37,10 +37,14 @@ class AdminIntegrationPluginControllerTest extends TestCase
         $listResponse = $this->getJson('/api/v2/admin/integration-plugins')
             ->assertOk()
             ->assertJsonPath('data.total', fn (int $total): bool => $total >= 6)
-            ->assertJsonPath('data.list.0.domain', fn (string $domain): bool => in_array($domain, ['captcha', 'mail', 'payment', 'sms', 'upstream', 'verification'], true));
+            ->assertJsonPath('data.list.0.domain', fn (string $domain): bool => in_array($domain, ['addons', 'captcha', 'mail', 'payment', 'sms', 'upstream', 'verification'], true));
 
         $this->assertFalse(collect($listResponse->json('data.list'))->contains(
             fn (array $plugin): bool => str_starts_with((string) ($plugin['slug'] ?? ''), 'demo_')
+        ));
+        $this->assertTrue(collect($listResponse->json('data.list'))->contains(
+            fn (array $plugin): bool => ($plugin['domain'] ?? '') === 'addons'
+                && ($plugin['slug'] ?? '') === 'zjmf_bridge'
         ));
 
         $installResponse = $this->postJson('/api/v2/admin/integration-plugins', [

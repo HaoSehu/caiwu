@@ -2,9 +2,13 @@
 
 namespace App\Services\Automation;
 
+use App\Models\IntegrationPlugin;
 use App\Services\Automation\Contracts\ScheduleHook;
+use App\Services\Integrations\Plugins\PluginFileLoader;
+use App\Services\Integrations\Plugins\PluginScanner;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use InvalidArgumentException;
 use Throwable;
 
@@ -93,8 +97,72 @@ class ScheduleHookService
     private function listenersFor(string $hook): array
     {
         $listeners = config("schedule_hooks.listeners.{$hook}", []);
+        $pluginListeners = $this->pluginListenersFor($hook);
 
-        return is_array($listeners) ? array_values(array_filter($listeners)) : [];
+        return array_values(array_filter(array_merge(
+            is_array($listeners) ? $listeners : [],
+            $pluginListeners,
+        )));
+    }
+
+    private function pluginListenersFor(string $hook): array
+    {
+        try {
+            if (! Schema::hasTable('integration_plugins')) {
+                return [];
+            }
+        } catch (Throwable) {
+            return [];
+        }
+
+        $scanner = $this->container->make(PluginScanner::class);
+        $fileLoader = $this->container->make(PluginFileLoader::class);
+        $listeners = [];
+
+        IntegrationPlugin::query()
+            ->where('status', IntegrationPlugin::STATUS_ENABLED)
+            ->orderBy('domain')
+            ->orderBy('slug')
+            ->get()
+            ->each(function (IntegrationPlugin $plugin) use ($hook, $scanner, $fileLoader, &$listeners): void {
+                try {
+                    $manifest = $scanner->find((string) $plugin->domain, (string) $plugin->slug);
+                } catch (Throwable) {
+                    return;
+                }
+
+                if ($manifest === null) {
+                    return;
+                }
+
+                $hookMap = is_array($manifest->extra['schedule_hooks'] ?? null)
+                    ? $manifest->extra['schedule_hooks']
+                    : [];
+                $definitions = $hookMap[$hook] ?? [];
+                if ($definitions === []) {
+                    return;
+                }
+
+                try {
+                    $fileLoader->ensureLoaded($manifest);
+                } catch (Throwable $exception) {
+                    Log::warning('[调度Hook] 插件监听器文件加载失败', [
+                        'domain' => $manifest->domain,
+                        'slug' => $manifest->slug,
+                        'hook' => $hook,
+                        'message' => $exception->getMessage(),
+                        'exception' => $exception::class,
+                    ]);
+
+                    return;
+                }
+
+                foreach ((array) $definitions as $definition) {
+                    $listeners[] = $definition;
+                }
+            });
+
+        return $listeners;
     }
 
     private function invokeListener(mixed $listener, string $hook, array $context): mixed

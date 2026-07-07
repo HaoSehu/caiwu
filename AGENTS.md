@@ -58,14 +58,15 @@
 - 禁止硬编码后端地址、token 键名、权限码和状态文案（详见 §三 技术基线、§四 前端规则、§四 后端规则）。
 - 禁止删除已有可复用能力后再重写一遍（详见 §四 通用规则）。
 - 禁止未说明影响面就修改接口响应结构或公共样式入口。
-- 禁止为了 v2 重构修改旧接口契约；禁止在 v2 新接口中接受 `per_page` 或复用旧宽 Resource 作为默认输出。
+- 禁止为了 v2 重构修改旧接口契约；禁止在 v2 新接口中接受 `per_page` 或复用旧宽 Resource 作为默认输出（详见 §四 后端规则）。
 - 禁止手工编辑 `文档/开发文档/后端/后端API清单.md`（自动生成）；改业务分组导航请改 `文档/开发文档/后端/API清单导航.md`，重生成跑 `php backend/scripts/export_api_inventory.php`。
 - 禁止用 `php artisan serve` 替代 `php artisan app:serve`（详见 §六 本地启动）。
 - 禁止在 Controller 里直接 `Http::*` 调上游或第三方（详见 §四 后端规则）。
 - 禁止在生产常驻 `queue:work`（队列已并入 `schedule:run`，详见 §三 技术基线）。
 - 禁止补跑历史激进迁移文件（详见 §四 数据库与接口）。
 - 禁止物理删除 Payment 记录、禁止把 `mofang_finance_api` 别名为 `hosting_panel_api`（详见 §四 后端规则）。
-- 禁止管理端页面新增独立"头部说明卡片"；禁止用户控制台财务记录页使用统计/指标卡片（详见 §四 前端规则）。
+- 禁止管理端页面新增独立"头部说明卡片"（详见 §四 前端规则）。
+- 禁止用户控制台财务记录页使用统计/指标卡片（详见 §四 前端规则）。
 - 禁止插件注册系统级定时任务、系统级 API 路由或全局中间件（详见 §四 后端规则）。
 - 禁止新增旧兼容层、保留已无调用方的废弃代码（详见 §一 执行原则）。
 - 禁止随手在仓库根新建文档；规则类以外放 `文档/` 下对应子目录。
@@ -103,7 +104,7 @@
 - `backend/scripts/`：维护脚本（`export_api_inventory.php` 等），不要放长期业务代码。
 - `migration-output`：历史旧数据快照的临时输出目录。
 
-不存在的目录不要引用：根目录无 `scripts/`、无 `.kiro/specs`、无 `frontend-admin`、无 `frontend-client`、无 `frontend-user-v3-console`。
+> 不存在的目录不要引用：根目录无 `scripts/`、无 `.kiro/specs`、无 `frontend-admin`、无 `frontend-client`、无 `frontend-user-v3-console`。
 
 ## 3.2 技术基线
 
@@ -144,8 +145,7 @@
 - v2 新接口必须使用 FormRequest 和 Resource/Response DTO，列表与详情 Resource 分离，并补 Feature 测试、字段白名单测试和大响应防控测试。
 - 业务逻辑放 `app/Services`，常量/枚举放 `app/Constants`。
 - 支付、账单、订单等流程必须考虑事务、幂等和审计字段。
-- Payment 记录（payments 表）只允许修改状态，禁止物理删除任何行（包括 gateway=balance/manual/free 的历史记录）。
-- Payment 仅记录第三方支付网关真实资金流入（如支付宝充值、支付宝付商品）；余额支付、管理员手动开服、免费订单不产生 Payment。
+- Payment 记录（payments 表）只允许修改状态，禁止物理删除任何行（包括 gateway=balance/manual/free 的历史记录）。Payment 仅记录第三方支付网关真实资金流入（如支付宝充值、支付宝付商品）；余额支付、管理员手动开服、免费订单不产生 Payment。
 - 操作来源沿用 `operator_*`、`actor_*`、`trace_id`、`ip_address`。
 - 调用上游/第三方必须走 `app/Services` 下的专用客户端，**不要**在 Controller 里直接 `Http::*`。
 - 上游 provider key 以真实 `suppliers.interface_type` 或服务绑定值为准，禁止把 `mofang_finance_api` 归一化或别名成 `hosting_panel_api`。
@@ -159,13 +159,13 @@
 ### 通用
 
 - 统一 Vue 3 `script setup` + Composition API。
+- UI 框架与图标：`frontend-admin-v3`、`frontend-user-v4-console` 用 TDesign Vue Next + `tdesign-icons-vue-next`；`frontend-user-v3-www` 用 Element Plus + `@element-plus/icons-vue`。各端禁止混用另一套 UI 库。
 - 接口请求走各端 `src/utils/request.js`（或 `src/utils/request/`），不要直接新建 axios 实例。
 - 认证存取走 `src/utils/auth.js`（或等价模块），不要直接操作 localStorage 键。
 - 领域请求收敛到 `src/api/*`，视图层只消费明确的 API 方法。
 
 ### 管理端 `frontend-admin-v3`
 
-- UI 框架：TDesign Vue Next + TDesign Icons Vue Next，**禁止**混用 Element Plus。
 - 工程基底：TDesign Starter for Vue Next（`Tencent/tdesign-vue-next-starter`）。
 - 样式入口：`src/style/` 目录，沿用 Starter 自带的主题变量（`tvision-color`）和 Less 变量体系。
 - 布局组件：`src/layouts/`，基于 Starter Admin Layout，包含侧边菜单、顶部栏、面包屑、用户菜单。
@@ -173,20 +173,17 @@
 - 状态管理：`src/store/modules/`，使用 Pinia + `pinia-plugin-persistedstate`。
 - 权限控制：`src/permission.ts`（路由守卫）+ `src/store/modules/permission.ts`，权限码与旧管理端一致。
 - 页面模板：`src/pages/` 下按领域组织，复用 Starter 的列表页、表单页、详情页模板模式。
-- 图标统一使用 `tdesign-icons-vue-next`，禁止混用 `@element-plus/icons-vue`。
 - 管理端页面禁止新增独立的"头部说明卡片"（例如 `admin-page-head`、`*-hero`、`*-head` 这类只放模块名、标题、说明文案和少量按钮的顶部大卡片）。列表页直接从筛选区、指标区或表格卡片开始；详情页的返回、保存、刷新等必要操作使用紧凑工具栏。
 - 禁止在 v3 中硬编码 Element Plus 组件或样式。
 
 ### 官网与用户入口 `frontend-user-v3-www`
 
-- UI 框架：Element Plus，不引入第二套 UI 库。
 - 可以比管理端更有视觉表现，但沿用现有 token、圆角、阴影和蓝色品牌体系。
 - 样式复用 `src/assets/styles/variables.scss`、`global.scss` 和既有布局组件。
 - 购买/结算/恢复流程优先复用 `src/domains/products/*`、`src/composables/*` 和现有 API 封装，不在页面模板里重写流程。
 
 ### 用户控制台 `frontend-user-v4-console`
 
-- UI 框架：TDesign Vue Next + TDesign Icons Vue Next，禁止混用 Element Plus。
 - 页面放在 `src/pages/client/`，业务逻辑优先收敛到 `src/domains/`、`src/composables/`、`src/api/`。
 - 复用 `shared/user-v3` 的控制台基础组件（如 `PageScaffold`、`DataState`、`StatusTag`）和 `@caiwu/shared` 状态/运行时能力。
 - 控制台是高频业务界面，保持浅色、克制、信息密度合理，不做官网式 Hero 或装饰优先布局。
@@ -211,7 +208,7 @@
 - 新增样式先复用变量文件中的 token，不要手写第二套。
 - 登录页/官网首页可以更有表现力，但不破坏整体品牌。
 
-### 反主流视觉模式（用户明确要求视觉设计时启用）
+### 反模板视觉风格（用户明确要求视觉设计时启用）
 
 - 设计目标不是标准 SaaS 模板，而是有触感、有审美立场的页面。
 - 允许打破对称，保留轻微偏移和留白张力。
@@ -219,7 +216,7 @@
 - 色彩：深灰+橙色、炭黑+米白+焦橙，避免蓝紫体系。
 - 文案直白有人味，不写"赋能""闭环"这类空话。
 
-#### 反主流禁止清单
+#### 反模板禁止清单
 
 - 禁止紫色/靛蓝渐变、纯平背景色、Hero+三卡片公式、整页完美居中。
 - 禁止 Emoji 做功能图标、`ease-in-out` 做默认动画曲线。
@@ -279,8 +276,6 @@ cd frontend-user-v4-console && npm run dev
 - **查接口格式**：`文档/开发文档/后端/API格式规范.md`。
 - **API 直接重构**：先读 `文档/开发文档/后端/API直接重构方案.md`，再回查 `api-docs/`、路由、Controller、FormRequest、Resource、Service；旧接口冻结，新接口按 v2 规范新建。
 - **查表结构**：先看 `文档/开发文档/数据库/当前数据库结构.md`；疑难以实库 `information_schema` 与 `文档/开发文档/架构/架构现状说明.md` 为准。
-- **后端规范**：`文档/开发文档/后端/API格式规范.md`、`文档/开发文档/后端/后端目录分类规范.md`。
-- **前端规范**：`文档/开发文档/前端/前端项目规范.md`。
 - **上游对接**：`文档/开发文档/集成/本地对接说明.md`。
 - **部署与调度**：`文档/开发文档/部署与调度指南.md`。
 - **回溯旧方案**：直接查 `git` 历史，`文档/` 目录不保留历史副本。

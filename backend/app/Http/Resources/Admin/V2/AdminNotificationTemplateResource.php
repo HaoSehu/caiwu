@@ -25,6 +25,7 @@ class AdminNotificationTemplateResource extends JsonResource
             'subject' => $template['subject'] ?? null,
             'content' => (string) ($template['content'] ?? ''),
             'provider_template_id' => (string) ($template['provider_template_id'] ?? ''),
+            'is_enabled' => (bool) ($template['is_enabled'] ?? true),
             'variables' => array_values((array) ($template['variables'] ?? [])),
             'provider_variables' => array_values((array) ($template['provider_variables'] ?? [])),
             'setting_keys' => (array) ($template['setting_keys'] ?? []),

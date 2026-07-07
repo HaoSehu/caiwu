@@ -104,7 +104,9 @@ const getHref = (item: MenuRoute) => {
 const getPath = (item: ListItemType) => {
   const activeLevel = active.value.split('/').length;
   const pathLevel = item.path.split('/').length;
-  if (activeLevel > pathLevel && active.value.startsWith(item.path)) {
+  const hasExactActiveItem = list.value.some((menuItem) => menuItem.path === active.value);
+
+  if (activeLevel > pathLevel && !hasExactActiveItem && active.value.startsWith(`${item.path}/`)) {
     return active.value;
   }
 

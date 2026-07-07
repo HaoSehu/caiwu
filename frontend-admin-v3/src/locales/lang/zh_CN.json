@@ -86,6 +86,7 @@
         }
       },
       "navigationLayout": "导航布局",
+      "hideHeaderLogo": "隐藏顶栏logo",
       "sideMode": "侧边栏模式",
       "splitMenu": "分割菜单（混合模式下有效）",
       "fixedSidebar": "固定侧边栏",

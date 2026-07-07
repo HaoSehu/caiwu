@@ -16,103 +16,149 @@ import type { RouteRecordRaw } from 'vue-router';
 import router, { fixedRouterList, homepageRouterList } from '@/router';
 import { store } from '@/store';
 import { hasPermissionInList } from '@/constants/permissions';
+import type { LocalizedTitle } from '@/locales';
+
+interface MenuChildConfig {
+  path: string;
+  title?: LocalizedTitle;
+  showWhenHidden?: boolean;
+}
+
+type MenuChild = string | MenuChildConfig;
 
 interface MenuGroupConfig {
   path: string;
-  title: {
-    zh_CN: string;
-    en_US: string;
-  };
+  title: LocalizedTitle;
   icon: ReturnType<typeof shallowRef>;
   orderNo: number;
-  children: string[];
+  children: MenuChild[];
 }
 
 const ADMIN_MENU_GROUPS: MenuGroupConfig[] = [
-  // ── 工作台 ──────────────────────────────────────────────
   {
-    path: '/admin/menu/workbench',
-    title: { zh_CN: '工作台', en_US: 'Workbench' },
+    path: '/admin/menu/analytics',
+    title: { zh_CN: '经营分析', en_US: 'Analytics' },
     icon: shallowRef(DashboardIcon),
     orderNo: 0,
-    children: ['/admin/dashboard'],
+    children: [
+      '/admin/dashboard',
+      {
+        path: '/admin/finance/new-customers',
+        title: { zh_CN: '新客户日报', en_US: 'New Customer Daily' },
+        showWhenHidden: true,
+      },
+    ],
   },
-  // ── 客户管理：用户列表 / 实名认证 ─────────────────────
   {
-    path: '/admin/menu/users',
-    title: { zh_CN: '客户管理', en_US: 'Customers' },
+    path: '/admin/menu/customer-identity',
+    title: { zh_CN: '客户与身份', en_US: 'Customers & Identity' },
     icon: shallowRef(UserCircleIcon),
     orderNo: 10,
-    children: ['/admin/users', '/admin/users/verification'],
+    children: ['/admin/users', '/admin/users/verification', '/admin/users/verification/manage'],
   },
-  // ── 交易管理：订单 / 账单 / 充值 ───────────
   {
-    path: '/admin/menu/finance',
-    title: { zh_CN: '交易管理', en_US: 'Transactions' },
-    icon: shallowRef(FileIcon),
-    orderNo: 20,
-    children: [
-      '/admin/finance/orders',
-      '/admin/finance/invoices',
-      '/admin/finance/recharges',
-    ],
-  },
-  // ── 商品管理：商品目录（内部切 Tab：商品/流量包/提供商）/ 规格 / CPU 型号 ──
-  {
-    path: '/admin/menu/products',
-    title: { zh_CN: '商品管理', en_US: 'Products' },
+    path: '/admin/menu/product-supply',
+    title: { zh_CN: '商品与供应', en_US: 'Products & Supply' },
     icon: shallowRef(ShopIcon),
-    orderNo: 30,
-    children: [
-      '/admin/products',
-      '/admin/specs',
-      '/admin/cpu-models',
-    ],
+    orderNo: 20,
+    children: ['/admin/products', '/admin/products/traffic-packages', '/admin/products/suppliers', '/admin/specs', '/admin/cpu-models'],
   },
-  // ── 服务交付：服务实例 / 工单 ─────────────────────────────
   {
-    path: '/admin/menu/service-ops',
+    path: '/admin/menu/service-delivery',
     title: { zh_CN: '服务交付', en_US: 'Service Delivery' },
     icon: shallowRef(ServerIcon),
-    orderNo: 40,
-    children: ['/admin/services', '/admin/tickets'],
+    orderNo: 30,
+    children: [{ path: '/admin/services', title: { zh_CN: '服务实例', en_US: 'Service Instances' } }, '/admin/tickets'],
   },
-  // ── 内容运营：站点信息 / 首页装修 / 公告 / 帮助 / 媒体库 ──
   {
-    path: '/admin/menu/content',
-    title: { zh_CN: '内容运营', en_US: 'Content' },
-    icon: shallowRef(ArticleIcon),
+    path: '/admin/menu/finance',
+    title: { zh_CN: '交易账务', en_US: 'Transactions & Billing' },
+    icon: shallowRef(FileIcon),
+    orderNo: 40,
+    children: [
+      '/admin/finance/orders',
+      '/admin/finance/orders/normal',
+      '/admin/finance/orders/renewals',
+      '/admin/finance/orders/upgrades',
+      '/admin/finance/invoices',
+      { path: '/admin/finance/recharges', title: { zh_CN: '充值记录', en_US: 'Recharge Records' } },
+    ],
+  },
+  {
+    path: '/admin/menu/marketing-benefits',
+    title: { zh_CN: '营销权益', en_US: 'Marketing & Benefits' },
+    icon: shallowRef(GiftIcon),
     orderNo: 50,
     children: [
-      '/admin/site-info',
-      '/admin/site-hero',
+      '/admin/member-levels',
+      '/admin/coupons',
+      '/admin/coupon-campaigns',
+      '/admin/referral',
+      '/admin/referral/rewards',
+      '/admin/referral/withdrawals',
+      '/admin/referral-settings',
+    ],
+  },
+  {
+    path: '/admin/menu/site-content',
+    title: { zh_CN: '站点内容', en_US: 'Site Content' },
+    icon: shallowRef(ArticleIcon),
+    orderNo: 60,
+    children: [
+      { path: '/admin/site-info', title: { zh_CN: '站点配置', en_US: 'Site Settings' } },
+      { path: '/admin/site-hero', title: { zh_CN: '首页 Banner', en_US: 'Home Banner' } },
       '/admin/content/notices',
       '/admin/content/help',
       '/admin/content/media-library',
     ],
   },
-  // ── 营销增长：会员等级 / 优惠券 / 推广返利 / 推荐奖励 ──
   {
-    path: '/admin/menu/marketing',
-    title: { zh_CN: '营销增长', en_US: 'Growth' },
-    icon: shallowRef(GiftIcon),
-    orderNo: 60,
-    children: ['/admin/member-levels', '/admin/coupons', '/admin/referral', '/admin/referral-settings'],
-  },
-  // ── 平台管理：自动化 / 插件 / 通知 / 日志 / 员工 / 角色 ──
-  {
-    path: '/admin/menu/system',
-    title: { zh_CN: '平台管理', en_US: 'Platform' },
-    icon: shallowRef(ToolsIcon),
+    path: '/admin/menu/notifications-api',
+    title: { zh_CN: '通知与接口', en_US: 'Notifications & APIs' },
+    icon: shallowRef(FileIcon),
     orderNo: 70,
+    children: ['/admin/notifications', '/admin/notifications/sms-templates', '/admin/notifications/api-directory'],
+  },
+  {
+    path: '/admin/menu/integration-channels',
+    title: { zh_CN: '集成通道', en_US: 'Integration Channels' },
+    icon: shallowRef(ToolsIcon),
+    orderNo: 80,
+    children: [
+      '/admin/integration-plugins/captcha',
+      '/admin/integration-plugins/verification',
+      '/admin/integration-plugins/payment',
+      '/admin/integration-plugins/mail',
+      '/admin/integration-plugins/sms',
+      '/admin/integration-plugins/upstream',
+      '/admin/integration-plugins/addons',
+    ],
+  },
+  {
+    path: '/admin/menu/automation-audit',
+    title: { zh_CN: '自动化审计', en_US: 'Automation & Audit' },
+    icon: shallowRef(ToolsIcon),
+    orderNo: 90,
     children: [
       '/admin/automation',
-      '/admin/integration-plugins',
-      '/admin/notifications',
-      '/admin/logs',
-      '/admin/system/staff',
-      '/admin/system/roles',
+      '/admin/logs/system',
+      '/admin/logs/runtime',
+      '/admin/logs/admin-logins',
+      '/admin/logs/api',
+      '/admin/logs/sms',
+      '/admin/logs/email',
+      '/admin/logs/tasks',
+      '/admin/logs/gateway',
+      '/admin/logs/schedules',
+      '/admin/logs/cleanup',
     ],
+  },
+  {
+    path: '/admin/menu/org-permissions',
+    title: { zh_CN: '组织权限', en_US: 'Organization & Permissions' },
+    icon: shallowRef(UserCircleIcon),
+    orderNo: 100,
+    children: ['/admin/system/staff', '/admin/system/roles'],
   },
 ];
 
@@ -167,11 +213,13 @@ function buildGroupedMenuRouters(routes: RouteRecordRaw[], permissions: string[]
     if (route.path !== '/admin') return route;
 
     const children = Array.isArray(route.children) ? route.children : [];
-    return ADMIN_MENU_GROUPS.map((group) => buildMenuGroup(group, children, permissions)).filter((group) => group.children?.length);
+    return ADMIN_MENU_GROUPS.map((group) => buildMenuGroup(group, children, permissions)).filter(
+      (group): group is RouteRecordRaw => Boolean(group?.children?.length),
+    );
   });
 }
 
-function buildMenuGroup(group: MenuGroupConfig, adminChildren: RouteRecordRaw[], permissions: string[]): RouteRecordRaw {
+function buildMenuGroup(group: MenuGroupConfig, adminChildren: RouteRecordRaw[], permissions: string[]): RouteRecordRaw | null {
   const routeMap = new Map<string, RouteRecordRaw>();
   adminChildren.forEach((child) => {
     const fullPath = resolveAdminChildPath(child.path);
@@ -182,19 +230,51 @@ function buildMenuGroup(group: MenuGroupConfig, adminChildren: RouteRecordRaw[],
   });
 
   const groupChildren = group.children
-    .map((path) => routeMap.get(path))
-    .filter((item): item is RouteRecordRaw => Boolean(item) && canAccessMenuRoute(item, permissions));
+    .map((child) => {
+      const childConfig = normalizeMenuChild(child);
+      const route = routeMap.get(childConfig.path);
+
+      if (!route || !canAccessMenuRoute(route, permissions)) {
+        return null;
+      }
+
+      return applyMenuChildOverrides(route, childConfig);
+    })
+    .filter((item): item is RouteRecordRaw => Boolean(item));
   const firstChild = groupChildren[0];
+
+  if (!firstChild) {
+    return null;
+  }
 
   return {
     path: group.path,
-    redirect: firstChild?.path,
+    redirect: firstChild.path,
     meta: {
       title: group.title,
       icon: group.icon,
       orderNo: group.orderNo,
     },
     children: groupChildren,
+  };
+}
+
+function normalizeMenuChild(child: MenuChild): MenuChildConfig {
+  return typeof child === 'string' ? { path: child } : child;
+}
+
+function applyMenuChildOverrides(route: RouteRecordRaw, config: MenuChildConfig): RouteRecordRaw {
+  if (!config.title && !config.showWhenHidden) {
+    return route;
+  }
+
+  return {
+    ...route,
+    meta: {
+      ...route.meta,
+      ...(config.title ? { title: config.title } : {}),
+      ...(config.showWhenHidden ? { hidden: false } : {}),
+    },
   };
 }
 

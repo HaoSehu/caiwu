@@ -12,5 +12,6 @@ export default {
   isHeaderFixed: true,
   isUseTabsRouter: false,
   showHeader: true,
+  hideHeaderLogo: false,
   brandTheme: '#006EFF',
 };

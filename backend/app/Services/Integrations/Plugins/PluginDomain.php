@@ -20,6 +20,8 @@ final class PluginDomain
 
     public const UPSTREAM = 'upstream';
 
+    public const ADDONS = 'addons';
+
     /**
      * @return array<int, string>
      */
@@ -32,6 +34,7 @@ final class PluginDomain
             self::MAIL,
             self::SMS,
             self::UPSTREAM,
+            self::ADDONS,
         ];
     }
 
@@ -73,6 +76,7 @@ final class PluginDomain
             self::MAIL => 'mail',
             self::SMS => 'sms',
             self::UPSTREAM => 'servers',
+            self::ADDONS => 'addons',
         };
     }
 }

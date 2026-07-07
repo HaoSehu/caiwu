@@ -7,11 +7,54 @@ export const financeRoutes: RouteRecordRaw[] = [
     component: () => import('@/pages/finance/orders/index.vue'),
     meta: {
       title: {
-        zh_CN: '订单管理',
-        en_US: 'Orders',
+        zh_CN: '全部订单',
+        en_US: 'All Orders',
       },
       permission: 'order.list',
       keepAlive: false,
+      orderTab: 'all',
+    },
+  },
+  {
+    path: 'finance/orders/normal',
+    name: 'AdminFinanceNormalOrders',
+    component: () => import('@/pages/finance/orders/index.vue'),
+    meta: {
+      title: {
+        zh_CN: '普通订单',
+        en_US: 'Normal Orders',
+      },
+      permission: 'order.list',
+      keepAlive: false,
+      orderTab: 'orders',
+    },
+  },
+  {
+    path: 'finance/orders/renewals',
+    name: 'AdminFinanceRenewalOrders',
+    component: () => import('@/pages/finance/orders/index.vue'),
+    meta: {
+      title: {
+        zh_CN: '续费订单',
+        en_US: 'Renewal Orders',
+      },
+      permission: 'invoice.list',
+      keepAlive: false,
+      orderTab: 'renewals',
+    },
+  },
+  {
+    path: 'finance/orders/upgrades',
+    name: 'AdminFinanceUpgradeOrders',
+    component: () => import('@/pages/finance/orders/index.vue'),
+    meta: {
+      title: {
+        zh_CN: '附加配置',
+        en_US: 'Upgrade Orders',
+      },
+      permission: 'invoice.list',
+      keepAlive: false,
+      orderTab: 'upgrade',
     },
   },
   {
@@ -68,7 +111,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: 'finance/renewals',
     name: 'AdminFinanceRenewals',
-    redirect: { path: '/admin/finance/orders', query: { tab: 'renewals' } },
+    redirect: '/admin/finance/orders/renewals',
     meta: {
       title: {
         zh_CN: '续费订单',
@@ -81,7 +124,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: 'finance/upgrades',
     name: 'AdminFinanceUpgrades',
-    redirect: { path: '/admin/finance/orders', query: { tab: 'upgrade' } },
+    redirect: '/admin/finance/orders/upgrades',
     meta: {
       title: {
         zh_CN: '附加配置订单',

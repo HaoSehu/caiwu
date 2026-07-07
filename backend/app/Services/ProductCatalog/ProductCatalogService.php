@@ -217,6 +217,11 @@ class ProductCatalogService
         return $this->syncService->syncUpstreamProductConfigOptions();
     }
 
+    public function syncUpstreamProductStocks(?string $providerKey = null): array
+    {
+        return $this->syncService->syncUpstreamProductStocks($providerKey);
+    }
+
     public function applyLiveStockToProduct(Product $product, bool $strict = false): Product
     {
         return $this->syncService->applyLiveStockToProduct($product, $strict);

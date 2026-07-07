@@ -5,6 +5,8 @@ namespace App\Services\Automation;
 use App\Models\ScheduleRunLog;
 use App\Services\Automation\Heartbeat\Contracts\ScheduledTask;
 use App\Services\Automation\Heartbeat\HeartbeatTaskRegistry;
+use App\Services\Automation\Heartbeat\Providers\LegacyScheduleHookTaskProvider;
+use App\Services\Automation\Heartbeat\Providers\PluginScheduledTaskProvider;
 use App\Services\Automation\Heartbeat\ScheduleTaskRunRepository;
 use App\Services\System\SettingService;
 use App\Support\AutomationScheduleExpression;
@@ -18,6 +20,8 @@ class ScheduleTaskService
         private ScheduleTaskTriggerService $scheduleTaskTriggerService,
         private HeartbeatTaskRegistry $registry,
         private ScheduleTaskRunRepository $taskRuns,
+        private LegacyScheduleHookTaskProvider $legacyScheduleHookTaskProvider,
+        private PluginScheduledTaskProvider $pluginScheduledTaskProvider,
     ) {}
 
     public function overview(): array
@@ -28,6 +32,7 @@ class ScheduleTaskService
         $phpBinary = PHP_BINARY;
         $artisanPath = base_path('artisan');
         $runtimeState = $this->resolveScheduleRuntimeState();
+        $thirdPartyTaskKeys = $this->thirdPartyTaskKeys();
 
         return [
             'environment' => [
@@ -47,7 +52,7 @@ class ScheduleTaskService
             ],
             'commands' => $this->buildCommands($phpBinary, $artisanPath),
             'tasks' => collect($this->registry->enabledTasks())
-                ->map(fn (ScheduledTask $task): array => $this->serializeTask($task, $appTimezone))
+                ->map(fn (ScheduledTask $task): array => $this->serializeTask($task, $appTimezone, $thirdPartyTaskKeys))
                 ->values()
                 ->all(),
             'recent_logs' => $this->recentLogs(),
@@ -55,7 +60,10 @@ class ScheduleTaskService
         ];
     }
 
-    private function serializeTask(ScheduledTask $task, string $appTimezone): array
+    /**
+     * @param  array<string, bool>  $thirdPartyTaskKeys
+     */
+    private function serializeTask(ScheduledTask $task, string $appTimezone, array $thirdPartyTaskKeys): array
     {
         $now = now($appTimezone);
         $nextRunAt = collect($task->triggers())
@@ -67,11 +75,14 @@ class ScheduleTaskService
             ->map(fn ($rule): string => $rule->describe())
             ->filter()
             ->implode('；');
+        $sourceType = isset($thirdPartyTaskKeys[$task->key()]) ? 'third_party' : 'system';
 
         return [
             'key' => $task->key(),
             'title' => $task->title(),
             'category' => $task->category(),
+            'source_type' => $sourceType,
+            'source_label' => $sourceType === 'third_party' ? '第三方任务' : '系统任务',
             'description' => $task->description(),
             'manual_triggerable' => $this->scheduleTaskTriggerService->supports($task->key()),
             'expression' => $expression !== '' ? $expression : '手动触发',
@@ -83,6 +94,27 @@ class ScheduleTaskService
             'overlap_expires_minutes' => max(1, (int) ceil($task->lockTtlSeconds() / 60)),
             'last_log' => $this->taskRuns->latestRunForTask($task->key()) ?? $this->latestLegacyLogForTask($task->title(), $task->key()),
         ];
+    }
+
+    /**
+     * @return array<string, bool>
+     */
+    private function thirdPartyTaskKeys(): array
+    {
+        $keys = [];
+
+        foreach ([$this->legacyScheduleHookTaskProvider, $this->pluginScheduledTaskProvider] as $provider) {
+            foreach ($provider->tasks() as $task) {
+                if ($task instanceof ScheduledTask) {
+                    $taskKey = trim($task->key());
+                    if ($taskKey !== '') {
+                        $keys[$taskKey] = true;
+                    }
+                }
+            }
+        }
+
+        return $keys;
     }
 
     private function resolveScheduleRuntimeState(): array

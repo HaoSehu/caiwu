@@ -25,7 +25,6 @@
         <div class="category-panel-head">
           <div class="category-panel-title">
             <strong>商品分类</strong>
-            <span>{{ visibleCategoryCount }} / {{ displayCategoryTotalCount }}</span>
           </div>
           <t-space size="small">
             <t-button shape="square" variant="text" :loading="categoryLoading" @click="loadCategories">
@@ -61,11 +60,11 @@
             <button type="button" class="category-drag" aria-label="排序占位" disabled>::</button>
             <button type="button" class="category-tree-main" @click="handleCategorySelect(item)">
               <span class="category-title-line">
+                <span class="category-level-tag" :class="`category-level-${level}`">{{ level === 0 ? '一级' : '二级' }}</span>
                 <span class="category-name" :class="{ 'is-hidden': !isCategoryVisible(item) }">
                   {{ categoryDisplayName(item) }}
                 </span>
               </span>
-              <small class="category-count">{{ categoryCountLabel(item, childCount) }}</small>
             </button>
             <t-dropdown
               class="category-menu"
@@ -125,7 +124,7 @@
               <template #icon><refresh-icon /></template>
               重置
             </t-button>
-            <t-button theme="primary" @click="openProductDialog()">
+            <t-button theme="primary" @click="router.push({ name: 'AdminProductCreate' })">
               <template #icon><add-icon /></template>
               新增商品
             </t-button>
@@ -209,7 +208,7 @@
                   </t-button>
                 </template>
                 <template v-else>
-                  <t-button size="small" variant="text" theme="primary" @click="openProductDialog(row)">编辑</t-button>
+                  <t-button size="small" variant="text" theme="primary" @click="router.push({ name: 'AdminProductEdit', params: { id: row.id } })">编辑</t-button>
                   <t-button size="small" variant="text" :loading="productActionLoading === row.id" @click="handleToggleProduct(row)">
                     {{ Number(row.status) === 1 ? '隐藏' : '显示' }}
                   </t-button>
@@ -272,7 +271,6 @@
           <div class="category-panel-head">
             <div class="category-panel-title">
               <strong>商品分类</strong>
-              <span>{{ visibleCategoryCount }} / {{ displayCategoryTotalCount }}</span>
             </div>
             <t-space size="small">
               <t-button shape="square" variant="text" :loading="categoryLoading" @click="loadCategories">
@@ -308,11 +306,11 @@
               <button type="button" class="category-drag" aria-label="排序占位" disabled>::</button>
               <button type="button" class="category-tree-main" @click="handleMobileCategorySelect(item)">
                 <span class="category-title-line">
+                  <span class="category-level-tag" :class="`category-level-${level}`">{{ level === 0 ? '一级' : '二级' }}</span>
                   <span class="category-name" :class="{ 'is-hidden': !isCategoryVisible(item) }">
                     {{ categoryDisplayName(item) }}
                   </span>
                 </span>
-                <small class="category-count">{{ categoryCountLabel(item, childCount) }}</small>
               </button>
               <t-dropdown
                 class="category-menu"
@@ -893,6 +891,7 @@ import {
 import type { DropdownOption, PageInfo, PrimaryTableCol } from 'tdesign-vue-next';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref } from 'vue';
+import { useRouter } from 'vue-router';
 
 import { productApi, type ProductCategoryRecord, type ProductRecord, type ProductTypeRecord } from '@/api/product';
 import { supplierApi, type ProviderTypeRecord, type SupplierFormField, type SupplierRecord } from '@/api/supplier';
@@ -970,6 +969,7 @@ interface ConfigOptionSubItemFormRow {
 type ProductLifecycleStatus = 'active' | 'deleted' | 'all';
 
 // --- State ---
+const router = useRouter();
 const typeLoading = ref(false);
 const typeSubmitting = ref(false);
 const categoryLoading = ref(false);

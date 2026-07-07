@@ -47,6 +47,10 @@ class AdminLogService
             'title' => '接口认证刷新',
             'log_keywords' => ['JWT刷新', '接口认证刷新', 'refresh-hosting-panel-auth'],
         ],
+        'refresh-mofang-finance-auth' => [
+            'title' => '魔方财务认证刷新',
+            'log_keywords' => ['魔方财务认证刷新', 'refresh-mofang-finance-auth'],
+        ],
         'service-auto-renew' => [
             'title' => '服务自动续费',
             'log_keywords' => ['自动续费执行完成', '[自动续费]', 'service-auto-renew'],
