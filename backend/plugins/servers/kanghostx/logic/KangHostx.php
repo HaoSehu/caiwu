@@ -471,7 +471,7 @@ class KangHostx implements ProvidesConsoleCatalog, ProvidesConsoleRuntime, Provi
             'connection_message' => '连接正常',
             'client' => [
                 'provider_key' => self::KEY,
-                'version' => (string) ($response['version'] ?? ''),
+                'version' => $this->firstScalarString($response['version'] ?? null, data_get($response, 'data.version')),
             ],
         ];
     }
@@ -1179,10 +1179,10 @@ class KangHostx implements ProvidesConsoleCatalog, ProvidesConsoleRuntime, Provi
 
     private function serverIp(Supplier $supplier): string
     {
-        $baseUrl = trim((string) ($supplier->api_url ?? $this->providerConfig($supplier)['api_url'] ?? ''));
+        $baseUrl = $this->firstScalarString($supplier->api_url ?? null, $this->providerConfig($supplier)['api_url'] ?? null);
         $host = trim((string) parse_url($baseUrl, PHP_URL_HOST));
 
-        return $host !== '' ? $host : trim((string) ($this->providerConfig($supplier)['server_ip'] ?? ''));
+        return $host !== '' ? $host : $this->firstScalarString($this->providerConfig($supplier)['server_ip'] ?? null);
     }
 
     /**
@@ -1190,7 +1190,7 @@ class KangHostx implements ProvidesConsoleCatalog, ProvidesConsoleRuntime, Provi
      */
     private function cardBaseUrl(Supplier $supplier, array $binding): string
     {
-        $baseUrl = trim((string) ($binding['base_url'] ?? $supplier->api_url ?? ''));
+        $baseUrl = $this->firstScalarString($binding['base_url'] ?? null, $supplier->api_url ?? null);
 
         return $baseUrl !== '' ? $baseUrl : '未配置';
     }
@@ -1202,7 +1202,7 @@ class KangHostx implements ProvidesConsoleCatalog, ProvidesConsoleRuntime, Provi
      */
     private function cardConnectionStatus(array $remote, array $binding): array
     {
-        $status = strtolower(trim((string) ($remote['connection_status'] ?? $binding['last_check_status'] ?? '')));
+        $status = strtolower($this->scalarString($remote['connection_status'] ?? $binding['last_check_status'] ?? null));
 
         return match (true) {
             in_array($status, ['connected', 'success', 'succeeded', 'ok', 'healthy', 'valid', 'passed'], true) => [
@@ -1226,11 +1226,11 @@ class KangHostx implements ProvidesConsoleCatalog, ProvidesConsoleRuntime, Provi
     private function hasCardCredentials(Supplier $supplier, array $binding): bool
     {
         $secretValues = is_array($binding['has_secret_values'] ?? null) ? (array) $binding['has_secret_values'] : [];
-        $hasBaseUrl = trim((string) ($binding['base_url'] ?? $supplier->api_url ?? '')) !== ''
+        $hasBaseUrl = $this->firstScalarString($binding['base_url'] ?? null, $supplier->api_url ?? null) !== ''
             || (bool) ($binding['has_base_url'] ?? false);
         $hasApiKey = (bool) ($binding['has_api_key'] ?? false)
             || (bool) ($secretValues['api_key'] ?? false)
-            || trim((string) ($supplier->api_key ?? '')) !== '';
+            || $this->scalarString($supplier->api_key ?? null) !== '';
 
         return $hasBaseUrl && $hasApiKey;
     }
@@ -1241,9 +1241,38 @@ class KangHostx implements ProvidesConsoleCatalog, ProvidesConsoleRuntime, Provi
             return $value->format('Y-m-d H:i:s');
         }
 
-        $string = trim((string) ($value ?? ''));
+        $string = $this->scalarString($value);
 
         return $string !== '' ? $string : '-';
+    }
+
+    private function scalarString(mixed $value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+
+        if (is_scalar($value)) {
+            return trim((string) $value);
+        }
+
+        if ($value instanceof \Stringable) {
+            return trim((string) $value);
+        }
+
+        return '';
+    }
+
+    private function firstScalarString(mixed ...$values): string
+    {
+        foreach ($values as $value) {
+            $string = $this->scalarString($value);
+            if ($string !== '') {
+                return $string;
+            }
+        }
+
+        return '';
     }
 
     private function truthy(mixed $value): bool
