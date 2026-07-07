@@ -31,7 +31,7 @@ class SiteProductDetailResource extends JsonResource
         $display = app(ProductDisplayNameResolver::class)->resolveForProduct($product);
         $hierarchy = ProductGroupHierarchyFields::fromProduct($product);
         $cpuModelPayload = app(ProductSiteService::class)->cpuModelPayloadForProduct($product);
-        $productType = (string) ($hierarchy['service_type_code'] ?? $product->product_type ?? '');
+        $productType = (string) ($hierarchy['product_type'] ?? $hierarchy['service_type_code'] ?? $product->product_type ?? '');
         $pricing = $this->pricing($product);
         $primaryCycle = $this->primaryCycle($pricing);
 
@@ -48,7 +48,7 @@ class SiteProductDetailResource extends JsonResource
             ...$cpuModelPayload,
             'product_type' => $productType,
             'type' => $productType,
-            'type_label' => ProductType::labelOf($productType),
+            'type_label' => ProductType::businessLabelOf($productType),
             ...$hierarchy,
             'pricing' => $pricing,
             'pricing_entries' => $this->pricingEntries($pricing, $product),
@@ -73,14 +73,14 @@ class SiteProductDetailResource extends JsonResource
         return [
             'id' => $hierarchy['effective_product_group_id'],
             'product_type' => $productType,
-            'product_type_id' => ProductType::routeIdOf($productType),
-            'product_type_label' => ProductType::labelOf($productType),
+            'product_type_id' => (int) ($hierarchy['first_product_group_id'] ?? 0),
+            'product_type_label' => ProductType::businessLabelOf($productType),
             'name' => $hierarchy['third_product_group_name'] ?? $hierarchy['second_product_group_name'] ?? '',
             'display_name' => (string) ($display['product_display_name'] ?? ''),
             'slogan' => $hierarchy['third_product_group_description'] ?? $hierarchy['second_product_group_description'] ?? '',
             'parent_id' => $hierarchy['second_product_group_id'],
             'parent_product_type' => $productType,
-            'parent_product_type_id' => ProductType::routeIdOf($productType),
+            'parent_product_type_id' => (int) ($hierarchy['first_product_group_id'] ?? 0),
             'parent_name' => $hierarchy['second_product_group_name'] ?? '',
             'parent_display_name' => $hierarchy['second_product_group_name'] ?? '',
             'parent_slogan' => $hierarchy['second_product_group_description'] ?? '',

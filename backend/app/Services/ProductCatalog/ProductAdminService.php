@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\ProductCatalog;
 
+use App\Constants\ProductType;
 use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
 use App\Models\FirstProductGroup;
@@ -704,6 +705,8 @@ class ProductAdminService
     {
         $lifecycleStatus = $this->normalizeLifecycleStatus($filters['lifecycle_status'] ?? null);
         $hasProductUpstreamBindings = Schema::hasTable('product_upstream_bindings');
+        $productType = trim((string) ($filters['product_type'] ?? $filters['type'] ?? ''));
+        $firstGroupCode = trim((string) ($filters['first_product_group_code'] ?? ''));
 
         return $query
             ->when(! empty($filters['keyword']), function (Builder $builder) use ($filters, $lifecycleStatus, $hasProductUpstreamBindings) {
@@ -729,10 +732,11 @@ class ProductAdminService
 
                 });
             })
-            ->when(
-                ! empty($filters['type']),
-                fn (Builder $builder) => $builder->where('products.product_type', (string) $filters['type'])
-            )
+            ->when($productType !== '', fn (Builder $builder) => $builder->where('products.product_type', ProductType::normalizeBusinessValue($productType)))
+            ->when($firstGroupCode !== '', fn (Builder $builder) => $builder->whereHas(
+                'firstProductGroup',
+                fn (Builder $groupQuery) => $groupQuery->where('code', $firstGroupCode)
+            ))
             ->when(
                 array_key_exists('status', $filters) && $filters['status'] !== null && $filters['status'] !== '',
                 fn (Builder $builder) => $builder->where('status', (int) $filters['status'])
@@ -872,7 +876,7 @@ class ProductAdminService
 
     private function buildSplitProductPayload(Product $source, array $variant): array
     {
-        $sourceProductType = (string) ($source->product_type ?? '');
+        $sourceProductType = ProductType::normalizeBusinessValue($source->getRawOriginal('product_type') ?: $source->product_type);
         $purchaseRequires = is_array($source->purchase_requires ?? null) ? $source->purchase_requires : [];
         $purchaseRequires['upstream_default_config'] = (array) ($variant['defaults'] ?? []);
         $purchaseRequires['upstream_split'] = [
@@ -887,7 +891,7 @@ class ProductAdminService
             'first_product_group_id' => (int) ($source->first_product_group_id ?? 0) ?: null,
             'second_product_group_id' => (int) ($source->second_product_group_id ?? 0) ?: null,
             'third_product_group_id' => (int) ($source->third_product_group_id ?? 0) ?: null,
-            'service_type_code' => (string) ($source->service_type_code ?: $sourceProductType),
+            'service_type_code' => $sourceProductType,
             'remark' => $source->remark,
             'pricing' => (array) ($variant['pricing'] ?? []),
             'setup_fee' => (float) ($source->setup_fee ?? 0),
@@ -1654,10 +1658,10 @@ class ProductAdminService
             new BusinessException('一级分类与二级分类不匹配')
         );
 
-        $serviceTypeCode = trim((string) ($data['service_type_code'] ?? $data['type'] ?? $data['product_type'] ?? $firstGroup->code));
-        if ($serviceTypeCode === '') {
-            $serviceTypeCode = (string) $firstGroup->code;
-        }
+        $serviceTypeCode = ProductType::businessValueForFirstGroup(
+            $firstGroup,
+            $data['product_type'] ?? $data['type'] ?? $data['service_type_code'] ?? null
+        );
 
         $thirdName = $thirdGroup instanceof ThirdProductGroup ? (string) $thirdGroup->name : null;
         $secondName = (string) $secondGroup->name;

@@ -89,7 +89,7 @@ class ServiceDetailService
             'status' => (int) $service->status,
             'status_label' => ServiceStatus::$labels[$service->status] ?? (string) $service->status,
             'product_type' => $catalogProductType,
-            'product_type_label' => ProductType::labelOf($catalogProductType),
+            'product_type_label' => ProductType::businessLabelOf($catalogProductType),
             'machine_category' => $this->transformService->resolveMachineCategory($service, $catalogProductType, $consoleMode),
             'console_mode' => $consoleMode,
             'is_nat_console' => $consoleMode === 'nat',

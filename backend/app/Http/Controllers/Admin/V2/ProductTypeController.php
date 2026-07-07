@@ -31,7 +31,11 @@ class ProductTypeController extends Controller
 
         return $this->success([
             'type' => AdminProductTypeResource::make(
-                $this->productTypes->create((string) $payload['label'], $payload['icon'] ?? null)
+                $this->productTypes->create(
+                    (string) $payload['label'],
+                    $payload['icon'] ?? null,
+                    $payload['product_type'] ?? null
+                )
             )->resolve(),
         ], '商品种类已创建');
     }
@@ -46,7 +50,8 @@ class ProductTypeController extends Controller
                     $productType,
                     (string) $payload['label'],
                     array_key_exists('is_hidden', $payload) ? (bool) $payload['is_hidden'] : null,
-                    $payload['icon'] ?? null
+                    $payload['icon'] ?? null,
+                    $payload['product_type'] ?? null
                 )
             )->resolve(),
         ], '商品种类已更新');

@@ -2,11 +2,26 @@
 
 namespace App\Constants;
 
+use App\Models\FirstProductGroup;
 use App\Models\Setting;
 use Illuminate\Support\Str;
 
 class ProductType
 {
+    public const CLOUD_SERVER = 'cloud_server';
+
+    public const GAME_CLOUD = 'game_cloud';
+
+    public const CLOUD_DESKTOP = 'cloud_desktop';
+
+    public const BARE_METAL = 'bare_metal';
+
+    public const CDN = 'cdn';
+
+    public const PHYSICAL_MACHINE = 'physical_machine';
+
+    public const WEB_HOSTING = 'web_hosting';
+
     const VPS = 'vps';
 
     const DEDICATED = 'dedicated';
@@ -21,6 +36,29 @@ class ProductType
 
     public const SETTING_KEY = 'product_types';
 
+    public const BUSINESS_TYPE_ITEMS = [
+        self::CLOUD_SERVER => ['label' => '云服务器', 'icon' => 'Platform', 'plugin_driven' => false],
+        self::GAME_CLOUD => ['label' => '游戏云', 'icon' => 'Gamepad', 'plugin_driven' => false],
+        self::CLOUD_DESKTOP => ['label' => '云电脑', 'icon' => 'Desktop', 'plugin_driven' => false],
+        self::BARE_METAL => ['label' => '裸金属', 'icon' => 'Server', 'plugin_driven' => false],
+        self::CDN => ['label' => 'CDN', 'icon' => 'Node', 'plugin_driven' => false],
+        self::OTHER => ['label' => '其他', 'icon' => 'Grid', 'plugin_driven' => true],
+        self::PHYSICAL_MACHINE => ['label' => '物理机', 'icon' => 'Server', 'plugin_driven' => false],
+        self::WEB_HOSTING => ['label' => '虚拟主机', 'icon' => 'Monitor', 'plugin_driven' => false],
+    ];
+
+    private const LEGACY_BUSINESS_TYPE_MAP = [
+        self::VPS => self::CLOUD_SERVER,
+        self::DEDICATED => self::GAME_CLOUD,
+        self::DOMAIN => self::CLOUD_DESKTOP,
+        'type_iwjqnj' => self::BARE_METAL,
+        self::OTHER => self::CDN,
+        'type_ipragu' => self::OTHER,
+        'type_tgynng' => self::PHYSICAL_MACHINE,
+        'type_1' => self::WEB_HOSTING,
+        self::HOSTING => self::WEB_HOSTING,
+    ];
+
     private static ?array $cachedItems = null;
 
     private const DEFAULT_INTERNAL_IDS = [
@@ -32,6 +70,13 @@ class ProductType
     ];
 
     public static array $labels = [
+        self::CLOUD_SERVER => '云服务器',
+        self::GAME_CLOUD => '游戏云',
+        self::CLOUD_DESKTOP => '云电脑',
+        self::BARE_METAL => '裸金属',
+        self::CDN => 'CDN',
+        self::PHYSICAL_MACHINE => '物理机',
+        self::WEB_HOSTING => '虚拟主机',
         self::VPS => '云服务器',
         self::DEDICATED => '独立服务器',
         self::HOSTING => '虚拟主机',
@@ -39,14 +84,99 @@ class ProductType
         self::OTHER => '其他',
     ];
 
+    public static function businessItems(): array
+    {
+        return array_map(
+            fn (string $value, array $item): array => [
+                'value' => $value,
+                'label' => (string) $item['label'],
+                'icon' => (string) $item['icon'],
+                'plugin_driven' => (bool) $item['plugin_driven'],
+            ],
+            array_keys(self::BUSINESS_TYPE_ITEMS),
+            array_values(self::BUSINESS_TYPE_ITEMS)
+        );
+    }
+
+    public static function businessAllowedValues(): array
+    {
+        return array_keys(self::BUSINESS_TYPE_ITEMS);
+    }
+
+    public static function normalizeBusinessValue(mixed $value): string
+    {
+        $normalizedValue = trim((string) $value);
+        if ($normalizedValue === '') {
+            return self::OTHER;
+        }
+
+        if (isset(self::BUSINESS_TYPE_ITEMS[$normalizedValue])) {
+            return $normalizedValue;
+        }
+
+        return self::LEGACY_BUSINESS_TYPE_MAP[$normalizedValue] ?? self::OTHER;
+    }
+
+    public static function normalizeBusinessValueFromMenuCode(mixed $value): string
+    {
+        $normalizedValue = trim((string) $value);
+        if ($normalizedValue === '') {
+            return self::OTHER;
+        }
+
+        if (isset(self::LEGACY_BUSINESS_TYPE_MAP[$normalizedValue])) {
+            return self::LEGACY_BUSINESS_TYPE_MAP[$normalizedValue];
+        }
+
+        return self::normalizeBusinessValue($normalizedValue);
+    }
+
+    public static function businessValueForFirstGroup(?FirstProductGroup $group, mixed $fallback = null): string
+    {
+        if ($group instanceof FirstProductGroup) {
+            $productType = trim((string) ($group->product_type ?? ''));
+            if ($productType !== '') {
+                return self::normalizeBusinessValue($productType);
+            }
+
+            $code = trim((string) ($group->code ?? ''));
+            if ($code !== '') {
+                return self::normalizeBusinessValueFromMenuCode($code);
+            }
+        }
+
+        return self::normalizeBusinessValue($fallback);
+    }
+
+    public static function businessLabelOf(?string $value): string
+    {
+        $normalizedValue = self::normalizeBusinessValue($value);
+
+        return (string) (self::BUSINESS_TYPE_ITEMS[$normalizedValue]['label'] ?? self::$labels[$normalizedValue] ?? $normalizedValue);
+    }
+
+    public static function businessIconOf(?string $value): string
+    {
+        $normalizedValue = self::normalizeBusinessValue($value);
+
+        return (string) (self::BUSINESS_TYPE_ITEMS[$normalizedValue]['icon'] ?? '');
+    }
+
+    public static function isPluginDriven(?string $value): bool
+    {
+        $normalizedValue = self::normalizeBusinessValue($value);
+
+        return (bool) (self::BUSINESS_TYPE_ITEMS[$normalizedValue]['plugin_driven'] ?? false);
+    }
+
     public static function defaultItems(): array
     {
         return [
-            ['internal_id' => self::DEFAULT_INTERNAL_IDS[self::VPS], 'value' => self::VPS, 'label' => '云服务器', 'icon' => 'Platform', 'is_builtin' => true, 'is_hidden' => false],
-            ['internal_id' => self::DEFAULT_INTERNAL_IDS[self::DEDICATED], 'value' => self::DEDICATED, 'label' => '独立服务器', 'icon' => 'OfficeBuilding', 'is_builtin' => true, 'is_hidden' => false],
-            ['internal_id' => self::DEFAULT_INTERNAL_IDS[self::HOSTING], 'value' => self::HOSTING, 'label' => '虚拟主机', 'icon' => 'Monitor', 'is_builtin' => true, 'is_hidden' => false],
-            ['internal_id' => self::DEFAULT_INTERNAL_IDS[self::DOMAIN], 'value' => self::DOMAIN, 'label' => '域名', 'icon' => 'Link', 'is_builtin' => true, 'is_hidden' => false],
-            ['internal_id' => self::DEFAULT_INTERNAL_IDS[self::OTHER], 'value' => self::OTHER, 'label' => '其他', 'icon' => 'Grid', 'is_builtin' => true, 'is_hidden' => false],
+            ['internal_id' => self::DEFAULT_INTERNAL_IDS[self::VPS], 'value' => self::VPS, 'label' => '云服务器', 'icon' => 'Platform', 'is_builtin' => true, 'is_hidden' => false, 'product_type' => self::CLOUD_SERVER],
+            ['internal_id' => self::DEFAULT_INTERNAL_IDS[self::DEDICATED], 'value' => self::DEDICATED, 'label' => '游戏云', 'icon' => 'Gamepad', 'is_builtin' => true, 'is_hidden' => false, 'product_type' => self::GAME_CLOUD],
+            ['internal_id' => self::DEFAULT_INTERNAL_IDS[self::HOSTING], 'value' => self::HOSTING, 'label' => '虚拟主机', 'icon' => 'Monitor', 'is_builtin' => true, 'is_hidden' => false, 'product_type' => self::WEB_HOSTING],
+            ['internal_id' => self::DEFAULT_INTERNAL_IDS[self::DOMAIN], 'value' => self::DOMAIN, 'label' => '云电脑', 'icon' => 'Desktop', 'is_builtin' => true, 'is_hidden' => false, 'product_type' => self::CLOUD_DESKTOP],
+            ['internal_id' => self::DEFAULT_INTERNAL_IDS[self::OTHER], 'value' => self::OTHER, 'label' => 'CDN', 'icon' => 'Node', 'is_builtin' => true, 'is_hidden' => false, 'product_type' => self::CDN],
         ];
     }
 
@@ -254,10 +384,18 @@ class ProductType
             }
 
             $label = Str::limit($label, 30, '');
+            $productType = array_key_exists('product_type', $item)
+                ? self::normalizeBusinessValue($item['product_type'])
+                : self::normalizeBusinessValueFromMenuCode($value);
+            if (! array_key_exists('product_type', $item) || trim((string) ($item['product_type'] ?? '')) !== $productType) {
+                $changed = true;
+            }
+
             $normalized[] = [
                 'internal_id' => $internalId,
                 'value' => $value,
                 'label' => $label,
+                'product_type' => $productType,
                 'icon' => self::normalizeIcon($item['icon'] ?? ''),
                 'is_builtin' => (bool) ($item['is_builtin'] ?? false),
                 'is_hidden' => (bool) ($item['is_hidden'] ?? false),

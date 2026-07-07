@@ -4,6 +4,7 @@ import type { PagedListParams } from './types';
 
 export interface ProductListParams extends PagedListParams {
   product_type?: string;
+  first_product_group_code?: string;
   first_product_group_id?: number | string;
   second_product_group_id?: number | string;
   third_product_group_id?: number | string;
@@ -65,6 +66,10 @@ export interface ProductRecord {
 export interface ProductTypeRecord {
   value: string;
   label: string;
+  product_type?: string;
+  product_type_label?: string;
+  product_type_icon?: string;
+  product_type_plugin_driven?: boolean;
   icon?: string;
   usage_count?: number;
   first_product_group_id?: number | string | null;
@@ -104,7 +109,7 @@ export interface ProductCategoryRecord {
 
 export interface ProductGroupV2ListParams extends PagedListParams {
   keyword?: string;
-  service_type_code?: string;
+  first_product_group_code?: string;
   product_type?: string;
   status?: number | string;
 }
@@ -294,7 +299,8 @@ function normalizeV2ProductDetail(response: V2ProductDetailResponse): ProductRec
 
 function normalizeV2ProductGroup(item: ProductGroupV2Record, children: ProductCategoryRecord[] = []): ProductCategoryRecord {
   const level = Number(item.effective_product_group_level || item.level || 0);
-  const serviceTypeCode = String(item.service_type_code || item.first_product_group_code || item.product_type || '');
+  const productType = String(item.product_type || '');
+  const firstGroupCode = String(item.first_product_group_code || '');
   const name = String(item.name || item.label || '');
   const firstGroupId = item.first_product_group_id ?? (level === 1 ? item.id : null);
   const secondGroupId = item.second_product_group_id ?? (level === 2 ? item.id : null);
@@ -305,11 +311,11 @@ function normalizeV2ProductGroup(item: ProductGroupV2Record, children: ProductCa
     id: item.id,
     name,
     label: name,
-    product_type: serviceTypeCode,
+    product_type: productType,
     product_type_label: String(item.product_type_label || item.service_type_label || ''),
-    service_type_code: serviceTypeCode,
+    service_type_code: productType,
     first_product_group_id: firstGroupId,
-    first_product_group_code: serviceTypeCode,
+    first_product_group_code: firstGroupCode,
     first_product_group_name: String(item.first_product_group_name || (level === 1 ? name : '')),
     second_product_group_id: secondGroupId,
     second_product_group_name: String(item.second_product_group_name || (level === 2 ? name : '')),
@@ -327,12 +333,8 @@ function normalizeV2ProductGroup(item: ProductGroupV2Record, children: ProductCa
   };
 }
 
-function normalizeV2GroupParams(params?: Record<string, unknown>): Record<string, unknown> {
-  const normalized: Record<string, unknown> = { ...(params || {}) };
-  if (!normalized.service_type_code && normalized.product_type) {
-    normalized.service_type_code = normalized.product_type;
-  }
-  return normalized;
+function normalizeV2GroupParams(params?: ProductGroupV2ListParams): Record<string, unknown> {
+  return { ...(params || {}) };
 }
 
 function compactQueryParams<T extends Record<string, unknown>>(params?: T): T | undefined {
@@ -417,7 +419,7 @@ export const productApi = {
   v2Groups: (params?: ProductGroupV2ListParams) =>
     request.get<{ list?: ProductGroupV2Record[]; total?: number; page?: number; page_size?: number }>({
       url: '/v2/admin/product-groups',
-      params,
+      params: compactQueryParams(normalizeV2GroupParams(params)),
     }),
   v2GroupDetail: (id: number | string, level: number | string) =>
     request.get<{ group?: ProductGroupV2Record }>({

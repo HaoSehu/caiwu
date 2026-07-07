@@ -142,6 +142,7 @@ class IntegrationPluginService
             if ($plugin->isEnabled()) {
                 $this->installer->disable($plugin);
             }
+            $this->deleteUpstreamRuntimeBindings($plugin);
             $plugin->bindings()->delete();
             $plugin->supplierBindings()->delete();
             $plugin->config()->delete();
@@ -476,6 +477,26 @@ class IntegrationPluginService
         }
 
         return $countsByPluginId;
+    }
+
+    private function deleteUpstreamRuntimeBindings(IntegrationPlugin $plugin): void
+    {
+        $pluginId = (int) $plugin->id;
+        if ($pluginId <= 0) {
+            return;
+        }
+
+        $this->deletePluginRows('service_upstream_bindings', $pluginId);
+        $this->deletePluginRows('product_upstream_bindings', $pluginId);
+    }
+
+    private function deletePluginRows(string $table, int $pluginId): void
+    {
+        if (! Schema::hasTable($table) || ! Schema::hasColumn($table, 'plugin_id')) {
+            return;
+        }
+
+        DB::table($table)->where('plugin_id', $pluginId)->delete();
     }
 
     /**

@@ -17,11 +17,11 @@ class ProductHierarchyResourceSemanticsTest extends TestCase
     {
         $product = new Product([
             'id' => 1001,
-            'product_type' => 'vps',
+            'product_type' => 'cloud_server',
             'first_product_group_id' => 11,
             'second_product_group_id' => 22,
             'third_product_group_id' => 33,
-            'service_type_code' => 'vps',
+            'service_type_code' => 'cloud_server',
             'pricing' => ['monthly' => '10.00'],
             'setup_fee' => '0.00',
             'config_options' => [],
@@ -36,6 +36,7 @@ class ProductHierarchyResourceSemanticsTest extends TestCase
                 'id' => 11,
                 'code' => 'vps',
                 'name' => '云服务器',
+                'product_type' => 'cloud_server',
             ], true);
         }));
         $product->setRelation('secondProductGroup', tap(new SecondProductGroup, function (SecondProductGroup $group): void {
@@ -61,6 +62,9 @@ class ProductHierarchyResourceSemanticsTest extends TestCase
         $this->assertSame(33, $payload['effective_product_group_id']);
         $this->assertSame(3, $payload['effective_product_group_level']);
         $this->assertSame('云服务器', $payload['first_product_group_name']);
+        $this->assertSame('vps', $payload['first_product_group_code']);
+        $this->assertSame('cloud_server', $payload['product_type']);
+        $this->assertSame('cloud_server', $payload['service_type_code']);
         $this->assertSame('香港', $payload['second_product_group_name']);
         $this->assertSame('精品线路', $payload['third_product_group_name']);
     }

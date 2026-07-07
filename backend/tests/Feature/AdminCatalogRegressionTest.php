@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Constants\ProductType;
 use App\Models\AdminUser;
 use App\Models\FirstProductGroup;
 use App\Models\IntegrationPlugin;
@@ -87,7 +88,6 @@ class AdminCatalogRegressionTest extends TestCase
         ]);
 
         $type = app(ProductTypeService::class)->create('Filter type '.$suffix, '');
-        $productType = (string) $type['value'];
         $firstGroup = FirstProductGroup::query()->findOrFail((int) $type['first_product_group_id']);
         $group = $this->createSecondGroup($firstGroup, 'Filter group '.$suffix, 'admin-filter-group-'.$suffix);
 
@@ -95,7 +95,12 @@ class AdminCatalogRegressionTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/v2/admin/products?second_product_group_id='.$group->id.'&product_type='.$productType.'&page=1&page_size=20')
+        $this->getJson('/api/v2/admin/products?'.http_build_query([
+            'second_product_group_id' => (int) $group->id,
+            'first_product_group_code' => (string) $firstGroup->code,
+            'page' => 1,
+            'page_size' => 20,
+        ]))
             ->assertOk()
             ->assertJsonStructure(['code', 'message', 'data', 'timestamp']);
     }
@@ -128,7 +133,7 @@ class AdminCatalogRegressionTest extends TestCase
 
         $secondResponse = $this->postJson('/api/v2/admin/product-groups', [
             'effective_product_group_level' => 2,
-            'service_type_code' => (string) $firstGroup->code,
+            'first_product_group_code' => (string) $firstGroup->code,
             'first_product_group_id' => (int) $firstGroup->id,
             'name' => '襄阳 '.$suffix,
             'sort_order' => 1,
@@ -235,6 +240,38 @@ class AdminCatalogRegressionTest extends TestCase
 
         $this->assertSame($firstGroupId, (int) $category['first_product_group_id']);
         $this->assertSame('西安 '.$suffix, $category['second_product_group_name']);
+    }
+
+    public function test_second_level_category_create_recovers_missing_first_group_from_product_type_code(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+
+        $label = 'Recover '.$suffix;
+        $type = app(ProductTypeService::class)->create($label, '');
+        $productType = (string) $type['value'];
+        $staleFirstGroupId = (int) $type['first_product_group_id'];
+
+        FirstProductGroup::query()->whereKey($staleFirstGroupId)->delete();
+        $this->assertDatabaseMissing('first_product_groups', [
+            'id' => $staleFirstGroupId,
+        ]);
+
+        $category = app(ProductCategoryService::class)->createCategory([
+            'effective_product_group_level' => 2,
+            'service_type_code' => $productType,
+            'first_product_group_code' => $productType,
+            'first_product_group_id' => $staleFirstGroupId,
+            'name' => '美国 '.$suffix,
+            'sort_order' => 0,
+            'is_visible' => 1,
+        ]);
+
+        $firstGroup = FirstProductGroup::query()->where('code', $productType)->first();
+
+        $this->assertInstanceOf(FirstProductGroup::class, $firstGroup);
+        $this->assertSame((int) $firstGroup->id, (int) $category['first_product_group_id']);
+        $this->assertSame($productType, $category['first_product_group_code']);
+        $this->assertSame('美国 '.$suffix, $category['second_product_group_name']);
     }
 
     public function test_admin_category_reorder_accepts_current_hierarchy_payload(): void
@@ -429,12 +466,12 @@ class AdminCatalogRegressionTest extends TestCase
         $this->assertDatabaseHas('products', [
             'id' => (int) $firstSourceProduct->id,
             'second_product_group_id' => (int) $targetCategory->id,
-            'product_type' => 'vps',
+            'product_type' => ProductType::CLOUD_SERVER,
         ]);
         $this->assertDatabaseHas('products', [
             'id' => (int) $secondSourceProduct->id,
             'second_product_group_id' => (int) $targetCategory->id,
-            'product_type' => 'vps',
+            'product_type' => ProductType::CLOUD_SERVER,
         ]);
 
         $targetOrder = Product::query()
@@ -590,11 +627,19 @@ class AdminCatalogRegressionTest extends TestCase
                 'is_visible' => 1,
                 'is_system' => 0,
                 'legacy_product_type' => $code,
+                'product_type' => ProductType::normalizeBusinessValueFromMenuCode($code),
             ]
         );
 
+        $updates = [];
         if ((int) $group->is_visible !== 1) {
-            $group->update(['is_visible' => 1]);
+            $updates['is_visible'] = 1;
+        }
+        if (trim((string) ($group->product_type ?? '')) === '') {
+            $updates['product_type'] = ProductType::normalizeBusinessValueFromMenuCode($code);
+        }
+        if ($updates !== []) {
+            $group->update($updates);
         }
 
         return $group->refresh();
@@ -615,15 +660,16 @@ class AdminCatalogRegressionTest extends TestCase
     {
         $firstGroup = $group->firstProductGroup ?: FirstProductGroup::query()->findOrFail((int) $group->first_product_group_id);
         $code = (string) $firstGroup->code;
+        $productType = ProductType::businessValueForFirstGroup($firstGroup, $code);
 
         return [
             'first_product_group_id' => (int) $firstGroup->id,
             'second_product_group_id' => (int) $group->id,
             'third_product_group_id' => null,
-            'service_type_code' => $code,
+            'service_type_code' => $productType,
             'name' => $name,
             'custom_display_name' => $name,
-            'product_type' => $code,
+            'product_type' => $productType,
             'pricing' => ['monthly' => $monthlyPrice],
             'purchase_requires' => [],
             'config_options' => [],

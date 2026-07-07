@@ -189,16 +189,22 @@ class ProductGroupHierarchyService
             return [];
         }
 
+        $firstGroupId = (int) ($hierarchy['first_product_group_id'] ?? 0);
+        $firstGroup = $firstGroupId > 0
+            ? FirstProductGroup::query()->find($firstGroupId)
+            : null;
+        $productType = ProductType::businessValueForFirstGroup(
+            $firstGroup,
+            $serviceTypeCode ?? ($hierarchy['first_product_group_code'] ?? null)
+        );
+
         $payload = [
-            'first_product_group_id' => $hierarchy['first_product_group_id'] ?? null,
+            'first_product_group_id' => $firstGroupId ?: null,
             'second_product_group_id' => $hierarchy['second_product_group_id'] ?? null,
             'third_product_group_id' => $hierarchy['third_product_group_id'] ?? null,
+            'product_type' => $productType,
+            'service_type_code' => $productType,
         ];
-
-        $resolvedServiceType = $this->normalizeProductTypeCode($serviceTypeCode ?? '');
-        $payload['service_type_code'] = $resolvedServiceType !== ''
-            ? $resolvedServiceType
-            : ($hierarchy['first_product_group_code'] ?? null);
 
         return $payload;
     }
@@ -486,8 +492,25 @@ class ProductGroupHierarchyService
             ->unique()
             ->values();
 
-        foreach ($productTypes as $productType) {
-            $firstGroup = $this->ensureFirstProductGroup($productType);
+        foreach ($productTypes as $rawProductType) {
+            $firstGroup = FirstProductGroup::query()
+                ->where('code', $rawProductType)
+                ->first();
+
+            $businessProductType = ProductType::businessValueForFirstGroup($firstGroup, $rawProductType);
+            if (! $firstGroup instanceof FirstProductGroup) {
+                $firstGroup = FirstProductGroup::query()
+                    ->where('product_type', $businessProductType)
+                    ->orderBy('sort_order')
+                    ->orderBy('id')
+                    ->first();
+            }
+
+            if (! $firstGroup instanceof FirstProductGroup) {
+                $firstGroup = $this->ensureFirstProductGroup($rawProductType);
+                $businessProductType = ProductType::businessValueForFirstGroup($firstGroup, $rawProductType);
+            }
+
             if (! $firstGroup instanceof FirstProductGroup) {
                 continue;
             }
@@ -496,14 +519,15 @@ class ProductGroupHierarchyService
 
             $updated += Product::withTrashed()
                 ->whereNotNull('product_group_id')
-                ->where('product_type', $productType)
+                ->where('product_type', $rawProductType)
                 ->whereNotIn('product_group_id', ProductCategory::query()->select('id'))
                 ->update([
                     'product_group_id' => null,
                     'first_product_group_id' => (int) $firstGroup->id,
                     'second_product_group_id' => (int) $secondGroup->id,
                     'third_product_group_id' => null,
-                    'service_type_code' => $productType,
+                    'product_type' => $businessProductType,
+                    'service_type_code' => $businessProductType,
                 ]);
         }
 
@@ -539,6 +563,11 @@ class ProductGroupHierarchyService
             ->whereNotIn('product_group_id', ProductCategory::query()->select('id'));
     }
 
+    public function ensureFirstProductGroupForType(string $code): ?FirstProductGroup
+    {
+        return $this->ensureFirstProductGroup($code);
+    }
+
     private function ensureFirstProductGroup(string $code, ?array $item = null, int $sortOrder = 0): ?FirstProductGroup
     {
         if (! $this->tablesReady()) {
@@ -559,19 +588,24 @@ class ProductGroupHierarchyService
             [],
             $existing?->id
         );
+        $payload = [
+            'name' => $label !== '' ? $label : $code,
+            'slug' => $slug,
+            'icon' => $this->nullableString($item['icon'] ?? null),
+            'sort_order' => $sortOrder > 0 ? $sortOrder : $this->productTypeSortOrder($code),
+            'is_visible' => (bool) ($item['is_hidden'] ?? false) ? 0 : 1,
+            'is_system' => (bool) ($item['is_builtin'] ?? false) ? 1 : 0,
+            'legacy_product_type' => $code,
+        ];
+
+        if (Schema::hasColumn('first_product_groups', 'product_type')) {
+            $payload['product_type'] = $this->resolveFirstGroupProductType($code, $item);
+        }
 
         /** @var FirstProductGroup $group */
         $group = FirstProductGroup::query()->updateOrCreate(
             ['code' => $code],
-            [
-                'name' => $label !== '' ? $label : $code,
-                'slug' => $slug,
-                'icon' => $this->nullableString($item['icon'] ?? null),
-                'sort_order' => $sortOrder > 0 ? $sortOrder : $this->productTypeSortOrder($code),
-                'is_visible' => (bool) ($item['is_hidden'] ?? false) ? 0 : 1,
-                'is_system' => (bool) ($item['is_builtin'] ?? false) ? 1 : 0,
-                'legacy_product_type' => $code,
-            ]
+            $payload
         );
 
         return $group;
@@ -592,6 +626,15 @@ class ProductGroupHierarchyService
             'is_builtin' => false,
             'is_hidden' => false,
         ];
+    }
+
+    private function resolveFirstGroupProductType(string $code, ?array $item): string
+    {
+        if (is_array($item) && array_key_exists('product_type', $item)) {
+            return ProductType::normalizeBusinessValue($item['product_type']);
+        }
+
+        return ProductType::normalizeBusinessValueFromMenuCode($item['value'] ?? $code);
     }
 
     private function productTypeSortOrder(string $code): int

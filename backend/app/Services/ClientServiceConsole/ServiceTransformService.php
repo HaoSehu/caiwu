@@ -103,7 +103,7 @@ class ServiceTransformService
         $rootGroupName = trim((string) ($rootGroup?->name ?? ''));
         $leafGroupName = trim((string) ($leafGroup?->name ?? ''));
         $catalogProductType = $this->resolverService->resolveGroupedOverviewTypeValue($service);
-        $catalogProductTypeLabel = ProductType::labelOf($catalogProductType);
+        $catalogProductTypeLabel = ProductType::businessLabelOf($catalogProductType);
         $consoleMode = $this->resolverService->resolveConsoleMode($service, $provisionData);
         $productConfigOptions = is_array($service->product?->config_options ?? null)
             ? $service->product->config_options
@@ -183,7 +183,7 @@ class ServiceTransformService
         $specConfigOptions = $this->resolveSpecConfigOptions($service, $host, $provisionData);
         $canExecuteConsoleActions = $this->canExecuteConsoleActions($service, $serviceStatus, $runtimeState);
         $catalogProductType = $this->resolverService->resolveGroupedOverviewTypeValue($service);
-        $catalogProductTypeLabel = ProductType::labelOf($catalogProductType);
+        $catalogProductTypeLabel = ProductType::businessLabelOf($catalogProductType);
         $consoleMode = $this->resolverService->resolveConsoleMode($service, $provisionData);
         $productPricing = Service::extractSupportedRenewPricing(
             is_array($service->product?->pricing ?? null) ? $service->product->pricing : []
@@ -815,12 +815,14 @@ class ServiceTransformService
         }
 
         $typeMap = [
-            'vps' => ['key' => 'cloud_server', 'label' => '云服务器'],
-            'cdn' => ['key' => 'cdn',           'label' => 'CDN'],
-            'dedicated' => ['key' => 'dedicated',     'label' => '物理机'],
-            'bare_metal' => ['key' => 'bare_metal',    'label' => '裸金属'],
-            'hypervisor' => ['key' => 'hypervisor',    'label' => '宿主机'],
-            'hosting' => ['key' => 'hosting',       'label' => '虚拟主机'],
+            'cloud_server' => ['key' => 'cloud_server', 'label' => '云服务器'],
+            'game_cloud' => ['key' => 'game_cloud', 'label' => '游戏云'],
+            'cloud_desktop' => ['key' => 'cloud_desktop', 'label' => '云电脑'],
+            'bare_metal' => ['key' => 'bare_metal', 'label' => '裸金属'],
+            'cdn' => ['key' => 'cdn', 'label' => 'CDN'],
+            'physical_machine' => ['key' => 'physical_machine', 'label' => '物理机'],
+            'web_hosting' => ['key' => 'web_hosting', 'label' => '虚拟主机'],
+            'other' => ['key' => 'other', 'label' => '其他'],
         ];
 
         if (isset($typeMap[$normalizedType])) {
@@ -842,19 +844,19 @@ class ServiceTransformService
             'cloud_server' => ['云服务器', 'vps', 'ecs', 'cvm', '轻量'],
             'nat' => ['nat', '云电脑', '云桌面'],
             'cdn' => ['cdn', '加速'],
-            'dedicated' => ['物理机', '物理服务器', '独立服务器', 'dedicated'],
+            'game_cloud' => ['游戏云'],
+            'physical_machine' => ['物理机', '物理服务器', '独立服务器', 'dedicated'],
             'bare_metal' => ['裸金属', 'bare metal', 'bare_metal'],
-            'hypervisor' => ['宿主机', '母鸡', 'hypervisor'],
-            'hosting' => ['虚拟主机', '虚机', 'hosting', '空间'],
+            'web_hosting' => ['虚拟主机', '虚机', 'hosting', '空间'],
         ];
         $labelMap = [
             'cloud_server' => '云服务器',
             'nat' => 'NAT / 云电脑',
             'cdn' => 'CDN',
-            'dedicated' => '物理机',
+            'game_cloud' => '游戏云',
+            'physical_machine' => '物理机',
             'bare_metal' => '裸金属',
-            'hypervisor' => '宿主机',
-            'hosting' => '虚拟主机',
+            'web_hosting' => '虚拟主机',
         ];
 
         foreach ($keywordMap as $key => $keywords) {

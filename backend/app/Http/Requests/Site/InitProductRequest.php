@@ -16,7 +16,8 @@ class InitProductRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'product_type' => ['nullable', Rule::in(ProductType::allowedValues())],
+            'product_type' => ['nullable', Rule::in(ProductType::businessAllowedValues())],
+            'first_product_group_code' => ['nullable', 'string', 'max:50'],
         ];
     }
 }

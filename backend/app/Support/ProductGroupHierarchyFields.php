@@ -115,8 +115,9 @@ class ProductGroupHierarchyFields
         $thirdId = $third instanceof ThirdProductGroup
             ? (int) $third->id
             : ((int) ($product->getAttribute('third_product_group_id') ?? 0) ?: null);
-        $serviceTypeCode = trim((string) ($product->getAttribute('service_type_code') ?: $product->getAttribute('product_type') ?: ''));
-        $firstCode = trim((string) ($first?->code ?? $serviceTypeCode));
+        $fallbackType = trim((string) ($product->getRawOriginal('product_type') ?: $product->getRawOriginal('service_type_code') ?: ''));
+        $productType = ProductType::businessValueForFirstGroup($first, $fallbackType);
+        $firstCode = trim((string) ($first?->code ?? $product->getRawOriginal('service_type_code') ?? ''));
         $firstName = trim((string) ($first?->name ?? ProductType::labelOf($firstCode)));
         $secondName = trim((string) ($second?->name ?? ''));
         $thirdName = $thirdId !== null ? trim((string) ($third?->name ?? '')) : null;
@@ -137,7 +138,9 @@ class ProductGroupHierarchyFields
             'third_product_group_description' => $thirdDescription,
             'effective_product_group_id' => $thirdId ?? $secondId,
             'effective_product_group_level' => $thirdId !== null ? 3 : ($secondId !== null ? 2 : null),
-            'service_type_code' => $serviceTypeCode !== '' ? $serviceTypeCode : null,
+            'product_type' => $productType,
+            'product_type_label' => ProductType::businessLabelOf($productType),
+            'service_type_code' => $productType,
         ];
     }
 

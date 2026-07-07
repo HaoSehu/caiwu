@@ -63,6 +63,7 @@ class SupplierBatchConnectRegressionTest extends TestCase
                 'is_visible' => 1,
                 'is_system' => 0,
                 'legacy_product_type' => 'vps',
+                'product_type' => 'cloud_server',
             ]
         );
 
@@ -90,7 +91,7 @@ class SupplierBatchConnectRegressionTest extends TestCase
         $service = new ProductSyncService($this->makeProviderResolver($transport));
 
         $result = $service->bulkConnectSupplierProducts($supplier, [
-            'product_type' => 'vps',
+            'first_product_group_code' => 'vps',
             'first_product_group_id' => (int) $firstGroup->id,
             'second_product_group_name' => '香港云服务器 / CN2',
             'product_ids' => [$supplierProductId],
@@ -116,6 +117,8 @@ class SupplierBatchConnectRegressionTest extends TestCase
 
         $this->assertNotNull($product);
         $this->assertSame('99.00', $product->pricing['monthly'] ?? null);
+        $this->assertSame('cloud_server', $product->product_type);
+        $this->assertSame('cloud_server', $product->service_type_code);
         $this->assertSame(1, (int) $product->status);
         $this->assertSame(1, (int) $product->auto_setup);
         $this->assertSame('2', (string) (($product->purchase_requires['upstream_default_config'] ?? [])['cpu'] ?? ''));
@@ -136,7 +139,7 @@ class SupplierBatchConnectRegressionTest extends TestCase
         $product = new Product([
             'id' => 999001,
             'name' => '通用共享',
-            'product_type' => 'vps',
+            'product_type' => 'cloud_server',
             'purchase_requires' => [],
             'config_options' => [
                 [
@@ -180,7 +183,7 @@ class SupplierBatchConnectRegressionTest extends TestCase
         $product = new Product([
             'id' => 999002,
             'custom_display_name' => 'gscs',
-            'product_type' => 'vps',
+            'product_type' => 'cloud_server',
             'purchase_requires' => [
                 'upstream_default_config' => [
                     'cpu' => '2',
@@ -205,7 +208,7 @@ class SupplierBatchConnectRegressionTest extends TestCase
             999003 => ['instance_spec_text' => 'gscs'],
         ]);
         $product = new Product([
-            'product_type' => 'vps',
+            'product_type' => 'cloud_server',
             'purchase_requires' => [
                 'upstream_default_config' => [
                     'cpu' => '32',
@@ -230,7 +233,7 @@ class SupplierBatchConnectRegressionTest extends TestCase
             999004 => ['instance_spec_text' => 'ecs.g9i.2c2g'],
         ]);
         $product = new Product([
-            'product_type' => 'vps',
+            'product_type' => 'cloud_server',
             'purchase_requires' => [
                 'upstream_default_config' => [
                     'cpu' => '2',

@@ -23,7 +23,7 @@ class AdminProductSummaryResource extends JsonResource
         $product = $this->resource;
         $display = app(ProductDisplayNameResolver::class)->resolveForProduct($product);
         $hierarchy = ProductGroupHierarchyFields::fromProduct($product);
-        $productType = (string) ($hierarchy['service_type_code'] ?? $product->product_type ?? '');
+        $productType = (string) ($hierarchy['product_type'] ?? $hierarchy['service_type_code'] ?? $product->product_type ?? '');
         $pricing = (array) ($product->pricing ?? []);
         $primaryPrice = $this->primaryPrice($pricing);
         $provisionHostname = ProductProvisionHostname::fromPurchaseRequires((array) ($product->purchase_requires ?? []));
@@ -39,8 +39,8 @@ class AdminProductSummaryResource extends JsonResource
             'combined_display_name' => (string) ($display['combined_display_name'] ?? ''),
             'product_type' => $productType,
             'type' => $productType,
-            'product_type_label' => ProductType::labelOf($productType),
-            'type_label' => ProductType::labelOf($productType),
+            'product_type_label' => ProductType::businessLabelOf($productType),
+            'type_label' => ProductType::businessLabelOf($productType),
             'category_full_name' => $this->categoryFullName($hierarchy),
             'effective_product_group_full_name' => $this->categoryFullName($hierarchy),
             'first_product_group_id' => $hierarchy['first_product_group_id'],

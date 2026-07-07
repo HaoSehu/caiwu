@@ -41,7 +41,7 @@ function groupMatchesType(group, typeValue) {
     return true
   }
 
-  return [group?.product_type, group?.first_product_group_code, group?.service_type_code]
+  return [group?.first_product_group_code]
     .map((value) => String(value || '').trim())
     .includes(typeValue)
 }
@@ -345,7 +345,7 @@ export function useWebsiteProductsCatalog({ onProductSelect, onResetSelection })
     pageLoading.value = true
 
     try {
-      const res = await siteApi.productGroups({ product_type: activeTypeValue.value || undefined })
+      const res = await siteApi.productGroups({ first_product_group_code: activeTypeValue.value || undefined })
       rootGroups.value = filterGroupsByType(res.data.list || [], activeTypeValue.value)
 
       if (rootGroups.value.length) {

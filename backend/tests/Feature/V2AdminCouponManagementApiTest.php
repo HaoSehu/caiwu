@@ -141,7 +141,7 @@ class V2AdminCouponManagementApiTest extends TestCase
             ->assertJsonPath('data', null);
     }
 
-    public function test_admin_coupon_campaign_can_update_after_generating_coupon_batch(): void
+    public function test_admin_coupon_campaign_cannot_update_after_generating_coupon_batch(): void
     {
         Sanctum::actingAs($this->createAdmin([
             AdminPermissions::PRODUCT_LIST,
@@ -163,12 +163,21 @@ class V2AdminCouponManagementApiTest extends TestCase
             ->assertJsonPath('code', 0);
 
         $this->putJson('/api/v2/admin/coupon-campaigns/'.$campaignId, $this->campaignPayload('V2 已生成活动更新 '.$suffix, 30))
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 42200)
+            ->assertJsonPath('message', '活动已生成优惠券批次，不允许修改');
+
+        $this->getJson('/api/v2/admin/coupon-campaigns?'.http_build_query([
+            'keyword' => $suffix,
+            'page' => 1,
+            'page_size' => 100,
+        ]))
             ->assertOk()
-            ->assertJsonPath('code', 0)
-            ->assertJsonPath('data.campaign.name', 'V2 已生成活动更新 '.$suffix)
-            ->assertJsonPath('data.campaign.issue_quantity', 30)
-            ->assertJsonPath('data.campaign.can_update', true)
-            ->assertJsonPath('data.campaign.can_delete', false);
+            ->assertJsonPath('data.list.0.name', 'V2 已生成活动 '.$suffix)
+            ->assertJsonPath('data.list.0.issue_quantity', 20)
+            ->assertJsonPath('data.list.0.can_update', false)
+            ->assertJsonPath('data.list.0.can_delete', false)
+            ->assertJsonPath('data.list.0.lock_reason', '活动已生成优惠券批次，不允许修改或删除');
     }
 
     private function createAdmin(array $permissions): AdminUser

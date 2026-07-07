@@ -222,8 +222,8 @@ class MofangFinance
      */
     private function validateBulkConnectPayload(array $payload): array
     {
-        $productType = trim((string) ($payload['product_type'] ?? ''));
-        if ($productType === '' || ! in_array($productType, ProductType::allowedValues(), true)) {
+        $firstGroupCode = trim((string) ($payload['first_product_group_code'] ?? ''));
+        if ($firstGroupCode === '' || ! in_array($firstGroupCode, ProductType::allowedValues(), true)) {
             throw new BusinessException('请选择有效的商品种类', 42200);
         }
 
@@ -239,7 +239,7 @@ class MofangFinance
         }
 
         return [
-            'product_type' => $productType,
+            'first_product_group_code' => $firstGroupCode,
             'first_product_group_id' => $this->positiveInt($payload['first_product_group_id'] ?? null),
             'second_product_group_id' => $this->positiveInt($payload['second_product_group_id'] ?? null),
             'third_product_group_id' => $this->positiveInt($payload['third_product_group_id'] ?? null),

@@ -25,7 +25,8 @@ class CouponProductGroupResource extends JsonResource
 
     private function firstGroupPayload(FirstProductGroup $group): array
     {
-        $serviceTypeCode = (string) $group->code;
+        $firstGroupCode = (string) $group->code;
+        $productType = ProductType::businessValueForFirstGroup($group, $firstGroupCode);
 
         return [
             'id' => (int) $group->id,
@@ -36,9 +37,12 @@ class CouponProductGroupResource extends JsonResource
             'parent_id' => null,
             'parent_level' => null,
             'level' => 1,
-            'service_type_code' => $serviceTypeCode,
-            'service_type_label' => ProductType::labelOf($serviceTypeCode),
+            'product_type' => $productType,
+            'product_type_label' => ProductType::businessLabelOf($productType),
+            'service_type_code' => $productType,
+            'service_type_label' => ProductType::businessLabelOf($productType),
             'first_product_group_id' => (int) $group->id,
+            'first_product_group_code' => $firstGroupCode,
             'first_product_group_name' => (string) $group->name,
             'second_product_group_id' => null,
             'second_product_group_name' => null,
@@ -60,7 +64,8 @@ class CouponProductGroupResource extends JsonResource
     private function secondGroupPayload(SecondProductGroup $group): array
     {
         $firstGroup = $group->firstProductGroup;
-        $serviceTypeCode = (string) ($firstGroup?->code ?? '');
+        $firstGroupCode = (string) ($firstGroup?->code ?? '');
+        $productType = ProductType::businessValueForFirstGroup($firstGroup, $firstGroupCode);
         $firstGroupName = (string) ($firstGroup?->name ?? '');
         $groupPath = collect([$firstGroupName, (string) $group->name])->filter()->implode(' / ');
 
@@ -73,9 +78,12 @@ class CouponProductGroupResource extends JsonResource
             'parent_id' => (int) $group->first_product_group_id,
             'parent_level' => 1,
             'level' => 2,
-            'service_type_code' => $serviceTypeCode,
-            'service_type_label' => ProductType::labelOf($serviceTypeCode),
+            'product_type' => $productType,
+            'product_type_label' => ProductType::businessLabelOf($productType),
+            'service_type_code' => $productType,
+            'service_type_label' => ProductType::businessLabelOf($productType),
             'first_product_group_id' => (int) $group->first_product_group_id,
+            'first_product_group_code' => $firstGroupCode,
             'first_product_group_name' => $firstGroupName,
             'second_product_group_id' => (int) $group->id,
             'second_product_group_name' => (string) $group->name,
@@ -98,7 +106,8 @@ class CouponProductGroupResource extends JsonResource
     {
         $secondGroup = $group->secondProductGroup;
         $firstGroup = $secondGroup?->firstProductGroup;
-        $serviceTypeCode = (string) ($firstGroup?->code ?? '');
+        $firstGroupCode = (string) ($firstGroup?->code ?? '');
+        $productType = ProductType::businessValueForFirstGroup($firstGroup, $firstGroupCode);
         $firstGroupName = (string) ($firstGroup?->name ?? '');
         $secondGroupName = (string) ($secondGroup?->name ?? '');
         $groupPath = collect([$firstGroupName, $secondGroupName, (string) $group->name])->filter()->implode(' / ');
@@ -112,9 +121,12 @@ class CouponProductGroupResource extends JsonResource
             'parent_id' => (int) $group->second_product_group_id,
             'parent_level' => 2,
             'level' => 3,
-            'service_type_code' => $serviceTypeCode,
-            'service_type_label' => ProductType::labelOf($serviceTypeCode),
+            'product_type' => $productType,
+            'product_type_label' => ProductType::businessLabelOf($productType),
+            'service_type_code' => $productType,
+            'service_type_label' => ProductType::businessLabelOf($productType),
             'first_product_group_id' => (int) ($secondGroup?->first_product_group_id ?? 0),
+            'first_product_group_code' => $firstGroupCode,
             'first_product_group_name' => $firstGroupName,
             'second_product_group_id' => (int) $group->second_product_group_id,
             'second_product_group_name' => $secondGroupName,

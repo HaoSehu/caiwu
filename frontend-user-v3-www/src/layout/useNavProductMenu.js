@@ -46,8 +46,9 @@ export function useNavProductMenu() {
         const list = res.data.list || []
         const normalized = list.map((item, index) => ({
           id: Number(item.id || index + 1),
-          value: String(item.value || item.product_type || ''),
+          value: String(item.first_product_group_code || item.value || ''),
           label: item.label || item.product_type_label || `分类 ${index + 1}`,
+          product_type: String(item.product_type || ''),
           product_count: Number(item.product_count || 0),
           group_count: Number(item.group_count || 0),
         })).filter((item) => item.value !== '')
@@ -74,13 +75,14 @@ export function useNavProductMenu() {
     }
 
     try {
-      const res = await siteApi.productGroups({ product_type: typeValue })
+      const res = await siteApi.productGroups({ first_product_group_code: typeValue })
       const groups = (res.data.list || []).map((g) => ({
         id: Number(g.id || 0),
         name: g.name || '',
         slogan: g.slogan || '',
         product_count: Number(g.product_count || 0),
         product_type: g.product_type || '',
+        first_product_group_code: g.first_product_group_code || '',
         product_type_id: Number(g.product_type_id || 0),
         children_count: Number(g.children_count || 0),
       }))

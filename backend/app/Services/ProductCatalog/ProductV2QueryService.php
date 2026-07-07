@@ -113,13 +113,15 @@ class ProductV2QueryService
     public function purchaseContext(array $filters): array
     {
         $types = $this->catalog->siteProductTypes();
+        $firstGroupCode = trim((string) ($filters['first_product_group_code'] ?? ''));
         $productType = trim((string) ($filters['product_type'] ?? ''));
 
-        if ($productType === '' && $types !== []) {
-            $productType = (string) ($types[0]['value'] ?? '');
+        if ($firstGroupCode === '' && $types !== []) {
+            $firstGroupCode = (string) ($types[0]['first_product_group_code'] ?? $types[0]['value'] ?? '');
         }
 
         $rootGroups = $this->productGroups->paginateSiteRootGroups([
+            'first_product_group_code' => $firstGroupCode !== '' ? $firstGroupCode : null,
             'product_type' => $productType !== '' ? $productType : null,
             'page' => 1,
             'page_size' => $filters['root_page_size'] ?? 50,
@@ -142,10 +144,8 @@ class ProductV2QueryService
             return Product::query()->whereRaw('1 = 0');
         }
 
+        $firstGroupCode = trim((string) ($filters['first_product_group_code'] ?? ''));
         $productType = trim((string) ($filters['product_type'] ?? $filters['type'] ?? ''));
-        if ($productType !== '' && ! in_array($productType, $visibleProductTypes, true)) {
-            return Product::query()->whereRaw('1 = 0');
-        }
 
         return Product::query()
             ->onSale()
@@ -154,7 +154,8 @@ class ProductV2QueryService
             ->whereHas('firstProductGroup', fn (Builder $query) => $query
                 ->where('is_visible', 1)
                 ->whereIn('code', $visibleProductTypes)
-                ->when($productType !== '', fn (Builder $typeQuery) => $typeQuery->where('code', $productType)))
+                ->when($firstGroupCode !== '', fn (Builder $typeQuery) => $typeQuery->where('code', $firstGroupCode))
+                ->when($productType !== '', fn (Builder $typeQuery) => $typeQuery->where('product_type', ProductType::normalizeBusinessValue($productType))))
             ->whereHas('secondProductGroup', fn (Builder $query) => $query->where('is_visible', 1))
             ->where(function (Builder $query): void {
                 $query

@@ -67,7 +67,7 @@ class OrderSnapshotSemanticsTest extends TestCase
     public function test_it_falls_back_to_related_product_display_name_when_spec_snapshot_missing(): void
     {
         $product = new Product([
-            'product_type' => 'vps',
+            'product_type' => 'cloud_server',
             'purchase_requires' => [
                 'upstream_default_config' => [
                     'cpu' => '2',
@@ -81,19 +81,19 @@ class OrderSnapshotSemanticsTest extends TestCase
 
         $this->assertNull($order->product_spec_snapshot);
         $this->assertSame('2 vCPU 2G', $order->display_product_name);
-        $this->assertSame('vps', $order->product_type_snapshot);
+        $this->assertSame('cloud_server', $order->product_type_snapshot);
     }
 
     public function test_product_full_path_resolver_builds_category_path_from_product_hierarchy(): void
     {
         $product = new Product([
-            'product_type' => 'vps',
-            'service_type_code' => 'vps',
+            'product_type' => 'cloud_server',
+            'service_type_code' => 'cloud_server',
             'purchase_requires' => [],
             'config_options' => [],
         ]);
         $product->setRelation('firstProductGroup', tap(new FirstProductGroup, function (FirstProductGroup $group): void {
-            $group->setRawAttributes(['id' => 1, 'code' => 'vps', 'name' => '云服务器'], true);
+            $group->setRawAttributes(['id' => 1, 'code' => 'vps', 'name' => '云服务器', 'product_type' => 'cloud_server'], true);
         }));
         $product->setRelation('secondProductGroup', tap(new SecondProductGroup, function (SecondProductGroup $group): void {
             $group->setRawAttributes(['id' => 2, 'first_product_group_id' => 1, 'name' => '轻量云'], true);
@@ -104,7 +104,7 @@ class OrderSnapshotSemanticsTest extends TestCase
 
         $order = new Order([
             'product_spec_snapshot' => 'gscs-2vcpu-2gib',
-            'product_type_snapshot' => 'vps',
+            'product_type_snapshot' => 'cloud_server',
         ]);
         $order->setRelation('product', $product);
 
@@ -117,13 +117,13 @@ class OrderSnapshotSemanticsTest extends TestCase
     public function test_product_full_path_resolver_prefers_order_snapshot_path(): void
     {
         $product = new Product([
-            'product_type' => 'vps',
-            'service_type_code' => 'vps',
+            'product_type' => 'cloud_server',
+            'service_type_code' => 'cloud_server',
             'purchase_requires' => [],
             'config_options' => [],
         ]);
         $product->setRelation('firstProductGroup', tap(new FirstProductGroup, function (FirstProductGroup $group): void {
-            $group->setRawAttributes(['id' => 1, 'code' => 'vps', 'name' => '云服务器'], true);
+            $group->setRawAttributes(['id' => 1, 'code' => 'vps', 'name' => '云服务器', 'product_type' => 'cloud_server'], true);
         }));
 
         $order = new Order([
