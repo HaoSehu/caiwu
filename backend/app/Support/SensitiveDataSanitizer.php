@@ -19,6 +19,26 @@ final class SensitiveDataSanitizer
         'verify_token',
         'authorization',
         'cookie',
+        'email',
+        'to_email',
+        'mail',
+        'recipient',
+        'phone',
+        'mobile',
+        'telephone',
+        'tel',
+        'account',
+        'username',
+        'nickname',
+        'qq',
+        'wechat',
+        'ip',
+        'ip_address',
+        'client_ip',
+        'remote_addr',
+        'device_id',
+        'device',
+        'user_agent',
         'client_id',
         'client_secret',
         'api_key',
@@ -78,6 +98,18 @@ final class SensitiveDataSanitizer
         'verify_token',
         'authorization',
         'cookie',
+        'email',
+        'recipient',
+        'phone',
+        'mobile',
+        'telephone',
+        'account',
+        'username',
+        'nickname',
+        'qq',
+        'wechat',
+        'ip_address',
+        'device_id',
         'client_id',
         'client_secret',
         'api_key',
@@ -156,6 +188,9 @@ final class SensitiveDataSanitizer
     {
         $sanitized = $text;
 
+        $sanitized = preg_replace('/(authorization\s*[=:]\s*)(Bearer\s+)?(["\']?)[A-Za-z0-9._~+\/=-]+(["\']?)/iu', '$1"'.self::REDACTED.'"', $sanitized) ?? $sanitized;
+        $sanitized = preg_replace('/Bearer\s+[A-Za-z0-9._~+\/=-]+/iu', 'Bearer "'.self::REDACTED.'"', $sanitized) ?? $sanitized;
+
         foreach (self::TEXT_SENSITIVE_FIELDS as $field) {
             $quotedField = preg_quote($field, '/');
 
@@ -169,6 +204,10 @@ final class SensitiveDataSanitizer
                 $sanitized = preg_replace($pattern, '$1"'.self::REDACTED.'"', $sanitized) ?? $sanitized;
             }
         }
+
+        $sanitized = preg_replace('/[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/iu', '[REDACTED_EMAIL]', $sanitized) ?? $sanitized;
+        $sanitized = preg_replace('/(?<!\d)1[3-9]\d{9}(?!\d)/u', '[REDACTED_PHONE]', $sanitized) ?? $sanitized;
+        $sanitized = preg_replace('/\b(?:\d{1,3}\.){3}\d{1,3}\b/u', '[REDACTED_IP]', $sanitized) ?? $sanitized;
 
         return $sanitized;
     }

@@ -142,7 +142,7 @@ class V2AdminLogApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('code', 0)
             ->assertJsonPath('data.log.channel', 'sms')
-            ->assertJsonPath('data.log.fields.phone', '13800138000')
+            ->assertJsonPath('data.log.fields.phone', '[REDACTED]')
             ->assertJsonMissingPath('data.log.context.params.password')
             ->assertJsonMissingPath('data.log.context.params.api_key');
 

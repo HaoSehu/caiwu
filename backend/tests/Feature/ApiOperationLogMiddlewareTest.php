@@ -28,7 +28,13 @@ class ApiOperationLogMiddlewareTest extends TestCase
                     $this->assertSame(['scene' => 'home'], $detail['params'] ?? []);
                     $this->assertSame(200, $detail['status'] ?? null);
                     $this->assertSame('trace-get-001', $detail['request_id'] ?? null);
+                    $this->assertSame('GET', $detail['method'] ?? null);
+                    $this->assertSame('api/v2/site/config', $detail['path'] ?? null);
+                    $this->assertIsInt($detail['duration_ms'] ?? null);
+                    $this->assertGreaterThanOrEqual(0, $detail['duration_ms']);
+                    $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{6}$/', (string) ($detail['request_time'] ?? ''));
                     $this->assertSame('CodexTest/1.0', $detail['user_agent'] ?? null);
+                    $this->assertNotEmpty($detail['service'] ?? '');
 
                     return true;
                 }),
@@ -44,6 +50,7 @@ class ApiOperationLogMiddlewareTest extends TestCase
         $response = $middleware->handle($request, static fn () => new JsonResponse(['code' => 0], 200));
 
         $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('trace-get-001', $response->headers->get('X-Request-Id'));
     }
 
     public function test_it_logs_business_exceptions_for_api_requests(): void
@@ -58,9 +65,13 @@ class ApiOperationLogMiddlewareTest extends TestCase
                 'login',
                 null,
                 $this->callback(function (array $detail): bool {
-                    $this->assertSame('guest@example.com', $detail['params']['account'] ?? null);
+                    $this->assertSame('[REDACTED]', $detail['params']['account'] ?? null);
                     $this->assertSame('[REDACTED]', $detail['params']['password'] ?? null);
                     $this->assertSame(422, $detail['status'] ?? null);
+                    $this->assertNotEmpty($detail['request_id'] ?? '');
+                    $this->assertSame('POST', $detail['method'] ?? null);
+                    $this->assertSame('api/v2/client/login', $detail['path'] ?? null);
+                    $this->assertIsInt($detail['duration_ms'] ?? null);
                     $this->assertSame('BusinessException', $detail['exception'] ?? null);
                     $this->assertSame('鐧诲綍澶辫触', $detail['exception_message'] ?? null);
 

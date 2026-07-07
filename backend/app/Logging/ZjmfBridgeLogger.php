@@ -13,8 +13,10 @@ class ZjmfBridgeLogger
     public function record(Request $request, Response $response, int $latencyMs): void
     {
         $payload = [
+            'request_time' => (string) $request->attributes->get('request_time', now()->format('Y-m-d H:i:s.u')),
             'trace_id' => (string) $request->attributes->get('trace_id', ''),
-            'request_id' => (string) $request->headers->get('X-Request-Id', ''),
+            'request_id' => (string) $request->attributes->get('request_id', $request->headers->get('X-Request-Id', '')),
+            'service' => (string) config('app.name', 'caiwu-backend'),
             'method' => $request->getMethod(),
             'path' => $request->getPathInfo(),
             'mapped_target' => (string) $request->route()?->getActionName(),

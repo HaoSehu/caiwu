@@ -8,6 +8,7 @@ use App\Services\System\OperationLogService;
 use App\Support\SensitiveDataSanitizer;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
@@ -19,28 +20,39 @@ class LogOperation
 
     public function handle(Request $request, Closure $next)
     {
+        $startedAt = microtime(true);
+        $requestTime = now()->format('Y-m-d H:i:s.u');
+        $requestId = $this->resolveRequestId($request);
+
         try {
             $response = $next($request);
         } catch (\Throwable $exception) {
-            $this->writeApiAccessLog($request, null, $exception);
+            $this->writeApiAccessLog($request, null, $exception, $startedAt, $requestTime, $requestId);
 
             throw $exception;
         }
 
-        $this->writeApiAccessLog($request, $response);
+        $response->headers->set('X-Request-Id', $requestId);
+        $this->writeApiAccessLog($request, $response, null, $startedAt, $requestTime, $requestId);
 
         return $response;
     }
 
-    private function writeApiAccessLog(Request $request, ?Response $response = null, ?\Throwable $exception = null): void
-    {
+    private function writeApiAccessLog(
+        Request $request,
+        ?Response $response = null,
+        ?\Throwable $exception = null,
+        ?float $startedAt = null,
+        ?string $requestTime = null,
+        ?string $requestId = null,
+    ): void {
         if (! $this->shouldLog($request)) {
             return;
         }
 
         try {
             $user = $request->user();
-            $requestId = trim((string) $request->header('X-Request-Id', ''));
+            $requestId = trim((string) ($requestId ?? $request->attributes->get('request_id', $request->header('X-Request-Id', ''))));
             $userAgent = trim((string) $request->userAgent());
             $statusCode = $response?->getStatusCode();
 
@@ -57,10 +69,15 @@ class LogOperation
             }
 
             $detail = [
+                'request_time' => $requestTime ?? now()->format('Y-m-d H:i:s.u'),
+                'method' => $request->method(),
+                'path' => $request->path(),
                 'params' => SensitiveDataSanitizer::sanitize($request->all()),
                 'status' => $statusCode,
                 'request_id' => $requestId,
+                'duration_ms' => $this->elapsedMilliseconds($startedAt),
                 'user_agent' => $userAgent,
+                'service' => (string) config('app.name', 'caiwu-backend'),
             ];
 
             if ($exception !== null) {
@@ -144,5 +161,30 @@ class LogOperation
         }
 
         return trim((string) ($segments[0] ?? 'unknown')) ?: 'unknown';
+    }
+
+    private function resolveRequestId(Request $request): string
+    {
+        $requestId = trim((string) ($request->headers->get('X-Request-Id') ?: $request->attributes->get('request_id', '')));
+
+        if ($requestId === '') {
+            $requestId = (string) Str::ulid();
+        }
+
+        $requestId = mb_substr($requestId, 0, 64);
+
+        $request->headers->set('X-Request-Id', $requestId);
+        $request->attributes->set('request_id', $requestId);
+
+        return $requestId;
+    }
+
+    private function elapsedMilliseconds(?float $startedAt): int
+    {
+        if ($startedAt === null) {
+            return 0;
+        }
+
+        return max(0, (int) round((microtime(true) - $startedAt) * 1000));
     }
 }
