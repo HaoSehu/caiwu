@@ -28,6 +28,12 @@ import sys
 from pathlib import Path
 
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+
 SCRIPT_PATH = Path(__file__).resolve()
 SCRIPT_DIR = SCRIPT_PATH.parent
 BACKEND_DIR = SCRIPT_DIR.parent
@@ -72,6 +78,35 @@ if (Schema::hasTable('admin_user_roles')) {
         ],
         []
     );
+}"""
+
+DEFAULT_DATA_BOOTSTRAP_CODE = r"""use Database\Seeders\SettingsSeeder;
+use Illuminate\Support\Facades\Schema;
+
+if (Schema::hasTable('settings')) {
+    SettingsSeeder::seed();
+}
+
+if (Schema::hasTable('notification_templates')) {
+    $migrationFiles = [
+        '2026_07_06_124000_seed_notification_templates_defaults.php',
+        '2026_07_06_125000_convert_sms_template_variables_to_single_braces.php',
+        '2026_07_06_130000_renumber_sms_notification_template_codes.php',
+        '2026_07_07_100000_replace_email_notification_templates_with_legacy_catalog.php',
+        '2026_07_08_004000_remove_email_template_visual_cards.php',
+    ];
+
+    foreach ($migrationFiles as $migrationFile) {
+        $path = database_path('migrations/'.$migrationFile);
+        if (! is_file($path)) {
+            throw new RuntimeException('缺少默认通知模板迁移文件：'.$migrationFile);
+        }
+
+        $migration = require $path;
+        if (is_object($migration) && method_exists($migration, 'up')) {
+            $migration->up();
+        }
+    }
 }"""
 
 
@@ -223,6 +258,8 @@ def run_command(
             cwd=str(cwd) if cwd else None,
             env=env,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             capture_output=capture,
             check=False,
         )
@@ -412,6 +449,17 @@ def run_artisan_php(php_code: str, *, dry_run: bool, admin_password: str) -> Non
     )
 
 
+def run_default_data_bootstrap(*, dry_run: bool) -> None:
+    if dry_run:
+        log("dry-run: php artisan tinker --execute '<初始化默认配置和通知模板代码>'")
+        return
+
+    run_command(
+        ["php", "artisan", "tinker", f"--execute={DEFAULT_DATA_BOOTSTRAP_CODE}"],
+        cwd=BACKEND_DIR,
+    )
+
+
 def main() -> int:
     args = parse_args()
 
@@ -576,6 +624,9 @@ def main() -> int:
             cwd=BACKEND_DIR,
             dry_run=args.dry_run,
         )
+
+        log("初始化默认配置和通知模板")
+        run_default_data_bootstrap(dry_run=args.dry_run)
 
         log("初始化默认管理员 cerbo")
         run_artisan_php(ADMIN_BOOTSTRAP_CODE, dry_run=args.dry_run, admin_password=admin_password)
