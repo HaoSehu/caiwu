@@ -32,7 +32,7 @@ class TestNotificationTemplateSendRequest extends FormRequest
             'channel' => ['required', 'string', 'in:email,sms'],
             'code' => ['required', 'string', 'max:64'],
             'recipient' => ['nullable', 'string'],
-            'recipients' => ['required', 'array', 'min:1', 'max:20'],
+            'recipients' => ['required', 'array', 'min:1', 'max:1'],
             'recipients.*' => ['required', 'string', 'max:255'],
             'page' => ['prohibited'],
             'page_size' => ['prohibited'],

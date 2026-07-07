@@ -112,15 +112,15 @@
         </div>
         <t-form label-align="top">
           <t-form-item :label="templateChannel === 'sms' ? '接收手机号' : '接收邮箱地址'">
-            <t-textarea
-              v-model="testSendRecipients"
+            <t-input
+              v-model="testSendRecipient"
               :placeholder="testSendPlaceholder"
-              :autosize="{ minRows: 4, maxRows: 8 }"
+              clearable
+              :type="templateChannel === 'sms' ? 'tel' : 'email'"
               @input="testSendResult = null"
             />
           </t-form-item>
         </t-form>
-        <p class="template-test-hint">支持一行一个或用逗号分隔，最多 20 个。</p>
 
         <div v-if="testSendResult" class="template-test-feedback" :class="`template-test-feedback--${testSendResult.status}`">
           <strong>{{ testSendSummaryText }}</strong>
@@ -156,7 +156,7 @@ const loading = ref(false);
 const saving = ref(false);
 const testSendVisible = ref(false);
 const testSending = ref(false);
-const testSendRecipients = ref('');
+const testSendRecipient = ref('');
 const testSendResult = ref(null);
 const DEFAULT_SITE_NAME = '创欧云';
 const DEFAULT_SITE_LOGO = '/branding/logo.svg';
@@ -332,7 +332,7 @@ function resetCurrentTemplate() {
 function openTestSendDialog() {
   if (!templateDefinition.value) return;
 
-  testSendRecipients.value = '';
+  testSendRecipient.value = '';
   testSendResult.value = null;
   testSendVisible.value = true;
 }
@@ -340,8 +340,8 @@ function openTestSendDialog() {
 async function submitTestSend() {
   if (!templateDefinition.value) return;
 
-  const recipients = parseRecipients(testSendRecipients.value);
-  if (!recipients.length) {
+  const recipient = normalizeRecipient(testSendRecipient.value);
+  if (!recipient) {
     MessagePlugin.warning(templateChannel.value === 'sms' ? '请输入接收手机号' : '请输入接收邮箱地址');
     return;
   }
@@ -351,7 +351,7 @@ async function submitTestSend() {
     const result = await adminApi.settings.testNotificationTemplateSend({
       channel: templateChannel.value,
       code: templateDefinition.value.code,
-      recipients,
+      recipient,
     });
     testSendResult.value = result;
 
@@ -443,13 +443,10 @@ function settingValue(settings, key, fallback) {
   return Object.prototype.hasOwnProperty.call(settings, key) ? settings[key] ?? '' : fallback;
 }
 
-function parseRecipients(value) {
-  const items = String(value || '')
-    .split(/[\n,;，；]+/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-
-  return Array.from(new Set(items)).slice(0, 20);
+function normalizeRecipient(value) {
+  const recipient = String(value || '').trim();
+  if (templateChannel.value === 'sms') return recipient.replace(/[\s-]+/g, '');
+  return recipient;
 }
 
 function toBooleanValue(value) {

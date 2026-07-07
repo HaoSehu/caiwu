@@ -193,7 +193,7 @@ export interface NotificationTemplateItem {
 export interface NotificationTemplateTestSendPayload {
   channel: 'email' | 'sms';
   code: string;
-  recipients: string[];
+  recipient: string;
 }
 
 export interface NotificationTemplateTestSendResult {

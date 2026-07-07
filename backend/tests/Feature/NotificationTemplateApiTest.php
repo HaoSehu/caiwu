@@ -185,14 +185,20 @@ class NotificationTemplateApiTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonPath('code', 42200)
             ->assertJsonStructure(['data' => ['errors' => ['recipients.0']]]);
+
+        $this->postJson('/api/v2/admin/notification-templates/test-send', [
+            'channel' => 'email',
+            'code' => NotificationService::TEMPLATE_EMAIL_CODE,
+            'recipients' => ['first@example.com', 'second@example.com'],
+        ])
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 42200)
+            ->assertJsonStructure(['data' => ['errors' => ['recipients']]]);
     }
 
-    public function test_admin_notification_template_test_send_sends_email_batch_with_sample_variables(): void
+    public function test_admin_notification_template_test_send_sends_email_with_sample_variables(): void
     {
-        $to = [
-            'template-email-a-'.bin2hex(random_bytes(4)).'@example.com',
-            'template-email-b-'.bin2hex(random_bytes(4)).'@example.com',
-        ];
+        $to = 'template-email-'.bin2hex(random_bytes(4)).'@example.com';
         $emailEnabled = Setting::getValue('notification', 'email_enabled', '0');
         $driver = new NotificationTemplateFakeMailDriver('smtp');
         $resolver = new NotificationTemplateFakeBindingResolver('demo_sms', 'smtp');
@@ -208,19 +214,19 @@ class NotificationTemplateApiTest extends TestCase
             $this->postJson('/api/v2/admin/notification-templates/test-send', [
                 'channel' => 'email',
                 'code' => NotificationService::TEMPLATE_EMAIL_CODE,
-                'recipients' => $to,
+                'recipient' => $to,
             ])
                 ->assertOk()
                 ->assertJsonPath('code', 0)
                 ->assertJsonPath('data.status', 'success')
-                ->assertJsonPath('data.total', 2)
-                ->assertJsonPath('data.success_count', 2)
+                ->assertJsonPath('data.total', 1)
+                ->assertJsonPath('data.success_count', 1)
                 ->assertJsonPath('data.failed_count', 0)
-                ->assertJsonPath('data.results.0.recipient', $to[0])
+                ->assertJsonPath('data.results.0.recipient', $to)
                 ->assertJsonPath('data.results.0.status', 'success');
 
-            $this->assertSame(2, $driver->sendCount);
-            $this->assertSame($to, array_column($driver->messages, 'to'));
+            $this->assertSame(1, $driver->sendCount);
+            $this->assertSame($to, $driver->messages[0]['to'] ?? null);
             $this->assertSame(
                 NotificationService::TEMPLATE_EMAIL_CODE,
                 $driver->messages[0]['context']['template_code'] ?? null
@@ -228,19 +234,16 @@ class NotificationTemplateApiTest extends TestCase
             $this->assertStringContainsString('482915', (string) ($driver->messages[0]['html'] ?? ''));
         } finally {
             Setting::setValue('notification', 'email_enabled', $emailEnabled);
-            foreach ($to as $recipient) {
-                $this->deleteEmailLogsByRecipient($recipient);
-            }
+            $this->deleteEmailLogsByRecipient($to);
         }
     }
 
-    public function test_admin_notification_template_test_send_reports_sms_partial_failure(): void
+    public function test_admin_notification_template_test_send_reports_sms_failure(): void
     {
         if (! Schema::hasTable('notification_logs') && ! Schema::hasTable('sms_logs')) {
             $this->markTestSkipped('通知日志表不存在，无法验证短信模板测试发送。');
         }
 
-        $successPhone = '139'.random_int(10000000, 89999999);
         $failedPhone = '138'.random_int(10000000, 89999999);
         $driver = new NotificationTemplateFakeSmsDriver('demo_sms');
         $driver->failMessagePhones = [$failedPhone];
@@ -264,29 +267,26 @@ class NotificationTemplateApiTest extends TestCase
             $this->postJson('/api/v2/admin/notification-templates/test-send', [
                 'channel' => 'sms',
                 'code' => SmsTemplateCatalog::TEMPLATE_VERIFY_CODE,
-                'recipient' => $successPhone."\n".$failedPhone,
+                'recipient' => $failedPhone,
             ])
                 ->assertOk()
                 ->assertJsonPath('code', 0)
-                ->assertJsonPath('data.status', 'partial_failed')
-                ->assertJsonPath('data.total', 2)
-                ->assertJsonPath('data.success_count', 1)
+                ->assertJsonPath('data.status', 'failed')
+                ->assertJsonPath('data.total', 1)
+                ->assertJsonPath('data.success_count', 0)
                 ->assertJsonPath('data.failed_count', 1)
-                ->assertJsonPath('data.results.0.recipient', $successPhone)
-                ->assertJsonPath('data.results.0.status', 'success')
-                ->assertJsonPath('data.results.1.recipient', $failedPhone)
-                ->assertJsonPath('data.results.1.status', 'failed')
-                ->assertJsonPath('data.results.1.error', '短信供应商拒绝发送');
+                ->assertJsonPath('data.results.0.recipient', $failedPhone)
+                ->assertJsonPath('data.results.0.status', 'failed')
+                ->assertJsonPath('data.results.0.error', '短信供应商拒绝发送');
 
-            $this->assertCount(2, $driver->messageRequests);
-            $this->assertSame($successPhone, $driver->messageRequests[0]->phone);
+            $this->assertCount(1, $driver->messageRequests);
+            $this->assertSame($failedPhone, $driver->messageRequests[0]->phone);
             $this->assertStringContainsString('482915', $driver->messageRequests[0]->content);
         } finally {
             foreach ($settings as $key => $value) {
                 Setting::setValue('notification', (string) $key, $value);
             }
 
-            $this->deleteSmsLogsByRecipient($successPhone);
             $this->deleteSmsLogsByRecipient($failedPhone);
         }
     }
