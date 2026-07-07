@@ -1,21 +1,5 @@
 <template>
   <div class="logs-page">
-    <t-card :bordered="false">
-      <div class="page-tabs-toolbar">
-        <t-tabs :value="activeTab" @change="handleTabChange">
-          <template v-for="group in tabGroups" :key="group.group">
-            <t-tab-panel
-              v-for="(item, idx) in group.tabs"
-              :key="item.value"
-              :value="item.value"
-              :label="item.label"
-              :class="{ 'tab-group-first': idx === 0 }"
-            />
-          </template>
-        </t-tabs>
-      </div>
-    </t-card>
-
     <template v-if="isLogTab(activeTab)">
       <t-card :bordered="false">
         <div class="log-filter-grid" :class="`log-filter-grid--${activeTab}`">
@@ -212,8 +196,8 @@
     </template>
 
     <template v-else-if="activeTab === 'schedules'">
-      <t-card v-if="!canManageSchedules" :bordered="false">
-        <t-alert theme="warning" message="当前账号缺少 settings.manage 权限，无法查看或触发定时任务。" />
+      <t-card v-if="!canViewSchedules" :bordered="false">
+        <t-alert theme="warning" message="当前账号缺少 schedule.view 权限，无法查看定时任务。" />
       </t-card>
       <template v-else>
         <t-card v-if="scheduleEnvAlerts.length > 0" :bordered="false" class="schedule-env-card">
@@ -234,55 +218,81 @@
         </t-card>
 
         <t-card :bordered="false" :loading="scheduleLoading">
-          <template #title>任务清单</template>
+          <template #title>已注册任务</template>
           <template #subtitle>共 {{ scheduleTasks.length }} 个任务</template>
-          <div class="table-scroll">
-            <t-table row-key="key" :data="scheduleTasks" :columns="scheduleColumns" hover table-layout="fixed">
-              <template #task="{ row }">
-                <div class="stack-cell">
-                  <strong>{{ fieldValue(row.title || row.key) }}</strong>
-                  <span>{{ fieldValue(row.category) }}</span>
+          <div class="schedule-task-toolbar">
+            <div class="schedule-task-stats" aria-label="任务来源统计">
+              <div class="schedule-task-stat">
+                <span>系统任务</span>
+                <strong>{{ scheduleSystemTasks.length }}</strong>
+              </div>
+              <div class="schedule-task-stat schedule-task-stat--third-party">
+                <span>第三方任务</span>
+                <strong>{{ scheduleThirdPartyTasks.length }}</strong>
+              </div>
+            </div>
+            <t-radio-group v-model="scheduleSourceFilter" variant="default-filled" class="schedule-task-filter">
+              <t-radio-button v-for="item in scheduleSourceOptions" :key="item.value" :value="item.value">
+                {{ item.label }}
+              </t-radio-button>
+            </t-radio-group>
+          </div>
+          <div class="schedule-task-groups">
+            <section v-for="group in visibleScheduleTaskGroups" :key="group.key" class="schedule-task-group">
+              <div class="schedule-task-group__head">
+                <div>
+                  <h3>{{ group.title }}</h3>
+                  <p>{{ group.description }}</p>
                 </div>
-              </template>
-              <template #cycle="{ row }">
-                <div class="stack-cell">
-                  <strong>{{ formatScheduleCycle(row) }}</strong>
-                  <span>{{ fieldValue(row.expression) }}</span>
-                </div>
-              </template>
-              <template #last="{ row }">{{ fieldValue(row.last_run_at || toRecord(row.last_log).time) }}</template>
-              <template #level="{ row }">
-                <t-tag :theme="levelTheme(toRecord(row.last_log).level)" variant="light">
-                  {{ fieldValue(toRecord(row.last_log).level || '待执行') }}
-                </t-tag>
-              </template>
-              <template #next="{ row }">{{ fieldValue(row.next_run_at) }}</template>
-              <template #actions="{ row }">
-                <t-button
-                  v-if="row.manual_triggerable"
-                  theme="primary"
-                  variant="outline"
-                  size="small"
-                  :loading="triggeringKey === row.key"
-                  @click="triggerTask(row)"
-                >
-                  立即执行
-                </t-button>
-                <span v-else class="muted-text">自动</span>
-              </template>
-            </t-table>
+                <t-tag :theme="group.theme" variant="light">{{ group.tasks.length }} 个任务</t-tag>
+              </div>
+              <div v-if="group.tasks.length" class="table-scroll">
+                <t-table row-key="key" :data="group.tasks" :columns="scheduleColumns" hover table-layout="fixed">
+                  <template #task="{ row }">
+                    <div class="stack-cell schedule-task-cell">
+                      <div class="schedule-task-cell__name">
+                        <strong>{{ fieldValue(row.title || row.key) }}</strong>
+                        <t-tag size="small" :theme="scheduleTaskSourceTheme(row)" variant="light">
+                          {{ fieldValue(row.source_label || group.title) }}
+                        </t-tag>
+                      </div>
+                      <span>{{ fieldValue(row.category) }}</span>
+                    </div>
+                  </template>
+                  <template #cycle="{ row }">
+                    <div class="stack-cell">
+                      <strong>{{ formatScheduleCycle(row) }}</strong>
+                      <span>{{ fieldValue(row.expression) }}</span>
+                    </div>
+                  </template>
+                  <template #last="{ row }">{{ fieldValue(row.last_run_at || toRecord(row.last_log).time) }}</template>
+                  <template #level="{ row }">
+                    <t-tag :theme="levelTheme(toRecord(row.last_log).level)" variant="light">
+                      {{ fieldValue(toRecord(row.last_log).level || '待执行') }}
+                    </t-tag>
+                  </template>
+                  <template #next="{ row }">{{ fieldValue(row.next_run_at) }}</template>
+                  <template #actions="{ row }">
+                    <t-button
+                      v-if="row.manual_triggerable"
+                      theme="primary"
+                      variant="outline"
+                      size="small"
+                      :loading="triggeringKey === row.key"
+                      :disabled="!canTriggerSchedules"
+                      @click="triggerTask(row)"
+                    >
+                      立即执行
+                    </t-button>
+                    <span v-else class="muted-text">自动</span>
+                  </template>
+                </t-table>
+              </div>
+              <t-empty v-else :description="`暂无${group.title}`" />
+            </section>
           </div>
         </t-card>
 
-        <t-card :bordered="false" :loading="scheduleLoading">
-          <template #title>最近执行日志</template>
-          <div class="table-scroll">
-            <t-table row-key="id" :data="scheduleLogs" :columns="scheduleLogColumns" hover table-layout="fixed">
-              <template #time="{ row }">{{ fieldValue(row.time) }}</template>
-              <template #message="{ row }">{{ fieldValue(row.message) }}</template>
-            </t-table>
-          </div>
-        </t-card>
       </template>
     </template>
 
@@ -402,7 +412,7 @@ import { MessagePlugin } from 'tdesign-vue-next';
 import type { PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 
 import { adminApi, type PaginatedList, type LogListParams } from '@/api/admin';
-import { fieldValue } from '@/utils/format';
+import { fieldValue, formatDateTime } from '@/utils/format';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { errorMessage } from '@/utils/userMessage';
 import { AdminPermissions, hasPermissionInList } from '@/constants/permissions';
@@ -421,9 +431,10 @@ const router = useRouter();
 const userStore = useUserStore();
 const isMobile = useMediaQuery('(max-width: 768px)');
 const validTabs: LogsTab[] = ['system', 'runtime', 'admin-logins', 'api', 'sms', 'email', 'tasks', 'gateway', 'schedules', 'cleanup'];
-const activeTab = ref<LogsTab>(normalizeTab(route.query.tab));
+const activeTab = ref<LogsTab>(resolveRouteTab());
 const logLoading = ref(false);
 const scheduleLoading = ref(false);
+const scheduleSourceFilter = ref<'all' | 'system' | 'third_party'>('all');
 const cleanupLoading = ref(false);
 const cleanupSubmitting = ref(false);
 const triggeringKey = ref('');
@@ -471,32 +482,6 @@ const cleanupForm = reactive({
   keep_days: 30,
   confirm_text: '',
 });
-
-const tabGroups: Array<{ group: string; label: string; tabs: Array<{ value: LogsTab; label: string }> }> = [
-  {
-    group: 'logs',
-    label: '日志查看',
-    tabs: [
-      { value: 'system', label: '系统日志' },
-      { value: 'runtime', label: '运行日志' },
-      { value: 'admin-logins', label: '管理员登录' },
-      { value: 'api', label: 'API 日志' },
-      { value: 'sms', label: '短信日志' },
-      { value: 'email', label: '邮件日志' },
-      { value: 'tasks', label: '自动任务日志' },
-      { value: 'gateway', label: '网关日志' },
-    ],
-  },
-  {
-    group: 'ops',
-    label: '运维操作',
-    tabs: [
-      { value: 'schedules', label: '定时任务' },
-      { value: 'cleanup', label: '日志清理' },
-    ],
-  },
-];
-const tabOptions = tabGroups.flatMap((g) => g.tabs);
 
 const logLevelOptions = ['DEBUG', 'INFO', 'NOTICE', 'WARNING', 'ERROR', 'CRITICAL', 'ALERT', 'EMERGENCY'];
 const methodOptions = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'];
@@ -689,12 +674,6 @@ const scheduleColumns: PrimaryTableCol<RecordRow>[] = [
   { colKey: 'next', title: '下次执行', width: 170 },
   { colKey: 'actions', title: '操作', fixed: 'right', width: 120 },
 ];
-const scheduleLogColumns: PrimaryTableCol<RecordRow>[] = [
-  { colKey: 'time', title: '时间', width: 170 },
-  { colKey: 'task_key', title: '任务', minWidth: 160 },
-  { colKey: 'message', title: '内容', minWidth: 360 },
-];
-
 const currentLoading = computed(() => logLoading.value || scheduleLoading.value || cleanupLoading.value || cleanupSubmitting.value);
 const currentLogMeta = computed(() => (isLogTab(activeTab.value) ? logMeta[activeTab.value] : logMeta.system));
 const logTableColumns = computed(() => (isLogTab(activeTab.value) ? baseLogColumns[activeTab.value] : []));
@@ -717,7 +696,33 @@ const statusOptions = computed(() => {
 });
 const drawerSize = computed(() => (isMobile.value ? '100%' : '700px'));
 const scheduleTasks = computed(() => asArray(scheduleOverview.value.tasks));
-const scheduleLogs = computed(() => asArray(scheduleOverview.value.recent_logs));
+const scheduleSystemTasks = computed(() => scheduleTasks.value.filter((task) => scheduleTaskSourceType(task) === 'system'));
+const scheduleThirdPartyTasks = computed(() => scheduleTasks.value.filter((task) => scheduleTaskSourceType(task) === 'third_party'));
+const scheduleSourceOptions = computed(() => [
+  { label: `全部 ${scheduleTasks.value.length}`, value: 'all' },
+  { label: `系统 ${scheduleSystemTasks.value.length}`, value: 'system' },
+  { label: `第三方 ${scheduleThirdPartyTasks.value.length}`, value: 'third_party' },
+]);
+const scheduleTaskGroups = computed(() => [
+  {
+    key: 'system',
+    title: '系统任务',
+    description: '核心自动化',
+    theme: 'primary' as const,
+    tasks: scheduleSystemTasks.value,
+  },
+  {
+    key: 'third_party',
+    title: '第三方任务',
+    description: '插件 / Addon / Hook',
+    theme: 'warning' as const,
+    tasks: scheduleThirdPartyTasks.value,
+  },
+]);
+const visibleScheduleTaskGroups = computed(() => {
+  if (scheduleSourceFilter.value === 'all') return scheduleTaskGroups.value;
+  return scheduleTaskGroups.value.filter((group) => group.key === scheduleSourceFilter.value);
+});
 const scheduleEnvironment = computed(() => toRecord(scheduleOverview.value.environment));
 const scheduleMutex = computed(() => toRecord(scheduleEnvironment.value.schedule_mutex));
 const scheduleAutomationConfig = computed(() => toRecord(scheduleEnvironment.value.automation_config));
@@ -773,7 +778,8 @@ const scheduleEnvAlerts = computed(() => {
 
   return alerts;
 });
-const canManageSchedules = computed(() => hasPermission(AdminPermissions.SCHEDULE_TRIGGER));
+const canViewSchedules = computed(() => hasPermission(AdminPermissions.SCHEDULE_VIEW));
+const canTriggerSchedules = computed(() => hasPermission(AdminPermissions.SCHEDULE_TRIGGER));
 const canManageLogCleanup = computed(() => hasPermission(AdminPermissions.LOG_MANAGE));
 const cleanupSubmitDisabled = computed(
   () =>
@@ -809,9 +815,17 @@ const affectedCountText = computed(() => {
   return affected.reduce((total: number, value) => total + Number(value || 0), 0);
 });
 
-function normalizeTab(value: unknown): LogsTab {
+function resolveTabValue(value: unknown): LogsTab | null {
   const tab = Array.isArray(value) ? value[0] : value;
-  return validTabs.includes(tab as LogsTab) ? (tab as LogsTab) : 'system';
+  return validTabs.includes(tab as LogsTab) ? (tab as LogsTab) : null;
+}
+
+function normalizeTab(value: unknown): LogsTab {
+  return resolveTabValue(value) || 'system';
+}
+
+function resolveRouteTab(): LogsTab {
+  return resolveTabValue(route.query.tab) || resolveTabValue(route.meta.logTab) || 'system';
 }
 
 function isLogTab(value: LogsTab): value is LogTab {
@@ -820,13 +834,6 @@ function isLogTab(value: LogsTab): value is LogTab {
 
 function showFilter(name: string) {
   return currentLogMeta.value.filters.includes(name);
-}
-
-function handleTabChange(value: string | number) {
-  activeTab.value = normalizeTab(value);
-  router.replace({ path: '/admin/logs', query: activeTab.value === 'system' ? {} : { tab: activeTab.value } });
-  resetLogFilters(false);
-  refreshCurrentTab();
 }
 
 function refreshCurrentTab() {
@@ -942,7 +949,7 @@ function handleLogPageChange(data: PageInfo) {
 }
 
 async function loadScheduleOverview() {
-  if (!canManageSchedules.value) return;
+  if (!canViewSchedules.value) return;
   scheduleLoading.value = true;
   try {
     scheduleOverview.value = { ...(await adminApi.schedules.overview()) };
@@ -955,6 +962,11 @@ async function loadScheduleOverview() {
 }
 
 async function triggerTask(row: TableRowData) {
+  if (!canTriggerSchedules.value) {
+    MessagePlugin.warning('当前账号缺少 schedule.trigger 权限');
+    return;
+  }
+
   const task = String(row.key || '');
   if (!task) return;
   triggeringKey.value = task;
@@ -1266,11 +1278,19 @@ function hasPermission(permission: string) {
 }
 
 function formatDate(value: unknown) {
-  return fieldValue(value);
+  return formatDateTime(value);
 }
 
 function asArray(value: unknown): RecordRow[] {
   return Array.isArray(value) ? (value as RecordRow[]) : [];
+}
+
+function scheduleTaskSourceType(row: RecordRow) {
+  return String(row.source_type || '').trim() === 'third_party' ? 'third_party' : 'system';
+}
+
+function scheduleTaskSourceTheme(row: RecordRow) {
+  return scheduleTaskSourceType(row) === 'third_party' ? 'warning' : 'primary';
 }
 
 function toRecord(value: unknown): Record<string, unknown> {
@@ -1365,9 +1385,9 @@ function formatScheduleCycle(row: RecordRow) {
 
 
 watch(
-  () => route.query.tab,
-  (value) => {
-    const nextTab = normalizeTab(value);
+  () => [route.path, route.query.tab, route.meta.logTab],
+  () => {
+    const nextTab = resolveRouteTab();
     if (nextTab === activeTab.value) return;
     activeTab.value = nextTab;
     resetLogFilters(false);
