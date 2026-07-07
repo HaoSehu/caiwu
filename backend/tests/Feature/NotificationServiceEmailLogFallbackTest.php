@@ -107,9 +107,10 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
         try {
             Setting::setValue('notification', 'email_enabled', '1');
             Setting::setValue('basic', 'site_name', 'Codex Billing');
+            Setting::setValue('basic', 'site_logo', '/uploads/site/logo-test.png');
             $template->forceFill([
                 'subject' => '测试验证码',
-                'content' => '<style>.email-test-code { color: #1f5eff; font-weight: 700; }</style><div class="email-test-code">{{code}}</div>',
+                'content' => '<style>.email-test-code { color: #1f5eff; font-weight: 700; }</style><div class="email-test-code">{{#site_logo}}<img class="email-logo" src="{{site_logo}}" alt="{{site_name}}">{{/site_logo}}<span>{{site_name}}</span><strong>{{code}}</strong></div>',
             ])->save();
 
             $this->useFakeMailDriver($fakeMailDriver);
@@ -123,7 +124,10 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
 
             $html = (string) ($fakeMailDriver->messages[0]['html'] ?? '');
 
-            $this->assertStringContainsString('<div class="email-test-code">482915</div>', $html);
+            $this->assertStringContainsString('class="email-logo"', $html);
+            $this->assertStringContainsString('/uploads/site/logo-test.png', $html);
+            $this->assertStringContainsString('<span>Codex Billing</span>', $html);
+            $this->assertStringContainsString('<strong>482915</strong>', $html);
             $this->assertStringContainsString('.email-test-code { color: #1f5eff; font-weight: 700; }', $html);
             $this->assertStringNotContainsString('mail-shell', $html);
             $this->assertStringNotContainsString('mail-card', $html);

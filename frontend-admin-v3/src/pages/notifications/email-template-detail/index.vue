@@ -113,7 +113,10 @@ const route = useRoute();
 const router = useRouter();
 const loading = ref(false);
 const saving = ref(false);
-const siteName = '创欧云';
+const DEFAULT_SITE_NAME = '创欧云';
+const DEFAULT_SITE_LOGO = '/branding/logo.svg';
+const siteName = ref(DEFAULT_SITE_NAME);
+const siteLogo = ref(DEFAULT_SITE_LOGO);
 const templateDefinitions = ref([]);
 
 const templateCode = computed(() => String(route.params.code || '').trim());
@@ -125,7 +128,8 @@ const currentTab = computed(() => {
 });
 
 const previewBaseParams = computed(() => ({
-  site_name: siteName,
+  site_name: siteName.value,
+  site_logo: siteLogo.value,
   display_name: '张三',
   username: 'zhangsan',
   recipient_name: '运维管理员',
@@ -219,11 +223,15 @@ function applySettings(template, settings) {
 async function loadSettings() {
   loading.value = true;
   try {
-    const [templateResponse, response] = await Promise.all([
+    const [templateResponse, response, basicResponse] = await Promise.all([
       adminApi.settings.notificationTemplates({ channel: templateChannel.value }),
       adminApi.settings.list({ group: 'notification' }),
+      adminApi.settings.list({ group: 'basic' }),
     ]);
     const settings = normalizeSettings(response);
+    const basicSettings = normalizeSettings(basicResponse);
+    siteName.value = String(basicSettings.site_name || DEFAULT_SITE_NAME);
+    siteLogo.value = resolvePreviewLogo(String(basicSettings.site_logo || DEFAULT_SITE_LOGO));
     templateDefinitions.value = (templateResponse.list || []).map((template) => applySettings(template, settings));
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '加载通知模板失败'));
@@ -345,6 +353,12 @@ function settingValue(settings, key, fallback) {
 function toBooleanValue(value) {
   if (value === true || value === 1) return true;
   return ['1', 'true', 'on', 'yes'].includes(String(value).trim().toLowerCase());
+}
+
+function resolvePreviewLogo(value) {
+  const logo = String(value || '').trim() || DEFAULT_SITE_LOGO;
+  if (/^(https?:)?\/\//i.test(logo) || logo.startsWith('data:') || logo.startsWith('/')) return logo;
+  return `/${logo}`;
 }
 
 function escapeHtml(value) {

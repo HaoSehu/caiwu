@@ -1,6 +1,6 @@
 <template>
   <div class="product-edit-page">
-    <div class="product-edit-header">
+    <div class="product-edit-toolbar">
       <t-button variant="text" @click="goBack">
         <template #icon><chevron-left-icon /></template>
         返回商品目录
@@ -8,27 +8,31 @@
       <h2>{{ isEdit ? '编辑商品' : '新增商品' }}</h2>
     </div>
 
-    <div class="product-edit-body">
-      <div class="product-drawer">
-        <aside class="product-drawer-nav">
+    <div class="product-edit-card">
+      <div class="product-edit-layout">
+        <aside class="product-edit-nav">
           <button
-            v-for="section in sections"
+            v-for="(section, index) in sections"
             :key="section.key"
             type="button"
-            :class="['product-drawer-nav-item', { active: activeSection === section.key }]"
+            :class="['product-edit-nav-item', { 'is-active': activeSection === section.key }]"
+            :aria-current="activeSection === section.key ? 'step' : undefined"
             @click="activeSection = section.key"
           >
-            <strong>{{ section.label }}</strong>
-            <span>{{ section.description }}</span>
+            <span class="product-edit-nav-index">{{ index + 1 }}</span>
+            <span class="product-edit-nav-copy">
+              <strong>{{ section.label }}</strong>
+              <span>{{ section.description }}</span>
+            </span>
           </button>
         </aside>
 
-        <div class="product-drawer-main">
-          <t-form ref="formRef" class="product-drawer-form" :data="form" :rules="rules" label-width="120px">
+        <div class="product-edit-main">
+          <t-form ref="formRef" class="product-edit-form" :data="form" :rules="rules" label-width="96px">
             <!-- 详情 -->
-            <section v-show="activeSection === 'basic'" class="product-drawer-section">
-              <h3 class="section-title">详情</h3>
-              <div class="product-drawer-grid">
+            <section v-show="activeSection === 'basic'" class="product-edit-section">
+              <h3 class="product-edit-section-title">详情</h3>
+              <div class="product-edit-grid">
                 <t-form-item label="商品名称" name="display_name">
                   <t-input v-model="form.display_name" />
                 </t-form-item>
@@ -49,14 +53,16 @@
             </section>
 
             <!-- 定价 -->
-            <section v-show="activeSection === 'pricing'" class="product-drawer-section">
-              <h3 class="section-title">定价</h3>
-              <div class="product-pricing-actions">
+            <section v-show="activeSection === 'pricing'" class="product-edit-section">
+              <div class="product-edit-section-head">
+                <h3 class="product-edit-section-title">定价</h3>
+                <div class="product-edit-section-actions">
                 <t-select v-model="pricingPlan" size="small" style="width: 150px" @change="syncPricingCycles">
                   <t-option v-for="item in pricingPlanOptions" :key="item.value" :label="item.label" :value="item.value" />
                 </t-select>
+                </div>
               </div>
-              <div class="product-drawer-grid">
+              <div class="product-edit-grid">
                 <t-form-item label="月付价格" name="monthly_price">
                   <t-input-number v-model="form.monthly_price" :min="0" style="width: 100%" />
                 </t-form-item>
@@ -73,10 +79,10 @@
             </section>
 
             <!-- 接口设置 -->
-            <section v-show="activeSection === 'interface'" class="product-drawer-section product-interface-section">
-              <h3 class="section-title">自动开通</h3>
-              <div class="product-interface-tip">配置开通模块、支付方式和上架状态。</div>
-              <div class="product-interface-panel">
+            <section v-show="activeSection === 'interface'" class="product-edit-section">
+              <h3 class="product-edit-section-title">自动开通</h3>
+              <div class="product-edit-tip">配置开通模块、支付方式和上架状态。</div>
+              <div class="product-edit-interface-panel">
                 <t-form-item label="提供商" name="supplier_id">
                   <t-select
                     v-model="form.supplier_id"
@@ -92,7 +98,7 @@
                       :label="supplierOptionLabel(item)"
                       :value="item.id"
                     >
-                      <div class="supplier-option-row">
+                      <div class="product-edit-supplier-option">
                         <span>{{ item.name || item.id }}</span>
                         <span>{{ supplierInterfaceTypeLabel(item) }}</span>
                       </div>
@@ -100,7 +106,7 @@
                   </t-select>
                 </t-form-item>
                 <t-form-item label="提供商商品" name="upstream_product_id">
-                  <div class="supplier-product-row">
+                  <div class="product-edit-supplier-product-row">
                     <t-cascader
                       v-model="form.upstream_product_id"
                       :options="supplierProductCascaderOptions"
@@ -122,16 +128,16 @@
                     </t-button>
                   </div>
                 </t-form-item>
-                <div class="product-interface-grid">
+                <div class="product-edit-interface-grid">
                   <t-form-item label="自动开通" name="auto_setup">
-                    <div class="product-switch-line">
+                    <div class="product-edit-switch-line">
                       <span>手动</span>
                       <t-switch v-model="form.auto_setup" :custom-value="[1, 0]" />
                       <span>自动</span>
                     </div>
                   </t-form-item>
                   <t-form-item label="上架状态" name="interface_status">
-                    <div class="product-switch-line">
+                    <div class="product-edit-switch-line">
                       <span>下架</span>
                       <t-switch v-model="form.status" :custom-value="[1, 0]" />
                       <span>上架</span>
@@ -142,17 +148,19 @@
             </section>
 
             <!-- 产品配置 -->
-            <section v-show="activeSection === 'config'" class="product-drawer-section">
-              <h3 class="section-title">产品配置</h3>
-              <div class="product-config-actions">
+            <section v-show="activeSection === 'config'" class="product-edit-section">
+              <div class="product-edit-section-head">
+                <h3 class="product-edit-section-title">产品配置</h3>
+                <div class="product-edit-section-actions">
                 <t-button size="small" variant="outline" :loading="configTemplateLoading" @click="pullConfigTemplate">
                   拉取模板
                 </t-button>
                 <t-button size="small" theme="primary" variant="outline" @click="openConfigOptionDialog()">新增配置</t-button>
+                </div>
               </div>
-              <div class="config-option-panel">
-                <div class="config-option-count">{{ form.config_options.length }} 项配置，保存商品后生效。</div>
-                <div v-if="form.config_options.length" class="config-option-list">
+              <div class="product-edit-config-panel">
+                <div class="product-edit-config-count">{{ form.config_options.length }} 项配置，保存商品后生效。</div>
+                <div v-if="form.config_options.length" class="product-edit-config-list">
                   <article v-for="(item, index) in form.config_options" :key="item.uid || item.field || index">
                     <div>
                       <strong>{{ item.name || item.option_name || item.field }}</strong>
@@ -861,187 +869,308 @@ function goBack() {
 
 <style lang="less" scoped>
 .product-edit-page {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
   padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
-  max-width: 1100px;
+  gap: var(--td-comp-margin-m);
 }
 
-.product-edit-header {
+.product-edit-toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: var(--td-comp-margin-s);
+  min-height: 32px;
 
   h2 {
     margin: 0;
-    font-size: 18px;
+    color: var(--td-text-color-primary);
+    font-size: var(--td-font-size-size-5, 18px);
     font-weight: 600;
+    line-height: 26px;
   }
 }
 
-.product-edit-body {
-  background: var(--td-bg-color-container);
+.product-edit-card {
+  overflow: hidden;
   border: 1px solid var(--td-component-border);
   border-radius: var(--td-radius-medium);
+  background: var(--td-bg-color-container);
 }
 
-.product-drawer {
-  display: flex;
-  min-height: 500px;
+.product-edit-layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  min-height: min(640px, calc(100vh - 220px));
 }
 
-.product-drawer-nav {
-  flex: 0 0 180px;
+.product-edit-nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 16px 8px;
+  gap: var(--td-comp-margin-xs);
   border-right: 1px solid var(--td-component-border);
+  padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-m);
   background: var(--td-bg-color-page);
 }
 
-.product-drawer-nav-item {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
+.product-edit-nav-item {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--td-comp-margin-s);
   width: 100%;
-  border: 0;
-  border-radius: var(--td-radius-medium);
-  padding: 10px 12px;
+  min-height: 58px;
+  border: 1px solid transparent;
+  border-radius: var(--td-radius-default, 4px);
+  padding: 8px 10px;
   background: transparent;
+  color: var(--td-text-color-primary);
   cursor: pointer;
   text-align: left;
-  transition: background 0.15s;
+  transition:
+    border-color 0.16s cubic-bezier(0.2, 0, 0, 1),
+    background 0.16s cubic-bezier(0.2, 0, 0, 1),
+    color 0.16s cubic-bezier(0.2, 0, 0, 1);
 
   &:hover {
-    background: var(--td-bg-color-container-hover);
+    border-color: var(--td-component-border);
+    background: var(--td-bg-color-container);
   }
 
-  &.active {
+  &.is-active {
+    border-color: var(--td-brand-color-light);
     background: var(--td-brand-color-light);
-    strong {
-      color: var(--td-brand-color);
-    }
-  }
-
-  strong {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--td-text-color-primary);
-  }
-
-  span {
-    font-size: 12px;
-    color: var(--td-text-color-placeholder);
+    color: var(--td-brand-color);
+    box-shadow: inset 3px 0 0 var(--td-brand-color);
   }
 }
 
-.product-drawer-main {
-  flex: 1;
-  min-width: 0;
-  padding: 20px 24px;
-}
-
-.section-title {
-  margin: 0 0 16px;
-  font-size: 15px;
+.product-edit-nav-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--td-radius-small);
+  background: var(--td-bg-color-container);
+  color: var(--td-text-color-secondary);
+  font-size: var(--td-font-size-size-1, 12px);
   font-weight: 600;
 }
 
-.product-drawer-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0 24px;
+.product-edit-nav-item.is-active .product-edit-nav-index {
+  background: var(--td-brand-color);
+  color: var(--td-text-color-anti);
 }
 
-.product-pricing-actions {
-  margin-bottom: 12px;
-}
+.product-edit-nav-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
 
-.product-interface-section {
-  .product-interface-tip {
-    margin-bottom: 16px;
+  strong,
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  strong {
+    font-size: var(--td-font-size-size-3, 14px);
+    font-weight: 600;
+    line-height: 22px;
+  }
+
+  span {
     color: var(--td-text-color-secondary);
-    font-size: 13px;
+    font-size: var(--td-font-size-size-1, 12px);
+    line-height: 18px;
   }
 }
 
-.product-interface-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
+.product-edit-main {
+  min-width: 0;
+  padding: 28px 32px;
 }
 
-.supplier-product-row {
+.product-edit-form {
+  max-width: 960px;
+}
+
+.product-edit-section {
+  min-width: 0;
+}
+
+.product-edit-section-head {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--td-comp-margin-m);
+  margin-bottom: var(--td-comp-margin-l);
+}
+
+.product-edit-section-title {
+  margin: 0 0 var(--td-comp-margin-l);
+  color: var(--td-text-color-primary);
+  font-size: var(--td-font-size-size-4, 16px);
+  font-weight: 600;
+  line-height: 24px;
+}
+
+.product-edit-section-head .product-edit-section-title {
+  margin-bottom: 0;
+}
+
+.product-edit-section-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--td-comp-margin-s);
+  justify-content: flex-end;
+}
+
+.product-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(260px, 1fr));
+  gap: 2px 32px;
+}
+
+.product-edit-tip {
+  margin: -8px 0 var(--td-comp-margin-l);
+  color: var(--td-text-color-secondary);
+  font-size: var(--td-font-size-size-2, 13px);
+  line-height: 20px;
+}
+
+.product-edit-interface-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.product-edit-supplier-product-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--td-comp-margin-s);
   width: 100%;
 
   > .t-cascader {
-    flex: 1;
     min-width: 0;
   }
 }
 
-.product-interface-grid {
+.product-edit-interface-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0 24px;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  gap: 2px 32px;
 }
 
-.product-switch-line {
-  display: flex;
+.product-edit-switch-line {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  min-height: 32px;
+  gap: var(--td-comp-margin-s);
+  color: var(--td-text-color-primary);
+  font-size: var(--td-font-size-size-2, 13px);
 }
 
-.product-config-actions {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.config-option-panel {
+.product-edit-config-panel {
+  min-width: 0;
   border: 1px solid var(--td-component-border);
-  border-radius: var(--td-radius-medium);
-  padding: 12px;
+  border-radius: var(--td-radius-default, 4px);
+  padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
+  background: var(--td-bg-color-container);
 }
 
-.config-option-count {
-  margin-bottom: 12px;
+.product-edit-config-count {
+  margin-bottom: var(--td-comp-margin-m);
   color: var(--td-text-color-secondary);
-  font-size: 13px;
+  font-size: var(--td-font-size-size-2, 13px);
+  line-height: 20px;
 }
 
-.config-option-list article {
+.product-edit-config-list {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--td-component-border);
+  flex-direction: column;
+  gap: var(--td-comp-margin-s);
+}
 
-  &:last-child {
-    border-bottom: 0;
+.product-edit-config-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--td-comp-margin-m);
+  align-items: center;
+  border: 1px solid var(--td-component-border);
+  border-radius: var(--td-radius-default, 4px);
+  padding: var(--td-comp-paddingTB-s) var(--td-comp-paddingLR-m);
+  background: var(--td-bg-color-container);
+
+  &:hover {
+    border-color: var(--td-brand-color-light);
+    background: var(--td-bg-color-container-hover);
+  }
+
+  > div:first-child {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    gap: 3px;
+  }
+
+  strong,
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  strong {
+    color: var(--td-text-color-primary);
+    font-weight: 600;
+  }
+
+  span {
+    color: var(--td-text-color-secondary);
+    font-size: var(--td-font-size-size-1, 12px);
   }
 }
 
-.supplier-option-row {
-  display: flex;
-  justify-content: space-between;
+.product-edit-supplier-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--td-comp-margin-m);
+  align-items: center;
   width: 100%;
 
+  span:first-child {
+    overflow: hidden;
+    color: var(--td-text-color-primary);
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   span:last-child {
-    color: var(--td-text-color-placeholder);
-    font-size: 12px;
+    color: var(--td-text-color-secondary);
+    font-size: var(--td-font-size-size-1, 12px);
   }
 }
 
 .product-edit-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  padding: 16px 24px;
+  gap: var(--td-comp-margin-s);
   border-top: 1px solid var(--td-component-border);
+  padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-xl);
+  background: var(--td-bg-color-container);
+}
+
+.product-edit-form :deep(.t-form__item) {
+  margin-bottom: var(--td-comp-margin-l);
+}
+
+.product-edit-form :deep(.t-form__label) {
+  color: var(--td-text-color-primary);
 }
 
 // Config option dialog styles
@@ -1084,5 +1213,89 @@ function goBack() {
   margin-top: 16px;
   padding-top: 16px;
   border-top: 1px solid var(--td-component-border);
+}
+
+@media (max-width: 1024px) {
+  .product-edit-layout {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .product-edit-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--td-component-border);
+    padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
+  }
+
+  .product-edit-nav-item {
+    min-width: 160px;
+  }
+
+  .product-edit-main {
+    padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
+  }
+
+  .product-edit-form {
+    max-width: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .product-edit-page {
+    padding: 12px;
+  }
+
+  .product-edit-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .product-edit-main {
+    padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
+  }
+
+  .product-edit-grid,
+  .product-edit-interface-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .product-edit-section-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .product-edit-section-actions {
+    justify-content: flex-start;
+  }
+
+  .product-edit-supplier-product-row {
+    grid-template-columns: 1fr;
+  }
+
+  .product-edit-config-list article {
+    grid-template-columns: 1fr;
+  }
+
+  .product-edit-footer {
+    padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
+  }
+
+  .product-edit-footer .t-button {
+    flex: 1;
+  }
+
+  .config-option-basic-grid,
+  .config-option-footer-row {
+    grid-template-columns: 1fr;
+  }
+
+  .config-subitem-table {
+    overflow-x: auto;
+  }
+
+  .config-subitem-grid {
+    min-width: 640px;
+  }
 }
 </style>
