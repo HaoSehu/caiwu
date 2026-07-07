@@ -16,6 +16,7 @@
           <template #icon><refresh-icon /></template>
           刷新
         </t-button>
+        <t-button variant="outline" :disabled="!templateDefinition" @click="openTestSendDialog">测试发送</t-button>
         <t-button variant="outline" :disabled="!templateDefinition" @click="resetCurrentTemplate">恢复默认</t-button>
         <t-button theme="primary" :loading="saving" :disabled="!templateDefinition" @click="saveCurrentTemplate">保存模板</t-button>
       </t-space>
@@ -96,6 +97,46 @@
         <t-button theme="primary" @click="goBack">返回模板列表</t-button>
       </t-empty>
     </t-card>
+
+    <t-dialog
+      v-model:visible="testSendVisible"
+      :header="testSendDialogTitle"
+      width="560px"
+      :confirm-btn="{ content: '确认发送', loading: testSending }"
+      @confirm="submitTestSend"
+    >
+      <div class="template-test-dialog">
+        <div v-if="templateDefinition" class="template-test-target">
+          <strong>{{ templateDefinition.name }}</strong>
+          <span>{{ templateDefinition.channel === 'sms' ? '短信模板' : '邮件模板' }} · {{ templateDefinition.code }}</span>
+        </div>
+        <t-form label-align="top">
+          <t-form-item :label="templateChannel === 'sms' ? '接收手机号' : '接收邮箱地址'">
+            <t-textarea
+              v-model="testSendRecipients"
+              :placeholder="testSendPlaceholder"
+              :autosize="{ minRows: 4, maxRows: 8 }"
+              @input="testSendResult = null"
+            />
+          </t-form-item>
+        </t-form>
+        <p class="template-test-hint">支持一行一个或用逗号分隔，最多 20 个。</p>
+
+        <div v-if="testSendResult" class="template-test-feedback" :class="`template-test-feedback--${testSendResult.status}`">
+          <strong>{{ testSendSummaryText }}</strong>
+          <span>成功 {{ testSendResult.success_count }} 条，失败 {{ testSendResult.failed_count }} 条</span>
+        </div>
+        <div v-if="testSendResult?.results?.length" class="template-test-results">
+          <div v-for="item in testSendResult.results" :key="`${item.recipient}:${item.status}`" class="template-test-result-row">
+            <span>{{ item.recipient }}</span>
+            <t-tag :theme="item.status === 'success' ? 'success' : 'danger'" variant="light">
+              {{ item.status === 'success' ? '成功' : '失败' }}
+            </t-tag>
+            <small v-if="item.error">{{ item.error }}</small>
+          </div>
+        </div>
+      </div>
+    </t-dialog>
   </div>
 </template>
 
@@ -113,6 +154,10 @@ const route = useRoute();
 const router = useRouter();
 const loading = ref(false);
 const saving = ref(false);
+const testSendVisible = ref(false);
+const testSending = ref(false);
+const testSendRecipients = ref('');
+const testSendResult = ref(null);
 const DEFAULT_SITE_NAME = '创欧云';
 const DEFAULT_SITE_LOGO = '/branding/logo.svg';
 const siteName = ref(DEFAULT_SITE_NAME);
@@ -125,6 +170,16 @@ const templateDefinition = computed(() => templateDefinitions.value.find((item) 
 const currentTab = computed(() => {
   if (route.query.tab === 'admin' || route.query.tab === 'user') return route.query.tab;
   return templateDefinition.value?.audience === 'admin' ? 'admin' : 'user';
+});
+const testSendDialogTitle = computed(() => (templateChannel.value === 'sms' ? '测试发送短信' : '测试发送邮件'));
+const testSendPlaceholder = computed(() =>
+  templateChannel.value === 'sms' ? '请输入接收手机号，例如：13900001234' : '请输入接收邮箱，例如：tester@example.com',
+);
+const testSendSummaryText = computed(() => {
+  if (!testSendResult.value) return '';
+  if (testSendResult.value.status === 'success') return '测试发送成功';
+  if (testSendResult.value.status === 'partial_failed') return '测试发送部分失败';
+  return '测试发送失败';
 });
 
 const previewBaseParams = computed(() => ({
@@ -274,6 +329,44 @@ function resetCurrentTemplate() {
   if (templateDefinition.value) resetTemplate(templateDefinition.value);
 }
 
+function openTestSendDialog() {
+  if (!templateDefinition.value) return;
+
+  testSendRecipients.value = '';
+  testSendResult.value = null;
+  testSendVisible.value = true;
+}
+
+async function submitTestSend() {
+  if (!templateDefinition.value) return;
+
+  const recipients = parseRecipients(testSendRecipients.value);
+  if (!recipients.length) {
+    MessagePlugin.warning(templateChannel.value === 'sms' ? '请输入接收手机号' : '请输入接收邮箱地址');
+    return;
+  }
+
+  testSending.value = true;
+  try {
+    const result = await adminApi.settings.testNotificationTemplateSend({
+      channel: templateChannel.value,
+      code: templateDefinition.value.code,
+      recipients,
+    });
+    testSendResult.value = result;
+
+    if (result.failed_count > 0) {
+      MessagePlugin.warning(result.status === 'partial_failed' ? '测试发送部分失败' : '测试发送失败');
+    } else {
+      MessagePlugin.success('测试发送成功');
+    }
+  } catch (error) {
+    MessagePlugin.error(errorMessage(error, '测试发送失败'));
+  } finally {
+    testSending.value = false;
+  }
+}
+
 function resetTemplate(template) {
   template.subject = template.defaultSubject || '';
   template.content = template.defaultContent;
@@ -348,6 +441,15 @@ function hasValue(value) {
 
 function settingValue(settings, key, fallback) {
   return Object.prototype.hasOwnProperty.call(settings, key) ? settings[key] ?? '' : fallback;
+}
+
+function parseRecipients(value) {
+  const items = String(value || '')
+    .split(/[\n,;，；]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return Array.from(new Set(items)).slice(0, 20);
 }
 
 function toBooleanValue(value) {

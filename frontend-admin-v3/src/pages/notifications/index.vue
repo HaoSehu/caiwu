@@ -51,7 +51,10 @@
               </span>
             </template>
             <template #actions="{ row }">
-              <t-button theme="primary" variant="text" @click.stop="openTemplate(row)">编辑</t-button>
+              <t-space size="small">
+                <t-button variant="text" @click.stop="openTestSend(row)">测试发送</t-button>
+                <t-button theme="primary" variant="text" @click.stop="openTemplate(row)">编辑</t-button>
+              </t-space>
             </template>
           </t-table>
         </div>
@@ -82,7 +85,10 @@
               </div>
               <div v-if="row.channel === 'email'"><dt>面向对象</dt><dd>{{ row.audience === 'admin' ? '管理员' : '用户' }}</dd></div>
             </dl>
-            <t-button theme="primary" variant="outline" @click="openTemplate(row)">编辑</t-button>
+            <div class="template-mobile-card__actions">
+              <t-button variant="outline" @click="openTestSend(row)">测试发送</t-button>
+              <t-button theme="primary" variant="outline" @click="openTemplate(row)">编辑</t-button>
+            </div>
           </article>
         </div>
       </t-card>
@@ -197,6 +203,46 @@
         </div>
       </section>
     </template>
+
+    <t-dialog
+      v-model:visible="testSendVisible"
+      :header="testSendDialogTitle"
+      width="560px"
+      :confirm-btn="{ content: '确认发送', loading: testSending }"
+      @confirm="submitTestSend"
+    >
+      <div class="template-test-dialog">
+        <div v-if="testSendTemplate" class="template-test-target">
+          <strong>{{ testSendTemplate.name }}</strong>
+          <span>{{ testSendTemplate.channel === 'sms' ? '短信模板' : '邮件模板' }} · {{ testSendTemplate.code }}</span>
+        </div>
+        <t-form label-align="top">
+          <t-form-item :label="testSendTemplate?.channel === 'sms' ? '接收手机号' : '接收邮箱地址'">
+            <t-textarea
+              v-model="testSendRecipients"
+              :placeholder="testSendPlaceholder"
+              :autosize="{ minRows: 4, maxRows: 8 }"
+              @input="testSendResult = null"
+            />
+          </t-form-item>
+        </t-form>
+        <p class="template-test-hint">支持一行一个或用逗号分隔，最多 20 个。</p>
+
+        <div v-if="testSendResult" class="template-test-feedback" :class="`template-test-feedback--${testSendResult.status}`">
+          <strong>{{ testSendSummaryText }}</strong>
+          <span>成功 {{ testSendResult.success_count }} 条，失败 {{ testSendResult.failed_count }} 条</span>
+        </div>
+        <div v-if="testSendResult?.results?.length" class="template-test-results">
+          <div v-for="item in testSendResult.results" :key="`${item.recipient}:${item.status}`" class="template-test-result-row">
+            <span>{{ item.recipient }}</span>
+            <t-tag :theme="item.status === 'success' ? 'success' : 'danger'" variant="light">
+              {{ item.status === 'success' ? '成功' : '失败' }}
+            </t-tag>
+            <small v-if="item.error">{{ item.error }}</small>
+          </div>
+        </div>
+      </div>
+    </t-dialog>
   </div>
 </template>
 
@@ -207,7 +253,7 @@ import { SearchIcon } from 'tdesign-icons-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import type { PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 
-import { adminApi, type NotificationTemplateItem, type SettingItem } from '@/api/admin';
+import { adminApi, type NotificationTemplateItem, type NotificationTemplateTestSendResponse, type SettingItem } from '@/api/admin';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { errorMessage } from '@/utils/userMessage';
 import apiCatalogData from '@/data/apiCatalog.generated.json';
@@ -259,6 +305,11 @@ const templateAudience = ref<TemplateAudience>(normalizeTemplateAudience(route.q
 const activeTab = ref<NotificationTab>(resolveRouteTab());
 const templatesLoading = ref(false);
 const statusSavingKey = ref('');
+const testSendVisible = ref(false);
+const testSending = ref(false);
+const testSendRecipients = ref('');
+const testSendTemplate = ref<TemplateRow | null>(null);
+const testSendResult = ref<NotificationTemplateTestSendResponse | null>(null);
 const settingsMap = ref<Record<string, unknown>>({});
 const templateSummaries = ref<NotificationTemplateItem[]>([]);
 const selectedApiModule = ref('all');
@@ -288,6 +339,16 @@ const templateDescription = computed(() => {
   }
 
   return '点击编辑进入独立详情页，维护每封邮件自己的主题和 HTML 正文。';
+});
+const testSendDialogTitle = computed(() => (testSendTemplate.value?.channel === 'sms' ? '测试发送短信' : '测试发送邮件'));
+const testSendPlaceholder = computed(() =>
+  testSendTemplate.value?.channel === 'sms' ? '请输入接收手机号，例如：13900001234' : '请输入接收邮箱，例如：tester@example.com',
+);
+const testSendSummaryText = computed(() => {
+  if (!testSendResult.value) return '';
+  if (testSendResult.value.status === 'success') return '测试发送成功';
+  if (testSendResult.value.status === 'partial_failed') return '测试发送部分失败';
+  return '测试发送失败';
 });
 const templateAudienceOptions = computed(() => [
   { label: `用户模板（${templateRows.value.filter((item) => item.audience === 'user').length}）`, value: 'user' },
@@ -359,7 +420,7 @@ const templateColumns: PrimaryTableCol<TemplateRow>[] = [
   { colKey: 'templateType', title: '模板类型', width: 100 },
   { colKey: 'bodyType', title: '正文类型', width: 110 },
   { colKey: 'status', title: '发送状态', width: 130 },
-  { colKey: 'actions', title: '操作', fixed: 'right', width: 90 },
+  { colKey: 'actions', title: '操作', fixed: 'right', width: 150 },
 ];
 const apiColumns: PrimaryTableCol<ApiCatalogItem>[] = [
   { colKey: 'category', title: '所属分类', minWidth: 220 },
@@ -419,6 +480,47 @@ function openTemplate(row: TemplateRow | TableRowData) {
   router.push({ path: `/admin/notifications/${channel}-templates/${code}`, query: { tab: audience } });
 }
 
+function openTestSend(row: TemplateRow | TableRowData) {
+  const template = row as TemplateRow;
+  if (!template?.code) return;
+
+  testSendTemplate.value = template;
+  testSendRecipients.value = '';
+  testSendResult.value = null;
+  testSendVisible.value = true;
+}
+
+async function submitTestSend() {
+  const template = testSendTemplate.value;
+  if (!template) return;
+
+  const recipients = parseRecipients(testSendRecipients.value);
+  if (!recipients.length) {
+    MessagePlugin.warning(template.channel === 'sms' ? '请输入接收手机号' : '请输入接收邮箱地址');
+    return;
+  }
+
+  testSending.value = true;
+  try {
+    const result = await adminApi.settings.testNotificationTemplateSend({
+      channel: template.channel,
+      code: template.code,
+      recipients,
+    });
+    testSendResult.value = result;
+
+    if (result.failed_count > 0) {
+      MessagePlugin.warning(result.status === 'partial_failed' ? '测试发送部分失败' : '测试发送失败');
+    } else {
+      MessagePlugin.success('测试发送成功');
+    }
+  } catch (error) {
+    MessagePlugin.error(errorMessage(error, '测试发送失败'));
+  } finally {
+    testSending.value = false;
+  }
+}
+
 function resetApiFilters() {
   selectedApiModule.value = 'all';
   apiFilters.keyword = '';
@@ -474,6 +576,15 @@ function templateEnabledSettingKey(template: Pick<NotificationTemplateItem, 'cha
 
 function templateRowKey(row: Pick<NotificationTemplateItem, 'channel' | 'code'>) {
   return `${row.channel}:${row.code}`;
+}
+
+function parseRecipients(value: string) {
+  const items = value
+    .split(/[\n,;，；]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return Array.from(new Set(items)).slice(0, 20);
 }
 
 function normalizeSettings(response: SettingItem[] | Record<string, unknown>) {

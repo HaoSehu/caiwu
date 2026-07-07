@@ -1,5 +1,11 @@
 import { request } from '@/utils/request';
-import type { NotificationTemplateItem, SettingItem, ScheduleOverview } from './types';
+import type {
+  NotificationTemplateItem,
+  NotificationTemplateTestSendPayload,
+  NotificationTemplateTestSendResponse,
+  SettingItem,
+  ScheduleOverview,
+} from './types';
 
 type V2SettingItem = SettingItem & {
   sensitive?: boolean;
@@ -39,6 +45,8 @@ export const settingsApi = {
       ...response,
       list: Array.isArray(response.list) ? response.list : [],
     })),
+  testNotificationTemplateSend: (data: NotificationTemplateTestSendPayload) =>
+    request.post<NotificationTemplateTestSendResponse>({ url: '/v2/admin/notification-templates/test-send', data }),
   save: (data: Record<string, unknown>) => request.post({ url: '/v2/admin/settings', data }),
   revealSecret: (group: string, key: string) =>
     request.get<{ group: string; key: string; value: unknown }>({ url: `/v2/admin/settings/${encodeURIComponent(group)}/secrets/${encodeURIComponent(key)}` }),

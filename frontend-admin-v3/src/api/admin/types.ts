@@ -190,6 +190,30 @@ export interface NotificationTemplateItem {
   setting_keys?: Record<string, string>;
 }
 
+export interface NotificationTemplateTestSendPayload {
+  channel: 'email' | 'sms';
+  code: string;
+  recipients: string[];
+}
+
+export interface NotificationTemplateTestSendResult {
+  recipient: string;
+  status: 'success' | 'failed';
+  message: string;
+  error?: string | null;
+}
+
+export interface NotificationTemplateTestSendResponse {
+  channel: 'email' | 'sms';
+  code: string;
+  template_name: string;
+  status: 'success' | 'partial_failed' | 'failed';
+  total: number;
+  success_count: number;
+  failed_count: number;
+  results: NotificationTemplateTestSendResult[];
+}
+
 export interface ScheduleOverview {
   tasks?: Record<string, unknown>[];
   recent_logs?: Record<string, unknown>[];

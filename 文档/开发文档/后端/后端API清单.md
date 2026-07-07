@@ -1,8 +1,8 @@
 # 后端 API 清单
 
-- 生成时间: `2026-07-07 17:50:02`
-- API 总数: `332`
-- 分组统计: `公共 / 健康检查=1, 公共 / 安全资源=1, 客户端 / VNC Token=1, 客户端 / 优惠券=5, 客户端 / 充值=3, 客户端 / 内容=8, 客户端 / 分销=5, 客户端 / 实名认证=8, 客户端 / 工单=9, 客户端 / 支付回调=2, 客户端 / 支付记录=3, 客户端 / 服务=36, 客户端 / 订单=4, 客户端 / 认证=16, 客户端 / 认证入口=3, 客户端 / 财务=6, 客户端 / 账单=9, 客户端 / 通知=5, 站点 / 产品=9, 站点 / 内容=5, 站点 / 首页=3, 管理端 / Integration Plugins=10, 管理端 / 产品=16, 管理端 / 产品分组=8, 管理端 / 产品类型=5, 管理端 / 仪表盘=3, 管理端 / 优惠券=16, 管理端 / 会员等级=4, 管理端 / 供应商=13, 管理端 / 内容=10, 管理端 / 分销=5, 管理端 / 员工=8, 管理端 / 媒体=4, 管理端 / 实名认证=5, 管理端 / 工单=10, 管理端 / 日志=5, 管理端 / 服务=3, 管理端 / 用户=28, 管理端 / 站点=2, 管理端 / 规格目录=4, 管理端 / 角色权限=7, 管理端 / 订单=2, 管理端 / 认证=5, 管理端 / 设置=4, 管理端 / 调度=2, 管理端 / 财务=8, 管理端 / 账单=3`
+- 生成时间: `2026-07-08 01:52:36`
+- API 总数: `333`
+- 分组统计: `公共 / 健康检查=1, 公共 / 安全资源=1, 客户端 / VNC Token=1, 客户端 / 优惠券=5, 客户端 / 充值=3, 客户端 / 内容=8, 客户端 / 分销=5, 客户端 / 实名认证=8, 客户端 / 工单=9, 客户端 / 支付回调=2, 客户端 / 支付记录=3, 客户端 / 服务=36, 客户端 / 订单=4, 客户端 / 认证=16, 客户端 / 认证入口=3, 客户端 / 财务=6, 客户端 / 账单=9, 客户端 / 通知=5, 站点 / 产品=9, 站点 / 内容=5, 站点 / 首页=3, 管理端 / Integration Plugins=10, 管理端 / 产品=16, 管理端 / 产品分组=8, 管理端 / 产品类型=5, 管理端 / 仪表盘=3, 管理端 / 优惠券=16, 管理端 / 会员等级=4, 管理端 / 供应商=13, 管理端 / 内容=10, 管理端 / 分销=5, 管理端 / 员工=8, 管理端 / 媒体=4, 管理端 / 实名认证=5, 管理端 / 工单=10, 管理端 / 日志=5, 管理端 / 服务=3, 管理端 / 用户=28, 管理端 / 站点=2, 管理端 / 规格目录=4, 管理端 / 角色权限=7, 管理端 / 订单=2, 管理端 / 认证=5, 管理端 / 设置=5, 管理端 / 调度=2, 管理端 / 财务=8, 管理端 / 账单=3`
 
 > **自动生成**，由 `backend/scripts/export_api_inventory.php` 扫描 Laravel 路由表导出，**不要手工编辑**。
 >
@@ -327,6 +327,7 @@
 | 管理端 / 认证 | `PUT` | `/api/v2/admin/auth/profile` | `App\Http\Controllers\Admin\V2\AuthController@updateProfile` | `admin` | `api, auth:sanctum, ensure.admin` |
 | 管理端 / 认证 | `POST` | `/api/v2/admin/login` | `App\Http\Controllers\Admin\V2\AuthController@login` | `public` | `api, throttle:5,1,v2-admin-login` |
 | 管理端 / 设置 | `GET` | `/api/v2/admin/notification-templates` | `App\Http\Controllers\Admin\V2\SettingController@notificationTemplates` | `admin` | `api, auth:sanctum, ensure.admin, permission:settings.view` |
+| 管理端 / 设置 | `POST` | `/api/v2/admin/notification-templates/test-send` | `App\Http\Controllers\Admin\V2\SettingController@testNotificationTemplate` | `admin` | `api, auth:sanctum, ensure.admin, permission:settings.manage` |
 | 管理端 / 设置 | `GET` | `/api/v2/admin/settings` | `App\Http\Controllers\Admin\V2\SettingController@index` | `admin` | `api, auth:sanctum, ensure.admin, permission:settings.view` |
 | 管理端 / 设置 | `POST` | `/api/v2/admin/settings` | `App\Http\Controllers\Admin\V2\SettingController@update` | `admin` | `api, auth:sanctum, ensure.admin, permission:settings.manage` |
 | 管理端 / 设置 | `GET` | `/api/v2/admin/settings/{group}/secrets/{key}` | `App\Http\Controllers\Admin\V2\SettingController@revealSecret` | `admin` | `api, auth:sanctum, ensure.admin, permission:settings.secret_reveal` |

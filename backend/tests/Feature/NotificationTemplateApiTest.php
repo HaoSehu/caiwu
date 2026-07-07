@@ -157,6 +157,140 @@ class NotificationTemplateApiTest extends TestCase
         ));
     }
 
+    public function test_admin_notification_template_test_send_requires_manage_permission_and_valid_recipient(): void
+    {
+        $payload = [
+            'channel' => 'email',
+            'code' => NotificationService::TEMPLATE_EMAIL_CODE,
+            'recipient' => 'tester@example.com',
+        ];
+
+        $this->postJson('/api/v2/admin/notification-templates/test-send', $payload)
+            ->assertUnauthorized()
+            ->assertJsonPath('code', 40100);
+
+        Sanctum::actingAs($this->createAdmin([AdminPermissions::SETTINGS_VIEW]));
+
+        $this->postJson('/api/v2/admin/notification-templates/test-send', $payload)
+            ->assertForbidden()
+            ->assertJsonPath('code', 40300);
+
+        Sanctum::actingAs($this->createAdmin([AdminPermissions::SETTINGS_MANAGE]));
+
+        $this->postJson('/api/v2/admin/notification-templates/test-send', [
+            'channel' => 'email',
+            'code' => NotificationService::TEMPLATE_EMAIL_CODE,
+            'recipient' => 'not-an-email',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 42200)
+            ->assertJsonStructure(['data' => ['errors' => ['recipients.0']]]);
+    }
+
+    public function test_admin_notification_template_test_send_sends_email_batch_with_sample_variables(): void
+    {
+        $to = [
+            'template-email-a-'.bin2hex(random_bytes(4)).'@example.com',
+            'template-email-b-'.bin2hex(random_bytes(4)).'@example.com',
+        ];
+        $emailEnabled = Setting::getValue('notification', 'email_enabled', '0');
+        $driver = new NotificationTemplateFakeMailDriver('smtp');
+        $resolver = new NotificationTemplateFakeBindingResolver('demo_sms', 'smtp');
+
+        $this->app->instance(IntegrationDriverBindingResolver::class, $resolver);
+        $this->app->instance(MailDriverManager::class, new MailDriverManager([$driver], $resolver));
+
+        Sanctum::actingAs($this->createAdmin([AdminPermissions::SETTINGS_MANAGE]));
+
+        try {
+            Setting::setValue('notification', 'email_enabled', '1');
+
+            $this->postJson('/api/v2/admin/notification-templates/test-send', [
+                'channel' => 'email',
+                'code' => NotificationService::TEMPLATE_EMAIL_CODE,
+                'recipients' => $to,
+            ])
+                ->assertOk()
+                ->assertJsonPath('code', 0)
+                ->assertJsonPath('data.status', 'success')
+                ->assertJsonPath('data.total', 2)
+                ->assertJsonPath('data.success_count', 2)
+                ->assertJsonPath('data.failed_count', 0)
+                ->assertJsonPath('data.results.0.recipient', $to[0])
+                ->assertJsonPath('data.results.0.status', 'success');
+
+            $this->assertSame(2, $driver->sendCount);
+            $this->assertSame($to, array_column($driver->messages, 'to'));
+            $this->assertSame(
+                NotificationService::TEMPLATE_EMAIL_CODE,
+                $driver->messages[0]['context']['template_code'] ?? null
+            );
+            $this->assertStringContainsString('482915', (string) ($driver->messages[0]['html'] ?? ''));
+        } finally {
+            Setting::setValue('notification', 'email_enabled', $emailEnabled);
+            foreach ($to as $recipient) {
+                $this->deleteEmailLogsByRecipient($recipient);
+            }
+        }
+    }
+
+    public function test_admin_notification_template_test_send_reports_sms_partial_failure(): void
+    {
+        if (! Schema::hasTable('notification_logs') && ! Schema::hasTable('sms_logs')) {
+            $this->markTestSkipped('通知日志表不存在，无法验证短信模板测试发送。');
+        }
+
+        $successPhone = '139'.random_int(10000000, 89999999);
+        $failedPhone = '138'.random_int(10000000, 89999999);
+        $driver = new NotificationTemplateFakeSmsDriver('demo_sms');
+        $driver->failMessagePhones = [$failedPhone];
+        $resolver = new NotificationTemplateFakeBindingResolver('demo_sms');
+        $settings = [
+            'sms_enabled' => Setting::getValue('notification', 'sms_enabled', '0'),
+            'sms_driver' => Setting::getValue('notification', 'sms_driver', ''),
+            'sms_provider' => Setting::getValue('notification', 'sms_provider', ''),
+        ];
+
+        $this->app->instance(IntegrationDriverBindingResolver::class, $resolver);
+        $this->app->instance(SmsDriverManager::class, new SmsDriverManager([$driver], $resolver));
+
+        Sanctum::actingAs($this->createAdmin([AdminPermissions::SETTINGS_MANAGE]));
+
+        try {
+            Setting::setValue('notification', 'sms_enabled', '1');
+            Setting::setValue('notification', 'sms_driver', 'demo_sms');
+            Setting::setValue('notification', 'sms_provider', 'demo_sms');
+
+            $this->postJson('/api/v2/admin/notification-templates/test-send', [
+                'channel' => 'sms',
+                'code' => SmsTemplateCatalog::TEMPLATE_VERIFY_CODE,
+                'recipient' => $successPhone."\n".$failedPhone,
+            ])
+                ->assertOk()
+                ->assertJsonPath('code', 0)
+                ->assertJsonPath('data.status', 'partial_failed')
+                ->assertJsonPath('data.total', 2)
+                ->assertJsonPath('data.success_count', 1)
+                ->assertJsonPath('data.failed_count', 1)
+                ->assertJsonPath('data.results.0.recipient', $successPhone)
+                ->assertJsonPath('data.results.0.status', 'success')
+                ->assertJsonPath('data.results.1.recipient', $failedPhone)
+                ->assertJsonPath('data.results.1.status', 'failed')
+                ->assertJsonPath('data.results.1.error', '短信供应商拒绝发送');
+
+            $this->assertCount(2, $driver->messageRequests);
+            $this->assertSame($successPhone, $driver->messageRequests[0]->phone);
+            $this->assertStringContainsString('482915', $driver->messageRequests[0]->content);
+        } finally {
+            foreach ($settings as $key => $value) {
+                Setting::setValue('notification', (string) $key, $value);
+            }
+
+            $this->deleteSmsLogsByRecipient($successPhone);
+            $this->deleteSmsLogsByRecipient($failedPhone);
+        }
+    }
+
     public function test_sms_verification_log_uses_configurable_template_content_and_redacts_code(): void
     {
         if (! Schema::hasTable('notification_logs') && ! Schema::hasTable('sms_logs')) {
@@ -624,6 +758,9 @@ final class NotificationTemplateFakeMailDriver implements MailDriver
 {
     public int $sendCount = 0;
 
+    /** @var list<array{to: string, subject: string, html: string, context: array<string, mixed>}> */
+    public array $messages = [];
+
     public function __construct(
         private readonly string $key,
     ) {}
@@ -641,6 +778,7 @@ final class NotificationTemplateFakeMailDriver implements MailDriver
     public function sendHtml(string $to, string $subject, string $html, array $context = []): void
     {
         $this->sendCount++;
+        $this->messages[] = compact('to', 'subject', 'html', 'context');
     }
 }
 
@@ -649,6 +787,12 @@ final class NotificationTemplateFakeSmsDriver implements SmsDriver
     public ?SmsSendRequest $lastRequest = null;
 
     public ?SmsMessageRequest $lastMessageRequest = null;
+
+    /** @var list<SmsMessageRequest> */
+    public array $messageRequests = [];
+
+    /** @var list<string> */
+    public array $failMessagePhones = [];
 
     public function __construct(
         private readonly string $key,
@@ -667,6 +811,11 @@ final class NotificationTemplateFakeSmsDriver implements SmsDriver
     public function sendMessage(SmsMessageRequest $request): SmsSendResult
     {
         $this->lastMessageRequest = $request;
+        $this->messageRequests[] = $request;
+
+        if (in_array($request->phone, $this->failMessagePhones, true)) {
+            throw new \RuntimeException('短信供应商拒绝发送');
+        }
 
         return new SmsSendResult(
             status: 'success',
