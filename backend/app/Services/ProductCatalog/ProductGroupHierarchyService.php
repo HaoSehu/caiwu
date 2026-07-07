@@ -486,8 +486,8 @@ class ProductGroupHierarchyService
         $productTypes = $this->missingLegacyGroupProductsQuery()
             ->select('product_type')
             ->distinct()
-            ->pluck('product_type')
-            ->map(fn ($value): string => $this->normalizeProductTypeCode($value))
+            ->get()
+            ->map(fn (Product $product): string => $this->normalizeProductTypeCode($product->getRawOriginal('product_type')))
             ->filter(fn (string $value): bool => $value !== '')
             ->unique()
             ->values();
