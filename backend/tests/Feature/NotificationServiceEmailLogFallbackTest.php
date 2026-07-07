@@ -12,10 +12,20 @@ use App\Services\System\AdminLogService;
 use App\Services\System\NotificationService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Tests\Support\InstallsNotificationTemplateDefaults;
 use Tests\TestCase;
 
 class NotificationServiceEmailLogFallbackTest extends TestCase
 {
+    use InstallsNotificationTemplateDefaults;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->installNotificationTemplateDefaults();
+    }
+
     public function test_notification_service_no_longer_uses_plugin_placeholder_smtp_values(): void
     {
         $content = file_get_contents(base_path('app/Services/System/NotificationService.php'));

@@ -24,10 +24,20 @@ use App\Support\SmsTemplateCatalog;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\Sanctum;
+use Tests\Support\InstallsNotificationTemplateDefaults;
 use Tests\TestCase;
 
 class NotificationTemplateApiTest extends TestCase
 {
+    use InstallsNotificationTemplateDefaults;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->installNotificationTemplateDefaults();
+    }
+
     public function test_admin_notification_template_catalog_requires_settings_view_and_returns_email_sms_templates(): void
     {
         $this->getJson('/api/v2/admin/notification-templates')
