@@ -31,11 +31,16 @@ type V2LogDetail = {
 };
 
 function toV2Params(params: LogListParams = {}) {
-  return params;
+  const { include_summary = false, ...rest } = params;
+
+  return {
+    ...rest,
+    include_summary: include_summary ? 1 : 0,
+  };
 }
 
 function toV2SummaryParams(params: LogListParams = {}) {
-  const { page, page_size, ...rest } = params;
+  const { page, page_size, include_summary, ...rest } = params;
   return rest;
 }
 

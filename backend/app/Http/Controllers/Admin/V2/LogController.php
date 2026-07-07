@@ -29,7 +29,8 @@ class LogController extends Controller
                 $channel,
                 $request->filters(),
                 $request->pageNumber(),
-                $request->perPage()
+                $request->perPage(),
+                $request->includeSummary()
             )
         );
     }

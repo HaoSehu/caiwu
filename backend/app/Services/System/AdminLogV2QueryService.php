@@ -54,9 +54,9 @@ class AdminLogV2QueryService
      * @param  array<string, mixed>  $filters
      * @return array<string, mixed>
      */
-    public function paginate(string $channel, array $filters, int $page, int $perPage): array
+    public function paginate(string $channel, array $filters, int $page, int $perPage, bool $withSummary = true): array
     {
-        $payload = $this->legacyList($channel, $filters, $page, $perPage);
+        $payload = $this->legacyList($channel, $filters, $page, $perPage, $withSummary);
         $rows = $payload['data'] ?? $payload['items'] ?? $payload['list'] ?? [];
 
         return [
@@ -70,7 +70,7 @@ class AdminLogV2QueryService
             'total' => (int) ($payload['total'] ?? 0),
             'page' => (int) ($payload['current_page'] ?? $payload['page'] ?? $page),
             'page_size' => (int) ($payload['per_page'] ?? $payload['page_size'] ?? $perPage),
-            'summary' => $this->summary($channel, $filters),
+            'summary' => $withSummary ? $this->resolveSummary($channel, $filters, $payload) : [],
         ];
     }
 
@@ -119,21 +119,37 @@ class AdminLogV2QueryService
      * @param  array<string, mixed>  $filters
      * @return array<string, mixed>
      */
-    private function legacyList(string $channel, array $filters, int $page, int $perPage): array
+    private function legacyList(string $channel, array $filters, int $page, int $perPage, bool $withSummary = true): array
     {
         return match ($channel) {
             'sms' => $this->adminLogService->getSmsLogs($filters, $perPage),
             'email' => $this->adminLogService->getEmailLogs($filters, $perPage),
-            'api' => $this->adminLogService->getApiLogs($filters, $page, $perPage),
+            'api' => $this->adminLogService->getApiLogs($filters, $page, $perPage, $withSummary),
             'tasks' => $this->adminLogService->getTaskLogs($filters, $page, $perPage),
-            'system' => $this->adminLogService->getSystemLogs($filters, $page, $perPage),
-            'activity' => $this->adminLogService->getActivityLogs($filters, $page, $perPage),
+            'system' => $this->adminLogService->getSystemLogs($filters, $page, $perPage, $withSummary),
+            'activity' => $this->adminLogService->getActivityLogs($filters, $page, $perPage, $withSummary),
             'runtime' => $this->adminLogService->getRuntimeLogs($filters, $page, $perPage),
-            'admin-logins' => $this->adminLogService->getAdminLoginLogs($filters, $page, $perPage),
-            'gateway' => $this->adminLogService->getGatewayLogs($filters, $page, $perPage),
+            'admin-logins' => $this->adminLogService->getAdminLoginLogs($filters, $page, $perPage, $withSummary),
+            'gateway' => $this->adminLogService->getGatewayLogs($filters, $page, $perPage, $withSummary),
             'schedule' => $this->scheduleRunLogService->getScheduleStatus($page, $perPage, $filters),
             default => throw new NotFoundHttpException('日志 channel 不存在'),
         };
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function resolveSummary(string $channel, array $filters, array $payload): array
+    {
+        $summary = $payload['summary'] ?? [];
+
+        if (is_array($summary) && $summary !== []) {
+            return $summary;
+        }
+
+        return $this->summary($channel, $filters);
     }
 
     /**
