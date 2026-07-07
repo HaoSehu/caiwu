@@ -6,6 +6,8 @@ namespace App\Support;
 
 final class EmailNotificationTemplateDefaults
 {
+    private const THEME_BLUE = '#1f5eff';
+
     /**
      * @return array<int, array<string, mixed>>
      */
@@ -68,10 +70,10 @@ final class EmailNotificationTemplateDefaults
             'name' => $name,
             'description' => $description,
             'subject' => $subject,
-            'content' => self::content($code, $name, $lead, $rows, $notice, $accent),
+            'content' => self::content($code, $name, $lead, $rows, $notice, self::THEME_BLUE),
             'variables' => $variables,
             'audience' => $audience,
-            'accent' => $accent,
+            'accent' => self::THEME_BLUE,
         ];
     }
 
@@ -82,7 +84,7 @@ final class EmailNotificationTemplateDefaults
     {
         $style = self::style($code, $accent);
         $rowHtml = '';
-        [$visualLabel, $visualValue, $visualMark, $actionTitle] = self::visual($code);
+        $actionTitle = '处理建议';
 
         foreach ($rows as $row) {
             $rowHtml .= '                  <tr><td class="detail-label">'.(string) $row[0].'</td><td class="detail-value">'.(string) $row[1].'</td></tr>'."\n";
@@ -118,11 +120,6 @@ final class EmailNotificationTemplateDefaults
                       <h1>{$title}</h1>
                       <p class="email-lead">{$lead}</p>
                     </td>
-                    <td class="hero-visual" width="176">
-                      <div class="visual-mark">{$visualMark}</div>
-                      <div class="visual-label">{$visualLabel}</div>
-                      <div class="visual-value">{$visualValue}</div>
-                    </td>
                   </tr>
                 </table>
               </td>
@@ -151,23 +148,6 @@ final class EmailNotificationTemplateDefaults
 </body>
 </html>
 HTML;
-    }
-
-    /**
-     * @return array{0: string, 1: string, 2: string, 3: string}
-     */
-    private static function visual(string $code): array
-    {
-        return match ($code) {
-            '100001' => ['验证码', '{{code}}', '验证', '安全提示'],
-            '100002' => ['账号状态', '已创建', '账号', '下一步'],
-            '100003', '100004', '100028' => ['安全提醒', '请核对', '安全', '安全提示'],
-            '100005', '100006', '100007', '100008', '100009', '100029' => ['产品状态', '请确认', '服务', '处理建议'],
-            '100010', '100011', '100012', '100013', '100016', '100017', '100020', '100021', '100022' => ['账单状态', '请跟进', '账单', '处理建议'],
-            '100014', '100015', '100018', '100019' => ['续费状态', '请留意', '续费', '处理建议'],
-            '100023', '100024', '100025', '100026', '100027' => ['工单编号', '#{{ticket_id}}', '工单', '处理建议'],
-            default => ['通知状态', '请查看', '通知', '提示'],
-        };
     }
 
     private static function style(string $code, string $accent): string
@@ -217,7 +197,6 @@ body {
   padding: 28px 32px 12px;
 }
 .cw-email-template-{$code} .hero-copy {
-  padding-right: 24px;
   vertical-align: top;
 }
 .cw-email-template-{$code} .email-eyebrow {
@@ -237,35 +216,6 @@ body {
   color: #4b5563;
   font-size: 14px;
   line-height: 1.8;
-}
-.cw-email-template-{$code} .hero-visual {
-  width: 176px;
-  padding: 14px 14px 16px;
-  border: 1px solid #dbe5f4;
-  background: #f8fbff;
-  text-align: center;
-  vertical-align: top;
-}
-.cw-email-template-{$code} .visual-mark {
-  display: inline-block;
-  padding: 4px 8px;
-  background: {$accent};
-  color: #ffffff;
-  font-size: 11px;
-  font-weight: 700;
-}
-.cw-email-template-{$code} .visual-label {
-  margin-top: 12px;
-  color: #667085;
-  font-size: 13px;
-}
-.cw-email-template-{$code} .visual-value {
-  margin-top: 6px;
-  color: #111827;
-  font-size: 18px;
-  font-weight: 700;
-  line-height: 1.35;
-  word-break: break-word;
 }
 .cw-email-template-{$code} .email-section {
   padding: 14px 32px 0;
@@ -335,16 +285,12 @@ body {
     padding-left: 18px;
     padding-right: 18px;
   }
-  .cw-email-template-{$code} .hero-copy,
-  .cw-email-template-{$code} .hero-visual {
+  .cw-email-template-{$code} .hero-copy {
     display: block;
     width: auto;
   }
   .cw-email-template-{$code} .hero-copy {
     padding-right: 0;
-  }
-  .cw-email-template-{$code} .hero-visual {
-    margin-top: 16px;
   }
   .cw-email-template-{$code} h1 {
     font-size: 21px;
