@@ -310,6 +310,7 @@ class V2SiteHomeApiTest extends TestCase
             'slogan' => '',
             'product_count' => 1,
             'product_type' => $type,
+            'first_product_group_code' => $type,
             'product_type_id' => $id,
             'product_type_label' => $typeLabel,
         ];
