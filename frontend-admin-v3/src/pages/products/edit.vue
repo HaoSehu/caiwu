@@ -995,7 +995,8 @@ function goBack() {
 }
 
 .product-edit-form {
-  max-width: 960px;
+  width: 100%;
+  max-width: 1120px;
 }
 
 .product-edit-section {
