@@ -22,6 +22,13 @@ class ProductCategoryService
 
     private const ADMIN_SUMMARY_CACHE_TTL_SECONDS = 60;
 
+    private readonly ProductGroupHierarchyService $hierarchyService;
+
+    public function __construct(?ProductGroupHierarchyService $hierarchyService = null)
+    {
+        $this->hierarchyService = $hierarchyService ?? app(ProductGroupHierarchyService::class);
+    }
+
     public function adminSummary(): array
     {
         return Cache::remember(
@@ -95,7 +102,7 @@ class ProductCategoryService
             $payload = $this->sharedGroupPayload($data, $name);
 
             if ($level === 1) {
-                $code = trim((string) ($data['service_type_code'] ?? $data['first_product_group_code'] ?? ''));
+                $code = trim((string) ($data['first_product_group_code'] ?? $data['code'] ?? ''));
                 throw_if($code === '', new BusinessException('请输入一级分类编码'));
 
                 $group = FirstProductGroup::query()->create([
@@ -104,6 +111,7 @@ class ProductCategoryService
                     'slug' => $this->generateUniqueSlug(FirstProductGroup::query(), $data['slug'] ?? $name),
                     'is_system' => (int) (($data['is_system'] ?? 0) ? 1 : 0),
                     'legacy_product_type' => null,
+                    'product_type' => ProductType::normalizeBusinessValue($data['product_type'] ?? $code),
                 ]);
 
                 $this->forgetSiteCatalogCache();
@@ -112,7 +120,7 @@ class ProductCategoryService
             }
 
             if ($level === 2) {
-                $firstGroup = $this->findFirstGroup((int) ($data['first_product_group_id'] ?? 0));
+                $firstGroup = $this->resolveFirstGroupForCategory($data);
                 $group = SecondProductGroup::query()->create([
                     ...$payload,
                     'first_product_group_id' => (int) $firstGroup->id,
@@ -155,10 +163,13 @@ class ProductCategoryService
 
             if ($level === 1) {
                 $group = $this->findFirstGroup($groupId);
-                if (array_key_exists('service_type_code', $data) || array_key_exists('first_product_group_code', $data)) {
-                    $code = trim((string) ($data['service_type_code'] ?? $data['first_product_group_code'] ?? ''));
+                if (array_key_exists('first_product_group_code', $data) || array_key_exists('code', $data)) {
+                    $code = trim((string) ($data['first_product_group_code'] ?? $data['code'] ?? ''));
                     throw_if($code === '', new BusinessException('一级分类编码不能为空'));
                     $payload['code'] = $code;
+                }
+                if (array_key_exists('product_type', $data)) {
+                    $payload['product_type'] = ProductType::normalizeBusinessValue($data['product_type']);
                 }
                 $group->update($payload);
                 if ($shouldCascadeVisibility) {
@@ -335,15 +346,17 @@ class ProductCategoryService
     private function firstGroupPayload(FirstProductGroup $group): array
     {
         $children = $group->relationLoaded('secondProductGroups') ? $group->secondProductGroups : collect();
+        $productType = ProductType::businessValueForFirstGroup($group, $group->code);
 
         return [
             'id' => (int) $group->id,
             'first_product_group_id' => (int) $group->id,
             'first_product_group_code' => (string) $group->code,
             'first_product_group_name' => (string) $group->name,
-            'service_type_code' => (string) $group->code,
-            'product_type' => (string) $group->code,
-            'product_type_label' => ProductType::labelOf((string) $group->code),
+            'service_type_code' => $productType,
+            'service_type_label' => ProductType::businessLabelOf($productType),
+            'product_type' => $productType,
+            'product_type_label' => ProductType::businessLabelOf($productType),
             'effective_product_group_id' => (int) $group->id,
             'effective_product_group_level' => 1,
             'level' => 1,
@@ -369,6 +382,7 @@ class ProductCategoryService
     {
         $firstGroup = $firstGroup ?? $group->firstProductGroup;
         $children = $group->relationLoaded('thirdProductGroups') ? $group->thirdProductGroups : collect();
+        $productType = ProductType::businessValueForFirstGroup($firstGroup, $firstGroup?->code);
 
         return [
             'id' => (int) $group->id,
@@ -381,9 +395,10 @@ class ProductCategoryService
             'effective_product_group_id' => (int) $group->id,
             'effective_product_group_level' => 2,
             'level' => 2,
-            'service_type_code' => (string) ($firstGroup?->code ?? ''),
-            'product_type' => (string) ($firstGroup?->code ?? ''),
-            'product_type_label' => ProductType::labelOf((string) ($firstGroup?->code ?? '')),
+            'service_type_code' => $productType,
+            'service_type_label' => ProductType::businessLabelOf($productType),
+            'product_type' => $productType,
+            'product_type_label' => ProductType::businessLabelOf($productType),
             'name' => (string) $group->name,
             'description' => (string) ($group->description ?? ''),
             'slug' => (string) $group->slug,
@@ -408,6 +423,7 @@ class ProductCategoryService
     {
         $secondGroup = $secondGroup ?? $group->secondProductGroup;
         $firstGroup = $secondGroup?->firstProductGroup;
+        $productType = ProductType::businessValueForFirstGroup($firstGroup, $firstGroup?->code);
 
         return [
             'id' => (int) $group->id,
@@ -421,9 +437,10 @@ class ProductCategoryService
             'effective_product_group_id' => (int) $group->id,
             'effective_product_group_level' => 3,
             'level' => 3,
-            'service_type_code' => (string) ($firstGroup?->code ?? ''),
-            'product_type' => (string) ($firstGroup?->code ?? ''),
-            'product_type_label' => ProductType::labelOf((string) ($firstGroup?->code ?? '')),
+            'service_type_code' => $productType,
+            'service_type_label' => ProductType::businessLabelOf($productType),
+            'product_type' => $productType,
+            'product_type_label' => ProductType::businessLabelOf($productType),
             'name' => (string) $group->name,
             'description' => (string) ($group->description ?? ''),
             'slug' => (string) $group->slug,
@@ -511,6 +528,32 @@ class ProductCategoryService
         throw_if(! in_array($level, [1, 2, 3], true), new BusinessException('分类层级不正确'));
 
         return $level;
+    }
+
+    private function resolveFirstGroupForCategory(array $data): FirstProductGroup
+    {
+        $id = (int) ($data['first_product_group_id'] ?? 0);
+        if ($id > 0) {
+            $group = FirstProductGroup::query()->find($id);
+            if ($group instanceof FirstProductGroup) {
+                return $group;
+            }
+        }
+
+        $code = trim((string) ($data['first_product_group_code'] ?? $data['code'] ?? ''));
+        if ($code !== '') {
+            $group = FirstProductGroup::query()->where('code', $code)->first();
+            if ($group instanceof FirstProductGroup) {
+                return $group;
+            }
+
+            $group = $this->hierarchyService->ensureFirstProductGroupForType($code);
+            if ($group instanceof FirstProductGroup) {
+                return $group;
+            }
+        }
+
+        throw new BusinessException('一级分类不存在');
     }
 
     private function findFirstGroup(int $id): FirstProductGroup

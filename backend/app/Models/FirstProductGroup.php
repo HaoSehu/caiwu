@@ -18,6 +18,7 @@ class FirstProductGroup extends Model
         'is_visible',
         'is_system',
         'legacy_product_type',
+        'product_type',
     ];
 
     protected function casts(): array

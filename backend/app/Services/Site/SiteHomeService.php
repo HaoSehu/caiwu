@@ -154,7 +154,7 @@ class SiteHomeService
      */
     private function typeValue(array $type): string
     {
-        return trim((string) ($type['value'] ?? $type['product_type'] ?? $type['first_product_group_code'] ?? ''));
+        return trim((string) ($type['first_product_group_code'] ?? $type['value'] ?? ''));
     }
 
     /**
@@ -162,7 +162,7 @@ class SiteHomeService
      */
     private function groupProductType(array $group): string
     {
-        return trim((string) ($group['product_type'] ?? $group['first_product_group_code'] ?? ''));
+        return trim((string) ($group['first_product_group_code'] ?? ''));
     }
 
     /**

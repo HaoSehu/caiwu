@@ -18,7 +18,8 @@ class ProductPurchaseContextRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'product_type' => ['sometimes', 'string', Rule::in(ProductType::allowedValues())],
+            'product_type' => ['sometimes', 'string', Rule::in(ProductType::businessAllowedValues())],
+            'first_product_group_code' => ['sometimes', 'string', 'max:50'],
             'root_page_size' => ['sometimes', 'integer', 'min:1', 'max:50'],
             'page' => ['prohibited'],
             'page_size' => ['prohibited'],

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Resources\Site\V2;
 
+use App\Constants\ProductType;
 use App\Models\Product;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use Illuminate\Http\Request;
@@ -22,7 +23,8 @@ class SiteProductSummaryResource extends JsonResource
         $firstGroup = $product->relationLoaded('firstProductGroup') ? $product->firstProductGroup : null;
         $secondGroup = $product->relationLoaded('secondProductGroup') ? $product->secondProductGroup : null;
         $thirdGroup = $product->relationLoaded('thirdProductGroup') ? $product->thirdProductGroup : null;
-        $productType = (string) ($firstGroup?->code ?? $product->service_type_code ?? $product->product_type ?? '');
+        $firstGroupCode = (string) ($firstGroup?->code ?? '');
+        $productType = ProductType::businessValueForFirstGroup($firstGroup, $product->product_type);
         $pricing = $this->pricing($product);
         $primaryCycle = $this->primaryCycle($pricing);
 
@@ -35,7 +37,7 @@ class SiteProductSummaryResource extends JsonResource
             'cpu_turbo_frequency' => (string) ($product->getAttribute('cpu_turbo_frequency') ?? ''),
             'product_type' => $productType,
             'first_product_group_id' => $firstGroup?->id ? (int) $firstGroup->id : null,
-            'first_product_group_code' => $productType,
+            'first_product_group_code' => $firstGroupCode,
             'first_product_group_name' => $firstGroup?->name,
             'second_product_group_id' => $secondGroup?->id ? (int) $secondGroup->id : null,
             'second_product_group_name' => $secondGroup?->name,

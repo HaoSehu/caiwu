@@ -64,11 +64,20 @@ class ProductTypeService
         return array_map(function (array $item, int $index) use ($usageMap, $groupUsageMap, $firstGroups) {
             $value = (string) $item['value'];
             $firstGroup = $firstGroups->get($value);
+            $businessType = ProductType::normalizeBusinessValue(
+                $firstGroup instanceof FirstProductGroup
+                    ? ($firstGroup->getAttribute('product_type') ?: ($item['product_type'] ?? $value))
+                    : ($item['product_type'] ?? $value)
+            );
 
             return [
                 'internal_id' => (int) ($item['internal_id'] ?? 0),
                 'value' => $value,
                 'label' => (string) $item['label'],
+                'product_type' => $businessType,
+                'product_type_label' => ProductType::businessLabelOf($businessType),
+                'product_type_icon' => ProductType::businessIconOf($businessType),
+                'product_type_plugin_driven' => ProductType::isPluginDriven($businessType),
                 'first_product_group_id' => $firstGroup instanceof FirstProductGroup ? (int) $firstGroup->id : null,
                 'first_product_group_code' => $value,
                 'first_product_group_name' => $firstGroup instanceof FirstProductGroup ? (string) $firstGroup->name : (string) $item['label'],
@@ -82,10 +91,11 @@ class ProductTypeService
         }, $items, array_keys($items));
     }
 
-    public function create(string $label, ?string $icon = null): array
+    public function create(string $label, ?string $icon = null, ?string $productType = null): array
     {
         $normalizedLabel = $this->normalizeLabel($label);
         $normalizedIcon = $this->normalizeIcon($icon);
+        $normalizedProductType = ProductType::normalizeBusinessValue($productType);
         $items = ProductType::items();
 
         foreach ($items as $item) {
@@ -116,6 +126,7 @@ class ProductTypeService
             'internal_id' => max(1, $nextInternalId),
             'value' => $value,
             'label' => $normalizedLabel,
+            'product_type' => $normalizedProductType,
             'icon' => $normalizedIcon,
             'is_builtin' => false,
             'is_hidden' => false,
@@ -127,11 +138,14 @@ class ProductTypeService
         return $this->findOrFail($value);
     }
 
-    public function update(string $value, string $label, ?bool $isHidden = null, ?string $icon = null): array
+    public function update(string $value, string $label, ?bool $isHidden = null, ?string $icon = null, ?string $productType = null): array
     {
         $normalizedValue = trim($value);
         $normalizedLabel = $this->normalizeLabel($label);
         $normalizedIcon = $this->normalizeIcon($icon);
+        $normalizedProductType = $productType !== null
+            ? ProductType::normalizeBusinessValue($productType)
+            : null;
         $items = ProductType::items();
         $matched = false;
 
@@ -147,6 +161,7 @@ class ProductTypeService
             $items[$index]['label'] = $normalizedLabel;
             $items[$index]['is_hidden'] = $isHidden ?? (bool) ($item['is_hidden'] ?? false);
             $items[$index]['icon'] = $normalizedIcon;
+            $items[$index]['product_type'] = $normalizedProductType ?? ProductType::normalizeBusinessValue($item['product_type'] ?? $item['value'] ?? $normalizedValue);
             $matched = true;
         }
 

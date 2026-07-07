@@ -26,10 +26,12 @@ class ProductGroupV2QueryService
     public function paginateAdminRootGroups(array $filters): LengthAwarePaginator
     {
         $keyword = trim((string) ($filters['keyword'] ?? ''));
-        $serviceTypeCode = trim((string) ($filters['service_type_code'] ?? $filters['product_type'] ?? ''));
+        $firstGroupCode = trim((string) ($filters['first_product_group_code'] ?? ''));
+        $productType = trim((string) ($filters['product_type'] ?? ''));
 
         return FirstProductGroup::query()
-            ->when($serviceTypeCode !== '', fn (Builder $query) => $query->where('code', $serviceTypeCode))
+            ->when($firstGroupCode !== '', fn (Builder $query) => $query->where('code', $firstGroupCode))
+            ->when($productType !== '', fn (Builder $query) => $query->where('product_type', ProductType::normalizeBusinessValue($productType)))
             ->when($keyword !== '', function (Builder $query) use ($keyword): void {
                 $query->where(function (Builder $keywordQuery) use ($keyword): void {
                     $keywordQuery
@@ -59,12 +61,14 @@ class ProductGroupV2QueryService
      */
     public function listAdminTreeGroups(array $filters): array
     {
-        $serviceTypeCode = trim((string) ($filters['service_type_code'] ?? $filters['product_type'] ?? ''));
+        $firstGroupCode = trim((string) ($filters['first_product_group_code'] ?? ''));
+        $productType = trim((string) ($filters['product_type'] ?? ''));
         $hasStatus = array_key_exists('status', $filters) && $filters['status'] !== null;
         $status = $hasStatus ? (int) $filters['status'] : null;
 
         $roots = FirstProductGroup::query()
-            ->when($serviceTypeCode !== '', fn (Builder $query) => $query->where('code', $serviceTypeCode))
+            ->when($firstGroupCode !== '', fn (Builder $query) => $query->where('code', $firstGroupCode))
+            ->when($productType !== '', fn (Builder $query) => $query->where('product_type', ProductType::normalizeBusinessValue($productType)))
             ->when($hasStatus, fn (Builder $query) => $query->where('is_visible', $status))
             ->withCount([
                 'secondProductGroups as children_count',
@@ -190,7 +194,7 @@ class ProductGroupV2QueryService
      */
     public function paginateSiteRootGroups(array $filters): LengthAwarePaginator
     {
-        $productType = trim((string) ($filters['product_type'] ?? ''));
+        $productType = trim((string) ($filters['first_product_group_code'] ?? $filters['product_type'] ?? ''));
 
         return $this->visibleSecondProductGroupQuery($productType !== '' ? $productType : null)
             ->with(['firstProductGroup'])
@@ -289,7 +293,7 @@ class ProductGroupV2QueryService
     {
         $visibleProductTypes = ProductType::visibleValues();
 
-        if ($visibleProductTypes === [] || ($productType !== null && ! in_array($productType, $visibleProductTypes, true))) {
+        if ($visibleProductTypes === []) {
             return SecondProductGroup::query()->whereRaw('1 = 0');
         }
 
@@ -299,7 +303,14 @@ class ProductGroupV2QueryService
             ->where('second_product_groups.is_visible', 1)
             ->where('first_product_groups.is_visible', 1)
             ->whereIn('first_product_groups.code', $visibleProductTypes)
-            ->when($productType !== null, fn (Builder $query) => $query->where('first_product_groups.code', $productType));
+            ->when($productType !== null, function (Builder $query) use ($productType): void {
+                $businessType = ProductType::normalizeBusinessValue($productType);
+                $query->where(function (Builder $typeQuery) use ($productType, $businessType): void {
+                    $typeQuery
+                        ->where('first_product_groups.code', $productType)
+                        ->orWhere('first_product_groups.product_type', $businessType);
+                });
+            });
     }
 
     private function adminSecondProductGroupQuery(int $firstGroupId): Builder

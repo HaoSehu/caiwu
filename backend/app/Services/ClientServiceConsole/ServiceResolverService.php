@@ -49,19 +49,19 @@ class ServiceResolverService
     {
         $service->loadMissing('product.firstProductGroup');
 
-        $serviceTypeCode = trim((string) ($service->product?->service_type_code ?? ''));
-        if ($serviceTypeCode !== '') {
-            return $serviceTypeCode;
-        }
-
-        $firstGroupCode = trim((string) ($service->product?->firstProductGroup?->code ?? ''));
-        if ($firstGroupCode !== '') {
-            return $firstGroupCode;
-        }
-
         $productType = trim((string) ($service->product?->product_type ?? ''));
         if ($productType !== '') {
-            return $productType;
+            return ProductType::normalizeBusinessValue($productType);
+        }
+
+        $serviceTypeCode = trim((string) ($service->product?->service_type_code ?? ''));
+        if ($serviceTypeCode !== '') {
+            return ProductType::normalizeBusinessValue($serviceTypeCode);
+        }
+
+        $firstGroup = $service->product?->firstProductGroup;
+        if ($firstGroup instanceof FirstProductGroup) {
+            return ProductType::businessValueForFirstGroup($firstGroup);
         }
 
         return ProductType::OTHER;

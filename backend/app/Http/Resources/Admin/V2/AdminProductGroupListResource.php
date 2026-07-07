@@ -22,7 +22,8 @@ class AdminProductGroupListResource extends JsonResource
         $firstGroup = $this->firstGroup();
         $secondGroup = $this->secondGroup();
         $thirdGroup = $this->thirdGroup();
-        $serviceTypeCode = (string) ($firstGroup?->code ?? '');
+        $firstGroupCode = (string) ($firstGroup?->code ?? '');
+        $productType = ProductType::businessValueForFirstGroup($firstGroup, $firstGroupCode);
         $name = (string) ($this->resource->name ?? '');
 
         return [
@@ -33,10 +34,13 @@ class AdminProductGroupListResource extends JsonResource
             'parent_id' => $this->parentId(),
             'parent_level' => $level > 1 ? $level - 1 : null,
             'level' => $level,
-            'service_type_code' => $serviceTypeCode,
-            'service_type_label' => ProductType::labelOf($serviceTypeCode),
+            'product_type' => $productType,
+            'product_type_label' => ProductType::businessLabelOf($productType),
+            'service_type_code' => $productType,
+            'service_type_label' => ProductType::businessLabelOf($productType),
             'slug' => (string) ($this->resource->slug ?? ''),
             'first_product_group_id' => $firstGroup?->id ? (int) $firstGroup->id : null,
+            'first_product_group_code' => $firstGroupCode,
             'first_product_group_name' => $firstGroup?->name,
             'second_product_group_id' => $secondGroup?->id ? (int) $secondGroup->id : null,
             'second_product_group_name' => $secondGroup?->name,

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Admin\V2\ProductType;
 
+use App\Constants\ProductType;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateProductTypeRequest extends FormRequest
 {
@@ -16,12 +18,13 @@ class UpdateProductTypeRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'product_type' => ['required', 'string', 'max:50'],
+            'product_type_code' => ['required', 'string', 'max:50'],
             'per_page' => ['prohibited'],
             'page' => ['prohibited'],
             'page_size' => ['prohibited'],
             'pageSize' => ['prohibited'],
             'label' => ['required', 'string', 'max:30'],
+            'product_type' => ['required', 'string', Rule::in(ProductType::businessAllowedValues())],
             'is_hidden' => ['nullable', 'boolean'],
             'icon' => ['nullable', 'string', 'max:50'],
         ];
@@ -30,7 +33,7 @@ class UpdateProductTypeRequest extends FormRequest
     public function validationData(): array
     {
         return array_merge(parent::validationData(), [
-            'product_type' => $this->route('productType'),
+            'product_type_code' => $this->route('productType'),
         ]);
     }
 }

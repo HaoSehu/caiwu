@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Constants\ProductType;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use Illuminate\Database\Eloquent\Model;
@@ -63,18 +64,18 @@ class Product extends Model
 
     public function getProductTypeAttribute(mixed $value): string
     {
+        if ($this->relationLoaded('firstProductGroup') && $this->firstProductGroup instanceof FirstProductGroup) {
+            return ProductType::businessValueForFirstGroup($this->firstProductGroup, $value);
+        }
+
         $normalized = trim((string) ($value ?? ''));
         if ($normalized !== '') {
-            return $normalized;
+            return ProductType::normalizeBusinessValue($normalized);
         }
 
         $serviceTypeCode = trim((string) ($this->attributes['service_type_code'] ?? ''));
         if ($serviceTypeCode !== '') {
-            return $serviceTypeCode;
-        }
-
-        if ($this->relationLoaded('firstProductGroup') && $this->firstProductGroup instanceof FirstProductGroup) {
-            return trim((string) $this->firstProductGroup->code);
+            return ProductType::normalizeBusinessValue($serviceTypeCode);
         }
 
         return '';
@@ -215,7 +216,7 @@ class Product extends Model
 
     public function scopeOfType($query, string $type)
     {
-        return $query->where('product_type', $type);
+        return $query->where('product_type', ProductType::normalizeBusinessValue($type));
     }
 
     public function getPriceByBillingCycle(string $cycle): float

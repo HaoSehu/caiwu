@@ -27,6 +27,7 @@ export function flattenCategories<
     children?: T[];
     parent_id?: number | string | null;
     product_type?: string;
+    first_product_group_code?: string;
   },
 >(nodes: T[], level = 0, parent: T | null = null, catalogProductType = ''): T[] {
   return nodes.flatMap((node) => {
@@ -35,7 +36,8 @@ export function flattenCategories<
       ...node,
       label,
       parent_id: node.parent_id ?? parent?.id ?? null,
-      product_type: node.product_type || parent?.product_type || catalogProductType || '',
+      product_type: node.product_type || parent?.product_type || '',
+      first_product_group_code: node.first_product_group_code || parent?.first_product_group_code || catalogProductType || '',
     } as T;
     return [current, ...flattenCategories(node.children || [], level + 1, current, catalogProductType)];
   });
@@ -53,7 +55,9 @@ export interface ProductGroupLike {
   id: string | number;
   label?: string;
   name?: string;
+  product_type?: string;
   first_product_group_id?: number | string | null;
+  first_product_group_code?: string | null;
   first_product_group_name?: string | null;
   second_product_group_id?: number | string | null;
   second_product_group_name?: string | null;

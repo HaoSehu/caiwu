@@ -201,8 +201,8 @@ class ProductSyncService
 
     public function bulkConnectSupplierProducts(Supplier $supplier, array $data): array
     {
-        $productType = trim((string) ($data['product_type'] ?? ''));
-        throw_if($productType === '', new BusinessException('请选择所属一级菜单'));
+        $firstGroupCode = trim((string) ($data['first_product_group_code'] ?? ''));
+        throw_if($firstGroupCode === '', new BusinessException('请选择所属一级菜单'));
 
         $supplierProductIds = collect($data['product_ids'] ?? [])
             ->map(fn ($id) => (int) $id)
@@ -225,9 +225,10 @@ class ProductSyncService
         $syncConfigOptions = (int) ($data['sync_config_options'] ?? 0) === 1;
 
         $firstGroup = $this->resolveImportedFirstProductGroup(
-            $productType,
+            $firstGroupCode,
             (int) ($data['first_product_group_id'] ?? 0)
         );
+        $productType = ProductType::businessValueForFirstGroup($firstGroup, $firstGroupCode);
         $targetSecondGroup = $this->resolveImportedSecondProductGroup(
             $firstGroup,
             (int) ($data['second_product_group_id'] ?? 0),
@@ -1449,15 +1450,18 @@ class ProductSyncService
     }
 
     /**
-     * @return array{service_type_code:string,first_product_group_id:int,second_product_group_id:int,third_product_group_id:?int}
+     * @return array{product_type:string,service_type_code:string,first_product_group_id:int,second_product_group_id:int,third_product_group_id:?int}
      */
     private function buildImportedTargetHierarchy(
         FirstProductGroup $firstGroup,
         SecondProductGroup $secondGroup,
         ?ThirdProductGroup $thirdGroup
     ): array {
+        $productType = ProductType::businessValueForFirstGroup($firstGroup, $firstGroup->code);
+
         return [
-            'service_type_code' => (string) $firstGroup->code,
+            'product_type' => $productType,
+            'service_type_code' => $productType,
             'first_product_group_id' => (int) $firstGroup->id,
             'second_product_group_id' => (int) $secondGroup->id,
             'third_product_group_id' => $thirdGroup instanceof ThirdProductGroup ? (int) $thirdGroup->id : null,
@@ -1496,7 +1500,7 @@ class ProductSyncService
 
         return [
             'name' => $name,
-            'product_type' => $productType,
+            'product_type' => ProductType::normalizeBusinessValue($productType),
             'service_type_code' => (string) $targetHierarchy['service_type_code'],
             'first_product_group_id' => (int) $targetHierarchy['first_product_group_id'],
             'second_product_group_id' => (int) $targetHierarchy['second_product_group_id'],

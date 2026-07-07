@@ -11,6 +11,7 @@ function toPlainRecord(value: unknown): Record<string, unknown> {
 export interface BindingOption extends ProductBindingRecord {
   value: string;
   label: string;
+  first_product_group_code?: string | null;
 }
 
 export interface BindingTreeNode {
@@ -26,11 +27,14 @@ export interface BindingTreeNode {
 }
 
 const PRODUCT_TYPE_LABELS: Record<string, string> = {
-  vps: '云服务器',
-  dedicated: '独立服务器',
-  hosting: '虚拟主机',
-  domain: '域名',
+  cloud_server: '云服务器',
+  game_cloud: '游戏云',
+  cloud_desktop: '云电脑',
+  bare_metal: '裸金属',
+  cdn: 'CDN',
   other: '其他',
+  physical_machine: '物理机',
+  web_hosting: '虚拟主机',
 };
 
 // ---- price normalization ----
@@ -48,6 +52,7 @@ function normalizeBindingPrice(price: unknown) {
 export interface BindingParentContext {
   product_type?: string;
   first_product_group_id?: number | null;
+  first_product_group_code?: string | null;
   first_product_group_name?: string | null;
   second_product_group_id?: number | null;
   second_product_group_name?: string | null;
@@ -62,8 +67,9 @@ function mergeParentContext(source: Record<string, unknown>, parent?: BindingPar
   if (!parent) return {};
   const sourceEffectiveId = Number(source.effective_product_group_id || 0) || 0;
   return {
-    product_type: String(source.product_type || source.service_type_code || parent.product_type || '').trim() || undefined,
+    product_type: String(source.product_type || parent.product_type || '').trim() || undefined,
     first_product_group_id: Number(source.first_product_group_id || parent.first_product_group_id || 0) || parent.first_product_group_id || null,
+    first_product_group_code: String(source.first_product_group_code || parent.first_product_group_code || '').trim() || parent.first_product_group_code || null,
     first_product_group_name: String(source.first_product_group_name || parent.first_product_group_name || '').trim() || parent.first_product_group_name || null,
     second_product_group_id: Number(source.second_product_group_id || parent.second_product_group_id || 0) || parent.second_product_group_id || null,
     second_product_group_name: String(source.second_product_group_name || parent.second_product_group_name || '').trim() || parent.second_product_group_name || null,
@@ -116,6 +122,7 @@ function createBindingRecord(sourceValue: unknown, parent?: BindingParentContext
     status: Number(source.status || 0) === 1 ? 1 : 0,
     product_type: context.product_type,
     first_product_group_id: context.first_product_group_id ?? null,
+    first_product_group_code: context.first_product_group_code ?? null,
     first_product_group_name: context.first_product_group_name ?? null,
     second_product_group_id: context.second_product_group_id ?? null,
     second_product_group_name: context.second_product_group_name ?? null,
@@ -300,7 +307,7 @@ export function buildBindingTreeOptions(
   const typeNodes = new Map<string, BindingTreeNode>();
   nodes.forEach((nodeValue, index) => {
     const node = toPlainRecord(nodeValue);
-    const productType = String(node.product_type || node.service_type_code || 'other').trim() || 'other';
+    const productType = String(node.product_type || 'other').trim() || 'other';
     const typeLabel = String(
       node.product_type_label || node.service_type_label || PRODUCT_TYPE_LABELS[productType] || productType,
     ).trim();
@@ -312,6 +319,7 @@ export function buildBindingTreeOptions(
       {
         product_type: productType,
         first_product_group_id: Number(node.first_product_group_id || 0) || null,
+        first_product_group_code: String(node.first_product_group_code || '').trim() || null,
         first_product_group_name: String(node.first_product_group_name || '').trim() || null,
         effective_product_group_id: Number(node.first_product_group_id || 0) || undefined,
         effective_product_group_level: 1,

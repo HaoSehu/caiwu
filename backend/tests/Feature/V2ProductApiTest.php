@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Constants\ProductType;
 use App\Models\AdminUser;
 use App\Models\FirstProductGroup;
 use App\Models\IntegrationPlugin;
@@ -156,7 +157,7 @@ class V2ProductApiTest extends TestCase
             ->assertJsonStructure(['data' => ['errors' => ['pageSize']]]);
 
         $response = $this->getJson('/api/v2/site/products?'.http_build_query([
-            'product_type' => 'vps',
+            'first_product_group_code' => 'vps',
             'page' => 1,
             'page_size' => 50,
         ]))
@@ -214,7 +215,7 @@ class V2ProductApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('code', 0)
             ->assertJsonPath('data.product.id', $visibleProduct->id)
-            ->assertJsonPath('data.product.product_type', 'vps');
+            ->assertJsonPath('data.product.product_type', 'cloud_server');
 
         $this->assertSame($this->siteProductDetailWhitelist(), array_keys($response->json('data.product')));
         $this->assertNoSensitiveKeys($response->json());
@@ -225,7 +226,7 @@ class V2ProductApiTest extends TestCase
     {
         $suffix = bin2hex(random_bytes(4));
         $firstGroup = $this->visibleSiteFirstGroup();
-        $otherFirstGroup = $this->visibleSiteFirstGroupByCode('dedicated', '独立服务器');
+        $otherFirstGroup = $this->visibleSiteFirstGroupByCode('dedicated', '游戏云');
 
         foreach (range(1, 20) as $index) {
             $this->createSecondGroup($firstGroup, '首屏分组 '.$suffix.' '.$index, $index, true);
@@ -265,7 +266,7 @@ class V2ProductApiTest extends TestCase
         );
 
         $response = $this->getJson('/api/v2/site/product-purchase-context?'.http_build_query([
-            'product_type' => 'vps',
+            'first_product_group_code' => 'vps',
             'root_page_size' => 20,
         ]))
             ->assertOk()
@@ -287,6 +288,10 @@ class V2ProductApiTest extends TestCase
                     'id' => 1,
                     'value' => 'vps',
                     'label' => '云服务器',
+                    'product_type' => 'cloud_server',
+                    'product_type_label' => '云服务器',
+                    'product_type_icon' => 'Platform',
+                    'product_type_plugin_driven' => false,
                     'first_product_group_id' => 10,
                     'first_product_group_code' => 'vps',
                     'first_product_group_name' => '云服务器',
@@ -499,6 +504,7 @@ class V2ProductApiTest extends TestCase
                 'name' => $group->name ?: '云服务器',
                 'slug' => $group->slug ?: 'vps',
                 'is_visible' => 1,
+                'product_type' => ProductType::CLOUD_SERVER,
             ]);
 
             return $group->refresh();
@@ -513,6 +519,7 @@ class V2ProductApiTest extends TestCase
             'is_visible' => 1,
             'is_system' => 1,
             'legacy_product_type' => 'vps',
+            'product_type' => ProductType::CLOUD_SERVER,
         ]);
     }
 
@@ -525,6 +532,7 @@ class V2ProductApiTest extends TestCase
                 'name' => $group->name ?: $name,
                 'slug' => $group->slug ?: $code,
                 'is_visible' => 1,
+                'product_type' => ProductType::normalizeBusinessValueFromMenuCode($code),
             ]);
 
             return $group->refresh();
@@ -539,6 +547,7 @@ class V2ProductApiTest extends TestCase
             'is_visible' => 1,
             'is_system' => 1,
             'legacy_product_type' => $code,
+            'product_type' => ProductType::normalizeBusinessValueFromMenuCode($code),
         ]);
     }
 
@@ -579,14 +588,15 @@ class V2ProductApiTest extends TestCase
     ): array {
         $firstGroup = $secondGroup->firstProductGroup ?: FirstProductGroup::query()->findOrFail((int) $secondGroup->first_product_group_id);
         $code = (string) $firstGroup->code;
+        $productType = ProductType::businessValueForFirstGroup($firstGroup, $code);
 
         return array_replace([
             'first_product_group_id' => (int) $firstGroup->id,
             'second_product_group_id' => (int) $secondGroup->id,
             'third_product_group_id' => $thirdGroup ? (int) $thirdGroup->id : null,
-            'service_type_code' => $code,
+            'service_type_code' => $productType,
             'custom_display_name' => $name,
-            'product_type' => $code,
+            'product_type' => $productType,
             'pricing' => [
                 'monthly' => $monthlyPrice,
                 'quarterly' => number_format((float) $monthlyPrice * 3, 2, '.', ''),
@@ -784,6 +794,7 @@ class V2ProductApiTest extends TestCase
             'third_product_group_description',
             'effective_product_group_id',
             'effective_product_group_level',
+            'product_type_label',
             'service_type_code',
             'pricing',
             'pricing_entries',

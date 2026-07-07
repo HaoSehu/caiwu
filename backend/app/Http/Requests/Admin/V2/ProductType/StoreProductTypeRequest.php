@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Admin\V2\ProductType;
 
+use App\Constants\ProductType;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreProductTypeRequest extends FormRequest
 {
@@ -21,6 +23,7 @@ class StoreProductTypeRequest extends FormRequest
             'page_size' => ['prohibited'],
             'pageSize' => ['prohibited'],
             'label' => ['required', 'string', 'max:30'],
+            'product_type' => ['required', 'string', Rule::in(ProductType::businessAllowedValues())],
             'icon' => ['nullable', 'string', 'max:50'],
         ];
     }

@@ -1206,9 +1206,9 @@ function resolveSupplierBatchCategoryPayload() {
   return productGroupPayload(supplierBatchTargetGroup.value);
 }
 
-function resolveSupplierBatchTargetProductType() {
+function resolveSupplierBatchTargetFirstGroupCode() {
   const group = supplierBatchTargetGroup.value;
-  return String(group?.product_type || group?.first_product_group_code || group?.service_type_code || '').trim();
+  return String(group?.first_product_group_code || '').trim();
 }
 
 async function submitSupplierBatchConnect() {
@@ -1219,8 +1219,8 @@ async function submitSupplierBatchConnect() {
     MessagePlugin.warning('插件未提供批量对接执行入口');
     return;
   }
-  const productType = resolveSupplierBatchTargetProductType();
-  if (!supplierBatchTargetGroup.value || !productType) {
+  const firstGroupCode = resolveSupplierBatchTargetFirstGroupCode();
+  if (!supplierBatchTargetGroup.value || !firstGroupCode) {
     MessagePlugin.warning('请选择右侧当前系统分类');
     return;
   }
@@ -1232,7 +1232,7 @@ async function submitSupplierBatchConnect() {
   supplierBatchSubmitting.value = true;
   try {
     const response = await supplierApi.executeAction(supplierBatchSupplier.value.id, requestAction, {
-      product_type: productType,
+      first_product_group_code: firstGroupCode,
       ...resolveSupplierBatchCategoryPayload(),
       product_ids: selectedProductIdsFromKeys(supplierBatchSelectedKeys.value),
       default_status: Number(supplierBatchForm.default_status || 0),

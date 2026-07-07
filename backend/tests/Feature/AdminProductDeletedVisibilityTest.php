@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Constants\ProductType;
 use App\Models\AdminUser;
 use App\Models\FirstProductGroup;
 use App\Models\Product;
@@ -34,7 +35,7 @@ class AdminProductDeletedVisibilityTest extends TestCase
                 'products_count' => 0,
             ]);
 
-        $this->getJson('/api/v2/admin/products?second_product_group_id='.$category->id.'&product_type=vps&lifecycle_status=deleted&page=1&page_size=20')
+        $this->getJson('/api/v2/admin/products?second_product_group_id='.$category->id.'&first_product_group_code=vps&lifecycle_status=deleted&page=1&page_size=20')
             ->assertOk()
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.id', (int) $product->id)
@@ -94,11 +95,15 @@ class AdminProductDeletedVisibilityTest extends TestCase
                 'is_visible' => 1,
                 'is_system' => 0,
                 'legacy_product_type' => $code,
+                'product_type' => ProductType::normalizeBusinessValueFromMenuCode($code),
             ]
         );
 
         if ((int) $group->is_visible !== 1) {
             $group->update(['is_visible' => 1]);
+        }
+        if ((string) ($group->product_type ?? '') === '') {
+            $group->update(['product_type' => ProductType::normalizeBusinessValueFromMenuCode($code)]);
         }
 
         return $group->refresh();
@@ -119,15 +124,16 @@ class AdminProductDeletedVisibilityTest extends TestCase
     {
         $firstGroup = $group->firstProductGroup ?: FirstProductGroup::query()->findOrFail((int) $group->first_product_group_id);
         $code = (string) $firstGroup->code;
+        $productType = ProductType::businessValueForFirstGroup($firstGroup, $code);
 
         return [
             'first_product_group_id' => (int) $firstGroup->id,
             'second_product_group_id' => (int) $group->id,
             'third_product_group_id' => null,
-            'service_type_code' => $code,
+            'service_type_code' => $productType,
             'name' => $name,
             'custom_display_name' => $name,
-            'product_type' => $code,
+            'product_type' => $productType,
             'pricing' => ['monthly' => $monthlyPrice],
             'purchase_requires' => [],
             'config_options' => [],

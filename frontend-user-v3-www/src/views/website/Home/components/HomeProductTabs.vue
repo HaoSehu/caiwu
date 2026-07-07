@@ -98,7 +98,7 @@ const activeEnterpriseType = computed(() => (
 const activeEnterpriseGroups = computed(() => {
   const activeTypeValue = activeEnterpriseType.value?.value || ''
   return props.rootGroups.filter((group) => (
-    activeTypeValue === '' || group.product_type === activeTypeValue
+    activeTypeValue === '' || group.first_product_group_code === activeTypeValue
   ))
 })
 
@@ -151,7 +151,7 @@ function deriveProductTypesFromGroups(groups) {
   const map = new Map()
 
   groups.forEach((group, index) => {
-    const value = String(group?.product_type || '')
+    const value = String(group?.first_product_group_code || '')
 
     if (!value) {
       return
@@ -160,7 +160,7 @@ function deriveProductTypesFromGroups(groups) {
     const current = map.get(value) || {
       id: Number(group?.product_type_id || index + 1),
       value,
-      label: group?.product_type_label || `产品分类 ${index + 1}`,
+      label: group?.first_product_group_name || `产品分类 ${index + 1}`,
       group_count: 0,
       product_count: 0,
     }

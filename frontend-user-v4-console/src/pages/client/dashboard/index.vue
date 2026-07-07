@@ -349,13 +349,14 @@ function resolvePagedList<T>(payload: { list?: T[] } | T[] | null | undefined): 
 
 function resolveProductMeta(item: ServiceOverviewGroup, key: string) {
   const title = String(item.title || item.name || item.product_type_label || '').toLowerCase();
-  if (key === 'vps' || title.includes('云服务器')) return { icon: ServerIcon, tone: 'is-brand' };
-  if (key === 'dedicated' || title.includes('物理机') || title.includes('裸金属')) {
+  if (key === 'cloud_server' || title.includes('云服务器')) return { icon: ServerIcon, tone: 'is-brand' };
+  if (key === 'physical_machine' || key === 'bare_metal' || title.includes('物理机') || title.includes('裸金属')) {
     return { icon: DashboardIcon, tone: 'is-success' };
   }
-  if (key === 'hosting' || title.includes('虚拟主机')) return { icon: ServiceIcon, tone: 'is-warning' };
-  if (key === 'domain' || title.includes('域名')) return { icon: HelpCircleIcon, tone: 'is-info' };
-  if (title.includes('数据库') || title.includes('对象存储')) return { icon: FileIcon, tone: 'is-success' };
+  if (key === 'game_cloud' || title.includes('游戏云')) return { icon: DashboardIcon, tone: 'is-info' };
+  if (key === 'cloud_desktop' || title.includes('云电脑')) return { icon: HelpCircleIcon, tone: 'is-info' };
+  if (key === 'web_hosting' || title.includes('虚拟主机')) return { icon: ServiceIcon, tone: 'is-warning' };
+  if (key === 'cdn' || title.includes('CDN')) return { icon: ServiceIcon, tone: 'is-warning' };
   return { icon: ServerIcon, tone: 'is-muted' };
 }
 
@@ -445,12 +446,12 @@ const productCards = computed<ProductCard[]>(() => {
   }
 
   return [
-    { key: 'cloud', title: '云服务器', countText: '0 个', count: 0, path: '/client/services', primaryServiceId: 0, icon: ServerIcon, tone: 'is-brand' },
-    { key: 'storage', title: '对象存储', countText: '0 个', count: 0, path: '/client/services', primaryServiceId: 0, icon: FileIcon, tone: 'is-success' },
-    { key: 'database', title: '云数据库', countText: '0 个', count: 0, path: '/client/services', primaryServiceId: 0, icon: DashboardIcon, tone: 'is-info' },
-    { key: 'cdn', title: 'CDN 加速', countText: '0 个', count: 0, path: '/client/services', primaryServiceId: 0, icon: ServiceIcon, tone: 'is-warning' },
-    { key: 'domain', title: '域名注册', countText: '0 个', count: 0, path: '/client/services', primaryServiceId: 0, icon: HelpCircleIcon, tone: 'is-muted' },
-    { key: 'ssl', title: 'SSL 证书', countText: '0 个', count: 0, path: '/client/services', primaryServiceId: 0, icon: UserSafetyIcon, tone: 'is-success' },
+    { key: 'cloud_server', title: '云服务器', countText: '0 个', count: 0, path: '/client/services', primaryServiceId: 0, icon: ServerIcon, tone: 'is-brand' },
+    { key: 'game_cloud', title: '游戏云', countText: '0 个', count: 0, path: '/client/services', primaryServiceId: 0, icon: DashboardIcon, tone: 'is-info' },
+    { key: 'cloud_desktop', title: '云电脑', countText: '0 个', count: 0, path: '/client/services', primaryServiceId: 0, icon: HelpCircleIcon, tone: 'is-info' },
+    { key: 'bare_metal', title: '裸金属', countText: '0 个', count: 0, path: '/client/services', primaryServiceId: 0, icon: DashboardIcon, tone: 'is-success' },
+    { key: 'cdn', title: 'CDN', countText: '0 个', count: 0, path: '/client/services', primaryServiceId: 0, icon: ServiceIcon, tone: 'is-warning' },
+    { key: 'web_hosting', title: '虚拟主机', countText: '0 个', count: 0, path: '/client/services', primaryServiceId: 0, icon: UserSafetyIcon, tone: 'is-success' },
   ];
 });
 

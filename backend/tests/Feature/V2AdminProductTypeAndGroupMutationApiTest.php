@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Constants\ProductType;
 use App\Models\AdminUser;
 use App\Models\FirstProductGroup;
 use App\Models\Role;
@@ -60,6 +61,7 @@ class V2AdminProductTypeAndGroupMutationApiTest extends TestCase
         $suffix = bin2hex(random_bytes(4));
         $createResponse = $this->postJson('/api/v2/admin/product-types', [
             'label' => 'V2 类型 '.$suffix,
+            'product_type' => 'cloud_server',
             'icon' => 'Server',
         ])
             ->assertOk()
@@ -73,6 +75,7 @@ class V2AdminProductTypeAndGroupMutationApiTest extends TestCase
 
         $this->putJson('/api/v2/admin/product-types/'.$value, [
             'label' => 'V2 类型更新 '.$suffix,
+            'product_type' => 'game_cloud',
             'icon' => 'Cloud',
             'is_hidden' => true,
         ])
@@ -164,7 +167,7 @@ class V2AdminProductTypeAndGroupMutationApiTest extends TestCase
         Sanctum::actingAs($this->createAdmin([]));
 
         $this->getJson('/api/v2/admin/product-groups/tree?'.http_build_query([
-            'product_type' => $firstGroup->code,
+            'first_product_group_code' => $firstGroup->code,
         ]))
             ->assertForbidden()
             ->assertJsonPath('code', 40300);
@@ -172,7 +175,7 @@ class V2AdminProductTypeAndGroupMutationApiTest extends TestCase
         Sanctum::actingAs($this->createAdmin([AdminPermissions::PRODUCT_LIST]));
 
         $response = $this->getJson('/api/v2/admin/product-groups/tree?'.http_build_query([
-            'product_type' => $firstGroup->code,
+            'first_product_group_code' => $firstGroup->code,
         ]))
             ->assertOk()
             ->assertJsonPath('code', 0)
@@ -306,6 +309,7 @@ class V2AdminProductTypeAndGroupMutationApiTest extends TestCase
             'is_visible' => 1,
             'is_system' => 0,
             'legacy_product_type' => 'v2_type_'.$suffix,
+            'product_type' => ProductType::OTHER,
         ]);
     }
 
@@ -342,6 +346,10 @@ class V2AdminProductTypeAndGroupMutationApiTest extends TestCase
             'internal_id',
             'value',
             'label',
+            'product_type',
+            'product_type_label',
+            'product_type_icon',
+            'product_type_plugin_driven',
             'first_product_group_id',
             'first_product_group_code',
             'first_product_group_name',
@@ -367,10 +375,13 @@ class V2AdminProductTypeAndGroupMutationApiTest extends TestCase
             'parent_id',
             'parent_level',
             'level',
+            'product_type',
+            'product_type_label',
             'service_type_code',
             'service_type_label',
             'slug',
             'first_product_group_id',
+            'first_product_group_code',
             'first_product_group_name',
             'second_product_group_id',
             'second_product_group_name',

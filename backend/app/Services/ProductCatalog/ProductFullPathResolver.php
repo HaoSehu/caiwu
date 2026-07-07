@@ -146,8 +146,11 @@ class ProductFullPathResolver
         $firstGroup = $product->relationLoaded('firstProductGroup') ? $product->firstProductGroup : null;
         $secondGroup = $product->relationLoaded('secondProductGroup') ? $product->secondProductGroup : null;
         $thirdGroup = $product->relationLoaded('thirdProductGroup') ? $product->thirdProductGroup : null;
-        $productType = trim((string) ($productTypeOverride ?? $firstGroup?->code ?? $product->service_type_code ?? $product->product_type ?? ''));
-        $firstName = trim((string) ($firstGroup?->name ?? '')) ?: ProductType::labelOf($productType);
+        $productType = ProductType::businessValueForFirstGroup(
+            $firstGroup,
+            $productTypeOverride ?? $product->product_type ?? $product->service_type_code
+        );
+        $firstName = trim((string) ($firstGroup?->name ?? '')) ?: ProductType::businessLabelOf($productType);
 
         return $this->cleanSegments([
             $firstName,

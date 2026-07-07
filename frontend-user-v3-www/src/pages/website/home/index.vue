@@ -70,7 +70,7 @@ function deriveProductTypesFromGroups(groups: any[]) {
   const map = new Map<string, ProductTypeItem>()
 
   groups.forEach((group, index) => {
-    const value = String(group?.product_type || '')
+    const value = String(group?.first_product_group_code || '')
     if (!value) {
       return
     }
@@ -78,7 +78,7 @@ function deriveProductTypesFromGroups(groups: any[]) {
     const current = map.get(value) || {
       id: Number(group?.product_type_id || index + 1),
       value,
-      label: String(group?.product_type_label || `产品分类 ${index + 1}`),
+      label: String(group?.first_product_group_name || `产品分类 ${index + 1}`),
       product_count: 0,
     }
 

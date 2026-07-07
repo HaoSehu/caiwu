@@ -116,6 +116,10 @@ class CouponCampaignService
                 ->first();
 
             throw_if(! $lockedCampaign, new BusinessException('活动不存在或已删除'));
+            throw_if(
+                $this->campaignHasGeneratedCoupons($lockedCampaign),
+                new BusinessException('活动已生成优惠券批次，不允许修改')
+            );
 
             $lockedCampaign->fill($this->normalizeAdminCampaignPayload($payload, $context, $lockedCampaign));
             $lockedCampaign->save();
@@ -316,8 +320,9 @@ class CouponCampaignService
         $productIds = $this->normalizeProductIds((array) ($campaign->product_ids ?? []));
         $coupon = $campaign->lastCoupon;
         $generatedCouponCount = (int) ($campaign->coupons_count ?? 0);
-        $canDelete = $generatedCouponCount === 0;
-        $lockReason = $canDelete ? '' : '活动已生成优惠券批次，不允许删除；编辑仅影响后续批次';
+        $canUpdate = $generatedCouponCount === 0;
+        $canDelete = $canUpdate;
+        $lockReason = $canUpdate ? '' : '活动已生成优惠券批次，不允许修改或删除';
 
         return [
             'id' => (int) $campaign->id,
@@ -367,7 +372,7 @@ class CouponCampaignService
             'trace_id' => (string) ($campaign->trace_id ?? ''),
             'created_at' => $campaign->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $campaign->updated_at?->format('Y-m-d H:i:s'),
-            'can_update' => true,
+            'can_update' => $canUpdate,
             'can_delete' => $canDelete,
             'lock_reason' => $lockReason,
         ];

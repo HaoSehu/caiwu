@@ -257,7 +257,7 @@ class CouponService
     public function adminProductTree(): array
     {
         $groups = FirstProductGroup::query()
-            ->select(['id', 'code', 'name', 'sort_order', 'is_visible'])
+            ->select(['id', 'code', 'name', 'product_type', 'sort_order', 'is_visible'])
             ->with([
                 'secondProductGroups' => fn ($query) => $query
                     ->select(['id', 'first_product_group_id', 'name', 'sort_order', 'is_visible'])
@@ -291,6 +291,19 @@ class CouponService
             ->orderBy('id')
             ->get()
             ->groupBy(fn (Product $product) => (int) ($product->third_product_group_id ?: $product->second_product_group_id));
+
+        $firstGroupTypePayload = static function (FirstProductGroup $firstGroup): array {
+            $productType = ProductType::businessValueForFirstGroup($firstGroup, (string) $firstGroup->code);
+            $productTypeLabel = ProductType::businessLabelOf($productType);
+
+            return [
+                'first_product_group_code' => (string) $firstGroup->code,
+                'product_type' => $productType,
+                'product_type_label' => $productTypeLabel,
+                'service_type_code' => $productType,
+                'service_type_label' => $productTypeLabel,
+            ];
+        };
 
         $buildProductNodes = function (int $effectiveGroupId, string $fullName) use ($productsByGroup): array {
             return collect($productsByGroup->get($effectiveGroupId, collect()))
@@ -329,7 +342,7 @@ class CouponService
                 ->all();
         };
 
-        $buildThirdNode = function ($thirdGroup, $firstGroup, $secondGroup, array $path) use ($buildProductNodes): array {
+        $buildThirdNode = function ($thirdGroup, $firstGroup, $secondGroup, array $path) use ($buildProductNodes, $firstGroupTypePayload): array {
             $thirdId = (int) ($thirdGroup->id ?? 0);
             $currentPath = [...$path, trim((string) $thirdGroup->name)];
             $categoryFullName = implode(' / ', array_values(array_filter($currentPath, fn ($item) => trim((string) $item) !== '')));
@@ -340,8 +353,7 @@ class CouponService
                 'node_type' => 'third_product_group',
                 'first_product_group_id' => (int) $firstGroup->id,
                 'first_product_group_name' => (string) $firstGroup->name,
-                'service_type_code' => (string) $firstGroup->code,
-                'service_type_label' => ProductType::labelOf((string) $firstGroup->code),
+                ...$firstGroupTypePayload($firstGroup),
                 'second_product_group_id' => (int) $secondGroup->id,
                 'second_product_group_name' => (string) $secondGroup->name,
                 'third_product_group_id' => $thirdId,
@@ -355,7 +367,7 @@ class CouponService
             ];
         };
 
-        $buildSecondNode = function ($secondGroup, $firstGroup, array $path) use ($buildThirdNode, $buildProductNodes): array {
+        $buildSecondNode = function ($secondGroup, $firstGroup, array $path) use ($buildThirdNode, $buildProductNodes, $firstGroupTypePayload): array {
             $secondId = (int) ($secondGroup->id ?? 0);
             $currentPath = [...$path, trim((string) $secondGroup->name)];
             $categoryFullName = implode(' / ', array_values(array_filter($currentPath, fn ($item) => trim((string) $item) !== '')));
@@ -376,8 +388,7 @@ class CouponService
                     'node_type' => 'third_product_group',
                     'first_product_group_id' => (int) $firstGroup->id,
                     'first_product_group_name' => (string) $firstGroup->name,
-                    'service_type_code' => (string) $firstGroup->code,
-                    'service_type_label' => ProductType::labelOf((string) $firstGroup->code),
+                    ...$firstGroupTypePayload($firstGroup),
                     'second_product_group_id' => $secondId,
                     'second_product_group_name' => (string) $secondGroup->name,
                     'third_product_group_id' => null,
@@ -397,8 +408,7 @@ class CouponService
                 'node_type' => 'second_product_group',
                 'first_product_group_id' => (int) $firstGroup->id,
                 'first_product_group_name' => (string) $firstGroup->name,
-                'service_type_code' => (string) $firstGroup->code,
-                'service_type_label' => ProductType::labelOf((string) $firstGroup->code),
+                ...$firstGroupTypePayload($firstGroup),
                 'second_product_group_id' => $secondId,
                 'second_product_group_name' => (string) $secondGroup->name,
                 'third_product_group_id' => null,
@@ -412,7 +422,7 @@ class CouponService
             ];
         };
 
-        $buildFirstNode = function (FirstProductGroup $firstGroup) use ($buildSecondNode): array {
+        $buildFirstNode = function (FirstProductGroup $firstGroup) use ($buildSecondNode, $firstGroupTypePayload): array {
             $path = [trim((string) $firstGroup->name)];
             $children = collect($firstGroup->secondProductGroups ?? [])
                 ->map(fn ($secondGroup) => $buildSecondNode($secondGroup, $firstGroup, $path))
@@ -425,8 +435,7 @@ class CouponService
                 'node_type' => 'first_product_group',
                 'first_product_group_id' => (int) $firstGroup->id,
                 'first_product_group_name' => (string) $firstGroup->name,
-                'service_type_code' => (string) $firstGroup->code,
-                'service_type_label' => ProductType::labelOf((string) $firstGroup->code),
+                ...$firstGroupTypePayload($firstGroup),
                 'leaf' => false,
                 'disabled' => false,
                 'children' => $children,
@@ -2215,7 +2224,10 @@ class CouponService
                 $firstGroup = $product->firstProductGroup;
                 $secondGroup = $product->secondProductGroup;
                 $thirdGroup = $product->thirdProductGroup;
-                $typeCode = trim((string) ($firstGroup?->code ?? $product->service_type_code ?? $product->product_type ?? ''));
+                $typeCode = ProductType::businessValueForFirstGroup(
+                    $firstGroup,
+                    $product->product_type ?: $product->service_type_code
+                );
                 $instanceSpecText = (string) (($specMap[(int) $product->id] ?? [])['instance_spec_text'] ?? '');
                 $displayNamePayload = $this->resolveProductDisplayNameResolver()->resolveForProduct($product, [
                     'instance_spec_text' => $instanceSpecText,
@@ -2226,9 +2238,12 @@ class CouponService
                 return [
                     'id' => (int) $product->id,
                     'name' => $combinedName !== '' ? $combinedName : ($productName !== '' ? $productName : '未配置规格 #'.(int) $product->id),
+                    'product_type' => $typeCode,
+                    'product_type_label' => ProductType::businessLabelOf($typeCode),
                     'service_type_code' => $typeCode,
-                    'service_type_label' => ProductType::labelOf($typeCode),
+                    'service_type_label' => ProductType::businessLabelOf($typeCode),
                     'first_product_group_id' => (int) ($product->first_product_group_id ?? 0) ?: null,
+                    'first_product_group_code' => trim((string) ($firstGroup?->code ?? '')),
                     'first_product_group_name' => trim((string) ($firstGroup?->name ?? '')),
                     'second_product_group_id' => (int) ($product->second_product_group_id ?? 0) ?: null,
                     'second_product_group_name' => trim((string) ($secondGroup?->name ?? '')),

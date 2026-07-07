@@ -1037,10 +1037,13 @@ class InvoiceService
         $thirdGroup = $product instanceof Product && $product->relationLoaded('thirdProductGroup')
             ? $product->thirdProductGroup
             : null;
-        $productType = trim((string) ($order->product_type_snapshot ?? $firstGroup?->code ?? $product?->service_type_code ?? $product?->product_type ?? ''));
+        $productType = trim((string) ($order->product_type_snapshot ?? $product?->product_type ?? $product?->service_type_code ?? ''));
+        $productType = $productType !== ''
+            ? ProductType::normalizeBusinessValue($productType)
+            : ProductType::businessValueForFirstGroup($firstGroup, $firstGroup?->code);
 
         $segments = [
-            ProductType::labelOf($productType),
+            ProductType::businessLabelOf($productType),
             trim((string) ($secondGroup?->name ?? '')),
             trim((string) ($thirdGroup?->name ?? '')),
             $this->resolveOrderProductName($order),

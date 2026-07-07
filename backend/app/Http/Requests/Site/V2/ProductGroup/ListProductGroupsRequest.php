@@ -22,7 +22,8 @@ class ListProductGroupsRequest extends FormRequest
             'page_size' => ['sometimes', 'integer', 'min:1', 'max:50'],
             'per_page' => ['prohibited'],
             'pageSize' => ['prohibited'],
-            'product_type' => ['sometimes', 'nullable', Rule::in(ProductType::allowedValues())],
+            'product_type' => ['sometimes', 'nullable', Rule::in(ProductType::businessAllowedValues())],
+            'first_product_group_code' => ['sometimes', 'nullable', 'string', 'max:50'],
         ];
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Constants\ProductType;
 use App\Models\AdminUser;
 use App\Models\FirstProductGroup;
 use App\Models\Product;
@@ -137,7 +138,7 @@ class V2ProductGroupCatalogTest extends TestCase
             ->assertJsonStructure(['data' => ['errors' => ['pageSize']]]);
 
         $rootResponse = $this->getJson('/api/v2/site/product-groups?'.http_build_query([
-            'product_type' => 'vps',
+            'first_product_group_code' => 'vps',
             'page' => 1,
             'page_size' => 10,
         ]))
@@ -263,6 +264,7 @@ class V2ProductGroupCatalogTest extends TestCase
             'is_visible' => 1,
             'is_system' => 0,
             'legacy_product_type' => 'v2_group_'.$suffix,
+            'product_type' => ProductType::OTHER,
         ]);
     }
 
@@ -275,6 +277,7 @@ class V2ProductGroupCatalogTest extends TestCase
                 'name' => $group->name ?: '云服务器',
                 'slug' => $group->slug ?: 'vps',
                 'is_visible' => 1,
+                'product_type' => ProductType::CLOUD_SERVER,
             ]);
 
             return $group->refresh();
@@ -289,6 +292,7 @@ class V2ProductGroupCatalogTest extends TestCase
             'is_visible' => 1,
             'is_system' => 1,
             'legacy_product_type' => 'vps',
+            'product_type' => ProductType::CLOUD_SERVER,
         ]);
     }
 
@@ -325,14 +329,15 @@ class V2ProductGroupCatalogTest extends TestCase
     ): array {
         $firstGroup = $secondGroup->firstProductGroup ?: FirstProductGroup::query()->findOrFail((int) $secondGroup->first_product_group_id);
         $code = (string) $firstGroup->code;
+        $productType = ProductType::businessValueForFirstGroup($firstGroup, $code);
 
         return [
             'first_product_group_id' => (int) $firstGroup->id,
             'second_product_group_id' => (int) $secondGroup->id,
             'third_product_group_id' => $thirdGroup ? (int) $thirdGroup->id : null,
-            'service_type_code' => $code,
+            'service_type_code' => $productType,
             'custom_display_name' => $name,
-            'product_type' => $code,
+            'product_type' => $productType,
             'pricing' => [
                 'monthly' => $monthlyPrice,
                 'quarterly' => number_format((float) $monthlyPrice * 3, 2, '.', ''),
@@ -362,10 +367,13 @@ class V2ProductGroupCatalogTest extends TestCase
             'parent_id',
             'parent_level',
             'level',
+            'product_type',
+            'product_type_label',
             'service_type_code',
             'service_type_label',
             'slug',
             'first_product_group_id',
+            'first_product_group_code',
             'first_product_group_name',
             'second_product_group_id',
             'second_product_group_name',

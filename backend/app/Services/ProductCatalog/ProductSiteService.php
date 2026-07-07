@@ -81,6 +81,10 @@ class ProductSiteService
                         $value = (string) ($item['value'] ?? '');
                         $firstGroup = $firstGroups->get($value);
                         $groupCount = (int) ($groupCounts[$value] ?? 0);
+                        $businessProductType = ProductType::businessValueForFirstGroup(
+                            $firstGroup,
+                            $item['product_type'] ?? $value
+                        );
                         $label = $firstGroup instanceof FirstProductGroup
                             ? (string) $firstGroup->name
                             : (string) ($item['label'] ?? ProductType::labelOf($value));
@@ -89,6 +93,10 @@ class ProductSiteService
                             'id' => (int) ($item['internal_id'] ?? ProductType::routeIdOf($value)),
                             'value' => $value,
                             'label' => $label,
+                            'product_type' => $businessProductType,
+                            'product_type_label' => ProductType::businessLabelOf($businessProductType),
+                            'product_type_icon' => ProductType::businessIconOf($businessProductType),
+                            'product_type_plugin_driven' => ProductType::isPluginDriven($businessProductType),
                             'first_product_group_id' => $firstGroup instanceof FirstProductGroup ? (int) $firstGroup->id : null,
                             'first_product_group_code' => $value,
                             'first_product_group_name' => $label,
@@ -114,10 +122,6 @@ class ProductSiteService
             function () use ($productType) {
                 $visibleProductTypes = ProductType::visibleValues();
                 if ($visibleProductTypes === []) {
-                    return [];
-                }
-
-                if ($productType && ! in_array($productType, $visibleProductTypes, true)) {
                     return [];
                 }
 
@@ -428,20 +432,23 @@ class ProductSiteService
         $directProductCount = (int) ($group->direct_product_count ?? 0);
         $childProductCount = (int) ($group->child_product_count ?? 0);
         $firstGroup = $group->firstProductGroup;
-        $productType = trim((string) ($firstGroup?->code ?? ''));
+        $firstGroupCode = trim((string) ($firstGroup?->code ?? ''));
+        $productType = ProductType::businessValueForFirstGroup($firstGroup, $firstGroupCode);
+        $productTypeId = $firstGroup instanceof FirstProductGroup ? (int) $firstGroup->id : ProductType::routeIdOf($firstGroupCode);
+        $firstGroupName = (string) ($firstGroup?->name ?? ProductType::labelOf($firstGroupCode));
 
         return [
             'id' => (int) $group->id,
             'product_type' => $productType,
-            'product_type_id' => ProductType::routeIdOf($productType),
-            'product_type_label' => ProductType::labelOf($productType),
+            'product_type_id' => $productTypeId,
+            'product_type_label' => ProductType::businessLabelOf($productType),
             'first_product_group_id' => $firstGroup instanceof FirstProductGroup ? (int) $firstGroup->id : null,
-            'first_product_group_code' => $productType,
-            'first_product_group_name' => (string) ($firstGroup?->name ?? ProductType::labelOf($productType)),
+            'first_product_group_code' => $firstGroupCode,
+            'first_product_group_name' => $firstGroupName,
             'second_product_group_id' => (int) $group->id,
             'second_product_group_name' => (string) $group->name,
             'second_product_group_parent_id' => $firstGroup instanceof FirstProductGroup ? (int) $firstGroup->id : null,
-            'second_product_group_parent_name' => (string) ($firstGroup?->name ?? ProductType::labelOf($productType)),
+            'second_product_group_parent_name' => $firstGroupName,
             'third_product_group_id' => null,
             'third_product_group_name' => null,
             'effective_product_group_id' => (int) $group->id,
@@ -460,21 +467,24 @@ class ProductSiteService
     {
         $secondGroup = $group->secondProductGroup;
         $firstGroup = $secondGroup?->firstProductGroup;
-        $productType = trim((string) ($firstGroup?->code ?? ''));
+        $firstGroupCode = trim((string) ($firstGroup?->code ?? ''));
+        $productType = ProductType::businessValueForFirstGroup($firstGroup, $firstGroupCode);
+        $productTypeId = $firstGroup instanceof FirstProductGroup ? (int) $firstGroup->id : ProductType::routeIdOf($firstGroupCode);
+        $firstGroupName = (string) ($firstGroup?->name ?? ProductType::labelOf($firstGroupCode));
 
         return [
             'id' => (int) $group->id,
             'parent_id' => $secondGroup instanceof SecondProductGroup ? (int) $secondGroup->id : null,
             'product_type' => $productType,
-            'product_type_id' => ProductType::routeIdOf($productType),
-            'product_type_label' => ProductType::labelOf($productType),
+            'product_type_id' => $productTypeId,
+            'product_type_label' => ProductType::businessLabelOf($productType),
             'first_product_group_id' => $firstGroup instanceof FirstProductGroup ? (int) $firstGroup->id : null,
-            'first_product_group_code' => $productType,
-            'first_product_group_name' => (string) ($firstGroup?->name ?? ProductType::labelOf($productType)),
+            'first_product_group_code' => $firstGroupCode,
+            'first_product_group_name' => $firstGroupName,
             'second_product_group_id' => $secondGroup instanceof SecondProductGroup ? (int) $secondGroup->id : null,
             'second_product_group_name' => (string) ($secondGroup?->name ?? ''),
             'second_product_group_parent_id' => $firstGroup instanceof FirstProductGroup ? (int) $firstGroup->id : null,
-            'second_product_group_parent_name' => (string) ($firstGroup?->name ?? ProductType::labelOf($productType)),
+            'second_product_group_parent_name' => $firstGroupName,
             'third_product_group_id' => (int) $group->id,
             'third_product_group_name' => (string) $group->name,
             'effective_product_group_id' => (int) $group->id,
@@ -529,7 +539,7 @@ class ProductSiteService
             ...$this->resolveCpuModelPayload($product),
             'product_type' => $productType,
             'type' => $productType,
-            'type_label' => ProductType::labelOf($productType),
+            'type_label' => ProductType::businessLabelOf($productType),
             ...$hierarchyFields,
             'pricing' => $pricing,
             'pricing_entries' => $this->buildPricingEntries($pricing, number_format((float) ($product->setup_fee ?? 0), 2, '.', '')),
@@ -622,7 +632,7 @@ class ProductSiteService
             ...$this->resolveCpuModelPayload($product),
             'product_type' => $productType,
             'type' => $productType,
-            'type_label' => ProductType::labelOf($productType),
+            'type_label' => ProductType::businessLabelOf($productType),
             ...$hierarchyFields,
             'pricing' => $pricing,
             'pricing_entries' => $this->buildPricingEntries($pricing, $setupFee),
@@ -635,14 +645,15 @@ class ProductSiteService
             'group' => [
                 'id' => $hierarchyFields['effective_product_group_id'],
                 'product_type' => $productType,
-                'product_type_id' => ProductType::routeIdOf($productType),
+                'product_type_id' => (int) ($hierarchyFields['first_product_group_id'] ?? 0),
+                'product_type_label' => ProductType::businessLabelOf($productType),
                 'name' => $hierarchyFields['third_product_group_name'] ?? $hierarchyFields['second_product_group_name'],
                 'display_name' => $displayName !== '' ? $displayName : (string) ($hierarchyFields['third_product_group_name'] ?? $hierarchyFields['second_product_group_name'] ?? ''),
                 'slogan' => $groupSlogan,
                 'slug' => null,
                 'parent_id' => $hierarchyFields['second_product_group_id'],
                 'parent_product_type' => $productType,
-                'parent_product_type_id' => ProductType::routeIdOf($productType),
+                'parent_product_type_id' => (int) ($hierarchyFields['first_product_group_id'] ?? 0),
                 'parent_name' => $hierarchyFields['second_product_group_name'],
                 'parent_display_name' => $hierarchyFields['second_product_group_name'],
                 'parent_slogan' => $parentSlogan,
@@ -709,7 +720,14 @@ class ProductSiteService
             ->where('second_product_groups.is_visible', 1)
             ->where('first_product_groups.is_visible', 1)
             ->whereIn('first_product_groups.code', $visibleProductTypes)
-            ->when($productType, fn (Builder $query) => $query->where('first_product_groups.code', $productType));
+            ->when($productType, function (Builder $query) use ($productType): void {
+                $businessType = ProductType::normalizeBusinessValue($productType);
+                $query->where(function (Builder $typeQuery) use ($productType, $businessType): void {
+                    $typeQuery
+                        ->where('first_product_groups.code', $productType)
+                        ->orWhere('first_product_groups.product_type', $businessType);
+                });
+            });
     }
 
     private function resolveVisibleSecondProductGroup(int $groupId): ?SecondProductGroup

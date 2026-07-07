@@ -27,7 +27,7 @@ class AdminProductDetailResource extends JsonResource
         $product = $this->resource;
         $display = app(ProductDisplayNameResolver::class)->resolveForProduct($product);
         $hierarchy = ProductGroupHierarchyFields::fromProduct($product);
-        $productType = (string) ($hierarchy['service_type_code'] ?? $product->product_type ?? '');
+        $productType = (string) ($hierarchy['product_type'] ?? $hierarchy['service_type_code'] ?? $product->product_type ?? '');
         $purchaseRequires = $this->removeSensitiveKeys((array) ($product->purchase_requires ?? []));
 
         return [
@@ -42,7 +42,7 @@ class AdminProductDetailResource extends JsonResource
             ],
             'classification' => [
                 'product_type' => $productType,
-                'product_type_label' => ProductType::labelOf($productType),
+                'product_type_label' => ProductType::businessLabelOf($productType),
                 ...$hierarchy,
                 'category_full_name' => $this->categoryFullName($hierarchy),
             ],

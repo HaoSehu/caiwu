@@ -22,7 +22,8 @@ class SiteProductGroupResource extends JsonResource
         $firstGroup = $this->firstGroup();
         $secondGroup = $this->secondGroup();
         $thirdGroup = $this->thirdGroup();
-        $serviceTypeCode = (string) ($firstGroup?->code ?? '');
+        $firstGroupCode = (string) ($firstGroup?->code ?? '');
+        $productType = ProductType::businessValueForFirstGroup($firstGroup, $firstGroupCode);
         $directProductCount = (int) ($this->resource->direct_products_count ?? 0);
         $childProductCount = (int) ($this->resource->child_products_count ?? 0);
         $productCount = (int) ($this->resource->product_count ?? $this->resource->products_count ?? ($directProductCount + $childProductCount));
@@ -30,11 +31,11 @@ class SiteProductGroupResource extends JsonResource
         return [
             'id' => (int) $this->resource->id,
             'parent_id' => $this->parentId(),
-            'product_type' => $serviceTypeCode,
-            'product_type_id' => ProductType::routeIdOf($serviceTypeCode),
-            'product_type_label' => ProductType::labelOf($serviceTypeCode),
+            'product_type' => $productType,
+            'product_type_id' => $firstGroup?->id ? (int) $firstGroup->id : ProductType::routeIdOf($firstGroupCode),
+            'product_type_label' => ProductType::businessLabelOf($productType),
             'first_product_group_id' => $firstGroup?->id ? (int) $firstGroup->id : null,
-            'first_product_group_code' => $serviceTypeCode,
+            'first_product_group_code' => $firstGroupCode,
             'first_product_group_name' => $firstGroup?->name,
             'second_product_group_id' => $secondGroup?->id ? (int) $secondGroup->id : null,
             'second_product_group_name' => $secondGroup?->name,
@@ -44,7 +45,7 @@ class SiteProductGroupResource extends JsonResource
             'third_product_group_name' => $thirdGroup?->name,
             'effective_product_group_id' => (int) $this->resource->id,
             'effective_product_group_level' => $level,
-            'service_type_code' => $serviceTypeCode,
+            'service_type_code' => $productType,
             'name' => (string) ($this->resource->name ?? ''),
             'slogan' => (string) ($this->resource->description ?? ''),
             'slug' => (string) ($this->resource->slug ?? ''),

@@ -18,8 +18,9 @@ class ListProductsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'product_type' => ['sometimes', 'string', Rule::in(ProductType::allowedValues())],
-            'type' => ['sometimes', 'string', Rule::in(ProductType::allowedValues())],
+            'product_type' => ['sometimes', 'string', Rule::in(ProductType::businessAllowedValues())],
+            'type' => ['sometimes', 'string', Rule::in(ProductType::businessAllowedValues())],
+            'first_product_group_code' => ['sometimes', 'string', 'max:50'],
             'first_product_group_id' => ['sometimes', 'integer', 'min:1'],
             'second_product_group_id' => ['sometimes', 'integer', 'min:1'],
             'third_product_group_id' => ['sometimes', 'integer', 'min:1'],

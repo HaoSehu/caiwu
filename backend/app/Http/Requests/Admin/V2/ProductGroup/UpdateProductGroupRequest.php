@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Admin\V2\ProductGroup;
 
+use App\Constants\ProductType;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -23,8 +24,9 @@ class UpdateProductGroupRequest extends FormRequest
             'page_size' => ['prohibited'],
             'pageSize' => ['prohibited'],
             'effective_product_group_level' => ['required', 'integer', Rule::in([1, 2, 3])],
-            'service_type_code' => ['nullable', 'string', 'max:50'],
+            'service_type_code' => ['prohibited'],
             'first_product_group_code' => ['nullable', 'string', 'max:50'],
+            'product_type' => ['nullable', 'string', Rule::in(ProductType::businessAllowedValues())],
             'first_product_group_id' => ['nullable', 'integer', 'min:1'],
             'second_product_group_id' => ['nullable', 'integer', 'min:1'],
             'name' => ['sometimes', 'string', 'max:100'],
