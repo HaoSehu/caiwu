@@ -38,7 +38,7 @@
 import { computed } from 'vue';
 import { ChevronLeftIcon } from 'tdesign-icons-vue-next';
 
-import { fieldValue } from '@/utils/format';
+import { fieldValue, formatDateTime } from '@/utils/format';
 
 type LogTab = 'system' | 'runtime' | 'admin-logins' | 'api' | 'sms' | 'email' | 'tasks' | 'gateway';
 type RecordRow = Record<string, unknown>;
@@ -223,7 +223,7 @@ const detailBlocks = computed(() => {
 });
 
 function formatDate(value: unknown) {
-  return fieldValue(value);
+  return formatDateTime(value);
 }
 
 function statusLabel(status: unknown) {
