@@ -104,7 +104,7 @@ class ProductGroupHierarchyServiceTest extends TestCase
             'first_product_group_id' => (int) $firstGroup->id,
             'second_product_group_id' => (int) $secondGroup->id,
             'third_product_group_id' => (int) $thirdGroup->id,
-            'service_type_code' => 'vps',
+            'service_type_code' => 'cloud_server',
         ]);
 
         $this->assertSame([], app(ProductGroupHierarchyService::class)->checkHierarchy()['blocking_errors']);
@@ -144,7 +144,7 @@ class ProductGroupHierarchyServiceTest extends TestCase
         $this->assertSame((int) $firstGroup->id, (int) $product->first_product_group_id);
         $this->assertSame((int) $secondGroup->id, (int) $product->second_product_group_id);
         $this->assertNull($product->third_product_group_id);
-        $this->assertSame('vps', $product->service_type_code);
+        $this->assertSame('cloud_server', $product->service_type_code);
         $this->assertSame([], app(ProductGroupHierarchyService::class)->checkHierarchy()['blocking_errors']);
     }
 
