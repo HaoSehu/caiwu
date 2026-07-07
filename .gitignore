@@ -14,6 +14,7 @@ backend/phpunit.xml
 # Frontend dependencies and generated output
 frontend-admin-v3/node_modules/
 frontend-admin-v3/dist/
+frontend-admin-v3/.vite/
 frontend-admin-v3/dev-server.log
 frontend-admin-v3/playwright-report/
 frontend-admin-v3/test-results/
@@ -23,6 +24,7 @@ frontend-user-v3-www/dist/
 frontend-user-v3-www/public/novnc/
 frontend-user-v4-console/node_modules/
 frontend-user-v4-console/dist/
+frontend-user-v4-console/.vite/
 frontend-user-v4-console/dev-server.log
 frontend-user-v4-console/playwright-report/
 frontend-user-v4-console/test-results/
@@ -112,6 +114,7 @@ frontend-admin/
 frontend-client/
 frontend-www-v2/
 frontend-console-v2/
+zjmf/
 zjmf-manger-decoded-main/
 
 # Claude
