@@ -200,6 +200,87 @@ class KangHostxPluginTest extends TestCase
         $this->assertSame('NewPassw0rd!', $password['passwd'] ?? null);
     }
 
+    public function test_kanghostx_supplier_refresh_card_tolerates_array_info_fields(): void
+    {
+        $this->ensurePluginTables();
+        $this->activatePlugin('upstream', 'kanghostx');
+        $this->app->forgetInstance(ProviderRegistry::class);
+
+        Http::fake(function (Request $request) {
+            $query = $this->queryFromRequest($request);
+            $this->assertSame('info', $query['a'] ?? null);
+
+            return Http::response([
+                'result' => 200,
+                'version' => ['raw' => 'nested-version'],
+                'data' => [
+                    'version' => 'panel-3.5',
+                ],
+            ]);
+        });
+
+        $driver = app(ProviderRegistry::class)->find('kanghostx');
+        $runtime = $driver?->resolve(ProvidesConsoleRuntime::class);
+        $this->assertInstanceOf(KangHostx::class, $runtime);
+
+        $result = $runtime->execute([
+            'action' => 'server.supplier.refresh_card',
+            'context' => [
+                'supplier' => $this->makeSupplier(),
+                'binding' => [
+                    'base_url' => ['unexpected' => 'array'],
+                    'last_check_status' => ['unexpected' => 'array'],
+                    'has_api_key' => true,
+                ],
+            ],
+        ]);
+
+        $fields = collect($result['data']['card']['fields'] ?? [])->keyBy('key');
+
+        $this->assertTrue((bool) ($result['success'] ?? false));
+        $this->assertSame('connected', $result['data']['remote']['connection_status'] ?? null);
+        $this->assertSame('panel-3.5', $result['data']['remote']['client']['version'] ?? null);
+        $this->assertSame('http://panel.example.test:3312', $fields->get('panel_url')['value'] ?? null);
+        $this->assertSame('正常', $fields->get('connection_status')['value'] ?? null);
+    }
+
+    public function test_kanghostx_supplier_refresh_card_reports_array_error_messages(): void
+    {
+        $this->ensurePluginTables();
+        $this->activatePlugin('upstream', 'kanghostx');
+        $this->app->forgetInstance(ProviderRegistry::class);
+
+        Http::fake(function (Request $request) {
+            $query = $this->queryFromRequest($request);
+            $this->assertSame('info', $query['a'] ?? null);
+
+            return Http::response([
+                'result' => 500,
+                'msg' => [
+                    'message' => 'accesshash invalid',
+                ],
+            ]);
+        });
+
+        $driver = app(ProviderRegistry::class)->find('kanghostx');
+        $runtime = $driver?->resolve(ProvidesConsoleRuntime::class);
+        $this->assertInstanceOf(KangHostx::class, $runtime);
+
+        $this->expectException(\App\Exceptions\BusinessException::class);
+        $this->expectExceptionMessage('康乐连接检测失败：accesshash invalid');
+
+        $runtime->execute([
+            'action' => 'server.supplier.refresh_card',
+            'context' => [
+                'supplier' => $this->makeSupplier(),
+                'binding' => [
+                    'base_url' => 'http://panel.example.test:3312',
+                    'has_api_key' => true,
+                ],
+            ],
+        ]);
+    }
+
     private function activatePlugin(string $domain, string $slug): IntegrationPlugin
     {
         $scanner = app(PluginScanner::class);

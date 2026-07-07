@@ -118,7 +118,7 @@ final class KangHostxClient
             return;
         }
 
-        $message = trim((string) ($response['msg'] ?? $response['message'] ?? ''));
+        $message = $this->responseMessage($response['msg'] ?? $response['message'] ?? null);
         if ($result === 500 && $message === '') {
             $message = '主机名已存在或参数不正确';
         }
@@ -129,6 +129,36 @@ final class KangHostxClient
     public function sign(string $action, string $accessHash, string $nonce): string
     {
         return md5($action.$accessHash.$nonce);
+    }
+
+    private function responseMessage(mixed $value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+
+        if (is_scalar($value)) {
+            return trim((string) $value);
+        }
+
+        if ($value instanceof \Stringable) {
+            return trim((string) $value);
+        }
+
+        if (is_array($value)) {
+            foreach (['msg', 'message', 'error', 'reason'] as $key) {
+                $message = $this->responseMessage($value[$key] ?? null);
+                if ($message !== '') {
+                    return $message;
+                }
+            }
+
+            $encoded = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+            return is_string($encoded) ? $encoded : '';
+        }
+
+        return '';
     }
 
     private function apiEndpoint(Supplier $supplier): string

@@ -255,6 +255,46 @@ class AliyunSmsClient
         return $signName !== '' ? $signName : self::DEFAULT_SIGN_NAME;
     }
 
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return list<string>
+     */
+    private function extractSignNames(array $payload): array
+    {
+        $items = $payload['SmsSignList']['SmsSign']
+            ?? $payload['SmsSignList']['Sign']
+            ?? $payload['SmsSignList']
+            ?? $payload['SmsSign']
+            ?? [];
+
+        if (! is_array($items)) {
+            return [];
+        }
+
+        if (array_key_exists('SignName', $items) || array_key_exists('sign_name', $items)) {
+            $items = [$items];
+        }
+
+        $names = [];
+        foreach ($items as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $auditStatus = trim((string) ($item['AuditStatus'] ?? $item['audit_status'] ?? ''));
+            if ($auditStatus !== '' && $auditStatus !== 'AUDIT_STATE_PASS') {
+                continue;
+            }
+
+            $name = trim((string) ($item['SignName'] ?? $item['sign_name'] ?? ''));
+            if ($name !== '') {
+                $names[] = $name;
+            }
+        }
+
+        return array_values(array_unique($names));
+    }
+
     private function maskPhone(string $phone): string
     {
         if (mb_strlen($phone) <= 7) {
