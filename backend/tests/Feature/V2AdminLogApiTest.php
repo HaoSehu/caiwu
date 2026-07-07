@@ -8,8 +8,10 @@ use App\Models\AdminUser;
 use App\Models\NotificationLog;
 use App\Models\OperationLog;
 use App\Models\Role;
+use App\Services\System\AdminLogService;
 use App\Support\AdminPermissions;
 use Laravel\Sanctum\Sanctum;
+use Mockery\MockInterface;
 use Tests\TestCase;
 
 class V2AdminLogApiTest extends TestCase
@@ -44,6 +46,11 @@ class V2AdminLogApiTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonPath('code', 42200);
 
+        $this->getJson('/api/v2/admin/logs/api?include_summary=maybe')
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 42200)
+            ->assertJsonStructure(['data' => ['errors' => ['include_summary']]]);
+
         $response = $this->getJson('/api/v2/admin/logs/api?'.http_build_query([
             'method' => 'GET',
             'module' => 'v2-api-log-test',
@@ -60,8 +67,22 @@ class V2AdminLogApiTest extends TestCase
             ->assertJsonMissingPath('data.list.0.raw');
 
         $this->assertSame($this->logPageWhitelist(), array_keys($response->json('data')));
+        $this->assertArrayHasKey('total', $response->json('data.summary'));
         $this->assertNoSensitiveKeys($response->json());
         $this->assertLessThan(100 * 1024, strlen((string) $response->getContent()));
+
+        $lightweightResponse = $this->getJson('/api/v2/admin/logs/api?'.http_build_query([
+            'method' => 'GET',
+            'module' => 'v2-api-log-test',
+            'page' => 1,
+            'page_size' => 10,
+            'include_summary' => 0,
+        ]))
+            ->assertOk()
+            ->assertJsonPath('code', 0)
+            ->assertJsonPath('data.list.0.id', $apiLog->id);
+
+        $this->assertSame([], $lightweightResponse->json('data.summary'));
     }
 
     public function test_admin_log_detail_returns_full_context_without_sensitive_keys(): void
@@ -87,6 +108,30 @@ class V2AdminLogApiTest extends TestCase
         $this->assertSame($this->logDetailWhitelist(), array_keys($response->json('data.log')));
         $this->assertNoSensitiveKeys($response->json());
         $this->assertLessThan(100 * 1024, strlen((string) $response->getContent()));
+    }
+
+    public function test_admin_log_list_can_skip_summary_for_page_loads(): void
+    {
+        $this->mock(AdminLogService::class, function (MockInterface $mock): void {
+            $mock->shouldReceive('getApiLogs')
+                ->once()
+                ->with([], 1, 20, false)
+                ->andReturn([
+                    'data' => [],
+                    'total' => 0,
+                    'current_page' => 1,
+                    'per_page' => 20,
+                    'summary' => ['total' => 99],
+                ]);
+        });
+
+        Sanctum::actingAs($this->createAdmin([AdminPermissions::LOG_LIST]));
+
+        $this->getJson('/api/v2/admin/logs/api?include_summary=0')
+            ->assertOk()
+            ->assertJsonPath('code', 0)
+            ->assertJsonPath('data.list', [])
+            ->assertJsonPath('data.summary', []);
     }
 
     public function test_notification_log_list_summary_and_detail_are_safely_projected(): void

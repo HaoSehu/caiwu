@@ -191,7 +191,7 @@ class AdminLogService
         );
     }
 
-    public function getApiLogs(array $filters, int $page, int $perPage): array
+    public function getApiLogs(array $filters, int $page, int $perPage, bool $withSummary = true): array
     {
         $query = OperationLog::query()
             ->whereRaw('action REGEXP ?', [self::HTTP_ACTION_REGEXP]);
@@ -242,6 +242,10 @@ class AdminLogService
         });
         $logs->setCollection($rows);
 
+        if (! $withSummary) {
+            return $this->buildPaginatorPayload($logs);
+        }
+
         $summary = (clone $query)
             ->selectRaw('COUNT(*) as total')
             ->selectRaw("COALESCE(SUM(CASE WHEN CAST(JSON_UNQUOTE(JSON_EXTRACT(context, '$.status')) AS UNSIGNED) >= 500 THEN 1 ELSE 0 END), 0) as errors")
@@ -281,9 +285,9 @@ class AdminLogService
         );
     }
 
-    public function getSystemLogs(array $filters, int $page, int $perPage): array
+    public function getSystemLogs(array $filters, int $page, int $perPage, bool $withSummary = true): array
     {
-        return $this->getActivityLogs($filters, $page, $perPage);
+        return $this->getActivityLogs($filters, $page, $perPage, $withSummary);
     }
 
     public function getSystemLogsSummary(array $filters): array
@@ -318,7 +322,7 @@ class AdminLogService
         );
     }
 
-    public function getAdminLoginLogs(array $filters, int $page, int $perPage): array
+    public function getAdminLoginLogs(array $filters, int $page, int $perPage, bool $withSummary = true): array
     {
         // 仅当 operation_logs 表中从未有过任何 admin.login 记录（全新部署）时，才降级到
         // admin_users 快照。若表内有历史记录但当前过滤条件下为空，应返回空页而非降级，
@@ -329,7 +333,7 @@ class AdminLogService
             ->exists();
 
         if (! $hasAnyLoginRecord) {
-            return $this->getAdminLoginLogsFromSnapshot($filters, $page, $perPage);
+            return $this->getAdminLoginLogsFromSnapshot($filters, $page, $perPage, $withSummary);
         }
 
         $query = OperationLog::query()
@@ -361,13 +365,18 @@ class AdminLogService
         });
         $logs->setCollection($rows);
 
-        return $this->buildPaginatorPayload($logs, [
-            'total' => $logs->total(),
-            'mode' => 'operation_log',
-        ]);
+        return $this->buildPaginatorPayload(
+            $logs,
+            $withSummary
+                ? [
+                    'total' => $logs->total(),
+                    'mode' => 'operation_log',
+                ]
+                : []
+        );
     }
 
-    private function getAdminLoginLogsFromSnapshot(array $filters, int $page, int $perPage): array
+    private function getAdminLoginLogsFromSnapshot(array $filters, int $page, int $perPage, bool $withSummary = true): array
     {
         $query = AdminUser::query()
             ->with('role:id,name,label')
@@ -407,10 +416,15 @@ class AdminLogService
             ];
         }));
 
-        return $this->buildPaginatorPayload($admins, [
-            'total' => $admins->total(),
-            'mode' => 'admin_snapshot',
-        ]);
+        return $this->buildPaginatorPayload(
+            $admins,
+            $withSummary
+                ? [
+                    'total' => $admins->total(),
+                    'mode' => 'admin_snapshot',
+                ]
+                : []
+        );
     }
 
     private function baseApiLogQuery()
@@ -1253,7 +1267,7 @@ class AdminLogService
         return true;
     }
 
-    public function getGatewayLogs(array $filters, int $page, int $perPage): array
+    public function getGatewayLogs(array $filters, int $page, int $perPage, bool $withSummary = true): array
     {
         if (! Schema::hasTable('gateway_logs')) {
             return $this->buildPaginatorPayload($this->emptyPaginator($perPage));
@@ -1290,6 +1304,10 @@ class AdminLogService
 
         $logs = (clone $query)->orderByDesc('created_at')->paginate($perPage, ['*'], 'page', $page);
 
+        if (! $withSummary) {
+            return $this->buildPaginatorPayload($logs);
+        }
+
         $summary = (clone $query)
             ->selectRaw('COUNT(*) as total')
             ->selectRaw("COALESCE(SUM(CASE WHEN result_status = 'success' THEN 1 ELSE 0 END), 0) as success")
@@ -1303,12 +1321,12 @@ class AdminLogService
         ]);
     }
 
-    public function getActivityLogs(array $filters, int $page, int $perPage): array
+    public function getActivityLogs(array $filters, int $page, int $perPage, bool $withSummary = true): array
     {
         // 仅在表不存在，或表完全没有任何数据（刚迁移、尚未写入）时才降级到 operation_logs。
         // 若表已存在并有历史数据，过滤条件导致的空结果不应降级，否则同一页面会混用两套数据源。
         if (! Schema::hasTable('activity_logs') || ActivityLog::query()->doesntExist()) {
-            return $this->getBusinessOperationLogsAsActivityLogs($filters, $page, $perPage);
+            return $this->getBusinessOperationLogsAsActivityLogs($filters, $page, $perPage, $withSummary);
         }
 
         $query = ActivityLog::query();
@@ -1328,6 +1346,10 @@ class AdminLogService
 
             return $item;
         }));
+
+        if (! $withSummary) {
+            return $this->buildPaginatorPayload($logs);
+        }
 
         $summary = (clone $query)
             ->selectRaw('COUNT(*) as total')
@@ -1438,7 +1460,7 @@ class AdminLogService
         $this->applyDateFilter($query, $filters);
     }
 
-    private function getBusinessOperationLogsAsActivityLogs(array $filters, int $page, int $perPage): array
+    private function getBusinessOperationLogsAsActivityLogs(array $filters, int $page, int $perPage, bool $withSummary = true): array
     {
         if (! Schema::hasTable('operation_logs')) {
             return $this->buildPaginatorPayload($this->emptyPaginator($perPage));
@@ -1454,6 +1476,10 @@ class AdminLogService
             $this->mapOperationLogs($logs->getCollection(), true)
                 ->map(fn (array $item) => $this->mapOperationLogToActivityRow($item))
         );
+
+        if (! $withSummary) {
+            return $this->buildPaginatorPayload($logs);
+        }
 
         $summary = (clone $query)
             ->selectRaw('COUNT(*) as total')

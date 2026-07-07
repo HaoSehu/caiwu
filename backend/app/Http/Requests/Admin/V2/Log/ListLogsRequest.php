@@ -21,6 +21,7 @@ class ListLogsRequest extends FormRequest
             'channel' => ['required', Rule::in(AdminLogV2QueryService::channels())],
             'page' => ['sometimes', 'integer', 'min:1'],
             'page_size' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'include_summary' => ['sometimes', 'boolean'],
             'per_page' => ['prohibited'],
             'pageSize' => ['prohibited'],
             'keyword' => ['sometimes', 'string', 'max:120'],
@@ -98,5 +99,10 @@ class ListLogsRequest extends FormRequest
     public function perPage(): int
     {
         return max(1, min((int) $this->integer('page_size', 20), 100));
+    }
+
+    public function includeSummary(): bool
+    {
+        return $this->boolean('include_summary', true);
     }
 }

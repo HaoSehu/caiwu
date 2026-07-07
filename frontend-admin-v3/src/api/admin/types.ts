@@ -223,6 +223,7 @@ export interface ScheduleOverview {
 export interface LogListParams {
   page?: number;
   page_size?: number;
+  include_summary?: boolean;
   keyword?: string;
   actor_keyword?: string;
   description_keyword?: string;
