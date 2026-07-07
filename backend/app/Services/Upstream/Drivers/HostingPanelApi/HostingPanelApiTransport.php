@@ -20,6 +20,7 @@ use App\Services\Upstream\Drivers\HostingPanelApi\Concerns\HandlesCatalogNormali
 use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\Support\CloudConfigTemplate;
 use App\Services\Upstream\Support\WebSessionCookieParser;
+use App\Support\SensitiveDataSanitizer;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Client\Response;
@@ -1201,14 +1202,14 @@ PHP;
             return ['raw' => $this->sanitizeLogArray($decoded)];
         }
 
-        return ['raw' => $this->truncateLogValue($payload)];
+        return ['raw' => $this->sanitizeLogValue($payload)];
     }
 
     private function sanitizeLogArray(array $data): array
     {
         if (array_is_list($data)) {
             $preview = array_map(
-                fn ($item) => is_array($item) ? $this->sanitizeLogArray($item) : $this->truncateLogValue($item),
+                fn ($item) => is_array($item) ? $this->sanitizeLogArray($item) : $this->sanitizeLogValue($item),
                 array_slice($data, 0, 6)
             );
 
@@ -1250,7 +1251,7 @@ PHP;
                 continue;
             }
 
-            $sanitized[$key] = $this->truncateLogValue($value);
+            $sanitized[$key] = $this->sanitizeLogValue($value, (string) $key);
             $index++;
         }
 
@@ -1260,7 +1261,7 @@ PHP;
     private function summarizeLogResponse(mixed $response): mixed
     {
         if (! is_array($response)) {
-            return $this->truncateLogValue($response);
+            return $this->sanitizeLogValue($response);
         }
 
         $summary = $this->sanitizeLogArray($response);
@@ -1280,6 +1281,13 @@ PHP;
         }
 
         return $summary;
+    }
+
+    private function sanitizeLogValue(mixed $value, ?string $field = null): mixed
+    {
+        $value = $this->truncateLogValue($value);
+
+        return SensitiveDataSanitizer::sanitize($value, $field);
     }
 
     private function truncateLogValue(mixed $value): mixed
