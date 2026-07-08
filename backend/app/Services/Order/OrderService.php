@@ -450,7 +450,7 @@ class OrderService
      */
     public function adminList(array $filters, int $perPage = 20)
     {
-        $query = Order::with(['user:id,email,nickname', 'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires']);
+        $query = Order::with(['user:id,email,nickname', 'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires']);
 
         if (! empty($filters['order_no'])) {
             $query->where('order_no', $filters['order_no']);
@@ -714,7 +714,7 @@ class OrderService
     private function freshCheckoutOrder(int $orderId): ?Order
     {
         return Order::query()
-            ->with(['product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires', 'invoice', 'service'])
+            ->with(['product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires', 'invoice', 'service'])
             ->where('status', '!=', OrderStatus::CANCELLED)
             ->find($orderId);
     }

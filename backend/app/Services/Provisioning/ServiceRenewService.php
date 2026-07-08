@@ -182,7 +182,7 @@ class ServiceRenewService
 
         $blockingPaidInvoice = $this->findBlockingPaidRenewInvoice($user, $service, $cycle, $userCouponId);
         if ($blockingPaidInvoice instanceof Invoice) {
-            $blockingPaidInvoice->loadMissing(['product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires', 'service']);
+            $blockingPaidInvoice->loadMissing(['product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires', 'service']);
             $this->operationLogService->writeServiceConsoleLog($service, 'service.console.renew.invoice.create', [
                 'category' => 'renew',
                 'summary' => '获取已支付待处理续费账单',
@@ -222,7 +222,7 @@ class ServiceRenewService
             $expectedDiscount = round((float) ($expectedCouponPayload['discount_amount'] ?? 0), 2);
 
             if ($existingAmount === $amount && $existingDiscount === $expectedDiscount && (int) $existingInvoice->product_id === (int) $effectiveProduct->id) {
-                $existingInvoice->loadMissing(['product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires', 'service']);
+                $existingInvoice->loadMissing(['product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires', 'service']);
                 $this->operationLogService->writeServiceConsoleLog($service, 'service.console.renew.invoice.create', [
                     'category' => 'renew',
                     'summary' => '获取待支付续费账单',
@@ -297,7 +297,7 @@ class ServiceRenewService
 
             $this->invoiceService->syncProjection($invoice);
 
-            return $invoice->load(['product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires', 'service']);
+            return $invoice->load(['product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires', 'service']);
         });
         $discountAmount = round((float) ($invoice->discount ?? 0), 2);
         $payableAmount = round((float) $invoice->amount, 2);
@@ -389,7 +389,7 @@ class ServiceRenewService
             );
 
             return $order->setRelation('invoice', $invoice)->load([
-                'invoice.product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
+                'invoice.product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
                 'invoice.service',
             ]);
         });

@@ -60,17 +60,13 @@ class ProductAdminService
                     'deleted_at',
                     ...Product::optionalSelectColumns([
                         'custom_display_name',
-                        'first_product_group_id',
-                        'second_product_group_id',
-                        'third_product_group_id',
+                        'product_group_id',
                         'service_type_code',
                     ]),
                     'updated_at',
                 ])
                 ->with([
-                    'firstProductGroup',
-                    'secondProductGroup',
-                    'thirdProductGroup',
+                    'productGroup.parent.parent',
                     'upstreamBindings.supplierPluginBinding',
                 ])
                 ->withCount([
@@ -733,22 +729,19 @@ class ProductAdminService
                 });
             })
             ->when($productType !== '', fn (Builder $builder) => $builder->where('products.product_type', ProductType::normalizeBusinessValue($productType)))
-            ->when($firstGroupCode !== '', fn (Builder $builder) => $builder->whereHas(
-                'firstProductGroup',
-                fn (Builder $groupQuery) => $groupQuery->where('code', $firstGroupCode)
-            ))
+            ->when($firstGroupCode !== '', fn (Builder $builder) => $builder->underRootProductGroup($firstGroupCode))
             ->when(
                 array_key_exists('status', $filters) && $filters['status'] !== null && $filters['status'] !== '',
                 fn (Builder $builder) => $builder->where('status', (int) $filters['status'])
             )
             ->when(! empty($filters['first_product_group_id']), function (Builder $builder) use ($filters) {
-                $builder->where('products.first_product_group_id', (int) $filters['first_product_group_id']);
+                $builder->inProductGroupTree((int) $filters['first_product_group_id']);
             })
             ->when(! empty($filters['second_product_group_id']), function (Builder $builder) use ($filters) {
-                $builder->where('products.second_product_group_id', (int) $filters['second_product_group_id']);
+                $builder->inProductGroupTree((int) $filters['second_product_group_id']);
             })
             ->when(! empty($filters['third_product_group_id']), function (Builder $builder) use ($filters) {
-                $builder->where('products.third_product_group_id', (int) $filters['third_product_group_id']);
+                $builder->inCurrentProductGroup((int) $filters['third_product_group_id']);
             });
     }
 
@@ -888,6 +881,7 @@ class ProductAdminService
         return [
             'name' => (string) $variant['name'],
             'product_type' => $sourceProductType,
+            'product_group_id' => (int) ($source->product_group_id ?? 0) ?: null,
             'first_product_group_id' => (int) ($source->first_product_group_id ?? 0) ?: null,
             'second_product_group_id' => (int) ($source->second_product_group_id ?? 0) ?: null,
             'third_product_group_id' => (int) ($source->third_product_group_id ?? 0) ?: null,
@@ -907,12 +901,7 @@ class ProductAdminService
     private function findExistingSplitProduct(Product $source, string $variantKey): ?Product
     {
         $candidates = Product::query()
-            ->where('second_product_group_id', (int) ($source->second_product_group_id ?? 0))
-            ->when(
-                (int) ($source->third_product_group_id ?? 0) > 0,
-                fn (Builder $query) => $query->where('third_product_group_id', (int) $source->third_product_group_id),
-                fn (Builder $query) => $query->whereNull('third_product_group_id')
-            )
+            ->inCurrentProductGroup((int) ($source->product_group_id ?? 0))
             ->where('id', '!=', (int) $source->id)
             ->get();
 
@@ -1457,12 +1446,7 @@ class ProductAdminService
         }
 
         return Product::query()
-            ->where('second_product_group_id', $secondProductGroupId)
-            ->when(
-                $thirdProductGroupId !== null && $thirdProductGroupId > 0,
-                fn (Builder $query) => $query->where('third_product_group_id', $thirdProductGroupId),
-                fn (Builder $query) => $query->whereNull('third_product_group_id')
-            )
+            ->inCurrentProductGroup($thirdProductGroupId !== null && $thirdProductGroupId > 0 ? $thirdProductGroupId : $secondProductGroupId)
             ->orderBy('sort_order')
             ->orderByDesc('status')
             ->orderByDesc('id')
@@ -1692,18 +1676,14 @@ class ProductAdminService
 
         return [
             'product_type' => $serviceTypeCode,
-            'first_product_group_id' => (int) $targetHierarchy['first_product_group_id'],
-            'second_product_group_id' => (int) $targetHierarchy['second_product_group_id'],
-            'third_product_group_id' => $targetHierarchy['third_product_group_id'],
+            'product_group_id' => (int) $targetHierarchy['effective_product_group_id'],
             'service_type_code' => $serviceTypeCode,
         ];
     }
 
     private function productMatchesHierarchy(Product $product, array $targetHierarchy): bool
     {
-        return (int) ($product->first_product_group_id ?? 0) === (int) $targetHierarchy['first_product_group_id']
-            && (int) ($product->second_product_group_id ?? 0) === (int) $targetHierarchy['second_product_group_id']
-            && (((int) ($product->third_product_group_id ?? 0)) ?: null) === $targetHierarchy['third_product_group_id'];
+        return (int) ($product->product_group_id ?? 0) === (int) $targetHierarchy['effective_product_group_id'];
     }
 
     private function productScopeKey(int $secondProductGroupId, ?int $thirdProductGroupId): string
@@ -1714,9 +1694,7 @@ class ProductAdminService
     private function loadProductSnapshot(Product $product): Product
     {
         return $product->refresh()->load([
-            'firstProductGroup',
-            'secondProductGroup',
-            'thirdProductGroup',
+            'productGroup.parent.parent',
             'upstreamBindings.supplierPluginBinding.supplier',
         ]);
     }

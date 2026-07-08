@@ -33,7 +33,7 @@ class ServicePowerService
     public function powerActionForUser(User $user, int $serviceId, string $action, array $context = []): array
     {
         $service = $this->detailService->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -140,7 +140,7 @@ class ServicePowerService
     public function getModuleStatusForUser(User $user, int $serviceId, string $type = 'host'): array
     {
         $service = $this->detailService->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -168,7 +168,7 @@ class ServicePowerService
     public function getReinstallOptionsForUser(User $user, int $serviceId, bool $forceRefresh = false): array
     {
         $service = $this->detailService->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -221,7 +221,7 @@ class ServicePowerService
     public function resetPasswordForUser(User $user, int $serviceId, array $data, array $context = []): array
     {
         $service = $this->detailService->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -243,7 +243,7 @@ class ServicePowerService
         if ($secondVerify === [] && $password !== '') {
             $this->transformService->cacheSubmittedPasswordForService($service, $password);
             $service->refresh()->loadMissing([
-                'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
+                'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
                 'product.firstProductGroup:id,code,name,description,slug',
                 'product.secondProductGroup:id,first_product_group_id,name,description,slug',
                 'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -273,7 +273,7 @@ class ServicePowerService
     public function reinstallForUser(User $user, int $serviceId, array $data, array $context = []): array
     {
         $service = $this->detailService->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',

@@ -118,7 +118,7 @@ class V2ProductApiTest extends TestCase
         $secondGroup = $this->createSecondGroup($firstGroup, '站点二级 '.$suffix, 1, true);
         $thirdGroup = $this->createThirdGroup($secondGroup, '站点三级 '.$suffix, 1, true);
         $hiddenSecondGroup = $this->createSecondGroup($firstGroup, '隐藏二级 '.$suffix, 2, false);
-        $visibleProduct = Product::query()->create($this->productPayload($secondGroup, $thirdGroup, '站点商品 '.$suffix, '39.00', 1));
+        $visibleProduct = Product::query()->create($this->productPayload($secondGroup, $thirdGroup, '站点商品 '.$suffix, '39.00', -1000));
         Product::query()->create($this->productPayload($hiddenSecondGroup, null, '隐藏商品 '.$suffix, '49.00', 2));
         Product::query()->create($this->productPayload($secondGroup, $thirdGroup, '下架商品 '.$suffix, '59.00', 3, ['status' => 0]));
         Setting::setValue('product', 'cpu_model_catalog', json_encode([
@@ -591,9 +591,7 @@ class V2ProductApiTest extends TestCase
         $productType = ProductType::businessValueForFirstGroup($firstGroup, $code);
 
         return array_replace([
-            'first_product_group_id' => (int) $firstGroup->id,
-            'second_product_group_id' => (int) $secondGroup->id,
-            'third_product_group_id' => $thirdGroup ? (int) $thirdGroup->id : null,
+            'product_group_id' => $thirdGroup ? (int) $thirdGroup->id : (int) $secondGroup->id,
             'service_type_code' => $productType,
             'custom_display_name' => $name,
             'product_type' => $productType,
@@ -748,10 +746,16 @@ class V2ProductApiTest extends TestCase
             'first_product_group_name',
             'second_product_group_id',
             'second_product_group_name',
+            'second_product_group_description',
+            'second_product_group_parent_id',
+            'second_product_group_parent_name',
             'third_product_group_id',
             'third_product_group_name',
+            'third_product_group_description',
             'effective_product_group_id',
             'effective_product_group_level',
+            'product_type_label',
+            'service_type_code',
             'primary_cycle',
             'primary_price',
             'setup_fee',

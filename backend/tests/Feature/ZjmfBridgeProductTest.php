@@ -164,7 +164,7 @@ class ZjmfBridgeProductTest extends TestCase
     {
         $suffix = bin2hex(random_bytes(4));
         $firstGroupPayload = [
-            'code' => 'zjmf_menu_'.$suffix,
+            'code' => ProductType::VPS,
             'name' => 'ZJMF 云菜单 '.$suffix,
             'slug' => 'zjmf-menu-'.$suffix,
             'description' => 'ZJMF 一级菜单',
@@ -218,9 +218,7 @@ class ZjmfBridgeProductTest extends TestCase
         $firstGroup = FirstProductGroup::query()->findOrFail((int) $secondGroup->first_product_group_id);
 
         return [
-            'first_product_group_id' => (int) $firstGroup->id,
-            'second_product_group_id' => (int) $secondGroup->id,
-            'third_product_group_id' => $thirdGroup ? (int) $thirdGroup->id : null,
+            'product_group_id' => $thirdGroup ? (int) $thirdGroup->id : (int) $secondGroup->id,
             'service_type_code' => ProductType::CLOUD_SERVER,
             'custom_display_name' => $name,
             'product_type' => ProductType::CLOUD_SERVER,

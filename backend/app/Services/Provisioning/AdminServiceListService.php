@@ -50,7 +50,7 @@ class AdminServiceListService
             ])
             ->with([
                 'user:id,nickname,email,phone,status',
-                'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
+                'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
                 'product.firstProductGroup:id,code,name,description,slug',
                 'product.secondProductGroup:id,first_product_group_id,name,description,slug',
                 'product.thirdProductGroup:id,second_product_group_id,name,description,slug',

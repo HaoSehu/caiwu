@@ -2,7 +2,7 @@
 
 namespace App\Constants;
 
-use App\Models\FirstProductGroup;
+use App\Models\ProductGroup;
 use App\Models\Setting;
 use Illuminate\Support\Str;
 
@@ -131,9 +131,9 @@ class ProductType
         return self::normalizeBusinessValue($normalizedValue);
     }
 
-    public static function businessValueForFirstGroup(?FirstProductGroup $group, mixed $fallback = null): string
+    public static function businessValueForFirstGroup(?ProductGroup $group, mixed $fallback = null): string
     {
-        if ($group instanceof FirstProductGroup) {
+        if ($group instanceof ProductGroup) {
             $productType = trim((string) ($group->product_type ?? ''));
             if ($productType !== '') {
                 return self::normalizeBusinessValue($productType);

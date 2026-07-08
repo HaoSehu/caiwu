@@ -28,7 +28,12 @@ class AdminProductDeletedVisibilityTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/v2/admin/product-groups/'.$root->id.'/children?level=1&page=1&page_size=50')
+        $this->getJson('/api/v2/admin/product-groups/'.$root->id.'/children?'.http_build_query([
+            'level' => 1,
+            'keyword' => $suffix,
+            'page' => 1,
+            'page_size' => 50,
+        ]))
             ->assertOk()
             ->assertJsonFragment([
                 'id' => (int) $category->id,
@@ -127,9 +132,7 @@ class AdminProductDeletedVisibilityTest extends TestCase
         $productType = ProductType::businessValueForFirstGroup($firstGroup, $code);
 
         return [
-            'first_product_group_id' => (int) $firstGroup->id,
-            'second_product_group_id' => (int) $group->id,
-            'third_product_group_id' => null,
+            'product_group_id' => (int) $group->id,
             'service_type_code' => $productType,
             'name' => $name,
             'custom_display_name' => $name,

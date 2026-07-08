@@ -1,15 +1,14 @@
 <?php
 
 /**
- * @deprecated product_groups 表已于 2026-07-04 DROP（migration 2026_07_04_260000）。
- *             商品分类体系已迁移至 first_product_groups / second_product_groups / third_product_groups。
- *             此 Model 仅保留供历史迁移命令（MigrateCatalogProductGroupsCommand 等）引用，
- *             新代码请使用 FirstProductGroup / SecondProductGroup / ThirdProductGroup。
+ * @deprecated 商品分组真源已恢复为 product_groups 自引用树。
+ *             此 Model 仅保留供历史命令引用，新代码请使用 ProductGroup。
  */
 
 namespace App\Models;
 
 use App\Constants\ProductType as ProductTypeCatalog;
+use App\Support\DatabaseSchema;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -21,20 +20,30 @@ class ProductCategory extends Model
     protected $fillable = [
         'parent_group_id',
         'parent_id',
+        'level',
+        'code',
         'product_type',
         'name',
         'slug',
+        'description',
         'slogan',
         'is_visible',
+        'is_system',
         'sort_order',
+        'legacy_product_type',
+        'legacy_product_group_id',
     ];
 
     protected function casts(): array
     {
         return [
             'parent_group_id' => 'integer',
+            'parent_id' => 'integer',
+            'level' => 'integer',
             'is_visible' => 'integer',
+            'is_system' => 'integer',
             'sort_order' => 'integer',
+            'legacy_product_group_id' => 'integer',
         ];
     }
 
@@ -53,14 +62,16 @@ class ProductCategory extends Model
             return (int) $value;
         }
 
-        $parentGroupId = $this->attributes['parent_group_id'] ?? null;
+        $parentGroupId = $this->attributes['parent_id'] ?? $this->attributes['parent_group_id'] ?? null;
 
         return $parentGroupId === null ? null : (int) $parentGroupId;
     }
 
     public function setParentIdAttribute(mixed $value): void
     {
-        $this->attributes['parent_group_id'] = $value === null || $value === '' ? null : (int) $value;
+        $column = $this->parentColumnName();
+
+        $this->attributes[$column] = $value === null || $value === '' ? null : (int) $value;
     }
 
     public function getStatusAttribute(mixed $value): int
@@ -88,12 +99,12 @@ class ProductCategory extends Model
 
     public function parent(): BelongsTo
     {
-        return $this->belongsTo(self::class, 'parent_group_id');
+        return $this->belongsTo(self::class, $this->parentColumnName());
     }
 
     public function children(): HasMany
     {
-        return $this->hasMany(self::class, 'parent_group_id');
+        return $this->hasMany(self::class, $this->parentColumnName());
     }
 
     public function products(): HasMany
@@ -108,7 +119,7 @@ class ProductCategory extends Model
 
     public function scopeRoot($query)
     {
-        return $query->whereNull('parent_group_id');
+        return $query->whereNull($this->parentColumnName());
     }
 
     public function getPublicIdAttribute(): int
@@ -118,7 +129,7 @@ class ProductCategory extends Model
 
     public function getParentPublicIdAttribute(): ?int
     {
-        $parentGroupId = $this->getAttribute('parent_group_id');
+        $parentGroupId = $this->getAttribute($this->parentColumnName());
         if ($parentGroupId === null) {
             return null;
         }
@@ -129,5 +140,14 @@ class ProductCategory extends Model
         }
 
         return (int) (($parent->legacy_group_id ?? 0) ?: $parent->id);
+    }
+
+    private function parentColumnName(): string
+    {
+        try {
+            return DatabaseSchema::hasColumn($this->getTable(), 'parent_id') ? 'parent_id' : 'parent_group_id';
+        } catch (\Throwable) {
+            return 'parent_id';
+        }
     }
 }

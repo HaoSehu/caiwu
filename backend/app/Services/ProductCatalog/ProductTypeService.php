@@ -8,6 +8,8 @@ use App\Models\FirstProductGroup;
 use App\Models\Product;
 use App\Models\SecondProductGroup;
 use App\Models\ThirdProductGroup;
+use App\Support\DatabaseSchema;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class ProductTypeService
@@ -25,19 +27,24 @@ class ProductTypeService
 
         $items = ProductType::items();
         $values = array_values(array_map(fn (array $item): string => (string) $item['value'], $items));
-        $firstGroups = Schema::hasTable('first_product_groups')
+        $firstGroups = DatabaseSchema::hasTableOrView('first_product_groups')
             ? FirstProductGroup::query()->whereIn('code', $values)->get()->keyBy('code')
             : collect();
-        $usageMap = Schema::hasTable('first_product_groups')
+        $usageMap = DatabaseSchema::hasTableOrView('product_groups') && DatabaseSchema::hasTableOrView('products')
             ? Product::query()
-                ->join('first_product_groups', 'first_product_groups.id', '=', 'products.first_product_group_id')
-                ->selectRaw('first_product_groups.code as product_type, COUNT(products.id) as total')
-                ->groupBy('first_product_groups.code')
+                ->join('product_groups as leaf', 'leaf.id', '=', 'products.product_group_id')
+                ->leftJoin('product_groups as parent', 'parent.id', '=', 'leaf.parent_id')
+                ->leftJoin('product_groups as root', 'root.id', '=', DB::raw(
+                    'CASE WHEN leaf.level = 1 THEN leaf.id WHEN leaf.level = 2 THEN leaf.parent_id ELSE parent.parent_id END'
+                ))
+                ->whereNotNull('root.code')
+                ->selectRaw('root.code as product_type, COUNT(products.id) as total')
+                ->groupBy('root.code')
                 ->pluck('total', 'product_type')
                 ->all()
             : [];
 
-        $secondGroupUsageMap = Schema::hasTable('second_product_groups') && Schema::hasTable('first_product_groups')
+        $secondGroupUsageMap = DatabaseSchema::hasTableOrView('second_product_groups') && DatabaseSchema::hasTableOrView('first_product_groups')
             ? SecondProductGroup::query()
                 ->join('first_product_groups', 'first_product_groups.id', '=', 'second_product_groups.first_product_group_id')
                 ->selectRaw('first_product_groups.code as product_type, COUNT(second_product_groups.id) as total')
@@ -46,7 +53,7 @@ class ProductTypeService
                 ->all()
             : [];
 
-        $thirdGroupUsageMap = Schema::hasTable('third_product_groups') && Schema::hasTable('second_product_groups') && Schema::hasTable('first_product_groups')
+        $thirdGroupUsageMap = DatabaseSchema::hasTableOrView('third_product_groups') && DatabaseSchema::hasTableOrView('second_product_groups') && DatabaseSchema::hasTableOrView('first_product_groups')
             ? ThirdProductGroup::query()
                 ->join('second_product_groups', 'second_product_groups.id', '=', 'third_product_groups.second_product_group_id')
                 ->join('first_product_groups', 'first_product_groups.id', '=', 'second_product_groups.first_product_group_id')
@@ -207,7 +214,7 @@ class ProductTypeService
         }
 
         $usageCount = $firstGroupId > 0
-            ? Product::query()->where('first_product_group_id', $firstGroupId)->count()
+            ? Product::query()->inProductGroupTree($firstGroupId)->count()
             : 0;
         if ($usageCount > 0) {
             throw new BusinessException("该种类下仍有 {$usageCount} 个商品，无法删除");

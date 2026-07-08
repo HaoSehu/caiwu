@@ -10,8 +10,10 @@ use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\SecondProductGroup;
 use App\Models\ThirdProductGroup;
+use App\Support\DatabaseSchema;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
@@ -19,14 +21,14 @@ class ProductGroupHierarchyService
 {
     public function tablesReady(): bool
     {
-        return Schema::hasTable('first_product_groups')
-            && Schema::hasTable('second_product_groups')
-            && Schema::hasTable('third_product_groups');
+        return DatabaseSchema::hasTableOrView('first_product_groups')
+            && DatabaseSchema::hasTableOrView('second_product_groups')
+            && DatabaseSchema::hasTableOrView('third_product_groups');
     }
 
     public function productColumnsReady(): bool
     {
-        return Schema::hasTable('products');
+        return DatabaseSchema::hasTableOrView('products') && Schema::hasColumn('products', 'product_group_id');
     }
 
     public function syncProductTypes(): array
@@ -180,7 +182,7 @@ class ProductGroupHierarchyService
 
     public function buildProductHierarchyPayload(ProductCategory $category, ?string $serviceTypeCode = null): array
     {
-        if (! $this->tablesReady() || ! Schema::hasTable('products')) {
+        if (! $this->tablesReady() || ! DatabaseSchema::hasTableOrView('products')) {
             return [];
         }
 
@@ -198,7 +200,11 @@ class ProductGroupHierarchyService
             $serviceTypeCode ?? ($hierarchy['first_product_group_code'] ?? null)
         );
 
+        $effectiveGroupId = (int) ($hierarchy['third_product_group_id'] ?? 0)
+            ?: ((int) ($hierarchy['second_product_group_id'] ?? 0) ?: $firstGroupId);
+
         $payload = [
+            'product_group_id' => $effectiveGroupId ?: null,
             'first_product_group_id' => $firstGroupId ?: null,
             'second_product_group_id' => $hierarchy['second_product_group_id'] ?? null,
             'third_product_group_id' => $hierarchy['third_product_group_id'] ?? null,
@@ -223,9 +229,6 @@ class ProductGroupHierarchyService
                 'product_group_id',
                 'product_type',
                 ...Product::optionalSelectColumns([
-                    'first_product_group_id',
-                    'second_product_group_id',
-                    'third_product_group_id',
                     'service_type_code',
                 ]),
             ])
@@ -254,7 +257,7 @@ class ProductGroupHierarchyService
                     }
 
                     Product::withoutEvents(function () use ($product, $payload): void {
-                        $product->forceFill($payload)->save();
+                        $product->forceFill($this->productUpdatePayload($payload))->save();
                     });
                     $updated++;
                 }
@@ -265,6 +268,10 @@ class ProductGroupHierarchyService
 
     public function checkHierarchy(): array
     {
+        if ($this->currentProductGroupsReady()) {
+            return $this->checkCurrentProductGroupHierarchy();
+        }
+
         $blockingErrors = [];
         $warnings = [];
 
@@ -325,16 +332,11 @@ class ProductGroupHierarchyService
             }
 
             $missingProductHierarchyCount = Product::withTrashed()
-                ->whereNotNull('product_group_id')
-                ->where(function (Builder $query): void {
-                    $query
-                        ->whereNull('first_product_group_id')
-                        ->orWhereNull('second_product_group_id');
-                })
+                ->whereNull('product_group_id')
                 ->count();
 
             if ($missingProductHierarchyCount > 0) {
-                $blockingErrors[] = "存在 {$missingProductHierarchyCount} 个商品缺少一级或二级分类挂载字段";
+                $blockingErrors[] = "存在 {$missingProductHierarchyCount} 个商品缺少 product_group_id 挂载字段";
             }
         } else {
             $warnings[] = 'products 三层挂载字段尚未全部存在';
@@ -350,6 +352,67 @@ class ProductGroupHierarchyService
                 'missing_third_product_groups' => $missingThirdCount,
                 'missing_legacy_product_groups' => $missingLegacyProductGroupCount,
                 'missing_product_hierarchy' => $missingProductHierarchyCount,
+            ],
+        ];
+    }
+
+    private function checkCurrentProductGroupHierarchy(): array
+    {
+        $blockingErrors = [];
+        $warnings = [];
+
+        if (! $this->tablesReady()) {
+            $warnings[] = '商品分组兼容视图尚未全部创建';
+        }
+
+        $rootCount = DB::table('product_groups')->where('level', 1)->count();
+        $secondCount = DB::table('product_groups')->where('level', 2)->count();
+        $thirdCount = DB::table('product_groups')->where('level', 3)->count();
+        $orphanGroupCount = DB::table('product_groups as child')
+            ->whereNotNull('child.parent_id')
+            ->whereNotExists(function ($query): void {
+                $query->selectRaw('1')
+                    ->from('product_groups as parent')
+                    ->whereColumn('parent.id', 'child.parent_id');
+            })
+            ->count();
+
+        if ($orphanGroupCount > 0) {
+            $blockingErrors[] = "存在 {$orphanGroupCount} 个商品分组找不到父级";
+        }
+
+        $missingProductHierarchyCount = 0;
+        $orphanProductGroupCount = 0;
+        if ($this->productColumnsReady()) {
+            $missingProductHierarchyCount = Product::withTrashed()
+                ->whereNull('product_group_id')
+                ->count();
+            $orphanProductGroupCount = Product::withTrashed()
+                ->whereNotNull('product_group_id')
+                ->whereNotIn('product_group_id', DB::table('product_groups')->select('id'))
+                ->count();
+
+            if ($missingProductHierarchyCount > 0) {
+                $blockingErrors[] = "存在 {$missingProductHierarchyCount} 个商品缺少 product_group_id 挂载字段";
+            }
+
+            if ($orphanProductGroupCount > 0) {
+                $blockingErrors[] = "存在 {$orphanProductGroupCount} 个商品引用了不存在的 product_groups";
+            }
+        } else {
+            $warnings[] = 'products.product_group_id 尚不存在';
+        }
+
+        return [
+            'blocking_errors' => $blockingErrors,
+            'warnings' => $warnings,
+            'counts' => [
+                'root_product_groups' => $rootCount,
+                'second_product_groups' => $secondCount,
+                'third_product_groups' => $thirdCount,
+                'orphan_product_groups' => $orphanGroupCount,
+                'missing_product_hierarchy' => $missingProductHierarchyCount,
+                'orphan_product_group_products' => $orphanProductGroupCount,
             ],
         ];
     }
@@ -471,9 +534,13 @@ class ProductGroupHierarchyService
             return 0;
         }
 
+        if (DatabaseSchema::hasTableOrView('product_groups')) {
+            return 0;
+        }
+
         return Product::withTrashed()
             ->where('product_group_id', (int) $category->id)
-            ->update($payload);
+            ->update($this->productUpdatePayload($payload));
     }
 
     private function repairProductsWithMissingLegacyGroup(): int
@@ -482,56 +549,14 @@ class ProductGroupHierarchyService
             return 0;
         }
 
-        $updated = 0;
-        $productTypes = $this->missingLegacyGroupProductsQuery()
-            ->select('product_type')
-            ->distinct()
-            ->get()
-            ->map(fn (Product $product): string => $this->normalizeProductTypeCode($product->getRawOriginal('product_type')))
-            ->filter(fn (string $value): bool => $value !== '')
-            ->unique()
-            ->values();
+        return 0;
+    }
 
-        foreach ($productTypes as $rawProductType) {
-            $firstGroup = FirstProductGroup::query()
-                ->where('code', $rawProductType)
-                ->first();
-
-            $businessProductType = ProductType::businessValueForFirstGroup($firstGroup, $rawProductType);
-            if (! $firstGroup instanceof FirstProductGroup) {
-                $firstGroup = FirstProductGroup::query()
-                    ->where('product_type', $businessProductType)
-                    ->orderBy('sort_order')
-                    ->orderBy('id')
-                    ->first();
-            }
-
-            if (! $firstGroup instanceof FirstProductGroup) {
-                $firstGroup = $this->ensureFirstProductGroup($rawProductType);
-                $businessProductType = ProductType::businessValueForFirstGroup($firstGroup, $rawProductType);
-            }
-
-            if (! $firstGroup instanceof FirstProductGroup) {
-                continue;
-            }
-
-            $secondGroup = $this->ensureUnmappedSecondProductGroup($firstGroup);
-
-            $updated += Product::withTrashed()
-                ->whereNotNull('product_group_id')
-                ->where('product_type', $rawProductType)
-                ->whereNotIn('product_group_id', ProductCategory::query()->select('id'))
-                ->update([
-                    'product_group_id' => null,
-                    'first_product_group_id' => (int) $firstGroup->id,
-                    'second_product_group_id' => (int) $secondGroup->id,
-                    'third_product_group_id' => null,
-                    'product_type' => $businessProductType,
-                    'service_type_code' => $businessProductType,
-                ]);
-        }
-
-        return $updated;
+    private function currentProductGroupsReady(): bool
+    {
+        return DatabaseSchema::hasTableOrView('product_groups')
+            && DatabaseSchema::hasColumn('product_groups', 'level')
+            && DatabaseSchema::hasColumn('product_groups', 'parent_id');
     }
 
     private function ensureUnmappedSecondProductGroup(FirstProductGroup $firstGroup): SecondProductGroup
@@ -558,9 +583,26 @@ class ProductGroupHierarchyService
 
     private function missingLegacyGroupProductsQuery(): Builder
     {
+        if (! DatabaseSchema::hasTableOrView('product_groups')) {
+            return Product::withTrashed()->whereRaw('1 = 0');
+        }
+
         return Product::withTrashed()
             ->whereNotNull('product_group_id')
-            ->whereNotIn('product_group_id', ProductCategory::query()->select('id'));
+            ->whereNotIn('product_group_id', DB::table('product_groups')->select('id'));
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function productUpdatePayload(array $payload): array
+    {
+        return [
+            'product_group_id' => $payload['product_group_id'] ?? null,
+            'product_type' => $payload['product_type'] ?? null,
+            'service_type_code' => $payload['service_type_code'] ?? null,
+        ];
     }
 
     public function ensureFirstProductGroupForType(string $code): ?FirstProductGroup
@@ -598,7 +640,7 @@ class ProductGroupHierarchyService
             'legacy_product_type' => $code,
         ];
 
-        if (Schema::hasColumn('first_product_groups', 'product_type')) {
+        if (DatabaseSchema::hasColumn('first_product_groups', 'product_type')) {
             $payload['product_type'] = $this->resolveFirstGroupProductType($code, $item);
         }
 

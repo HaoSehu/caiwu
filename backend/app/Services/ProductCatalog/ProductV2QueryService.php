@@ -49,9 +49,7 @@ class ProductV2QueryService
             ->withTrashed()
             ->select($this->adminProductDetailColumns())
             ->with([
-                'firstProductGroup',
-                'secondProductGroup',
-                'thirdProductGroup',
+                'productGroup.parent.parent',
                 'upstreamBindings.supplierPluginBinding.supplier',
             ])
             ->withCount([
@@ -76,9 +74,7 @@ class ProductV2QueryService
         $paginator = $this->siteProductQuery($filters)
             ->select($this->siteProductListColumns())
             ->with([
-                'firstProductGroup',
-                'secondProductGroup',
-                'thirdProductGroup',
+                'productGroup.parent.parent',
             ])
             ->orderBy('sort_order')
             ->orderBy('id')
@@ -92,9 +88,7 @@ class ProductV2QueryService
         $product = $this->siteProductQuery([])
             ->select($this->siteProductDetailColumns())
             ->with([
-                'firstProductGroup',
-                'secondProductGroup',
-                'thirdProductGroup',
+                'productGroup.parent.parent',
             ])
             ->whereKey($productId)
             ->first();
@@ -149,33 +143,14 @@ class ProductV2QueryService
 
         return Product::query()
             ->onSale()
-            ->whereNotNull('first_product_group_id')
-            ->whereNotNull('second_product_group_id')
-            ->whereHas('firstProductGroup', fn (Builder $query) => $query
-                ->where('is_visible', 1)
-                ->whereIn('code', $visibleProductTypes)
-                ->when($firstGroupCode !== '', fn (Builder $typeQuery) => $typeQuery->where('code', $firstGroupCode))
-                ->when($productType !== '', fn (Builder $typeQuery) => $typeQuery->where('product_type', ProductType::normalizeBusinessValue($productType))))
-            ->whereHas('secondProductGroup', fn (Builder $query) => $query->where('is_visible', 1))
-            ->where(function (Builder $query): void {
-                $query
-                    ->whereNull('third_product_group_id')
-                    ->orWhereHas('thirdProductGroup', fn (Builder $thirdQuery) => $thirdQuery->where('is_visible', 1));
-            })
-            ->when(isset($filters['first_product_group_id']), fn (Builder $query) => $query->where('first_product_group_id', (int) $filters['first_product_group_id']))
-            ->when(isset($filters['second_product_group_id']), fn (Builder $query) => $query->where('second_product_group_id', (int) $filters['second_product_group_id']))
-            ->when(isset($filters['third_product_group_id']), fn (Builder $query) => $query->where('third_product_group_id', (int) $filters['third_product_group_id']))
+            ->whereNotNull('product_group_id')
+            ->withVisibleProductGroupPath($visibleProductTypes)
+            ->underRootProductGroup($firstGroupCode !== '' ? $firstGroupCode : null, $productType !== '' ? $productType : null)
+            ->when(isset($filters['first_product_group_id']), fn (Builder $query) => $query->inProductGroupTree((int) $filters['first_product_group_id']))
+            ->when(isset($filters['second_product_group_id']), fn (Builder $query) => $query->inProductGroupTree((int) $filters['second_product_group_id']))
+            ->when(isset($filters['third_product_group_id']), fn (Builder $query) => $query->inCurrentProductGroup((int) $filters['third_product_group_id']))
             ->when(isset($filters['effective_product_group_id']), function (Builder $query) use ($filters): void {
-                $groupId = (int) $filters['effective_product_group_id'];
-                $query->where(function (Builder $groupQuery) use ($groupId): void {
-                    $groupQuery
-                        ->where('third_product_group_id', $groupId)
-                        ->orWhere(function (Builder $secondQuery) use ($groupId): void {
-                            $secondQuery
-                                ->where('second_product_group_id', $groupId)
-                                ->whereNull('third_product_group_id');
-                        });
-                });
+                $query->inCurrentProductGroup((int) $filters['effective_product_group_id']);
             });
     }
 
@@ -199,9 +174,7 @@ class ProductV2QueryService
             'deleted_at',
             ...Product::optionalSelectColumns([
                 'custom_display_name',
-                'first_product_group_id',
-                'second_product_group_id',
-                'third_product_group_id',
+                'product_group_id',
                 'service_type_code',
             ]),
             'created_at',
@@ -219,9 +192,7 @@ class ProductV2QueryService
             'product_type',
             ...Product::optionalSelectColumns([
                 'custom_display_name',
-                'first_product_group_id',
-                'second_product_group_id',
-                'third_product_group_id',
+                'product_group_id',
                 'service_type_code',
             ]),
             'pricing',

@@ -551,7 +551,7 @@ class ReferralService
                 [
                     'invoice:id,invoice_no,product_id,product_spec_snapshot,config_snapshot,paid_at',
                     'order:id,order_no,product_id,product_spec_snapshot,config_snapshot,paid_at',
-                    'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
+                    'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
                 ]
             ))
             ->where('referrer_user_id', $user->id)
@@ -687,7 +687,7 @@ class ReferralService
                 $this->referralUserWithRelations('referredUser'),
                 [
                     'order:id,order_no,product_id,product_spec_snapshot,config_snapshot',
-                    'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
+                    'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
                 ]
             ));
 

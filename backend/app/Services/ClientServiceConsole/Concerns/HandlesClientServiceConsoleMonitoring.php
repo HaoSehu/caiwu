@@ -23,7 +23,7 @@ trait HandlesClientServiceConsoleMonitoring
     public function getMonitorForUser(User $user, int $serviceId, array $filters = []): array
     {
         $service = $this->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -176,7 +176,7 @@ trait HandlesClientServiceConsoleMonitoring
     public function getMonitorBatchForUser(User $user, int $serviceId, array $filters = []): array
     {
         $service = $this->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',

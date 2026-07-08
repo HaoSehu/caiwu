@@ -465,18 +465,17 @@ class AdminCatalogRegressionTest extends TestCase
 
         $this->assertDatabaseHas('products', [
             'id' => (int) $firstSourceProduct->id,
-            'second_product_group_id' => (int) $targetCategory->id,
+            'product_group_id' => (int) $targetCategory->id,
             'product_type' => ProductType::CLOUD_SERVER,
         ]);
         $this->assertDatabaseHas('products', [
             'id' => (int) $secondSourceProduct->id,
-            'second_product_group_id' => (int) $targetCategory->id,
+            'product_group_id' => (int) $targetCategory->id,
             'product_type' => ProductType::CLOUD_SERVER,
         ]);
 
         $targetOrder = Product::query()
-            ->where('second_product_group_id', (int) $targetCategory->id)
-            ->whereNull('third_product_group_id')
+            ->where('product_group_id', (int) $targetCategory->id)
             ->orderBy('sort_order')
             ->pluck('id')
             ->map(fn ($id) => (int) $id)
@@ -528,8 +527,7 @@ class AdminCatalogRegressionTest extends TestCase
             ->assertJsonPath('data.position', 'after');
 
         $orderedIds = Product::query()
-            ->where('second_product_group_id', (int) $category->id)
-            ->whereNull('third_product_group_id')
+            ->where('product_group_id', (int) $category->id)
             ->orderBy('sort_order')
             ->orderByDesc('status')
             ->orderByDesc('id')
@@ -663,9 +661,7 @@ class AdminCatalogRegressionTest extends TestCase
         $productType = ProductType::businessValueForFirstGroup($firstGroup, $code);
 
         return [
-            'first_product_group_id' => (int) $firstGroup->id,
-            'second_product_group_id' => (int) $group->id,
-            'third_product_group_id' => null,
+            'product_group_id' => (int) $group->id,
             'service_type_code' => $productType,
             'name' => $name,
             'custom_display_name' => $name,

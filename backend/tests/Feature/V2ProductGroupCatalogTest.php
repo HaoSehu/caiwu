@@ -230,7 +230,7 @@ class V2ProductGroupCatalogTest extends TestCase
             ->assertOk()
             ->assertJsonCount(50, 'data.list');
 
-        $this->assertLessThan(70 * 1024, strlen((string) $productsResponse->getContent()));
+        $this->assertLessThan(100 * 1024, strlen((string) $productsResponse->getContent()));
         $this->assertNoSensitiveKeys($productsResponse->json());
     }
 
@@ -332,9 +332,7 @@ class V2ProductGroupCatalogTest extends TestCase
         $productType = ProductType::businessValueForFirstGroup($firstGroup, $code);
 
         return [
-            'first_product_group_id' => (int) $firstGroup->id,
-            'second_product_group_id' => (int) $secondGroup->id,
-            'third_product_group_id' => $thirdGroup ? (int) $thirdGroup->id : null,
+            'product_group_id' => $thirdGroup ? (int) $thirdGroup->id : (int) $secondGroup->id,
             'service_type_code' => $productType,
             'custom_display_name' => $name,
             'product_type' => $productType,
@@ -456,10 +454,16 @@ class V2ProductGroupCatalogTest extends TestCase
             'first_product_group_name',
             'second_product_group_id',
             'second_product_group_name',
+            'second_product_group_description',
+            'second_product_group_parent_id',
+            'second_product_group_parent_name',
             'third_product_group_id',
             'third_product_group_name',
+            'third_product_group_description',
             'effective_product_group_id',
             'effective_product_group_level',
+            'product_type_label',
+            'service_type_code',
             'pricing',
             'pricing_entries',
             'primary_cycle',

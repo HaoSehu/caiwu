@@ -43,13 +43,13 @@ class InvoiceWorkflowController extends Controller
         $filters = $request->validated();
 
         $query = Invoice::with([
-            'product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
+            'product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
             'user:id,email,nickname',
             'service:id,name,status,expires_at',
             'payments',
             'items',
             'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle',
-            'order.product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
+            'order.product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
         ])
             ->where('user_id', $request->user()->id)
             ->orderByDesc('id');
@@ -131,8 +131,8 @@ class InvoiceWorkflowController extends Controller
 
         $invoice = $this->checkoutService->create($request->user()->id, $data, $context);
         $invoice->loadMissing([
-            'product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
-            'order.product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
+            'product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
+            'order.product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
             'service',
             'payments',
         ]);
@@ -143,8 +143,8 @@ class InvoiceWorkflowController extends Controller
     public function show(Request $request, int $id)
     {
         $invoice = Invoice::with([
-            'product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
-            'order.product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
+            'product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
+            'order.product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
             'service',
             'payments',
         ])
@@ -153,8 +153,8 @@ class InvoiceWorkflowController extends Controller
 
         $invoice = $this->checkoutService->cancelExpiredUnpaidInvoice($invoice, $this->buildPaymentWindowExpiredContext($request));
         $invoice->loadMissing([
-            'product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
-            'order.product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
+            'product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
+            'order.product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
             'service',
             'payments',
         ]);
@@ -165,8 +165,8 @@ class InvoiceWorkflowController extends Controller
     public function cancel(Request $request, int $id)
     {
         $invoice = Invoice::with([
-            'product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
-            'order.product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
+            'product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
+            'order.product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
             'service',
             'payments',
         ])
@@ -184,8 +184,8 @@ class InvoiceWorkflowController extends Controller
             ])
         );
         $updated->loadMissing([
-            'product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
-            'order.product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
+            'product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
+            'order.product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
             'service',
             'payments',
         ]);
@@ -199,8 +199,8 @@ class InvoiceWorkflowController extends Controller
 
         $user = $request->user();
         $invoice = Invoice::with([
-            'product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
-            'order.product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
+            'product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
+            'order.product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
             'service',
             'payments',
         ])
@@ -221,7 +221,7 @@ class InvoiceWorkflowController extends Controller
             $this->buildOperationContext($request)
         );
 
-        $invoice->refresh()->load(['product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires', 'service', 'payments']);
+        $invoice->refresh()->load(['product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires', 'service', 'payments']);
         $user->refresh();
 
         return $this->success([
@@ -239,8 +239,8 @@ class InvoiceWorkflowController extends Controller
 
         $user = $request->user();
         $invoice = Invoice::with([
-            'product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
-            'order.product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
+            'product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
+            'order.product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
             'service',
             'payments',
         ])
@@ -262,7 +262,7 @@ class InvoiceWorkflowController extends Controller
             $this->buildOperationContext($request)
         );
 
-        $invoice->refresh()->load(['product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires', 'service', 'payments']);
+        $invoice->refresh()->load(['product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires', 'service', 'payments']);
         $payment = Payment::query()
             ->where('payment_no', (string) ($result['payment_no'] ?? ''))
             ->where('invoice_id', $invoice->id)
@@ -288,7 +288,7 @@ class InvoiceWorkflowController extends Controller
         $data = $request->validated();
 
         $user = $request->user();
-        $invoice = Invoice::with(['product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires', 'payments'])
+        $invoice = Invoice::with(['product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires', 'payments'])
             ->where('user_id', $user->id)
             ->findOrFail($id);
 
@@ -348,8 +348,8 @@ class InvoiceWorkflowController extends Controller
 
         $user = $request->user();
         $invoice = Invoice::with([
-            'product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
-            'order.product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires',
+            'product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
+            'order.product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
             'service',
             'payments',
         ])
@@ -386,7 +386,7 @@ class InvoiceWorkflowController extends Controller
         $responseData = $result;
 
         if (($result['paid'] ?? false) === true) {
-            $invoice->refresh()->load(['product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,remark,config_options,purchase_requires', 'service', 'payments']);
+            $invoice->refresh()->load(['product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires', 'service', 'payments']);
             $responseData['invoice'] = $this->transformInvoice($invoice, $user);
         }
 

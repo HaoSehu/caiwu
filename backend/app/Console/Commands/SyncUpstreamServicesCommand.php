@@ -27,7 +27,7 @@ class SyncUpstreamServicesCommand extends Command
         $idsRaw = trim((string) $this->option('service-ids'));
 
         $query = Service::query()
-            ->with(['product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires'])
+            ->with(['product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires'])
             ->where(function ($builder): void {
                 if (Schema::hasTable('service_upstream_bindings')) {
                     $builder->whereExists(function ($subQuery): void {

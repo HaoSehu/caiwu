@@ -67,7 +67,7 @@ class ServiceDetailService
     public function getServiceConfigForUser(User $user, int $serviceId): array
     {
         $service = $this->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -104,7 +104,7 @@ class ServiceDetailService
     public function getDetailForUser(User $user, int $serviceId, bool $refreshRemote = false): array
     {
         $service = $this->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,pricing,purchase_requires',
+            'product:id,product_type,service_type_code,product_group_id,config_options,pricing,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -137,7 +137,7 @@ class ServiceDetailService
                 if (! empty($remote['host']) || ! empty($remote['runtime']) || ! empty($remote['nat'])) {
                     $this->syncServiceFromRemote($service, $remote['host'] ?? [], $remote['runtime'] ?? [], $remote['nat'] ?? []);
                     $service->refresh()->loadMissing([
-                        'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,pricing,purchase_requires',
+                        'product:id,product_type,service_type_code,product_group_id,config_options,pricing,purchase_requires',
                         'product.firstProductGroup:id,code,name,description,slug',
                         'product.secondProductGroup:id,first_product_group_id,name,description,slug',
                         'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -172,7 +172,7 @@ class ServiceDetailService
     public function getBaseDetailForUser(User $user, int $serviceId): array
     {
         $service = $this->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,pricing,purchase_requires',
+            'product:id,product_type,service_type_code,product_group_id,config_options,pricing,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -197,7 +197,7 @@ class ServiceDetailService
     public function getRemoteStatusPatchForUser(User $user, int $serviceId): array
     {
         $service = $this->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,pricing,purchase_requires',
+            'product:id,product_type,service_type_code,product_group_id,config_options,pricing,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -222,7 +222,7 @@ class ServiceDetailService
                 if (! empty($remote['host']) || ! empty($remote['runtime']) || ! empty($remote['nat'])) {
                     $this->syncServiceFromRemote($service, $remote['host'] ?? [], $remote['runtime'] ?? [], $remote['nat'] ?? []);
                     $service->refresh()->loadMissing([
-                        'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,pricing,purchase_requires',
+                        'product:id,product_type,service_type_code,product_group_id,config_options,pricing,purchase_requires',
                         'product.firstProductGroup:id,code,name,description,slug',
                         'product.secondProductGroup:id,first_product_group_id,name,description,slug',
                         'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -327,7 +327,7 @@ class ServiceDetailService
     public function updateRemarkForUser(User $user, int $serviceId, ?string $remark, array $context = []): array
     {
         $service = $this->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -354,7 +354,7 @@ class ServiceDetailService
     public function updateServiceNameForUser(User $user, int $serviceId, ?string $serviceName, array $context = []): array
     {
         $service = $this->findUserService($user, $serviceId, [
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
@@ -383,7 +383,7 @@ class ServiceDetailService
         ], $context);
 
         return $this->transformService->transformListItem($service->fresh([
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name,description,slug',
             'product.secondProductGroup:id,first_product_group_id,name,description,slug',
             'product.thirdProductGroup:id,second_product_group_id,name,description,slug',

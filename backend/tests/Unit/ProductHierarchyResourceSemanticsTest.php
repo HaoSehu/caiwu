@@ -4,10 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Unit;
 
-use App\Models\FirstProductGroup;
 use App\Models\Product;
-use App\Models\SecondProductGroup;
-use App\Models\ThirdProductGroup;
+use App\Models\ProductGroup;
 use App\Support\ProductGroupHierarchyFields;
 use Tests\TestCase;
 
@@ -18,9 +16,7 @@ class ProductHierarchyResourceSemanticsTest extends TestCase
         $product = new Product([
             'id' => 1001,
             'product_type' => 'cloud_server',
-            'first_product_group_id' => 11,
-            'second_product_group_id' => 22,
-            'third_product_group_id' => 33,
+            'product_group_id' => 33,
             'service_type_code' => 'cloud_server',
             'pricing' => ['monthly' => '10.00'],
             'setup_fee' => '0.00',
@@ -31,27 +27,32 @@ class ProductHierarchyResourceSemanticsTest extends TestCase
             'sort_order' => 1,
         ]);
         $product->exists = true;
-        $product->setRelation('firstProductGroup', tap(new FirstProductGroup, function (FirstProductGroup $group): void {
+        $firstGroup = tap(new ProductGroup, function (ProductGroup $group): void {
             $group->setRawAttributes([
                 'id' => 11,
+                'level' => 1,
                 'code' => 'vps',
                 'name' => '云服务器',
                 'product_type' => 'cloud_server',
             ], true);
-        }));
-        $product->setRelation('secondProductGroup', tap(new SecondProductGroup, function (SecondProductGroup $group): void {
+        });
+        $secondGroup = tap(new ProductGroup, function (ProductGroup $group) use ($firstGroup): void {
             $group->setRawAttributes([
                 'id' => 22,
+                'parent_id' => 11,
+                'level' => 2,
                 'name' => '香港',
-                'first_product_group_id' => 11,
             ], true);
-        }));
-        $product->setRelation('thirdProductGroup', tap(new ThirdProductGroup, function (ThirdProductGroup $group): void {
+            $group->setRelation('parent', $firstGroup);
+        });
+        $product->setRelation('productGroup', tap(new ProductGroup, function (ProductGroup $group) use ($secondGroup): void {
             $group->setRawAttributes([
                 'id' => 33,
+                'parent_id' => 22,
+                'level' => 3,
                 'name' => '精品线路',
-                'second_product_group_id' => 22,
             ], true);
+            $group->setRelation('parent', $secondGroup);
         }));
 
         $payload = ProductGroupHierarchyFields::fromProduct($product);
@@ -89,14 +90,15 @@ class ProductHierarchyResourceSemanticsTest extends TestCase
         $source = (string) file_get_contents(app_path('Models/Product.php'));
 
         $this->assertStringNotContainsString("'category_id'", $source);
-        $this->assertStringNotContainsString("'product_group_id'", $source);
         $this->assertStringNotContainsString('function categoryMapping', $source);
         $this->assertStringNotContainsString('function getCategoryIdAttribute', $source);
         $this->assertStringNotContainsString('function setCategoryIdAttribute', $source);
         $this->assertStringNotContainsString('function getGroupIdAttribute', $source);
         $this->assertStringNotContainsString('function setGroupIdAttribute', $source);
         $this->assertStringNotContainsString("setIfColumnExists('category_id'", $source);
-        $this->assertStringNotContainsString("setIfColumnExists('product_group_id'", $source);
+        $this->assertStringNotContainsString("setIfColumnExists('first_product_group_id'", $source);
+        $this->assertStringNotContainsString("setIfColumnExists('second_product_group_id'", $source);
+        $this->assertStringNotContainsString("setIfColumnExists('third_product_group_id'", $source);
     }
 
     public function test_product_runtime_paths_do_not_use_legacy_group_relations(): void
@@ -128,8 +130,8 @@ class ProductHierarchyResourceSemanticsTest extends TestCase
         ] as $sourcePath) {
             $source = (string) file_get_contents($sourcePath);
 
-            $this->assertStringNotContainsString('product:id,product_type,product_group_id', $source);
-            $this->assertStringNotContainsString('order.product:id,product_type,product_group_id', $source);
+            $this->assertStringNotContainsString('product:id,product_type,first_product_group_id', $source);
+            $this->assertStringNotContainsString('order.product:id,product_type,first_product_group_id', $source);
             $this->assertStringNotContainsString('categoryMapping', $source);
             $this->assertStringNotContainsString('ProductCategory::query()', $source);
             $this->assertStringNotContainsString("'target_category_id' =>", $source);
@@ -155,7 +157,7 @@ class ProductHierarchyResourceSemanticsTest extends TestCase
         foreach ($sourcePaths as $sourcePath) {
             $source = (string) file_get_contents($sourcePath);
 
-            $this->assertStringNotContainsString('product:id,product_type,product_group_id', $source, $sourcePath);
+            $this->assertStringNotContainsString('product:id,product_type,first_product_group_id', $source, $sourcePath);
             $this->assertStringNotContainsString('->category_id', $source, $sourcePath);
             $this->assertStringNotContainsString('->group_id', $source, $sourcePath);
             $this->assertStringNotContainsString('categoryMapping', $source, $sourcePath);

@@ -8,9 +8,9 @@ use App\Constants\ProductType;
 use App\Models\FirstProductGroup;
 use App\Models\Product;
 use App\Models\ProductCategory;
+use App\Models\ProductGroup;
 use App\Models\SecondProductGroup;
 use App\Models\ThirdProductGroup;
-use Illuminate\Support\Facades\Schema;
 
 class ProductGroupHierarchyFields
 {
@@ -102,17 +102,22 @@ class ProductGroupHierarchyFields
 
     public static function fromProduct(Product $product): array
     {
+        [$pathFirst, $pathSecond, $pathThird] = $product->resolvedProductGroupHierarchy();
         $first = $product->relationLoaded('firstProductGroup') ? $product->firstProductGroup : null;
         $second = $product->relationLoaded('secondProductGroup') ? $product->secondProductGroup : null;
         $third = $product->relationLoaded('thirdProductGroup') ? $product->thirdProductGroup : null;
 
-        $firstId = $first instanceof FirstProductGroup
+        $first = $pathFirst instanceof ProductGroup ? $pathFirst : $first;
+        $second = $pathSecond instanceof ProductGroup ? $pathSecond : $second;
+        $third = $pathThird instanceof ProductGroup ? $pathThird : $third;
+
+        $firstId = $first instanceof ProductGroup
             ? (int) $first->id
             : ((int) ($product->getAttribute('first_product_group_id') ?? 0) ?: null);
-        $secondId = $second instanceof SecondProductGroup
+        $secondId = $second instanceof ProductGroup
             ? (int) $second->id
             : ((int) ($product->getAttribute('second_product_group_id') ?? 0) ?: null);
-        $thirdId = $third instanceof ThirdProductGroup
+        $thirdId = $third instanceof ProductGroup
             ? (int) $third->id
             : ((int) ($product->getAttribute('third_product_group_id') ?? 0) ?: null);
         $fallbackType = trim((string) ($product->getRawOriginal('product_type') ?: $product->getRawOriginal('service_type_code') ?: ''));
@@ -224,7 +229,7 @@ class ProductGroupHierarchyFields
     private static function hasTable(string $table): bool
     {
         if (! array_key_exists($table, self::$tableExists)) {
-            self::$tableExists[$table] = Schema::hasTable($table);
+            self::$tableExists[$table] = DatabaseSchema::hasTableOrView($table);
         }
 
         return self::$tableExists[$table];

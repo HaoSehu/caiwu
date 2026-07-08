@@ -189,7 +189,7 @@ class ServiceTrafficPackageService
                 $displayPayload = (new ProductDisplayNameResolver)->resolveForProduct($product, (array) ($existingInvoice->config_snapshot ?? []));
                 $productSpecDisplay = (string) ($displayPayload['product_spec_display'] ?? $displayPayload['combined_display_name'] ?? '');
                 $this->ensureTrafficPackageOrderForInvoice($existingInvoice, $service, $product, $productSpecDisplay, $context);
-                $existingInvoice = $existingInvoice->fresh(['product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,config_options,purchase_requires', 'service', 'order']) ?? $existingInvoice;
+                $existingInvoice = $existingInvoice->fresh(['product:id,product_type,product_group_id,service_type_code,config_options,purchase_requires', 'service', 'order']) ?? $existingInvoice;
 
                 $this->operationLogService->writeServiceConsoleLog($service, 'service.console.traffic_package.invoice.create', [
                     'category' => 'upgrade',
@@ -264,7 +264,7 @@ class ServiceTrafficPackageService
             $this->invoiceService->syncProjection($invoice);
             $this->createTrafficPackageOrderForInvoice($invoice, $service, $product, $productSpecDisplay, $orderNo);
 
-            return $invoice->load(['product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,config_options,purchase_requires', 'service', 'order']);
+            return $invoice->load(['product:id,product_type,product_group_id,service_type_code,config_options,purchase_requires', 'service', 'order']);
         });
 
         $this->operationLogService->writeServiceConsoleLog($service, 'service.console.traffic_package.invoice.create', [
@@ -654,7 +654,7 @@ class ServiceTrafficPackageService
     private function findManagedService(User $user, int $serviceId): Service
     {
         return $this->detailService->findUserService($user, $serviceId, [
-            'product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,config_options,purchase_requires',
+            'product:id,product_type,product_group_id,service_type_code,config_options,purchase_requires',
             'product.supplier',
             'order:id,order_no,status,paid_at,created_at',
         ]);
@@ -1028,15 +1028,7 @@ class ServiceTrafficPackageService
 
     private function applyProductGroupScope($query, int $secondProductGroupId, ?int $thirdProductGroupId): void
     {
-        $query->where('second_product_group_id', $secondProductGroupId);
-
-        if ($thirdProductGroupId !== null && $thirdProductGroupId > 0) {
-            $query->where('third_product_group_id', $thirdProductGroupId);
-
-            return;
-        }
-
-        $query->whereNull('third_product_group_id');
+        $query->inCurrentProductGroup($thirdProductGroupId !== null && $thirdProductGroupId > 0 ? $thirdProductGroupId : $secondProductGroupId);
     }
 
     private function pullPackagesFromUpstreamOption(Supplier $supplier, int $hostId, string $jwt, array $option, array $host): array
@@ -1541,12 +1533,7 @@ class ServiceTrafficPackageService
      */
     private function effectiveProductGroupId(Service $service): int
     {
-        $thirdGroupId = (int) ($service->product?->third_product_group_id ?? 0);
-        if ($thirdGroupId > 0) {
-            return $thirdGroupId;
-        }
-
-        return (int) ($service->product?->second_product_group_id ?? 0);
+        return (int) ($service->product?->product_group_id ?? 0);
     }
 
     private function tryPullFlowPacketFromHtml(Supplier $supplier, int $hostId, string $jwt): array

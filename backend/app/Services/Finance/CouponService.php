@@ -20,6 +20,7 @@ use App\Models\User;
 use App\Models\UserCoupon;
 use App\Services\ProductCatalog\InstanceSpecCatalogService;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
+use App\Support\ProductGroupHierarchyFields;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -275,9 +276,7 @@ class CouponService
         $productsByGroup = Product::query()
             ->select([
                 'id',
-                'first_product_group_id',
-                'second_product_group_id',
-                'third_product_group_id',
+                'product_group_id',
                 'service_type_code',
                 'product_type',
                 'custom_display_name',
@@ -290,7 +289,7 @@ class CouponService
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get()
-            ->groupBy(fn (Product $product) => (int) ($product->third_product_group_id ?: $product->second_product_group_id));
+            ->groupBy(fn (Product $product) => (int) ($product->product_group_id ?? 0));
 
         $firstGroupTypePayload = static function (FirstProductGroup $firstGroup): array {
             $productType = ProductType::businessValueForFirstGroup($firstGroup, (string) $firstGroup->code);
@@ -2197,9 +2196,7 @@ class CouponService
         $products = Product::query()
             ->select([
                 'id',
-                'first_product_group_id',
-                'second_product_group_id',
-                'third_product_group_id',
+                'product_group_id',
                 'service_type_code',
                 'product_type',
                 'custom_display_name',
@@ -2209,9 +2206,7 @@ class CouponService
             ])
             ->whereIn('id', $productIds)
             ->with([
-                'firstProductGroup:id,code,name',
-                'secondProductGroup:id,first_product_group_id,name',
-                'thirdProductGroup:id,second_product_group_id,name',
+                'productGroup.parent.parent',
             ])
             ->get();
 
@@ -2221,13 +2216,8 @@ class CouponService
 
         return $products
             ->map(function (Product $product) use ($specMap) {
-                $firstGroup = $product->firstProductGroup;
-                $secondGroup = $product->secondProductGroup;
-                $thirdGroup = $product->thirdProductGroup;
-                $typeCode = ProductType::businessValueForFirstGroup(
-                    $firstGroup,
-                    $product->product_type ?: $product->service_type_code
-                );
+                $hierarchy = ProductGroupHierarchyFields::fromProduct($product);
+                $typeCode = (string) ($hierarchy['product_type'] ?? ProductType::OTHER);
                 $instanceSpecText = (string) (($specMap[(int) $product->id] ?? [])['instance_spec_text'] ?? '');
                 $displayNamePayload = $this->resolveProductDisplayNameResolver()->resolveForProduct($product, [
                     'instance_spec_text' => $instanceSpecText,
@@ -2242,18 +2232,18 @@ class CouponService
                     'product_type_label' => ProductType::businessLabelOf($typeCode),
                     'service_type_code' => $typeCode,
                     'service_type_label' => ProductType::businessLabelOf($typeCode),
-                    'first_product_group_id' => (int) ($product->first_product_group_id ?? 0) ?: null,
-                    'first_product_group_code' => trim((string) ($firstGroup?->code ?? '')),
-                    'first_product_group_name' => trim((string) ($firstGroup?->name ?? '')),
-                    'second_product_group_id' => (int) ($product->second_product_group_id ?? 0) ?: null,
-                    'second_product_group_name' => trim((string) ($secondGroup?->name ?? '')),
-                    'third_product_group_id' => (int) ($product->third_product_group_id ?? 0) ?: null,
-                    'third_product_group_name' => trim((string) ($thirdGroup?->name ?? '')),
-                    'effective_product_group_id' => ((int) ($product->third_product_group_id ?? 0)) ?: (((int) ($product->second_product_group_id ?? 0)) ?: null),
-                    'effective_product_group_level' => ((int) ($product->third_product_group_id ?? 0)) > 0 ? 3 : ((((int) ($product->second_product_group_id ?? 0)) > 0) ? 2 : null),
+                    'first_product_group_id' => $hierarchy['first_product_group_id'] ?? null,
+                    'first_product_group_code' => trim((string) ($hierarchy['first_product_group_code'] ?? '')),
+                    'first_product_group_name' => trim((string) ($hierarchy['first_product_group_name'] ?? '')),
+                    'second_product_group_id' => $hierarchy['second_product_group_id'] ?? null,
+                    'second_product_group_name' => trim((string) ($hierarchy['second_product_group_name'] ?? '')),
+                    'third_product_group_id' => $hierarchy['third_product_group_id'] ?? null,
+                    'third_product_group_name' => trim((string) ($hierarchy['third_product_group_name'] ?? '')),
+                    'effective_product_group_id' => $hierarchy['effective_product_group_id'] ?? null,
+                    'effective_product_group_level' => $hierarchy['effective_product_group_level'] ?? null,
                     '_sort_type' => $typeCode,
-                    '_sort_parent' => trim((string) ($secondGroup?->name ?? '')),
-                    '_sort_group' => trim((string) ($thirdGroup?->name ?? '')),
+                    '_sort_parent' => trim((string) ($hierarchy['second_product_group_name'] ?? '')),
+                    '_sort_group' => trim((string) ($hierarchy['third_product_group_name'] ?? '')),
                 ];
             })
             ->sortBy([
