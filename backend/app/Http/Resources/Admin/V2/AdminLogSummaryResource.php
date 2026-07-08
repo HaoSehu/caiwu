@@ -39,6 +39,7 @@ class AdminLogSummaryResource extends JsonResource
         'gateway',
         'gateway_key',
         'driver_key',
+        'plugin_key',
         'plugin_id',
         'trace_id',
         'out_trade_no',
@@ -57,6 +58,17 @@ class AdminLogSummaryResource extends JsonResource
         'finished_at',
     ];
 
+    private const PRIVACY_PROJECTED_FIELDS = [
+        'phone',
+        'to_email',
+    ];
+
+    private const BUSINESS_IDENTIFIER_FIELDS = [
+        'gateway_key',
+        'driver_key',
+        'plugin_key',
+    ];
+
     /**
      * @return array<string, mixed>
      */
@@ -64,6 +76,7 @@ class AdminLogSummaryResource extends JsonResource
     {
         $channel = (string) ($this->resource['channel'] ?? '');
         $row = is_array($this->resource['row'] ?? null) ? $this->resource['row'] : [];
+        $rawNotification = $this->isRawNotificationChannel($channel);
 
         $payload = [
             'id' => (string) ($row['id'] ?? ''),
@@ -72,13 +85,13 @@ class AdminLogSummaryResource extends JsonResource
 
         foreach (self::FIELD_KEYS as $key) {
             if (array_key_exists($key, $row) && ! $this->isSensitiveKey($key)) {
-                $payload[$key] = SensitiveDataSanitizer::sanitize($row[$key], $key);
+                $payload[$key] = $this->sanitizeField($key, $row[$key], $rawNotification);
             }
         }
 
-        $payload['message_excerpt'] = $this->excerpt($this->messageText($row));
-        $payload['context_excerpt'] = $this->excerpt($this->contextText($row), 240);
-        $payload['error_excerpt'] = $this->excerpt((string) ($row['error_msg'] ?? $row['error_message'] ?? ''), 200);
+        $payload['message_excerpt'] = $this->excerpt($this->messageText($row), sanitize: ! $rawNotification);
+        $payload['context_excerpt'] = $this->excerpt($this->contextText($row, $rawNotification), 240, ! $rawNotification);
+        $payload['error_excerpt'] = $this->excerpt((string) ($row['error_msg'] ?? $row['error_message'] ?? ''), 200, ! $rawNotification);
 
         return $this->dropSensitiveKeys($payload);
     }
@@ -95,7 +108,7 @@ class AdminLogSummaryResource extends JsonResource
         return '';
     }
 
-    private function contextText(array $row): string
+    private function contextText(array $row, bool $raw = false): string
     {
         $context = [];
         foreach (['detail', 'context', 'params', 'request_data', 'response_data', 'request_meta', 'response_meta', 'summary'] as $key) {
@@ -108,18 +121,41 @@ class AdminLogSummaryResource extends JsonResource
             return '';
         }
 
-        return (string) json_encode($this->dropSensitiveKeys($context), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        return (string) json_encode($raw ? $context : $this->dropSensitiveKeys($context), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
-    private function excerpt(string $value, int $limit = 160): string
+    private function excerpt(string $value, int $limit = 160, bool $sanitize = true): string
     {
-        $value = trim(preg_replace('/\s+/u', ' ', SensitiveDataSanitizer::sanitizeText($value)) ?? '');
+        $text = $sanitize ? SensitiveDataSanitizer::sanitizeText($value) : $value;
+        $value = trim(preg_replace('/\s+/u', ' ', $text) ?? '');
 
         if (mb_strlen($value) <= $limit) {
             return $value;
         }
 
         return mb_substr($value, 0, $limit).'...';
+    }
+
+    private function sanitizeField(string $key, mixed $value, bool $raw = false): mixed
+    {
+        if ($raw) {
+            return $value;
+        }
+
+        if (in_array($key, self::PRIVACY_PROJECTED_FIELDS, true)) {
+            return $value;
+        }
+
+        if (in_array($key, self::BUSINESS_IDENTIFIER_FIELDS, true)) {
+            return is_string($value) ? SensitiveDataSanitizer::sanitizeText($value) : $value;
+        }
+
+        return SensitiveDataSanitizer::sanitize($value, $key);
+    }
+
+    private function isRawNotificationChannel(string $channel): bool
+    {
+        return in_array($channel, ['sms', 'email'], true);
     }
 
     /**

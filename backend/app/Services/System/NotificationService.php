@@ -376,7 +376,6 @@ class NotificationService
      */
     private function createEmailLog(string $to, string $subject, string $content, ?string $templateCode): array
     {
-        $logContent = $this->buildEmailLogContent($content, $templateCode);
         $traceId = $this->notificationTraceId('email', $templateCode);
 
         try {
@@ -385,7 +384,7 @@ class NotificationService
                 'recipient' => $to,
                 'template_code' => $templateCode,
                 'subject' => $subject,
-                'content' => $logContent,
+                'content' => $content,
                 'status' => 'pending',
                 'origin_type' => 'email_send',
                 'origin_id' => 0,
@@ -431,15 +430,6 @@ class NotificationService
         $template = trim((string) $templateCode) !== '' ? trim((string) $templateCode) : 'none';
 
         return substr($channel.':'.$template.':'.str_replace('-', '', (string) Str::uuid()), 0, 64);
-    }
-
-    private function buildEmailLogContent(string $content, ?string $templateCode): string
-    {
-        if (trim((string) $templateCode) === self::TEMPLATE_EMAIL_CODE) {
-            return '邮件验证码已发送（内容已脱敏）';
-        }
-
-        return $content;
     }
 
     /**
