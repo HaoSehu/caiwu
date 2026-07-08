@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Models\NotificationLog;
+use App\Models\MessageLog;
 use App\Models\User;
 use App\Services\System\AdminLogService;
 use App\Services\User\UserService;
@@ -26,7 +26,7 @@ class SmsLogSanitizationTest extends TestCase
             'status' => 1,
         ]);
 
-        NotificationLog::query()->create([
+        MessageLog::query()->create([
             'channel' => 'sms',
             'recipient' => $phone,
             'template_code' => '100001',

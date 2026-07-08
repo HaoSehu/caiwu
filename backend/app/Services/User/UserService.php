@@ -12,15 +12,13 @@ use App\Constants\PaymentStatus;
 use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
 use App\Http\Resources\Finance\FinanceLedgerResource;
-use App\Models\EmailLog;
 use App\Models\Invoice;
-use App\Models\NotificationLog;
+use App\Models\MessageLog;
 use App\Models\OperationLog;
 use App\Models\Payment;
 use App\Models\ReferralReward;
 use App\Models\ReferralWithdrawal;
 use App\Models\Service;
-use App\Models\SmsLog;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Services\Automation\ServiceStatusSyncService;
@@ -718,38 +716,26 @@ class UserService
 
     private function buildUserSmsLogQuery(string $phone): ?Builder
     {
-        if (Schema::hasTable('notification_logs')) {
-            return NotificationLog::query()
-                ->where('channel', 'sms')
-                ->where('recipient', $phone)
-                ->selectRaw('id, recipient as phone, template_code, content, params_json, status, provider, request_id, error_msg, sent_at, created_at, updated_at, origin_type');
-        }
-
-        if (! Schema::hasTable('sms_logs')) {
+        if (! Schema::hasTable('message_logs')) {
             return null;
         }
 
-        return SmsLog::query()
-            ->where('phone', $phone)
-            ->selectRaw("id, phone, template_code, content, params as params_json, status, provider, request_id, error_msg, sent_at, created_at, updated_at, 'sms_log' as origin_type");
+        return MessageLog::query()
+            ->where('channel', 'sms')
+            ->where('recipient', $phone)
+            ->selectRaw('id, recipient as phone, template_code, content, params_json, status, provider, request_id, error_msg, sent_at, created_at, updated_at, origin_type');
     }
 
     private function buildUserEmailLogQuery(string $email): ?Builder
     {
-        if (Schema::hasTable('notification_logs')) {
-            return NotificationLog::query()
-                ->where('channel', 'email')
-                ->where('recipient', $email)
-                ->selectRaw('id, template_code, recipient as to_email, subject, content, status, error_msg, sent_at, created_at, updated_at');
-        }
-
-        if (! Schema::hasTable('email_logs')) {
+        if (! Schema::hasTable('message_logs')) {
             return null;
         }
 
-        return EmailLog::query()
-            ->where('to_email', $email)
-            ->selectRaw('id, template_code, to_email, subject, content, status, error_msg, sent_at, created_at, updated_at');
+        return MessageLog::query()
+            ->where('channel', 'email')
+            ->where('recipient', $email)
+            ->selectRaw('id, template_code, recipient as to_email, subject, content, status, error_msg, sent_at, created_at, updated_at');
     }
 
     private function emptyPaginator(int $perPage): LengthAwarePaginator

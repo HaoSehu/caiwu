@@ -36,18 +36,16 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
         $this->assertStringNotContainsString('邮件接口配置不完整', $content);
     }
 
-    public function test_send_email_falls_back_to_email_logs_when_notification_logs_table_is_missing(): void
+    public function test_send_email_writes_message_logs(): void
     {
-        if (Schema::hasTable('notification_logs')) {
-            $this->markTestSkipped('notification_logs 表存在，当前环境无法验证 email_logs 回退路径。');
+        if (! Schema::hasTable('message_logs')) {
+            $this->markTestSkipped('message_logs 表不存在，无法验证统一消息日志。');
         }
-
-        $this->assertTrue(Schema::hasTable('email_logs'));
 
         $suffix = bin2hex(random_bytes(4));
         $to = "codex-mail-{$suffix}@example.com";
-        $subject = "Codex 邮件回退测试 {$suffix}";
-        $content = "<p>mail fallback {$suffix}</p>";
+        $subject = "Codex 邮件日志测试 {$suffix}";
+        $content = "<p>mail message log {$suffix}</p>";
 
         $settings = [
             'email_enabled' => Setting::getValue('notification', 'email_enabled', '0'),
@@ -67,8 +65,9 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
             $this->assertSame($subject, $fakeMailDriver->messages[0]['payload']['subject'] ?? null);
             $this->assertSame(['no-reply@example.com', 'Codex Test'], $fakeMailDriver->messages[0]['payload']['from'] ?? null);
 
-            $log = DB::table('email_logs')
-                ->where('to_email', $to)
+            $log = DB::table('message_logs')
+                ->where('channel', 'email')
+                ->where('recipient', $to)
                 ->where('subject', $subject)
                 ->orderByDesc('id')
                 ->first();
@@ -78,8 +77,9 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
             $this->assertNull($log->error_msg ?? null);
             $this->assertNotNull($log->sent_at ?? null);
         } finally {
-            DB::table('email_logs')
-                ->where('to_email', $to)
+            DB::table('message_logs')
+                ->where('channel', 'email')
+                ->where('recipient', $to)
                 ->where('subject', $subject)
                 ->delete();
 
@@ -163,8 +163,8 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
 
     public function test_email_verification_code_is_redacted_in_logs(): void
     {
-        if (! Schema::hasTable('notification_logs')) {
-            $this->markTestSkipped('notification_logs 表不存在，无法验证统一通知日志脱敏。');
+        if (! Schema::hasTable('message_logs')) {
+            $this->markTestSkipped('message_logs 表不存在，无法验证统一消息日志脱敏。');
         }
 
         $suffix = bin2hex(random_bytes(4));
@@ -183,7 +183,7 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
 
             app(NotificationService::class)->sendEmailCode($to, $code);
 
-            $log = DB::table('notification_logs')
+            $log = DB::table('message_logs')
                 ->where('channel', 'email')
                 ->where('recipient', $to)
                 ->where('template_code', NotificationService::TEMPLATE_EMAIL_CODE)
@@ -194,7 +194,7 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
             $this->assertStringNotContainsString($code, (string) $log->content);
             $this->assertStringContainsString('已脱敏', (string) $log->content);
 
-            DB::table('notification_logs')
+            DB::table('message_logs')
                 ->where('id', $log->id)
                 ->update(['content' => "验证码：{$code}"]);
 
@@ -218,12 +218,11 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
 
     private function deleteEmailLogsByRecipient(string $to): void
     {
-        if (Schema::hasTable('notification_logs')) {
-            DB::table('notification_logs')->where('recipient', $to)->delete();
-        }
-
-        if (Schema::hasTable('email_logs')) {
-            DB::table('email_logs')->where('to_email', $to)->delete();
+        if (Schema::hasTable('message_logs')) {
+            DB::table('message_logs')
+                ->where('channel', 'email')
+                ->where('recipient', $to)
+                ->delete();
         }
     }
 

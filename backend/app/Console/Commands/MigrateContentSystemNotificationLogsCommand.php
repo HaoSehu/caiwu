@@ -15,7 +15,7 @@ class MigrateContentSystemNotificationLogsCommand extends ContentSystemMigrateBa
         {--batch-size=500 : 每批迁移行数}
         {--json : 以 JSON 输出结果}';
 
-    protected $description = '迁移旧库 notification_logs 到 idc.notification_logs';
+    protected $description = '迁移旧库 notification_logs 到 idc.message_logs';
 
     protected function sourceTable(): string
     {
@@ -24,12 +24,12 @@ class MigrateContentSystemNotificationLogsCommand extends ContentSystemMigrateBa
 
     protected function targetTable(): string
     {
-        return 'notification_logs';
+        return 'message_logs';
     }
 
     protected function migrationName(): string
     {
-        return 'content_system_notification_logs';
+        return 'content_system_message_logs';
     }
 
     protected function migrateRows(array $commonColumns, int $batchSize): int
@@ -47,7 +47,7 @@ class MigrateContentSystemNotificationLogsCommand extends ContentSystemMigrateBa
 
         foreach ($chunks as $index => $chunk) {
             $total += $service->batchUpsert(
-                'notification_logs',
+                'message_logs',
                 $columns,
                 $chunk,
                 ['id'],

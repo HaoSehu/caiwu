@@ -2,15 +2,13 @@
 
 namespace App\Services\System;
 
-use App\Models\EmailLog;
-use App\Models\NotificationLog;
+use App\Models\MessageLog;
 use App\Models\Setting;
 use App\Models\User;
 use App\Services\Integrations\Plugins\IntegrationDriverBindingResolver;
 use App\Services\Mail\MailDriverManager;
 use App\Support\SiteConfigPayload;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class NotificationService
@@ -374,7 +372,7 @@ class NotificationService
     }
 
     /**
-     * @return array{table: 'notification_logs'|'email_logs'|null, id: int|null}
+     * @return array{id: int|null}
      */
     private function createEmailLog(string $to, string $subject, string $content, ?string $templateCode): array
     {
@@ -382,40 +380,20 @@ class NotificationService
         $traceId = $this->notificationTraceId('email', $templateCode);
 
         try {
-            if (Schema::hasTable('notification_logs')) {
-                $log = NotificationLog::create(array_merge([
-                    'channel' => 'email',
-                    'recipient' => $to,
-                    'template_code' => $templateCode,
-                    'subject' => $subject,
-                    'content' => $logContent,
-                    'status' => 'pending',
-                    'origin_type' => 'email_send',
-                    'origin_id' => 0,
-                ], $this->mailAuditPayload('notification_logs', $traceId)));
+            $log = MessageLog::create(array_merge([
+                'channel' => 'email',
+                'recipient' => $to,
+                'template_code' => $templateCode,
+                'subject' => $subject,
+                'content' => $logContent,
+                'status' => 'pending',
+                'origin_type' => 'email_send',
+                'origin_id' => 0,
+            ], $this->mailAuditPayload($traceId)));
 
-                return [
-                    'table' => 'notification_logs',
-                    'id' => (int) $log->getKey(),
-                ];
-            }
-
-            if (Schema::hasTable('email_logs')) {
-                $log = EmailLog::create(array_merge([
-                    'template_code' => $templateCode,
-                    'to_email' => $to,
-                    'subject' => $subject,
-                    'content' => $logContent,
-                    'status' => 'pending',
-                    'error_msg' => null,
-                    'sent_at' => null,
-                ], $this->mailAuditPayload('email_logs', $traceId)));
-
-                return [
-                    'table' => 'email_logs',
-                    'id' => (int) $log->getKey(),
-                ];
-            }
+            return [
+                'id' => (int) $log->getKey(),
+            ];
         } catch (\Throwable $exception) {
             Log::warning('邮件日志写入失败，已跳过日志写入继续发送', [
                 'recipient' => $to,
@@ -425,7 +403,6 @@ class NotificationService
         }
 
         return [
-            'table' => null,
             'id' => null,
         ];
     }
@@ -433,24 +410,15 @@ class NotificationService
     /**
      * @return array<string, mixed>
      */
-    private function mailAuditPayload(string $table, string $traceId): array
+    private function mailAuditPayload(string $traceId): array
     {
         $context = $this->driverBindingResolver()->mailContext();
-        $payload = [];
 
-        if (Schema::hasColumn($table, 'plugin_id')) {
-            $payload['plugin_id'] = $context['plugin_id'];
-        }
-
-        if (Schema::hasColumn($table, 'driver_key')) {
-            $payload['driver_key'] = $context['driver_key'];
-        }
-
-        if (Schema::hasColumn($table, 'trace_id')) {
-            $payload['trace_id'] = $traceId;
-        }
-
-        return $payload;
+        return [
+            'plugin_id' => $context['plugin_id'],
+            'driver_key' => $context['driver_key'],
+            'trace_id' => $traceId,
+        ];
     }
 
     private function driverBindingResolver(): IntegrationDriverBindingResolver
@@ -475,35 +443,22 @@ class NotificationService
     }
 
     /**
-     * @param  array{table: 'notification_logs'|'email_logs'|null, id: int|null}  $logContext
+     * @param  array{id: int|null}  $logContext
      * @param  array{status?: string, error_msg?: ?string, sent_at?: mixed}  $attributes
      */
     private function updateEmailLog(array $logContext, array $attributes): void
     {
-        $table = $logContext['table'] ?? null;
         $id = isset($logContext['id']) ? (int) $logContext['id'] : 0;
 
-        if ($table === null || $id <= 0) {
+        if ($id <= 0) {
             return;
         }
 
         try {
-            if ($table === 'notification_logs') {
-                NotificationLog::query()->whereKey($id)->update($attributes);
-
-                return;
-            }
-
-            if ($table === 'email_logs') {
-                EmailLog::query()->whereKey($id)->update([
-                    'status' => $attributes['status'] ?? 'pending',
-                    'error_msg' => $attributes['error_msg'] ?? null,
-                    'sent_at' => $attributes['sent_at'] ?? null,
-                ]);
-            }
+            MessageLog::query()->whereKey($id)->update($attributes);
         } catch (\Throwable $exception) {
             Log::warning('邮件日志状态更新失败，已忽略以避免阻断发送流程', [
-                'table' => $table,
+                'table' => 'message_logs',
                 'id' => $id,
                 'message' => $exception->getMessage(),
             ]);

@@ -250,7 +250,7 @@ class NotificationTemplateApiTest extends TestCase
 
     public function test_admin_notification_template_test_send_reports_sms_failure(): void
     {
-        if (! Schema::hasTable('notification_logs') && ! Schema::hasTable('sms_logs')) {
+        if (! Schema::hasTable('message_logs')) {
             $this->markTestSkipped('通知日志表不存在，无法验证短信模板测试发送。');
         }
 
@@ -303,7 +303,7 @@ class NotificationTemplateApiTest extends TestCase
 
     public function test_sms_verification_log_uses_configurable_template_content_and_redacts_code(): void
     {
-        if (! Schema::hasTable('notification_logs') && ! Schema::hasTable('sms_logs')) {
+        if (! Schema::hasTable('message_logs')) {
             $this->markTestSkipped('通知日志表不存在，无法验证短信模板日志。');
         }
 
@@ -357,7 +357,7 @@ class NotificationTemplateApiTest extends TestCase
 
     public function test_aliyun_sms_verification_uses_builtin_plugin_template_instead_of_system_template(): void
     {
-        if (! Schema::hasTable('notification_logs') && ! Schema::hasTable('sms_logs')) {
+        if (! Schema::hasTable('message_logs')) {
             $this->markTestSkipped('通知日志表不存在，无法验证短信模板日志。');
         }
 
@@ -615,77 +615,58 @@ class NotificationTemplateApiTest extends TestCase
 
     private function latestSmsLog(string $phone): ?object
     {
-        if (Schema::hasTable('notification_logs')) {
-            return DB::table('notification_logs')
-                ->where('channel', 'sms')
-                ->where('recipient', $phone)
-                ->orderByDesc('id')
-                ->first();
+        if (! Schema::hasTable('message_logs')) {
+            return null;
         }
 
-        return DB::table('sms_logs')
-            ->where('phone', $phone)
+        return DB::table('message_logs')
+            ->where('channel', 'sms')
+            ->where('recipient', $phone)
             ->orderByDesc('id')
             ->first();
     }
 
     private function countSmsLogsByRecipient(string $phone): int
     {
-        if (Schema::hasTable('notification_logs')) {
-            return DB::table('notification_logs')
-                ->where('channel', 'sms')
-                ->where('recipient', $phone)
-                ->count();
+        if (! Schema::hasTable('message_logs')) {
+            return 0;
         }
 
-        if (Schema::hasTable('sms_logs')) {
-            return DB::table('sms_logs')->where('phone', $phone)->count();
-        }
-
-        return 0;
+        return DB::table('message_logs')
+            ->where('channel', 'sms')
+            ->where('recipient', $phone)
+            ->count();
     }
 
     private function countEmailLogsByRecipient(string $email): int
     {
-        if (Schema::hasTable('notification_logs')) {
-            return DB::table('notification_logs')
-                ->where('channel', 'email')
-                ->where('recipient', $email)
-                ->count();
+        if (! Schema::hasTable('message_logs')) {
+            return 0;
         }
 
-        if (Schema::hasTable('email_logs')) {
-            return DB::table('email_logs')->where('to_email', $email)->count();
-        }
-
-        return 0;
+        return DB::table('message_logs')
+            ->where('channel', 'email')
+            ->where('recipient', $email)
+            ->count();
     }
 
     private function deleteSmsLogsByRecipient(string $phone): void
     {
-        if (Schema::hasTable('notification_logs')) {
-            DB::table('notification_logs')
+        if (Schema::hasTable('message_logs')) {
+            DB::table('message_logs')
                 ->where('channel', 'sms')
                 ->where('recipient', $phone)
                 ->delete();
-        }
-
-        if (Schema::hasTable('sms_logs')) {
-            DB::table('sms_logs')->where('phone', $phone)->delete();
         }
     }
 
     private function deleteEmailLogsByRecipient(string $email): void
     {
-        if (Schema::hasTable('notification_logs')) {
-            DB::table('notification_logs')
+        if (Schema::hasTable('message_logs')) {
+            DB::table('message_logs')
                 ->where('channel', 'email')
                 ->where('recipient', $email)
                 ->delete();
-        }
-
-        if (Schema::hasTable('email_logs')) {
-            DB::table('email_logs')->where('to_email', $email)->delete();
         }
     }
 

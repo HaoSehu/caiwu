@@ -22,20 +22,10 @@ class LogArchiveService
             'retain_days' => 90,
             'description' => 'API/后台操作日志',
         ],
-        'notification_logs' => [
+        'message_logs' => [
             'date_column' => 'created_at',
             'retain_days' => 180,
-            'description' => '通知聚合日志',
-        ],
-        'email_logs' => [
-            'date_column' => 'created_at',
-            'retain_days' => 180,
-            'description' => '历史邮件日志',
-        ],
-        'sms_logs' => [
-            'date_column' => 'created_at',
-            'retain_days' => 180,
-            'description' => '历史短信日志',
+            'description' => '短信/邮件统一消息日志',
         ],
         'automation_logs' => [
             'date_column' => 'created_at',

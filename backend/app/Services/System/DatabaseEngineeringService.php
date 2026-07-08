@@ -250,9 +250,7 @@ class DatabaseEngineeringService
 
         $targets = [
             'operation_logs' => 'created_at',
-            'notification_logs' => 'created_at',
-            'email_logs' => 'created_at',
-            'sms_logs' => 'created_at',
+            'message_logs' => 'created_at',
             'automation_logs' => 'created_at',
         ];
 
@@ -356,8 +354,6 @@ class DatabaseEngineeringService
             'coupon_campaigns.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
             'coupons.coupon_campaign_id' => $candidate('coupon_campaigns', 'SET NULL', '优惠券保留，活动删除后清空来源活动'),
             'coupons.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
-            'email_logs.plugin_id' => $candidate('integration_plugins', 'SET NULL', '日志保留，插件删除后仅清空插件引用'),
-            'email_logs.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
             'gateway_logs.plugin_id' => $candidate('integration_plugins', 'SET NULL', '网关审计日志保留，插件删除后仅清空插件引用'),
             'gateway_logs.invoice_id' => $candidate('invoices', 'SET NULL', '网关审计日志保留，账单删除后清空引用'),
             'gateway_logs.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
@@ -371,12 +367,12 @@ class DatabaseEngineeringService
             'invoices.coupon_id' => $candidate('coupons', 'SET NULL', '账单保留，优惠券模板删除后清空引用'),
             'invoices.refund_trace_id' => $snapshot('退款 trace_id 是链路追踪标识，不是关系字段'),
             'invoices.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
+            'message_logs.plugin_id' => $candidate('integration_plugins', 'SET NULL', '消息日志保留，插件删除后仅清空插件引用'),
+            'message_logs.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
+            'message_logs.request_id' => $snapshot('request_id 是请求标识，不是关系字段'),
+            'message_logs.origin_id' => $snapshot('origin_type/origin_id 是消息来源对象快照'),
             'notice_reads.user_id' => $candidate('users', 'CASCADE', '阅读记录随用户删除清理'),
             'notice_reads.article_id' => $candidate('content_articles', 'CASCADE', '阅读记录随文章删除清理'),
-            'notification_logs.plugin_id' => $candidate('integration_plugins', 'SET NULL', '通知日志保留，插件删除后仅清空插件引用'),
-            'notification_logs.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
-            'notification_logs.request_id' => $snapshot('request_id 是请求标识，不是关系字段'),
-            'notification_logs.origin_id' => $snapshot('origin_type/origin_id 是通知来源对象快照'),
             'notification_templates.provider_template_id' => $snapshot('供应商模板 ID 是外部平台标识'),
             'operation_logs.user_id' => $snapshot('user_type/user_id 是用户、管理员、系统等混合操作者'),
             'operation_logs.subject_id' => $snapshot('subject_type/subject_id 是多业务对象类型'),
@@ -415,9 +411,6 @@ class DatabaseEngineeringService
             'services.order_id' => $candidate('orders', 'SET NULL', '服务保留，内部订单删除后清空引用'),
             'services.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
             'sessions.user_id' => $candidate('users', 'CASCADE', '会话随用户删除清理'),
-            'sms_logs.plugin_id' => $candidate('integration_plugins', 'SET NULL', '短信日志保留，插件删除后仅清空插件引用'),
-            'sms_logs.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
-            'sms_logs.request_id' => $snapshot('request_id 是请求标识，不是关系字段'),
             'supplier_plugin_bindings.backfill_batch_id' => $snapshot('回填批次号是迁移追踪标识，不对应表主键'),
             'third_product_groups.legacy_product_group_id' => $snapshot('旧库分组 ID 是迁移来源标识'),
             'tickets.service_id' => $candidate('services', 'SET NULL', '工单可在服务删除后保留历史记录'),
@@ -523,7 +516,7 @@ class DatabaseEngineeringService
             'user_accounts',
             'ticket_replies',
             'operation_logs',
-            'notification_logs',
+            'message_logs',
         ];
 
         $rows = collect(DB::select("
@@ -532,7 +525,7 @@ class DatabaseEngineeringService
                 index_name AS index_name
             FROM information_schema.statistics
             WHERE table_schema = DATABASE()
-              AND table_name IN ('services','invoices','payments','invoice_items','payment_callbacks','user_accounts','ticket_replies','operation_logs','notification_logs')
+              AND table_name IN ('services','invoices','payments','invoice_items','payment_callbacks','user_accounts','ticket_replies','operation_logs','message_logs')
             ORDER BY table_name, index_name
         "));
 

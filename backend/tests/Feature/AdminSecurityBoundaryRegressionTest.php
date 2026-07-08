@@ -88,7 +88,7 @@ class AdminSecurityBoundaryRegressionTest extends TestCase
         Sanctum::actingAs($this->createAdminUser([AdminPermissions::LOG_MANAGE]));
 
         $requestId = 'cleanup-overview-'.bin2hex(random_bytes(4));
-        DB::table('notification_logs')->insert([
+        DB::table('message_logs')->insert([
             'channel' => 'sms',
             'recipient' => '13900000000',
             'template_code' => 'cleanup-test',
@@ -116,7 +116,7 @@ class AdminSecurityBoundaryRegressionTest extends TestCase
             ->json('data.database.sms');
 
         $this->assertLessThan((int) $before, (int) $after);
-        $this->assertDatabaseMissing('notification_logs', ['request_id' => $requestId]);
+        $this->assertDatabaseMissing('message_logs', ['request_id' => $requestId]);
     }
 
     public function test_file_log_cleanup_removes_multiline_entries_as_a_unit(): void
