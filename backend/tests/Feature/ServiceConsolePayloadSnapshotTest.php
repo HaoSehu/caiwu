@@ -175,11 +175,14 @@ class ServiceConsolePayloadSnapshotTest extends TestCase
         $fixture = $this->makeBoundServiceFixture();
         $driver = $this->makeSnapshotDriver();
         $this->bindProviderResolver($driver);
+        $catalogProduct = $fixture['product']->fresh();
+        $this->assertInstanceOf(Product::class, $catalogProduct);
 
         $originalCatalog = Setting::getValue('traffic_package_catalog', 'items', '[]');
         Setting::setValue('traffic_package_catalog', 'items', json_encode([[
-            'category_id' => (int) $fixture['category']->id,
-            'product_type' => 'cloud_server',
+            'category_id' => (int) $catalogProduct->product_group_id,
+            'product_type' => (string) $catalogProduct->product_type,
+            'product_ids' => [(int) $catalogProduct->id],
             'label' => '2TB',
             'target_value' => 2048,
             'price' => '39.90',
@@ -201,7 +204,7 @@ class ServiceConsolePayloadSnapshotTest extends TestCase
             Setting::setValue('traffic_package_catalog', 'items', (string) $originalCatalog);
         }
 
-        $this->assertTrue($payload['supported']);
+        $this->assertTrue($payload['supported'], json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
         $this->assertSame((int) $fixture['service']->id, (int) $payload['service_id']);
         $this->assertSame('256.00', $payload['traffic']['usage']);
         $this->assertSame(1024, (int) $payload['traffic']['limit']);
@@ -256,6 +259,7 @@ class ServiceConsolePayloadSnapshotTest extends TestCase
         ]);
 
         $product = Product::query()->create([
+            'product_group_id' => (int) $category->id,
             'first_product_group_id' => (int) $rootGroup->id,
             'second_product_group_id' => (int) $category->id,
             'service_type_code' => 'vps',

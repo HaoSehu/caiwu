@@ -26,9 +26,11 @@ class OrderZeroAmountPaymentFlowTest extends TestCase
 {
     public function test_payment_session_token_can_be_issued_for_zero_amount_order(): void
     {
+        $user = $this->createPaymentSessionUser();
+
         $order = Order::query()->create([
             'order_no' => 'ORDZEROSESS'.strtoupper(bin2hex(random_bytes(4))),
-            'user_id' => 1,
+            'user_id' => (int) $user->id,
             'type' => 'new',
             'amount' => '50.00',
             'discount' => '50.00',
@@ -37,7 +39,7 @@ class OrderZeroAmountPaymentFlowTest extends TestCase
             'status' => OrderStatus::PENDING,
         ]);
 
-        $payload = app(CheckoutSecurityService::class)->issuePaymentSession($order, 1);
+        $payload = app(CheckoutSecurityService::class)->issuePaymentSession($order, (int) $user->id);
 
         $this->assertIsString($payload['session_token'] ?? null);
         $this->assertNotSame('', (string) ($payload['session_token'] ?? ''));
@@ -45,9 +47,11 @@ class OrderZeroAmountPaymentFlowTest extends TestCase
 
     public function test_payment_session_token_is_empty_when_order_already_paid(): void
     {
+        $user = $this->createPaymentSessionUser();
+
         $order = Order::query()->create([
             'order_no' => 'ORDZEROPAID'.strtoupper(bin2hex(random_bytes(4))),
-            'user_id' => 1,
+            'user_id' => (int) $user->id,
             'type' => 'new',
             'amount' => '50.00',
             'discount' => '50.00',
@@ -57,7 +61,7 @@ class OrderZeroAmountPaymentFlowTest extends TestCase
             'paid_at' => now(),
         ]);
 
-        $payload = app(CheckoutSecurityService::class)->issuePaymentSession($order, 1);
+        $payload = app(CheckoutSecurityService::class)->issuePaymentSession($order, (int) $user->id);
 
         $this->assertSame('', (string) ($payload['session_token'] ?? ''));
     }
@@ -239,5 +243,16 @@ class OrderZeroAmountPaymentFlowTest extends TestCase
             $balanceLogCountBefore,
             AccountTransaction::query()->where('user_id', (int) $user->id)->count(),
         );
+    }
+
+    private function createPaymentSessionUser(): User
+    {
+        return User::query()->create([
+            'email' => 'order-zero-session-'.bin2hex(random_bytes(4)).'@example.com',
+            'password' => 'Temp@123456',
+            'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
+            'status' => 1,
+            'referrer_user_id' => null,
+        ]);
     }
 }

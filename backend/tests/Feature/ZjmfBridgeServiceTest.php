@@ -182,7 +182,7 @@ class ZjmfBridgeServiceTest extends TestCase
         return Service::query()->create([
             'user_id' => (int) $user->id,
             'product_id' => (int) $product->id,
-            'order_id' => 0,
+            'order_id' => null,
             'invoice_id' => (int) $invoice->id,
             'name' => 'ZJMF 服务实例',
             'domain' => 'zjmf-service.example.test',

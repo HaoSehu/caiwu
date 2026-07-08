@@ -62,7 +62,7 @@ class ServiceRenewCouponRegressionTest extends TestCase
         $service = Service::query()->create([
             'user_id' => (int) $user->id,
             'product_id' => (int) $product->id,
-            'order_id' => 0,
+            'order_id' => null,
             'name' => 'Renewable Service',
             'domain' => 'renew-'.$suffix.'.example.com',
             'billing_cycle' => 'monthly',

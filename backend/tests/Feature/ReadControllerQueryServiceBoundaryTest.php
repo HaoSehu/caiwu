@@ -19,6 +19,7 @@ use App\Services\Finance\ClientFinanceQueryService;
 use App\Services\Referral\AdminReferralOverviewService;
 use App\Support\AdminPermissions;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -111,11 +112,12 @@ class ReadControllerQueryServiceBoundaryTest extends TestCase
             'status' => 1,
             'sort_order' => 1,
         ]);
+        $seedReferrer = $this->createClientUser("seed-referrer-{$suffix}");
 
         $topUser = $this->createClientUser("top-referrer-{$suffix}", [
             'member_level_id' => (int) $level->id,
             'total_sales_amount' => '999999.00',
-            'referrer_user_id' => 1,
+            'referrer_user_id' => (int) $seedReferrer->id,
             'nickname' => 'Top Referrer',
         ]);
         UserAccount::query()->updateOrCreate(
@@ -238,9 +240,14 @@ class ReadControllerQueryServiceBoundaryTest extends TestCase
             'referrer_user_id' => (int) $referrer->id,
         ]);
 
-        $this->createClientUser("invalid-referred-{$suffix}", [
-            'referrer_user_id' => 999999,
-        ]);
+        DB::statement('SET FOREIGN_KEY_CHECKS=0');
+        try {
+            $this->createClientUser("invalid-referred-{$suffix}", [
+                'referrer_user_id' => 999999,
+            ]);
+        } finally {
+            DB::statement('SET FOREIGN_KEY_CHECKS=1');
+        }
 
         $payload = app(AdminReferralOverviewService::class)->overview();
 
