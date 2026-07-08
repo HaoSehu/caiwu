@@ -47,6 +47,110 @@ class DatabaseEngineeringService
     }
 
     /**
+     * @return array<string, mixed>
+     */
+    public function auditForeignKeyCoverage(): array
+    {
+        $existingForeignKeys = collect($this->foreignKeys())
+            ->mapWithKeys(fn (array $fk): array => [
+                $fk['table_name'].'.'.$fk['column_name'] => $fk,
+            ]);
+        $logicalReferences = $this->logicalForeignKeyTargets();
+
+        $columns = collect(DB::select("
+            SELECT
+                table_name AS table_name,
+                column_name AS column_name,
+                is_nullable AS is_nullable,
+                column_type AS column_type,
+                column_comment AS column_comment
+            FROM information_schema.columns
+            WHERE table_schema = DATABASE()
+              AND column_name LIKE '%\\_id' ESCAPE '\\\\'
+            ORDER BY table_name, ordinal_position
+        "));
+
+        $groups = [
+            'existing_fk' => [],
+            'candidate_fk' => [],
+            'polymorphic_or_snapshot' => [],
+            'unclassified' => [],
+        ];
+
+        foreach ($columns as $column) {
+            $tableName = (string) $column->table_name;
+            $columnName = (string) $column->column_name;
+            $key = $tableName.'.'.$columnName;
+
+            if ($existingForeignKeys->has($key)) {
+                $groups['existing_fk'][] = array_merge([
+                    'table_name' => $tableName,
+                    'column_name' => $columnName,
+                    'is_nullable' => (string) $column->is_nullable,
+                    'column_type' => (string) $column->column_type,
+                    'column_comment' => (string) ($column->column_comment ?? ''),
+                ], (array) $existingForeignKeys->get($key));
+
+                continue;
+            }
+
+            $reference = $logicalReferences[$key] ?? null;
+            if ($reference === null) {
+                $groups['unclassified'][] = [
+                    'table_name' => $tableName,
+                    'column_name' => $columnName,
+                    'is_nullable' => (string) $column->is_nullable,
+                    'column_type' => (string) $column->column_type,
+                    'column_comment' => (string) ($column->column_comment ?? ''),
+                    'reason' => '未在逻辑外键映射中声明',
+                ];
+
+                continue;
+            }
+
+            if (($reference['category'] ?? '') !== 'candidate_fk') {
+                $groups['polymorphic_or_snapshot'][] = [
+                    'table_name' => $tableName,
+                    'column_name' => $columnName,
+                    'is_nullable' => (string) $column->is_nullable,
+                    'column_type' => (string) $column->column_type,
+                    'column_comment' => (string) ($column->column_comment ?? ''),
+                    'category' => (string) ($reference['category'] ?? 'polymorphic_or_snapshot'),
+                    'reason' => (string) ($reference['reason'] ?? ''),
+                ];
+
+                continue;
+            }
+
+            $referencedTable = (string) $reference['referenced_table'];
+            $referencedColumn = (string) ($reference['referenced_column'] ?? 'id');
+            $groups['candidate_fk'][] = [
+                'table_name' => $tableName,
+                'column_name' => $columnName,
+                'is_nullable' => (string) $column->is_nullable,
+                'column_type' => (string) $column->column_type,
+                'column_comment' => (string) ($column->column_comment ?? ''),
+                'referenced_table_name' => $referencedTable,
+                'referenced_column_name' => $referencedColumn,
+                'delete_rule' => (string) ($reference['delete_rule'] ?? 'RESTRICT'),
+                'orphan_count' => $this->countOrphans($tableName, $columnName, $referencedTable, $referencedColumn),
+                'reason' => (string) ($reference['reason'] ?? ''),
+            ];
+        }
+
+        return [
+            'database' => (string) DB::getDatabaseName(),
+            'counts' => [
+                'existing_fk' => count($groups['existing_fk']),
+                'candidate_fk' => count($groups['candidate_fk']),
+                'polymorphic_or_snapshot' => count($groups['polymorphic_or_snapshot']),
+                'unclassified' => count($groups['unclassified']),
+            ],
+            'groups' => $groups,
+        ];
+    }
+
+    /**
      * @return array<string, int>
      */
     public function normalizeCoreRelations(): array
@@ -216,6 +320,119 @@ class DatabaseEngineeringService
             ])
             ->values()
             ->all();
+    }
+
+    /**
+     * @return array<string, array<string, string>>
+     */
+    private function logicalForeignKeyTargets(): array
+    {
+        $candidate = static fn (string $referencedTable, string $deleteRule, string $reason): array => [
+            'category' => 'candidate_fk',
+            'referenced_table' => $referencedTable,
+            'delete_rule' => $deleteRule,
+            'reason' => $reason,
+        ];
+        $snapshot = static fn (string $reason): array => [
+            'category' => 'polymorphic_or_snapshot',
+            'reason' => $reason,
+        ];
+
+        return [
+            'account_transactions.user_id' => $candidate('users', 'RESTRICT', '账户流水必须保留用户审计归属'),
+            'account_transactions.source_id' => $snapshot('source_type/source_id 是跨域来源快照'),
+            'account_transactions.origin_id' => $snapshot('origin_type/origin_id 是跨域触发对象快照'),
+            'account_transactions.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
+            'activity_logs.actor_id' => $snapshot('actor_type/actor_id 是多操作者类型'),
+            'activity_logs.subject_id' => $snapshot('subject_type/subject_id 是多业务对象类型'),
+            'admin_user_roles.admin_user_id' => $candidate('admin_users', 'CASCADE', '管理员与角色桥表随管理员删除清理'),
+            'admin_user_roles.role_id' => $candidate('roles', 'RESTRICT', '有管理员绑定时禁止删除角色'),
+            'admin_users.role_id' => $candidate('roles', 'RESTRICT', '管理员必须绑定有效角色'),
+            'archive_audit_logs.batch_id' => $snapshot('归档批次号是业务批次标识，不对应表主键'),
+            'automation_logs.object_id' => $snapshot('automation_logs 记录调度/业务对象快照，不固定引用单表'),
+            'content_articles.category_id' => $candidate('content_categories', 'SET NULL', '文章可在分类删除后保留'),
+            'content_articles.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
+            'coupon_campaigns.last_coupon_id' => $candidate('coupons', 'SET NULL', '最近生成优惠券仅作执行游标'),
+            'coupon_campaigns.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
+            'coupons.coupon_campaign_id' => $candidate('coupon_campaigns', 'SET NULL', '优惠券保留，活动删除后清空来源活动'),
+            'coupons.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
+            'email_logs.plugin_id' => $candidate('integration_plugins', 'SET NULL', '日志保留，插件删除后仅清空插件引用'),
+            'email_logs.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
+            'gateway_logs.plugin_id' => $candidate('integration_plugins', 'SET NULL', '网关审计日志保留，插件删除后仅清空插件引用'),
+            'gateway_logs.invoice_id' => $candidate('invoices', 'SET NULL', '网关审计日志保留，账单删除后清空引用'),
+            'gateway_logs.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
+            'integration_plugin_bindings.bindable_id' => $snapshot('bindable_type/bindable_id 是多态插件绑定对象'),
+            'integration_plugin_bindings.backfill_batch_id' => $snapshot('回填批次号是迁移追踪标识，不对应表主键'),
+            'integration_plugin_runtime_logs.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
+            'integration_plugin_runtime_logs.binding_id' => $snapshot('运行日志里的绑定 ID 是历史执行快照，允许绑定已删除'),
+            'integration_plugin_runtime_logs.bindable_id' => $snapshot('bindable_type/bindable_id 是多态插件绑定对象快照'),
+            'integration_plugin_runtime_logs.actor_id' => $snapshot('actor_type/actor_id 是多操作者类型'),
+            'invoices.service_id' => $candidate('services', 'SET NULL', '账单保留，服务删除后清空服务引用'),
+            'invoices.coupon_id' => $candidate('coupons', 'SET NULL', '账单保留，优惠券模板删除后清空引用'),
+            'invoices.refund_trace_id' => $snapshot('退款 trace_id 是链路追踪标识，不是关系字段'),
+            'invoices.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
+            'notice_reads.user_id' => $candidate('users', 'CASCADE', '阅读记录随用户删除清理'),
+            'notice_reads.article_id' => $candidate('content_articles', 'CASCADE', '阅读记录随文章删除清理'),
+            'notification_logs.plugin_id' => $candidate('integration_plugins', 'SET NULL', '通知日志保留，插件删除后仅清空插件引用'),
+            'notification_logs.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
+            'notification_logs.request_id' => $snapshot('request_id 是请求标识，不是关系字段'),
+            'notification_logs.origin_id' => $snapshot('origin_type/origin_id 是通知来源对象快照'),
+            'notification_templates.provider_template_id' => $snapshot('供应商模板 ID 是外部平台标识'),
+            'operation_logs.user_id' => $snapshot('user_type/user_id 是用户、管理员、系统等混合操作者'),
+            'operation_logs.subject_id' => $snapshot('subject_type/subject_id 是多业务对象类型'),
+            'orders.user_id' => $candidate('users', 'RESTRICT', '订单作为交易审计记录必须保留用户归属'),
+            'orders.product_id' => $candidate('products', 'RESTRICT', '订单快照可保留，但产品引用不应脏写'),
+            'orders.service_id' => $candidate('services', 'SET NULL', '订单保留，服务删除后清空引用'),
+            'orders.coupon_id' => $candidate('coupons', 'SET NULL', '订单保留，优惠券模板删除后清空引用'),
+            'orders.user_coupon_id' => $candidate('user_coupons', 'SET NULL', '订单保留，用户优惠券删除后清空引用'),
+            'orders.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
+            'payment_callbacks.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
+            'payments.order_id' => $candidate('orders', 'SET NULL', '支付记录保留，内部订单删除后清空引用'),
+            'payments.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
+            'personal_access_tokens.tokenable_id' => $snapshot('tokenable_type/tokenable_id 是 Sanctum 多态令牌关系'),
+            'product_upstream_bindings.upstream_product_id' => $snapshot('上游商品 ID 是外部供应商标识'),
+            'product_upstream_bindings.backfill_batch_id' => $snapshot('回填批次号是迁移追踪标识，不对应表主键'),
+            'referral_account_logs.user_id' => $candidate('users', 'RESTRICT', '返佣账户日志必须保留用户归属'),
+            'referral_account_logs.reference_id' => $snapshot('reference_type/reference_id 是返佣来源对象快照'),
+            'referral_account_logs.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
+            'referral_rewards.user_id' => $candidate('users', 'RESTRICT', '返佣奖励必须保留用户归属'),
+            'referral_rewards.referrer_user_id' => $candidate('users', 'RESTRICT', '返佣奖励必须保留推荐人归属'),
+            'referral_rewards.referred_user_id' => $candidate('users', 'RESTRICT', '返佣奖励必须保留被推荐用户归属'),
+            'referral_rewards.order_id' => $candidate('orders', 'RESTRICT', '返佣奖励必须保留来源订单归属'),
+            'referral_rewards.invoice_id' => $candidate('invoices', 'SET NULL', '返佣奖励保留，账单删除后清空引用'),
+            'referral_rewards.product_id' => $candidate('products', 'SET NULL', '返佣奖励保留，商品删除后清空引用'),
+            'referral_rewards.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
+            'referral_withdrawals.user_id' => $candidate('users', 'RESTRICT', '提现记录必须保留用户归属'),
+            'referral_withdrawals.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
+            'second_product_groups.legacy_product_group_id' => $snapshot('旧库分组 ID 是迁移来源标识'),
+            'service_connection_snapshots.backfill_batch_id' => $snapshot('回填批次号是迁移追踪标识，不对应表主键'),
+            'service_provision_attempts.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
+            'service_provision_attempts.backfill_batch_id' => $snapshot('回填批次号是迁移追踪标识，不对应表主键'),
+            'service_runtime_snapshots.backfill_batch_id' => $snapshot('回填批次号是迁移追踪标识，不对应表主键'),
+            'service_upstream_bindings.upstream_service_id' => $snapshot('上游服务 ID 是外部供应商标识'),
+            'service_upstream_bindings.upstream_account_id' => $snapshot('上游账号 ID 是外部供应商标识'),
+            'service_upstream_bindings.backfill_batch_id' => $snapshot('回填批次号是迁移追踪标识，不对应表主键'),
+            'services.order_id' => $candidate('orders', 'SET NULL', '服务保留，内部订单删除后清空引用'),
+            'services.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
+            'sessions.user_id' => $candidate('users', 'CASCADE', '会话随用户删除清理'),
+            'sms_logs.plugin_id' => $candidate('integration_plugins', 'SET NULL', '短信日志保留，插件删除后仅清空插件引用'),
+            'sms_logs.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
+            'sms_logs.request_id' => $snapshot('request_id 是请求标识，不是关系字段'),
+            'supplier_plugin_bindings.backfill_batch_id' => $snapshot('回填批次号是迁移追踪标识，不对应表主键'),
+            'third_product_groups.legacy_product_group_id' => $snapshot('旧库分组 ID 是迁移来源标识'),
+            'tickets.service_id' => $candidate('services', 'SET NULL', '工单可在服务删除后保留历史记录'),
+            'tickets.assignee_id' => $candidate('admin_users', 'SET NULL', '负责人删除后保留工单并清空负责人'),
+            'ticket_replies.user_id' => $snapshot('is_staff 决定 user_id 指向用户或管理员'),
+            'ticket_replies.quote_reply_id' => $candidate('ticket_replies', 'SET NULL', '引用回复被删除时保留当前回复'),
+            'user_coupons.user_id' => $candidate('users', 'RESTRICT', '优惠券归属用户必须存在'),
+            'user_coupons.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
+            'user_notifications.user_id' => $candidate('users', 'CASCADE', '站内通知随用户删除清理'),
+            'users.referrer_user_id' => $candidate('users', 'SET NULL', '推荐人删除后保留用户账号'),
+            'users.member_level_id' => $candidate('member_levels', 'SET NULL', '会员等级删除后用户回到默认等级语义'),
+            'users.verification_certify_id' => $snapshot('实名认证 certify_id 是外部平台标识'),
+            'verification_histories.user_id' => $candidate('users', 'RESTRICT', '实名历史必须保留用户归属'),
+            'verification_histories.verification_certify_id' => $snapshot('实名认证 certify_id 是外部平台标识'),
+        ];
     }
 
     /**
