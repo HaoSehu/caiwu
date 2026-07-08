@@ -631,11 +631,6 @@ class UserService
             $paginator->getCollection()->map(function ($log) {
                 $item = $log->toArray();
                 $item['params_json'] = $this->normalizeNotificationParams($item['params_json'] ?? []);
-                $item['phone'] = $this->maskPhone((string) ($item['phone'] ?? ''));
-                if ($this->shouldRedactSmsLog($item)) {
-                    $item['content'] = '短信验证码已发送（内容已脱敏）';
-                    $item['params_json'] = $this->sanitizeSmsParams((array) ($item['params_json'] ?? []));
-                }
 
                 return $item;
             })
@@ -756,39 +751,6 @@ class UserService
         }
 
         return [];
-    }
-
-    private function shouldRedactSmsLog(array $item): bool
-    {
-        $originType = trim((string) ($item['origin_type'] ?? ''));
-        $templateCode = trim((string) ($item['template_code'] ?? ''));
-
-        return $originType === 'sms_verify' || $templateCode === '100001';
-    }
-
-    private function sanitizeSmsParams(array $params): array
-    {
-        if ($params === []) {
-            return ['code' => '***'];
-        }
-
-        $params['code'] = '***';
-
-        return $params;
-    }
-
-    private function maskPhone(string $phone): string
-    {
-        $normalized = trim($phone);
-        if ($normalized === '') {
-            return '';
-        }
-
-        if (mb_strlen($normalized) <= 7) {
-            return $normalized;
-        }
-
-        return mb_substr($normalized, 0, 3).'****'.mb_substr($normalized, -4);
     }
 
     private function findUserInvoice(User $user, int $invoiceId): Invoice

@@ -301,7 +301,7 @@ class NotificationTemplateApiTest extends TestCase
         }
     }
 
-    public function test_sms_verification_log_uses_configurable_template_content_and_redacts_code(): void
+    public function test_sms_verification_log_uses_configurable_template_content_and_keeps_raw_code(): void
     {
         if (! Schema::hasTable('message_logs')) {
             $this->markTestSkipped('通知日志表不存在，无法验证短信模板日志。');
@@ -340,8 +340,8 @@ class NotificationTemplateApiTest extends TestCase
             $log = $this->latestSmsLog($phone);
             $this->assertNotNull($log);
             $this->assertSame(SmsTemplateCatalog::TEMPLATE_VERIFY_CODE, (string) ($log->template_code ?? ''));
-            $this->assertStringContainsString('验证码 ***，5 分钟内有效。', (string) ($log->content ?? ''));
-            $this->assertStringNotContainsString($code, (string) ($log->content ?? ''));
+            $this->assertStringContainsString('验证码 482915，5 分钟内有效。', (string) ($log->content ?? ''));
+            $this->assertStringContainsString($code, (string) ($log->content ?? ''));
         } finally {
             foreach ($settings as $key => $value) {
                 Setting::setValue('notification', (string) $key, $value);
@@ -398,7 +398,7 @@ class NotificationTemplateApiTest extends TestCase
             $log = $this->latestSmsLog($phone);
             $this->assertNotNull($log);
             $this->assertSame('100003', (string) ($log->template_code ?? ''));
-            $this->assertStringNotContainsString($code, (string) ($log->content ?? ''));
+            $this->assertStringContainsString($code, (string) ($log->content ?? ''));
             $this->assertStringNotContainsString('这段系统模板不应被阿里云使用', (string) ($log->content ?? ''));
         } finally {
             foreach ($settings as $key => $value) {

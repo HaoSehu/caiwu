@@ -161,10 +161,10 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
         }
     }
 
-    public function test_email_verification_code_is_redacted_in_logs(): void
+    public function test_email_verification_code_is_kept_raw_in_logs(): void
     {
         if (! Schema::hasTable('message_logs')) {
-            $this->markTestSkipped('message_logs 表不存在，无法验证统一消息日志脱敏。');
+            $this->markTestSkipped('message_logs 表不存在，无法验证统一消息日志原文。');
         }
 
         $suffix = bin2hex(random_bytes(4));
@@ -191,8 +191,7 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
                 ->first();
 
             $this->assertNotNull($log);
-            $this->assertStringNotContainsString($code, (string) $log->content);
-            $this->assertStringContainsString('已脱敏', (string) $log->content);
+            $this->assertStringContainsString($code, (string) $log->content);
 
             DB::table('message_logs')
                 ->where('id', $log->id)
@@ -203,8 +202,7 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
                 ->first(fn (array $item): bool => ($item['to_email'] ?? null) === $to);
 
             $this->assertNotNull($adminLog);
-            $this->assertStringNotContainsString($code, (string) ($adminLog['content'] ?? ''));
-            $this->assertStringContainsString('已脱敏', (string) ($adminLog['content'] ?? ''));
+            $this->assertStringContainsString($code, (string) ($adminLog['content'] ?? ''));
         } finally {
             $this->deleteEmailLogsByRecipient($to);
 

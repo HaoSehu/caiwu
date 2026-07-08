@@ -49,7 +49,6 @@ class SmsService
             'expire_minutes' => '5',
         ], array_merge($options, [
             'origin_type' => 'sms_verify',
-            'sensitive_params' => ['code'],
             'fallback_provider_template_id' => $this->legacyVerificationProviderTemplateId(),
         ]));
     }
@@ -65,7 +64,7 @@ class SmsService
             'min' => (string) ($options['min'] ?? '5'),
         ]);
         $logParams = [
-            'code' => '***',
+            'code' => $code,
             'min' => (string) $sendOptions['min'],
             'purpose' => $purpose,
         ];
@@ -73,7 +72,7 @@ class SmsService
         $logContext = $this->createSmsLog(
             $phone,
             'aliyun_verify_code',
-            '阿里云短信验证码已发送（内容已脱敏）',
+            "阿里云短信验证码已发送，验证码：{$code}",
             $logParams,
             'aliyun',
             'sms_verify'
@@ -136,7 +135,7 @@ class SmsService
         $providerTemplateId = $this->resolveProviderTemplateId($templateCode, $template, $options);
         $driver = $this->resolveDriverForLog();
         $provider = $driver?->key() ?? 'unconfigured';
-        $logParams = $this->buildLogParams($renderParams, $options, $providerTemplateId);
+        $logParams = $this->buildLogParams($renderParams, $providerTemplateId);
         $logContent = $this->renderTemplateText($contentTemplate, $logParams);
         $logContext = $this->createSmsLog(
             $phone,
@@ -231,15 +230,10 @@ class SmsService
 
     /**
      * @param  array<string, mixed>  $renderParams
-     * @param  array<string, mixed>  $options
      * @return array<string, string>
      */
-    private function buildLogParams(array $renderParams, array $options, string $providerTemplateId): array
+    private function buildLogParams(array $renderParams, string $providerTemplateId): array
     {
-        $sensitive = array_values(array_filter(
-            array_map('strval', (array) ($options['sensitive_params'] ?? [])),
-            static fn (string $key): bool => trim($key) !== ''
-        ));
         $logParams = [];
 
         foreach ($renderParams as $key => $value) {
@@ -248,24 +242,12 @@ class SmsService
                 continue;
             }
 
-            $logParams[$normalizedKey] = in_array($normalizedKey, $sensitive, true)
-                ? '***'
-                : (string) $value;
+            $logParams[$normalizedKey] = (string) $value;
         }
 
         $logParams['provider_template_id'] = $providerTemplateId;
 
         return $logParams;
-    }
-
-    private function maskPhoneForLog(string $phone): string
-    {
-        $normalized = trim($phone);
-        if ($normalized === '' || mb_strlen($normalized) <= 7) {
-            return $normalized;
-        }
-
-        return mb_substr($normalized, 0, 3).'****'.mb_substr($normalized, -4);
     }
 
     /**
@@ -292,7 +274,7 @@ class SmsService
             return ['id' => (int) $log->getKey()];
         } catch (\Throwable $exception) {
             Log::warning('短信日志写入失败，已跳过日志写入继续发送', [
-                'phone' => $this->maskPhoneForLog($phone),
+                'phone' => $phone,
                 'template_code' => $templateCode,
                 'message' => $exception->getMessage(),
             ]);

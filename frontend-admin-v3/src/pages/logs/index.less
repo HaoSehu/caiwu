@@ -251,6 +251,11 @@
   grid-template-columns: minmax(220px, 1.2fr) 130px 130px 130px 150px 150px auto auto;
 }
 
+.log-filter-grid--sms,
+.log-filter-grid--email {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .table-scroll {
   overflow-x: auto;
 }
@@ -464,7 +469,10 @@
 }
 
 .danger-text {
+  display: block;
   color: var(--td-error-color);
+  line-height: 1.5;
+  word-break: break-word;
 }
 
 .pagination-row {

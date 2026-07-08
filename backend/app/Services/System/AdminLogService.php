@@ -98,7 +98,6 @@ class AdminLogService
         $logs->setCollection($logs->getCollection()->map(function ($log) {
             $item = $log->toArray();
             $item['params_json'] = $this->normalizeNotificationParams($item['params_json'] ?? []);
-            $item = $this->sanitizeSmsLogItem($item);
             $item['params'] = $item['params_json'] ?? [];
             unset($item['params_json']);
 
@@ -150,7 +149,7 @@ class AdminLogService
 
         $logs = (clone $query)->orderByDesc('created_at')->paginate($perPage);
         $logs->setCollection($logs->getCollection()->map(function ($log) {
-            return $this->sanitizeEmailLogItem($log->toArray());
+            return $log->toArray();
         }));
 
         return $this->buildPaginatorPayload($logs);
@@ -641,56 +640,6 @@ class AdminLogService
         }
 
         return [];
-    }
-
-    private function sanitizeSmsLogItem(array $item): array
-    {
-        $privacy = AdminPrivacy::current();
-        $item['phone'] = $privacy->allowsRaw()
-            ? $privacy->phone($item['phone'] ?? '')
-            : (new AdminPrivacy(false, true))->phone($item['phone'] ?? '');
-
-        if ($this->shouldRedactSmsLog($item)) {
-            $item['content'] = '短信验证码已发送（内容已脱敏）';
-            $item['params_json'] = $this->sanitizeSmsParams((array) ($item['params_json'] ?? []));
-        }
-
-        return $item;
-    }
-
-    private function shouldRedactSmsLog(array $item): bool
-    {
-        $originType = trim((string) ($item['origin_type'] ?? ''));
-        $templateCode = trim((string) ($item['template_code'] ?? ''));
-
-        return $originType === 'sms_verify' || $templateCode === '100001';
-    }
-
-    private function sanitizeSmsParams(array $params): array
-    {
-        if ($params === []) {
-            return ['code' => '***'];
-        }
-
-        $params['code'] = '***';
-
-        return $params;
-    }
-
-    private function sanitizeEmailLogItem(array $item): array
-    {
-        $item['to_email'] = AdminPrivacy::current()->email($item['to_email'] ?? '');
-
-        if ($this->shouldRedactEmailLog($item)) {
-            $item['content'] = '邮件验证码已发送（内容已脱敏）';
-        }
-
-        return $item;
-    }
-
-    private function shouldRedactEmailLog(array $item): bool
-    {
-        return trim((string) ($item['template_code'] ?? '')) === NotificationService::TEMPLATE_EMAIL_CODE;
     }
 
     private function buildTaskLogEntries(array $filters): Collection

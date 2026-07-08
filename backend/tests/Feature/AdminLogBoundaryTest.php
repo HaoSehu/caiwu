@@ -55,7 +55,7 @@ class AdminLogBoundaryTest extends TestCase
             ->assertJsonPath('code', 0)
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.gateway', 'alipay')
-            ->assertJsonPath('data.list.0.gateway_key', '[REDACTED]')
+            ->assertJsonPath('data.list.0.gateway_key', 'alipay')
             ->assertJsonPath('data.list.0.plugin_id', (int) $plugin->id)
             ->assertJsonPath('data.list.0.trace_id', 'gateway-trace-'.$suffix)
             ->assertJsonPath('data.list.0.action', 'refund')
@@ -100,7 +100,7 @@ class AdminLogBoundaryTest extends TestCase
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.source', 'integration_plugin_runtime_logs')
             ->assertJsonPath('data.list.0.plugin_id', (int) $plugin->id)
-            ->assertJsonMissingPath('data.list.0.plugin_key')
+            ->assertJsonPath('data.list.0.plugin_key', 'alipay')
             ->assertJsonPath('data.list.0.trace_id', 'runtime-trace-'.$suffix);
     }
 
@@ -145,7 +145,7 @@ class AdminLogBoundaryTest extends TestCase
             ->assertJsonPath('code', 0)
             ->assertJsonPath('data.total', 1)
             ->assertJsonPath('data.list.0.plugin_id', (int) $plugin->id)
-            ->assertJsonPath('data.list.0.driver_key', '[REDACTED]')
+            ->assertJsonPath('data.list.0.driver_key', 'aliyun_sms')
             ->assertJsonPath('data.list.0.trace_id', 'notify-trace-'.$suffix);
     }
 

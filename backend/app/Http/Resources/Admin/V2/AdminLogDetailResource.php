@@ -10,6 +10,17 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 class AdminLogDetailResource extends JsonResource
 {
+    private const PRIVACY_PROJECTED_FIELDS = [
+        'phone',
+        'to_email',
+    ];
+
+    private const BUSINESS_IDENTIFIER_FIELDS = [
+        'gateway_key',
+        'driver_key',
+        'plugin_key',
+    ];
+
     /**
      * @return array<string, mixed>
      */
@@ -17,16 +28,57 @@ class AdminLogDetailResource extends JsonResource
     {
         $row = is_array($this->resource) ? $this->resource : [];
         $fields = is_array($row['fields'] ?? null) ? $row['fields'] : [];
+        $channel = (string) ($row['channel'] ?? '');
+        $rawNotification = $this->isRawNotificationChannel($channel);
 
-        return $this->dropSensitiveKeys([
+        $payload = [
             'id' => (string) ($row['id'] ?? $fields['id'] ?? ''),
-            'channel' => (string) ($row['channel'] ?? ''),
+            'channel' => $channel,
             'source' => (string) ($row['source'] ?? $fields['source'] ?? ''),
-            'fields' => SensitiveDataSanitizer::sanitize($fields),
-            'message' => SensitiveDataSanitizer::sanitizeText((string) ($row['message'] ?? '')),
-            'context' => SensitiveDataSanitizer::sanitize($row['context'] ?? []),
+            'fields' => $this->sanitizeFields($fields, $rawNotification),
+            'message' => $rawNotification ? (string) ($row['message'] ?? '') : SensitiveDataSanitizer::sanitizeText((string) ($row['message'] ?? '')),
+            'context' => $rawNotification ? ($row['context'] ?? []) : SensitiveDataSanitizer::sanitize($row['context'] ?? []),
             'created_at' => $row['created_at'] ?? $fields['created_at'] ?? null,
-        ]);
+        ];
+
+        return $rawNotification ? $payload : $this->dropSensitiveKeys($payload);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function sanitizeFields(array $fields, bool $raw = false): array
+    {
+        if ($raw) {
+            return $fields;
+        }
+
+        $sanitized = [];
+
+        foreach ($fields as $key => $value) {
+            if (! is_string($key) || $this->isSensitiveKey($key)) {
+                continue;
+            }
+
+            if (in_array($key, self::PRIVACY_PROJECTED_FIELDS, true)) {
+                $sanitized[$key] = $value;
+                continue;
+            }
+
+            if (in_array($key, self::BUSINESS_IDENTIFIER_FIELDS, true)) {
+                $sanitized[$key] = is_string($value) ? SensitiveDataSanitizer::sanitizeText($value) : $value;
+                continue;
+            }
+
+            $sanitized[$key] = SensitiveDataSanitizer::sanitize($value, $key);
+        }
+
+        return $sanitized;
+    }
+
+    private function isRawNotificationChannel(string $channel): bool
+    {
+        return in_array($channel, ['sms', 'email'], true);
     }
 
     /**

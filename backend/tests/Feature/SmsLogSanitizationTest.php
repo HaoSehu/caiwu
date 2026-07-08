@@ -12,7 +12,7 @@ use Tests\TestCase;
 
 class SmsLogSanitizationTest extends TestCase
 {
-    public function test_user_and_admin_sms_log_reads_redact_verification_codes(): void
+    public function test_user_and_admin_sms_log_reads_return_raw_verification_codes(): void
     {
         $suffix = bin2hex(random_bytes(4));
         $email = "sms-log-user-{$suffix}@example.com";
@@ -42,24 +42,25 @@ class SmsLogSanitizationTest extends TestCase
         $userLogs = app(UserService::class)->smsLogs($user, 20);
         $userItem = (array) ($userLogs->items()[0] ?? []);
 
-        $this->assertMatchesRegularExpression('/^138\*{4}\d{4}$/', (string) ($userItem['phone'] ?? ''));
-        $this->assertSame('短信验证码已发送（内容已脱敏）', $userItem['content'] ?? '');
-        $this->assertSame('***', data_get($userItem, 'params_json.code'));
+        $this->assertSame($phone, (string) ($userItem['phone'] ?? ''));
+        $this->assertSame('您的验证码为123456，5分钟内有效。', $userItem['content'] ?? '');
+        $this->assertSame('123456', data_get($userItem, 'params_json.code'));
 
         $adminLogs = app(AdminLogService::class)->getSmsLogs(['keyword' => $requestId], 20);
         $adminItem = (array) (($adminLogs['data'][0] ?? $adminLogs['list'][0] ?? []) ?: []);
 
-        $this->assertMatchesRegularExpression('/^138\*{4}\d{4}$/', (string) ($adminItem['phone'] ?? ''));
-        $this->assertSame('短信验证码已发送（内容已脱敏）', $adminItem['content'] ?? '');
-        $this->assertSame('***', data_get($adminItem, 'params.code'));
+        $this->assertSame($phone, (string) ($adminItem['phone'] ?? ''));
+        $this->assertSame('您的验证码为123456，5分钟内有效。', $adminItem['content'] ?? '');
+        $this->assertSame('123456', data_get($adminItem, 'params.code'));
     }
 
-    public function test_sms_service_source_no_longer_persists_plain_otp_content_or_raw_response_log(): void
+    public function test_sms_service_source_keeps_raw_otp_log_content_without_provider_raw_response_log(): void
     {
         $content = file_get_contents(base_path('app/Services/System/SmsService.php'));
 
         $this->assertIsString($content);
-        $this->assertStringNotContainsString('您的验证码为{$code}，{$expire_minutes}分钟内有效。', $content);
+        $this->assertStringNotContainsString('内容已脱敏', $content);
+        $this->assertStringNotContainsString("'code' => '***'", $content);
         $this->assertStringNotContainsString("'raw' => \$result", $content);
         $this->assertStringNotContainsString("'decoded' => \$decoded", $content);
         $this->assertStringNotContainsString("'provider' => 'aliyun'", $content);

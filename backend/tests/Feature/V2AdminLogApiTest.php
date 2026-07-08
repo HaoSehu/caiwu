@@ -9,7 +9,9 @@ use App\Models\MessageLog;
 use App\Models\OperationLog;
 use App\Models\Role;
 use App\Services\System\AdminLogService;
+use App\Services\System\NotificationService;
 use App\Support\AdminPermissions;
+use App\Support\SmsTemplateCatalog;
 use Laravel\Sanctum\Sanctum;
 use Mockery\MockInterface;
 use Tests\TestCase;
@@ -134,12 +136,12 @@ class V2AdminLogApiTest extends TestCase
             ->assertJsonPath('data.summary', []);
     }
 
-    public function test_notification_log_list_summary_and_detail_are_safely_projected(): void
+    public function test_notification_log_list_summary_and_detail_return_raw_log_payloads(): void
     {
         $smsLog = MessageLog::query()->create([
             'channel' => 'sms',
             'recipient' => '13800138000',
-            'template_code' => 'LOGIN_CODE',
+            'template_code' => SmsTemplateCatalog::TEMPLATE_VERIFY_CODE,
             'content' => '验证码 123456，用于登录确认。'.str_repeat('内容', 80),
             'params_json' => [
                 'code' => '123456',
@@ -147,11 +149,32 @@ class V2AdminLogApiTest extends TestCase
                 'api_key' => 'must-not-leak',
             ],
             'provider' => 'aliyun',
+            'driver_key' => 'aliyun_sms',
             'request_id' => 'REQ-V2-SMS-'.bin2hex(random_bytes(3)),
             'status' => 'success',
             'error_msg' => 'secret=must-not-leak',
             'sent_at' => now(),
+            'origin_type' => 'sms_verify',
             'trace_id' => 'trace-v2-sms-'.bin2hex(random_bytes(3)),
+        ]);
+        $emailLog = MessageLog::query()->create([
+            'channel' => 'email',
+            'recipient' => 'raw-log@example.com',
+            'template_code' => NotificationService::TEMPLATE_EMAIL_CODE,
+            'subject' => '邮箱验证码',
+            'content' => '邮箱验证码 654321，用于登录确认。',
+            'params_json' => [
+                'code' => '654321',
+                'password' => 'email-must-be-visible',
+                'api_key' => 'email-key-visible',
+            ],
+            'provider' => 'smtp',
+            'driver_key' => 'smtp_mail',
+            'request_id' => 'REQ-V2-MAIL-'.bin2hex(random_bytes(3)),
+            'status' => 'success',
+            'error_msg' => 'secret=email-visible',
+            'sent_at' => now(),
+            'trace_id' => 'trace-v2-mail-'.bin2hex(random_bytes(3)),
         ]);
 
         Sanctum::actingAs($this->createAdmin([AdminPermissions::LOG_LIST]));
@@ -165,11 +188,14 @@ class V2AdminLogApiTest extends TestCase
             ->assertJsonPath('code', 0)
             ->assertJsonPath('data.list.0.id', $smsLog->id)
             ->assertJsonPath('data.list.0.channel', 'sms')
+            ->assertJsonPath('data.list.0.phone', '13800138000')
+            ->assertJsonPath('data.list.0.driver_key', 'aliyun_sms')
+            ->assertJsonPath('data.list.0.error_excerpt', 'secret=must-not-leak')
             ->assertJsonMissingPath('data.list.0.content')
             ->assertJsonMissingPath('data.list.0.params')
             ->assertJsonMissingPath('data.list.0.params_json');
+        $this->assertStringContainsString('验证码 123456', (string) $listResponse->json('data.list.0.message_excerpt'));
 
-        $this->assertNoSensitiveKeys($listResponse->json());
         $this->assertLessThan(100 * 1024, strlen((string) $listResponse->getContent()));
 
         $this->getJson('/api/v2/admin/log-summaries/sms?page=1&pageSize=10')
@@ -187,13 +213,41 @@ class V2AdminLogApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('code', 0)
             ->assertJsonPath('data.log.channel', 'sms')
-            ->assertJsonPath('data.log.fields.phone', '[REDACTED]')
-            ->assertJsonMissingPath('data.log.context.params.password')
-            ->assertJsonMissingPath('data.log.context.params.api_key');
+            ->assertJsonPath('data.log.fields.phone', '13800138000')
+            ->assertJsonPath('data.log.fields.driver_key', 'aliyun_sms')
+            ->assertJsonPath('data.log.fields.error_msg', 'secret=must-not-leak')
+            ->assertJsonPath('data.log.context.params.code', '123456')
+            ->assertJsonPath('data.log.context.params.password', 'must-not-leak')
+            ->assertJsonPath('data.log.context.params.api_key', 'must-not-leak');
 
         $this->assertStringContainsString('验证码 123456', (string) $detailResponse->json('data.log.message'));
-        $this->assertNoSensitiveKeys($detailResponse->json());
         $this->assertLessThan(100 * 1024, strlen((string) $detailResponse->getContent()));
+
+        $emailListResponse = $this->getJson('/api/v2/admin/logs/email?'.http_build_query([
+            'status' => 'success',
+            'page' => 1,
+            'page_size' => 10,
+        ]))
+            ->assertOk()
+            ->assertJsonPath('code', 0)
+            ->assertJsonPath('data.list.0.id', $emailLog->id)
+            ->assertJsonPath('data.list.0.channel', 'email')
+            ->assertJsonPath('data.list.0.to_email', 'raw-log@example.com')
+            ->assertJsonPath('data.list.0.driver_key', 'smtp_mail')
+            ->assertJsonPath('data.list.0.error_excerpt', 'secret=email-visible');
+        $this->assertStringContainsString('邮箱验证码 654321', (string) $emailListResponse->json('data.list.0.message_excerpt'));
+
+        $this->getJson('/api/v2/admin/logs/email/'.$emailLog->id)
+            ->assertOk()
+            ->assertJsonPath('code', 0)
+            ->assertJsonPath('data.log.channel', 'email')
+            ->assertJsonPath('data.log.fields.to_email', 'raw-log@example.com')
+            ->assertJsonPath('data.log.fields.driver_key', 'smtp_mail')
+            ->assertJsonPath('data.log.fields.error_msg', 'secret=email-visible')
+            ->assertJsonPath('data.log.message', '邮箱验证码 654321，用于登录确认。')
+            ->assertJsonPath('data.log.context.params.code', '654321')
+            ->assertJsonPath('data.log.context.params.password', 'email-must-be-visible')
+            ->assertJsonPath('data.log.context.params.api_key', 'email-key-visible');
     }
 
     private function createApiLog(): OperationLog
