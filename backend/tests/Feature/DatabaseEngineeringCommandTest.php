@@ -26,6 +26,30 @@ class DatabaseEngineeringCommandTest extends TestCase
         $this->assertArrayHasKey('trace_id_metrics', $payload);
     }
 
+    public function test_db_audit_foreign_keys_classifies_all_id_columns(): void
+    {
+        $exitCode = Artisan::call('db:audit-foreign-keys', [
+            '--json' => true,
+            '--strict' => true,
+        ]);
+
+        $output = Artisan::output();
+        $this->assertJson($output);
+
+        $payload = json_decode($output, true, 512, JSON_THROW_ON_ERROR);
+
+        $this->assertSame(0, $exitCode);
+        $this->assertSame(0, (int) ($payload['counts']['unclassified'] ?? -1));
+
+        foreach ((array) ($payload['groups']['candidate_fk'] ?? []) as $candidate) {
+            $this->assertSame(
+                0,
+                (int) ($candidate['orphan_count'] ?? -1),
+                sprintf('%s.%s has orphan rows', $candidate['table_name'] ?? '', $candidate['column_name'] ?? '')
+            );
+        }
+    }
+
     public function test_db_normalize_core_relations_rewrites_zero_order_id_to_null(): void
     {
         $userId = (int) DB::table('users')->value('id');
