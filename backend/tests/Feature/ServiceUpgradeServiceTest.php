@@ -18,24 +18,19 @@ use App\Services\ClientServiceConsole\ServiceUpgradeService;
 use App\Services\Finance\InvoiceService;
 use App\Services\System\OperationLogService;
 use App\Services\Upstream\ProviderKey;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Artisan;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class ServiceUpgradeServiceTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseTransactions;
 
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->activateIntegrationPluginForTest('upstream', 'mofang_finance');
-        Artisan::call('migrate', [
-            '--path' => 'database/migrations/2026_07_03_130000_create_plugin_binding_runtime_and_audit_tables.php',
-            '--force' => true,
-        ]);
     }
 
     public function test_create_host_upgrade_invoice_for_user_builds_upgrade_invoice(): void

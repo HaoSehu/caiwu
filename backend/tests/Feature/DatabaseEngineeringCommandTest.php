@@ -52,23 +52,28 @@ class DatabaseEngineeringCommandTest extends TestCase
 
     public function test_db_normalize_core_relations_rewrites_zero_order_id_to_null(): void
     {
-        $userId = (int) DB::table('users')->value('id');
-        $productId = (int) DB::table('products')->value('id');
+        $userId = $this->ensureUserId();
+        $productId = $this->ensureProductId();
 
-        $serviceId = (int) DB::table('services')->insertGetId([
-            'user_id' => $userId,
-            'product_id' => $productId,
-            'order_id' => 0,
-            'invoice_id' => null,
-            'name' => 'db-normalize-test',
-            'domain' => '',
-            'billing_cycle' => 'monthly',
-            'amount' => '1.00',
-            'status' => 0,
-            'auto_renew' => 0,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        DB::statement('SET FOREIGN_KEY_CHECKS=0');
+        try {
+            $serviceId = (int) DB::table('services')->insertGetId([
+                'user_id' => $userId,
+                'product_id' => $productId,
+                'order_id' => 0,
+                'invoice_id' => null,
+                'name' => 'db-normalize-test',
+                'domain' => '',
+                'billing_cycle' => 'monthly',
+                'amount' => '1.00',
+                'status' => 0,
+                'auto_renew' => 0,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        } finally {
+            DB::statement('SET FOREIGN_KEY_CHECKS=1');
+        }
 
         Artisan::call('db:normalize-core-relations');
 
@@ -80,7 +85,8 @@ class DatabaseEngineeringCommandTest extends TestCase
 
     public function test_db_audit_core_reports_orphan_invoice_order_id(): void
     {
-        $userId = (int) DB::table('users')->value('id');
+        $userId = $this->ensureUserId();
+        $productId = $this->ensureProductId();
         $invoiceNo = 'audit-orphan-'.bin2hex(random_bytes(4));
 
         DB::statement('SET FOREIGN_KEY_CHECKS=0');
@@ -88,6 +94,7 @@ class DatabaseEngineeringCommandTest extends TestCase
             DB::table('invoices')->insert([
                 'invoice_no' => $invoiceNo,
                 'user_id' => $userId,
+                'product_id' => $productId,
                 'order_id' => 999999999,
                 'type' => 'normal',
                 'amount' => '1.00',
@@ -118,7 +125,8 @@ class DatabaseEngineeringCommandTest extends TestCase
 
     public function test_db_normalize_core_relations_clears_orphan_invoice_order_id(): void
     {
-        $userId = (int) DB::table('users')->value('id');
+        $userId = $this->ensureUserId();
+        $productId = $this->ensureProductId();
         $invoiceNo = 'norm-orphan-'.bin2hex(random_bytes(4));
 
         DB::statement('SET FOREIGN_KEY_CHECKS=0');
@@ -126,6 +134,7 @@ class DatabaseEngineeringCommandTest extends TestCase
             $invoiceId = (int) DB::table('invoices')->insertGetId([
                 'invoice_no' => $invoiceNo,
                 'user_id' => $userId,
+                'product_id' => $productId,
                 'order_id' => 999999998,
                 'type' => 'normal',
                 'amount' => '1.00',
@@ -214,5 +223,51 @@ class DatabaseEngineeringCommandTest extends TestCase
 
         $payload = json_decode($output, true, 512, JSON_THROW_ON_ERROR);
         $this->assertStringContainsString('audit/financial table', (string) ($payload['error'] ?? ''));
+    }
+
+    private function ensureUserId(): int
+    {
+        $id = (int) DB::table('users')->value('id');
+        if ($id > 0) {
+            return $id;
+        }
+
+        return (int) DB::table('users')->insertGetId([
+            'email' => 'db-engineering-test@example.com',
+            'password' => bcrypt('password'),
+            'nickname' => 'DB Engineering Test',
+            'phone' => '13900000001',
+            'company' => '',
+            'qq' => '',
+            'alipay_real_name' => '',
+            'alipay_account' => '',
+            'status' => 1,
+            'real_name' => '',
+            'id_card' => '',
+            'verification_status' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    private function ensureProductId(): int
+    {
+        $id = (int) DB::table('products')->value('id');
+        if ($id > 0) {
+            return $id;
+        }
+
+        return (int) DB::table('products')->insertGetId([
+            'product_type' => 'db_engineering',
+            'custom_display_name' => 'DB Engineering Test Product',
+            'pricing' => json_encode(['monthly' => '1.00'], JSON_THROW_ON_ERROR),
+            'setup_fee' => '0.00',
+            'stock' => -1,
+            'status' => 1,
+            'sort_order' => 0,
+            'auto_setup' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 }

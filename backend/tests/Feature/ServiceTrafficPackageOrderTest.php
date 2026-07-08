@@ -151,7 +151,7 @@ class ServiceTrafficPackageOrderTest extends TestCase
             $service = Service::query()->create([
                 'user_id' => (int) $user->id,
                 'product_id' => (int) $product->id,
-                'order_id' => 0,
+                'order_id' => null,
                 'name' => 'Traffic Service '.$suffix,
                 'domain' => 'traffic-'.$suffix.'.example.com',
                 'billing_cycle' => 'monthly',
@@ -399,7 +399,7 @@ class ServiceTrafficPackageOrderTest extends TestCase
                 'product_id' => (int) $product->id,
                 'product_spec_snapshot' => '未配置规格 #'.(int) $product->id,
                 'product_type_snapshot' => (string) $product->product_type,
-                'service_id' => 0,
+                'service_id' => null,
                 'type' => 'upgrade',
                 'amount' => '30.00',
                 'discount' => '0.00',
@@ -422,7 +422,7 @@ class ServiceTrafficPackageOrderTest extends TestCase
             $service = Service::query()->create([
                 'user_id' => (int) $user->id,
                 'product_id' => (int) $product->id,
-                'order_id' => 0,
+                'order_id' => null,
                 'name' => 'Traffic Sync Service '.$suffix,
                 'domain' => 'sync-'.$suffix.'.example.com',
                 'billing_cycle' => 'monthly',
@@ -582,7 +582,7 @@ class ServiceTrafficPackageOrderTest extends TestCase
             $service = Service::query()->create([
                 'user_id' => (int) $user->id,
                 'product_id' => (int) $product->id,
-                'order_id' => 0,
+                'order_id' => null,
                 'name' => 'Traffic Paid Service '.$suffix,
                 'domain' => 'traffic-paid-'.$suffix.'.example.com',
                 'billing_cycle' => 'monthly',
@@ -800,7 +800,7 @@ class ServiceTrafficPackageOrderTest extends TestCase
             $service = Service::query()->create([
                 'user_id' => (int) $user->id,
                 'product_id' => (int) $product->id,
-                'order_id' => 0,
+                'order_id' => null,
                 'name' => 'Traffic Failed Service '.$suffix,
                 'domain' => 'traffic-failed-'.$suffix.'.example.com',
                 'billing_cycle' => 'monthly',

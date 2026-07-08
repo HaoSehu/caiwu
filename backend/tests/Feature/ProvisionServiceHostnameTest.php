@@ -896,6 +896,7 @@ class ProvisionServiceHostnameTest extends TestCase
         ]);
         $product->setRelation('supplier', $supplier);
         $this->bindProductToMofang($supplier, $product, 9001);
+        $actualProductId = (int) $product->id;
 
         $order = new class extends Order
         {
@@ -911,15 +912,36 @@ class ProvisionServiceHostnameTest extends TestCase
             'id' => 3001,
             'order_no' => 'ORD20260404000001TEST',
             'user_id' => (int) $user->id,
-            'product_id' => $productId,
+            'type' => 'new',
+            'product_id' => $actualProductId,
             'billing_cycle' => 'monthly',
             'amount' => 5.00,
+            'discount' => '0.00',
+            'paid_amount' => '0.00',
+            'status' => OrderStatus::PENDING,
             'product_spec_snapshot' => '通用NAT-2vcpu-1gib',
             'config_snapshot' => [
                 'hostname' => $snapshotHostname,
             ],
         ]);
         $order->setRelation('product', $product);
+
+        DB::table('orders')->updateOrInsert(['id' => 3001], [
+            'order_no' => 'ORD20260404000001TEST',
+            'user_id' => (int) $user->id,
+            'type' => 'new',
+            'product_id' => $actualProductId,
+            'billing_cycle' => 'monthly',
+            'amount' => '5.00',
+            'discount' => '0.00',
+            'paid_amount' => '0.00',
+            'quantity' => 1,
+            'status' => OrderStatus::PENDING,
+            'product_spec_snapshot' => '通用NAT-2vcpu-1gib',
+            'config_snapshot' => json_encode(['hostname' => $snapshotHostname], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
         return $order;
     }
