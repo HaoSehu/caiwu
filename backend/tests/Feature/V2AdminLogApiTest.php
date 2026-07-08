@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Models\AdminUser;
-use App\Models\NotificationLog;
+use App\Models\MessageLog;
 use App\Models\OperationLog;
 use App\Models\Role;
 use App\Services\System\AdminLogService;
@@ -136,7 +136,7 @@ class V2AdminLogApiTest extends TestCase
 
     public function test_notification_log_list_summary_and_detail_are_safely_projected(): void
     {
-        $smsLog = NotificationLog::query()->create([
+        $smsLog = MessageLog::query()->create([
             'channel' => 'sms',
             'recipient' => '13800138000',
             'template_code' => 'LOGIN_CODE',

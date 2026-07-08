@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\System\Concerns;
 
-use App\Models\NotificationLog;
+use App\Models\MessageLog;
 use App\Models\ScheduleRunLog;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -31,8 +31,8 @@ trait HandlesAdminLogCleanup
 
                 return [
                     'database' => [
-                        'sms' => NotificationLog::query()->where('channel', 'sms')->count(),
-                        'email' => NotificationLog::query()->where('channel', 'email')->count(),
+                        'sms' => MessageLog::query()->where('channel', 'sms')->count(),
+                        'email' => MessageLog::query()->where('channel', 'email')->count(),
                         'api' => $this->baseApiLogQuery()->count(),
                         'admin_login' => $this->baseAdminLoginLogQuery()->count(),
                         'business_audit' => $this->businessAuditLogCount(),
@@ -74,8 +74,8 @@ trait HandlesAdminLogCleanup
 
         if ($type === 'all' || $type === 'all_db') {
             DB::transaction(function () use ($cutoff, &$affected) {
-                $affected['sms'] = NotificationLog::query()->where('channel', 'sms')->where('created_at', '<', $cutoff)->delete();
-                $affected['email'] = NotificationLog::query()->where('channel', 'email')->where('created_at', '<', $cutoff)->delete();
+                $affected['sms'] = MessageLog::query()->where('channel', 'sms')->where('created_at', '<', $cutoff)->delete();
+                $affected['email'] = MessageLog::query()->where('channel', 'email')->where('created_at', '<', $cutoff)->delete();
                 $affected['api'] = $this->baseApiLogQuery()
                     ->where('created_at', '<', $cutoff)
                     ->delete();
@@ -88,11 +88,11 @@ trait HandlesAdminLogCleanup
         } else {
             DB::transaction(function () use ($type, $cutoff, &$affected) {
                 if ($type === 'sms') {
-                    $affected['sms'] = NotificationLog::query()->where('channel', 'sms')->where('created_at', '<', $cutoff)->delete();
+                    $affected['sms'] = MessageLog::query()->where('channel', 'sms')->where('created_at', '<', $cutoff)->delete();
                 }
 
                 if ($type === 'email') {
-                    $affected['email'] = NotificationLog::query()->where('channel', 'email')->where('created_at', '<', $cutoff)->delete();
+                    $affected['email'] = MessageLog::query()->where('channel', 'email')->where('created_at', '<', $cutoff)->delete();
                 }
 
                 if ($type === 'api') {

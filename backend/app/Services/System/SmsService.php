@@ -2,9 +2,8 @@
 
 namespace App\Services\System;
 
-use App\Models\NotificationLog;
+use App\Models\MessageLog;
 use App\Models\Setting;
-use App\Models\SmsLog;
 use App\Services\Integrations\Plugins\IntegrationDriverBindingResolver;
 use App\Services\Integrations\Plugins\PluginConfigRepository;
 use App\Services\Sms\Contracts\SmsDriver;
@@ -13,7 +12,6 @@ use App\Services\Sms\Data\SmsSendRequest;
 use App\Services\Sms\SmsDriverManager;
 use App\Support\SmsTemplateCatalog;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class SmsService
@@ -272,43 +270,26 @@ class SmsService
 
     /**
      * @param  array<string, mixed>  $params
-     * @return array{table: 'notification_logs'|'sms_logs'|null, id: int|null}
+     * @return array{id: int|null}
      */
     private function createSmsLog(string $phone, string $templateCode, string $content, array $params, string $provider, string $originType): array
     {
         $traceId = $this->notificationTraceId('sms', $templateCode);
 
         try {
-            if (Schema::hasTable('notification_logs')) {
-                $log = NotificationLog::create(array_merge([
-                    'channel' => 'sms',
-                    'recipient' => $phone,
-                    'template_code' => $templateCode,
-                    'content' => $content,
-                    'params_json' => $params,
-                    'provider' => $provider,
-                    'status' => 'pending',
-                    'origin_type' => $originType,
-                    'origin_id' => 0,
-                ], $this->smsAuditPayload('notification_logs', $traceId, $provider)));
+            $log = MessageLog::create(array_merge([
+                'channel' => 'sms',
+                'recipient' => $phone,
+                'template_code' => $templateCode,
+                'content' => $content,
+                'params_json' => $params,
+                'provider' => $provider,
+                'status' => 'pending',
+                'origin_type' => $originType,
+                'origin_id' => 0,
+            ], $this->smsAuditPayload($traceId, $provider)));
 
-                return ['table' => 'notification_logs', 'id' => (int) $log->getKey()];
-            }
-
-            if (Schema::hasTable('sms_logs')) {
-                $log = SmsLog::create(array_merge([
-                    'phone' => $phone,
-                    'template_code' => $templateCode,
-                    'content' => $content,
-                    'params' => $params,
-                    'provider' => $provider,
-                    'status' => 'pending',
-                    'error_msg' => null,
-                    'sent_at' => null,
-                ], $this->smsAuditPayload('sms_logs', $traceId, $provider)));
-
-                return ['table' => 'sms_logs', 'id' => (int) $log->getKey()];
-            }
+            return ['id' => (int) $log->getKey()];
         } catch (\Throwable $exception) {
             Log::warning('短信日志写入失败，已跳过日志写入继续发送', [
                 'phone' => $this->maskPhoneForLog($phone),
@@ -317,30 +298,21 @@ class SmsService
             ]);
         }
 
-        return ['table' => null, 'id' => null];
+        return ['id' => null];
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function smsAuditPayload(string $table, string $traceId, string $driverKey): array
+    private function smsAuditPayload(string $traceId, string $driverKey): array
     {
         $context = $this->driverBindingResolver()->smsContext($driverKey !== 'unconfigured' ? $driverKey : null);
-        $payload = [];
 
-        if (Schema::hasColumn($table, 'plugin_id')) {
-            $payload['plugin_id'] = $context['plugin_id'];
-        }
-
-        if (Schema::hasColumn($table, 'driver_key')) {
-            $payload['driver_key'] = $context['driver_key'];
-        }
-
-        if (Schema::hasColumn($table, 'trace_id')) {
-            $payload['trace_id'] = $traceId;
-        }
-
-        return $payload;
+        return [
+            'plugin_id' => $context['plugin_id'],
+            'driver_key' => $context['driver_key'],
+            'trace_id' => $traceId,
+        ];
     }
 
     private function driverBindingResolver(): IntegrationDriverBindingResolver
@@ -470,49 +442,21 @@ class SmsService
     }
 
     /**
-     * @param  array{table: 'notification_logs'|'sms_logs'|null, id: int|null}  $logContext
+     * @param  array{id: int|null}  $logContext
      */
     private function updateSmsLog(array $logContext, array $attributes): void
     {
-        $table = $logContext['table'] ?? null;
         $id = isset($logContext['id']) ? (int) $logContext['id'] : 0;
 
-        if ($table === null || $id <= 0) {
+        if ($id <= 0) {
             return;
         }
 
         try {
-            if ($table === 'notification_logs') {
-                NotificationLog::query()->whereKey($id)->update($attributes);
-
-                return;
-            }
-
-            if ($table === 'sms_logs') {
-                $payload = [
-                    'status' => $attributes['status'] ?? 'pending',
-                    'request_id' => $attributes['request_id'] ?? null,
-                    'error_msg' => $attributes['error_msg'] ?? null,
-                    'sent_at' => $attributes['sent_at'] ?? null,
-                ];
-
-                if (array_key_exists('template_code', $attributes)) {
-                    $payload['template_code'] = $attributes['template_code'];
-                }
-
-                if (array_key_exists('params_json', $attributes)) {
-                    $payload['params'] = $attributes['params_json'];
-                }
-
-                if (array_key_exists('content', $attributes)) {
-                    $payload['content'] = $attributes['content'];
-                }
-
-                SmsLog::query()->whereKey($id)->update($payload);
-            }
+            MessageLog::query()->whereKey($id)->update($attributes);
         } catch (\Throwable $exception) {
             Log::warning('短信日志状态更新失败，已忽略以避免阻断发送流程', [
-                'table' => $table,
+                'table' => 'message_logs',
                 'id' => $id,
                 'message' => $exception->getMessage(),
             ]);

@@ -518,30 +518,12 @@ class PluginDataBackfillService
         $mail = $this->driverContext($plugins, PluginDomain::MAIL, 'notification', 'mail_driver');
         $sms = $this->driverContext($plugins, PluginDomain::SMS, 'notification', 'sms_driver', 'sms_provider');
 
-        foreach ([['table' => 'email_logs', 'context' => $mail], ['table' => 'sms_logs', 'context' => $sms]] as $target) {
-            foreach (DB::table($target['table'])->orderBy('id')->get() as $row) {
-                $this->increment($report, $target['table'], 'total');
-                $context = $target['context'];
-                if ($context === null) {
-                    $this->increment($report, $target['table'], 'failed');
-                    $this->addUnknown($report, 'drivers', $target['table'], 'missing_selected_driver', (int) $row->id);
-
-                    continue;
-                }
-
-                $this->increment($report, $target['table'], 'success');
-                if ($execute) {
-                    DB::table($target['table'])->where('id', (int) $row->id)->update([
-                        'plugin_id' => $context['plugin_id'],
-                        'driver_key' => $context['driver_key'],
-                        'trace_id' => $this->historicalTraceId($target['table'], (int) $row->id),
-                    ]);
-                }
-            }
+        if (! Schema::hasTable('message_logs')) {
+            return;
         }
 
-        foreach (DB::table('notification_logs')->orderBy('id')->get() as $row) {
-            $this->increment($report, 'notification_logs', 'total');
+        foreach (DB::table('message_logs')->orderBy('id')->get() as $row) {
+            $this->increment($report, 'message_logs', 'total');
             $channel = trim((string) $row->channel);
             $context = match ($channel) {
                 'email' => $mail,
@@ -550,18 +532,18 @@ class PluginDataBackfillService
             };
 
             if ($context === null) {
-                $this->increment($report, 'notification_logs', 'failed');
-                $this->addUnknown($report, 'drivers', 'notification_logs.channel', $channel, (int) $row->id);
+                $this->increment($report, 'message_logs', 'failed');
+                $this->addUnknown($report, 'drivers', 'message_logs.channel', $channel, (int) $row->id);
 
                 continue;
             }
 
-            $this->increment($report, 'notification_logs', 'success');
+            $this->increment($report, 'message_logs', 'success');
             if ($execute) {
-                DB::table('notification_logs')->where('id', (int) $row->id)->update([
+                DB::table('message_logs')->where('id', (int) $row->id)->update([
                     'plugin_id' => $context['plugin_id'],
                     'driver_key' => $context['driver_key'],
-                    'trace_id' => $this->historicalTraceId('notification_logs', (int) $row->id),
+                    'trace_id' => $this->historicalTraceId('message_logs', (int) $row->id),
                 ]);
             }
         }
@@ -880,9 +862,7 @@ class PluginDataBackfillService
             'payments',
             'payment_callbacks',
             'gateway_logs',
-            'notification_logs',
-            'email_logs',
-            'sms_logs',
+            'message_logs',
         ];
 
         return [

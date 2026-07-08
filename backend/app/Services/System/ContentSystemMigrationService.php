@@ -283,11 +283,11 @@ class ContentSystemMigrationService
             'provider' => $this->normalizeNullableString($log['provider'] ?? null),
             'request_id' => $this->normalizeNullableString($log['request_id'] ?? null),
             'status' => $this->normalizeRequiredString($log['status'] ?? null, 'pending'),
-            'error_message' => $this->normalizeNullableString($log['error_msg'] ?? null),
+            'error_msg' => $this->normalizeNullableString($log['error_msg'] ?? null),
             'sent_at' => $this->normalizeDateTimeString($log['sent_at'] ?? null),
             'origin_type' => $this->normalizeNullableString($log['origin_type'] ?? null),
             'origin_id' => $this->normalizeNullablePositiveInt($log['origin_id'] ?? null),
-            'trace_id' => $this->normalizeNullableString($log['request_id'] ?? null),
+            'trace_id' => $this->normalizeNullableString($log['trace_id'] ?? $log['request_id'] ?? null),
             'created_at' => $this->normalizeDateTimeString($log['created_at'] ?? null),
             'updated_at' => $this->normalizeDateTimeString($log['updated_at'] ?? null),
         ];

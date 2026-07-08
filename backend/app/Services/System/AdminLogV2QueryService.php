@@ -7,13 +7,11 @@ namespace App\Services\System;
 use App\Http\Resources\Admin\V2\AdminLogSummaryResource;
 use App\Models\ActivityLog;
 use App\Models\AdminUser;
-use App\Models\EmailLog;
 use App\Models\GatewayLog;
 use App\Models\IntegrationPluginRuntimeLog;
-use App\Models\NotificationLog;
+use App\Models\MessageLog;
 use App\Models\OperationLog;
 use App\Models\ScheduleRunLog;
-use App\Models\SmsLog;
 use App\Support\SensitiveDataSanitizer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Schema;
@@ -170,19 +168,11 @@ class AdminLogV2QueryService
      */
     private function notificationDetail(string $channel, string $log): ?array
     {
-        $model = null;
-        if (Schema::hasTable('notification_logs')) {
-            $model = NotificationLog::query()->where('channel', $channel)->find($log);
+        if (! Schema::hasTable('message_logs')) {
+            return null;
         }
 
-        if (! $model && $channel === 'sms' && Schema::hasTable('sms_logs')) {
-            $model = SmsLog::query()->find($log);
-        }
-
-        if (! $model && $channel === 'email' && Schema::hasTable('email_logs')) {
-            $model = EmailLog::query()->find($log);
-        }
-
+        $model = MessageLog::query()->where('channel', $channel)->find($log);
         if (! $model instanceof Model) {
             return null;
         }
@@ -209,7 +199,7 @@ class AdminLogV2QueryService
         return [
             'id' => (string) $model->getKey(),
             'channel' => $channel,
-            'source' => $model instanceof NotificationLog ? 'notification_logs' : ($channel === 'sms' ? 'sms_logs' : 'email_logs'),
+            'source' => 'message_logs',
             'fields' => $fields,
             'message' => (string) ($row['content'] ?? ''),
             'context' => [

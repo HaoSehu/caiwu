@@ -7,7 +7,7 @@ use App\Models\AdminUser;
 use App\Models\GatewayLog;
 use App\Models\IntegrationPlugin;
 use App\Models\IntegrationPluginRuntimeLog;
-use App\Models\NotificationLog;
+use App\Models\MessageLog;
 use App\Models\Role;
 use App\Models\User;
 use App\Support\AdminPermissions;
@@ -112,7 +112,7 @@ class AdminLogBoundaryTest extends TestCase
         $suffix = bin2hex(random_bytes(4));
         $plugin = $this->createLogPlugin('sms', 'aliyun_sms', 'aliyun_sms');
 
-        NotificationLog::query()->create([
+        MessageLog::query()->create([
             'channel' => 'sms',
             'plugin_id' => (int) $plugin->id,
             'driver_key' => 'aliyun_sms',
@@ -126,7 +126,7 @@ class AdminLogBoundaryTest extends TestCase
             'sent_at' => now(),
         ]);
 
-        NotificationLog::query()->create([
+        MessageLog::query()->create([
             'channel' => 'sms',
             'plugin_id' => null,
             'driver_key' => 'other_sms',

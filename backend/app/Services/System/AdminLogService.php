@@ -7,14 +7,12 @@ namespace App\Services\System;
 use App\Constants\PaymentGatewayCode;
 use App\Models\ActivityLog;
 use App\Models\AdminUser;
-use App\Models\EmailLog;
 use App\Models\GatewayLog;
 use App\Models\IntegrationPluginRuntimeLog;
-use App\Models\NotificationLog;
+use App\Models\MessageLog;
 use App\Models\OperationLog;
 use App\Models\Role;
 use App\Models\ScheduleRunLog;
-use App\Models\SmsLog;
 use App\Models\User;
 use App\Services\System\Concerns\HandlesAdminLogCleanup;
 use App\Support\AdminPrivacy;
@@ -448,20 +446,15 @@ class AdminLogService
 
     private function buildSmsLogQuery(array $filters): ?Builder
     {
-        if (Schema::hasTable('notification_logs')) {
-            $tableName = 'notification_logs';
-            $query = NotificationLog::query()
-                ->where('channel', 'sms')
-                ->selectRaw('id, recipient as phone, template_code, content, params_json, status, provider, request_id, error_msg, sent_at, created_at, updated_at, origin_type');
-            $recipientColumn = 'recipient';
-        } elseif (Schema::hasTable('sms_logs')) {
-            $tableName = 'sms_logs';
-            $query = SmsLog::query()
-                ->selectRaw("id, phone, template_code, content, params as params_json, status, provider, request_id, error_msg, sent_at, created_at, updated_at, 'sms_log' as origin_type");
-            $recipientColumn = 'phone';
-        } else {
+        if (! Schema::hasTable('message_logs')) {
             return null;
         }
+
+        $tableName = 'message_logs';
+        $query = MessageLog::query()
+            ->where('channel', 'sms')
+            ->selectRaw('id, recipient as phone, template_code, content, params_json, status, provider, request_id, error_msg, sent_at, created_at, updated_at, origin_type');
+        $recipientColumn = 'recipient';
 
         $this->addOptionalSelectColumns($query, $tableName, ['plugin_id', 'driver_key', 'trace_id']);
         $this->applyPluginLogFilters($query, $tableName, $filters, 'driver_key');
@@ -489,20 +482,15 @@ class AdminLogService
 
     private function buildEmailLogQuery(array $filters): ?Builder
     {
-        if (Schema::hasTable('notification_logs')) {
-            $tableName = 'notification_logs';
-            $query = NotificationLog::query()
-                ->where('channel', 'email')
-                ->selectRaw('id, template_code, recipient as to_email, subject, content, status, error_msg, sent_at, created_at, updated_at');
-            $recipientColumn = 'recipient';
-        } elseif (Schema::hasTable('email_logs')) {
-            $tableName = 'email_logs';
-            $query = EmailLog::query()
-                ->selectRaw('id, template_code, to_email, subject, content, status, error_msg, sent_at, created_at, updated_at');
-            $recipientColumn = 'to_email';
-        } else {
+        if (! Schema::hasTable('message_logs')) {
             return null;
         }
+
+        $tableName = 'message_logs';
+        $query = MessageLog::query()
+            ->where('channel', 'email')
+            ->selectRaw('id, template_code, recipient as to_email, subject, content, status, error_msg, sent_at, created_at, updated_at');
+        $recipientColumn = 'recipient';
 
         $this->addOptionalSelectColumns($query, $tableName, ['plugin_id', 'driver_key', 'trace_id']);
         $this->applyPluginLogFilters($query, $tableName, $filters, 'driver_key');
@@ -531,24 +519,14 @@ class AdminLogService
 
     private function buildNotificationSummaryQuery(string $channel, array $filters): ?Builder
     {
-        if (Schema::hasTable('notification_logs')) {
-            $tableName = 'notification_logs';
-            $query = NotificationLog::query()->where('channel', $channel);
-            $recipientColumn = 'recipient';
-            $hasRequestId = true;
-        } elseif ($channel === 'sms' && Schema::hasTable('sms_logs')) {
-            $tableName = 'sms_logs';
-            $query = SmsLog::query();
-            $recipientColumn = 'phone';
-            $hasRequestId = true;
-        } elseif ($channel === 'email' && Schema::hasTable('email_logs')) {
-            $tableName = 'email_logs';
-            $query = EmailLog::query();
-            $recipientColumn = 'to_email';
-            $hasRequestId = false;
-        } else {
+        if (! Schema::hasTable('message_logs')) {
             return null;
         }
+
+        $tableName = 'message_logs';
+        $query = MessageLog::query()->where('channel', $channel);
+        $recipientColumn = 'recipient';
+        $hasRequestId = true;
 
         $this->applyPluginLogFilters($query, $tableName, $filters, 'driver_key');
 

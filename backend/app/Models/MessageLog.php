@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class NotificationLog extends Model
+class MessageLog extends Model
 {
     protected $fillable = [
         'channel',

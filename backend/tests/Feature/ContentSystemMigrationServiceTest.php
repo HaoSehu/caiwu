@@ -28,7 +28,7 @@ class ContentSystemMigrationServiceTest extends TestCase
         $this->assertSame(1, $payload['is_public']);
     }
 
-    public function test_it_builds_notification_log_payload_and_renames_error_message(): void
+    public function test_it_builds_notification_log_payload_for_message_logs(): void
     {
         $service = new ContentSystemMigrationService;
 
@@ -52,7 +52,7 @@ class ContentSystemMigrationServiceTest extends TestCase
         $this->assertSame(2, $payload['id']);
         $this->assertSame('sms', $payload['channel']);
         $this->assertSame('success', $payload['status']);
-        $this->assertNull($payload['error_message']);
+        $this->assertNull($payload['error_msg']);
         $this->assertSame('req-otp-e0db4ca2', $payload['trace_id']);
     }
 

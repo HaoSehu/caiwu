@@ -647,9 +647,7 @@ class IntegrationPluginService
             'payments',
             'payment_callbacks',
             'gateway_logs',
-            'notification_logs',
-            'email_logs',
-            'sms_logs',
+            'message_logs',
         ];
     }
 }
