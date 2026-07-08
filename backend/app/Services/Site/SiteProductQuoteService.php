@@ -88,17 +88,8 @@ class SiteProductQuoteService
 
         return Product::query()
             ->onSale()
-            ->whereHas('firstProductGroup', function ($query) use ($visibleProductTypes) {
-                $query->whereIn('code', $visibleProductTypes)->where('is_visible', 1);
-            })
-            ->whereHas('secondProductGroup', function ($query) {
-                $query->where('is_visible', 1);
-            })
-            ->where(function (Builder $query) {
-                $query
-                    ->whereNull('third_product_group_id')
-                    ->orWhereHas('thirdProductGroup', fn ($thirdQuery) => $thirdQuery->where('is_visible', 1));
-            });
+            ->whereNotNull('product_group_id')
+            ->withVisibleProductGroupPath($visibleProductTypes);
     }
 
     private function findSaleProductForQuote(int $productId): ?Product
@@ -106,9 +97,7 @@ class SiteProductQuoteService
         return $this->saleProductQuery()
             ->select([
                 'id',
-                'first_product_group_id',
-                'second_product_group_id',
-                'third_product_group_id',
+                'product_group_id',
                 'service_type_code',
                 'product_type',
                 'pricing',

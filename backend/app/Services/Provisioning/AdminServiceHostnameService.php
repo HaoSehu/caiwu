@@ -32,7 +32,7 @@ class AdminServiceHostnameService
 
         $serviceIds = $items->pluck('service_id')->values()->all();
         $services = Service::query()
-            ->with(['product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires', 'order:id,order_no'])
+            ->with(['product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires', 'order:id,order_no'])
             ->whereIn('id', $serviceIds)
             ->get()
             ->keyBy('id');

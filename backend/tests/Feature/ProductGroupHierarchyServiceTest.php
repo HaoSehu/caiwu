@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Models\Product;
-use App\Models\ProductCategory;
 use App\Services\ProductCatalog\ProductGroupHierarchyService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -48,31 +47,17 @@ class ProductGroupHierarchyServiceTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_it_backfills_three_level_hierarchy_from_legacy_product_groups(): void
+    public function test_it_reports_current_product_group_hierarchy_as_clean(): void
     {
-        $root = ProductCategory::query()->create([
-            'parent_id' => null,
-            'product_type' => 'vps',
-            'name' => '香港',
-            'slug' => 'hong-kong',
-            'slogan' => '香港云服务器',
-            'is_visible' => 1,
-            'sort_order' => 1,
-        ]);
-
-        $child = ProductCategory::query()->create([
-            'parent_id' => (int) $root->id,
-            'product_type' => 'vps',
-            'name' => '三网精品',
-            'slug' => 'premium',
-            'slogan' => '',
-            'is_visible' => 1,
-            'sort_order' => 2,
-        ]);
+        $rootId = $this->insertProductGroup(null, 1, 'vps', '云服务器');
+        $secondId = $this->insertProductGroup($rootId, 2, null, '香港');
+        $thirdId = $this->insertProductGroup($secondId, 3, null, '三网精品');
 
         $product = Product::query()->create([
+            'product_group_id' => $thirdId,
             'name' => '8vcpu-16gib',
-            'product_type' => 'vps',
+            'product_type' => 'cloud_server',
+            'service_type_code' => 'cloud_server',
             'pricing' => ['monthly' => '88.00'],
             'purchase_requires' => [],
             'config_options' => [],
@@ -82,40 +67,30 @@ class ProductGroupHierarchyServiceTest extends TestCase
             'provision_module' => null,
             'auto_setup' => 0,
         ]);
-        DB::table('products')
-            ->where('id', (int) $product->id)
-            ->update(['product_group_id' => (int) $child->id]);
 
-        $result = app(ProductGroupHierarchyService::class)->syncAllFromLegacy(100);
-
-        $firstGroup = DB::table('first_product_groups')->where('code', 'vps')->first();
-        $secondGroup = DB::table('second_product_groups')->where('legacy_product_group_id', (int) $root->id)->first();
-        $thirdGroup = DB::table('third_product_groups')->where('legacy_product_group_id', (int) $child->id)->first();
-
-        $this->assertTrue($result['tables_ready']);
-        $this->assertNotNull($firstGroup);
-        $this->assertNotNull($secondGroup);
-        $this->assertNotNull($thirdGroup);
-        $this->assertSame((int) $firstGroup->id, (int) $secondGroup->first_product_group_id);
-        $this->assertSame((int) $secondGroup->id, (int) $thirdGroup->second_product_group_id);
+        $result = app(ProductGroupHierarchyService::class)->checkHierarchy();
 
         $this->assertDatabaseHas('products', [
             'id' => (int) $product->id,
-            'first_product_group_id' => (int) $firstGroup->id,
-            'second_product_group_id' => (int) $secondGroup->id,
-            'third_product_group_id' => (int) $thirdGroup->id,
+            'product_group_id' => $thirdId,
             'service_type_code' => 'cloud_server',
         ]);
-
-        $this->assertSame([], app(ProductGroupHierarchyService::class)->checkHierarchy()['blocking_errors']);
+        $this->assertSame([], $result['blocking_errors']);
+        $this->assertSame(1, $result['counts']['root_product_groups']);
+        $this->assertSame(1, $result['counts']['second_product_groups']);
+        $this->assertSame(1, $result['counts']['third_product_groups']);
     }
 
-    public function test_it_archives_products_with_missing_legacy_group(): void
+    public function test_it_reports_products_with_missing_product_group(): void
     {
+        $this->insertProductGroup(null, 1, 'vps', '云服务器');
+
         $product = Product::query()->create([
+            'product_group_id' => 999,
             'name' => 'missing-legacy-group-product',
             'custom_display_name' => '历史缺失分类商品',
-            'product_type' => 'vps',
+            'product_type' => 'cloud_server',
+            'service_type_code' => 'cloud_server',
             'pricing' => ['monthly' => '88.00'],
             'purchase_requires' => [],
             'config_options' => [],
@@ -125,40 +100,52 @@ class ProductGroupHierarchyServiceTest extends TestCase
             'provision_module' => null,
             'auto_setup' => 0,
         ]);
-        DB::table('products')
-            ->where('id', (int) $product->id)
-            ->update(['product_group_id' => 999]);
 
-        $result = app(ProductGroupHierarchyService::class)->syncAllFromLegacy(100);
-        $product->refresh();
+        $result = app(ProductGroupHierarchyService::class)->checkHierarchy();
 
-        $firstGroup = DB::table('first_product_groups')->where('code', 'vps')->first();
-        $secondGroup = DB::table('second_product_groups')
-            ->where('first_product_group_id', (int) $firstGroup->id)
-            ->where('slug', 'legacy-unmapped-vps')
-            ->first();
+        $this->assertSame(1, $result['counts']['orphan_product_group_products']);
+        $this->assertNotSame([], $result['blocking_errors']);
+        $this->assertDatabaseHas('products', [
+            'id' => (int) $product->id,
+            'product_group_id' => 999,
+        ]);
+    }
 
-        $this->assertSame(1, $result['products_missing_legacy_group']);
-        $this->assertSame(1, $result['products_repaired_missing_legacy_group']);
-        $this->assertNull($product->product_group_id);
-        $this->assertSame((int) $firstGroup->id, (int) $product->first_product_group_id);
-        $this->assertSame((int) $secondGroup->id, (int) $product->second_product_group_id);
-        $this->assertNull($product->third_product_group_id);
-        $this->assertSame('cloud_server', $product->service_type_code);
-        $this->assertSame([], app(ProductGroupHierarchyService::class)->checkHierarchy()['blocking_errors']);
+    private function insertProductGroup(?int $parentId, int $level, ?string $code, string $name): int
+    {
+        return (int) DB::table('product_groups')->insertGetId([
+            'parent_id' => $parentId,
+            'level' => $level,
+            'code' => $code,
+            'product_type' => 'cloud_server',
+            'name' => $name,
+            'slug' => strtolower(str_replace(' ', '-', $name)).'-'.$level,
+            'sort_order' => $level,
+            'is_visible' => 1,
+            'is_system' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 
     private function createSchema(): void
     {
         Schema::connection('sqlite')->create('product_groups', function (Blueprint $table): void {
             $table->id();
-            $table->unsignedBigInteger('parent_group_id')->nullable();
-            $table->string('product_type')->nullable();
+            $table->unsignedBigInteger('parent_id')->nullable();
+            $table->integer('level');
+            $table->string('code', 50)->nullable();
+            $table->string('product_type', 50)->nullable();
             $table->string('name');
             $table->string('slug')->nullable();
-            $table->string('slogan')->nullable();
+            $table->string('description')->nullable();
+            $table->string('icon')->nullable();
+            $table->string('banner_image')->nullable();
             $table->integer('is_visible')->default(1);
+            $table->integer('is_system')->default(0);
             $table->integer('sort_order')->default(0);
+            $table->string('legacy_product_type', 50)->nullable();
+            $table->unsignedBigInteger('legacy_product_group_id')->nullable();
             $table->timestamps();
         });
 
@@ -206,9 +193,6 @@ class ProductGroupHierarchyServiceTest extends TestCase
         Schema::connection('sqlite')->create('products', function (Blueprint $table): void {
             $table->id();
             $table->unsignedBigInteger('product_group_id')->nullable();
-            $table->unsignedBigInteger('first_product_group_id')->nullable();
-            $table->unsignedBigInteger('second_product_group_id')->nullable();
-            $table->unsignedBigInteger('third_product_group_id')->nullable();
             $table->string('service_type_code', 50)->nullable();
             $table->string('name')->nullable();
             $table->string('custom_display_name')->nullable();

@@ -7,6 +7,7 @@ namespace App\Http\Resources\Site\V2;
 use App\Constants\ProductType;
 use App\Models\Product;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
+use App\Support\ProductGroupHierarchyFields;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -27,11 +28,8 @@ class SiteProductCardResource extends JsonResource
         /** @var Product $product */
         $product = $this->resource;
         $display = app(ProductDisplayNameResolver::class)->resolveForProduct($product);
-        $firstGroup = $product->relationLoaded('firstProductGroup') ? $product->firstProductGroup : null;
-        $secondGroup = $product->relationLoaded('secondProductGroup') ? $product->secondProductGroup : null;
-        $thirdGroup = $product->relationLoaded('thirdProductGroup') ? $product->thirdProductGroup : null;
-        $firstGroupCode = (string) ($firstGroup?->code ?? '');
-        $productType = ProductType::businessValueForFirstGroup($firstGroup, $product->product_type);
+        $hierarchy = ProductGroupHierarchyFields::fromProduct($product);
+        $productType = (string) ($hierarchy['product_type'] ?? $hierarchy['service_type_code'] ?? $product->product_type ?? '');
         $pricing = $this->pricing($product);
         $primaryCycle = $this->primaryCycle($pricing);
 
@@ -46,15 +44,7 @@ class SiteProductCardResource extends JsonResource
             'cpu_base_frequency' => (string) ($product->getAttribute('cpu_base_frequency') ?? ''),
             'cpu_turbo_frequency' => (string) ($product->getAttribute('cpu_turbo_frequency') ?? ''),
             'product_type' => $productType,
-            'first_product_group_id' => $firstGroup?->id ? (int) $firstGroup->id : null,
-            'first_product_group_code' => $firstGroupCode,
-            'first_product_group_name' => $firstGroup?->name,
-            'second_product_group_id' => $secondGroup?->id ? (int) $secondGroup->id : null,
-            'second_product_group_name' => $secondGroup?->name,
-            'third_product_group_id' => $thirdGroup?->id ? (int) $thirdGroup->id : null,
-            'third_product_group_name' => $thirdGroup?->name,
-            'effective_product_group_id' => $thirdGroup?->id ? (int) $thirdGroup->id : (int) ($secondGroup?->id ?? 0),
-            'effective_product_group_level' => $thirdGroup?->id ? 3 : 2,
+            ...$hierarchy,
             'pricing' => $pricing,
             'pricing_entries' => $this->pricingEntries($pricing, $product),
             'primary_cycle' => $primaryCycle,

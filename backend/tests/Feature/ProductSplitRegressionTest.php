@@ -186,7 +186,7 @@ class ProductSplitRegressionTest extends TestCase
         $this->assertSame(1, (int) (($upgradedVariant->config_options[1]['hidden'] ?? 0)));
         $this->assertSame(
             4,
-            Product::query()->where('second_product_group_id', $secondGroupId)->count()
+            Product::query()->where('product_group_id', $secondGroupId)->count()
         );
     }
 
@@ -376,7 +376,7 @@ class ProductSplitRegressionTest extends TestCase
         $this->assertSame(
             2,
             Product::query()
-                ->where('second_product_group_id', $secondGroupId)
+                ->where('product_group_id', $secondGroupId)
                 ->get()
                 ->filter(fn (Product $product) => (int) (($product->purchase_requires['upstream_split'] ?? [])['source_product_id'] ?? 0) === (int) $source->id)
                 ->count()
@@ -598,7 +598,7 @@ class ProductSplitRegressionTest extends TestCase
         $this->assertSame(1, (int) (($baseVariant->config_options[0]['hidden'] ?? 0)));
         $this->assertSame(
             2,
-            Product::query()->where('second_product_group_id', $secondGroupId)->count()
+            Product::query()->where('product_group_id', $secondGroupId)->count()
         );
     }
 
@@ -748,8 +748,7 @@ class ProductSplitRegressionTest extends TestCase
 
     /**
      * 创建一个可见的二级商品分组（隶属于可见的 vps 一级分组），返回其 ID。
-     * 商品按新的三级分组结构关联（products.second_product_group_id），
-     * 旧 product_groups/product_group_id 已废弃。
+     * 商品按当前 product_groups 自引用结构挂载（products.product_group_id）。
      */
     private function createSecondGroupId(string $slugSeed): int
     {

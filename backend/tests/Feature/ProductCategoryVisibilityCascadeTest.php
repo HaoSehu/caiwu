@@ -54,6 +54,7 @@ class ProductCategoryVisibilityCascadeTest extends TestCase
             'is_visible' => 1,
             'sort_order' => 0,
         ]);
+        $rootGroupId = $this->mirrorProductGroup(null, 1, 'vps', 'Visibility root', 'visibility-root');
 
         $child = SecondProductGroup::query()->create([
             'first_product_group_id' => (int) $root->id,
@@ -62,6 +63,7 @@ class ProductCategoryVisibilityCascadeTest extends TestCase
             'is_visible' => 1,
             'sort_order' => 1,
         ]);
+        $childGroupId = $this->mirrorProductGroup($rootGroupId, 2, null, 'Visibility child', 'visibility-child');
 
         $other = FirstProductGroup::query()->create([
             'code' => 'vps-other',
@@ -70,10 +72,11 @@ class ProductCategoryVisibilityCascadeTest extends TestCase
             'is_visible' => 1,
             'sort_order' => 2,
         ]);
+        $otherGroupId = $this->mirrorProductGroup(null, 1, 'vps-other', 'Visibility other', 'visibility-other');
 
-        $rootProduct = $this->createProduct((int) $root->id, null, 'Root product');
-        $childProduct = $this->createProduct((int) $root->id, (int) $child->id, 'Child product');
-        $otherProduct = $this->createProduct((int) $other->id, null, 'Other product');
+        $rootProduct = $this->createProduct($rootGroupId, 'Root product');
+        $childProduct = $this->createProduct($childGroupId, 'Child product');
+        $otherProduct = $this->createProduct($otherGroupId, 'Other product');
 
         app(ProductCategoryService::class)->updateCategory((int) $root->id, [
             'level' => 1,
@@ -105,11 +108,10 @@ class ProductCategoryVisibilityCascadeTest extends TestCase
         ]);
     }
 
-    private function createProduct(int $firstGroupId, ?int $secondGroupId, string $name): Product
+    private function createProduct(int $productGroupId, string $name): Product
     {
         return Product::query()->create([
-            'first_product_group_id' => $firstGroupId,
-            'second_product_group_id' => $secondGroupId,
+            'product_group_id' => $productGroupId,
             'service_type_code' => 'vps',
             'name' => $name,
             'custom_display_name' => $name,
@@ -125,17 +127,41 @@ class ProductCategoryVisibilityCascadeTest extends TestCase
         ]);
     }
 
+    private function mirrorProductGroup(?int $parentId, int $level, ?string $code, string $name, string $slug): int
+    {
+        return (int) DB::table('product_groups')->insertGetId([
+            'parent_id' => $parentId,
+            'level' => $level,
+            'code' => $code,
+            'product_type' => 'cloud_server',
+            'name' => $name,
+            'slug' => $slug,
+            'sort_order' => 0,
+            'is_visible' => 1,
+            'is_system' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
     private function createSchema(): void
     {
         Schema::connection('sqlite')->create('product_groups', function (Blueprint $table): void {
             $table->id();
-            $table->unsignedBigInteger('parent_group_id')->nullable();
-            $table->string('product_type')->nullable();
+            $table->unsignedBigInteger('parent_id')->nullable();
+            $table->integer('level');
+            $table->string('code', 50)->nullable();
+            $table->string('product_type', 50)->nullable();
             $table->string('name');
             $table->string('slug')->nullable();
-            $table->string('slogan')->nullable();
+            $table->string('description')->nullable();
+            $table->string('icon')->nullable();
+            $table->string('banner_image')->nullable();
             $table->integer('is_visible')->default(1);
+            $table->integer('is_system')->default(0);
             $table->integer('sort_order')->default(0);
+            $table->string('legacy_product_type', 50)->nullable();
+            $table->unsignedBigInteger('legacy_product_group_id')->nullable();
             $table->timestamps();
         });
 
@@ -183,9 +209,6 @@ class ProductCategoryVisibilityCascadeTest extends TestCase
         Schema::connection('sqlite')->create('products', function (Blueprint $table): void {
             $table->id();
             $table->unsignedBigInteger('product_group_id')->nullable();
-            $table->unsignedBigInteger('first_product_group_id')->nullable();
-            $table->unsignedBigInteger('second_product_group_id')->nullable();
-            $table->unsignedBigInteger('third_product_group_id')->nullable();
             $table->string('service_type_code', 50)->nullable();
             $table->string('name')->nullable();
             $table->string('custom_display_name')->nullable();

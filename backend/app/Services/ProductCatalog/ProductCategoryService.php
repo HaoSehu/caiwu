@@ -649,19 +649,19 @@ class ProductCategoryService
             ThirdProductGroup::query()
                 ->whereIn('second_product_group_id', SecondProductGroup::query()->select('id')->where('first_product_group_id', $groupId))
                 ->update(['is_visible' => $isVisible]);
-            Product::query()->where('first_product_group_id', $groupId)->update(['status' => $isVisible]);
+            Product::query()->inProductGroupTree($groupId)->update(['status' => $isVisible]);
 
             return;
         }
 
         if ($level === 2) {
             ThirdProductGroup::query()->where('second_product_group_id', $groupId)->update(['is_visible' => $isVisible]);
-            Product::query()->where('second_product_group_id', $groupId)->update(['status' => $isVisible]);
+            Product::query()->inProductGroupTree($groupId)->update(['status' => $isVisible]);
 
             return;
         }
 
-        Product::query()->where('third_product_group_id', $groupId)->update(['status' => $isVisible]);
+        Product::query()->inCurrentProductGroup($groupId)->update(['status' => $isVisible]);
     }
 
     private function resequenceGroupIds(int $level, array $sortMap): void

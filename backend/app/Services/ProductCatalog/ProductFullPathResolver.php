@@ -8,6 +8,7 @@ use App\Constants\ProductType;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Product;
+use App\Support\ProductGroupHierarchyFields;
 
 class ProductFullPathResolver
 {
@@ -137,25 +138,21 @@ class ProductFullPathResolver
     {
         if ($product->exists) {
             $product->loadMissing([
-                'firstProductGroup:id,code,name',
-                'secondProductGroup:id,first_product_group_id,name',
-                'thirdProductGroup:id,second_product_group_id,name',
+                'productGroup.parent.parent',
             ]);
         }
 
-        $firstGroup = $product->relationLoaded('firstProductGroup') ? $product->firstProductGroup : null;
-        $secondGroup = $product->relationLoaded('secondProductGroup') ? $product->secondProductGroup : null;
-        $thirdGroup = $product->relationLoaded('thirdProductGroup') ? $product->thirdProductGroup : null;
+        $hierarchy = ProductGroupHierarchyFields::fromProduct($product);
         $productType = ProductType::businessValueForFirstGroup(
-            $firstGroup,
-            $productTypeOverride ?? $product->product_type ?? $product->service_type_code
+            $product->resolvedProductGroupHierarchy()[0],
+            $productTypeOverride ?? $hierarchy['product_type'] ?? $product->product_type ?? $product->service_type_code
         );
-        $firstName = trim((string) ($firstGroup?->name ?? '')) ?: ProductType::businessLabelOf($productType);
+        $firstName = trim((string) ($hierarchy['first_product_group_name'] ?? '')) ?: ProductType::businessLabelOf($productType);
 
         return $this->cleanSegments([
             $firstName,
-            trim((string) ($secondGroup?->name ?? '')),
-            trim((string) ($thirdGroup?->name ?? '')),
+            trim((string) ($hierarchy['second_product_group_name'] ?? '')),
+            trim((string) ($hierarchy['third_product_group_name'] ?? '')),
             trim($productName),
         ]);
     }

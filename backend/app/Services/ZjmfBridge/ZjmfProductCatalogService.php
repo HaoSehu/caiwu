@@ -11,6 +11,7 @@ use App\Models\Product;
 use App\Models\SecondProductGroup;
 use App\Models\ThirdProductGroup;
 use App\Services\Order\Concerns\HandlesOrderCalculation;
+use App\Support\ProductGroupHierarchyFields;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Schema;
 
@@ -141,45 +142,17 @@ class ZjmfProductCatalogService
 
         return Product::query()
             ->onSale()
-            ->whereNotNull('first_product_group_id')
-            ->whereNotNull('second_product_group_id')
+            ->whereNotNull('product_group_id')
             ->with([
-                'firstProductGroup',
-                'secondProductGroup',
-                'thirdProductGroup',
+                'productGroup.parent.parent',
             ])
-            ->whereHas('firstProductGroup', function (Builder $query) use ($productType): void {
-                $query->where('is_visible', 1);
-
-                if ($this->firstGroupHasProductType()) {
-                    $query
-                        ->whereIn('product_type', ProductType::businessAllowedValues())
-                        ->when($productType !== null, fn (Builder $typeQuery) => $typeQuery->where('product_type', $productType));
-                }
-            })
-            ->when(
-                $productType !== null && ! $this->firstGroupHasProductType(),
-                fn (Builder $query) => $query->where('product_type', $productType)
-            )
-            ->whereHas('secondProductGroup', fn (Builder $query) => $query->where('is_visible', 1))
-            ->where(function (Builder $query): void {
-                $query
-                    ->whereNull('third_product_group_id')
-                    ->orWhereHas('thirdProductGroup', fn (Builder $thirdQuery) => $thirdQuery->where('is_visible', 1));
-            })
-            ->when($firstGroupId !== null, fn (Builder $query) => $query->where('first_product_group_id', $firstGroupId))
-            ->when($secondGroupId !== null, fn (Builder $query) => $query->where('second_product_group_id', $secondGroupId))
-            ->when($thirdGroupId !== null, fn (Builder $query) => $query->where('third_product_group_id', $thirdGroupId))
+            ->withVisibleProductGroupPath(ProductType::visibleValues())
+            ->when($productType !== null, fn (Builder $query) => $query->underRootProductGroup(null, $productType))
+            ->when($firstGroupId !== null, fn (Builder $query) => $query->inProductGroupTree($firstGroupId))
+            ->when($secondGroupId !== null, fn (Builder $query) => $query->inProductGroupTree($secondGroupId))
+            ->when($thirdGroupId !== null, fn (Builder $query) => $query->inCurrentProductGroup($thirdGroupId))
             ->when($effectiveGroupId !== null, function (Builder $query) use ($effectiveGroupId): void {
-                $query->where(function (Builder $groupQuery) use ($effectiveGroupId): void {
-                    $groupQuery
-                        ->where('third_product_group_id', $effectiveGroupId)
-                        ->orWhere(function (Builder $secondQuery) use ($effectiveGroupId): void {
-                            $secondQuery
-                                ->where('second_product_group_id', $effectiveGroupId)
-                                ->whereNull('third_product_group_id');
-                        });
-                });
+                $query->inCurrentProductGroup($effectiveGroupId);
             });
     }
 
@@ -205,12 +178,15 @@ class ZjmfProductCatalogService
      */
     private function productPayload(Product $product, bool $includeConfig = false): array
     {
-        $firstGroup = $product->relationLoaded('firstProductGroup') ? $product->firstProductGroup : null;
-        $secondGroup = $product->relationLoaded('secondProductGroup') ? $product->secondProductGroup : null;
-        $thirdGroup = $product->relationLoaded('thirdProductGroup') ? $product->thirdProductGroup : null;
-        $productType = $this->businessProductType($firstGroup, $product);
+        $hierarchy = ProductGroupHierarchyFields::fromProduct($product);
+        $productType = (string) ($hierarchy['product_type'] ?? ProductType::OTHER);
         $pricing = $this->pricing($product);
         $primaryCycle = $this->primaryCycle($pricing);
+        $firstGroupId = $hierarchy['first_product_group_id'] ?? null;
+        $secondGroupId = $hierarchy['second_product_group_id'] ?? null;
+        $thirdGroupId = $hierarchy['third_product_group_id'] ?? null;
+        $effectiveGroupId = $hierarchy['effective_product_group_id'] ?? null;
+        $effectiveGroupLevel = $hierarchy['effective_product_group_level'] ?? null;
 
         $payload = [
             'id' => (int) $product->id,
@@ -219,16 +195,16 @@ class ZjmfProductCatalogService
             'product_type' => $productType,
             'type' => $productType,
             'product_type_label' => ProductType::businessLabelOf($productType),
-            'menu_code' => (string) ($firstGroup?->code ?? ''),
-            'first_product_group_id' => $firstGroup?->id ? (int) $firstGroup->id : null,
-            'first_product_group_code' => (string) ($firstGroup?->code ?? ''),
-            'first_product_group_name' => $firstGroup?->name,
-            'second_product_group_id' => $secondGroup?->id ? (int) $secondGroup->id : null,
-            'second_product_group_name' => $secondGroup?->name,
-            'third_product_group_id' => $thirdGroup?->id ? (int) $thirdGroup->id : null,
-            'third_product_group_name' => $thirdGroup?->name,
-            'effective_product_group_id' => $thirdGroup?->id ? (int) $thirdGroup->id : ($secondGroup?->id ? (int) $secondGroup->id : null),
-            'effective_product_group_level' => $thirdGroup?->id ? 3 : ($secondGroup?->id ? 2 : null),
+            'menu_code' => (string) ($hierarchy['first_product_group_code'] ?? ''),
+            'first_product_group_id' => $firstGroupId,
+            'first_product_group_code' => (string) ($hierarchy['first_product_group_code'] ?? ''),
+            'first_product_group_name' => $hierarchy['first_product_group_name'] ?? null,
+            'second_product_group_id' => $secondGroupId,
+            'second_product_group_name' => $hierarchy['second_product_group_name'] ?? null,
+            'third_product_group_id' => $thirdGroupId,
+            'third_product_group_name' => $hierarchy['third_product_group_name'] ?? null,
+            'effective_product_group_id' => $effectiveGroupId,
+            'effective_product_group_level' => $effectiveGroupLevel,
             'primary_cycle' => $primaryCycle,
             'primary_price' => $primaryCycle !== '' ? $pricing[$primaryCycle] : '0.00',
             'setup_fee' => $this->money($product->setup_fee ?? 0),
@@ -236,17 +212,17 @@ class ZjmfProductCatalogService
             'auto_setup' => (int) ($product->auto_setup ?? 0),
             'pricing' => $pricing,
             'first_group' => [
-                'id' => $firstGroup?->id ? (int) $firstGroup->id : null,
-                'name' => $firstGroup?->name,
-                'code' => (string) ($firstGroup?->code ?? ''),
+                'id' => $firstGroupId,
+                'name' => $hierarchy['first_product_group_name'] ?? null,
+                'code' => (string) ($hierarchy['first_product_group_code'] ?? ''),
                 'product_type' => $productType,
                 'product_type_label' => ProductType::businessLabelOf($productType),
             ],
             'group' => [
-                'id' => $thirdGroup?->id ? (int) $thirdGroup->id : ($secondGroup?->id ? (int) $secondGroup->id : null),
-                'level' => $thirdGroup?->id ? 3 : ($secondGroup?->id ? 2 : null),
-                'name' => $thirdGroup?->name ?? $secondGroup?->name,
-                'parent_id' => $thirdGroup?->id ? (int) ($secondGroup?->id ?? 0) : (int) ($firstGroup?->id ?? 0),
+                'id' => $effectiveGroupId,
+                'level' => $effectiveGroupLevel,
+                'name' => $hierarchy['third_product_group_name'] ?? $hierarchy['second_product_group_name'] ?? null,
+                'parent_id' => $thirdGroupId ? (int) ($secondGroupId ?? 0) : (int) ($firstGroupId ?? 0),
             ],
         ];
 

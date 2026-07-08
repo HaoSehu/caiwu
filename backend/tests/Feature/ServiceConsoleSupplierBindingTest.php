@@ -222,7 +222,8 @@ class ServiceConsoleSupplierBindingTest extends TestCase
         $this->assertStringNotContainsString('product:id,name,type,', $source);
         $this->assertStringNotContainsString('product:id,product_type,product_group_id,supplier_id,provision_module', $source);
         $this->assertStringNotContainsString('supplier_id,provision_module', $source);
-        $this->assertStringContainsString('product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires', $source);
+        $this->assertStringNotContainsString('first_product_group_id,second_product_group_id,third_product_group_id', $source);
+        $this->assertStringContainsString('product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires', $source);
     }
 
     private function makeDetailService(?Supplier $resolvedSupplier): ServiceDetailService

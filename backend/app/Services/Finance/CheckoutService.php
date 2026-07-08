@@ -455,7 +455,7 @@ class CheckoutService
     private function freshCheckoutInvoice(int $invoiceId): ?Invoice
     {
         return Invoice::query()
-            ->with(['product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires', 'service'])
+            ->with(['product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires', 'service'])
             ->where('status', '!=', InvoiceStatus::CANCELLED)
             ->find($invoiceId);
     }

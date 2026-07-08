@@ -198,9 +198,7 @@ class OrderV2QueryService
             Product::optionalSelectColumns([
                 'product_type',
                 'service_type_code',
-                'first_product_group_id',
-                'second_product_group_id',
-                'third_product_group_id',
+                'product_group_id',
                 'custom_display_name',
                 'remark',
                 'config_options',

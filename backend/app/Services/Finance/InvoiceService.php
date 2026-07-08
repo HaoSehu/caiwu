@@ -177,8 +177,8 @@ class InvoiceService
         $query = Invoice::with([
             'user:id,email,nickname,phone',
             'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle',
-            'order.product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
+            'order.product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
             'service:id,name,status,expires_at',
             'payments',
             'items',
@@ -234,8 +234,8 @@ class InvoiceService
         $invoice = Invoice::with([
             'user:id,email,nickname,phone',
             'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle',
-            'order.product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
+            'order.product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
             'service:id,name,status,expires_at',
             'payments',
             'items',
@@ -378,11 +378,11 @@ class InvoiceService
     {
         $invoice->loadMissing([
             'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle,amount,discount,paid_amount,quantity,product_spec_snapshot,product_type_snapshot,config_snapshot,config_pricing_snapshot',
-            'order.product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
+            'order.product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
             'order.product.firstProductGroup:id,code,name',
             'order.product.secondProductGroup:id,first_product_group_id,name',
             'order.product.thirdProductGroup:id,second_product_group_id,name',
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name',
             'product.secondProductGroup:id,first_product_group_id,name',
             'product.thirdProductGroup:id,second_product_group_id,name',
@@ -461,8 +461,8 @@ class InvoiceService
         $invoice->loadMissing([
             'user:id,email,nickname,phone',
             'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle',
-            'order.product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
+            'order.product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
             'service:id,name,status,expires_at',
             'payments',
             'items',
@@ -972,7 +972,7 @@ class InvoiceService
         return $invoice->fresh([
             'items',
             'order',
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
         ]) ?? $invoice;
     }
 

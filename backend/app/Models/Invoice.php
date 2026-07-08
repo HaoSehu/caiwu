@@ -213,7 +213,7 @@ class Invoice extends Model
 
             $itemName = $this->display_product_name;
             if ($itemName === '') {
-                $this->loadMissing('order.product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires');
+                $this->loadMissing('order.product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires');
                 $itemName = trim((string) ($this->order?->display_product_name ?? ''));
             }
             $quantity = max((int) ($this->quantity ?? $this->order?->quantity ?? 1), 1);

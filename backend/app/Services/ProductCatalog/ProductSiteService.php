@@ -15,6 +15,7 @@ use App\Support\ProductGroupHierarchyFields;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class ProductSiteService
 {
@@ -61,19 +62,19 @@ class ProductSiteService
 
                 $productCounts = Product::query()
                     ->onSale()
-                    ->join('first_product_groups', 'first_product_groups.id', '=', 'products.first_product_group_id')
-                    ->join('second_product_groups', 'second_product_groups.id', '=', 'products.second_product_group_id')
-                    ->leftJoin('third_product_groups', 'third_product_groups.id', '=', 'products.third_product_group_id')
-                    ->where('first_product_groups.is_visible', 1)
-                    ->where('second_product_groups.is_visible', 1)
+                    ->join('product_groups as leaf', 'leaf.id', '=', 'products.product_group_id')
+                    ->leftJoin('product_groups as parent', 'parent.id', '=', 'leaf.parent_id')
+                    ->leftJoin('product_groups as root', 'root.id', '=', DB::raw(
+                        'CASE WHEN leaf.level = 1 THEN leaf.id WHEN leaf.level = 2 THEN leaf.parent_id ELSE parent.parent_id END'
+                    ))
+                    ->where('leaf.is_visible', 1)
                     ->where(function (Builder $query): void {
-                        $query
-                            ->whereNull('products.third_product_group_id')
-                            ->orWhere('third_product_groups.is_visible', 1);
+                        $query->whereNull('parent.id')->orWhere('parent.is_visible', 1);
                     })
-                    ->whereIn('first_product_groups.code', $visibleProductTypes)
-                    ->selectRaw('first_product_groups.code as product_type, COUNT(products.id) as product_count')
-                    ->groupBy('first_product_groups.code')
+                    ->where('root.is_visible', 1)
+                    ->whereIn('root.code', $visibleProductTypes)
+                    ->selectRaw('root.code as product_type, COUNT(products.id) as product_count')
+                    ->groupBy('root.code')
                     ->pluck('product_count', 'product_type');
 
                 return collect(ProductType::visibleItems())
@@ -137,12 +138,12 @@ class ProductSiteService
                     ->with(['firstProductGroup'])
                     ->withCount([
                         'thirdProductGroups as children_count' => fn (Builder $query) => $query->where('is_visible', 1),
-                        'products as direct_product_count' => fn (Builder $query) => $query->onSale()->whereNull('third_product_group_id'),
+                        'products as direct_product_count' => fn (Builder $query) => $query->onSale(),
                     ])
                     ->selectSub(
                         Product::query()
                             ->selectRaw('COUNT(*)')
-                            ->join('third_product_groups', 'third_product_groups.id', '=', 'products.third_product_group_id')
+                            ->join('third_product_groups', 'third_product_groups.id', '=', 'products.product_group_id')
                             ->whereColumn('third_product_groups.second_product_group_id', 'second_product_groups.id')
                             ->where('third_product_groups.is_visible', 1)
                             ->where('products.status', 1),
@@ -250,32 +251,19 @@ class ProductSiteService
 
         $productsByGroup = Product::query()
             ->onSale()
-            ->where(function (Builder $query) use ($visibleGroupIds): void {
-                if ($visibleGroupIds['second'] !== []) {
-                    $query->orWhere(function (Builder $secondQuery) use ($visibleGroupIds): void {
-                        $secondQuery
-                            ->whereIn('second_product_group_id', $visibleGroupIds['second'])
-                            ->whereNull('third_product_group_id');
-                    });
-                }
-
-                if ($visibleGroupIds['third'] !== []) {
-                    $query->orWhereIn('third_product_group_id', $visibleGroupIds['third']);
-                }
-            })
+            ->whereIn('product_group_id', array_values(array_unique([
+                ...$visibleGroupIds['second'],
+                ...$visibleGroupIds['third'],
+            ])))
             ->with([
-                'firstProductGroup',
-                'secondProductGroup',
-                'thirdProductGroup',
+                'productGroup.parent.parent',
             ])
             ->select([
                 'id',
                 'product_type',
                 ...Product::optionalSelectColumns([
                     'custom_display_name',
-                    'first_product_group_id',
-                    'second_product_group_id',
-                    'third_product_group_id',
+                    'product_group_id',
                     'service_type_code',
                 ]),
                 'purchase_requires',
@@ -289,7 +277,7 @@ class ProductSiteService
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get()
-            ->groupBy(fn (Product $product) => (int) ($product->third_product_group_id ?: $product->second_product_group_id));
+            ->groupBy(fn (Product $product) => (int) $product->product_group_id);
 
         $instanceSpecMap = $this->instanceSpecCatalogService->resolveProductSpecMap(
             collect($productsByGroup)
@@ -365,7 +353,6 @@ class ProductSiteService
                         ->orderBy('id'),
                     'products' => fn ($query) => $query
                         ->where('status', 1)
-                        ->whereNull('third_product_group_id')
                         ->orderBy('sort_order')
                         ->orderBy('id'),
                 ])
@@ -385,17 +372,8 @@ class ProductSiteService
 
         return Product::query()
             ->onSale()
-            ->whereNotNull('first_product_group_id')
-            ->whereNotNull('second_product_group_id')
-            ->whereHas('firstProductGroup', fn (Builder $query) => $query
-                ->where('is_visible', 1)
-                ->whereIn('code', $visibleProductTypes))
-            ->whereHas('secondProductGroup', fn (Builder $query) => $query->where('is_visible', 1))
-            ->where(function (Builder $query): void {
-                $query
-                    ->whereNull('third_product_group_id')
-                    ->orWhereHas('thirdProductGroup', fn (Builder $thirdQuery) => $thirdQuery->where('is_visible', 1));
-            });
+            ->whereNotNull('product_group_id')
+            ->withVisibleProductGroupPath($visibleProductTypes);
     }
 
     private function findSaleProductForDetail(int $productId): ?Product
@@ -406,9 +384,7 @@ class ProductSiteService
                 'product_type',
                 ...Product::optionalSelectColumns([
                     'custom_display_name',
-                    'first_product_group_id',
-                    'second_product_group_id',
-                    'third_product_group_id',
+                    'product_group_id',
                     'service_type_code',
                 ]),
                 'pricing',
@@ -419,9 +395,7 @@ class ProductSiteService
                 'auto_setup',
             ])
             ->with([
-                'firstProductGroup',
-                'secondProductGroup',
-                'thirdProductGroup',
+                'productGroup.parent.parent',
             ])
             ->whereKey($productId)
             ->first();
@@ -571,13 +545,9 @@ class ProductSiteService
         $cpuDisplay = trim((string) ($displayNamePayload['cpu_display'] ?? ''));
         $memoryDisplay = trim((string) ($displayNamePayload['memory_display'] ?? ''));
 
-        // 商品所在分组及其上级分组的标语，按三级结构（second/third）取 description。
-        $effectiveGroup = $product->relationLoaded('thirdProductGroup') && $product->thirdProductGroup
-            ? $product->thirdProductGroup
-            : ($product->relationLoaded('secondProductGroup') ? $product->secondProductGroup : null);
-        $parentGroup = ($product->thirdProductGroup ?? null)
-            ? ($product->relationLoaded('secondProductGroup') ? $product->secondProductGroup : null)
-            : ($product->relationLoaded('firstProductGroup') ? $product->firstProductGroup : null);
+        [, $secondGroup, $thirdGroup] = $product->resolvedProductGroupHierarchy();
+        $effectiveGroup = $thirdGroup ?? $secondGroup;
+        $parentGroup = $thirdGroup ? $secondGroup : $product->resolvedProductGroupHierarchy()[0];
         $groupSlogan = trim((string) ($effectiveGroup?->description ?? ''));
         $parentSlogan = trim((string) ($parentGroup?->description ?? ''));
 
@@ -591,21 +561,14 @@ class ProductSiteService
 
         $siblings = Product::query()
             ->onSale()
-            ->where('second_product_group_id', (int) ($product->second_product_group_id ?? 0))
-            ->when(
-                (int) ($product->third_product_group_id ?? 0) > 0,
-                fn (Builder $query) => $query->where('third_product_group_id', (int) $product->third_product_group_id),
-                fn (Builder $query) => $query->whereNull('third_product_group_id')
-            )
+            ->inCurrentProductGroup((int) ($product->product_group_id ?? 0))
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get([
                 'id',
                 'product_type',
                 'service_type_code',
-                'first_product_group_id',
-                'second_product_group_id',
-                'third_product_group_id',
+                'product_group_id',
                 ...Product::optionalSelectColumns(['custom_display_name']),
                 'purchase_requires',
                 'config_options',

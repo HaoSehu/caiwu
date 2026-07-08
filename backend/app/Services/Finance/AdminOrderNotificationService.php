@@ -61,7 +61,7 @@ class AdminOrderNotificationService
 
         $order->loadMissing([
             'user:id,email,nickname',
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name',
             'product.secondProductGroup:id,first_product_group_id,name',
             'product.thirdProductGroup:id,second_product_group_id,name',
@@ -102,7 +102,7 @@ class AdminOrderNotificationService
     {
         $order->loadMissing([
             'user:id,email,nickname',
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name',
             'product.secondProductGroup:id,first_product_group_id,name',
             'product.thirdProductGroup:id,second_product_group_id,name',
@@ -258,11 +258,11 @@ class AdminOrderNotificationService
         $invoice = Invoice::query()->with([
             'user:id,email,nickname',
             'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle,product_spec_snapshot,product_type_snapshot,config_snapshot',
-            'order.product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
+            'order.product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
             'order.product.firstProductGroup:id,code,name',
             'order.product.secondProductGroup:id,first_product_group_id,name',
             'order.product.thirdProductGroup:id,second_product_group_id,name',
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
             'product.firstProductGroup:id,code,name',
             'product.secondProductGroup:id,first_product_group_id,name',
             'product.thirdProductGroup:id,second_product_group_id,name',

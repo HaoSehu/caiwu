@@ -2,11 +2,28 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Support\DatabaseSchema;
 
-class FirstProductGroup extends Model
+class FirstProductGroup extends ProductGroup
 {
+    protected $table = 'first_product_groups';
+
+    protected static function booted(): void
+    {
+        static::addGlobalScope('first_product_group_level', function (Builder $builder): void {
+            if (self::hasLevelColumn()) {
+                $builder->where($builder->getModel()->qualifyColumn('level'), 1);
+            }
+        });
+        static::creating(function (self $group): void {
+            if (self::hasLevelColumn()) {
+                $group->level = 1;
+            }
+        });
+    }
+
     protected $fillable = [
         'code',
         'name',
@@ -21,15 +38,6 @@ class FirstProductGroup extends Model
         'product_type',
     ];
 
-    protected function casts(): array
-    {
-        return [
-            'sort_order' => 'integer',
-            'is_visible' => 'integer',
-            'is_system' => 'integer',
-        ];
-    }
-
     public function secondProductGroups(): HasMany
     {
         return $this->hasMany(SecondProductGroup::class, 'first_product_group_id');
@@ -37,6 +45,15 @@ class FirstProductGroup extends Model
 
     public function products(): HasMany
     {
-        return $this->hasMany(Product::class, 'first_product_group_id');
+        return $this->hasMany(Product::class, 'product_group_id');
+    }
+
+    private static function hasLevelColumn(): bool
+    {
+        try {
+            return DatabaseSchema::hasColumn((new self)->getTable(), 'level');
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }

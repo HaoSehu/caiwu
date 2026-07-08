@@ -38,7 +38,7 @@ class AdminFinanceQueryService
             ->with([
                 'user:id,email,nickname,phone',
                 'invoice:id,invoice_no,order_id,type,status,amount,paid_amount,paid_at,due_date,created_at',
-                'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
+                'product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
                 'product.firstProductGroup:id,code,name',
                 'product.secondProductGroup:id,first_product_group_id,name',
                 'product.thirdProductGroup:id,second_product_group_id,name',
@@ -222,7 +222,7 @@ class AdminFinanceQueryService
             ->with([
                 'user:id,email,nickname,phone',
                 'invoice:id,invoice_no,order_id,type,status,amount,paid_amount,paid_at,due_date,created_at',
-                'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
+                'product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
                 'service:id,name,domain,status,expires_at',
             ])
             ->where('type', OrderType::UPGRADE);
@@ -402,7 +402,7 @@ class AdminFinanceQueryService
                     'paid_at',
                     'trace_id',
                 ])),
-                'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
+                'product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
                 'product.firstProductGroup:id,code,name',
                 'product.secondProductGroup:id,first_product_group_id,name',
                 'product.thirdProductGroup:id,second_product_group_id,name',

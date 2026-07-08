@@ -922,9 +922,7 @@ class ProductSyncService
         return $this->saleProductQuery()
             ->select([
                 'id',
-                'first_product_group_id',
-                'second_product_group_id',
-                'third_product_group_id',
+                'product_group_id',
                 'stock',
             ])
             ->whereKey($productId)
@@ -1867,9 +1865,7 @@ class ProductSyncService
         $this->syncProductBindingFromPayload($product, $bindingPayload);
 
         return $product->fresh([
-            'firstProductGroup',
-            'secondProductGroup',
-            'thirdProductGroup',
+            'productGroup.parent.parent',
         ]);
     }
 
@@ -1890,9 +1886,7 @@ class ProductSyncService
         $this->syncProductBindingFromPayload($product, $bindingPayload);
 
         return $product->fresh([
-            'firstProductGroup',
-            'secondProductGroup',
-            'thirdProductGroup',
+            'productGroup.parent.parent',
         ]);
     }
 
@@ -1968,7 +1962,7 @@ class ProductSyncService
 
         if ($normalizedIds !== [] && Schema::hasTable('product_upstream_bindings') && Schema::hasTable('supplier_plugin_bindings')) {
             return Product::withTrashed()
-                ->with(['firstProductGroup', 'secondProductGroup', 'thirdProductGroup'])
+                ->with(['productGroup.parent.parent'])
                 ->select('products.*', 'pub.upstream_product_id as binding_upstream_product_id')
                 ->join('product_upstream_bindings as pub', 'pub.product_id', '=', 'products.id')
                 ->join('supplier_plugin_bindings as spb', 'spb.id', '=', 'pub.supplier_plugin_binding_id')
@@ -2060,16 +2054,7 @@ class ProductSyncService
 
         return Product::query()
             ->onSale()
-            ->whereHas('firstProductGroup', function ($query) use ($visibleProductTypes) {
-                $query->whereIn('code', $visibleProductTypes)->where('is_visible', 1);
-            })
-            ->whereHas('secondProductGroup', function ($query) {
-                $query->where('is_visible', 1);
-            })
-            ->where(function (Builder $query) {
-                $query
-                    ->whereNull('third_product_group_id')
-                    ->orWhereHas('thirdProductGroup', fn ($thirdQuery) => $thirdQuery->where('is_visible', 1));
-            });
+            ->whereNotNull('product_group_id')
+            ->withVisibleProductGroupPath($visibleProductTypes);
     }
 }

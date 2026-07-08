@@ -299,8 +299,8 @@ class UserService
     {
         $query = $user->invoices()->with([
             'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle',
-            'order.product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
-            'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
+            'order.product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
             'service:id,name,status,expires_at',
             'payments',
             'items',
@@ -361,7 +361,7 @@ class UserService
     {
         $invoice = $this->findUserInvoice($user, $invoiceId);
         $invoice->loadMissing([
-            'order.product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,config_options,purchase_requires',
+            'order.product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
             'payments.callbacks',
             'items',
         ]);
