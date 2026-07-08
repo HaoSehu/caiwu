@@ -10,11 +10,13 @@
 | --- | --- | --- | --- |
 | 支付渠道 | `payment` | `backend/plugins/gateways` | `PluginPaymentGateway` → `PaymentGatewayInterface` |
 | 实名认证 | `verification` | `backend/plugins/certification` | `PluginVerificationDriver` → `VerificationDriver` |
+| 人机验证 | `captcha` | `backend/plugins/captcha` | `GeeTestService` / 登录风控验证码调用链 |
 | 邮件发送 | `mail` | `backend/plugins/mail` | `PluginMailDriver` → `MailDriver` |
 | 短信发送 | `sms` | `backend/plugins/sms` | `PluginSmsDriver` → `SmsDriver` |
 | 上游开通/控制 | `upstream` | `backend/plugins/servers` | `PluginUpstreamDriver` → `UpstreamDriver` |
+| 功能扩展 | `addons` | `backend/plugins/addons` | 受控 addon action、调度任务和 hook |
 
-`domain` 是后台 API 和数据库里使用的领域名；物理目录沿用魔方财务的 `gateways/certification/mail/sms/servers` 风格。插件入口类不直接实现平台契约，入口类提供 `execute(array $request): array`，平台通过 `PluginRuntimeRegistry` 和领域 adapter 转换为内部契约。
+`domain` 是后台 API 和数据库里使用的领域名；物理目录沿用魔方财务的 `gateways/certification/mail/sms/servers` 风格，并按当前插件体系扩展了 `captcha/addons`。插件入口类不直接实现平台契约，入口类提供 `execute(array $request): array`，平台通过 `PluginRuntimeRegistry` 和领域 adapter 转换为内部契约。
 
 ## 单插件结构
 
@@ -73,7 +75,7 @@ return [
 
 必填字段：
 
-- `info.domain`：必须是 `payment`、`verification`、`mail`、`sms`、`upstream` 之一。
+- `info.domain`：必须是 `payment`、`verification`、`captcha`、`mail`、`sms`、`upstream`、`addons` 之一。
 - `info.slug`：必须和插件目录名一致。
 - `info.key`：业务注册 key，同领域内唯一。
 - `info.name`：后台展示名。
@@ -320,6 +322,222 @@ return [
 - 插件运行日志由 `PluginRuntimeRegistry::execute()` 统一写入，插件内部不要自建业务运行日志表。
 - 敏感字段只允许进入加密列或脱敏摘要，禁止写入 runtime log 的明文字段。
 
+## 定时任务与调度 Hooks
+
+插件需要定时能力时只能通过插件清单接入平台调度，不要在插件里注册 Laravel `Schedule`、系统级 Cron、全局中间件或系统级 API 路由。生产环境仍只保留宝塔每分钟执行一次 `php artisan schedule:run`；`backend/routes/console.php` 只发出 15 分钟心跳，具体任务由 `HeartbeatTaskRegistry` 和插件 provider 发现。
+
+插件有两种接入方式：
+
+| 方式 | 清单字段 | 适用场景 | 运行入口 |
+| --- | --- | --- | --- |
+| 监听调度 Hook | `info.extra.schedule_hooks` | 轻量扩展、跟随内置任务前后置逻辑、自定义插件 hook 监听 | `ScheduleHookService` |
+| 注册独立定时任务 | `info.extra.scheduled_tasks` | 插件自己的周期性同步、刷新、清理、巡检 | `PluginScheduledTaskProvider` → `RunHeartbeatTaskJob` |
+
+### 方式一：监听调度 Hook
+
+在 `config.php` 的 `info.extra.schedule_hooks` 中声明 hook 名和监听器类：
+
+```php
+use App\Services\Automation\ScheduleHookService;
+use Caiwu\Plugins\Example\Lib\ExampleScheduleHook;
+
+return [
+    'info' => [
+        // ...
+        'extra' => [
+            'schedule_hooks' => [
+                ScheduleHookService::HOOK_TASK_AFTER => [
+                    ExampleScheduleHook::class,
+                ],
+                'plugins.example.refresh' => [
+                    ['class' => ExampleScheduleHook::class, 'method' => 'handle'],
+                ],
+            ],
+        ],
+    ],
+];
+```
+
+监听器放在插件 `lib/`、`logic/` 或 `controller/` 下，推荐实现 `App\Services\Automation\Contracts\ScheduleHook`：
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace Caiwu\Plugins\Example\Lib;
+
+use App\Services\Automation\Contracts\ScheduleHook;
+
+final class ExampleScheduleHook implements ScheduleHook
+{
+    public function handle(string $hook, array $context = []): array
+    {
+        return [
+            'handled' => true,
+            'hook' => $hook,
+            'task_key' => $context['task_key'] ?? null,
+        ];
+    }
+}
+```
+
+支持的监听器写法与 `backend/config/schedule_hooks.php` 一致：
+
+- `ExampleScheduleHook::class`
+- `[ExampleScheduleHook::class, 'handle']`
+- `['class' => ExampleScheduleHook::class, 'method' => 'handle']`
+- 可调用对象或闭包（不建议插件清单里用闭包，跨进程序列化和可读性都差）
+
+当前内置 hook 名：
+
+| 常量 | 实际值 | 触发语义 |
+| --- | --- | --- |
+| `ScheduleHookService::HOOK_BEFORE_CRON` | `before_cron` | 每个被记录的调度任务执行前 |
+| `ScheduleHookService::HOOK_AFTER_CRON` | `after_cron` | 每个被记录的调度任务成功或失败后 |
+| `ScheduleHookService::HOOK_TASK_BEFORE` | `task.before` | 单个任务执行前，带 `task_key` / `task_name` |
+| `ScheduleHookService::HOOK_TASK_AFTER` | `task.after` | 单个任务成功后，带 `summary` |
+| `ScheduleHookService::HOOK_TASK_FAILED` | `task.failed` | 单个任务失败后，带异常摘要 |
+| `ScheduleHookService::HOOK_EVERY_MINUTE` | `tick.every_minute` | 兼容旧命名，当前按 15 分钟心跳触发 |
+| `ScheduleHookService::HOOK_EVERY_FIVE_MINUTES` | `tick.every_five_minutes` | 兼容旧命名，当前按 15 分钟心跳触发 |
+| `ScheduleHookService::HOOK_HOURLY` | `tick.hourly` | 每小时 hook |
+| `ScheduleHookService::HOOK_DAILY` | `tick.daily` | 每日 hook |
+| `ScheduleHookService::HOOK_BEFORE_DAILY_CRON` | `before_daily_cron` | 旧系统每日前置兼容 hook |
+| `ScheduleHookService::HOOK_AFTER_DAILY_CRON` | `after_daily_cron` | 旧系统每日后置兼容 hook |
+| `ScheduleHookService::HOOK_AFTER_FIVE_MINUTE_CRON` | `after_five_minute_cron` | 旧系统五分钟后置兼容 hook，当前不代表真实 5 分钟粒度 |
+| `ScheduleHookService::HOOK_AFTER_HALF_HOUR_MINUTE_CRON` | `after_half_hour_minute_cron` | 旧系统半小时后置兼容 hook |
+
+Hook 失败只会写警告日志，不会中断调度主流程。监听器必须自己控制幂等、限流和敏感字段脱敏。
+
+### 方式二：注册独立定时任务
+
+插件自己的周期任务通过 `info.extra.scheduled_tasks` 声明任务类：
+
+```php
+use Caiwu\Plugins\Example\Lib\ExampleScheduledTask;
+
+return [
+    'info' => [
+        // ...
+        'extra' => [
+            'scheduled_tasks' => [
+                ExampleScheduledTask::class,
+            ],
+        ],
+    ],
+];
+```
+
+任务类必须实现 `App\Services\Automation\Heartbeat\Contracts\ScheduledTask`：
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace Caiwu\Plugins\Example\Lib;
+
+use App\Services\Automation\Heartbeat\Contracts\ScheduledTask;
+use App\Services\Automation\Heartbeat\Data\TaskContext;
+use App\Services\Automation\Heartbeat\ScheduleRule;
+
+final class ExampleScheduledTask implements ScheduledTask
+{
+    public function key(): string
+    {
+        return 'example-refresh';
+    }
+
+    public function title(): string
+    {
+        return '示例插件刷新';
+    }
+
+    public function description(): string
+    {
+        return '由插件注册的心跳定时任务示例。';
+    }
+
+    public function category(): string
+    {
+        return '插件任务';
+    }
+
+    public function triggers(): array
+    {
+        return [ScheduleRule::everyTicks(1)];
+    }
+
+    public function handle(TaskContext $context): array
+    {
+        return [
+            'processed' => 0,
+            'source' => $context->source,
+        ];
+    }
+
+    public function queue(): string
+    {
+        return 'default';
+    }
+
+    public function timeout(): int
+    {
+        return 300;
+    }
+
+    public function lockTtlSeconds(): int
+    {
+        return 600;
+    }
+
+    public function manualTriggerable(): bool
+    {
+        return true;
+    }
+}
+```
+
+触发规则：
+
+- `ScheduleRule::everyTicks(1)`：每个 15 分钟心跳执行一次。
+- `ScheduleRule::everyTicks(4)`：每 4 个心跳执行一次，约 1 小时。
+- `ScheduleRule::cron('10 3 * * *')`：按 cron 表达式匹配心跳槽位；不要写低于 15 分钟粒度的业务假设。
+- `ScheduleRule::automation(...)`：仅在复用系统自动化配置模式时使用，普通插件优先用 `everyTicks()` 或 `cron()`。
+
+运行规则：
+
+- 只有“已启用”的插件会被 `PluginScheduledTaskProvider` 扫描。
+- 任务 `key()` 在全局调度注册表中必须唯一，建议使用 `{plugin_slug}-{action}`。
+- 任务通过 `RunHeartbeatTaskJob` 执行，带队列、重试和 `WithoutOverlapping` 互斥；`lockTtlSeconds()` 必须大于任务最坏运行时间。
+- `handle()` 只返回可记录的摘要数组，不返回第三方原始响应、token、密钥或大对象。
+- 需要在任务内部拆分扩展点时，可以让任务调用 `ScheduleHookService::run('plugins.{slug}.{action}', $context)`，再由 `extra.schedule_hooks` 注册监听器。`demo_style` 和 `mofang_finance` 插件已按这个模式实现。
+
+### 调试和验证
+
+开发插件调度能力时优先跑最小测试：
+
+```bash
+cd backend
+php artisan test tests/Unit/ScheduleHookServiceTest.php tests/Feature/PluginSimulationTest.php
+```
+
+本地手动触发一次心跳：
+
+```bash
+cd backend
+php artisan scheduler:heartbeat --at="2026-07-08 03:15:00"
+```
+
+查看 Laravel 当前唯一调度源：
+
+```bash
+cd backend
+php artisan schedule:list
+```
+
+不要用 `php artisan serve` 替代项目的 `php artisan app:serve`；需要联调时按仓库启动指南使用 `app:serve` 或 `app:serve --with-schedule`。
+
 ## 生命周期
 
 1. 上传插件目录到固定能力域目录。
@@ -379,15 +597,23 @@ return [
 | --- | --- | --- |
 | 支付渠道 | `backend/plugins/gateways/ali_pay` | 支付宝当面付真实支付插件 |
 | 支付渠道 | `backend/plugins/gateways/demo_pay` | 模拟支付网关 |
+| 支付渠道 | `backend/plugins/gateways/yi_pay` | 易支付插件 |
 | 实名认证 | `backend/plugins/certification/stay33` | Stay33 实名认证插件 |
+| 实名认证 | `backend/plugins/certification/baidu_face` | 百度人脸实名认证插件 |
 | 实名认证 | `backend/plugins/certification/demo_verification` | 模拟实名插件 |
+| 人机验证 | `backend/plugins/captcha/geetest` | GeeTest 验证码插件 |
+| 人机验证 | `backend/plugins/captcha/vaptcha` | Vaptcha 验证码插件 |
 | 邮件发送 | `backend/plugins/mail/multi_smtp_round_robin` | 多 SMTP 轮询邮件插件 |
+| 邮件发送 | `backend/plugins/mail/smtp` | 单 SMTP 邮件插件 |
 | 邮件发送 | `backend/plugins/mail/demo_mail` | 模拟邮件插件 |
 | 短信发送 | `backend/plugins/sms/aliyun` | 阿里云短信插件 |
+| 短信发送 | `backend/plugins/sms/stay33` | Stay33 短信插件 |
 | 短信发送 | `backend/plugins/sms/demo_sms` | 模拟短信插件 |
 | 上游开通/控制 | `backend/plugins/servers/mofang_finance` | 魔方财务上游插件 |
 | 上游开通/控制 | `backend/plugins/servers/kanghostx` | 康乐虚拟主机插件 |
 | 上游开通/控制 | `backend/plugins/servers/demo_servers` | 模拟上游插件 |
+| 功能扩展 | `backend/plugins/addons/demo_style` | Addon、调度任务和 hook 示例插件 |
+| 功能扩展 | `backend/plugins/addons/zjmf_bridge` | ZJMF Bridge 兼容扩展示例 |
 
 每个 demo 包都包含：
 
@@ -411,6 +637,13 @@ return [
 ```bash
 cd backend
 php artisan test tests/Feature/AdminIntegrationPluginControllerTest.php tests/Feature/PluginRuntimeRegistryIntegrationTest.php
+```
+
+涉及插件定时任务或调度 Hook：
+
+```bash
+cd backend
+php artisan test tests/Unit/ScheduleHookServiceTest.php tests/Feature/PluginSimulationTest.php
 ```
 
 涉及邮件插件：
