@@ -7,13 +7,14 @@ namespace Caiwu\Plugins\Addons\ZjmfBridge\Logic;
 use App\Exceptions\BusinessException;
 use App\Models\User;
 use App\Services\Auth\AuthService;
-use App\Services\ZjmfBridge\ZjmfErrorMapper;
-use App\Services\ZjmfBridge\ZjmfFinanceService;
-use App\Services\ZjmfBridge\ZjmfProductCatalogService;
-use App\Services\ZjmfBridge\ZjmfReconcileService;
-use App\Services\ZjmfBridge\ZjmfServiceService;
-use App\Services\ZjmfBridge\ZjmfTicketService;
-use App\Services\ZjmfBridge\ZjmfTokenService;
+use Caiwu\Plugins\Addons\ZjmfBridge\Models\AgentApplication;
+use Caiwu\Plugins\Addons\ZjmfBridge\Services\ZjmfErrorMapper;
+use Caiwu\Plugins\Addons\ZjmfBridge\Services\ZjmfFinanceService;
+use Caiwu\Plugins\Addons\ZjmfBridge\Services\ZjmfProductCatalogService;
+use Caiwu\Plugins\Addons\ZjmfBridge\Services\ZjmfReconcileService;
+use Caiwu\Plugins\Addons\ZjmfBridge\Services\ZjmfServiceService;
+use Caiwu\Plugins\Addons\ZjmfBridge\Services\ZjmfTicketService;
+use Caiwu\Plugins\Addons\ZjmfBridge\Services\ZjmfTokenService;
 use Laravel\Sanctum\PersonalAccessToken;
 
 class ZjmfBridge
@@ -56,10 +57,12 @@ class ZjmfBridge
 
         try {
             return match ($route) {
+                '',
                 'health',
                 'ping' => $this->health(),
                 'system.health' => $this->systemHealth(),
                 'auth.login' => $this->login($payload, $context),
+                'auth.api_login' => $this->apiLogin($payload, $context),
                 'user.show' => $this->user($context),
                 'invoices.index' => $this->withUser($context, fn (User $user): array => $this->finance->invoices($user, $this->query($payload))),
                 'invoices.show' => $this->withUser($context, fn (User $user): array => $this->finance->invoice($user, $this->id($payload))),
@@ -84,6 +87,8 @@ class ZjmfBridge
                 'products.config' => $this->product(fn (): array => $this->catalog->productConfig($this->query($payload))),
                 'products.total' => $this->product(fn (): array => $this->catalog->quote($this->body($payload))),
                 'hosts.cates' => $this->product(fn (): array => $this->catalog->categories($this->query($payload))),
+                'cart.all' => $this->product(fn (): array => $this->catalog->cartAll()),
+                'cart.credit' => $this->withUser($context, fn (User $user): array => $this->finance->credit($user)),
                 default => $this->fail(404, 'ZJMF Bridge Addon 未匹配到接口'),
             };
         } catch (BusinessException $exception) {
@@ -183,6 +188,82 @@ class ZjmfBridge
     }
 
     /**
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>  $context
+     * @return array<string, mixed>
+     */
+    private function apiLogin(array $payload, array $context): array
+    {
+        $body = $this->body($payload);
+        $apiKey = trim((string) ($body['api_key'] ?? $body['password'] ?? $body['apikey'] ?? ''));
+
+        if ($apiKey === '') {
+            return $this->apiFail('API密钥不能为空');
+        }
+
+        $application = AgentApplication::query()
+            ->where('api_key', $apiKey)
+            ->whereIn('status', ['approved', 'pending'])
+            ->first();
+
+        if (! $application) {
+            return $this->apiFail('API密钥无效');
+        }
+
+        $user = User::query()->with(['account', 'memberLevel'])->find($application->user_id);
+        if (! $user) {
+            return $this->apiFail('关联用户不存在');
+        }
+
+        $userId = (int) $user->id;
+        $ttl = (int) config('zjmf_bridge.token_ttl', 7200);
+        $jwt = $this->tokens->issue([
+            'sub' => 'client:'.$userId,
+            'uid' => $userId,
+            'scope' => $this->clientScopes(),
+        ], $ttl);
+
+        return [
+            'success' => true,
+            'message' => '登录成功',
+            'data' => [
+                'http_status' => 200,
+                'body' => [
+                    'status' => 200,
+                    'msg' => '登录成功',
+                    'jwt' => $jwt,
+                    'data' => [
+                        'jwt' => $jwt,
+                        'token' => $jwt,
+                        'token_type' => 'JWT',
+                        'expires_in' => $ttl,
+                        'user' => $this->userPayload($user),
+                    ],
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function apiFail(string $message): array
+    {
+        return [
+            'success' => false,
+            'message' => $message,
+            'data' => [
+                'http_status' => 200,
+                'body' => [
+                    'status' => 400,
+                    'msg' => $message,
+                    'data' => null,
+                ],
+            ],
+        ];
+    }
+
+    /**
      * @param  array<string, mixed>  $context
      * @return array<string, mixed>
      */
@@ -193,7 +274,10 @@ class ZjmfBridge
             return $this->fail(401, '未登录或登录已过期');
         }
 
-        return $this->ok($this->userPayload($user));
+        return $this->ok([
+            'client' => $this->clientPayload($user),
+            'country' => [],
+        ]);
     }
 
     /**
@@ -310,6 +394,41 @@ class ZjmfBridge
             'nickname' => (string) ($user->nickname ?? ''),
             'display_name' => (string) ($user->display_name ?? ''),
             'cash_balance' => (string) $user->balance,
+            'credit_limit' => (string) $user->credit_limit,
+            'referral_code' => (string) ($user->referral_code ?? ''),
+            'member_level_id' => $user->member_level_id,
+            'member_level' => $memberLevel ? [
+                'id' => (int) $memberLevel->id,
+                'name' => (string) $memberLevel->name,
+                'code' => (string) $memberLevel->code,
+            ] : null,
+            'status' => (int) $user->status,
+            'is_verified' => (int) $user->is_verified,
+            'real_name' => (string) $user->real_name,
+            'verification_status' => (int) $user->verification_status,
+            'last_login_at' => $user->last_login_at?->format('Y-m-d H:i:s'),
+            'last_login_ip' => (string) ($user->last_login_ip ?? ''),
+            'created_at' => $user->created_at?->format('Y-m-d H:i:s'),
+        ];
+    }
+
+    /**
+     * 标准 ZJMF 财务 /v1/user 接口 client 字段格式。
+     *
+     * @return array<string, mixed>
+     */
+    private function clientPayload(User $user): array
+    {
+        $memberLevel = $user->relationLoaded('memberLevel') ? $user->memberLevel : null;
+
+        return [
+            'id' => (int) $user->id,
+            'username' => (string) ($user->email ?? ''),
+            'email' => (string) ($user->email ?? ''),
+            'phonenumber' => (string) ($user->phone ?? ''),
+            'nickname' => (string) ($user->nickname ?? ''),
+            'display_name' => (string) ($user->display_name ?? ''),
+            'credit' => (string) $user->balance,
             'credit_limit' => (string) $user->credit_limit,
             'referral_code' => (string) ($user->referral_code ?? ''),
             'member_level_id' => $user->member_level_id,

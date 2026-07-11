@@ -23,6 +23,7 @@ class PluginInstaller
         private readonly PluginScanner $scanner,
         private readonly PluginFileLoader $fileLoader,
         private readonly PluginConfigRepository $configRepository,
+        private readonly PluginProviderRegistry $providerRegistry,
         private readonly Container $container,
     ) {}
 
@@ -72,6 +73,7 @@ class PluginInstaller
         });
 
         $this->forgetDomainRuntime($manifest->domain);
+        $this->providerRegistry->activate($manifest);
 
         return $plugin->fresh('config') ?? $plugin;
     }

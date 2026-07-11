@@ -1,20 +1,15 @@
 <?php
 
 use App\Http\Middleware\AppendSecurityHeaders;
-use App\Http\Middleware\AuthenticateZjmfClient;
 use App\Http\Middleware\CheckPermission;
 use App\Http\Middleware\EnsureAdminAuthenticated;
 use App\Http\Middleware\EnsureClientAuthenticated;
 use App\Http\Middleware\EnsureEmailIsVerified;
 use App\Http\Middleware\LogOperation;
-use App\Http\Middleware\LogZjmfBridgeRequest;
-use App\Http\Middleware\ResolveZjmfActor;
 use App\Http\Middleware\SetJsonEncodingOptions;
 use App\Http\Middleware\VerifyAlipayCallbackSignature;
 use App\Http\Middleware\VerifyCallbackSignature;
 use App\Http\Middleware\VerifyPaymentCallbackSignature;
-use App\Http\Middleware\VerifyZjmfSignature;
-use App\Http\Middleware\ZjmfBridgeEnabled;
 use App\Support\ApiResponseBuilder;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -43,10 +38,6 @@ return Application::configure(basePath: dirname(__DIR__))
                 ->prefix('api/v2/client')
                 ->group(base_path('routes/v2-client.php'));
 
-            Route::middleware(['api', 'zjmf.enabled', 'zjmf.actor', 'zjmf.log'])
-                ->prefix(config('zjmf_bridge.base_path', 'zjmf/v1'))
-                ->name('zjmf.v1.')
-                ->group(base_path('routes/zjmf.php'));
         },
     )
     ->withMiddleware(function (Middleware $middleware) {
@@ -82,11 +73,6 @@ return Application::configure(basePath: dirname(__DIR__))
             'verify.alipay.callback' => VerifyAlipayCallbackSignature::class,
             'verify.payment.callback' => VerifyPaymentCallbackSignature::class,
             'verify.callback' => VerifyCallbackSignature::class,
-            'zjmf.enabled' => ZjmfBridgeEnabled::class,
-            'zjmf.signature' => VerifyZjmfSignature::class,
-            'zjmf.client' => AuthenticateZjmfClient::class,
-            'zjmf.actor' => ResolveZjmfActor::class,
-            'zjmf.log' => LogZjmfBridgeRequest::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

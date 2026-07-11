@@ -1,33 +1,41 @@
 <template>
   <template v-if="settingStore.showSidebar">
     <div v-if="isMobile && settingStore.isMobileSidebarVisible" :class="`${prefix}-side-nav-mask`" @click="closeMobileSidebar"></div>
-    <div :class="sideNavCls">
+    <nav :class="sideNavCls" :aria-label="t('common.appName')">
       <t-menu
         :class="menuCls"
         :theme="theme"
         :value="active"
         :collapsed="collapsed"
         :expanded="expanded"
-        :expand-mutex="menuAutoCollapsed"
+        :expand-mutex="true"
         @change="handleMenuChange"
         @expand="onExpanded"
       >
         <template #logo>
-          <span v-if="showLogo" :class="`${prefix}-side-nav-logo-wrapper`" @click="goHome">
+          <button
+            v-if="showLogo"
+            :class="`${prefix}-side-nav-logo-wrapper`"
+            type="button"
+            :aria-label="t('common.appName')"
+            @click="goHome"
+          >
             <component :is="getLogo()" :class="logoCls" />
-          </span>
+          </button>
         </template>
         <menu-content :nav-data="menu" />
         <template #operations>
-          <span :class="versionCls"> {{ !collapsed ? t('common.appName') : '' }} {{ pgk.version }} </span>
+          <span :class="versionCls">
+            <span v-if="!collapsed">{{ t('common.appName') }}</span>
+            <span>v{{ pgk.version }}</span>
+          </span>
         </template>
       </t-menu>
       <div :class="`${prefix}-side-nav-placeholder${collapsed ? '-hidden' : ''}`"></div>
-    </div>
+    </nav>
   </template>
 </template>
 <script setup lang="ts">
-import { difference, remove, union } from 'lodash-es';
 import type { MenuValue } from 'tdesign-vue-next';
 import type { PropType } from 'vue';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
@@ -83,7 +91,6 @@ const settingStore = useSettingStore();
 const isMobile = ref(false);
 
 const collapsed = computed(() => (isMobile.value ? false : settingStore.isSidebarCompact));
-const menuAutoCollapsed = computed(() => settingStore.menuAutoCollapsed);
 
 const active = computed(() => getActive());
 
@@ -93,7 +100,7 @@ const getExpanded = () => {
   const path = getActive();
   const result = findExpandedByMenu(menu as MenuRoute[], path) || fallbackExpanded(path);
 
-  expanded.value = menuAutoCollapsed.value ? result : union(result, expanded.value);
+  expanded.value = result;
 };
 
 watch(
@@ -104,10 +111,15 @@ watch(
 );
 
 const onExpanded = (value: MenuValue[]) => {
-  const currentOperationMenu = difference(expanded.value, value);
-  const allExpanded = union(value, expanded.value);
-  remove(allExpanded, (item) => currentOperationMenu.includes(item));
-  expanded.value = allExpanded;
+  const openedMenus = value.filter((item) => !hasMenuValue(expanded.value, item));
+  const latestOpenedMenu = openedMenus[openedMenus.length - 1];
+
+  if (latestOpenedMenu) {
+    expanded.value = findExpandedMenuBranch(menu as MenuRoute[], latestOpenedMenu) || [latestOpenedMenu];
+    return;
+  }
+
+  expanded.value = removeClosedMenuDescendants(menu as MenuRoute[], value, expanded.value);
 };
 
 const sideMode = computed(() => {
@@ -133,7 +145,7 @@ const logoCls = computed(() => {
 });
 const versionCls = computed(() => {
   return [
-    `version-container`,
+    `${prefix}-side-nav-version`,
     {
       [`${prefix}-side-nav-dark`]: sideMode.value,
     },
@@ -201,6 +213,41 @@ function isRouteMatch(routePath: string, activePath: string) {
 function fallbackExpanded(path: string) {
   const parts = path.split('/').slice(1);
   return parts.map((_, index) => `/${parts.slice(0, index + 1).join('/')}`);
+}
+
+function findExpandedMenuBranch(list: MenuRoute[], target: MenuValue, parents: MenuValue[] = []): MenuValue[] | null {
+  for (const item of list || []) {
+    const currentPath = String(item.path);
+    const branch = [...parents, currentPath];
+
+    if (isSameMenuValue(currentPath, target)) return branch;
+
+    const childResult = findExpandedMenuBranch(item.children || [], target, branch);
+    if (childResult) return childResult;
+  }
+
+  return null;
+}
+
+function removeClosedMenuDescendants(list: MenuRoute[], nextExpanded: MenuValue[], previousExpanded: MenuValue[]) {
+  const closedMenus = previousExpanded.filter((item) => !hasMenuValue(nextExpanded, item));
+
+  if (!closedMenus.length) return nextExpanded;
+
+  return nextExpanded.filter((item) => !closedMenus.some((closedItem) => isDescendantMenuValue(list, item, closedItem)));
+}
+
+function isDescendantMenuValue(list: MenuRoute[], target: MenuValue, ancestor: MenuValue) {
+  const branch = findExpandedMenuBranch(list, target) || [];
+  return branch.slice(0, -1).some((item) => isSameMenuValue(item, ancestor));
+}
+
+function hasMenuValue(list: MenuValue[], target: MenuValue) {
+  return list.some((item) => isSameMenuValue(item, target));
+}
+
+function isSameMenuValue(left: MenuValue, right: MenuValue) {
+  return String(left) === String(right);
 }
 
 function closeMobileSidebar() {

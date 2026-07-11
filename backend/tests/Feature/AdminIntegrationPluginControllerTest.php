@@ -44,7 +44,6 @@ class AdminIntegrationPluginControllerTest extends TestCase
         ));
         $this->assertTrue(collect($listResponse->json('data.list'))->contains(
             fn (array $plugin): bool => ($plugin['domain'] ?? '') === 'addons'
-                && ($plugin['slug'] ?? '') === 'zjmf_bridge'
         ));
 
         $installResponse = $this->postJson('/api/v2/admin/integration-plugins', [

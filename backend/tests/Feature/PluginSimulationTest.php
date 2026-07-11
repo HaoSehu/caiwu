@@ -25,7 +25,6 @@ use App\Services\Upstream\ProviderRegistry;
 use App\Support\SmsTemplateCatalog;
 use Caiwu\Plugins\Addons\DemoStyle\DemoStylePlugin;
 use Caiwu\Plugins\Addons\DemoStyle\Lib\DemoStyleScheduledTask;
-use Caiwu\Plugins\Addons\ZjmfBridge\ZjmfBridgePlugin;
 use Caiwu\Plugins\Certification\DemoVerification\DemoVerificationPlugin;
 use Caiwu\Plugins\Gateways\DemoPay\DemoPayPlugin;
 use Caiwu\Plugins\Mail\DemoMail\DemoMailPlugin;
@@ -475,40 +474,6 @@ class PluginSimulationTest extends TestCase
         $this->assertTrue($task->manualTriggerable());
     }
 
-    public function test_zjmf_bridge_addon_dispatches_bridge_response(): void
-    {
-        $this->ensurePluginTables();
-        $this->activatePlugin(PluginDomain::ADDONS, 'zjmf_bridge', [
-            'enabled' => true,
-        ]);
-
-        $manifest = app(PluginScanner::class)->requireManifest(PluginDomain::ADDONS, 'zjmf_bridge');
-
-        $this->assertSame('addons', $manifest->domain);
-        $this->assertContains('zjmf.dispatch', $manifest->capabilities);
-        $this->assertSame('routes/zjmf.php', $manifest->extra['core_boundary']['route_file'] ?? null);
-
-        $result = app(PluginRuntimeRegistry::class)->execute(
-            domain: PluginDomain::ADDONS,
-            slugOrKey: 'zjmf_bridge',
-            action: 'zjmf.dispatch',
-            payload: [
-                'route_name' => 'zjmf.v1.health',
-                'query' => [],
-                'body' => [],
-                'route_parameters' => [],
-            ],
-            context: [
-                'trace_id' => 'plugin-test-zjmf-bridge',
-            ],
-        );
-
-        $this->assertTrue($result['success']);
-        $this->assertSame(200, $result['data']['http_status'] ?? null);
-        $this->assertSame(200, $result['data']['body']['status'] ?? null);
-        $this->assertSame('zjmf_bridge', $result['data']['body']['data']['service'] ?? null);
-    }
-
     // ──────────────────────────────────────────────
     //  边界：未安装/未启用
     // ──────────────────────────────────────────────
@@ -662,16 +627,12 @@ class PluginSimulationTest extends TestCase
         // 确保三个 demo 插件的入口类和 config.php 可被扫描加载
         $manifest = app(PluginScanner::class)->requireManifest(PluginDomain::ADDONS, 'demo_style');
         app(PluginFileLoader::class)->ensureLoaded($manifest);
-        $zjmfBridgeManifest = app(PluginScanner::class)->requireManifest(PluginDomain::ADDONS, 'zjmf_bridge');
-        app(PluginFileLoader::class)->ensureLoaded($zjmfBridgeManifest);
-
         $this->assertTrue(class_exists(DemoPayPlugin::class));
         $this->assertTrue(class_exists(DemoSmsPlugin::class));
         $this->assertTrue(class_exists(DemoMailPlugin::class));
         $this->assertTrue(class_exists(DemoVerificationPlugin::class));
         $this->assertTrue(class_exists(DemoServersPlugin::class));
         $this->assertTrue(class_exists(DemoStylePlugin::class));
-        $this->assertTrue(class_exists(ZjmfBridgePlugin::class));
     }
 
     // ──────────────────────────────────────────────

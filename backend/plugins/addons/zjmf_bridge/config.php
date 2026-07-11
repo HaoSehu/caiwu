@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Caiwu\Plugins\Addons\ZjmfBridge\ZjmfBridgePlugin;
+use Caiwu\Plugins\Addons\ZjmfBridge\Providers\ZjmfBridgeServiceProvider;
 
 return [
     'info' => [
@@ -12,6 +13,7 @@ return [
         'name' => 'ZJMF Bridge 接口插件',
         'version' => '1.0.0',
         'entry' => ZjmfBridgePlugin::class,
+        'provider' => ZjmfBridgeServiceProvider::class,
         'capabilities' => [
             'zjmf.bridge',
             'zjmf.dispatch',
@@ -24,16 +26,6 @@ return [
         ],
         'extra' => [
             'base_path_config' => 'zjmf_bridge.base_path',
-            'core_boundary' => [
-                'route_file' => 'routes/zjmf.php',
-                'middleware' => [
-                    'zjmf.enabled',
-                    'zjmf.signature',
-                    'zjmf.client',
-                    'zjmf.actor',
-                    'zjmf.log',
-                ],
-            ],
         ],
     ],
     'config' => [
@@ -41,7 +33,7 @@ return [
             'title' => '入口边界说明',
             'type' => 'notice',
             'theme' => 'info',
-            'content' => 'ZJMF URL、签名和 JWT 校验仍由核心受控路由处理，校验通过后的 API 行为由本 addon 执行。',
+            'content' => 'ZJMF URL、签名、JWT 校验和业务接口均由本 addon 提供。',
         ],
         'enabled' => [
             'title' => '启用插件内业务处理',

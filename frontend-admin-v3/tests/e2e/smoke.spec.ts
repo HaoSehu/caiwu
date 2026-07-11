@@ -2903,22 +2903,24 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     const sidebar = page.locator('.tdesign-starter-side-nav');
     const menuText = (text: string) => sidebar.getByText(text, { exact: true }).first();
 
-    for (const category of ['工作台', '客户支持', '商品供应', '营销增长', '财务服务', '内容通知', '系统运维']) {
+    await expect(page.locator('nav.tdesign-starter-sidebar-layout')).toHaveAttribute('aria-label', /.+/);
+
+    for (const category of ['数据看板', '产品配置', '用户管理', '工单处理', '财务管理', '营销推广', '站点内容', '系统设置', '日志中心']) {
       await expect(menuText(category)).toBeVisible();
     }
 
-    await menuText('客户支持').click();
-    await expect(menuText('用户管理')).toBeVisible();
-    await expect(menuText('工单管理')).toBeVisible();
+    await menuText('产品配置').click();
+    await expect(menuText('商品管理')).toBeVisible();
+    await expect(menuText('上游供应')).toBeVisible();
 
-    await menuText('财务服务').click();
-    await expect(menuText('账单管理')).toBeVisible();
-    await expect(menuText('服务列表')).toBeVisible();
+    await menuText('财务管理').click();
+    await expect(menuText('订单管理')).toBeVisible();
+    await expect(menuText('账务管理')).toBeVisible();
 
-    await menuText('系统运维').click();
-    await expect(menuText('日志中心')).toBeVisible();
-    await expect(menuText('系统设置')).toHaveCount(0);
-    await expect(menuText('自动化策略')).toBeVisible();
+    await menuText('系统设置').click();
+    await expect(menuText('集成插件')).toBeVisible();
+    await expect(menuText('自动化')).toBeVisible();
+    await expect(menuText('权限管理')).toBeVisible();
 
     await expect(sidebar.getByText('User Detail', { exact: true })).toHaveCount(0);
     await expect(sidebar.getByText('Orders Redirect', { exact: true })).toHaveCount(0);
