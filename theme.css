@@ -453,30 +453,52 @@
   color: var(--td-text-color-primary);
 }
 
-#app .t-default-menu .t-menu__item.t-is-active:not(.t-is-opened)::before {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 3px;
-  height: 100%;
-  background: #003cab;
-  content: '';
-}
-
 #app .t-default-menu .t-submenu.t-is-opened {
-  background: #f6f8fb;
+  background: var(--td-bg-color-container);
 }
 
 #app .t-default-menu .t-menu__sub {
-  padding: 4px 0;
-  background: #f6f8fb;
+  padding: 0;
+  background: var(--td-bg-color-container);
 }
 
 #app .t-default-menu .t-menu__sub .t-menu__item {
   height: 36px;
-  padding-left: 48px;
+  padding-left: 56px;
   color: var(--td-text-color-secondary);
   line-height: 36px;
+  font-weight: 400;
+  font-size: 13px;
+}
+
+/* 三级菜单项：更深缩进 + 前置灰点 */
+#app .t-default-menu .t-menu__sub .t-menu__sub .t-menu__item {
+  position: relative;
+  padding-left: 80px;
+}
+
+#app .t-default-menu .t-menu__sub .t-menu__sub .t-menu__item::before {
+  content: '';
+  position: absolute;
+  left: 68px;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* 二级终端菜单选中：灰色背景（排除子菜单父级） */
+#app .t-default-menu .t-menu__sub .t-menu__item.t-is-active:not(.t-is-opened) {
+  color: var(--td-text-color-primary);
+  background: var(--td-bg-color-page);
+}
+
+/* 三级菜单选中：蓝色字体 + 白色背景 */
+#app .t-default-menu .t-menu__sub .t-menu__sub .t-menu__item.t-is-active {
+  color: var(--td-brand-color);
+  background: var(--td-bg-color-container);
 }
 
 #app .t-default-menu.t-is-collapsed .t-menu__item,

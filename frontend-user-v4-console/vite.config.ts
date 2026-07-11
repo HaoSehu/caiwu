@@ -268,6 +268,10 @@ export default ({ mode }: ConfigEnv): UserConfig => {
           target: backendProxyTarget,
           changeOrigin: true,
         },
+        '/zjmf': {
+          target: backendProxyTarget,
+          changeOrigin: true,
+        },
         '/ws/vnc': {
           target: backendWsProxyTarget,
           changeOrigin: true,

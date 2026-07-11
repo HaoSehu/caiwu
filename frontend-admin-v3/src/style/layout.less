@@ -362,43 +362,201 @@
 
 // 侧边栏菜单层级样式：一级跟随侧边栏白底，二级使用灰底区分层级
 .@{starter-prefix}-side-nav.t-default-menu.t-menu--light {
+  box-sizing: border-box;
+  width: 232px;
+  padding: var(--td-comp-paddingTB-s) var(--td-comp-paddingLR-s);
   background: var(--td-bg-color-container);
+  border-right: 1px solid var(--td-component-border);
+
+  .t-menu__logo {
+    height: auto;
+    padding: 0;
+    margin-bottom: var(--td-comp-margin-s);
+  }
 
   .t-menu__item {
     height: var(--td-comp-size-l);
     line-height: var(--td-comp-size-l);
     font-size: var(--td-font-size-body-medium);
     font-weight: 400;
+    border-radius: var(--td-radius-medium);
+    transition:
+      color @anim-duration-base @anim-time-fn-easing,
+      background-color @anim-duration-base @anim-time-fn-easing;
   }
 
   // 一级分类：与侧边栏背景保持一致
-  > .t-menu__item,
-  > .t-submenu > .t-menu__item {
-    color: rgb(0 0 0 / 90%);
-    background-color: var(--td-bg-color-container);
+  .@{starter-prefix}-side-nav-logo-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: var(--td-comp-size-xl);
+    padding: 0;
+    color: var(--td-brand-color);
+    text-align: left;
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+    border-radius: var(--td-radius-medium);
+    transition: background-color @anim-duration-base @anim-time-fn-easing;
 
     &:hover {
-      background-color: var(--td-bg-color-container-hover);
+      background-color: var(--td-brand-color-light);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--td-brand-color-focus);
+      outline-offset: 2px;
     }
   }
 
-  // 二级菜单项：灰色区块承载子菜单
+  > .t-menu__item,
+  > .t-submenu > .t-menu__item {
+    color: var(--td-text-color-primary);
+    background-color: var(--td-bg-color-container);
+    font-weight: 600;
+
+    &:hover {
+      color: var(--td-brand-color);
+      background-color: var(--td-brand-color-light);
+    }
+  }
+
+  > .t-menu__item.t-is-active,
+  > .t-submenu > .t-menu__item.t-is-active {
+    color: var(--td-text-color-anti);
+    font-weight: 500;
+    background-color: var(--td-brand-color);
+
+    &:hover {
+      color: var(--td-text-color-anti);
+      background-color: var(--td-brand-color-hover);
+    }
+  }
+
+  .t-submenu.t-is-opened > .t-menu__item.t-is-opened,
+  .t-submenu > .t-menu__item.t-is-opened {
+    color: var(--td-brand-color);
+    font-weight: 600;
+    background-color: var(--td-brand-color-light);
+  }
+
+  // 覆盖 TDesign 内置的 background: unset，确保展开态父级菜单项有正确背景色
+  .t-submenu.t-is-opened > .t-menu__item {
+    background-color: var(--td-brand-color-light);
+  }
+
+  // 二级展开父级菜单：白色背景，蓝色文字标识当前区域
+  .t-menu__sub .t-submenu.t-is-opened > .t-menu__item.t-is-opened,
+  .t-menu__sub .t-submenu > .t-menu__item.t-is-opened {
+    color: var(--td-brand-color);
+    font-weight: 400;
+    background-color: var(--td-bg-color-container);
+  }
+
+  .t-menu__sub .t-submenu.t-is-opened > .t-menu__item {
+    background-color: var(--td-bg-color-container);
+  }
+
+  // 消除子菜单与父级菜单项之间的所有间隙，实现无缝连接
+  .t-submenu {
+    margin-bottom: 0;
+  }
+
   .t-menu__sub {
-    background-color: var(--td-bg-color-page);
+    margin-top: 0;
+  }
+
+  // 二级菜单项：白色背景承载子菜单
+  .t-menu__sub {
+    padding: 0 0 0 var(--td-comp-paddingLR-s);
+    margin: 0 0 0 var(--td-comp-margin-s);
+    background-color: var(--td-bg-color-container);
 
     .t-menu__item {
-      color: rgb(0 0 0 / 55%);
-      background-color: var(--td-bg-color-page);
+      position: relative;
+      color: var(--td-text-color-secondary);
+      background-color: var(--td-bg-color-container);
+      font-weight: 400;
+      font-size: var(--td-font-size-body-small);
 
       &:hover {
+        color: var(--td-brand-color);
         background-color: var(--td-bg-color-container-hover);
       }
 
       &.t-is-active {
-        color: var(--td-brand-color);
-        background-color: #eef2fe;
+        color: var(--td-text-color-primary);
+        font-weight: 400;
+        background-color: var(--td-bg-color-page);
       }
     }
+
+    .t-menu__sub {
+      padding-top: 0;
+      padding-bottom: 0;
+      margin-top: 0;
+      margin-bottom: 0;
+      background-color: transparent;
+
+      > .t-submenu > .t-menu__item,
+      > .t-menu__item {
+        font-size: var(--td-font-size-body-small);
+        font-weight: 400;
+      }
+
+      .t-menu__item {
+        &.t-is-active {
+          color: var(--td-brand-color);
+          font-weight: 500;
+          background-color: var(--td-bg-color-container);
+        }
+      }
+    }
+  }
+
+  .t-menu__item:focus-visible {
+    outline: 2px solid var(--td-brand-color-focus);
+    outline-offset: -2px;
+  }
+
+  .t-menu__operations {
+    padding-top: var(--td-comp-paddingTB-s);
+    margin-top: var(--td-comp-margin-s);
+    border-top: 1px solid var(--td-component-border);
+  }
+
+  .@{starter-prefix}-side-nav-version {
+    display: flex;
+    gap: var(--td-comp-margin-xs);
+    align-items: center;
+    justify-content: center;
+    color: var(--td-text-color-placeholder);
+    font-size: var(--td-font-size-body-small);
+    line-height: var(--td-line-height-body-small);
+  }
+
+  &.t-menu--collapsed {
+    width: 72px;
+    padding-right: var(--td-comp-paddingLR-s);
+    padding-left: var(--td-comp-paddingLR-s);
+
+    .t-menu__logo {
+      margin-bottom: var(--td-comp-margin-s);
+    }
+
+    .@{starter-prefix}-side-nav-logo-wrapper {
+      min-height: var(--td-comp-size-l);
+    }
+  }
+}
+
+@media (width <= 768px) {
+  .@{starter-prefix}-sidebar-mobile .@{starter-prefix}-side-nav.t-default-menu.t-menu--light {
+    width: 100%;
+    padding: var(--td-comp-paddingTB-s) var(--td-comp-paddingLR-s);
+    border-right: 0;
   }
 }
 
@@ -513,7 +671,7 @@
     }
 
     &-logo-tdesign-logo {
-      margin-right: var(--td-comp-margin-xxxl);
+      margin-right: 0;
       height: var(--td-comp-size-s);
       width: 100%;
       color: var(--td-text-color-primary);
@@ -553,11 +711,6 @@
   cursor: pointer;
   display: inline-flex;
   margin-left: 24px;
-}
-
-.version-container {
-  color: var(--td-text-color-primary);
-  opacity: 0.4;
 }
 
 .t-menu__popup {

@@ -50,6 +50,11 @@
               <setting-icon />
             </t-button>
           </t-tooltip>
+          <t-tooltip placement="bottom" content="仪表盘">
+            <t-button theme="default" shape="square" variant="text" @click="handleNav('/admin/dashboard')">
+              <home-icon />
+            </t-button>
+          </t-tooltip>
         </div>
       </template>
     </t-head-menu>
@@ -77,7 +82,7 @@
   </div>
 </template>
 <script setup lang="ts">
-import { ChevronDownIcon, PoweroffIcon, SettingIcon, UserCircleIcon } from 'tdesign-icons-vue-next';
+import { ChevronDownIcon, HomeIcon, PoweroffIcon, SettingIcon, UserCircleIcon } from 'tdesign-icons-vue-next';
 import type { PropType } from 'vue';
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
