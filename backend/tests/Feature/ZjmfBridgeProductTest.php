@@ -4,15 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-require_once __DIR__.'/../Support/InstallsZjmfBridgeAddon.php';
-
 use App\Constants\ProductType;
 use App\Models\FirstProductGroup;
 use App\Models\Product;
 use App\Models\SecondProductGroup;
 use App\Models\ThirdProductGroup;
-use App\Models\User;
-use Caiwu\Plugins\Addons\ZjmfBridge\Services\ZjmfTokenService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
@@ -161,73 +157,6 @@ class ZjmfBridgeProductTest extends TestCase
             ->assertJsonPath('data.total_amount', '108.00');
     }
 
-    public function test_legacy_product_import_endpoints_project_catalog_without_leaking_local_group_ids(): void
-    {
-        [$firstGroup, $secondGroup, $thirdGroup, $product] = $this->createVisibleCatalog();
-        $headers = ['Authorization' => 'Bearer '.$this->jwtFor($this->createClientUser(), ['client.read'])];
-
-        $catalogResponse = $this
-            ->withHeaders($headers)
-            ->get('/zjmf/v1/cart/all', ['Accept' => 'application/json']);
-
-        $catalogResponse
-            ->assertOk()
-            ->assertJsonPath('status', 200);
-
-        $this->assertGreaterThanOrEqual(1, (int) $catalogResponse->json('data.count'));
-
-        $sourceGroup = collect($catalogResponse->json('data.products'))
-            ->first(fn (mixed $group): bool => is_array($group)
-                && in_array((int) $product->id, collect($group['products'] ?? [])->pluck('id')->map('intval')->all(), true));
-
-        $this->assertIsArray($sourceGroup);
-        $this->assertSame([$firstGroup->name, $secondGroup->name, $thirdGroup->name], $sourceGroup['source_group_path'] ?? null);
-        $this->assertSame('dcimcloud', collect($sourceGroup['products'] ?? [])->firstWhere('id', (int) $product->id)['type'] ?? null);
-
-        $sourceGroupId = $sourceGroup['id'] ?? null;
-        $this->assertIsString($sourceGroupId);
-        $this->assertStringStartsWith('caiwu:', $sourceGroupId);
-        $this->assertNotSame((string) $thirdGroup->id, $sourceGroupId);
-
-        $infoResponse = $this
-            ->withHeaders($headers)
-            ->get('/zjmf/v1/api/product/proinfo?pids[]='.$product->id, ['Accept' => 'application/json']);
-
-        $infoResponse
-            ->assertOk()
-            ->assertJsonPath('status', 200)
-            ->assertJsonPath('data.info.0.id', (int) $product->id)
-            ->assertJsonPath('data.info.0.name', $product->name)
-            ->assertJsonPath('data.currency', 'CNY');
-        $this->assertIsInt($infoResponse->json('data.info.0.location_version'));
-
-        $detailResponse = $this
-            ->withHeaders($headers)
-            ->get('/zjmf/v1/api/product/prodetail?pids[]='.$product->id, ['Accept' => 'application/json']);
-
-        $detailResponse
-            ->assertOk()
-            ->assertJsonPath('status', 200)
-            ->assertJsonPath('data.detail.'.$product->id.'.id', (int) $product->id)
-            ->assertJsonPath('data.detail.'.$product->id.'.type', 'dcimcloud')
-            ->assertJsonPath('data.detail.'.$product->id.'.source_group_id', $sourceGroupId)
-            ->assertJsonPath('data.detail.'.$product->id.'.groupid', null)
-            ->assertJsonMissingPath('data.detail.'.$product->id.'.purchase_requires');
-
-        $configResponse = $this
-            ->withHeaders($headers)
-            ->get('/zjmf/v1/cart/get_product_config?pid='.$product->id, ['Accept' => 'application/json']);
-
-        $configResponse
-            ->assertOk()
-            ->assertJsonPath('status', 200)
-            ->assertJsonPath('data.products.id', (int) $product->id)
-            ->assertJsonPath('data.products.groupid', null)
-            ->assertJsonPath('data.product_pricings.0.code', 'CNY')
-            ->assertJsonPath('data.config_groups.0.options.0.option_name', 'CPU')
-            ->assertJsonMissingPath('data.products.purchase_requires');
-    }
-
     /**
      * @return array{0: FirstProductGroup, 1: SecondProductGroup, 2: ThirdProductGroup, 3: Product}
      */
@@ -274,19 +203,6 @@ class ZjmfBridgeProductTest extends TestCase
             'description' => $name.' 说明',
             'sort_order' => 1,
             'is_visible' => $visible ? 1 : 0,
-        ]);
-    }
-
-    private function createClientUser(): User
-    {
-        $suffix = bin2hex(random_bytes(4));
-
-        return User::query()->create([
-            'email' => 'zjmf-product-'.$suffix.'@example.com',
-            'phone' => '136'.random_int(10000000, 99999999),
-            'password' => 'Secret123!',
-            'nickname' => 'ZJMF Product',
-            'status' => 1,
         ]);
     }
 
@@ -374,17 +290,5 @@ class ZjmfBridgeProductTest extends TestCase
     private function url(string $path, array $query = []): string
     {
         return $query === [] ? $path : $path.'?'.http_build_query($query, '', '&', PHP_QUERY_RFC3986);
-    }
-
-    /**
-     * @param  list<string>  $scopes
-     */
-    private function jwtFor(User $user, array $scopes): string
-    {
-        return app(ZjmfTokenService::class)->issue([
-            'sub' => 'client:'.(int) $user->id,
-            'uid' => (int) $user->id,
-            'scope' => $scopes,
-        ], 7200);
     }
 }

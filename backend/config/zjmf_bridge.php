@@ -15,7 +15,6 @@ $systemScopes = array_values(array_filter(array_map(
 return [
     'enabled' => (bool) env('ZJMF_BRIDGE_ENABLED', false),
     'base_path' => trim((string) env('ZJMF_BRIDGE_BASE_PATH', '/zjmf/v1'), '/'),
-    'catalog_currency' => trim((string) env('ZJMF_BRIDGE_CATALOG_CURRENCY', 'CNY')),
     'mode' => (string) env('ZJMF_BRIDGE_MODE', 'strict'),
     'app_id' => (string) env('ZJMF_BRIDGE_APP_ID', 'zjmf'),
     'secret' => (string) env('ZJMF_BRIDGE_SECRET', ''),

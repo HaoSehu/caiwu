@@ -256,6 +256,8 @@ php artisan app:serve --with-schedule
 
 `app:serve` 同时拉起 HTTP、VNC Relay、Queue Worker。**不要**用 `php artisan serve` 替代。
 
+本地 PHP 路径：`D:\BtSoft\php\83`（PHP 8.3）。
+
 ### 前端
 
 ```bash
