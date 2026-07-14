@@ -88,7 +88,10 @@ class ZjmfBridge
                 'products.total' => $this->product(fn (): array => $this->catalog->quote($this->body($payload))),
                 'hosts.cates' => $this->product(fn (): array => $this->catalog->categories($this->query($payload))),
                 'cart.all' => $this->product(fn (): array => $this->catalog->cartAll()),
+                'cart.get_product_config' => $this->product(fn (): array => $this->catalog->legacyProductConfig($this->query($payload))),
                 'cart.credit' => $this->withUser($context, fn (User $user): array => $this->finance->credit($user)),
+                'api.product.proinfo' => $this->product(fn (): array => $this->catalog->proInfo($this->pids($payload))),
+                'api.product.prodetail' => $this->product(fn (): array => $this->catalog->proDetail($this->pids($payload))),
                 default => $this->fail(404, 'ZJMF Bridge Addon 未匹配到接口'),
             };
         } catch (BusinessException $exception) {
@@ -496,6 +499,24 @@ class ZjmfBridge
         $parameters = is_array($payload['route_parameters'] ?? null) ? $payload['route_parameters'] : [];
 
         return (int) ($parameters['id'] ?? 0);
+    }
+
+    /**
+     * 从 query 参数中提取 pids[] 为 int 数组。
+     *
+     * @param  array<string, mixed>  $payload
+     * @return int[]
+     */
+    private function pids(array $payload): array
+    {
+        $query = $this->query($payload);
+        $raw = $query['pids'] ?? [];
+
+        if (! is_array($raw)) {
+            $raw = [$raw];
+        }
+
+        return array_values(array_filter(array_map('intval', $raw), fn (int $v): bool => $v > 0));
     }
 
     /**

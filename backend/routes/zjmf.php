@@ -2,16 +2,13 @@
 
 declare(strict_types=1);
 
-use Caiwu\Plugins\Addons\ZjmfBridge\Http\Controllers\ZjmfBridge\AddonController;
+use App\Http\Controllers\Zjmf\AddonController;
 use Illuminate\Support\Facades\Route;
 
 $zjmfAddon = [AddonController::class, 'handle'];
 
-Route::match(['GET', 'POST'], '/', $zjmfAddon);
 Route::get('/health', $zjmfAddon)->name('health');
 Route::get('/ping', $zjmfAddon)->name('ping');
-
-Route::post('/zjmf_api_login', $zjmfAddon)->name('auth.api_login');
 
 Route::middleware(['zjmf.signature:system.health'])->group(function (): void {
     Route::get('/system/health', [AddonController::class, 'handle'])->name('system.health');
@@ -75,14 +72,3 @@ Route::middleware(['zjmf.signature:product.read'])->group(function (): void {
     Route::post('/products/total', [AddonController::class, 'handle'])->name('products.total');
     Route::get('/hosts/cates', [AddonController::class, 'handle'])->name('hosts.cates');
 });
-
-Route::middleware(['zjmf.client:client.read'])->group(function () use ($zjmfAddon): void {
-    Route::get('/cart/all', $zjmfAddon)->name('cart.all');
-    Route::get('/cart/get_product_config', $zjmfAddon)->name('cart.get_product_config');
-    Route::get('/api/product/proinfo', $zjmfAddon)->name('api.product.proinfo');
-    Route::get('/api/product/prodetail', $zjmfAddon)->name('api.product.prodetail');
-});
-
-Route::get('/cart/credit', $zjmfAddon)
-    ->middleware(['zjmf.client:payment.read'])
-    ->name('cart.credit');

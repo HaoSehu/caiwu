@@ -31,7 +31,7 @@ class ProductGroupV2QueryService
         $productType = trim((string) ($filters['product_type'] ?? ''));
 
         return FirstProductGroup::query()
-            ->select('first_product_groups.*')
+            ->select('product_groups.*')
             ->when($firstGroupCode !== '', fn (Builder $query) => $query->where('code', $firstGroupCode))
             ->when($productType !== '', fn (Builder $query) => $query->where('product_type', ProductType::normalizeBusinessValue($productType)))
             ->when($keyword !== '', function (Builder $query) use ($keyword): void {
@@ -46,8 +46,8 @@ class ProductGroupV2QueryService
             ->withCount([
                 'secondProductGroups as children_count',
             ])
-            ->selectSub($this->productTreeCountSubquery('first_product_groups.id', 1), 'products_count')
-            ->selectSub($this->directProductCountSubquery('first_product_groups.id'), 'direct_products_count')
+            ->selectSub($this->productTreeCountSubquery('product_groups.id', 1), 'products_count')
+            ->selectSub($this->directProductCountSubquery('product_groups.id'), 'direct_products_count')
             ->orderBy('sort_order')
             ->orderBy('id')
             ->paginate($this->perPage($filters, 50, 100), ['*'], 'page', $this->page($filters));
@@ -69,15 +69,15 @@ class ProductGroupV2QueryService
         $status = $hasStatus ? (int) $filters['status'] : null;
 
         $roots = FirstProductGroup::query()
-            ->select('first_product_groups.*')
+            ->select('product_groups.*')
             ->when($firstGroupCode !== '', fn (Builder $query) => $query->where('code', $firstGroupCode))
             ->when($productType !== '', fn (Builder $query) => $query->where('product_type', ProductType::normalizeBusinessValue($productType)))
             ->when($hasStatus, fn (Builder $query) => $query->where('is_visible', $status))
             ->withCount([
                 'secondProductGroups as children_count',
             ])
-            ->selectSub($this->productTreeCountSubquery('first_product_groups.id', 1), 'products_count')
-            ->selectSub($this->directProductCountSubquery('first_product_groups.id'), 'direct_products_count')
+            ->selectSub($this->productTreeCountSubquery('product_groups.id', 1), 'products_count')
+            ->selectSub($this->directProductCountSubquery('product_groups.id'), 'direct_products_count')
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get();
@@ -135,12 +135,12 @@ class ProductGroupV2QueryService
     {
         $group = match ($level) {
             1 => FirstProductGroup::query()
-                ->select('first_product_groups.*')
+                ->select('product_groups.*')
                 ->withCount([
                     'secondProductGroups as children_count',
                 ])
-                ->selectSub($this->productTreeCountSubquery('first_product_groups.id', 1), 'products_count')
-                ->selectSub($this->directProductCountSubquery('first_product_groups.id'), 'direct_products_count')
+                ->selectSub($this->productTreeCountSubquery('product_groups.id', 1), 'products_count')
+                ->selectSub($this->directProductCountSubquery('product_groups.id'), 'direct_products_count')
                 ->find($groupId),
             2 => SecondProductGroup::query()
                 ->select('second_product_groups.*')
@@ -406,14 +406,16 @@ class ProductGroupV2QueryService
         return Product::query()
             ->selectRaw('COUNT(*)')
             ->whereIn('product_group_id', ProductGroup::query()
-                ->select('id')
-                ->whereColumn('id', $outerColumn)
-                ->when($level <= 2, fn (Builder $query) => $query->orWhereColumn('parent_id', $outerColumn))
+                ->from('product_groups as group_tree')
+                ->select('group_tree.id')
+                ->whereColumn('group_tree.id', $outerColumn)
+                ->when($level <= 2, fn (Builder $query) => $query->orWhereColumn('group_tree.parent_id', $outerColumn))
                 ->when($level === 1, fn (Builder $query) => $query->orWhereIn(
-                    'parent_id',
+                    'group_tree.parent_id',
                     ProductGroup::query()
-                        ->select('id')
-                        ->whereColumn('parent_id', $outerColumn)
+                        ->from('product_groups as group_tree_child')
+                        ->select('group_tree_child.id')
+                        ->whereColumn('group_tree_child.parent_id', $outerColumn)
                 )));
     }
 

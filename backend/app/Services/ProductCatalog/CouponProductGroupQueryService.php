@@ -22,8 +22,8 @@ class CouponProductGroupQueryService
             ->withCount([
                 'secondProductGroups as children_count',
             ])
-            ->selectSub($this->productTreeCountSubquery('first_product_groups.id', 1), 'products_count')
-            ->selectSub($this->directProductCountSubquery('first_product_groups.id'), 'direct_products_count')
+            ->selectSub($this->productTreeCountSubquery('product_groups.id', 1), 'products_count')
+            ->selectSub($this->directProductCountSubquery('product_groups.id'), 'direct_products_count')
             ->when($this->keyword($filters) !== '', function (Builder $query) use ($filters): void {
                 $keyword = $this->keyword($filters);
                 $query->where(function (Builder $builder) use ($keyword): void {

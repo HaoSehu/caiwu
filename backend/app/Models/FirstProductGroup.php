@@ -2,13 +2,13 @@
 
 namespace App\Models;
 
+use App\Support\DatabaseSchema;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use App\Support\DatabaseSchema;
 
 class FirstProductGroup extends ProductGroup
 {
-    protected $table = 'first_product_groups';
+    protected $table = 'product_groups';
 
     protected static function booted(): void
     {

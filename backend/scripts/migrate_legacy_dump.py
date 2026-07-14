@@ -378,18 +378,22 @@ def fetch_table_columns(
 ) -> dict[str, dict[str, ColumnInfo]]:
     filters: list[str] = []
     if table_prefix:
-        filters.append(f"LEFT(TABLE_NAME, {len(table_prefix)}) = {quote_string(table_prefix)}")
+        filters.append(f"LEFT(columns.TABLE_NAME, {len(table_prefix)}) = {quote_string(table_prefix)}")
     else:
-        filters.append("TABLE_NAME NOT LIKE '__legacy\\_%'")
+        filters.append("columns.TABLE_NAME NOT LIKE '__legacy\\_%'")
 
     where_suffix = ""
     if filters:
         where_suffix = " AND " + " AND ".join(filters)
 
     sql = """
-        SELECT TABLE_NAME, COLUMN_NAME, IS_NULLABLE, COLUMN_DEFAULT, EXTRA
-        FROM information_schema.COLUMNS
-        WHERE TABLE_SCHEMA = DATABASE()
+        SELECT columns.TABLE_NAME, columns.COLUMN_NAME, columns.IS_NULLABLE, columns.COLUMN_DEFAULT, columns.EXTRA
+        FROM information_schema.COLUMNS AS columns
+        INNER JOIN information_schema.TABLES AS tables
+            ON tables.TABLE_SCHEMA = columns.TABLE_SCHEMA
+            AND tables.TABLE_NAME = columns.TABLE_NAME
+        WHERE columns.TABLE_SCHEMA = DATABASE()
+          AND tables.TABLE_TYPE = 'BASE TABLE'
         {where_suffix}
         ORDER BY TABLE_NAME, ORDINAL_POSITION
     """.format(where_suffix=where_suffix)
