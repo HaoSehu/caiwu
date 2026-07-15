@@ -447,19 +447,37 @@ class ServiceDetailService
             'last_synced_at' => now()->format('Y-m-d H:i:s'),
         ]);
 
+        $resolvedStatus = $host !== []
+            ? $this->transformService->resolveServiceStatusFromUpstream((string) ($host['domainstatus'] ?? ''))
+            : (int) $service->status;
+
         $service->forceFill([
             'name' => ServiceHostname::resolveInstanceName($service, $provisionData, $host),
             'domain' => trim((string) ($host['domain'] ?? $service->domain)),
-            'status' => $host !== []
-                ? $this->transformService->resolveServiceStatusFromUpstream((string) ($host['domainstatus'] ?? ''))
-                : $service->status,
+            'status' => $resolvedStatus,
             'expires_at' => $host !== []
                 ? $this->transformService->resolveExpiry($host, $service)
                 : $service->expires_at,
-            'suspended_reason' => null,
+            'suspended_reason' => $this->resolveConsoleSyncedSuspendedReason($service, $resolvedStatus),
             'provision_data' => $provisionData,
         ])->save();
         $this->serviceBindingWriter()->syncServiceState($service, null, $provisionData);
+    }
+
+    private function resolveConsoleSyncedSuspendedReason(Service $service, int $resolvedStatus): ?string
+    {
+        $localReason = trim((string) ($service->suspended_reason ?? ''));
+
+        if ((int) $service->status === ServiceStatus::SUSPENDED
+            && $localReason !== ''
+            && in_array($resolvedStatus, [ServiceStatus::ACTIVE, ServiceStatus::PENDING, ServiceStatus::SUSPENDED], true)) {
+            return $service->suspended_reason;
+        }
+
+        return $resolvedStatus === ServiceStatus::SUSPENDED
+            && (int) $service->status === ServiceStatus::SUSPENDED
+            ? $service->suspended_reason
+            : null;
     }
 
     public function fetchRemoteState(Service $service, ?Supplier $supplier = null, ?string $jwt = null): array
@@ -511,7 +529,12 @@ class ServiceDetailService
         $statusPayload = [];
 
         try {
-            $statusPayload = $resolvedJwt !== '' ? $this->fetchModuleStatusPayload($supplier, $hostId, $resolvedJwt, 'host') : [];
+            if ($resolvedJwt !== '') {
+                $hostDomainstatus = strtolower(trim((string) ($detailPayload['host']['domainstatus'] ?? '')));
+                if (! in_array($hostDomainstatus, ['suspended', 'cancelled', 'deleted'], true)) {
+                    $statusPayload = $this->fetchModuleStatusPayload($supplier, $hostId, $resolvedJwt, 'host');
+                }
+            }
         } catch (\Throwable $exception) {
             Log::warning('[实例详情] 上游 runtime 读取失败', [
                 'service_id' => $service->id,
