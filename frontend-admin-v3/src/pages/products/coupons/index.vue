@@ -37,18 +37,6 @@
           <t-option value="public" label="公开优惠券" />
           <t-option value="private" label="私有优惠券" />
         </t-select>
-        <t-button theme="primary" @click="handleSearch">
-          <template #icon><search-icon /></template>
-          搜索
-        </t-button>
-        <t-button variant="outline" @click="resetFilters">
-          <template #icon><refresh-icon /></template>
-          重置
-        </t-button>
-        <t-button variant="outline" :loading="loading" @click="loadData">
-          <template #icon><refresh-icon /></template>
-          刷新
-        </t-button>
         <t-button theme="primary" :disabled="!couponFeatureEnabled || !canManage" @click="openCouponDialog()">
           <template #icon><add-icon /></template>
           新增优惠券

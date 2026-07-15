@@ -13,9 +13,13 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\User;
 use App\Services\Finance\PaymentService;
+use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\Order\PaidOrderBusinessFlowDispatcher;
 use App\Services\Provisioning\ProvisionService;
 use App\Services\User\AccountService;
+use App\Services\Upstream\ProviderKey;
+use App\Services\Upstream\ProviderResolver;
+use App\Services\Upstream\ProviderRegistry;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
@@ -37,6 +41,44 @@ class PaidOrderBusinessFlowDispatcherTest extends TestCase
         Queue::assertPushedOn('provision', ProcessPaidOrderFulfillmentJob::class, function (ProcessPaidOrderFulfillmentJob $job) use ($order): bool {
             return (int) $job->orderId === (int) $order->id;
         });
+    }
+
+    public function test_web_mofang_payment_fulfills_synchronously(): void
+    {
+        Queue::fake([ProcessPaidOrderReferralRewardJob::class]);
+        config()->set('queue.default', 'database');
+
+        $product = new Product;
+        $product->setAttribute('id', 981);
+        $order = new Order;
+        $order->setAttribute('id', 982);
+        $order->setAttribute('type', 'new');
+        $order->setRelation('product', $product);
+        $invoice = new Invoice;
+        $invoice->setAttribute('id', 983);
+        $invoice->setRelation('order', $order);
+
+        $bindingResolver = $this->mock(PluginBindingResolver::class, function ($mock): void {
+            $mock->shouldReceive('providerKeyForProduct')
+                ->once()
+                ->andReturn(ProviderKey::MOFANG_FINANCE_API);
+        });
+        $dispatcher = new PaidOrderBusinessFlowDispatcher(new ProviderResolver(
+            new ProviderRegistry([]),
+            $bindingResolver,
+        ));
+        $this->mock(PaymentService::class, function ($mock) use ($order): void {
+            $mock->shouldReceive('processPaidOrderFulfillmentById')
+                ->once()
+                ->with((int) $order->id)
+                ->andReturn(null);
+        });
+
+        $this->runAsWebRequest(function () use ($dispatcher, $invoice): void {
+            $dispatcher->dispatchPaidInvoice($invoice, 'trace-mofang-sync');
+        });
+
+        Queue::assertNotPushed(ProcessPaidOrderFulfillmentJob::class);
     }
 
     public function test_paid_order_jobs_are_unique_by_order_id(): void

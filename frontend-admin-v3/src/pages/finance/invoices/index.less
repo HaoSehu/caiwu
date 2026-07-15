@@ -32,7 +32,7 @@
 
 .invoice-filter {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) 140px 140px 160px 160px repeat(3, auto);
+  grid-template-columns: minmax(260px, 1fr) 140px 140px 160px 160px;
   gap: 12px;
   align-items: stretch;
   margin-bottom: 16px;
@@ -291,11 +291,9 @@
     grid-template-areas:
       "keyword keyword"
       "type status"
-      "start end"
-      "search reset"
-      "refresh refresh";
+      "start end";
     align-items: stretch;
-    gap: 9px 10px;
+    gap: 8px;
     margin-bottom: 12px;
   }
 
@@ -303,11 +301,8 @@
     min-width: 0;
   }
 
-  .invoice-filter :where(.t-input, .t-select, .t-date-picker, .t-button) {
-    width: 100%;
-  }
-
   .invoice-filter :where(.t-input, .t-select, .t-date-picker) {
+    width: 100%;
     height: 38px;
   }
 
@@ -329,24 +324,6 @@
 
   .invoice-filter .filter-end {
     grid-area: end;
-  }
-
-  .invoice-filter .filter-search {
-    grid-area: search;
-  }
-
-  .invoice-filter .filter-reset {
-    grid-area: reset;
-  }
-
-  .invoice-filter .filter-refresh {
-    grid-area: refresh;
-  }
-
-  .invoice-filter .t-button {
-    height: 40px;
-    width: 100%;
-    font-weight: 600;
   }
 
   .invoice-summary {
@@ -379,9 +356,6 @@
       "type"
       "status"
       "start"
-      "end"
-      "search"
-      "reset"
-      "refresh";
+      "end";
   }
 }

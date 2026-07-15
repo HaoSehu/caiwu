@@ -26,14 +26,6 @@
           <template #icon><add-icon /></template>
           新增提供商
         </t-button>
-        <t-button theme="primary" variant="outline" @click="handleSupplierSearch">
-          <template #icon><search-icon /></template>
-          搜索
-        </t-button>
-        <t-button variant="outline" @click="resetSupplierFilters">
-          <template #icon><refresh-icon /></template>
-          重置
-        </t-button>
       </div>
     </div>
 

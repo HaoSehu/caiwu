@@ -2472,6 +2472,42 @@ class PaymentService
 
     public function processPaidOrderFulfillmentById(int $orderId): void
     {
+        if ($orderId <= 0) {
+            return;
+        }
+
+        try {
+            $lock = Cache::lock("lock:paid-order-fulfillment:{$orderId}", 1500);
+            $acquired = $lock->get();
+        } catch (\Throwable $exception) {
+            Log::warning('[支付后自动开通] 订单履约锁不可用，降级继续履约', [
+                'order_id' => $orderId,
+                'message' => $exception->getMessage(),
+                'exception' => $exception::class,
+            ]);
+
+            $this->fulfillPaidOrderById($orderId);
+
+            return;
+        }
+
+        if (! $acquired) {
+            Log::info('[支付后自动开通] 已有同订单履约正在执行，跳过重复请求', [
+                'order_id' => $orderId,
+            ]);
+
+            return;
+        }
+
+        try {
+            $this->fulfillPaidOrderById($orderId);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    private function fulfillPaidOrderById(int $orderId): void
+    {
         $order = $this->loadPayableOrderForBusinessFlow($orderId);
 
         if (! $order || ! $order->invoice) {

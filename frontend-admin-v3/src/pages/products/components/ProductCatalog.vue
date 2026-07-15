@@ -116,14 +116,6 @@
             <t-option v-for="item in lifecycleStatusOptions" :key="item.value" :value="item.value" :label="item.label" />
           </t-select>
           <div class="catalog-filter-actions">
-            <t-button theme="primary" @click="handleCatalogSearch">
-              <template #icon><search-icon /></template>
-              搜索
-            </t-button>
-            <t-button variant="outline" @click="resetCatalogFilters">
-              <template #icon><refresh-icon /></template>
-              重置
-            </t-button>
             <t-button theme="primary" @click="router.push({ name: 'AdminProductCreate' })">
               <template #icon><add-icon /></template>
               新增商品

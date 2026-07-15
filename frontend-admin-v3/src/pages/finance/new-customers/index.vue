@@ -20,17 +20,9 @@
           placeholder="结束日期"
           @change="loadData"
         />
-        <t-button theme="primary" @click="loadData">
-          <template #icon><search-icon /></template>
-          搜索
-        </t-button>
-        <t-button variant="outline" @click="resetCurrentMonth">
+        <t-button class="filter-month" variant="outline" size="small" @click="resetCurrentMonth">
           <template #icon><refresh-icon /></template>
           本月
-        </t-button>
-        <t-button variant="outline" :loading="loading" @click="loadData">
-          <template #icon><refresh-icon /></template>
-          刷新
         </t-button>
       </div>
     </t-card>
@@ -68,7 +60,7 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue';
-import { RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
+import { RefreshIcon } from 'tdesign-icons-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
 

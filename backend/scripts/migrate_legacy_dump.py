@@ -36,6 +36,24 @@ SKIP_IMPORT_TABLES = {
 
 PRESERVE_TABLES = {
     "migrations",
+    # These current-schema tables did not exist when the legacy dump was made.
+    # Keep the target's initialized/runtime data because no source rows exist.
+    "agent_applications",
+    "archive_audit_logs",
+    "integration_plugin_bindings",
+    "integration_plugin_configs",
+    "integration_plugin_runtime_logs",
+    "integration_plugins",
+    "message_logs",
+    "notification_templates",
+    "product_upstream_bindings",
+    "schedule_task_runs",
+    "schedule_ticks",
+    "service_connection_snapshots",
+    "service_provision_attempts",
+    "service_runtime_snapshots",
+    "service_upstream_bindings",
+    "supplier_plugin_bindings",
 }
 
 ALLOW_MISSING_SOURCE_TABLES = {
@@ -50,6 +68,7 @@ ALLOW_MISSING_SOURCE_TABLES = {
 }
 
 FILTER_CODEX_SETTINGS_SQL = "`group_key` NOT REGEXP '^codex_(runtime|service)_'"
+MAX_PRODUCT_GROUP_DEPTH = 3
 
 USE_PYMYSQL = False
 
@@ -110,6 +129,14 @@ class StagingContext:
         return f"{quote_db(self.database)}.{quote_identifier(self.table_name(table))}"
 
 
+@dataclass(frozen=True)
+class DirectInsertPlan:
+    table: str
+    target_columns: list[str]
+    projections: list[tuple[str, tuple[int, ...]]]
+    source_indexes: dict[str, int]
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="把旧数据库 SQL dump 的数据迁移到当前项目数据库，只迁移数据，不改结构。",
@@ -138,6 +165,16 @@ def parse_args() -> argparse.Namespace:
         "--keep-staging",
         action="store_true",
         help="迁移成功后保留临时库，便于人工检查。",
+    )
+    parser.add_argument(
+        "--require-separate-staging",
+        action="store_true",
+        help="禁止在目标库创建临时表；缺少建库权限时直接失败。",
+    )
+    parser.add_argument(
+        "--direct-data-only",
+        action="store_true",
+        help="不使用临时表，仅将旧 INSERT 数据映射写入目标现有表。",
     )
     parser.add_argument(
         "--dry-run",
@@ -452,6 +489,14 @@ def staging_columns_from_dump(dump_schema: dict[str, list[str]]) -> dict[str, di
 
 
 def build_select_expression(table: str, column: str, staging_columns: set[str]) -> str | None:
+    if table == "product_groups":
+        if column == "parent_id" and "parent_group_id" in staging_columns:
+            return "NULLIF(`parent_group_id`, 0)"
+        if column == "level":
+            return "1"
+        if column == "description" and "slogan" in staging_columns:
+            return "NULLIF(`slogan`, '')"
+
     if table in {"orders", "invoices"} and column == "product_spec_snapshot":
         candidates = []
         if "product_spec_snapshot" in staging_columns:
@@ -466,6 +511,466 @@ def build_select_expression(table: str, column: str, staging_columns: set[str]) 
         return quote_identifier(column)
 
     return None
+
+
+def validate_legacy_product_group_levels(
+    config: DbConfig,
+    staging: StagingContext,
+) -> dict[int, int]:
+    rows = query_rows(
+        config,
+        (
+            "SELECT `id`, `parent_group_id` "
+            f"FROM {staging.qualified_table('product_groups')}"
+        ),
+    )
+    parents: dict[int, int | None] = {}
+    for row_id, parent_id in rows:
+        group_id = int(row_id)
+        parents[group_id] = None if parent_id in {"", "NULL", "0"} else int(parent_id)
+
+    return resolve_product_group_levels(parents)
+
+
+def resolve_product_group_levels(parents: dict[int, int | None]) -> dict[int, int]:
+    missing_parents = sorted(
+        str(parent_id)
+        for parent_id in parents.values()
+        if parent_id is not None and parent_id not in parents
+    )
+    if missing_parents:
+        fail("旧 product_groups 存在缺失父级：" + ", ".join(missing_parents))
+
+    levels: dict[int, int] = {}
+    visiting: set[int] = set()
+
+    def resolve_level(group_id: int) -> int:
+        if group_id in levels:
+            return levels[group_id]
+        if group_id in visiting:
+            fail(f"旧 product_groups 存在循环父级引用：{group_id}")
+
+        visiting.add(group_id)
+        parent_id = parents[group_id]
+        level = 1 if parent_id is None else resolve_level(parent_id) + 1
+        visiting.remove(group_id)
+        if level > MAX_PRODUCT_GROUP_DEPTH:
+            fail(
+                "旧 product_groups 层级超过当前结构支持的 "
+                f"{MAX_PRODUCT_GROUP_DEPTH} 层：{group_id}"
+            )
+
+        levels[group_id] = level
+        return level
+
+    for group_id in parents:
+        resolve_level(group_id)
+
+    return levels
+
+
+def parse_insert_table(line: str) -> tuple[str, int] | None:
+    match = re.match(r"INSERT INTO `([^`]+)` VALUES ", line)
+    if match is None:
+        return None
+
+    return match.group(1), match.end()
+
+
+def iter_insert_tuple_values(line: str, start: int) -> Iterable[str]:
+    depth = 0
+    in_string = False
+    escaped = False
+    tuple_start = -1
+
+    for index in range(start, len(line)):
+        character = line[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == "'":
+                in_string = False
+            continue
+
+        if character == "'":
+            in_string = True
+        elif character == "(":
+            if depth == 0:
+                tuple_start = index + 1
+            depth += 1
+        elif character == ")":
+            depth -= 1
+            if depth < 0:
+                fail("旧 SQL INSERT 的括号不匹配")
+            if depth == 0:
+                yield line[tuple_start:index]
+
+    if in_string or depth != 0:
+        fail("旧 SQL INSERT 未闭合")
+
+
+def split_insert_values(tuple_sql: str) -> list[str]:
+    values: list[str] = []
+    start = 0
+    depth = 0
+    in_string = False
+    escaped = False
+
+    for index, character in enumerate(tuple_sql):
+        if in_string:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == "'":
+                in_string = False
+            continue
+
+        if character == "'":
+            in_string = True
+        elif character == "(":
+            depth += 1
+        elif character == ")":
+            depth -= 1
+        elif character == "," and depth == 0:
+            values.append(tuple_sql[start:index].strip())
+            start = index + 1
+
+    if in_string or depth != 0:
+        fail("旧 SQL INSERT 值未闭合")
+
+    values.append(tuple_sql[start:].strip())
+    return values
+
+
+def decode_sql_string(value: str) -> str | None:
+    value = value.strip()
+    if value.upper() == "NULL":
+        return None
+    if len(value) < 2 or value[0] != "'" or value[-1] != "'":
+        return value
+
+    replacements = {
+        "0": "\0",
+        "b": "\b",
+        "n": "\n",
+        "r": "\r",
+        "t": "\t",
+        "Z": "\x1a",
+    }
+    content = value[1:-1]
+    result: list[str] = []
+    escaped = False
+    for character in content:
+        if escaped:
+            result.append(replacements.get(character, character))
+            escaped = False
+        elif character == "\\":
+            escaped = True
+        else:
+            result.append(character)
+    if escaped:
+        result.append("\\")
+
+    return "".join(result)
+
+
+def build_direct_insert_plan(
+    table: str,
+    target_columns: dict[str, ColumnInfo],
+    source_columns: dict[str, ColumnInfo],
+) -> DirectInsertPlan:
+    source_indexes = {column: index for index, column in enumerate(source_columns)}
+    target_names: list[str] = []
+    projections: list[tuple[str, tuple[int, ...]]] = []
+
+    for column, info in target_columns.items():
+        projection: tuple[str, tuple[int, ...]] | None = None
+        if table == "product_groups":
+            if column == "parent_id" and "parent_group_id" in source_indexes:
+                projection = ("parent_id", (source_indexes["parent_group_id"],))
+            elif column == "level":
+                projection = ("level", (source_indexes["id"],))
+            elif column == "description" and "slogan" in source_indexes:
+                projection = ("raw", (source_indexes["slogan"],))
+
+        if projection is None and table in {"orders", "invoices"} and column == "product_spec_snapshot":
+            candidates = tuple(
+                source_indexes[candidate]
+                for candidate in ["product_spec_snapshot", "product_name_snapshot"]
+                if candidate in source_indexes
+            )
+            if candidates:
+                projection = ("coalesce_nonempty", candidates)
+
+        if projection is None and column in source_indexes:
+            projection = ("raw", (source_indexes[column],))
+
+        if projection is None:
+            if info.can_be_omitted:
+                continue
+            fail(f"{table}: 目标必填字段无法映射：{column}")
+
+        target_names.append(column)
+        projections.append(projection)
+
+    return DirectInsertPlan(
+        table=table,
+        target_columns=target_names,
+        projections=projections,
+        source_indexes=source_indexes,
+    )
+
+
+def transform_direct_tuple(
+    plan: DirectInsertPlan,
+    tuple_sql: str,
+    source_column_count: int,
+    product_group_levels: dict[int, int],
+) -> list[str]:
+    values = split_insert_values(tuple_sql)
+    if len(values) != source_column_count:
+        fail(
+            f"{plan.table} INSERT 字段数不匹配："
+            f"期望 {source_column_count}，实际 {len(values)}"
+        )
+
+    transformed: list[str] = []
+    for kind, indexes in plan.projections:
+        if kind == "raw":
+            transformed.append(values[indexes[0]])
+        elif kind == "parent_id":
+            transformed.append(f"NULLIF({values[indexes[0]]}, 0)")
+        elif kind == "level":
+            source_id = int(values[indexes[0]])
+            try:
+                transformed.append(str(product_group_levels[source_id]))
+            except KeyError:
+                fail(f"product_groups 缺少层级映射：{source_id}")
+        elif kind == "coalesce_nonempty":
+            transformed.append(
+                "COALESCE(" + ", ".join(
+                    f"NULLIF({values[index]}, '')" for index in indexes
+                ) + ")"
+            )
+        else:
+            fail(f"未知的直写字段映射类型：{kind}")
+
+    return transformed
+
+
+def load_legacy_product_group_levels(
+    dump_path: Path,
+    dump_schema: dict[str, list[str]],
+) -> dict[int, int]:
+    columns = dump_schema.get("product_groups")
+    if columns is None:
+        fail("旧 SQL dump 缺少 product_groups")
+    if "id" not in columns or "parent_group_id" not in columns:
+        fail("旧 product_groups 缺少 id 或 parent_group_id")
+
+    id_index = columns.index("id")
+    parent_index = columns.index("parent_group_id")
+    parents: dict[int, int | None] = {}
+    found = False
+    with dump_path.open("r", encoding="utf-8", errors="replace") as dump_file:
+        for line in dump_file:
+            parsed = parse_insert_table(line)
+            if parsed is None or parsed[0] != "product_groups":
+                continue
+
+            found = True
+            for tuple_sql in iter_insert_tuple_values(line, parsed[1]):
+                values = split_insert_values(tuple_sql)
+                if len(values) != len(columns):
+                    fail(
+                        "product_groups INSERT 字段数不匹配："
+                        f"期望 {len(columns)}，实际 {len(values)}"
+                    )
+
+                group_id = int(values[id_index])
+                parent_value = values[parent_index].strip().upper()
+                parents[group_id] = (
+                    None if parent_value in {"", "NULL", "0"} else int(parent_value)
+                )
+
+    if not found:
+        fail("旧 SQL dump 不含 product_groups INSERT")
+
+    return resolve_product_group_levels(parents)
+
+
+def should_import_direct_tuple(plan: DirectInsertPlan, tuple_sql: str) -> bool:
+    if plan.table != "settings":
+        return True
+
+    group_key_index = plan.source_indexes.get("group_key")
+    if group_key_index is None:
+        return True
+
+    values = split_insert_values(tuple_sql)
+    group_key = decode_sql_string(values[group_key_index])
+    return group_key is None or re.match(r"^codex_(runtime|service)_", group_key) is None
+
+
+def build_direct_insert_plans(
+    target_columns: dict[str, dict[str, ColumnInfo]],
+    dump_schema: dict[str, list[str]],
+    tables: list[str],
+) -> dict[str, DirectInsertPlan]:
+    plans: dict[str, DirectInsertPlan] = {}
+    for table in tables:
+        if table in PRESERVE_TABLES or table in SKIP_IMPORT_TABLES:
+            continue
+        if table not in dump_schema:
+            continue
+
+        plans[table] = build_direct_insert_plan(
+            table,
+            target_columns[table],
+            staging_columns_from_dump({table: dump_schema[table]})[table],
+        )
+
+    return plans
+
+
+def validate_direct_data_dump(
+    dump_path: Path,
+    dump_schema: dict[str, list[str]],
+    plans: dict[str, DirectInsertPlan],
+    product_group_levels: dict[int, int],
+) -> dict[str, int]:
+    counts = {table: 0 for table in plans}
+    with dump_path.open("r", encoding="utf-8", errors="replace") as dump_file:
+        for line in dump_file:
+            parsed = parse_insert_table(line)
+            if parsed is None:
+                continue
+
+            table, values_start = parsed
+            plan = plans.get(table)
+            if plan is None:
+                continue
+
+            for tuple_sql in iter_insert_tuple_values(line, values_start):
+                if not should_import_direct_tuple(plan, tuple_sql):
+                    continue
+
+                transform_direct_tuple(
+                    plan,
+                    tuple_sql,
+                    len(dump_schema[table]),
+                    product_group_levels,
+                )
+                counts[table] += 1
+
+    return counts
+
+
+def stream_direct_data_to_target(
+    config: DbConfig,
+    target_db: str,
+    dump_path: Path,
+    dump_schema: dict[str, list[str]],
+    tables: list[str],
+    plans: dict[str, DirectInsertPlan],
+    product_group_levels: dict[int, int],
+) -> dict[str, int]:
+    process = subprocess.Popen(
+        mysql_args(config, target_db),
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=mysql_env(config),
+    )
+    assert process.stdin is not None
+
+    counts = {table: 0 for table in plans}
+    try:
+        process.stdin.write("SET FOREIGN_KEY_CHECKS=0; START TRANSACTION;\n")
+        for table in tables:
+            if table not in PRESERVE_TABLES:
+                process.stdin.write(f"DELETE FROM {quote_identifier(table)};\n")
+
+        with dump_path.open("r", encoding="utf-8", errors="replace") as dump_file:
+            for line in dump_file:
+                parsed = parse_insert_table(line)
+                if parsed is None:
+                    continue
+
+                table, values_start = parsed
+                plan = plans.get(table)
+                if plan is None:
+                    continue
+
+                first_value = True
+                insert_prefix = (
+                    f"INSERT INTO {quote_identifier(table)} ("
+                    + ", ".join(quote_identifier(column) for column in plan.target_columns)
+                    + ") VALUES "
+                )
+                for tuple_sql in iter_insert_tuple_values(line, values_start):
+                    if not should_import_direct_tuple(plan, tuple_sql):
+                        continue
+
+                    transformed = transform_direct_tuple(
+                        plan,
+                        tuple_sql,
+                        len(dump_schema[table]),
+                        product_group_levels,
+                    )
+                    if first_value:
+                        process.stdin.write(insert_prefix)
+                        first_value = False
+                    else:
+                        process.stdin.write(",")
+                    process.stdin.write("(" + ", ".join(transformed) + ")")
+                    counts[table] += 1
+
+                if not first_value:
+                    process.stdin.write(";\n")
+
+        process.stdin.write("COMMIT; SET FOREIGN_KEY_CHECKS=1;\n")
+        process.stdin.close()
+        stdout = process.stdout.read() if process.stdout is not None else ""
+        stderr = process.stderr.read() if process.stderr is not None else ""
+        returncode = process.wait()
+    except (BrokenPipeError, OSError):
+        stdout = process.stdout.read() if process.stdout is not None else ""
+        stderr = process.stderr.read() if process.stderr is not None else ""
+        returncode = process.wait()
+
+    if returncode != 0:
+        detail = (stderr or stdout or f"退出码 {returncode}").strip()
+        fail(f"直写旧数据失败，事务已回滚：\n{detail}")
+
+    return counts
+
+
+def apply_product_group_levels(
+    config: DbConfig,
+    target_db: str,
+    levels: dict[int, int],
+) -> None:
+    for level in range(1, MAX_PRODUCT_GROUP_DEPTH + 1):
+        group_ids = [str(group_id) for group_id, value in levels.items() if value == level]
+        if not group_ids:
+            continue
+
+        run_sql(
+            config,
+            (
+                f"UPDATE {quote_identifier('product_groups')} "
+                f"SET `level` = {level} "
+                f"WHERE `id` IN ({', '.join(group_ids)})"
+            ),
+            target_db,
+        )
 
 
 def build_table_plan(
@@ -875,6 +1380,8 @@ def run_artisan_command(args: list[str]) -> None:
         ["php", "artisan", *args],
         cwd=BACKEND_DIR,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         capture_output=True,
         check=False,
     )
@@ -886,6 +1393,12 @@ def run_artisan_command(args: list[str]) -> None:
 def backfill_product_group_hierarchy() -> None:
     log("回填三层商品分类映射")
     run_artisan_command(["product-catalog:backfill-product-group-hierarchy"])
+    run_artisan_command(["product-catalog:check-product-group-hierarchy", "--json"])
+
+
+def normalize_direct_imported_product_group_tree() -> None:
+    log("规范直写导入的商品分类树")
+    run_artisan_command(["product-catalog:normalize-imported-product-group-tree"])
     run_artisan_command(["product-catalog:check-product-group-hierarchy", "--json"])
 
 
@@ -919,6 +1432,7 @@ def prepare_staging(
     dump_path: Path,
     dump_schema: dict[str, list[str]],
     staging_db: str,
+    require_separate_staging: bool,
 ) -> StagingContext:
     log(f"目标库：{config.database}")
     log(f"临时库：{staging_db}")
@@ -928,6 +1442,8 @@ def prepare_staging(
     except MigrationError as exc:
         if "Access denied" not in str(exc):
             raise
+        if require_separate_staging:
+            fail("数据库用户无建库权限，无法在不创建目标库临时表的约束下迁移")
 
         prefix = build_staging_prefix()
         log("当前数据库用户无建库权限，切换为同库临时前缀表模式")
@@ -950,7 +1466,69 @@ def dry_run(config: DbConfig, dump_path: Path) -> None:
     log("dry-run: 检查完成")
 
 
-def run_migration(config: DbConfig, dump_path: Path, staging_db: str, keep_staging: bool) -> None:
+def dry_run_direct_data_only(config: DbConfig, dump_path: Path) -> None:
+    log("direct dry-run: 开始检查，不会写入数据库")
+    target_columns = fetch_table_columns(config, config.database)
+    if not target_columns:
+        fail(f"目标库 {config.database} 没有表，请先初始化当前项目数据库")
+
+    assert_core_schema(target_columns)
+    dump_schema = parse_dump_schema(dump_path)
+    staging_columns = staging_columns_from_dump(dump_schema)
+    tables = print_plan(target_columns, staging_columns)
+    product_group_levels = load_legacy_product_group_levels(dump_path, dump_schema)
+    plans = build_direct_insert_plans(target_columns, dump_schema, tables)
+    counts = validate_direct_data_dump(
+        dump_path,
+        dump_schema,
+        plans,
+        product_group_levels,
+    )
+    for table in sorted(counts):
+        log(f"  - {table}: 已验证 {counts[table]} 行")
+    log("direct dry-run: 检查完成")
+
+
+def run_direct_data_only_migration(config: DbConfig, dump_path: Path) -> None:
+    target_columns = fetch_table_columns(config, config.database)
+    if not target_columns:
+        fail(f"目标库 {config.database} 没有表，请先初始化当前项目数据库")
+
+    assert_core_schema(target_columns)
+    dump_schema = parse_dump_schema(dump_path)
+    staging_columns = staging_columns_from_dump(dump_schema)
+    tables = print_plan(target_columns, staging_columns)
+    product_group_levels = load_legacy_product_group_levels(dump_path, dump_schema)
+    plans = build_direct_insert_plans(target_columns, dump_schema, tables)
+
+    log("开始直写旧数据，不创建或删除目标库表")
+    counts = stream_direct_data_to_target(
+        config,
+        config.database,
+        dump_path,
+        dump_schema,
+        tables,
+        plans,
+        product_group_levels,
+    )
+    for table, source_count in sorted(counts.items()):
+        target_count = count_rows(config, config.database, table)
+        if source_count != target_count:
+            fail(f"{table} 行数校验失败：旧库 {source_count} 行，目标库 {target_count} 行")
+        log(f"  - {table}: 旧库 {source_count} 行，目标库 {target_count} 行")
+
+    normalize_direct_imported_product_group_tree()
+    run_integrity_checks(config, config.database, target_columns)
+    log("直写数据迁移完成")
+
+
+def run_migration(
+    config: DbConfig,
+    dump_path: Path,
+    staging_db: str,
+    keep_staging: bool,
+    require_separate_staging: bool,
+) -> None:
     if staging_db == config.database:
         fail("临时库名不能和目标库名相同")
 
@@ -961,9 +1539,16 @@ def run_migration(config: DbConfig, dump_path: Path, staging_db: str, keep_stagi
     assert_core_schema(target_columns)
     dump_schema = parse_dump_schema(dump_path)
 
-    staging = prepare_staging(config, dump_path, dump_schema, staging_db)
+    staging = prepare_staging(
+        config,
+        dump_path,
+        dump_schema,
+        staging_db,
+        require_separate_staging,
+    )
     staging_columns = fetch_table_columns(config, staging.database, staging.prefix)
     tables = print_plan(target_columns, staging_columns)
+    product_group_levels = validate_legacy_product_group_levels(config, staging)
 
     auto_increment_tables = fetch_auto_increment_tables(config, config.database)
     clear_target_tables(config, config.database, tables, auto_increment_tables)
@@ -976,6 +1561,7 @@ def run_migration(config: DbConfig, dump_path: Path, staging_db: str, keep_stagi
         staging_columns,
         auto_increment_tables,
     )
+    apply_product_group_levels(config, config.database, product_group_levels)
     backfill_product_group_hierarchy()
     run_integrity_checks(config, config.database, target_columns)
 
@@ -1006,10 +1592,20 @@ def main() -> int:
         config = load_db_config(env_file, args.target_db)
         staging_db = args.staging_db.strip() or build_default_staging_db(config.database)
 
-        if args.dry_run:
+        if args.dry_run and args.direct_data_only:
+            dry_run_direct_data_only(config, dump_path)
+        elif args.dry_run:
             dry_run(config, dump_path)
+        elif args.direct_data_only:
+            run_direct_data_only_migration(config, dump_path)
         else:
-            run_migration(config, dump_path, staging_db, args.keep_staging)
+            run_migration(
+                config,
+                dump_path,
+                staging_db,
+                args.keep_staging,
+                args.require_separate_staging,
+            )
     except MigrationError as exc:
         print(f"[legacy-migrate] 错误：{exc}", file=sys.stderr)
         return 1

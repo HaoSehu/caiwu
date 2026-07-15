@@ -35,18 +35,6 @@
           placeholder="结束日期"
           @change="handleSearch"
         />
-        <t-button class="filter-search" theme="primary" @click="handleSearch">
-          <template #icon><search-icon /></template>
-          搜索
-        </t-button>
-        <t-button class="filter-reset" variant="outline" @click="resetFilters">
-          <template #icon><refresh-icon /></template>
-          重置
-        </t-button>
-        <t-button class="filter-refresh" variant="outline" :loading="loading" @click="loadList">
-          <template #icon><refresh-icon /></template>
-          刷新
-        </t-button>
       </div>
 
       <div v-if="!isMobile" class="table-scroll">
@@ -131,7 +119,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
 

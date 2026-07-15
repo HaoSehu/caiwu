@@ -32,7 +32,7 @@
 
 .report-filter {
   display: grid;
-  grid-template-columns: 170px 170px auto auto auto;
+  grid-template-columns: 170px 170px auto;
   gap: 12px;
   align-items: stretch;
   justify-content: flex-start;
@@ -43,7 +43,7 @@
 }
 
 .report-filter .t-button {
-  min-width: 88px;
+  min-width: 72px;
 }
 
 .table-scroll {
@@ -61,12 +61,7 @@
 
   .report-filter {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-areas:
-      "start end"
-      "search reset"
-      "refresh refresh";
-    align-items: stretch;
-    gap: 9px 10px;
+    gap: 8px;
   }
 
   .report-filter > * {
@@ -81,42 +76,16 @@
     height: 38px;
   }
 
-  .report-filter > :nth-child(1) {
-    grid-area: start;
-  }
-
-  .report-filter > :nth-child(2) {
-    grid-area: end;
-  }
-
-  .report-filter > :nth-child(3) {
-    grid-area: search;
-  }
-
-  .report-filter > :nth-child(4) {
-    grid-area: reset;
-  }
-
-  .report-filter > :nth-child(5) {
-    grid-area: refresh;
-  }
-
-  .report-filter .t-button {
-    height: 40px;
-    width: 100%;
-    font-weight: 600;
+  .report-filter .filter-month {
+    grid-column: 1 / -1;
+    height: 34px;
+    font-size: 13px;
   }
 }
 
 @media (max-width: 360px) {
   .report-filter {
     grid-template-columns: 1fr;
-    grid-template-areas:
-      "start"
-      "end"
-      "search"
-      "reset"
-      "refresh";
   }
 }
 

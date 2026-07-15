@@ -111,6 +111,78 @@ class AdminUserServiceUpstreamBindingTest extends TestCase
         ]);
     }
 
+    public function test_deleting_service_record_removes_its_local_upstream_binding_without_calling_upstream(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+        $user = User::query()->create([
+            'email' => 'service-delete-binding-'.$suffix.'@example.com',
+            'password' => 'Temp@123456',
+            'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
+            'status' => 1,
+        ]);
+        $supplier = Supplier::query()->create([
+            'name' => 'Delete Binding Supplier '.$suffix,
+            'code' => 'delete-binding-'.$suffix,
+            'interface_type' => ProviderKey::MOFANG_FINANCE_API,
+            'api_url' => 'https://supplier-delete-'.$suffix.'.example.com',
+            'api_username' => 'demo',
+            'api_key' => 'secret',
+            'status' => 1,
+            'sort_order' => 1,
+        ]);
+        $product = Product::query()->create([
+            'name' => 'Delete Binding Product '.$suffix,
+            'product_type' => 'server',
+            'pricing' => ['monthly' => '99.00'],
+            'setup_fee' => '0.00',
+            'config_options' => [],
+            'purchase_requires' => [],
+            'stock' => -1,
+            'status' => 1,
+            'auto_setup' => 0,
+            'supplier_id' => (int) $supplier->id,
+            'supplier_product_id' => 30001,
+            'provision_module' => ProviderKey::MOFANG_FINANCE_API,
+        ]);
+        $this->createProductUpstreamBinding($supplier, $product, 30001);
+
+        $service = Service::query()->create([
+            'user_id' => (int) $user->id,
+            'product_id' => (int) $product->id,
+            'name' => 'Delete Binding Service '.$suffix,
+            'domain' => 'delete-binding-'.$suffix.'.example.com',
+            'billing_cycle' => 'monthly',
+            'amount' => '99.00',
+            'status' => ServiceStatus::ACTIVE,
+            'locked_pricing' => [],
+            'provision_data' => [],
+            'expires_at' => now()->addMonth(),
+            'auto_renew' => 1,
+        ]);
+
+        $userService = app(UserService::class);
+        $userService->updateServiceMeta($user, (int) $service->id, [
+            'supplier_id' => (int) $supplier->id,
+            'upstream_product_id' => 30001,
+            'upstream_host_id' => 40001,
+        ]);
+
+        $this->assertDatabaseHas('service_upstream_bindings', [
+            'service_id' => (int) $service->id,
+            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'upstream_service_id' => '40001',
+        ]);
+
+        $userService->deleteService($user, (int) $service->id);
+
+        $this->assertDatabaseMissing('service_upstream_bindings', [
+            'service_id' => (int) $service->id,
+        ]);
+        $this->assertDatabaseMissing('services', [
+            'id' => (int) $service->id,
+        ]);
+    }
+
     public function test_update_upstream_host_id_only_corrects_provider_from_supplier_binding(): void
     {
         $suffix = bin2hex(random_bytes(4));

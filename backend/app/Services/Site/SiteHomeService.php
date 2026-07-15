@@ -91,6 +91,8 @@ class SiteHomeService
                 'product_type' => (string) ($group['product_type'] ?? ''),
                 'product_type_id' => (int) ($group['product_type_id'] ?? 0),
                 'product_type_label' => (string) ($group['product_type_label'] ?? ''),
+                'first_product_group_code' => (string) ($group['first_product_group_code'] ?? ''),
+                'first_product_group_name' => (string) ($group['first_product_group_name'] ?? ''),
             ])
             ->values()
             ->all();

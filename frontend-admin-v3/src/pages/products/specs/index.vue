@@ -20,18 +20,6 @@
           <t-option value="bound" label="已绑定" />
           <t-option value="unbound" label="未绑定" />
         </t-select>
-        <t-button theme="primary" @click="loadCatalog">
-          <template #icon><search-icon /></template>
-          搜索
-        </t-button>
-        <t-button variant="outline" @click="resetFilters">
-          <template #icon><refresh-icon /></template>
-          重置
-        </t-button>
-        <t-button variant="outline" :loading="loading" @click="loadCatalog">
-          <template #icon><refresh-icon /></template>
-          刷新
-        </t-button>
         <t-button theme="primary" variant="outline" @click="openSpecDialog()">
           <template #icon><add-icon /></template>
           新增规格

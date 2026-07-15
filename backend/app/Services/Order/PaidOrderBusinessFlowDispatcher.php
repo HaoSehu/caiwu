@@ -5,6 +5,10 @@ namespace App\Services\Order;
 use App\Jobs\ProcessPaidOrderFulfillmentJob;
 use App\Jobs\ProcessPaidOrderReferralRewardJob;
 use App\Models\Invoice;
+use App\Models\Order;
+use App\Models\Product;
+use App\Services\Upstream\ProviderKey;
+use App\Services\Upstream\ProviderResolver;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Predis\Client;
@@ -12,6 +16,10 @@ use Predis\Client;
 class PaidOrderBusinessFlowDispatcher
 {
     private ?bool $databaseQueueReady = null;
+
+    public function __construct(
+        private readonly ProviderResolver $providerResolver,
+    ) {}
 
     public function dispatchPaidInvoice(Invoice $invoice, ?string $traceId = null): void
     {
@@ -22,6 +30,16 @@ class PaidOrderBusinessFlowDispatcher
         }
 
         $shouldDispatchReferralReward = $this->shouldDispatchReferralReward($invoice);
+
+        if ($this->shouldSynchronouslyFulfillMofangPurchase($invoice)) {
+            if ($shouldDispatchReferralReward) {
+                ProcessPaidOrderReferralRewardJob::dispatch($orderId, $traceId);
+            }
+
+            ProcessPaidOrderFulfillmentJob::dispatchSync($orderId);
+
+            return;
+        }
 
         if (app()->runningInConsole()) {
             if ($this->shouldUseQueue()) {
@@ -66,6 +84,23 @@ class PaidOrderBusinessFlowDispatcher
     private function shouldDispatchReferralReward(Invoice $invoice): bool
     {
         return (string) ($invoice->order?->type ?? $invoice->type ?? '') === 'new';
+    }
+
+    private function shouldSynchronouslyFulfillMofangPurchase(Invoice $invoice): bool
+    {
+        $invoice->loadMissing('order.product');
+        $order = $invoice->order;
+
+        if (! $order instanceof Order || (string) $order->type !== 'new') {
+            return false;
+        }
+
+        $product = $order->product;
+        if (! $product instanceof Product) {
+            return false;
+        }
+
+        return $this->providerResolver->resolveForProduct($product)->key() === ProviderKey::MOFANG_FINANCE_API;
     }
 
     private function shouldUseQueue(): bool

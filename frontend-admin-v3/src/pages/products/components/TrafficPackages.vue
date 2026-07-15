@@ -6,7 +6,6 @@
         <p>按旧端 `traffic_package_catalog` 设置项维护分组和档位，支持保存当前分组与从上游拉取后回填。</p>
       </div>
       <div class="traffic-actions">
-        <t-button :loading="trafficLoading" @click="loadTrafficPackages">刷新</t-button>
         <t-button theme="primary" variant="outline" @click="openTrafficGroupDialog()">新增分组</t-button>
         <t-button variant="outline" :loading="trafficPulling" :disabled="!selectedTrafficGroup" @click="pullTrafficPackages">
           上游拉取
