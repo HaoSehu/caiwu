@@ -143,7 +143,7 @@ const userStore = useUserStore();
 const formRef = ref<FormInstanceFunctions<LoginForm>>();
 const loading = ref(false);
 const showPassword = ref(false);
-const { loading: captchaLoading, runWithCaptcha } = useGeeTestCaptcha();
+const { enabled, loading: captchaLoading, runWithCaptcha } = useGeeTestCaptcha();
 
 const form = reactive<LoginForm>({
   account: '',
@@ -252,12 +252,18 @@ function validateForm() {
 async function runLogin() {
   loading.value = true;
   try {
-    await performLogin();
+    if (enabled.value) {
+      await runWithCaptcha(async (captcha: unknown) => {
+        await performLogin(captcha);
+      }, { required: true });
+    } else {
+      await performLogin();
+    }
     MessagePlugin.success('登录成功');
     await router.push(redirectPath.value);
   } catch (error: unknown) {
     const runtimeError = asRuntimeLoginError(error);
-    if (isCaptchaRequiredError(runtimeError)) {
+    if (!enabled.value && isCaptchaRequiredError(runtimeError)) {
       try {
         await runWithCaptcha(async (captcha: unknown) => {
           await performLogin(captcha);

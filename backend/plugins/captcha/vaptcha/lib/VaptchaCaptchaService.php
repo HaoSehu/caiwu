@@ -343,8 +343,8 @@ class VaptchaCaptchaService
         return sdkPromise;
     }
 
-    function patchVerifyPageUrl(vaptchaObj) {
-        var core = global.VaptchaCore || (vaptchaObj && vaptchaObj.constructor);
+    function patchVerifyPageUrl() {
+        var core = global.VaptchaCore;
         if (!core || !core.prototype || typeof core.prototype.buildVerifyPageUrl !== 'function') {
             return;
         }
@@ -357,6 +357,11 @@ class VaptchaCaptchaService
             var url = original.call(this, mode, display);
             try {
                 var parsed = new URL(url, window.location.href);
+                // Force popup display to prevent full-page redirect on mobile
+                parsed.searchParams.set('display', 'popup');
+                if (parsed.searchParams.get('mode') === 'mobile') {
+                    parsed.searchParams.set('mode', 'pc');
+                }
                 if (parsed.origin === window.location.origin && parsed.pathname === '/src/verify.html') {
                     parsed = new URL(VERIFY_PAGE_URL + parsed.search);
                     return parsed.toString();
@@ -402,6 +407,7 @@ class VaptchaCaptchaService
             return configured;
         }
 
+        // VAPTCHA SDK requires a container element; create a hidden one
         var element = document.createElement('div');
         var id = 'vaptcha-container-' + Date.now() + '-' + Math.random().toString(16).slice(2);
         element.id = id;
@@ -488,6 +494,7 @@ class VaptchaCaptchaService
                         emit(successCallbacks);
                     })
                     .catch(function (error) {
+                        emit(closeCallbacks);
                         emit(errorCallbacks, error instanceof Error ? error : new Error('行为验证失败，请重试'));
                     });
 
@@ -530,6 +537,9 @@ class VaptchaCaptchaService
                     throw new Error('VAPTCHA VID 不能为空');
                 }
 
+                // Patch verify page URL before creating instance
+                patchVerifyPageUrl();
+
                 container = ensureContainer(options);
 
                 return vaptcha({
@@ -542,7 +552,6 @@ class VaptchaCaptchaService
                 });
             })
             .then(function (created) {
-                patchVerifyPageUrl(created);
                 vaptchaObj = created;
                 emit(readyCallbacks);
             })
