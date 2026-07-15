@@ -62,7 +62,9 @@ class V2SiteHomeApiTest extends TestCase
             ->assertJsonPath('data.site_config.site_name', 'Caiwu')
             ->assertJsonPath('data.hero.slides.0.title', 'Fast Cloud')
             ->assertJsonPath('data.notices.0.title', 'Notice')
-            ->assertJsonPath('data.root_groups.0.name', 'VPS');
+            ->assertJsonPath('data.root_groups.0.name', 'VPS')
+            ->assertJsonPath('data.root_groups.0.first_product_group_code', 'vps')
+            ->assertJsonPath('data.root_groups.0.first_product_group_name', 'VPS');
 
         $catalogMap = $response->json('data.group_catalog_map');
         $this->assertIsArray($catalogMap);
@@ -149,6 +151,10 @@ class V2SiteHomeApiTest extends TestCase
         $this->assertSame(
             ['bare', 'dedicated', 'dedicated', 'vps', 'domain'],
             array_column($payload['root_groups'], 'product_type')
+        );
+        $this->assertSame(
+            ['bare', 'dedicated', 'dedicated', 'vps', 'domain'],
+            array_column($payload['root_groups'], 'first_product_group_code')
         );
     }
 
@@ -254,6 +260,8 @@ class V2SiteHomeApiTest extends TestCase
                 'product_type' => 'vps',
                 'product_type_id' => 1,
                 'product_type_label' => 'VPS',
+                'first_product_group_code' => 'vps',
+                'first_product_group_name' => 'VPS',
                 'third_party_response' => 'must-not-leak',
             ]],
             'group_catalog_map' => [

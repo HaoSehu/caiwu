@@ -1,10 +1,6 @@
 <template>
   <div class="cpu-models-page">
     <div class="page-inline-actions">
-      <t-button variant="outline" :loading="loading" @click="loadCatalog">
-        <template #icon><refresh-icon /></template>
-        刷新
-      </t-button>
       <t-button theme="primary" :loading="saving" @click="handleSave">保存目录</t-button>
     </div>
 

@@ -237,7 +237,7 @@ class DatabaseOptimizationRegressionTest extends TestCase
 
     // ── H3 ──────────────────────────────────────────────────────────────────
 
-    public function test_users_email_is_not_nullable(): void
+    public function test_users_email_is_nullable(): void
     {
         $dbName = DB::getDatabaseName();
 
@@ -247,11 +247,11 @@ class DatabaseOptimizationRegressionTest extends TestCase
         ", [$dbName]);
 
         $this->assertNotEmpty($rows, 'users.email 列必须存在');
-        $this->assertSame('NO', (string) $rows[0]->IS_NULLABLE,
-            'users.email 应为 NOT NULL（H3 修复）');
+        $this->assertSame('YES', (string) $rows[0]->IS_NULLABLE,
+            'users.email 应允许为空，以保留旧数据原值');
     }
 
-    public function test_users_phone_is_not_nullable(): void
+    public function test_users_phone_is_nullable(): void
     {
         $dbName = DB::getDatabaseName();
 
@@ -261,17 +261,25 @@ class DatabaseOptimizationRegressionTest extends TestCase
         ", [$dbName]);
 
         $this->assertNotEmpty($rows, 'users.phone 列必须存在');
-        $this->assertSame('NO', (string) $rows[0]->IS_NULLABLE,
-            'users.phone 应为 NOT NULL（H3 修复）');
+        $this->assertSame('YES', (string) $rows[0]->IS_NULLABLE,
+            'users.phone 应允许为空，以保留旧数据原值');
     }
 
-    public function test_users_no_null_email_or_phone(): void
+    public function test_users_null_identity_values_are_allowed(): void
     {
-        $nullEmails = DB::table('users')->whereNull('email')->count();
-        $nullPhones = DB::table('users')->whereNull('phone')->count();
+        $rows = DB::select('
+            SELECT COLUMN_NAME, IS_NULLABLE
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = "users"
+              AND COLUMN_NAME IN ("email", "phone")
+        ');
+        $nullableByColumn = collect($rows)->mapWithKeys(
+            fn (object $row) => [(string) $row->COLUMN_NAME => (string) $row->IS_NULLABLE],
+        );
 
-        $this->assertSame(0, $nullEmails, 'users 表中不应有 email=NULL 的记录（H3 回填后）');
-        $this->assertSame(0, $nullPhones, 'users 表中不应有 phone=NULL 的记录（H3 回填后）');
+        $this->assertSame('YES', $nullableByColumn->get('email'));
+        $this->assertSame('YES', $nullableByColumn->get('phone'));
     }
 
     // ── L3 ──────────────────────────────────────────────────────────────────

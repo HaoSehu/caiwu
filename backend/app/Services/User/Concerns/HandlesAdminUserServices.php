@@ -871,6 +871,11 @@ trait HandlesAdminUserServices
                 ->where('service_id', $service->id)
                 ->update(['service_id' => null]);
 
+            // Record-only deletion must not invoke or destroy the upstream instance.
+            DB::table('service_upstream_bindings')
+                ->where('service_id', $service->id)
+                ->delete();
+
             if ($product instanceof Product && (int) $product->stock >= 0) {
                 $product->increment('stock');
             }

@@ -66,6 +66,8 @@ class SiteHomeOverviewResource extends JsonResource
                 'product_type' => (string) ($item['product_type'] ?? ''),
                 'product_type_id' => (int) ($item['product_type_id'] ?? 0),
                 'product_type_label' => (string) ($item['product_type_label'] ?? ''),
+                'first_product_group_code' => (string) ($item['first_product_group_code'] ?? ''),
+                'first_product_group_name' => (string) ($item['first_product_group_name'] ?? ''),
             ])
             ->values()
             ->all();
