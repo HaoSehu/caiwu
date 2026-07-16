@@ -58,6 +58,13 @@ class MediaFileController extends Controller
         return $this->success(null, '删除成功');
     }
 
+    public function references(MediaFile $mediaFile): JsonResponse
+    {
+        return $this->success([
+            'references' => $this->mediaFileService->checkReferences($mediaFile),
+        ]);
+    }
+
     public function reindex(ReindexMediaFilesRequest $request): JsonResponse
     {
         $result = $this->actions->reindexMediaFiles((int) $request->user()->id);

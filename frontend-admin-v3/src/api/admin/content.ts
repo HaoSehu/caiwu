@@ -83,6 +83,10 @@ export const mediaApi = {
     request.delete({
       url: `/v2/admin/media-files/${id}`,
     }),
+  references: (id: number | string) =>
+    request.get<{ references?: string[] }>({
+      url: `/v2/admin/media-files/${id}/references`,
+    }),
 };
 
 export const siteHeroApi = {

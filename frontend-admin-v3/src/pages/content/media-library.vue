@@ -101,7 +101,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
-import { MessagePlugin, type PageInfo, type PrimaryTableCol } from 'tdesign-vue-next';
+import { MessagePlugin, DialogPlugin, type PageInfo, type PrimaryTableCol } from 'tdesign-vue-next';
 import { RefreshIcon, SearchIcon, UploadIcon } from 'tdesign-icons-vue-next';
 
 import { adminApi, type MediaFileRecord } from '@/api/admin';
@@ -259,6 +259,33 @@ async function removeMedia(row: MediaFileRecord) {
   if (!canDelete(row)) return;
 
   const id = String(row.id || '');
+
+  // 先检查引用
+  let refs: string[] = [];
+  try {
+    const result = await adminApi.media.references(id);
+    refs = result.references || [];
+  } catch {
+    // 引用检查失败时允许继续删除
+  }
+
+  if (refs.length > 0) {
+    const refList = refs.join('；');
+    const confirmed = await new Promise<boolean>((resolve) => {
+      const dialog = DialogPlugin.confirm({
+        header: '确认删除',
+        body: `该媒体文件被以下内容引用：${refList}。删除后将导致这些内容出现死链，确认继续？`,
+        confirmBtn: { theme: 'danger', content: '仍然删除' },
+        cancelBtn: '取消',
+        onConfirm: () => { dialog.destroy(); resolve(true); },
+        onCancel: () => { dialog.destroy(); resolve(false); },
+        onClose: () => { dialog.destroy(); resolve(false); },
+      });
+    });
+
+    if (!confirmed) return;
+  }
+
   deletingId.value = id;
   try {
     await adminApi.media.remove(id);
