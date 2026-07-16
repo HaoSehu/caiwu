@@ -359,6 +359,7 @@ export interface MediaReindexResult {
   created?: number;
   skipped?: number;
   total?: number;
+  unrecognized?: string[];
 }
 
 // ─── Site Hero ────────────────────────────────────────────────
