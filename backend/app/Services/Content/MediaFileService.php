@@ -7,6 +7,7 @@ use App\Support\UploadedImage;
 use App\Support\UploadUrl;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
@@ -103,7 +104,7 @@ class MediaFileService
             }
         }
 
-        return MediaFile::query()->create([
+        $mediaFile = MediaFile::query()->create([
             'filename' => $originalName,
             'path' => $relativePath,
             'url' => UploadUrl::resolve($relativePath),
@@ -114,7 +115,15 @@ class MediaFileService
             'group' => $group,
             'uploaded_by' => $adminId,
         ]);
+
+        $this->bustHeroVideoCache();
+
+        return $mediaFile;
     }
+
+    private const CACHE_KEY_HERO_VIDEOS = 'media:hero-videos:list';
+
+    private const CACHE_TTL_HERO_VIDEOS = 300; // 5分钟
 
     /**
      * @return array<int, array<string, mixed>>
@@ -123,32 +132,41 @@ class MediaFileService
     {
         $keyword = strtolower(trim((string) $keyword));
 
-        $databaseItems = MediaFile::query()
-            ->where('group', self::HERO_VIDEO_GROUP)
-            ->where('mime_type', 'like', 'video/%')
-            ->orderByDesc('id')
-            ->get()
-            ->map(fn (MediaFile $item) => $this->toMediaArray($item))
-            ->all();
+        $allVideos = Cache::remember(
+            self::CACHE_KEY_HERO_VIDEOS,
+            now()->addSeconds(self::CACHE_TTL_HERO_VIDEOS),
+            function (): array {
+                $databaseItems = MediaFile::query()
+                    ->where('group', self::HERO_VIDEO_GROUP)
+                    ->where('mime_type', 'like', 'video/%')
+                    ->orderByDesc('id')
+                    ->get()
+                    ->map(fn (MediaFile $item) => $this->toMediaArray($item))
+                    ->all();
 
-        $databasePaths = collect($databaseItems)
-            ->map(fn (array $item) => (string) ($item['path'] ?? ''))
-            ->filter()
-            ->values()
-            ->all();
+                $databasePaths = collect($databaseItems)
+                    ->map(fn (array $item) => (string) ($item['path'] ?? ''))
+                    ->filter()
+                    ->values()
+                    ->all();
 
-        return collect([...$databaseItems, ...$this->scanHeroVideoFiles($databasePaths)])
-            ->filter(function (array $item) use ($keyword): bool {
-                if ($keyword === '') {
-                    return true;
-                }
+                return collect([...$databaseItems, ...$this->scanHeroVideoFiles($databasePaths)])
+                    ->sortBy([
+                        ['created_at', 'desc'],
+                        ['filename', 'asc'],
+                    ])
+                    ->values()
+                    ->all();
+            }
+        );
 
-                return str_contains(strtolower((string) ($item['filename'] ?? '')), $keyword);
-            })
-            ->sortBy([
-                ['created_at', 'desc'],
-                ['filename', 'asc'],
-            ])
+        if ($keyword === '') {
+            return $allVideos;
+        }
+
+        return collect($allVideos)
+            ->filter(fn (array $item): bool =>
+                str_contains(strtolower((string) ($item['filename'] ?? '')), $keyword))
             ->values()
             ->all();
     }
@@ -162,6 +180,8 @@ class MediaFileService
         }
 
         $mediaFile->delete();
+
+        $this->bustHeroVideoCache();
     }
 
     /**
@@ -212,11 +232,17 @@ class MediaFileService
             $created++;
         }
 
-        return [
+        $result = [
             'created' => $created,
             'skipped' => $skipped,
             'total' => $created + $skipped,
         ];
+
+        if ($created > 0) {
+            $this->bustHeroVideoCache();
+        }
+
+        return $result;
     }
 
     /**
@@ -432,5 +458,10 @@ class MediaFileService
         if ($freeSpace < $minFree) {
             throw new \RuntimeException('服务器磁盘空间不足，请联系管理员');
         }
+    }
+
+    private function bustHeroVideoCache(): void
+    {
+        Cache::forget(self::CACHE_KEY_HERO_VIDEOS);
     }
 }
