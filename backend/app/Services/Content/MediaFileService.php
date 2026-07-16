@@ -8,6 +8,7 @@ use App\Support\UploadUrl;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 class MediaFileService
@@ -82,7 +83,7 @@ class MediaFileService
         $directory = public_path(self::MEDIA_ROOT);
         File::ensureDirectoryExists($directory);
 
-        $filename = sprintf('%s_%s_%04d.%s', $media['prefix'], now()->format('His'), random_int(1000, 9999), $media['extension']);
+        $filename = sprintf('%s_%s_%s.%s', $media['prefix'], now()->format('His'), Str::random(8), $media['extension']);
         $originalName = UploadedImage::originalName($file, $filename);
 
         $file->move($directory, $filename);
