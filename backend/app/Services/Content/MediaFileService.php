@@ -83,6 +83,8 @@ class MediaFileService
         $directory = public_path(self::MEDIA_ROOT);
         File::ensureDirectoryExists($directory);
 
+        $this->guardDiskSpace($directory, (int) $file->getSize());
+
         $filename = sprintf('%s_%s_%s.%s', $media['prefix'], now()->format('His'), Str::random(8), $media['extension']);
         $originalName = UploadedImage::originalName($file, $filename);
 
@@ -415,5 +417,20 @@ class MediaFileService
         }
 
         return $realPath;
+    }
+
+    private function guardDiskSpace(string $directory, int $fileSize): void
+    {
+        $freeSpace = @disk_free_space($directory);
+
+        if ($freeSpace === false) {
+            return; // 无法获取磁盘信息时放行
+        }
+
+        $minFree = max($fileSize * 2, 50 * 1024 * 1024); // 至少预留 50MB
+
+        if ($freeSpace < $minFree) {
+            throw new \RuntimeException('服务器磁盘空间不足，请联系管理员');
+        }
     }
 }
