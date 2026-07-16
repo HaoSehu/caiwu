@@ -257,6 +257,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::get('/content/articles', [ContentArticleController::class, 'index']);
         Route::get('/content/articles/{article}', [ContentArticleController::class, 'show']);
         Route::get('/media-files', [MediaFileController::class, 'index']);
+        Route::get('/media-files/{mediaFile}/references', [MediaFileController::class, 'references']);
     });
 
     Route::middleware(['permission:'.AdminPermissions::MEMBER_LEVEL_LIST])->group(function (): void {

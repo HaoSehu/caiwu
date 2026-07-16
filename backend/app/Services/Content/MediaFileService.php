@@ -8,6 +8,7 @@ use App\Support\UploadUrl;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
@@ -182,6 +183,48 @@ class MediaFileService
         $mediaFile->delete();
 
         $this->bustHeroVideoCache();
+    }
+
+    /**
+     * 检查媒体文件是否被其他内容引用。
+     *
+     * @return array<int, string> 引用描述列表，为空表示无引用
+     */
+    public function checkReferences(MediaFile $mediaFile): array
+    {
+        $refs = [];
+        $path = (string) $mediaFile->path;
+        $url = (string) $mediaFile->url;
+
+        // 检查 settings 表
+        $settings = DB::table('settings')
+            ->where(function ($query) use ($path, $url) {
+                $query->where('item_value', 'like', "%{$path}%");
+                if ($url !== '') {
+                    $query->orWhere('item_value', 'like', "%{$url}%");
+                }
+            })
+            ->get(['group_key', 'item_key']);
+
+        foreach ($settings as $s) {
+            $refs[] = "系统设置 {$s->group_key}.{$s->item_key}";
+        }
+
+        // 检查内容文章封面
+        $articleCount = DB::table('content_articles')
+            ->where(function ($query) use ($path, $url) {
+                $query->where('cover_image', 'like', "%{$path}%");
+                if ($url !== '') {
+                    $query->orWhere('cover_image', 'like', "%{$url}%");
+                }
+            })
+            ->count();
+
+        if ($articleCount > 0) {
+            $refs[] = "{$articleCount} 篇文章封面";
+        }
+
+        return $refs;
     }
 
     /**
