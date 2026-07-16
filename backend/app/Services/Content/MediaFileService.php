@@ -228,13 +228,13 @@ class MediaFileService
     }
 
     /**
-     * @return array{created: int, skipped: int, total: int}
+     * @return array{created: int, skipped: int, total: int, unrecognized: array<int, string>}
      */
     public function reindexMediaDirectory(int $adminId): array
     {
         $directory = public_path(self::MEDIA_ROOT);
         if (! @is_dir($directory)) {
-            return ['created' => 0, 'skipped' => 0, 'total' => 0];
+            return ['created' => 0, 'skipped' => 0, 'total' => 0, 'unrecognized' => []];
         }
 
         $existingPaths = MediaFile::query()
@@ -245,10 +245,13 @@ class MediaFileService
 
         $created = 0;
         $skipped = 0;
+        $unrecognized = [];
 
         foreach (File::files($directory) as $file) {
             $metadata = $this->buildDirectoryMediaMetadata($file->getPathname());
             if ($metadata === null) {
+                $unrecognized[] = $file->getFilename();
+
                 continue;
             }
 
@@ -279,6 +282,7 @@ class MediaFileService
             'created' => $created,
             'skipped' => $skipped,
             'total' => $created + $skipped,
+            'unrecognized' => $unrecognized,
         ];
 
         if ($created > 0) {

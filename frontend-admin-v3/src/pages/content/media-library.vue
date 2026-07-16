@@ -240,12 +240,13 @@ async function handleReindex() {
   try {
     const response = await adminApi.media.reindex();
     const created = Number(response.created || 0);
+    const unrecognized = response.unrecognized || [];
 
-    if (created > 0) {
-      MessagePlugin.success(`重新获取完成，新增 ${created} 个媒体文件`);
-    } else {
-      MessagePlugin.success('重新获取完成，目录中没有新的媒体文件');
+    let msg = `重新获取完成，新增 ${created} 个媒体文件`;
+    if (unrecognized.length > 0) {
+      msg += `，${unrecognized.length} 个文件因类型不支持被跳过`;
     }
+    MessagePlugin.success(msg);
 
     await loadMediaList();
   } catch (error) {

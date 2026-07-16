@@ -88,6 +88,7 @@ class AdminOperationalActionV2Service
                     'created' => (int) ($result['created'] ?? 0),
                     'skipped' => (int) ($result['skipped'] ?? 0),
                     'total' => (int) ($result['total'] ?? 0),
+                    'unrecognized' => (array) ($result['unrecognized'] ?? []),
                 ],
             ],
         ];
