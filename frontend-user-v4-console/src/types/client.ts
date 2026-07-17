@@ -52,7 +52,6 @@ export interface ClientUserInfo {
   name?: string;
   nickname?: string;
   display_name?: string;
-  username?: string;
   email?: string;
   phone?: string;
   status?: number | string;

@@ -810,8 +810,6 @@ async function submit() {
   try {
     const group = findProductGroupByKey(categoryOptions.value, form.selected_product_group_key);
     const payload = {
-      display_name: form.display_name,
-      name: form.display_name,
       custom_display_name: resolveCustomDisplayNamePayload(),
       ...productGroupPayload(group),
       pricing: {

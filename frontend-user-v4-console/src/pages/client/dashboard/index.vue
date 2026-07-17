@@ -365,7 +365,7 @@ const displayName = computed(() =>
   String(userInfo.value.nickname || userInfo.value.display_name || userInfo.value.email || userInfo.value.name || '客户账户'),
 );
 const avatarText = computed(() => displayName.value.slice(0, 1) || '客');
-const avatarUrl = computed(() => String(userInfo.value.avatar || userInfo.value.avatar_url || userInfo.value.headimg || ''));
+const avatarUrl = computed(() => '');
 const userIdText = computed(() => String(userInfo.value.id || '--'));
 const isVerified = computed(() => Number(userInfo.value.is_verified || 0) === 1);
 const isPhoneBound = computed(() => Boolean(String(userInfo.value.phone || '').trim()));

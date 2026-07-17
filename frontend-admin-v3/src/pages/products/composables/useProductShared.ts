@@ -6,8 +6,8 @@ import { toUserMessage } from '@/utils/userMessage';
  */
 
 export const providerTypeFallbackLabels: Record<string, string> = {
-  mofang_finance_api: '魔方财务',
-  mofang_cloud_api: '魔方云',
+  zjmf_finance_api: 'ZJMF 财务',
+  zjmf_cloud_api: 'ZJMF 云',
   hosting_panel_api: '通用主机面板',
 };
 

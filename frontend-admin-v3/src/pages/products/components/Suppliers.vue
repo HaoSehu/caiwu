@@ -93,7 +93,7 @@
   >
     <div class="split-dialog-intro">
       <strong>左右穿梭对接商品</strong>
-      <p>左侧选择魔方财务未对接商品，右侧选择当前系统分类作为导入位置，执行后会创建或更新本地商品并绑定当前提供商商品 ID。</p>
+      <p>左侧选择 ZJMF 财务未对接商品，右侧选择当前系统分类作为导入位置，执行后会创建或更新本地商品并绑定当前提供商商品 ID。</p>
     </div>
 
     <t-form class="supplier-batch-form" :data="supplierBatchForm" label-width="90px">
@@ -131,7 +131,7 @@
         <div class="supplier-batch-panel__head">
           <div class="supplier-batch-panel__title">
             <strong>未对接</strong>
-            <span>魔方财务商品结构（含已对接）</span>
+            <span>ZJMF 财务商品结构（含已对接）</span>
           </div>
           <div class="supplier-batch-panel__actions">
             <t-tag variant="light" theme="warning">未对接 {{ supplierBatchPendingProducts.length }}/{{ supplierBatchProducts.length }}</t-tag>

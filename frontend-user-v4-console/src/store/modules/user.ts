@@ -11,7 +11,7 @@ const initUserInfo: ClientUserInfo = {
 };
 
 function normalizeUserInfo(raw: Record<string, unknown> = {}): ClientUserInfo {
-  const nickname = String(raw.nickname || raw.name || raw.username || raw.email || '').trim();
+  const nickname = String(raw.nickname || raw.name || raw.email || '').trim();
   return {
     ...raw,
     name: nickname || '创欧云用户',
