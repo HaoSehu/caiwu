@@ -175,6 +175,7 @@ export function useServiceCenter() {
     keyword: '',
     catalog_type: '',
     quick_filter: '',
+    auto_renew: '',
   });
   const viewMode = ref<'grid' | 'list'>('grid');
 
@@ -264,13 +265,19 @@ export function useServiceCenter() {
     try {
       const params: ServiceListParams = { page: filters.page, page_size: filters.page_size };
       if (String(filters.keyword).trim()) params.keyword = String(filters.keyword).trim();
-      if (filters.status === DEFAULT_SERVICE_STATUS_SCOPE) {
-        params.status_scope = DEFAULT_SERVICE_STATUS_SCOPE;
-      } else if (filters.status !== '' && filters.status !== null && filters.status !== undefined) {
-        params.status = filters.status;
+      if (filters.auto_renew === '1') {
+        params.quick_filter = 'auto_renew_enabled';
+      } else if (filters.auto_renew === '0') {
+        params.quick_filter = 'auto_renew_disabled';
+      } else {
+        if (filters.status === DEFAULT_SERVICE_STATUS_SCOPE) {
+          params.status_scope = DEFAULT_SERVICE_STATUS_SCOPE;
+        } else if (filters.status !== '' && filters.status !== null && filters.status !== undefined) {
+          params.status = filters.status;
+        }
+        if (filters.quick_filter) params.quick_filter = filters.quick_filter;
       }
       if (filters.catalog_type) params.catalog_type = filters.catalog_type;
-      if (filters.quick_filter) params.quick_filter = filters.quick_filter;
 
       const res = await clientApi.services(params);
       list.value = Array.isArray(res.data?.list) ? res.data.list : [];
@@ -344,6 +351,7 @@ export function useServiceCenter() {
     filters.keyword = '';
     filters.catalog_type = '';
     filters.quick_filter = '';
+    filters.auto_renew = '';
     void loadList();
   }
 
