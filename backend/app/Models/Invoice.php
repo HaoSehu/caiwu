@@ -49,6 +49,19 @@ class Invoice extends Model
         ];
     }
 
+    protected static function booted(): void
+    {
+        static::deleting(function (self $invoice): void {
+            if ($invoice->isForceDeleting()) {
+                return;
+            }
+
+            DB::transaction(function () use ($invoice): void {
+                $invoice->items()->each(fn ($item) => $item->delete());
+            });
+        });
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

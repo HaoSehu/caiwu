@@ -108,27 +108,29 @@ class InvoiceService
             }
         }
 
-        $invoice = Invoice::create([
-            'invoice_no' => Invoice::generateInvoiceNo(),
-            'user_id' => $user->id,
-            'type' => InvoiceType::RECHARGE,
-            'amount' => $amount,
-            'paid_amount' => $amount,
-            'status' => InvoiceStatus::PAID,
-            'paid_at' => now(),
-            'due_date' => null,  // 充值账单已立即付清，截止日期无意义
-            'config_snapshot' => array_filter([
-                'remark' => $remark,
-                'payment_no' => $payment?->payment_no,
-            ], static fn ($value) => $value !== null && $value !== ''),
-            'trace_id' => $traceId ?: $payment?->trace_id,
-        ]);
+        return DB::transaction(function () use ($user, $amount, $payment, $remark, $traceId): Invoice {
+            $invoice = Invoice::create([
+                'invoice_no' => Invoice::generateInvoiceNo(),
+                'user_id' => $user->id,
+                'type' => InvoiceType::RECHARGE,
+                'amount' => $amount,
+                'paid_amount' => $amount,
+                'status' => InvoiceStatus::PAID,
+                'paid_at' => now(),
+                'due_date' => null,  // 充值账单已立即付清，截止日期无意义
+                'config_snapshot' => array_filter([
+                    'remark' => $remark,
+                    'payment_no' => $payment?->payment_no,
+                ], static fn ($value) => $value !== null && $value !== ''),
+                'trace_id' => $traceId ?: $payment?->trace_id,
+            ]);
 
-        if ($payment) {
-            $payment->forceFill(['invoice_id' => $invoice->id])->save();
-        }
+            if ($payment) {
+                $payment->forceFill(['invoice_id' => $invoice->id])->save();
+            }
 
-        return $this->syncProjection($invoice);
+            return $this->syncProjection($invoice);
+        });
     }
 
     /**

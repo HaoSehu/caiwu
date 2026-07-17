@@ -1082,17 +1082,7 @@ class TicketService
 
     private function countReplies(Ticket $ticket): int
     {
-        if (self::tableExists('ticket_replies')) {
-            return TicketReply::query()->where('ticket_id', (int) $ticket->id)->count();
-        }
-
-        if (! self::tableExists('ticket_messages')) {
-            return 0;
-        }
-
-        return DB::table('ticket_messages')
-            ->where('ticket_id', (int) $ticket->id)
-            ->count();
+        return TicketReply::query()->where('ticket_id', (int) $ticket->id)->count();
     }
 
     /**
@@ -1192,107 +1182,22 @@ class TicketService
 
     private function resolveTicketReplies(Ticket $ticket, string $clientName): array
     {
-        if (self::tableExists('ticket_replies')) {
-            $ticket->load(['replies' => fn ($q) => $q->orderBy('created_at')]);
+        $ticket->load(['replies' => fn ($q) => $q->orderBy('created_at')]);
 
-            $staffMap = AdminUser::query()
-                ->whereIn('id', $ticket->replies->where('is_staff', 1)->pluck('user_id')->unique()->values())
-                ->get(['id', 'username', 'nickname'])
-                ->mapWithKeys(fn (AdminUser $admin) => [
-                    (int) $admin->id => trim((string) $admin->nickname) !== '' ? $admin->nickname : $admin->username,
-                ])
-                ->all();
-
-            return $ticket->replies
-                ->map(fn (TicketReply $reply) => $this->formatReply(
-                    $reply,
-                    $reply->is_staff ? ($staffMap[(int) $reply->user_id] ?? '员工') : $clientName
-                ))
-                ->values()
-                ->all();
-        }
-
-        if (! self::tableExists('ticket_messages')) {
-            return [];
-        }
-
-        $messages = DB::table('ticket_messages')
-            ->where('ticket_id', (int) $ticket->id)
-            ->orderBy('created_at')
-            ->get();
-
-        if ($messages->isEmpty()) {
-            return [];
-        }
-
-        $messageIds = $messages->pluck('id')->map(fn ($id) => (int) $id)->all();
-        $attachmentsByMessage = self::tableExists('ticket_attachments')
-            ? DB::table('ticket_attachments')
-                ->whereIn('ticket_message_id', $messageIds)
-                ->orderBy('id')
-                ->get()
-                ->groupBy('ticket_message_id')
-            : collect();
         $staffMap = AdminUser::query()
-            ->whereIn('id', $messages->where('sender_type', 'admin')->pluck('sender_id')->filter()->unique()->values())
+            ->whereIn('id', $ticket->replies->where('is_staff', 1)->pluck('user_id')->unique()->values())
             ->get(['id', 'username', 'nickname'])
             ->mapWithKeys(fn (AdminUser $admin) => [
                 (int) $admin->id => trim((string) $admin->nickname) !== '' ? $admin->nickname : $admin->username,
             ])
             ->all();
 
-        return $messages->map(function ($message) use ($attachmentsByMessage, $staffMap, $clientName, $messages) {
-            $isRecalled = ! empty($message->recalled_at);
-
-            $attachments = $isRecalled ? [] : collect($attachmentsByMessage->get($message->id, collect()))
-                ->map(function ($attachment) {
-                    try {
-                        return $this->serializeAttachmentForClient($this->buildStoredAttachmentMeta(
-                            (string) ($attachment->file_path ?? ''),
-                            (string) ($attachment->file_name ?? '图片'),
-                            (string) ($attachment->mime_type ?? '')
-                        ));
-                    } catch (\Throwable) {
-                        return null;
-                    }
-                })
-                ->filter()
-                ->values()
-                ->all();
-
-            $isStaff = (string) ($message->sender_type ?? '') === 'admin';
-
-            $quote = null;
-            if (! empty($message->quote_message_id)) {
-                $quotedMsg = $messages->firstWhere('id', (int) $message->quote_message_id);
-                if ($quotedMsg) {
-                    $isQuotedStaff = (string) ($quotedMsg->sender_type ?? '') === 'admin';
-                    $quote = [
-                        'id' => (int) ($quotedMsg->id ?? 0),
-                        'sender_name' => $isQuotedStaff ? ($staffMap[(int) ($quotedMsg->sender_id ?? 0)] ?? '员工') : $clientName,
-                        'content' => ! empty($quotedMsg->recalled_at) ? '消息已撤回' : Str::limit(trim((string) ($quotedMsg->content ?? '')), 100),
-                        'recalled' => ! empty($quotedMsg->recalled_at),
-                    ];
-                }
-            }
-
-            return [
-                'id' => (int) ($message->id ?? 0),
-                'ticket_id' => (int) ($message->ticket_id ?? 0),
-                'user_id' => (int) ($message->sender_id ?? 0),
-                'content' => $isRecalled ? '' : (string) ($message->content ?? ''),
-                'is_staff' => $isStaff ? 1 : 0,
-                'sender_name' => $isStaff ? ($staffMap[(int) ($message->sender_id ?? 0)] ?? '员工') : $clientName,
-                'attachments' => $attachments,
-                'recalled' => $isRecalled,
-                'recalled_at' => ! empty($message->recalled_at)
-                    ? Carbon::parse((string) $message->recalled_at)->format('Y-m-d H:i:s')
-                    : null,
-                'quote' => $quote,
-                'created_at' => ! empty($message->created_at)
-                    ? Carbon::parse((string) $message->created_at)->format('Y-m-d H:i:s')
-                    : null,
-            ];
-        })->values()->all();
+        return $ticket->replies
+            ->map(fn (TicketReply $reply) => $this->formatReply(
+                $reply,
+                $reply->is_staff ? ($staffMap[(int) $reply->user_id] ?? '员工') : $clientName
+            ))
+            ->values()
+            ->all();
     }
 }
