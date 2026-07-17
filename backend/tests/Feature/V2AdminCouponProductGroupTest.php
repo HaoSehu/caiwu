@@ -58,7 +58,6 @@ class V2AdminCouponProductGroupTest extends TestCase
         $firstGroup = $this->createFirstGroup($suffix);
         $secondGroup = $this->createSecondGroup($firstGroup, '二级分组 '.$suffix, 1);
         $thirdGroup = $this->createThirdGroup($secondGroup, '三级分组 '.$suffix, 1);
-        $rootProduct = Product::query()->create($this->rootProductPayload($firstGroup, '一级直属商品 '.$suffix, '8.00', 1));
         $directProduct = Product::query()->create($this->productPayload($secondGroup, null, '直属商品 '.$suffix, '10.00', 1));
         $thirdProduct = Product::query()->create($this->productPayload($secondGroup, $thirdGroup, '三级商品 '.$suffix, '20.00', 2));
 
@@ -78,8 +77,8 @@ class V2AdminCouponProductGroupTest extends TestCase
         $this->assertSame($firstGroup->id, (int) $rootGroup['id']);
         $this->assertSame(1, (int) $rootGroup['level']);
         $this->assertSame(1, (int) $rootGroup['children_count']);
-        $this->assertSame(3, (int) $rootGroup['products_count']);
-        $this->assertSame(1, (int) $rootGroup['direct_products_count']);
+        $this->assertSame(2, (int) $rootGroup['products_count']);
+        $this->assertSame(0, (int) $rootGroup['direct_products_count']);
         $this->assertSame($this->groupFieldWhitelist(), array_keys($rootGroup));
         $this->assertNoSensitiveKeys($rootResponse->json());
 
@@ -92,7 +91,7 @@ class V2AdminCouponProductGroupTest extends TestCase
             ->assertJsonPath('code', 0)
             ->assertJsonPath('data.list.0.id', $secondGroup->id)
             ->assertJsonPath('data.list.0.level', 2)
-            ->assertJsonPath('data.list.0.children_count', 1);
+            ->assertJsonPath('data.list.0.children_count', 2);
         $this->assertSame($this->groupFieldWhitelist(), array_keys($childrenResponse->json('data.list.0')));
         $this->assertNoSensitiveKeys($childrenResponse->json());
 
@@ -114,8 +113,8 @@ class V2AdminCouponProductGroupTest extends TestCase
         ]))
             ->assertOk()
             ->assertJsonPath('code', 0)
-            ->assertJsonPath('data.total', 1)
-            ->assertJsonPath('data.list.0.id', $rootProduct->id);
+            ->assertJsonPath('data.total', 2)
+            ->assertJsonPath('data.list.0.id', $directProduct->id);
         $this->assertSame($this->productFieldWhitelist(), array_keys($rootProductsResponse->json('data.list.0')));
         $this->assertNoSensitiveKeys($rootProductsResponse->json());
 
@@ -126,7 +125,7 @@ class V2AdminCouponProductGroupTest extends TestCase
         ]))
             ->assertOk()
             ->assertJsonPath('code', 0)
-            ->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.total', 2)
             ->assertJsonPath('data.list.0.id', $directProduct->id);
         $this->assertSame($this->productFieldWhitelist(), array_keys($directProductsResponse->json('data.list.0')));
         $this->assertNoSensitiveKeys($directProductsResponse->json());
@@ -251,13 +250,12 @@ class V2AdminCouponProductGroupTest extends TestCase
         string $monthlyPrice,
         int $sortOrder,
     ): array {
+        $thirdGroup ??= $this->createThirdGroup($secondGroup, $name.' 三级分组', $sortOrder);
         $firstGroup = $secondGroup->firstProductGroup ?: FirstProductGroup::query()->findOrFail((int) $secondGroup->first_product_group_id);
         $code = (string) $firstGroup->code;
 
         return [
-            'first_product_group_id' => (int) $firstGroup->id,
-            'second_product_group_id' => (int) $secondGroup->id,
-            'third_product_group_id' => $thirdGroup ? (int) $thirdGroup->id : null,
+            'product_group_id' => (int) $thirdGroup->id,
             'service_type_code' => $code,
             'custom_display_name' => $name,
             'product_type' => $code,
@@ -278,11 +276,11 @@ class V2AdminCouponProductGroupTest extends TestCase
         int $sortOrder,
     ): array {
         $code = (string) $firstGroup->code;
+        $secondGroup = $this->createSecondGroup($firstGroup, $name.' 二级分组', $sortOrder);
+        $thirdGroup = $this->createThirdGroup($secondGroup, $name.' 三级分组', $sortOrder);
 
         return [
-            'first_product_group_id' => (int) $firstGroup->id,
-            'second_product_group_id' => null,
-            'third_product_group_id' => null,
+            'product_group_id' => (int) $thirdGroup->id,
             'service_type_code' => $code,
             'custom_display_name' => $name,
             'product_type' => $code,

@@ -24,7 +24,6 @@ use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiTransport;
 use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use PHPUnit\Framework\Attributes\Test;
@@ -191,10 +190,6 @@ class ServiceRenewInvoiceOnlyIdempotencyTest extends TestCase
     {
         $suffix = bin2hex(random_bytes(4));
 
-        Artisan::call('migrate', [
-            '--path' => 'database/migrations/2026_07_03_130000_create_plugin_binding_runtime_and_audit_tables.php',
-            '--force' => true,
-        ]);
 
         $user = User::query()->create([
             'email' => 'renew-bind-'.$suffix.'@example.com',

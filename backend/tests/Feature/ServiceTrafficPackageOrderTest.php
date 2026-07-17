@@ -16,6 +16,7 @@ use App\Models\SecondProductGroup;
 use App\Models\Service;
 use App\Models\Setting;
 use App\Models\Supplier;
+use App\Models\ThirdProductGroup;
 use App\Models\User;
 use App\Services\ClientServiceConsole\ServiceDetailService;
 use App\Services\ClientServiceConsole\ServiceResolverService;
@@ -36,7 +37,6 @@ use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiTransport;
 use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -49,6 +49,7 @@ class ServiceTrafficPackageOrderTest extends TestCase
         $supplierId = null;
         $productId = null;
         $categoryId = null;
+        $thirdGroupId = null;
         $serviceId = null;
         $orderId = null;
         $invoiceId = null;
@@ -56,11 +57,6 @@ class ServiceTrafficPackageOrderTest extends TestCase
         $productBindingId = null;
 
         try {
-            Artisan::call('migrate', [
-                '--path' => 'database/migrations/2026_07_03_130000_create_plugin_binding_runtime_and_audit_tables.php',
-                '--force' => true,
-            ]);
-
             $user = User::query()->create([
                 'email' => 'traffic-package-'.$suffix.'@example.com',
                 'password' => 'Temp@123456',
@@ -100,9 +96,17 @@ class ServiceTrafficPackageOrderTest extends TestCase
             ]);
             $categoryId = (int) $category->id;
 
-            $product = Product::query()->create([
-                'first_product_group_id' => (int) $rootGroup->id,
+            $thirdGroup = ThirdProductGroup::query()->create([
                 'second_product_group_id' => (int) $category->id,
+                'name' => 'Traffic Leaf '.$suffix,
+                'slug' => 'traffic-leaf-'.$suffix,
+                'sort_order' => 0,
+                'is_visible' => 1,
+            ]);
+            $thirdGroupId = (int) $thirdGroup->id;
+
+            $product = Product::query()->create([
+                'product_group_id' => (int) $thirdGroup->id,
                 'name' => 'Traffic Product '.$suffix,
                 'product_type' => 'vps',
                 'pricing' => ['monthly' => '19.90'],
@@ -343,6 +347,9 @@ class ServiceTrafficPackageOrderTest extends TestCase
             if ($supplierId !== null) {
                 DB::table('suppliers')->where('id', $supplierId)->delete();
             }
+            if ($thirdGroupId !== null) {
+                DB::table('third_product_groups')->where('id', $thirdGroupId)->delete();
+            }
             if ($categoryId !== null) {
                 DB::table('second_product_groups')->where('id', $categoryId)->delete();
             }
@@ -515,11 +522,6 @@ class ServiceTrafficPackageOrderTest extends TestCase
         $productBindingId = null;
 
         try {
-            Artisan::call('migrate', [
-                '--path' => 'database/migrations/2026_07_03_130000_create_plugin_binding_runtime_and_audit_tables.php',
-                '--force' => true,
-            ]);
-
             $pluginId = $this->ensureHostingPanelIntegrationPlugin();
 
             $user = User::query()->create([
@@ -733,11 +735,6 @@ class ServiceTrafficPackageOrderTest extends TestCase
         $productBindingId = null;
 
         try {
-            Artisan::call('migrate', [
-                '--path' => 'database/migrations/2026_07_03_130000_create_plugin_binding_runtime_and_audit_tables.php',
-                '--force' => true,
-            ]);
-
             $pluginId = $this->ensureHostingPanelIntegrationPlugin();
 
             $user = User::query()->create([

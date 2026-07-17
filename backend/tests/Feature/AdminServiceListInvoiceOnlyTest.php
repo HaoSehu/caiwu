@@ -10,11 +10,12 @@ use App\Models\FirstProductGroup;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Product;
+use App\Models\SecondProductGroup;
 use App\Models\Service;
+use App\Models\ThirdProductGroup;
 use App\Models\User;
 use App\Services\Provisioning\AdminServiceListService;
 use App\Services\Upstream\ProviderKey;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
@@ -110,7 +111,7 @@ class AdminServiceListInvoiceOnlyTest extends TestCase
         ]);
 
         $product = Product::query()->create([
-            'first_product_group_id' => (int) $group->id,
+            'product_group_id' => (int) $this->createLeafGroup($group, $suffix)->id,
             'name' => '旧产品名 '.$suffix,
             'product_type' => 'server',
             'description' => '',
@@ -206,7 +207,7 @@ class AdminServiceListInvoiceOnlyTest extends TestCase
         ]);
 
         $product = Product::query()->create([
-            'first_product_group_id' => (int) $group->id,
+            'product_group_id' => (int) $this->createLeafGroup($group, $suffix)->id,
             'name' => '旧产品名快照 '.$suffix,
             'product_type' => 'server',
             'description' => '',
@@ -300,7 +301,7 @@ class AdminServiceListInvoiceOnlyTest extends TestCase
         ]);
 
         $product = Product::query()->create([
-            'first_product_group_id' => (int) $group->id,
+            'product_group_id' => (int) $this->createLeafGroup($group, $suffix)->id,
             'name' => '回退产品 '.$suffix,
             'product_type' => 'server',
             'description' => '',
@@ -413,7 +414,7 @@ class AdminServiceListInvoiceOnlyTest extends TestCase
         ]);
 
         $product = Product::query()->create([
-            'first_product_group_id' => (int) $group->id,
+            'product_group_id' => (int) $this->createLeafGroup($group, $suffix)->id,
             'name' => '运行态搜索产品 '.$suffix,
             'product_type' => 'server',
             'description' => '',
@@ -459,6 +460,23 @@ class AdminServiceListInvoiceOnlyTest extends TestCase
             ],
             'expires_at' => now()->addMonth(),
             'auto_renew' => 1,
+        ]);
+        $this->mirrorServiceCompatToIdc([
+            'id' => (int) $service->id,
+            'user_id' => (int) $service->user_id,
+            'product_id' => (int) $service->product_id,
+            'invoice_id' => (int) $service->invoice_id,
+            'name' => (string) $service->name,
+            'domain' => (string) $service->domain,
+            'billing_cycle' => (string) $service->billing_cycle,
+            'amount' => (string) $service->amount,
+            'locked_pricing' => $service->locked_pricing ?? [],
+            'status' => (int) $service->status,
+            'provision_data' => $service->provision_data ?? [],
+            'expires_at' => $service->expires_at,
+            'auto_renew' => (int) $service->auto_renew,
+            'created_at' => $service->created_at,
+            'updated_at' => $service->updated_at,
         ]);
 
         $invoice->forceFill(['service_id' => (int) $service->id])->save();
@@ -511,17 +529,34 @@ class AdminServiceListInvoiceOnlyTest extends TestCase
         $this->assertSame((int) $user->id, (int) ($matched['user']['id'] ?? 0));
     }
 
+    private function createLeafGroup(FirstProductGroup $firstGroup, string $suffix): ThirdProductGroup
+    {
+        $secondGroup = SecondProductGroup::query()->create([
+            'first_product_group_id' => (int) $firstGroup->id,
+            'name' => 'Admin Service Second '.$suffix,
+            'slug' => 'admin-service-second-'.$suffix,
+            'description' => '',
+            'sort_order' => 0,
+            'is_visible' => 1,
+        ]);
+
+        return ThirdProductGroup::query()->create([
+            'second_product_group_id' => (int) $secondGroup->id,
+            'name' => 'Admin Service Third '.$suffix,
+            'slug' => 'admin-service-third-'.$suffix,
+            'description' => '',
+            'sort_order' => 0,
+            'is_visible' => 1,
+        ]);
+    }
+
     private function attachRuntimeSnapshotsToService(Service $service, string $suffix): void
     {
         $this->activateIntegrationPluginForTest('upstream', 'mofang_finance');
-        Artisan::call('migrate', [
-            '--path' => 'database/migrations/2026_07_03_130000_create_plugin_binding_runtime_and_audit_tables.php',
-            '--force' => true,
-        ]);
 
         $pluginId = (int) DB::table('integration_plugins')
             ->where('domain', 'upstream')
-            ->where('plugin_key', ProviderKey::MOFANG_FINANCE_API)
+            ->where('slug', 'mofang_finance')
             ->value('id');
 
         $this->assertGreaterThan(0, $pluginId);

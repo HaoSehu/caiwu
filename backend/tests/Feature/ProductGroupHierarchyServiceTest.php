@@ -39,7 +39,6 @@ class ProductGroupHierarchyServiceTest extends TestCase
             'third_product_groups',
             'second_product_groups',
             'first_product_groups',
-            'product_groups',
         ] as $table) {
             Schema::connection('sqlite')->dropIfExists($table);
         }
@@ -47,11 +46,34 @@ class ProductGroupHierarchyServiceTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_it_reports_current_product_group_hierarchy_as_clean(): void
+    public function test_it_reports_physical_product_group_hierarchy_as_clean(): void
     {
-        $rootId = $this->insertProductGroup(null, 1, 'vps', '云服务器');
-        $secondId = $this->insertProductGroup($rootId, 2, null, '香港');
-        $thirdId = $this->insertProductGroup($secondId, 3, null, '三网精品');
+        $rootId = (int) DB::table('first_product_groups')->insertGetId([
+            'code' => 'vps',
+            'product_type' => 'cloud_server',
+            'name' => '云服务器',
+            'sort_order' => 1,
+            'is_visible' => 1,
+            'is_system' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $secondId = (int) DB::table('second_product_groups')->insertGetId([
+            'first_product_group_id' => $rootId,
+            'name' => '香港',
+            'sort_order' => 1,
+            'is_visible' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $thirdId = (int) DB::table('third_product_groups')->insertGetId([
+            'second_product_group_id' => $secondId,
+            'name' => '三网精品',
+            'sort_order' => 1,
+            'is_visible' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
         $product = Product::query()->create([
             'product_group_id' => $thirdId,
@@ -83,7 +105,16 @@ class ProductGroupHierarchyServiceTest extends TestCase
 
     public function test_it_reports_products_with_missing_product_group(): void
     {
-        $this->insertProductGroup(null, 1, 'vps', '云服务器');
+        DB::table('first_product_groups')->insert([
+            'code' => 'vps',
+            'product_type' => 'cloud_server',
+            'name' => '云服务器',
+            'sort_order' => 1,
+            'is_visible' => 1,
+            'is_system' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
         $product = Product::query()->create([
             'product_group_id' => 999,
@@ -111,47 +142,37 @@ class ProductGroupHierarchyServiceTest extends TestCase
         ]);
     }
 
-    private function insertProductGroup(?int $parentId, int $level, ?string $code, string $name): int
+    public function test_product_scopes_resolve_only_the_requested_physical_group_level(): void
     {
-        return (int) DB::table('product_groups')->insertGetId([
-            'parent_id' => $parentId,
-            'level' => $level,
-            'code' => $code,
-            'product_type' => 'cloud_server',
-            'name' => $name,
-            'slug' => strtolower(str_replace(' ', '-', $name)).'-'.$level,
-            'sort_order' => $level,
-            'is_visible' => 1,
-            'is_system' => 0,
-            'created_at' => now(),
-            'updated_at' => now(),
+        DB::table('first_product_groups')->insert([
+            ['id' => 1, 'code' => 'vps', 'product_type' => 'cloud_server', 'name' => '云服务器', 'sort_order' => 1, 'is_visible' => 1, 'is_system' => 0, 'created_at' => now(), 'updated_at' => now()],
+            ['id' => 2, 'code' => 'game', 'product_type' => 'game', 'name' => '游戏云', 'sort_order' => 2, 'is_visible' => 1, 'is_system' => 0, 'created_at' => now(), 'updated_at' => now()],
         ]);
+        DB::table('second_product_groups')->insert([
+            ['id' => 1, 'first_product_group_id' => 1, 'name' => '香港', 'sort_order' => 1, 'is_visible' => 1, 'created_at' => now(), 'updated_at' => now()],
+            ['id' => 2, 'first_product_group_id' => 2, 'name' => '日本', 'sort_order' => 2, 'is_visible' => 1, 'created_at' => now(), 'updated_at' => now()],
+        ]);
+        DB::table('third_product_groups')->insert([
+            ['id' => 1, 'second_product_group_id' => 1, 'name' => '标准型', 'sort_order' => 1, 'is_visible' => 1, 'created_at' => now(), 'updated_at' => now()],
+            ['id' => 2, 'second_product_group_id' => 2, 'name' => '高性能', 'sort_order' => 2, 'is_visible' => 1, 'created_at' => now(), 'updated_at' => now()],
+        ]);
+        DB::table('products')->insert([
+            ['id' => 101, 'product_group_id' => 1, 'service_type_code' => 'cloud_server', 'name' => '香港标准', 'product_type' => 'cloud_server', 'pricing' => '{}', 'purchase_requires' => '{}', 'config_options' => '{}', 'stock' => -1, 'status' => 1, 'sort_order' => 1, 'auto_setup' => 0, 'created_at' => now(), 'updated_at' => now()],
+            ['id' => 102, 'product_group_id' => 2, 'service_type_code' => 'game', 'name' => '日本高性能', 'product_type' => 'game', 'pricing' => '{}', 'purchase_requires' => '{}', 'config_options' => '{}', 'stock' => -1, 'status' => 1, 'sort_order' => 2, 'auto_setup' => 0, 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        $this->assertSame([101], Product::query()->inFirstProductGroup(1)->pluck('id')->all());
+        $this->assertSame([101], Product::query()->inSecondProductGroup(1)->pluck('id')->all());
+        $this->assertSame([101], Product::query()->inCurrentProductGroup(1)->pluck('id')->all());
+        $this->assertSame([102], Product::query()->inFirstProductGroup(2)->pluck('id')->all());
     }
 
     private function createSchema(): void
     {
-        Schema::connection('sqlite')->create('product_groups', function (Blueprint $table): void {
-            $table->id();
-            $table->unsignedBigInteger('parent_id')->nullable();
-            $table->integer('level');
-            $table->string('code', 50)->nullable();
-            $table->string('product_type', 50)->nullable();
-            $table->string('name');
-            $table->string('slug')->nullable();
-            $table->string('description')->nullable();
-            $table->string('icon')->nullable();
-            $table->string('banner_image')->nullable();
-            $table->integer('is_visible')->default(1);
-            $table->integer('is_system')->default(0);
-            $table->integer('sort_order')->default(0);
-            $table->string('legacy_product_type', 50)->nullable();
-            $table->unsignedBigInteger('legacy_product_group_id')->nullable();
-            $table->timestamps();
-        });
-
         Schema::connection('sqlite')->create('first_product_groups', function (Blueprint $table): void {
             $table->id();
             $table->string('code', 50)->unique();
+            $table->string('product_type', 50)->nullable();
             $table->string('name', 100);
             $table->string('slug', 100)->nullable()->unique();
             $table->string('description', 255)->nullable();
@@ -160,7 +181,6 @@ class ProductGroupHierarchyServiceTest extends TestCase
             $table->integer('sort_order')->default(0);
             $table->integer('is_visible')->default(1);
             $table->integer('is_system')->default(0);
-            $table->string('legacy_product_type', 50)->nullable();
             $table->timestamps();
         });
 
@@ -173,7 +193,6 @@ class ProductGroupHierarchyServiceTest extends TestCase
             $table->string('banner_image', 255)->nullable();
             $table->integer('sort_order')->default(0);
             $table->integer('is_visible')->default(1);
-            $table->unsignedBigInteger('legacy_product_group_id')->nullable()->unique();
             $table->timestamps();
         });
 
@@ -186,7 +205,6 @@ class ProductGroupHierarchyServiceTest extends TestCase
             $table->string('banner_image', 255)->nullable();
             $table->integer('sort_order')->default(0);
             $table->integer('is_visible')->default(1);
-            $table->unsignedBigInteger('legacy_product_group_id')->nullable()->unique();
             $table->timestamps();
         });
 

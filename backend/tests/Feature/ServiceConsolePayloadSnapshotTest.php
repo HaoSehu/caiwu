@@ -8,6 +8,7 @@ use App\Constants\ServiceStatus;
 use App\Models\FirstProductGroup;
 use App\Models\Product;
 use App\Models\SecondProductGroup;
+use App\Models\ThirdProductGroup;
 use App\Models\Service;
 use App\Models\Setting;
 use App\Models\Supplier;
@@ -29,7 +30,6 @@ use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
 use App\Support\CacheKey;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -43,10 +43,6 @@ class ServiceConsolePayloadSnapshotTest extends TestCase
         parent::setUp();
 
         $this->activateIntegrationPluginForTest('upstream', 'mofang_finance');
-        Artisan::call('migrate', [
-            '--path' => 'database/migrations/2026_07_03_130000_create_plugin_binding_runtime_and_audit_tables.php',
-            '--force' => true,
-        ]);
         Cache::flush();
     }
 
@@ -59,9 +55,7 @@ class ServiceConsolePayloadSnapshotTest extends TestCase
 
         $detail = $this->makeTransformService()->transformDetail(
             $fixture['service']->fresh([
-                'product.firstProductGroup',
-                'product.secondProductGroup',
-                'product.thirdProductGroup',
+                'product.productGroup.secondProductGroup.firstProductGroup',
                 'order',
                 'invoice',
             ])
@@ -257,11 +251,16 @@ class ServiceConsolePayloadSnapshotTest extends TestCase
             'sort_order' => 0,
             'is_visible' => 1,
         ]);
+        $thirdGroup = ThirdProductGroup::query()->create([
+            'second_product_group_id' => (int) $category->id,
+            'name' => 'Snapshot Leaf '.$suffix,
+            'slug' => 'snapshot-leaf-'.$suffix,
+            'sort_order' => 0,
+            'is_visible' => 1,
+        ]);
 
         $product = Product::query()->create([
-            'product_group_id' => (int) $category->id,
-            'first_product_group_id' => (int) $rootGroup->id,
-            'second_product_group_id' => (int) $category->id,
+            'product_group_id' => (int) $thirdGroup->id,
             'service_type_code' => 'vps',
             'custom_display_name' => 'Snapshot Product '.$suffix,
             'product_type' => 'vps',

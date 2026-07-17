@@ -11,7 +11,6 @@ use App\Models\Supplier;
 use App\Models\User;
 use App\Services\Upstream\ProviderKey;
 use App\Services\User\UserService;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -22,10 +21,6 @@ class AdminUserServiceUpstreamBindingTest extends TestCase
         parent::setUp();
 
         $this->activateIntegrationPluginForTest('upstream', 'mofang_finance');
-        Artisan::call('migrate', [
-            '--path' => 'database/migrations/2026_07_03_130000_create_plugin_binding_runtime_and_audit_tables.php',
-            '--force' => true,
-        ]);
     }
 
     public function test_manual_service_can_bind_mofang_finance_supplier_and_override_upstream_product_id(): void

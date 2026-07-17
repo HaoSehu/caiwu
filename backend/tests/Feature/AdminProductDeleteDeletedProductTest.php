@@ -9,6 +9,7 @@ use App\Models\FirstProductGroup;
 use App\Models\Product;
 use App\Models\Role;
 use App\Models\SecondProductGroup;
+use App\Models\ThirdProductGroup;
 use App\Support\AdminPermissions;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -21,8 +22,9 @@ class AdminProductDeleteDeletedProductTest extends TestCase
         $admin = $this->createAdmin($suffix);
         $root = $this->firstGroupForType('vps', 'Deleted delete root '.$suffix, 'deleted-delete-root-'.$suffix);
         $category = $this->createSecondGroup($root, 'Deleted delete category '.$suffix, 'deleted-delete-category-'.$suffix);
+        $leaf = $this->createThirdGroup($category, 'Deleted delete leaf '.$suffix, 'deleted-delete-leaf-'.$suffix);
 
-        $product = Product::query()->create($this->productPayload($category, 'Deleted delete product '.$suffix, '66.00', 1));
+        $product = Product::query()->create($this->productPayload($leaf, 'Deleted delete product '.$suffix, '66.00', 1));
         $product->delete();
 
         Sanctum::actingAs($admin);
@@ -88,15 +90,25 @@ class AdminProductDeleteDeletedProductTest extends TestCase
         ]);
     }
 
-    private function productPayload(SecondProductGroup $group, string $name, string $monthlyPrice, int $sortOrder): array
+    private function createThirdGroup(SecondProductGroup $secondGroup, string $name, string $slug): ThirdProductGroup
     {
-        $firstGroup = $group->firstProductGroup ?: FirstProductGroup::query()->findOrFail((int) $group->first_product_group_id);
+        return ThirdProductGroup::query()->create([
+            'second_product_group_id' => (int) $secondGroup->id,
+            'name' => $name,
+            'slug' => $slug,
+            'sort_order' => 0,
+            'is_visible' => 1,
+        ]);
+    }
+
+    private function productPayload(ThirdProductGroup $group, string $name, string $monthlyPrice, int $sortOrder): array
+    {
+        $secondGroup = $group->secondProductGroup ?: SecondProductGroup::query()->findOrFail((int) $group->second_product_group_id);
+        $firstGroup = $secondGroup->firstProductGroup ?: FirstProductGroup::query()->findOrFail((int) $secondGroup->first_product_group_id);
         $code = (string) $firstGroup->code;
 
         return [
-            'first_product_group_id' => (int) $firstGroup->id,
-            'second_product_group_id' => (int) $group->id,
-            'third_product_group_id' => null,
+            'product_group_id' => (int) $group->id,
             'service_type_code' => $code,
             'name' => $name,
             'custom_display_name' => $name,

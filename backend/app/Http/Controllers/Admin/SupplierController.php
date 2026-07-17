@@ -411,7 +411,7 @@ class SupplierController extends Controller
         }
 
         $localProducts = Product::withTrashed()
-            ->with(['firstProductGroup', 'secondProductGroup', 'thirdProductGroup'])
+            ->with(['productGroup.secondProductGroup.firstProductGroup'])
             ->where('supplier_id', $supplier->id)
             ->whereIn('supplier_product_id', $productIds)
             ->get()
@@ -422,9 +422,9 @@ class SupplierController extends Controller
             $displayName = $localProduct instanceof Product
                 ? trim((string) ((new ProductDisplayNameResolver)->resolveForProduct($localProduct)['product_display_name'] ?? ''))
                 : '';
-            $firstGroup = $localProduct?->firstProductGroup;
-            $secondGroup = $localProduct?->secondProductGroup;
-            $thirdGroup = $localProduct?->thirdProductGroup;
+            $thirdGroup = $localProduct?->productGroup;
+            $secondGroup = $thirdGroup?->secondProductGroup;
+            $firstGroup = $secondGroup?->firstProductGroup;
             $groupNameSegments = array_values(array_filter([
                 trim((string) ($firstGroup?->name ?? '')),
                 trim((string) ($secondGroup?->name ?? '')),
@@ -442,10 +442,8 @@ class SupplierController extends Controller
                 'connected_second_product_group_name' => $secondGroup?->name,
                 'connected_third_product_group_id' => $thirdGroup?->id ? (int) $thirdGroup->id : null,
                 'connected_third_product_group_name' => $thirdGroup?->name,
-                'connected_effective_product_group_id' => $thirdGroup?->id
-                    ? (int) $thirdGroup->id
-                    : ($secondGroup?->id ? (int) $secondGroup->id : null),
-                'connected_effective_product_group_level' => $thirdGroup?->id ? 3 : ($secondGroup?->id ? 2 : null),
+                'connected_effective_product_group_id' => $thirdGroup?->id ? (int) $thirdGroup->id : null,
+                'connected_effective_product_group_level' => $thirdGroup?->id ? 3 : null,
                 'connected_effective_product_group_full_name' => implode(' / ', $groupNameSegments),
                 'connected_updated_at' => $localProduct?->updated_at?->format('Y-m-d H:i:s'),
             ]);

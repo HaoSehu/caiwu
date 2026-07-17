@@ -11,6 +11,7 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Models\SecondProductGroup;
+use App\Models\ThirdProductGroup;
 use App\Models\Service;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -63,9 +64,6 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
     {
         $payload = [
             'product_group_id' => (int) ($product->product_group_id ?: 0) ?: null,
-            'first_product_group_id' => (int) ($product->first_product_group_id ?: 0) ?: null,
-            'second_product_group_id' => (int) ($product->second_product_group_id ?: 0) ?: null,
-            'third_product_group_id' => (int) ($product->third_product_group_id ?: 0) ?: null,
             'product_type' => (string) ($product->product_type ?: 'other'),
             'remark' => null,
             'pricing' => json_encode($product->pricing ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
@@ -197,8 +195,7 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
         $groupIds = $this->createProductGroupIds('client-invoice-group-'.$suffix, 'Client Invoice Group '.$suffix);
 
         $product = Product::query()->create([
-            'first_product_group_id' => $groupIds['first'],
-            'second_product_group_id' => $groupIds['second'],
+            'product_group_id' => $groupIds['third'],
             'name' => 'Client Invoice Product '.$suffix,
             'product_type' => 'server',
             'description' => '',
@@ -379,8 +376,7 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
         $groupIds = $this->createProductGroupIds('client-invoice-display-group-'.$suffix, 'Client Invoice Display Group '.$suffix);
 
         $product = Product::query()->create([
-            'first_product_group_id' => $groupIds['first'],
-            'second_product_group_id' => $groupIds['second'],
+            'product_group_id' => $groupIds['third'],
             'name' => 'Name Attribute Is Not Persisted '.$suffix,
             'product_type' => 'server',
             'description' => '',
@@ -525,7 +521,7 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
     }
 
     /**
-     * @return array{first:int,second:int}
+     * @return array{first:int,second:int,third:int}
      */
     private function createProductGroupIds(string $slug, string $name): array
     {
@@ -553,10 +549,19 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
             'sort_order' => 0,
             'is_visible' => 1,
         ]);
+        $third = ThirdProductGroup::query()->create([
+            'second_product_group_id' => (int) $second->id,
+            'name' => $name.' 三级分组',
+            'slug' => $slug.'-third',
+            'description' => '',
+            'sort_order' => 0,
+            'is_visible' => 1,
+        ]);
 
         return [
             'first' => (int) $first->id,
             'second' => (int) $second->id,
+            'third' => (int) $third->id,
         ];
     }
 }

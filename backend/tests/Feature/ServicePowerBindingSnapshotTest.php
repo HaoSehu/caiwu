@@ -14,7 +14,6 @@ use App\Services\ClientServiceConsole\ServicePowerService;
 use App\Services\ClientServiceConsole\ServiceTransformService;
 use App\Services\System\OperationLogService;
 use App\Services\Upstream\ProviderKey;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -26,10 +25,6 @@ class ServicePowerBindingSnapshotTest extends TestCase
         parent::setUp();
 
         $this->activateIntegrationPluginForTest('upstream', 'mofang_finance');
-        Artisan::call('migrate', [
-            '--path' => 'database/migrations/2026_07_03_130000_create_plugin_binding_runtime_and_audit_tables.php',
-            '--force' => true,
-        ]);
     }
 
     #[Test]

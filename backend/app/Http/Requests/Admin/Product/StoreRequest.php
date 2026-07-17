@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Admin\Product;
 
 use App\Http\Requests\Admin\Common\AdminFormRequest;
+use App\Models\ThirdProductGroup;
 use Illuminate\Validation\Rule;
 
 class StoreRequest extends AdminFormRequest
@@ -16,8 +17,8 @@ class StoreRequest extends AdminFormRequest
             'product_type' => ['nullable', 'string', 'max:50'],
             'service_type_code' => ['nullable', 'string', 'max:50'],
             'first_product_group_id' => ['nullable', 'integer', 'min:1'],
-            'second_product_group_id' => ['required', 'integer', 'min:1'],
-            'third_product_group_id' => ['nullable', 'integer', 'min:1'],
+            'second_product_group_id' => ['nullable', 'integer', 'min:1'],
+            'third_product_group_id' => ['required', 'integer', 'min:1', Rule::exists((new ThirdProductGroup)->getTable(), 'id')],
             'remark' => ['nullable', 'string', 'max:255'],
             'pricing' => ['required', 'array'],
             'pricing.monthly' => ['nullable', 'numeric', 'min:0'],

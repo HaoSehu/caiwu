@@ -51,9 +51,9 @@ class AdminServiceListService
             ->with([
                 'user:id,nickname,email,phone,status',
                 'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
-                'product.firstProductGroup:id,code,name,description,slug',
-                'product.secondProductGroup:id,first_product_group_id,name,description,slug',
-                'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
+                'product.productGroup:id,second_product_group_id,name,description,slug',
+                'product.productGroup.secondProductGroup:id,first_product_group_id,name,description,slug',
+                'product.productGroup.secondProductGroup.firstProductGroup:id,code,name,description,slug',
                 'order:id,order_no,status,paid_at',
                 'invoice:id,invoice_no,service_id,order_id,product_spec_snapshot,status,paid_at',
                 'invoices:id,invoice_no,service_id,order_id,product_spec_snapshot,status,paid_at',

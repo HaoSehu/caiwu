@@ -13,7 +13,9 @@ use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\Role;
+use App\Models\SecondProductGroup;
 use App\Models\Service;
+use App\Models\ThirdProductGroup;
 use App\Models\User;
 use App\Support\AdminPermissions;
 use Laravel\Sanctum\Sanctum;
@@ -145,9 +147,25 @@ class AdminUserServiceDeletionRetentionTest extends TestCase
             'is_visible' => 1,
             'sort_order' => 0,
         ]);
+        $secondGroup = SecondProductGroup::query()->create([
+            'first_product_group_id' => (int) $group->id,
+            'name' => 'Delete Service Second '.$suffix,
+            'slug' => 'delete-service-second-'.$suffix,
+            'description' => '',
+            'is_visible' => 1,
+            'sort_order' => 0,
+        ]);
+        $thirdGroup = ThirdProductGroup::query()->create([
+            'second_product_group_id' => (int) $secondGroup->id,
+            'name' => 'Delete Service Third '.$suffix,
+            'slug' => 'delete-service-third-'.$suffix,
+            'description' => '',
+            'is_visible' => 1,
+            'sort_order' => 0,
+        ]);
 
         return Product::query()->create([
-            'first_product_group_id' => (int) $group->id,
+            'product_group_id' => (int) $thirdGroup->id,
             'name' => 'Delete Service Product '.$suffix,
             'product_type' => 'server',
             'description' => '',

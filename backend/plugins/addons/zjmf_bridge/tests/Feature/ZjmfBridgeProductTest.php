@@ -15,7 +15,6 @@ use App\Models\User;
 use Caiwu\Plugins\Addons\ZjmfBridge\Services\ZjmfTokenService;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Schema;
 use Tests\Support\InstallsZjmfBridgeAddon;
 use Tests\TestCase;
 
@@ -44,7 +43,14 @@ class ZjmfBridgeProductTest extends TestCase
     {
         [$firstGroup, $secondGroup, $thirdGroup, $product] = $this->createVisibleCatalog();
         $hiddenSecondGroup = $this->createSecondGroup($firstGroup, '隐藏二级 '.bin2hex(random_bytes(3)), false);
-        $hiddenProduct = Product::query()->create($this->productPayload($hiddenSecondGroup, null, '隐藏商品', '99.00'));
+        $hiddenThirdGroup = ThirdProductGroup::query()->create([
+            'second_product_group_id' => (int) $hiddenSecondGroup->id,
+            'name' => '隐藏三级 '.bin2hex(random_bytes(3)),
+            'slug' => 'zjmf-hidden-third-'.bin2hex(random_bytes(3)),
+            'sort_order' => 1,
+            'is_visible' => 0,
+        ]);
+        $hiddenProduct = Product::query()->create($this->productPayload($hiddenSecondGroup, $hiddenThirdGroup, '隐藏商品', '99.00'));
 
         $query = [
             'product_type' => ProductType::CLOUD_SERVER,
@@ -234,22 +240,26 @@ class ZjmfBridgeProductTest extends TestCase
     private function createVisibleCatalog(): array
     {
         $suffix = bin2hex(random_bytes(4));
-        $firstGroupPayload = [
+        $firstGroup = FirstProductGroup::query()->firstOrCreate([
             'code' => ProductType::VPS,
+        ], [
             'name' => 'ZJMF 云菜单 '.$suffix,
             'slug' => 'zjmf-menu-'.$suffix,
             'description' => 'ZJMF 一级菜单',
             'sort_order' => 1,
             'is_visible' => 1,
             'is_system' => 0,
-            'legacy_product_type' => 'vps',
-        ];
-        if (Schema::hasColumn('first_product_groups', 'product_type')) {
-            $firstGroupPayload['product_type'] = ProductType::CLOUD_SERVER;
-        }
-
-        $firstGroup = FirstProductGroup::query()->create($firstGroupPayload);
+            'product_type' => ProductType::CLOUD_SERVER,
+        ]);
         $secondGroup = $this->createSecondGroup($firstGroup, 'ZJMF 二级 '.$suffix, true);
+        $firstGroup->forceFill([
+            'product_type' => ProductType::CLOUD_SERVER,
+            'is_visible' => 1,
+        ])->save();
+        SecondProductGroup::query()
+            ->where('first_product_group_id', (int) $firstGroup->id)
+            ->whereKeyNot((int) $secondGroup->id)
+            ->update(['is_visible' => 0]);
         $thirdGroup = ThirdProductGroup::query()->create([
             'second_product_group_id' => (int) $secondGroup->id,
             'name' => 'ZJMF 三级 '.$suffix,
@@ -295,14 +305,14 @@ class ZjmfBridgeProductTest extends TestCase
      */
     private function productPayload(
         SecondProductGroup $secondGroup,
-        ?ThirdProductGroup $thirdGroup,
+        ThirdProductGroup $thirdGroup,
         string $name,
         string $monthlyPrice,
     ): array {
         $firstGroup = FirstProductGroup::query()->findOrFail((int) $secondGroup->first_product_group_id);
 
         return [
-            'product_group_id' => $thirdGroup ? (int) $thirdGroup->id : (int) $secondGroup->id,
+            'product_group_id' => (int) $thirdGroup->id,
             'service_type_code' => ProductType::CLOUD_SERVER,
             'custom_display_name' => $name,
             'product_type' => ProductType::CLOUD_SERVER,

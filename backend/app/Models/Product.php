@@ -35,7 +35,6 @@ class Product extends Model
 
     protected $fillable = [
         'product_group_id',
-        'first_product_group_id', 'second_product_group_id', 'third_product_group_id',
         'service_type_code',
         'name', 'product_type', 'type',
         'custom_display_name', 'remark',
@@ -57,9 +56,6 @@ class Product extends Model
             'sort_order' => 'integer',
             'auto_setup' => 'integer',
             'product_group_id' => 'integer',
-            'first_product_group_id' => 'integer',
-            'second_product_group_id' => 'integer',
-            'third_product_group_id' => 'integer',
         ];
     }
 
@@ -68,12 +64,8 @@ class Product extends Model
     public function getProductTypeAttribute(mixed $value): string
     {
         [$firstGroup] = $this->resolvedProductGroupHierarchy();
-        if ($firstGroup instanceof ProductGroup) {
+        if ($firstGroup instanceof FirstProductGroup) {
             return ProductType::businessValueForFirstGroup($firstGroup, $value);
-        }
-
-        if ($this->relationLoaded('firstProductGroup') && $this->firstProductGroup instanceof FirstProductGroup) {
-            return ProductType::businessValueForFirstGroup($this->firstProductGroup, $value);
         }
 
         $normalized = trim((string) ($value ?? ''));
@@ -161,46 +153,25 @@ class Product extends Model
         $this->attributes['remark'] = $normalized !== '' ? $normalized : null;
     }
 
-    public function getFirstProductGroupIdAttribute(mixed $value): ?int
+    public function getFirstProductGroupIdAttribute(): ?int
     {
         [$firstGroup] = $this->resolvedProductGroupHierarchy();
 
-        return $firstGroup instanceof ProductGroup ? (int) $firstGroup->id : ((int) ($value ?? 0) ?: null);
+        return $firstGroup instanceof FirstProductGroup ? (int) $firstGroup->id : null;
     }
 
-    public function setFirstProductGroupIdAttribute(mixed $value): void
-    {
-        if (! isset($this->attributes['product_group_id']) && (int) $value > 0) {
-            $this->attributes['product_group_id'] = (int) $value;
-        }
-    }
-
-    public function getSecondProductGroupIdAttribute(mixed $value): ?int
+    public function getSecondProductGroupIdAttribute(): ?int
     {
         [, $secondGroup] = $this->resolvedProductGroupHierarchy();
 
-        return $secondGroup instanceof ProductGroup ? (int) $secondGroup->id : ((int) ($value ?? 0) ?: null);
+        return $secondGroup instanceof SecondProductGroup ? (int) $secondGroup->id : null;
     }
 
-    public function setSecondProductGroupIdAttribute(mixed $value): void
-    {
-        if ((int) $value > 0) {
-            $this->attributes['product_group_id'] = (int) $value;
-        }
-    }
-
-    public function getThirdProductGroupIdAttribute(mixed $value): ?int
+    public function getThirdProductGroupIdAttribute(): ?int
     {
         [, , $thirdGroup] = $this->resolvedProductGroupHierarchy();
 
-        return $thirdGroup instanceof ProductGroup ? (int) $thirdGroup->id : ((int) ($value ?? 0) ?: null);
-    }
-
-    public function setThirdProductGroupIdAttribute(mixed $value): void
-    {
-        if ((int) $value > 0) {
-            $this->attributes['product_group_id'] = (int) $value;
-        }
+        return $thirdGroup instanceof ThirdProductGroup ? (int) $thirdGroup->id : null;
     }
 
     public function getNameAttribute(mixed $value): string
@@ -224,24 +195,9 @@ class Product extends Model
         }
     }
 
-    public function firstProductGroup(): BelongsTo
-    {
-        return $this->belongsTo(FirstProductGroup::class, 'product_group_id');
-    }
-
-    public function secondProductGroup(): BelongsTo
-    {
-        return $this->belongsTo(SecondProductGroup::class, 'product_group_id');
-    }
-
-    public function thirdProductGroup(): BelongsTo
-    {
-        return $this->belongsTo(ThirdProductGroup::class, 'product_group_id');
-    }
-
     public function productGroup(): BelongsTo
     {
-        return $this->belongsTo(ProductGroup::class, 'product_group_id');
+        return $this->belongsTo(ThirdProductGroup::class, 'product_group_id');
     }
 
     public function supplier(): HasOne
@@ -276,15 +232,41 @@ class Product extends Model
 
     public function scopeInProductGroupTree(Builder $query, int $groupId): Builder
     {
+        return $this->scopeInCurrentProductGroup($query, $groupId);
+    }
+
+    public function scopeInFirstProductGroup(Builder $query, int $groupId): Builder
+    {
         if ($groupId <= 0) {
             return $query->whereRaw('1 = 0');
         }
 
-        return $query->whereIn('product_group_id', ProductGroup::query()
-            ->select('id')
-            ->whereKey($groupId)
-            ->orWhere('parent_id', $groupId)
-            ->orWhereIn('parent_id', ProductGroup::query()->select('id')->where('parent_id', $groupId)));
+        return $query->whereIn(
+            $query->qualifyColumn('product_group_id'),
+            ThirdProductGroup::query()
+                ->select('third_product_groups.id')
+                ->join(
+                    'second_product_groups',
+                    'second_product_groups.id',
+                    '=',
+                    'third_product_groups.second_product_group_id'
+                )
+                ->where('second_product_groups.first_product_group_id', $groupId)
+        );
+    }
+
+    public function scopeInSecondProductGroup(Builder $query, int $groupId): Builder
+    {
+        if ($groupId <= 0) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->whereIn(
+            $query->qualifyColumn('product_group_id'),
+            ThirdProductGroup::query()
+                ->select('third_product_groups.id')
+                ->where('second_product_group_id', $groupId)
+        );
     }
 
     public function scopeInCurrentProductGroup(Builder $query, int $groupId): Builder
@@ -305,11 +287,7 @@ class Product extends Model
 
         return $query->whereIn('product_group_id', self::rootProductGroupSubquery()
             ->where('leaf.is_visible', 1)
-            ->where(function (Builder $builder): void {
-                $builder
-                    ->whereNull('parent.id')
-                    ->orWhere('parent.is_visible', 1);
-            })
+            ->where('parent.is_visible', 1)
             ->where('root.is_visible', 1)
             ->whereIn('root.code', $visibleProductTypes));
     }
@@ -330,13 +308,11 @@ class Product extends Model
 
     private static function rootProductGroupSubquery(): Builder
     {
-        return ProductGroup::query()
+        return ThirdProductGroup::query()
             ->select('leaf.id')
-            ->from('product_groups as leaf')
-            ->leftJoin('product_groups as parent', 'parent.id', '=', 'leaf.parent_id')
-            ->leftJoin('product_groups as root', 'root.id', '=', DB::raw(
-                'CASE WHEN leaf.level = 1 THEN leaf.id WHEN leaf.level = 2 THEN leaf.parent_id ELSE parent.parent_id END'
-            ));
+            ->from('third_product_groups as leaf')
+            ->join('second_product_groups as parent', 'parent.id', '=', 'leaf.second_product_group_id')
+            ->join('first_product_groups as root', 'root.id', '=', 'parent.first_product_group_id');
     }
 
     public function getPriceByBillingCycle(string $cycle): float
@@ -463,37 +439,14 @@ class Product extends Model
     }
 
     /**
-     * @return array{0:?ProductGroup,1:?ProductGroup,2:?ProductGroup}
+     * @return array{0:?FirstProductGroup,1:?SecondProductGroup,2:?ThirdProductGroup}
      */
     public function resolvedProductGroupHierarchy(): array
     {
-        $group = $this->relationLoaded('productGroup') ? $this->productGroup : null;
+        $third = $this->relationLoaded('productGroup') ? $this->productGroup : null;
+        $second = $third?->relationLoaded('secondProductGroup') ? $third->secondProductGroup : null;
+        $first = $second?->relationLoaded('firstProductGroup') ? $second->firstProductGroup : null;
 
-        if (! $group instanceof ProductGroup && (int) ($this->attributes['product_group_id'] ?? 0) > 0) {
-            try {
-                $group = ProductGroup::query()
-                    ->with(['parent.parent'])
-                    ->find((int) $this->attributes['product_group_id']);
-                if ($group instanceof ProductGroup) {
-                    $this->setRelation('productGroup', $group);
-                }
-            } catch (\Throwable) {
-                $group = null;
-            }
-        }
-
-        if (! $group instanceof ProductGroup) {
-            return [null, null, null];
-        }
-
-        if ($group->exists && ! $group->relationLoaded('parent')) {
-            try {
-                $group->loadMissing(['parent.parent']);
-            } catch (\Throwable) {
-                // Best-effort path hydration for projections and tests.
-            }
-        }
-
-        return $group->hierarchy();
+        return [$first, $second, $third];
     }
 }

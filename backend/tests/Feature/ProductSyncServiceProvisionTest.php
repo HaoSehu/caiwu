@@ -22,7 +22,6 @@ use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiTransport;
 use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -35,10 +34,6 @@ class ProductSyncServiceProvisionTest extends TestCase
         app(PluginFileLoader::class)->ensureLoaded(
             app(PluginScanner::class)->requireManifest('upstream', 'mofang_finance')
         );
-        Artisan::call('migrate', [
-            '--path' => 'database/migrations/2026_07_03_130000_create_plugin_binding_runtime_and_audit_tables.php',
-            '--force' => true,
-        ]);
         $this->activateIntegrationPluginForTest('upstream', 'mofang_finance');
     }
 

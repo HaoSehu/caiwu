@@ -11,6 +11,7 @@ use App\Models\Product;
 use App\Models\ReferralReward;
 use App\Models\ReferralWithdrawal;
 use App\Models\SecondProductGroup;
+use App\Models\ThirdProductGroup;
 use App\Models\User;
 use App\Services\Referral\ReferralService;
 use Tests\TestCase;
@@ -103,8 +104,7 @@ class ReferralServiceKeywordSearchRegressionTest extends TestCase
         $groupIds = $this->createProductGroupIds('referral-group-'.$suffix, 'Referral Group '.$suffix);
 
         $product = Product::query()->create([
-            'first_product_group_id' => $groupIds['first'],
-            'second_product_group_id' => $groupIds['second'],
+            'product_group_id' => $groupIds['third'],
             'name' => 'Referral Product '.$suffix,
             'product_type' => 'server',
             'description' => '',
@@ -161,7 +161,7 @@ class ReferralServiceKeywordSearchRegressionTest extends TestCase
     }
 
     /**
-     * @return array{first:int,second:int}
+     * @return array{first:int,second:int,third:int}
      */
     private function createProductGroupIds(string $slug, string $name): array
     {
@@ -189,10 +189,19 @@ class ReferralServiceKeywordSearchRegressionTest extends TestCase
             'sort_order' => 0,
             'is_visible' => 1,
         ]);
+        $third = ThirdProductGroup::query()->create([
+            'second_product_group_id' => (int) $second->id,
+            'name' => $name.' Leaf',
+            'slug' => $slug.'-leaf',
+            'description' => '',
+            'sort_order' => 0,
+            'is_visible' => 1,
+        ]);
 
         return [
             'first' => (int) $first->id,
             'second' => (int) $second->id,
+            'third' => (int) $third->id,
         ];
     }
 }

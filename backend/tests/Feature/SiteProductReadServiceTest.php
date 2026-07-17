@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Constants\ProductType;
+use App\Models\FirstProductGroup;
 use App\Models\Product;
-use App\Models\ProductGroup;
+use App\Models\SecondProductGroup;
 use App\Models\Setting;
+use App\Models\ThirdProductGroup;
 use App\Models\User;
 use App\Services\Finance\CheckoutSecurityService;
 use App\Services\Finance\CheckoutService;
@@ -50,10 +52,9 @@ class SiteProductReadServiceTest extends TestCase
         Schema::connection('sqlite')->dropIfExists('personal_access_tokens');
         Schema::connection('sqlite')->dropIfExists('users');
         Schema::connection('sqlite')->dropIfExists('products');
-        DB::statement('DROP VIEW IF EXISTS third_product_groups');
-        DB::statement('DROP VIEW IF EXISTS second_product_groups');
-        DB::statement('DROP VIEW IF EXISTS first_product_groups');
-        Schema::connection('sqlite')->dropIfExists('product_groups');
+        Schema::connection('sqlite')->dropIfExists('third_product_groups');
+        Schema::connection('sqlite')->dropIfExists('second_product_groups');
+        Schema::connection('sqlite')->dropIfExists('first_product_groups');
         Schema::connection('sqlite')->dropIfExists('settings');
 
         parent::tearDown();
@@ -133,7 +134,8 @@ class SiteProductReadServiceTest extends TestCase
     {
         $suffix = bin2hex(random_bytes(4));
 
-        $group = $this->createSiteRootGroup('vps', 'CPU Catalog Cache '.$suffix, 'cpu-catalog-cache-'.$suffix);
+        $parentGroup = $this->createSiteRootGroup('vps', 'CPU Catalog Cache '.$suffix, 'cpu-catalog-cache-'.$suffix);
+        $group = $this->createSiteChildGroup($parentGroup, 'CPU Catalog Leaf '.$suffix, 'cpu-catalog-leaf-'.$suffix);
 
         foreach (range(1, 4) as $index) {
             Product::query()->create([
@@ -177,7 +179,8 @@ class SiteProductReadServiceTest extends TestCase
     {
         $suffix = bin2hex(random_bytes(4));
 
-        $group = $this->createSiteRootGroup('vps', 'Spec Batch Cache '.$suffix, 'spec-batch-cache-'.$suffix);
+        $parentGroup = $this->createSiteRootGroup('vps', 'Spec Batch Cache '.$suffix, 'spec-batch-cache-'.$suffix);
+        $group = $this->createSiteChildGroup($parentGroup, 'Spec Batch Leaf '.$suffix, 'spec-batch-leaf-'.$suffix);
 
         $products = collect(range(1, 4))
             ->map(fn (int $index): Product => Product::query()->create([
@@ -645,10 +648,8 @@ class SiteProductReadServiceTest extends TestCase
             $table->unique(['group_key', 'item_key'], 'settings_group_item_unique');
         });
 
-        Schema::connection('sqlite')->create('product_groups', function (Blueprint $table): void {
+        Schema::connection('sqlite')->create('first_product_groups', function (Blueprint $table): void {
             $table->id();
-            $table->unsignedBigInteger('parent_id')->nullable();
-            $table->unsignedTinyInteger('level');
             $table->string('code', 50)->nullable();
             $table->string('product_type', 50)->nullable();
             $table->string('name', 100);
@@ -658,73 +659,36 @@ class SiteProductReadServiceTest extends TestCase
             $table->string('banner_image', 255)->nullable();
             $table->unsignedTinyInteger('is_visible')->default(1);
             $table->unsignedTinyInteger('is_system')->default(0);
-            $table->string('legacy_product_type', 50)->nullable();
-            $table->unsignedBigInteger('legacy_product_group_id')->nullable();
             $table->integer('sort_order')->default(0);
             $table->timestamps();
         });
 
-        DB::statement(<<<'SQL'
-CREATE VIEW first_product_groups AS
-SELECT
-    id,
-    code,
-    name,
-    slug,
-    description,
-    icon,
-    banner_image,
-    sort_order,
-    is_visible,
-    is_system,
-    legacy_product_type,
-    product_type,
-    level,
-    created_at,
-    updated_at
-FROM product_groups
-WHERE level = 1
-SQL);
+        Schema::connection('sqlite')->create('second_product_groups', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('first_product_group_id');
+            $table->string('name', 100);
+            $table->string('slug', 100)->nullable();
+            $table->string('description', 255)->nullable();
+            $table->string('banner_image', 255)->nullable();
+            $table->integer('sort_order')->default(0);
+            $table->unsignedTinyInteger('is_visible')->default(1);
+            $table->string('product_type', 50)->nullable();
+            $table->unsignedTinyInteger('level')->nullable();
+            $table->timestamps();
+        });
 
-        DB::statement(<<<'SQL'
-CREATE VIEW second_product_groups AS
-SELECT
-    id,
-    parent_id AS first_product_group_id,
-    name,
-    slug,
-    description,
-    banner_image,
-    sort_order,
-    is_visible,
-    legacy_product_group_id,
-    product_type,
-    level,
-    created_at,
-    updated_at
-FROM product_groups
-WHERE level = 2
-SQL);
-
-        DB::statement(<<<'SQL'
-CREATE VIEW third_product_groups AS
-SELECT
-    id,
-    parent_id AS second_product_group_id,
-    name,
-    slug,
-    description,
-    banner_image,
-    sort_order,
-    is_visible,
-    legacy_product_group_id,
-    product_type,
-    level,
-    created_at,
-    updated_at
-FROM product_groups
-WHERE level = 3
-SQL);
+        Schema::connection('sqlite')->create('third_product_groups', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('second_product_group_id');
+            $table->string('name', 100);
+            $table->string('slug', 100)->nullable();
+            $table->string('description', 255)->nullable();
+            $table->integer('sort_order')->default(0);
+            $table->unsignedTinyInteger('is_visible')->default(1);
+            $table->string('product_type', 50)->nullable();
+            $table->unsignedTinyInteger('level')->nullable();
+            $table->timestamps();
+        });
 
         Schema::connection('sqlite')->create('products', function (Blueprint $table): void {
             $table->id();
@@ -801,11 +765,9 @@ SQL);
         $this->resetStaticProperty(Setting::class, 'groupValueCache', []);
     }
 
-    private function createSiteRootGroup(string $productType, string $name, string $slug): ProductGroup
+    private function createSiteRootGroup(string $productType, string $name, string $slug): SecondProductGroup
     {
-        $firstGroup = ProductGroup::query()->create([
-            'parent_id' => null,
-            'level' => 1,
+        $firstGroup = FirstProductGroup::query()->create([
             'code' => $productType,
             'product_type' => ProductType::normalizeBusinessValueFromMenuCode($productType),
             'name' => ProductType::labelOf($productType),
@@ -814,46 +776,38 @@ SQL);
             'sort_order' => 0,
             'is_visible' => 1,
             'is_system' => 1,
-            'legacy_product_type' => $productType,
         ]);
 
-        return ProductGroup::query()->create([
-            'parent_id' => (int) $firstGroup->id,
-            'level' => 2,
-            'code' => null,
-            'product_type' => ProductType::normalizeBusinessValueFromMenuCode($productType),
+        return SecondProductGroup::query()->create([
+            'first_product_group_id' => (int) $firstGroup->id,
+            'name' => $name,
+            'slug' => $slug,
+            'description' => '',
+            'banner_image' => null,
+            'sort_order' => 0,
+            'is_visible' => 1,
+        ]);
+    }
+
+    private function createSiteChildGroup(SecondProductGroup $parent, string $name, string $slug): ThirdProductGroup
+    {
+        return ThirdProductGroup::query()->create([
+            'second_product_group_id' => (int) $parent->id,
             'name' => $name,
             'slug' => $slug,
             'description' => '',
             'sort_order' => 0,
             'is_visible' => 1,
-            'is_system' => 0,
-            'legacy_product_group_id' => null,
         ]);
     }
 
-    private function createSiteChildGroup(ProductGroup $parent, string $name, string $slug): ProductGroup
+    private function productGroupFields(ThirdProductGroup $group): array
     {
-        return ProductGroup::query()->create([
-            'parent_id' => (int) $parent->id,
-            'level' => 3,
-            'code' => null,
-            'product_type' => (string) $parent->product_type,
-            'name' => $name,
-            'slug' => $slug,
-            'description' => '',
-            'sort_order' => 0,
-            'is_visible' => 1,
-            'is_system' => 0,
-            'legacy_product_group_id' => null,
-        ]);
-    }
+        $firstGroup = $group->secondProductGroup?->firstProductGroup;
 
-    private function productGroupFields(ProductGroup $group): array
-    {
         return [
             'product_group_id' => (int) $group->id,
-            'service_type_code' => (string) $group->product_type,
+            'service_type_code' => ProductType::businessValueForFirstGroup($firstGroup, $firstGroup?->product_type),
         ];
     }
 

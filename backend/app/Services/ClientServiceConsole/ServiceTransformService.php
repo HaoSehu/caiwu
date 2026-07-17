@@ -94,11 +94,9 @@ class ServiceTransformService
         $provisionData = $this->serviceProvisionData($service);
         $displayDomain = ServiceHostname::resolveDisplayDomain($service, $provisionData);
         $service->loadMissing([
-            'product.firstProductGroup',
-            'product.secondProductGroup',
-            'product.thirdProductGroup',
+            'product.productGroup.secondProductGroup.firstProductGroup',
         ]);
-        $leafGroup = $service->product?->thirdProductGroup ?: $service->product?->secondProductGroup;
+        $leafGroup = $service->product?->productGroup;
         $rootGroup = $this->resolverService->resolveServiceRootGroup($service);
         $rootGroupName = trim((string) ($rootGroup?->name ?? ''));
         $leafGroupName = trim((string) ($leafGroup?->name ?? ''));
@@ -833,12 +831,12 @@ class ServiceTransformService
             $service->name,
             $service->product?->name ?? '',
             $service->product?->service_type_code ?? '',
-            $service->product?->firstProductGroup?->name ?? '',
-            $service->product?->firstProductGroup?->description ?? '',
-            $service->product?->secondProductGroup?->name ?? '',
-            $service->product?->secondProductGroup?->description ?? '',
-            $service->product?->thirdProductGroup?->name ?? '',
-            $service->product?->thirdProductGroup?->description ?? '',
+            $service->product?->productGroup?->secondProductGroup?->firstProductGroup?->name ?? '',
+            $service->product?->productGroup?->secondProductGroup?->firstProductGroup?->description ?? '',
+            $service->product?->productGroup?->secondProductGroup?->name ?? '',
+            $service->product?->productGroup?->secondProductGroup?->description ?? '',
+            $service->product?->productGroup?->name ?? '',
+            $service->product?->productGroup?->description ?? '',
         ])));
         $keywordMap = [
             'cloud_server' => ['云服务器', 'vps', 'ecs', 'cvm', '轻量'],

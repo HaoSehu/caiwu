@@ -62,9 +62,9 @@ class AdminOrderNotificationService
         $order->loadMissing([
             'user:id,email,nickname',
             'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
-            'product.firstProductGroup:id,code,name',
-            'product.secondProductGroup:id,first_product_group_id,name',
-            'product.thirdProductGroup:id,second_product_group_id,name',
+            'product.productGroup:id,second_product_group_id,name',
+            'product.productGroup.secondProductGroup:id,first_product_group_id,name',
+            'product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
             'invoice:'.implode(',', $invoiceColumns),
         ]);
 
@@ -103,9 +103,9 @@ class AdminOrderNotificationService
         $order->loadMissing([
             'user:id,email,nickname',
             'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
-            'product.firstProductGroup:id,code,name',
-            'product.secondProductGroup:id,first_product_group_id,name',
-            'product.thirdProductGroup:id,second_product_group_id,name',
+            'product.productGroup:id,second_product_group_id,name',
+            'product.productGroup.secondProductGroup:id,first_product_group_id,name',
+            'product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
             'invoice:id,order_id,invoice_no,amount,status,paid_at',
         ]);
 
@@ -259,13 +259,13 @@ class AdminOrderNotificationService
             'user:id,email,nickname',
             'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle,product_spec_snapshot,product_type_snapshot,config_snapshot',
             'order.product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
-            'order.product.firstProductGroup:id,code,name',
-            'order.product.secondProductGroup:id,first_product_group_id,name',
-            'order.product.thirdProductGroup:id,second_product_group_id,name',
+            'order.product.productGroup:id,second_product_group_id,name',
+            'order.product.productGroup.secondProductGroup:id,first_product_group_id,name',
+            'order.product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
             'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
-            'product.firstProductGroup:id,code,name',
-            'product.secondProductGroup:id,first_product_group_id,name',
-            'product.thirdProductGroup:id,second_product_group_id,name',
+            'product.productGroup:id,second_product_group_id,name',
+            'product.productGroup.secondProductGroup:id,first_product_group_id,name',
+            'product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
         ])->find($invoiceId);
 
         if (! $invoice instanceof Invoice || (int) $invoice->status !== InvoiceStatus::PAID) {

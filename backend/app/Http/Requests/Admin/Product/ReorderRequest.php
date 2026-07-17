@@ -14,8 +14,8 @@ class ReorderRequest extends AdminFormRequest
         return [
             'product_id' => ['required', 'integer', 'min:1', 'exists:products,id'],
             'target_first_product_group_id' => ['nullable', 'integer', 'min:1'],
-            'target_second_product_group_id' => ['required_without:target_third_product_group_id', 'integer', 'min:1', Rule::exists((new SecondProductGroup)->getTable(), 'id')],
-            'target_third_product_group_id' => ['nullable', 'integer', 'min:1', Rule::exists((new ThirdProductGroup)->getTable(), 'id')],
+            'target_second_product_group_id' => ['nullable', 'integer', 'min:1', Rule::exists((new SecondProductGroup)->getTable(), 'id')],
+            'target_third_product_group_id' => ['required', 'integer', 'min:1', Rule::exists((new ThirdProductGroup)->getTable(), 'id')],
             'reference_product_id' => ['nullable', 'integer', 'min:1', 'exists:products,id'],
             'position' => ['required', 'string', 'in:before,after,append'],
         ];

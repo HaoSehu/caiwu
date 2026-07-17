@@ -92,14 +92,16 @@ class OrderSnapshotSemanticsTest extends TestCase
             'purchase_requires' => [],
             'config_options' => [],
         ]);
-        $product->setRelation('firstProductGroup', tap(new FirstProductGroup, function (FirstProductGroup $group): void {
+        $firstGroup = tap(new FirstProductGroup, function (FirstProductGroup $group): void {
             $group->setRawAttributes(['id' => 1, 'code' => 'vps', 'name' => '云服务器', 'product_type' => 'cloud_server'], true);
-        }));
-        $product->setRelation('secondProductGroup', tap(new SecondProductGroup, function (SecondProductGroup $group): void {
+        });
+        $secondGroup = tap(new SecondProductGroup, function (SecondProductGroup $group) use ($firstGroup): void {
             $group->setRawAttributes(['id' => 2, 'first_product_group_id' => 1, 'name' => '轻量云'], true);
-        }));
-        $product->setRelation('thirdProductGroup', tap(new ThirdProductGroup, function (ThirdProductGroup $group): void {
+            $group->setRelation('firstProductGroup', $firstGroup);
+        });
+        $product->setRelation('productGroup', tap(new ThirdProductGroup, function (ThirdProductGroup $group) use ($secondGroup): void {
             $group->setRawAttributes(['id' => 3, 'second_product_group_id' => 2, 'name' => '香港'], true);
+            $group->setRelation('secondProductGroup', $secondGroup);
         }));
 
         $order = new Order([
@@ -122,8 +124,16 @@ class OrderSnapshotSemanticsTest extends TestCase
             'purchase_requires' => [],
             'config_options' => [],
         ]);
-        $product->setRelation('firstProductGroup', tap(new FirstProductGroup, function (FirstProductGroup $group): void {
+        $firstGroup = tap(new FirstProductGroup, function (FirstProductGroup $group): void {
             $group->setRawAttributes(['id' => 1, 'code' => 'vps', 'name' => '云服务器', 'product_type' => 'cloud_server'], true);
+        });
+        $secondGroup = tap(new SecondProductGroup, function (SecondProductGroup $group) use ($firstGroup): void {
+            $group->setRawAttributes(['id' => 2, 'first_product_group_id' => 1, 'name' => '轻量云'], true);
+            $group->setRelation('firstProductGroup', $firstGroup);
+        });
+        $product->setRelation('productGroup', tap(new ThirdProductGroup, function (ThirdProductGroup $group) use ($secondGroup): void {
+            $group->setRawAttributes(['id' => 3, 'second_product_group_id' => 2, 'name' => '香港'], true);
+            $group->setRelation('secondProductGroup', $secondGroup);
         }));
 
         $order = new Order([

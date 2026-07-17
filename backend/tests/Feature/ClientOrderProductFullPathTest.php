@@ -62,9 +62,7 @@ class ClientOrderProductFullPathTest extends TestCase
         ]);
 
         $product = Product::query()->create([
-            'first_product_group_id' => (int) $firstGroup->id,
-            'second_product_group_id' => (int) $secondGroup->id,
-            'third_product_group_id' => (int) $thirdGroup->id,
+            'product_group_id' => (int) $thirdGroup->id,
             'service_type_code' => 'vps',
             'product_type' => 'vps',
             'pricing' => ['monthly' => '88.00'],

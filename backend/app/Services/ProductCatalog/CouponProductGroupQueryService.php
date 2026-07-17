@@ -7,7 +7,6 @@ namespace App\Services\ProductCatalog;
 use App\Exceptions\BusinessException;
 use App\Models\FirstProductGroup;
 use App\Models\Product;
-use App\Models\ProductGroup;
 use App\Models\SecondProductGroup;
 use App\Models\ThirdProductGroup;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -22,8 +21,8 @@ class CouponProductGroupQueryService
             ->withCount([
                 'secondProductGroups as children_count',
             ])
-            ->selectSub($this->productTreeCountSubquery('product_groups.id', 1), 'products_count')
-            ->selectSub($this->directProductCountSubquery('product_groups.id'), 'direct_products_count')
+            ->selectSub($this->productTreeCountSubquery('first_product_groups.id', 1), 'products_count')
+            ->selectSub($this->directProductCountSubquery('first_product_groups.id', 1), 'direct_products_count')
             ->when($this->keyword($filters) !== '', function (Builder $query) use ($filters): void {
                 $keyword = $this->keyword($filters);
                 $query->where(function (Builder $builder) use ($keyword): void {
@@ -56,7 +55,7 @@ class CouponProductGroupQueryService
                     'thirdProductGroups as children_count',
                 ])
                 ->selectSub($this->productTreeCountSubquery('second_product_groups.id', 2), 'products_count')
-                ->selectSub($this->directProductCountSubquery('second_product_groups.id'), 'direct_products_count')
+                ->selectSub($this->directProductCountSubquery('second_product_groups.id', 2), 'direct_products_count')
                 ->when($this->keyword($filters) !== '', fn (Builder $query) => $query->where('name', 'like', '%'.$this->keyword($filters).'%'))
                 ->when($this->status($filters) !== null, fn (Builder $query) => $query->where('is_visible', $this->status($filters)))
                 ->orderBy('sort_order')
@@ -95,15 +94,20 @@ class CouponProductGroupQueryService
         $query = Product::query()
             ->select($this->productColumns())
             ->with([
-                'productGroup.parent.parent',
+                'productGroup.secondProductGroup.firstProductGroup',
             ]);
 
         if ($level === 1) {
             $this->firstGroup($groupId);
-            $query->inCurrentProductGroup($groupId);
+            $query->whereIn('product_group_id', ThirdProductGroup::query()
+                ->select('third_product_groups.id')
+                ->join('second_product_groups', 'second_product_groups.id', '=', 'third_product_groups.second_product_group_id')
+                ->where('second_product_groups.first_product_group_id', $groupId));
         } elseif ($level === 2) {
             $this->secondGroup($groupId);
-            $query->inCurrentProductGroup($groupId);
+            $query->whereIn('product_group_id', ThirdProductGroup::query()
+                ->select('id')
+                ->where('second_product_group_id', $groupId));
         } elseif ($level === 3) {
             $this->thirdGroup($groupId);
             $query->inCurrentProductGroup($groupId);
@@ -162,25 +166,29 @@ class CouponProductGroupQueryService
 
     private function productTreeCountSubquery(string $outerColumn, int $level): Builder
     {
-        return Product::query()
-            ->selectRaw('COUNT(*)')
-            ->whereIn('product_group_id', ProductGroup::query()
-                ->select('id')
-                ->whereColumn('id', $outerColumn)
-                ->when($level <= 2, fn (Builder $query) => $query->orWhereColumn('parent_id', $outerColumn))
-                ->when($level === 1, fn (Builder $query) => $query->orWhereIn(
-                    'parent_id',
-                    ProductGroup::query()
-                        ->select('id')
-                        ->whereColumn('parent_id', $outerColumn)
-                )));
+        $query = Product::query()->selectRaw('COUNT(*)');
+
+        return match ($level) {
+            1 => $query
+                ->join('third_product_groups as group_tree', 'group_tree.id', '=', 'products.product_group_id')
+                ->join('second_product_groups as group_tree_parent', 'group_tree_parent.id', '=', 'group_tree.second_product_group_id')
+                ->whereColumn('group_tree_parent.first_product_group_id', $outerColumn),
+            2 => $query
+                ->join('third_product_groups as group_tree', 'group_tree.id', '=', 'products.product_group_id')
+                ->whereColumn('group_tree.second_product_group_id', $outerColumn),
+            default => $query->whereColumn('products.product_group_id', $outerColumn),
+        };
     }
 
-    private function directProductCountSubquery(string $outerColumn): Builder
+    private function directProductCountSubquery(string $outerColumn, int $level): Builder
     {
+        if ($level !== 3) {
+            return Product::query()->selectRaw('COUNT(*)')->whereRaw('1 = 0');
+        }
+
         return Product::query()
             ->selectRaw('COUNT(*)')
-            ->whereColumn('product_group_id', $outerColumn);
+            ->whereColumn('products.product_group_id', $outerColumn);
     }
 
     /**
