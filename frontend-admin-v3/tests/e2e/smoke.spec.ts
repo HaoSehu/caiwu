@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+﻿import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
 async function mockAdminInfo(page: import('@playwright/test').Page) {
@@ -758,7 +758,7 @@ async function mockProductsHub(page: import('@playwright/test').Page) {
   await page.route('**/api/admin/suppliers/provider-types**', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
-      body: JSON.stringify({ code: 0, data: [{ value: 'mofang_finance_api', label: '魔方财务' }] }),
+      body: JSON.stringify({ code: 0, data: [{ value: 'zjmf_finance_api', label: 'ZJMF 财务' }] }),
     });
   });
 
@@ -774,8 +774,8 @@ async function mockProductsHub(page: import('@playwright/test').Page) {
           code: 0,
           data: {
             id: 3,
-            name: '魔方财务详情',
-            interface_type: 'mofang_finance_api',
+            name: 'ZJMF 财务详情',
+            interface_type: 'zjmf_finance_api',
             api_url: 'https://example.test',
             api_username: 'api-user',
             api_key: 'secret',
@@ -789,7 +789,7 @@ async function mockProductsHub(page: import('@playwright/test').Page) {
     if (pathname.endsWith('/suppliers/3/balance') && request.method() === 'GET') {
       await route.fulfill({
         contentType: 'application/json',
-        body: JSON.stringify({ code: 0, data: { balance: '123.45', client: { name: '魔方财务' } } }),
+        body: JSON.stringify({ code: 0, data: { balance: '123.45', client: { name: 'ZJMF 财务' } } }),
       });
       return;
     }
@@ -844,9 +844,9 @@ async function mockProductsHub(page: import('@playwright/test').Page) {
           list: [
             {
               id: 3,
-              name: keyword ? '筛选供应商' : '魔方财务',
-              interface_type: 'mofang_finance_api',
-              interface_type_label: '魔方财务',
+              name: keyword ? '筛选供应商' : 'ZJMF 财务',
+              interface_type: 'zjmf_finance_api',
+              interface_type_label: 'ZJMF 财务',
               api_url: 'https://example.test',
               api_username: 'api-user',
               has_api_url: true,
@@ -931,7 +931,7 @@ async function mockProductsHub(page: import('@playwright/test').Page) {
     if (pathname.endsWith('/suppliers/3/balance') && request.method() === 'GET') {
       await route.fulfill({
         contentType: 'application/json',
-        body: JSON.stringify({ code: 0, data: { balance: '123.45', client: { name: '魔方财务' } } }),
+        body: JSON.stringify({ code: 0, data: { balance: '123.45', client: { name: 'ZJMF 财务' } } }),
       });
       return;
     }
@@ -943,8 +943,8 @@ async function mockProductsHub(page: import('@playwright/test').Page) {
           code: 0,
           data: {
             id: 3,
-            name: '魔方财务详情',
-            interface_type: 'mofang_finance_api',
+            name: 'ZJMF 财务详情',
+            interface_type: 'zjmf_finance_api',
             api_url: 'https://example.test',
             api_username: 'api-user',
             api_key: 'secret',
@@ -2166,7 +2166,7 @@ async function mockUserDetail(page: import('@playwright/test').Page) {
       contentType: 'application/json',
       body: JSON.stringify({
         code: 0,
-        data: { list: [{ id: 3, name: '魔方财务', interface_type: 'mofang_finance_api', interface_type_label: '魔方财务' }], total: 1 },
+        data: { list: [{ id: 3, name: 'ZJMF 财务', interface_type: 'zjmf_finance_api', interface_type_label: 'ZJMF 财务' }], total: 1 },
       }),
     });
   });
@@ -2235,7 +2235,7 @@ async function mockUserDetail(page: import('@playwright/test').Page) {
             expires_at: '2026-07-06 10:00:00',
             invoice: { id: 21, invoice_no: 'INV-USER-001', status: 1 },
             order: { id: 71, invoice_no: 'INV-USER-001', amount: 88 },
-            upstream: { provider: 'mofang_finance_api', supplier_id: 3, host_id: 9001, status_label: '在线' },
+            upstream: { provider: 'zjmf_finance_api', supplier_id: 3, host_id: 9001, status_label: '在线' },
             runtime: { power_state: 'running', power_label: '运行中' },
             connection: { dedicated_ip: '192.0.2.10', username: 'root', port: 22 },
             specs: [{ label: 'CPU', value: '2 核' }],
@@ -3345,7 +3345,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     );
     await page.goto('/admin/products/suppliers', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/admin\/products\?tab=suppliers/);
-    await expect(page.getByText('魔方财务').first()).toBeVisible();
+    await expect(page.getByText('ZJMF 财务').first()).toBeVisible();
     await supplierBalanceRequest;
     await expect(page.getByText('¥ 123.45')).toBeVisible();
 
@@ -3401,14 +3401,14 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await page.locator('.supplier-grid').getByRole('button', { name: '编辑' }).first().click();
     await supplierDetailRequest;
     const supplierDialog = page.locator('.t-dialog:visible');
-    await expect(supplierDialog.locator('.t-form__item').filter({ hasText: '接口名称' }).locator('input')).toHaveValue('魔方财务详情');
-    await supplierDialog.locator('.t-form__item').filter({ hasText: '接口名称' }).locator('input').fill('魔方财务编辑');
+    await expect(supplierDialog.locator('.t-form__item').filter({ hasText: '接口名称' }).locator('input')).toHaveValue('ZJMF 财务详情');
+    await supplierDialog.locator('.t-form__item').filter({ hasText: '接口名称' }).locator('input').fill('ZJMF 财务编辑');
     await supplierDialog.locator('.t-form__item').filter({ hasText: 'API 密钥' }).locator('input').fill('secret');
     const updateSupplierRequest = page.waitForRequest(
       (request) => request.url().endsWith('/api/admin/suppliers/3') && request.method() === 'PUT',
     );
     await supplierDialog.getByRole('button', { name: '保存' }).click();
-    await expect((await updateSupplierRequest).postDataJSON()).toMatchObject({ name: '魔方财务编辑', api_key: 'secret' });
+    await expect((await updateSupplierRequest).postDataJSON()).toMatchObject({ name: 'ZJMF 财务编辑', api_key: 'secret' });
 
     const deleteSupplierRequest = page.waitForRequest(
       (request) => request.url().endsWith('/api/admin/suppliers/3') && request.method() === 'DELETE',

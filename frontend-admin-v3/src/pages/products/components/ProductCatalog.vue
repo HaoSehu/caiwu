@@ -2271,8 +2271,6 @@ async function submitProduct() {
   productSubmitting.value = true;
   try {
     const payload = {
-      display_name: productForm.display_name,
-      name: productForm.display_name,
       custom_display_name: resolveProductCustomDisplayNamePayload(),
       ...productGroupPayload(findProductGroupByKey(categoryOptions.value, productForm.selected_product_group_key)),
       pricing: {
