@@ -20,14 +20,14 @@ class PaymentController extends Controller
             'invoice:id,invoice_no,status,amount,type',
         ])
             ->where('user_id', $request->user()->id)
-            ->whereIn('gateway', $thirdPartyGateways)
+            ->whereGatewayKeyIn($thirdPartyGateways)
             ->orderByDesc('id');
 
         if (($filters['status'] ?? null) !== null) {
             $query->where('status', (int) $filters['status']);
         }
         if (! empty($filters['gateway'])) {
-            $query->where('gateway', $filters['gateway']);
+            $query->whereGatewayKey($filters['gateway']);
         }
         if (! empty($filters['keyword'])) {
             $keyword = trim((string) $filters['keyword']);
@@ -72,7 +72,7 @@ class PaymentController extends Controller
 
         $row = Payment::query()
             ->where('user_id', $userId)
-            ->whereIn('gateway', PaymentGatewayCode::thirdPartyGateways())
+            ->whereGatewayKeyIn(PaymentGatewayCode::thirdPartyGateways())
             ->selectRaw('COUNT(*) AS total')
             ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS pending', [PaymentStatus::PENDING])
             ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS success', [PaymentStatus::SUCCESS])
@@ -95,7 +95,7 @@ class PaymentController extends Controller
             'invoice:id,invoice_no,status,amount,paid_amount,type,created_at',
         ])
             ->where('user_id', $userId)
-            ->whereIn('gateway', PaymentGatewayCode::thirdPartyGateways())
+            ->whereGatewayKeyIn(PaymentGatewayCode::thirdPartyGateways())
             ->findOrFail($id);
 
         return $this->success([

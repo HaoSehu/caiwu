@@ -361,7 +361,8 @@ class AdminLogV2QueryService
      */
     private function runtimeDetail(string $log): ?array
     {
-        $model = IntegrationPluginRuntimeLog::query()->find($log);
+        $id = $this->stripLogPrefix($log, 'plugin-runtime-');
+        $model = IntegrationPluginRuntimeLog::query()->find($id);
         if (! $model instanceof IntegrationPluginRuntimeLog) {
             return null;
         }
@@ -397,7 +398,8 @@ class AdminLogV2QueryService
      */
     private function scheduleDetail(string $channel, string $log): ?array
     {
-        $model = ScheduleRunLog::query()->find($log);
+        $id = $this->stripLogPrefix($log, 'schedule-');
+        $model = ScheduleRunLog::query()->find($id);
         if (! $model instanceof ScheduleRunLog) {
             return null;
         }
@@ -470,5 +472,16 @@ class AdminLogV2QueryService
         }
 
         return $result;
+    }
+
+    private function stripLogPrefix(string $log, string $prefix): int|string
+    {
+        if (str_starts_with($log, $prefix)) {
+            $stripped = substr($log, strlen($prefix));
+
+            return is_numeric($stripped) ? (int) $stripped : $stripped;
+        }
+
+        return is_numeric($log) ? (int) $log : $log;
     }
 }

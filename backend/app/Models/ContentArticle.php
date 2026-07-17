@@ -40,7 +40,6 @@ class ContentArticle extends Model
     protected $fillable = [
         'content_type',
         'type',
-        'node_type',
         'category_id',
         'content_category_id',
         'title',
@@ -75,7 +74,6 @@ class ContentArticle extends Model
             'is_recommended' => 'integer',
             'sort_order' => 'integer',
             'view_count' => 'integer',
-            'node_type' => 'string',
             'publish_at' => 'datetime',
             'last_published_at' => 'datetime',
             'require_reread_at' => 'datetime',

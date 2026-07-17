@@ -45,9 +45,9 @@ class AdminLogService
             'title' => '接口认证刷新',
             'log_keywords' => ['JWT刷新', '接口认证刷新', 'refresh-hosting-panel-auth'],
         ],
-        'refresh-mofang-finance-auth' => [
-            'title' => '魔方财务认证刷新',
-            'log_keywords' => ['魔方财务认证刷新', 'refresh-mofang-finance-auth'],
+        'refresh-zjmf-finance-auth' => [
+            'title' => 'ZJMF 财务认证刷新',
+            'log_keywords' => ['ZJMF 财务认证刷新', 'refresh-zjmf-finance-auth'],
         ],
         'service-auto-renew' => [
             'title' => '服务自动续费',

@@ -8,7 +8,7 @@ final class ProviderKey
 {
     public const HOSTING_PANEL_API = 'hosting_panel_api';
 
-    public const MOFANG_FINANCE_API = 'mofang_finance_api';
+    public const ZJMF_FINANCE_API = 'zjmf_finance_api';
 
     public static function label(string $key): string
     {

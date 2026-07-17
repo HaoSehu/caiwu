@@ -7,7 +7,7 @@ use App\Jobs\ProcessPaidOrderReferralRewardJob;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Product;
-use App\Services\Upstream\ProviderKey;
+use App\Services\Upstream\Contracts\ProvidesSynchronousNewPurchaseFulfillment;
 use App\Services\Upstream\ProviderResolver;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -31,7 +31,7 @@ class PaidOrderBusinessFlowDispatcher
 
         $shouldDispatchReferralReward = $this->shouldDispatchReferralReward($invoice);
 
-        if ($this->shouldSynchronouslyFulfillMofangPurchase($invoice)) {
+        if ($this->shouldSynchronouslyFulfillNewPurchase($invoice)) {
             if ($shouldDispatchReferralReward) {
                 ProcessPaidOrderReferralRewardJob::dispatch($orderId, $traceId);
             }
@@ -86,7 +86,7 @@ class PaidOrderBusinessFlowDispatcher
         return (string) ($invoice->order?->type ?? $invoice->type ?? '') === 'new';
     }
 
-    private function shouldSynchronouslyFulfillMofangPurchase(Invoice $invoice): bool
+    private function shouldSynchronouslyFulfillNewPurchase(Invoice $invoice): bool
     {
         $invoice->loadMissing('order.product');
         $order = $invoice->order;
@@ -100,7 +100,9 @@ class PaidOrderBusinessFlowDispatcher
             return false;
         }
 
-        return $this->providerResolver->resolveForProduct($product)->key() === ProviderKey::MOFANG_FINANCE_API;
+        return $this->providerResolver
+            ->resolveForProduct($product)
+            ->supports(ProvidesSynchronousNewPurchaseFulfillment::class);
     }
 
     private function shouldUseQueue(): bool
