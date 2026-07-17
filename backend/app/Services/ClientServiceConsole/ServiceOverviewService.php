@@ -187,16 +187,16 @@ class ServiceOverviewService
         // 第 6 个固定保留给“其他服务”。
         $typeItems = collect(ProductType::visibleItems())->values();
         $typeOrderMap = $typeItems->values()
-            ->mapWithKeys(fn (array $item, int $index) => [(string) ($item['value'] ?? '') => $index])
+            ->mapWithKeys(fn (array $item, int $index) => [(string) ($item['product_type'] ?? $item['value'] ?? '') => $index])
             ->all();
         $knownTypeValues = $typeItems
-            ->map(fn (array $item) => trim((string) ($item['value'] ?? '')))
+            ->map(fn (array $item) => trim((string) ($item['product_type'] ?? $item['value'] ?? '')))
             ->filter(fn (string $value) => $value !== '')
             ->values()->all();
         $primaryTypeItems = $typeItems
             ->take(5)->values();
         $primaryTypeValues = $primaryTypeItems
-            ->map(fn (array $item) => trim((string) ($item['value'] ?? '')))
+            ->map(fn (array $item) => trim((string) ($item['product_type'] ?? $item['value'] ?? '')))
             ->filter(fn (string $value) => $value !== '')
             ->values()->all();
         $otherTypeValues = collect($knownTypeValues)
@@ -206,10 +206,10 @@ class ServiceOverviewService
         $list = $primaryTypeItems->map(fn (array $typeItem) => $this->buildGroupedOverviewTypeItem(
             $typeItem,
             $services->filter(
-                fn (Service $service) => $this->resolverService->resolveGroupedOverviewTypeValue($service) === trim((string) ($typeItem['value'] ?? ''))
+                fn (Service $service) => $this->resolverService->resolveGroupedOverviewTypeValue($service) === trim((string) ($typeItem['product_type'] ?? $typeItem['value'] ?? ''))
             )->values(),
             $expiringDeadline,
-            (int) ($typeOrderMap[(string) ($typeItem['value'] ?? '')] ?? 9999)
+            (int) ($typeOrderMap[(string) ($typeItem['product_type'] ?? $typeItem['value'] ?? '')] ?? 9999)
         ))->values();
 
         $otherServices = $services->filter(function (Service $service) use ($otherTypeValues, $knownTypeValues) {
@@ -237,11 +237,11 @@ class ServiceOverviewService
             })->all();
 
         $primaryTypeValueMap = $primaryTypeItems
-            ->mapWithKeys(fn (array $item) => [trim((string) ($item['value'] ?? '')) => true])
+            ->mapWithKeys(fn (array $item) => [trim((string) ($item['product_type'] ?? $item['value'] ?? '')) => true])
             ->all();
 
         $catalogTypes = $typeItems->map(function (array $item) use ($services, $knownTypeValues, $primaryTypeValueMap) {
-            $typeValue = trim((string) ($item['value'] ?? ''));
+            $typeValue = trim((string) ($item['product_type'] ?? $item['value'] ?? ''));
             $count = $services->filter(function (Service $service) use ($typeValue, $knownTypeValues, $primaryTypeValueMap) {
                 $resolvedType = $this->resolverService->resolveGroupedOverviewTypeValue($service);
 
@@ -298,7 +298,7 @@ class ServiceOverviewService
         $groupServices = collect($services)->values();
         /** @var Service|null $firstService */
         $firstService = $groupServices->first();
-        $typeValue = trim((string) ($typeItem['value'] ?? ''));
+        $typeValue = trim((string) ($typeItem['product_type'] ?? $typeItem['value'] ?? ''));
         $typeLabel = trim((string) ($typeItem['label'] ?? '')) ?: '其他服务';
         $children = $groupServices
             ->groupBy(fn (Service $service) => $this->resolveGroupedOverviewGroupKey($this->resolveServiceLeafGroup($service)))

@@ -914,9 +914,9 @@ class AccountMigrationService
     {
         $map = [];
 
-        foreach ($this->targetQuery('SELECT id, product_snapshot_json FROM invoices ORDER BY id ASC') as $row) {
+        foreach ($this->targetQuery('SELECT id, config_snapshot FROM invoices ORDER BY id ASC') as $row) {
             $targetInvoiceId = (int) ($row->id ?? 0);
-            $snapshot = json_decode((string) ($row->product_snapshot_json ?? ''), true);
+            $snapshot = json_decode((string) ($row->config_snapshot ?? ''), true);
             $legacyInvoiceId = is_array($snapshot) && isset($snapshot['legacy_invoice_id'])
                 ? (int) $snapshot['legacy_invoice_id']
                 : 0;
@@ -937,9 +937,9 @@ class AccountMigrationService
         $map = [];
 
         // 优先通过 legacy_order_id 映射（这是最可靠的方式）
-        foreach ($this->targetQuery('SELECT id, product_snapshot_json FROM invoices ORDER BY id ASC') as $row) {
+        foreach ($this->targetQuery('SELECT id, config_snapshot FROM invoices ORDER BY id ASC') as $row) {
             $targetInvoiceId = (int) ($row->id ?? 0);
-            $snapshot = json_decode((string) ($row->product_snapshot_json ?? ''), true);
+            $snapshot = json_decode((string) ($row->config_snapshot ?? ''), true);
             $legacyOrderId = is_array($snapshot) && isset($snapshot['legacy_order_id'])
                 ? (int) $snapshot['legacy_order_id']
                 : 0;

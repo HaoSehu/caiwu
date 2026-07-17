@@ -36,12 +36,11 @@ class Product extends Model
     protected $fillable = [
         'product_group_id',
         'service_type_code',
-        'name', 'product_type', 'type',
+        'product_type', 'type',
         'custom_display_name', 'remark',
         'pricing',
         'setup_fee', 'config_options', 'purchase_requires', 'stock', 'status',
         'sort_order', 'auto_setup',
-        'supplier_product_name',
     ];
 
     protected function casts(): array
@@ -416,21 +415,16 @@ class Product extends Model
 
         $setIfColumnExists('product_type', (string) ($product->product_type ?: 'other'));
         $setIfColumnExists('product_group_id', (int) ($product->product_group_id ?? 0) ?: null);
-        $setIfColumnExists('name', (string) $product->name);
         $setIfColumnExists('custom_display_name', $product->custom_display_name);
-        $setIfColumnExists('slug', $slug ?: 'test-product-'.(int) $product->id);
-        $setIfColumnExists('summary', null);
         $setIfColumnExists('remark', $product->remark);
         $setIfColumnExists('pricing', $encodeJson((array) ($product->pricing ?? [])));
         $setIfColumnExists('setup_fee', number_format((float) ($product->setup_fee ?? 0), 2, '.', ''));
         $setIfColumnExists('config_options', $encodeJson((array) ($product->config_options ?? [])));
         $setIfColumnExists('purchase_requires', $encodeJson((array) ($product->purchase_requires ?? [])));
-        $setIfColumnExists('purchase_requires_json', $encodeJson((array) ($product->purchase_requires ?? [])));
         $setIfColumnExists('stock', (int) ($product->stock ?? -1));
         $setIfColumnExists('status', (int) ($product->status ?? 1));
         $setIfColumnExists('sort_order', (int) ($product->sort_order ?? 0));
         $setIfColumnExists('auto_setup', (int) ($product->auto_setup ?? 0));
-        $setIfColumnExists('supplier_product_name', $product->supplier_product_name);
         $setIfColumnExists('deleted_at', null);
         $setIfColumnExists('created_at', $product->created_at ?? now());
         $setIfColumnExists('updated_at', $product->updated_at ?? now());

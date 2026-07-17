@@ -11,12 +11,8 @@ class SystemSetting extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'legacy_setting_id',
         'group_key',
         'item_key',
         'item_value',
-        'value_type',
-        'is_encrypted',
-        'updated_by_admin_id',
     ];
 }

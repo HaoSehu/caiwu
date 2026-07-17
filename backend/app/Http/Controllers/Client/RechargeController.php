@@ -32,7 +32,7 @@ class RechargeController extends Controller
         $payment = Payment::query()
             ->where('payment_no', (string) ($result['payment_no'] ?? ''))
             ->where('user_id', $request->user()->id)
-            ->where('gateway', PaymentGatewayCode::ALIPAY)
+            ->whereGatewayKey(PaymentGatewayCode::ALIPAY)
             ->whereNull('invoice_id')
             ->first();
 
@@ -55,7 +55,7 @@ class RechargeController extends Controller
 
         $payment = Payment::where('payment_no', $paymentNo)
             ->where('user_id', $request->user()->id)
-            ->where('gateway', PaymentGatewayCode::ALIPAY)
+            ->whereGatewayKey(PaymentGatewayCode::ALIPAY)
             ->firstOrFail();
 
         $this->checkoutSecurityService->assertRechargePollToken(

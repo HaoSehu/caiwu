@@ -48,7 +48,7 @@ class ReferralRewardController extends Controller
                 ] : null,
                 'product' => $item->product ? [
                     'id' => $item->product->id,
-                    'name' => $item->product->name,
+                    'custom_display_name' => $item->product->custom_display_name,
                     'display_name' => $this->referralService->resolveRewardProductDisplayName($item),
                 ] : null,
             ])->values()->all(),

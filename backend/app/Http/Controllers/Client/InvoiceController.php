@@ -266,7 +266,7 @@ class InvoiceController extends Controller
             ->where('payment_no', (string) ($result['payment_no'] ?? ''))
             ->where('invoice_id', $invoice->id)
             ->where('user_id', $user->id)
-            ->where('gateway', PaymentGatewayCode::ALIPAY)
+            ->whereGatewayKey(PaymentGatewayCode::ALIPAY)
             ->first();
 
         if (! $payment) {
@@ -309,7 +309,7 @@ class InvoiceController extends Controller
             ->where('payment_no', (string) ($result['payment_no'] ?? ''))
             ->where('invoice_id', $invoice->id)
             ->where('user_id', $user->id)
-            ->where('gateway', PaymentGatewayCode::ALIPAY)
+            ->whereGatewayKey(PaymentGatewayCode::ALIPAY)
             ->first();
 
         if (! $payment) {
@@ -339,7 +339,7 @@ class InvoiceController extends Controller
             ->where('payment_no', (string) $data['payment_no'])
             ->where('invoice_id', $invoice->id)
             ->where('user_id', $user->id)
-            ->where('gateway', PaymentGatewayCode::ALIPAY)
+            ->whereGatewayKey(PaymentGatewayCode::ALIPAY)
             ->first();
 
         if (! $payment) {

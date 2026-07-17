@@ -53,7 +53,7 @@ class ReferralController extends Controller
                     ],
                     'product' => [
                         'id' => $item->product?->id,
-                        'name' => $item->product?->name,
+                        'custom_display_name' => $item->product?->custom_display_name,
                         'display_name' => $this->referralService->resolveRewardProductDisplayName($item),
                     ],
                 ];

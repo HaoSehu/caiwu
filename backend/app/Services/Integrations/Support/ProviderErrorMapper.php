@@ -13,7 +13,6 @@ final class ProviderErrorMapper
         return match (trim($provider)) {
             'alipay', 'alipay_f2f', 'yipay' => $actionLabel.'失败，请稍后重试或联系管理员处理',
             'stay33' => $actionLabel.'失败，请稍后重新发起实名认证',
-            'mofang_finance_api' => $actionLabel.'失败，上游业务接口暂时不可用',
             'hosting_panel_api' => $actionLabel.'失败，主机面板接口暂时不可用',
             default => $actionLabel.'失败，请稍后重试',
         };
