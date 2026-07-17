@@ -1,6 +1,6 @@
 # Caiwu 插件开发指南
 
-本文档说明当前项目的插件目录规范、加载规则、配置规则和真实插件包。插件系统采用“魔方财务风格目录 + Laravel 受控加载”方案：插件上传到固定目录后，由管理员在后台扫描、安装、配置、启用。
+本文档说明当前项目的插件目录规范、加载规则、配置规则和真实插件包。插件系统采用“ZJMF 财务风格目录 + Laravel 受控加载”方案：插件上传到固定目录后，由管理员在后台扫描、安装、配置、启用。
 
 ## 目录映射
 
@@ -16,7 +16,7 @@
 | 上游开通/控制 | `upstream` | `backend/plugins/servers` | `PluginUpstreamDriver` → `UpstreamDriver` |
 | 功能扩展 | `addons` | `backend/plugins/addons` | 受控 addon action、调度任务和 hook |
 
-`domain` 是后台 API 和数据库里使用的领域名；物理目录沿用魔方财务的 `gateways/certification/mail/sms/servers` 风格，并按当前插件体系扩展了 `captcha/addons`。插件入口类不直接实现平台契约，入口类提供 `execute(array $request): array`，平台通过 `PluginRuntimeRegistry` 和领域 adapter 转换为内部契约。
+`domain` 是后台 API 和数据库里使用的领域名；物理目录沿用ZJMF 财务的 `gateways/certification/mail/sms/servers` 风格，并按当前插件体系扩展了 `captcha/addons`。插件入口类不直接实现平台契约，入口类提供 `execute(array $request): array`，平台通过 `PluginRuntimeRegistry` 和领域 adapter 转换为内部契约。
 
 ## 单插件结构
 
@@ -33,7 +33,7 @@ backend/plugins/{domain-directory}/{slug}/
 └── *.png                  # 后台图标，可选
 ```
 
-当前项目不使用魔方财务的 `.tpl` 模板机制，插件 demo 和真实插件都不需要 `template/` 目录。管理页面统一由 `frontend-admin-v3` 的插件管理页渲染。
+当前项目不使用ZJMF 财务的 `.tpl` 模板机制，插件 demo 和真实插件都不需要 `template/` 目录。管理页面统一由 `frontend-admin-v3` 的插件管理页渲染。
 
 加载顺序由 `PluginFileLoader` 控制：
 
@@ -511,7 +511,7 @@ final class ExampleScheduledTask implements ScheduledTask
 - 任务 `key()` 在全局调度注册表中必须唯一，建议使用 `{plugin_slug}-{action}`。
 - 任务通过 `RunHeartbeatTaskJob` 执行，带队列、重试和 `WithoutOverlapping` 互斥；`lockTtlSeconds()` 必须大于任务最坏运行时间。
 - `handle()` 只返回可记录的摘要数组，不返回第三方原始响应、token、密钥或大对象。
-- 需要在任务内部拆分扩展点时，可以让任务调用 `ScheduleHookService::run('plugins.{slug}.{action}', $context)`，再由 `extra.schedule_hooks` 注册监听器。`demo_style` 和 `mofang_finance` 插件已按这个模式实现。
+- 需要在任务内部拆分扩展点时，可以让任务调用 `ScheduleHookService::run('plugins.{slug}.{action}', $context)`，再由 `extra.schedule_hooks` 注册监听器。`demo_style` 和 `zjmf_finance` 插件已按这个模式实现。
 
 ### 调试和验证
 
@@ -609,7 +609,7 @@ php artisan schedule:list
 | 短信发送 | `backend/plugins/sms/aliyun` | 阿里云短信插件 |
 | 短信发送 | `backend/plugins/sms/stay33` | Stay33 短信插件 |
 | 短信发送 | `backend/plugins/sms/demo_sms` | 模拟短信插件 |
-| 上游开通/控制 | `backend/plugins/servers/mofang_finance` | 魔方财务上游插件 |
+| 上游开通/控制 | `backend/plugins/servers/zjmf_finance` | ZJMF 财务上游插件 |
 | 上游开通/控制 | `backend/plugins/servers/kanghostx` | 康乐虚拟主机插件 |
 | 上游开通/控制 | `backend/plugins/servers/demo_servers` | 模拟上游插件 |
 | 功能扩展 | `backend/plugins/addons/demo_style` | Addon、调度任务和 hook 示例插件 |
