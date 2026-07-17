@@ -1670,7 +1670,7 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (12,'2026_03_12_000
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (13,'2026_03_12_000006_create_email_logs_table',1);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (14,'2026_03_13_000007_create_verification_histories_table',1);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (15,'2026_03_13_000008_add_interface_type_to_suppliers_table',1);
-INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (16,'2026_03_13_000009_add_mofang_credentials_to_suppliers_table',1);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (16,'2026_03_13_000009_add_zjmf_credentials_to_suppliers_table',1);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (17,'2026_03_13_000010_enhance_product_catalog_tables',1);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (18,'2026_03_13_000020_add_supplier_mapping_fields_to_products_table',1);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (19,'2026_03_16_000021_add_product_type_to_product_groups_table',1);

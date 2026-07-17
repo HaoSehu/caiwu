@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
  * 并从 orders.invoice_id 回填历史数据。
  *
  * 注意：本迁移**不再**删除 orders 表或 order_id 列，而是保留 orders 作为
- * 内部基础设施（不对外暴露 UI/API），供上游 Mofang 开通链路继续使用。
+ * 内部基础设施（不对外暴露 UI/API），供上游 ZJMF 开通链路继续使用。
  * 用户侧的业务流水全部以 Invoice 为唯一展示口径，符合"抛弃订单概念"的目标。
  */
 return new class extends Migration
