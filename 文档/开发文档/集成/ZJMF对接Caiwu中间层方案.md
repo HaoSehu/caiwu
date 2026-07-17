@@ -1,10 +1,10 @@
 # ZJMF 对接 Caiwu 中间层方案
 
 - 文档性质：实施前设计方案 / 对接规范
-- 适用范围：第三方“魔方财务 / ZJMF”调用 Caiwu 现有财务、产品、订单、账单、支付、服务和内容能力
+- 适用范围：第三方“ZJMF 财务 / ZJMF”调用 Caiwu 现有财务、产品、订单、账单、支付、服务和内容能力
 - 对齐日期：2026-07-07
 - 关联参考：
-  - `文档/开发文档/集成/魔方财务API文档.md`
+  - `文档/开发文档/集成/ZJMF 财务API文档.md`
   - `文档/开发文档/集成/本地对接说明.md`
   - `文档/开发文档/后端/API格式规范.md`
   - `文档/开发文档/后端/API直接重构方案.md`
@@ -26,14 +26,14 @@ https://{FRONTEND_URL}/zjmf/v1/*
 - 对接基准为当前活跃后端接口：`/api/v2/admin/*`、`/api/v2/client/*`、`/api/v2/site/*`。
 - ZJMF 中间层不做盲目通配代理，而是通过显式映射表复用现有 Controller / Service / Resource / 支付回调能力。
 - 商品域必须按当前结构处理：固定业务 `product_type`、一级菜单 `first_product_groups`、二级分类 `second_product_groups`、三级分类 `third_product_groups`、商品 `products` 分层转换，不能再把一级菜单 `code` 当业务产品类型使用。
-- 现有 `backend/plugins/servers/mofang_finance/` 是 Caiwu 调用魔方财务上游的数据面插件；本文方案是魔方财务调用 Caiwu 的入站兼容层，二者方向相反，不能混用 provider key 或职责。
-- `mofang_finance_api` 必须继续保持独立 provider key，禁止别名成 `hosting_panel_api`。
+- 现有 `backend/plugins/servers/zjmf_finance/` 是 Caiwu 调用ZJMF 财务上游的数据面插件；本文方案是ZJMF 财务调用 Caiwu 的入站兼容层，二者方向相反，不能混用 provider key 或职责。
+- `zjmf_finance_api` 必须继续保持独立 provider key，禁止别名成 `hosting_panel_api`。
 
 ## 2. 目标与非目标
 
 ### 2.1 目标
 
-- 为 ZJMF 提供稳定入口 `/zjmf/v1/*`，兼容魔方财务官方 `/v1/*` 调用风格。
+- 为 ZJMF 提供稳定入口 `/zjmf/v1/*`，兼容ZJMF 财务官方 `/v1/*` 调用风格。
 - 复用 Caiwu 当前接口能力，覆盖产品类型、一级菜单、二三级分类、商品、订单、账单、支付、财务流水、服务状态、续费、升降级、工单、内容等核心域。
 - 提供可插拔开关，停用后不影响现有 `/api/v2/*`、前端、支付回调、调度和上游插件运行。
 - 在边界层完成请求参数转换、鉴权签名转换、响应格式转换、错误码转换和审计日志。
@@ -45,7 +45,7 @@ https://{FRONTEND_URL}/zjmf/v1/*
 - 不重写现有财务、订单、支付、服务开通业务。
 - 不开放任意管理端能力给 ZJMF；管理型接口必须经过 scope 白名单。
 - 不为了 ZJMF 修改现有 `/api/v2/*` 响应契约。
-- 不把当前上游魔方插件改造成入站网关。
+- 不把当前上游ZJMF插件改造成入站网关。
 - 不新增历史别名或长期代理入口；对外只承诺 `/zjmf/v1/*`。
 
 ## 3. 当前接口体系审查
@@ -98,7 +98,7 @@ Caiwu 当前标准响应：
 }
 ```
 
-ZJMF / 魔方财务参考接口更偏向：
+ZJMF / ZJMF 财务参考接口更偏向：
 
 - `status` / 状态码表达成功失败。
 - 列表可能使用 `page`、`limit`、`keywords`、`orderby` 等字段。
@@ -123,7 +123,7 @@ Caiwu：
 - 回调验签失败可使用 `40001` 并覆盖 HTTP 状态。
 - 第三方原始错误只能进入脱敏日志，不能直接返回给调用方。
 
-ZJMF 中间层对外返回建议兼容魔方财务习惯：
+ZJMF 中间层对外返回建议兼容ZJMF 财务习惯：
 
 ```json
 {
@@ -137,7 +137,7 @@ ZJMF 中间层对外返回建议兼容魔方财务习惯：
 
 ### 3.5 商品结构基准
 
-当前商品结构已经拆分“业务产品类型”和“运营菜单分类”。ZJMF Bridge 对外兼容魔方财务字段时，内部必须按以下模型取数和转换：
+当前商品结构已经拆分“业务产品类型”和“运营菜单分类”。ZJMF Bridge 对外兼容ZJMF 财务字段时，内部必须按以下模型取数和转换：
 
 ```text
 产品类型 product_type
@@ -187,7 +187,7 @@ Bridge 商品域取值规则：
 
 ```mermaid
 flowchart LR
-    ZJMF[魔方财务 / ZJMF] --> CDN[前端域名 / 网关]
+    ZJMF[ZJMF 财务 / ZJMF] --> CDN[前端域名 / 网关]
     CDN -->|/zjmf/v1/*| Bridge[ZjmfBridge 路由层]
     Bridge --> Enabled[启停开关]
     Enabled --> Auth[JWT / HMAC / IP 白名单]
@@ -205,7 +205,7 @@ flowchart LR
 - `ZjmfBridge` 是入站兼容层，只处理协议适配，不承载业务规则。
 - 业务处理继续落在现有 Service，例如财务、订单、支付、服务控制台、工单等服务。
 - 支付回调继续走已有签名中间件和 `PaymentService` 幂等逻辑。
-- 现有上游插件 `backend/plugins/servers/mofang_finance/` 不参与入站路由注册。
+- 现有上游插件 `backend/plugins/servers/zjmf_finance/` 不参与入站路由注册。
 
 ## 5. 建议文件布局
 
@@ -322,7 +322,7 @@ ZJMF
   -> GET /zjmf/v1/user
   -> VerifyZjmfSignature / ResolveZjmfActor
   -> 调用现有用户资料、余额、认证状态服务
-  -> UserMapper 转为魔方字段
+  -> UserMapper 转为ZJMF字段
 ```
 
 ### 7.2 账单支付链路
@@ -530,7 +530,7 @@ ZJMF
 | Caiwu | ZJMF | 说明 |
 | --- | --- | --- |
 | ISO datetime / Carbon | Unix timestamp | 输出秒级时间戳 |
-| null | `0` 或空字符串 | 按魔方字段语义决定 |
+| null | `0` 或空字符串 | 按ZJMF字段语义决定 |
 
 ### 9.4 状态映射
 
@@ -598,7 +598,7 @@ ZJMF
 | `third_product_group_id/name` | `group.id/name` | 有三级分类时作为有效商品分组 |
 | `effective_product_group_id` / `effective_product_group_level` | `group.id` + `group.custom_fields.level` | 防止二级和三级 ID 混淆 |
 | `pricing` / `pricing_entries` | `cycle` / `product_price` / `setup_fee` | 周期和金额按 9.2 金额规则输出 |
-| `config_options` | `custom_fields` / `config_options` | 按魔方字段兼容输出，同时保留 Caiwu 配置项 ID 用于报价 |
+| `config_options` | `custom_fields` / `config_options` | 按ZJMF字段兼容输出，同时保留 Caiwu 配置项 ID 用于报价 |
 
 `/hosts/cates` 建议输出保持 ZJMF 必需字段 `id/name`，并在可扩展字段中补充：
 
@@ -619,13 +619,13 @@ ZJMF
 }
 ```
 
-如果对接方要求严格的魔方原始结构，不接受扩展字段，则把 `code`、`product_type`、`product_type_label`、`level` 放入 `custom_fields`，但内部映射仍按上述规则执行。
+如果对接方要求严格的ZJMF原始结构，不接受扩展字段，则把 `code`、`product_type`、`product_type_label`、`level` 放入 `custom_fields`，但内部映射仍按上述规则执行。
 
 ## 10. 鉴权与签名策略
 
 ### 10.1 用户态 JWT
 
-兼容魔方财务头部：
+兼容ZJMF 财务头部：
 
 ```http
 authorization: JWT {token}
@@ -952,7 +952,7 @@ php artisan route:clear
 效果：
 
 - `/zjmf/v1/*` 立即不可用。
-- `/api/v2/*`、前端、现有支付回调、上游魔方插件不受影响。
+- `/api/v2/*`、前端、现有支付回调、上游ZJMF插件不受影响。
 
 ### 14.2 网关回滚
 
@@ -1086,7 +1086,7 @@ ZJMF_BRIDGE_WRITE_ENABLED=false
 以下事项需要和业务 / 对接方确认后才能进入开发：
 
 - ZJMF 调用方最终使用用户态 JWT、系统态 HMAC，还是二者并存。
-- 魔方财务要求的成功响应是否必须为 `status=200`，还是可接受 Caiwu 标准 `code=0`。
+- ZJMF 财务要求的成功响应是否必须为 `status=200`，还是可接受 Caiwu 标准 `code=0`。
 - 企业实名认证是否必须支持；当前用户实名能力需核对是否覆盖企业认证。
 - 购物车是否必须持久化；如非必须，建议用 Redis 短期缓存。
 - 账单合并、信用额、资源下载、API 日志等无等价接口是否需要首期开放。

@@ -161,7 +161,7 @@
 - 复用现有领域 Service。
 - 如现有 Service 返回字段过宽，新增查询 DTO 或投影方法，不修改旧接口依赖的返回。
 - 财务、订单、支付、退款、余额相关流程必须保留事务、幂等、审计。
-- 上游 provider key 保持真实值，禁止把 `mofang_finance_api` 别名为 `hosting_panel_api`。
+- 上游 provider key 保持真实值，禁止把 `zjmf_finance_api` 别名为 `hosting_panel_api`。
 
 ### 5.5 Resource / DTO 层
 
@@ -654,6 +654,6 @@ php vendor\bin\pint --test
 - 禁止 Controller 直接调用第三方 HTTP。
 - 禁止返回第三方原始错误给前端。
 - 禁止物理删除 Payment 记录。
-- 禁止把 `mofang_finance_api` 归一化或别名成 `hosting_panel_api`。
+- 禁止把 `zjmf_finance_api` 归一化或别名成 `hosting_panel_api`。
 - 禁止把图片、二维码、附件、视频用 base64 放进 JSON。
 - 禁止未测试就进入下一组接口。

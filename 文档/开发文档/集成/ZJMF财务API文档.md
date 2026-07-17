@@ -1,6 +1,6 @@
 # jzmf API 接口文档
 
-- 文档性质：**魔方财务官方接口全量参考**，非本项目自产内容
+- 文档性质：**ZJMF 财务官方接口全量参考**，非本项目自产内容
 - 读者：后端对接开发、排查上游接口行为时查阅
 - 当前运行时入口：`backend/app/Services/Upstream/Drivers/HostingPanelApi/HostingPanelApiTransport.php`
 - 本项目实际调用的子集：见 `文档/开发文档/集成/本地对接说明.md` 的「对接的主机面板 OpenAPI 清单」章节
@@ -880,7 +880,7 @@
 | ├─ product | array[] |  | - | 商品列表信息 |  |
 | ├─ id | int |  | - | 商品ID | 1 |
 | ├─ type | string |  | - | 商品类型 | dcimcloud |
-| ├─ name | string |  | - | 商品名称 | 魔方云 |
+| ├─ name | string |  | - | 商品名称 | ZJMF 云 |
 | ├─ description | string |  | - | 商品描述 | 这是一个商品描述 |
 | ├─ billingcycle | string |  | - | 商品周期 | onetime |
 | ├─ product_price | price |  | - | 商品价格 | 100.00 |
@@ -1691,10 +1691,10 @@
 | ├─ prefix | string | 是 | - | 货币前缀 | ￥ |
 | ├─ suffix | string | 是 | - | 货币后缀 | 元 |
 | └─ default | int | 是 | - | 是否默认货币:1是,0否 | 1 |
-| hosts | array[] | 是 |  | 产品信息 | { "productid": 1, "dedicatedip": "192.168.1.71", "uid": 7, "id": 142, "name": "魔方云主机", "nextduedate": 1638786314, "billingcycle": "monthly", "amount": "23.40", "flag": 1, "groupid": 1, "promoid": 0, "groupn": { "id": 1, "groupname": "云服务器", "fa_icon": "el-icon-menu", "order": 0 }, "saleproducts": 0, "nextduedate_renew": 1641464714, "allow_billingcycle": [ { "setup_fee": "1.00", "price": "60.00", "billingcycle": "hour", "billingcycle_zh": "小时", "amount": "54.00", "saleproducts": "36.00", "flags": 1 }, { "setup_fee": "10.00", "price": "20.00", "billingcycle": "day", "billingcycle_zh": "天", "amount": "12.00", "saleproducts": "8.00", "flags": 1 }, { "setup_fee": "10.00", "price": "20.00", "billingcycle": "monthly", "billingcycle_zh": "月付", "amount": "23.40", "saleproducts": 0 }, { "setup_fee": "20.00", "price": "40.00", "billingcycle": "quarterly", "billingcycle_zh": "季付", "amount": "36.00", "saleproducts": "24.00" }, { "setup_fee": "30.00", "price": "60.00", "billingcycle": "semiannually", "billingcycle_zh": "半年付", "amount": "36.00", "saleproducts": "24.00" } ], "flags": 1 } |
+| hosts | array[] | 是 |  | 产品信息 | { "productid": 1, "dedicatedip": "192.168.1.71", "uid": 7, "id": 142, "name": "ZJMF 云主机", "nextduedate": 1638786314, "billingcycle": "monthly", "amount": "23.40", "flag": 1, "groupid": 1, "promoid": 0, "groupn": { "id": 1, "groupname": "云服务器", "fa_icon": "el-icon-menu", "order": 0 }, "saleproducts": 0, "nextduedate_renew": 1641464714, "allow_billingcycle": [ { "setup_fee": "1.00", "price": "60.00", "billingcycle": "hour", "billingcycle_zh": "小时", "amount": "54.00", "saleproducts": "36.00", "flags": 1 }, { "setup_fee": "10.00", "price": "20.00", "billingcycle": "day", "billingcycle_zh": "天", "amount": "12.00", "saleproducts": "8.00", "flags": 1 }, { "setup_fee": "10.00", "price": "20.00", "billingcycle": "monthly", "billingcycle_zh": "月付", "amount": "23.40", "saleproducts": 0 }, { "setup_fee": "20.00", "price": "40.00", "billingcycle": "quarterly", "billingcycle_zh": "季付", "amount": "36.00", "saleproducts": "24.00" }, { "setup_fee": "30.00", "price": "60.00", "billingcycle": "semiannually", "billingcycle_zh": "半年付", "amount": "36.00", "saleproducts": "24.00" } ], "flags": 1 } |
 | ├─ productid | int | 是 |  | 商品ID | 1 |
 | ├─ dedicatedip | string | 是 |  | 独立IP | 192.168.1.71 |
-| ├─ name | string | 是 |  | 商品名称 | 魔方云主机 |
+| ├─ name | string | 是 |  | 商品名称 | ZJMF 云主机 |
 | ├─ nextduedate | int | 是 |  | 到期时间时间戳 | 1638786314 |
 | ├─ billingcycle | string | 是 |  | 周期 | monthly |
 | ├─ nextduedate | int | 是 |  | 到期时间时间戳 | 1638786314 |
@@ -2016,13 +2016,13 @@
 | ├─ prefix | string | 是 | - | 货币前缀 | ￥ |
 | └─ suffix | string | 是 | - | 货币后缀 | 元 |
 | old_host | array[] | 是 |  | 原产品信息 | { "host": "升降级8001", "domain": "ser557409352685", "description": "CPU:2*e5-2450L\n内存:16G\n硬盘:250G SSD\nIP数量:3\n1:1", "pid": 379, "uid": 7, "flag": 1 } |
-| ├─ host | string | 是 |  | 产品名称 | 魔方云 |
+| ├─ host | string | 是 |  | 产品名称 | ZJMF 云 |
 | ├─ domain | string | 是 |  | 主机名 | ser557409352685 |
 | ├─ description | string | 是 |  | 描述 | CPU:2*e5-2450L\n内存:16G\n硬盘:250G SSD\nIP数量:3\n1:1 |
 | └─ pid | int | 是 |  | 商品ID | 379 |
-| host | array[] | 是 |  | 新产品信息 | { "pid": 1, "host": "魔方云主机", "description": "a撒旦法撒旦法哈开始大复活卡a收待发送联动jafdasdf", "cycle": [ { "setup_fee": "1.00", "price": 42.6, "billingcycle": "hour", "billingcycle_zh": "小时", "amount": "0.00", "saleproducts": 0 }, { "setup_fee": "10.00", "price": 18, "billingcycle": "day", "billingcycle_zh": "天", "amount": "0.00", "saleproducts": 0 }, { "setup_fee": "20.00", "price": 33.6, "billingcycle": "monthly", "billingcycle_zh": "月付", "amount": "0.00", "saleproducts": 0 }, { "setup_fee": "40.00", "price": 60, "billingcycle": "quarterly", "billingcycle_zh": "季付", "amount": "0.00", "saleproducts": 0 }, { "setup_fee": "30.00", "price": 54, "billingcycle": "semiannually", "billingcycle_zh": "半年付", "amount": "0.00", "saleproducts": 0 } ] } |
+| host | array[] | 是 |  | 新产品信息 | { "pid": 1, "host": "ZJMF 云主机", "description": "a撒旦法撒旦法哈开始大复活卡a收待发送联动jafdasdf", "cycle": [ { "setup_fee": "1.00", "price": 42.6, "billingcycle": "hour", "billingcycle_zh": "小时", "amount": "0.00", "saleproducts": 0 }, { "setup_fee": "10.00", "price": 18, "billingcycle": "day", "billingcycle_zh": "天", "amount": "0.00", "saleproducts": 0 }, { "setup_fee": "20.00", "price": 33.6, "billingcycle": "monthly", "billingcycle_zh": "月付", "amount": "0.00", "saleproducts": 0 }, { "setup_fee": "40.00", "price": 60, "billingcycle": "quarterly", "billingcycle_zh": "季付", "amount": "0.00", "saleproducts": 0 }, { "setup_fee": "30.00", "price": 54, "billingcycle": "semiannually", "billingcycle_zh": "半年付", "amount": "0.00", "saleproducts": 0 } ] } |
 | ├─ pid | int | 是 |  | 商品ID | 1 |
-| ├─ host | string | 是 |  | 商品名称 | 魔方云主机 |
+| ├─ host | string | 是 |  | 商品名称 | ZJMF 云主机 |
 | ├─ description | string | 是 |  | 商品描述 | CPU:2*e5-2450L\n内存:16G\n硬盘:250G SSD\nIP数量:3\n1:1 |
 | ├─ cycle | array[] | 是 |  | 商品可用周期 | { "setup_fee": "1.00", "price": 42.6, "billingcycle": "hour", "billingcycle_zh": "小时", "amount": "0.00", "saleproducts": 0 } |
 | ├─ setup_fee | price | 是 |  | 商品当前周期初装费 | 20.00 |
@@ -2061,7 +2061,7 @@
 | ├─ code | string |  | - | 货币代码 | CNY |
 | ├─ prefix | string |  | - | 货币前缀 | ￥ |
 | └─ suffix | string |  | - | 货币后缀 | 元 |
-| name | string |  |  | 新商品名称 | 魔方云主机 |
+| name | string |  |  | 新商品名称 | ZJMF 云主机 |
 | saleproducts | price |  |  | 折扣金额 | 14.40 |
 | amount_total | price |  |  | 总价 | -700.79 |
 | promo_code | string |  |  | 优惠码 | rlA6e5F0 |
