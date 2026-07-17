@@ -42,7 +42,7 @@ class ServiceConsolePayloadSnapshotTest extends TestCase
     {
         parent::setUp();
 
-        $this->activateIntegrationPluginForTest('upstream', 'mofang_finance');
+        $this->activateIntegrationPluginForTest('upstream', 'zjmf_finance');
         Cache::flush();
     }
 
@@ -61,7 +61,7 @@ class ServiceConsolePayloadSnapshotTest extends TestCase
             ])
         );
 
-        $this->assertSame(ProviderKey::MOFANG_FINANCE_API, $detail['upstream']['provider_key']);
+        $this->assertSame(ProviderKey::ZJMF_FINANCE_API, $detail['upstream']['provider_key']);
         $this->assertSame((int) $fixture['supplier']->id, (int) $detail['upstream']['supplier_id']);
         $this->assertSame(8001, (int) $detail['upstream']['upstream_product_id']);
         $this->assertSame(88001, (int) $detail['upstream']['host_id']);
@@ -216,7 +216,7 @@ class ServiceConsolePayloadSnapshotTest extends TestCase
         $suffix = bin2hex(random_bytes(4));
         $pluginId = (int) DB::table('integration_plugins')
             ->where('domain', 'upstream')
-            ->where('plugin_key', ProviderKey::MOFANG_FINANCE_API)
+            ->where('plugin_key', ProviderKey::ZJMF_FINANCE_API)
             ->value('id');
 
         $this->assertGreaterThan(0, $pluginId);
@@ -311,7 +311,7 @@ class ServiceConsolePayloadSnapshotTest extends TestCase
         $supplierBindingId = DB::table('supplier_plugin_bindings')->insertGetId([
             'supplier_id' => (int) $supplier->id,
             'plugin_id' => $pluginId,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'environment' => 'production',
             'status' => 1,
             'priority' => 0,
@@ -325,7 +325,7 @@ class ServiceConsolePayloadSnapshotTest extends TestCase
             'product_id' => (int) $product->id,
             'supplier_plugin_binding_id' => $supplierBindingId,
             'plugin_id' => $pluginId,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'upstream_product_id' => '8001',
             'auto_setup' => 1,
             'status' => 1,
@@ -338,7 +338,7 @@ class ServiceConsolePayloadSnapshotTest extends TestCase
             'product_upstream_binding_id' => $productBindingId,
             'supplier_plugin_binding_id' => $supplierBindingId,
             'plugin_id' => $pluginId,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'upstream_service_id' => '88001',
             'runtime_snapshot_json' => json_encode(['bw_usage' => 256, 'bw_limit' => 1024], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             'connection_snapshot_json' => json_encode(['hostname' => 'snapshot-host.example.test'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
@@ -351,7 +351,7 @@ class ServiceConsolePayloadSnapshotTest extends TestCase
             'service_id' => (int) $service->id,
             'service_upstream_binding_id' => $serviceBindingId,
             'plugin_id' => $pluginId,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'status_key' => 'running',
             'status_text' => '运行中',
             'resource_json' => json_encode(['os' => 'linux', 'bw_usage' => 256, 'bw_limit' => 1024], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
@@ -366,7 +366,7 @@ class ServiceConsolePayloadSnapshotTest extends TestCase
             'service_id' => (int) $service->id,
             'service_upstream_binding_id' => $serviceBindingId,
             'plugin_id' => $pluginId,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'connection_type' => 'default',
             'hostname' => 'snapshot-host.example.test',
             'ip_address' => '203.0.113.80',
@@ -418,12 +418,12 @@ class ServiceConsolePayloadSnapshotTest extends TestCase
 
             public function key(): string
             {
-                return ProviderKey::MOFANG_FINANCE_API;
+                return ProviderKey::ZJMF_FINANCE_API;
             }
 
             public function label(): string
             {
-                return 'Mofang Snapshot Driver';
+                return 'Zjmf Snapshot Driver';
             }
 
             public function capabilities(): array

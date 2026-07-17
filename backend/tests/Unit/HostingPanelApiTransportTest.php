@@ -47,7 +47,7 @@ class HostingPanelApiTransportTest extends TestCase
         $this->assertSame('https://panel.example.test/v1/login_api?account=demo', $url);
     }
 
-    public function test_generic_hosting_panel_driver_does_not_claim_mofang_cloud_config_template_types(): void
+    public function test_generic_hosting_panel_driver_does_not_claim_zjmf_cloud_config_template_types(): void
     {
         $transport = new HostingPanelApiTransport;
 

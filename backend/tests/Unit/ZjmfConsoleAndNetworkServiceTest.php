@@ -8,21 +8,21 @@ use App\Models\Supplier;
 use App\Services\Integrations\Plugins\PluginFileLoader;
 use App\Services\Integrations\Plugins\PluginScanner;
 use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiTransport;
-use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangAuthManager;
-use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangConsoleService;
-use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangFinanceTransport;
-use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangNetworkService;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfAuthManager;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfConsoleService;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfFinanceTransport;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfNetworkService;
 use Mockery;
 use Tests\TestCase;
 
-class MofangConsoleAndNetworkServiceTest extends TestCase
+class ZjmfConsoleAndNetworkServiceTest extends TestCase
 {
     protected function setUp(): void
     {
         parent::setUp();
 
         app(PluginFileLoader::class)->ensureLoaded(
-            app(PluginScanner::class)->requireManifest('upstream', 'mofang_finance')
+            app(PluginScanner::class)->requireManifest('upstream', 'zjmf_finance')
         );
     }
 
@@ -44,7 +44,7 @@ class MofangConsoleAndNetworkServiceTest extends TestCase
             )
             ->andReturn(['status' => 200, 'data' => ['url' => 'wss://vnc.example/ws']]);
 
-        $service = new MofangConsoleService($this->makeTransport($hostingTransport));
+        $service = new ZjmfConsoleService($this->makeTransport($hostingTransport));
 
         $response = $service->getVncUrl($supplier, 123, 'jwt-token');
 
@@ -77,8 +77,8 @@ class MofangConsoleAndNetworkServiceTest extends TestCase
             ->andReturn(['status' => 200, 'data' => ['host' => ['bwlimit' => 2048]]]);
 
         $transport = $this->makeTransport($hostingTransport);
-        $consoleService = new MofangConsoleService($transport);
-        $networkService = new MofangNetworkService($transport, $consoleService);
+        $consoleService = new ZjmfConsoleService($transport);
+        $networkService = new ZjmfNetworkService($transport, $consoleService);
 
         $result = $networkService->purchaseTrafficPackage(
             $supplier,
@@ -125,8 +125,8 @@ class MofangConsoleAndNetworkServiceTest extends TestCase
             ->andReturn(['status' => 200, 'data' => ['host' => ['productid' => 88]]]);
 
         $transport = $this->makeTransport($hostingTransport);
-        $consoleService = new MofangConsoleService($transport);
-        $networkService = new MofangNetworkService($transport, $consoleService);
+        $consoleService = new ZjmfConsoleService($transport);
+        $networkService = new ZjmfNetworkService($transport, $consoleService);
 
         $result = $networkService->purchaseHostUpgrade($supplier, 77, 88, 'monthly', 'PROMO10', 'jwt-token');
 
@@ -134,9 +134,9 @@ class MofangConsoleAndNetworkServiceTest extends TestCase
         $this->assertSame(88, $result['host_detail']['productid']);
     }
 
-    private function makeTransport(HostingPanelApiTransport $hostingTransport): MofangFinanceTransport
+    private function makeTransport(HostingPanelApiTransport $hostingTransport): ZjmfFinanceTransport
     {
-        return new MofangFinanceTransport($hostingTransport, new MofangAuthManager($hostingTransport));
+        return new ZjmfFinanceTransport($hostingTransport, new ZjmfAuthManager($hostingTransport));
     }
 
     private function makeSupplier(): Supplier
@@ -145,7 +145,7 @@ class MofangConsoleAndNetworkServiceTest extends TestCase
         $supplier->forceFill([
             'id' => 10,
             'api_url' => 'https://upstream.example/api',
-            'interface_type' => 'mofang_finance_api',
+            'interface_type' => 'zjmf_finance_api',
         ]);
 
         return $supplier;

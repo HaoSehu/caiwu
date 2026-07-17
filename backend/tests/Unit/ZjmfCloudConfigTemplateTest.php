@@ -8,24 +8,24 @@ use App\Models\Supplier;
 use App\Services\Integrations\Plugins\PluginFileLoader;
 use App\Services\Integrations\Plugins\PluginScanner;
 use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiTransport;
-use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangCloudConfigTemplate;
-use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangFinanceAdapter;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfCloudConfigTemplate;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfFinanceAdapter;
 use Tests\TestCase;
 
-class MofangCloudConfigTemplateTest extends TestCase
+class ZjmfCloudConfigTemplateTest extends TestCase
 {
     protected function setUp(): void
     {
         parent::setUp();
 
         app(PluginFileLoader::class)->ensureLoaded(
-            app(PluginScanner::class)->requireManifest('upstream', 'mofang_finance')
+            app(PluginScanner::class)->requireManifest('upstream', 'zjmf_finance')
         );
     }
 
     public function test_it_builds_cloud_config_template_from_product_description(): void
     {
-        $template = new MofangCloudConfigTemplate;
+        $template = new ZjmfCloudConfigTemplate;
 
         $configOptions = $template->build([
             'name' => '香港 CN2 云服务器',
@@ -35,7 +35,7 @@ class MofangCloudConfigTemplateTest extends TestCase
 
         $optionsByField = collect($configOptions)->keyBy('field');
 
-        $this->assertSame('mofang_api', $optionsByField->get('cpu')['source']);
+        $this->assertSame('zjmf_api', $optionsByField->get('cpu')['source']);
         $this->assertSame('2|2 核心', $optionsByField->get('cpu')['parameter']);
         $this->assertSame('4096|4G', $optionsByField->get('memory')['parameter']);
         $this->assertSame('20|20Mbps', $optionsByField->get('bw')['parameter']);
@@ -45,7 +45,7 @@ class MofangCloudConfigTemplateTest extends TestCase
 
     public function test_it_exposes_supported_cloud_product_types(): void
     {
-        $template = new MofangCloudConfigTemplate;
+        $template = new ZjmfCloudConfigTemplate;
 
         $this->assertTrue($template->supports(['type' => 'dcimcloud']));
         $this->assertTrue($template->supports(['type' => 'cloud']));
@@ -53,7 +53,7 @@ class MofangCloudConfigTemplateTest extends TestCase
         $this->assertFalse($template->supports(['type' => 'server']));
     }
 
-    public function test_mofang_adapter_falls_back_to_cloud_template_when_remote_options_are_empty(): void
+    public function test_zjmf_adapter_falls_back_to_cloud_template_when_remote_options_are_empty(): void
     {
         $supplier = $this->makeSupplier();
         $transport = $this->makeCatalogTransport([
@@ -65,7 +65,7 @@ class MofangCloudConfigTemplateTest extends TestCase
             ],
         ]);
 
-        $template = (new MofangFinanceAdapter($transport, new MofangCloudConfigTemplate))
+        $template = (new ZjmfFinanceAdapter($transport, new ZjmfCloudConfigTemplate))
             ->getProductConfigTemplate($supplier, 1001);
 
         $optionsByField = collect($template['config_options'])->keyBy('field');
@@ -75,7 +75,7 @@ class MofangCloudConfigTemplateTest extends TestCase
         $this->assertSame(['cpu', 'memory', 'bw'], $template['auto_filled_fields']);
     }
 
-    public function test_mofang_adapter_labels_mofang_cloud_product_types(): void
+    public function test_zjmf_adapter_labels_zjmf_cloud_product_types(): void
     {
         $supplier = $this->makeSupplier();
         $transport = $this->makeCatalogTransport([
@@ -88,13 +88,13 @@ class MofangCloudConfigTemplateTest extends TestCase
             ],
         ]);
 
-        $template = (new MofangFinanceAdapter($transport, new MofangCloudConfigTemplate))
+        $template = (new ZjmfFinanceAdapter($transport, new ZjmfCloudConfigTemplate))
             ->getProductConfigTemplate($supplier, 1001);
 
         $this->assertSame('云服务器', $template['product']['type_label']);
     }
 
-    public function test_mofang_adapter_labels_mofang_cloud_product_types_in_catalog(): void
+    public function test_zjmf_adapter_labels_zjmf_cloud_product_types_in_catalog(): void
     {
         $supplier = $this->makeSupplier();
         $transport = $this->makeCatalogTransport([
@@ -106,7 +106,7 @@ class MofangCloudConfigTemplateTest extends TestCase
             ],
         ]);
 
-        $catalog = (new MofangFinanceAdapter($transport, new MofangCloudConfigTemplate))
+        $catalog = (new ZjmfFinanceAdapter($transport, new ZjmfCloudConfigTemplate))
             ->getProductCatalog($supplier);
 
         $this->assertSame('云服务器', $catalog['products'][0]['type_label']);
@@ -117,8 +117,8 @@ class MofangCloudConfigTemplateTest extends TestCase
     {
         return (new Supplier)->forceFill([
             'id' => 1,
-            'interface_type' => 'mofang_finance_api',
-            'api_url' => 'https://mofang.example.test',
+            'interface_type' => 'zjmf_finance_api',
+            'api_url' => 'https://zjmf.example.test',
             'api_username' => 'demo',
             'api_key' => 'secret',
         ]);
@@ -140,7 +140,7 @@ class MofangCloudConfigTemplateTest extends TestCase
                 array $query = []
             ): array {
                 if ($uri === '/v1/login_api') {
-                    return ['status' => 200, 'jwt' => 'mofang-jwt'];
+                    return ['status' => 200, 'jwt' => 'zjmf-jwt'];
                 }
 
                 if ($uri === '/v1/products') {

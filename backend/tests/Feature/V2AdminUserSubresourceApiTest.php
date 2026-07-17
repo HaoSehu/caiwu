@@ -364,7 +364,7 @@ class V2AdminUserSubresourceApiTest extends TestCase
             'auto_renew' => 1,
             'product' => ['id' => 1, 'name' => 'VPS', 'display_name' => 'VPS Pro'],
             'invoice' => ['id' => 99, 'invoice_no' => 'INV321'],
-            'upstream' => ['provider_key' => 'mofang_finance_api', 'host_id' => 456, 'status' => 'Active'],
+            'upstream' => ['provider_key' => 'zjmf_finance_api', 'host_id' => 456, 'status' => 'Active'],
             'runtime' => ['power_state' => 'running', 'power_label' => '运行中'],
             'connection' => ['password' => 'must-not-leak'],
             'actions' => ['refresh' => true, 'available' => ['power:reboot']],

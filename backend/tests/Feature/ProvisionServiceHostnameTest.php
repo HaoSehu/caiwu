@@ -36,9 +36,9 @@ class ProvisionServiceHostnameTest extends TestCase
         parent::setUp();
 
         app(PluginFileLoader::class)->ensureLoaded(
-            app(PluginScanner::class)->requireManifest('upstream', 'mofang_finance')
+            app(PluginScanner::class)->requireManifest('upstream', 'zjmf_finance')
         );
-        $this->activateIntegrationPluginForTest('upstream', 'mofang_finance');
+        $this->activateIntegrationPluginForTest('upstream', 'zjmf_finance');
 
         Cache::flush();
     }
@@ -179,9 +179,9 @@ class ProvisionServiceHostnameTest extends TestCase
     }
 
     #[Test]
-    public function it_preserves_mofang_provider_key_after_successful_upstream_provisioning(): void
+    public function it_preserves_zjmf_provider_key_after_successful_upstream_provisioning(): void
     {
-        $this->activateIntegrationPluginForTest('upstream', 'mofang_finance');
+        $this->activateIntegrationPluginForTest('upstream', 'zjmf_finance');
 
         $transport = new class extends HostingPanelApiTransport
         {
@@ -237,7 +237,7 @@ class ProvisionServiceHostnameTest extends TestCase
                                 'domain' => 'srv7788.example.test',
                                 'domainstatus' => 'Active',
                                 'product_id' => 9001,
-                                'product_name' => '魔方云服务器',
+                                'product_name' => 'ZJMF云服务器',
                             ],
                         ],
                     ];
@@ -296,7 +296,7 @@ class ProvisionServiceHostnameTest extends TestCase
                                 'domain' => 'srv7788.example.test',
                                 'domainstatus' => 'Active',
                                 'product_id' => 9001,
-                                'product_name' => '魔方云服务器',
+                                'product_name' => 'ZJMF云服务器',
                             ],
                         ],
                     ];
@@ -328,22 +328,22 @@ class ProvisionServiceHostnameTest extends TestCase
             'status' => OrderStatus::PAID,
         ]);
         $order->product->forceFill([
-            'provision_module' => ProviderKey::MOFANG_FINANCE_API,
+            'provision_module' => ProviderKey::ZJMF_FINANCE_API,
         ]);
         $order->product->supplier->forceFill([
-            'interface_type' => ProviderKey::MOFANG_FINANCE_API,
+            'interface_type' => ProviderKey::ZJMF_FINANCE_API,
         ]);
 
         $createdService = $service->processPaidOrder($order);
 
-        $this->assertSame(ProviderKey::MOFANG_FINANCE_API, $createdService->provision_data['provider_key'] ?? null);
+        $this->assertSame(ProviderKey::ZJMF_FINANCE_API, $createdService->provision_data['provider_key'] ?? null);
         $this->assertSame(7788, $createdService->provision_data['upstream_host_id'] ?? null);
         $this->assertSame(9001, $createdService->provision_data['upstream_product_id'] ?? null);
         $this->assertSame(ServiceStatus::ACTIVE, (int) $createdService->status);
 
         $binding = DB::table('service_upstream_bindings')
             ->where('service_id', (int) $createdService->id)
-            ->where('provider_key', ProviderKey::MOFANG_FINANCE_API)
+            ->where('provider_key', ProviderKey::ZJMF_FINANCE_API)
             ->where('upstream_service_id', '7788')
             ->first();
 
@@ -351,20 +351,20 @@ class ProvisionServiceHostnameTest extends TestCase
         $this->assertDatabaseHas('service_runtime_snapshots', [
             'service_id' => (int) $createdService->id,
             'service_upstream_binding_id' => (int) $binding->id,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'status_key' => 'Active',
         ]);
         $this->assertDatabaseHas('service_connection_snapshots', [
             'service_id' => (int) $createdService->id,
             'service_upstream_binding_id' => (int) $binding->id,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'connection_type' => 'default',
             'hostname' => 'srv7788',
         ]);
         $this->assertDatabaseHas('service_provision_attempts', [
             'service_id' => (int) $createdService->id,
             'service_upstream_binding_id' => (int) $binding->id,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'action' => 'provision',
             'attempt_status' => 'success',
         ]);
@@ -743,7 +743,7 @@ class ProvisionServiceHostnameTest extends TestCase
     #[Test]
     public function process_paid_order_recognizes_existing_upstream_binding_without_legacy_provision_data_host(): void
     {
-        $this->activateIntegrationPluginForTest('upstream', 'mofang_finance');
+        $this->activateIntegrationPluginForTest('upstream', 'zjmf_finance');
 
         $provisionService = new ProvisionService(
             $this->makeProviderResolver(new class extends HostingPanelApiTransport
@@ -773,10 +773,10 @@ class ProvisionServiceHostnameTest extends TestCase
         ]);
         $order->exists = true;
         $order->product->forceFill([
-            'provision_module' => ProviderKey::MOFANG_FINANCE_API,
+            'provision_module' => ProviderKey::ZJMF_FINANCE_API,
         ]);
         $order->product->supplier->forceFill([
-            'interface_type' => ProviderKey::MOFANG_FINANCE_API,
+            'interface_type' => ProviderKey::ZJMF_FINANCE_API,
         ]);
 
         $service = Service::query()->create([
@@ -790,21 +790,21 @@ class ProvisionServiceHostnameTest extends TestCase
             'status' => ServiceStatus::ACTIVE,
             'provision_data' => [
                 'source_type' => 'upstream',
-                'provider' => ProviderKey::MOFANG_FINANCE_API,
+                'provider' => ProviderKey::ZJMF_FINANCE_API,
             ],
         ]);
         $order->setRelation('service', $service);
 
         $pluginId = (int) DB::table('integration_plugins')
             ->where('domain', 'upstream')
-            ->where('plugin_key', ProviderKey::MOFANG_FINANCE_API)
+            ->where('plugin_key', ProviderKey::ZJMF_FINANCE_API)
             ->value('id');
         $this->assertGreaterThan(0, $pluginId);
 
         DB::table('service_upstream_bindings')->insert([
             'service_id' => (int) $service->id,
             'plugin_id' => $pluginId,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'upstream_service_id' => '98765',
             'status_snapshot' => 'Active',
             'last_synced_at' => now(),
@@ -830,9 +830,9 @@ class ProvisionServiceHostnameTest extends TestCase
         $suffix = bin2hex(random_bytes(4));
 
         $supplier = Supplier::query()->create([
-            'code' => 'test-mofang-'.$suffix,
+            'code' => 'test-zjmf-'.$suffix,
             'name' => '测试供应商-'.$suffix,
-            'interface_type' => ProviderKey::MOFANG_FINANCE_API,
+            'interface_type' => ProviderKey::ZJMF_FINANCE_API,
             'status' => 1,
             'sort_order' => 0,
         ]);
@@ -862,7 +862,7 @@ class ProvisionServiceHostnameTest extends TestCase
             'supplier_id' => (int) $supplier->id,
             'supplier_product_id' => 9001,
             'auto_setup' => 1,
-            'provision_module' => ProviderKey::MOFANG_FINANCE_API,
+            'provision_module' => ProviderKey::ZJMF_FINANCE_API,
             'pricing' => ['monthly' => '5.00'],
             'setup_fee' => '0.00',
             'purchase_requires' => $purchaseRequires,
@@ -886,7 +886,7 @@ class ProvisionServiceHostnameTest extends TestCase
             ],
         ]);
         $product->setRelation('supplier', $supplier);
-        $this->bindProductToMofang($supplier, $product, 9001);
+        $this->bindProductToZjmf($supplier, $product, 9001);
         $actualProductId = (int) $product->id;
 
         $order = new class extends Order
@@ -942,9 +942,9 @@ class ProvisionServiceHostnameTest extends TestCase
         $suffix = bin2hex(random_bytes(4));
 
         $supplier = Supplier::query()->create([
-            'code' => 'retry-mofang-'.$suffix,
+            'code' => 'retry-zjmf-'.$suffix,
             'name' => '重试供应商-'.$suffix,
-            'interface_type' => ProviderKey::MOFANG_FINANCE_API,
+            'interface_type' => ProviderKey::ZJMF_FINANCE_API,
             'status' => 1,
             'sort_order' => 0,
         ]);
@@ -955,7 +955,7 @@ class ProvisionServiceHostnameTest extends TestCase
             'supplier_id' => (int) $supplier->id,
             'supplier_product_id' => 665,
             'auto_setup' => 1,
-            'provision_module' => ProviderKey::MOFANG_FINANCE_API,
+            'provision_module' => ProviderKey::ZJMF_FINANCE_API,
             'pricing' => ['monthly' => '99.00'],
             'setup_fee' => '0.00',
             'purchase_requires' => [
@@ -968,7 +968,7 @@ class ProvisionServiceHostnameTest extends TestCase
             'status' => 1,
         ]);
         $product->setRelation('supplier', $supplier);
-        $this->bindProductToMofang($supplier, $product, 665);
+        $this->bindProductToZjmf($supplier, $product, 665);
 
         $order = new class extends Order
         {
@@ -1060,23 +1060,23 @@ class ProvisionServiceHostnameTest extends TestCase
         return $method->invoke($service, $order);
     }
 
-    private function makeProviderResolver(HostingPanelApiTransport $transport, bool $includeMofang = true): ProviderResolver
+    private function makeProviderResolver(HostingPanelApiTransport $transport, bool $includeZjmf = true): ProviderResolver
     {
         $drivers = [];
 
-        if ($includeMofang) {
+        if ($includeZjmf) {
             $drivers[] = new class($transport) implements UpstreamDriver
             {
                 public function __construct(private readonly HostingPanelApiTransport $transport) {}
 
                 public function key(): string
                 {
-                    return ProviderKey::MOFANG_FINANCE_API;
+                    return ProviderKey::ZJMF_FINANCE_API;
                 }
 
                 public function label(): string
                 {
-                    return '魔方财务接口';
+                    return 'ZJMF 财务接口';
                 }
 
                 public function capabilities(): array
@@ -1100,11 +1100,11 @@ class ProvisionServiceHostnameTest extends TestCase
         return new ProviderResolver(new ProviderRegistry($drivers));
     }
 
-    private function bindProductToMofang(Supplier $supplier, Product $product, int|string $upstreamProductId): void
+    private function bindProductToZjmf(Supplier $supplier, Product $product, int|string $upstreamProductId): void
     {
         $pluginId = (int) DB::table('integration_plugins')
             ->where('domain', 'upstream')
-            ->where('plugin_key', ProviderKey::MOFANG_FINANCE_API)
+            ->where('plugin_key', ProviderKey::ZJMF_FINANCE_API)
             ->value('id');
 
         $this->assertGreaterThan(0, $pluginId);
@@ -1114,7 +1114,7 @@ class ProvisionServiceHostnameTest extends TestCase
             'plugin_id' => $pluginId,
             'environment' => 'production',
         ], [
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'status' => 1,
             'priority' => 0,
             'created_at' => now(),
@@ -1133,7 +1133,7 @@ class ProvisionServiceHostnameTest extends TestCase
             'upstream_product_id' => (string) $upstreamProductId,
         ], [
             'plugin_id' => $pluginId,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'auto_setup' => 1,
             'status' => 1,
             'created_at' => now(),

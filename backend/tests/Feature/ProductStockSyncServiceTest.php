@@ -42,7 +42,7 @@ class ProductStockSyncServiceTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_sync_upstream_product_stocks_updates_only_mofang_bound_products(): void
+    public function test_sync_upstream_product_stocks_updates_only_zjmf_bound_products(): void
     {
         $catalog = new RecordingStockCatalog([
             1001 => 9,
@@ -53,11 +53,11 @@ class ProductStockSyncServiceTest extends TestCase
         app()->instance(ProviderRegistry::class, $providerRegistry);
         $service = new ProductSyncService(new ProviderResolver($providerRegistry));
 
-        $supplierId = $this->insertSupplier('Mofang Supplier');
-        $pluginId = $this->insertPlugin('mofang_finance', ProviderKey::MOFANG_FINANCE_API);
-        $supplierBindingId = $this->insertSupplierBinding($supplierId, $pluginId, ProviderKey::MOFANG_FINANCE_API);
-        $mofangProductId = $this->insertProduct(2);
-        $this->insertProductBinding($mofangProductId, $supplierBindingId, $pluginId, ProviderKey::MOFANG_FINANCE_API, '1001');
+        $supplierId = $this->insertSupplier('Zjmf Supplier');
+        $pluginId = $this->insertPlugin('zjmf_finance', ProviderKey::ZJMF_FINANCE_API);
+        $supplierBindingId = $this->insertSupplierBinding($supplierId, $pluginId, ProviderKey::ZJMF_FINANCE_API);
+        $zjmfProductId = $this->insertProduct(2);
+        $this->insertProductBinding($zjmfProductId, $supplierBindingId, $pluginId, ProviderKey::ZJMF_FINANCE_API, '1001');
 
         $otherSupplierId = $this->insertSupplier('Hosting Supplier');
         $otherPluginId = $this->insertPlugin('hosting_panel_api', ProviderKey::HOSTING_PANEL_API);
@@ -65,17 +65,17 @@ class ProductStockSyncServiceTest extends TestCase
         $otherProductId = $this->insertProduct(4);
         $this->insertProductBinding($otherProductId, $otherSupplierBindingId, $otherPluginId, ProviderKey::HOSTING_PANEL_API, '2001');
 
-        $result = $service->syncUpstreamProductStocks(ProviderKey::MOFANG_FINANCE_API);
+        $result = $service->syncUpstreamProductStocks(ProviderKey::ZJMF_FINANCE_API);
 
         $this->assertSame(1, (int) ($result['matched_products'] ?? 0));
         $this->assertSame(1, (int) ($result['matched_suppliers'] ?? 0));
         $this->assertSame(1, (int) ($result['synced_products'] ?? 0));
         $this->assertSame([[1001]], $catalog->requestedProductIds);
-        $this->assertSame(9, (int) Product::query()->findOrFail($mofangProductId)->stock);
+        $this->assertSame(9, (int) Product::query()->findOrFail($zjmfProductId)->stock);
         $this->assertSame(4, (int) Product::query()->findOrFail($otherProductId)->stock);
 
         $snapshot = DB::table('product_upstream_bindings')
-            ->where('product_id', $mofangProductId)
+            ->where('product_id', $zjmfProductId)
             ->value('upstream_product_snapshot_json');
         $decoded = json_decode((string) $snapshot, true);
 
@@ -286,7 +286,7 @@ final class FakeStockCatalogDriver implements UpstreamDriver
 
     public function key(): string
     {
-        return ProviderKey::MOFANG_FINANCE_API;
+        return ProviderKey::ZJMF_FINANCE_API;
     }
 
     public function label(): string

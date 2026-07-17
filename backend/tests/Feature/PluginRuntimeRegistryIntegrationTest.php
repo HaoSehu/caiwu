@@ -37,9 +37,9 @@ use Caiwu\Plugins\Certification\Stay33\Logic\Stay33Client;
 use Caiwu\Plugins\Certification\Stay33\Stay33Plugin;
 use Caiwu\Plugins\Gateways\AliPay\AliPayPlugin;
 use Caiwu\Plugins\Gateways\AliPay\Controller\IndexController;
-use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangFinanceAdapter;
-use Caiwu\Plugins\Servers\MofangFinance\Logic\MofangFinance;
-use Caiwu\Plugins\Servers\MofangFinance\MofangFinancePlugin;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfFinanceAdapter;
+use Caiwu\Plugins\Servers\ZjmfFinance\Logic\ZjmfFinance;
+use Caiwu\Plugins\Servers\ZjmfFinance\ZjmfFinancePlugin;
 use Caiwu\Plugins\Sms\Aliyun\AliyunPlugin;
 use Caiwu\Plugins\Sms\Aliyun\Lib\AliyunSmsService;
 use Illuminate\Database\Schema\Blueprint;
@@ -632,22 +632,22 @@ class PluginRuntimeRegistryIntegrationTest extends TestCase
     public function test_upstream_registry_prefers_enabled_upstream_plugin_without_duplicate_registration(): void
     {
         $this->ensurePluginTables();
-        $this->activatePlugin('upstream', 'mofang_finance', []);
+        $this->activatePlugin('upstream', 'zjmf_finance', []);
 
         $this->app->forgetInstance(ProviderRegistry::class);
 
         $registry = app(ProviderRegistry::class);
-        $mofangDriver = $registry->find(ProviderKey::MOFANG_FINANCE_API);
+        $zjmfDriver = $registry->find(ProviderKey::ZJMF_FINANCE_API);
 
-        $this->assertNotNull($mofangDriver);
-        $this->assertSame(PluginUpstreamDriver::class, $mofangDriver::class);
-        $this->assertTrue(class_exists(MofangFinancePlugin::class));
-        $this->assertTrue(class_exists(MofangFinance::class));
-        $this->assertContains(ProvidesConsoleCatalog::class, $mofangDriver->capabilities());
-        $mofangCatalog = $mofangDriver->resolve(ProvidesConsoleCatalog::class);
-        $this->assertInstanceOf(ProvidesConsoleCatalog::class, $mofangCatalog);
-        $this->assertInstanceOf(MofangFinanceAdapter::class, $mofangCatalog);
-        $this->assertSame([ProviderKey::MOFANG_FINANCE_API], $registry->keys());
+        $this->assertNotNull($zjmfDriver);
+        $this->assertSame(PluginUpstreamDriver::class, $zjmfDriver::class);
+        $this->assertTrue(class_exists(ZjmfFinancePlugin::class));
+        $this->assertTrue(class_exists(ZjmfFinance::class));
+        $this->assertContains(ProvidesConsoleCatalog::class, $zjmfDriver->capabilities());
+        $zjmfCatalog = $zjmfDriver->resolve(ProvidesConsoleCatalog::class);
+        $this->assertInstanceOf(ProvidesConsoleCatalog::class, $zjmfCatalog);
+        $this->assertInstanceOf(ZjmfFinanceAdapter::class, $zjmfCatalog);
+        $this->assertSame([ProviderKey::ZJMF_FINANCE_API], $registry->keys());
     }
 
     /**

@@ -32,9 +32,9 @@ class ProductSyncServiceProvisionTest extends TestCase
         parent::setUp();
 
         app(PluginFileLoader::class)->ensureLoaded(
-            app(PluginScanner::class)->requireManifest('upstream', 'mofang_finance')
+            app(PluginScanner::class)->requireManifest('upstream', 'zjmf_finance')
         );
-        $this->activateIntegrationPluginForTest('upstream', 'mofang_finance');
+        $this->activateIntegrationPluginForTest('upstream', 'zjmf_finance');
     }
 
     public function test_assert_product_can_be_provisioned_blocks_when_local_stock_is_insufficient(): void
@@ -75,7 +75,7 @@ class ProductSyncServiceProvisionTest extends TestCase
         $supplier = Supplier::query()->create([
             'name' => 'Provision Supplier '.$suffix,
             'code' => 'provision-'.$suffix,
-            'interface_type' => ProviderKey::MOFANG_FINANCE_API,
+            'interface_type' => ProviderKey::ZJMF_FINANCE_API,
             'api_url' => 'https://supplier-'.$suffix.'.example.com',
             'api_username' => 'demo',
             'api_key' => 'secret',
@@ -95,10 +95,10 @@ class ProductSyncServiceProvisionTest extends TestCase
             'status' => 1,
             'auto_setup' => 0,
             'supplier_id' => (int) $supplier->id,
-            'provision_module' => ProviderKey::MOFANG_FINANCE_API,
+            'provision_module' => ProviderKey::ZJMF_FINANCE_API,
             'supplier_product_id' => $supplierProductId,
         ]);
-        $this->bindProductToMofang($supplier, $product, $supplierProductId);
+        $this->bindProductToZjmf($supplier, $product, $supplierProductId);
 
         Order::query()->create([
             'order_no' => 'ORDPROVISION'.strtoupper($suffix),
@@ -150,7 +150,7 @@ class ProductSyncServiceProvisionTest extends TestCase
         $accountName = 'runtime-account-'.$suffix;
         $apiKey = 'runtime-secret-'.$suffix;
         $supplierBindingId = app(UpstreamBindingWriter::class)->syncSupplierBinding($supplier, [
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'base_url' => $baseUrl,
             'account_name' => $accountName,
             'api_key' => $apiKey,
@@ -177,9 +177,9 @@ class ProductSyncServiceProvisionTest extends TestCase
             'supplier_plugin_binding_id' => $supplierBindingId,
             'plugin_id' => (int) DB::table('integration_plugins')
                 ->where('domain', 'upstream')
-                ->where('plugin_key', ProviderKey::MOFANG_FINANCE_API)
+                ->where('plugin_key', ProviderKey::ZJMF_FINANCE_API)
                 ->value('id'),
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'upstream_product_id' => (string) $supplierProductId,
             'auto_setup' => 1,
             'status' => 1,
@@ -214,7 +214,7 @@ class ProductSyncServiceProvisionTest extends TestCase
         $supplier = Supplier::query()->create([
             'name' => 'Provision Supplier Pending Service '.$suffix,
             'code' => 'provision-pending-'.$suffix,
-            'interface_type' => ProviderKey::MOFANG_FINANCE_API,
+            'interface_type' => ProviderKey::ZJMF_FINANCE_API,
             'api_url' => 'https://supplier-'.$suffix.'.example.com',
             'api_username' => 'demo',
             'api_key' => 'secret',
@@ -234,10 +234,10 @@ class ProductSyncServiceProvisionTest extends TestCase
             'status' => 1,
             'auto_setup' => 1,
             'supplier_id' => (int) $supplier->id,
-            'provision_module' => ProviderKey::MOFANG_FINANCE_API,
+            'provision_module' => ProviderKey::ZJMF_FINANCE_API,
             'supplier_product_id' => $supplierProductId,
         ]);
-        $this->bindProductToMofang($supplier, $product, $supplierProductId);
+        $this->bindProductToZjmf($supplier, $product, $supplierProductId);
 
         $user = User::query()->create([
             'email' => 'provision-pending-'.$suffix.'@example.com',
@@ -310,12 +310,12 @@ class ProductSyncServiceProvisionTest extends TestCase
 
                 public function key(): string
                 {
-                    return ProviderKey::MOFANG_FINANCE_API;
+                    return ProviderKey::ZJMF_FINANCE_API;
                 }
 
                 public function label(): string
                 {
-                    return '魔方财务接口';
+                    return 'ZJMF 财务接口';
                 }
 
                 public function capabilities(): array
@@ -337,11 +337,11 @@ class ProductSyncServiceProvisionTest extends TestCase
         ]));
     }
 
-    private function bindProductToMofang(Supplier $supplier, Product $product, int|string $upstreamProductId): void
+    private function bindProductToZjmf(Supplier $supplier, Product $product, int|string $upstreamProductId): void
     {
         $pluginId = (int) DB::table('integration_plugins')
             ->where('domain', 'upstream')
-            ->where('plugin_key', ProviderKey::MOFANG_FINANCE_API)
+            ->where('plugin_key', ProviderKey::ZJMF_FINANCE_API)
             ->value('id');
 
         $this->assertGreaterThan(0, $pluginId);
@@ -351,7 +351,7 @@ class ProductSyncServiceProvisionTest extends TestCase
             'plugin_id' => $pluginId,
             'environment' => 'production',
         ], [
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'status' => 1,
             'priority' => 0,
             'created_at' => now(),
@@ -370,7 +370,7 @@ class ProductSyncServiceProvisionTest extends TestCase
             'upstream_product_id' => (string) $upstreamProductId,
         ], [
             'plugin_id' => $pluginId,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'auto_setup' => (int) ($product->auto_setup ?? 0) === 1 ? 1 : 0,
             'status' => 1,
             'created_at' => now(),

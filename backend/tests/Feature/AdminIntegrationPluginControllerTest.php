@@ -6,8 +6,10 @@ namespace Tests\Feature;
 
 use App\Models\AdminUser;
 use App\Models\IntegrationPlugin;
+use App\Models\Payment;
 use App\Models\Role;
 use App\Models\Setting;
+use App\Models\User;
 use App\Support\AdminPermissions;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -275,6 +277,52 @@ class AdminIntegrationPluginControllerTest extends TestCase
             ->assertJsonPath('code', 42200)
             ->assertJsonPath('message', '参数验证失败')
             ->assertJsonStructure(['data' => ['errors' => ['payload.phone']]]);
+    }
+
+    public function test_admin_can_remove_plugin_registry_and_config_when_payment_history_references_plugin(): void
+    {
+        $this->ensurePluginTables();
+        Sanctum::actingAs($this->createAdmin());
+
+        $plugin = $this->createPlugin('upstream', 'zjmf_finance');
+        DB::table('integration_plugin_configs')->insert([
+            'plugin_id' => (int) $plugin->id,
+            'config_json' => json_encode(['api_url' => 'https://zjmf.example.test']),
+            'secret_json' => null,
+            'has_secret_json' => json_encode([]),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $user = User::query()->create([
+            'email' => 'plugin-delete-'.bin2hex(random_bytes(4)).'@example.test',
+            'password' => 'secret123',
+            'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
+            'status' => 1,
+        ]);
+        $payment = Payment::query()->create([
+            'payment_no' => 'PAYPLUGIN'.strtoupper(bin2hex(random_bytes(4))),
+            'user_id' => (int) $user->id,
+            'plugin_id' => (int) $plugin->id,
+            'gateway' => 'alipay',
+            'trade_no' => 'ALI'.strtoupper(bin2hex(random_bytes(4))),
+            'amount' => '1.00',
+            'status' => 1,
+            'paid_at' => now(),
+        ]);
+
+        $this->deleteJson("/api/v2/admin/integration-plugins/{$plugin->id}")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'deleted')
+            ->assertJsonPath('data.detail.deleted', true);
+
+        $this->assertDatabaseMissing('integration_plugins', ['id' => $plugin->id]);
+        $this->assertDatabaseMissing('integration_plugin_configs', ['plugin_id' => $plugin->id]);
+        $this->assertDatabaseHas('payments', [
+            'id' => $payment->id,
+            'plugin_id' => null,
+        ]);
+        $this->assertDirectoryExists(base_path('plugins/servers/zjmf_finance'));
     }
 
     private function createAdmin(): AdminUser

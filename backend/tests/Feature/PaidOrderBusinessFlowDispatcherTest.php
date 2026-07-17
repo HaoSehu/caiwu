@@ -17,6 +17,8 @@ use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\Order\PaidOrderBusinessFlowDispatcher;
 use App\Services\Provisioning\ProvisionService;
 use App\Services\User\AccountService;
+use App\Services\Upstream\Contracts\ProvidesSynchronousNewPurchaseFulfillment;
+use App\Services\Upstream\Contracts\UpstreamDriver;
 use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderResolver;
 use App\Services\Upstream\ProviderRegistry;
@@ -43,7 +45,7 @@ class PaidOrderBusinessFlowDispatcherTest extends TestCase
         });
     }
 
-    public function test_web_mofang_payment_fulfills_synchronously(): void
+    public function test_web_payment_fulfills_synchronously_when_provider_declares_capability(): void
     {
         Queue::fake([ProcessPaidOrderReferralRewardJob::class]);
         config()->set('queue.default', 'database');
@@ -61,10 +63,38 @@ class PaidOrderBusinessFlowDispatcherTest extends TestCase
         $bindingResolver = $this->mock(PluginBindingResolver::class, function ($mock): void {
             $mock->shouldReceive('providerKeyForProduct')
                 ->once()
-                ->andReturn(ProviderKey::MOFANG_FINANCE_API);
+                ->andReturn('declared_sync_provider');
         });
+
+        $driver = new class implements UpstreamDriver
+        {
+            public function key(): string
+            {
+                return 'declared_sync_provider';
+            }
+
+            public function label(): string
+            {
+                return 'Declared sync provider';
+            }
+
+            public function capabilities(): array
+            {
+                return [ProvidesSynchronousNewPurchaseFulfillment::class];
+            }
+
+            public function supports(string $capability): bool
+            {
+                return $capability === ProvidesSynchronousNewPurchaseFulfillment::class;
+            }
+
+            public function resolve(string $capability): ?object
+            {
+                return null;
+            }
+        };
         $dispatcher = new PaidOrderBusinessFlowDispatcher(new ProviderResolver(
-            new ProviderRegistry([]),
+            new ProviderRegistry([$driver]),
             $bindingResolver,
         ));
         $this->mock(PaymentService::class, function ($mock) use ($order): void {
@@ -75,7 +105,7 @@ class PaidOrderBusinessFlowDispatcherTest extends TestCase
         });
 
         $this->runAsWebRequest(function () use ($dispatcher, $invoice): void {
-            $dispatcher->dispatchPaidInvoice($invoice, 'trace-mofang-sync');
+            $dispatcher->dispatchPaidInvoice($invoice, 'trace-declared-sync');
         });
 
         Queue::assertNotPushed(ProcessPaidOrderFulfillmentJob::class);

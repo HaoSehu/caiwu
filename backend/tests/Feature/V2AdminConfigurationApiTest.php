@@ -373,7 +373,7 @@ class V2AdminConfigurationApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('code', 0)
             ->assertJsonPath('data.list.0.id', $supplier->id)
-            ->assertJsonPath('data.list.0.provider_key', 'mofang_finance_api')
+            ->assertJsonPath('data.list.0.provider_key', 'zjmf_finance_api')
             ->assertJsonPath('data.list.0.connection.base_url', 'https://provider.example.test')
             ->assertJsonPath('data.list.0.upstream_binding.base_url', 'https://provider.example.test')
             ->assertJsonPath('data.list.0.credentials.api_credential_configured', true)
@@ -391,7 +391,7 @@ class V2AdminConfigurationApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('code', 0)
             ->assertJsonPath('data.supplier.id', $supplier->id)
-            ->assertJsonPath('data.supplier.provider_key', 'mofang_finance_api')
+            ->assertJsonPath('data.supplier.provider_key', 'zjmf_finance_api')
             ->assertJsonPath('data.supplier.connection.base_url', 'https://provider.example.test')
             ->assertJsonPath('data.supplier.upstream_binding.base_url', 'https://provider.example.test')
             ->assertJsonMissingPath('data.supplier.upstream_binding.last_check_error');
@@ -482,7 +482,7 @@ class V2AdminConfigurationApiTest extends TestCase
                 }
 
                 Assert::assertSame('upstream', $domain);
-                Assert::assertSame('mofang_finance_api', $slugOrKey);
+                Assert::assertSame('zjmf_finance_api', $slugOrKey);
                 Assert::assertSame('server.supplier.refresh_card', $action);
                 Assert::assertSame('test', $payload['source'] ?? null);
                 Assert::assertSame($this->expectedSupplierId, (int) ($context['supplier_id'] ?? 0));
@@ -635,12 +635,12 @@ class V2AdminConfigurationApiTest extends TestCase
     {
         $suffix = bin2hex(random_bytes(4));
         $plugin = IntegrationPlugin::query()->updateOrCreate(
-            ['domain' => 'upstream', 'slug' => 'mofang_finance'],
+            ['domain' => 'upstream', 'slug' => 'zjmf_finance'],
             [
-                'plugin_key' => 'mofang_finance_api',
-                'name' => 'Mofang Finance',
+                'plugin_key' => 'zjmf_finance_api',
+                'name' => 'Zjmf Finance',
                 'version' => '1.0.0',
-                'entry_class' => 'Caiwu\\Plugins\\Servers\\MofangFinance\\MofangFinancePlugin',
+                'entry_class' => 'Caiwu\\Plugins\\Servers\\ZjmfFinance\\ZjmfFinancePlugin',
                 'provider_class' => null,
                 'capabilities_json' => [],
                 'status' => IntegrationPlugin::STATUS_ENABLED,
@@ -663,7 +663,7 @@ class V2AdminConfigurationApiTest extends TestCase
         DB::table('supplier_plugin_bindings')->insert([
             'supplier_id' => (int) $supplier->id,
             'plugin_id' => (int) $plugin->id,
-            'provider_key' => 'mofang_finance_api',
+            'provider_key' => 'zjmf_finance_api',
             'environment' => 'production',
             'status' => 1,
             'priority' => 0,

@@ -20,10 +20,10 @@ class AdminUserServiceUpstreamBindingTest extends TestCase
     {
         parent::setUp();
 
-        $this->activateIntegrationPluginForTest('upstream', 'mofang_finance');
+        $this->activateIntegrationPluginForTest('upstream', 'zjmf_finance');
     }
 
-    public function test_manual_service_can_bind_mofang_finance_supplier_and_override_upstream_product_id(): void
+    public function test_manual_service_can_bind_zjmf_finance_supplier_and_override_upstream_product_id(): void
     {
         $suffix = bin2hex(random_bytes(4));
 
@@ -35,9 +35,9 @@ class AdminUserServiceUpstreamBindingTest extends TestCase
         ]);
 
         $supplier = Supplier::query()->create([
-            'name' => 'Mofang Service Supplier '.$suffix,
-            'code' => 'mofang-service-'.$suffix,
-            'interface_type' => ProviderKey::MOFANG_FINANCE_API,
+            'name' => 'Zjmf Service Supplier '.$suffix,
+            'code' => 'zjmf-service-'.$suffix,
+            'interface_type' => ProviderKey::ZJMF_FINANCE_API,
             'api_url' => 'https://supplier-'.$suffix.'.example.com',
             'api_username' => 'demo',
             'api_key' => 'secret',
@@ -46,7 +46,7 @@ class AdminUserServiceUpstreamBindingTest extends TestCase
         ]);
 
         $product = Product::query()->create([
-            'name' => 'Mofang Service Product '.$suffix,
+            'name' => 'Zjmf Service Product '.$suffix,
             'product_type' => 'server',
             'pricing' => ['monthly' => '99.00'],
             'setup_fee' => '0.00',
@@ -57,7 +57,7 @@ class AdminUserServiceUpstreamBindingTest extends TestCase
             'auto_setup' => 0,
             'supplier_id' => (int) $supplier->id,
             'supplier_product_id' => 10001,
-            'provision_module' => ProviderKey::MOFANG_FINANCE_API,
+            'provision_module' => ProviderKey::ZJMF_FINANCE_API,
         ]);
         $this->createProductUpstreamBinding($supplier, $product, 10001);
 
@@ -87,14 +87,14 @@ class AdminUserServiceUpstreamBindingTest extends TestCase
         $provisionData = (array) $service->refresh()->provision_data;
 
         $this->assertSame('upstream', $provisionData['source_type'] ?? null);
-        $this->assertSame(ProviderKey::MOFANG_FINANCE_API, $provisionData['provider_key'] ?? null);
+        $this->assertSame(ProviderKey::ZJMF_FINANCE_API, $provisionData['provider_key'] ?? null);
         $this->assertSame((int) $supplier->id, $provisionData['supplier_id'] ?? null);
         $this->assertSame(20002, $provisionData['upstream_product_id'] ?? null);
         $this->assertSame(30003, $provisionData['upstream_host_id'] ?? null);
 
         $binding = DB::table('service_upstream_bindings')
             ->where('service_id', (int) $service->id)
-            ->where('provider_key', ProviderKey::MOFANG_FINANCE_API)
+            ->where('provider_key', ProviderKey::ZJMF_FINANCE_API)
             ->where('upstream_service_id', '30003')
             ->first();
 
@@ -102,7 +102,7 @@ class AdminUserServiceUpstreamBindingTest extends TestCase
         $this->assertDatabaseHas('service_runtime_snapshots', [
             'service_id' => (int) $service->id,
             'service_upstream_binding_id' => (int) $binding->id,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
         ]);
     }
 
@@ -118,7 +118,7 @@ class AdminUserServiceUpstreamBindingTest extends TestCase
         $supplier = Supplier::query()->create([
             'name' => 'Delete Binding Supplier '.$suffix,
             'code' => 'delete-binding-'.$suffix,
-            'interface_type' => ProviderKey::MOFANG_FINANCE_API,
+            'interface_type' => ProviderKey::ZJMF_FINANCE_API,
             'api_url' => 'https://supplier-delete-'.$suffix.'.example.com',
             'api_username' => 'demo',
             'api_key' => 'secret',
@@ -137,7 +137,7 @@ class AdminUserServiceUpstreamBindingTest extends TestCase
             'auto_setup' => 0,
             'supplier_id' => (int) $supplier->id,
             'supplier_product_id' => 30001,
-            'provision_module' => ProviderKey::MOFANG_FINANCE_API,
+            'provision_module' => ProviderKey::ZJMF_FINANCE_API,
         ]);
         $this->createProductUpstreamBinding($supplier, $product, 30001);
 
@@ -164,7 +164,7 @@ class AdminUserServiceUpstreamBindingTest extends TestCase
 
         $this->assertDatabaseHas('service_upstream_bindings', [
             'service_id' => (int) $service->id,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'upstream_service_id' => '40001',
         ]);
 
@@ -190,9 +190,9 @@ class AdminUserServiceUpstreamBindingTest extends TestCase
         ]);
 
         $supplier = Supplier::query()->create([
-            'name' => 'Mofang Host Only Supplier '.$suffix,
-            'code' => 'mofang-host-only-'.$suffix,
-            'interface_type' => ProviderKey::MOFANG_FINANCE_API,
+            'name' => 'Zjmf Host Only Supplier '.$suffix,
+            'code' => 'zjmf-host-only-'.$suffix,
+            'interface_type' => ProviderKey::ZJMF_FINANCE_API,
             'api_url' => 'https://supplier-host-only-'.$suffix.'.example.com',
             'api_username' => 'demo',
             'api_key' => 'secret',
@@ -201,7 +201,7 @@ class AdminUserServiceUpstreamBindingTest extends TestCase
         ]);
 
         $product = Product::query()->create([
-            'name' => 'Mofang Host Only Product '.$suffix,
+            'name' => 'Zjmf Host Only Product '.$suffix,
             'product_type' => 'server',
             'pricing' => ['monthly' => '88.00'],
             'setup_fee' => '0.00',
@@ -212,7 +212,7 @@ class AdminUserServiceUpstreamBindingTest extends TestCase
             'auto_setup' => 1,
             'supplier_id' => (int) $supplier->id,
             'supplier_product_id' => 80001,
-            'provision_module' => ProviderKey::MOFANG_FINANCE_API,
+            'provision_module' => ProviderKey::ZJMF_FINANCE_API,
         ]);
         $this->createProductUpstreamBinding($supplier, $product, 80001);
 
@@ -242,7 +242,7 @@ class AdminUserServiceUpstreamBindingTest extends TestCase
 
         $provisionData = (array) $service->refresh()->provision_data;
 
-        $this->assertSame(ProviderKey::MOFANG_FINANCE_API, $provisionData['provider_key'] ?? null,
+        $this->assertSame(ProviderKey::ZJMF_FINANCE_API, $provisionData['provider_key'] ?? null,
             'When only updating upstream_host_id, the provider key is corrected from the normalized product/supplier binding');
         $this->assertSame(80001, $provisionData['upstream_product_id'] ?? null);
         $this->assertSame(90002, $provisionData['upstream_host_id'] ?? null);
@@ -260,9 +260,9 @@ class AdminUserServiceUpstreamBindingTest extends TestCase
         ]);
 
         $supplier = Supplier::query()->create([
-            'name' => 'Mofang Rebind Supplier '.$suffix,
-            'code' => 'mofang-rebind-'.$suffix,
-            'interface_type' => ProviderKey::MOFANG_FINANCE_API,
+            'name' => 'Zjmf Rebind Supplier '.$suffix,
+            'code' => 'zjmf-rebind-'.$suffix,
+            'interface_type' => ProviderKey::ZJMF_FINANCE_API,
             'api_url' => 'https://supplier-rebind-'.$suffix.'.example.com',
             'api_username' => 'demo',
             'api_key' => 'secret',
@@ -271,7 +271,7 @@ class AdminUserServiceUpstreamBindingTest extends TestCase
         ]);
 
         $product = Product::query()->create([
-            'name' => 'Mofang Rebind Product '.$suffix,
+            'name' => 'Zjmf Rebind Product '.$suffix,
             'product_type' => 'server',
             'pricing' => ['monthly' => '77.00'],
             'setup_fee' => '0.00',
@@ -282,7 +282,7 @@ class AdminUserServiceUpstreamBindingTest extends TestCase
             'auto_setup' => 1,
             'supplier_id' => (int) $supplier->id,
             'supplier_product_id' => 80002,
-            'provision_module' => ProviderKey::MOFANG_FINANCE_API,
+            'provision_module' => ProviderKey::ZJMF_FINANCE_API,
         ]);
         $this->createProductUpstreamBinding($supplier, $product, 80002);
 
@@ -313,13 +313,13 @@ class AdminUserServiceUpstreamBindingTest extends TestCase
 
         $provisionData = (array) $service->refresh()->provision_data;
 
-        $this->assertSame(ProviderKey::MOFANG_FINANCE_API, $provisionData['provider_key'] ?? null,
+        $this->assertSame(ProviderKey::ZJMF_FINANCE_API, $provisionData['provider_key'] ?? null,
             'Rebinding same supplier must correct a mismatched provider key to the normalized supplier binding');
         $this->assertSame(80002, $provisionData['upstream_product_id'] ?? null);
         $this->assertSame(91002, $provisionData['upstream_host_id'] ?? null);
         $this->assertDatabaseHas('service_upstream_bindings', [
             'service_id' => (int) $service->id,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'upstream_service_id' => '91002',
         ]);
     }
@@ -328,14 +328,14 @@ class AdminUserServiceUpstreamBindingTest extends TestCase
     {
         $pluginId = (int) DB::table('integration_plugins')
             ->where('domain', 'upstream')
-            ->where('plugin_key', ProviderKey::MOFANG_FINANCE_API)
+            ->where('plugin_key', ProviderKey::ZJMF_FINANCE_API)
             ->value('id');
 
         $now = now();
         $supplierBindingId = DB::table('supplier_plugin_bindings')->insertGetId([
             'supplier_id' => (int) $supplier->id,
             'plugin_id' => $pluginId,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'environment' => 'production',
             'status' => 1,
             'priority' => 1,
@@ -349,7 +349,7 @@ class AdminUserServiceUpstreamBindingTest extends TestCase
             'product_id' => (int) $product->id,
             'supplier_plugin_binding_id' => $supplierBindingId,
             'plugin_id' => $pluginId,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'upstream_product_id' => (string) $upstreamProductId,
             'auto_setup' => (int) ($product->auto_setup ?? 0) === 1 ? 1 : 0,
             'status' => 1,

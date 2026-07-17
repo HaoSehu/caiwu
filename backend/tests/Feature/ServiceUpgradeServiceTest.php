@@ -30,7 +30,7 @@ class ServiceUpgradeServiceTest extends TestCase
     {
         parent::setUp();
 
-        $this->activateIntegrationPluginForTest('upstream', 'mofang_finance');
+        $this->activateIntegrationPluginForTest('upstream', 'zjmf_finance');
     }
 
     public function test_create_host_upgrade_invoice_for_user_builds_upgrade_invoice(): void
@@ -47,7 +47,7 @@ class ServiceUpgradeServiceTest extends TestCase
         $supplier = Supplier::query()->create([
             'name' => 'Upgrade Supplier '.$suffix,
             'code' => 'upgrade-supplier-'.$suffix,
-            'interface_type' => 'mofang_finance_api',
+            'interface_type' => 'zjmf_finance_api',
             'api_url' => 'https://upgrade-'.$suffix.'.example.test',
             'api_username' => 'demo',
             'api_key' => 'secret',
@@ -77,7 +77,7 @@ class ServiceUpgradeServiceTest extends TestCase
             'status' => ServiceStatus::ACTIVE,
             'provision_data' => [
                 'upstream_host_id' => 778899,
-                'provider' => 'mofang_finance_api',
+                'provider' => 'zjmf_finance_api',
             ],
             'expires_at' => now()->addMonth(),
             'auto_renew' => 0,
@@ -154,7 +154,7 @@ class ServiceUpgradeServiceTest extends TestCase
         $supplier = Supplier::query()->create([
             'name' => 'Upgrade Paid Supplier '.$suffix,
             'code' => 'upgrade-paid-supplier-'.$suffix,
-            'interface_type' => 'mofang_finance_api',
+            'interface_type' => 'zjmf_finance_api',
             'api_url' => 'https://upgrade-paid-'.$suffix.'.example.test',
             'api_username' => 'demo',
             'api_key' => 'secret',
@@ -268,16 +268,16 @@ class ServiceUpgradeServiceTest extends TestCase
         $this->assertSame('host_upgrade', (string) data_get($service->fresh()->provision_data ?? [], 'last_upgrade_kind', ''));
         $this->assertSame(9988, (int) data_get($service->fresh()->provision_data ?? [], 'last_upgrade_invoice_id', 0));
         $this->assertSame(778899, (int) data_get($service->fresh()->provision_data ?? [], 'upstream_host_id', 0));
-        $this->assertSame(ProviderKey::MOFANG_FINANCE_API, (string) DB::table('service_upstream_bindings')
+        $this->assertSame(ProviderKey::ZJMF_FINANCE_API, (string) DB::table('service_upstream_bindings')
             ->where('service_id', (int) $service->id)
             ->value('provider_key'));
         $this->assertDatabaseHas('service_runtime_snapshots', [
             'service_id' => (int) $service->id,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
         ]);
         $this->assertDatabaseHas('service_provision_attempts', [
             'service_id' => (int) $service->id,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'action' => 'upgrade',
             'attempt_status' => 'success',
             'trace_id' => 'host-upgrade-paid-'.$suffix,
@@ -298,7 +298,7 @@ class ServiceUpgradeServiceTest extends TestCase
         $supplier = Supplier::query()->create([
             'name' => 'Upgrade Failed Supplier '.$suffix,
             'code' => 'upgrade-failed-supplier-'.$suffix,
-            'interface_type' => 'mofang_finance_api',
+            'interface_type' => 'zjmf_finance_api',
             'api_url' => 'https://upgrade-failed-'.$suffix.'.example.test',
             'api_username' => 'demo',
             'api_key' => 'secret',
@@ -395,7 +395,7 @@ class ServiceUpgradeServiceTest extends TestCase
         $this->assertSame('上游升降级余额不足', (string) data_get($service->fresh()->provision_data ?? [], 'upgrade_error', ''));
         $this->assertDatabaseHas('service_provision_attempts', [
             'service_id' => (int) $service->id,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'action' => 'upgrade',
             'attempt_status' => 'failed',
             'trace_id' => 'host-upgrade-failed-'.$suffix,
@@ -412,7 +412,7 @@ class ServiceUpgradeServiceTest extends TestCase
     ): void {
         $pluginId = (int) DB::table('integration_plugins')
             ->where('domain', 'upstream')
-            ->where('plugin_key', ProviderKey::MOFANG_FINANCE_API)
+            ->where('plugin_key', ProviderKey::ZJMF_FINANCE_API)
             ->value('id');
 
         $this->assertGreaterThan(0, $pluginId);
@@ -420,7 +420,7 @@ class ServiceUpgradeServiceTest extends TestCase
         $supplierBindingId = DB::table('supplier_plugin_bindings')->insertGetId([
             'supplier_id' => (int) $supplier->id,
             'plugin_id' => $pluginId,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'environment' => 'production',
             'status' => 1,
             'priority' => 0,
@@ -432,7 +432,7 @@ class ServiceUpgradeServiceTest extends TestCase
             'product_id' => (int) $product->id,
             'supplier_plugin_binding_id' => $supplierBindingId,
             'plugin_id' => $pluginId,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'upstream_product_id' => (string) $upstreamProductId,
             'auto_setup' => 1,
             'status' => 1,
@@ -445,7 +445,7 @@ class ServiceUpgradeServiceTest extends TestCase
             'product_upstream_binding_id' => $productBindingId,
             'supplier_plugin_binding_id' => $supplierBindingId,
             'plugin_id' => $pluginId,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'upstream_service_id' => (string) $upstreamHostId,
             'status_snapshot' => 'active',
             'created_at' => now(),

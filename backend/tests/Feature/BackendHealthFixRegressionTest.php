@@ -121,29 +121,29 @@ class BackendHealthFixRegressionTest extends TestCase
         $this->assertSame('supplier-secret', $payload['value']);
     }
 
-    public function test_provider_aware_cache_keys_keep_mofang_independent(): void
+    public function test_provider_aware_cache_keys_keep_zjmf_independent(): void
     {
         $suffix = bin2hex(random_bytes(4));
         $supplier = Supplier::query()->create([
-            'name' => 'Mofang Cache Supplier '.$suffix,
-            'code' => 'mofang-cache-'.$suffix,
-            'interface_type' => ProviderKey::MOFANG_FINANCE_API,
+            'name' => 'Zjmf Cache Supplier '.$suffix,
+            'code' => 'zjmf-cache-'.$suffix,
+            'interface_type' => ProviderKey::ZJMF_FINANCE_API,
             'status' => 1,
             'sort_order' => 0,
         ]);
-        $this->createSupplierPluginBinding($supplier, $this->ensureMofangIntegrationPlugin());
+        $this->createSupplierPluginBinding($supplier, $this->ensureZjmfIntegrationPlugin());
         $supplierId = (int) $supplier->id;
 
         $this->assertSame(
-            "upstream:mofang_finance_api:product_config_options:{$supplierId}:123",
+            "upstream:zjmf_finance_api:product_config_options:{$supplierId}:123",
             app(ServiceTransformService::class)->buildProductConfigOptionsCacheKey($supplier, 123)
         );
         $this->assertSame(
-            "upstream:mofang_finance_api:host_modules:{$supplierId}:456",
+            "upstream:zjmf_finance_api:host_modules:{$supplierId}:456",
             app(ServiceDetailService::class)->buildMonitorModuleCacheKey($supplier, 456)
         );
         $this->assertSame(
-            "upstream:mofang_finance_api:reinstall_options:{$supplierId}:789",
+            "upstream:zjmf_finance_api:reinstall_options:{$supplierId}:789",
             app(ServiceDetailService::class)->buildReinstallOptionsCacheKey($supplier, 789)
         );
 
@@ -286,17 +286,17 @@ class BackendHealthFixRegressionTest extends TestCase
         $this->assertSame('证件号码', $messages['attributes']['idcard']);
     }
 
-    private function ensureMofangIntegrationPlugin(): int
+    private function ensureZjmfIntegrationPlugin(): int
     {
         DB::table('integration_plugins')->updateOrInsert([
             'domain' => 'upstream',
-            'plugin_key' => ProviderKey::MOFANG_FINANCE_API,
+            'plugin_key' => ProviderKey::ZJMF_FINANCE_API,
         ], [
-            'slug' => 'mofang_finance',
-            'name' => '魔方财务接口',
+            'slug' => 'zjmf_finance',
+            'name' => 'ZJMF 财务接口',
             'version' => '1.0.0',
             'provider_class' => null,
-            'entry_class' => 'Caiwu\\Plugins\\Servers\\MofangFinance\\MofangFinancePlugin',
+            'entry_class' => 'Caiwu\\Plugins\\Servers\\ZjmfFinance\\ZjmfFinancePlugin',
             'capabilities_json' => json_encode([]),
             'config_schema_json' => json_encode([]),
             'status' => 1,
@@ -307,7 +307,7 @@ class BackendHealthFixRegressionTest extends TestCase
 
         return (int) DB::table('integration_plugins')
             ->where('domain', 'upstream')
-            ->where('plugin_key', ProviderKey::MOFANG_FINANCE_API)
+            ->where('plugin_key', ProviderKey::ZJMF_FINANCE_API)
             ->value('id');
     }
 
@@ -316,7 +316,7 @@ class BackendHealthFixRegressionTest extends TestCase
         DB::table('supplier_plugin_bindings')->insert([
             'supplier_id' => (int) $supplier->id,
             'plugin_id' => $pluginId,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'environment' => 'production',
             'status' => 1,
             'priority' => 0,
@@ -327,9 +327,9 @@ class BackendHealthFixRegressionTest extends TestCase
 
     private function syncSupplierBinding(Supplier $supplier, string $apiKey): void
     {
-        $this->ensureMofangIntegrationPlugin();
+        $this->ensureZjmfIntegrationPlugin();
         app(UpstreamBindingWriter::class)->syncSupplierBinding($supplier, [
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'base_url' => 'https://supplier.example.com',
             'account_name' => 'demo',
             'api_key' => $apiKey,

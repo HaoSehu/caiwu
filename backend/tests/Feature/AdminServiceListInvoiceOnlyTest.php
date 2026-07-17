@@ -552,11 +552,11 @@ class AdminServiceListInvoiceOnlyTest extends TestCase
 
     private function attachRuntimeSnapshotsToService(Service $service, string $suffix): void
     {
-        $this->activateIntegrationPluginForTest('upstream', 'mofang_finance');
+        $this->activateIntegrationPluginForTest('upstream', 'zjmf_finance');
 
         $pluginId = (int) DB::table('integration_plugins')
             ->where('domain', 'upstream')
-            ->where('slug', 'mofang_finance')
+            ->where('slug', 'zjmf_finance')
             ->value('id');
 
         $this->assertGreaterThan(0, $pluginId);
@@ -564,7 +564,7 @@ class AdminServiceListInvoiceOnlyTest extends TestCase
         $bindingId = DB::table('service_upstream_bindings')->insertGetId([
             'service_id' => (int) $service->id,
             'plugin_id' => $pluginId,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'upstream_service_id' => 'runtime-host-'.$suffix,
             'status_snapshot' => 'active',
             'created_at' => now(),
@@ -575,7 +575,7 @@ class AdminServiceListInvoiceOnlyTest extends TestCase
             'service_id' => (int) $service->id,
             'service_upstream_binding_id' => $bindingId,
             'plugin_id' => $pluginId,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'status_key' => 'running',
             'status_text' => 'Running',
             'resource_json' => json_encode([
@@ -594,7 +594,7 @@ class AdminServiceListInvoiceOnlyTest extends TestCase
             'service_id' => (int) $service->id,
             'service_upstream_binding_id' => $bindingId,
             'plugin_id' => $pluginId,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'connection_type' => 'default',
             'hostname' => 'console-host-'.$suffix.'.example.net',
             'ip_address' => '198.51.100.61',
