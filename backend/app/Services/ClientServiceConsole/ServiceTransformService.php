@@ -274,7 +274,7 @@ class ServiceTransformService
                 'power' => $canExecuteConsoleActions,
                 'module_status' => $this->canManageService($service),
                 'manual_provision' => $this->canManualProvisionService($service),
-                'password_reset' => $canExecuteConsoleActions,
+                'password_reset' => $this->canResetPassword($service, $serviceStatus),
                 'reinstall' => $canExecuteConsoleActions,
                 'traffic_package' => $this->canManageService($service) && $trafficPackageEnabled,
                 'available' => array_keys(self::POWER_ACTIONS),
@@ -403,6 +403,32 @@ class ServiceTransformService
 
         return $provisionError !== ''
             && (int) $service->status === ServiceStatus::PENDING;
+    }
+
+    /**
+     * 密码重置不需要实例处于开机状态，只检查业务状态和上游状态。
+     */
+    public function canResetPassword(Service $service, string $upstreamStatus = ''): bool
+    {
+        if (! $this->canManageService($service)) {
+            return false;
+        }
+
+        if (in_array((int) $service->status, [
+            ServiceStatus::PENDING,
+            ServiceStatus::SUSPENDED,
+            ServiceStatus::EXPIRED,
+            ServiceStatus::CANCELLED,
+        ], true)) {
+            return false;
+        }
+
+        $provisionData = $this->serviceProvisionData($service);
+        $normalizedUpstreamStatus = strtolower(trim($upstreamStatus !== ''
+            ? $upstreamStatus
+            : (string) ($provisionData['upstream_status'] ?? '')));
+
+        return ! in_array($normalizedUpstreamStatus, ['pending', 'suspended', 'cancelled', 'deleted', 'fraud'], true);
     }
 
     // ── Connection cache helpers ───────────────────────────────────────────

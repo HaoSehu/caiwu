@@ -220,7 +220,7 @@ class ServicePowerService
             'product.supplier',
             'order:id,order_no,status,paid_at,created_at',
         ]);
-        throw_if(! $this->transformService->canExecuteConsoleActions($service), new BusinessException('当前实例状态不支持该操作', 42200));
+        throw_if(! $this->transformService->canResetPassword($service), new BusinessException('当前实例状态不支持该操作', 42200));
 
         [$runtime, $supplier, $hostId, $jwt] = $this->detailService->resolveUpstreamContext($service);
         $password = (string) ($data['password'] ?? '');
