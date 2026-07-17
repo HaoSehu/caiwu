@@ -12,6 +12,7 @@ use App\Models\Product;
 use App\Models\Role;
 use App\Models\SecondProductGroup;
 use App\Models\Service;
+use App\Models\ThirdProductGroup;
 use App\Models\Ticket;
 use App\Models\TicketReply;
 use App\Models\User;
@@ -468,10 +469,17 @@ class V2TicketApiTest extends TestCase
             'sort_order' => 1,
             'is_visible' => 1,
         ]);
+        $thirdGroup = ThirdProductGroup::query()->create([
+            'second_product_group_id' => (int) $secondGroup->id,
+            'name' => '工单三级 '.$suffix,
+            'slug' => 'v2-ticket-leaf-'.$suffix,
+            'description' => '工单三级说明',
+            'sort_order' => 1,
+            'is_visible' => 1,
+        ]);
 
         return Product::query()->create([
-            'first_product_group_id' => (int) $firstGroup->id,
-            'second_product_group_id' => (int) $secondGroup->id,
+            'product_group_id' => (int) $thirdGroup->id,
             'service_type_code' => ProductType::VPS,
             'name' => 'V2 Ticket Product '.$suffix,
             'custom_display_name' => 'V2 Ticket Product '.$suffix,

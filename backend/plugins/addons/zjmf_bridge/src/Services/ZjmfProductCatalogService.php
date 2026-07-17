@@ -535,12 +535,12 @@ class ZjmfProductCatalogService
             ->onSale()
             ->whereNotNull('product_group_id')
             ->with([
-                'productGroup.parent.parent',
+                'productGroup.secondProductGroup.firstProductGroup',
             ])
             ->withVisibleProductGroupPath(ProductType::visibleValues())
             ->when($productType !== null, fn (Builder $query) => $query->underRootProductGroup(null, $productType))
-            ->when($firstGroupId !== null, fn (Builder $query) => $query->inProductGroupTree($firstGroupId))
-            ->when($secondGroupId !== null, fn (Builder $query) => $query->inProductGroupTree($secondGroupId))
+            ->when($firstGroupId !== null, fn (Builder $query) => $query->inFirstProductGroup($firstGroupId))
+            ->when($secondGroupId !== null, fn (Builder $query) => $query->inSecondProductGroup($secondGroupId))
             ->when($thirdGroupId !== null, fn (Builder $query) => $query->inCurrentProductGroup($thirdGroupId))
             ->when($effectiveGroupId !== null, function (Builder $query) use ($effectiveGroupId): void {
                 $query->inCurrentProductGroup($effectiveGroupId);
@@ -707,7 +707,7 @@ class ZjmfProductCatalogService
             return ProductType::normalizeBusinessValue($candidate);
         }
 
-        $code = trim((string) ($firstGroup?->legacy_product_type ?? $firstGroup?->code ?? $product?->service_type_code ?? ''));
+        $code = trim((string) ($firstGroup?->code ?? $product?->service_type_code ?? ''));
 
         return ProductType::normalizeBusinessValueFromMenuCode($code);
     }

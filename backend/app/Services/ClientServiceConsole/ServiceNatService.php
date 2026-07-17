@@ -36,9 +36,7 @@ class ServiceNatService
     {
         $service = $this->detailService->findUserService($user, $serviceId, [
             'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
-            'product.firstProductGroup:id,code,name,description,slug',
-            'product.secondProductGroup:id,first_product_group_id,name,description,slug',
-            'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
+            'product.productGroup.secondProductGroup.firstProductGroup',
             'product.supplier',
         ]);
 
@@ -97,9 +95,7 @@ class ServiceNatService
     {
         $service = $this->detailService->findUserService($user, $serviceId, [
             'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
-            'product.firstProductGroup:id,code,name,description,slug',
-            'product.secondProductGroup:id,first_product_group_id,name,description,slug',
-            'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
+            'product.productGroup.secondProductGroup.firstProductGroup',
             'product.supplier',
         ]);
 
@@ -146,9 +142,7 @@ class ServiceNatService
     {
         $service = $this->detailService->findUserService($user, $serviceId, [
             'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
-            'product.firstProductGroup:id,code,name,description,slug',
-            'product.secondProductGroup:id,first_product_group_id,name,description,slug',
-            'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
+            'product.productGroup.secondProductGroup.firstProductGroup',
             'product.supplier',
         ]);
 

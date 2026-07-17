@@ -52,9 +52,7 @@ class ProductController extends Controller
     public function show(Product $product)
     {
         $product->load([
-            'firstProductGroup',
-            'secondProductGroup',
-            'thirdProductGroup',
+            'productGroup.secondProductGroup.firstProductGroup',
             'supplier',
         ])->loadCount(['orders', 'services']);
 

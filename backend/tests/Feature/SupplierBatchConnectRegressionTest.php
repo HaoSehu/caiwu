@@ -18,7 +18,6 @@ use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiTransport;
 use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -31,10 +30,6 @@ class SupplierBatchConnectRegressionTest extends TestCase
         app(PluginFileLoader::class)->ensureLoaded(
             app(PluginScanner::class)->requireManifest('upstream', 'mofang_finance')
         );
-        Artisan::call('migrate', [
-            '--path' => 'database/migrations/2026_07_03_130000_create_plugin_binding_runtime_and_audit_tables.php',
-            '--force' => true,
-        ]);
         $this->activateIntegrationPluginForTest('upstream', 'mofang_finance');
     }
 
@@ -107,7 +102,7 @@ class SupplierBatchConnectRegressionTest extends TestCase
 
         /** @var Product|null $product */
         $product = Product::query()
-            ->with('secondProductGroup.firstProductGroup')
+            ->with('productGroup.secondProductGroup.firstProductGroup')
             ->join('product_upstream_bindings as pub', 'pub.product_id', '=', 'products.id')
             ->join('supplier_plugin_bindings as spb', 'spb.id', '=', 'pub.supplier_plugin_binding_id')
             ->where('spb.supplier_id', (int) $supplier->id)
@@ -123,10 +118,11 @@ class SupplierBatchConnectRegressionTest extends TestCase
         $this->assertSame(1, (int) $product->auto_setup);
         $this->assertSame('2', (string) (($product->purchase_requires['upstream_default_config'] ?? [])['cpu'] ?? ''));
         $this->assertSame('4', (string) (($product->purchase_requires['upstream_default_config'] ?? [])['memory'] ?? ''));
-        $this->assertNotNull($product->secondProductGroup);
-        $this->assertNotNull($product->secondProductGroup?->firstProductGroup);
-        $this->assertSame((int) $firstGroup->id, (int) $product->secondProductGroup?->firstProductGroup?->id);
-        $this->assertSame('香港云服务器 / CN2', $product->secondProductGroup?->name);
+        $this->assertNotNull($product->productGroup);
+        $this->assertNotNull($product->productGroup?->secondProductGroup);
+        $this->assertNotNull($product->productGroup?->secondProductGroup?->firstProductGroup);
+        $this->assertSame((int) $firstGroup->id, (int) $product->productGroup?->secondProductGroup?->firstProductGroup?->id);
+        $this->assertSame('香港云服务器 / CN2', $product->productGroup?->secondProductGroup?->name);
 
         $display = (new ProductDisplayNameResolver)->resolveForProduct($product);
         $this->assertSame('2 vCPU 4G', $display['product_display_name'] ?? null);

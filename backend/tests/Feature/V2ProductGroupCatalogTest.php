@@ -156,7 +156,7 @@ class V2ProductGroupCatalogTest extends TestCase
         ]))
             ->assertOk()
             ->assertJsonPath('code', 0)
-            ->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.total', 2)
             ->assertJsonPath('data.list.0.id', $thirdGroup->id)
             ->assertJsonPath('data.list.0.effective_product_group_level', 3);
 
@@ -170,7 +170,7 @@ class V2ProductGroupCatalogTest extends TestCase
         ]))
             ->assertOk()
             ->assertJsonPath('code', 0)
-            ->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.total', 2)
             ->assertJsonPath('data.list.0.id', $directProduct->id)
             ->assertJsonPath('data.list.0.cpu_model_name', 'Intel Xeon Platinum 8269CY')
             ->assertJsonPath('data.list.0.cpu_base_frequency', '2.50GHz')
@@ -327,12 +327,13 @@ class V2ProductGroupCatalogTest extends TestCase
         string $monthlyPrice,
         int $sortOrder,
     ): array {
+        $thirdGroup ??= $this->createThirdGroup($secondGroup, $name.' 三级分组', $sortOrder, true);
         $firstGroup = $secondGroup->firstProductGroup ?: FirstProductGroup::query()->findOrFail((int) $secondGroup->first_product_group_id);
         $code = (string) $firstGroup->code;
         $productType = ProductType::businessValueForFirstGroup($firstGroup, $code);
 
         return [
-            'product_group_id' => $thirdGroup ? (int) $thirdGroup->id : (int) $secondGroup->id,
+            'product_group_id' => (int) $thirdGroup->id,
             'service_type_code' => $productType,
             'custom_display_name' => $name,
             'product_type' => $productType,

@@ -39,9 +39,9 @@ class OrderV2QueryService
                 'user:id,email,nickname,phone',
                 'invoice:id,invoice_no,order_id,status,amount,paid_amount,paid_at',
                 'product' => fn ($query) => $query->select($this->productProjectionColumns()),
-                'product.firstProductGroup:id,code,name',
-                'product.secondProductGroup:id,first_product_group_id,name',
-                'product.thirdProductGroup:id,second_product_group_id,name',
+                'product.productGroup:id,second_product_group_id,name',
+                'product.productGroup.secondProductGroup:id,first_product_group_id,name',
+                'product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
                 'service:id,name,domain,status,expires_at',
             ]);
 
@@ -98,9 +98,9 @@ class OrderV2QueryService
                     ]))
                     ->orderByDesc('id'),
                 'product' => fn ($query) => $query->select($this->productProjectionColumns()),
-                'product.firstProductGroup:id,code,name',
-                'product.secondProductGroup:id,first_product_group_id,name',
-                'product.thirdProductGroup:id,second_product_group_id,name',
+                'product.productGroup:id,second_product_group_id,name',
+                'product.productGroup.secondProductGroup:id,first_product_group_id,name',
+                'product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
                 'service:id,name,domain,status,expires_at',
                 'coupon:id,code,name,type,value',
             ])

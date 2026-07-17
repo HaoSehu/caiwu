@@ -84,42 +84,42 @@ class DatabaseOptimizationRegressionTest extends TestCase
     public function test_second_product_groups_duplicate_index_is_removed(): void
     {
         $this->assertSame(
-            'VIEW',
+            'BASE TABLE',
             $this->objectTypeFor('second_product_groups'),
-            'second_product_groups 应为 product_groups 的兼容视图'
+            'second_product_groups 应为独立物理表'
         );
 
-        $indexes = $this->indexNamesFor('product_groups');
+        $indexes = $this->indexNamesFor('second_product_groups');
         $this->assertContains(
-            'product_groups_parent_visible_sort_idx',
+            'idx_second_first_visible_sort',
             $indexes,
-            'product_groups_parent_visible_sort_idx 必须保留'
+            'idx_second_first_visible_sort 必须保留'
         );
-        $this->assertNotContains(
-            'idx_second_product_groups_first_visible_sort',
-            $indexes,
-            'idx_second_product_groups_first_visible_sort 是旧二级表冗余索引，应已删除'
+        $this->assertContains(
+            'fk_second_first_group',
+            $this->foreignNamesFor('second_product_groups'),
+            'second_product_groups.first_product_group_id 外键必须存在'
         );
     }
 
     public function test_third_product_groups_duplicate_index_is_removed(): void
     {
         $this->assertSame(
-            'VIEW',
+            'BASE TABLE',
             $this->objectTypeFor('third_product_groups'),
-            'third_product_groups 应为 product_groups 的兼容视图'
+            'third_product_groups 应为独立物理表'
         );
 
-        $indexes = $this->indexNamesFor('product_groups');
+        $indexes = $this->indexNamesFor('third_product_groups');
         $this->assertContains(
-            'product_groups_level_sort_idx',
+            'idx_third_second_visible_sort',
             $indexes,
-            'product_groups_level_sort_idx 必须保留'
+            'idx_third_second_visible_sort 必须保留'
         );
-        $this->assertNotContains(
-            'idx_third_product_groups_second_visible_sort',
-            $indexes,
-            'idx_third_product_groups_second_visible_sort 是旧三级表冗余索引，应已删除'
+        $this->assertContains(
+            'fk_third_second_group',
+            $this->foreignNamesFor('third_product_groups'),
+            'third_product_groups.second_product_group_id 外键必须存在'
         );
     }
 
@@ -292,22 +292,13 @@ class DatabaseOptimizationRegressionTest extends TestCase
         );
     }
 
-    // ── product_groups 自引用分组基线 ─────────────────────────────────────
+    // ── 商品三级物理分组基线 ───────────────────────────────────────────────
 
-    public function test_product_groups_table_is_self_referencing_source(): void
+    public function test_product_groups_compatibility_table_is_absent(): void
     {
-        $this->assertTrue(
+        $this->assertFalse(
             Schema::hasTable('product_groups'),
-            'product_groups 表必须存在（商品分组自引用唯一真源）'
-        );
-        $this->assertTrue(
-            Schema::hasColumn('product_groups', 'parent_id'),
-            'product_groups.parent_id 必须存在'
-        );
-        $this->assertContains(
-            'product_groups_parent_fk',
-            $this->foreignNamesFor('product_groups'),
-            'product_groups.parent_id 自引用外键必须存在'
+            '不保留 product_groups 兼容表或视图'
         );
     }
 
@@ -315,12 +306,12 @@ class DatabaseOptimizationRegressionTest extends TestCase
     {
         $this->assertTrue(
             Schema::hasColumn('products', 'product_group_id'),
-            'products.product_group_id 必须存在（商品挂载到 product_groups）'
+            'products.product_group_id 必须存在（商品挂载到 third_product_groups）'
         );
         $this->assertContains(
             'products_product_group_fk',
             $this->foreignNamesFor('products'),
-            'products.product_group_id 外键必须存在'
+            'products.product_group_id 到三级分组的外键必须存在'
         );
     }
 
@@ -329,9 +320,32 @@ class DatabaseOptimizationRegressionTest extends TestCase
         foreach (['first_product_group_id', 'second_product_group_id', 'third_product_group_id'] as $column) {
             $this->assertFalse(
                 Schema::hasColumn('products', $column),
-                "products.{$column} 应已删除（由 product_group_id + product_groups 层级推导）"
+                "products.{$column} 应已删除（商品仅挂载三级物理分组）"
             );
         }
+    }
+
+    public function test_products_has_a_single_status_only_index(): void
+    {
+        $indexes = collect(DB::select(
+            'SELECT index_name AS index_name
+             FROM information_schema.statistics
+             WHERE table_schema = DATABASE()
+               AND table_name = ?
+             GROUP BY index_name
+             HAVING COUNT(*) = 1 AND MAX(column_name) = ?
+             ORDER BY index_name',
+            ['products', 'status'],
+        ))
+            ->map(fn (object $row) => (string) $row->index_name)
+            ->values()
+            ->all();
+
+        $this->assertSame(
+            ['idx_product_status_groups'],
+            $indexes,
+            'products.status 只能保留一个单列索引，避免重复索引造成额外写放大'
+        );
     }
 
     // ── 工具方法 ──────────────────────────────────────────────────────────

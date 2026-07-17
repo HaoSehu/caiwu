@@ -99,6 +99,7 @@ class SettingTableBindingTest extends TestCase
         $suffix = bin2hex(random_bytes(4));
         $firstGroupId = null;
         $secondGroupId = null;
+        $thirdGroupId = null;
         $productId = null;
 
         try {
@@ -106,20 +107,23 @@ class SettingTableBindingTest extends TestCase
 
             $secondGroupId = (int) DB::table('second_product_groups')->insertGetId([
                 'first_product_group_id' => $firstGroupId,
-                'product_type' => 'cloud_server',
-                'level' => 2,
                 'name' => '测试分组-'.$suffix,
                 'slug' => 'stock-test-'.$suffix,
                 'description' => '',
                 'sort_order' => 0,
                 'is_visible' => 1,
             ]);
+            $thirdGroupId = (int) DB::table('third_product_groups')->insertGetId([
+                'second_product_group_id' => $secondGroupId,
+                'name' => '测试叶子分组-'.$suffix,
+                'slug' => 'stock-leaf-'.$suffix,
+                'description' => '',
+                'sort_order' => 0,
+                'is_visible' => 1,
+            ]);
 
             $productId = $this->insertProduct([
-                'product_group_id' => $secondGroupId,
-                'first_product_group_id' => $firstGroupId,
-                'second_product_group_id' => $secondGroupId,
-                'third_product_group_id' => null,
+                'product_group_id' => $thirdGroupId,
                 'service_type_code' => 'vps',
                 'product_type' => 'vps',
                 'remark' => '测试商品-'.$suffix,
@@ -147,6 +151,9 @@ class SettingTableBindingTest extends TestCase
                 DB::table('products')->where('id', $productId)->delete();
             }
 
+            if ($thirdGroupId !== null) {
+                DB::table('third_product_groups')->where('id', $thirdGroupId)->delete();
+            }
             if ($secondGroupId !== null) {
                 DB::table('second_product_groups')->where('id', $secondGroupId)->delete();
             }
@@ -170,7 +177,6 @@ class SettingTableBindingTest extends TestCase
         return (int) DB::table('first_product_groups')->insertGetId([
             'code' => 'vps',
             'product_type' => 'cloud_server',
-            'level' => 1,
             'name' => 'VPS',
             'slug' => $slugSeed,
             'description' => '',
@@ -207,8 +213,6 @@ class SettingTableBindingTest extends TestCase
 
             $parentGroupId = (int) DB::table('second_product_groups')->insertGetId([
                 'first_product_group_id' => $firstGroupId,
-                'product_type' => 'cloud_server',
-                'level' => 2,
                 'name' => '父级分类-'.$suffix,
                 'slug' => 'detail-parent-'.$suffix,
                 'description' => $parentSlogan,
@@ -218,8 +222,6 @@ class SettingTableBindingTest extends TestCase
 
             $childGroupId = (int) DB::table('third_product_groups')->insertGetId([
                 'second_product_group_id' => $parentGroupId,
-                'product_type' => 'cloud_server',
-                'level' => 3,
                 'name' => '子级分类-'.$suffix,
                 'slug' => 'detail-child-'.$suffix,
                 'description' => $childSlogan,
@@ -229,9 +231,6 @@ class SettingTableBindingTest extends TestCase
 
             $productId = $this->insertProduct([
                 'product_group_id' => $childGroupId,
-                'first_product_group_id' => $firstGroupId,
-                'second_product_group_id' => $parentGroupId,
-                'third_product_group_id' => $childGroupId,
                 'service_type_code' => 'vps',
                 'product_type' => 'vps',
                 'remark' => '详情商品-'.$suffix,
@@ -282,6 +281,7 @@ class SettingTableBindingTest extends TestCase
         $suffix = bin2hex(random_bytes(4));
         $firstGroupId = null;
         $secondGroupId = null;
+        $thirdGroupId = null;
         $productId = null;
 
         try {
@@ -289,20 +289,23 @@ class SettingTableBindingTest extends TestCase
 
             $secondGroupId = (int) DB::table('second_product_groups')->insertGetId([
                 'first_product_group_id' => $firstGroupId,
-                'product_type' => 'cloud_server',
-                'level' => 2,
                 'name' => '报价分组-'.$suffix,
                 'slug' => 'quote-test-'.$suffix,
                 'description' => '',
                 'sort_order' => 0,
                 'is_visible' => 1,
             ]);
+            $thirdGroupId = (int) DB::table('third_product_groups')->insertGetId([
+                'second_product_group_id' => $secondGroupId,
+                'name' => '报价叶子分组-'.$suffix,
+                'slug' => 'quote-leaf-'.$suffix,
+                'description' => '',
+                'sort_order' => 0,
+                'is_visible' => 1,
+            ]);
 
             $productId = $this->insertProduct([
-                'product_group_id' => $secondGroupId,
-                'first_product_group_id' => $firstGroupId,
-                'second_product_group_id' => $secondGroupId,
-                'third_product_group_id' => null,
+                'product_group_id' => $thirdGroupId,
                 'service_type_code' => 'vps',
                 'product_type' => 'vps',
                 'remark' => '报价商品-'.$suffix,
@@ -334,6 +337,9 @@ class SettingTableBindingTest extends TestCase
                 DB::table('products')->where('id', $productId)->delete();
             }
 
+            if ($thirdGroupId !== null) {
+                DB::table('third_product_groups')->where('id', $thirdGroupId)->delete();
+            }
             if ($secondGroupId !== null) {
                 DB::table('second_product_groups')->where('id', $secondGroupId)->delete();
             }

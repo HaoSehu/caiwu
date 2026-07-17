@@ -9,6 +9,7 @@ use App\Models\FirstProductGroup;
 use App\Models\Product;
 use App\Models\Role;
 use App\Models\SecondProductGroup;
+use App\Models\ThirdProductGroup;
 use App\Services\Admin\V2\AdminCatalogActionV2Service;
 use App\Support\AdminPermissions;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -85,21 +86,22 @@ class V2AdminProductCoreActionApiTest extends TestCase
     public function test_product_crud_delete_restore_and_force_delete_use_v2_contracts(): void
     {
         $secondGroup = $this->createSecondGroup();
+        $thirdGroup = $this->createThirdGroup($secondGroup);
 
         Sanctum::actingAs($this->createAdmin([AdminPermissions::PRODUCT_LIST]));
 
-        $this->postJson('/api/v2/admin/products', $this->productPayload($secondGroup))
+        $this->postJson('/api/v2/admin/products', $this->productPayload($thirdGroup))
             ->assertForbidden()
             ->assertJsonPath('code', 40300);
 
         Sanctum::actingAs($this->createAdmin([AdminPermissions::PRODUCT_MANAGE]));
 
-        $this->postJson('/api/v2/admin/products?per_page=20', $this->productPayload($secondGroup))
+        $this->postJson('/api/v2/admin/products?per_page=20', $this->productPayload($thirdGroup))
             ->assertUnprocessable()
             ->assertJsonPath('code', 42200)
             ->assertJsonStructure(['data' => ['errors' => ['per_page']]]);
 
-        $createResponse = $this->postJson('/api/v2/admin/products', $this->productPayload($secondGroup))
+        $createResponse = $this->postJson('/api/v2/admin/products', $this->productPayload($thirdGroup))
             ->assertOk()
             ->assertJsonPath('code', 0)
             ->assertJsonPath('message', '商品创建成功')
@@ -111,7 +113,7 @@ class V2AdminProductCoreActionApiTest extends TestCase
         $this->assertNoSensitiveKeys($createResponse->json());
 
         $updateResponse = $this->putJson('/api/v2/admin/products/'.$productId, array_merge(
-            $this->productPayload($secondGroup),
+            $this->productPayload($thirdGroup),
             ['custom_display_name' => 'V2 Updated Product']
         ))
             ->assertOk()
@@ -151,7 +153,7 @@ class V2AdminProductCoreActionApiTest extends TestCase
     public function test_product_batch_actions_use_v2_routes_validation_and_sanitized_payloads(): void
     {
         $product = $this->createProduct();
-        $secondGroup = $product->secondProductGroup ?: SecondProductGroup::query()->findOrFail((int) $product->second_product_group_id);
+        $thirdGroup = $product->productGroup ?: ThirdProductGroup::query()->findOrFail((int) $product->product_group_id);
 
         $this->app->instance(AdminCatalogActionV2Service::class, new class extends AdminCatalogActionV2Service
         {
@@ -161,7 +163,7 @@ class V2AdminProductCoreActionApiTest extends TestCase
             {
                 return [
                     'product_id' => (int) $payload['product_id'],
-                    'target_second_product_group_id' => (int) $payload['target_second_product_group_id'],
+                    'target_third_product_group_id' => (int) $payload['target_third_product_group_id'],
                     'position' => (string) $payload['position'],
                     'raw_response' => 'must-not-leak',
                 ];
@@ -179,7 +181,7 @@ class V2AdminProductCoreActionApiTest extends TestCase
 
             public function batchUpdateCategory(array $payload): array
             {
-                return ['updated_count' => count($payload['product_ids'] ?? []), 'target_second_product_group_id' => (int) $payload['target_second_product_group_id']];
+                return ['updated_count' => count($payload['product_ids'] ?? []), 'target_third_product_group_id' => (int) $payload['target_third_product_group_id']];
             }
 
             public function batchUpdateProvisionHostname(array $payload, array $context): array
@@ -197,7 +199,7 @@ class V2AdminProductCoreActionApiTest extends TestCase
 
         $reorderPayload = [
             'product_id' => (int) $product->id,
-            'target_second_product_group_id' => (int) $secondGroup->id,
+            'target_third_product_group_id' => (int) $thirdGroup->id,
             'position' => 'append',
         ];
 
@@ -226,7 +228,7 @@ class V2AdminProductCoreActionApiTest extends TestCase
 
         $categoryResponse = $this->postJson('/api/v2/admin/products/category-batches', [
             'product_ids' => [(int) $product->id],
-            'target_second_product_group_id' => (int) $secondGroup->id,
+            'target_third_product_group_id' => (int) $thirdGroup->id,
         ])
             ->assertOk()
             ->assertJsonPath('code', 0)
@@ -243,7 +245,7 @@ class V2AdminProductCoreActionApiTest extends TestCase
         Sanctum::actingAs($this->createAdmin([AdminPermissions::PRODUCT_SYNC]));
 
         $trafficResponse = $this->postJson('/api/v2/admin/products/traffic-package-pulls', [
-            'second_product_group_id' => (int) $secondGroup->id,
+            'third_product_group_id' => (int) $thirdGroup->id,
             'source_product_id' => (int) $product->id,
         ])
             ->assertOk()
@@ -260,8 +262,14 @@ class V2AdminProductCoreActionApiTest extends TestCase
     private function createProduct(): Product
     {
         $secondGroup = $this->createSecondGroup();
+        $thirdGroup = $this->createThirdGroup($secondGroup);
+        $payload = $this->productPayload($thirdGroup);
+        $payload['product_group_id'] = (int) $thirdGroup->id;
+        unset($payload['third_product_group_id']);
 
-        return Product::query()->create($this->productPayload($secondGroup))->refresh()->load('secondProductGroup');
+        return Product::query()->create($payload)
+            ->refresh()
+            ->load('productGroup.secondProductGroup.firstProductGroup');
     }
 
     private function createSecondGroup(): SecondProductGroup
@@ -288,16 +296,30 @@ class V2AdminProductCoreActionApiTest extends TestCase
         ]);
     }
 
+    private function createThirdGroup(SecondProductGroup $secondGroup): ThirdProductGroup
+    {
+        $suffix = bin2hex(random_bytes(4));
+
+        return ThirdProductGroup::query()->create([
+            'second_product_group_id' => (int) $secondGroup->id,
+            'name' => 'V2 Core Third '.$suffix,
+            'slug' => 'v2-core-third-'.$suffix,
+            'description' => 'V2 Core Third',
+            'sort_order' => 1,
+            'is_visible' => 1,
+        ]);
+    }
+
     /**
      * @return array<string, mixed>
      */
-    private function productPayload(SecondProductGroup $secondGroup): array
+    private function productPayload(ThirdProductGroup $thirdGroup): array
     {
+        $secondGroup = $thirdGroup->secondProductGroup ?: SecondProductGroup::query()->findOrFail((int) $thirdGroup->second_product_group_id);
         $firstGroup = $secondGroup->firstProductGroup ?: FirstProductGroup::query()->findOrFail((int) $secondGroup->first_product_group_id);
 
         return [
-            'first_product_group_id' => (int) $firstGroup->id,
-            'second_product_group_id' => (int) $secondGroup->id,
+            'third_product_group_id' => (int) $thirdGroup->id,
             'service_type_code' => (string) $firstGroup->code,
             'custom_display_name' => 'V2 Core Product',
             'product_type' => (string) $firstGroup->code,

@@ -68,9 +68,7 @@ class ServiceDetailService
     {
         $service = $this->findUserService($user, $serviceId, [
             'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
-            'product.firstProductGroup:id,code,name,description,slug',
-            'product.secondProductGroup:id,first_product_group_id,name,description,slug',
-            'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
+            'product.productGroup.secondProductGroup.firstProductGroup',
         ]);
 
         $cacheKey = $this->buildServiceConfigCacheKey($service);
@@ -105,9 +103,7 @@ class ServiceDetailService
     {
         $service = $this->findUserService($user, $serviceId, [
             'product:id,product_type,service_type_code,product_group_id,config_options,pricing,purchase_requires',
-            'product.firstProductGroup:id,code,name,description,slug',
-            'product.secondProductGroup:id,first_product_group_id,name,description,slug',
-            'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
+            'product.productGroup.secondProductGroup.firstProductGroup',
             'product.supplier',
             'order:id,order_no,status,paid_at,created_at',
             'order.invoice:id,order_id,invoice_no',
@@ -138,9 +134,7 @@ class ServiceDetailService
                     $this->syncServiceFromRemote($service, $remote['host'] ?? [], $remote['runtime'] ?? [], $remote['nat'] ?? []);
                     $service->refresh()->loadMissing([
                         'product:id,product_type,service_type_code,product_group_id,config_options,pricing,purchase_requires',
-                        'product.firstProductGroup:id,code,name,description,slug',
-                        'product.secondProductGroup:id,first_product_group_id,name,description,slug',
-                        'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
+                        'product.productGroup.secondProductGroup.firstProductGroup',
                         'product.supplier',
                         'order:id,order_no,status,paid_at,created_at',
                         'order.invoice:id,order_id,invoice_no',
@@ -173,9 +167,7 @@ class ServiceDetailService
     {
         $service = $this->findUserService($user, $serviceId, [
             'product:id,product_type,service_type_code,product_group_id,config_options,pricing,purchase_requires',
-            'product.firstProductGroup:id,code,name,description,slug',
-            'product.secondProductGroup:id,first_product_group_id,name,description,slug',
-            'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
+            'product.productGroup.secondProductGroup.firstProductGroup',
             'product.supplier',
             'order:id,order_no,status,paid_at,created_at',
             'order.invoice:id,order_id,invoice_no',
@@ -198,9 +190,7 @@ class ServiceDetailService
     {
         $service = $this->findUserService($user, $serviceId, [
             'product:id,product_type,service_type_code,product_group_id,config_options,pricing,purchase_requires',
-            'product.firstProductGroup:id,code,name,description,slug',
-            'product.secondProductGroup:id,first_product_group_id,name,description,slug',
-            'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
+            'product.productGroup.secondProductGroup.firstProductGroup',
             'product.supplier',
             'order:id,order_no,status,paid_at,created_at',
             'order.invoice:id,order_id,invoice_no',
@@ -223,9 +213,7 @@ class ServiceDetailService
                     $this->syncServiceFromRemote($service, $remote['host'] ?? [], $remote['runtime'] ?? [], $remote['nat'] ?? []);
                     $service->refresh()->loadMissing([
                         'product:id,product_type,service_type_code,product_group_id,config_options,pricing,purchase_requires',
-                        'product.firstProductGroup:id,code,name,description,slug',
-                        'product.secondProductGroup:id,first_product_group_id,name,description,slug',
-                        'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
+                        'product.productGroup.secondProductGroup.firstProductGroup',
                         'product.supplier',
                         'order:id,order_no,status,paid_at,created_at',
                         'order.invoice:id,order_id,invoice_no',
@@ -328,9 +316,7 @@ class ServiceDetailService
     {
         $service = $this->findUserService($user, $serviceId, [
             'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
-            'product.firstProductGroup:id,code,name,description,slug',
-            'product.secondProductGroup:id,first_product_group_id,name,description,slug',
-            'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
+            'product.productGroup.secondProductGroup.firstProductGroup',
             'order:id,order_no,status,paid_at',
             'invoice:id,invoice_no,status,paid_at',
         ]);
@@ -355,9 +341,7 @@ class ServiceDetailService
     {
         $service = $this->findUserService($user, $serviceId, [
             'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
-            'product.firstProductGroup:id,code,name,description,slug',
-            'product.secondProductGroup:id,first_product_group_id,name,description,slug',
-            'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
+            'product.productGroup.secondProductGroup.firstProductGroup',
             'order:id,order_no,status,paid_at',
             'invoice:id,invoice_no,status,paid_at',
         ]);
@@ -384,9 +368,7 @@ class ServiceDetailService
 
         return $this->transformService->transformListItem($service->fresh([
             'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
-            'product.firstProductGroup:id,code,name,description,slug',
-            'product.secondProductGroup:id,first_product_group_id,name,description,slug',
-            'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
+            'product.productGroup.secondProductGroup.firstProductGroup',
             'order:id,order_no,status,paid_at',
             'invoice:id,invoice_no,status,paid_at',
         ]));

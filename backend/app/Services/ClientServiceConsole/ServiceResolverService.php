@@ -40,14 +40,14 @@ class ServiceResolverService
 
     public function resolveServiceRootGroup(Service $service): ?FirstProductGroup
     {
-        $service->loadMissing('product.firstProductGroup');
+        $service->loadMissing('product.productGroup.secondProductGroup.firstProductGroup');
 
-        return $service->product?->firstProductGroup;
+        return $service->product?->productGroup?->secondProductGroup?->firstProductGroup;
     }
 
     public function resolveGroupedOverviewTypeValue(Service $service): string
     {
-        $service->loadMissing('product.firstProductGroup');
+        $service->loadMissing('product.productGroup.secondProductGroup.firstProductGroup');
 
         $productType = trim((string) ($service->product?->product_type ?? ''));
         if ($productType !== '') {
@@ -59,7 +59,7 @@ class ServiceResolverService
             return ProductType::normalizeBusinessValue($serviceTypeCode);
         }
 
-        $firstGroup = $service->product?->firstProductGroup;
+        $firstGroup = $service->product?->productGroup?->secondProductGroup?->firstProductGroup;
         if ($firstGroup instanceof FirstProductGroup) {
             return ProductType::businessValueForFirstGroup($firstGroup);
         }
@@ -90,19 +90,21 @@ class ServiceResolverService
             return true;
         }
 
+        $firstGroup = $this->resolveServiceRootGroup($service);
+        $thirdGroup = $service->product?->productGroup;
+        $secondGroup = $thirdGroup?->secondProductGroup;
+
         foreach ([
             (string) ($service->product?->name ?? ''),
             (string) ($service->product?->product_type ?? ''),
             (string) ($service->product?->service_type_code ?? ''),
-            (string) ($service->product?->firstProductGroup?->name ?? ''),
-            (string) ($service->product?->firstProductGroup?->description ?? ''),
-            (string) ($service->product?->secondProductGroup?->name ?? ''),
-            (string) ($service->product?->secondProductGroup?->description ?? ''),
-            (string) ($service->product?->thirdProductGroup?->name ?? ''),
-            (string) ($service->product?->thirdProductGroup?->description ?? ''),
-            (string) ($this->resolveServiceRootGroup($service)?->name ?? ''),
-            (string) ($this->resolveServiceRootGroup($service)?->description ?? ''),
-            (string) ($this->resolveServiceRootGroup($service)?->code ?? ''),
+            (string) ($firstGroup?->name ?? ''),
+            (string) ($firstGroup?->description ?? ''),
+            (string) ($secondGroup?->name ?? ''),
+            (string) ($secondGroup?->description ?? ''),
+            (string) ($thirdGroup?->name ?? ''),
+            (string) ($thirdGroup?->description ?? ''),
+            (string) ($firstGroup?->code ?? ''),
             (string) ($provisionData['upstream_product_name'] ?? ''),
         ] as $candidateText) {
             if ($this->containsNatConsoleKeyword($candidateText)) {

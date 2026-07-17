@@ -2206,7 +2206,7 @@ class CouponService
             ])
             ->whereIn('id', $productIds)
             ->with([
-                'productGroup.parent.parent',
+                'productGroup.secondProductGroup.firstProductGroup',
             ])
             ->get();
 

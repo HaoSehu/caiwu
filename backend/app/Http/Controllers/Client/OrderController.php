@@ -29,10 +29,10 @@ class OrderController extends Controller
                 'invoice:id,invoice_no,order_id,type,status,amount,paid_amount,paid_at',
                 'service:id,name,status,expires_at',
                 'coupon:id,code,name,type,value',
-                'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
-                'product.firstProductGroup:id,code,name',
-                'product.secondProductGroup:id,first_product_group_id,name',
-                'product.thirdProductGroup:id,second_product_group_id,name',
+                'product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
+                'product.productGroup:id,second_product_group_id,name',
+                'product.productGroup.secondProductGroup:id,first_product_group_id,name',
+                'product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
             ])
             ->where('user_id', $userId)
             ->orderByDesc('id');
@@ -106,10 +106,10 @@ class OrderController extends Controller
                 'invoice:id,invoice_no,order_id,type,status,amount,paid_amount,paid_at,due_date,created_at',
                 'service:id,name,domain,status,expires_at',
                 'coupon:id,code,name,type,value',
-                'product:id,product_type,service_type_code,first_product_group_id,second_product_group_id,third_product_group_id,remark,config_options,purchase_requires',
-                'product.firstProductGroup:id,code,name',
-                'product.secondProductGroup:id,first_product_group_id,name',
-                'product.thirdProductGroup:id,second_product_group_id,name',
+                'product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
+                'product.productGroup:id,second_product_group_id,name',
+                'product.productGroup.secondProductGroup:id,first_product_group_id,name',
+                'product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
             ])
             ->where('user_id', $userId)
             ->findOrFail($id);

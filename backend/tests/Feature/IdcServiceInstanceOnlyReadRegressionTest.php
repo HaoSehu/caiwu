@@ -9,6 +9,7 @@ use App\Models\FirstProductGroup;
 use App\Models\Product;
 use App\Models\SecondProductGroup;
 use App\Models\Service;
+use App\Models\ThirdProductGroup;
 use App\Models\User;
 use App\Services\ProductCatalog\ProductAdminService;
 use App\Services\System\DashboardService;
@@ -41,8 +42,7 @@ class IdcServiceInstanceOnlyReadRegressionTest extends TestCase
         $groupIds = $this->createProductGroupIds('dashboard-group-'.$suffix, 'Dashboard Group '.$suffix);
 
         $product = Product::query()->create([
-            'first_product_group_id' => $groupIds['first'],
-            'second_product_group_id' => $groupIds['second'],
+            'product_group_id' => $groupIds['third'],
             'name' => 'Dashboard Product '.$suffix,
             'product_type' => 'server',
             'pricing' => ['monthly' => '12.00'],
@@ -117,8 +117,7 @@ class IdcServiceInstanceOnlyReadRegressionTest extends TestCase
         $groupIds = $this->createProductGroupIds('owner-group-'.$suffix, 'Owner Group '.$suffix);
 
         $product = Product::query()->create([
-            'first_product_group_id' => $groupIds['first'],
-            'second_product_group_id' => $groupIds['second'],
+            'product_group_id' => $groupIds['third'],
             'name' => 'Owner Product '.$suffix,
             'product_type' => 'server',
             'pricing' => ['monthly' => '23.00'],
@@ -152,7 +151,7 @@ class IdcServiceInstanceOnlyReadRegressionTest extends TestCase
     }
 
     /**
-     * @return array{first:int,second:int}
+     * @return array{first:int,second:int,third:int}
      */
     private function createProductGroupIds(string $slug, string $name): array
     {
@@ -180,10 +179,19 @@ class IdcServiceInstanceOnlyReadRegressionTest extends TestCase
             'sort_order' => 0,
             'is_visible' => 1,
         ]);
+        $third = ThirdProductGroup::query()->create([
+            'second_product_group_id' => (int) $second->id,
+            'name' => $name.' Leaf',
+            'slug' => $slug.'-leaf',
+            'description' => '',
+            'sort_order' => 0,
+            'is_visible' => 1,
+        ]);
 
         return [
             'first' => (int) $first->id,
             'second' => (int) $second->id,
+            'third' => (int) $third->id,
         ];
     }
 }

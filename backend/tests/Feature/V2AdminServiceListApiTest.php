@@ -14,6 +14,7 @@ use App\Models\Product;
 use App\Models\Role;
 use App\Models\SecondProductGroup;
 use App\Models\Service;
+use App\Models\ThirdProductGroup;
 use App\Models\User;
 use App\Support\AdminPermissions;
 use Illuminate\Support\Facades\Crypt;
@@ -220,10 +221,17 @@ class V2AdminServiceListApiTest extends TestCase
             'sort_order' => 1,
             'is_visible' => 1,
         ]);
+        $thirdGroup = ThirdProductGroup::query()->create([
+            'second_product_group_id' => (int) $secondGroup->id,
+            'name' => '管理服务三级 '.$suffix,
+            'slug' => 'v2-admin-service-leaf-'.$suffix,
+            'description' => '管理服务三级说明',
+            'sort_order' => 1,
+            'is_visible' => 1,
+        ]);
 
         return Product::query()->create([
-            'first_product_group_id' => (int) $firstGroup->id,
-            'second_product_group_id' => (int) $secondGroup->id,
+            'product_group_id' => (int) $thirdGroup->id,
             'service_type_code' => ProductType::VPS,
             'name' => 'V2 Admin Service Product '.$suffix,
             'custom_display_name' => 'V2 Admin Service Product '.$suffix,

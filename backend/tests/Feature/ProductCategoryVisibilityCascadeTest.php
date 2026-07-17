@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Models\FirstProductGroup;
 use App\Models\Product;
 use App\Models\SecondProductGroup;
+use App\Models\ThirdProductGroup;
 use App\Services\ProductCatalog\ProductCategoryService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -40,7 +41,6 @@ class ProductCategoryVisibilityCascadeTest extends TestCase
         Schema::connection('sqlite')->dropIfExists('third_product_groups');
         Schema::connection('sqlite')->dropIfExists('second_product_groups');
         Schema::connection('sqlite')->dropIfExists('first_product_groups');
-        Schema::connection('sqlite')->dropIfExists('product_groups');
 
         parent::tearDown();
     }
@@ -54,8 +54,6 @@ class ProductCategoryVisibilityCascadeTest extends TestCase
             'is_visible' => 1,
             'sort_order' => 0,
         ]);
-        $rootGroupId = $this->mirrorProductGroup(null, 1, 'vps', 'Visibility root', 'visibility-root');
-
         $child = SecondProductGroup::query()->create([
             'first_product_group_id' => (int) $root->id,
             'name' => 'Visibility child',
@@ -63,7 +61,20 @@ class ProductCategoryVisibilityCascadeTest extends TestCase
             'is_visible' => 1,
             'sort_order' => 1,
         ]);
-        $childGroupId = $this->mirrorProductGroup($rootGroupId, 2, null, 'Visibility child', 'visibility-child');
+        $rootLeaf = ThirdProductGroup::query()->create([
+            'second_product_group_id' => (int) $child->id,
+            'name' => 'Visibility root leaf',
+            'slug' => 'visibility-root-leaf',
+            'is_visible' => 1,
+            'sort_order' => 1,
+        ]);
+        $childLeaf = ThirdProductGroup::query()->create([
+            'second_product_group_id' => (int) $child->id,
+            'name' => 'Visibility child leaf',
+            'slug' => 'visibility-child-leaf',
+            'is_visible' => 1,
+            'sort_order' => 2,
+        ]);
 
         $other = FirstProductGroup::query()->create([
             'code' => 'vps-other',
@@ -72,11 +83,29 @@ class ProductCategoryVisibilityCascadeTest extends TestCase
             'is_visible' => 1,
             'sort_order' => 2,
         ]);
-        $otherGroupId = $this->mirrorProductGroup(null, 1, 'vps-other', 'Visibility other', 'visibility-other');
+        $otherSecond = SecondProductGroup::query()->create([
+            'first_product_group_id' => (int) $other->id,
+            'name' => 'Visibility other second',
+            'slug' => 'visibility-other-second',
+            'is_visible' => 1,
+            'sort_order' => 1,
+        ]);
+        $otherLeaf = ThirdProductGroup::query()->create([
+            'second_product_group_id' => (int) $otherSecond->id,
+            'name' => 'Visibility other leaf',
+            'slug' => 'visibility-other-leaf',
+            'is_visible' => 1,
+            'sort_order' => 1,
+        ]);
 
-        $rootProduct = $this->createProduct($rootGroupId, 'Root product');
-        $childProduct = $this->createProduct($childGroupId, 'Child product');
-        $otherProduct = $this->createProduct($otherGroupId, 'Other product');
+        $rootProduct = $this->createProduct((int) $rootLeaf->id, 'Root product');
+        $childProduct = $this->createProduct((int) $childLeaf->id, 'Child product');
+        $otherProduct = $this->createProduct((int) $otherLeaf->id, 'Other product');
+
+        $tree = app(ProductCategoryService::class)->adminCategoryTree('vps');
+        $this->assertSame(2, $tree[0]['products_count']);
+        $this->assertSame(2, $tree[0]['children'][0]['products_count']);
+        $this->assertSame(1, $tree[0]['children'][0]['children'][0]['products_count']);
 
         app(ProductCategoryService::class)->updateCategory((int) $root->id, [
             'level' => 1,
@@ -92,6 +121,14 @@ class ProductCategoryVisibilityCascadeTest extends TestCase
         ]);
         $this->assertDatabaseHas('second_product_groups', [
             'id' => (int) $child->id,
+            'is_visible' => 0,
+        ]);
+        $this->assertDatabaseHas('third_product_groups', [
+            'id' => (int) $rootLeaf->id,
+            'is_visible' => 0,
+        ]);
+        $this->assertDatabaseHas('third_product_groups', [
+            'id' => (int) $childLeaf->id,
             'is_visible' => 0,
         ]);
         $this->assertDatabaseHas('products', [
@@ -127,47 +164,12 @@ class ProductCategoryVisibilityCascadeTest extends TestCase
         ]);
     }
 
-    private function mirrorProductGroup(?int $parentId, int $level, ?string $code, string $name, string $slug): int
-    {
-        return (int) DB::table('product_groups')->insertGetId([
-            'parent_id' => $parentId,
-            'level' => $level,
-            'code' => $code,
-            'product_type' => 'cloud_server',
-            'name' => $name,
-            'slug' => $slug,
-            'sort_order' => 0,
-            'is_visible' => 1,
-            'is_system' => 0,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-    }
-
     private function createSchema(): void
     {
-        Schema::connection('sqlite')->create('product_groups', function (Blueprint $table): void {
-            $table->id();
-            $table->unsignedBigInteger('parent_id')->nullable();
-            $table->integer('level');
-            $table->string('code', 50)->nullable();
-            $table->string('product_type', 50)->nullable();
-            $table->string('name');
-            $table->string('slug')->nullable();
-            $table->string('description')->nullable();
-            $table->string('icon')->nullable();
-            $table->string('banner_image')->nullable();
-            $table->integer('is_visible')->default(1);
-            $table->integer('is_system')->default(0);
-            $table->integer('sort_order')->default(0);
-            $table->string('legacy_product_type', 50)->nullable();
-            $table->unsignedBigInteger('legacy_product_group_id')->nullable();
-            $table->timestamps();
-        });
-
         Schema::connection('sqlite')->create('first_product_groups', function (Blueprint $table): void {
             $table->id();
             $table->string('code', 50)->unique();
+            $table->string('product_type', 50)->nullable();
             $table->string('name', 100);
             $table->string('slug', 100)->nullable()->unique();
             $table->string('description', 255)->nullable();
@@ -176,7 +178,6 @@ class ProductCategoryVisibilityCascadeTest extends TestCase
             $table->integer('sort_order')->default(0);
             $table->integer('is_visible')->default(1);
             $table->integer('is_system')->default(0);
-            $table->string('legacy_product_type', 50)->nullable();
             $table->timestamps();
         });
 
@@ -189,7 +190,6 @@ class ProductCategoryVisibilityCascadeTest extends TestCase
             $table->string('banner_image', 255)->nullable();
             $table->integer('sort_order')->default(0);
             $table->integer('is_visible')->default(1);
-            $table->unsignedBigInteger('legacy_product_group_id')->nullable()->unique();
             $table->timestamps();
         });
 
@@ -202,7 +202,6 @@ class ProductCategoryVisibilityCascadeTest extends TestCase
             $table->string('banner_image', 255)->nullable();
             $table->integer('sort_order')->default(0);
             $table->integer('is_visible')->default(1);
-            $table->unsignedBigInteger('legacy_product_group_id')->nullable()->unique();
             $table->timestamps();
         });
 

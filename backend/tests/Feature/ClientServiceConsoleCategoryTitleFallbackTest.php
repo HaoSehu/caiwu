@@ -11,6 +11,7 @@ use App\Models\FirstProductGroup;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\SecondProductGroup;
+use App\Models\ThirdProductGroup;
 use App\Models\Service;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -25,6 +26,7 @@ class ClientServiceConsoleCategoryTitleFallbackTest extends TestCase
         $userId = null;
         $rootGroupId = null;
         $childGroupId = null;
+        $thirdGroupId = null;
         $productId = null;
         $orderId = null;
         $serviceId = null;
@@ -77,10 +79,18 @@ class ClientServiceConsoleCategoryTitleFallbackTest extends TestCase
                 'is_visible' => 1,
             ]);
             $childGroupId = (int) $childGroup->id;
+            $thirdGroup = ThirdProductGroup::query()->create([
+                'second_product_group_id' => $childGroupId,
+                'name' => 'Leaf Group '.$suffix,
+                'slug' => 'client-service-leaf-'.$suffix,
+                'description' => '',
+                'sort_order' => 0,
+                'is_visible' => 1,
+            ]);
+            $thirdGroupId = (int) $thirdGroup->id;
 
             $product = Product::query()->create([
-                'first_product_group_id' => (int) $rootGroup->id,
-                'second_product_group_id' => (int) $childGroup->id,
+                'product_group_id' => $thirdGroupId,
                 'name' => 'Client Service Product '.$suffix,
                 'product_type' => ProductType::VPS,
                 'description' => '',
@@ -168,7 +178,7 @@ class ClientServiceConsoleCategoryTitleFallbackTest extends TestCase
                 ->assertJsonPath('code', 0)
                 ->assertJsonPath('data.total', 1)
                 ->assertJsonPath('data.list.0.id', $serviceId)
-                ->assertJsonPath('data.list.0.product.group_name', 'Child Group '.$suffix);
+                ->assertJsonPath('data.list.0.product.group_name', 'Leaf Group '.$suffix);
 
             $defaultStatusResponse = $this->getJson('/api/v2/client/services?page=1&page_size=10&status_scope=active_pending')
                 ->assertOk()
@@ -197,8 +207,8 @@ class ClientServiceConsoleCategoryTitleFallbackTest extends TestCase
             $this->assertIsArray($nonEmptyTypeCard['children'] ?? null);
             $firstChild = $nonEmptyTypeCard['children'][0] ?? null;
             $this->assertIsArray($firstChild);
-            $this->assertSame('Child Group '.$suffix, $firstChild['name'] ?? '');
-            $this->assertSame('Child slogan '.$suffix, $firstChild['description'] ?? '');
+            $this->assertSame('Leaf Group '.$suffix, $firstChild['name'] ?? '');
+            $this->assertSame('当前分类已开通 3 个服务，可快速进入控制台处理业务。', $firstChild['description'] ?? '');
         } finally {
             if ($suspendedServiceId !== null) {
                 DB::table('services')->where('id', $suspendedServiceId)->delete();
@@ -218,6 +228,10 @@ class ClientServiceConsoleCategoryTitleFallbackTest extends TestCase
 
             if ($productId !== null) {
                 DB::table('products')->where('id', $productId)->delete();
+            }
+
+            if ($thirdGroupId !== null) {
+                DB::table('third_product_groups')->where('id', $thirdGroupId)->delete();
             }
 
             if ($childGroupId !== null) {

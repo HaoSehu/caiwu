@@ -75,7 +75,7 @@ class ProductSyncService
         );
 
         $products = Product::query()
-            ->with(['firstProductGroup', 'secondProductGroup', 'thirdProductGroup', 'supplier'])
+            ->with(['productGroup.secondProductGroup.firstProductGroup', 'supplier'])
             ->whereIn('id', $productIds->all())
             ->get()
             ->keyBy(fn (Product $product) => (int) $product->id);
@@ -238,7 +238,7 @@ class ProductSyncService
             $targetSecondGroup,
             (int) ($data['third_product_group_id'] ?? 0),
             TextSanitizer::nullable((string) ($data['third_product_group_name'] ?? ''))
-        );
+        ) ?? $this->resolveOrCreateImportedThirdProductGroup($targetSecondGroup, '默认分类');
 
         $importedProducts = [];
         $skippedItems = [];
@@ -1569,21 +1569,19 @@ class ProductSyncService
     }
 
     /**
-     * @return array{product_type:string,service_type_code:string,first_product_group_id:int,second_product_group_id:int,third_product_group_id:?int}
+     * @return array{product_type:string,service_type_code:string,product_group_id:int}
      */
     private function buildImportedTargetHierarchy(
         FirstProductGroup $firstGroup,
         SecondProductGroup $secondGroup,
-        ?ThirdProductGroup $thirdGroup
+        ThirdProductGroup $thirdGroup
     ): array {
         $productType = ProductType::businessValueForFirstGroup($firstGroup, $firstGroup->code);
 
         return [
             'product_type' => $productType,
             'service_type_code' => $productType,
-            'first_product_group_id' => (int) $firstGroup->id,
-            'second_product_group_id' => (int) $secondGroup->id,
-            'third_product_group_id' => $thirdGroup instanceof ThirdProductGroup ? (int) $thirdGroup->id : null,
+            'product_group_id' => (int) $thirdGroup->id,
         ];
     }
 
@@ -1621,9 +1619,7 @@ class ProductSyncService
             'name' => $name,
             'product_type' => ProductType::normalizeBusinessValue($productType),
             'service_type_code' => (string) $targetHierarchy['service_type_code'],
-            'first_product_group_id' => (int) $targetHierarchy['first_product_group_id'],
-            'second_product_group_id' => (int) $targetHierarchy['second_product_group_id'],
-            'third_product_group_id' => $targetHierarchy['third_product_group_id'],
+            'product_group_id' => (int) $targetHierarchy['product_group_id'],
             'pricing' => $pricing,
             'setup_fee' => $this->normalizeImportedAmount($supplierProduct['setup_fee'] ?? null) ?? '0.00',
             'config_options' => $configOptions,
@@ -1822,7 +1818,6 @@ class ProductSyncService
             'banner_image' => null,
             'sort_order' => 0,
             'is_visible' => 1,
-            'legacy_product_group_id' => null,
         ]);
 
         return $group;
@@ -1845,10 +1840,8 @@ class ProductSyncService
             'name' => $name,
             'slug' => $this->generateUniqueThirdProductGroupSlug($secondGroup, $name),
             'description' => null,
-            'banner_image' => null,
             'sort_order' => 0,
             'is_visible' => 1,
-            'legacy_product_group_id' => null,
         ]);
 
         return $group;
@@ -1865,7 +1858,7 @@ class ProductSyncService
         $this->syncProductBindingFromPayload($product, $bindingPayload);
 
         return $product->fresh([
-            'productGroup.parent.parent',
+            'productGroup.secondProductGroup.firstProductGroup',
         ]);
     }
 
@@ -1886,7 +1879,7 @@ class ProductSyncService
         $this->syncProductBindingFromPayload($product, $bindingPayload);
 
         return $product->fresh([
-            'productGroup.parent.parent',
+            'productGroup.secondProductGroup.firstProductGroup',
         ]);
     }
 
@@ -1962,7 +1955,7 @@ class ProductSyncService
 
         if ($normalizedIds !== [] && Schema::hasTable('product_upstream_bindings') && Schema::hasTable('supplier_plugin_bindings')) {
             return Product::withTrashed()
-                ->with(['productGroup.parent.parent'])
+                ->with(['productGroup.secondProductGroup.firstProductGroup'])
                 ->select('products.*', 'pub.upstream_product_id as binding_upstream_product_id')
                 ->join('product_upstream_bindings as pub', 'pub.product_id', '=', 'products.id')
                 ->join('supplier_plugin_bindings as spb', 'spb.id', '=', 'pub.supplier_plugin_binding_id')

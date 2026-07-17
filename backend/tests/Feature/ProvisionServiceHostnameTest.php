@@ -24,7 +24,6 @@ use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
 use App\Support\ProductProvisionHostname;
 use ArrayObject;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
@@ -39,10 +38,6 @@ class ProvisionServiceHostnameTest extends TestCase
         app(PluginFileLoader::class)->ensureLoaded(
             app(PluginScanner::class)->requireManifest('upstream', 'mofang_finance')
         );
-        Artisan::call('migrate', [
-            '--path' => 'database/migrations/2026_07_03_130000_create_plugin_binding_runtime_and_audit_tables.php',
-            '--force' => true,
-        ]);
         $this->activateIntegrationPluginForTest('upstream', 'mofang_finance');
 
         Cache::flush();
@@ -186,10 +181,6 @@ class ProvisionServiceHostnameTest extends TestCase
     #[Test]
     public function it_preserves_mofang_provider_key_after_successful_upstream_provisioning(): void
     {
-        Artisan::call('migrate', [
-            '--path' => 'database/migrations/2026_07_03_130000_create_plugin_binding_runtime_and_audit_tables.php',
-            '--force' => true,
-        ]);
         $this->activateIntegrationPluginForTest('upstream', 'mofang_finance');
 
         $transport = new class extends HostingPanelApiTransport

@@ -12,6 +12,7 @@ use App\Models\Product;
 use App\Models\Role;
 use App\Models\SecondProductGroup;
 use App\Models\Supplier;
+use App\Models\ThirdProductGroup;
 use App\Services\Integrations\Plugins\PluginDomain;
 use App\Services\Integrations\Plugins\UpstreamBindingWriter;
 use App\Services\ProductCatalog\ProductCategoryService;
@@ -90,8 +91,9 @@ class AdminCatalogRegressionTest extends TestCase
         $type = app(ProductTypeService::class)->create('Filter type '.$suffix, '');
         $firstGroup = FirstProductGroup::query()->findOrFail((int) $type['first_product_group_id']);
         $group = $this->createSecondGroup($firstGroup, 'Filter group '.$suffix, 'admin-filter-group-'.$suffix);
+        $thirdGroup = $this->createThirdGroup($group, 'Filter leaf '.$suffix, 'admin-filter-leaf-'.$suffix);
 
-        Product::query()->create($this->productPayload($group, 'Domain product '.$suffix, '10.00', 0));
+        Product::query()->create($this->productPayload($thirdGroup, 'Domain product '.$suffix, '10.00', 0));
 
         Sanctum::actingAs($admin);
 
@@ -378,6 +380,7 @@ class AdminCatalogRegressionTest extends TestCase
 
         $firstGroup = $this->firstGroupForType('vps', 'Binding root '.$suffix, 'admin-binding-root-'.$suffix);
         $group = $this->createSecondGroup($firstGroup, 'Binding group '.$suffix, 'admin-binding-group-'.$suffix);
+        $thirdGroup = $this->createThirdGroup($group, 'Binding leaf '.$suffix, 'admin-binding-leaf-'.$suffix);
 
         Sanctum::actingAs($admin);
 
@@ -386,6 +389,7 @@ class AdminCatalogRegressionTest extends TestCase
             'product_type' => 'vps',
             'first_product_group_id' => (int) $firstGroup->id,
             'second_product_group_id' => (int) $group->id,
+            'third_product_group_id' => (int) $thirdGroup->id,
             'pricing' => ['monthly' => '12.00'],
             'auto_setup' => 1,
             'status' => 1,
@@ -448,34 +452,37 @@ class AdminCatalogRegressionTest extends TestCase
         $root = $this->firstGroupForType('vps', 'Batch category root '.$suffix, 'admin-batch-category-root-'.$suffix);
         $sourceCategory = $this->createSecondGroup($root, 'Batch category source '.$suffix, 'admin-batch-category-source-'.$suffix, 1);
         $targetCategory = $this->createSecondGroup($root, 'Batch category target '.$suffix, 'admin-batch-category-target-'.$suffix, 2);
+        $sourceLeaf = $this->createThirdGroup($sourceCategory, 'Batch source leaf '.$suffix, 'admin-batch-category-source-leaf-'.$suffix);
+        $targetLeaf = $this->createThirdGroup($targetCategory, 'Batch target leaf '.$suffix, 'admin-batch-category-target-leaf-'.$suffix);
 
-        $existingTargetProduct = Product::query()->create($this->productPayload($targetCategory, 'Target product '.$suffix, '30.00', 1));
-        $firstSourceProduct = Product::query()->create($this->productPayload($sourceCategory, 'Source product A '.$suffix, '10.00', 1));
-        $secondSourceProduct = Product::query()->create($this->productPayload($sourceCategory, 'Source product B '.$suffix, '20.00', 2));
+        $existingTargetProduct = Product::query()->create($this->productPayload($targetLeaf, 'Target product '.$suffix, '30.00', 1));
+        $firstSourceProduct = Product::query()->create($this->productPayload($sourceLeaf, 'Source product A '.$suffix, '10.00', 1));
+        $secondSourceProduct = Product::query()->create($this->productPayload($sourceLeaf, 'Source product B '.$suffix, '20.00', 2));
 
         Sanctum::actingAs($admin);
 
         $this->postJson('/api/v2/admin/products/category-batches', [
             'product_ids' => [(int) $firstSourceProduct->id, (int) $secondSourceProduct->id],
             'target_second_product_group_id' => (int) $targetCategory->id,
+            'target_third_product_group_id' => (int) $targetLeaf->id,
         ])
             ->assertOk()
             ->assertJsonPath('data.updated_count', 2)
-            ->assertJsonPath('data.target_effective_product_group_id', (int) $targetCategory->id);
+            ->assertJsonPath('data.target_effective_product_group_id', (int) $targetLeaf->id);
 
         $this->assertDatabaseHas('products', [
             'id' => (int) $firstSourceProduct->id,
-            'product_group_id' => (int) $targetCategory->id,
+            'product_group_id' => (int) $targetLeaf->id,
             'product_type' => ProductType::CLOUD_SERVER,
         ]);
         $this->assertDatabaseHas('products', [
             'id' => (int) $secondSourceProduct->id,
-            'product_group_id' => (int) $targetCategory->id,
+            'product_group_id' => (int) $targetLeaf->id,
             'product_type' => ProductType::CLOUD_SERVER,
         ]);
 
         $targetOrder = Product::query()
-            ->where('product_group_id', (int) $targetCategory->id)
+            ->where('product_group_id', (int) $targetLeaf->id)
             ->orderBy('sort_order')
             ->pluck('id')
             ->map(fn ($id) => (int) $id)
@@ -508,26 +515,28 @@ class AdminCatalogRegressionTest extends TestCase
 
         $root = $this->firstGroupForType('vps', 'Drag reorder root '.$suffix, 'admin-drag-reorder-root-'.$suffix);
         $category = $this->createSecondGroup($root, 'Drag reorder category '.$suffix, 'admin-drag-reorder-category-'.$suffix);
+        $leaf = $this->createThirdGroup($category, 'Drag reorder leaf '.$suffix, 'admin-drag-reorder-leaf-'.$suffix);
 
-        $firstProduct = Product::query()->create($this->productPayload($category, 'Drag product A '.$suffix, '10.00', 0));
-        $secondProduct = Product::query()->create($this->productPayload($category, 'Drag product B '.$suffix, '20.00', 0));
-        $thirdProduct = Product::query()->create($this->productPayload($category, 'Drag product C '.$suffix, '30.00', 0));
+        $firstProduct = Product::query()->create($this->productPayload($leaf, 'Drag product A '.$suffix, '10.00', 0));
+        $secondProduct = Product::query()->create($this->productPayload($leaf, 'Drag product B '.$suffix, '20.00', 0));
+        $thirdProduct = Product::query()->create($this->productPayload($leaf, 'Drag product C '.$suffix, '30.00', 0));
 
         Sanctum::actingAs($admin);
 
         $this->postJson('/api/v2/admin/products/reorders', [
             'product_id' => (int) $thirdProduct->id,
             'target_second_product_group_id' => (int) $category->id,
+            'target_third_product_group_id' => (int) $leaf->id,
             'reference_product_id' => (int) $secondProduct->id,
             'position' => 'after',
         ])
             ->assertOk()
             ->assertJsonPath('data.product_id', (int) $thirdProduct->id)
-            ->assertJsonPath('data.target_effective_product_group_id', (int) $category->id)
+            ->assertJsonPath('data.target_effective_product_group_id', (int) $leaf->id)
             ->assertJsonPath('data.position', 'after');
 
         $orderedIds = Product::query()
-            ->where('product_group_id', (int) $category->id)
+            ->where('product_group_id', (int) $leaf->id)
             ->orderBy('sort_order')
             ->orderByDesc('status')
             ->orderByDesc('id')
@@ -562,8 +571,9 @@ class AdminCatalogRegressionTest extends TestCase
 
         $root = $this->firstGroupForType('vps', 'Product detail root '.$suffix, 'admin-product-detail-root-'.$suffix);
         $category = $this->createSecondGroup($root, 'Product detail category '.$suffix, 'admin-product-detail-category-'.$suffix);
+        $leaf = $this->createThirdGroup($category, 'Product detail leaf '.$suffix, 'admin-product-detail-leaf-'.$suffix);
 
-        $product = Product::query()->create($this->productPayload($category, 'Product detail item '.$suffix, '299.00', 1));
+        $product = Product::query()->create($this->productPayload($leaf, 'Product detail item '.$suffix, '299.00', 1));
 
         Sanctum::actingAs($admin);
 
@@ -601,8 +611,9 @@ class AdminCatalogRegressionTest extends TestCase
 
         $root = $this->firstGroupForType('vps', 'Product remark root '.$suffix, 'admin-product-remark-root-'.$suffix);
         $category = $this->createSecondGroup($root, 'Product remark category '.$suffix, 'admin-product-remark-category-'.$suffix);
+        $leaf = $this->createThirdGroup($category, 'Product remark leaf '.$suffix, 'admin-product-remark-leaf-'.$suffix);
 
-        $product = Product::query()->create($this->productPayload($category, 'Product remark item '.$suffix, '299.00', 1));
+        $product = Product::query()->create($this->productPayload($leaf, 'Product remark item '.$suffix, '299.00', 1));
 
         Sanctum::actingAs($admin);
 
@@ -624,7 +635,6 @@ class AdminCatalogRegressionTest extends TestCase
                 'sort_order' => 0,
                 'is_visible' => 1,
                 'is_system' => 0,
-                'legacy_product_type' => $code,
                 'product_type' => ProductType::normalizeBusinessValueFromMenuCode($code),
             ]
         );
@@ -654,9 +664,21 @@ class AdminCatalogRegressionTest extends TestCase
         ]);
     }
 
-    private function productPayload(SecondProductGroup $group, string $name, string $monthlyPrice, int $sortOrder): array
+    private function createThirdGroup(SecondProductGroup $secondGroup, string $name, string $slug): ThirdProductGroup
     {
-        $firstGroup = $group->firstProductGroup ?: FirstProductGroup::query()->findOrFail((int) $group->first_product_group_id);
+        return ThirdProductGroup::query()->create([
+            'second_product_group_id' => (int) $secondGroup->id,
+            'name' => $name,
+            'slug' => $slug,
+            'sort_order' => 0,
+            'is_visible' => 1,
+        ]);
+    }
+
+    private function productPayload(ThirdProductGroup $group, string $name, string $monthlyPrice, int $sortOrder): array
+    {
+        $secondGroup = $group->secondProductGroup ?: SecondProductGroup::query()->findOrFail((int) $group->second_product_group_id);
+        $firstGroup = $secondGroup->firstProductGroup ?: FirstProductGroup::query()->findOrFail((int) $secondGroup->first_product_group_id);
         $code = (string) $firstGroup->code;
         $productType = ProductType::businessValueForFirstGroup($firstGroup, $code);
 

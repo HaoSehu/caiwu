@@ -12,6 +12,7 @@ use App\Models\Role;
 use App\Models\SecondProductGroup;
 use App\Models\Setting;
 use App\Models\Supplier;
+use App\Models\ThirdProductGroup;
 use App\Services\Provisioning\ProvisionService;
 use App\Services\System\SettingService;
 use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiDriver;
@@ -53,7 +54,7 @@ class ProductSplitRegressionTest extends TestCase
         ]);
         $secondGroupId = $this->createSecondGroupId('cpumem-'.$suffix);
         $source = Product::query()->create([
-            'second_product_group_id' => $secondGroupId,
+            'product_group_id' => $secondGroupId,
             'name' => '美国 2h2g '.$suffix,
             'product_type' => 'vps',
             'pricing' => ['monthly' => '50.00', 'quarterly' => '150.00'],
@@ -206,11 +207,11 @@ class ProductSplitRegressionTest extends TestCase
             'email' => 'product-split-alias-spec-'.$suffix.'@example.com',
             'status' => 1,
         ]);
-        $secondGroupId = $this->createSecondGroupId('alias-'.$suffix);
+        $thirdGroupId = $this->createSecondGroupId('alias-'.$suffix);
+        $secondGroupId = (int) ThirdProductGroup::query()->findOrFail($thirdGroupId)->second_product_group_id;
         $firstGroupId = (int) SecondProductGroup::query()->findOrFail($secondGroupId)->first_product_group_id;
         $source = Product::query()->create([
-            'first_product_group_id' => $firstGroupId,
-            'second_product_group_id' => $secondGroupId,
+            'product_group_id' => $thirdGroupId,
             'service_type_code' => 'vps',
             'name' => 'Alias node 2H2G '.$suffix,
             'product_type' => 'vps',
@@ -341,7 +342,7 @@ class ProductSplitRegressionTest extends TestCase
         ]);
         $secondGroupId = $this->createSecondGroupId('idem-'.$suffix);
         $source = Product::query()->create([
-            'second_product_group_id' => $secondGroupId,
+            'product_group_id' => $secondGroupId,
             'name' => '美国 2h2g idem '.$suffix,
             'product_type' => 'vps',
             'pricing' => ['monthly' => '50.00'],
@@ -492,7 +493,7 @@ class ProductSplitRegressionTest extends TestCase
         ]);
         $secondGroupId = $this->createSecondGroupId('mb-'.$suffix);
         $source = Product::query()->create([
-            'second_product_group_id' => $secondGroupId,
+            'product_group_id' => $secondGroupId,
             'name' => '襄阳高防大带宽 2H2G '.$suffix,
             'product_type' => 'vps',
             'pricing' => ['monthly' => '50.00'],
@@ -547,7 +548,7 @@ class ProductSplitRegressionTest extends TestCase
         ]);
         $secondGroupId = $this->createSecondGroupId('generic-'.$suffix);
         $source = Product::query()->create([
-            'second_product_group_id' => $secondGroupId,
+            'product_group_id' => $secondGroupId,
             'name' => '旗舰云主机 '.$suffix,
             'product_type' => 'vps',
             'pricing' => ['monthly' => '50.00'],
@@ -620,7 +621,7 @@ class ProductSplitRegressionTest extends TestCase
         ]);
         $secondGroupId = $this->createSecondGroupId('flow-'.$suffix);
         $source = Product::query()->create([
-            'second_product_group_id' => $secondGroupId,
+            'product_group_id' => $secondGroupId,
             'name' => 'Xiangyang high bandwidth 2H2G '.$suffix,
             'product_type' => 'vps',
             'pricing' => ['monthly' => '50.00'],
@@ -748,7 +749,7 @@ class ProductSplitRegressionTest extends TestCase
 
     /**
      * 创建一个可见的二级商品分组（隶属于可见的 vps 一级分组），返回其 ID。
-     * 商品按当前 product_groups 自引用结构挂载（products.product_group_id）。
+     * 创建一条三级叶分组，并返回其 ID，供 products.product_group_id 使用。
      */
     private function createSecondGroupId(string $slugSeed): int
     {
@@ -760,7 +761,7 @@ class ProductSplitRegressionTest extends TestCase
                 'sort_order' => 0,
                 'is_visible' => 1,
                 'is_system' => 0,
-                'legacy_product_type' => 'vps',
+                'product_type' => 'cloud_server',
             ]
         );
 
@@ -777,6 +778,13 @@ class ProductSplitRegressionTest extends TestCase
             'is_visible' => 1,
         ]);
 
-        return (int) $second->id;
+        return (int) ThirdProductGroup::query()->create([
+            'second_product_group_id' => (int) $second->id,
+            'name' => 'Split third '.$slugSeed,
+            'slug' => 'split-third-'.$slugSeed,
+            'description' => '',
+            'sort_order' => 0,
+            'is_visible' => 1,
+        ])->id;
     }
 }

@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Tests\Unit;
 
 use App\Models\Product;
-use App\Models\ProductGroup;
+use App\Models\FirstProductGroup;
+use App\Models\SecondProductGroup;
+use App\Models\ThirdProductGroup;
 use App\Support\ProductGroupHierarchyFields;
 use Tests\TestCase;
 
@@ -27,32 +29,29 @@ class ProductHierarchyResourceSemanticsTest extends TestCase
             'sort_order' => 1,
         ]);
         $product->exists = true;
-        $firstGroup = tap(new ProductGroup, function (ProductGroup $group): void {
+        $firstGroup = tap(new FirstProductGroup, function (FirstProductGroup $group): void {
             $group->setRawAttributes([
                 'id' => 11,
-                'level' => 1,
                 'code' => 'vps',
                 'name' => '云服务器',
                 'product_type' => 'cloud_server',
             ], true);
         });
-        $secondGroup = tap(new ProductGroup, function (ProductGroup $group) use ($firstGroup): void {
+        $secondGroup = tap(new SecondProductGroup, function (SecondProductGroup $group) use ($firstGroup): void {
             $group->setRawAttributes([
                 'id' => 22,
-                'parent_id' => 11,
-                'level' => 2,
+                'first_product_group_id' => 11,
                 'name' => '香港',
             ], true);
-            $group->setRelation('parent', $firstGroup);
+            $group->setRelation('firstProductGroup', $firstGroup);
         });
-        $product->setRelation('productGroup', tap(new ProductGroup, function (ProductGroup $group) use ($secondGroup): void {
+        $product->setRelation('productGroup', tap(new ThirdProductGroup, function (ThirdProductGroup $group) use ($secondGroup): void {
             $group->setRawAttributes([
                 'id' => 33,
-                'parent_id' => 22,
-                'level' => 3,
+                'second_product_group_id' => 22,
                 'name' => '精品线路',
             ], true);
-            $group->setRelation('parent', $secondGroup);
+            $group->setRelation('secondProductGroup', $secondGroup);
         }));
 
         $payload = ProductGroupHierarchyFields::fromProduct($product);

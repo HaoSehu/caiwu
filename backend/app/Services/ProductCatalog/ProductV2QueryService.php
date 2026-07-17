@@ -49,7 +49,7 @@ class ProductV2QueryService
             ->withTrashed()
             ->select($this->adminProductDetailColumns())
             ->with([
-                'productGroup.parent.parent',
+                'productGroup.secondProductGroup.firstProductGroup',
                 'upstreamBindings.supplierPluginBinding.supplier',
             ])
             ->withCount([
@@ -74,7 +74,7 @@ class ProductV2QueryService
         $paginator = $this->siteProductQuery($filters)
             ->select($this->siteProductListColumns())
             ->with([
-                'productGroup.parent.parent',
+                'productGroup.secondProductGroup.firstProductGroup',
             ])
             ->orderBy('sort_order')
             ->orderBy('id')
@@ -88,7 +88,7 @@ class ProductV2QueryService
         $product = $this->siteProductQuery([])
             ->select($this->siteProductDetailColumns())
             ->with([
-                'productGroup.parent.parent',
+                'productGroup.secondProductGroup.firstProductGroup',
             ])
             ->whereKey($productId)
             ->first();
@@ -146,8 +146,8 @@ class ProductV2QueryService
             ->whereNotNull('product_group_id')
             ->withVisibleProductGroupPath($visibleProductTypes)
             ->underRootProductGroup($firstGroupCode !== '' ? $firstGroupCode : null, $productType !== '' ? $productType : null)
-            ->when(isset($filters['first_product_group_id']), fn (Builder $query) => $query->inProductGroupTree((int) $filters['first_product_group_id']))
-            ->when(isset($filters['second_product_group_id']), fn (Builder $query) => $query->inProductGroupTree((int) $filters['second_product_group_id']))
+            ->when(isset($filters['first_product_group_id']), fn (Builder $query) => $query->inFirstProductGroup((int) $filters['first_product_group_id']))
+            ->when(isset($filters['second_product_group_id']), fn (Builder $query) => $query->inSecondProductGroup((int) $filters['second_product_group_id']))
             ->when(isset($filters['third_product_group_id']), fn (Builder $query) => $query->inCurrentProductGroup((int) $filters['third_product_group_id']))
             ->when(isset($filters['effective_product_group_id']), function (Builder $query) use ($filters): void {
                 $query->inCurrentProductGroup((int) $filters['effective_product_group_id']);

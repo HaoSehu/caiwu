@@ -49,9 +49,7 @@ class ServiceOverviewService
             ])
             ->with([
                 'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
-                'product.firstProductGroup:id,code,name,description,slug',
-                'product.secondProductGroup:id,first_product_group_id,name,description,slug',
-                'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
+                'product.productGroup.secondProductGroup.firstProductGroup',
                 'order:id,order_no,status,paid_at',
                 'invoice:id,invoice_no',
             ])
@@ -97,7 +95,7 @@ class ServiceOverviewService
         $catalogType = trim((string) ($filters['catalog_type'] ?? ''));
         if ($catalogType !== '') {
             $query->where(function ($builder) use ($catalogType) {
-                $builder->whereHas('product.firstProductGroup', fn ($q) => $q->where('code', $catalogType))
+                $builder->whereHas('product.productGroup.secondProductGroup.firstProductGroup', fn ($q) => $q->where('code', $catalogType))
                     ->orWhereHas('product', fn ($q) => $q->where('service_type_code', $catalogType))
                     ->orWhereHas('product', fn ($q) => $q->where('product_type', $catalogType));
             });
@@ -178,9 +176,7 @@ class ServiceOverviewService
         $services = Service::query()
             ->with([
                 'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
-                'product.firstProductGroup:id,code,name,description,slug',
-                'product.secondProductGroup:id,first_product_group_id,name,description,slug',
-                'product.thirdProductGroup:id,second_product_group_id,name,description,slug',
+                'product.productGroup.secondProductGroup.firstProductGroup',
             ])
             ->where('user_id', $user->id)
             ->orderByDesc('id')
@@ -427,11 +423,10 @@ class ServiceOverviewService
     private function resolveServiceLeafGroup(Service $service): SecondProductGroup|ThirdProductGroup|null
     {
         $service->loadMissing([
-            'product.secondProductGroup',
-            'product.thirdProductGroup',
+            'product.productGroup.secondProductGroup.firstProductGroup',
         ]);
 
-        return $service->product?->thirdProductGroup ?: $service->product?->secondProductGroup;
+        return $service->product?->productGroup;
     }
 
     private function resolveGroupedOverviewGroupKey(SecondProductGroup|ThirdProductGroup|null $group, string $fallback = 'ungrouped'): string

@@ -9,7 +9,6 @@ use App\Models\AdminUser;
 use App\Models\FirstProductGroup;
 use App\Models\IntegrationPlugin;
 use App\Models\Product;
-use App\Models\ProductGroup;
 use App\Models\ProductUpstreamBinding;
 use App\Models\Role;
 use App\Models\SecondProductGroup;
@@ -19,7 +18,6 @@ use App\Models\SupplierPluginBinding;
 use App\Models\ThirdProductGroup;
 use App\Services\Site\SiteProductQuoteService;
 use App\Services\Site\SiteProductReadService;
-use App\Services\ProductCatalog\ImportedProductGroupTreeNormalizer;
 use App\Support\AdminPermissions;
 use Illuminate\Support\Facades\Cache;
 use Laravel\Sanctum\Sanctum;
@@ -27,80 +25,6 @@ use Tests\TestCase;
 
 class V2ProductApiTest extends TestCase
 {
-    public function test_imported_legacy_product_group_tree_is_normalized_without_changing_product_group_ids(): void
-    {
-        $suffix = bin2hex(random_bytes(4));
-        $typeCode = 'legacy_type_'.$suffix;
-        $originalTypes = Setting::getValue(ProductType::SETTING_GROUP, ProductType::SETTING_KEY, '');
-
-        Setting::setValue(ProductType::SETTING_GROUP, ProductType::SETTING_KEY, json_encode([
-            [
-                'internal_id' => 901,
-                'value' => $typeCode,
-                'label' => '历史导入类型 '.$suffix,
-                'product_type' => ProductType::OTHER,
-                'icon' => 'Server',
-                'is_builtin' => false,
-                'is_hidden' => false,
-            ],
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
-        ProductType::resetCache();
-
-        try {
-            $legacyRoot = ProductGroup::query()->create([
-                'parent_id' => null,
-                'level' => 1,
-                'code' => null,
-                'product_type' => $typeCode,
-                'name' => '历史地域 '.$suffix,
-                'slug' => 'legacy-root-'.$suffix,
-                'sort_order' => 1,
-                'is_visible' => 1,
-                'is_system' => 0,
-            ]);
-            $legacyChild = ProductGroup::query()->create([
-                'parent_id' => $legacyRoot->id,
-                'level' => 2,
-                'code' => null,
-                'product_type' => $typeCode,
-                'name' => '历史线路 '.$suffix,
-                'slug' => 'legacy-child-'.$suffix,
-                'sort_order' => 1,
-                'is_visible' => 1,
-                'is_system' => 0,
-            ]);
-            $legacySecondGroup = SecondProductGroup::query()->findOrFail($legacyChild->id);
-            $product = Product::query()->create($this->productPayload(
-                $legacySecondGroup,
-                null,
-                '历史商品 '.$suffix,
-                '19.00',
-                1,
-            ));
-
-            $result = app(ImportedProductGroupTreeNormalizer::class)->normalize();
-
-            $firstGroup = ProductGroup::query()
-                ->where('level', 1)
-                ->where('code', $typeCode)
-                ->firstOrFail();
-
-            $this->assertSame(1, $result['reparented_root_count']);
-            $this->assertSame(1, $result['promoted_child_count']);
-            $this->assertSame('历史导入类型 '.$suffix, $firstGroup->name);
-            $this->assertSame(ProductType::OTHER, $firstGroup->product_type);
-            $this->assertSame(2, $legacyRoot->refresh()->level);
-            $this->assertSame($firstGroup->id, $legacyRoot->parent_id);
-            $this->assertSame(3, $legacyChild->refresh()->level);
-            $this->assertSame($legacyRoot->id, $legacyChild->parent_id);
-            $this->assertSame($legacyChild->id, $product->refresh()->product_group_id);
-        } finally {
-            Setting::setValue(ProductType::SETTING_GROUP, ProductType::SETTING_KEY, $originalTypes);
-            ProductType::resetCache();
-            Cache::flush();
-        }
-    }
-
     public function test_admin_products_require_login_and_permission(): void
     {
         $this->getJson('/api/v2/admin/products')
@@ -662,12 +586,13 @@ class V2ProductApiTest extends TestCase
         int $sortOrder,
         array $overrides = [],
     ): array {
+        $thirdGroup ??= $this->createThirdGroup($secondGroup, $name.' 三级分组', $sortOrder, true);
         $firstGroup = $secondGroup->firstProductGroup ?: FirstProductGroup::query()->findOrFail((int) $secondGroup->first_product_group_id);
         $code = (string) $firstGroup->code;
         $productType = ProductType::businessValueForFirstGroup($firstGroup, $code);
 
         return array_replace([
-            'product_group_id' => $thirdGroup ? (int) $thirdGroup->id : (int) $secondGroup->id,
+            'product_group_id' => (int) $thirdGroup->id,
             'service_type_code' => $productType,
             'custom_display_name' => $name,
             'product_type' => $productType,

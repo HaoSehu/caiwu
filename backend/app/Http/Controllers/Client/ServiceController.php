@@ -200,7 +200,7 @@ class ServiceController extends Controller
                 $this->buildOperationContext($request)
             )
         );
-        $invoice->loadMissing(['product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,config_options,purchase_requires', 'service']);
+        $invoice->loadMissing(['product:id,product_type,product_group_id,service_type_code,config_options,purchase_requires', 'service']);
 
         return $this->success([
             'id' => (int) $invoice->id,
@@ -224,7 +224,7 @@ class ServiceController extends Controller
                 $this->buildOperationContext($request)
             )
         );
-        $invoice->loadMissing(['product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,config_options,purchase_requires', 'service']);
+        $invoice->loadMissing(['product:id,product_type,product_group_id,service_type_code,config_options,purchase_requires', 'service']);
 
         return $this->success([
             'id' => (int) $invoice->id,
@@ -248,7 +248,7 @@ class ServiceController extends Controller
                 $this->buildOperationContext($request)
             )
         );
-        $invoice->loadMissing(['product:id,product_type,first_product_group_id,second_product_group_id,third_product_group_id,service_type_code,config_options,purchase_requires', 'service']);
+        $invoice->loadMissing(['product:id,product_type,product_group_id,service_type_code,config_options,purchase_requires', 'service']);
 
         return $this->success([
             'id' => (int) $invoice->id,

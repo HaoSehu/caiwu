@@ -53,18 +53,14 @@ class ProductCategoryService
                 trim((string) $serviceTypeCode) !== '',
                 fn (Builder $query) => $query->where('code', trim((string) $serviceTypeCode))
             )
-            ->withCount([
-                'products',
-                'products as products_with_trashed_count' => fn ($query) => $query->withTrashed(),
-                'secondProductGroups',
-            ])
+            ->withCount('secondProductGroups')
+            ->selectSub($this->physicalProductCountSubquery(1), 'products_count')
+            ->selectSub($this->physicalProductCountSubquery(1, true), 'products_with_trashed_count')
             ->with([
                 'secondProductGroups' => fn ($query) => $query
-                    ->withCount([
-                        'products',
-                        'products as products_with_trashed_count' => fn ($productsQuery) => $productsQuery->withTrashed(),
-                        'thirdProductGroups',
-                    ])
+                    ->withCount('thirdProductGroups')
+                    ->selectSub($this->physicalProductCountSubquery(2), 'products_count')
+                    ->selectSub($this->physicalProductCountSubquery(2, true), 'products_with_trashed_count')
                     ->with([
                         'thirdProductGroups' => fn ($thirdQuery) => $thirdQuery
                             ->withCount([
@@ -110,7 +106,6 @@ class ProductCategoryService
                     'code' => $code,
                     'slug' => $this->generateUniqueSlug(FirstProductGroup::query(), $data['slug'] ?? $name),
                     'is_system' => (int) (($data['is_system'] ?? 0) ? 1 : 0),
-                    'legacy_product_type' => null,
                     'product_type' => ProductType::normalizeBusinessValue($data['product_type'] ?? $code),
                 ]);
 
@@ -128,7 +123,6 @@ class ProductCategoryService
                         SecondProductGroup::query()->where('first_product_group_id', (int) $firstGroup->id),
                         $data['slug'] ?? $name
                     ),
-                    'legacy_product_group_id' => null,
                 ]);
 
                 $this->forgetSiteCatalogCache();
@@ -144,7 +138,6 @@ class ProductCategoryService
                     ThirdProductGroup::query()->where('second_product_group_id', (int) $secondGroup->id),
                     $data['slug'] ?? $name
                 ),
-                'legacy_product_group_id' => null,
             ]);
 
             $this->forgetSiteCatalogCache();
@@ -216,12 +209,12 @@ class ProductCategoryService
             if ($level === 1) {
                 $group = $this->findFirstGroup($groupId);
                 throw_if($group->secondProductGroups()->exists(), new BusinessException('请先删除下级分类'));
-                throw_if($group->products()->exists(), new BusinessException('请先迁移或删除该分类下的商品'));
+                throw_if(Product::query()->inFirstProductGroup((int) $group->id)->exists(), new BusinessException('请先迁移或删除该分类下的商品'));
                 $group->delete();
             } elseif ($level === 2) {
                 $group = $this->findSecondGroup($groupId);
                 throw_if($group->thirdProductGroups()->exists(), new BusinessException('请先删除下级分类'));
-                throw_if($group->products()->exists(), new BusinessException('请先迁移或删除该分类下的商品'));
+                throw_if(Product::query()->inSecondProductGroup((int) $group->id)->exists(), new BusinessException('请先迁移或删除该分类下的商品'));
                 $group->delete();
             } else {
                 $group = $this->findThirdGroup($groupId);
@@ -583,18 +576,14 @@ class ProductCategoryService
     private function loadFirstGroup(int $id): FirstProductGroup
     {
         return FirstProductGroup::query()
-            ->withCount([
-                'products',
-                'products as products_with_trashed_count' => fn ($query) => $query->withTrashed(),
-                'secondProductGroups',
-            ])
+            ->withCount('secondProductGroups')
+            ->selectSub($this->physicalProductCountSubquery(1), 'products_count')
+            ->selectSub($this->physicalProductCountSubquery(1, true), 'products_with_trashed_count')
             ->with([
                 'secondProductGroups' => fn ($query) => $query
-                    ->withCount([
-                        'products',
-                        'products as products_with_trashed_count' => fn ($productsQuery) => $productsQuery->withTrashed(),
-                        'thirdProductGroups',
-                    ])
+                    ->withCount('thirdProductGroups')
+                    ->selectSub($this->physicalProductCountSubquery(2), 'products_count')
+                    ->selectSub($this->physicalProductCountSubquery(2, true), 'products_with_trashed_count')
                     ->with([
                         'thirdProductGroups' => fn ($thirdQuery) => $thirdQuery
                             ->withCount([
@@ -614,11 +603,9 @@ class ProductCategoryService
     {
         return SecondProductGroup::query()
             ->with(['firstProductGroup'])
-            ->withCount([
-                'products',
-                'products as products_with_trashed_count' => fn ($query) => $query->withTrashed(),
-                'thirdProductGroups',
-            ])
+            ->withCount('thirdProductGroups')
+            ->selectSub($this->physicalProductCountSubquery(2), 'products_count')
+            ->selectSub($this->physicalProductCountSubquery(2, true), 'products_with_trashed_count')
             ->with([
                 'thirdProductGroups' => fn ($query) => $query
                     ->withCount([
@@ -649,14 +636,14 @@ class ProductCategoryService
             ThirdProductGroup::query()
                 ->whereIn('second_product_group_id', SecondProductGroup::query()->select('id')->where('first_product_group_id', $groupId))
                 ->update(['is_visible' => $isVisible]);
-            Product::query()->inProductGroupTree($groupId)->update(['status' => $isVisible]);
+            Product::query()->inFirstProductGroup($groupId)->update(['status' => $isVisible]);
 
             return;
         }
 
         if ($level === 2) {
             ThirdProductGroup::query()->where('second_product_group_id', $groupId)->update(['is_visible' => $isVisible]);
-            Product::query()->inProductGroupTree($groupId)->update(['status' => $isVisible]);
+            Product::query()->inSecondProductGroup($groupId)->update(['status' => $isVisible]);
 
             return;
         }
@@ -728,6 +715,25 @@ class ProductCategoryService
             ->map(fn ($id): int => (int) $id)
             ->values()
             ->all();
+    }
+
+    private function physicalProductCountSubquery(int $level, bool $includeTrashed = false): Builder
+    {
+        $query = Product::query();
+        if ($includeTrashed) {
+            $query->withTrashed();
+        }
+
+        $query->selectRaw('COUNT(*)')
+            ->join('third_product_groups as product_count_third', 'product_count_third.id', '=', 'products.product_group_id');
+
+        if ($level === 1) {
+            return $query
+                ->join('second_product_groups as product_count_second', 'product_count_second.id', '=', 'product_count_third.second_product_group_id')
+                ->whereColumn('product_count_second.first_product_group_id', 'first_product_groups.id');
+        }
+
+        return $query->whereColumn('product_count_third.second_product_group_id', 'second_product_groups.id');
     }
 
     private function generateUniqueSlug(Builder $query, mixed $source): string

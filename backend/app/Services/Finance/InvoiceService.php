@@ -379,13 +379,13 @@ class InvoiceService
         $invoice->loadMissing([
             'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle,amount,discount,paid_amount,quantity,product_spec_snapshot,product_type_snapshot,config_snapshot,config_pricing_snapshot',
             'order.product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
-            'order.product.firstProductGroup:id,code,name',
-            'order.product.secondProductGroup:id,first_product_group_id,name',
-            'order.product.thirdProductGroup:id,second_product_group_id,name',
+            'order.product.productGroup:id,second_product_group_id,name',
+            'order.product.productGroup.secondProductGroup:id,first_product_group_id,name',
+            'order.product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
             'product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
-            'product.firstProductGroup:id,code,name',
-            'product.secondProductGroup:id,first_product_group_id,name',
-            'product.thirdProductGroup:id,second_product_group_id,name',
+            'product.productGroup:id,second_product_group_id,name',
+            'product.productGroup.secondProductGroup:id,first_product_group_id,name',
+            'product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
             'service:id,name,status,expires_at',
             'payments',
             'items',
@@ -1028,14 +1028,14 @@ class InvoiceService
     private function resolveOrderProductPath(Order $order): string
     {
         $product = $order->product;
-        $firstGroup = $product instanceof Product && $product->relationLoaded('firstProductGroup')
-            ? $product->firstProductGroup
+        $thirdGroup = $product instanceof Product && $product->relationLoaded('productGroup')
+            ? $product->productGroup
             : null;
-        $secondGroup = $product instanceof Product && $product->relationLoaded('secondProductGroup')
-            ? $product->secondProductGroup
+        $secondGroup = $thirdGroup?->relationLoaded('secondProductGroup')
+            ? $thirdGroup->secondProductGroup
             : null;
-        $thirdGroup = $product instanceof Product && $product->relationLoaded('thirdProductGroup')
-            ? $product->thirdProductGroup
+        $firstGroup = $secondGroup?->relationLoaded('firstProductGroup')
+            ? $secondGroup->firstProductGroup
             : null;
         $productType = trim((string) ($order->product_type_snapshot ?? $product?->product_type ?? $product?->service_type_code ?? ''));
         $productType = $productType !== ''

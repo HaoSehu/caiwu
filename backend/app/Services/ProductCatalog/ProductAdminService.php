@@ -66,7 +66,7 @@ class ProductAdminService
                     'updated_at',
                 ])
                 ->with([
-                    'productGroup.parent.parent',
+                    'productGroup.secondProductGroup.firstProductGroup',
                     'upstreamBindings.supplierPluginBinding',
                 ])
                 ->withCount([
@@ -163,19 +163,13 @@ class ProductAdminService
         $targetHierarchy = $this->resolveTargetHierarchy($targetData);
         throw_if(! in_array($position, ['before', 'after', 'append'], true), new BusinessException('拖动位置参数不正确'));
 
-        $sourceSecondId = (int) ($product->second_product_group_id ?? 0);
-        $sourceThirdId = ((int) ($product->third_product_group_id ?? 0)) ?: null;
-        $sameScope = $this->productScopeKey($sourceSecondId, $sourceThirdId) === $this->productScopeKey(
-            (int) $targetHierarchy['second_product_group_id'],
-            $targetHierarchy['third_product_group_id']
-        );
-        $sourceIds = $this->resolveProductScopeIds($sourceSecondId, $sourceThirdId);
+        $sourceGroupId = (int) ($product->product_group_id ?? 0);
+        $targetGroupId = (int) $targetHierarchy['effective_product_group_id'];
+        $sameScope = $sourceGroupId === $targetGroupId;
+        $sourceIds = $this->resolveProductScopeIds($sourceGroupId);
         $targetIds = $sameScope
             ? $sourceIds
-            : $this->resolveProductScopeIds(
-                (int) $targetHierarchy['second_product_group_id'],
-                $targetHierarchy['third_product_group_id']
-            );
+            : $this->resolveProductScopeIds($targetGroupId);
 
         $reorderedTargetIds = $this->buildReorderedIds(
             $targetIds,
@@ -435,17 +429,12 @@ class ProductAdminService
                 continue;
             }
 
-            $secondId = (int) ($product->second_product_group_id ?? 0);
-            $thirdId = ((int) ($product->third_product_group_id ?? 0)) ?: null;
-            $scopeKey = $this->productScopeKey($secondId, $thirdId);
-            $sourceScopeMap[$scopeKey] ??= $this->resolveProductScopeIds($secondId, $thirdId);
+            $sourceGroupId = (int) ($product->product_group_id ?? 0);
+            $sourceScopeMap[$sourceGroupId] ??= $this->resolveProductScopeIds($sourceGroupId);
         }
 
         $targetScopeIds = array_values(array_filter(
-            $this->resolveProductScopeIds(
-                (int) $targetHierarchy['second_product_group_id'],
-                $targetHierarchy['third_product_group_id']
-            ),
+            $this->resolveProductScopeIds((int) $targetHierarchy['effective_product_group_id']),
             fn (int $productId) => ! isset($selectedIdSet[$productId])
         ));
         $reorderedTargetIds = array_merge($targetScopeIds, $productIds->all());
@@ -656,7 +645,7 @@ class ProductAdminService
 
         $this->forgetSiteCatalogCache();
 
-        return $product->refresh()->load(['firstProductGroup', 'secondProductGroup', 'thirdProductGroup', 'supplier']);
+        return $product->refresh()->load(['productGroup.secondProductGroup.firstProductGroup', 'supplier']);
     }
 
     public function deleteProduct(Product $product): void
@@ -674,7 +663,7 @@ class ProductAdminService
         $product->restore();
         $this->forgetSiteCatalogCache();
 
-        return $product->refresh()->load(['firstProductGroup', 'secondProductGroup', 'thirdProductGroup', 'supplier']);
+        return $product->refresh()->load(['productGroup.secondProductGroup.firstProductGroup', 'supplier']);
     }
 
     public function forceDeleteProduct(Product $product): void
@@ -694,7 +683,7 @@ class ProductAdminService
 
         $this->forgetSiteCatalogCache();
 
-        return $product->refresh()->load(['firstProductGroup', 'secondProductGroup', 'thirdProductGroup', 'supplier']);
+        return $product->refresh()->load(['productGroup.secondProductGroup.firstProductGroup', 'supplier']);
     }
 
     private function applyAdminProductFilters(Builder $query, array $filters): Builder
@@ -735,10 +724,10 @@ class ProductAdminService
                 fn (Builder $builder) => $builder->where('status', (int) $filters['status'])
             )
             ->when(! empty($filters['first_product_group_id']), function (Builder $builder) use ($filters) {
-                $builder->inProductGroupTree((int) $filters['first_product_group_id']);
+                $builder->inFirstProductGroup((int) $filters['first_product_group_id']);
             })
             ->when(! empty($filters['second_product_group_id']), function (Builder $builder) use ($filters) {
-                $builder->inProductGroupTree((int) $filters['second_product_group_id']);
+                $builder->inSecondProductGroup((int) $filters['second_product_group_id']);
             })
             ->when(! empty($filters['third_product_group_id']), function (Builder $builder) use ($filters) {
                 $builder->inCurrentProductGroup((int) $filters['third_product_group_id']);
@@ -882,9 +871,6 @@ class ProductAdminService
             'name' => (string) $variant['name'],
             'product_type' => $sourceProductType,
             'product_group_id' => (int) ($source->product_group_id ?? 0) ?: null,
-            'first_product_group_id' => (int) ($source->first_product_group_id ?? 0) ?: null,
-            'second_product_group_id' => (int) ($source->second_product_group_id ?? 0) ?: null,
-            'third_product_group_id' => (int) ($source->third_product_group_id ?? 0) ?: null,
             'service_type_code' => $sourceProductType,
             'remark' => $source->remark,
             'pricing' => (array) ($variant['pricing'] ?? []),
@@ -1439,14 +1425,14 @@ class ProductAdminService
         ];
     }
 
-    private function resolveProductScopeIds(int $secondProductGroupId, ?int $thirdProductGroupId): array
+    private function resolveProductScopeIds(int $thirdProductGroupId): array
     {
-        if ($secondProductGroupId <= 0) {
+        if ($thirdProductGroupId <= 0) {
             return [];
         }
 
         return Product::query()
-            ->inCurrentProductGroup($thirdProductGroupId !== null && $thirdProductGroupId > 0 ? $thirdProductGroupId : $secondProductGroupId)
+            ->inCurrentProductGroup($thirdProductGroupId)
             ->orderBy('sort_order')
             ->orderByDesc('status')
             ->orderByDesc('id')
@@ -1624,15 +1610,7 @@ class ProductAdminService
             );
             $secondGroup = $resolvedSecond;
         } else {
-            throw_if($secondId === null, new BusinessException('请选择二级或三级商品分类'));
-            $secondGroup = SecondProductGroup::query()
-                ->with(['firstProductGroup'])
-                ->find($secondId);
-            throw_if(! $secondGroup, new BusinessException('二级分类不存在'));
-            throw_if(
-                $secondGroup->thirdProductGroups()->where('is_visible', 1)->exists(),
-                new BusinessException('商品必须挂载到最终可售三级分类下')
-            );
+            throw new BusinessException('商品必须挂载到三级分类下');
         }
 
         $firstGroup = $secondGroup->firstProductGroup;
@@ -1647,7 +1625,7 @@ class ProductAdminService
             $data['product_type'] ?? $data['type'] ?? $data['service_type_code'] ?? null
         );
 
-        $thirdName = $thirdGroup instanceof ThirdProductGroup ? (string) $thirdGroup->name : null;
+        $thirdName = (string) $thirdGroup->name;
         $secondName = (string) $secondGroup->name;
 
         return [
@@ -1656,11 +1634,11 @@ class ProductAdminService
             'first_product_group_name' => (string) $firstGroup->name,
             'second_product_group_id' => (int) $secondGroup->id,
             'second_product_group_name' => $secondName,
-            'third_product_group_id' => $thirdGroup instanceof ThirdProductGroup ? (int) $thirdGroup->id : null,
+            'third_product_group_id' => (int) $thirdGroup->id,
             'third_product_group_name' => $thirdName,
-            'effective_product_group_id' => $thirdGroup instanceof ThirdProductGroup ? (int) $thirdGroup->id : (int) $secondGroup->id,
-            'effective_product_group_level' => $thirdGroup instanceof ThirdProductGroup ? 3 : 2,
-            'effective_product_group_name' => $thirdName ?? $secondName,
+            'effective_product_group_id' => (int) $thirdGroup->id,
+            'effective_product_group_level' => 3,
+            'effective_product_group_name' => $thirdName,
             'full_name' => implode(' / ', array_values(array_filter([
                 (string) $firstGroup->name,
                 $secondName,
@@ -1686,15 +1664,10 @@ class ProductAdminService
         return (int) ($product->product_group_id ?? 0) === (int) $targetHierarchy['effective_product_group_id'];
     }
 
-    private function productScopeKey(int $secondProductGroupId, ?int $thirdProductGroupId): string
-    {
-        return $secondProductGroupId.':'.($thirdProductGroupId ?? 0);
-    }
-
     private function loadProductSnapshot(Product $product): Product
     {
         return $product->refresh()->load([
-            'productGroup.parent.parent',
+            'productGroup.secondProductGroup.firstProductGroup',
             'upstreamBindings.supplierPluginBinding.supplier',
         ]);
     }

@@ -138,7 +138,7 @@ class ProductFullPathResolver
     {
         if ($product->exists) {
             $product->loadMissing([
-                'productGroup.parent.parent',
+                'productGroup.secondProductGroup.firstProductGroup',
             ]);
         }
 
