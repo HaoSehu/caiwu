@@ -28,16 +28,16 @@ class SupplierInterfaceTypeAliasRegressionTest extends TestCase
         $this->ensureUpstreamPluginsEnabled();
     }
 
-    public function test_admin_can_create_supplier_with_mofang_finance_provider(): void
+    public function test_admin_can_create_supplier_with_zjmf_finance_provider(): void
     {
         $suffix = bin2hex(random_bytes(4));
 
         $this->actingAsProductManager($suffix);
 
         $response = $this->postJson('/api/v2/admin/suppliers', [
-            'name' => 'Mofang Alias '.$suffix,
+            'name' => 'Zjmf Alias '.$suffix,
             'upstream_binding' => [
-                'provider_key' => 'mofang_finance_api',
+                'provider_key' => 'zjmf_finance_api',
                 'base_url' => 'https://supplier-'.$suffix.'.example.com',
                 'account_name' => 'demo',
             ],
@@ -47,9 +47,9 @@ class SupplierInterfaceTypeAliasRegressionTest extends TestCase
 
         $response
             ->assertOk()
-            ->assertJsonPath('data.supplier.provider_key', 'mofang_finance_api')
-            ->assertJsonPath('data.supplier.upstream_binding.provider_key', 'mofang_finance_api')
-            ->assertJsonPath('data.supplier.card.title', 'Mofang Alias '.$suffix)
+            ->assertJsonPath('data.supplier.provider_key', 'zjmf_finance_api')
+            ->assertJsonPath('data.supplier.upstream_binding.provider_key', 'zjmf_finance_api')
+            ->assertJsonPath('data.supplier.card.title', 'Zjmf Alias '.$suffix)
             ->assertJsonPath('data.supplier.card.fields.0.label', '用户名')
             ->assertJsonPath('data.supplier.card.fields.1.label', '上游余额');
 
@@ -59,13 +59,13 @@ class SupplierInterfaceTypeAliasRegressionTest extends TestCase
         ));
 
         $supplier = Supplier::query()
-            ->where('name', 'Mofang Alias '.$suffix)
+            ->where('name', 'Zjmf Alias '.$suffix)
             ->first();
 
         $this->assertNotNull($supplier);
         $this->assertDatabaseHas('supplier_plugin_bindings', [
             'supplier_id' => (int) $supplier->id,
-            'provider_key' => 'mofang_finance_api',
+            'provider_key' => 'zjmf_finance_api',
         ]);
     }
 
@@ -76,13 +76,13 @@ class SupplierInterfaceTypeAliasRegressionTest extends TestCase
         $this->actingAsProductManager($suffix);
 
         $supplier = Supplier::query()->create([
-            'name' => 'Mofang Preserve '.$suffix,
-            'code' => 'mofang_preserve_'.$suffix,
+            'name' => 'Zjmf Preserve '.$suffix,
+            'code' => 'zjmf_preserve_'.$suffix,
             'status' => 1,
             'sort_order' => 0,
         ]);
         app(UpstreamBindingWriter::class)->syncSupplierBinding($supplier, [
-            'provider_key' => 'mofang_finance_api',
+            'provider_key' => 'zjmf_finance_api',
             'base_url' => 'https://supplier-'.$suffix.'.example.com',
             'account_name' => 'demo',
             'api_key' => 'secret-value-'.$suffix,
@@ -92,9 +92,9 @@ class SupplierInterfaceTypeAliasRegressionTest extends TestCase
         ]);
 
         $response = $this->putJson('/api/v2/admin/suppliers/'.$supplier->id, [
-            'name' => 'Mofang Preserve Updated '.$suffix,
+            'name' => 'Zjmf Preserve Updated '.$suffix,
             'upstream_binding' => [
-                'provider_key' => 'mofang_finance_api',
+                'provider_key' => 'zjmf_finance_api',
                 'base_url' => 'https://supplier-updated-'.$suffix.'.example.com',
                 'account_name' => 'demo-updated',
             ],
@@ -121,13 +121,13 @@ class SupplierInterfaceTypeAliasRegressionTest extends TestCase
             ->assertOk()
             ->json('data.list');
 
-        $mofang = collect($payload)->firstWhere('value', 'mofang_finance_api');
+        $zjmf = collect($payload)->firstWhere('value', 'zjmf_finance_api');
 
-        $this->assertIsArray($mofang);
-        $this->assertSame('魔方财务接口', $mofang['label'] ?? null);
-        $this->assertSame('魔方财务地址', $mofang['supplier_form']['fields'][0]['label'] ?? null);
-        $this->assertSame('api_key', $mofang['supplier_form']['fields'][2]['key'] ?? null);
-        $this->assertArrayNotHasKey('secret', $mofang['supplier_form']['fields'][2]);
+        $this->assertIsArray($zjmf);
+        $this->assertSame('ZJMF 财务接口', $zjmf['label'] ?? null);
+        $this->assertSame('ZJMF 财务地址', $zjmf['supplier_form']['fields'][0]['label'] ?? null);
+        $this->assertSame('api_key', $zjmf['supplier_form']['fields'][2]['key'] ?? null);
+        $this->assertArrayNotHasKey('secret', $zjmf['supplier_form']['fields'][2]);
         $this->assertFalse(collect($payload)->contains(fn (array $item): bool => ($item['value'] ?? null) === 'hosting_panel_api'));
     }
 
@@ -210,7 +210,7 @@ class SupplierInterfaceTypeAliasRegressionTest extends TestCase
 
     private function ensureUpstreamPluginsEnabled(): void
     {
-        $this->ensureUpstreamPluginEnabled('mofang_finance');
+        $this->ensureUpstreamPluginEnabled('zjmf_finance');
     }
 
     private function ensureUpstreamPluginEnabled(string $slug): void

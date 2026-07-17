@@ -30,7 +30,7 @@ class ServiceConsoleSupplierBindingTest extends TestCase
     {
         parent::setUp();
 
-        $this->ensureMofangFinancePluginEnabled();
+        $this->ensureZjmfFinancePluginEnabled();
     }
 
     #[Test]
@@ -39,7 +39,7 @@ class ServiceConsoleSupplierBindingTest extends TestCase
         $suffix = bin2hex(random_bytes(4));
         $pluginId = (int) DB::table('integration_plugins')
             ->where('domain', 'upstream')
-            ->where('plugin_key', ProviderKey::MOFANG_FINANCE_API)
+            ->where('plugin_key', ProviderKey::ZJMF_FINANCE_API)
             ->value('id');
 
         $this->assertGreaterThan(0, $pluginId);
@@ -52,23 +52,23 @@ class ServiceConsoleSupplierBindingTest extends TestCase
         ]);
 
         $boundSupplier = Supplier::query()->create([
-            'name' => 'Mofang Bound Supplier '.$suffix,
-            'code' => 'mofang-bound-'.$suffix,
-            'interface_type' => ProviderKey::MOFANG_FINANCE_API,
+            'name' => 'Zjmf Bound Supplier '.$suffix,
+            'code' => 'zjmf-bound-'.$suffix,
+            'interface_type' => ProviderKey::ZJMF_FINANCE_API,
             'status' => 1,
             'sort_order' => 1,
         ]);
 
         $productSupplier = Supplier::query()->create([
-            'name' => 'Mofang Product Supplier '.$suffix,
-            'code' => 'mofang-product-'.$suffix,
-            'interface_type' => ProviderKey::MOFANG_FINANCE_API,
+            'name' => 'Zjmf Product Supplier '.$suffix,
+            'code' => 'zjmf-product-'.$suffix,
+            'interface_type' => ProviderKey::ZJMF_FINANCE_API,
             'status' => 1,
             'sort_order' => 1,
         ]);
 
         $product = Product::query()->create([
-            'name' => 'Mofang Console Product '.$suffix,
+            'name' => 'Zjmf Console Product '.$suffix,
             'product_type' => 'server',
             'pricing' => ['monthly' => '99.00'],
             'setup_fee' => '0.00',
@@ -97,7 +97,7 @@ class ServiceConsoleSupplierBindingTest extends TestCase
         $supplierBindingId = DB::table('supplier_plugin_bindings')->insertGetId([
             'supplier_id' => (int) $boundSupplier->id,
             'plugin_id' => $pluginId,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'environment' => 'production',
             'status' => 1,
             'priority' => 0,
@@ -109,7 +109,7 @@ class ServiceConsoleSupplierBindingTest extends TestCase
             'service_id' => (int) $service->id,
             'supplier_plugin_binding_id' => $supplierBindingId,
             'plugin_id' => $pluginId,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'upstream_service_id' => '456',
             'status_snapshot' => 'active',
             'created_at' => now(),
@@ -134,7 +134,7 @@ class ServiceConsoleSupplierBindingTest extends TestCase
         $suffix = bin2hex(random_bytes(4));
         $pluginId = (int) DB::table('integration_plugins')
             ->where('domain', 'upstream')
-            ->where('plugin_key', ProviderKey::MOFANG_FINANCE_API)
+            ->where('plugin_key', ProviderKey::ZJMF_FINANCE_API)
             ->value('id');
 
         $user = User::query()->create([
@@ -145,9 +145,9 @@ class ServiceConsoleSupplierBindingTest extends TestCase
         ]);
 
         $supplier = Supplier::query()->create([
-            'name' => 'Mofang Console Supplier '.$suffix,
-            'code' => 'mofang-console-'.$suffix,
-            'interface_type' => ProviderKey::MOFANG_FINANCE_API,
+            'name' => 'Zjmf Console Supplier '.$suffix,
+            'code' => 'zjmf-console-'.$suffix,
+            'interface_type' => ProviderKey::ZJMF_FINANCE_API,
             'api_url' => 'https://supplier-'.$suffix.'.example.com',
             'api_username' => 'demo',
             'api_key' => 'secret',
@@ -156,7 +156,7 @@ class ServiceConsoleSupplierBindingTest extends TestCase
         ]);
 
         $product = Product::query()->create([
-            'name' => 'Mofang Console Product '.$suffix,
+            'name' => 'Zjmf Console Product '.$suffix,
             'product_type' => 'server',
             'pricing' => ['monthly' => '99.00'],
             'setup_fee' => '0.00',
@@ -187,7 +187,7 @@ class ServiceConsoleSupplierBindingTest extends TestCase
         $supplierBindingId = DB::table('supplier_plugin_bindings')->insertGetId([
             'supplier_id' => (int) $supplier->id,
             'plugin_id' => $pluginId,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'environment' => 'production',
             'status' => 1,
             'priority' => 0,
@@ -199,7 +199,7 @@ class ServiceConsoleSupplierBindingTest extends TestCase
             'service_id' => (int) $service->id,
             'supplier_plugin_binding_id' => $supplierBindingId,
             'plugin_id' => $pluginId,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'upstream_service_id' => '456',
             'status_snapshot' => 'active',
             'created_at' => now(),
@@ -241,14 +241,14 @@ class ServiceConsoleSupplierBindingTest extends TestCase
         };
     }
 
-    private function ensureMofangFinancePluginEnabled(): void
+    private function ensureZjmfFinancePluginEnabled(): void
     {
         $this->ensurePluginTables();
 
         $scanner = app(PluginScanner::class);
         $installer = app(PluginInstaller::class);
-        $scanner->requireManifest('upstream', 'mofang_finance');
-        $plugin = $installer->install('upstream', 'mofang_finance');
+        $scanner->requireManifest('upstream', 'zjmf_finance');
+        $plugin = $installer->install('upstream', 'zjmf_finance');
         $installer->enable($plugin);
 
         $this->app->forgetInstance(ProviderRegistry::class);

@@ -4,18 +4,25 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Integrations\Mofang\Billing\MofangBillingRestoreService;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfBillingRestoreService;
 use Tests\TestCase;
 
-class UpstreamBillingRestoreCommandTest extends TestCase
+class ZjmfBillingRestoreCommandTest extends TestCase
 {
-    public function test_restore_upstream_billing_requires_confirmation_phrase(): void
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->activateIntegrationPluginForTest('upstream', 'zjmf_finance');
+    }
+
+    public function test_restore_zjmf_billing_requires_confirmation_phrase(): void
     {
         $path = tempnam(sys_get_temp_dir(), 'restore-sql-');
         file_put_contents($path, '');
 
         try {
-            $this->artisan('finance:restore-upstream-billing', [
+            $this->artisan('finance:restore-zjmf-billing', [
                 'dump' => $path,
                 '--dry-run' => true,
             ])->assertExitCode(2);
@@ -24,17 +31,17 @@ class UpstreamBillingRestoreCommandTest extends TestCase
         }
     }
 
-    public function test_restore_upstream_billing_accepts_generic_confirmation_phrase(): void
+    public function test_restore_zjmf_billing_accepts_zjmf_confirmation_phrase(): void
     {
         $path = tempnam(sys_get_temp_dir(), 'restore-sql-');
         file_put_contents($path, '');
 
-        $this->app->instance(MofangBillingRestoreService::class, $this->fakeRestoreService());
+        $this->app->instance(ZjmfBillingRestoreService::class, $this->fakeRestoreService());
 
         try {
-            $this->artisan('finance:restore-upstream-billing', [
+            $this->artisan('finance:restore-zjmf-billing', [
                 'dump' => $path,
-                '--confirm' => 'RESTORE_UPSTREAM_BILLING',
+                '--confirm' => 'RESTORE_ZJMF_BILLING',
                 '--dry-run' => true,
             ])->assertExitCode(0);
         } finally {
@@ -42,27 +49,27 @@ class UpstreamBillingRestoreCommandTest extends TestCase
         }
     }
 
-    public function test_restore_upstream_billing_accepts_legacy_mofang_confirmation_phrase(): void
+    public function test_restore_zjmf_billing_rejects_legacy_zjmf_confirmation_phrase(): void
     {
         $path = tempnam(sys_get_temp_dir(), 'restore-sql-');
         file_put_contents($path, '');
 
-        $this->app->instance(MofangBillingRestoreService::class, $this->fakeRestoreService());
+        $this->app->instance(ZjmfBillingRestoreService::class, $this->fakeRestoreService());
 
         try {
-            $this->artisan('finance:restore-upstream-billing', [
+            $this->artisan('finance:restore-zjmf-billing', [
                 'dump' => $path,
-                '--confirm' => 'RESTORE_MOFANG_BILLING',
+                '--confirm' => 'RESTORE_ZJMF_BILLING',
                 '--dry-run' => true,
-            ])->assertExitCode(0);
+            ])->assertExitCode(2);
         } finally {
             @unlink($path);
         }
     }
 
-    private function fakeRestoreService(): MofangBillingRestoreService
+    private function fakeRestoreService(): ZjmfBillingRestoreService
     {
-        return new class extends MofangBillingRestoreService
+        return new class extends ZjmfBillingRestoreService
         {
             public function restoreFromSqlDump(string $dumpPath, bool $dryRun = false): array
             {

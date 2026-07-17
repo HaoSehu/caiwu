@@ -14,6 +14,6 @@ class UpstreamAuthRefreshTaskTest extends TestCase
         $service = app(ScheduleTaskTriggerService::class);
 
         $this->assertTrue($service->supports('refresh-hosting-panel-auth'));
-        $this->assertFalse($service->supports('refresh-mofang-jwt'));
+        $this->assertFalse($service->supports('refresh-zjmf-jwt'));
     }
 }

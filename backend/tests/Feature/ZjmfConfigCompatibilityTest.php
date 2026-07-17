@@ -6,26 +6,20 @@ namespace Tests\Feature;
 
 use Tests\TestCase;
 
-class MofangConfigCompatibilityTest extends TestCase
+class ZjmfConfigCompatibilityTest extends TestCase
 {
-    public function test_hosting_panel_config_keeps_legacy_mofang_env_fallbacks(): void
+    public function test_hosting_panel_config_reads_env_without_zjmf_config_file(): void
     {
-        $this->assertTrue(config()->has('mofang.finance_api.ssl_verify'));
-        $this->assertSame(
-            config('mofang.finance_api.ssl_verify'),
-            config('idc.hosting_panel_api.ssl_verify')
-        );
-        $this->assertSame(
-            config('mofang.finance_api.jwt_cache_store'),
-            config('idc.hosting_panel_api.jwt_cache_store')
-        );
+        $this->assertFileDoesNotExist(base_path('config/zjmf.php'));
+        $this->assertFalse(config()->has('zjmf.finance_api.ssl_verify'));
+
+        $this->assertIsBool((bool) config('idc.hosting_panel_api.ssl_verify'));
+        $this->assertNotSame('', (string) config('idc.hosting_panel_api.jwt_cache_store'));
     }
 
-    public function test_idc_config_can_read_legacy_mofang_env_before_mofang_config_is_loaded(): void
+    public function test_idc_hosting_panel_config_uses_hosting_panel_env_directly(): void
     {
-        $this->withEnvironmentValue('MOFANG_FINANCE_JWT_CACHE_STORE', 'array', function (): void {
-            config(['mofang' => []]);
-
+        $this->withEnvironmentValue('HOSTING_PANEL_API_JWT_CACHE_STORE', 'array', function (): void {
             $idc = require base_path('config/idc.php');
 
             $this->assertSame('array', $idc['hosting_panel_api']['jwt_cache_store']);

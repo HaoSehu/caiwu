@@ -4,16 +4,23 @@ declare(strict_types=1);
 
 namespace Tests\Unit;
 
-use App\Integrations\Mofang\Support\MofangLegacyPasswordVerifier;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfLegacyPasswordVerifier;
 use PHPUnit\Framework\TestCase;
 
-class MofangLegacyPasswordVerifierTest extends TestCase
+class ZjmfLegacyPasswordVerifierTest extends TestCase
 {
-    public function test_it_accepts_mofang_md5_password_and_requests_rehash(): void
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        require_once dirname(__DIR__, 2).'/plugins/servers/zjmf_finance/lib/ZjmfLegacyPasswordVerifier.php';
+    }
+
+    public function test_it_accepts_zjmf_md5_password_and_requests_rehash(): void
     {
         $needsRehash = false;
 
-        $matched = (new MofangLegacyPasswordVerifier)->verify(
+        $matched = (new ZjmfLegacyPasswordVerifier)->verify(
             'Secret123',
             '###'.md5('Secret123'),
             $needsRehash
@@ -23,11 +30,11 @@ class MofangLegacyPasswordVerifierTest extends TestCase
         $this->assertTrue($needsRehash);
     }
 
-    public function test_it_rejects_invalid_mofang_md5_password(): void
+    public function test_it_rejects_invalid_zjmf_md5_password(): void
     {
         $needsRehash = false;
 
-        $matched = (new MofangLegacyPasswordVerifier)->verify(
+        $matched = (new ZjmfLegacyPasswordVerifier)->verify(
             'Secret123',
             '###'.md5('OtherSecret'),
             $needsRehash
@@ -37,11 +44,11 @@ class MofangLegacyPasswordVerifierTest extends TestCase
         $this->assertFalse($needsRehash);
     }
 
-    public function test_it_ignores_non_mofang_hashes(): void
+    public function test_it_ignores_non_zjmf_hashes(): void
     {
         $needsRehash = false;
 
-        $matched = (new MofangLegacyPasswordVerifier)->verify(
+        $matched = (new ZjmfLegacyPasswordVerifier)->verify(
             'Secret123',
             '$2y$10$not-a-real-bcrypt-hash',
             $needsRehash

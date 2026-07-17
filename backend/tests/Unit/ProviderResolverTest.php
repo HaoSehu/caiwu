@@ -17,9 +17,9 @@ use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiTransport;
 use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
-use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangCloudConfigTemplate;
-use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangFinanceAdapter;
-use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangFinanceDriver;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfCloudConfigTemplate;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfFinanceAdapter;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfFinanceDriver;
 use Tests\TestCase;
 
 class ProviderResolverTest extends TestCase
@@ -29,31 +29,31 @@ class ProviderResolverTest extends TestCase
         parent::setUp();
 
         app(PluginFileLoader::class)->ensureLoaded(
-            app(PluginScanner::class)->requireManifest('upstream', 'mofang_finance')
+            app(PluginScanner::class)->requireManifest('upstream', 'zjmf_finance')
         );
     }
 
-    public function test_it_resolves_mofang_supplier_key_to_mofang_driver(): void
+    public function test_it_resolves_zjmf_supplier_key_to_zjmf_driver(): void
     {
         $resolver = $this->makeResolver();
         $supplier = new Supplier;
 
         $resolved = $resolver->resolveForSupplier($supplier);
 
-        $this->assertSame(ProviderKey::MOFANG_FINANCE_API, $resolved->rawKey());
-        $this->assertSame(ProviderKey::MOFANG_FINANCE_API, $resolved->key());
-        $this->assertSame('魔方财务接口', $resolved->label());
+        $this->assertSame(ProviderKey::ZJMF_FINANCE_API, $resolved->rawKey());
+        $this->assertSame(ProviderKey::ZJMF_FINANCE_API, $resolved->key());
+        $this->assertSame('ZJMF 财务接口', $resolved->label());
         $this->assertContains(ProvidesProvisioning::class, $resolved->capabilities());
         $this->assertContains(ProvidesConsoleCatalog::class, $resolved->capabilities());
         $this->assertTrue($resolved->supports(ProvidesProvisioning::class));
         $descriptorPayload = $resolved->descriptor()->toArray();
-        $this->assertSame(ProviderKey::MOFANG_FINANCE_API, $descriptorPayload['key']);
-        $this->assertSame('魔方财务接口', $descriptorPayload['label']);
+        $this->assertSame(ProviderKey::ZJMF_FINANCE_API, $descriptorPayload['key']);
+        $this->assertSame('ZJMF 财务接口', $descriptorPayload['label']);
         $this->assertSame($resolved->capabilities(), $descriptorPayload['capabilities']);
         $this->assertArrayHasKey('supplier_form', $descriptorPayload);
     }
 
-    public function test_mofang_capabilities_resolve_to_mofang_adapter_instead_of_shared_transport(): void
+    public function test_zjmf_capabilities_resolve_to_zjmf_adapter_instead_of_shared_transport(): void
     {
         $resolver = $this->makeResolver();
         $supplier = new Supplier;
@@ -62,7 +62,7 @@ class ProviderResolverTest extends TestCase
             ->resolveForSupplier($supplier)
             ->require(ProvidesConsoleCatalog::class);
 
-        $this->assertInstanceOf(MofangFinanceAdapter::class, $catalogCapability);
+        $this->assertInstanceOf(ZjmfFinanceAdapter::class, $catalogCapability);
         $this->assertNotInstanceOf(HostingPanelApiTransport::class, $catalogCapability);
     }
 
@@ -72,7 +72,7 @@ class ProviderResolverTest extends TestCase
         {
             public function providerKeyForService(Service $service): ?string
             {
-                return ProviderKey::MOFANG_FINANCE_API;
+                return ProviderKey::ZJMF_FINANCE_API;
             }
         });
 
@@ -80,8 +80,8 @@ class ProviderResolverTest extends TestCase
 
         $resolved = $resolver->resolveForService($service);
 
-        $this->assertSame(ProviderKey::MOFANG_FINANCE_API, $resolved->rawKey());
-        $this->assertSame(ProviderKey::MOFANG_FINANCE_API, $resolved->key());
+        $this->assertSame(ProviderKey::ZJMF_FINANCE_API, $resolved->rawKey());
+        $this->assertSame(ProviderKey::ZJMF_FINANCE_API, $resolved->key());
         $this->assertTrue($resolved->isResolved());
     }
 
@@ -91,7 +91,7 @@ class ProviderResolverTest extends TestCase
         {
             public function providerKeyForService(Service $service): ?string
             {
-                return ProviderKey::MOFANG_FINANCE_API;
+                return ProviderKey::ZJMF_FINANCE_API;
             }
         });
 
@@ -104,7 +104,7 @@ class ProviderResolverTest extends TestCase
 
         $resolved = $resolver->resolveForService($service);
 
-        $this->assertSame(ProviderKey::MOFANG_FINANCE_API, $resolved->key());
+        $this->assertSame(ProviderKey::ZJMF_FINANCE_API, $resolved->key());
         $this->assertTrue($resolved->isResolved());
     }
 
@@ -114,22 +114,22 @@ class ProviderResolverTest extends TestCase
 
         return new ProviderResolver(new ProviderRegistry([
             new HostingPanelApiDriver($transport),
-            new MofangFinanceDriver(new MofangFinanceAdapter($transport, new MofangCloudConfigTemplate)),
+            new ZjmfFinanceDriver(new ZjmfFinanceAdapter($transport, new ZjmfCloudConfigTemplate)),
         ]), $bindingResolver ?? new class extends PluginBindingResolver
         {
             public function providerKeyForSupplier(Supplier $supplier): ?string
             {
-                return ProviderKey::MOFANG_FINANCE_API;
+                return ProviderKey::ZJMF_FINANCE_API;
             }
 
             public function providerKeyForProduct(Product $product): ?string
             {
-                return ProviderKey::MOFANG_FINANCE_API;
+                return ProviderKey::ZJMF_FINANCE_API;
             }
 
             public function providerKeyForService(Service $service): ?string
             {
-                return ProviderKey::MOFANG_FINANCE_API;
+                return ProviderKey::ZJMF_FINANCE_API;
             }
         });
     }

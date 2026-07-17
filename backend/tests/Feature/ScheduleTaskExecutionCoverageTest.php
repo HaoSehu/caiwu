@@ -25,9 +25,9 @@ use App\Services\Upstream\Contracts\UpstreamDriver;
 use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderRegistry;
 use App\Services\Upstream\ProviderResolver;
-use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangInventoryAndServiceSyncTask;
-use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangScheduledAuthRefreshTask;
-use Caiwu\Plugins\Servers\MofangFinance\MofangFinancePlugin;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfInventoryAndServiceSyncTask;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfScheduledAuthRefreshTask;
+use Caiwu\Plugins\Servers\ZjmfFinance\ZjmfFinancePlugin;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -212,30 +212,30 @@ class ScheduleTaskExecutionCoverageTest extends TestCase
         $this->assertSame([1], $scheduledAuthRefresh->supplierStatuses);
     }
 
-    public function test_mofang_auth_refresh_task_is_registered_from_enabled_plugin_hooks(): void
+    public function test_zjmf_auth_refresh_task_is_registered_from_enabled_plugin_hooks(): void
     {
         $this->createSuppliersTable();
         $this->createSupplierPluginBindingTables();
 
         $scheduledAuthRefresh = new RecordingScheduledAuthRefresh;
         $providerRegistry = new ProviderRegistry([
-            new FakeScheduledAuthRefreshDriver($scheduledAuthRefresh, ProviderKey::MOFANG_FINANCE_API),
+            new FakeScheduledAuthRefreshDriver($scheduledAuthRefresh, ProviderKey::ZJMF_FINANCE_API),
         ]);
         app()->instance(ProviderRegistry::class, $providerRegistry);
         app()->instance(ProviderResolver::class, new ProviderResolver($providerRegistry));
 
         $supplier = Supplier::query()->create([
-            'name' => 'Mofang Supplier',
-            'interface_type' => ProviderKey::MOFANG_FINANCE_API,
+            'name' => 'Zjmf Supplier',
+            'interface_type' => ProviderKey::ZJMF_FINANCE_API,
             'status' => 1,
         ]);
         $pluginId = DB::table('integration_plugins')->insertGetId([
             'domain' => 'upstream',
-            'slug' => 'mofang_finance',
-            'plugin_key' => ProviderKey::MOFANG_FINANCE_API,
-            'name' => '魔方财务接口',
+            'slug' => 'zjmf_finance',
+            'plugin_key' => ProviderKey::ZJMF_FINANCE_API,
+            'name' => 'ZJMF 财务接口',
             'version' => '1.0.0',
-            'entry_class' => MofangFinancePlugin::class,
+            'entry_class' => ZjmfFinancePlugin::class,
             'status' => 1,
             'created_at' => now(),
             'updated_at' => now(),
@@ -243,7 +243,7 @@ class ScheduleTaskExecutionCoverageTest extends TestCase
         DB::table('supplier_plugin_bindings')->insert([
             'supplier_id' => (int) $supplier->id,
             'plugin_id' => $pluginId,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'environment' => 'production',
             'status' => 1,
             'priority' => 0,
@@ -252,35 +252,35 @@ class ScheduleTaskExecutionCoverageTest extends TestCase
         ]);
 
         $tasks = collect(app(ScheduleTaskService::class)->overview()['tasks'] ?? []);
-        $task = $tasks->firstWhere('key', MofangScheduledAuthRefreshTask::KEY);
+        $task = $tasks->firstWhere('key', ZjmfScheduledAuthRefreshTask::KEY);
 
         $this->assertIsArray($task);
-        $this->assertSame('魔方财务认证刷新', $task['title'] ?? null);
+        $this->assertSame('ZJMF 财务认证刷新', $task['title'] ?? null);
         $this->assertSame('third_party', $task['source_type'] ?? null);
         $this->assertSame('第三方任务', $task['source_label'] ?? null);
 
-        RunHeartbeatTaskJob::dispatchSync(MofangScheduledAuthRefreshTask::KEY, null, null, 1, 'manual_trigger');
+        RunHeartbeatTaskJob::dispatchSync(ZjmfScheduledAuthRefreshTask::KEY, null, null, 1, 'manual_trigger');
 
         $this->assertSame([1], $scheduledAuthRefresh->supplierStatuses);
     }
 
-    public function test_mofang_inventory_and_service_sync_task_runs_registered_plugin_hooks(): void
+    public function test_zjmf_inventory_and_service_sync_task_runs_registered_plugin_hooks(): void
     {
         $this->createSuppliersTable();
         $this->createSupplierPluginBindingTables();
 
         $supplier = Supplier::query()->create([
-            'name' => 'Mofang Supplier',
-            'interface_type' => ProviderKey::MOFANG_FINANCE_API,
+            'name' => 'Zjmf Supplier',
+            'interface_type' => ProviderKey::ZJMF_FINANCE_API,
             'status' => 1,
         ]);
         $pluginId = DB::table('integration_plugins')->insertGetId([
             'domain' => 'upstream',
-            'slug' => 'mofang_finance',
-            'plugin_key' => ProviderKey::MOFANG_FINANCE_API,
-            'name' => '魔方财务接口',
+            'slug' => 'zjmf_finance',
+            'plugin_key' => ProviderKey::ZJMF_FINANCE_API,
+            'name' => 'ZJMF 财务接口',
             'version' => '1.0.0',
-            'entry_class' => MofangFinancePlugin::class,
+            'entry_class' => ZjmfFinancePlugin::class,
             'status' => 1,
             'created_at' => now(),
             'updated_at' => now(),
@@ -288,7 +288,7 @@ class ScheduleTaskExecutionCoverageTest extends TestCase
         DB::table('supplier_plugin_bindings')->insert([
             'supplier_id' => (int) $supplier->id,
             'plugin_id' => $pluginId,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'environment' => 'production',
             'status' => 1,
             'priority' => 0,
@@ -299,7 +299,7 @@ class ScheduleTaskExecutionCoverageTest extends TestCase
         $productCatalogService = $this->createMock(ProductCatalogService::class);
         $productCatalogService->expects($this->once())
             ->method('syncUpstreamProductStocks')
-            ->with(ProviderKey::MOFANG_FINANCE_API)
+            ->with(ProviderKey::ZJMF_FINANCE_API)
             ->willReturn([
                 'matched_products' => 1,
                 'matched_suppliers' => 1,
@@ -312,7 +312,7 @@ class ScheduleTaskExecutionCoverageTest extends TestCase
         $serviceStatusSyncService = $this->createMock(ServiceStatusSyncService::class);
         $serviceStatusSyncService->expects($this->once())
             ->method('handleProvider')
-            ->with(ProviderKey::MOFANG_FINANCE_API)
+            ->with(ProviderKey::ZJMF_FINANCE_API)
             ->willReturn([
                 'scanned' => 1,
                 'synced' => 1,
@@ -322,14 +322,14 @@ class ScheduleTaskExecutionCoverageTest extends TestCase
         app()->instance(ServiceStatusSyncService::class, $serviceStatusSyncService);
 
         $tasks = collect(app(ScheduleTaskService::class)->overview()['tasks'] ?? []);
-        $task = $tasks->firstWhere('key', MofangInventoryAndServiceSyncTask::KEY);
+        $task = $tasks->firstWhere('key', ZjmfInventoryAndServiceSyncTask::KEY);
 
         $this->assertIsArray($task);
-        $this->assertSame('魔方财务库存与服务同步', $task['title'] ?? null);
+        $this->assertSame('ZJMF 财务库存与服务同步', $task['title'] ?? null);
         $this->assertSame('third_party', $task['source_type'] ?? null);
         $this->assertSame('第三方任务', $task['source_label'] ?? null);
 
-        RunHeartbeatTaskJob::dispatchSync(MofangInventoryAndServiceSyncTask::KEY, null, null, 1, 'manual_trigger');
+        RunHeartbeatTaskJob::dispatchSync(ZjmfInventoryAndServiceSyncTask::KEY, null, null, 1, 'manual_trigger');
     }
 
     public function test_sync_processing_order_status_command_is_a_compatibility_no_op(): void

@@ -8,30 +8,30 @@ use App\Models\Supplier;
 use App\Services\Integrations\Plugins\PluginFileLoader;
 use App\Services\Integrations\Plugins\PluginScanner;
 use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiTransport;
-use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangAuthManager;
-use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangFinanceTransport;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfAuthManager;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfFinanceTransport;
 use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
-class MofangFinanceTransportTest extends TestCase
+class ZjmfFinanceTransportTest extends TestCase
 {
     protected function setUp(): void
     {
         parent::setUp();
 
         app(PluginFileLoader::class)->ensureLoaded(
-            app(PluginScanner::class)->requireManifest('upstream', 'mofang_finance')
+            app(PluginScanner::class)->requireManifest('upstream', 'zjmf_finance')
         );
     }
 
-    public function test_auth_manager_caches_jwt_under_mofang_provider_key(): void
+    public function test_auth_manager_caches_jwt_under_zjmf_provider_key(): void
     {
-        config(['mofang.finance_api.jwt_cache_store' => 'array']);
+        config(['idc.hosting_panel_api.jwt_cache_store' => 'array']);
 
         $supplier = (new Supplier)->forceFill([
             'id' => 321,
-            'interface_type' => 'mofang_finance_api',
-            'api_url' => 'https://mofang.example.test',
+            'interface_type' => 'zjmf_finance_api',
+            'api_url' => 'https://zjmf.example.test',
             'api_username' => 'demo',
             'api_key' => 'secret',
         ]);
@@ -51,27 +51,27 @@ class MofangFinanceTransportTest extends TestCase
             ): array {
                 $this->captured[] = compact('method', 'uri', 'payload', 'jwt', 'headers', 'query');
 
-                return ['status' => 200, 'jwt' => 'mofang-plugin-jwt'];
+                return ['status' => 200, 'jwt' => 'zjmf-plugin-jwt'];
             }
         };
 
-        $auth = new MofangAuthManager($transport);
+        $auth = new ZjmfAuthManager($transport);
         $jwt = $auth->login($supplier);
 
-        $this->assertSame('mofang-plugin-jwt', $jwt);
-        $this->assertSame('mofang-plugin-jwt', Cache::store('array')->get($auth->jwtCacheKey($supplier)));
+        $this->assertSame('zjmf-plugin-jwt', $jwt);
+        $this->assertSame('zjmf-plugin-jwt', Cache::store('array')->get($auth->jwtCacheKey($supplier)));
         $this->assertSame('/v1/login_api', $transport->captured[0]['uri']);
         $this->assertSame('demo', $transport->captured[0]['payload']['account']);
     }
 
-    public function test_transport_forgets_mofang_jwt_cache_on_unauthorized_response(): void
+    public function test_transport_forgets_zjmf_jwt_cache_on_unauthorized_response(): void
     {
-        config(['mofang.finance_api.jwt_cache_store' => 'array']);
+        config(['idc.hosting_panel_api.jwt_cache_store' => 'array']);
 
         $supplier = (new Supplier)->forceFill([
             'id' => 654,
-            'interface_type' => 'mofang_finance_api',
-            'api_url' => 'https://mofang.example.test',
+            'interface_type' => 'zjmf_finance_api',
+            'api_url' => 'https://zjmf.example.test',
             'api_username' => 'demo',
             'api_key' => 'secret',
         ]);
@@ -91,10 +91,10 @@ class MofangFinanceTransportTest extends TestCase
             }
         };
 
-        $auth = new MofangAuthManager($legacyTransport);
+        $auth = new ZjmfAuthManager($legacyTransport);
         Cache::store('array')->put($auth->jwtCacheKey($supplier), 'stale-jwt', now()->addMinutes(5));
 
-        $transport = new MofangFinanceTransport($legacyTransport, $auth);
+        $transport = new ZjmfFinanceTransport($legacyTransport, $auth);
         $transport->get($supplier, '/v1/user', 'stale-jwt');
 
         $this->assertNull(Cache::store('array')->get($auth->jwtCacheKey($supplier)));

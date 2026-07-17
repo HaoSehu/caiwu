@@ -26,7 +26,7 @@ class ServiceStatusSyncBindingTest extends TestCase
     {
         parent::setUp();
 
-        $this->activateIntegrationPluginForTest('upstream', 'mofang_finance');
+        $this->activateIntegrationPluginForTest('upstream', 'zjmf_finance');
     }
 
     #[Test]
@@ -104,7 +104,7 @@ class ServiceStatusSyncBindingTest extends TestCase
         $this->assertSame('legacy-only.example.test', (string) $legacyOnlyService->refresh()->domain);
         $this->assertDatabaseHas('service_runtime_snapshots', [
             'service_id' => (int) $boundService->id,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'status_key' => 'running',
         ]);
     }
@@ -126,7 +126,7 @@ class ServiceStatusSyncBindingTest extends TestCase
             upstreamHostId: 33333,
             createServiceBinding: true,
             provisionData: [
-                'provider' => ProviderKey::MOFANG_FINANCE_API,
+                'provider' => ProviderKey::ZJMF_FINANCE_API,
                 'source_type' => 'upstream',
             ],
         )['service'];
@@ -152,12 +152,12 @@ class ServiceStatusSyncBindingTest extends TestCase
 
             public function key(): string
             {
-                return ProviderKey::MOFANG_FINANCE_API;
+                return ProviderKey::ZJMF_FINANCE_API;
             }
 
             public function label(): string
             {
-                return 'Mofang Finance';
+                return 'Zjmf Finance';
             }
 
             public function capabilities(): array
@@ -193,7 +193,7 @@ class ServiceStatusSyncBindingTest extends TestCase
         $unique = $suffix.'-'.bin2hex(random_bytes(4));
         $pluginId = (int) DB::table('integration_plugins')
             ->where('domain', 'upstream')
-            ->where('plugin_key', ProviderKey::MOFANG_FINANCE_API)
+            ->where('plugin_key', ProviderKey::ZJMF_FINANCE_API)
             ->value('id');
 
         $this->assertGreaterThan(0, $pluginId);
@@ -206,9 +206,9 @@ class ServiceStatusSyncBindingTest extends TestCase
         ]);
 
         $supplier = Supplier::query()->create([
-            'name' => 'Mofang Status Supplier '.$unique,
+            'name' => 'Zjmf Status Supplier '.$unique,
             'code' => 'status-'.$unique,
-            'interface_type' => ProviderKey::MOFANG_FINANCE_API,
+            'interface_type' => ProviderKey::ZJMF_FINANCE_API,
             'api_url' => 'https://supplier-'.$unique.'.example.test',
             'api_username' => 'demo',
             'api_key' => 'secret',
@@ -217,7 +217,7 @@ class ServiceStatusSyncBindingTest extends TestCase
         ]);
 
         $product = Product::query()->create([
-            'name' => 'Mofang Status Product '.$unique,
+            'name' => 'Zjmf Status Product '.$unique,
             'product_type' => 'server',
             'pricing' => ['monthly' => '99.00'],
             'setup_fee' => '0.00',
@@ -228,13 +228,13 @@ class ServiceStatusSyncBindingTest extends TestCase
             'auto_setup' => 1,
             'supplier_id' => (int) $supplier->id,
             'supplier_product_id' => $upstreamProductId,
-            'provision_module' => ProviderKey::MOFANG_FINANCE_API,
+            'provision_module' => ProviderKey::ZJMF_FINANCE_API,
         ]);
 
         $supplierBindingId = DB::table('supplier_plugin_bindings')->insertGetId([
             'supplier_id' => (int) $supplier->id,
             'plugin_id' => $pluginId,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'environment' => 'production',
             'status' => 1,
             'priority' => 0,
@@ -246,7 +246,7 @@ class ServiceStatusSyncBindingTest extends TestCase
             'product_id' => (int) $product->id,
             'supplier_plugin_binding_id' => $supplierBindingId,
             'plugin_id' => $pluginId,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'upstream_product_id' => (string) $upstreamProductId,
             'auto_setup' => 1,
             'status' => 1,
@@ -264,7 +264,7 @@ class ServiceStatusSyncBindingTest extends TestCase
             'status' => ServiceStatus::ACTIVE,
             'locked_pricing' => [],
             'provision_data' => $provisionData ?? [
-                'provider' => ProviderKey::MOFANG_FINANCE_API,
+                'provider' => ProviderKey::ZJMF_FINANCE_API,
                 'supplier_id' => (int) $supplier->id,
                 'supplier_product_id' => $upstreamProductId,
                 'upstream_host_id' => $upstreamHostId,
@@ -279,7 +279,7 @@ class ServiceStatusSyncBindingTest extends TestCase
                 'product_upstream_binding_id' => $productBindingId,
                 'supplier_plugin_binding_id' => $supplierBindingId,
                 'plugin_id' => $pluginId,
-                'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+                'provider_key' => ProviderKey::ZJMF_FINANCE_API,
                 'upstream_service_id' => (string) $upstreamHostId,
                 'status_snapshot' => 'active',
                 'created_at' => now(),

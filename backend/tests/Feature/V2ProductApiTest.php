@@ -103,7 +103,7 @@ class V2ProductApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('code', 0)
             ->assertJsonPath('data.product.id', $product->id)
-            ->assertJsonPath('data.product.upstream_binding.provider_key', 'mofang_finance_api')
+            ->assertJsonPath('data.product.upstream_binding.provider_key', 'zjmf_finance_api')
             ->assertJsonPath('data.product.upstream_binding.upstream_product_id', 'mf-'.$suffix);
 
         $this->assertSame($this->adminProductDetailWhitelist(), array_keys($response->json('data.product')));
@@ -616,9 +616,9 @@ class V2ProductApiTest extends TestCase
     {
         $plugin = IntegrationPlugin::query()->create([
             'domain' => 'servers',
-            'slug' => 'mofang-finance-'.$suffix,
-            'plugin_key' => 'servers.mofang_finance.'.$suffix,
-            'name' => '魔方财务 '.$suffix,
+            'slug' => 'zjmf-finance-'.$suffix,
+            'plugin_key' => 'servers.zjmf_finance.'.$suffix,
+            'name' => 'ZJMF 财务 '.$suffix,
             'version' => '1.0.0',
             'provider_class' => 'Tests\\FakeProvider',
             'entry_class' => 'Tests\\FakePlugin',
@@ -629,7 +629,7 @@ class V2ProductApiTest extends TestCase
             'enabled_at' => now(),
         ]);
         $supplier = Supplier::query()->create([
-            'name' => '魔方供应商 '.$suffix,
+            'name' => 'ZJMF供应商 '.$suffix,
             'code' => 'mf-'.$suffix,
             'status' => 1,
             'sort_order' => 1,
@@ -637,7 +637,7 @@ class V2ProductApiTest extends TestCase
         $supplierBinding = SupplierPluginBinding::query()->create([
             'supplier_id' => (int) $supplier->id,
             'plugin_id' => (int) $plugin->id,
-            'provider_key' => 'mofang_finance_api',
+            'provider_key' => 'zjmf_finance_api',
             'environment' => 'production',
             'status' => 1,
             'priority' => 10,
@@ -649,7 +649,7 @@ class V2ProductApiTest extends TestCase
             'product_id' => (int) $product->id,
             'supplier_plugin_binding_id' => (int) $supplierBinding->id,
             'plugin_id' => (int) $plugin->id,
-            'provider_key' => 'mofang_finance_api',
+            'provider_key' => 'zjmf_finance_api',
             'upstream_product_id' => 'mf-'.$suffix,
             'upstream_product_snapshot_json' => ['raw_response' => 'should-not-leak'],
             'option_schema_json' => ['secret' => 'should-not-leak'],

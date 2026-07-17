@@ -8,22 +8,22 @@ use App\Models\Supplier;
 use App\Services\Integrations\Plugins\PluginFileLoader;
 use App\Services\Integrations\Plugins\PluginScanner;
 use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiTransport;
-use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangAuthManager;
-use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangFinanceTransport;
-use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangRenewService;
-use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangStatusService;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfAuthManager;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfFinanceTransport;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfRenewService;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfStatusService;
 use Illuminate\Support\Facades\Cache;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
-final class MofangRenewAndStatusServiceTest extends TestCase
+final class ZjmfRenewAndStatusServiceTest extends TestCase
 {
     protected function setUp(): void
     {
         parent::setUp();
 
         app(PluginFileLoader::class)->ensureLoaded(
-            app(PluginScanner::class)->requireManifest('upstream', 'mofang_finance')
+            app(PluginScanner::class)->requireManifest('upstream', 'zjmf_finance')
         );
 
         Cache::flush();
@@ -84,7 +84,7 @@ final class MofangRenewAndStatusServiceTest extends TestCase
             }
         };
 
-        $service = new MofangRenewService($this->makeMofangTransport($fakeTransport));
+        $service = new ZjmfRenewService($this->makeZjmfTransport($fakeTransport));
         $result = $service->renewServiceInvoice($this->makeSupplier(), 7788, 'monthly');
 
         $this->assertSame(8899, $result['upstream_invoice_id']);
@@ -131,7 +131,7 @@ final class MofangRenewAndStatusServiceTest extends TestCase
                                     'domain' => 'srv501.example.test',
                                     'domainstatus' => 'Active',
                                     'product_id' => '9001',
-                                    'product_name' => 'Mofang VPS',
+                                    'product_name' => 'Zjmf VPS',
                                     'dedicatedip' => '203.0.113.10',
                                     'assignedips' => ['203.0.113.10', '203.0.113.11'],
                                     'config_option' => ['cpu' => 2],
@@ -159,7 +159,7 @@ final class MofangRenewAndStatusServiceTest extends TestCase
             }
         };
 
-        $service = new MofangStatusService($this->makeMofangTransport($fakeTransport));
+        $service = new ZjmfStatusService($this->makeZjmfTransport($fakeTransport));
         $result = $service->syncServiceStatuses($this->makeSupplier(), [
             [
                 'service_id' => 501,
@@ -180,17 +180,17 @@ final class MofangRenewAndStatusServiceTest extends TestCase
         $supplier = new Supplier;
         $supplier->forceFill([
             'id' => 1001,
-            'interface_type' => 'mofang_finance_api',
+            'interface_type' => 'zjmf_finance_api',
         ]);
 
         return $supplier;
     }
 
-    private function makeMofangTransport(HostingPanelApiTransport $transport): MofangFinanceTransport
+    private function makeZjmfTransport(HostingPanelApiTransport $transport): ZjmfFinanceTransport
     {
-        return new MofangFinanceTransport(
+        return new ZjmfFinanceTransport(
             $transport,
-            new MofangAuthManager($transport),
+            new ZjmfAuthManager($transport),
         );
     }
 }

@@ -4,47 +4,52 @@ declare(strict_types=1);
 
 namespace Tests\Unit;
 
-use App\Integrations\Mofang\Billing\MofangBillingRestoreProfile;
-use App\Integrations\Mofang\Billing\MofangBillingRestoreService;
 use App\Services\Auth\LegacyPasswordVerifier;
 use App\Services\Integrations\Plugins\Adapters\PluginUpstreamDriver;
 use App\Services\Integrations\Plugins\PluginInstaller;
 use App\Services\Integrations\Plugins\PluginScanner;
 use App\Services\Upstream\Contracts\ProvidesConsoleCatalog;
+use App\Services\Upstream\Contracts\ProvidesSynchronousNewPurchaseFulfillment;
 use App\Services\Upstream\Contracts\UpstreamBillingRestoreProfile;
 use App\Services\Upstream\Data\UpstreamProviderDescriptor;
 use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderRegistry;
-use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangFinanceAdapter;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfBillingRestoreProfile;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfBillingRestoreService;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfFinanceAdapter;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
-class MofangServiceProviderTest extends TestCase
+class ZjmfServiceProviderTest extends TestCase
 {
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->ensureMofangPluginEnabled();
+        $this->ensureZjmfPluginEnabled();
     }
 
-    public function test_it_registers_mofang_driver_through_upstream_plugin(): void
+    public function test_it_registers_zjmf_driver_through_upstream_plugin(): void
     {
         $registry = app(ProviderRegistry::class);
-        $driver = $registry->find(ProviderKey::MOFANG_FINANCE_API);
+        $driver = $registry->find(ProviderKey::ZJMF_FINANCE_API);
 
         $this->assertInstanceOf(PluginUpstreamDriver::class, $driver);
-        $this->assertSame('魔方财务接口', $driver?->label());
+        $this->assertSame('ZJMF 财务接口', $driver?->label());
         $this->assertInstanceOf(
-            MofangFinanceAdapter::class,
+            ZjmfFinanceAdapter::class,
             $driver?->resolve(ProvidesConsoleCatalog::class)
+        );
+        $this->assertInstanceOf(
+            ProvidesSynchronousNewPurchaseFulfillment::class,
+            $driver?->resolve(ProvidesSynchronousNewPurchaseFulfillment::class)
         );
     }
 
-    public function test_mofang_adapter_declares_platform_used_methods_explicitly_without_dynamic_forwarding(): void
+    public function test_zjmf_adapter_declares_platform_used_methods_explicitly_without_dynamic_forwarding(): void
     {
-        $reflection = new \ReflectionClass(MofangFinanceAdapter::class);
+        $reflection = new \ReflectionClass(ZjmfFinanceAdapter::class);
 
         foreach ([
             'login',
@@ -98,8 +103,8 @@ class MofangServiceProviderTest extends TestCase
             'request',
         ] as $method) {
             $this->assertTrue(
-                $reflection->hasMethod($method) && $reflection->getMethod($method)->getDeclaringClass()->getName() === MofangFinanceAdapter::class,
-                "MofangFinanceAdapter must explicitly declare {$method}()."
+                $reflection->hasMethod($method) && $reflection->getMethod($method)->getDeclaringClass()->getName() === ZjmfFinanceAdapter::class,
+                "ZjmfFinanceAdapter must explicitly declare {$method}()."
             );
         }
 
@@ -110,27 +115,27 @@ class MofangServiceProviderTest extends TestCase
     {
         $registry = app(ProviderRegistry::class);
 
-        $this->assertSame(ProviderKey::MOFANG_FINANCE_API, ProviderKey::label(ProviderKey::MOFANG_FINANCE_API));
-        $this->assertContains(ProviderKey::MOFANG_FINANCE_API, $registry->keys());
+        $this->assertSame(ProviderKey::ZJMF_FINANCE_API, ProviderKey::label(ProviderKey::ZJMF_FINANCE_API));
+        $this->assertContains(ProviderKey::ZJMF_FINANCE_API, $registry->keys());
         $option = collect($registry->options())
-            ->firstWhere('value', ProviderKey::MOFANG_FINANCE_API);
+            ->firstWhere('value', ProviderKey::ZJMF_FINANCE_API);
         $this->assertIsArray($option);
-        $this->assertSame('魔方财务接口', $option['label']);
+        $this->assertSame('ZJMF 财务接口', $option['label']);
         $this->assertArrayHasKey('supplier_form', $option);
 
         $descriptor = collect($registry->descriptors())
-            ->first(fn (UpstreamProviderDescriptor $item): bool => $item->key === ProviderKey::MOFANG_FINANCE_API);
+            ->first(fn (UpstreamProviderDescriptor $item): bool => $item->key === ProviderKey::ZJMF_FINANCE_API);
 
         $this->assertInstanceOf(UpstreamProviderDescriptor::class, $descriptor);
         $descriptorPayload = $descriptor->toArray();
-        $this->assertSame(ProviderKey::MOFANG_FINANCE_API, $descriptorPayload['key']);
-        $this->assertSame('魔方财务接口', $descriptorPayload['label']);
+        $this->assertSame(ProviderKey::ZJMF_FINANCE_API, $descriptorPayload['key']);
+        $this->assertSame('ZJMF 财务接口', $descriptorPayload['label']);
         $this->assertSame($descriptor->capabilities, $descriptorPayload['capabilities']);
         $this->assertArrayHasKey('supplier_form', $descriptorPayload);
         $this->assertContains(ProvidesConsoleCatalog::class, $descriptor->capabilities);
     }
 
-    public function test_it_registers_mofang_legacy_password_verifier_in_chain(): void
+    public function test_it_registers_zjmf_legacy_password_verifier_in_chain(): void
     {
         $needsRehash = false;
         $matched = app(LegacyPasswordVerifier::class)->verify(
@@ -143,27 +148,29 @@ class MofangServiceProviderTest extends TestCase
         $this->assertTrue($needsRehash);
     }
 
-    public function test_it_registers_mofang_billing_restore_module(): void
+    public function test_it_registers_zjmf_billing_restore_module(): void
     {
         $profile = app(UpstreamBillingRestoreProfile::class);
 
-        $this->assertInstanceOf(MofangBillingRestoreProfile::class, $profile);
-        $this->assertInstanceOf(MofangBillingRestoreService::class, app(MofangBillingRestoreService::class));
-        $this->assertSame('RESTORE_UPSTREAM_BILLING', $profile->defaultConfirmationPhrase());
-        $this->assertContains('RESTORE_MOFANG_BILLING', $profile->confirmationPhrases());
+        $this->assertInstanceOf(ZjmfBillingRestoreProfile::class, $profile);
+        $this->assertInstanceOf(ZjmfBillingRestoreService::class, app(ZjmfBillingRestoreService::class));
+        $this->assertSame('RESTORE_ZJMF_BILLING', $profile->defaultConfirmationPhrase());
+        $this->assertContains('RESTORE_ZJMF_BILLING', $profile->confirmationPhrases());
     }
 
-    private function ensureMofangPluginEnabled(): void
+    private function ensureZjmfPluginEnabled(): void
     {
         $this->ensurePluginTables();
 
         $scanner = app(PluginScanner::class);
         $installer = app(PluginInstaller::class);
-        $scanner->requireManifest('upstream', 'mofang_finance');
-        $plugin = $installer->install('upstream', 'mofang_finance');
+        $scanner->requireManifest('upstream', 'zjmf_finance');
+        $plugin = $installer->install('upstream', 'zjmf_finance');
         $installer->enable($plugin);
 
         $this->app->forgetInstance(ProviderRegistry::class);
+        $this->app->forgetInstance(LegacyPasswordVerifier::class);
+        $this->app->forgetInstance(\App\Services\Upstream\Support\WebSessionCookieParser::class);
     }
 
     private function ensurePluginTables(): void

@@ -12,38 +12,38 @@ use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\Integrations\Plugins\PluginFileLoader;
 use App\Services\Integrations\Plugins\PluginScanner;
 use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiTransport;
-use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangAuthManager;
-use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangFinanceTransport;
-use Caiwu\Plugins\Servers\MofangFinance\Lib\MofangProvisionService;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfAuthManager;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfFinanceTransport;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfProvisionService;
 use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
-class MofangProvisionCartSessionTest extends TestCase
+class ZjmfProvisionCartSessionTest extends TestCase
 {
     protected function setUp(): void
     {
         parent::setUp();
 
         app(PluginFileLoader::class)->ensureLoaded(
-            app(PluginScanner::class)->requireManifest('upstream', 'mofang_finance')
+            app(PluginScanner::class)->requireManifest('upstream', 'zjmf_finance')
         );
     }
 
     public function test_provision_cart_reuses_upstream_session_cookie(): void
     {
-        config(['mofang.finance_api.jwt_cache_store' => 'array']);
+        config(['idc.hosting_panel_api.jwt_cache_store' => 'array']);
         Cache::store('array')->flush();
 
         $supplier = (new Supplier)->forceFill([
             'id' => 9981,
-            'api_url' => 'https://mofang.example.test',
+            'api_url' => 'https://zjmf.example.test',
             'api_username' => 'demo',
             'api_key' => 'secret',
         ]);
 
         $product = (new Product)->forceFill([
             'id' => 771,
-            'name' => '魔方测试云主机',
+            'name' => 'ZJMF 测试云主机',
             'purchase_requires' => [],
             'config_options' => [],
         ]);
@@ -160,7 +160,7 @@ class MofangProvisionCartSessionTest extends TestCase
             }
         };
 
-        $transport = new MofangFinanceTransport($upstreamTransport, new MofangAuthManager($upstreamTransport));
+        $transport = new ZjmfFinanceTransport($upstreamTransport, new ZjmfAuthManager($upstreamTransport));
         $bindingResolver = new class extends PluginBindingResolver
         {
             public function upstreamProductIdForProduct(Product $product): ?string
@@ -174,7 +174,7 @@ class MofangProvisionCartSessionTest extends TestCase
             }
         };
 
-        $provisionService = new MofangProvisionService($transport, $bindingResolver);
+        $provisionService = new ZjmfProvisionService($transport, $bindingResolver);
 
         $result = $provisionService->provisionOrder($order, $supplier);
 

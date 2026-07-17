@@ -28,9 +28,9 @@ class SupplierBatchConnectRegressionTest extends TestCase
         parent::setUp();
 
         app(PluginFileLoader::class)->ensureLoaded(
-            app(PluginScanner::class)->requireManifest('upstream', 'mofang_finance')
+            app(PluginScanner::class)->requireManifest('upstream', 'zjmf_finance')
         );
-        $this->activateIntegrationPluginForTest('upstream', 'mofang_finance');
+        $this->activateIntegrationPluginForTest('upstream', 'zjmf_finance');
     }
 
     public function test_bulk_connect_supplier_products_creates_local_products_from_upstream_catalog(): void
@@ -40,14 +40,14 @@ class SupplierBatchConnectRegressionTest extends TestCase
         $supplier = Supplier::query()->create([
             'name' => 'Batch Connect Supplier '.$suffix,
             'code' => 'batch-connect-'.$suffix,
-            'interface_type' => ProviderKey::MOFANG_FINANCE_API,
+            'interface_type' => ProviderKey::ZJMF_FINANCE_API,
             'api_url' => 'https://supplier-'.$suffix.'.example.com',
             'api_username' => 'demo',
             'api_key' => 'secret',
             'status' => 1,
             'sort_order' => 1,
         ]);
-        $this->bindSupplierToMofang($supplier);
+        $this->bindSupplierToZjmf($supplier);
 
         $firstGroup = FirstProductGroup::query()->firstOrCreate(
             ['code' => 'vps'],
@@ -256,12 +256,12 @@ class SupplierBatchConnectRegressionTest extends TestCase
 
                 public function key(): string
                 {
-                    return ProviderKey::MOFANG_FINANCE_API;
+                    return ProviderKey::ZJMF_FINANCE_API;
                 }
 
                 public function label(): string
                 {
-                    return '魔方财务接口';
+                    return 'ZJMF 财务接口';
                 }
 
                 public function capabilities(): array
@@ -283,11 +283,11 @@ class SupplierBatchConnectRegressionTest extends TestCase
         ]));
     }
 
-    private function bindSupplierToMofang(Supplier $supplier): void
+    private function bindSupplierToZjmf(Supplier $supplier): void
     {
         $pluginId = (int) DB::table('integration_plugins')
             ->where('domain', 'upstream')
-            ->where('plugin_key', ProviderKey::MOFANG_FINANCE_API)
+            ->where('plugin_key', ProviderKey::ZJMF_FINANCE_API)
             ->value('id');
 
         $this->assertGreaterThan(0, $pluginId);
@@ -297,7 +297,7 @@ class SupplierBatchConnectRegressionTest extends TestCase
             'plugin_id' => $pluginId,
             'environment' => 'production',
         ], [
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'status' => 1,
             'priority' => 0,
             'created_at' => now(),

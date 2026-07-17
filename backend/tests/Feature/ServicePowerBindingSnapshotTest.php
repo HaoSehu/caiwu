@@ -24,7 +24,7 @@ class ServicePowerBindingSnapshotTest extends TestCase
     {
         parent::setUp();
 
-        $this->activateIntegrationPluginForTest('upstream', 'mofang_finance');
+        $this->activateIntegrationPluginForTest('upstream', 'zjmf_finance');
     }
 
     #[Test]
@@ -45,7 +45,7 @@ class ServicePowerBindingSnapshotTest extends TestCase
             ->value('status_snapshot'));
         $this->assertDatabaseHas('service_runtime_snapshots', [
             'service_id' => (int) $service->id,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'status_key' => 'rebooting',
         ]);
     }
@@ -55,7 +55,7 @@ class ServicePowerBindingSnapshotTest extends TestCase
         $suffix = bin2hex(random_bytes(4));
         $pluginId = (int) DB::table('integration_plugins')
             ->where('domain', 'upstream')
-            ->where('plugin_key', ProviderKey::MOFANG_FINANCE_API)
+            ->where('plugin_key', ProviderKey::ZJMF_FINANCE_API)
             ->value('id');
 
         $this->assertGreaterThan(0, $pluginId);
@@ -68,15 +68,15 @@ class ServicePowerBindingSnapshotTest extends TestCase
         ]);
 
         $supplier = Supplier::query()->create([
-            'name' => 'Mofang Power Supplier '.$suffix,
+            'name' => 'Zjmf Power Supplier '.$suffix,
             'code' => 'power-'.$suffix,
-            'interface_type' => ProviderKey::MOFANG_FINANCE_API,
+            'interface_type' => ProviderKey::ZJMF_FINANCE_API,
             'status' => 1,
             'sort_order' => 1,
         ]);
 
         $product = Product::query()->create([
-            'name' => 'Mofang Power Product '.$suffix,
+            'name' => 'Zjmf Power Product '.$suffix,
             'product_type' => 'server',
             'pricing' => ['monthly' => '99.00'],
             'setup_fee' => '0.00',
@@ -87,13 +87,13 @@ class ServicePowerBindingSnapshotTest extends TestCase
             'auto_setup' => 1,
             'supplier_id' => (int) $supplier->id,
             'supplier_product_id' => 8001,
-            'provision_module' => ProviderKey::MOFANG_FINANCE_API,
+            'provision_module' => ProviderKey::ZJMF_FINANCE_API,
         ]);
 
         $supplierBindingId = DB::table('supplier_plugin_bindings')->insertGetId([
             'supplier_id' => (int) $supplier->id,
             'plugin_id' => $pluginId,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'environment' => 'production',
             'status' => 1,
             'priority' => 0,
@@ -105,7 +105,7 @@ class ServicePowerBindingSnapshotTest extends TestCase
             'product_id' => (int) $product->id,
             'supplier_plugin_binding_id' => $supplierBindingId,
             'plugin_id' => $pluginId,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'upstream_product_id' => '8001',
             'auto_setup' => 1,
             'status' => 1,
@@ -132,7 +132,7 @@ class ServicePowerBindingSnapshotTest extends TestCase
             'product_upstream_binding_id' => $productBindingId,
             'supplier_plugin_binding_id' => $supplierBindingId,
             'plugin_id' => $pluginId,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'upstream_service_id' => '88001',
             'status_snapshot' => 'running',
             'created_at' => now(),

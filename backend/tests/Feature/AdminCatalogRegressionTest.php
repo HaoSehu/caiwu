@@ -349,13 +349,13 @@ class AdminCatalogRegressionTest extends TestCase
         IntegrationPlugin::query()->updateOrCreate(
             [
                 'domain' => PluginDomain::UPSTREAM,
-                'plugin_key' => ProviderKey::MOFANG_FINANCE_API,
+                'plugin_key' => ProviderKey::ZJMF_FINANCE_API,
             ],
             [
-                'slug' => 'mofang_finance',
-                'name' => '魔方财务',
+                'slug' => 'zjmf_finance',
+                'name' => 'ZJMF 财务',
                 'version' => '1.0.0',
-                'entry_class' => 'Tests\\Fixtures\\MofangFinancePlugin',
+                'entry_class' => 'Tests\\Fixtures\\ZjmfFinancePlugin',
                 'capabilities_json' => [],
                 'config_schema_json' => [],
                 'status' => IntegrationPlugin::STATUS_ENABLED,
@@ -364,13 +364,13 @@ class AdminCatalogRegressionTest extends TestCase
         );
 
         $supplier = Supplier::query()->create([
-            'name' => '魔方财务 '.$suffix,
-            'code' => 'mofang-'.$suffix,
+            'name' => 'ZJMF 财务 '.$suffix,
+            'code' => 'zjmf-'.$suffix,
             'status' => 1,
             'sort_order' => 0,
         ]);
         app(UpstreamBindingWriter::class)->syncSupplierBinding($supplier, [
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'base_url' => 'https://panel.example.com',
             'account_name' => 'demo',
             'api_key' => 'secret',
@@ -395,7 +395,7 @@ class AdminCatalogRegressionTest extends TestCase
             'status' => 1,
             'config_options' => [],
             'upstream_binding' => [
-                'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+                'provider_key' => ProviderKey::ZJMF_FINANCE_API,
                 'supplier_id' => (int) $supplier->id,
                 'upstream_product_id' => '900123',
             ],
@@ -403,7 +403,7 @@ class AdminCatalogRegressionTest extends TestCase
 
         $response
             ->assertOk()
-            ->assertJsonPath('data.product.upstream_binding.provider_key', ProviderKey::MOFANG_FINANCE_API)
+            ->assertJsonPath('data.product.upstream_binding.provider_key', ProviderKey::ZJMF_FINANCE_API)
             ->assertJsonPath('data.product.upstream_binding.supplier_id', (int) $supplier->id)
             ->assertJsonPath('data.product.upstream_binding.upstream_product_id', '900123');
 
@@ -412,11 +412,11 @@ class AdminCatalogRegressionTest extends TestCase
         $this->assertDatabaseHas('products', ['id' => $productId]);
         $this->assertDatabaseHas('supplier_plugin_bindings', [
             'supplier_id' => (int) $supplier->id,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
         ]);
         $this->assertDatabaseHas('product_upstream_bindings', [
             'product_id' => $productId,
-            'provider_key' => ProviderKey::MOFANG_FINANCE_API,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
             'upstream_product_id' => '900123',
         ]);
 
@@ -425,7 +425,7 @@ class AdminCatalogRegressionTest extends TestCase
             (int) DB::table('product_upstream_bindings')
                 ->join('supplier_plugin_bindings', 'supplier_plugin_bindings.id', '=', 'product_upstream_bindings.supplier_plugin_binding_id')
                 ->where('supplier_plugin_bindings.supplier_id', (int) $supplier->id)
-                ->where('product_upstream_bindings.provider_key', ProviderKey::MOFANG_FINANCE_API)
+                ->where('product_upstream_bindings.provider_key', ProviderKey::ZJMF_FINANCE_API)
                 ->where('upstream_product_id', '900123')
                 ->value('product_id')
         );
