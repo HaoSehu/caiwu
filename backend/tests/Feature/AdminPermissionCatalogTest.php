@@ -19,6 +19,8 @@ class AdminPermissionCatalogTest extends TestCase
 
         foreach ([
             AdminPermissions::SETTINGS_VIEW,
+            AdminPermissions::DATABASE_VIEW,
+            AdminPermissions::DATABASE_MANAGE,
             AdminPermissions::INTEGRATION_PLUGIN_VIEW,
             AdminPermissions::INTEGRATION_PLUGIN_MANAGE,
             AdminPermissions::INTEGRATION_PLUGIN_TEST,
@@ -43,10 +45,14 @@ class AdminPermissionCatalogTest extends TestCase
 
         $this->assertSame('high', $items[AdminPermissions::PRIVACY_VIEW_RAW]['risk_level']);
         $this->assertSame('high', $items[AdminPermissions::SETTINGS_SECRET_REVEAL]['risk_level']);
+        $this->assertSame('high', $items[AdminPermissions::DATABASE_MANAGE]['risk_level']);
         $this->assertSame('high', $items[AdminPermissions::SUPPLIER_SECRET_REVEAL]['risk_level']);
         $this->assertSame('high', $items[AdminPermissions::INTEGRATION_PLUGIN_SECRET_REVEAL]['risk_level']);
         $this->assertSame('medium', $items[AdminPermissions::INTEGRATION_PLUGIN_TEST]['risk_level']);
         $this->assertSame('low', $items[AdminPermissions::INTEGRATION_PLUGIN_VIEW]['risk_level']);
+        $this->assertSame('low', $items[AdminPermissions::DATABASE_VIEW]['risk_level']);
+        $this->assertSame('system_database', $items[AdminPermissions::DATABASE_VIEW]['group']);
+        $this->assertSame('查看数据库状态', $items[AdminPermissions::DATABASE_VIEW]['name']);
     }
 
     public function test_manage_permissions_do_not_imply_secret_reveal_or_raw_privacy(): void
@@ -54,11 +60,13 @@ class AdminPermissionCatalogTest extends TestCase
         $resolved = AdminPermissions::resolveRolePermissions(null, [
             AdminPermissions::INTEGRATION_PLUGIN_MANAGE,
             AdminPermissions::SETTINGS_MANAGE,
+            AdminPermissions::DATABASE_MANAGE,
             AdminPermissions::SUPPLIER_MANAGE,
         ]);
 
         $this->assertContains(AdminPermissions::INTEGRATION_PLUGIN_VIEW, $resolved);
         $this->assertContains(AdminPermissions::SETTINGS_VIEW, $resolved);
+        $this->assertContains(AdminPermissions::DATABASE_VIEW, $resolved);
         $this->assertContains(AdminPermissions::SUPPLIER_LIST, $resolved);
         $this->assertContains(AdminPermissions::SUPPLIER_DETAIL, $resolved);
 

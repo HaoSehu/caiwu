@@ -200,6 +200,11 @@ const ADMIN_MENU_GROUPS: MenuGroupConfig[] = [
         title: { zh_CN: '权限管理', en_US: 'Permission Management' },
         children: ['/admin/system/staff', '/admin/system/roles'],
       },
+      {
+        path: '/admin/menu/system-settings/database',
+        title: { zh_CN: '数据库状态', en_US: 'Database Status' },
+        children: ['/admin/system/database'],
+      },
     ],
   },
   {

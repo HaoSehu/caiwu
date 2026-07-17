@@ -28,6 +28,8 @@ export const AdminPermissions = {
   SETTINGS_VIEW: 'settings.view',
   SETTINGS_MANAGE: 'settings.manage',
   SETTINGS_SECRET_REVEAL: 'settings.secret_reveal',
+  DATABASE_VIEW: 'database.view',
+  DATABASE_MANAGE: 'database.manage',
   INTEGRATION_PLUGIN_VIEW: 'integration_plugin.view',
   INTEGRATION_PLUGIN_MANAGE: 'integration_plugin.manage',
   INTEGRATION_PLUGIN_TEST: 'integration_plugin.test',
@@ -136,6 +138,8 @@ export function impliedPermissions(permission: string): string[] {
       return [AdminPermissions.SUPPLIER_LIST, AdminPermissions.SUPPLIER_DETAIL];
     case AdminPermissions.SETTINGS_MANAGE:
       return [AdminPermissions.SETTINGS_VIEW];
+    case AdminPermissions.DATABASE_MANAGE:
+      return [AdminPermissions.DATABASE_VIEW];
     case AdminPermissions.INTEGRATION_PLUGIN_MANAGE:
     case AdminPermissions.INTEGRATION_PLUGIN_TEST:
       return [AdminPermissions.INTEGRATION_PLUGIN_VIEW];

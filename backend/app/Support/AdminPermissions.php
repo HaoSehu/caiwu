@@ -62,6 +62,10 @@ class AdminPermissions
 
     public const SETTINGS_SECRET_REVEAL = 'settings.secret_reveal';
 
+    public const DATABASE_VIEW = 'database.view';
+
+    public const DATABASE_MANAGE = 'database.manage';
+
     public const INTEGRATION_PLUGIN_VIEW = 'integration_plugin.view';
 
     public const INTEGRATION_PLUGIN_MANAGE = 'integration_plugin.manage';
@@ -246,6 +250,7 @@ class AdminPermissions
             self::SUPPLIER_MANAGE => [self::SUPPLIER_LIST, self::SUPPLIER_DETAIL],
             self::SUPPLIER_SYNC => [self::SUPPLIER_LIST, self::SUPPLIER_DETAIL],
             self::SETTINGS_MANAGE => [self::SETTINGS_VIEW],
+            self::DATABASE_MANAGE => [self::DATABASE_VIEW],
             self::INTEGRATION_PLUGIN_MANAGE => [self::INTEGRATION_PLUGIN_VIEW],
             self::INTEGRATION_PLUGIN_TEST => [self::INTEGRATION_PLUGIN_VIEW],
             self::SCHEDULE_TRIGGER => [self::SCHEDULE_VIEW],

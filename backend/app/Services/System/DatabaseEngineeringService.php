@@ -477,9 +477,9 @@ class DatabaseEngineeringService
     }
 
     /**
-     * @return list<array<string, mixed>>
+     * @return list<array{table_name: string, table_rows: int, size_mb: float, update_time: ?string}>
      */
-    private function tableSizeMetrics(): array
+    public function tableSizeMetrics(): array
     {
         return collect(DB::select("
             SELECT
