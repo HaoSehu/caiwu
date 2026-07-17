@@ -123,6 +123,7 @@ class ServiceTransformService
             'amount' => number_format((float) $service->amount, 2, '.', ''),
             'expires_at' => $service->expires_at?->format('Y-m-d H:i:s'),
             'created_at' => $service->created_at?->format('Y-m-d H:i:s'),
+            'auto_renew' => (int) $service->auto_renew,
             'product' => [
                 'name' => $service->product?->name ?? '',
                 'display_name' => $productDisplayName,
