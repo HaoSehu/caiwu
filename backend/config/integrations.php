@@ -46,7 +46,7 @@ return [
     'upstream' => [
         'default' => env('UPSTREAM_PROVIDER_DEFAULT', ''),
         'preserve_provider_keys' => [
-            'mofang_finance_api',
+            'zjmf_finance_api',
             'hosting_panel_api',
         ],
     ],
