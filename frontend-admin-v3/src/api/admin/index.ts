@@ -1,4 +1,5 @@
 import { dashboardApi } from './dashboard';
+import { databaseApi } from './database';
 import { invoiceApi, orderApi, financeMenuApi } from './finance';
 import { settingsApi, schedulesApi } from './settings';
 import { logsApi } from './logs';
@@ -32,6 +33,9 @@ export const adminApi = {
 
   // Settings
   settings: settingsApi,
+
+  // Database
+  database: databaseApi,
 
   // Logs
   logs: logsApi,

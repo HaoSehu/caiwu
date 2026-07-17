@@ -189,6 +189,19 @@ export const systemRoutes: RouteRecordRaw[] = [
     },
   },
   {
+    path: 'system/database',
+    name: 'AdminDatabaseStatus',
+    component: () => import('@/pages/admin/system/database/index.vue'),
+    meta: {
+      title: {
+        zh_CN: '数据库状态',
+        en_US: 'Database Status',
+      },
+      permission: 'database.view',
+      keepAlive: false,
+    },
+  },
+  {
     path: 'automation',
     name: 'AdminAutomation',
     component: () => import('@/pages/settings/index.vue'),

@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\V2\CouponController;
 use App\Http\Controllers\Admin\V2\CouponProductGroupController;
 use App\Http\Controllers\Admin\V2\CpuModelCatalogController;
 use App\Http\Controllers\Admin\V2\DashboardController;
+use App\Http\Controllers\Admin\V2\DatabaseStatusController;
 use App\Http\Controllers\Admin\V2\FinanceLedgerController;
 use App\Http\Controllers\Admin\V2\FinanceMenuController;
 use App\Http\Controllers\Admin\V2\HomeHeroController;
@@ -332,6 +333,15 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
 
     Route::middleware(['permission:'.AdminPermissions::SETTINGS_SECRET_REVEAL])->group(function (): void {
         Route::get('/settings/{group}/secrets/{key}', [SettingController::class, 'revealSecret']);
+    });
+
+    Route::middleware(['permission:'.AdminPermissions::DATABASE_VIEW])->group(function (): void {
+        Route::get('/database/status', [DatabaseStatusController::class, 'status']);
+    });
+
+    Route::middleware(['permission:'.AdminPermissions::DATABASE_MANAGE])->group(function (): void {
+        Route::post('/database/optimizations', [DatabaseStatusController::class, 'optimize']);
+        Route::post('/database/backups', [DatabaseStatusController::class, 'exportBackup']);
     });
 
     Route::middleware(['permission:'.AdminPermissions::STAFF_LIST])->group(function (): void {
