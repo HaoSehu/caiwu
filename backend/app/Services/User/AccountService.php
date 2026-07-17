@@ -33,17 +33,17 @@ class AccountService
             return $account;
         }
 
-        UserAccount::query()->create(array_merge(
+        // 使用 firstOrCreate 防止并发创建导致的 duplicate key 异常
+        $account = UserAccount::query()->firstOrCreate(
             ['user_id' => $userId],
             $this->defaultAttributes(),
-        ));
+        );
 
-        $query = UserAccount::query();
         if ($lockForUpdate) {
-            $query->lockForUpdate();
+            $account = UserAccount::query()->lockForUpdate()->findOrFail($userId);
         }
 
-        return $query->findOrFail($userId);
+        return $account;
     }
 
     public function cashBalance(User|int $user, bool $lockForUpdate = false): float

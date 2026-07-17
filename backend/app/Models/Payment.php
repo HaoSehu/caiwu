@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
@@ -56,6 +57,16 @@ class Payment extends Model
                     $payment->gateway_key = $gateway;
                 }
             }
+        });
+
+        static::deleting(function (self $payment): void {
+            if ($payment->isForceDeleting()) {
+                return;
+            }
+
+            DB::transaction(function () use ($payment): void {
+                $payment->callbacks()->each(fn ($callback) => $callback->delete());
+            });
         });
     }
 

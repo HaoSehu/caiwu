@@ -701,9 +701,9 @@ class AdminConfigurationV2QueryService
             $displayName = $localProduct instanceof Product
                 ? trim((string) (app(ProductDisplayNameResolver::class)->resolveForProduct($localProduct)['product_display_name'] ?? ''))
                 : '';
-            $firstGroup = $localProduct?->firstProductGroup;
-            $secondGroup = $localProduct?->secondProductGroup;
-            $thirdGroup = $localProduct?->thirdProductGroup;
+            $thirdGroup = $localProduct?->productGroup;
+            $secondGroup = $thirdGroup?->secondProductGroup;
+            $firstGroup = $secondGroup?->firstProductGroup;
             $groupNameSegments = array_values(array_filter([
                 trim((string) ($firstGroup?->name ?? '')),
                 trim((string) ($secondGroup?->name ?? '')),
@@ -754,7 +754,7 @@ class AdminConfigurationV2QueryService
         if (Schema::hasTable('product_upstream_bindings') && Schema::hasTable('supplier_plugin_bindings')) {
             if ($normalizedIds !== [] && $bindingIds !== []) {
                 $bindingProducts = Product::withTrashed()
-                    ->with(['firstProductGroup', 'secondProductGroup', 'thirdProductGroup'])
+                    ->with(['productGroup.secondProductGroup.firstProductGroup'])
                     ->select('products.*', 'pub.upstream_product_id as binding_upstream_product_id')
                     ->join('product_upstream_bindings as pub', 'pub.product_id', '=', 'products.id')
                     ->whereIn('pub.supplier_plugin_binding_id', $bindingIds)

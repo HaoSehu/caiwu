@@ -7,10 +7,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Supplier extends Model
 {
-    protected $hidden = [
-        'api_key',
-        'provider_config',
-    ];
+    protected $hidden = [];
 
     protected $fillable = [
         'name',

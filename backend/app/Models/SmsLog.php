@@ -9,6 +9,9 @@ use Illuminate\Support\Facades\Schema;
 class SmsLog extends Model
 {
     protected $fillable = [
+        'plugin_id',
+        'driver_key',
+        'trace_id',
         'phone',
         'template_code',
         'params',
@@ -23,6 +26,7 @@ class SmsLog extends Model
     protected $casts = [
         'params' => 'array',
         'sent_at' => 'datetime',
+        'trace_id' => 'string',
     ];
 
     protected static function booted(): void
