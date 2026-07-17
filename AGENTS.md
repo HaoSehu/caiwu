@@ -65,7 +65,7 @@
 - 禁止在 Controller 里直接 `Http::*` 调上游或第三方（详见 §四 后端规则）。
 - 禁止在生产常驻 `queue:work`（队列已并入 `schedule:run`，详见 §三 技术基线）。
 - 禁止补跑历史激进迁移文件（详见 §四 数据库与接口）。
-- 禁止物理删除 Payment 记录、禁止把 `mofang_finance_api` 别名为 `hosting_panel_api`（详见 §四 后端规则）。
+- 禁止物理删除 Payment 记录、禁止把 `zjmf_finance_api` 别名为 `hosting_panel_api`（详见 §四 后端规则）。
 - 禁止管理端页面新增独立"头部说明卡片"（详见 §四 前端规则）。
 - 禁止用户控制台财务记录页使用统计/指标卡片（详见 §四 前端规则）。
 - 禁止插件注册系统级定时任务、系统级 API 路由或全局中间件（详见 §四 后端规则）。
@@ -92,7 +92,7 @@
 
 # 三、项目认知（中高权重）
 
-先理解项目再动手。
+先理解项目再动手。优先看E:\caiwu\文档
 
 ## 3.1 项目结构
 
@@ -149,8 +149,8 @@
 - Payment 记录（payments 表）只允许修改状态，禁止物理删除任何行（包括 gateway=balance/manual/free 的历史记录）。Payment 仅记录第三方支付网关真实资金流入（如支付宝充值、支付宝付商品）；余额支付、管理员手动开服、免费订单不产生 Payment。
 - 操作来源沿用 `operator_*`、`actor_*`、`trace_id`、`ip_address`。
 - 调用上游/第三方必须走 `app/Services` 下的专用客户端，**不要**在 Controller 里直接 `Http::*`。
-- 上游 provider key 以真实 `suppliers.interface_type` 或服务绑定值为准，禁止把 `mofang_finance_api` 归一化或别名成 `hosting_panel_api`。
-- 魔方财务/魔方云数据面对接必须收敛在 `backend/plugins/servers/mofang_finance/` 插件及其能力服务中；`app/Integrations/Mofang` 仅保留旧密码兼容、账单恢复等非数据面兼容能力；通用主机面板协议只能保留共享传输与协议能力。
+- 上游 provider key 以真实 `suppliers.interface_type` 或服务绑定值为准，禁止把 `zjmf_finance_api` 归一化或别名成 `hosting_panel_api`。
+- ZJMF 财务数据面对接与历史兼容能力必须收敛在 `backend/plugins/servers/zjmf_finance/` 插件及其能力服务中；核心不再承载 ZJMF 实现；通用主机面板协议只能保留共享传输与协议能力。
 - 回调接口必须走签名中间件，业务处理必须幂等，必须落日志。
 - 敏感配置走 `settings` 或 `.env`，不要硬编码。
 - 插件功能做到最小化与系统接入：禁止在插件中注册系统级定时任务（`schedule`）、系统级 API 路由或全局中间件；插件的调度、API、业务逻辑全部收敛在插件自身目录内，通过插件自身的服务提供者按需注册，不污染全局命名空间与调度表。
@@ -296,4 +296,3 @@ cd frontend-user-v4-console && npm run dev
 - `frontend-user-v3-www` 的 `npm run build` 会生成 sitemap/prerender 相关产物。
 - `frontend-user-v3-www` 额外脚本：`verify:refactor`、`check:source-health`。
 - `frontend-user-v4-console` 额外脚本：`verify:refactor`。
-
