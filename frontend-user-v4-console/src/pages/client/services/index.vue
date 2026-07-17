@@ -29,6 +29,12 @@
           <t-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
         </t-select>
 
+        <t-select v-model="filters.auto_renew" clearable placeholder="续费方式" @change="handleSearch">
+          <t-option label="全部" value="" />
+          <t-option label="自动续费" value="1" />
+          <t-option label="未开启自动续费" value="0" />
+        </t-select>
+
         <div class="service-filter-actions">
           <t-button theme="primary" @click="handleSearch">
             <template #icon><SearchIcon /></template>
@@ -141,6 +147,9 @@
                   </div>
                 </div>
               </div>
+              <div v-if="Number(item.auto_renew) === 1" class="service-auto-renew-badge">
+                <span class="service-auto-renew-badge__text">自</span>
+              </div>
             </article>
           </div>
 
@@ -163,6 +172,7 @@
                       <t-button theme="primary" variant="text" class="service-name-button" @click="openDetail(row.id)">
                         {{ resolveServiceName(row) }}
                       </t-button>
+                      <span v-if="Number(row.auto_renew) === 1" class="service-table-auto-renew">自</span>
                       <span class="service-row-id">ID {{ row.id }}</span>
                     </div>
                     <div class="service-table-meta">
@@ -431,7 +441,7 @@ function actionOptions(item: Record<string, any>) {
 
 .service-filter-bar {
   display: grid;
-  grid-template-columns: minmax(16rem, 1.5fr) minmax(10rem, 0.72fr) minmax(10rem, 0.72fr) auto;
+  grid-template-columns: minmax(16rem, 1.5fr) minmax(10rem, 0.72fr) minmax(10rem, 0.72fr) minmax(8rem, 0.5fr) auto;
   gap: var(--td-comp-margin-s);
   align-items: center;
 }
@@ -465,6 +475,51 @@ function actionOptions(item: Record<string, any>) {
     border-color: var(--td-brand-color-focus);
     box-shadow: var(--td-shadow-2);
   }
+}
+
+.service-auto-renew-badge {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.service-auto-renew-badge::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--td-success-color);
+  clip-path: polygon(0 0, 100% 100%, 0 100%);
+}
+
+.service-auto-renew-badge__text {
+  position: absolute;
+  left: 0.125rem;
+  bottom: 0.125rem;
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  z-index: 1;
+}
+
+.service-table-auto-renew {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  background: var(--td-success-color);
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1;
+  border-radius: var(--td-radius-small);
+  flex-shrink: 0;
 }
 
 .service-row-head {
