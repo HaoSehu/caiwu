@@ -40,7 +40,7 @@ class ZjmfProductCatalogService
                     'id' => (int) $product->id,
                     'name' => (string) $product->name,
                     'product_type' => (string) $product->product_type,
-                    'reason' => '当前产品类型没有可安全导入的魔方产品类型映射',
+                    'reason' => '当前产品类型没有可安全导入的 ZJMF 产品类型映射',
                 ];
 
                 continue;
@@ -267,7 +267,7 @@ class ZjmfProductCatalogService
     {
         $product = $this->findSaleProduct($productId);
         if ($this->legacyType($product) === null) {
-            throw new BusinessException('该商品类型暂不支持导入魔方财务', 42200, 422);
+            throw new BusinessException('该商品类型暂不支持导入 ZJMF 财务', 42200, 422);
         }
 
         return $product;
@@ -323,7 +323,7 @@ class ZjmfProductCatalogService
     {
         $legacyType = $this->legacyType($product);
         if ($legacyType === null) {
-            throw new BusinessException('该商品类型暂不支持导入魔方财务', 42200, 422);
+            throw new BusinessException('该商品类型暂不支持导入 ZJMF 财务', 42200, 422);
         }
 
         $sourceGroup = $this->legacySourceGroup($product);
@@ -478,7 +478,7 @@ class ZjmfProductCatalogService
     private function legacyConfigBase(int $productId): int
     {
         if ($productId <= 0 || $productId > 2_000_000_000) {
-            throw new BusinessException('商品ID不支持生成魔方配置项映射', 42200, 422);
+            throw new BusinessException('商品ID不支持生成 ZJMF 配置项映射', 42200, 422);
         }
 
         return $productId * 1_000_000;
