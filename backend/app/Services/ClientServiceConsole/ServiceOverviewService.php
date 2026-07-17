@@ -31,6 +31,8 @@ class ServiceOverviewService
 
     private const QUICK_FILTER_AUTO_RENEW_ENABLED = 'auto_renew_enabled';
 
+    private const QUICK_FILTER_AUTO_RENEW_DISABLED = 'auto_renew_disabled';
+
     private const QUICK_FILTER_AUTO_RENEW_7D = 'auto_renew_7d';
 
     public function __construct(
@@ -111,6 +113,13 @@ class ServiceOverviewService
         if ($quickFilter === self::QUICK_FILTER_AUTO_RENEW_ENABLED) {
             $query->where('status', ServiceStatus::ACTIVE)
                 ->where('auto_renew', 1);
+        }
+
+        if ($quickFilter === self::QUICK_FILTER_AUTO_RENEW_DISABLED) {
+            $query->where('status', ServiceStatus::ACTIVE)
+                ->where(function ($q) {
+                    $q->where('auto_renew', 0)->orWhereNull('auto_renew');
+                });
         }
 
         if ($quickFilter === self::QUICK_FILTER_AUTO_RENEW_7D) {
