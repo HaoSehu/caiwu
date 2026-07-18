@@ -230,6 +230,7 @@ class ServiceTransformService
             'invoice' => [
                 'id' => (int) ($service->invoice?->id ?? 0),
                 'invoice_no' => $service->invoice?->invoice_no ?? '',
+                'order_no' => $service->order?->order_no ?: $service->invoice?->order?->order_no ?: '',
                 'status' => (int) ($service->invoice?->status ?? 0),
                 'paid_at' => $service->invoice?->paid_at?->format('Y-m-d H:i:s'),
             ],

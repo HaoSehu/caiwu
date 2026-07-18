@@ -79,6 +79,7 @@ class ServiceDetailResource extends JsonResource
         return [
             'id' => (int) ($invoice['id'] ?? 0),
             'invoice_no' => (string) ($invoice['invoice_no'] ?? ''),
+            'order_no' => (string) ($invoice['order_no'] ?? ''),
             'status' => (int) ($invoice['status'] ?? 0),
             'paid_at' => $invoice['paid_at'] ?? null,
         ];

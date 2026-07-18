@@ -1,5 +1,6 @@
-import { defineComponent, h } from 'vue';
+import { defineComponent, h, ref, nextTick, onMounted, onUpdated } from 'vue';
 import { CopyIcon } from 'tdesign-icons-vue-next';
+import { Popup as TPopup } from 'tdesign-vue-next';
 
 export const InfoCell = defineComponent({
   name: 'InfoCell',
@@ -12,11 +13,50 @@ export const InfoCell = defineComponent({
   },
   emits: ['copy'],
   setup(props, { emit }) {
-    return () =>
-      h('div', { class: 'detail-cell' }, [
+    const textRef = ref<HTMLElement | null>(null);
+    const isTruncated = ref(false);
+
+    const checkTruncated = () => {
+      const el = textRef.value;
+      if (!el) {
+        isTruncated.value = false;
+        return;
+      }
+      isTruncated.value = el.scrollWidth > el.clientWidth;
+    };
+
+    onMounted(() => nextTick(checkTruncated));
+    onUpdated(() => nextTick(checkTruncated));
+
+    return () => {
+      const tag = props.strong ? 'strong' : 'span';
+      const textEl = h(
+        tag,
+        {
+          ref: textRef,
+          style: { cursor: isTruncated.value ? 'pointer' : undefined },
+        },
+        props.value,
+      );
+
+      const wrappedValue = isTruncated.value
+        ? h(
+            TPopup,
+            {
+              content: props.value,
+              trigger: 'click',
+              placement: 'bottom',
+              showArrow: true,
+              destroyOnClose: true,
+            },
+            () => textEl,
+          )
+        : textEl;
+
+      return h('div', { class: 'detail-cell' }, [
         h('span', props.label),
         h('div', { class: ['detail-cell-value', { 'is-warning': props.warning }] }, [
-          props.strong ? h('strong', props.value) : h('span', props.value),
+          wrappedValue,
           props.copyable && props.value && props.value !== '--'
             ? h(
                 'button',
@@ -32,5 +72,6 @@ export const InfoCell = defineComponent({
             : null,
         ]),
       ]);
+    };
   },
 });
