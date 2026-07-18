@@ -107,7 +107,8 @@ class ServiceDetailService
             'product.supplier',
             'order:id,order_no,status,paid_at,created_at',
             'order.invoice:id,order_id,invoice_no',
-            'invoice:id,invoice_no,status,paid_at',
+            'invoice:id,invoice_no,status,paid_at,order_id',
+            'invoice.order:id,order_no',
         ]);
 
         $needsRemoteRefresh = $refreshRemote
@@ -171,7 +172,8 @@ class ServiceDetailService
             'product.supplier',
             'order:id,order_no,status,paid_at,created_at',
             'order.invoice:id,order_id,invoice_no',
-            'invoice:id,invoice_no,status,paid_at',
+            'invoice:id,invoice_no,status,paid_at,order_id',
+            'invoice.order:id,order_no',
         ]);
 
         $cacheKey = $this->buildDetailResponseCacheKey($service);

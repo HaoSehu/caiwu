@@ -144,6 +144,7 @@ export interface ServiceProduct {
 export interface ServiceInvoiceLink {
   id?: number;
   invoice_no?: string;
+  order_no?: string;
   status?: number | string;
   [key: string]: unknown;
 }

@@ -30,7 +30,7 @@ export function emptyDetail(): ConsoleServiceDetail {
     can_manage: false,
     machine_category: { key: '', label: '' },
     product: { id: 0, name: '', type: '', type_label: '', display_name: '', catalog_type: '' },
-    invoice: { id: 0, invoice_no: '', status: 0 },
+    invoice: { id: 0, invoice_no: '', order_no: '', status: 0 },
     upstream: { provider_key: '', host_id: 0, status: '', remote_error: '', os: '', dedicated_ip: '' },
     runtime: { power_state: '', power_label: '', description: '' },
     traffic: {
