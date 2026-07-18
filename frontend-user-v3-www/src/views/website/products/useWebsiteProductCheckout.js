@@ -400,8 +400,6 @@ export function useWebsiteProductCheckout({
     }
 
     const token = ++detailToken
-    detailAbortController?.abort()
-    detailAbortController = null
     const cached = getCachedProductDetail(productId)
     if (cached) {
       if (token !== detailToken || currentProductId !== productId) {
@@ -412,6 +410,7 @@ export function useWebsiteProductCheckout({
       return true
     }
 
+    detailAbortController?.abort()
     detailAbortController = new AbortController()
     configLoading.value = true
     try {
@@ -457,7 +456,7 @@ export function useWebsiteProductCheckout({
   function loadSelectedProduct(id, options = {}) {
     currentProductId = normalizeProductId(id)
 
-    if (options.refreshStockOnly) {
+    if (options.refreshStockOnly && productDetail.value) {
       refreshProductStock(currentProductId)
       return
     }
