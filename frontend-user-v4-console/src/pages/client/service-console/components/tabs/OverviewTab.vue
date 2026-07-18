@@ -33,7 +33,7 @@
     </t-card>
 
     <t-card class="console-panel" title="网络信息" :bordered="false">
-      <div class="detail-grid">
+      <div class="detail-grid detail-grid--stack">
         <div class="detail-cell connection-ip-cell">
           <span>{{ primaryConnectionLabel }}</span>
           <div class="detail-cell-value connection-ip-list">
@@ -51,7 +51,18 @@
             <strong v-else>--</strong>
           </div>
         </div>
-        <InfoCell label="内网 IP" :value="detail.connection?.internal_ip || '--'" copyable @copy="copyText" />
+        <div class="detail-cell">
+          <span>内网 IP</span>
+          <div class="detail-cell-value">
+            <template v-if="detail.connection?.internal_ip">
+              <strong>{{ detail.connection.internal_ip }}</strong>
+              <button type="button" class="copy-link" :aria-label="`复制${detail.connection.internal_ip}`" @click="copyText(detail.connection.internal_ip)">
+                <CopyIcon size="1rem" />
+              </button>
+            </template>
+            <strong v-else>--</strong>
+          </div>
+        </div>
       </div>
     </t-card>
 

@@ -226,6 +226,10 @@
     gap: 1rem 1.5rem;
   }
 
+  .detail-grid--stack {
+    grid-template-columns: 1fr;
+  }
+
   .credential-grid {
     display: grid;
     grid-template-columns: 1fr;
@@ -321,7 +325,7 @@
   }
 
   .detail-cell .connection-ip-list {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: flex-start;
   }
 
@@ -337,14 +341,17 @@
     gap: 0.375rem;
     align-items: center;
     max-width: 100%;
+    min-width: 0;
+    flex-shrink: 1;
   }
 
   .detail-cell .connection-ip-chip strong {
     flex: 0 1 auto;
-    overflow: visible;
+    overflow: hidden;
     overflow-wrap: anywhere;
-    text-overflow: clip;
-    white-space: normal;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
   }
 
   .connection-ip-chip .copy-link {
@@ -354,27 +361,6 @@
 
   .connection-copy-all {
     margin-top: 0.125rem;
-  }
-
-  .ip-dialog-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-
-  .ip-dialog-item {
-    display: flex;
-    gap: 0.75rem;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.5rem 0.75rem;
-    background: var(--td-bg-color-secondarycontainer);
-    border-radius: 6px;
-  }
-
-  .ip-dialog-item strong {
-    font-size: 0.875rem;
-    word-break: break-all;
   }
 
   .credential-password-value {
@@ -1026,7 +1012,7 @@
       border-radius: 0.5rem !important;
       background: var(--td-bg-color-component);
       cursor: pointer;
-      transition: border-color 0.2s ease;
+      transition: border-color 0.2s ease, background-color 0.2s ease;
 
       &:hover {
         border-color: var(--td-brand-color) !important;
@@ -1324,4 +1310,26 @@
       gap: 0.75rem;
     }
   }
+}
+
+/* IP dialog (teleported, outside .service-console) */
+.ip-dialog-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.ip-dialog-item {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  background: var(--td-bg-color-secondarycontainer);
+  border-radius: 6px;
+}
+
+.ip-dialog-item strong {
+  font-size: 0.875rem;
+  word-break: break-all;
 }

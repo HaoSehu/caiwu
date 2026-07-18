@@ -9,33 +9,29 @@
       </div>
 
       <div class="console-meta-grid">
-        <div class="console-meta-row">
-          <span>实例 ID：{{ detail.id || '--' }}</span>
-          <span>地址：{{ serviceRegion }}</span>
-          <span>{{ primaryConnectionLabel }}：{{ primaryConnectionText }}</span>
+        <span class="meta-item meta-id">实例 ID：{{ detail.id || '--' }}</span>
+        <span class="meta-item meta-region">地址：{{ serviceRegion }}</span>
+        <span class="meta-item meta-ip">{{ primaryConnectionLabel }}：{{ primaryConnectionValues[0] || '--' }}<template v-if="primaryConnectionValues.length > 1"> <t-button size="small" variant="text" theme="primary" @click="ipDialogVisible = true">查看更多</t-button></template></span>
+        <div class="console-auto-renew-line">
+          <span>自动续费</span>
+          <t-switch
+            :value="Number(detail.auto_renew) === 1"
+            :loading="autoRenewLoading"
+            @change="handleToggleAutoRenew"
+          />
         </div>
-        <div class="console-meta-row">
-          <div class="console-auto-renew-line">
-            <span>自动续费</span>
-            <t-switch
-              :value="Number(detail.auto_renew) === 1"
-              :loading="autoRenewLoading"
-              @change="handleToggleAutoRenew"
-            />
-          </div>
-          <div class="console-remark-line" style="grid-column: span 2">
-            <span>备注：</span>
-            <strong :class="{ 'is-empty': !detail.remark }">{{ detail.remark || '点击添加备注' }}</strong>
-            <t-button
-              shape="square"
-              variant="text"
-              size="small"
-              :aria-label="detail.remark ? '编辑备注' : '添加备注'"
-              @click="openRemarkDialog"
-            >
-              <template #icon><EditIcon /></template>
-            </t-button>
-          </div>
+        <div class="console-remark-line">
+          <span>备注：</span>
+          <strong :class="{ 'is-empty': !detail.remark }">{{ detail.remark || '点击添加备注' }}</strong>
+          <t-button
+            shape="square"
+            variant="text"
+            size="small"
+            :aria-label="detail.remark ? '编辑备注' : '添加备注'"
+            @click="openRemarkDialog"
+          >
+            <template #icon><EditIcon /></template>
+          </t-button>
         </div>
       </div>
     </div>
@@ -65,11 +61,26 @@
       </t-dropdown>
     </div>
   </t-card>
+
+  <t-dialog v-model:visible="ipDialogVisible" :header="primaryConnectionLabel" width="min(24rem, calc(100vw - 2rem))" destroy-on-close>
+    <div class="ip-dialog-list">
+      <div v-for="ip in primaryConnectionValues" :key="ip" class="ip-dialog-item">
+        <strong>{{ ip }}</strong>
+        <button type="button" class="copy-link" :aria-label="`复制${ip}`" @click="copyText(ip)">
+          <CopyIcon size="1rem" />
+        </button>
+      </div>
+    </div>
+    <template #footer>
+      <t-button v-if="primaryConnectionValues.length > 1" variant="outline" @click="copyText(primaryConnectionText)">复制全部</t-button>
+      <t-button theme="primary" @click="ipDialogVisible = false">关闭</t-button>
+    </template>
+  </t-dialog>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
-import { EditIcon, EllipsisIcon, PauseCircleFilledIcon, PlayCircleFilledIcon, RefreshIcon, RotateIcon } from 'tdesign-icons-vue-next';
+import { computed, ref } from 'vue';
+import { CopyIcon, EditIcon, EllipsisIcon, PauseCircleFilledIcon, PlayCircleFilledIcon, RefreshIcon, RotateIcon } from 'tdesign-icons-vue-next';
 
 import { useServiceConsoleContext } from './context';
 
@@ -82,6 +93,7 @@ const {
   canSyncStatus,
   serviceRegion,
   primaryConnectionLabel,
+  primaryConnectionValues,
   primaryConnectionText,
   instanceStatusTheme,
   resolveServiceStatusLabel,
@@ -93,7 +105,10 @@ const {
   handleToggleAutoRenew,
   openPasswordDialog,
   openReinstallDialog,
+  copyText,
 } = useServiceConsoleContext();
+
+const ipDialogVisible = ref(false);
 
 const moreOptions = computed(() => [
   { content: '重置密码', value: 'password', disabled: !detail.value.actions?.password_reset },
