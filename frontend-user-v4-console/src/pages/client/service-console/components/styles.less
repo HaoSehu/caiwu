@@ -69,20 +69,37 @@
     }
   }
 
-  .console-meta-line {
+  .console-meta-grid {
     display: flex;
-    flex-wrap: wrap;
-    gap: 1.25rem;
+    flex-direction: column;
+    gap: 0.5rem;
     margin-top: 0.75rem;
     color: var(--td-text-color-secondary);
     font-size: 0.875rem;
+  }
+
+  .console-meta-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0.5rem 1.25rem;
+  }
+
+  .console-auto-renew-line {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    color: var(--td-text-color-secondary);
+
+    span {
+      flex: none;
+      color: var(--td-text-color-placeholder);
+    }
   }
 
   .console-remark-line {
     display: flex;
     align-items: flex-start;
     gap: 0.375rem;
-    margin-top: 0.625rem;
     color: var(--td-text-color-secondary);
     font-size: 0.8125rem;
     line-height: 1.7;
@@ -193,7 +210,7 @@
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     grid-auto-flow: dense;
-    gap: 0.625rem;
+    gap: 1rem;
   }
 
   .console-panel-wide {
@@ -203,8 +220,8 @@
   /* ---- 详情格 ---- */
   .detail-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+    gap: 1rem 1.5rem;
   }
 
   .credential-grid {
@@ -216,7 +233,7 @@
   .credential-grid .detail-cell,
   .credential-grid .detail-cell {
     display: grid;
-    grid-template-columns: 4rem minmax(0, 1fr);
+    grid-template-columns: 4.5rem minmax(0, 1fr);
     gap: 0.75rem;
     align-items: center;
     padding: 0.125rem 0;
@@ -226,22 +243,22 @@
     display: flex;
     gap: 0.75rem;
     align-items: center;
-    padding: 0.25rem 0;
+    padding: 0.375rem 0;
 
     > span {
-      min-width: 3.75rem;
+      min-width: 4.5rem;
       flex-shrink: 0;
       color: var(--td-text-color-placeholder);
-      font-size: 0.75rem;
+      font-size: 0.8125rem;
       line-height: 1.6;
     }
   }
 
   .detail-cell > span:first-child {
-    min-width: 3.75rem;
+    min-width: 4.5rem;
     flex-shrink: 0;
     color: var(--td-text-color-placeholder);
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
     line-height: 1.6;
   }
 
@@ -1197,12 +1214,24 @@
     .monitor-grid {
       grid-template-columns: 1fr;
     }
+
+    .detail-grid--info,
+    .detail-grid--config {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
   }
 
   @media (max-width: @screen-sm-rem) {
-    .console-meta-line {
-      flex-direction: column;
-      gap: 0.5rem;
+    .console-title-line {
+      h1 {
+        font-size: 1rem;
+      }
+    }
+
+    .console-meta-row {
+      grid-template-columns: 1fr;
+      gap: 0.375rem;
+      font-size: 0.8125rem;
     }
 
     .console-header-actions {
@@ -1216,6 +1245,29 @@
       min-width: 0;
       margin-left: 0 !important;
       justify-content: center;
+    }
+
+    .console-overview-grid {
+      gap: 0.75rem;
+    }
+
+    .detail-cell {
+      padding: 0.25rem 0;
+
+      > span,
+      > span:first-child {
+        min-width: 3.75rem;
+        font-size: 0.75rem;
+      }
+    }
+
+    .credential-grid .detail-cell,
+    .credential-grid .detail-cell {
+      grid-template-columns: 4rem minmax(0, 1fr);
+    }
+
+    .detail-cell-value {
+      font-size: 0.8125rem;
     }
 
     .renew-cycle-group {

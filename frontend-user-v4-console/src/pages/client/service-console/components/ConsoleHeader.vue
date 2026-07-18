@@ -8,24 +8,35 @@
         <t-tag v-if="detail.product?.type_label" variant="light">{{ detail.product.type_label }}</t-tag>
       </div>
 
-      <div class="console-meta-line">
-        <span>实例 ID：{{ detail.id || '--' }}</span>
-        <span>地址：{{ serviceRegion }}</span>
-        <span>{{ primaryConnectionLabel }}：{{ primaryConnectionText }}</span>
-      </div>
-
-      <div class="console-remark-line">
-        <span>备注：</span>
-        <strong :class="{ 'is-empty': !detail.remark }">{{ detail.remark || '点击添加备注' }}</strong>
-        <t-button
-          shape="square"
-          variant="text"
-          size="small"
-          :aria-label="detail.remark ? '编辑备注' : '添加备注'"
-          @click="openRemarkDialog"
-        >
-          <template #icon><EditIcon /></template>
-        </t-button>
+      <div class="console-meta-grid">
+        <div class="console-meta-row">
+          <span>实例 ID：{{ detail.id || '--' }}</span>
+          <span>地址：{{ serviceRegion }}</span>
+          <span>{{ primaryConnectionLabel }}：{{ primaryConnectionText }}</span>
+        </div>
+        <div class="console-meta-row">
+          <div class="console-auto-renew-line">
+            <span>自动续费</span>
+            <t-switch
+              :value="Number(detail.auto_renew) === 1"
+              :loading="autoRenewLoading"
+              @change="handleToggleAutoRenew"
+            />
+          </div>
+          <div class="console-remark-line" style="grid-column: span 2">
+            <span>备注：</span>
+            <strong :class="{ 'is-empty': !detail.remark }">{{ detail.remark || '点击添加备注' }}</strong>
+            <t-button
+              shape="square"
+              variant="text"
+              size="small"
+              :aria-label="detail.remark ? '编辑备注' : '添加备注'"
+              @click="openRemarkDialog"
+            >
+              <template #icon><EditIcon /></template>
+            </t-button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -67,6 +78,7 @@ const {
   serviceId,
   statusSyncing,
   actionLoading,
+  autoRenewLoading,
   canSyncStatus,
   serviceRegion,
   primaryConnectionLabel,
@@ -78,6 +90,7 @@ const {
   openRemarkDialog,
   handleSyncStatus,
   handlePowerAction,
+  handleToggleAutoRenew,
   openPasswordDialog,
   openReinstallDialog,
 } = useServiceConsoleContext();
