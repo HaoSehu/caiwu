@@ -31,6 +31,7 @@ class SiteProductQuoteResource extends JsonResource
             'available_coupons' => $this->couponList((array) ($payload['available_coupons'] ?? [])),
             'quote_token' => (string) ($payload['quote_token'] ?? ''),
             'quote_expires_at' => $payload['quote_expires_at'] ?? null,
+            'items' => $this->items((array) ($payload['items'] ?? [])),
         ];
     }
 
@@ -65,6 +66,22 @@ class SiteProductQuoteResource extends JsonResource
         return collect($coupons)
             ->map(fn (mixed $coupon): ?array => $this->coupon($coupon))
             ->filter()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $items
+     * @return list<array<string, mixed>>
+     */
+    private function items(array $items): array
+    {
+        return collect($items)
+            ->map(fn (array $item): array => [
+                'field' => (string) ($item['field'] ?? ''),
+                'label' => (string) ($item['label'] ?? ''),
+                'amount' => $this->money($item['amount'] ?? 0),
+            ])
             ->values()
             ->all();
     }
