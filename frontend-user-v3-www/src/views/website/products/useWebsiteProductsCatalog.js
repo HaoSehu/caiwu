@@ -265,16 +265,17 @@ export function useWebsiteProductsCatalog({ onProductSelect, onResetSelection })
     return selectTempGroup(groupId)
   }
 
-  function confirmRegionSelection(groupId, childId) {
+  async function confirmRegionSelection(groupId, childId) {
     mobileRegionDrawer.value = false
     const targetGroupId = groupId || tempGroupId.value
-    switchGroup(targetGroupId, { syncRoute: true }).then(() => {
-      const matchedChild = childGroups.value.find((child) => child.id === childId)
-      const targetChildId = matchedChild?.id || childGroups.value[0]?.id || 0
-      if (targetChildId > 0) {
-        switchChild(targetChildId, { syncRoute: true })
-      }
+    await withSuspendedRouteSync(async () => {
+      await switchGroup(targetGroupId, {
+        syncRoute: false,
+        targetChildId: childId || tempChildGroups.value.find((g) => g.id === (childId || 0))?.id || 0,
+        targetProductId: selectedProductId.value,
+      })
     })
+    await syncSelectionRoute()
   }
 
   function handleMobileGroupSelect(id) {
