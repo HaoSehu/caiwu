@@ -59,6 +59,6 @@ export const clientAuthApi = {
   resetPassword: (data: Record<string, unknown>) => request.post('/v2/client/auth/reset-password', data),
   logout: () => request.post('/v2/client/auth/logout'),
 
-  applyAgent: (data: Record<string, unknown>) => postEnvelope('/v2/client/agent/apply', data),
-  getAgentInfo: () => getEnvelope<ClientAgentInfo>('/v2/client/agent/info'),
+  applyAgent: (data: Record<string, unknown>) => postEnvelope('/v2/client/agent/apply', data, SILENT_ERROR_CONFIG),
+  getAgentInfo: () => getEnvelope<ClientAgentInfo>('/v2/client/agent/info', SILENT_ERROR_CONFIG),
 };
