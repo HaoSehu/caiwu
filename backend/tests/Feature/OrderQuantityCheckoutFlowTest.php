@@ -20,13 +20,11 @@ use App\Services\Finance\CheckoutService;
 use App\Services\Finance\CouponService;
 use App\Services\Finance\InvoiceService;
 use App\Services\Finance\PaymentService;
-use App\Services\Order\OrderService;
 use App\Services\Order\PaidOrderBusinessFlowDispatcher;
 use App\Services\ProductCatalog\ProductCatalogService;
 use App\Services\Provisioning\ProvisionService;
 use App\Services\Provisioning\ServiceRenewService;
 use App\Services\Referral\ReferralService;
-use App\Services\System\NotificationService;
 use App\Services\System\OperationLogService;
 use Tests\TestCase;
 
@@ -64,32 +62,31 @@ class OrderQuantityCheckoutFlowTest extends TestCase
             ->with($this->callback(fn (Product $candidate): bool => (int) $candidate->id === (int) $product->id), 2);
 
         $couponService = $this->createMock(CouponService::class);
-        $couponService->method('reserveOwnedCouponForOrder')->willReturn([]);
+        $couponService->method('reserveOwnedCouponForInvoice')->willReturn([]);
 
         $operationLogService = $this->createMock(OperationLogService::class);
         $operationLogService->method('write');
 
         $adminOrderNotificationService = $this->createMock(AdminOrderNotificationService::class);
-        $adminOrderNotificationService->method('notifyOrderCreated');
+        $adminOrderNotificationService->method('notifyInvoicePaidAfterResponse');
 
-        $orderService = new OrderService(
+        $checkoutService = new CheckoutService(
             $invoiceService,
             $this->createMock(PaymentService::class),
             $productCatalogService,
             $checkoutSecurity,
             $couponService,
             $operationLogService,
-            $this->createMock(NotificationService::class),
             $adminOrderNotificationService,
         );
 
-        $quote = $orderService->quote($product, 'monthly', [], 2);
+        $quote = $checkoutService->quote($product, 'monthly', [], 2);
         $quotePayload = array_merge($quote, [
             'subtotal_amount' => $quote['total_amount'],
         ]);
         $tokenData = $checkoutSecurity->issueQuoteToken($product->id, 'monthly', [], $quotePayload);
 
-        $order = $orderService->create($user->id, [
+        $invoice = $checkoutService->create($user->id, [
             'product_id' => (int) $product->id,
             'billing_cycle' => 'monthly',
             'quantity' => 2,
@@ -100,15 +97,17 @@ class OrderQuantityCheckoutFlowTest extends TestCase
             'trace_id' => 'trace-order-quantity-'.$suffix,
         ]);
 
-        $order->refresh()->load('invoice');
+        $invoice->refresh()->load('order');
+        $order = $invoice->order;
 
+        $this->assertNotNull($order, 'Shadow order should be created');
         $this->assertSame(2, (int) $order->quantity);
         $this->assertSame('218.00', number_format((float) $order->amount, 2, '.', ''));
         $this->assertSame(2, (int) ($order->config_pricing_snapshot['quantity'] ?? 0));
         $this->assertSame('218.00', (string) ($order->config_pricing_snapshot['total_amount'] ?? ''));
 
         $invoiceItem = InvoiceItem::query()
-            ->where('invoice_id', (int) $order->invoice?->id)
+            ->where('invoice_id', (int) $invoice->id)
             ->first();
 
         $this->assertNotNull($invoiceItem);
