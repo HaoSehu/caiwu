@@ -36,11 +36,6 @@
         </t-select>
 
         <div class="service-filter-actions">
-          <t-button theme="primary" @click="handleSearch">
-            <template #icon><SearchIcon /></template>
-            搜索
-          </t-button>
-          <t-button variant="outline" @click="resetFilters">重置</t-button>
           <t-button
             variant="outline"
             class="service-view-toggle"
@@ -52,7 +47,6 @@
             </template>
             {{ viewMode === 'grid' ? '列表' : '卡片' }}
           </t-button>
-          <t-button variant="outline" :loading="loading || overviewLoading" @click="refreshAll">刷新</t-button>
         </div>
       </div>
     </t-card>
@@ -350,7 +344,6 @@ import {
 
 const {
   loading,
-  overviewLoading,
   list,
   total,
   filters,
@@ -369,10 +362,8 @@ const {
   selectedRenewAmount,
   availableRenewCoupons,
   loadList,
-  refreshAll,
   handleSearch,
   handlePageSizeChange,
-  resetFilters,
   setViewMode,
   openDetail,
   handleRenewCycleChange,
@@ -933,8 +924,25 @@ function actionOptions(item: Record<string, any>) {
 }
 
 @media (max-width: @screen-sm-rem) {
+  .client-services {
+    padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
+  }
+
+  .service-filter-card :deep(.t-card__body) {
+    padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
+  }
+
   .service-filter-bar {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+
+    > :first-child,
+    > :last-child {
+      grid-column: 1 / -1;
+    }
+  }
+
+  .service-filter-actions {
+    display: none;
   }
 
   .service-view-toggle {
@@ -995,10 +1003,6 @@ function actionOptions(item: Record<string, any>) {
 
   .service-ip-label {
     font-size: 0.625rem;
-  }
-
-  .service-filter-actions {
-    flex-wrap: wrap;
   }
 
   .service-pagination {

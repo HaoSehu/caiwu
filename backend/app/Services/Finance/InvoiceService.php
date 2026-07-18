@@ -674,6 +674,23 @@ class InvoiceService
                     'amount' => $invoice->amount,
                 ]],
             ],
+            InvoiceType::REFUND => [
+                'kind' => 'refund',
+                'headline' => '退款红字账单',
+                'subheadline' => '用于冲抵原账单的退款单据，可通过原账单编号追溯退款来源。',
+                'badge' => '退款',
+                'highlight' => (string) ($invoice->originInvoice?->invoice_no ?? $invoice->config_snapshot['origin_invoice_no'] ?? ''),
+                'remark' => $remark !== '' ? $remark : '退款冲抵',
+                'fields' => [
+                    ['label' => '原账单', 'value' => (string) ($invoice->originInvoice?->invoice_no ?? $invoice->config_snapshot['origin_invoice_no'] ?? '--')],
+                    ['label' => '退款金额', 'value' => number_format((float) $invoice->amount, 2, '.', '')],
+                    ['label' => '退款时间', 'value' => $invoice->paid_at?->format('Y-m-d H:i:s') ?: '--'],
+                ],
+                'items' => [[
+                    'description' => '退款冲抵',
+                    'amount' => $invoice->amount,
+                ]],
+            ],
             InvoiceType::REFERRAL_CREDIT => [
                 'kind' => 'referral_credit',
                 'headline' => '推荐奖励账单',
@@ -912,6 +929,7 @@ class InvoiceService
         return match (InvoiceType::normalize((string) $invoice->type)) {
             InvoiceType::RECHARGE => '该账单主要反映余额入账，不依赖订单或服务实例。',
             InvoiceType::DEDUCTION => '该账单主要反映余额扣减，不依赖订单或服务实例。',
+            InvoiceType::REFUND => '该账单为退款红字凭证，用于冲抵原账单资金。',
             InvoiceType::REFERRAL_CREDIT => '该账单主要反映推荐奖励入账，不依赖订单或服务实例。',
             InvoiceType::MANUAL => '该账单由后台人工创建或修正，重点查看备注和支付方式。',
             default => '',
@@ -926,6 +944,7 @@ class InvoiceService
             InvoiceType::RECHARGE => '充值账单',
             InvoiceType::UPGRADE => '附加配置账单',
             InvoiceType::DEDUCTION => '扣款账单',
+            InvoiceType::REFUND => '退款红字账单',
             InvoiceType::REFERRAL_CREDIT => '推荐奖励账单',
             InvoiceType::MANUAL => '手工账单',
             default => ($invoice->order?->display_product_name ?? '') !== '' ? '产品账单' : '普通账单',

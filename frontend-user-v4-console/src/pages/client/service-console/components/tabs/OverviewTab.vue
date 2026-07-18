@@ -44,9 +44,6 @@
                   <CopyIcon size="1rem" />
                 </button>
               </span>
-              <t-button v-if="primaryConnectionValues.length > 1" size="small" variant="text" theme="primary" @click="ipDialogVisible = true">
-                查看更多
-              </t-button>
             </template>
             <strong v-else>--</strong>
           </div>

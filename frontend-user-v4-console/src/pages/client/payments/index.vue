@@ -24,13 +24,6 @@
         <t-select v-model="filters.type" clearable placeholder="全部渠道" @change="handleSearch">
           <t-option v-for="item in PAYMENT_GATEWAY_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
         </t-select>
-        <div class="record-actions">
-          <t-button theme="primary" @click="handleSearch">
-            <template #icon><SearchIcon /></template>
-            搜索
-          </t-button>
-          <t-button variant="outline" @click="resetFilters">重置</t-button>
-        </div>
       </div>
     </t-card>
 
@@ -115,7 +108,6 @@ const {
   loadList,
   handleSearch,
   handlePageSizeChange,
-  resetFilters,
   applyQuickFilter,
 } = useRecordList(recordApi.payments, '第三方支付记录加载失败');
 

@@ -303,18 +303,6 @@ export function useRecordList(fetcher: Fetcher, errorMessage: string, options: {
     void loadList();
   }
 
-  function resetFilters() {
-    filters.page = 1;
-    filters.page_size = 10;
-    filters.keyword = '';
-    filters.status = '';
-    filters.type = '';
-    filters.start_date = '';
-    filters.end_date = '';
-    filters.quickFilter = '';
-    void loadList();
-  }
-
   function applyQuickFilter(key: string) {
     filters.quickFilter = key;
     filters.page = 1;
@@ -377,7 +365,6 @@ export function useRecordList(fetcher: Fetcher, errorMessage: string, options: {
     loadList,
     handleSearch,
     handlePageSizeChange,
-    resetFilters,
     applyQuickFilter,
     goToInvoice,
     openDetail,

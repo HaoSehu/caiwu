@@ -19,7 +19,7 @@ class Invoice extends Model
     use HandlesProductSnapshot, NormalizesTraceId, SoftDeletes;
 
     protected $fillable = [
-        'invoice_no', 'user_id', 'order_id', 'type',
+        'invoice_no', 'user_id', 'order_id', 'origin_invoice_id', 'type', 'currency',
         'product_id', 'product_spec_snapshot', 'product_type_snapshot',
         'service_id',
         'coupon_id', 'user_coupon_id', 'coupon_code',
@@ -28,7 +28,7 @@ class Invoice extends Model
         'config_snapshot', 'config_pricing_snapshot', 'coupon_snapshot',
         'status', 'due_date', 'paid_at',
         'refunded_at', 'refund_amount', 'refund_method', 'refund_trace_id',
-        'trace_id',
+        'remark', 'operator', 'trace_id',
     ];
 
     protected function casts(): array
@@ -75,6 +75,26 @@ class Invoice extends Model
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);
+    }
+
+    public function originInvoice(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'origin_invoice_id');
+    }
+
+    public function refundInvoices(): HasMany
+    {
+        return $this->hasMany(self::class, 'origin_invoice_id');
+    }
+
+    public function rechargeRecords(): HasMany
+    {
+        return $this->hasMany(RechargeRecord::class);
+    }
+
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(Refund::class);
     }
 
     public function product(): BelongsTo

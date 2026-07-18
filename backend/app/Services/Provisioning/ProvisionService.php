@@ -77,6 +77,7 @@ class ProvisionService
             $order->forceFill([
                 'service_id' => $service->id,
                 'status' => OrderStatus::COMPLETED,
+                'service_snapshot' => $this->buildServiceSnapshot($service),
             ])->save();
 
             return $service;
@@ -254,6 +255,7 @@ class ProvisionService
             $order->forceFill([
                 'service_id' => $service->id,
                 'status' => $serviceStatus === ServiceStatus::ACTIVE ? OrderStatus::COMPLETED : OrderStatus::PROCESSING,
+                'service_snapshot' => $this->buildServiceSnapshot($service),
             ])->save();
 
             return $service;
@@ -290,6 +292,7 @@ class ProvisionService
             $order->forceFill([
                 'service_id' => $service->id,
                 'status' => OrderStatus::PROCESSING,
+                'service_snapshot' => $this->buildServiceSnapshot($service),
             ])->save();
 
             Log::error('[自动开通] 支付后上游开通失败', [
@@ -355,6 +358,7 @@ class ProvisionService
 
         $order->forceFill([
             'service_id' => $service->id,
+            'service_snapshot' => $this->buildServiceSnapshot($service),
         ])->save();
 
         return $service;
@@ -370,6 +374,7 @@ class ProvisionService
         $order->forceFill([
             'service_id' => $service->id,
             'status' => OrderStatus::PROCESSING,
+            'service_snapshot' => $this->buildServiceSnapshot($service),
         ])->save();
     }
 
@@ -1455,6 +1460,14 @@ class ProvisionService
     private function serviceBindingWriter(): ServiceUpstreamBindingWriter
     {
         return $this->serviceBindingWriter ??= app(ServiceUpstreamBindingWriter::class);
+    }
+
+    private function buildServiceSnapshot(Service $service): array
+    {
+        return [
+            'instance_id' => (int) $service->id,
+            'hostname' => (string) ($service->domain ?? ''),
+        ];
     }
 
     private function ensureProductBinding(Product $product): void

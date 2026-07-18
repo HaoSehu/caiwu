@@ -18,6 +18,7 @@ use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Product;
+use App\Models\Refund;
 use App\Models\User;
 use App\Services\ClientServiceConsole\ServiceTrafficPackageService;
 use App\Services\ClientServiceConsole\ServiceUpgradeService;
@@ -52,6 +53,7 @@ class PaymentService
         private InvoiceService $invoiceService,
         private ?AccountService $accountService = null,
         private ?PaymentGatewayBindingResolver $paymentGatewayBindingResolver = null,
+        private ?FinanceDocumentService $financeDocumentService = null,
     ) {}
 
     /**
@@ -202,11 +204,11 @@ class PaymentService
     /**
      * 资金调整（管理员手动，正数增加、负数扣减）
      */
-    public function adjustBalance(User $user, float $amount, string $remark = '管理员手动调整', array $context = []): void
+    public function adjustBalance(User $user, float $amount, string $remark = '管理员手动调整', array $context = []): array
     {
         throw_if($amount == 0, new BusinessException('调整金额不能为 0'));
 
-        DB::transaction(function () use ($user, $amount, $remark, $context) {
+        return DB::transaction(function () use ($user, $amount, $remark, $context): array {
             $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
             $currentBalance = $this->getUserBalance($lockedUser);
             $newBalance = $currentBalance + $amount;
@@ -220,7 +222,7 @@ class PaymentService
             $eventType = $amount > 0
                 ? FinanceLedgerEventType::MANUAL_RECHARGE
                 : FinanceLedgerEventType::MANUAL_DEDUCTION;
-            $this->createBalanceLog(
+            $transaction = $this->createBalanceLog(
                 (int) $lockedUser->id,
                 $eventType,
                 $amount,
@@ -233,11 +235,38 @@ class PaymentService
                 ]
             );
 
+            $operatorName = trim((string) ($context['operator_name'] ?? $context['operator'] ?? ''));
+            $invoice = $amount > 0
+                ? $this->invoiceService->createForRecharge($lockedUser, abs($amount), null, $remark, trim((string) ($context['trace_id'] ?? '')))
+                : $this->invoiceService->createForDeduction($lockedUser, abs($amount), $remark, trim((string) ($context['trace_id'] ?? '')));
+
+            $invoice->forceFill([
+                'remark' => $remark,
+                'operator' => $operatorName !== '' ? $operatorName : null,
+            ])->save();
+
+            $rechargeRecord = null;
             if ($amount > 0) {
-                $this->invoiceService->createForRecharge($lockedUser, abs($amount), null, $remark, trim((string) ($context['trace_id'] ?? '')));
-            } else {
-                $this->invoiceService->createForDeduction($lockedUser, abs($amount), $remark, trim((string) ($context['trace_id'] ?? '')));
+                $rechargeRecord = $this->financeDocuments()->recordRecharge(
+                    $invoice,
+                    null,
+                    $transaction,
+                    'admin_recharge',
+                    [
+                        'record_remark' => '管理员手工充值',
+                        'operator_type' => (string) ($context['operator_type'] ?? 'admin'),
+                        'operator_id' => $context['operator_id'] ?? null,
+                        'operator_name' => $operatorName,
+                        'trace_id' => (string) ($context['trace_id'] ?? ''),
+                    ],
+                );
             }
+
+            return [
+                'invoice' => $invoice->fresh(),
+                'transaction' => $transaction,
+                'recharge_record' => $rechargeRecord,
+            ];
         });
     }
 
@@ -594,7 +623,7 @@ class PaymentService
                 $user = User::query()->lockForUpdate()->findOrFail($lockedPayment->user_id);
                 $balanceAfter = $this->setUserBalance($user, $this->getUserBalance($user) + (float) $lockedPayment->amount);
 
-                $this->createBalanceLog(
+                $transaction = $this->createBalanceLog(
                     (int) $user->id,
                     FinanceLedgerEventType::RECHARGE,
                     (float) $lockedPayment->amount,
@@ -606,7 +635,22 @@ class PaymentService
                     ]
                 );
 
-                $this->invoiceService->createForRecharge($user, (float) $lockedPayment->amount, $lockedPayment, null, (string) ($lockedPayment->trace_id ?? ''));
+                $invoice = $this->invoiceService->createForRecharge(
+                    $user,
+                    (float) $lockedPayment->amount,
+                    $lockedPayment,
+                    null,
+                    (string) ($lockedPayment->trace_id ?? ''),
+                );
+                $this->financeDocuments()->recordRecharge(
+                    $invoice,
+                    $lockedPayment,
+                    $transaction,
+                    'user_recharge',
+                    [
+                        'trace_id' => (string) ($lockedPayment->trace_id ?? ''),
+                    ],
+                );
             });
         });
     }
@@ -1422,6 +1466,7 @@ class PaymentService
                     ])->save();
 
                     $this->closeOtherPendingPayments($invoice, (int) $lockedPayment->id, 'invoice_paid_by_gateway');
+                    $this->recordSuccessfulInvoicePayment($lockedPayment, $invoice);
 
                     return [
                         'dispatch' => true,
@@ -1684,6 +1729,7 @@ class PaymentService
                     ])->save();
 
                     $this->closeOtherPendingPayments($invoice, (int) $lockedPayment->id, 'invoice_paid_by_alipay');
+                    $this->recordSuccessfulInvoicePayment($lockedPayment, $invoice);
 
                     return [
                         'dispatch' => true,
@@ -1939,6 +1985,7 @@ class PaymentService
                     ])->save();
 
                     $this->closeOtherPendingPayments($invoice, (int) $lockedPayment->id, 'invoice_paid_by_alipay_query');
+                    $this->recordSuccessfulInvoicePayment($lockedPayment, $invoice);
 
                     return [
                         'dispatch' => true,
@@ -2017,7 +2064,7 @@ class PaymentService
 
                 throw_if((int) $invoice->status !== InvoiceStatus::PAID, new BusinessException('当前账单状态不支持支付宝退款'));
                 throw_if(
-                    ! in_array((int) $lockedOrder->status, [OrderStatus::PAID, OrderStatus::PROCESSING, OrderStatus::COMPLETED], true),
+                    ! in_array((int) $lockedOrder->status, [OrderStatus::PAID, OrderStatus::COMPLETED], true),
                     new BusinessException('当前订单状态不支持支付宝退款')
                 );
 
@@ -2174,7 +2221,10 @@ class PaymentService
                     ->findOrFail($user->id);
 
                 throw_if((int) $lockedInvoice->user_id !== (int) $lockedUser->id, new BusinessException('账单与用户不匹配'));
-                throw_if((int) $lockedInvoice->status !== InvoiceStatus::PAID, new BusinessException('当前账单状态不支持退款'));
+                throw_if(
+                    ! in_array((int) $lockedInvoice->status, [InvoiceStatus::PAID, InvoiceStatus::PARTIALLY_REFUNDED], true),
+                    new BusinessException('当前账单状态不支持退款')
+                );
 
                 $order = $lockedInvoice->order;
 
@@ -2188,14 +2238,13 @@ class PaymentService
                 }
 
                 throw_if(
-                    $order && ! in_array((int) $order->status, [OrderStatus::PAID, OrderStatus::PROCESSING, OrderStatus::COMPLETED], true),
+                    $order && ! in_array((int) $order->status, [OrderStatus::PAID, OrderStatus::COMPLETED], true),
                     new BusinessException('当前订单状态不支持退款')
                 );
 
                 $payment = $this->resolvePrimaryRefundablePayment($lockedInvoice);
-                throw_if(! $payment instanceof Payment, new BusinessException('未找到可退款的支付记录'));
 
-                if ((int) $payment->status === PaymentStatus::REFUNDED) {
+                if ($payment instanceof Payment && (int) $payment->status === PaymentStatus::REFUNDED) {
                     $refund = (array) data_get((array) ($payment->callback_raw ?? []), 'refund', []);
                     if ((int) $lockedInvoice->status !== InvoiceStatus::REFUNDED) {
                         $this->markInvoiceRefunded(
@@ -2215,10 +2264,10 @@ class PaymentService
                     ];
                 }
 
-                $refundableAmount = $this->resolveBalanceRefundableAmount($lockedInvoice, $payment);
+                $refundableAmount = $this->remainingRefundableAmount($lockedInvoice, $payment);
                 $refundAmount = round((float) ($payload['amount'] ?? $refundableAmount), 2);
                 throw_if($refundAmount <= 0, new BusinessException('退款金额不正确'));
-                throw_if(abs($refundAmount - $refundableAmount) > 0.00001, new BusinessException('当前仅支持按原支付金额全额退款'));
+                throw_if($refundAmount - $refundableAmount > 0.00001, new BusinessException('退款金额超过原单可退金额'));
 
                 $refundReason = trim((string) ($payload['remark'] ?? ''));
                 if ($refundReason === '') {
@@ -2233,13 +2282,17 @@ class PaymentService
                 }
 
                 $balanceAfter = $this->setUserBalance($lockedUser, $this->getUserBalance($lockedUser) + $refundAmount);
-                $this->createBalanceLog(
+                $transaction = $this->createBalanceLog(
                     (int) $lockedUser->id,
                     FinanceLedgerEventType::INVOICE_REFUND,
                     $refundAmount,
                     $balanceAfter,
                     (int) $lockedInvoice->id,
-                    '账单退款 '.(string) $lockedInvoice->invoice_no
+                    '账单退款 '.(string) $lockedInvoice->invoice_no,
+                    [
+                        'operator' => (string) ($context['operator_name'] ?? ''),
+                        'trace_id' => (string) ($context['trace_id'] ?? ''),
+                    ],
                 );
 
                 $refundRecord = [
@@ -2247,29 +2300,59 @@ class PaymentService
                     'refund_method_label' => $refundMethodLabel,
                     'refund_amount' => number_format($refundAmount, 2, '.', ''),
                     'refund_reason' => $refundReason,
-                    'trade_no' => (string) ($payment->trade_no ?? ''),
-                    'original_gateway' => $payment->gatewayKey(),
-                    'original_gateway_label' => $this->resolvePaymentGatewayLabel($payment->gatewayKey()),
+                    'trade_no' => (string) ($payment?->trade_no ?? ''),
+                    'original_gateway' => $payment?->gatewayKey() ?? 'balance',
+                    'original_gateway_label' => $payment instanceof Payment
+                        ? $this->resolvePaymentGatewayLabel($payment->gatewayKey())
+                        : '余额支付',
                     'operator_id' => (int) ($context['operator_id'] ?? 0),
                     'operator_name' => (string) ($context['operator_name'] ?? ''),
                     'trace_id' => (string) ($context['trace_id'] ?? ''),
                     'refunded_at' => now()->format('Y-m-d H:i:s'),
                 ];
 
-                $callbackRaw = (array) ($payment->callback_raw ?? []);
-                $callbackRaw['refund'] = $refundRecord;
+                $documents = $this->financeDocuments()->createBalanceRefundDocuments(
+                    $lockedInvoice,
+                    $payment,
+                    $transaction,
+                    $refundAmount,
+                    $refundReason,
+                    array_merge($context, ['operator_type' => $context['operator_type'] ?? 'admin']),
+                );
+                $isFullyRefunded = abs($refundAmount - $refundableAmount) <= 0.00001;
 
-                $payment->forceFill([
-                    'status' => PaymentStatus::REFUNDED,
-                    'callback_raw' => $callbackRaw,
-                ])->save();
-                $this->syncProjection($payment);
+                if ($payment instanceof Payment) {
+                    $callbackRaw = (array) ($payment->callback_raw ?? []);
+                    $callbackRaw['refund'] = $refundRecord;
+                    $callbackRaw['refunds'] = array_values(array_merge(
+                        (array) ($callbackRaw['refunds'] ?? []),
+                        [$refundRecord]
+                    ));
 
-                $this->markInvoiceRefunded($lockedInvoice, $refundRecord, $refundMethod, $refundAmount, $context);
+                    $paymentPayload = [
+                        'callback_raw' => $callbackRaw,
+                    ];
+                    if ($isFullyRefunded) {
+                        $paymentPayload['status'] = PaymentStatus::REFUNDED;
+                    }
+                    $payment->forceFill($paymentPayload)->save();
+                    $this->syncProjection($payment);
+                }
+
+                if ($isFullyRefunded) {
+                    $this->markInvoiceRefunded($lockedInvoice, $refundRecord, $refundMethod, $refundAmount, $context);
+                } else {
+                    $this->markInvoicePartiallyRefunded(
+                        $lockedInvoice,
+                        $refundMethod,
+                        $this->completedRefundAmount($lockedInvoice),
+                        $context,
+                    );
+                }
 
                 $scope = (array) ($payload['scope'] ?? ['order', 'payment']);
 
-                if ($order && in_array('order', $scope, true)) {
+                if ($isFullyRefunded && $order && in_array('order', $scope, true)) {
                     $order->forceFill([
                         'status' => OrderStatus::REFUNDED,
                     ])->save();
@@ -2280,7 +2363,7 @@ class PaymentService
                 Log::info('[账单退款] 已退回用户余额', [
                     'invoice_id' => $lockedInvoice->id,
                     'invoice_no' => $lockedInvoice->invoice_no,
-                    'payment_id' => $payment->id,
+                    'payment_id' => $payment?->id,
                     'refund_amount' => $refundRecord['refund_amount'],
                     'user_id' => $lockedUser->id,
                 ]);
@@ -2288,7 +2371,10 @@ class PaymentService
                 return [
                     'already_refunded' => false,
                     'invoice_id' => (int) $lockedInvoice->id,
-                    'payment_id' => (int) $payment->id,
+                    'payment_id' => (int) ($payment?->id ?? 0),
+                    'refund_id' => (int) $documents['refund']->id,
+                    'refund_invoice_id' => (int) $documents['refund_invoice']->id,
+                    'recharge_record_id' => $documents['recharge_record']?->id,
                     'refund' => $refundRecord,
                 ];
             });
@@ -3272,14 +3358,52 @@ class PaymentService
         return (array) ($payment->callback_raw ?? []);
     }
 
-    private function resolveBalanceRefundableAmount(Invoice $invoice, Payment $payment): float
+    private function resolveBalanceRefundableAmount(Invoice $invoice, ?Payment $payment): float
     {
-        $mixBalanceAmount = $this->resolveMixBalanceAmount($payment);
-        if ($mixBalanceAmount > 0) {
+        $mixBalanceAmount = $payment instanceof Payment ? $this->resolveMixBalanceAmount($payment) : 0.0;
+        if ($mixBalanceAmount > 0 || $this->invoiceHasBalancePayment($invoice)) {
             return round(max((float) ($invoice->paid_amount ?? 0), (float) ($invoice->amount ?? 0)), 2);
         }
 
-        return round((float) $payment->amount, 2);
+        return $payment instanceof Payment ? round((float) $payment->amount, 2) : 0.0;
+    }
+
+    private function invoiceHasBalancePayment(Invoice $invoice): bool
+    {
+        return AccountTransaction::query()
+            ->where('user_id', (int) $invoice->user_id)
+            ->where('event_type', FinanceLedgerEventType::INVOICE_PAYMENT)
+            ->where(function ($query) use ($invoice): void {
+                $query->where(function ($sourceQuery) use ($invoice): void {
+                    $sourceQuery
+                        ->where('source_type', 'invoice')
+                        ->where('source_id', (int) $invoice->id);
+                });
+
+                if ((int) ($invoice->order_id ?? 0) > 0) {
+                    $query->orWhere(function ($sourceQuery) use ($invoice): void {
+                        $sourceQuery
+                            ->where('source_type', 'invoice')
+                            ->where('source_id', (int) $invoice->order_id);
+                    });
+                }
+            })
+            ->exists();
+    }
+
+    private function remainingRefundableAmount(Invoice $invoice, ?Payment $payment): float
+    {
+        $refundedAmount = $this->completedRefundAmount($invoice);
+
+        return round(max($this->resolveBalanceRefundableAmount($invoice, $payment) - $refundedAmount, 0), 2);
+    }
+
+    private function completedRefundAmount(Invoice $invoice): float
+    {
+        return round((float) Refund::query()
+            ->where('invoice_id', (int) $invoice->id)
+            ->where('status', Refund::STATUS_COMPLETED)
+            ->sum('amount'), 2);
     }
 
     private function detectPrimaryPaymentGateway(Order $order): string
@@ -3335,6 +3459,20 @@ class PaymentService
         return $this->accountService ??= app(AccountService::class);
     }
 
+    private function financeDocuments(): FinanceDocumentService
+    {
+        return $this->financeDocumentService ??= app(FinanceDocumentService::class);
+    }
+
+    private function recordSuccessfulInvoicePayment(Payment $payment, Invoice $invoice): void
+    {
+        if (! in_array(InvoiceType::normalize((string) $invoice->type), [InvoiceType::NEW_PURCHASE, InvoiceType::RENEW], true)) {
+            return;
+        }
+
+        $this->financeDocuments()->recordThirdPartyPayment($payment, $invoice);
+    }
+
     private function markInvoiceRefunded(
         Invoice $invoice,
         array $refundRecord,
@@ -3374,6 +3512,22 @@ class PaymentService
         $invoice->forceFill($payload)->save();
     }
 
+    private function markInvoicePartiallyRefunded(
+        Invoice $invoice,
+        string $refundMethod,
+        float $refundAmount,
+        array $context = [],
+    ): void {
+        $payload = [
+            'status' => InvoiceStatus::PARTIALLY_REFUNDED,
+            'refund_amount' => number_format(round($refundAmount, 2), 2, '.', ''),
+            'refund_method' => trim($refundMethod) !== '' ? trim($refundMethod) : 'balance',
+            'refund_trace_id' => trim((string) ($context['trace_id'] ?? '')) ?: null,
+        ];
+
+        $invoice->forceFill($payload)->save();
+    }
+
     private function createBalanceLog(
         int $userId,
         string $eventType,
@@ -3382,10 +3536,10 @@ class PaymentService
         ?int $referenceId = null,
         string $remark = '',
         array $context = [],
-    ): void {
+    ): AccountTransaction {
         $sourceType = $this->resolveAccountTransactionSourceType($eventType);
 
-        AccountTransaction::query()->create([
+        return AccountTransaction::query()->create([
             'user_id' => $userId,
             'account_type' => 'cash',
             'event_type' => $eventType,

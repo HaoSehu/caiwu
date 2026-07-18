@@ -30,7 +30,7 @@ class Payment extends Model
         'order_id',
         'invoice_id', 'gateway',
         'plugin_id', 'gateway_key',
-        'trade_no', 'amount', 'status', 'callback_raw', 'paid_at',
+        'trade_no', 'amount', 'currency', 'status', 'callback_raw', 'paid_at',
         'trace_id',
     ];
 
@@ -170,6 +170,16 @@ class Payment extends Model
     public function invoice(): BelongsTo
     {
         return $this->belongsTo(Invoice::class);
+    }
+
+    public function rechargeRecord(): HasOne
+    {
+        return $this->hasOne(RechargeRecord::class);
+    }
+
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(Refund::class);
     }
 
     public function plugin(): BelongsTo

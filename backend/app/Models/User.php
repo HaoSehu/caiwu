@@ -308,6 +308,16 @@ class User extends Authenticatable
         return $this->hasMany(AccountTransaction::class, 'user_id');
     }
 
+    public function rechargeRecords(): HasMany
+    {
+        return $this->hasMany(RechargeRecord::class);
+    }
+
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(Refund::class);
+    }
+
     public function tickets(): HasMany
     {
         return $this->hasMany(Ticket::class);

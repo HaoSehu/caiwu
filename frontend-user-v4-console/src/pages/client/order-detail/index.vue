@@ -151,23 +151,12 @@
                 <h4>关联服务</h4>
                 <div class="detail-kv-grid">
                   <div class="detail-kv-item">
-                    <span>服务名称</span>
-                    <t-button
-                      variant="text"
-                      theme="primary"
-                      size="small"
-                      @click="router.push(`/client/services/${detail.service.id}`)"
-                    >
-                      {{ detail.service.name || '--' }}
-                    </t-button>
-                  </div>
-                  <div v-if="detail.service.domain" class="detail-kv-item">
-                    <span>域名</span>
-                    <strong>{{ detail.service.domain }}</strong>
+                    <span>实例ID</span>
+                    <strong>{{ detail.service.instance_id || '--' }}</strong>
                   </div>
                   <div class="detail-kv-item">
-                    <span>到期时间</span>
-                    <strong>{{ detail.service.expires_at || '--' }}</strong>
+                    <span>主机名</span>
+                    <strong>{{ detail.service.hostname || '--' }}</strong>
                   </div>
                 </div>
               </section>

@@ -73,8 +73,11 @@ class AdminUserActionV2Service
      */
     public function refundInvoice(User $user, int $invoiceId, array $payload, Request $request): array
     {
-        $this->users->refundInvoice($user, $invoiceId, $payload, $this->operatorContext($request));
+        $refundDetail = $this->users->refundInvoice($user, $invoiceId, $payload, $this->operatorContext($request));
         $invoice = Invoice::query()->find($invoiceId);
+        $documentLinks = is_array($refundDetail['document_links'] ?? null)
+            ? $refundDetail['document_links']
+            : [];
 
         return $this->result($invoiceId, 'completed', '账单已完成退款', [
             'type' => 'invoice_refund',
@@ -84,6 +87,11 @@ class AdminUserActionV2Service
                 'refund_method' => $invoice?->refund_method,
                 'refund_amount' => $this->formatNullableAmount($invoice?->refund_amount),
                 'refunded_at' => $invoice?->refunded_at?->format('Y-m-d H:i:s'),
+            ],
+            'documents' => [
+                'refund_id' => isset($documentLinks['refund_id']) ? (int) $documentLinks['refund_id'] : null,
+                'refund_invoice_id' => isset($documentLinks['refund_invoice_id']) ? (int) $documentLinks['refund_invoice_id'] : null,
+                'recharge_record_id' => isset($documentLinks['recharge_record_id']) ? (int) $documentLinks['recharge_record_id'] : null,
             ],
         ]);
     }
@@ -147,6 +155,7 @@ class AdminUserActionV2Service
         $operator = $request->user();
 
         return [
+            'operator_type' => 'admin',
             'operator_id' => (int) ($operator?->id ?? 0),
             'operator_name' => (string) ($operator?->username ?? $operator?->name ?? $operator?->email ?? 'admin'),
             'trace_id' => (string) $request->header('X-Request-Id', ''),

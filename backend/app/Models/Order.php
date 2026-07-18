@@ -33,6 +33,7 @@ class Order extends Model
         'user_coupon_id',
         'coupon_code',
         'amount',
+        'currency',
         'discount',
         'paid_amount',
         'billing_cycle',
@@ -40,6 +41,7 @@ class Order extends Model
         'config_snapshot',
         'config_pricing_snapshot',
         'coupon_snapshot',
+        'service_snapshot',
         'status',
         'paid_at',
         'remark',
@@ -59,6 +61,7 @@ class Order extends Model
             'config_snapshot' => 'array',
             'config_pricing_snapshot' => 'array',
             'coupon_snapshot' => 'array',
+            'service_snapshot' => 'array',
             'paid_at' => 'datetime',
         ];
     }
@@ -159,6 +162,11 @@ class Order extends Model
     public function payments(): HasMany
     {
         return $this->hasMany(Payment::class);
+    }
+
+    public function rechargeRecords(): HasMany
+    {
+        return $this->hasMany(RechargeRecord::class);
     }
 
     public function referralReward(): HasOne

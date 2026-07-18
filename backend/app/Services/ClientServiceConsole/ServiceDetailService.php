@@ -270,6 +270,10 @@ class ServiceDetailService
                 $builder->where(function (Builder $serviceBuilder) use ($serviceId) {
                     $serviceBuilder->where('module', 'service')->where('subject_id', $serviceId);
                 })->orWhere('context->service_id', $serviceId);
+            })
+            ->where(function (Builder $builder) {
+                $builder->where('context->actor_type', '!=', 'admin')
+                    ->orWhereNull('context->actor_type');
             });
 
         $keyword = trim((string) ($filters['keyword'] ?? ''));

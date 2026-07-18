@@ -98,11 +98,13 @@ class UserController extends Controller
         $payload = $request->payload();
         $amount = (float) $payload['amount'];
 
-        $this->payments->adjustBalance(
+        $documents = $this->payments->adjustBalance(
             $user,
             $amount,
             $payload['remark'] ?? '管理员手动调整',
             [
+                'operator_type' => 'admin',
+                'operator_id' => (int) ($request->user()?->id ?? 0),
                 'operator_name' => (string) ($request->user()?->username ?? $request->user()?->name ?? $request->user()?->email ?? 'admin'),
                 'trace_id' => (string) $request->header('X-Request-Id', ''),
             ],
@@ -122,6 +124,11 @@ class UserController extends Controller
                 'adjustment' => [
                     'amount' => number_format($amount, 2, '.', ''),
                     'direction' => $amount > 0 ? 'increase' : 'decrease',
+                ],
+                'documents' => [
+                    'invoice_id' => (int) $documents['invoice']->id,
+                    'account_transaction_id' => (int) $documents['transaction']->id,
+                    'recharge_record_id' => $documents['recharge_record']?->id,
                 ],
             ],
         ])->resolve(), "余额{$label}成功");

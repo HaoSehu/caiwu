@@ -552,6 +552,14 @@ function mergeCouponProductHierarchy(data: CouponHierarchyItem[]): MergedCouponH
 }
 
 @media (max-width: @screen-sm-rem) {
+  .coupon-page {
+    padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
+  }
+
+  .coupon-card-shell :deep(.t-card__body) {
+    padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
+  }
+
   .coupon-filter-bar,
   .coupon-grid {
     grid-template-columns: 1fr;

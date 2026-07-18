@@ -466,7 +466,13 @@ class UserService
             );
         }
 
-        return $this->invoiceDetail($user, $invoiceId);
+        return array_merge($this->invoiceDetail($user, $invoiceId), [
+            'document_links' => [
+                'refund_id' => isset($result['refund_id']) ? (int) $result['refund_id'] : null,
+                'refund_invoice_id' => isset($result['refund_invoice_id']) ? (int) $result['refund_invoice_id'] : null,
+                'recharge_record_id' => isset($result['recharge_record_id']) ? (int) $result['recharge_record_id'] : null,
+            ],
+        ]);
     }
 
     /**
@@ -932,6 +938,7 @@ class UserService
             'renew' => '续费账单',
             'recharge' => '充值账单',
             'deduction' => '扣款账单',
+            'refund' => '退款红字账单',
             'referral_credit' => '推荐奖励账单',
             'manual' => '手工账单',
             default => ($invoice->order?->display_product_name ?? '') !== '' ? '产品账单' : '普通账单',
@@ -986,6 +993,17 @@ class UserService
                 'highlight' => $remark !== '' ? $remark : '余额扣减',
                 'items' => [[
                     'description' => '账户扣款',
+                    'amount' => $invoice->amount,
+                ]],
+            ],
+            InvoiceType::REFUND => [
+                'kind' => 'refund',
+                'headline' => '退款红字账单',
+                'subheadline' => '用于冲抵原账单的退款单据。',
+                'badge' => '退款',
+                'highlight' => (string) ($invoice->originInvoice?->invoice_no ?? $invoice->config_snapshot['origin_invoice_no'] ?? ''),
+                'items' => [[
+                    'description' => '退款冲抵',
                     'amount' => $invoice->amount,
                 ]],
             ],

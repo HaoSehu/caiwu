@@ -6,6 +6,7 @@ use App\Models\Concerns\NormalizesTraceId;
 use App\Support\UserBalanceCache;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class AccountTransaction extends Model
 {
@@ -16,6 +17,7 @@ class AccountTransaction extends Model
         'account_type',
         'event_type',
         'change_amount',
+        'currency',
         'balance_after',
         'source_type',
         'source_id',
@@ -44,6 +46,11 @@ class AccountTransaction extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function rechargeRecord(): HasOne
+    {
+        return $this->hasOne(RechargeRecord::class);
     }
 
     protected static function booted(): void
