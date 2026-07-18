@@ -9,12 +9,11 @@ use App\Models\Product;
 use App\Models\User;
 use App\Services\Finance\AdminOrderNotificationService;
 use App\Services\Finance\CheckoutSecurityService;
+use App\Services\Finance\CheckoutService;
 use App\Services\Finance\CouponService;
 use App\Services\Finance\InvoiceService;
 use App\Services\Finance\PaymentService;
-use App\Services\Order\OrderService;
 use App\Services\ProductCatalog\ProductCatalogService;
-use App\Services\System\NotificationService;
 use App\Services\System\OperationLogService;
 use Tests\TestCase;
 
@@ -43,16 +42,16 @@ class ProductPurchaseRequiresCheckoutTest extends TestCase
             'auto_setup' => 0,
         ]);
 
-        $orderService = $this->makeOrderService($product, 1);
+        $checkoutService = $this->makeCheckoutService($product, 1);
         $checkoutSecurity = new CheckoutSecurityService;
-        $quote = $orderService->quote($product, 'monthly', [], 1);
+        $quote = $checkoutService->quote($product, 'monthly', [], 1);
         $quotePayload = array_merge($quote, [
             'subtotal_amount' => $quote['total_amount'],
         ]);
         $tokenData = $checkoutSecurity->issueQuoteToken($product->id, 'monthly', [], $quotePayload);
 
         try {
-            $orderService->create($user->id, [
+            $checkoutService->create($user->id, [
                 'product_id' => (int) $product->id,
                 'billing_cycle' => 'monthly',
                 'quantity' => 1,
@@ -94,16 +93,16 @@ class ProductPurchaseRequiresCheckoutTest extends TestCase
             'auto_setup' => 0,
         ]);
 
-        $orderService = $this->makeOrderService($product, 1);
+        $checkoutService = $this->makeCheckoutService($product, 1);
         $checkoutSecurity = new CheckoutSecurityService;
-        $quote = $orderService->quote($product, 'monthly', [], 1);
+        $quote = $checkoutService->quote($product, 'monthly', [], 1);
         $quotePayload = array_merge($quote, [
             'subtotal_amount' => $quote['total_amount'],
         ]);
         $tokenData = $checkoutSecurity->issueQuoteToken($product->id, 'monthly', [], $quotePayload);
 
         try {
-            $orderService->create($user->id, [
+            $checkoutService->create($user->id, [
                 'product_id' => (int) $product->id,
                 'billing_cycle' => 'monthly',
                 'quantity' => 1,
@@ -147,16 +146,16 @@ class ProductPurchaseRequiresCheckoutTest extends TestCase
             'auto_setup' => 0,
         ]);
 
-        $orderService = $this->makeOrderService($product, 1);
+        $checkoutService = $this->makeCheckoutService($product, 1);
         $checkoutSecurity = new CheckoutSecurityService;
-        $quote = $orderService->quote($product, 'monthly', [], 1);
+        $quote = $checkoutService->quote($product, 'monthly', [], 1);
         $quotePayload = array_merge($quote, [
             'subtotal_amount' => $quote['total_amount'],
         ]);
         $tokenData = $checkoutSecurity->issueQuoteToken($product->id, 'monthly', [], $quotePayload);
 
         try {
-            $orderService->create($user->id, [
+            $checkoutService->create($user->id, [
                 'product_id' => (int) $product->id,
                 'billing_cycle' => 'monthly',
                 'quantity' => 1,
@@ -174,7 +173,7 @@ class ProductPurchaseRequiresCheckoutTest extends TestCase
         }
     }
 
-    private function makeOrderService(Product $product, int $expectedQuantity): OrderService
+    private function makeCheckoutService(Product $product, int $expectedQuantity): CheckoutService
     {
         $invoiceService = new InvoiceService;
         $checkoutSecurity = new CheckoutSecurityService;
@@ -188,23 +187,23 @@ class ProductPurchaseRequiresCheckoutTest extends TestCase
             );
 
         $couponService = $this->createMock(CouponService::class);
-        $couponService->method('previewOwnedCoupon')->willReturn(null);
+        $couponService->method('reserveOwnedCouponForInvoice')->willReturn([]);
 
         $operationLogService = $this->createMock(OperationLogService::class);
         $operationLogService->method('write');
 
         $adminOrderNotificationService = $this->createMock(AdminOrderNotificationService::class);
-        $adminOrderNotificationService->method('notifyOrderCreated');
+        $adminOrderNotificationService->method('notifyInvoicePaidAfterResponse');
 
-        return new OrderService(
+        return new CheckoutService(
             $invoiceService,
             $this->createMock(PaymentService::class),
             $productCatalogService,
             $checkoutSecurity,
             $couponService,
             $operationLogService,
-            $this->createMock(NotificationService::class),
             $adminOrderNotificationService,
         );
     }
 }
+

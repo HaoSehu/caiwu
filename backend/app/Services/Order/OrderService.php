@@ -15,20 +15,12 @@ use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Models\User;
-use App\Services\Finance\AdminOrderNotificationService;
-use App\Services\Finance\CheckoutSecurityService;
 use App\Services\Finance\CouponService;
-use App\Services\Finance\InvoiceService;
 use App\Services\Finance\PaymentService;
 use App\Services\Order\Concerns\HandlesOrderCalculation;
-use App\Services\ProductCatalog\ProductCatalogService;
-use App\Services\ProductCatalog\ProductDisplayNameResolver;
-use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Services\System\NotificationService;
 use App\Services\System\OperationLogService;
 use Carbon\Carbon;
-use Illuminate\Contracts\Cache\LockTimeoutException;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -39,257 +31,11 @@ class OrderService
     // RANGE_TYPES / OS_TYPES / BILLING_CYCLE_MONTHS / TYPE_FIELD_MAP 已移入 HandlesOrderCalculation Trait
 
     public function __construct(
-        private InvoiceService $invoiceService,
         private PaymentService $paymentService,
-        private ProductCatalogService $productCatalogService,
-        private CheckoutSecurityService $checkoutSecurityService,
         private CouponService $couponService,
         private OperationLogService $operationLogService,
         private NotificationService $notificationService,
-        private AdminOrderNotificationService $adminOrderNotificationService,
-        private ?ProductDisplayNameResolver $productDisplayNameResolver = null,
     ) {}
-
-    /**
-     * 创建新购订单（旧入口，Order-first 路径）
-     *
-     * @deprecated 新功能请使用 CheckoutService::create()（Invoice-first 路径）。
-     *             OrderService::create() 保留兼容旧调用；两套路径共享
-     *             HandlesOrderCalculation Trait 的计算逻辑，语义上以 Invoice 为财务主体。
-     */
-    public function create(int $userId, array $data, array $context = []): Order
-    {
-        $productId = (int) ($data['product_id'] ?? 0);
-        $billingCycle = trim((string) ($data['billing_cycle'] ?? ''));
-        $quantity = max((int) ($data['quantity'] ?? 1), 1);
-        $rawConfig = (array) ($data['config'] ?? []);
-        $quoteToken = trim((string) ($data['quote_token'] ?? ''));
-        $userCouponId = (int) ($data['user_coupon_id'] ?? 0);
-        $idempotencyKey = trim((string) ($context['idempotency_key'] ?? ''));
-        $startedAt = microtime(true);
-        $latency = [
-            'idempotent_lookup_ms' => 0,
-            'stock_assert_ms' => 0,
-            'purchase_requires_ms' => 0,
-            'quote_ms' => 0,
-            'coupon_reserve_ms' => 0,
-            'quote_token_assert_ms' => 0,
-        ];
-
-        throw_if($productId <= 0, new BusinessException('商品信息错误'));
-        throw_if($billingCycle === '', new BusinessException('计费周期不能为空'));
-        throw_if($quoteToken === '', new BusinessException('报价凭证已失效，请刷新配置后重试'));
-        throw_if($idempotencyKey === '', new BusinessException('请求缺少幂等标识，请刷新页面后重试'));
-
-        $lockKey = 'lock:order:create:'.$userId.':'.sha1($idempotencyKey);
-
-        try {
-            $order = Cache::lock($lockKey, 20)->block(5, function () use (
-                $userId,
-                $productId,
-                $billingCycle,
-                $quantity,
-                $rawConfig,
-                $quoteToken,
-                $userCouponId,
-                $idempotencyKey,
-                $context,
-                &$latency
-            ) {
-                $stepStartedAt = microtime(true);
-                $idempotentOrderId = $this->checkoutSecurityService->resolveIdempotentOrderId($userId, $idempotencyKey);
-                $latency['idempotent_lookup_ms'] = $this->elapsedMilliseconds($stepStartedAt);
-                if ($idempotentOrderId) {
-                    $existingOrder = $this->freshCheckoutOrder($idempotentOrderId);
-                    if ($existingOrder) {
-                        return $existingOrder;
-                    }
-                }
-
-                return DB::transaction(function () use (
-                    $userId,
-                    $productId,
-                    $billingCycle,
-                    $quantity,
-                    $rawConfig,
-                    $quoteToken,
-                    $userCouponId,
-                    $idempotencyKey,
-                    $context,
-                    &$latency
-                ) {
-                    $product = Product::query()
-                        ->lockForUpdate()
-                        ->findOrFail($productId);
-
-                    throw_if($product->status !== 1, new BusinessException('产品已下架'));
-                    $product->loadMissing('supplier');
-                    $stepStartedAt = microtime(true);
-                    $this->productCatalogService->assertProductCanBeProvisioned($product, $quantity);
-                    $latency['stock_assert_ms'] = $this->elapsedMilliseconds($stepStartedAt);
-
-                    $stepStartedAt = microtime(true);
-                    $this->assertPurchaseRequires($product, $userId);
-                    $latency['purchase_requires_ms'] = $this->elapsedMilliseconds($stepStartedAt);
-
-                    $normalizedConfig = $this->normalizeConfig($product, $rawConfig);
-                    $fingerprint = $this->checkoutSecurityService->buildCheckoutFingerprint(
-                        $product->id,
-                        $billingCycle,
-                        $quantity,
-                        $normalizedConfig,
-                        $userCouponId
-                    );
-
-                    $recentOrderId = $this->checkoutSecurityService->resolveFingerprintOrderId($userId, $fingerprint);
-                    if ($recentOrderId) {
-                        $recentOrder = $this->freshCheckoutOrder($recentOrderId);
-                        if ($recentOrder) {
-                            $this->checkoutSecurityService->rememberCreatedOrder(
-                                $userId,
-                                $idempotencyKey,
-                                $fingerprint,
-                                $recentOrder->id
-                            );
-
-                            return $recentOrder;
-                        }
-                    }
-
-                    $stepStartedAt = microtime(true);
-                    $quote = $this->quote($product, $billingCycle, $normalizedConfig, $quantity);
-                    $latency['quote_ms'] = $this->elapsedMilliseconds($stepStartedAt);
-                    $amount = (float) ($quote['total_amount'] ?? 0);
-                    $configPricingSnapshot = $this->buildConfigPricingSnapshot($product, $billingCycle, $normalizedConfig, $quantity);
-                    $displayNamePayload = $this->resolveProductDisplayNameResolver()->resolveForProduct($product, $normalizedConfig);
-                    $productDisplayName = $this->resolveCheckoutProductDisplayName($displayNamePayload);
-                    $orderConfigSnapshot = $this->withProductDisplaySnapshot($product, $normalizedConfig, $productDisplayName);
-                    throw_if($amount <= 0, new BusinessException('无效的计费周期'));
-                    $stepStartedAt = microtime(true);
-                    $couponPayload = $this->couponService->reserveOwnedCouponForOrder($userCouponId, $userId, $product, $billingCycle, $amount, OrderType::NEW);
-                    $latency['coupon_reserve_ms'] = $this->elapsedMilliseconds($stepStartedAt);
-                    $discountAmount = (float) ($couponPayload['discount_amount'] ?? 0);
-                    $payableAmount = max($amount - $discountAmount, 0);
-
-                    $stepStartedAt = microtime(true);
-                    $this->checkoutSecurityService->assertQuoteToken(
-                        $quoteToken,
-                        $product->id,
-                        $billingCycle,
-                        $quantity,
-                        $normalizedConfig,
-                        $this->formatAmount($amount),
-                        $this->formatAmount($payableAmount),
-                        $couponPayload['user_coupon_id'] ?? $userCouponId
-                    );
-                    $latency['quote_token_assert_ms'] = $this->elapsedMilliseconds($stepStartedAt);
-
-                    $order = Order::query()->create([
-                        'order_no' => Order::generateOrderNo(),
-                        'projection_type' => Order::PROJECTION_TYPE_PROVISIONING,
-                        'user_id' => $userId,
-                        'product_id' => $product->id,
-                        'product_spec_snapshot' => $productDisplayName,
-                        'product_type_snapshot' => (string) $product->product_type,
-                        'coupon_id' => $couponPayload['id'] ?? null,
-                        'user_coupon_id' => $couponPayload['user_coupon_id'] ?? null,
-                        'coupon_code' => $couponPayload['code'] ?? null,
-                        'type' => OrderType::NEW,
-                        'amount' => $amount,
-                        'discount' => $discountAmount,
-                        'billing_cycle' => $billingCycle,
-                        'quantity' => $quantity,
-                        'config_snapshot' => $orderConfigSnapshot,
-                        'config_pricing_snapshot' => $configPricingSnapshot,
-                        'coupon_snapshot' => $couponPayload,
-                        'status' => OrderStatus::PENDING,
-                    ]);
-
-                    $this->invoiceService->createFromOrder($order);
-
-                    if ((int) $product->stock > 0) {
-                        $product->decrement('stock', $quantity);
-                    }
-
-                    $this->checkoutSecurityService->rememberCreatedOrder(
-                        $userId,
-                        $idempotencyKey,
-                        $fingerprint,
-                        (int) $order->id
-                    );
-
-                    $this->operationLogService->write(
-                        userId: $userId,
-                        userType: 'client',
-                        action: 'order.create',
-                        module: 'order',
-                        targetId: (int) $order->id,
-                        detail: [
-                            'order_no' => (string) $order->order_no,
-                            'product_id' => (int) $product->id,
-                            'product_name' => $productDisplayName,
-                            'product_full_path' => (string) ($orderConfigSnapshot['product_full_path'] ?? ''),
-                            'billing_cycle' => $billingCycle,
-                            'quantity' => $quantity,
-                            'amount' => $this->formatAmount($amount),
-                            'discount' => $this->formatAmount($discountAmount),
-                            'coupon_code' => (string) ($couponPayload['code'] ?? ''),
-                            'quote_token_hash' => substr(hash('sha256', $quoteToken), 0, 16),
-                            'idempotency_key_hash' => substr(hash('sha256', $idempotencyKey), 0, 16),
-                            'trace_id' => (string) ($context['trace_id'] ?? ''),
-                        ],
-                        ipAddress: (string) ($context['ip_address'] ?? ''),
-                    );
-
-                    return $order->load('invoice');
-                });
-            });
-
-            if ($order instanceof Order && $order->wasRecentlyCreated) {
-                $this->adminOrderNotificationService->notifyOrderCreatedAfterResponse($order);
-            }
-
-            $this->safeLog('info', '[购买链路] 下单校验耗时', array_merge($latency, [
-                'result' => $order->wasRecentlyCreated ? 'created' : 'reused',
-                'user_id' => $userId,
-                'product_id' => $productId,
-                'order_id' => (int) $order->id,
-                'order_no' => (string) $order->order_no,
-                'billing_cycle' => $billingCycle,
-                'quantity' => $quantity,
-                'trace_id' => (string) ($context['trace_id'] ?? ''),
-                'duration_ms' => $this->elapsedMilliseconds($startedAt),
-            ]));
-
-            return $order;
-        } catch (LockTimeoutException) {
-            $this->safeLog('warning', '[购买链路] 下单校验耗时', array_merge($latency, [
-                'result' => 'failed',
-                'user_id' => $userId,
-                'product_id' => $productId,
-                'billing_cycle' => $billingCycle,
-                'quantity' => $quantity,
-                'trace_id' => (string) ($context['trace_id'] ?? ''),
-                'duration_ms' => $this->elapsedMilliseconds($startedAt),
-                'message' => '订单正在处理中，请勿重复提交',
-                'exception' => BusinessException::class,
-            ]));
-            throw new BusinessException('订单正在处理中，请勿重复提交');
-        } catch (\Throwable $exception) {
-            $this->safeLog('warning', '[购买链路] 下单校验耗时', array_merge($latency, [
-                'result' => 'failed',
-                'user_id' => $userId,
-                'product_id' => $productId,
-                'billing_cycle' => $billingCycle,
-                'quantity' => $quantity,
-                'trace_id' => (string) ($context['trace_id'] ?? ''),
-                'duration_ms' => $this->elapsedMilliseconds($startedAt),
-                'message' => $exception->getMessage(),
-                'exception' => $exception::class,
-            ]));
-            throw $exception;
-        }
-    }
 
     /**
      * 取消订单
@@ -711,14 +457,6 @@ class OrderService
         return $this->loadAdminOrder((int) $order->id);
     }
 
-    private function freshCheckoutOrder(int $orderId): ?Order
-    {
-        return Order::query()
-            ->with(['product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires', 'invoice', 'service'])
-            ->where('status', '!=', OrderStatus::CANCELLED)
-            ->find($orderId);
-    }
-
     private function buildManualTraceId(Order $order, array $context, string $suffix): string
     {
         $traceId = trim((string) ($context['trace_id'] ?? ''));
@@ -859,34 +597,5 @@ class OrderService
             'refunded_at' => (string) ($refund['refunded_at'] ?? ($refund['gmt_refund_pay'] ?? '')),
             'out_request_no' => (string) ($refund['out_request_no'] ?? ''),
         ];
-    }
-
-    private function resolveProductDisplayNameResolver(): ProductDisplayNameResolver
-    {
-        return $this->productDisplayNameResolver ??= new ProductDisplayNameResolver;
-    }
-
-    private function withProductDisplaySnapshot(Product $product, array $configSnapshot, string $productDisplayName): array
-    {
-        return array_merge(
-            $configSnapshot,
-            (new ProductFullPathResolver($this->resolveProductDisplayNameResolver()))
-                ->snapshotForProduct($product, $productDisplayName, $configSnapshot)
-        );
-    }
-
-    /**
-     * @param  array<string, mixed>  $displayNamePayload
-     */
-    private function resolveCheckoutProductDisplayName(array $displayNamePayload): string
-    {
-        foreach (['combined_display_name', 'product_spec_display', 'product_display_name'] as $key) {
-            $value = trim((string) ($displayNamePayload[$key] ?? ''));
-            if ($value !== '') {
-                return $value;
-            }
-        }
-
-        return '';
     }
 }
