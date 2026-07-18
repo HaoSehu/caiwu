@@ -191,6 +191,22 @@ class ClientRecordResponsibilityBoundaryTest extends TestCase
             ->assertJsonStructure(['data' => ['errors' => ['page']]]);
     }
 
+    public function test_client_order_list_and_summary_can_run_expired_order_cleanup(): void
+    {
+        $suffix = strtoupper(bin2hex(random_bytes(4)));
+        $user = $this->createClientUser('order-cleanup-'.$suffix);
+
+        Sanctum::actingAs($user);
+
+        $this->getJson('/api/v2/client/orders?page=1&page_size=10')
+            ->assertOk()
+            ->assertJsonPath('code', 0);
+
+        $this->getJson('/api/v2/client/orders/summary')
+            ->assertOk()
+            ->assertJsonPath('code', 0);
+    }
+
     public function test_client_order_records_are_purchase_service_orders_not_recharge_invoices(): void
     {
         $suffix = strtoupper(bin2hex(random_bytes(4)));

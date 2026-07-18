@@ -15,6 +15,7 @@ use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Models\User;
+use App\Services\Finance\CheckoutSecurityService;
 use App\Services\Finance\CouponService;
 use App\Services\Finance\PaymentService;
 use App\Services\Order\Concerns\HandlesOrderCalculation;
@@ -33,6 +34,7 @@ class OrderService
     public function __construct(
         private PaymentService $paymentService,
         private CouponService $couponService,
+        private CheckoutSecurityService $checkoutSecurityService,
         private OperationLogService $operationLogService,
         private NotificationService $notificationService,
     ) {}

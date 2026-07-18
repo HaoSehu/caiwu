@@ -11,7 +11,7 @@
       <div class="console-meta-grid">
         <span class="meta-item meta-id">实例 ID：{{ detail.id || '--' }}</span>
         <span class="meta-item meta-region">地址：{{ serviceRegion }}</span>
-        <span class="meta-item meta-ip">{{ primaryConnectionLabel }}：{{ primaryConnectionValues[0] || '--' }}<template v-if="primaryConnectionValues.length > 1"> <t-button size="small" variant="text" theme="primary" @click="ipDialogVisible = true">查看更多</t-button></template></span>
+        <span class="meta-item meta-ip">{{ primaryConnectionLabel }}：{{ primaryConnectionValues[0] || '--' }}</span>
         <div class="console-auto-renew-line">
           <span>自动续费</span>
           <t-switch

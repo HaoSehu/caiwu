@@ -287,11 +287,6 @@ export function useServiceCenter() {
     }
   }
 
-  async function refreshAll() {
-    await Promise.all([loadOverview(), loadList()]);
-    MessagePlugin.success('服务数据已刷新');
-  }
-
   function normalizeViewMode(value: unknown) {
     return value === 'list' ? 'list' : 'grid';
   }
@@ -342,17 +337,6 @@ export function useServiceCenter() {
     if (filters.catalog_type === value) return;
     filters.catalog_type = value;
     handleSearch();
-  }
-
-  function resetFilters() {
-    filters.page = 1;
-    filters.page_size = 10;
-    filters.status = DEFAULT_SERVICE_STATUS;
-    filters.keyword = '';
-    filters.catalog_type = '';
-    filters.quick_filter = '';
-    filters.auto_renew = '';
-    void loadList();
   }
 
   function openDetail(id: number) {
@@ -501,11 +485,9 @@ export function useServiceCenter() {
     availableRenewCoupons,
     loadOverview,
     loadList,
-    refreshAll,
     handleSearch,
     handlePageSizeChange,
     pickCategory,
-    resetFilters,
     setViewMode,
     openDetail,
     openRenew,

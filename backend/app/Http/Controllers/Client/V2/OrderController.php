@@ -198,13 +198,7 @@ class OrderController extends Controller
         ] : null;
         $base['coupon_code'] = (string) ($order->coupon_code ?? '');
         $base['remark'] = (string) ($order->remark ?? '');
-        $base['service'] = $order->service ? [
-            'id' => (int) $order->service->id,
-            'name' => (string) $order->service->name,
-            'domain' => (string) ($order->service->domain ?? ''),
-            'status' => (int) $order->service->status,
-            'expires_at' => $order->service->expires_at?->format('Y-m-d H:i:s'),
-        ] : null;
+        $base['service'] = $this->resolveServiceSnapshot($order);
         $base['invoice'] = $order->invoice ? [
             'id' => (int) $order->invoice->id,
             'invoice_no' => (string) $order->invoice->invoice_no,
@@ -252,6 +246,28 @@ class OrderController extends Controller
         }
 
         $query->where('created_at', '<=', CarbonImmutable::parse($end)->endOfDay());
+    }
+
+    private function resolveServiceSnapshot(Order $order): ?array
+    {
+        $snapshot = $order->service_snapshot;
+
+        if (is_array($snapshot) && ! empty($snapshot)) {
+            return [
+                'instance_id' => (int) ($snapshot['instance_id'] ?? 0),
+                'hostname' => (string) ($snapshot['hostname'] ?? ''),
+            ];
+        }
+
+        // 向下兼容：没有快照时回退到实时 service 数据（但不返回 name/domain/status/expires_at）
+        if ($order->service) {
+            return [
+                'instance_id' => (int) $order->service->id,
+                'hostname' => (string) ($order->service->domain ?? ''),
+            ];
+        }
+
+        return null;
     }
 
     private function productFullPathResolver(): ProductFullPathResolver

@@ -210,13 +210,6 @@ export function useTicketList() {
     void loadTickets();
   }
 
-  function resetFilters() {
-    filters.keyword = '';
-    filters.status = undefined;
-    filters.page = 1;
-    void loadTickets();
-  }
-
   async function openCreateDialog() {
     resetCreateForm();
     createVisible.value = true;
@@ -309,7 +302,6 @@ export function useTicketList() {
     loadServiceOptions,
     handleSearch,
     handlePageSizeChange,
-    resetFilters,
     openCreateDialog,
     closeCreateDialog,
     uploadTicketImage,

@@ -18,7 +18,6 @@
             <template #icon><AddIcon /></template>
             提交工单
           </t-button>
-          <t-button variant="outline" @click="resetFilters">重置</t-button>
         </div>
       </div>
     </t-card>
@@ -183,7 +182,6 @@ const {
   loadTickets,
   handleSearch,
   handlePageSizeChange,
-  resetFilters,
   openCreateDialog,
   closeCreateDialog,
   uploadTicketImage,
@@ -382,17 +380,33 @@ onMounted(() => {
 }
 
 @media (max-width: @screen-sm-rem) {
-  .ticket-filter-bar {
-    grid-template-columns: 1fr;
+  .client-tickets {
+    padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
   }
 
-  .ticket-filter-actions,
-  .ticket-pagination {
+  .ticket-filter-card :deep(.t-card__body) {
+    padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
+  }
+
+  .ticket-filter-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+
+    > :first-child {
+      grid-column: 1 / -1;
+    }
+  }
+
+  .ticket-filter-actions {
     justify-content: flex-start;
   }
 
   .ticket-filter-actions :deep(.t-button) {
-    flex: 1 1 auto;
+    width: 100%;
+    min-height: var(--td-comp-size-l);
+  }
+
+  .ticket-pagination {
+    justify-content: flex-start;
   }
 
   .ticket-table-shell {

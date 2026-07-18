@@ -14,6 +14,8 @@ class InvoiceType
 
     const DEDUCTION = 'deduction'; // 扣款
 
+    const REFUND = 'refund'; // 退款红字账单
+
     const REFERRAL_CREDIT = 'referral_credit'; // 推荐奖励
 
     const MANUAL = 'manual';    // 手工账单
@@ -24,6 +26,7 @@ class InvoiceType
         self::RECHARGE => '充值',
         self::UPGRADE => '附加配置',
         self::DEDUCTION => '扣款',
+        self::REFUND => '退款',
         self::REFERRAL_CREDIT => '推荐奖励账单',
         self::MANUAL => '手工账单',
     ];

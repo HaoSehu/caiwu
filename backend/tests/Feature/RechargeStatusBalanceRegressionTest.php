@@ -117,6 +117,14 @@ class RechargeStatusBalanceRegressionTest extends TestCase
             'balance_after' => '15.00',
             'source_id' => (int) $payment->id,
         ]);
+        $this->assertDatabaseHas('recharge_records', [
+            'user_id' => (int) $user->id,
+            'invoice_id' => (int) $payment->invoice_id,
+            'payment_id' => (int) $payment->id,
+            'scene' => 'user_recharge',
+            'amount' => '5.00',
+            'currency' => 'CNY',
+        ]);
 
         $resultAgain = $service->queryRechargeStatus($payment->fresh());
 

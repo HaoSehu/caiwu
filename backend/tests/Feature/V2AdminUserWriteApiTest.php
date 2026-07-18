@@ -115,7 +115,12 @@ class V2AdminUserWriteApiTest extends TestCase
                 ->withArgs(fn (User $actualUser, float $amount, string $remark, array $context): bool => (int) $actualUser->id === (int) $user->id
                     && $amount === 25.5
                     && $remark === '测试调整'
-                    && ($context['operator_name'] ?? '') !== '');
+                    && ($context['operator_name'] ?? '') !== '')
+                ->andReturn([
+                    'invoice' => (object) ['id' => 101],
+                    'transaction' => (object) ['id' => 202],
+                    'recharge_record' => (object) ['id' => 303],
+                ]);
         });
 
         $this->mock(AuthService::class, function (MockInterface $mock) use ($user): void {
@@ -181,7 +186,10 @@ class V2AdminUserWriteApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('code', 0)
             ->assertJsonPath('data.status', 'completed')
-            ->assertJsonPath('data.detail.adjustment.amount', '25.50');
+            ->assertJsonPath('data.detail.adjustment.amount', '25.50')
+            ->assertJsonPath('data.detail.documents.invoice_id', 101)
+            ->assertJsonPath('data.detail.documents.account_transaction_id', 202)
+            ->assertJsonPath('data.detail.documents.recharge_record_id', 303);
 
         $this->assertActionResponse($rechargeResponse->json());
 

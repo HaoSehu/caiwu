@@ -7,10 +7,13 @@ namespace App\Models;
 use App\Models\Concerns\NormalizesTraceId;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Str;
 
 class Refund extends Model
 {
     use NormalizesTraceId;
+
+    public const STATUS_COMPLETED = 1;
 
     protected $table = 'refunds';
 
@@ -18,15 +21,19 @@ class Refund extends Model
         'refund_no',
         'payment_id',
         'invoice_id',
+        'refund_invoice_id',
         'user_id',
         'amount',
         'status',
+        'refund_method',
+        'currency',
         'reason',
         'gateway_refund_no',
+        'operator_type',
+        'operator_id',
+        'operator_name',
         'refunded_at',
         'trace_id',
-        'remark',
-        'operator',
     ];
 
     protected function casts(): array
@@ -34,11 +41,18 @@ class Refund extends Model
         return [
             'payment_id' => 'integer',
             'invoice_id' => 'integer',
+            'refund_invoice_id' => 'integer',
             'user_id' => 'integer',
+            'operator_id' => 'integer',
             'amount' => 'decimal:2',
             'status' => 'integer',
             'refunded_at' => 'datetime',
         ];
+    }
+
+    public static function generateRefundNo(): string
+    {
+        return 'RFD'.now()->format('YmdHis').Str::upper(Str::random(8));
     }
 
     public function payment(): BelongsTo
@@ -49,6 +63,16 @@ class Refund extends Model
     public function invoice(): BelongsTo
     {
         return $this->belongsTo(Invoice::class);
+    }
+
+    public function refundInvoice(): BelongsTo
+    {
+        return $this->belongsTo(Invoice::class, 'refund_invoice_id');
+    }
+
+    public function rechargeRecords(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(RechargeRecord::class);
     }
 
     public function user(): BelongsTo

@@ -192,6 +192,11 @@ class V2AdminUserFinanceActionApiTest extends TestCase
                         && ($context['operator_id'] ?? 0) > 0;
                 })
                 ->andReturn([
+                    'document_links' => [
+                        'refund_id' => 101,
+                        'refund_invoice_id' => 202,
+                        'recharge_record_id' => 303,
+                    ],
                     'raw_response' => 'must-not-leak',
                     'api_key' => 'must-not-leak',
                 ]);
@@ -240,6 +245,9 @@ class V2AdminUserFinanceActionApiTest extends TestCase
             ->assertJsonPath('data.id', $fixture['invoice']->id)
             ->assertJsonPath('data.status', 'completed')
             ->assertJsonPath('data.detail.type', 'invoice_refund')
+            ->assertJsonPath('data.detail.documents.refund_id', 101)
+            ->assertJsonPath('data.detail.documents.refund_invoice_id', 202)
+            ->assertJsonPath('data.detail.documents.recharge_record_id', 303)
             ->assertJsonMissingPath('data.detail.raw_response')
             ->assertJsonMissingPath('data.detail.api_key');
 

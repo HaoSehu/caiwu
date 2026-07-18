@@ -96,18 +96,6 @@ export function useOrderList(options: { pageSize?: number } = {}) {
     void loadList();
   }
 
-  function resetFilters() {
-    filters.page = 1;
-    filters.page_size = Number(options.pageSize || 10);
-    filters.keyword = '';
-    filters.status = '';
-    filters.type = '';
-    filters.start_date = '';
-    filters.end_date = '';
-    filters.quickFilter = '';
-    void loadData();
-  }
-
   function applyQuickFilter(key: string) {
     filters.quickFilter = key;
     filters.page = 1;
@@ -167,7 +155,6 @@ export function useOrderList(options: { pageSize?: number } = {}) {
     loadSummary,
     handleSearch,
     handlePageSizeChange,
-    resetFilters,
     applyQuickFilter,
     cancelOrder,
   };

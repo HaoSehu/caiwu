@@ -19,12 +19,6 @@
   align-items: center;
 }
 
-.record-actions {
-  display: flex;
-  gap: var(--td-comp-margin-s);
-  justify-content: flex-end;
-}
-
 .stack-cell {
   display: flex;
   flex-direction: column;
@@ -252,18 +246,24 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .record-actions {
-    justify-content: flex-start;
-  }
 }
 
 @media (max-width: @screen-sm-rem) {
   .record-page {
-    padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-s);
+    padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
+  }
+
+  .record-card :deep(.t-card__body) {
+    padding: var(--td-comp-paddingTB-l) var(--td-comp-paddingLR-l);
   }
 
   .record-toolbar {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--td-comp-margin-s);
+
+    > :first-child {
+      grid-column: 1 / -1;
+    }
   }
 
   .record-pagination {
