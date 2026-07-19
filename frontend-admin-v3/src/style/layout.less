@@ -55,6 +55,12 @@
   }
 }
 
+// 防止 .table-scroll 包装 TDesign 表格时产生双层横向滑动条
+// .table-scroll 提供外层滚动（含分页），TDesign 内置的 .t-table__content 不应再独立滚动
+.table-scroll .t-table__content {
+  overflow: visible;
+}
+
 @media (max-width: 768px) {
   html,
   body,
