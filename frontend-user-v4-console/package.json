@@ -17,7 +17,7 @@
     "stylelint:fix": "stylelint --fix src/**/*.{html,vue,css,sass,less}",
     "prepare": "husky",
     "site:preview": "npm run build && cp -r dist _site",
-    "test": "node --experimental-strip-types ./tests/domains/useCoupons.spec.ts && node --experimental-strip-types ./tests/domains/financeDateFilters.spec.ts",
+    "test": "node --experimental-strip-types ./tests/domains/useCoupons.spec.ts && node --experimental-strip-types ./tests/domains/financeDateFilters.spec.ts && node --experimental-strip-types ./tests/vnc/vncApiPaths.spec.ts",
     "verify:refactor": "node scripts/verify-refactor.mjs",
     "test:coverage": "echo \"no test:coverage specified,work in process\""
   },

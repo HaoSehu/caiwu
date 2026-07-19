@@ -547,13 +547,12 @@
     }
   }
 
-  function getAuthToken(mode = 'client') {
-    const tokenKey = mode === 'admin' ? 'admin_token' : 'client_token'
-    return String(readCookieValue(tokenKey) || '').trim()
+  function getAuthToken() {
+    return String(readCookieValue('client_token') || '').trim()
   }
 
-  function buildRequestHeaders(extraHeaders = {}, mode = 'client') {
-    const token = getAuthToken(mode)
+  function buildRequestHeaders(extraHeaders = {}) {
+    const token = getAuthToken()
     return {
       Accept: 'application/json',
       'X-Requested-With': 'XMLHttpRequest',
@@ -582,12 +581,12 @@
     }
   }
 
-  async function readJson(url, options = {}, fallbackMessage = '请求失败', mode = 'client') {
+  async function readJson(url, options = {}, fallbackMessage = '请求失败') {
     const resolvedUrl = resolveApiUrl(url)
     const res = await fetch(resolvedUrl, {
       // 跨域请求默认不带凭证，避免 CORS 预检失败；同域保留 include 以兼容 Cookie Session
       credentials: isCrossOriginRequest(resolvedUrl) ? 'omit' : 'include',
-      headers: buildRequestHeaders(options.headers || {}, mode),
+      headers: buildRequestHeaders(options.headers || {}),
       ...options,
     })
     const json = await res.json().catch(() => ({}))
@@ -698,16 +697,11 @@
 
   async function renewParamsByServiceId(serviceId) {
     const id = Number(serviceId || 0)
-    const adminUserId = Number(q('admin_user_id') || 0)
-    const isAdminMode = Number.isFinite(adminUserId) && adminUserId > 0
     if (!Number.isFinite(id) || id <= 0) {
       throw new Error('服务编号无效，无法重新获取 VNC 连接')
     }
 
-    const renewUrl = isAdminMode
-      ? `/api/admin/users/${adminUserId}/services/${id}/vnc`
-      : `/api/client/services/${id}/vnc`
-    const data = await readJson(renewUrl, {}, '重新获取 VNC 链接失败', isAdminMode ? 'admin' : 'client')
+    const data = await readJson(`/api/v2/client/services/${id}/vnc`, {}, '重新获取 VNC 连接失败')
     const freshUrl = String(data.url || '').trim()
     if (!freshUrl) {
       throw new Error('未获取到新的 VNC 链接')
@@ -716,9 +710,6 @@
 
     const freshLocation = new URL(freshUrl, location.origin)
     freshLocation.searchParams.set('service_id', String(id))
-    if (isAdminMode) {
-      freshLocation.searchParams.set('admin_user_id', String(adminUserId))
-    }
     // 如果后端未回填 api_base，则继承当前页面的 api_base，避免 renew 后跨域请求失效
     const currentApiBase = q('api_base', '')
     if (currentApiBase && !freshLocation.searchParams.get('api_base')) {
@@ -729,7 +720,7 @@
     const freshToken = freshLocation.searchParams.get('token')
     const freshRelayPath = freshLocation.searchParams.get('relay_path')
     if (freshToken) {
-      const relaySession = await readJson(`/api/client/vnc-tokens/${encodeURIComponent(freshToken)}`, {}, '新的 VNC 链接已失效', isAdminMode ? 'admin' : 'client')
+      const relaySession = await readJson(`/api/v2/client/vnc-tokens/${encodeURIComponent(freshToken)}`, {}, '新的 VNC 链接已失效')
       return withStoredVncCredentials(freshToken, {
         token: freshToken,
         ...relaySession,
@@ -754,7 +745,7 @@
     const serviceId = q('service_id') || q('sid')
     if (token) {
       try {
-        const relaySession = await readJson(`/api/client/vnc-tokens/${encodeURIComponent(token)}`, {}, 'VNC 链接已失效，请重新获取')
+        const relaySession = await readJson(`/api/v2/client/vnc-tokens/${encodeURIComponent(token)}`, {}, 'VNC 链接已失效，请重新获取')
         return withStoredVncCredentials(token, {
           token,
           ...relaySession,
