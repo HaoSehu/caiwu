@@ -244,13 +244,13 @@
 }
 
 .detail-toolbar.compact {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
 }
 
 .detail-toolbar.compact .t-input,
 .detail-toolbar.compact .t-select {
-  width: 100%;
+  width: 180px;
 }
 
 .table-scroll {
@@ -476,6 +476,17 @@
     > :first-child,
     > :last-child {
       grid-column: 1 / -1;
+    }
+  }
+
+  .detail-toolbar.compact {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--td-comp-margin-m);
+
+    > :first-child,
+    > :last-child {
+      grid-column: auto;
     }
   }
 

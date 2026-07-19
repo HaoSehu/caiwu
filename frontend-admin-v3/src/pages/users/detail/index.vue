@@ -9,16 +9,6 @@
         <div class="user-detail-actions">
           <t-button theme="primary" :disabled="!user.id" :loading="loginAsLoading" @click="handleLoginAs">代登录</t-button>
           <t-button theme="default" :disabled="!user.id" @click="openEditDialog">编辑资料</t-button>
-          <t-button theme="default" :disabled="!user.id" @click="openRechargeDialog">资金管理</t-button>
-          <t-button
-            :theme="isEnabled ? 'danger' : 'success'"
-            variant="outline"
-            :disabled="!user.id"
-            :loading="actionLoading"
-            @click="handleToggleStatus"
-          >
-            {{ isEnabled ? '禁用账号' : '启用账号' }}
-          </t-button>
         </div>
       </div>
     </t-loading>
@@ -26,7 +16,10 @@
     <div class="user-detail-stats">
       <t-card v-for="item in statCards" :key="item.key" :bordered="false">
         <div class="user-stat-card">
-          <span>{{ item.label }}</span>
+          <div class="user-stat-card__label">
+            <span>{{ item.label }}</span>
+            <edit-icon v-if="item.key === 'cash_balance'" class="balance-action-icon" :class="{ 'is-disabled': !user.id }" @click="user.id && openRechargeDialog()" />
+          </div>
           <strong :class="`is-${item.tone}`">{{ item.value }}</strong>
         </div>
       </t-card>
@@ -47,14 +40,33 @@
       <section v-if="activeTab === 'basic'" class="user-detail-section">
         <div class="basic-grid">
           <t-card header="基础信息" :bordered="true">
-            <t-descriptions :column="descriptionColumn" bordered>
-              <t-descriptions-item v-for="item in infoItems" :key="item.label" :label="item.label">
-                <span :class="item.tone ? `text-${item.tone}` : ''">{{ item.value }}</span>
-              </t-descriptions-item>
-            </t-descriptions>
+            <div class="info-grid">
+              <div v-for="item in infoItems" :key="item.label" class="info-field">
+                <span class="info-label">{{ item.label }}</span>
+                <t-popup :content="String(item.value)" trigger="click" placement="bottom-left" show-arrow>
+                  <span class="info-value" :class="item.tone ? `text-${item.tone}` : ''">{{ item.value }}</span>
+                </t-popup>
+              </div>
+            </div>
           </t-card>
-          <t-card header="管理员备注" :bordered="true">
-            <div class="user-note" :class="{ 'is-empty': !user.admin_note }">{{ user.admin_note || '暂无备注' }}</div>
+          <t-card :bordered="true">
+            <template #header>
+              <div class="note-header">
+                <span>管理员备注</span>
+                <t-button v-if="!noteEditing" variant="text" theme="primary" size="small" @click="startEditNote">编辑</t-button>
+              </div>
+            </template>
+            <div v-if="!noteEditing" class="user-note" :class="{ 'is-empty': !user.admin_note }">{{ user.admin_note || '暂无备注' }}</div>
+            <div v-else class="note-edit">
+              <t-textarea v-model="noteForm" placeholder="输入管理员备注" :maxlength="500" :autosize="{ minRows: 3, maxRows: 6 }" />
+              <div class="note-edit-footer">
+                <span class="note-char-count" :class="{ 'is-over': noteForm.length >= 500 }">{{ noteForm.length }} / 500</span>
+                <div class="note-edit-actions">
+                  <t-button size="small" theme="default" @click="noteEditing = false">取消</t-button>
+                  <t-button size="small" theme="primary" :loading="noteSaving" :disabled="noteForm.length > 500" @click="saveNote">保存</t-button>
+                </div>
+              </div>
+            </div>
           </t-card>
         </div>
       </section>
@@ -83,15 +95,7 @@
           <t-select v-model="services.filters.status" clearable placeholder="状态" @change="searchServices">
             <t-option v-for="option in serviceStatusOptions" :key="option.value" :label="option.label" :value="option.value" />
           </t-select>
-          <t-button theme="primary" @click="searchServices">
-            <template #icon><search-icon /></template>
-            搜索
-          </t-button>
           <t-button theme="primary" @click="openAddServiceDialog">添加实例</t-button>
-          <t-button theme="default" :loading="services.loading" @click="loadServices">
-            <template #icon><refresh-icon /></template>
-            刷新
-          </t-button>
           <t-button theme="default" :loading="services.refreshingStatus" @click="handleRefreshServicesStatus">批量刷新状态</t-button>
         </div>
         <div class="table-scroll">
@@ -208,8 +212,14 @@
 
       <section v-else-if="activeTab === 'logs'" class="user-detail-section">
         <div class="detail-toolbar compact">
-          <t-input v-model="logs.filters.keyword" clearable placeholder="搜索 action 关键字" @enter="searchLogs" />
-          <t-button theme="primary" @click="searchLogs">查询</t-button>
+          <t-date-picker v-model="logs.filters.start_date" clearable placeholder="开始日期" @change="searchLogs" />
+          <t-date-picker v-model="logs.filters.end_date" clearable placeholder="结束日期" @change="searchLogs" />
+          <t-input v-model="logs.filters.keyword" clearable placeholder="描述" @enter="searchLogs" @clear="searchLogs" />
+          <t-input v-model="logs.filters.ip_address" clearable placeholder="IP 地址" @enter="searchLogs" @clear="searchLogs" />
+          <t-select v-model="logs.filters.source" clearable placeholder="来源" @change="searchLogs">
+            <t-option value="web" label="Web" />
+            <t-option value="api" label="API" />
+          </t-select>
         </div>
         <div class="table-scroll">
           <t-table
@@ -641,7 +651,7 @@
 </template>
 
 <script setup lang="ts">
-import { ChevronLeftIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
+import { ChevronLeftIcon, SearchIcon, EditIcon } from 'tdesign-icons-vue-next';
 import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
@@ -657,7 +667,7 @@ import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
 import { required } from '@/utils/formRules';
 import { hasAdminPermission } from '@/utils/permission';
 import { toUserMessage, errorMessage } from '@/utils/userMessage';
-import { useMediaQuery } from '@/hooks';
+
 import { INVOICE_STATUS_MAP, SERVICE_STATUS_MAP, toLabelMap, toSelectOptions, toTagTypeMap } from '@shared/statusConfig';
 
 import './index.less';
@@ -721,7 +731,10 @@ const manualProvisionFormRef = ref<FormInstanceFunctions>();
 const serviceRefundFormRef = ref<FormInstanceFunctions>();
 const invoiceRefundFormRef = ref<FormInstanceFunctions>();
 const editForm = reactive({ nickname: '', phone: '', password: '', status: 1 });
-const rechargeForm = reactive({ email: '', type: 'increase', amount: 100, remark: '' });
+const noteEditing = ref(false);
+const noteSaving = ref(false);
+const noteForm = ref('');
+const rechargeForm = reactive({ email: '', type: 'increase', amount: 0, remark: '' });
 const addServiceForm = reactive({
   product_id: undefined as number | undefined,
   billing_cycle: '',
@@ -771,7 +784,7 @@ const services = reactive<PageState>({ loading: false, refreshing: false, refres
 const invoices = reactive<PageState>({ loading: false, list: [], total: 0, page: 1, pageSize: 10, filters: { status: '', type: '' } });
 const balance = reactive<PageState>({ loading: false, list: [], total: 0, page: 1, pageSize: 10, filters: {} });
 const tickets = reactive<PageState>({ loading: false, list: [], total: 0, page: 1, pageSize: 10, filters: {} });
-const logs = reactive<PageState>({ loading: false, list: [], total: 0, page: 1, pageSize: 10, filters: { keyword: '' } });
+const logs = reactive<PageState>({ loading: false, list: [], total: 0, page: 1, pageSize: 10, filters: { keyword: '', start_date: '', end_date: '', ip_address: '', source: '' } });
 const notices = reactive<PageState>({ loading: false, list: [], total: 0, page: 1, pageSize: 10, filters: {}, channel: 'email' });
 
 const editRules: Record<string, FormRule[]> = {
@@ -879,8 +892,6 @@ const userId = computed(() => String(route.params.id || ''));
 const isEnabled = computed(() => Number(user.value.status) === 1);
 const isVerified = computed(() => Number(user.value.is_verified || 0) === 1 || Number(user.value.verification_status || 0) === 2);
 const pageTitle = computed(() => user.value.nickname || user.value.display_name || user.value.email || `用户 #${userId.value}`);
-const isSmallScreen = useMediaQuery('(max-width: 768px)');
-const descriptionColumn = computed(() => (isSmallScreen.value ? 1 : 2));
 const recentReferrals = computed(() => (Array.isArray(referral.value.recent_referrals) ? referral.value.recent_referrals : []));
 const addServiceBillingOptions = computed(() => resolveBillingOptions(addServiceProductDetail.value));
 const addServiceOsFlatOptions = computed(() => flattenOptionTree(addServiceOsOptions.value));
@@ -935,7 +946,6 @@ const statCards = computed(() => [
   { key: 'ticket_open', label: '在线工单', value: stats.value.ticket_open || 0, tone: 'warning' },
   { key: 'cash_balance', label: '余额', value: formatMoney(user.value.cash_balance), tone: 'success' },
   { key: 'total_expense', label: '总消费', value: formatMoney(stats.value.total_expense), tone: 'primary' },
-  { key: 'admin_note', label: '管理员备注', value: user.value.admin_note || '暂无', tone: 'muted' },
 ]);
 const referralItems = computed(() => [
   { label: '推荐码', value: referral.value.referral_code || '-' },
@@ -947,6 +957,7 @@ const referralItems = computed(() => [
 const infoItems = computed(() => [
   { label: '邮箱', value: fieldValue(user.value.email) },
   { label: '手机号', value: fieldValue(user.value.phone) },
+  { label: '账号状态', value: Number(user.value.status) === 1 ? '正常' : '禁用', tone: Number(user.value.status) === 1 ? 'success' : 'danger' },
   { label: '公司', value: fieldValue(user.value.company) },
   { label: 'QQ', value: fieldValue(user.value.qq) },
   { label: '账户余额', value: formatMoney(user.value.cash_balance), tone: 'success' },
@@ -1072,6 +1083,23 @@ function openEditDialog() {
   editVisible.value = true;
 }
 
+function startEditNote() {
+  noteForm.value = user.value.admin_note || '';
+  noteEditing.value = true;
+}
+
+async function saveNote() {
+  noteSaving.value = true;
+  try {
+    await userApi.update(userId.value, { admin_note: noteForm.value });
+    user.value.admin_note = noteForm.value;
+    noteEditing.value = false;
+    MessagePlugin.success('备注已保存');
+  } finally {
+    noteSaving.value = false;
+  }
+}
+
 async function handleSave() {
   const result = await editFormRef.value?.validate?.();
   if (!isValidationPass(result)) return;
@@ -1094,7 +1122,7 @@ async function handleSave() {
 function openRechargeDialog() {
   rechargeForm.email = user.value.email || user.value.phone || '-';
   rechargeForm.type = 'increase';
-  rechargeForm.amount = 100;
+  rechargeForm.amount = 0;
   rechargeForm.remark = '';
   rechargeVisible.value = true;
 }
