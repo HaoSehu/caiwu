@@ -611,6 +611,26 @@ class UserService
             $query->where('action', 'like', "%{$filters['keyword']}%");
         }
 
+        if (! empty($filters['start_date'])) {
+            $query->whereDate('created_at', '>=', $filters['start_date']);
+        }
+
+        if (! empty($filters['end_date'])) {
+            $query->whereDate('created_at', '<=', $filters['end_date']);
+        }
+
+        if (! empty($filters['ip_address'])) {
+            $query->where('ip_address', 'like', "%{$filters['ip_address']}%");
+        }
+
+        if (! empty($filters['source'])) {
+            if ($filters['source'] === 'api') {
+                $query->whereNotNull('context->method');
+            } else {
+                $query->whereNull('context->method');
+            }
+        }
+
         return $query->orderByDesc('created_at')->paginate($perPage);
     }
 
