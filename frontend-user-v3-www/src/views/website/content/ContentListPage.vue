@@ -554,6 +554,10 @@ watch(
   color: $text-color-secondary;
   font-size: 14px;
   line-height: 1.8;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
 }
 
 .list-item__meta {
