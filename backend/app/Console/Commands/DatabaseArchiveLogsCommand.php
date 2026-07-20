@@ -72,26 +72,32 @@ class DatabaseArchiveLogsCommand extends Command
      */
     private function outputResult(array $result, string $mode): int
     {
+        $hasRestoreFailure = $mode === 'restore' && collect((array) ($result['tables'] ?? []))
+            ->contains(static fn (array $tableReport): bool => (string) ($tableReport['status'] ?? '') !== 'restored');
+
         if ((bool) $this->option('json')) {
             $this->line(json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
 
-            return self::SUCCESS;
+            return $hasRestoreFailure ? self::FAILURE : self::SUCCESS;
         }
 
         if ($mode === 'restore') {
             $this->info('日志归档恢复完成');
             $this->line('Manifest: '.($result['manifest_path'] ?? ''));
+            $hasFailure = false;
 
             foreach ((array) ($result['tables'] ?? []) as $table => $tableReport) {
+                $status = (string) ($tableReport['status'] ?? '');
+                $hasFailure = $hasFailure || $status !== 'restored';
                 $this->line(sprintf(
                     '- %s: restored=%d status=%s',
                     $table,
                     (int) ($tableReport['restored_rows'] ?? 0),
-                    (string) ($tableReport['status'] ?? '')
+                    $status
                 ));
             }
 
-            return self::SUCCESS;
+            return $hasFailure || $hasRestoreFailure ? self::FAILURE : self::SUCCESS;
         }
 
         $this->info($mode === 'archive' ? '日志归档执行完成' : '日志归档 dry-run 完成');

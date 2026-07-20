@@ -27,9 +27,7 @@ use App\Services\Upstream\ProviderResolver;
 use App\Support\AutomationScheduleExpression;
 use Closure;
 use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 use Throwable;
 
@@ -238,29 +236,26 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 description: '每月 1 日 04:00 归档 operation_logs，默认保留最近 90 天。',
                 triggers: [ScheduleRule::cron('0 4 1 * *')],
                 handler: fn (): array => $this->runArtisan('db:archive-logs', [
-                    '--table' => 'operation_logs',
-                    '--keep-days' => 90,
+                    '--table' => ['operation_logs'],
+                    '--retain-days' => 90,
+                    '--execute' => true,
+                    '--json' => true,
                 ]),
                 timeout: 1800,
                 lockTtlSeconds: 3600,
             ),
             $this->task(
                 key: 'schedule-run-logs-prune-weekly',
-                title: 'schedule_run_logs 清理',
+                title: 'schedule_run_logs 归档',
                 category: '日志维护',
-                description: '每周日 03:00 清理 30 天前的定时任务运行日志。',
+                description: '每周日 03:00 归档 30 天前的定时任务运行日志。',
                 triggers: [ScheduleRule::cron('0 3 * * 0')],
-                handler: function (): array {
-                    if (! Schema::hasTable('schedule_run_logs')) {
-                        return ['deleted' => 0, 'skipped' => true, 'reason' => 'schedule_run_logs_missing'];
-                    }
-
-                    $deleted = DB::table('schedule_run_logs')
-                        ->where('created_at', '<', now()->subDays(30))
-                        ->delete();
-
-                    return ['deleted' => $deleted];
-                },
+                handler: fn (): array => $this->runArtisan('db:archive-logs', [
+                    '--table' => ['schedule_run_logs'],
+                    '--retain-days' => 30,
+                    '--execute' => true,
+                    '--json' => true,
+                ]),
                 timeout: 600,
                 lockTtlSeconds: 900,
             ),
