@@ -32,7 +32,7 @@
 
 .specs-filter {
   display: grid;
-  grid-template-columns: minmax(360px, 1fr) 180px repeat(5, max-content);
+  grid-template-columns: minmax(360px, 1fr) 180px repeat(2, max-content);
   gap: 12px;
   align-items: stretch;
   margin-bottom: 16px;
@@ -44,43 +44,6 @@
 
 .specs-filter .t-button {
   min-width: 88px;
-}
-
-@media (max-width: 1280px) and (min-width: 769px) {
-  .specs-filter {
-    grid-template-columns: minmax(320px, 1fr) 180px repeat(3, max-content);
-    grid-template-areas:
-      "keyword status search reset refresh"
-      "keyword status add save save";
-  }
-
-  .specs-filter > :nth-child(1) {
-    grid-area: keyword;
-  }
-
-  .specs-filter > :nth-child(2) {
-    grid-area: status;
-  }
-
-  .specs-filter > :nth-child(3) {
-    grid-area: search;
-  }
-
-  .specs-filter > :nth-child(4) {
-    grid-area: reset;
-  }
-
-  .specs-filter > :nth-child(5) {
-    grid-area: refresh;
-  }
-
-  .specs-filter > :nth-child(6) {
-    grid-area: add;
-  }
-
-  .specs-filter > :nth-child(7) {
-    grid-area: save;
-  }
 }
 
 .table-scroll {
@@ -124,9 +87,7 @@
     grid-template-areas:
       "keyword keyword"
       "status status"
-      "search reset"
-      "refresh add"
-      "save save";
+      "add save";
     align-items: stretch;
     gap: 10px;
   }
@@ -144,22 +105,10 @@
   }
 
   .specs-filter > :nth-child(3) {
-    grid-area: search;
-  }
-
-  .specs-filter > :nth-child(4) {
-    grid-area: reset;
-  }
-
-  .specs-filter > :nth-child(5) {
-    grid-area: refresh;
-  }
-
-  .specs-filter > :nth-child(6) {
     grid-area: add;
   }
 
-  .specs-filter > :nth-child(7) {
+  .specs-filter > :nth-child(4) {
     grid-area: save;
   }
 
@@ -174,9 +123,6 @@
     grid-template-areas:
       "keyword"
       "status"
-      "search"
-      "reset"
-      "refresh"
       "add"
       "save";
   }

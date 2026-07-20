@@ -5,10 +5,6 @@
       <template #subtitle>共 {{ levels.length }} 个档位</template>
       <template #actions>
         <t-space>
-          <t-button variant="outline" :loading="loading" @click="loadLevels">
-            <template #icon><refresh-icon /></template>
-            刷新
-          </t-button>
           <t-button theme="primary" @click="openCreateDialog">
             <template #icon><add-icon /></template>
             新增等级
@@ -117,7 +113,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
-import { AddIcon, RefreshIcon } from 'tdesign-icons-vue-next';
+import { AddIcon } from 'tdesign-icons-vue-next';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import type { DropdownOption, FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
 

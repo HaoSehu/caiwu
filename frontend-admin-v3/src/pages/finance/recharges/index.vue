@@ -219,17 +219,6 @@ function handleSearch() {
   loadList();
 }
 
-function resetFilters() {
-  Object.assign(filters, {
-    keyword: '',
-    status: '',
-    start_date: '',
-    end_date: '',
-  });
-  pagination.page = 1;
-  loadList();
-}
-
 function handlePageChange(data: { current: number; pageSize: number }) {
   pagination.page = data.current;
   pagination.page_size = data.pageSize;

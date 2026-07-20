@@ -14,16 +14,8 @@
         >
           <template #suffix-icon><search-icon /></template>
         </t-input>
-        <t-button theme="primary" @click="handleSearch">
-          <template #icon><search-icon /></template>
-          搜索
-        </t-button>
         <t-button v-if="!isMobile" variant="outline" :disabled="!selectedRowKeys.length" @click="openHostnameDialog">
           批量主机名<span v-if="selectedRowKeys.length">({{ selectedRowKeys.length }})</span>
-        </t-button>
-        <t-button variant="outline" :loading="loading" @click="loadList">
-          <template #icon><refresh-icon /></template>
-          刷新
         </t-button>
         <t-button v-if="!isMobile" variant="text" :disabled="!selectedRowKeys.length" @click="clearSelection">清空选择</t-button>
       </div>
@@ -155,7 +147,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
+import { SearchIcon } from 'tdesign-icons-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import type { PageInfo, PrimaryTableCol } from 'tdesign-vue-next';
 

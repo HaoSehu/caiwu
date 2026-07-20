@@ -101,7 +101,7 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue';
-import { AddIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
+import { AddIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import type { FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
 
@@ -210,12 +210,6 @@ async function loadCatalog() {
   } finally {
     loading.value = false;
   }
-}
-
-function resetFilters() {
-  filters.keyword = '';
-  filters.binding_status = '';
-  void loadCatalog();
 }
 
 function openSpecDialog(spec?: SpecRecord) {

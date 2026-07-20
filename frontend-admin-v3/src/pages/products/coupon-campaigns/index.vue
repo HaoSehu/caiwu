@@ -266,7 +266,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
-import { AddIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
+import { AddIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import type { FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
 
@@ -435,12 +435,6 @@ async function loadData() {
 }
 
 function handleSearch() {
-  page.value = 1;
-  loadData();
-}
-
-function resetFilters() {
-  Object.assign(filters, { keyword: '', status: '' });
   page.value = 1;
   loadData();
 }

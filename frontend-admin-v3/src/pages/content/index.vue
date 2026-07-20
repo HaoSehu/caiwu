@@ -21,15 +21,6 @@
           <t-option label="仅看置顶" :value="1" />
           <t-option label="仅看普通" :value="0" />
         </t-select>
-        <t-button theme="primary" @click="handleSearch">
-          <template #icon><search-icon /></template>
-          搜索
-        </t-button>
-        <t-button variant="outline" @click="resetFilters">重置</t-button>
-        <t-button variant="outline" :loading="loading || categoryLoading" @click="loadAll">
-          <template #icon><refresh-icon /></template>
-          刷新
-        </t-button>
         <t-button variant="outline" @click="openCategoryDialog">
           <template #icon><folder-icon /></template>
           分类管理
@@ -195,7 +186,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { AddIcon, FolderIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
+import { AddIcon, FolderIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import type { FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
 
@@ -292,15 +283,6 @@ function goCreateArticle() {
 
 function goEditArticle(id: number | string) {
   router.push(`${getBasePath()}/${id}`);
-}
-
-function resetFilters() {
-  filters.keyword = '';
-  filters.category_id = '';
-  filters.status = '';
-  filters.is_pinned = '';
-  pagination.page = 1;
-  loadArticles();
 }
 
 function resetCategoryForm() {

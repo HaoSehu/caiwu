@@ -11,14 +11,6 @@
           <t-option label="成功" value="success" />
           <t-option label="失败" value="failed" />
         </t-select>
-        <t-button theme="primary" @click="handleSearch">
-          <template #icon><search-icon /></template>
-          搜索
-        </t-button>
-        <t-button variant="base" theme="default" @click="resetFilters">
-          <template #icon><refresh-icon /></template>
-          重置
-        </t-button>
       </div>
 
       <t-table
@@ -174,7 +166,7 @@
 </template>
 
 <script setup lang="ts">
-import { ChevronLeftIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
+import { ChevronLeftIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
@@ -309,13 +301,6 @@ async function loadSummary() {
 }
 
 function handleSearch() {
-  page.value = 1;
-  loadList();
-}
-
-function resetFilters() {
-  filters.keyword = '';
-  quickStatus.value = 'all';
   page.value = 1;
   loadList();
 }
@@ -492,7 +477,7 @@ onMounted(() => {
 
 .verification-filter {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) 180px auto auto;
+  grid-template-columns: minmax(220px, 1fr) 180px;
   gap: var(--td-comp-margin-m);
   align-items: stretch;
   margin-bottom: var(--td-comp-margin-l);
@@ -630,38 +615,8 @@ onMounted(() => {
 
 @media (max-width: 768px) {
   .verification-filter {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-areas:
-      "keyword keyword"
-      "status status"
-      "search reset";
-    align-items: stretch;
+    grid-template-columns: minmax(140px, 1fr) 130px;
     gap: var(--td-comp-margin-s);
-  }
-
-  .verification-filter > * {
-    min-width: 0;
-  }
-
-  .verification-filter > :nth-child(1) {
-    grid-area: keyword;
-  }
-
-  .verification-filter > :nth-child(2) {
-    grid-area: status;
-  }
-
-  .verification-filter > :nth-child(3) {
-    grid-area: search;
-  }
-
-  .verification-filter > :nth-child(4) {
-    grid-area: reset;
-  }
-
-  .verification-filter .t-button {
-    width: 100%;
-    margin-left: 0;
   }
 
   .verification-table {
@@ -696,12 +651,7 @@ onMounted(() => {
 
 @media (max-width: 360px) {
   .verification-filter {
-    grid-template-columns: 1fr;
-    grid-template-areas:
-      "keyword"
-      "status"
-      "search"
-      "reset";
+    grid-template-columns: 1fr 110px;
   }
 }
 </style>

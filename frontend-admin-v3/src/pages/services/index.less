@@ -32,7 +32,7 @@
 
 .service-filter {
   display: grid;
-  grid-template-columns: 150px minmax(280px, 1fr) repeat(4, auto);
+  grid-template-columns: 150px minmax(280px, 1fr) repeat(2, auto);
   gap: 12px;
   align-items: stretch;
   margin-bottom: 16px;
@@ -198,9 +198,7 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-areas:
       "keyword keyword"
-      "status status"
-      "search batch"
-      "refresh clear";
+      "status status";
     align-items: stretch;
     gap: 10px;
   }
@@ -215,22 +213,6 @@
 
   .service-filter > :nth-child(2) {
     grid-area: keyword;
-  }
-
-  .service-filter > :nth-child(3) {
-    grid-area: search;
-  }
-
-  .service-filter > :nth-child(4) {
-    grid-area: batch;
-  }
-
-  .service-filter > :nth-child(5) {
-    grid-area: refresh;
-  }
-
-  .service-filter > :nth-child(6) {
-    grid-area: clear;
   }
 
   .service-filter .t-button {
@@ -248,10 +230,6 @@
     grid-template-columns: 1fr;
     grid-template-areas:
       "keyword"
-      "status"
-      "search"
-      "batch"
-      "refresh"
-      "clear";
+      "status";
   }
 }

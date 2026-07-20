@@ -110,7 +110,12 @@
 
 @media (max-width: 768px) {
   .media-toolbar {
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .media-toolbar .t-input {
+    grid-column: 1 / -1;
   }
 
   .media-toolbar .t-input,
@@ -119,6 +124,10 @@
     width: 100%;
     flex: none;
     min-width: 0;
+  }
+
+  .media-toolbar .t-button:last-child {
+    grid-column: 1 / -1;
   }
 
   .media-preview {

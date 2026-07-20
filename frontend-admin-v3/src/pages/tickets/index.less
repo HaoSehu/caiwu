@@ -183,8 +183,7 @@
     grid-template-areas:
       "keyword keyword"
       "status priority"
-      "department department"
-      "search reset";
+      "department department";
     align-items: stretch;
     gap: var(--td-comp-margin-s);
   }
@@ -207,14 +206,6 @@
 
   .tickets-filter > :nth-child(4) {
     grid-area: department;
-  }
-
-  .tickets-filter > :nth-child(5) {
-    grid-area: search;
-  }
-
-  .tickets-filter > :nth-child(6) {
-    grid-area: reset;
   }
 
   .ticket-grid {
@@ -244,8 +235,6 @@
       "keyword"
       "status"
       "priority"
-      "department"
-      "search"
-      "reset";
+      "department";
   }
 }

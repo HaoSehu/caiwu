@@ -41,19 +41,26 @@ export const settingsApi = {
       list: Array.isArray(response.list) ? response.list.map((item) => normalizeV2Setting(item)) : [],
     })),
   notificationTemplates: (params?: { channel?: 'email' | 'sms' }) =>
-    request.get<NotificationTemplateListResponse>({ url: '/v2/admin/notification-templates', params }).then((response) => ({
-      ...response,
-      list: Array.isArray(response.list) ? response.list : [],
-    })),
+    request
+      .get<NotificationTemplateListResponse>({ url: '/v2/admin/notification-templates', params })
+      .then((response) => ({
+        ...response,
+        list: Array.isArray(response.list) ? response.list : [],
+      })),
   testNotificationTemplateSend: (data: NotificationTemplateTestSendPayload) =>
     request.post<NotificationTemplateTestSendResponse>({ url: '/v2/admin/notification-templates/test-send', data }),
   save: (data: Record<string, unknown>) => request.post({ url: '/v2/admin/settings', data }),
   revealSecret: (group: string, key: string) =>
-    request.get<{ group: string; key: string; value: unknown }>({ url: `/v2/admin/settings/${encodeURIComponent(group)}/secrets/${encodeURIComponent(key)}` }),
+    request.get<{ group: string; key: string; value: unknown }>({
+      url: `/v2/admin/settings/${encodeURIComponent(group)}/secrets/${encodeURIComponent(key)}`,
+    }),
 };
 
 export const schedulesApi = {
   overview: () => request.get<ScheduleOverview>({ url: '/v2/admin/schedules/overview' }),
   trigger: (data: { task: string }) =>
-    request.post<Record<string, unknown>>({ url: '/v2/admin/schedule-triggers', data }),
+    request.post<Record<string, unknown>>({ url: '/v2/admin/schedule-triggers', data }).then((response) => {
+      const detail = (response as { detail?: { task?: Record<string, unknown> } }).detail;
+      return (detail?.task || response) as Record<string, unknown>;
+    }),
 };

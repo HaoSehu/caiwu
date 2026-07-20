@@ -608,7 +608,10 @@
 @media (max-width: 768px) {
   .log-filter-grid,
   .log-filter-grid--api,
-  .log-filter-grid--tasks,
+  .log-filter-grid--tasks {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .cleanup-card-grid,
   .file-meta-grid,
   .cleanup-form,

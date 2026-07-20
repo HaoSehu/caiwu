@@ -6,17 +6,24 @@
 
 .users-filter {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) 160px auto auto auto;
+  grid-template-columns: minmax(220px, 1fr) 160px auto;
   gap: var(--td-comp-margin-m);
-  align-items: stretch;
+  align-items: center;
 }
 
 .users-filter > * {
   min-width: 0;
 }
 
+.users-filter .t-input,
+.users-filter .t-select,
+.users-filter .t-button {
+  height: var(--td-comp-size-m);
+}
+
 .users-filter .t-button {
   min-width: 88px;
+  min-height: 0;
 }
 
 .users-table-card {
@@ -229,10 +236,8 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-areas:
       "keyword keyword"
-      "status status"
-      "search reset"
-      "create create";
-    align-items: stretch;
+      "status create";
+    align-items: center;
     gap: var(--td-comp-margin-s);
   }
 
@@ -249,14 +254,6 @@
   }
 
   .users-filter > :nth-child(3) {
-    grid-area: search;
-  }
-
-  .users-filter > :nth-child(4) {
-    grid-area: reset;
-  }
-
-  .users-filter > :nth-child(5) {
     grid-area: create;
   }
 
@@ -296,8 +293,6 @@
     grid-template-areas:
       "keyword"
       "status"
-      "search"
-      "reset"
       "create";
   }
 }

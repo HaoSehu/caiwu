@@ -18,14 +18,6 @@
           <t-option label="启用" :value="1" />
           <t-option label="停用" :value="0" />
         </t-select>
-        <t-button theme="primary" @click="handleSearch">
-          <template #icon><search-icon /></template>
-          搜索
-        </t-button>
-        <t-button variant="base" @click="resetFilters">
-          <template #icon><refresh-icon /></template>
-          重置
-        </t-button>
         <t-button v-if="canManage" theme="primary" @click="openCreateDialog">
           <template #icon><user-add-icon /></template>
           新增员工
@@ -179,7 +171,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
-import { RefreshIcon, SearchIcon, UserAddIcon } from 'tdesign-icons-vue-next';
+import { SearchIcon, UserAddIcon } from 'tdesign-icons-vue-next';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 
@@ -324,14 +316,6 @@ async function loadList() {
 }
 
 function handleSearch() {
-  page.value = 1;
-  loadList();
-}
-
-function resetFilters() {
-  filters.keyword = '';
-  filters.status = '';
-  filters.role_id = '';
   page.value = 1;
   loadList();
 }

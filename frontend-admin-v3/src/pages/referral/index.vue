@@ -49,14 +49,6 @@
           <t-select v-model="rewardFilters.status" clearable placeholder="奖励状态" @change="handleRewardSearch">
             <t-option v-for="item in rewardStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
           </t-select>
-          <t-button theme="primary" @click="handleRewardSearch">
-            <template #icon><search-icon /></template>
-            搜索
-          </t-button>
-          <t-button variant="outline" @click="resetRewardFilters">
-            <template #icon><refresh-icon /></template>
-            重置
-          </t-button>
         </div>
       </t-card>
 
@@ -135,14 +127,6 @@
           <t-select v-model="withdrawalFilters.status" clearable placeholder="提现状态" @change="handleWithdrawalSearch">
             <t-option v-for="item in withdrawalStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
           </t-select>
-          <t-button theme="primary" @click="handleWithdrawalSearch">
-            <template #icon><search-icon /></template>
-            搜索
-          </t-button>
-          <t-button variant="outline" @click="resetWithdrawalFilters">
-            <template #icon><refresh-icon /></template>
-            重置
-          </t-button>
         </div>
       </t-card>
 
@@ -247,7 +231,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
+import { SearchIcon } from 'tdesign-icons-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
 
@@ -448,21 +432,7 @@ function handleRewardSearch() {
   loadRewards();
 }
 
-function resetRewardFilters() {
-  rewardFilters.keyword = '';
-  rewardFilters.status = '';
-  rewardPagination.page = 1;
-  loadRewards();
-}
-
 function handleWithdrawalSearch() {
-  withdrawalPagination.page = 1;
-  loadWithdrawals();
-}
-
-function resetWithdrawalFilters() {
-  withdrawalFilters.keyword = '';
-  withdrawalFilters.status = '';
   withdrawalPagination.page = 1;
   loadWithdrawals();
 }
