@@ -409,34 +409,13 @@ class YiPayClient
                 ? $this->buildHttpClient()->get($url, $payload)
                 : $this->buildHttpClient()->post($url, $payload);
         } catch (ConnectionException $exception) {
-            if (! $this->shouldRetryWithoutSslVerification($exception)) {
-                Log::error('[易支付] 网关请求失败', [
-                    'url' => $url,
-                    'message' => $exception->getMessage(),
-                    'exception' => $exception::class,
-                ]);
-
-                throw new BusinessException('易支付网关暂时不可用，请稍后重试', 42200, 422);
-            }
-
-            Log::warning('[易支付] SSL 证书错误，非生产环境降级重试', [
+            Log::error('[易支付] 网关请求失败', [
                 'url' => $url,
                 'message' => $exception->getMessage(),
+                'exception' => $exception::class,
             ]);
 
-            try {
-                $response = $method === 'get'
-                    ? $this->buildHttpClient(verifySsl: false)->get($url, $payload)
-                    : $this->buildHttpClient(verifySsl: false)->post($url, $payload);
-            } catch (ConnectionException $retryException) {
-                Log::error('[易支付] 网关请求失败', [
-                    'url' => $url,
-                    'message' => $retryException->getMessage(),
-                    'exception' => $retryException::class,
-                ]);
-
-                throw new BusinessException('易支付网关暂时不可用，请稍后重试', 42200, 422);
-            }
+            throw new BusinessException('易支付网关暂时不可用，请稍后重试', 42200, 422);
         }
 
         $result = $response->json();
@@ -468,16 +447,10 @@ class YiPayClient
         return in_array((string) $code, ['1', '200'], true);
     }
 
-    private function shouldRetryWithoutSslVerification(ConnectionException $exception): bool
-    {
-        return ! app()->environment('production')
-            && str_contains($exception->getMessage(), 'SSL certificate problem');
-    }
-
-    private function buildHttpClient(bool $verifySsl = true): PendingRequest
+    private function buildHttpClient(): PendingRequest
     {
         return Http::asForm()
-            ->withOptions(['verify' => $verifySsl])
+            ->withOptions(['verify' => true])
             ->timeout(15)
             ->retry(1, 200);
     }

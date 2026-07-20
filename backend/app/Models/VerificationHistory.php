@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Casts\LegacyEncrypted;
 use Illuminate\Database\Eloquent\Model;
 
 class VerificationHistory extends Model
@@ -23,7 +22,6 @@ class VerificationHistory extends Model
     protected function casts(): array
     {
         return [
-            'id_card' => LegacyEncrypted::class,
             'submitted_at' => 'datetime',
             'completed_at' => 'datetime',
             'created_at' => 'datetime',

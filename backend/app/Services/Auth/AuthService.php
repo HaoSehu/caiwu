@@ -71,11 +71,11 @@ class AuthService
             : Hash::check($password, self::PASSWORD_TIMING_GUARD_HASH);
 
         if (! $user) {
-            throw new BusinessException('未找到该账号', 40100, 422);
+            throw new BusinessException('账号或密码错误', 40100, 422);
         }
 
         if (! $passwordValid) {
-            throw new BusinessException('密码错误', 40100, 422);
+            throw new BusinessException('账号或密码错误', 40100, 422);
         }
 
         if ($user->status !== 1) {
@@ -138,7 +138,7 @@ class AuthService
         $user = $this->findClientByAccount($accountType, $normalizedAccount);
 
         if (! $user) {
-            throw new BusinessException('未找到该账号', 40100, 422);
+            throw new BusinessException('账号或验证码错误', 40100, 422);
         }
 
         if ($user->status !== 1) {
