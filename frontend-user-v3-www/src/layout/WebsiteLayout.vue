@@ -356,7 +356,11 @@
                     @click="navNoticesActivateCategory(cat.label)"
                   >
                     <span class="mobile-second-level-label">{{ cat.label }}</span>
-                    <span class="mobile-second-level-count">{{ cat.count }}</span>
+                    <span class="mobile-second-level-right">
+                      <svg class="mobile-second-level-arrow" :class="{ expanded: navNoticesActiveCategory === cat.label }" viewBox="0 0 10 6" fill="none" width="10" height="6" aria-hidden="true">
+                        <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    </span>
                   </button>
                   <div v-if="navNoticesActiveCategory === cat.label && navNoticesFiltered.length" class="mobile-third-level-list">
                     <router-link
@@ -386,7 +390,11 @@
                     @click="navHelpActivateCategory(cat.label)"
                   >
                     <span class="mobile-second-level-label">{{ cat.label }}</span>
-                    <span class="mobile-second-level-count">{{ cat.count }}</span>
+                    <span class="mobile-second-level-right">
+                      <svg class="mobile-second-level-arrow" :class="{ expanded: navHelpActiveCategory === cat.label }" viewBox="0 0 10 6" fill="none" width="10" height="6" aria-hidden="true">
+                        <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    </span>
                   </button>
                   <div v-if="navHelpActiveCategory === cat.label && navHelpFiltered.length" class="mobile-third-level-list">
                     <router-link

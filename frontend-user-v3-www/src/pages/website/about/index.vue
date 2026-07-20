@@ -73,6 +73,12 @@ h1 {
   gap: 20px;
 }
 
+@media (max-width: 768px) {
+  .about-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .about-card {
   padding: 28px;
   border: 1px solid #e5eaf3;

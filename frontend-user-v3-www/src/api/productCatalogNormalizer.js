@@ -17,7 +17,7 @@ function toPayloadObject(data) {
 }
 
 export function normalizeProductType(item = {}, index = 0) {
-  const value = toText(pickFirst(item.first_product_group_code, item.value))
+  const value = toText(pickFirst(item.first_product_group_code, item.value, item.product_type))
   const productType = toText(item.product_type)
   const label = toText(pickFirst(item.first_product_group_name, item.label, item.product_type_label, item.type_label, value))
   const firstProductGroupId = toNumber(item.first_product_group_id, 0)
@@ -47,7 +47,7 @@ export function normalizeProductGroup(item = {}, index = 0) {
     index + 1,
   )
   const id = effectiveProductGroupId
-  const firstCode = toText(pickFirst(item.first_product_group_code, item.value))
+  const firstCode = toText(pickFirst(item.first_product_group_code, item.value, item.product_type))
   const productType = toText(item.product_type)
   const firstName = toText(pickFirst(item.first_product_group_name, item.label, firstCode))
   const productTypeLabel = toText(pickFirst(item.product_type_label, item.type_label, productType))
@@ -86,7 +86,7 @@ export function normalizeProductGroup(item = {}, index = 0) {
 }
 
 export function normalizeProduct(item = {}) {
-  const firstCode = toText(pickFirst(item.first_product_group_code, item.value))
+  const firstCode = toText(pickFirst(item.first_product_group_code, item.value, item.product_type))
   const productType = toText(item.product_type)
   const firstName = toText(pickFirst(item.first_product_group_name, item.label, firstCode))
   const productTypeLabel = toText(pickFirst(item.product_type_label, item.type_label, productType))

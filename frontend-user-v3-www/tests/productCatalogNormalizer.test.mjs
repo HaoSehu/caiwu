@@ -30,6 +30,8 @@ assert.equal(payload.root_groups[0].product_type, 'vps')
 assert.equal(payload.root_groups[0].product_type_label, 'Cloud')
 assert.equal(payload.root_groups[0].first_product_group_code, 'vps')
 assert.equal(payload.group_catalog_map[11].featured_product.product_type, 'vps')
+assert.equal(payload.root_groups[0].first_product_group_code, 'vps')
+assert.equal(payload.group_catalog_map[11].featured_product.product_type, 'vps')
 
 const activeTypeValue = 'vps'
 const activeGroups = payload.root_groups.filter((group) => group.product_type === activeTypeValue)
