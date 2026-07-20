@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Client\V2;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Client\Ticket\ReplyRequest;
-use App\Http\Requests\Client\Ticket\ServiceOptionsRequest;
-use App\Http\Requests\Client\Ticket\StoreRequest;
-use App\Http\Requests\Client\Ticket\UploadImageRequest;
+use App\Http\Requests\Client\V2\Ticket\ReplyRequest;
+use App\Http\Requests\Client\V2\Ticket\ServiceOptionsRequest;
+use App\Http\Requests\Client\V2\Ticket\StoreRequest;
+use App\Http\Requests\Client\V2\Ticket\UploadImageRequest;
 use App\Models\Ticket;
 use App\Services\Ticket\TicketService;
 use App\Traits\ApiResponse;

@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Http\Requests\Admin\V2\Product;
 
 use App\Constants\ProductType;
-use Illuminate\Foundation\Http\FormRequest;
+use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
 use Illuminate\Validation\Rule;
 
-class ListProductsRequest extends FormRequest
+class ListProductsRequest extends AdminFormRequest
 {
     public function authorize(): bool
     {

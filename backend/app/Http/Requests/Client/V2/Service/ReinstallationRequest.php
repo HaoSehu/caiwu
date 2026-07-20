@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Client\V2\Service;
 
-use App\Http\Requests\Client\Service\ReinstallRequest;
+use App\Http\Requests\Client\V2\Action\ClientActionRequest;
 
-class ReinstallationRequest extends ReinstallRequest
+class ReinstallationRequest extends ClientActionRequest
 {
     public function rules(): array
     {
         return array_merge(parent::rules(), [
-            'per_page' => ['prohibited'],
+            'os_id' => ['required', 'string', 'max:50'],
         ]);
     }
 }

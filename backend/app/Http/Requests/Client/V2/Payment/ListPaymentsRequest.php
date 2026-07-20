@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests\Client\V2\Payment;
 
 use App\Constants\PaymentGatewayCode;
-use App\Http\Requests\Client\Common\ClientFormRequest;
+use App\Http\Requests\Client\V2\Common\ClientFormRequest;
 use App\Http\Requests\Concerns\HasDateRangeFilter;
 use Illuminate\Validation\Rule;
 

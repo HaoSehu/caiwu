@@ -6,11 +6,11 @@ namespace App\Http\Requests\Admin\V2\Invoice;
 
 use App\Constants\InvoiceType;
 use App\Http\Requests\Concerns\HasDateRangeFilter;
-use Illuminate\Foundation\Http\FormRequest;
+use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
-class ListInvoicesRequest extends FormRequest
+class ListInvoicesRequest extends AdminFormRequest
 {
     use HasDateRangeFilter;
 

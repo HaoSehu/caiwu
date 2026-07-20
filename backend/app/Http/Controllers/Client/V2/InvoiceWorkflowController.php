@@ -5,12 +5,11 @@ namespace App\Http\Controllers\Client\V2;
 use App\Constants\InvoiceStatus;
 use App\Constants\PaymentGatewayCode;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Client\Invoice\IndexRequest;
-use App\Http\Requests\Client\Invoice\PayByAlipayRequest;
-use App\Http\Requests\Client\Invoice\PayByBalanceAndAlipayRequest;
-use App\Http\Requests\Client\Invoice\PayByBalanceRequest;
-use App\Http\Requests\Client\Invoice\QueryAlipayStatusRequest;
-use App\Http\Requests\Client\Invoice\StoreRequest;
+use App\Http\Requests\Client\V2\Invoice\PayByAlipayRequest;
+use App\Http\Requests\Client\V2\Invoice\PayByBalanceAndAlipayRequest;
+use App\Http\Requests\Client\V2\Invoice\PayByBalanceRequest;
+use App\Http\Requests\Client\V2\Invoice\QueryAlipayStatusRequest;
+use App\Http\Requests\Client\V2\Invoice\StoreRequest;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\User;
@@ -20,7 +19,6 @@ use App\Services\Finance\InvoiceService;
 use App\Services\Finance\PaymentService;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
 use App\Support\VersionedJson;
-use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 
 class InvoiceWorkflowController extends Controller
@@ -32,67 +30,6 @@ class InvoiceWorkflowController extends Controller
         private CheckoutSecurityService $checkoutSecurityService,
         private CheckoutService $checkoutService,
     ) {}
-
-    public function index(IndexRequest $request)
-    {
-        $this->checkoutService->cancelExpiredUnpaidInvoicesForUser(
-            (int) $request->user()->id,
-            $this->buildPaymentWindowExpiredContext($request)
-        );
-
-        $filters = $request->validated();
-
-        $query = Invoice::with([
-            'product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
-            'user:id,email,nickname',
-            'service:id,name,status,expires_at',
-            'payments',
-            'items',
-            'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle',
-            'order.product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
-        ])
-            ->where('user_id', $request->user()->id)
-            ->orderByDesc('id');
-
-        if (($filters['status'] ?? null) === 5) {
-            $query->where(function ($builder) {
-                $builder->whereHas('payments', fn ($paymentQuery) => $paymentQuery->where('status', 3))
-                    ->orWhere('status', InvoiceStatus::REFUNDED);
-            });
-        } elseif (array_key_exists('status', $filters) && $filters['status'] !== null) {
-            $query->where('status', (int) $filters['status']);
-        }
-        $types = $this->normalizeInvoiceTypeFilters((string) ($filters['type'] ?? ''));
-        if ($types !== []) {
-            $query->whereIn('type', $types);
-        }
-        if (! empty($filters['keyword'])) {
-            $keyword = trim((string) $filters['keyword']);
-            $query->where(function ($builder) use ($keyword) {
-                $builder->where('invoice_no', 'like', '%'.$keyword.'%')
-                    ->orWhereHas('payments', function ($paymentQuery) use ($keyword) {
-                        $paymentQuery->where('payment_no', 'like', '%'.$keyword.'%')
-                            ->orWhere('trade_no', 'like', '%'.$keyword.'%');
-                    });
-            });
-        }
-        $this->applyDateFilter($query, $filters);
-
-        $perPage = (int) ($filters['page_size'] ?? 15);
-        $list = $query->paginate($perPage);
-
-        $items = collect($list->items())
-            ->map(fn (Invoice $invoice) => $this->buildClientListItem($invoice))
-            ->values()
-            ->all();
-
-        return $this->success([
-            'list' => $items,
-            'total' => $list->total(),
-            'page' => $list->currentPage(),
-            'page_size' => $list->perPage(),
-        ]);
-    }
 
     public function summary(Request $request)
     {
@@ -138,59 +75,6 @@ class InvoiceWorkflowController extends Controller
         ]);
 
         return $this->success($this->transformInvoice($invoice, $request->user()), '账单创建成功');
-    }
-
-    public function show(Request $request, int $id)
-    {
-        $invoice = Invoice::with([
-            'product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
-            'order.product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
-            'service',
-            'payments',
-        ])
-            ->where('user_id', $request->user()->id)
-            ->findOrFail($id);
-
-        $invoice = $this->checkoutService->cancelExpiredUnpaidInvoice($invoice, $this->buildPaymentWindowExpiredContext($request));
-        $invoice->loadMissing([
-            'product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
-            'order.product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
-            'service',
-            'payments',
-        ]);
-
-        return $this->success($this->transformInvoice($invoice, $request->user()));
-    }
-
-    public function cancel(Request $request, int $id)
-    {
-        $invoice = Invoice::with([
-            'product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
-            'order.product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
-            'service',
-            'payments',
-        ])
-            ->where('user_id', $request->user()->id)
-            ->findOrFail($id);
-
-        if ((int) $invoice->status === InvoiceStatus::CANCELLED) {
-            return $this->success($this->transformInvoice($invoice, $request->user()), '账单已取消');
-        }
-
-        $updated = $this->checkoutService->cancel(
-            $invoice,
-            array_merge($this->buildOperationContext($request), [
-                'reason' => 'client_manual_cancel',
-            ])
-        );
-        $updated->loadMissing([
-            'product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
-            'order.product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
-            'service',
-            'payments',
-        ]);
-
-        return $this->success($this->transformInvoice($updated, $request->user()), '账单已取消');
     }
 
     public function payByBalance(PayByBalanceRequest $request, int $id)
@@ -472,84 +356,6 @@ class InvoiceWorkflowController extends Controller
         }
 
         return null;
-    }
-
-    private function buildClientListItem(Invoice $invoice): array
-    {
-        $detail = $this->invoiceService->adminListItem($invoice);
-
-        return [
-            'id' => (int) $detail['id'],
-            'invoice_no' => (string) $detail['invoice_no'],
-            'type' => (string) $detail['type'],
-            'type_label' => (string) $detail['type_label'],
-            'product_spec_display' => (string) ($detail['product_spec_display'] ?? ''),
-            'product_display_name' => (string) ($detail['product_display_name'] ?? ''),
-            'combined_display_name' => (string) ($detail['combined_display_name'] ?? ''),
-            'product' => $detail['product'],
-            'amount' => (string) $detail['amount'],
-            'discount' => (string) $detail['discount'],
-            'paid_amount' => (string) $detail['paid_amount'],
-            'payable_amount' => (string) $detail['payable_amount'],
-            'status' => (int) $detail['status'],
-            'status_label' => (string) $detail['status_label'],
-            'scene' => $detail['scene'],
-            'summary' => $detail['summary'],
-            'payment_summary' => $detail['payment_summary'],
-            'due_date' => $detail['due_date'],
-            'created_at' => $detail['created_at'],
-            'paid_at' => $detail['paid_at'],
-        ];
-    }
-
-    private function normalizeInvoiceTypeFilters(string $typeFilter): array
-    {
-        $types = [];
-
-        foreach (explode(',', $typeFilter) as $type) {
-            $normalized = trim($type);
-            if ($normalized === '') {
-                continue;
-            }
-
-            if (in_array($normalized, ['new', 'normal'], true)) {
-                $types[] = 'new';
-                $types[] = 'normal';
-
-                continue;
-            }
-
-            $types[] = $normalized;
-        }
-
-        return array_values(array_unique($types));
-    }
-
-    private function applyDateFilter($query, array $filters): void
-    {
-        $start = trim((string) ($filters['start_date'] ?? ''));
-        $end = trim((string) ($filters['end_date'] ?? ''));
-
-        if ($start === '' && $end === '') {
-            return;
-        }
-
-        if ($start !== '' && $end !== '') {
-            $query->whereBetween('created_at', [
-                CarbonImmutable::parse($start)->startOfDay(),
-                CarbonImmutable::parse($end)->endOfDay(),
-            ]);
-
-            return;
-        }
-
-        if ($start !== '') {
-            $query->where('created_at', '>=', CarbonImmutable::parse($start)->startOfDay());
-
-            return;
-        }
-
-        $query->where('created_at', '<=', CarbonImmutable::parse($end)->endOfDay());
     }
 
     private function buildOperationContext(Request $request, string $actorType = 'client'): array

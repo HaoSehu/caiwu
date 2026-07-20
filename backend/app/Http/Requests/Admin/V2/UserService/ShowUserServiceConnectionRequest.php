@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace App\Http\Requests\Admin\V2\UserService;
 
 use App\Models\User;
-use Illuminate\Foundation\Http\FormRequest;
+use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
 
-class ShowUserServiceConnectionRequest extends FormRequest
+class ShowUserServiceConnectionRequest extends AdminFormRequest
 {
     public function authorize(): bool
     {

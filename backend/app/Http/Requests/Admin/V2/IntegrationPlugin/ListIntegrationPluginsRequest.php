@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Http\Requests\Admin\V2\IntegrationPlugin;
 
 use App\Services\Integrations\Plugins\PluginDomain;
-use Illuminate\Foundation\Http\FormRequest;
+use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
 use Illuminate\Validation\Rule;
 
-class ListIntegrationPluginsRequest extends FormRequest
+class ListIntegrationPluginsRequest extends AdminFormRequest
 {
     public function authorize(): bool
     {

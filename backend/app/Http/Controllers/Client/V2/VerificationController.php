@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Client\V2;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Client\Verification\InitVerificationRequest;
-use App\Http\Requests\Client\Verification\QrcodeRequest;
-use App\Http\Requests\Client\Verification\StatusRequest;
+use App\Http\Requests\Client\V2\Verification\InitVerificationRequest;
+use App\Http\Requests\Client\V2\Verification\QrcodeRequest;
+use App\Http\Requests\Client\V2\Verification\StatusRequest;
 use App\Services\Auth\VerificationService;
 use Illuminate\Http\Request;
 

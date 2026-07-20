@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Client\V2\Order;
 
-use App\Http\Requests\Client\Common\ClientFormRequest;
+use App\Http\Requests\Client\V2\Common\ClientFormRequest;
 
 class ShowOrderRequest extends ClientFormRequest
 {

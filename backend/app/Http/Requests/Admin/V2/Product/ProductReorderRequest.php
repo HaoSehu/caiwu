@@ -1,20 +1,24 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Http\Requests\Admin\V2\Product;
 
-use App\Http\Requests\Admin\Product\ReorderRequest;
+use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
+use App\Models\SecondProductGroup;
+use App\Models\ThirdProductGroup;
+use Illuminate\Validation\Rule;
 
-class ProductReorderRequest extends ReorderRequest
+class ProductReorderRequest extends AdminFormRequest
 {
     public function rules(): array
     {
-        return array_merge(parent::rules(), [
-            'page' => ['prohibited'],
-            'page_size' => ['prohibited'],
-            'pageSize' => ['prohibited'],
-            'per_page' => ['prohibited'],
-        ]);
+        return [
+            'product_id' => ['required', 'integer', 'min:1', 'exists:products,id'],
+            'target_first_product_group_id' => ['nullable', 'integer', 'min:1'],
+            'target_second_product_group_id' => ['nullable', 'integer', 'min:1', Rule::exists((new SecondProductGroup)->getTable(), 'id')],
+            'target_third_product_group_id' => ['required', 'integer', 'min:1', Rule::exists((new ThirdProductGroup)->getTable(), 'id')],
+            'reference_product_id' => ['nullable', 'integer', 'min:1', 'exists:products,id'],
+            'position' => ['required', 'string', 'in:before,after,append'],
+            ...$this->allPaginationRules(),
+        ];
     }
 }

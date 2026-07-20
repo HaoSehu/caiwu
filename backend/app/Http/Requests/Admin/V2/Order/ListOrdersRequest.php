@@ -6,11 +6,11 @@ namespace App\Http\Requests\Admin\V2\Order;
 
 use App\Constants\OrderType;
 use App\Http\Requests\Concerns\HasDateRangeFilter;
-use Illuminate\Foundation\Http\FormRequest;
+use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
-class ListOrdersRequest extends FormRequest
+class ListOrdersRequest extends AdminFormRequest
 {
     use HasDateRangeFilter;
 

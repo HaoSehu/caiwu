@@ -1,18 +1,24 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Http\Requests\Admin\V2\User;
 
-use App\Http\Requests\Admin\User\UserInvoicesRequest as BaseUserInvoicesRequest;
-use App\Http\Requests\Admin\V2\Concerns\RejectsLegacyPagination;
+use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
 
-class ListUserInvoicesRequest extends BaseUserInvoicesRequest
+class ListUserInvoicesRequest extends AdminFormRequest
 {
-    use RejectsLegacyPagination;
-
     public function rules(): array
     {
-        return array_merge(parent::rules(), $this->legacyPaginationRules());
+        return array_merge($this->paginationRules(), [
+            'status' => ['nullable', 'in:0,1,2,3,5'],
+            'type' => ['nullable', 'in:normal,renew,manual'],
+        ], $this->legacyPaginationRules());
+    }
+
+    public function filters(): array
+    {
+        return $this->safe()->only([
+            'status',
+            'type',
+        ]);
     }
 }

@@ -1,18 +1,17 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Http\Requests\Admin\V2\UserService;
 
-use App\Http\Requests\Admin\User\RefreshServiceStatusesRequest as BaseRefreshServiceStatusesRequest;
-use App\Http\Requests\Admin\V2\Concerns\RejectsLegacyPagination;
+use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
 
-class RefreshUserServiceStatusesRequest extends BaseRefreshServiceStatusesRequest
+class RefreshUserServiceStatusesRequest extends AdminFormRequest
 {
-    use RejectsLegacyPagination;
-
     public function rules(): array
     {
-        return array_merge(parent::rules(), $this->allPaginationRules());
+        return [
+            'service_ids' => ['required', 'array', 'min:1', 'max:50'],
+            'service_ids.*' => ['integer', 'min:1'],
+            ...$this->allPaginationRules(),
+        ];
     }
 }

@@ -1,18 +1,21 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Http\Requests\Admin\V2\UserService;
 
-use App\Http\Requests\Admin\User\ManualProvisionUserServiceRequest as BaseManualProvisionUserServiceRequest;
-use App\Http\Requests\Admin\V2\Concerns\RejectsLegacyPagination;
+use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
 
-class ManualProvisionUserServiceRequest extends BaseManualProvisionUserServiceRequest
+class ManualProvisionUserServiceRequest extends AdminFormRequest
 {
-    use RejectsLegacyPagination;
-
     public function rules(): array
     {
-        return array_merge(parent::rules(), $this->allPaginationRules());
+        return [
+            'remark' => ['nullable', 'string', 'max:200'],
+            ...$this->allPaginationRules(),
+        ];
+    }
+
+    public function payload(): array
+    {
+        return $this->safe()->only(['remark']);
     }
 }

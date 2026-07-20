@@ -73,7 +73,7 @@ class ProductHierarchyResourceSemanticsTest extends TestCase
     {
         foreach ([
             app_path('Http/Resources/Product/ProductResource.php'),
-            app_path('Http/Resources/Admin/AdminProductListResource.php'),
+            app_path('Http/Resources/Admin/V2/AdminProductSummaryResource.php'),
             app_path('Http/Resources/Product/ProductCategoryResource.php'),
         ] as $resourcePath) {
             $source = (string) file_get_contents($resourcePath);

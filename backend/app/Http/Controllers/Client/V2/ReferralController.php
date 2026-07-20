@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Client\V2;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Client\Referral\AccountLogsRequest;
-use App\Http\Requests\Client\Referral\ApplyWithdrawalRequest;
-use App\Http\Requests\Client\Referral\RewardsRequest;
-use App\Http\Requests\Client\Referral\WithdrawalsRequest;
+use App\Http\Requests\Client\V2\Referral\AccountLogsRequest;
+use App\Http\Requests\Client\V2\Referral\ApplyWithdrawalRequest;
+use App\Http\Requests\Client\V2\Referral\RewardsRequest;
+use App\Http\Requests\Client\V2\Referral\WithdrawalsRequest;
 use App\Services\Referral\ReferralService;
 use Illuminate\Http\Request;
 
