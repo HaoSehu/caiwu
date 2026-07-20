@@ -11,14 +11,6 @@
         >
           <template #suffix-icon><search-icon /></template>
         </t-input>
-        <t-button theme="primary" @click="loadRoles">
-          <template #icon><search-icon /></template>
-          搜索
-        </t-button>
-        <t-button variant="base" @click="resetSearch">
-          <template #icon><refresh-icon /></template>
-          重置
-        </t-button>
         <t-button v-if="canManage" theme="primary" @click="openCreateDialog">
           <template #icon><add-icon /></template>
           新增角色
@@ -176,7 +168,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue';
-import { AddIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
+import { AddIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import type { FormInstanceFunctions, FormRule, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 
@@ -347,11 +339,6 @@ async function loadRoles() {
   } finally {
     loading.value = false;
   }
-}
-
-function resetSearch() {
-  keyword.value = '';
-  loadRoles();
 }
 
 function openCreateDialog() {

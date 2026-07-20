@@ -145,7 +145,10 @@
 
 @media (max-width: 1024px) {
   .admin-roles-page {
-    .roles-filter,
+    .roles-filter {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+
     .role-form-grid,
     .permission-toolbar,
     .permission-grid {

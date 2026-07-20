@@ -289,8 +289,14 @@
             </div>
             <div v-if="form.distribution_type === 'private'" class="user-picker-body">
               <div class="user-search-row">
-                <t-input v-model="userSearchKeyword" clearable placeholder="搜索用户 ID / 邮箱 / 手机号 / 昵称" @enter="searchUsers" />
-                <t-button :loading="userOptionsLoading" @click="searchUsers">搜索用户</t-button>
+                <t-input
+                  v-model="userSearchKeyword"
+                  clearable
+                  :loading="userOptionsLoading"
+                  placeholder="搜索用户 ID / 邮箱 / 手机号 / 昵称"
+                  @enter="searchUsers"
+                  @clear="searchUsers"
+                />
               </div>
               <div class="user-picker-grid">
                 <div>
@@ -348,7 +354,7 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { AddIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
+import { AddIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import type { FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
 
@@ -630,18 +636,6 @@ async function loadData() {
 }
 
 function handleSearch() {
-  page.value = 1;
-  loadData();
-}
-
-function resetFilters() {
-  Object.assign(filters, {
-    keyword: '',
-    status: '',
-    discount_type: '',
-    discount_scope: '',
-    distribution_type: '',
-  });
   page.value = 1;
   loadData();
 }

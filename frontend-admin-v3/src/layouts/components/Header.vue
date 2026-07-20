@@ -353,7 +353,7 @@ const handleLogout = () => {
   border-bottom: 1px solid var(--td-component-stroke);
 }
 
-/* 手机端 side 布局：顶栏显示菜单按钮 + logo */
+/* 手机端 side 布局：顶栏显示菜单按钮，隐藏 logo 为右侧操作区腾空间 */
 @media (max-width: 768px) {
   .header-mobile-logo-bar {
     display: inline-flex;
@@ -363,17 +363,7 @@ const handleLogout = () => {
   }
 
   .header-mobile-logo {
-    display: inline-flex;
-    align-items: center;
-    height: 26px;
-    width: 160px;
-    color: var(--td-text-color-primary);
-    cursor: pointer;
-
-    .t-logo {
-      width: 100%;
-      height: 100%;
-    }
+    display: none;
   }
 }
 

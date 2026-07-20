@@ -12,10 +12,6 @@
         </div>
       </div>
       <t-space>
-        <t-button variant="outline" :loading="loading" @click="loadSettings">
-          <template #icon><refresh-icon /></template>
-          刷新
-        </t-button>
         <t-button variant="outline" :disabled="!templateDefinition" @click="openTestSendDialog">测试发送</t-button>
         <t-button variant="outline" :disabled="!templateDefinition" @click="resetCurrentTemplate">恢复默认</t-button>
         <t-button theme="primary" :loading="saving" :disabled="!templateDefinition" @click="saveCurrentTemplate">保存模板</t-button>
@@ -143,7 +139,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ChevronLeftIcon, RefreshIcon } from 'tdesign-icons-vue-next';
+import { ChevronLeftIcon } from 'tdesign-icons-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 
 import { adminApi } from '@/api/admin';

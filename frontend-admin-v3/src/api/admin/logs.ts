@@ -1,16 +1,7 @@
 import { request } from '@/utils/request';
 import type { LogListParams, PaginatedList, LogCleanupPayload } from './types';
 
-type LogChannel =
-  | 'system'
-  | 'runtime'
-  | 'admin-logins'
-  | 'api'
-  | 'sms'
-  | 'email'
-  | 'tasks'
-  | 'gateway'
-  | 'activity';
+type LogChannel = 'system' | 'runtime' | 'admin-logins' | 'api' | 'sms' | 'email' | 'tasks' | 'gateway' | 'activity';
 
 type V2LogPage = {
   list?: Record<string, unknown>[];
@@ -45,19 +36,20 @@ function toV2SummaryParams(params: LogListParams = {}) {
 }
 
 function listChannel(channel: LogChannel, params: LogListParams): Promise<PaginatedList> {
-  return request
-    .get<V2LogPage>({ url: `/v2/admin/logs/${channel}`, params: toV2Params(params) })
-    .then((payload) => ({
-      list: (payload.list || []).map(toLegacyLogRow),
-      total: Number(payload.total || 0),
-      page: Number(payload.page || params.page || 1),
-      page_size: Number(payload.page_size || params.page_size || 20),
-      summary: payload.summary || {},
-    }));
+  return request.get<V2LogPage>({ url: `/v2/admin/logs/${channel}`, params: toV2Params(params) }).then((payload) => ({
+    list: (payload.list || []).map(toLegacyLogRow),
+    total: Number(payload.total || 0),
+    page: Number(payload.page || params.page || 1),
+    page_size: Number(payload.page_size || params.page_size || 20),
+    summary: payload.summary || {},
+  }));
 }
 
 function summaryChannel(channel: LogChannel, params: LogListParams): Promise<Record<string, unknown>> {
-  return request.get<Record<string, unknown>>({ url: `/v2/admin/log-summaries/${channel}`, params: toV2SummaryParams(params) });
+  return request.get<Record<string, unknown>>({
+    url: `/v2/admin/log-summaries/${channel}`,
+    params: toV2SummaryParams(params),
+  });
 }
 
 function detailChannel(channel: LogChannel, id: number | string): Promise<Record<string, unknown>> {
@@ -122,8 +114,14 @@ export const logsApi = {
   gateway: (params: LogListParams) => listChannel('gateway', params),
   activity: (params: LogListParams) => listChannel('activity', params),
   detail: (channel: LogChannel, id: number | string) => detailChannel(channel, id),
-  cleanupOverview: () =>
-    request.get<Record<string, unknown>>({ url: '/v2/admin/log-cleanups/overview' }),
+  cleanupOverview: () => request.get<Record<string, unknown>>({ url: '/v2/admin/log-cleanups/overview' }),
   cleanup: (data: LogCleanupPayload) =>
-    request.post<Record<string, unknown>>({ url: '/v2/admin/log-cleanups', data }),
+    request
+      .post<
+        { detail?: { cleanup?: Record<string, unknown> } } | Record<string, unknown>
+      >({ url: '/v2/admin/log-cleanups', data })
+      .then((response) => {
+        const detail = (response as { detail?: { cleanup?: Record<string, unknown> } }).detail;
+        return detail?.cleanup || response;
+      }),
 };

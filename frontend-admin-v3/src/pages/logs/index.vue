@@ -3,51 +3,51 @@
     <template v-if="isLogTab(activeTab)">
       <t-card :bordered="false">
         <div class="log-filter-grid" :class="`log-filter-grid--${activeTab}`">
-          <t-select v-if="showFilter('level')" v-model="filters.level" clearable placeholder="日志级别">
+          <t-select v-if="showFilter('level')" v-model="filters.level" clearable placeholder="日志级别" @change="handleLogSearch">
             <t-option v-for="item in logLevelOptions" :key="item" :label="item" :value="item" />
           </t-select>
-          <t-select v-if="showFilter('task_key')" v-model="filters.task_key" clearable placeholder="任务名称">
+          <t-select v-if="showFilter('task_key')" v-model="filters.task_key" clearable placeholder="任务名称" @change="handleLogSearch">
             <t-option v-for="item in taskLogOptions" :key="item.value" :label="item.label" :value="item.value" />
           </t-select>
-          <t-select v-if="showFilter('method')" v-model="filters.method" clearable placeholder="请求方法">
+          <t-select v-if="showFilter('method')" v-model="filters.method" clearable placeholder="请求方法" @change="handleLogSearch">
             <t-option v-for="item in methodOptions" :key="item" :label="item" :value="item" />
           </t-select>
-          <t-input v-if="showFilter('actor_keyword')" v-model="filters.actor_keyword" clearable placeholder="操作人" @enter="handleLogSearch" />
-          <t-input v-if="showFilter('description_keyword')" v-model="filters.description_keyword" clearable placeholder="描述关键词" @enter="handleLogSearch" />
-          <t-input v-if="showFilter('ip_address')" v-model="filters.ip_address" clearable placeholder="IP 地址" @enter="handleLogSearch" />
-          <t-input v-if="showFilter('module')" v-model="filters.module" clearable placeholder="模块，例如 auth / order" @enter="handleLogSearch" />
-          <t-select v-if="showFilter('user_type')" v-model="filters.user_type" clearable placeholder="调用端">
+          <t-input v-if="showFilter('actor_keyword')" v-model="filters.actor_keyword" clearable placeholder="操作人" @enter="handleLogSearch" @clear="handleLogSearch" />
+          <t-input v-if="showFilter('description_keyword')" v-model="filters.description_keyword" clearable placeholder="描述关键词" @enter="handleLogSearch" @clear="handleLogSearch" />
+          <t-input v-if="showFilter('ip_address')" v-model="filters.ip_address" clearable placeholder="IP 地址" @enter="handleLogSearch" @clear="handleLogSearch" />
+          <t-input v-if="showFilter('module')" v-model="filters.module" clearable placeholder="模块，例如 auth / order" @enter="handleLogSearch" @clear="handleLogSearch" />
+          <t-select v-if="showFilter('user_type')" v-model="filters.user_type" clearable placeholder="调用端" @change="handleLogSearch">
             <t-option label="管理员" value="admin" />
             <t-option label="客户" value="client" />
             <t-option label="访客" value="guest" />
           </t-select>
-          <t-select v-if="showFilter('status')" v-model="filters.status" clearable :placeholder="statusPlaceholder">
+          <t-select v-if="showFilter('status')" v-model="filters.status" clearable :placeholder="statusPlaceholder" @change="handleLogSearch">
             <t-option v-for="item in statusOptions" :key="String(item.value)" :label="item.label" :value="item.value" />
           </t-select>
-          <t-input v-if="showFilter('phone')" v-model="filters.phone" clearable placeholder="输入接收手机号" @enter="handleLogSearch" />
-          <t-input v-if="showFilter('email')" v-model="filters.email" clearable placeholder="输入收件邮箱" @enter="handleLogSearch" />
-          <t-select v-if="showFilter('gateway')" v-model="filters.gateway" clearable placeholder="支付网关">
+          <t-input v-if="showFilter('phone')" v-model="filters.phone" clearable placeholder="输入接收手机号" @enter="handleLogSearch" @clear="handleLogSearch" />
+          <t-input v-if="showFilter('email')" v-model="filters.email" clearable placeholder="输入收件邮箱" @enter="handleLogSearch" @clear="handleLogSearch" />
+          <t-select v-if="showFilter('gateway')" v-model="filters.gateway" clearable placeholder="支付网关" @change="handleLogSearch">
             <t-option v-for="item in gatewayOptions" :key="item.value" :label="item.label" :value="item.value" />
           </t-select>
-          <t-input v-if="showFilter('plugin_id')" v-model="filters.plugin_id" clearable placeholder="插件 ID" @enter="handleLogSearch" />
-          <t-input v-if="showFilter('gateway_key')" v-model="filters.gateway_key" clearable placeholder="业务网关 key" @enter="handleLogSearch" />
-          <t-input v-if="showFilter('driver_key')" v-model="filters.driver_key" clearable placeholder="驱动 key" @enter="handleLogSearch" />
-          <t-input v-if="showFilter('trace_id')" v-model="filters.trace_id" clearable placeholder="Trace ID" @enter="handleLogSearch" />
-          <t-select v-if="showFilter('action')" v-model="filters.action" clearable placeholder="网关操作">
+          <t-input v-if="showFilter('plugin_id')" v-model="filters.plugin_id" clearable placeholder="插件 ID" @enter="handleLogSearch" @clear="handleLogSearch" />
+          <t-input v-if="showFilter('gateway_key')" v-model="filters.gateway_key" clearable placeholder="业务网关 key" @enter="handleLogSearch" @clear="handleLogSearch" />
+          <t-input v-if="showFilter('driver_key')" v-model="filters.driver_key" clearable placeholder="驱动 key" @enter="handleLogSearch" @clear="handleLogSearch" />
+          <t-input v-if="showFilter('trace_id')" v-model="filters.trace_id" clearable placeholder="Trace ID" @enter="handleLogSearch" @clear="handleLogSearch" />
+          <t-select v-if="showFilter('action')" v-model="filters.action" clearable placeholder="网关操作" @change="handleLogSearch">
             <t-option v-for="item in gatewayActionOptions" :key="item.value" :label="item.label" :value="item.value" />
           </t-select>
-          <t-select v-if="showFilter('result_status')" v-model="filters.result_status" clearable placeholder="结果状态">
+          <t-select v-if="showFilter('result_status')" v-model="filters.result_status" clearable placeholder="结果状态" @change="handleLogSearch">
             <t-option v-for="item in gatewayResultOptions" :key="String(item.value)" :label="item.label" :value="item.value" />
           </t-select>
-          <t-select v-if="showFilter('actor_type')" v-model="filters.actor_type" clearable placeholder="操作人类型">
+          <t-select v-if="showFilter('actor_type')" v-model="filters.actor_type" clearable placeholder="操作人类型" @change="handleLogSearch">
             <t-option label="管理员" value="admin" />
             <t-option label="客户" value="client" />
             <t-option label="系统" value="system" />
           </t-select>
-          <t-select v-if="showFilter('subject_type')" v-model="filters.subject_type" clearable placeholder="关联类型">
+          <t-select v-if="showFilter('subject_type')" v-model="filters.subject_type" clearable placeholder="关联类型" @change="handleLogSearch">
             <t-option v-for="item in activitySubjectOptions" :key="item.value" :label="item.label" :value="item.value" />
           </t-select>
-          <t-input v-if="showFilter('keyword')" v-model="filters.keyword" clearable :placeholder="keywordPlaceholder" @enter="handleLogSearch">
+          <t-input v-if="showFilter('keyword')" v-model="filters.keyword" clearable :placeholder="keywordPlaceholder" @enter="handleLogSearch" @clear="handleLogSearch">
             <template #suffix-icon><search-icon /></template>
           </t-input>
           <t-date-picker
@@ -70,11 +70,6 @@
             placeholder="结束日期"
             @change="handleLogSearch"
           />
-          <t-button theme="primary" @click="handleLogSearch">
-            <template #icon><search-icon /></template>
-            搜索
-          </t-button>
-          <t-button variant="outline" @click="resetLogFilters">重置</t-button>
         </div>
 
         <div v-if="!isMobile" class="table-scroll">
@@ -407,7 +402,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
+import { SearchIcon } from 'tdesign-icons-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import type { PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 
@@ -874,22 +869,29 @@ function applyRouteFilterQuery() {
   }
 }
 
+const logRequestSeq = ref(0);
+
 async function loadLogs() {
   if (!isLogTab(activeTab.value)) return;
   logLoading.value = true;
+  const seq = ++logRequestSeq.value;
   try {
     const params = buildLogParams();
     const response = await requestLogList(activeTab.value, params);
+    if (seq !== logRequestSeq.value) return;
     logRows.value = response.list || [];
     logPagination.total = Number(response.total || 0);
     logPagination.page = Number(response.page || logPagination.page);
     logPagination.page_size = Number(response.page_size || logPagination.page_size);
   } catch (error) {
+    if (seq !== logRequestSeq.value) return;
     logRows.value = [];
     logPagination.total = 0;
     MessagePlugin.error(errorMessage(error, `加载${currentLogMeta.value.title}失败`));
   } finally {
-    logLoading.value = false;
+    if (seq === logRequestSeq.value) {
+      logLoading.value = false;
+    }
   }
 }
 

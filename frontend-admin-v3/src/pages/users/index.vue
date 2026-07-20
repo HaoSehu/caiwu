@@ -5,7 +5,7 @@
         <t-input
           v-model="filters.keyword"
           clearable
-          placeholder="搜索邮箱/昵称/手机号"
+          placeholder="搜索用户ID/邮箱/手机号/昵称/真实姓名/QQ/身份证"
           @enter="handleSearch"
           @clear="handleSearch"
         >
@@ -15,15 +15,7 @@
           <t-option label="正常" :value="1" />
           <t-option label="禁用" :value="0" />
         </t-select>
-        <t-button theme="primary" @click="handleSearch">
-          <template #icon><search-icon /></template>
-          搜索
-        </t-button>
-        <t-button variant="base" theme="default" @click="resetFilters">
-          <template #icon><refresh-icon /></template>
-          重置
-        </t-button>
-        <t-button theme="primary" @click="openCreateDialog">
+        <t-button size="medium" theme="primary" @click="openCreateDialog">
           <template #icon><user-add-icon /></template>
           新增用户
         </t-button>
@@ -151,7 +143,7 @@
 </template>
 
 <script setup lang="ts">
-import { CheckCircleFilledIcon, RefreshIcon, SearchIcon, UserAddIcon } from 'tdesign-icons-vue-next';
+import { CheckCircleFilledIcon, SearchIcon, UserAddIcon } from 'tdesign-icons-vue-next';
 import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref } from 'vue';
@@ -226,13 +218,6 @@ async function loadList() {
 }
 
 function handleSearch() {
-  page.value = 1;
-  loadList();
-}
-
-function resetFilters() {
-  filters.keyword = '';
-  filters.status = '';
   page.value = 1;
   loadList();
 }

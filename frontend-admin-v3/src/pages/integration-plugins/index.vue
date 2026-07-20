@@ -3,10 +3,6 @@
     <t-card :bordered="false">
       <div class="plugins-toolbar">
         <t-space>
-          <t-button variant="outline" :loading="loading" @click="loadPlugins">
-            <template #icon><refresh-icon /></template>
-            刷新
-          </t-button>
           <t-button v-if="canManagePlugins" theme="primary" :loading="scanning" @click="scanPlugins">
             扫描插件
           </t-button>
@@ -302,7 +298,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { MessagePlugin } from 'tdesign-vue-next';
-import { BrowseIcon, BrowseOffIcon, MoreIcon, RefreshIcon } from 'tdesign-icons-vue-next';
+import { BrowseIcon, BrowseOffIcon, MoreIcon } from 'tdesign-icons-vue-next';
 
 import SecretInput from '@/components/secret-input/index.vue';
 import { pluginsApi, type IntegrationPluginConfigSchema, type IntegrationPluginDomain, type IntegrationPluginRecord } from '@/api/admin/plugins';

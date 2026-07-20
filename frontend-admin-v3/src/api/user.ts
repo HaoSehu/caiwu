@@ -55,6 +55,7 @@ export interface UserUpdatePayload {
   phone?: string;
   password?: string;
   status?: number | string;
+  admin_note?: string;
 }
 
 export interface UserDetailResponse {

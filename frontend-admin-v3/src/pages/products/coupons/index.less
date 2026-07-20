@@ -40,7 +40,7 @@
 
 .coupons-filter {
   display: grid;
-  grid-template-columns: minmax(240px, 1fr) repeat(4, minmax(120px, 145px)) repeat(4, auto);
+  grid-template-columns: minmax(240px, 1fr) repeat(4, minmax(120px, 145px)) auto;
   gap: 12px;
   align-items: stretch;
   margin-bottom: 16px;
@@ -232,9 +232,7 @@
 }
 
 .user-search-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
+  display: block;
   margin-bottom: 12px;
 }
 
@@ -319,8 +317,7 @@
       "keyword keyword"
       "status type"
       "scope distribution"
-      "search reset"
-      "refresh create";
+      "create create";
     align-items: stretch;
     gap: 10px;
   }
@@ -350,18 +347,6 @@
   }
 
   .coupons-filter > :nth-child(6) {
-    grid-area: search;
-  }
-
-  .coupons-filter > :nth-child(7) {
-    grid-area: reset;
-  }
-
-  .coupons-filter > :nth-child(8) {
-    grid-area: refresh;
-  }
-
-  .coupons-filter > :nth-child(9) {
     grid-area: create;
   }
 
@@ -406,9 +391,6 @@
       "type"
       "scope"
       "distribution"
-      "search"
-      "reset"
-      "refresh"
       "create";
   }
 }

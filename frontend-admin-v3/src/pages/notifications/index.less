@@ -415,7 +415,14 @@
     justify-content: flex-start;
   }
 
-  .api-filter-grid,
+  .api-filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .api-filter-grid > :first-child {
+    grid-column: 1 / -1;
+  }
+
   .template-mobile-card dl {
     grid-template-columns: 1fr;
   }

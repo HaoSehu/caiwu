@@ -1,8 +1,16 @@
 ﻿import { expect, test } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
 
+test('keeps core API fixtures on v2 admin contracts', () => {
+  const source = readFileSync(new URL('./smoke.spec.ts', import.meta.url), 'utf8');
+  const legacyPath = `/${['api', 'admin'].join('/')}/`;
+
+  expect(source).not.toContain(legacyPath);
+});
+
 async function mockAdminInfo(page: import('@playwright/test').Page) {
-  await page.route(/\/api\/(?:v2\/admin|admin)\/auth\/info(?:\?.*)?$/, async (route) => {
+  await page.route(/\/api\/v2\/admin\/auth\/info(?:\?.*)?$/, async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
@@ -22,7 +30,7 @@ async function mockAdminInfo(page: import('@playwright/test').Page) {
 }
 
 async function mockDashboard(page: import('@playwright/test').Page) {
-  await page.route('**/api/admin/dashboard/stats**', async (route) => {
+  await page.route('**/api/v2/admin/dashboard/stats**', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
@@ -35,7 +43,7 @@ async function mockDashboard(page: import('@playwright/test').Page) {
       }),
     });
   });
-  await page.route('**/api/admin/dashboard/recent-invoices**', async (route) => {
+  await page.route('**/api/v2/admin/dashboard/recent-invoices**', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
@@ -48,7 +56,7 @@ async function mockDashboard(page: import('@playwright/test').Page) {
       }),
     });
   });
-  await page.route('**/api/admin/dashboard/monthly-revenue**', async (route) => {
+  await page.route('**/api/v2/admin/dashboard/monthly-revenue**', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
@@ -64,7 +72,7 @@ async function mockDashboard(page: import('@playwright/test').Page) {
 }
 
 async function mockUsers(page: import('@playwright/test').Page) {
-  await page.route(/\/api\/admin\/users(?:\?.*)?$/, async (route) => {
+  await page.route(/\/api\/v2\/admin\/users(?:\?.*)?$/, async (route) => {
     const request = route.request();
     if (request.method() !== 'GET') {
       await route.fulfill({
@@ -91,7 +99,7 @@ async function mockUsers(page: import('@playwright/test').Page) {
               phone: '',
               nickname: keyword ? '筛选用户' : '测试用户',
               display_name: keyword ? '筛选用户' : '测试用户',
-              balance: 128.5,
+              cash_balance: 128.5,
               opened_product_count: 2,
               status: 1,
               verification_status: 2,
@@ -109,7 +117,7 @@ async function mockUsers(page: import('@playwright/test').Page) {
 }
 
 async function mockTickets(page: import('@playwright/test').Page) {
-  await page.route(/\/api\/admin\/tickets(?:\?.*)?$/, async (route) => {
+  await page.route(/\/api\/v2\/admin\/tickets(?:\?.*)?$/, async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const keyword = url.searchParams.get('keyword') || '';
@@ -226,44 +234,66 @@ async function mockTicketConversation(page: import('@playwright/test').Page) {
     ],
   });
 
-  await page.route('**/api/admin/tickets/admin-users**', async (route) => {
+  await page.route('**/api/v2/admin/tickets/admin-users**', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
         code: 0,
-        data: [
-          { id: 1, username: 'cerbo', nickname: 'cerbo', email: 'ticket@example.com' },
-          { id: 2, username: 'support', nickname: 'support', email: 'support@example.com' },
-        ],
+        data: {
+          list: [
+            { id: 1, username: 'cerbo', nickname: 'cerbo', email: 'ticket@example.com' },
+            { id: 2, username: 'support', nickname: 'support', email: 'support@example.com' },
+          ],
+        },
       }),
     });
   });
 
-  await page.route('**/api/admin/tickets/upload-image**', async (route) => {
+  await page.route('**/api/v2/admin/tickets/upload-images**', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
         code: 0,
         message: '图片上传成功',
-        data: { id: 'upload-1', path: 'private/tickets/admin.png', url: '/mock-upload.png', name: 'admin.png', type: 'image' },
+        data: {
+          attachment: {
+            id: 'upload-1',
+            path: 'private/tickets/admin.png',
+            url: '/mock-upload.png',
+            name: 'admin.png',
+            type: 'image',
+          },
+        },
       }),
     });
   });
 
-  await page.route('**/api/admin/tickets/101**', async (route) => {
+  await page.route('**/api/v2/admin/tickets/101**', async (route) => {
     const request = route.request();
     const pathname = new URL(request.url()).pathname;
 
-    if (pathname.endsWith('/reply')) {
-      replied = true;
+    if (pathname.endsWith('/replies') && request.method() === 'GET') {
+      const detail = detailPayload();
       await route.fulfill({
         contentType: 'application/json',
-        body: JSON.stringify({ code: 0, message: '回复成功', data: { id: 203 } }),
+        body: JSON.stringify({
+          code: 0,
+          data: { list: detail.replies, total: detail.replies.length, page: 1, page_size: 100 },
+        }),
       });
       return;
     }
 
-    if (pathname.endsWith('/assign')) {
+    if (pathname.endsWith('/replies') && request.method() === 'POST') {
+      replied = true;
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ code: 0, message: '回复成功', data: { reply: { id: 203 } } }),
+      });
+      return;
+    }
+
+    if (pathname.endsWith('/assignment') && request.method() === 'PUT') {
       const body = request.postDataJSON() as { assignee_id?: number };
       assigneeId = Number(body.assignee_id || 0) || null;
       await route.fulfill({
@@ -273,7 +303,7 @@ async function mockTicketConversation(page: import('@playwright/test').Page) {
       return;
     }
 
-    if (pathname.endsWith('/close')) {
+    if (pathname.endsWith('/closures') && request.method() === 'POST') {
       closed = true;
       await route.fulfill({
         contentType: 'application/json',
@@ -282,7 +312,7 @@ async function mockTicketConversation(page: import('@playwright/test').Page) {
       return;
     }
 
-    if (pathname.endsWith('/replies/202/recall')) {
+    if (pathname.endsWith('/replies/202/recalls') && request.method() === 'POST') {
       recalled = true;
       await route.fulfill({
         contentType: 'application/json',
@@ -291,15 +321,101 @@ async function mockTicketConversation(page: import('@playwright/test').Page) {
       return;
     }
 
+    const detail = detailPayload();
+    const { replies, ...ticket } = detail;
     await route.fulfill({
       contentType: 'application/json',
-      body: JSON.stringify({ code: 0, data: detailPayload() }),
+      body: JSON.stringify({ code: 0, data: { ticket } }),
     });
   });
 }
 
+async function mockCouponProductTree(
+  page: import('@playwright/test').Page,
+  labels: { root: string; child: string } = { root: '云服务器', child: '通用型' },
+) {
+  const groupPath = `${labels.root} / ${labels.child}`;
+  const paginate = (list: Record<string, unknown>[]) => ({
+    code: 0,
+    data: { list, total: list.length, page: 1, page_size: 100 },
+  });
+  const root = {
+    id: 11,
+    node_key: '1:11',
+    name: labels.root,
+    label: labels.root,
+    level: 1,
+    product_type: 'cloud_server',
+    product_type_label: '云服务器',
+    first_product_group_id: 11,
+    first_product_group_code: 'cloud_server',
+    first_product_group_name: labels.root,
+    effective_product_group_id: 11,
+    effective_product_group_level: 1,
+    group_path: labels.root,
+    has_children: true,
+    direct_products_count: 0,
+    status: 1,
+  };
+  const child = {
+    id: 12,
+    node_key: '2:12',
+    name: labels.child,
+    label: labels.child,
+    parent_id: 11,
+    parent_level: 1,
+    level: 2,
+    product_type: 'cloud_server',
+    product_type_label: '云服务器',
+    first_product_group_id: 11,
+    first_product_group_code: 'cloud_server',
+    first_product_group_name: labels.root,
+    second_product_group_id: 12,
+    second_product_group_name: labels.child,
+    effective_product_group_id: 12,
+    effective_product_group_level: 2,
+    group_path: groupPath,
+    has_children: false,
+    direct_products_count: 1,
+    status: 1,
+  };
+  const product = {
+    id: 101,
+    product_id: 101,
+    label: '标准云服务器',
+    name: '标准云服务器',
+    display_name: '标准云服务器',
+    cpu_memory_display: '2C4G',
+    product_type: 'cloud_server',
+    product_type_label: '云服务器',
+    group_path: groupPath,
+    category_full_name: groupPath,
+    first_product_group_id: 11,
+    first_product_group_name: labels.root,
+    second_product_group_id: 12,
+    second_product_group_name: labels.child,
+    effective_product_group_id: 12,
+    effective_product_group_level: 2,
+    node_type: 'product',
+    leaf: true,
+    primary_price: { cycle: 'monthly', amount: '99.00' },
+    status: 1,
+  };
+
+  await page.route(/\/api\/v2\/admin\/coupon-product-groups(?:\?.*)?$/, async (route) => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify(paginate([root])) });
+  });
+  await page.route(/\/api\/v2\/admin\/coupon-product-groups\/11\/children(?:\?.*)?$/, async (route) => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify(paginate([child])) });
+  });
+  await page.route(/\/api\/v2\/admin\/coupon-product-groups\/12\/products(?:\?.*)?$/, async (route) => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify(paginate([product])) });
+  });
+}
+
 async function mockProductsHub(page: import('@playwright/test').Page) {
-  await page.route('**/api/admin/products/summary**', async (route) => {
+  await mockCouponProductTree(page, { root: '襄阳', child: '高宽' });
+  await page.route('**/api/v2/admin/products/summary**', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
@@ -316,11 +432,11 @@ async function mockProductsHub(page: import('@playwright/test').Page) {
     });
   });
 
-  await page.route('**/api/admin/product-types**', async (route) => {
+  await page.route('**/api/v2/admin/product-types**', async (route) => {
     const request = route.request();
     const pathname = new URL(request.url()).pathname;
 
-    if (pathname.endsWith('/product-types/reorder')) {
+    if (pathname.endsWith('/product-types/reorders')) {
       await route.fulfill({
         contentType: 'application/json',
         body: JSON.stringify({
@@ -362,34 +478,34 @@ async function mockProductsHub(page: import('@playwright/test').Page) {
 
     await route.fulfill({
       contentType: 'application/json',
-        body: JSON.stringify({
-          code: 0,
-          data: {
-            list: [
-              {
-                value: 'cloud_server',
-                label: '云服务器',
-                usage_count: 8,
-                group_count: 2,
-                icon: 'ServerIcon',
-                first_product_group_id: 11,
-                first_product_group_name: '计算',
-              },
-              {
-                value: 'storage_server',
-                label: '存储服务器',
-                usage_count: 0,
-                group_count: 0,
-                first_product_group_id: 21,
-                first_product_group_name: '存储',
-              },
-            ],
-          },
-        }),
+      body: JSON.stringify({
+        code: 0,
+        data: {
+          list: [
+            {
+              value: 'cloud_server',
+              label: '云服务器',
+              usage_count: 8,
+              group_count: 2,
+              icon: 'ServerIcon',
+              first_product_group_id: 11,
+              first_product_group_name: '计算',
+            },
+            {
+              value: 'storage_server',
+              label: '存储服务器',
+              usage_count: 0,
+              group_count: 0,
+              first_product_group_id: 21,
+              first_product_group_name: '存储',
+            },
+          ],
+        },
+      }),
     });
   });
 
-  await page.route('**/api/admin/product-categories**', async (route) => {
+  await page.route('**/api/v2/admin/product-groups**', async (route) => {
     if (route.request().method() !== 'GET') {
       await route.fulfill({
         contentType: 'application/json',
@@ -400,107 +516,65 @@ async function mockProductsHub(page: import('@playwright/test').Page) {
 
     await route.fulfill({
       contentType: 'application/json',
-        body: JSON.stringify({
-          code: 0,
-          data: {
-            tree: [
-              {
-                id: 11,
-                name: '计算',
-                label: '计算',
-                product_type: 'cloud_server',
-                first_product_group_id: 11,
-                first_product_group_name: '计算',
-                effective_product_group_id: 11,
-                effective_product_group_level: 1,
-                product_count: 2,
-                children: [
-                  {
-                    id: 12,
-                    name: '通用型',
-                    label: '通用型',
-                    parent_id: 11,
-                    product_type: 'cloud_server',
-                    first_product_group_id: 11,
-                    first_product_group_name: '计算',
-                    second_product_group_id: 12,
-                    second_product_group_name: '通用型',
-                    effective_product_group_id: 12,
-                    effective_product_group_level: 2,
-                    product_count: 1,
-                  },
-                  {
-                    id: 13,
-                    name: '存储型',
-                    label: '存储型',
-                    parent_id: 11,
-                    product_type: 'cloud_server',
-                    first_product_group_id: 11,
-                    first_product_group_name: '计算',
-                    second_product_group_id: 13,
-                    second_product_group_name: '存储型',
-                    effective_product_group_id: 13,
-                    effective_product_group_level: 2,
-                    product_count: 1,
-                  },
-                ],
-              },
-            ],
-          },
-      }),
-    });
-  });
-
-  await page.route('**/api/admin/coupons/product-tree**', async (route) => {
-    await route.fulfill({
-      contentType: 'application/json',
       body: JSON.stringify({
         code: 0,
         data: {
           tree: [
             {
               id: 11,
-              name: '襄阳',
-              label: '襄阳',
+              name: '计算',
+              label: '计算',
+              level: 1,
               product_type: 'cloud_server',
               product_type_label: '云服务器',
               first_product_group_id: 11,
-              first_product_group_name: '襄阳',
+              first_product_group_code: 'cloud_server',
+              first_product_group_name: '计算',
               effective_product_group_id: 11,
               effective_product_group_level: 1,
+              group_path: '计算',
+              has_children: true,
+              direct_products_count: 0,
               children: [
                 {
                   id: 12,
-                  name: '高宽',
-                  label: '高宽',
+                  name: '通用型',
+                  label: '通用型',
+                  parent_id: 11,
+                  parent_level: 1,
+                  level: 2,
                   product_type: 'cloud_server',
+                  product_type_label: '云服务器',
                   first_product_group_id: 11,
-                  first_product_group_name: '襄阳',
+                  first_product_group_code: 'cloud_server',
+                  first_product_group_name: '计算',
                   second_product_group_id: 12,
-                  second_product_group_name: '高宽',
+                  second_product_group_name: '通用型',
                   effective_product_group_id: 12,
                   effective_product_group_level: 2,
-                  effective_product_group_full_name: '襄阳 / 高宽',
-                  children: [
-                    {
-                      id: 101,
-                      product_id: 101,
-                      label: '标准云服务器',
-                      display_name: '标准云服务器',
-                      category_full_name: '襄阳 / 高宽',
-                      product_type: 'cloud_server',
-                      first_product_group_id: 11,
-                      first_product_group_name: '襄阳',
-                      second_product_group_id: 12,
-                      second_product_group_name: '高宽',
-                      effective_product_group_id: 12,
-                      effective_product_group_level: 2,
-                      node_type: 'product',
-                      leaf: true,
-                      primary_price: { cycle: 'monthly', amount: '99.00' },
-                      status: 1,
-                    },
-                  ],
+                  group_path: '计算 / 通用型',
+                  has_children: false,
+                  direct_products_count: 1,
+                },
+                {
+                  id: 13,
+                  name: '存储型',
+                  label: '存储型',
+                  parent_id: 11,
+                  parent_level: 1,
+                  level: 2,
+                  product_type: 'cloud_server',
+                  product_type_label: '云服务器',
+                  first_product_group_id: 11,
+                  first_product_group_code: 'cloud_server',
+                  first_product_group_name: '计算',
+                  second_product_group_id: 13,
+                  second_product_group_name: '存储型',
+                  effective_product_group_id: 13,
+                  effective_product_group_level: 2,
+                  group_path: '计算 / 存储型',
+                  has_children: false,
+                  direct_products_count: 0,
                 },
               ],
             },
@@ -510,167 +584,197 @@ async function mockProductsHub(page: import('@playwright/test').Page) {
     });
   });
 
-  await page.route(/\/api\/admin\/products(?:\?.*)?$/, async (route) => {
-    const request = route.request();
-    const url = new URL(request.url());
-    const pathname = url.pathname;
+  await page.route(
+    /\/api\/v2\/admin\/products(?:\/(?:category-batches|split-previews|splits|provision-hostname-batches|traffic-package-pulls))?(?:\?.*)?$/,
+    async (route) => {
+      const request = route.request();
+      const url = new URL(request.url());
+      const pathname = url.pathname;
 
-    if (pathname.endsWith('/products/traffic-packages/pull')) {
+      if (pathname.endsWith('/products/traffic-package-pulls')) {
+        await route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({
+            code: 0,
+            message: '流量包配置拉取成功',
+            data: {
+              packages: [{ label: '200GB', target_value: 200, price: 29.9, enabled: 1, sort_order: 1 }],
+              source: { mode: 'local_product_template', product_name: '标准云服务器' },
+            },
+          }),
+        });
+        return;
+      }
+
+      if (pathname.endsWith('/products/category-batches')) {
+        await route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({
+            code: 0,
+            message: '商品分类已批量更新',
+            data: { updated_count: 1, target_category_name: '存储型' },
+          }),
+        });
+        return;
+      }
+
+      if (pathname.endsWith('/products/split-previews')) {
+        await route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({
+            code: 0,
+            message: '商品拆分预览完成',
+            data: {
+              requested_count: 1,
+              preview_count: 1,
+              skipped_count: 0,
+              items: [
+                {
+                  source_product_id: 101,
+                  source_display_name: '筛选云服务器',
+                  action: 'preview',
+                  variants: [
+                    {
+                      product_id: null,
+                      display_name: '筛选云服务器 2C4G',
+                      source_display_name: '筛选云服务器',
+                      variant_key: 'cpu_2-memory_4',
+                      action: 'create',
+                    },
+                  ],
+                },
+              ],
+            },
+          }),
+        });
+        return;
+      }
+
+      if (pathname.endsWith('/products/splits')) {
+        await route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({
+            code: 0,
+            message: '商品拆分完成',
+            data: { created_count: 1, updated_count: 0, skipped_count: 0, items: [] },
+          }),
+        });
+        return;
+      }
+
+      if (pathname.endsWith('/products/provision-hostname-batches')) {
+        await route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({ code: 0, message: '商品开通主机名规则已更新', data: { updated_count: 1 } }),
+        });
+        return;
+      }
+
+      if (pathname.endsWith('/products/101') || request.method() !== 'GET') {
+        await route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({ code: 0, message: '操作成功', data: {} }),
+        });
+        return;
+      }
+
+      const keyword = url.searchParams.get('keyword') || '';
       await route.fulfill({
         contentType: 'application/json',
         body: JSON.stringify({
           code: 0,
-          message: '流量包配置拉取成功',
           data: {
-            packages: [{ label: '200GB', target_value: 200, price: 29.9, enabled: 1, sort_order: 1 }],
-            source: { mode: 'local_product_template', product_name: '标准云服务器' },
-          },
-        }),
-      });
-      return;
-    }
-
-    if (pathname.endsWith('/products/category/batch')) {
-      await route.fulfill({
-        contentType: 'application/json',
-        body: JSON.stringify({
-          code: 0,
-          message: '商品分类已批量更新',
-          data: { updated_count: 1, target_category_name: '存储型' },
-        }),
-      });
-      return;
-    }
-
-    if (pathname.endsWith('/products/split-preview')) {
-      await route.fulfill({
-        contentType: 'application/json',
-        body: JSON.stringify({
-          code: 0,
-          message: '商品拆分预览完成',
-          data: {
-            requested_count: 1,
-            preview_count: 1,
-            skipped_count: 0,
-            items: [
+            list: [
               {
-                source_product_id: 101,
-                source_display_name: '筛选云服务器',
-                action: 'preview',
-                variants: [
-                  {
-                    product_id: null,
-                    display_name: '筛选云服务器 2C4G',
-                    source_display_name: '筛选云服务器',
-                    variant_key: 'cpu_2-memory_4',
-                    action: 'create',
-                  },
-                ],
+                id: 101,
+                name: keyword ? '筛选云服务器' : '标准云服务器',
+                display_name: keyword ? '筛选云服务器' : '标准云服务器',
+                product_type: 'cloud_server',
+                product_type_label: '云服务器',
+                first_product_group_id: 11,
+                first_product_group_name: '计算',
+                second_product_group_id: 12,
+                second_product_group_name: '通用型',
+                effective_product_group_id: 12,
+                effective_product_group_level: 2,
+                effective_product_group_full_name: '计算 / 通用型',
+                status: 1,
+                primary_price: { cycle: 'monthly', amount: '88.00' },
+                monthly_price: 88,
+                lifecycle_status: 'active',
+                provision_hostname: { mode: 'system', value: '', length: 12 },
+                provision_hostname_summary: '跟随上游',
               },
             ],
+            total: 1,
+            page: Number(url.searchParams.get('page') || 1),
+            page_size: Number(url.searchParams.get('page_size') || 20),
           },
         }),
       });
-      return;
-    }
+    },
+  );
 
-    if (pathname.endsWith('/products/split')) {
-      await route.fulfill({
-        contentType: 'application/json',
-        body: JSON.stringify({
-          code: 0,
-          message: '商品拆分完成',
-          data: { created_count: 1, updated_count: 0, skipped_count: 0, items: [] },
-        }),
-      });
-      return;
-    }
-
-    if (pathname.endsWith('/products/provision-hostname/batch')) {
-      await route.fulfill({
-        contentType: 'application/json',
-        body: JSON.stringify({ code: 0, message: '商品开通主机名规则已更新', data: { updated_count: 1 } }),
-      });
-      return;
-    }
-
-    if (pathname.endsWith('/products/101') || request.method() !== 'GET') {
-      await route.fulfill({
-        contentType: 'application/json',
-        body: JSON.stringify({ code: 0, message: '操作成功', data: {} }),
-      });
-      return;
-    }
-
-    const keyword = url.searchParams.get('keyword') || '';
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        code: 0,
-        data: {
-          list: [
-            {
-              id: 101,
-              name: keyword ? '筛选云服务器' : '标准云服务器',
-              display_name: keyword ? '筛选云服务器' : '标准云服务器',
-              product_type: 'cloud_server',
-              product_type_label: '云服务器',
-              first_product_group_id: 11,
-              first_product_group_name: '计算',
-              second_product_group_id: 12,
-              second_product_group_name: '通用型',
-              effective_product_group_id: 12,
-              effective_product_group_level: 2,
-              effective_product_group_full_name: '计算 / 通用型',
-              status: 1,
-              pricing: { monthly: 88 },
-              provision_hostname: { mode: 'system', value: '', length: 12 },
-              provision_hostname_summary: '跟随上游',
-            },
-          ],
-          total: 1,
-          page: Number(url.searchParams.get('page') || 1),
-          page_size: Number(url.searchParams.get('page_size') || 20),
-        },
-      }),
-    });
-  });
-
-  await page.route('**/api/admin/products/101**', async (route) => {
+  await page.route('**/api/v2/admin/products/101**', async (route) => {
     if (route.request().method() === 'GET') {
       await route.fulfill({
         contentType: 'application/json',
         body: JSON.stringify({
           code: 0,
           data: {
-            id: 101,
-            name: '标准云服务器',
-            display_name: '标准云服务器',
-            product_type: 'cloud_server',
-            first_product_group_id: 11,
-            first_product_group_name: '计算',
-            second_product_group_id: 12,
-            second_product_group_name: '通用型',
-            effective_product_group_id: 12,
-            effective_product_group_level: 2,
-            status: 1,
-            pricing: { monthly: 88 },
-            supplier_id: 3,
-            supplier_product_id: 300,
-            config_options: [
-              {
-                uid: 'cpu',
-                field: 'cpu',
-                name: 'CPU',
-                option_name: 'CPU',
-                option_mode: 'select',
-                parameter: '2|2核',
-                sub_items: [{ value: '2', label: '2核', option_name: '2核', option_name_first: '2' }],
-                required: true,
-                hidden: false,
-                sort_order: 1,
+            product: {
+              id: 101,
+              display: {
+                display_name: '标准云服务器',
+                product_display_name: '标准云服务器',
+                product_spec_display: '2C4G',
+                cpu_memory_display: '2C4G',
+                combined_display_name: '标准云服务器 2C4G',
               },
-            ],
+              classification: {
+                product_type: 'cloud_server',
+                product_type_label: '云服务器',
+                first_product_group_id: 11,
+                first_product_group_code: 'cloud_server',
+                first_product_group_name: '计算',
+                second_product_group_id: 12,
+                second_product_group_name: '通用型',
+                effective_product_group_id: 12,
+                effective_product_group_level: 2,
+                category_full_name: '计算 / 通用型',
+              },
+              pricing: {
+                items: { monthly: 88 },
+                primary_price: { cycle: 'monthly', amount: '88.00' },
+                setup_fee: '0.00',
+              },
+              configuration: {
+                config_options: [
+                  {
+                    uid: 'cpu',
+                    field: 'cpu',
+                    name: 'CPU',
+                    option_name: 'CPU',
+                    option_mode: 'select',
+                    parameter: '2|2核',
+                    sub_items: [{ value: '2', label: '2核', option_name: '2核', option_name_first: '2' }],
+                    required: true,
+                    hidden: false,
+                    sort_order: 1,
+                  },
+                ],
+              },
+              purchase_requirements: {
+                require_verification: false,
+                require_phone: false,
+                provision_hostname: { mode: 'system', value: '', length: 12 },
+              },
+              provisioning: { stock: -1, auto_setup: 1 },
+              upstream_binding: { supplier_id: 3, upstream_product_id: 300 },
+              statistics: { orders_count: 0, services_count: 0, active_services_count: 0 },
+              lifecycle: { status: 1, lifecycle_status: 'active', deleted_at: null, sort_order: 1 },
+              timestamps: { created_at: '2026-06-06 10:00:00', updated_at: '2026-06-06 10:00:00' },
+            },
           },
         }),
       });
@@ -683,14 +787,14 @@ async function mockProductsHub(page: import('@playwright/test').Page) {
     });
   });
 
-  await page.route('**/api/admin/product-categories/12**', async (route) => {
+  await page.route('**/api/v2/admin/product-groups/12**', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({ code: 0, message: '操作成功', data: {} }),
     });
   });
 
-  await page.route(/\/api\/admin\/settings(?:\?.*)?$/, async (route) => {
+  await page.route(/\/api\/v2\/admin\/settings(?:\?.*)?$/, async (route) => {
     if (route.request().method() !== 'GET') {
       await route.fulfill({
         contentType: 'application/json',
@@ -703,66 +807,68 @@ async function mockProductsHub(page: import('@playwright/test').Page) {
       contentType: 'application/json',
       body: JSON.stringify({
         code: 0,
-        data: [
-          {
-            key: 'items',
-            value: JSON.stringify([
-              {
-                traffic_group_id: 'traffic:cloud_server:12:seed',
-                group_name: '基础流量包',
-                first_product_group_id: 11,
-                second_product_group_id: 12,
-                third_product_group_id: null,
-                effective_product_group_id: 12,
-                product_group_label: '通用型',
-                product_type: 'cloud_server',
-                product_ids: [101],
-                label: '100GB',
-                target_value: 100,
-                price: '19.90',
-                enabled: 1,
-                sort_order: 1,
-              },
-            ]),
-          },
-          {
-            key: 'groups',
-            value: JSON.stringify([
-              {
-                id: 'traffic:cloud_server:12:seed',
-                name: '基础流量包',
-                product_type: 'cloud_server',
-                product_group_key: '2:12',
-                first_product_group_id: 11,
-                second_product_group_id: 12,
-                third_product_group_id: null,
-                effective_product_group_id: 12,
-                product_group_label: '通用型',
-                product_ids: [101],
-                sort_order: 1,
-              },
-            ]),
-          },
-        ],
+        data: {
+          list: [
+            {
+              key: 'items',
+              value: JSON.stringify([
+                {
+                  traffic_group_id: 'traffic:cloud_server:12:seed',
+                  group_name: '基础流量包',
+                  first_product_group_id: 11,
+                  second_product_group_id: 12,
+                  third_product_group_id: null,
+                  effective_product_group_id: 12,
+                  product_group_label: '通用型',
+                  product_type: 'cloud_server',
+                  product_ids: [101],
+                  label: '100GB',
+                  target_value: 100,
+                  price: '19.90',
+                  enabled: 1,
+                  sort_order: 1,
+                },
+              ]),
+            },
+            {
+              key: 'groups',
+              value: JSON.stringify([
+                {
+                  id: 'traffic:cloud_server:12:seed',
+                  name: '基础流量包',
+                  product_type: 'cloud_server',
+                  product_group_key: '2:12',
+                  first_product_group_id: 11,
+                  second_product_group_id: 12,
+                  third_product_group_id: null,
+                  effective_product_group_id: 12,
+                  product_group_label: '通用型',
+                  product_ids: [101],
+                  sort_order: 1,
+                },
+              ]),
+            },
+          ],
+        },
       }),
     });
   });
 
-  await page.route('**/api/admin/suppliers/summary**', async (route) => {
+  await page.route('**/api/v2/admin/suppliers/summary**', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({ code: 0, data: { total: 2, active: 1, inactive: 1 } }),
     });
   });
 
-  await page.route('**/api/admin/suppliers/provider-types**', async (route) => {
+  await page.route('**/api/v2/admin/suppliers/provider-types**', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
-      body: JSON.stringify({ code: 0, data: [{ value: 'zjmf_finance_api', label: 'ZJMF 财务' }] }),
+      body: JSON.stringify({ code: 0, data: { list: [{ value: 'zjmf_finance_api', label: 'ZJMF 财务' }] } }),
     });
   });
 
-  await page.route('**/api/admin/suppliers**', async (route) => {
+  await page.route(/\/api\/v2\/admin\/suppliers(?:\?.*)?$/, async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const pathname = url.pathname;
@@ -815,22 +921,29 @@ async function mockProductsHub(page: import('@playwright/test').Page) {
       return;
     }
 
-    if (pathname.endsWith('/suppliers/3/products/batch-connect')) {
+    if (request.method() !== 'GET') {
       await route.fulfill({
         contentType: 'application/json',
         body: JSON.stringify({
           code: 0,
-          message: '批量对接完成',
-          data: { created_count: 1, updated_count: 0, skipped_count: 0 },
+          message: '操作成功',
+          data: {
+            supplier: {
+              id: 4,
+              name: '新供应商',
+              provider_key: 'zjmf_finance_api',
+              provider_label: 'ZJMF 财务',
+              status: 1,
+              connection: { base_url: 'https://new.example.test', base_url_configured: true, account_name: 'new-user' },
+              credentials: { api_credential_configured: true, provider_values_configured: { api_key: true } },
+              upstream_binding: {
+                provider_key: 'zjmf_finance_api',
+                base_url: 'https://new.example.test',
+                base_url_configured: true,
+              },
+            },
+          },
         }),
-      });
-      return;
-    }
-
-    if (request.method() !== 'GET') {
-      await route.fulfill({
-        contentType: 'application/json',
-        body: JSON.stringify({ code: 0, message: '操作成功', data: {} }),
       });
       return;
     }
@@ -845,15 +958,34 @@ async function mockProductsHub(page: import('@playwright/test').Page) {
             {
               id: 3,
               name: keyword ? '筛选供应商' : 'ZJMF 财务',
-              interface_type: 'zjmf_finance_api',
-              interface_type_label: 'ZJMF 财务',
-              api_url: 'https://example.test',
-              api_username: 'api-user',
-              has_api_url: true,
-              has_api_key: true,
+              provider_key: 'zjmf_finance_api',
+              provider_label: 'ZJMF 财务',
               status: 1,
-              remote_balance_status: 'success',
-              remote_balance: 123.45,
+              connection: { base_url: 'https://example.test', base_url_configured: true, account_name: 'api-user' },
+              credentials: { api_credential_configured: true, provider_values_configured: { api_key: true } },
+              upstream_binding: {
+                id: 3,
+                provider_key: 'zjmf_finance_api',
+                base_url: 'https://example.test',
+                base_url_configured: true,
+                account_name: 'api-user',
+                credentials_configured: { api_key: true },
+              },
+              card: {
+                provided: true,
+                title: 'ZJMF 财务',
+                status: { label: '可用', theme: 'success' },
+                fields: [{ key: 'balance', label: '余额', value: '123.45' }],
+                actions: [
+                  {
+                    key: 'bulk_connect',
+                    label: '批量对接',
+                    action: 'supplier.batch_connect',
+                    request_action: 'server.supplier.bulk_connect',
+                    disabled: false,
+                  },
+                ],
+              },
               updated_at: '2026-06-06 10:00:00',
             },
           ],
@@ -865,7 +997,7 @@ async function mockProductsHub(page: import('@playwright/test').Page) {
     });
   });
 
-  await page.route('**/api/admin/suppliers/3**', async (route) => {
+  await page.route('**/api/v2/admin/suppliers/3**', async (route) => {
     const request = route.request();
     const pathname = new URL(request.url()).pathname;
 
@@ -890,14 +1022,30 @@ async function mockProductsHub(page: import('@playwright/test').Page) {
       return;
     }
 
-    if (pathname.endsWith('/suppliers/3/products/batch-connect')) {
+    if (pathname.endsWith('/suppliers/3/tasks') && request.method() === 'POST') {
+      const body = request.postDataJSON() as { type?: string; payload?: Record<string, unknown> };
       await route.fulfill({
         contentType: 'application/json',
         body: JSON.stringify({
           code: 0,
-          message: '批量对接完成',
-          data: { created_count: 1, updated_count: 0, skipped_count: 0 },
+          data: {
+            id: 3,
+            status: 'completed',
+            message: '批量对接完成',
+            detail: {
+              type: body.type || 'server.supplier.bulk_connect',
+              result: { created_count: 1, updated_count: 0, skipped_count: 0 },
+            },
+          },
         }),
+      });
+      return;
+    }
+
+    if (pathname.endsWith('/suppliers/3/status') && request.method() === 'PATCH') {
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ code: 0, data: { id: 3, status: 'completed', message: '供应商状态已更新' } }),
       });
       return;
     }
@@ -942,13 +1090,23 @@ async function mockProductsHub(page: import('@playwright/test').Page) {
         body: JSON.stringify({
           code: 0,
           data: {
-            id: 3,
-            name: 'ZJMF 财务详情',
-            interface_type: 'zjmf_finance_api',
-            api_url: 'https://example.test',
-            api_username: 'api-user',
-            api_key: 'secret',
-            status: 1,
+            supplier: {
+              id: 3,
+              name: 'ZJMF 财务详情',
+              provider_key: 'zjmf_finance_api',
+              provider_label: 'ZJMF 财务',
+              status: 1,
+              connection: { base_url: 'https://example.test', base_url_configured: true, account_name: 'api-user' },
+              credentials: { api_credential_configured: true, provider_values_configured: { api_key: true } },
+              upstream_binding: {
+                id: 3,
+                provider_key: 'zjmf_finance_api',
+                base_url: 'https://example.test',
+                base_url_configured: true,
+                account_name: 'api-user',
+                credentials_configured: { api_key: true },
+              },
+            },
           },
         }),
       });
@@ -963,7 +1121,9 @@ async function mockProductsHub(page: import('@playwright/test').Page) {
 }
 
 async function mockInstanceSpecs(page: import('@playwright/test').Page) {
-  await page.route('**/api/admin/instance-spec-catalog**', async (route) => {
+  await mockCouponProductTree(page);
+
+  await page.route('**/api/v2/admin/instance-spec-catalog**', async (route) => {
     const request = route.request();
     if (request.method() === 'POST') {
       const body = request.postDataJSON() as { list?: unknown[] };
@@ -997,41 +1157,12 @@ async function mockInstanceSpecs(page: import('@playwright/test').Page) {
       }),
     });
   });
-
-  await page.route('**/api/admin/coupons/product-tree**', async (route) => {
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        code: 0,
-        data: {
-          tree: [
-            {
-              id: 'category-12',
-              label: '通用型',
-              children: [
-                {
-                  id: 101,
-                  product_id: 101,
-                  label: '标准云服务器',
-                  display_name: '标准云服务器',
-                  cpu_memory_display: '2C4G',
-                  category_full_name: '云服务器 / 通用型',
-                  node_type: 'product',
-                  leaf: true,
-                  primary_price: { cycle: 'monthly', amount: '99.00' },
-                  status: 1,
-                },
-              ],
-            },
-          ],
-        },
-      }),
-    });
-  });
 }
 
 async function mockCpuModels(page: import('@playwright/test').Page) {
-  await page.route('**/api/admin/cpu-model-catalog**', async (route) => {
+  await mockCouponProductTree(page);
+
+  await page.route('**/api/v2/admin/cpu-model-catalog**', async (route) => {
     const request = route.request();
     if (request.method() === 'POST') {
       const body = request.postDataJSON() as { list?: unknown[] };
@@ -1070,40 +1201,11 @@ async function mockCpuModels(page: import('@playwright/test').Page) {
       }),
     });
   });
-
-  await page.route('**/api/admin/coupons/product-tree**', async (route) => {
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        code: 0,
-        data: {
-          tree: [
-            {
-              id: 'category-12',
-              label: '通用型',
-              children: [
-                {
-                  id: 101,
-                  product_id: 101,
-                  label: '标准云服务器',
-                  display_name: '标准云服务器',
-                  cpu_memory_display: '2C4G',
-                  category_full_name: '云服务器 / 通用型',
-                  node_type: 'product',
-                  leaf: true,
-                  primary_price: { cycle: 'monthly', amount: '99.00' },
-                  status: 1,
-                },
-              ],
-            },
-          ],
-        },
-      }),
-    });
-  });
 }
 
 async function mockCoupons(page: import('@playwright/test').Page) {
+  await mockCouponProductTree(page);
+
   let coupons: Record<string, unknown>[] = [
     {
       id: 501,
@@ -1143,43 +1245,10 @@ async function mockCoupons(page: import('@playwright/test').Page) {
     },
   ];
 
-  await page.route('**/api/admin/coupons**', async (route) => {
+  await page.route('**/api/v2/admin/coupons**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const pathname = url.pathname;
-
-    if (pathname.endsWith('/coupons/product-tree')) {
-      await route.fulfill({
-        contentType: 'application/json',
-        body: JSON.stringify({
-          code: 0,
-          data: {
-            tree: [
-              {
-                id: 'category-12',
-                label: '通用型',
-                product_type: 'vps',
-                children: [
-                  {
-                    id: 101,
-                    product_id: 101,
-                    label: '标准云服务器',
-                    display_name: '标准云服务器',
-                    cpu_memory_display: '2C4G',
-                    category_full_name: '云服务器 / 通用型',
-                    node_type: 'product',
-                    leaf: true,
-                    primary_price: { cycle: 'monthly', amount: '99.00' },
-                    status: 1,
-                  },
-                ],
-              },
-            ],
-          },
-        }),
-      });
-      return;
-    }
 
     if (pathname.endsWith('/coupons/summary')) {
       await route.fulfill({
@@ -1209,12 +1278,15 @@ async function mockCoupons(page: import('@playwright/test').Page) {
 
     if (pathname.endsWith('/coupons') && request.method() === 'POST') {
       const body = request.postDataJSON();
-      coupons = [{ id: 502, ...body, display_status: 'active', display_status_label: '生效中', can_delete: true }, ...coupons];
+      coupons = [
+        { id: 502, ...body, display_status: 'active', display_status_label: '生效中', can_delete: true },
+        ...coupons,
+      ];
       await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ code: 0, data: coupons[0] }) });
       return;
     }
 
-    if (pathname.endsWith('/toggle-status')) {
+    if (pathname.endsWith('/status') && request.method() === 'PATCH') {
       const id = Number(pathname.split('/').at(-2));
       coupons = coupons.map((item) => (item.id === id ? { ...item, status: Number(item.status) === 1 ? 0 : 1 } : item));
       await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ code: 0, data: {} }) });
@@ -1237,6 +1309,8 @@ async function mockCoupons(page: import('@playwright/test').Page) {
 }
 
 async function mockCouponCampaigns(page: import('@playwright/test').Page) {
+  await mockCouponProductTree(page);
+
   let campaigns: Record<string, unknown>[] = [
     {
       id: 601,
@@ -1277,38 +1351,7 @@ async function mockCouponCampaigns(page: import('@playwright/test').Page) {
     },
   ];
 
-  await page.route('**/api/admin/coupons/product-tree**', async (route) => {
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        code: 0,
-        data: {
-          tree: [
-            {
-              id: 'category-12',
-              label: '通用型',
-              children: [
-                {
-                  id: 101,
-                  product_id: 101,
-                  label: '标准云服务器',
-                  display_name: '标准云服务器',
-                  cpu_memory_display: '2C4G',
-                  category_full_name: '云服务器 / 通用型',
-                  node_type: 'product',
-                  leaf: true,
-                  primary_price: { cycle: 'monthly', amount: '99.00' },
-                  status: 1,
-                },
-              ],
-            },
-          ],
-        },
-      }),
-    });
-  });
-
-  await page.route('**/api/admin/coupon-campaigns**', async (route) => {
+  await page.route('**/api/v2/admin/coupon-campaigns**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const pathname = url.pathname;
@@ -1338,14 +1381,19 @@ async function mockCouponCampaigns(page: import('@playwright/test').Page) {
       return;
     }
 
-    if (pathname.endsWith('/trigger')) {
-      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ code: 0, data: { dispatched: true } }) });
+    if (pathname.endsWith('/tasks') && request.method() === 'POST') {
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ code: 0, data: { dispatched: true } }),
+      });
       return;
     }
 
-    if (pathname.endsWith('/toggle-status')) {
+    if (pathname.endsWith('/status') && request.method() === 'PATCH') {
       const id = Number(pathname.split('/').at(-2));
-      campaigns = campaigns.map((item) => (item.id === id ? { ...item, status: Number(item.status) === 1 ? 0 : 1 } : item));
+      campaigns = campaigns.map((item) =>
+        item.id === id ? { ...item, status: Number(item.status) === 1 ? 0 : 1 } : item,
+      );
       await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ code: 0, data: {} }) });
       return;
     }
@@ -1389,7 +1437,11 @@ async function mockReferral(page: import('@playwright/test').Page) {
   };
   const rewardRow = (variant: 'default' | 'filtered' | 'page2' = 'default') => ({
     id: variant === 'page2' ? 702 : 701,
-    referrer: { id: 21, display_name: variant === 'filtered' ? '筛选推荐人' : '推广用户', email: 'referrer@example.test' },
+    referrer: {
+      id: 21,
+      display_name: variant === 'filtered' ? '筛选推荐人' : '推广用户',
+      email: 'referrer@example.test',
+    },
     referred_user: { id: 22, display_name: '新客户', email: 'new@example.test' },
     order: {
       order_no: variant === 'page2' ? 'ORD-REF-PAGE-002' : 'ORD-REF-001',
@@ -1434,7 +1486,7 @@ async function mockReferral(page: import('@playwright/test').Page) {
     },
   ];
 
-  await page.route('**/api/admin/referral**', async (route) => {
+  await page.route('**/api/v2/admin/referral**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const pathname = url.pathname;
@@ -1450,7 +1502,10 @@ async function mockReferral(page: import('@playwright/test').Page) {
       const variant = keyword ? 'filtered' : pageNo === '2' ? 'page2' : 'default';
       await route.fulfill({
         contentType: 'application/json',
-        body: JSON.stringify({ code: 0, data: { list: [rewardRow(variant)], total: 21, page: Number(pageNo || 1), page_size: 20 } }),
+        body: JSON.stringify({
+          code: 0,
+          data: { list: [rewardRow(variant)], total: 21, page: Number(pageNo || 1), page_size: 20 },
+        }),
       });
       return;
     }
@@ -1458,7 +1513,12 @@ async function mockReferral(page: import('@playwright/test').Page) {
     if (pathname.endsWith('/referral-withdrawals') && request.method() === 'GET') {
       const keyword = url.searchParams.get('keyword');
       const list = keyword
-        ? [{ ...withdrawals[0], user: { id: 24, display_name: '筛选提现用户', email: 'filtered-withdraw@example.test' } }]
+        ? [
+            {
+              ...withdrawals[0],
+              user: { id: 24, display_name: '筛选提现用户', email: 'filtered-withdraw@example.test' },
+            },
+          ]
         : withdrawals;
       await route.fulfill({
         contentType: 'application/json',
@@ -1467,25 +1527,47 @@ async function mockReferral(page: import('@playwright/test').Page) {
       return;
     }
 
-    const approveMatch = pathname.match(/\/referral-withdrawals\/(\d+)\/approve$/);
+    const approveMatch = pathname.match(/\/referral-withdrawals\/(\d+)\/approvals$/);
     if (approveMatch && request.method() === 'POST') {
       const id = Number(approveMatch[1]);
       const body = request.postDataJSON();
       withdrawals = withdrawals.map((item) =>
-        item.id === id ? { ...item, status: 1, operator: 'cerbo', remark: body.remark || '已通过', processed_at: '2026-06-06 13:00:00' } : item,
+        item.id === id
+          ? {
+              ...item,
+              status: 1,
+              operator: 'cerbo',
+              remark: body.remark || '已通过',
+              processed_at: '2026-06-06 13:00:00',
+            }
+          : item,
       );
-      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ code: 0, data: withdrawals.find((item) => item.id === id) }) });
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ code: 0, data: withdrawals.find((item) => item.id === id) }),
+      });
       return;
     }
 
-    const rejectMatch = pathname.match(/\/referral-withdrawals\/(\d+)\/reject$/);
+    const rejectMatch = pathname.match(/\/referral-withdrawals\/(\d+)\/rejections$/);
     if (rejectMatch && request.method() === 'POST') {
       const id = Number(rejectMatch[1]);
       const body = request.postDataJSON();
       withdrawals = withdrawals.map((item) =>
-        item.id === id ? { ...item, status: 2, operator: 'cerbo', remark: body.remark || '已拒绝', processed_at: '2026-06-06 14:00:00' } : item,
+        item.id === id
+          ? {
+              ...item,
+              status: 2,
+              operator: 'cerbo',
+              remark: body.remark || '已拒绝',
+              processed_at: '2026-06-06 14:00:00',
+            }
+          : item,
       );
-      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ code: 0, data: withdrawals.find((item) => item.id === id) }) });
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ code: 0, data: withdrawals.find((item) => item.id === id) }),
+      });
       return;
     }
 
@@ -1523,13 +1605,16 @@ async function mockMemberLevels(page: import('@playwright/test').Page) {
     },
   ];
 
-  await page.route('**/api/admin/member-levels**', async (route) => {
+  await page.route('**/api/v2/admin/member-levels**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const pathname = url.pathname;
 
     if (pathname.endsWith('/member-levels') && request.method() === 'GET') {
-      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ code: 0, data: levels }) });
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ code: 0, data: { list: levels, total: levels.length } }),
+      });
       return;
     }
 
@@ -1545,7 +1630,10 @@ async function mockMemberLevels(page: import('@playwright/test').Page) {
       const id = Number(match[1]);
       const body = request.postDataJSON();
       levels = levels.map((item) => (item.id === id ? { ...item, ...body, updated_at: '2026-06-06 13:00:00' } : item));
-      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ code: 0, data: levels.find((item) => item.id === id) }) });
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ code: 0, data: levels.find((item) => item.id === id) }),
+      });
       return;
     }
 
@@ -1565,9 +1653,19 @@ async function mockContent(page: import('@playwright/test').Page) {
     notice: [{ id: 1001, name: '系统通知', slug: 'system', status: 1, sort_order: 10, articles_count: 1 }],
     help: [{ id: 1002, name: '新手指南', slug: 'guide', status: 1, sort_order: 10, articles_count: 1 }],
   };
-  const articleRow = (type: string, variant: 'default' | 'filtered' | 'page2' = 'default'): Record<string, unknown> => ({
+  const articleRow = (
+    type: string,
+    variant: 'default' | 'filtered' | 'page2' = 'default',
+  ): Record<string, unknown> => ({
     id: type === 'help' ? 1201 : variant === 'page2' ? 1102 : 1101,
-    title: type === 'help' ? '新手指南文章' : variant === 'filtered' ? '筛选公告' : variant === 'page2' ? '第二页公告' : '平台维护公告',
+    title:
+      type === 'help'
+        ? '新手指南文章'
+        : variant === 'filtered'
+          ? '筛选公告'
+          : variant === 'page2'
+            ? '第二页公告'
+            : '平台维护公告',
     category_id: type === 'help' ? 1002 : 1001,
     category_name: type === 'help' ? '新手指南' : '系统通知',
     slug: type === 'help' ? 'getting-started' : 'maintenance',
@@ -1591,14 +1689,17 @@ async function mockContent(page: import('@playwright/test').Page) {
     help: [articleRow('help')],
   };
 
-  await page.route('**/api/admin/content/**', async (route) => {
+  await page.route('**/api/v2/admin/content/**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const pathname = url.pathname;
     const type = url.searchParams.get('content_type') || 'notice';
 
     if (pathname.endsWith('/content/categories') && request.method() === 'GET') {
-      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ code: 0, data: categoriesByType[type] || [] }) });
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ code: 0, data: categoriesByType[type] || [] }),
+      });
       return;
     }
 
@@ -1625,7 +1726,14 @@ async function mockContent(page: import('@playwright/test').Page) {
 
     if (pathname.endsWith('/content/articles') && request.method() === 'POST') {
       const body = request.postDataJSON();
-      const item = { id: 1103, ...body, category_name: '系统通知', status_label: '已发布', view_count: 0, updated_at: '2026-06-06 12:00:00' };
+      const item = {
+        id: 1103,
+        ...body,
+        category_name: '系统通知',
+        status_label: '已发布',
+        view_count: 0,
+        updated_at: '2026-06-06 12:00:00',
+      };
       articlesByType[body.content_type] = [item, ...(articlesByType[body.content_type] || [])];
       await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ code: 0, data: item }) });
       return;
@@ -1635,7 +1743,10 @@ async function mockContent(page: import('@playwright/test').Page) {
     if (articleMatch && request.method() === 'GET') {
       const id = Number(articleMatch[1]);
       const all = [...articlesByType.notice, ...articlesByType.help, articleRow('notice', 'page2')];
-      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ code: 0, data: all.find((item) => item.id === id) || articleRow(type) }) });
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ code: 0, data: all.find((item) => item.id === id) || articleRow(type) }),
+      });
       return;
     }
 
@@ -1643,8 +1754,13 @@ async function mockContent(page: import('@playwright/test').Page) {
       const id = Number(articleMatch[1]);
       const body = request.postDataJSON();
       const list = articlesByType[body.content_type] || [];
-      articlesByType[body.content_type] = list.map((item) => (item.id === id ? { ...item, ...body, updated_at: '2026-06-06 13:00:00' } : item));
-      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ code: 0, data: articlesByType[body.content_type].find((item) => item.id === id) }) });
+      articlesByType[body.content_type] = list.map((item) =>
+        item.id === id ? { ...item, ...body, updated_at: '2026-06-06 13:00:00' } : item,
+      );
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ code: 0, data: articlesByType[body.content_type].find((item) => item.id === id) }),
+      });
       return;
     }
 
@@ -1665,7 +1781,8 @@ const notificationEmailContentDefault =
 
 async function mockNotifications(page: import('@playwright/test').Page) {
   const emailContentDefault = notificationEmailContentDefault;
-  const emailContentOverride = '<p>{{#site_logo}}<img class="email-logo" src="{{site_logo}}" alt="{{site_name}}">{{/site_logo}}验证码 {{code}}</p>';
+  const emailContentOverride =
+    '<p>{{#site_logo}}<img class="email-logo" src="{{site_logo}}" alt="{{site_name}}">{{/site_logo}}验证码 {{code}}</p>';
   type MockNotificationTemplate = {
     channel: 'email' | 'sms';
     code: string;
@@ -1680,7 +1797,7 @@ async function mockNotifications(page: import('@playwright/test').Page) {
     setting_keys: Record<string, string>;
   };
 
-  await page.route(/\/api\/(?:v2\/admin|admin)\/notification-templates(?:\?.*)?$/, async (route) => {
+  await page.route(/\/api\/v2\/admin\/notification-templates(?:\?.*)?$/, async (route) => {
     const url = new URL(route.request().url());
     const channel = url.searchParams.get('channel') || 'email';
     const list: MockNotificationTemplate[] =
@@ -1744,7 +1861,7 @@ async function mockNotifications(page: import('@playwright/test').Page) {
     });
   });
 
-  await page.route(/\/api\/(?:v2\/admin|admin)\/settings(?:\?.*)?$/, async (route) => {
+  await page.route(/\/api\/v2\/admin\/settings(?:\?.*)?$/, async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     if (request.method() === 'POST') {
@@ -1824,12 +1941,12 @@ async function mockInvoices(page: import('@playwright/test').Page) {
     payment_summary: { gateway_label: '余额支付' },
   });
 
-  await page.route('**/api/admin/invoices**', async (route) => {
+  await page.route('**/api/v2/admin/invoices**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const pathname = url.pathname;
 
-    if (pathname.endsWith('/cancel')) {
+    if (pathname.endsWith('/cancellations')) {
       cancelled = true;
       await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ code: 0, data: {} }) });
       return;
@@ -1842,10 +1959,62 @@ async function mockInvoices(page: import('@playwright/test').Page) {
         body: JSON.stringify({
           code: 0,
           data: {
-            invoice,
-            payments: [{ id: 1, payment_no: 'PAY-001', gateway_label: '余额支付', amount: 128.5, created_at: '2026-06-06 10:01:00' }],
-            items: [{ id: 1, description: '标准云服务器 2C4G', amount: 128.5 }],
-            logs: [{ id: 1, summary: '账单已创建', created_at: '2026-06-06 10:00:00' }],
+            invoice: {
+              id: invoice.id,
+              basic: {
+                invoice_no: invoice.invoice_no,
+                type: invoice.type,
+                type_label: invoice.type_label,
+                status: invoice.status,
+                status_label: invoice.status_label,
+                raw_status: invoice.raw_status,
+                raw_status_label: invoice.status_label,
+                billing_cycle: 'monthly',
+                quantity: 1,
+                due_date: invoice.due_date,
+              },
+              display: {
+                product_spec_snapshot: '2C4G',
+                product_spec_display: invoice.product_spec_display,
+                product_display_name: invoice.product_display_name,
+                combined_display_name: invoice.combined_display_name,
+                summary: invoice.summary,
+              },
+              financial: {
+                amount: invoice.amount,
+                discount: 0,
+                paid_amount: invoice.paid_amount,
+                payable_amount: invoice.amount,
+                paid_at: invoice.paid_at,
+              },
+              user: invoice.user,
+              order: invoice.order,
+              product: {
+                id: 101,
+                name: invoice.product_display_name,
+                full_path: invoice.combined_display_name,
+                type: 'cloud_server',
+              },
+              service: null,
+              configuration: { config_snapshot: {}, config_pricing_snapshot: {}, coupon_snapshot: null },
+              payment_chain: {
+                payment_summary: invoice.payment_summary,
+                payments: [
+                  {
+                    id: 1,
+                    payment_no: 'PAY-001',
+                    gateway_label: '余额支付',
+                    amount: 128.5,
+                    created_at: '2026-06-06 10:01:00',
+                  },
+                ],
+              },
+              items: [{ id: 1, description: '标准云服务器 2C4G', amount: 128.5 }],
+              logs: [{ id: 1, summary: '账单已创建', created_at: '2026-06-06 10:00:00' }],
+              audit: { trace_id: 'trace-invoice-900' },
+              actions: { can_cancel: !cancelled },
+              timestamps: { created_at: invoice.created_at, updated_at: invoice.created_at },
+            },
           },
         }),
       });
@@ -1892,7 +2061,7 @@ async function mockOrders(page: import('@playwright/test').Page) {
     },
   });
 
-  await page.route('**/api/admin/orders**', async (route) => {
+  await page.route('**/api/v2/admin/orders**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const keyword = url.searchParams.get('keyword') || '';
@@ -1915,7 +2084,10 @@ async function mockOrders(page: import('@playwright/test').Page) {
 }
 
 async function mockFinanceModeOrders(page: import('@playwright/test').Page) {
-  const modeOrderRow = (mode: 'renewals' | 'upgrade', variant: 'default' | 'filtered' | 'page2' = 'default'): Record<string, unknown> => ({
+  const modeOrderRow = (
+    mode: 'renewals' | 'upgrade',
+    variant: 'default' | 'filtered' | 'page2' = 'default',
+  ): Record<string, unknown> => ({
     id: mode === 'renewals' ? 820 : 830,
     order_no:
       variant === 'filtered'
@@ -1969,8 +2141,8 @@ async function mockFinanceModeOrders(page: import('@playwright/test').Page) {
     });
   };
 
-  await page.route('**/api/admin/finance/renewal-orders**', async (route) => fulfillList(route, 'renewals'));
-  await page.route('**/api/admin/finance/upgrade-orders**', async (route) => fulfillList(route, 'upgrade'));
+  await page.route('**/api/v2/admin/finance/renewal-orders**', async (route) => fulfillList(route, 'renewals'));
+  await page.route('**/api/v2/admin/finance/upgrade-orders**', async (route) => fulfillList(route, 'upgrade'));
 }
 
 async function mockRecharges(page: import('@playwright/test').Page) {
@@ -1992,7 +2164,7 @@ async function mockRecharges(page: import('@playwright/test').Page) {
     },
   });
 
-  await page.route('**/api/admin/finance/recharges**', async (route) => {
+  await page.route('**/api/v2/admin/finance/recharges**', async (route) => {
     const url = new URL(route.request().url());
     const keyword = url.searchParams.get('keyword') || '';
     const pageIndex = Number(url.searchParams.get('page') || 1);
@@ -2014,7 +2186,7 @@ async function mockRecharges(page: import('@playwright/test').Page) {
 }
 
 async function mockNewCustomers(page: import('@playwright/test').Page) {
-  await page.route('**/api/admin/finance/new-customer-daily-summary**', async (route) => {
+  await page.route('**/api/v2/admin/finance/new-customer-daily-summary**', async (route) => {
     const url = new URL(route.request().url());
     const isFiltered = url.searchParams.get('start_date') === '2026-05-01';
     await route.fulfill({
@@ -2023,8 +2195,22 @@ async function mockNewCustomers(page: import('@playwright/test').Page) {
         code: 0,
         data: {
           summary: isFiltered
-            ? { new_customers: 3, new_orders: 4, completed_orders: 2, new_tickets: 1, ticket_replies: 6, cancel_requests: 0 }
-            : { new_customers: 12, new_orders: 18, completed_orders: 9, new_tickets: 5, ticket_replies: 21, cancel_requests: 2 },
+            ? {
+                new_customers: 3,
+                new_orders: 4,
+                completed_orders: 2,
+                new_tickets: 1,
+                ticket_replies: 6,
+                cancel_requests: 0,
+              }
+            : {
+                new_customers: 12,
+                new_orders: 18,
+                completed_orders: 9,
+                new_tickets: 5,
+                ticket_replies: 21,
+                cancel_requests: 2,
+              },
           list: [
             isFiltered
               ? {
@@ -2076,7 +2262,7 @@ async function mockServices(page: import('@playwright/test').Page) {
     invoice: { id: 900, invoice_no: 'INV-SERVICE-001' },
   });
 
-  await page.route('**/api/admin/services**', async (route) => {
+  await page.route('**/api/v2/admin/services**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const pathname = url.pathname;
@@ -2109,7 +2295,7 @@ async function mockServices(page: import('@playwright/test').Page) {
 }
 
 async function mockUserDetail(page: import('@playwright/test').Page) {
-  await page.route('**/api/admin/product-categories**', async (route) => {
+  await page.route('**/api/v2/admin/product-groups**', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
@@ -2118,7 +2304,7 @@ async function mockUserDetail(page: import('@playwright/test').Page) {
       }),
     });
   });
-  await page.route(/\/api\/admin\/products(?:\?.*)?$/, async (route) => {
+  await page.route(/\/api\/v2\/admin\/products(?:\?.*)?$/, async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const pathname = url.pathname;
@@ -2161,16 +2347,19 @@ async function mockUserDetail(page: import('@playwright/test').Page) {
       }),
     });
   });
-  await page.route('**/api/admin/suppliers**', async (route) => {
+  await page.route('**/api/v2/admin/suppliers**', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
         code: 0,
-        data: { list: [{ id: 3, name: 'ZJMF 财务', interface_type: 'zjmf_finance_api', interface_type_label: 'ZJMF 财务' }], total: 1 },
+        data: {
+          list: [{ id: 3, name: 'ZJMF 财务', interface_type: 'zjmf_finance_api', interface_type_label: 'ZJMF 财务' }],
+          total: 1,
+        },
       }),
     });
   });
-  await page.route('**/api/admin/os-options**', async (route) => {
+  await page.route('**/api/v2/admin/os-options**', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
@@ -2179,13 +2368,13 @@ async function mockUserDetail(page: import('@playwright/test').Page) {
       }),
     });
   });
-  await page.route('**/api/admin/invoices/**', async (route) => {
+  await page.route('**/api/v2/admin/invoices/**', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({ code: 0, message: '操作成功', data: {} }),
     });
   });
-  await page.route('**/api/admin/users/1**', async (route) => {
+  await page.route('**/api/v2/admin/users/1**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const pathname = url.pathname;
@@ -2196,7 +2385,9 @@ async function mockUserDetail(page: import('@playwright/test').Page) {
         body: JSON.stringify({
           code: 0,
           message: pathname.endsWith('/login-as') ? 'OK' : '操作成功',
-          data: pathname.endsWith('/login-as') ? { login_code: 'LOGIN-AS-CODE', redirect_url: '/login-as?code=LOGIN-AS-CODE' } : {},
+          data: pathname.endsWith('/login-as')
+            ? { login_code: 'LOGIN-AS-CODE', redirect_url: '/login-as?code=LOGIN-AS-CODE' }
+            : {},
         }),
       });
       return;
@@ -2214,7 +2405,24 @@ async function mockUserDetail(page: import('@playwright/test').Page) {
         contentType: 'application/json',
         body: JSON.stringify({
           code: 0,
-          data: { id: 11, runtime: { power_state: 'running', power_label: '运行中' }, upstream: { status_label: '在线' } },
+          data: {
+            service: {
+              id: 11,
+              runtime: { power_state: 'running', power_label: '运行中' },
+              upstream: { status_label: '在线' },
+            },
+          },
+        }),
+      });
+      return;
+    }
+
+    if (pathname.endsWith('/services/11/connection')) {
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          code: 0,
+          data: { connection: { dedicated_ip: '192.0.2.10', username: 'root', port: 22 } },
         }),
       });
       return;
@@ -2226,22 +2434,27 @@ async function mockUserDetail(page: import('@playwright/test').Page) {
         body: JSON.stringify({
           code: 0,
           data: {
-            id: 11,
-            name: '测试云服务器',
-            status: 1,
-            status_label: '运行中',
-            billing_cycle_label: '月付',
-            amount: 88,
-            expires_at: '2026-07-06 10:00:00',
-            invoice: { id: 21, invoice_no: 'INV-USER-001', status: 1 },
-            order: { id: 71, invoice_no: 'INV-USER-001', amount: 88 },
-            upstream: { provider: 'zjmf_finance_api', supplier_id: 3, host_id: 9001, status_label: '在线' },
-            runtime: { power_state: 'running', power_label: '运行中' },
-            connection: { dedicated_ip: '192.0.2.10', username: 'root', port: 22 },
-            specs: [{ label: 'CPU', value: '2 核' }],
-            renew_pricing_cycles: [{ billing_cycle: 'monthly', enabled: true, base_amount: 88, manual_amount: 88 }],
-            refund: { amount: 88, can_original: false, original_blocked_reason: '余额支付不支持原路退款' },
-            actions: { password_reset: true, manual_provision: true, available: ['power:off', 'power:reboot', 'refund'] },
+            service: {
+              id: 11,
+              name: '测试云服务器',
+              status: 1,
+              status_label: '运行中',
+              billing_cycle_label: '月付',
+              amount: 88,
+              expires_at: '2026-07-06 10:00:00',
+              invoice: { id: 21, invoice_no: 'INV-USER-001', status: 1 },
+              order: { id: 71, invoice_no: 'INV-USER-001', amount: 88 },
+              upstream: { provider: 'zjmf_finance_api', supplier_id: 3, host_id: 9001, status_label: '在线' },
+              runtime: { power_state: 'running', power_label: '运行中' },
+              specs: [{ label: 'CPU', value: '2 核' }],
+              renewal: { cycles: [{ billing_cycle: 'monthly', enabled: true, base_amount: 88, manual_amount: 88 }] },
+              refund: { amount: 88, can_original: false, original_blocked_reason: '余额支付不支持原路退款' },
+              actions: {
+                password_reset: true,
+                manual_provision: true,
+                available: ['power:off', 'power:reboot', 'refund'],
+              },
+            },
           },
         }),
       });
@@ -2296,7 +2509,9 @@ async function mockUserDetail(page: import('@playwright/test').Page) {
               payment_summary: { gateway_label: '余额' },
               scene: { items: [{ id: 'item-1', description: '测试云服务器套餐', amount: 88 }] },
             },
-            payments: [{ id: 91, payment_no: 'PAY-USER-001', gateway: 'balance', gateway_label: '余额', status: 1, amount: 88 }],
+            payments: [
+              { id: 91, payment_no: 'PAY-USER-001', gateway: 'balance', gateway_label: '余额', status: 1, amount: 88 },
+            ],
             logs: [{ id: 1, action: 'paid', summary: '账单已支付', created_at: '2026-06-06 10:01:00' }],
           },
         }),
@@ -2353,9 +2568,7 @@ async function mockUserDetail(page: import('@playwright/test').Page) {
       await route.fulfill({
         contentType: 'application/json',
         body: JSON.stringify(
-          paged([
-            { id: 41, subject: '测试工单', priority: 2, status: 0, created_at: '2026-06-06 10:00:00' },
-          ]),
+          paged([{ id: 41, subject: '测试工单', priority: 2, status: 0, created_at: '2026-06-06 10:00:00' }]),
         ),
       });
       return;
@@ -2366,7 +2579,13 @@ async function mockUserDetail(page: import('@playwright/test').Page) {
         contentType: 'application/json',
         body: JSON.stringify(
           paged([
-            { id: 51, action: 'admin.user.update', module: 'user', ip_address: '127.0.0.1', created_at: '2026-06-06 10:00:00' },
+            {
+              id: 51,
+              action: 'admin.user.update',
+              module: 'user',
+              ip_address: '127.0.0.1',
+              created_at: '2026-06-06 10:00:00',
+            },
           ]),
         ),
       });
@@ -2378,7 +2597,13 @@ async function mockUserDetail(page: import('@playwright/test').Page) {
         contentType: 'application/json',
         body: JSON.stringify(
           paged([
-            { id: 61, to_email: '2908990438@qq.com', subject: '测试邮件', status: 'success', sent_at: '2026-06-06 10:00:00' },
+            {
+              id: 61,
+              to_email: '2908990438@qq.com',
+              subject: '测试邮件',
+              status: 'success',
+              sent_at: '2026-06-06 10:00:00',
+            },
           ]),
         ),
       });
@@ -2390,7 +2615,13 @@ async function mockUserDetail(page: import('@playwright/test').Page) {
         contentType: 'application/json',
         body: JSON.stringify(
           paged([
-            { id: 62, phone: '13800000000', template_code: 'SMS_TEST', status: 'pending', created_at: '2026-06-06 10:00:00' },
+            {
+              id: 62,
+              phone: '13800000000',
+              template_code: 'SMS_TEST',
+              status: 'pending',
+              created_at: '2026-06-06 10:00:00',
+            },
           ]),
         ),
       });
@@ -2408,7 +2639,7 @@ async function mockUserDetail(page: import('@playwright/test').Page) {
             phone: '13800000000',
             nickname: '测试用户',
             display_name: '测试用户',
-            balance: 128.5,
+            cash_balance: 128.5,
             credit_limit: 500,
             status: 1,
             is_verified: 1,
@@ -2430,7 +2661,9 @@ async function mockUserDetail(page: import('@playwright/test').Page) {
             referral_code: 'REF001',
             referral_available_amount: 33,
             member_level: { name: '黄金会员' },
-            recent_referrals: [{ id: 2, nickname: '被推荐用户', email: 'ref@example.com', referred_at: '2026-06-06 12:00:00' }],
+            recent_referrals: [
+              { id: 2, nickname: '被推荐用户', email: 'ref@example.com', referred_at: '2026-06-06 12:00:00' },
+            ],
           },
         },
       }),
@@ -2439,7 +2672,7 @@ async function mockUserDetail(page: import('@playwright/test').Page) {
 }
 
 async function mockVerifications(page: import('@playwright/test').Page) {
-  await page.route(/\/api\/admin\/verifications(?:\/[^/?]+)?(?:\/history|\/summary)?(?:\?.*)?$/, async (route) => {
+  await page.route(/\/api\/v2\/admin\/verifications(?:\/[^/?]+)?(?:\/history|\/summary)?(?:\?.*)?$/, async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const pathname = url.pathname;
@@ -2488,7 +2721,7 @@ async function mockVerifications(page: import('@playwright/test').Page) {
       return;
     }
 
-    const detailMatch = pathname.match(/\/api\/admin\/verifications\/([^/]+)$/);
+    const detailMatch = pathname.match(/\/api\/v2\/admin\/verifications\/([^/]+)$/);
     if (detailMatch) {
       await route.fulfill({
         contentType: 'application/json',
@@ -2542,7 +2775,7 @@ async function mockVerifications(page: import('@playwright/test').Page) {
     });
   });
 
-  await page.route(/\/api\/admin\/settings(?:\?.*)?$/, async (route) => {
+  await page.route(/\/api\/v2\/admin\/settings(?:\?.*)?$/, async (route) => {
     if (route.request().method() === 'POST') {
       await route.fulfill({
         contentType: 'application/json',
@@ -2554,20 +2787,22 @@ async function mockVerifications(page: import('@playwright/test').Page) {
       contentType: 'application/json',
       body: JSON.stringify({
         code: 0,
-        data: [
-          { key: 'verification_api', value: 'api-id' },
-          { key: 'verification_key', value: 'api-key' },
-          { key: 'verification_biz_code', value: 'FACE' },
-          { key: 'free_attempts', value: 3 },
-          { key: 'retry_fee', value: 2 },
-        ],
+        data: {
+          list: [
+            { key: 'verification_api', value: 'api-id' },
+            { key: 'verification_key', value: 'api-key' },
+            { key: 'verification_biz_code', value: 'FACE' },
+            { key: 'free_attempts', value: 3 },
+            { key: 'retry_fee', value: 2 },
+          ],
+        },
       }),
     });
   });
 }
 
 async function mockLogin(page: import('@playwright/test').Page) {
-  await page.route('**/api/admin/login**', async (route) => {
+  await page.route('**/api/v2/admin/login**', async (route) => {
     const body = route.request().postDataJSON() as { username?: string; password?: string };
     await route.fulfill({
       contentType: 'application/json',
@@ -2590,109 +2825,257 @@ async function mockLogin(page: import('@playwright/test').Page) {
 }
 
 async function mockLogs(page: import('@playwright/test').Page) {
-  await page.route('**/api/admin/logs/**', async (route) => {
-    const request = route.request();
-    const url = new URL(request.url());
-    const pathname = url.pathname;
-    const pageIndex = Number(url.searchParams.get('page') || 1);
-    const keyword = url.searchParams.get('keyword') || '';
-    const status = url.searchParams.get('status') || '';
-    const paginator = (row: Record<string, unknown>, total = 21) => ({
-      data: [row],
-      total,
-      current_page: pageIndex,
-      per_page: Number(url.searchParams.get('per_page') || 15),
-    });
+  await page.route(
+    /\/api\/v2\/admin\/(?:logs(?:\/.*)?|log-summaries\/[^/?]+|log-cleanups(?:\/.*)?)(?:\?.*)?$/,
+    async (route) => {
+      const request = route.request();
+      const url = new URL(request.url());
+      const pathname = url.pathname;
+      const pageIndex = Number(url.searchParams.get('page') || 1);
+      const keyword = url.searchParams.get('keyword') || '';
+      const status = url.searchParams.get('status') || '';
+      const paginator = (row: Record<string, unknown>, total = 21) => ({
+        list: [row],
+        total,
+        page: pageIndex,
+        page_size: Number(url.searchParams.get('page_size') || 20),
+        summary: {},
+      });
 
-    if (pathname.endsWith('/logs/system/summary')) {
-      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ code: 0, data: { total: 21, errors: 2, warnings: 3, infos: 16 } }) });
-      return;
-    }
-    if (pathname.endsWith('/logs/sms/summary') || pathname.endsWith('/logs/email/summary')) {
-      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ code: 0, data: { total: 21, success: 18, failed: 2, pending: 1 } }) });
-      return;
-    }
-    if (pathname.endsWith('/logs/tasks/summary')) {
-      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ code: 0, data: { total: 21, tasks: 8, errors: 1 } }) });
-      return;
-    }
-    if (pathname.endsWith('/logs/cleanup/overview') && request.method() === 'GET') {
+      if (pathname.endsWith('/log-summaries/system')) {
+        await route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({ code: 0, data: { total: 21, errors: 2, warnings: 3, infos: 16 } }),
+        });
+        return;
+      }
+      if (pathname.endsWith('/log-summaries/sms') || pathname.endsWith('/log-summaries/email')) {
+        await route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({ code: 0, data: { total: 21, success: 18, failed: 2, pending: 1 } }),
+        });
+        return;
+      }
+      if (pathname.endsWith('/log-summaries/tasks')) {
+        await route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({ code: 0, data: { total: 21, tasks: 8, errors: 1 } }),
+        });
+        return;
+      }
+      if (pathname.endsWith('/log-cleanups/overview') && request.method() === 'GET') {
+        await route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({
+            code: 0,
+            data: {
+              database: { sms: 12, email: 8, api: 33, admin_login: 5 },
+              file: {
+                exists: true,
+                size_bytes: 2048,
+                task_log_count: 9,
+                system_log_count: 18,
+                path: 'storage/logs/laravel.log',
+                updated_at: '2026-06-06 10:30:00',
+              },
+              supported_cleanup_types: [
+                { label: '短信日志', value: 'sms' },
+                { label: '邮件日志', value: 'email' },
+                { label: 'API 日志', value: 'api' },
+              ],
+            },
+          }),
+        });
+        return;
+      }
+      if (pathname.endsWith('/log-cleanups') && request.method() === 'POST') {
+        const body = request.postDataJSON();
+        await route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({
+            code: 0,
+            message: '日志清理完成',
+            data: {
+              id: 'cleanup-1',
+              status: 'completed',
+              detail: {
+                cleanup: {
+                  type: body.type,
+                  keep_days: body.keep_days,
+                  cutoff_at: '2026-05-07 00:00:00',
+                  affected: { sms: 3 },
+                },
+              },
+            },
+          }),
+        });
+        return;
+      }
+      if (/\/api\/v2\/admin\/logs\/system\/[^/]+$/.test(pathname)) {
+        await route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({
+            code: 0,
+            data: {
+              log: {
+                id: 1,
+                channel: 'system',
+                source: 'system',
+                fields: { id: 1, level: 'WARNING', raw: '[INFO] Filtered system warning' },
+                message: '[INFO] Filtered system warning',
+                context: { keyword: 'filtered' },
+                created_at: '2026-06-06 10:00:00',
+              },
+            },
+          }),
+        });
+        return;
+      }
+      if (pathname.endsWith('/logs/system')) {
+        const message = pageIndex === 2 ? 'System page 2' : keyword ? 'Filtered system warning' : 'System boot ok';
+        await route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({
+            code: 0,
+            data: paginator({
+              id: pageIndex,
+              channel: 'system',
+              source: 'system',
+              level: keyword ? 'WARNING' : 'INFO',
+              message_excerpt: message,
+              error_excerpt: '',
+              context_excerpt: `[INFO] ${message}`,
+              created_at: '2026-06-06 10:00:00',
+            }),
+          }),
+        });
+        return;
+      }
+      if (pathname.endsWith('/logs/admin-logins')) {
+        await route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({
+            code: 0,
+            data: paginator({
+              id: 101,
+              channel: 'admin-logins',
+              admin_username: 'cerbo',
+              admin_nickname: '主账号',
+              role_name: 'super_admin',
+              ip_address: '127.0.0.1',
+              source: 'operation_log',
+              message_excerpt: '管理员登录成功',
+              context_excerpt: 'Playwright',
+              created_at: '2026-06-06 10:01:00',
+            }),
+          }),
+        });
+        return;
+      }
+      if (pathname.endsWith('/logs/api')) {
+        await route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({
+            code: 0,
+            data: paginator({
+              id: 201,
+              channel: 'api',
+              method: 'GET',
+              path: keyword ? '/api/v2/admin/logs/api' : '/api/v2/admin/users',
+              status: 200,
+              module: 'admin',
+              actor_name: 'cerbo',
+              user_type: 'admin',
+              ip_address: '127.0.0.1',
+              request_id: 'REQ-LOG-001',
+              message_excerpt: 'API 请求完成',
+              context_excerpt: 'admin.logs.api',
+              created_at: '2026-06-06 10:02:00',
+            }),
+          }),
+        });
+        return;
+      }
+      if (pathname.endsWith('/logs/sms')) {
+        await route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({
+            code: 0,
+            data: paginator({
+              id: 301,
+              channel: 'sms',
+              phone: '13800000000',
+              template_code: 'SMS_001',
+              provider: 'aliyun',
+              status: status || 'success',
+              request_id: 'SMS-REQ-001',
+              message_excerpt: '短信验证码 482915',
+              error_excerpt: status === 'failed' ? '通道失败' : '',
+              context_excerpt: '验证码: 482915',
+              sent_at: '2026-06-06 10:03:00',
+              created_at: '2026-06-06 10:03:00',
+            }),
+          }),
+        });
+        return;
+      }
+      if (pathname.endsWith('/logs/email')) {
+        await route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({
+            code: 0,
+            data: paginator({
+              id: 401,
+              channel: 'email',
+              to_email: 'notice@example.com',
+              template_code: '100001',
+              subject: '测试邮件',
+              status: status || 'success',
+              message_excerpt: '邮件正文 482915',
+              error_excerpt: '',
+              context_excerpt: '模板: 100001',
+              sent_at: '2026-06-06 10:04:00',
+              created_at: '2026-06-06 10:04:00',
+            }),
+          }),
+        });
+        return;
+      }
+      if (pathname.endsWith('/logs/tasks')) {
+        await route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({
+            code: 0,
+            data: paginator({
+              id: 501,
+              channel: 'tasks',
+              time: '2026-06-06 10:05:00',
+              task_key: 'service-auto-renew',
+              task_title: '服务自动续费',
+              level: 'INFO',
+              message_excerpt: '服务自动续费完成',
+              context_excerpt: '[INFO] service auto renew done',
+              created_at: '2026-06-06 10:05:00',
+            }),
+          }),
+        });
+        return;
+      }
+      await route.fallback();
+    },
+  );
+
+  await page.route(/\/api\/v2\/admin\/(?:schedules\/overview|schedule-triggers)(?:\?.*)?$/, async (route) => {
+    const request = route.request();
+    const pathname = new URL(request.url()).pathname;
+    if (pathname.endsWith('/schedule-triggers')) {
       await route.fulfill({
         contentType: 'application/json',
         body: JSON.stringify({
           code: 0,
-          data: {
-            database: { sms: 12, email: 8, api: 33, admin_login: 5 },
-            file: { exists: true, size_bytes: 2048, task_log_count: 9, system_log_count: 18, path: 'storage/logs/laravel.log', updated_at: '2026-06-06 10:30:00' },
-            supported_cleanup_types: [
-              { label: '短信日志', value: 'sms' },
-              { label: '邮件日志', value: 'email' },
-              { label: 'API 日志', value: 'api' },
-            ],
-          },
+          data: { id: 'schedule-1', status: 'completed', detail: { task: { execution_mode: 'sync' } } },
         }),
       });
-      return;
-    }
-    if (pathname.endsWith('/logs/cleanup') && request.method() === 'POST') {
-      const body = request.postDataJSON();
-      await route.fulfill({
-        contentType: 'application/json',
-        body: JSON.stringify({ code: 0, message: '日志清理完成', data: { type: body.type, keep_days: body.keep_days, cutoff_at: '2026-05-07 00:00:00', affected: { sms: 3 } } }),
-      });
-      return;
-    }
-    if (pathname.endsWith('/logs/system')) {
-      const message = pageIndex === 2 ? 'System page 2' : keyword ? 'Filtered system warning' : 'System boot ok';
-      await route.fulfill({
-        contentType: 'application/json',
-        body: JSON.stringify({ code: 0, data: paginator({ id: pageIndex, time: '2026-06-06 10:00:00', level: keyword ? 'WARNING' : 'INFO', message, raw: `[INFO] ${message}` }) }),
-      });
-      return;
-    }
-    if (pathname.endsWith('/logs/admin-logins')) {
-      await route.fulfill({
-        contentType: 'application/json',
-        body: JSON.stringify({ code: 0, data: paginator({ id: 101, admin_username: 'cerbo', admin_nickname: '主账号', role_name: 'super_admin', ip_address: '127.0.0.1', created_at: '2026-06-06 10:01:00', source: 'operation_log', detail: { user_agent: 'Playwright' } }) }),
-      });
-      return;
-    }
-    if (pathname.endsWith('/logs/api')) {
-      await route.fulfill({
-        contentType: 'application/json',
-        body: JSON.stringify({ code: 0, data: paginator({ id: 201, method: 'GET', path: keyword ? '/api/admin/logs/api' : '/api/admin/users', status: 200, module: 'admin', actor_name: 'cerbo', user_type: 'admin', ip_address: '127.0.0.1', request_id: 'REQ-LOG-001', created_at: '2026-06-06 10:02:00', params: { keyword }, detail: { route: 'admin.logs.api' }, user_agent: 'Playwright' }) }),
-      });
-      return;
-    }
-    if (pathname.endsWith('/logs/sms')) {
-      await route.fulfill({
-        contentType: 'application/json',
-        body: JSON.stringify({ code: 0, data: paginator({ id: 301, phone: '13800000000', template_code: 'SMS_001', provider: 'aliyun', content: '短信验证码 482915', status: status || 'success', request_id: 'SMS-REQ-001', error_msg: status === 'failed' ? '通道失败' : '', sent_at: '2026-06-06 10:03:00', created_at: '2026-06-06 10:03:00', params: { code: '482915' } }) }),
-      });
-      return;
-    }
-    if (pathname.endsWith('/logs/email')) {
-      await route.fulfill({
-        contentType: 'application/json',
-        body: JSON.stringify({ code: 0, data: paginator({ id: 401, to_email: 'notice@example.com', template_code: '100001', subject: '测试邮件', content: '<p>邮件正文 482915</p>', status: status || 'success', error_msg: '', sent_at: '2026-06-06 10:04:00', created_at: '2026-06-06 10:04:00' }) }),
-      });
-      return;
-    }
-    if (pathname.endsWith('/logs/tasks')) {
-      await route.fulfill({
-        contentType: 'application/json',
-        body: JSON.stringify({ code: 0, data: paginator({ id: 501, time: '2026-06-06 10:05:00', task_key: 'service-auto-renew', task_title: '服务自动续费', level: 'INFO', message: '服务自动续费完成', raw: '[INFO] service auto renew done' }) }),
-      });
-      return;
-    }
-    await route.fallback();
-  });
-
-  await page.route('**/api/admin/schedules/**', async (route) => {
-    const request = route.request();
-    const pathname = new URL(request.url()).pathname;
-    if (pathname.endsWith('/schedules/trigger')) {
-      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ code: 0, data: { execution_mode: 'sync' } }) });
       return;
     }
     await route.fulfill({
@@ -2701,10 +3084,28 @@ async function mockLogs(page: import('@playwright/test').Page) {
         code: 0,
         data: {
           tasks: [
-            { key: 'service-status-sync', title: '服务状态同步', category: '服务', expression: '*/5 * * * *', last_run_at: '2026-06-06 10:00:00', next_run_at: '2026-06-06 10:05:00', manual_triggerable: true, last_log: { level: 'INFO', time: '2026-06-06 10:00:00' } },
-            { key: 'queue-backlog-drain', title: '队列积压消费', category: '队列', expression: '* * * * *', manual_triggerable: false, last_log: null },
+            {
+              key: 'service-status-sync',
+              title: '服务状态同步',
+              category: '服务',
+              expression: '*/5 * * * *',
+              last_run_at: '2026-06-06 10:00:00',
+              next_run_at: '2026-06-06 10:05:00',
+              manual_triggerable: true,
+              last_log: { level: 'INFO', time: '2026-06-06 10:00:00' },
+            },
+            {
+              key: 'queue-backlog-drain',
+              title: '队列积压消费',
+              category: '队列',
+              expression: '* * * * *',
+              manual_triggerable: false,
+              last_log: null,
+            },
           ],
-          recent_logs: [{ id: 1, time: '2026-06-06 10:00:00', task_key: 'service-status-sync', message: '状态同步完成' }],
+          recent_logs: [
+            { id: 1, time: '2026-06-06 10:00:00', task_key: 'service-status-sync', message: '状态同步完成' },
+          ],
         },
       }),
     });
@@ -2712,7 +3113,9 @@ async function mockLogs(page: import('@playwright/test').Page) {
 }
 
 function visibleAccount(page: import('@playwright/test').Page, account: string) {
-  return page.locator('button.users-account:visible, button.users-mobile-card__account:visible').filter({ hasText: account });
+  return page
+    .locator('button.users-account:visible, button.users-mobile-card__account:visible')
+    .filter({ hasText: account });
 }
 
 function visibleVerificationName(page: import('@playwright/test').Page, name: string) {
@@ -2787,7 +3190,7 @@ async function mockSettingsCenter(page: Page) {
     },
   };
 
-  await page.route(/\/api\/admin\/settings(?:\?.*)?$/, async (route) => {
+  await page.route(/\/api\/v2\/admin\/settings(?:\?.*)?$/, async (route) => {
     const request = route.request();
     if (request.method() !== 'GET') {
       await route.fulfill({
@@ -2802,12 +3205,12 @@ async function mockSettingsCenter(page: Page) {
       contentType: 'application/json',
       body: JSON.stringify({
         code: 0,
-        data: Object.entries(settingGroups[group] || {}).map(([key, value]) => ({ key, value })),
+        data: { list: Object.entries(settingGroups[group] || {}).map(([key, value]) => ({ key, value })) },
       }),
     });
   });
 
-  await page.route('**/api/admin/media-files**', async (route) => {
+  await page.route('**/api/v2/admin/media-files**', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
@@ -2818,7 +3221,7 @@ async function mockSettingsCenter(page: Page) {
     });
   });
 
-  await page.route('**/api/admin/site/home-hero**', async (route) => {
+  await page.route('**/api/v2/admin/site/home-hero**', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
@@ -2828,7 +3231,6 @@ async function mockSettingsCenter(page: Page) {
       }),
     });
   });
-
 }
 
 test.describe('frontend-admin-v3 shell smoke', () => {
@@ -2858,7 +3260,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await page.goto('/admin/login', { waitUntil: 'domcontentloaded' });
     await page.getByPlaceholder('请输入管理员账号').fill('cerbo');
     await page.getByPlaceholder('请输入密码').fill('Temp@123456');
-    const loginRequest = page.waitForRequest('**/api/admin/login');
+    const loginRequest = page.waitForRequest('**/api/v2/admin/login');
     await page.getByRole('button', { name: '登录' }).click();
     await expect((await loginRequest).postDataJSON()).toMatchObject({
       username: 'cerbo',
@@ -2905,7 +3307,17 @@ test.describe('frontend-admin-v3 shell smoke', () => {
 
     await expect(page.locator('nav.tdesign-starter-sidebar-layout')).toHaveAttribute('aria-label', /.+/);
 
-    for (const category of ['数据看板', '产品配置', '用户管理', '工单处理', '财务管理', '营销推广', '站点内容', '系统设置', '日志中心']) {
+    for (const category of [
+      '数据看板',
+      '产品配置',
+      '用户管理',
+      '工单处理',
+      '财务管理',
+      '营销推广',
+      '站点内容',
+      '系统设置',
+      '日志中心',
+    ]) {
       await expect(menuText(category)).toBeVisible();
     }
 
@@ -3008,10 +3420,11 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(page.getByText('客户回复')).toBeVisible();
 
     await page.getByPlaceholder('搜索工单标题或 ID').fill('network');
-    await page.getByRole('button', { name: '搜索' }).click();
+    await page.getByPlaceholder('搜索工单标题或 ID').press('Enter');
     await expect(page.getByText('筛选工单')).toBeVisible();
 
-    await page.getByRole('button', { name: '重置' }).click();
+    await page.getByPlaceholder('搜索工单标题或 ID').clear();
+    await page.getByPlaceholder('搜索工单标题或 ID').press('Enter');
     await expect(page.getByText('网络无法连接')).toBeVisible();
 
     await page.getByRole('button', { name: '测试用户' }).click();
@@ -3032,14 +3445,14 @@ test.describe('frontend-admin-v3 shell smoke', () => {
 
     await page.goto('/admin/ticket-conversations/101', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/admin\/ticket-conversations\/101/);
-    await expect(page.getByRole('heading', { name: '网络无法连接' })).toBeVisible();
+    await expect(page.locator('.card-headline').getByText('沟通记录', { exact: true })).toBeVisible();
     await expect(page.getByText('客户反馈无法访问服务器')).toBeVisible();
     await expect(page.getByText('测试云服务器')).toBeVisible();
     await expect(page.getByText('192.0.2.10')).toBeVisible();
 
     await page.locator('.assign-box .t-select').click();
     await page.getByText('cerbo(ticket@example.com)').click();
-    const assignRequest = page.waitForRequest('**/api/admin/tickets/101/assign');
+    const assignRequest = page.waitForRequest('**/api/v2/admin/tickets/101/assignment');
     await page.getByRole('button', { name: '保存指派' }).click();
     await expect((await assignRequest).postDataJSON()).toMatchObject({ assignee_id: 1 });
     await expect(page.getByText('指派成功')).toBeVisible();
@@ -3047,7 +3460,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await page.getByRole('button', { name: '引用' }).first().click();
     await expect(page.getByText('回复 测试用户')).toBeVisible();
 
-    const uploadRequest = page.waitForRequest('**/api/admin/tickets/upload-image');
+    const uploadRequest = page.waitForRequest('**/api/v2/admin/tickets/upload-images');
     await page.locator('.reply-composer input[type="file"]').setInputFiles({
       name: 'admin.png',
       mimeType: 'image/png',
@@ -3056,7 +3469,9 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await uploadRequest;
 
     await page.getByPlaceholder('输入回复内容，或只上传图片后发送').fill('后台回复内容');
-    const replyRequest = page.waitForRequest('**/api/admin/tickets/101/reply');
+    const replyRequest = page.waitForRequest(
+      (request) => request.url().includes('/api/v2/admin/tickets/101/replies') && request.method() === 'POST',
+    );
     await page.getByRole('button', { name: '发送' }).click();
     const replyPayload = (await replyRequest).postDataJSON();
     await expect(replyPayload).toMatchObject({
@@ -3066,12 +3481,12 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     expect(replyPayload.attachments).toContain('private/tickets/admin.png');
     await expect(page.getByText('后台回复内容')).toBeVisible();
 
-    const recallRequest = page.waitForRequest('**/api/admin/tickets/101/replies/202/recall');
+    const recallRequest = page.waitForRequest('**/api/v2/admin/tickets/101/replies/202/recalls');
     await page.getByRole('button', { name: '撤回' }).first().click();
     await recallRequest;
     await expect(page.locator('.recalled-text').filter({ hasText: '消息已撤回' })).toBeVisible();
 
-    const closeRequest = page.waitForRequest('**/api/admin/tickets/101/close');
+    const closeRequest = page.waitForRequest('**/api/v2/admin/tickets/101/closures');
     await page.getByRole('button', { name: '关闭工单' }).click();
     await page.locator('.t-dialog:visible').getByRole('button', { name: '确认关闭' }).click();
     await closeRequest;
@@ -3094,7 +3509,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(page.getByText('云服务器').first()).toBeVisible();
 
     await page.getByPlaceholder('搜索商品名称').fill('filtered');
-    await page.getByRole('button', { name: '搜索' }).click();
+    await page.getByPlaceholder('搜索商品名称').press('Enter');
     await expect(page.getByText('筛选云服务器')).toBeVisible();
 
     await page.locator('.product-table-card .t-table__body .t-checkbox').first().click();
@@ -3104,7 +3519,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(batchCategoryDialog.getByText('批量归类')).toBeVisible();
     await batchCategoryDialog.locator('.t-form__item').filter({ hasText: '目标分类' }).locator('.t-select').click();
     await page.locator('.t-popup:visible .t-select-option').filter({ hasText: '存储型' }).last().click();
-    const batchCategoryRequest = page.waitForRequest('**/api/admin/products/category/batch');
+    const batchCategoryRequest = page.waitForRequest('**/api/v2/admin/products/category-batches');
     await batchCategoryDialog.getByRole('button', { name: '确认归类' }).click();
     await expect((await batchCategoryRequest).postDataJSON()).toMatchObject({
       product_ids: [101],
@@ -3114,13 +3529,13 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     });
 
     await page.locator('.product-table-card .t-table__body .t-checkbox').first().click();
-    const splitPreviewRequest = page.waitForRequest('**/api/admin/products/split-preview');
+    const splitPreviewRequest = page.waitForRequest('**/api/v2/admin/products/split-previews');
     await page.getByRole('button', { name: '拆分商品' }).click();
     await expect((await splitPreviewRequest).postDataJSON()).toMatchObject({ product_ids: [101] });
     const splitDialog = page.locator('.t-dialog:visible');
     await expect(splitDialog.getByText('筛选云服务器 2C4G')).toBeVisible();
     await expect(splitDialog.getByText('预计处理 1 个规格')).toBeVisible();
-    const splitSubmitRequest = page.waitForRequest('**/api/admin/products/split');
+    const splitSubmitRequest = page.waitForRequest('**/api/v2/admin/products/splits');
     await splitDialog.getByRole('button', { name: '确认拆分' }).click();
     await expect((await splitSubmitRequest).postDataJSON()).toMatchObject({ product_ids: [101] });
 
@@ -3130,7 +3545,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(hostnameDialog.getByText('设置商品开通主机名')).toBeVisible();
     await hostnameDialog.getByText('指定前缀').click();
     await hostnameDialog.getByPlaceholder('例如 hk / sg / us').fill('hk');
-    const hostnameRequest = page.waitForRequest('**/api/admin/products/provision-hostname/batch');
+    const hostnameRequest = page.waitForRequest('**/api/v2/admin/products/provision-hostname-batches');
     await hostnameDialog.getByRole('button', { name: '保存规则' }).click();
     await expect((await hostnameRequest).postDataJSON()).toMatchObject({
       product_ids: [101],
@@ -3140,35 +3555,62 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await page.getByRole('button', { name: '管理一级分类' }).click();
     const typeDialog = page.locator('.t-dialog:visible');
     await expect(typeDialog.getByText('管理一级分类')).toBeVisible();
-    await typeDialog.locator('.type-form .t-form__item').filter({ hasText: '一级分类名称' }).locator('input').fill('存储服务器');
-    await typeDialog.locator('.type-form .t-form__item').filter({ hasText: '图标名称' }).locator('input').fill('ServerIcon');
+    await typeDialog
+      .locator('.type-form .t-form__item')
+      .filter({ hasText: '一级分类名称' })
+      .locator('input')
+      .fill('存储服务器');
+    await typeDialog
+      .locator('.type-form .t-form__item')
+      .filter({ hasText: '图标名称' })
+      .locator('input')
+      .fill('ServerIcon');
     const createTypeRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/product-types') && request.method() === 'POST',
+      (request) => request.url().includes('/api/v2/admin/product-types') && request.method() === 'POST',
     );
     await typeDialog.getByRole('button', { name: '新增一级分类' }).click();
     await expect((await createTypeRequest).postDataJSON()).toMatchObject({ label: '存储服务器', icon: 'ServerIcon' });
 
-    await typeDialog.locator('.type-manager-item').filter({ hasText: '云服务器' }).getByRole('button', { name: '编辑' }).click();
-    await typeDialog.locator('.type-form .t-form__item').filter({ hasText: '一级分类名称' }).locator('input').fill('云服务器编辑');
+    await typeDialog
+      .locator('.type-manager-item')
+      .filter({ hasText: '云服务器' })
+      .getByRole('button', { name: '编辑' })
+      .click();
+    await typeDialog
+      .locator('.type-form .t-form__item')
+      .filter({ hasText: '一级分类名称' })
+      .locator('input')
+      .fill('云服务器编辑');
     const updateTypeRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/product-types/cloud_server') && request.method() === 'PUT',
+      (request) => request.url().includes('/api/v2/admin/product-types/cloud_server') && request.method() === 'PUT',
     );
     await typeDialog.getByRole('button', { name: '保存一级分类' }).click();
     await expect((await updateTypeRequest).postDataJSON()).toMatchObject({ label: '云服务器编辑' });
 
-    const reorderTypeRequest = page.waitForRequest('**/api/admin/product-types/reorder');
-    await typeDialog.locator('.type-manager-item').filter({ hasText: '存储服务器' }).getByRole('button', { name: '上移' }).click();
-    await expect((await reorderTypeRequest).postDataJSON()).toMatchObject({ values: ['storage_server', 'cloud_server'] });
+    const reorderTypeRequest = page.waitForRequest('**/api/v2/admin/product-types/reorders');
+    await typeDialog
+      .locator('.type-manager-item')
+      .filter({ hasText: '存储服务器' })
+      .getByRole('button', { name: '上移' })
+      .click();
+    await expect((await reorderTypeRequest).postDataJSON()).toMatchObject({
+      values: ['storage_server', 'cloud_server'],
+    });
 
     const deleteTypeRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/product-types/storage_server') && request.method() === 'DELETE',
+      (request) =>
+        request.url().includes('/api/v2/admin/product-types/storage_server') && request.method() === 'DELETE',
     );
-    await typeDialog.locator('.type-manager-item').filter({ hasText: '存储服务器' }).getByRole('button', { name: '删除' }).click();
+    await typeDialog
+      .locator('.type-manager-item')
+      .filter({ hasText: '存储服务器' })
+      .getByRole('button', { name: '删除' })
+      .click();
     await page.locator('.t-dialog:visible').getByRole('button', { name: '确认删除' }).click();
     await deleteTypeRequest;
     await typeDialog.getByRole('button', { name: '关闭' }).click();
 
-    const reorderCategoryRequest = page.waitForRequest('**/api/admin/product-categories/reorder');
+    const reorderCategoryRequest = page.waitForRequest('**/api/v2/admin/product-groups/reorders');
     await page.locator('.category-tree-row').filter({ hasText: '存储型' }).locator('.category-menu-trigger').click();
     await page.locator('.t-popup:visible .t-dropdown__item').filter({ hasText: '上移' }).click();
     await expect((await reorderCategoryRequest).postDataJSON()).toMatchObject({
@@ -3182,7 +3624,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(categoryCreateDialog.getByText('新增二级分类')).toBeVisible();
     await categoryCreateDialog.locator('.t-form__item').filter({ hasText: '分类名称' }).locator('input').fill('存储型');
     const createCategoryRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/product-categories') && request.method() === 'POST',
+      (request) => request.url().includes('/api/v2/admin/product-groups') && request.method() === 'POST',
     );
     await categoryCreateDialog.getByRole('button', { name: '保存' }).click();
     await expect((await createCategoryRequest).postDataJSON()).toMatchObject({
@@ -3196,9 +3638,13 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await page.locator('.t-popup:visible .t-dropdown__item').filter({ hasText: '新增三级分类' }).click();
     const thirdCategoryCreateDialog = page.locator('.t-dialog:visible');
     await expect(thirdCategoryCreateDialog.getByText('新增三级分类')).toBeVisible();
-    await thirdCategoryCreateDialog.locator('.t-form__item').filter({ hasText: '分类名称' }).locator('input').fill('高性能');
+    await thirdCategoryCreateDialog
+      .locator('.t-form__item')
+      .filter({ hasText: '分类名称' })
+      .locator('input')
+      .fill('高性能');
     const createThirdCategoryRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/product-categories') && request.method() === 'POST',
+      (request) => request.url().includes('/api/v2/admin/product-groups') && request.method() === 'POST',
     );
     await thirdCategoryCreateDialog.getByRole('button', { name: '保存' }).click();
     await expect((await createThirdCategoryRequest).postDataJSON()).toMatchObject({
@@ -3212,9 +3658,13 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await page.locator('.t-popup:visible .t-dropdown__item').filter({ hasText: '编辑' }).click();
     const categoryEditDialog = page.locator('.t-dialog:visible');
     await expect(categoryEditDialog.getByText('分类名称')).toBeVisible();
-    await categoryEditDialog.locator('.t-form__item').filter({ hasText: '分类名称' }).locator('input').fill('通用型编辑');
+    await categoryEditDialog
+      .locator('.t-form__item')
+      .filter({ hasText: '分类名称' })
+      .locator('input')
+      .fill('通用型编辑');
     const updateCategoryRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/product-categories/') && request.method() === 'PUT',
+      (request) => request.url().includes('/api/v2/admin/product-groups/') && request.method() === 'PUT',
     );
     await categoryEditDialog.getByRole('button', { name: '保存' }).click();
     await expect((await updateCategoryRequest).postDataJSON()).toMatchObject({
@@ -3224,7 +3674,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     });
 
     const deleteCategoryRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/product-categories/') && request.method() === 'DELETE',
+      (request) => request.url().includes('/api/v2/admin/product-groups/') && request.method() === 'DELETE',
     );
     await page.locator('.category-tree-row').filter({ hasText: '存储型' }).locator('.category-menu-trigger').click();
     await page.locator('.t-popup:visible .t-dropdown__item').filter({ hasText: '删除' }).click();
@@ -3237,7 +3687,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await newProductDrawer.getByRole('button', { name: '取消' }).click();
 
     const productDetailRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/products/101') && request.method() === 'GET',
+      (request) => request.url().includes('/api/v2/admin/products/101') && request.method() === 'GET',
     );
     await page.locator('.product-table-card').getByRole('button', { name: '编辑' }).first().click();
     await productDetailRequest;
@@ -3246,7 +3696,8 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await productDrawer.getByRole('button', { name: '产品配置' }).click();
     await expect(productDrawer.locator('.config-option-list').getByText('CPU', { exact: true })).toBeVisible();
     const templateRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/suppliers/3/products/300/config-template') && request.method() === 'GET',
+      (request) =>
+        request.url().includes('/api/v2/admin/suppliers/3/products/300/config-template') && request.method() === 'GET',
     );
     await productDrawer.getByRole('button', { name: '拉取模板' }).click();
     await templateRequest;
@@ -3261,7 +3712,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await configDialog.getByRole('button', { name: '保存配置' }).click();
     await expect(productDrawer.locator('.config-option-list').getByText('带宽', { exact: true })).toBeVisible();
     const updateProductRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/products/101') && request.method() === 'PUT',
+      (request) => request.url().includes('/api/v2/admin/products/101') && request.method() === 'PUT',
     );
     await productDrawer.getByRole('button', { name: '保存更改' }).click();
     const updateProductPayload = (await updateProductRequest).postDataJSON();
@@ -3270,7 +3721,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     );
 
     const deleteProductRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/products/101') && request.method() === 'DELETE',
+      (request) => request.url().includes('/api/v2/admin/products/101') && request.method() === 'DELETE',
     );
     await page.locator('.product-table-card').getByRole('button', { name: '删除' }).first().click();
     await page.locator('.t-dialog:visible').getByRole('button', { name: '确认删除' }).click();
@@ -3281,7 +3732,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(page.locator('.traffic-group-list').getByRole('button', { name: /基础流量包/ })).toBeVisible();
     await expect(page.locator('.traffic-row input').first()).toHaveValue('100GB');
 
-    const pullTrafficRequest = page.waitForRequest('**/api/admin/products/traffic-packages/pull');
+    const pullTrafficRequest = page.waitForRequest('**/api/v2/admin/products/traffic-package-pulls');
     await page.getByRole('button', { name: '上游拉取' }).click();
     await expect((await pullTrafficRequest).postDataJSON()).toMatchObject({
       second_product_group_id: 12,
@@ -3291,7 +3742,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(page.locator('.traffic-row input').first()).toHaveValue('200GB');
 
     const saveTrafficRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/settings') && request.method() === 'POST',
+      (request) => request.url().includes('/api/v2/admin/settings') && request.method() === 'POST',
     );
     await page.getByRole('button', { name: '保存当前分组' }).click();
     const saveTrafficPayload = (await saveTrafficRequest).postDataJSON();
@@ -3303,26 +3754,44 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await page.locator('.traffic-actions').getByRole('button', { name: '新增分组' }).click();
     const trafficGroupDialog = page.locator('.t-dialog:visible').filter({ hasText: '新增流量包分组' });
     await expect(trafficGroupDialog.getByText('绑定配置', { exact: true })).toBeVisible();
-    await trafficGroupDialog.locator('.t-form__item').filter({ hasText: '分组名称' }).locator('input').fill('高防流量包');
-    await trafficGroupDialog.locator('.t-form__item').filter({ hasText: '绑定配置' }).locator('.binding-tree-select').click();
+    await trafficGroupDialog
+      .locator('.t-form__item')
+      .filter({ hasText: '分组名称' })
+      .locator('input')
+      .fill('高防流量包');
+    await trafficGroupDialog
+      .locator('.t-form__item')
+      .filter({ hasText: '绑定配置' })
+      .locator('.binding-tree-select')
+      .click();
     await page.locator('.t-popup:visible').getByText('标准云服务器', { exact: true }).last().click();
     await expect(trafficGroupDialog.getByText('襄阳 / 高宽')).toBeVisible();
     await trafficGroupDialog.getByText('分组名称', { exact: true }).click();
     const createTrafficGroupRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/settings') && request.method() === 'POST',
+      (request) => request.url().includes('/api/v2/admin/settings') && request.method() === 'POST',
     );
     await trafficGroupDialog.getByRole('button', { name: '保存分组' }).click();
     const createTrafficGroupPayload = (await createTrafficGroupRequest).postDataJSON();
     expect(JSON.parse(createTrafficGroupPayload.settings.groups)).toEqual(
-      expect.arrayContaining([expect.objectContaining({ name: '高防流量包', product_type: 'cloud_server', product_ids: [101] })]),
+      expect.arrayContaining([
+        expect.objectContaining({ name: '高防流量包', product_type: 'cloud_server', product_ids: [101] }),
+      ]),
     );
     await expect(page.locator('.traffic-group-list').getByRole('button', { name: /高防流量包/ })).toBeVisible();
 
-    await page.locator('.traffic-group-item').filter({ hasText: '高防流量包' }).getByRole('button', { name: '编辑' }).click();
+    await page
+      .locator('.traffic-group-item')
+      .filter({ hasText: '高防流量包' })
+      .getByRole('button', { name: '编辑' })
+      .click();
     const editTrafficGroupDialog = page.locator('.t-dialog:visible').filter({ hasText: '编辑流量包分组' });
-    await editTrafficGroupDialog.locator('.t-form__item').filter({ hasText: '分组名称' }).locator('input').fill('高防流量包编辑');
+    await editTrafficGroupDialog
+      .locator('.t-form__item')
+      .filter({ hasText: '分组名称' })
+      .locator('input')
+      .fill('高防流量包编辑');
     const updateTrafficGroupRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/settings') && request.method() === 'POST',
+      (request) => request.url().includes('/api/v2/admin/settings') && request.method() === 'POST',
     );
     await editTrafficGroupDialog.getByRole('button', { name: '保存分组' }).click();
     const updateTrafficGroupPayload = (await updateTrafficGroupRequest).postDataJSON();
@@ -3331,9 +3800,13 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     );
 
     const deleteTrafficGroupRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/settings') && request.method() === 'POST',
+      (request) => request.url().includes('/api/v2/admin/settings') && request.method() === 'POST',
     );
-    await page.locator('.traffic-group-item').filter({ hasText: '高防流量包编辑' }).getByRole('button', { name: '删除' }).click();
+    await page
+      .locator('.traffic-group-item')
+      .filter({ hasText: '高防流量包编辑' })
+      .getByRole('button', { name: '删除' })
+      .click();
     await page.locator('.t-dialog:visible').getByRole('button', { name: '确认删除' }).click();
     const deleteTrafficGroupPayload = (await deleteTrafficGroupRequest).postDataJSON();
     expect(JSON.parse(deleteTrafficGroupPayload.settings.groups)).not.toEqual(
@@ -3341,7 +3814,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     );
 
     const supplierBalanceRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/suppliers/3/balance') && request.method() === 'GET',
+      (request) => request.url().includes('/api/v2/admin/suppliers/3/balance') && request.method() === 'GET',
     );
     await page.goto('/admin/products/suppliers', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/admin\/products\?tab=suppliers/);
@@ -3359,27 +3832,46 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await supplierBatchDialog.locator('.t-form__item').filter({ hasText: '导入分类' }).locator('.t-select').click();
     await page.getByText('通用型').last().click();
     await supplierBatchDialog.getByRole('button', { name: '选择未对接' }).click();
-    const supplierBatchRequest = page.waitForRequest('**/api/admin/suppliers/3/products/batch-connect');
+    const supplierBatchRequest = page.waitForRequest(
+      (request) => request.url().endsWith('/api/v2/admin/suppliers/3/tasks') && request.method() === 'POST',
+    );
     await supplierBatchDialog.getByRole('button', { name: '执行对接' }).click();
     await expect((await supplierBatchRequest).postDataJSON()).toMatchObject({
-      product_type: 'cloud_server',
-      child_category_id: 12,
-      product_ids: [9001],
-      default_status: 1,
-      default_auto_setup: 1,
-      sync_config_options: 1,
+      type: 'server.supplier.bulk_connect',
+      payload: {
+        first_product_group_code: 'cloud_server',
+        first_product_group_id: 11,
+        second_product_group_id: 12,
+        third_product_group_id: null,
+        product_ids: [9001],
+        default_status: 1,
+        default_auto_setup: 1,
+        sync_config_options: 1,
+      },
     });
     await supplierBatchDialog.getByRole('button', { name: /Cancel|取消/ }).click();
 
     await page.getByRole('button', { name: '新增供应商' }).click();
     const createSupplierDialog = page.locator('.t-dialog:visible').filter({ hasText: '新增供应商' });
     await expect(createSupplierDialog.getByText('接口名称')).toBeVisible();
-    await createSupplierDialog.locator('.t-form__item').filter({ hasText: '接口名称' }).locator('input').fill('新供应商');
-    await createSupplierDialog.locator('.t-form__item').filter({ hasText: '接口地址' }).locator('input').fill('https://new.example.test');
+    await createSupplierDialog
+      .locator('.t-form__item')
+      .filter({ hasText: '接口名称' })
+      .locator('input')
+      .fill('新供应商');
+    await createSupplierDialog
+      .locator('.t-form__item')
+      .filter({ hasText: '接口地址' })
+      .locator('input')
+      .fill('https://new.example.test');
     await createSupplierDialog.locator('.t-form__item').filter({ hasText: '用户名' }).locator('input').fill('new-user');
-    await createSupplierDialog.locator('.t-form__item').filter({ hasText: 'API 密钥' }).locator('input').fill('new-secret');
+    await createSupplierDialog
+      .locator('.t-form__item')
+      .filter({ hasText: 'API 密钥' })
+      .locator('input')
+      .fill('new-secret');
     const createSupplierRequest = page.waitForRequest(
-      (request) => request.url().endsWith('/api/admin/suppliers') && request.method() === 'POST',
+      (request) => request.url().endsWith('/api/v2/admin/suppliers') && request.method() === 'POST',
     );
     await createSupplierDialog.getByRole('button', { name: '保存' }).click();
     await expect((await createSupplierRequest).postDataJSON()).toMatchObject({
@@ -3390,10 +3882,10 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     });
 
     const toggleSupplierRequest = page.waitForRequest(
-      (request) => request.url().endsWith('/api/admin/suppliers/3/toggle-status') && request.method() === 'POST',
+      (request) => request.url().endsWith('/api/v2/admin/suppliers/3/status') && request.method() === 'PATCH',
     );
     await page.locator('.supplier-grid').getByRole('button', { name: '停用' }).first().click();
-    await toggleSupplierRequest;
+    await expect((await toggleSupplierRequest).postDataJSON()).toMatchObject({ enabled: false });
 
     const supplierDetailRequest = page.waitForRequest(
       (request) => request.url().includes('/admin/suppliers/3') && request.method() === 'GET',
@@ -3401,17 +3893,26 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await page.locator('.supplier-grid').getByRole('button', { name: '编辑' }).first().click();
     await supplierDetailRequest;
     const supplierDialog = page.locator('.t-dialog:visible');
-    await expect(supplierDialog.locator('.t-form__item').filter({ hasText: '接口名称' }).locator('input')).toHaveValue('ZJMF 财务详情');
-    await supplierDialog.locator('.t-form__item').filter({ hasText: '接口名称' }).locator('input').fill('ZJMF 财务编辑');
+    await expect(supplierDialog.locator('.t-form__item').filter({ hasText: '接口名称' }).locator('input')).toHaveValue(
+      'ZJMF 财务详情',
+    );
+    await supplierDialog
+      .locator('.t-form__item')
+      .filter({ hasText: '接口名称' })
+      .locator('input')
+      .fill('ZJMF 财务编辑');
     await supplierDialog.locator('.t-form__item').filter({ hasText: 'API 密钥' }).locator('input').fill('secret');
     const updateSupplierRequest = page.waitForRequest(
-      (request) => request.url().endsWith('/api/admin/suppliers/3') && request.method() === 'PUT',
+      (request) => request.url().endsWith('/api/v2/admin/suppliers/3') && request.method() === 'PUT',
     );
     await supplierDialog.getByRole('button', { name: '保存' }).click();
-    await expect((await updateSupplierRequest).postDataJSON()).toMatchObject({ name: 'ZJMF 财务编辑', api_key: 'secret' });
+    await expect((await updateSupplierRequest).postDataJSON()).toMatchObject({
+      name: 'ZJMF 财务编辑',
+      api_key: 'secret',
+    });
 
     const deleteSupplierRequest = page.waitForRequest(
-      (request) => request.url().endsWith('/api/admin/suppliers/3') && request.method() === 'DELETE',
+      (request) => request.url().endsWith('/api/v2/admin/suppliers/3') && request.method() === 'DELETE',
     );
     await page.locator('.supplier-grid').getByRole('button', { name: '删除' }).first().click();
     await page.locator('.t-dialog:visible').getByRole('button', { name: '确认删除' }).click();
@@ -3456,7 +3957,9 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(dialog.getByText('新增优惠券')).toBeVisible();
     await dialog.locator('.t-form__item').filter({ hasText: '优惠券名称' }).locator('input').fill('自动化优惠券');
     await dialog.locator('.t-form__item').filter({ hasText: '优惠金额' }).locator('input').first().fill('50');
-    const createRequest = page.waitForRequest((request) => request.url().endsWith('/api/admin/coupons') && request.method() === 'POST');
+    const createRequest = page.waitForRequest(
+      (request) => request.url().endsWith('/api/v2/admin/coupons') && request.method() === 'POST',
+    );
     await dialog.getByRole('button', { name: '保存' }).click();
     await expect((await createRequest).postDataJSON()).toMatchObject({
       name: '自动化优惠券',
@@ -3472,7 +3975,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(dialog.getByText('编辑优惠券')).toBeVisible();
     await dialog.locator('.t-form__item').filter({ hasText: '描述' }).locator('textarea').fill('更新说明');
     const updateRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/coupons/501') && request.method() === 'PUT',
+      (request) => request.url().includes('/api/v2/admin/coupons/501') && request.method() === 'PUT',
     );
     await dialog.getByRole('button', { name: '保存' }).click();
     await expect((await updateRequest).postDataJSON()).toMatchObject({
@@ -3481,11 +3984,15 @@ test.describe('frontend-admin-v3 shell smoke', () => {
       product_ids: [101],
     });
 
-    const toggleRequest = page.waitForRequest('**/api/admin/coupons/501/toggle-status');
+    const toggleRequest = page.waitForRequest(
+      (request) => request.url().endsWith('/api/v2/admin/coupons/501/status') && request.method() === 'PATCH',
+    );
     await clickRowAction('新客首单立减券', '停用');
-    await toggleRequest;
+    await expect((await toggleRequest).postDataJSON()).toMatchObject({ enabled: false });
 
-    const deleteRequest = page.waitForRequest((request) => request.url().includes('/api/admin/coupons/501') && request.method() === 'DELETE');
+    const deleteRequest = page.waitForRequest(
+      (request) => request.url().includes('/api/v2/admin/coupons/501') && request.method() === 'DELETE',
+    );
     await clickRowAction('新客首单立减券', '删除');
     await page.locator('.t-dialog:visible').getByRole('button', { name: '确认删除' }).click();
     await deleteRequest;
@@ -3528,7 +4035,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(dialog.getByText('新增优惠券活动')).toBeVisible();
     await dialog.locator('.t-form__item').filter({ hasText: '活动名称' }).locator('input').fill('自动化活动');
     const createRequest = page.waitForRequest(
-      (request) => request.url().endsWith('/api/admin/coupon-campaigns') && request.method() === 'POST',
+      (request) => request.url().endsWith('/api/v2/admin/coupon-campaigns') && request.method() === 'POST',
     );
     await dialog.getByRole('button', { name: '保存' }).click();
     await expect((await createRequest).postDataJSON()).toMatchObject({
@@ -3545,7 +4052,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(dialog.getByText('编辑优惠券活动')).toBeVisible();
     await dialog.locator('.t-form__item').filter({ hasText: '描述' }).locator('textarea').fill('活动更新说明');
     const updateRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/coupon-campaigns/601') && request.method() === 'PUT',
+      (request) => request.url().includes('/api/v2/admin/coupon-campaigns/601') && request.method() === 'PUT',
     );
     await dialog.getByRole('button', { name: '保存' }).click();
     await expect((await updateRequest).postDataJSON()).toMatchObject({
@@ -3554,17 +4061,21 @@ test.describe('frontend-admin-v3 shell smoke', () => {
       product_ids: [101],
     });
 
-    const triggerRequest = page.waitForRequest('**/api/admin/coupon-campaigns/601/trigger');
+    const triggerRequest = page.waitForRequest(
+      (request) => request.url().endsWith('/api/v2/admin/coupon-campaigns/601/tasks') && request.method() === 'POST',
+    );
     await clickRowAction('周五特惠', '立即发放');
     await page.locator('.t-dialog:visible').getByRole('button', { name: '确认发放' }).click();
-    await triggerRequest;
+    await expect((await triggerRequest).postDataJSON()).toEqual({ type: 'trigger', payload: {} });
 
-    const toggleRequest = page.waitForRequest('**/api/admin/coupon-campaigns/601/toggle-status');
+    const toggleRequest = page.waitForRequest(
+      (request) => request.url().endsWith('/api/v2/admin/coupon-campaigns/601/status') && request.method() === 'PATCH',
+    );
     await clickRowAction('周五特惠', '停用');
-    await toggleRequest;
+    await expect((await toggleRequest).postDataJSON()).toMatchObject({ enabled: false });
 
     const deleteRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/coupon-campaigns/601') && request.method() === 'DELETE',
+      (request) => request.url().includes('/api/v2/admin/coupon-campaigns/601') && request.method() === 'DELETE',
     );
     await clickRowAction('周五特惠', '删除');
     await page.locator('.t-dialog:visible').getByRole('button', { name: '确认删除' }).click();
@@ -3585,10 +4096,18 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     };
     const clickWithdrawalAction = async (rowText: string, action: string) => {
       if (isMobileViewport()) {
-        await page.locator('.referral-mobile-card').filter({ hasText: rowText }).getByRole('button', { name: action }).click();
+        await page
+          .locator('.referral-mobile-card')
+          .filter({ hasText: rowText })
+          .getByRole('button', { name: action })
+          .click();
         return;
       }
-      await page.locator('.t-table__body tr').filter({ hasText: rowText }).getByRole('button', { name: action }).click();
+      await page
+        .locator('.t-table__body tr')
+        .filter({ hasText: rowText })
+        .getByRole('button', { name: action })
+        .click();
     };
 
     await page.goto('/admin/referral', { waitUntil: 'domcontentloaded' });
@@ -3599,7 +4118,10 @@ test.describe('frontend-admin-v3 shell smoke', () => {
 
     await clickTab('奖励');
     await expect(page.getByText('ORD-REF-001')).toBeVisible();
-    const rewardFilterRequest = page.waitForRequest((request) => request.url().includes('/api/admin/referral/rewards') && request.url().includes('keyword=filtered'));
+    const rewardFilterRequest = page.waitForRequest(
+      (request) =>
+        request.url().includes('/api/v2/admin/referral/rewards') && request.url().includes('keyword=filtered'),
+    );
     await page.getByPlaceholder('搜索推荐人 / 被推荐人 / 账单号').fill('filtered');
     await page.getByRole('button', { name: '搜索' }).click();
     await rewardFilterRequest;
@@ -3607,7 +4129,9 @@ test.describe('frontend-admin-v3 shell smoke', () => {
 
     await page.getByRole('button', { name: '重置' }).click();
     await expect(page.getByText('ORD-REF-001')).toBeVisible();
-    const rewardPageRequest = page.waitForRequest((request) => request.url().includes('/api/admin/referral/rewards') && request.url().includes('page=2'));
+    const rewardPageRequest = page.waitForRequest(
+      (request) => request.url().includes('/api/v2/admin/referral/rewards') && request.url().includes('page=2'),
+    );
     await page.locator('.t-pagination').getByText('2', { exact: true }).click();
     await rewardPageRequest;
     await expect(page.getByText('ORD-REF-PAGE-002')).toBeVisible();
@@ -3615,7 +4139,8 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await clickTab('提现');
     await expect(page.getByText('提现用户')).toBeVisible();
     const withdrawalFilterRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/referral-withdrawals') && request.url().includes('keyword=filtered'),
+      (request) =>
+        request.url().includes('/api/v2/admin/referral-withdrawals') && request.url().includes('keyword=filtered'),
     );
     await page.getByPlaceholder('搜索用户 / 邮箱 / 账号 / 备注').fill('filtered');
     await page.getByRole('button', { name: '搜索' }).click();
@@ -3625,7 +4150,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await page.getByRole('button', { name: '重置' }).click();
     await expect(page.getByText('提现用户')).toBeVisible();
 
-    const approveRequest = page.waitForRequest('**/api/admin/referral-withdrawals/801/approve');
+    const approveRequest = page.waitForRequest('**/api/v2/admin/referral-withdrawals/801/approvals');
     await clickWithdrawalAction('提现用户', '通过');
     let dialog = page.locator('.t-dialog:visible');
     await expect(dialog.getByText('通过提现申请')).toBeVisible();
@@ -3634,7 +4159,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect((await approveRequest).postDataJSON()).toMatchObject({ remark: '审核通过' });
     await expect(page.getByText('提现申请已通过')).toBeVisible();
 
-    const rejectRequest = page.waitForRequest('**/api/admin/referral-withdrawals/802/reject');
+    const rejectRequest = page.waitForRequest('**/api/v2/admin/referral-withdrawals/802/rejections');
     await clickWithdrawalAction('待拒绝用户', '拒绝');
     dialog = page.locator('.t-dialog:visible');
     await expect(dialog.getByText('拒绝提现申请')).toBeVisible();
@@ -3655,10 +4180,18 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     const isMobileViewport = () => (page.viewportSize()?.width || 1440) <= 768;
     const clickLevelAction = async (rowText: string, action: string) => {
       if (isMobileViewport()) {
-        await page.locator('.member-mobile-card').filter({ hasText: rowText }).getByRole('button', { name: action }).click();
+        await page
+          .locator('.member-mobile-card')
+          .filter({ hasText: rowText })
+          .getByRole('button', { name: action })
+          .click();
         return;
       }
-      await page.locator('.t-table__body tr').filter({ hasText: rowText }).getByRole('button', { name: action }).click();
+      await page
+        .locator('.t-table__body tr')
+        .filter({ hasText: rowText })
+        .getByRole('button', { name: action })
+        .click();
     };
 
     await page.goto('/admin/member-levels', { waitUntil: 'domcontentloaded' });
@@ -3677,7 +4210,9 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await dialog.locator('.t-form__item').filter({ hasText: '返利比例' }).locator('input').fill('12');
     await dialog.locator('.t-form__item').filter({ hasText: '排序值' }).locator('input').fill('1');
     await dialog.locator('textarea').fill('高阶推广等级');
-    const createRequest = page.waitForRequest((request) => request.url().endsWith('/api/admin/member-levels') && request.method() === 'POST');
+    const createRequest = page.waitForRequest(
+      (request) => request.url().endsWith('/api/v2/admin/member-levels') && request.method() === 'POST',
+    );
     await dialog.getByRole('button', { name: '保存' }).click();
     await expect((await createRequest).postDataJSON()).toMatchObject({
       name: '钻石会员',
@@ -3697,7 +4232,9 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(dialog.getByText('编辑会员等级')).toBeVisible();
     await dialog.locator('.t-form__item').filter({ hasText: '等级名称' }).locator('input').fill('黄金会员编辑');
     await dialog.locator('textarea').fill('更新等级备注');
-    const updateRequest = page.waitForRequest((request) => request.url().includes('/api/admin/member-levels/901') && request.method() === 'PUT');
+    const updateRequest = page.waitForRequest(
+      (request) => request.url().includes('/api/v2/admin/member-levels/901') && request.method() === 'PUT',
+    );
     await dialog.getByRole('button', { name: '保存' }).click();
     await expect((await updateRequest).postDataJSON()).toMatchObject({
       name: '黄金会员编辑',
@@ -3706,7 +4243,9 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(page.getByText('会员等级已更新')).toBeVisible();
     await expect(page.getByText('黄金会员编辑')).toBeVisible();
 
-    const deleteRequest = page.waitForRequest((request) => request.url().includes('/api/admin/member-levels/902') && request.method() === 'DELETE');
+    const deleteRequest = page.waitForRequest(
+      (request) => request.url().includes('/api/v2/admin/member-levels/902') && request.method() === 'DELETE',
+    );
     await clickLevelAction('白银会员', '删除');
     await page.locator('.t-dialog:visible').getByRole('button', { name: '确认删除' }).click();
     await deleteRequest;
@@ -3728,10 +4267,18 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     const isMobileViewport = () => (page.viewportSize()?.width || 1440) <= 768;
     const clickArticleAction = async (rowText: string, action: string) => {
       if (isMobileViewport()) {
-        await page.locator('.content-mobile-card').filter({ hasText: rowText }).getByRole('button', { name: action }).click();
+        await page
+          .locator('.content-mobile-card')
+          .filter({ hasText: rowText })
+          .getByRole('button', { name: action })
+          .click();
         return;
       }
-      await page.locator('.t-table__body tr').filter({ hasText: rowText }).getByRole('button', { name: action }).click();
+      await page
+        .locator('.t-table__body tr')
+        .filter({ hasText: rowText })
+        .getByRole('button', { name: action })
+        .click();
     };
 
     await page.goto('/admin/content/notices', { waitUntil: 'domcontentloaded' });
@@ -3739,7 +4286,10 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(page.getByRole('heading', { name: '系统公告' })).toBeVisible();
     await expect(page.getByText('平台维护公告')).toBeVisible();
 
-    const filterRequest = page.waitForRequest((request) => request.url().includes('/api/admin/content/articles') && request.url().includes('keyword=filtered'));
+    const filterRequest = page.waitForRequest(
+      (request) =>
+        request.url().includes('/api/v2/admin/content/articles') && request.url().includes('keyword=filtered'),
+    );
     await page.getByPlaceholder('搜索公告标题 / 摘要 / 正文 / 别名').fill('filtered');
     await page.getByRole('button', { name: '搜索' }).click();
     await filterRequest;
@@ -3747,7 +4297,9 @@ test.describe('frontend-admin-v3 shell smoke', () => {
 
     await page.getByRole('button', { name: '重置' }).click();
     await expect(page.getByText('平台维护公告')).toBeVisible();
-    const pageRequest = page.waitForRequest((request) => request.url().includes('/api/admin/content/articles') && request.url().includes('page=2'));
+    const pageRequest = page.waitForRequest(
+      (request) => request.url().includes('/api/v2/admin/content/articles') && request.url().includes('page=2'),
+    );
     await page.locator('.t-pagination').getByText('2', { exact: true }).click();
     await pageRequest;
     await expect(page.getByText('第二页公告')).toBeVisible();
@@ -3758,7 +4310,9 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(dialog.getByText('分类管理')).toBeVisible();
     await dialog.locator('.t-form__item').filter({ hasText: '分类名称' }).locator('input').fill('运维公告');
     await dialog.locator('.t-form__item').filter({ hasText: '别名' }).locator('input').fill('ops');
-    const createCategoryRequest = page.waitForRequest((request) => request.url().endsWith('/api/admin/content/categories') && request.method() === 'POST');
+    const createCategoryRequest = page.waitForRequest(
+      (request) => request.url().endsWith('/api/v2/admin/content/categories') && request.method() === 'POST',
+    );
     await dialog.getByRole('button', { name: '新增分类' }).click();
     await expect((await createCategoryRequest).postDataJSON()).toMatchObject({
       content_type: 'notice',
@@ -3774,7 +4328,9 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await dialog.getByPlaceholder('请输入标题').fill('自动化公告');
     await dialog.locator('.t-form__item').filter({ hasText: '摘要' }).locator('textarea').fill('自动化摘要');
     await dialog.locator('.t-form__item').filter({ hasText: '正文内容' }).locator('textarea').fill('自动化正文');
-    const createArticleRequest = page.waitForRequest((request) => request.url().endsWith('/api/admin/content/articles') && request.method() === 'POST');
+    const createArticleRequest = page.waitForRequest(
+      (request) => request.url().endsWith('/api/v2/admin/content/articles') && request.method() === 'POST',
+    );
     await dialog.getByRole('button', { name: '保存' }).click();
     await expect((await createArticleRequest).postDataJSON()).toMatchObject({
       content_type: 'notice',
@@ -3787,7 +4343,9 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     dialog = page.locator('.t-dialog:visible');
     await expect(dialog.getByText('编辑公告')).toBeVisible();
     await dialog.getByPlaceholder('请输入标题').fill('平台维护公告编辑');
-    const updateArticleRequest = page.waitForRequest((request) => request.url().includes('/api/admin/content/articles/1101') && request.method() === 'PUT');
+    const updateArticleRequest = page.waitForRequest(
+      (request) => request.url().includes('/api/v2/admin/content/articles/1101') && request.method() === 'PUT',
+    );
     await dialog.getByRole('button', { name: '保存' }).click();
     await expect((await updateArticleRequest).postDataJSON()).toMatchObject({
       content_type: 'notice',
@@ -3795,7 +4353,9 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     });
     await expect(page.getByText('公告已更新')).toBeVisible();
 
-    const deleteArticleRequest = page.waitForRequest((request) => request.url().includes('/api/admin/content/articles/1101') && request.method() === 'DELETE');
+    const deleteArticleRequest = page.waitForRequest(
+      (request) => request.url().includes('/api/v2/admin/content/articles/1101') && request.method() === 'DELETE',
+    );
     await clickArticleAction('平台维护公告编辑', '删除');
     await page.locator('.t-dialog:visible').getByRole('button', { name: '确认删除' }).click();
     await deleteArticleRequest;
@@ -3827,18 +4387,26 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(page.getByRole('heading', { name: '系统日志' })).toBeVisible();
     await expect(page.getByText('System boot ok')).toBeVisible();
 
-    const filterRequest = page.waitForRequest((request) => request.url().includes('/api/admin/logs/system') && request.url().includes('keyword=filtered'));
+    const filterRequest = page.waitForRequest(
+      (request) => request.url().includes('/api/v2/admin/logs/system') && request.url().includes('keyword=filtered'),
+    );
     await page.getByPlaceholder('日志内容关键词').fill('filtered');
     await page.getByRole('button', { name: '搜索' }).click();
     await filterRequest;
     await expect(page.getByText('Filtered system warning')).toBeVisible();
 
-    await page.locator('.t-table__body tr').filter({ hasText: 'Filtered system warning' }).getByRole('button', { name: '详情' }).click();
+    await page
+      .locator('.t-table__body tr')
+      .filter({ hasText: 'Filtered system warning' })
+      .getByRole('button', { name: '详情' })
+      .click();
     await expect(page.locator('.t-drawer:visible').getByText('系统日志详情')).toBeVisible();
     await expect(page.locator('.t-drawer:visible').getByText('[INFO] Filtered system warning')).toBeVisible();
     await page.keyboard.press('Escape');
 
-    const pageRequest = page.waitForRequest((request) => request.url().includes('/api/admin/logs/system') && request.url().includes('page=2'));
+    const pageRequest = page.waitForRequest(
+      (request) => request.url().includes('/api/v2/admin/logs/system') && request.url().includes('page=2'),
+    );
     await page.locator('.t-pagination').getByText('2', { exact: true }).click();
     await pageRequest;
     await expect(page.getByText('System page 2')).toBeVisible();
@@ -3847,7 +4415,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(page.getByText('cerbo').first()).toBeVisible();
 
     await clickLogTab('API 日志');
-    await expect(page.getByText('/api/admin/users')).toBeVisible();
+    await expect(page.getByText('/api/v2/admin/users')).toBeVisible();
 
     await clickLogTab('短信日志');
     await expect(page.getByText('13800000000')).toBeVisible();
@@ -3874,17 +4442,29 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(page.getByText('服务状态同步')).toBeVisible();
     await expect(page.getByText('状态同步完成')).toBeVisible();
 
-    const triggerRequest = page.waitForRequest((request) => request.url().includes('/api/admin/schedules/trigger') && request.method() === 'POST');
-    await page.locator('.t-table__body tr').filter({ hasText: '服务状态同步' }).getByRole('button', { name: '立即执行' }).click();
+    const triggerRequest = page.waitForRequest(
+      (request) => request.url().includes('/api/v2/admin/schedule-triggers') && request.method() === 'POST',
+    );
+    await page
+      .locator('.t-table__body tr')
+      .filter({ hasText: '服务状态同步' })
+      .getByRole('button', { name: '立即执行' })
+      .click();
     await expect((await triggerRequest).postDataJSON()).toMatchObject({ task: 'service-status-sync' });
 
     await page.locator('.t-tabs__nav-item-text-wrapper').filter({ hasText: '日志清理' }).click();
     await expect(page.getByText('数据库日志概览')).toBeVisible();
     await expect(page.getByText('storage/logs/laravel.log')).toBeVisible();
     await page.getByPlaceholder('请输入 立即清理').fill('立即清理');
-    const cleanupRequest = page.waitForRequest((request) => request.url().includes('/api/admin/logs/cleanup') && request.method() === 'POST');
+    const cleanupRequest = page.waitForRequest(
+      (request) => request.url().includes('/api/v2/admin/log-cleanups') && request.method() === 'POST',
+    );
     await page.getByRole('button', { name: '立即清理' }).click();
-    await expect((await cleanupRequest).postDataJSON()).toMatchObject({ type: 'sms', keep_days: 30, confirm_text: '立即清理' });
+    await expect((await cleanupRequest).postDataJSON()).toMatchObject({
+      type: 'sms',
+      keep_days: 30,
+      confirm_text: '立即清理',
+    });
     await expect(page.getByText('最近一次清理结果')).toBeVisible();
   });
 
@@ -3898,7 +4478,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
 
     await page.goto('/admin/logs/api', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/admin\/logs\?tab=api/);
-    await expect(page.getByText('/api/admin/users')).toBeVisible();
+    await expect(page.getByText('/api/v2/admin/users')).toBeVisible();
 
     await page.goto('/admin/notifications/email-logs', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/admin\/logs\?tab=email/);
@@ -3940,7 +4520,9 @@ test.describe('frontend-admin-v3 shell smoke', () => {
 
     await page.locator('.field-card').filter({ hasText: '站点名称' }).locator('input').fill('创欧云测试站');
     await page.locator('.field-card').filter({ hasText: '站点 Logo' }).locator('.upload-trigger').click();
-    const uploadRequest = page.waitForRequest((request) => request.url().includes('/api/admin/media-files') && request.method() === 'POST');
+    const uploadRequest = page.waitForRequest(
+      (request) => request.url().includes('/api/v2/admin/media-files') && request.method() === 'POST',
+    );
     await page.locator('.hidden-file-input').setInputFiles({
       name: 'logo-new.png',
       mimeType: 'image/png',
@@ -3948,9 +4530,13 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     });
     await uploadRequest;
     await expect(page.getByText('图片上传成功')).toBeVisible();
-    await expect(page.locator('.field-card').filter({ hasText: '站点 Logo' }).locator('input')).toHaveValue('/uploads/site/logo-new.png');
+    await expect(page.locator('.field-card').filter({ hasText: '站点 Logo' }).locator('input')).toHaveValue(
+      '/uploads/site/logo-new.png',
+    );
 
-    const saveRequest = page.waitForRequest((request) => request.url().includes('/api/admin/settings') && request.method() === 'POST');
+    const saveRequest = page.waitForRequest(
+      (request) => request.url().includes('/api/v2/admin/settings') && request.method() === 'POST',
+    );
     await page.getByRole('button', { name: '保存设置' }).click();
     await expect((await saveRequest).postDataJSON()).toMatchObject({
       group: 'basic',
@@ -3979,7 +4565,9 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await firstSlide.locator('input').nth(1).fill('官网首页 Banner 测试标题');
     await expect(page.getByText('当前存在未保存修改')).toBeVisible();
 
-    const saveHeroRequest = page.waitForRequest((request) => request.url().includes('/api/admin/site/home-hero') && request.method() === 'POST');
+    const saveHeroRequest = page.waitForRequest(
+      (request) => request.url().includes('/api/v2/admin/site/home-hero') && request.method() === 'POST',
+    );
     await page.getByRole('button', { name: '保存设置' }).click();
     await expect((await saveHeroRequest).postDataJSON()).toMatchObject({
       slides: [{ title: '官网首页 Banner 测试标题' }],
@@ -4004,7 +4592,9 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(page.getByPlaceholder('例如 smtp.qq.com')).toHaveValue('smtp.example.test');
 
     await page.getByPlaceholder('例如 smtp.qq.com').fill('smtp.updated.test');
-    const emailSaveRequest = page.waitForRequest((request) => request.url().includes('/settings') && request.method() === 'POST');
+    const emailSaveRequest = page.waitForRequest(
+      (request) => request.url().includes('/settings') && request.method() === 'POST',
+    );
     await page.getByRole('button', { name: '保存邮件配置' }).click();
     await expect((await emailSaveRequest).postDataJSON()).toMatchObject({
       group: 'notification',
@@ -4027,11 +4617,11 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await page.locator('.t-tabs__nav-item-text-wrapper').filter({ hasText: 'API 接口' }).click();
     await expect(page.getByRole('heading', { name: 'API 接口页' })).toBeVisible();
     await expect(page.getByText('全部接口')).toBeVisible();
-    await expect(page.getByText('/api/admin/auth/info').first()).toBeVisible();
+    await expect(page.getByText('/api/v2/admin/auth/info').first()).toBeVisible();
     await page.getByPlaceholder('搜索路径、权限码、控制器或源码文件').fill('auth/info');
-    await expect(page.getByText('/api/admin/auth/info').first()).toBeVisible();
+    await expect(page.getByText('/api/v2/admin/auth/info').first()).toBeVisible();
     await page.getByRole('button', { name: '重置筛选' }).click();
-    await expect(page.getByText('/api/admin/auth/info').first()).toBeVisible();
+    await expect(page.getByText('/api/v2/admin/auth/info').first()).toBeVisible();
 
     await page.goto('/admin/notifications/interfaces', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/admin\/notifications$/);
@@ -4063,12 +4653,16 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(page.getByText('主题预览')).toBeVisible();
     await expect(page.getByPlaceholder('请输入邮件主题')).toHaveValue('测试验证码邮件');
     const htmlEditor = page.locator('.editor-pane').filter({ hasText: 'HTML 正文' }).locator('textarea');
-    await expect(htmlEditor).toHaveValue('<p>{{#site_logo}}<img class="email-logo" src="{{site_logo}}" alt="{{site_name}}">{{/site_logo}}验证码 {{code}}</p>');
+    await expect(htmlEditor).toHaveValue(
+      '<p>{{#site_logo}}<img class="email-logo" src="{{site_logo}}" alt="{{site_name}}">{{/site_logo}}验证码 {{code}}</p>',
+    );
     await expect(page.getByText('模板 CSS')).toHaveCount(0);
 
     await page.getByPlaceholder('请输入邮件主题').fill('自动化验证码主题');
     await htmlEditor.fill('<style>.email-auto { color: #1f5eff; }</style><p>自动化正文 {{code}}</p>');
-    const saveRequest = page.waitForRequest((request) => request.url().includes('/settings') && request.method() === 'POST');
+    const saveRequest = page.waitForRequest(
+      (request) => request.url().includes('/settings') && request.method() === 'POST',
+    );
     await page.getByRole('button', { name: '保存模板' }).click();
     await expect((await saveRequest).postDataJSON()).toMatchObject({
       group: 'notification',
@@ -4113,7 +4707,9 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(page.getByText('INV-20260606-001')).toBeVisible();
     await expect(page.getByText('标准云服务器 2C4G')).toBeVisible();
 
-    const filterRequest = page.waitForRequest((request) => request.url().includes('/api/admin/invoices') && request.url().includes('keyword=filtered'));
+    const filterRequest = page.waitForRequest(
+      (request) => request.url().includes('/api/v2/admin/invoices') && request.url().includes('keyword=filtered'),
+    );
     await page.getByPlaceholder('搜索账单号 / 订单号 / 用户').fill('filtered');
     await page.getByRole('button', { name: '搜索' }).click();
     await filterRequest;
@@ -4123,7 +4719,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(page.getByText('INV-20260606-001')).toBeVisible();
 
     const detailRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/invoices/900') && request.method() === 'GET',
+      (request) => request.url().includes('/api/v2/admin/invoices/900') && request.method() === 'GET',
     );
     await clickRowAction('INV-20260606-001', '详情');
     await detailRequest;
@@ -4133,7 +4729,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(drawer.getByText('账单已创建')).toBeVisible();
 
     const cancelRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/invoices/900/cancel') && request.method() === 'POST',
+      (request) => request.url().includes('/api/v2/admin/invoices/900/cancellations') && request.method() === 'POST',
     );
     await drawer.getByRole('button', { name: '取消账单' }).click();
     await page.locator('.t-dialog:visible').getByRole('button', { name: '确认取消' }).click();
@@ -4156,7 +4752,9 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(page.getByText('INV-20260606-001')).toBeVisible();
     await expect(page.locator('.t-pagination')).toContainText('21');
 
-    const filterRequest = page.waitForRequest((request) => request.url().includes('/api/admin/orders') && request.url().includes('keyword=filtered'));
+    const filterRequest = page.waitForRequest(
+      (request) => request.url().includes('/api/v2/admin/orders') && request.url().includes('keyword=filtered'),
+    );
     await page.getByPlaceholder('搜索订单号 / 账单号 / 用户 / 服务').fill('filtered');
     await page.getByRole('button', { name: '搜索' }).click();
     await filterRequest;
@@ -4166,7 +4764,9 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await page.getByRole('button', { name: '重置' }).click();
     await expect(page.getByText('ORD-20260606-001')).toBeVisible();
 
-    const pageRequest = page.waitForRequest((request) => request.url().includes('/api/admin/orders') && request.url().includes('page=2'));
+    const pageRequest = page.waitForRequest(
+      (request) => request.url().includes('/api/v2/admin/orders') && request.url().includes('page=2'),
+    );
     await page.locator('.t-pagination').getByText('2', { exact: true }).click();
     await pageRequest;
     await expect(page.getByText('ORD-PAGE-002')).toBeVisible();
@@ -4186,7 +4786,8 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(page.getByText('INV-RENEW-001')).toBeVisible();
 
     const filterRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/finance/renewal-orders') && request.url().includes('keyword=filtered'),
+      (request) =>
+        request.url().includes('/api/v2/admin/finance/renewal-orders') && request.url().includes('keyword=filtered'),
     );
     await page.getByPlaceholder('搜索订单号 / 账单号 / 用户 / 服务').fill('filtered');
     await page.getByRole('button', { name: '搜索' }).click();
@@ -4197,7 +4798,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(page.getByText('REN-20260606-001')).toBeVisible();
 
     const pageRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/finance/renewal-orders') && request.url().includes('page=2'),
+      (request) => request.url().includes('/api/v2/admin/finance/renewal-orders') && request.url().includes('page=2'),
     );
     await page.locator('.t-pagination').getByText('2', { exact: true }).click();
     await pageRequest;
@@ -4219,7 +4820,8 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(page.getByText('100GB 流量包')).toBeVisible();
 
     const filterRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/finance/upgrade-orders') && request.url().includes('keyword=filtered'),
+      (request) =>
+        request.url().includes('/api/v2/admin/finance/upgrade-orders') && request.url().includes('keyword=filtered'),
     );
     await page.getByPlaceholder('搜索订单号 / 账单号 / 用户 / 服务').fill('filtered');
     await page.getByRole('button', { name: '搜索' }).click();
@@ -4230,7 +4832,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(page.getByText('UPG-20260606-001')).toBeVisible();
 
     const pageRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/finance/upgrade-orders') && request.url().includes('page=2'),
+      (request) => request.url().includes('/api/v2/admin/finance/upgrade-orders') && request.url().includes('page=2'),
     );
     await page.locator('.t-pagination').getByText('2', { exact: true }).click();
     await pageRequest;
@@ -4253,7 +4855,8 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(page.locator('.t-pagination')).toContainText('21');
 
     const filterRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/finance/recharges') && request.url().includes('keyword=filtered'),
+      (request) =>
+        request.url().includes('/api/v2/admin/finance/recharges') && request.url().includes('keyword=filtered'),
     );
     await page.getByPlaceholder('搜索账单号 / 支付号 / 用户').fill('filtered');
     await page.getByRole('button', { name: '搜索' }).click();
@@ -4265,7 +4868,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(page.getByText('RC-20260606-001')).toBeVisible();
 
     const pageRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/finance/recharges') && request.url().includes('page=2'),
+      (request) => request.url().includes('/api/v2/admin/finance/recharges') && request.url().includes('page=2'),
     );
     await page.locator('.t-pagination').getByText('2', { exact: true }).click();
     await pageRequest;
@@ -4288,7 +4891,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
 
     const filterRequest = page.waitForRequest(
       (request) =>
-        request.url().includes('/api/admin/finance/new-customer-daily-summary') &&
+        request.url().includes('/api/v2/admin/finance/new-customer-daily-summary') &&
         request.url().includes('start_date=2026-05-01') &&
         request.url().includes('end_date=2026-05-31'),
     );
@@ -4317,7 +4920,9 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(page.getByText('标准云服务器 2C4G')).toBeVisible();
     await expect(page.getByText('INV-SERVICE-001')).toBeVisible();
 
-    const filterRequest = page.waitForRequest((request) => request.url().includes('/api/admin/services') && request.url().includes('keyword=filtered'));
+    const filterRequest = page.waitForRequest(
+      (request) => request.url().includes('/api/v2/admin/services') && request.url().includes('keyword=filtered'),
+    );
     await page.getByPlaceholder('搜索主机ID / 主机IP / 实例ID / 用户名 / 账单号').fill('filtered');
     await page.getByRole('button', { name: '搜索' }).click();
     await filterRequest;
@@ -4327,7 +4932,9 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await page.getByRole('button', { name: '搜索' }).click();
     await expect(page.getByText('SVC-20260606-001')).toBeVisible();
 
-    const pageRequest = page.waitForRequest((request) => request.url().includes('/api/admin/services') && request.url().includes('page=2'));
+    const pageRequest = page.waitForRequest(
+      (request) => request.url().includes('/api/v2/admin/services') && request.url().includes('page=2'),
+    );
     await page.locator('.t-pagination').getByText('2', { exact: true }).click();
     await pageRequest;
     await expect(page.getByText('SVC-PAGE-002')).toBeVisible();
@@ -4340,7 +4947,8 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(dialog.getByText('设置自定义主机名')).toBeVisible();
     await dialog.getByPlaceholder('留空则清空自定义主机名').fill('custom-vm-001');
     const saveRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/services/custom-hostnames/batch') && request.method() === 'POST',
+      (request) =>
+        request.url().includes('/api/v2/admin/services/custom-hostnames/batch') && request.method() === 'POST',
     );
     await dialog.getByRole('button', { name: '保存' }).click();
     expect((await saveRequest).postDataJSON()).toMatchObject({
@@ -4375,7 +4983,8 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(page.getByText('ecs.g9i.2c2g')).toBeVisible();
 
     const filterRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/instance-spec-catalog') && request.url().includes('keyword=filtered'),
+      (request) =>
+        request.url().includes('/api/v2/admin/instance-spec-catalog') && request.url().includes('keyword=filtered'),
     );
     await page.getByPlaceholder('搜索规格文本 / 别名 / 说明 / 绑定配置').fill('filtered');
     await page.getByRole('button', { name: '搜索' }).click();
@@ -4398,7 +5007,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(page.getByText('ecs.g9i.4c8g')).not.toBeVisible();
 
     const saveRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/instance-spec-catalog') && request.method() === 'POST',
+      (request) => request.url().includes('/api/v2/admin/instance-spec-catalog') && request.method() === 'POST',
     );
     await page.getByRole('button', { name: '保存目录' }).click();
     const savePayload = (await saveRequest).postDataJSON();
@@ -4431,7 +5040,11 @@ test.describe('frontend-admin-v3 shell smoke', () => {
 
     await page.getByRole('button', { name: '新增型号' }).click();
     const modelDialog = page.locator('.t-dialog:visible').filter({ hasText: '新增 CPU 型号' });
-    await modelDialog.locator('.t-form__item').filter({ hasText: '型号名称' }).locator('input').fill('Intel Xeon Silver 4210');
+    await modelDialog
+      .locator('.t-form__item')
+      .filter({ hasText: '型号名称' })
+      .locator('input')
+      .fill('Intel Xeon Silver 4210');
     await modelDialog.locator('.t-form__item').filter({ hasText: '主频' }).locator('input').fill('2.20');
     await modelDialog.locator('.t-form__item').filter({ hasText: '睿频' }).locator('input').fill('3.20');
     await modelDialog.getByRole('button', { name: '确认' }).click();
@@ -4453,7 +5066,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(createdGroup).not.toBeVisible();
 
     const saveRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/admin/cpu-model-catalog') && request.method() === 'POST',
+      (request) => request.url().includes('/api/v2/admin/cpu-model-catalog') && request.method() === 'POST',
     );
     await page.getByRole('button', { name: '保存目录' }).click();
     const savePayload = (await saveRequest).postDataJSON();
@@ -4489,7 +5102,10 @@ test.describe('frontend-admin-v3 shell smoke', () => {
 
     await page.getByRole('button', { name: '编辑资料' }).click();
     await expect(page.locator('.t-dialog:visible').getByText('信用额度')).toBeVisible();
-    await page.locator('.t-dialog:visible').getByRole('button', { name: /Cancel|取消/ }).click();
+    await page
+      .locator('.t-dialog:visible')
+      .getByRole('button', { name: /Cancel|取消/ })
+      .click();
 
     await userDetailTab(page, '产品/服务').click();
     await expect(page.getByText('测试云服务器').first()).toBeVisible();
@@ -4529,7 +5145,10 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await userDetailTab(page, '产品/服务').click();
     await page.getByRole('button', { name: '添加实例' }).click();
     await expect(page.locator('.t-dialog:visible').getByText('选择商品')).toBeVisible();
-    await page.locator('.t-dialog:visible').getByRole('button', { name: /Cancel|取消/ }).click();
+    await page
+      .locator('.t-dialog:visible')
+      .getByRole('button', { name: /Cancel|取消/ })
+      .click();
 
     await page.locator('.table-scroll').getByRole('button', { name: '管理', exact: true }).first().click();
     const serviceDrawer = page.locator('.t-drawer:visible');
@@ -4541,11 +5160,17 @@ test.describe('frontend-admin-v3 shell smoke', () => {
 
     await serviceDrawer.getByRole('button', { name: '重置密码' }).click();
     await expect(page.locator('.t-dialog:visible').getByText('新密码')).toBeVisible();
-    await page.locator('.t-dialog:visible').getByRole('button', { name: /Cancel|取消/ }).click();
+    await page
+      .locator('.t-dialog:visible')
+      .getByRole('button', { name: /Cancel|取消/ })
+      .click();
 
     await serviceDrawer.getByRole('button', { name: '退款' }).click();
     await expect(page.locator('.t-dialog:visible').getByText('退款方式')).toBeVisible();
-    await page.locator('.t-dialog:visible').getByRole('button', { name: /Cancel|取消/ }).click();
+    await page
+      .locator('.t-dialog:visible')
+      .getByRole('button', { name: /Cancel|取消/ })
+      .click();
     await page.keyboard.press('Escape');
 
     await userDetailTab(page, '账单').click();

@@ -32,7 +32,7 @@
 
 .campaigns-filter {
   display: grid;
-  grid-template-columns: minmax(320px, 1fr) 160px 92px 92px 92px 120px;
+  grid-template-columns: minmax(320px, 1fr) 160px auto;
   gap: 12px;
   align-items: stretch;
   margin-bottom: 16px;
@@ -195,8 +195,7 @@
     grid-template-areas:
       "keyword keyword"
       "status status"
-      "search reset"
-      "refresh create";
+      "create create";
     align-items: stretch;
     gap: 10px;
   }
@@ -214,18 +213,6 @@
   }
 
   .campaigns-filter > :nth-child(3) {
-    grid-area: search;
-  }
-
-  .campaigns-filter > :nth-child(4) {
-    grid-area: reset;
-  }
-
-  .campaigns-filter > :nth-child(5) {
-    grid-area: refresh;
-  }
-
-  .campaigns-filter > :nth-child(6) {
     grid-area: create;
   }
 
@@ -265,9 +252,6 @@
     grid-template-areas:
       "keyword"
       "status"
-      "search"
-      "reset"
-      "refresh"
       "create";
   }
 }

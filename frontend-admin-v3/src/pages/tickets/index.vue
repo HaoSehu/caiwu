@@ -14,14 +14,6 @@
         <t-select v-model="filters.department" clearable placeholder="工单分类" @change="handleSearch">
           <t-option v-for="option in departmentOptions" :key="option.value" :label="option.label" :value="option.value" />
         </t-select>
-        <t-button theme="primary" @click="handleSearch">
-          <template #icon><search-icon /></template>
-          搜索
-        </t-button>
-        <t-button theme="default" @click="resetFilters">
-          <template #icon><refresh-icon /></template>
-          重置
-        </t-button>
       </div>
     </t-card>
 
@@ -66,7 +58,7 @@
 </template>
 
 <script setup lang="ts">
-import { RefreshIcon, SearchIcon, UserIcon } from 'tdesign-icons-vue-next';
+import { SearchIcon, UserIcon } from 'tdesign-icons-vue-next';
 import type { PageInfo } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { onMounted, reactive, ref } from 'vue';
@@ -135,15 +127,6 @@ async function loadList() {
 }
 
 function handleSearch() {
-  page.value = 1;
-  loadList();
-}
-
-function resetFilters() {
-  filters.keyword = '';
-  filters.status = DEFAULT_STATUS_FILTER;
-  filters.priority = '';
-  filters.department = '';
   page.value = 1;
   loadList();
 }
