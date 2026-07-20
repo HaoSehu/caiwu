@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Admin\V2\IntegrationPlugin;
 
-use Illuminate\Foundation\Http\FormRequest;
+use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
 
-class ShowIntegrationPluginRequest extends FormRequest
+class ShowIntegrationPluginRequest extends AdminFormRequest
 {
     public function authorize(): bool
     {

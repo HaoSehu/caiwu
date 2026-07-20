@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Client\V2\Action;
 
-use Illuminate\Foundation\Http\FormRequest;
+use App\Http\Requests\Client\V2\Common\ClientFormRequest;
 
-class ClientActionRequest extends FormRequest
+class ClientActionRequest extends ClientFormRequest
 {
     public function authorize(): bool
     {

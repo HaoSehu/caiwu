@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Admin\V2\ProductType;
 
-use Illuminate\Foundation\Http\FormRequest;
+use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
 
-class DeleteProductTypeRequest extends FormRequest
+class DeleteProductTypeRequest extends AdminFormRequest
 {
     public function authorize(): bool
     {

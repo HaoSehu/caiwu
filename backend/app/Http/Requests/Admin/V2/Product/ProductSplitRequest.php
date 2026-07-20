@@ -1,20 +1,17 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Http\Requests\Admin\V2\Product;
 
-use App\Http\Requests\Admin\Product\SplitRequest;
+use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
 
-class ProductSplitRequest extends SplitRequest
+class ProductSplitRequest extends AdminFormRequest
 {
     public function rules(): array
     {
-        return array_merge(parent::rules(), [
-            'page' => ['prohibited'],
-            'page_size' => ['prohibited'],
-            'pageSize' => ['prohibited'],
-            'per_page' => ['prohibited'],
-        ]);
+        return [
+            'product_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'product_ids.*' => ['integer', 'min:1', 'distinct'],
+            ...$this->allPaginationRules(),
+        ];
     }
 }

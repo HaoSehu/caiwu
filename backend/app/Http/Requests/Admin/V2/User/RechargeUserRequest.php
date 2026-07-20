@@ -1,20 +1,33 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Http\Requests\Admin\V2\User;
 
-use App\Http\Requests\Admin\User\RechargeUserRequest as BaseRechargeUserRequest;
+use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
 
-class RechargeUserRequest extends BaseRechargeUserRequest
+class RechargeUserRequest extends AdminFormRequest
 {
     public function rules(): array
     {
-        return array_merge(parent::rules(), [
-            'page' => ['prohibited'],
-            'page_size' => ['prohibited'],
-            'pageSize' => ['prohibited'],
-            'per_page' => ['prohibited'],
+        return [
+            'amount' => ['required', 'numeric', 'not_in:0', 'min:-999999', 'max:999999'],
+            'remark' => ['required', 'string', 'max:200'],
+            ...$this->allPaginationRules(),
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'amount.not_in' => '调整金额不能为 0',
+            'remark.required' => '请填写操作备注',
+        ];
+    }
+
+    public function payload(): array
+    {
+        return $this->safe()->only([
+            'amount',
+            'remark',
         ]);
     }
 }

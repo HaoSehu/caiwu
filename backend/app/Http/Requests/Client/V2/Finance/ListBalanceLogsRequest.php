@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Client\V2\Finance;
 
-use App\Http\Requests\Client\Common\ClientFormRequest;
+use App\Http\Requests\Client\V2\Common\ClientFormRequest;
 use App\Http\Requests\Concerns\HasDateRangeFilter;
 
 class ListBalanceLogsRequest extends ClientFormRequest

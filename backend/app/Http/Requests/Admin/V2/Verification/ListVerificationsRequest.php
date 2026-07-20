@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Admin\V2\Verification;
 
-use App\Http\Requests\Admin\Common\AdminFormRequest;
+use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
 use Illuminate\Validation\Validator;
 
 class ListVerificationsRequest extends AdminFormRequest

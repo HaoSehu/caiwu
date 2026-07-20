@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Admin\V2\CouponProductGroup;
 
-use Illuminate\Foundation\Http\FormRequest;
+use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
 use Illuminate\Validation\Rule;
 
-class ListCouponProductGroupsRequest extends FormRequest
+class ListCouponProductGroupsRequest extends AdminFormRequest
 {
     public function authorize(): bool
     {

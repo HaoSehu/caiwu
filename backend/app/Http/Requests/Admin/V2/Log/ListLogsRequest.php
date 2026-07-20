@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Http\Requests\Admin\V2\Log;
 
 use App\Services\System\AdminLogV2QueryService;
-use Illuminate\Foundation\Http\FormRequest;
+use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
 use Illuminate\Validation\Rule;
 
-class ListLogsRequest extends FormRequest
+class ListLogsRequest extends AdminFormRequest
 {
     public function authorize(): bool
     {
@@ -96,9 +96,9 @@ class ListLogsRequest extends FormRequest
         return max(1, (int) $this->integer('page', 1));
     }
 
-    public function perPage(): int
+    public function perPage(int $default = 20, int $max = 100): int
     {
-        return max(1, min((int) $this->integer('page_size', 20), 100));
+        return max(1, min((int) $this->integer('page_size', $default), $max));
     }
 
     public function includeSummary(): bool

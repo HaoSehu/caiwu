@@ -1,16 +1,17 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Http\Requests\Admin\V2\Auth;
 
-use App\Http\Requests\Admin\Auth\UpdateProfileRequest as LegacyUpdateProfileRequest;
+use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
 
-class UpdateProfileRequest extends LegacyUpdateProfileRequest
+class UpdateProfileRequest extends AdminFormRequest
 {
     public function rules(): array
     {
-        return array_merge(parent::rules(), [
+        return array_merge([
+            'nickname' => ['nullable', 'string', 'max:50'],
+            'email' => ['missing'],
+        ], [
             'per_page' => ['prohibited'],
         ]);
     }

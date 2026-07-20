@@ -1,18 +1,21 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Http\Requests\Admin\V2\UserService;
 
-use App\Http\Requests\Admin\User\UserServicesRequest as BaseUserServicesRequest;
-use App\Http\Requests\Admin\V2\Concerns\RejectsLegacyPagination;
+use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
 
-class ListUserServicesRequest extends BaseUserServicesRequest
+class ListUserServicesRequest extends AdminFormRequest
 {
-    use RejectsLegacyPagination;
-
     public function rules(): array
     {
-        return array_merge(parent::rules(), $this->legacyPaginationRules());
+        return array_merge($this->paginationRules(), [
+            'keyword' => ['nullable', 'string', 'max:100'],
+            'status' => ['nullable', 'in:0,1,2,3,4'],
+        ], $this->legacyPaginationRules());
+    }
+
+    public function filters(): array
+    {
+        return $this->safe()->only(['keyword', 'status']);
     }
 }

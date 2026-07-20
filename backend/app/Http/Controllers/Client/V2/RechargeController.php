@@ -4,8 +4,8 @@ namespace App\Http\Controllers\Client\V2;
 
 use App\Constants\PaymentGatewayCode;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Client\Recharge\StatusRequest;
-use App\Http\Requests\Client\Recharge\StoreRequest;
+use App\Http\Requests\Client\V2\Recharge\StatusRequest;
+use App\Http\Requests\Client\V2\Recharge\StoreRequest;
 use App\Models\Payment;
 use App\Services\Finance\CheckoutSecurityService;
 use App\Services\Finance\PaymentService;

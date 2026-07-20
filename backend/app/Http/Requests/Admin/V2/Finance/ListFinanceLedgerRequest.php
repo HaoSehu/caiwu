@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests\Admin\V2\Finance;
 
 use App\Constants\FinanceLedgerEventType;
-use App\Http\Requests\Admin\Common\AdminFormRequest;
+use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
 use App\Http\Requests\Concerns\HasDateRangeFilter;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;

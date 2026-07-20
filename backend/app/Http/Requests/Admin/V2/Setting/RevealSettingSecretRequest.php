@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Admin\V2\Setting;
 
-use Illuminate\Foundation\Http\FormRequest;
+use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
 
-class RevealSettingSecretRequest extends FormRequest
+class RevealSettingSecretRequest extends AdminFormRequest
 {
     public function authorize(): bool
     {

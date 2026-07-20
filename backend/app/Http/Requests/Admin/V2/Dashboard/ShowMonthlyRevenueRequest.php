@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Admin\V2\Dashboard;
 
-use Illuminate\Foundation\Http\FormRequest;
+use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
 
-class ShowMonthlyRevenueRequest extends FormRequest
+class ShowMonthlyRevenueRequest extends AdminFormRequest
 {
     public function authorize(): bool
     {

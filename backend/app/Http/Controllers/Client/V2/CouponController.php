@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Client\V2;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Client\Coupon\ListCouponsRequest;
+use App\Http\Requests\Client\V2\Coupon\ListCouponsRequest;
 use App\Models\Coupon;
 use App\Services\Finance\CouponService;
 use Illuminate\Support\Facades\Schema;

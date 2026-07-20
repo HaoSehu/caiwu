@@ -4,26 +4,23 @@ namespace App\Http\Controllers\Client\V2;
 
 use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Client\Service\CreateHostUpgradeOrderRequest;
-use App\Http\Requests\Client\Service\CreateNatForwardingRequest;
-use App\Http\Requests\Client\Service\CreateRenewOrderRequest;
-use App\Http\Requests\Client\Service\CreateSecurityGroupRequest;
-use App\Http\Requests\Client\Service\CreateSecurityRuleRequest;
-use App\Http\Requests\Client\Service\CreateTrafficPackageOrderRequest;
-use App\Http\Requests\Client\Service\IndexRequest;
-use App\Http\Requests\Client\Service\ListServiceOperationLogsRequest;
-use App\Http\Requests\Client\Service\ModuleStatusRequest;
-use App\Http\Requests\Client\Service\MonitorBatchRequest;
-use App\Http\Requests\Client\Service\MonitorRequest;
-use App\Http\Requests\Client\Service\PowerRequest;
-use App\Http\Requests\Client\Service\QuoteHostUpgradeRequest;
-use App\Http\Requests\Client\Service\QuoteTrafficPackageRequest;
-use App\Http\Requests\Client\Service\ReinstallRequest;
-use App\Http\Requests\Client\Service\RenewPreviewRequest;
-use App\Http\Requests\Client\Service\ResetPasswordRequest;
-use App\Http\Requests\Client\Service\UpdateAutoRenewRequest;
-use App\Http\Requests\Client\Service\UpdateNameRequest;
-use App\Http\Requests\Client\Service\UpdateRemarkRequest;
+use App\Http\Requests\Client\V2\Service\CreateHostUpgradeOrderRequest;
+use App\Http\Requests\Client\V2\Service\CreateNatForwardingRequest;
+use App\Http\Requests\Client\V2\Service\CreateRenewOrderRequest;
+use App\Http\Requests\Client\V2\Service\CreateSecurityGroupRequest;
+use App\Http\Requests\Client\V2\Service\CreateSecurityRuleRequest;
+use App\Http\Requests\Client\V2\Service\CreateTrafficPackageOrderRequest;
+use App\Http\Requests\Client\V2\Service\IndexRequest;
+use App\Http\Requests\Client\V2\Service\ListServiceOperationLogsRequest;
+use App\Http\Requests\Client\V2\Service\ModuleStatusRequest;
+use App\Http\Requests\Client\V2\Service\MonitorBatchRequest;
+use App\Http\Requests\Client\V2\Service\MonitorRequest;
+use App\Http\Requests\Client\V2\Service\QuoteHostUpgradeRequest;
+use App\Http\Requests\Client\V2\Service\QuoteTrafficPackageRequest;
+use App\Http\Requests\Client\V2\Service\RenewPreviewRequest;
+use App\Http\Requests\Client\V2\Service\UpdateAutoRenewRequest;
+use App\Http\Requests\Client\V2\Service\UpdateNameRequest;
+use App\Http\Requests\Client\V2\Service\UpdateRemarkRequest;
 use App\Services\ClientServiceConsole\ClientServiceConsoleService;
 use App\Services\Provisioning\ServiceRenewService;
 use Illuminate\Contracts\Cache\LockTimeoutException;
@@ -57,37 +54,6 @@ class ServiceConsoleController extends Controller
     {
         return $this->success(
             $this->clientServiceConsoleService->getServiceConfigForUser(
-                $request->user(),
-                $id
-            )
-        );
-    }
-
-    public function show(Request $request, int $id)
-    {
-        return $this->success(
-            $this->clientServiceConsoleService->getDetailForUser(
-                $request->user(),
-                $id,
-                $this->booleanQuery($request, 'refresh')
-            )
-        );
-    }
-
-    public function baseDetail(Request $request, int $id)
-    {
-        return $this->success(
-            $this->clientServiceConsoleService->getBaseDetailForUser(
-                $request->user(),
-                $id
-            )
-        );
-    }
-
-    public function remoteStatus(Request $request, int $id)
-    {
-        return $this->success(
-            $this->clientServiceConsoleService->getRemoteStatusPatchForUser(
                 $request->user(),
                 $id
             )
@@ -277,26 +243,6 @@ class ServiceConsoleController extends Controller
         );
     }
 
-    public function power(PowerRequest $request, int $id)
-    {
-        $data = $request->validated();
-
-        return $this->success(
-            $this->executeLockedServiceAction(
-                $request,
-                $id,
-                'power_'.(string) $data['action'],
-                fn () => $this->clientServiceConsoleService->powerActionForUser(
-                    $request->user(),
-                    $id,
-                    $data['action'],
-                    $this->buildOperationContext($request)
-                )
-            ),
-            '操作已提交'
-        );
-    }
-
     public function moduleStatus(ModuleStatusRequest $request, int $id)
     {
         $filters = $request->validated();
@@ -314,46 +260,6 @@ class ServiceConsoleController extends Controller
                 $id,
                 $this->booleanQuery($request, 'refresh')
             )
-        );
-    }
-
-    public function resetPassword(ResetPasswordRequest $request, int $id)
-    {
-        $data = $request->validated();
-
-        return $this->success(
-            $this->executeLockedServiceAction(
-                $request,
-                $id,
-                'password_reset',
-                fn () => $this->clientServiceConsoleService->resetPasswordForUser(
-                    $request->user(),
-                    $id,
-                    $data,
-                    $this->buildOperationContext($request)
-                )
-            ),
-            '重置密码指令已提交'
-        );
-    }
-
-    public function reinstall(ReinstallRequest $request, int $id)
-    {
-        $data = $request->validated();
-
-        return $this->success(
-            $this->executeLockedServiceAction(
-                $request,
-                $id,
-                'reinstall',
-                fn () => $this->clientServiceConsoleService->reinstallForUser(
-                    $request->user(),
-                    $id,
-                    $data,
-                    $this->buildOperationContext($request)
-                )
-            ),
-            '重装系统任务已提交'
         );
     }
 

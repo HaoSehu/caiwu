@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Http\Resources\Admin\AdminUserListResource;
+use App\Http\Resources\Admin\V2\AdminUserListItemResource;
 use App\Http\Resources\User\UserResource;
 use App\Models\User;
 use App\Models\UserAccount;
@@ -44,7 +44,7 @@ class UserReadAggregateLoadingTest extends TestCase
         DB::enableQueryLog();
 
         $detailPayload = (new UserResource($loadedUser))->resolve();
-        $listPayload = AdminUserListResource::collection($loadedCollection)->resolve();
+        $listPayload = AdminUserListItemResource::collection($loadedCollection)->resolve();
 
         $queries = DB::getQueryLog();
         DB::disableQueryLog();

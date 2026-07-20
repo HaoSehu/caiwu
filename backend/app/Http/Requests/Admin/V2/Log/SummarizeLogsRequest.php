@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Http\Requests\Admin\V2\Log;
 
 use App\Services\System\AdminLogV2QueryService;
-use Illuminate\Foundation\Http\FormRequest;
+use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
 use Illuminate\Validation\Rule;
 
-class SummarizeLogsRequest extends FormRequest
+class SummarizeLogsRequest extends AdminFormRequest
 {
     public function authorize(): bool
     {
