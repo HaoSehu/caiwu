@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Tests\TestCase;
 
 class DatabaseEngineeringCommandTest extends TestCase
@@ -223,6 +224,91 @@ class DatabaseEngineeringCommandTest extends TestCase
 
         $payload = json_decode($output, true, 512, JSON_THROW_ON_ERROR);
         $this->assertStringContainsString('audit/financial table', (string) ($payload['error'] ?? ''));
+    }
+
+    public function test_db_archive_logs_execute_writes_audited_archive_and_restores_it(): void
+    {
+        $archivePath = sys_get_temp_dir().DIRECTORY_SEPARATOR.'caiwu-log-archive-'.bin2hex(random_bytes(8));
+        $logId = null;
+        $batchId = null;
+
+        try {
+            $logId = (int) DB::table('operation_logs')->insertGetId([
+                'action' => 'test.log_archive',
+                'created_at' => now()->subDays(10001),
+            ]);
+
+            $exitCode = Artisan::call('db:archive-logs', [
+                '--execute' => true,
+                '--json' => true,
+                '--table' => ['operation_logs'],
+                '--retain-days' => 10000,
+                '--path' => $archivePath,
+            ]);
+
+            $this->assertSame(0, $exitCode);
+            $payload = json_decode(Artisan::output(), true, 512, JSON_THROW_ON_ERROR);
+            $batchId = (string) ($payload['batch_id'] ?? '');
+            $table = (array) ($payload['tables']['operation_logs'] ?? []);
+            $manifestPath = (string) ($payload['manifest_path'] ?? '');
+            $archiveFile = (string) ($table['archive_file'] ?? '');
+
+            $this->assertNotSame('', $batchId);
+            $this->assertSame('completed', $table['status'] ?? null);
+            $this->assertSame(1, (int) ($table['exported_rows'] ?? 0));
+            $this->assertSame(1, (int) ($table['deleted_rows'] ?? 0));
+            $this->assertFileExists($manifestPath);
+            $this->assertFileExists($archiveFile);
+            $this->assertSame(hash_file('sha256', $archiveFile), $table['checksum_sha256'] ?? null);
+            $this->assertDatabaseMissing('operation_logs', ['id' => $logId]);
+            $this->assertDatabaseHas('archive_audit_logs', [
+                'batch_id' => $batchId,
+                'table_name' => 'operation_logs',
+                'mode' => 'archive',
+                'row_count' => 1,
+                'status' => 'completed',
+            ]);
+
+            $restoreExitCode = Artisan::call('db:archive-logs', [
+                '--restore' => $manifestPath,
+                '--json' => true,
+            ]);
+
+            $this->assertSame(0, $restoreExitCode);
+            $this->assertDatabaseHas('operation_logs', ['id' => $logId]);
+            $this->assertDatabaseHas('archive_audit_logs', [
+                'batch_id' => $batchId,
+                'table_name' => 'operation_logs',
+                'mode' => 'restore',
+                'row_count' => 1,
+                'status' => 'completed',
+            ]);
+
+            DB::table('operation_logs')->where('id', $logId)->delete();
+            file_put_contents($archiveFile, PHP_EOL, FILE_APPEND);
+
+            $invalidRestoreExitCode = Artisan::call('db:archive-logs', [
+                '--restore' => $manifestPath,
+                '--json' => true,
+            ]);
+
+            $this->assertSame(1, $invalidRestoreExitCode);
+            $this->assertDatabaseMissing('operation_logs', ['id' => $logId]);
+            $this->assertDatabaseHas('archive_audit_logs', [
+                'batch_id' => $batchId,
+                'table_name' => 'operation_logs',
+                'mode' => 'restore',
+                'status' => 'failed',
+            ]);
+        } finally {
+            if ($logId !== null) {
+                DB::table('operation_logs')->where('id', $logId)->delete();
+            }
+            if ($batchId !== null && $batchId !== '') {
+                DB::table('archive_audit_logs')->where('batch_id', $batchId)->delete();
+            }
+            File::deleteDirectory($archivePath);
+        }
     }
 
     private function ensureUserId(): int
