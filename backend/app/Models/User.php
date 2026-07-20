@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Casts\LegacyEncrypted;
 use App\Services\User\AccountService;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -31,8 +30,8 @@ class User extends Authenticatable
 
     protected $guarded = [];
 
-    // id_card 是加密存储的身份证号，序列化时不返回原文（通过脱敏专用端点按需读取）
-    protected $hidden = ['password', 'id_card'];
+    // 从 JSON 序列化中隐藏密码
+    protected $hidden = ['password'];
 
     protected function casts(): array
     {
@@ -109,11 +108,6 @@ class User extends Authenticatable
     public function getRealNameAttribute(mixed $value): string
     {
         return trim((string) ($value ?? ''));
-    }
-
-    public function getIdCardAttribute(mixed $value): string
-    {
-        return (new LegacyEncrypted)->get($this, 'id_card', $value, $this->attributes);
     }
 
     public function getVerificationStatusAttribute(mixed $value): int
@@ -360,7 +354,8 @@ class User extends Authenticatable
                     ->orWhere('nickname', 'like', '%'.$keyword.'%')
                     ->orWhere('company', 'like', '%'.$keyword.'%')
                     ->orWhere('qq', 'like', '%'.$keyword.'%')
-                    ->orWhere('real_name', 'like', '%'.$keyword.'%');
+                    ->orWhere('real_name', 'like', '%'.$keyword.'%')
+                    ->orWhere('id_card', 'like', '%'.$keyword.'%');
 
                 return;
             }
@@ -370,7 +365,8 @@ class User extends Authenticatable
                 ->orWhere('nickname', 'like', '%'.$keyword.'%')
                 ->orWhere('company', 'like', '%'.$keyword.'%')
                 ->orWhere('qq', 'like', '%'.$keyword.'%')
-                ->orWhere('real_name', 'like', '%'.$keyword.'%');
+                ->orWhere('real_name', 'like', '%'.$keyword.'%')
+                ->orWhere('id_card', 'like', '%'.$keyword.'%');
         });
     }
 

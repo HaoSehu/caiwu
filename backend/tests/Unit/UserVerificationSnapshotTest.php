@@ -5,18 +5,17 @@ declare(strict_types=1);
 namespace Tests\Unit;
 
 use App\Models\User;
-use Illuminate\Support\Facades\Crypt;
 use Tests\TestCase;
 
 class UserVerificationSnapshotTest extends TestCase
 {
-    public function test_it_decrypts_encrypted_user_id_card_attribute(): void
+    public function test_it_stores_id_card_as_plaintext(): void
     {
         $plainIdCard = '320505199001010012';
 
         $user = new User;
         $user->setRawAttributes([
-            'id_card' => Crypt::encryptString($plainIdCard),
+            'id_card' => $plainIdCard,
         ], true);
 
         $this->assertSame($plainIdCard, $user->id_card);
