@@ -22,7 +22,7 @@
     "lint:user-v4-console": "npm run lint --workspace chuangouyun-user-v4-console",
     "lint:frontends": "npm run lint:shared && npm run lint:admin-v3 && npm run lint:user-v3-www && npm run lint:user-v4-console",
     "typecheck:shared": "npm run typecheck --workspace shared",
-    "typecheck:admin-v3": "npm run typecheck --workspace chuangouyun-admin-v3",
+    "typecheck:admin-v3": "npm run build:type --workspace chuangouyun-admin-v3",
     "typecheck:user-v3-www": "npm run build:type --workspace chuangouyun-user-v3-www",
     "typecheck:user-v4-console": "npm run build:type --workspace chuangouyun-user-v4-console",
     "typecheck:frontends": "npm run typecheck:shared && npm run typecheck:admin-v3 && npm run typecheck:user-v3-www && npm run typecheck:user-v4-console",
