@@ -28,6 +28,14 @@ yarn-error.log
 *.zip
 .history
 .stylelintcache
+build_output*.txt
+build-*.log
+dev-*.log
+tsc.log
+*.err.log
+*.out.log
+*.png
+*.jpg
 
 .env.local
 .env.*.local
