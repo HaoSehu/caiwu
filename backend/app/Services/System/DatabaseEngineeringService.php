@@ -27,6 +27,50 @@ class DatabaseEngineeringService
     }
 
     /**
+     * @return list<string>
+     */
+    public function optimizableTables(int $minimumFreeBytes, float $minimumFreeRatio): array
+    {
+        return collect($this->optimizationCandidates($minimumFreeBytes, $minimumFreeRatio))
+            ->pluck('table_name')
+            ->all();
+    }
+
+    /**
+     * @return list<array{table_name: string, reclaimable_bytes: int, reclaimable_mb: float, fragmentation_ratio: float}>
+     */
+    public function optimizationCandidates(int $minimumFreeBytes, float $minimumFreeRatio): array
+    {
+        return collect(DB::select("
+            SELECT table_name AS table_name
+                 , data_free AS reclaimable_bytes
+                 , data_length + index_length AS total_bytes
+            FROM information_schema.tables
+            WHERE table_schema = DATABASE()
+              AND table_type = 'BASE TABLE'
+              AND data_free >= ?
+              AND (
+                  data_length + index_length = 0
+                  OR data_free / (data_length + index_length) >= ?
+              )
+            ORDER BY data_free DESC, table_name
+        ", [$minimumFreeBytes, $minimumFreeRatio]))
+            ->map(static function (object $row): array {
+                $reclaimableBytes = max(0, (int) ($row->reclaimable_bytes ?? 0));
+                $totalBytes = max(0, (int) ($row->total_bytes ?? 0));
+
+                return [
+                    'table_name' => (string) $row->table_name,
+                    'reclaimable_bytes' => $reclaimableBytes,
+                    'reclaimable_mb' => round($reclaimableBytes / 1024 / 1024, 2),
+                    'fragmentation_ratio' => $totalBytes > 0 ? round($reclaimableBytes / $totalBytes, 4) : 1.0,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function auditCore(): array
@@ -388,6 +432,8 @@ class DatabaseEngineeringService
             'personal_access_tokens.tokenable_id' => $snapshot('tokenable_type/tokenable_id 是 Sanctum 多态令牌关系'),
             'product_upstream_bindings.upstream_product_id' => $snapshot('上游商品 ID 是外部供应商标识'),
             'product_upstream_bindings.backfill_batch_id' => $snapshot('回填批次号是迁移追踪标识，不对应表主键'),
+            'recharge_records.operator_id' => $snapshot('operator_type/operator_id 是多操作者类型快照'),
+            'recharge_records.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
             'second_product_groups.first_product_group_id' => $candidate('first_product_groups', 'RESTRICT', '二级分组必须归属一个一级分组'),
             'referral_account_logs.user_id' => $candidate('users', 'RESTRICT', '返佣账户日志必须保留用户归属'),
             'referral_account_logs.reference_id' => $snapshot('reference_type/reference_id 是返佣来源对象快照'),
@@ -401,6 +447,8 @@ class DatabaseEngineeringService
             'referral_rewards.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
             'referral_withdrawals.user_id' => $candidate('users', 'RESTRICT', '提现记录必须保留用户归属'),
             'referral_withdrawals.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
+            'refunds.operator_id' => $snapshot('operator_type/operator_id 是多操作者类型快照'),
+            'refunds.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
             'service_connection_snapshots.backfill_batch_id' => $snapshot('回填批次号是迁移追踪标识，不对应表主键'),
             'service_provision_attempts.trace_id' => $snapshot('trace_id 是链路追踪标识，不是关系字段'),
             'service_provision_attempts.backfill_batch_id' => $snapshot('回填批次号是迁移追踪标识，不对应表主键'),

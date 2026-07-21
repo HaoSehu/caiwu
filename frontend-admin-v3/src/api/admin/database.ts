@@ -8,12 +8,25 @@ export type DatabaseTableItem = {
   update_time?: string | null;
 };
 
+export type DatabaseOptimizationCandidate = {
+  name: string;
+  reclaimable_mb: number;
+  fragmentation_ratio: number;
+};
+
 export type DatabaseStatus = {
   database: string;
   list: DatabaseTableItem[];
   total_count: number;
   total_rows: number;
   total_size_mb: number;
+  optimization: {
+    candidate_count: number;
+    estimated_reclaimable_mb: number;
+    candidates: DatabaseOptimizationCandidate[];
+    cooldown_remaining_seconds: number;
+    last_optimized_at?: string | null;
+  };
 };
 
 export type DatabaseOptimizeResult = {
@@ -28,6 +41,8 @@ export type DatabaseOptimizeResult = {
   };
 };
 
+const DATABASE_OPTIMIZE_TIMEOUT = 5 * 60 * 1000;
+
 function resolveApiBase(): string {
   const env = import.meta.env.MODE || 'development';
   const rawApiUrl = String(import.meta.env.VITE_API_BASE_URL || '');
@@ -41,7 +56,16 @@ function resolveApiBase(): string {
 export const databaseApi = {
   status: () => request.get<DatabaseStatus>({ url: '/v2/admin/database/status' }),
   optimize: (data?: { tables?: string[] }) =>
-    request.post<DatabaseOptimizeResult>({ url: '/v2/admin/database/optimizations', data: data || {} }),
+    request.post<DatabaseOptimizeResult>(
+      {
+        url: '/v2/admin/database/optimizations',
+        data: data || {},
+        timeout: DATABASE_OPTIMIZE_TIMEOUT,
+      },
+      {
+        retry: { count: 0, delay: 0 },
+      },
+    ),
   exportBackup: async (): Promise<void> => {
     const token = getAdminToken();
     const response = await fetch(`${resolveApiBase()}/v2/admin/database/backups`, {
