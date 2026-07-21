@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Exceptions\BusinessException;
 use App\Models\AdminUser;
 use App\Models\Role;
 use App\Services\System\DatabaseStatusService;
@@ -33,6 +34,19 @@ class V2AdminDatabaseStatusApiTest extends TestCase
                     'total_count' => 1,
                     'total_rows' => 12,
                     'total_size_mb' => 1.25,
+                    'optimization' => [
+                        'candidate_count' => 1,
+                        'estimated_reclaimable_mb' => 8.5,
+                        'candidates' => [
+                            [
+                                'name' => 'users',
+                                'reclaimable_mb' => 8.5,
+                                'fragmentation_ratio' => 0.25,
+                            ],
+                        ],
+                        'cooldown_remaining_seconds' => 120,
+                        'last_optimized_at' => '2026-07-20 10:00:00',
+                    ],
                     'raw_response' => 'must-not-leak',
                 ]);
         });
@@ -59,16 +73,26 @@ class V2AdminDatabaseStatusApiTest extends TestCase
             ->assertJsonPath('code', 0)
             ->assertJsonPath('data.database', 'idc_test')
             ->assertJsonPath('data.list.0.name', 'users')
+            ->assertJsonPath('data.optimization.candidate_count', 1)
+            ->assertJsonPath('data.optimization.candidates.0.reclaimable_mb', 8.5)
             ->assertJsonMissingPath('data.raw_response')
             ->assertJsonMissingPath('data.list.0.secret');
 
         $this->assertSame(
-            ['database', 'list', 'total_count', 'total_rows', 'total_size_mb'],
+            ['database', 'list', 'total_count', 'total_rows', 'total_size_mb', 'optimization'],
             array_keys($response->json('data'))
         );
         $this->assertSame(
             ['name', 'rows', 'size_mb', 'update_time'],
             array_keys($response->json('data.list.0'))
+        );
+        $this->assertSame(
+            ['candidate_count', 'estimated_reclaimable_mb', 'candidates', 'cooldown_remaining_seconds', 'last_optimized_at'],
+            array_keys($response->json('data.optimization'))
+        );
+        $this->assertSame(
+            ['name', 'reclaimable_mb', 'fragmentation_ratio'],
+            array_keys($response->json('data.optimization.candidates.0'))
         );
         $this->assertNoSensitiveKeys($response->json());
         $this->assertLessThan(100 * 1024, strlen((string) $response->getContent()));
@@ -120,6 +144,22 @@ class V2AdminDatabaseStatusApiTest extends TestCase
         );
         $this->assertNoSensitiveKeys($response->json());
         $this->assertLessThan(100 * 1024, strlen((string) $response->getContent()));
+    }
+
+    public function test_database_optimize_returns_a_conflict_when_another_maintenance_run_holds_the_lock(): void
+    {
+        $this->mock(DatabaseStatusService::class, function (MockInterface $mock): void {
+            $mock->shouldReceive('optimize')
+                ->once()
+                ->andThrow(new BusinessException('数据库优化正在进行，请勿重复提交', 40900, 409));
+        });
+
+        Sanctum::actingAs($this->createAdmin([AdminPermissions::DATABASE_MANAGE]));
+
+        $this->postJson('/api/v2/admin/database/optimizations')
+            ->assertConflict()
+            ->assertJsonPath('code', 40900)
+            ->assertJsonPath('message', '数据库优化正在进行，请勿重复提交');
     }
 
     public function test_database_backup_requires_manage_permission_and_downloads_file(): void
