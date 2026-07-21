@@ -72,12 +72,16 @@ final class ZjmfProvisionService
                         'host_detail' => $hostDetail,
                     ];
                 }
+
+                throw new BusinessException('无法确认已创建的上游实例状态，已停止重复开通，请稍后重试或先核实上游实例');
             } catch (\Throwable $exception) {
-                Log::warning('[ZJMF 财务开通] 上游 host 幂等回查失败，继续正常开通', [
+                Log::warning('[ZJMF 财务开通] 上游 host 幂等回查失败，已停止重复开通', [
                     'order_id' => $order->id,
                     'upstream_host_id' => $existingHostId,
                     'message' => $exception->getMessage(),
                 ]);
+
+                throw new BusinessException('无法确认已创建的上游实例状态，已停止重复开通，请稍后重试或先核实上游实例');
             }
         }
 
@@ -137,6 +141,7 @@ final class ZjmfProvisionService
             $checkoutPayload = $this->extractPayload($checkoutResponse);
             $invoiceId = $this->extractInvoiceId($checkoutResponse, $checkoutPayload);
             $hostIds = $this->extractHostIds($checkoutResponse, $checkoutPayload);
+            $this->checkpointUpstreamProvision($existingService, $supplier, $product, $invoiceId, $hostIds, $requestedHost);
 
             if ($hostIds === [] && $invoiceId > 0 && ! $this->isCompletedCheckoutResponse($checkoutResponse)) {
                 $stepStartedAt = microtime(true);
@@ -152,6 +157,7 @@ final class ZjmfProvisionService
                 $this->assertUpstreamSuccess($fundResponse, [200, 1001], '使用供应商余额支付上游账单');
                 $fundPayload = $this->extractPayload($fundResponse);
                 $hostIds = $this->extractHostIds($fundResponse, $fundPayload);
+                $this->checkpointUpstreamProvision($existingService, $supplier, $product, $invoiceId, $hostIds, $requestedHost);
 
                 if ($hostIds === []) {
                     $message = trim((string) ($fundResponse['msg'] ?? ''));
@@ -165,6 +171,7 @@ final class ZjmfProvisionService
                 $stepStartedAt = microtime(true);
                 $hostIds = $this->findHostIdsByName($supplier, $jwt, (string) $payload['host']);
                 $latency['find_host_ids_ms'] = $this->elapsedMilliseconds($stepStartedAt);
+                $this->checkpointUpstreamProvision($existingService, $supplier, $product, $invoiceId, $hostIds, $requestedHost);
             }
 
             if ($hostIds === []) {
@@ -270,6 +277,46 @@ final class ZjmfProvisionService
         $provisionData = (array) ($service->provision_data ?? []);
 
         return (int) (($bindingHostId ?? '') ?: ($provisionData['upstream_host_id'] ?? 0) ?: 0);
+    }
+
+    /**
+     * Persist upstream references before any later network call can fail.
+     *
+     * The supplied service instance is updated as well, allowing the core
+     * failure path to retain the checkpoint and a retry to verify the existing
+     * resource instead of checking out another cart.
+     */
+    private function checkpointUpstreamProvision(
+        ?Service $service,
+        Supplier $supplier,
+        Product $product,
+        int $upstreamInvoiceId,
+        array $upstreamHostIds,
+        string $requestedHost,
+    ): void {
+        if (! $service instanceof Service || ! $service->exists) {
+            return;
+        }
+
+        $freshService = $service->fresh() ?? $service;
+        $provisionData = (array) ($freshService->provision_data ?? []);
+        $hostIds = array_values(array_filter(array_map('intval', $upstreamHostIds), fn (int $hostId) => $hostId > 0));
+        $hostId = (int) ($hostIds[0] ?? $provisionData['upstream_host_id'] ?? 0);
+
+        $freshService->forceFill([
+            'provision_data' => array_merge($provisionData, array_filter([
+                'provider_key' => ProviderKey::ZJMF_FINANCE_API,
+                'supplier_id' => (int) $supplier->id,
+                'requested_host' => trim($requestedHost) !== '' ? trim($requestedHost) : null,
+                'upstream_invoice_id' => $upstreamInvoiceId > 0 ? $upstreamInvoiceId : null,
+                'upstream_host_id' => $hostId > 0 ? $hostId : null,
+                'upstream_host_ids' => $hostIds !== [] ? $hostIds : null,
+                'upstream_product_id' => $this->resolveProductUpstreamProductId($product),
+                'last_provision_attempt_at' => now()->format('Y-m-d H:i:s'),
+            ], static fn (mixed $value): bool => $value !== null)),
+        ])->save();
+
+        $service->setAttribute('provision_data', $freshService->provision_data);
     }
 
     private function resolveProductUpstreamProductId(Product $product): int

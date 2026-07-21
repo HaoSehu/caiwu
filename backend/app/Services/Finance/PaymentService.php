@@ -2402,7 +2402,7 @@ class PaymentService
     public function handlePaidInvoice(Invoice $invoice, ?string $traceId = null): void
     {
         $startedAt = microtime(true);
-        $invoice = $invoice->fresh(['order']) ?? $invoice;
+        $invoice = $invoice->fresh(['order.product']) ?? $invoice;
 
         if ((int) $invoice->status !== InvoiceStatus::PAID) {
             return;
@@ -2410,6 +2410,10 @@ class PaymentService
 
         $orderId = (int) ($invoice->order?->id ?? 0);
         $invoiceType = (string) ($invoice->type ?? $invoice->order?->type ?? '');
+
+        if ($this->shouldTrackFulfillment($invoice, $invoiceType)) {
+            $invoice = $this->markFulfillmentPending($invoice, $invoiceType);
+        }
 
         $latency = [
             'coupon_sync_schedule_ms' => 0,
@@ -2422,7 +2426,9 @@ class PaymentService
         if ($orderId > 0) {
             $this->paidOrderBusinessFlowDispatcher->dispatchPaidInvoice($invoice, $traceId);
         } else {
-            $this->provisionPaidInvoice($invoice);
+            if ($this->provisionPaidInvoice($invoice)) {
+                $this->clearFulfillmentPending($invoice);
+            }
 
             if (! in_array($invoiceType, ['renew', 'upgrade'], true)) {
                 $this->dispatchInvoiceOnlyReferralReward($invoice, $traceId);
@@ -2473,28 +2479,30 @@ class PaymentService
     /**
      * 直接根据账单执行开通履约（无订单场景）
      */
-    private function provisionPaidInvoice(Invoice $invoice): void
+    private function provisionPaidInvoice(Invoice $invoice): bool
     {
         if ((int) $invoice->status !== InvoiceStatus::PAID) {
-            return;
+            return false;
         }
 
         try {
             $invoiceType = (string) ($invoice->type ?? '');
             if ($invoiceType === 'renew') {
-                $this->serviceRenewService->processPaidRenewInvoice($invoice);
+                $service = $this->serviceRenewService->processPaidRenewInvoice($invoice);
 
-                return;
+                return $this->serviceRenewService->isRenewInvoiceFulfilled($invoice, $service);
             }
 
             if ($invoiceType === 'upgrade') {
                 app(ServiceTrafficPackageService::class)
                     ->processPaidTrafficPackageInvoice($invoice);
 
-                return;
+                return true;
             }
 
             $this->provisionService->processPaidInvoice($invoice);
+
+            return false;
         } catch (\Throwable $exception) {
             Log::error('[支付后自动开通] 基于账单的开通失败', [
                 'invoice_id' => $invoice->id,
@@ -2502,6 +2510,8 @@ class PaymentService
                 'message' => $exception->getMessage(),
                 'exception' => $exception::class,
             ]);
+
+            return false;
         }
     }
 
@@ -2600,7 +2610,11 @@ class PaymentService
             return;
         }
 
-        $this->provisionPaidOrder($order->invoice);
+        $fulfilled = $this->provisionPaidOrder($order->invoice);
+        if (! $fulfilled) {
+            throw new BusinessException('支付后履约未完成，等待后续重试');
+        }
+
         $this->clearFulfillmentPending($order->invoice);
     }
 
@@ -2626,20 +2640,24 @@ class PaymentService
         $this->couponService->syncInvoiceCouponUsage($invoice);
     }
 
-    private function provisionPaidOrder(?Invoice $invoice): void
+    private function provisionPaidOrder(?Invoice $invoice): bool
     {
         $order = $invoice?->order;
 
         if (! $order || (int) $invoice->status !== InvoiceStatus::PAID) {
-            return;
+            return true;
         }
 
         try {
             if ($order->type === 'renew') {
-                $this->serviceRenewService->processPaidRenewOrder($order);
+                $service = $this->serviceRenewService->processPaidRenewOrder($order);
+                if (! $this->serviceRenewService->isRenewInvoiceFulfilled($invoice, $service)) {
+                    return false;
+                }
+
                 $this->notifyOrderPaid($invoice, 'renew');
 
-                return;
+                return true;
             }
 
             if ($order->type === 'upgrade') {
@@ -2654,11 +2672,23 @@ class PaymentService
                 }
                 $this->notifyOrderPaid($invoice, 'upgrade');
 
-                return;
+                return true;
             }
 
-            $this->provisionService->processPaidOrder($order);
+            $service = $this->provisionService->processPaidOrder($order);
+            if ($service === null) {
+                return true;
+            }
+
+            if ((int) $order->status !== OrderStatus::COMPLETED) {
+                $provisionData = is_array($service->provision_data ?? null) ? $service->provision_data : [];
+
+                return empty($provisionData['provision_error']);
+            }
+
             $this->notifyOrderPaid($invoice, 'new');
+
+            return true;
         } catch (\Throwable $exception) {
             Log::error('[支付后自动开通] 调用开通服务失败', [
                 'invoice_id' => $invoice->id,
@@ -2669,6 +2699,31 @@ class PaymentService
 
             throw $exception;
         }
+    }
+
+    private function shouldTrackFulfillment(Invoice $invoice, string $invoiceType): bool
+    {
+        if ($invoiceType === 'renew') {
+            return true;
+        }
+
+        return $invoiceType === 'new'
+            && (int) ($invoice->order?->product?->auto_setup ?? 0) === 1;
+    }
+
+    private function markFulfillmentPending(Invoice $invoice, string $invoiceType): Invoice
+    {
+        $configSnapshot = is_array($invoice->config_snapshot ?? null) ? $invoice->config_snapshot : [];
+        if (! empty($configSnapshot['fulfillment_pending']) || ! empty($configSnapshot['fulfillment_cleared_at'])) {
+            return $invoice;
+        }
+
+        $configSnapshot['fulfillment_pending'] = true;
+        $configSnapshot['fulfillment_type'] = $invoiceType;
+
+        $invoice->forceFill(['config_snapshot' => $configSnapshot])->saveQuietly();
+
+        return $invoice->fresh(['order.product']) ?? $invoice;
     }
 
     private function clearFulfillmentPending(Invoice $invoice): void

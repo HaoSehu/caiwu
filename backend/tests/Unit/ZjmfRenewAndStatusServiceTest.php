@@ -95,6 +95,60 @@ final class ZjmfRenewAndStatusServiceTest extends TestCase
     }
 
     #[Test]
+    public function renew_service_invoice_keeps_local_fulfillment_pending_when_upstream_fund_is_not_paid(): void
+    {
+        $fakeTransport = new class extends HostingPanelApiTransport
+        {
+            public array $uris = [];
+
+            public function request(
+                Supplier $supplier,
+                string $method,
+                string $uri,
+                array|string $payload = [],
+                ?string $jwt = null,
+                array $headers = [],
+                array $query = []
+            ): array {
+                $this->uris[] = "{$method} {$uri}";
+
+                return match ($uri) {
+                    '/v1/login_api' => [
+                        'status' => 200,
+                        'code' => 200,
+                        'jwt' => 'jwt-renew-pending-test',
+                    ],
+                    '/v1/hosts/7788/renew' => [
+                        'status' => 200,
+                        'data' => [
+                            'invoiceid' => 8899,
+                        ],
+                    ],
+                    '/v1/invoices/8899/fund' => [
+                        'status' => 200,
+                        'data' => [
+                            'invoiceid' => 8899,
+                        ],
+                    ],
+                    default => [
+                        'status' => 404,
+                        'msg' => 'not found',
+                    ],
+                };
+            }
+        };
+
+        $service = new ZjmfRenewService($this->makeZjmfTransport($fakeTransport));
+        $result = $service->renewServiceInvoice($this->makeSupplier(), 7788, 'monthly');
+
+        $this->assertSame(8899, $result['upstream_invoice_id']);
+        $this->assertSame(200, $result['fund_status']);
+        $this->assertFalse($result['payment_completed']);
+        $this->assertSame([], $result['host_detail']);
+        $this->assertNotContains('GET /v1/hosts/7788', $fakeTransport->uris);
+    }
+
+    #[Test]
     public function sync_service_statuses_returns_platform_writable_snapshot_payloads(): void
     {
         $fakeTransport = new class extends HostingPanelApiTransport

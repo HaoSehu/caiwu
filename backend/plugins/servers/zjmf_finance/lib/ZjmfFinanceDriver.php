@@ -14,7 +14,6 @@ use App\Services\Upstream\Contracts\ProvidesRenewal;
 use App\Services\Upstream\Contracts\ProvidesScheduledAuthRefresh;
 use App\Services\Upstream\Contracts\ProvidesStatusSync;
 use App\Services\Upstream\Contracts\ProvidesSupplierFormSchema;
-use App\Services\Upstream\Contracts\ProvidesSynchronousNewPurchaseFulfillment;
 use App\Services\Upstream\Contracts\UpstreamDriver;
 use App\Services\Upstream\ProviderKey;
 
@@ -30,7 +29,6 @@ final class ZjmfFinanceDriver implements ProvidesSupplierFormSchema, UpstreamDri
         ProvidesRenewal::class,
         ProvidesScheduledAuthRefresh::class,
         ProvidesStatusSync::class,
-        ProvidesSynchronousNewPurchaseFulfillment::class,
     ];
 
     public function __construct(

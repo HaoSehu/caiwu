@@ -539,11 +539,15 @@ class ServiceRenewService
                         'renew_error' => null,
                     ]);
                     $renewal = $this->resolveRenewalCapability($service, $effectiveProduct);
+                    $paymentCompleted = true;
+                    $upstreamFundError = '';
 
                     if (method_exists($renewal, 'renewServiceInvoice')) {
                         $renewResult = $renewal->renewServiceInvoice($supplier, $hostId, $billingCycle);
                         $upstreamInvoiceId = (int) ($renewResult['upstream_invoice_id'] ?? 0);
                         $hostDetail = is_array($renewResult['host_detail'] ?? null) ? $renewResult['host_detail'] : [];
+                        $paymentCompleted = (bool) ($renewResult['payment_completed'] ?? true);
+                        $upstreamFundError = trim((string) ($renewResult['fund_error'] ?? ''));
                     } else {
                         $jwt = $renewal->login($supplier);
                         $renewResponse = $renewal->renewHost($supplier, $hostId, $billingCycle);
@@ -589,6 +593,13 @@ class ServiceRenewService
                         'renew_error' => null,
                     ]);
 
+                    throw_if(
+                        ! $paymentCompleted,
+                        new BusinessException($upstreamFundError !== ''
+                            ? $upstreamFundError
+                            : '上游续费账单未支付完成，请检查供应商余额')
+                    );
+
                     $nextExpiresAt = $this->resolveRenewedExpiry($service, $billingCycle, $hostDetail);
                     $provisionData = $this->serviceProvisionData($service);
                     $provisionData['upstream_invoice_id'] = $upstreamInvoiceId;
@@ -617,6 +628,11 @@ class ServiceRenewService
                             if (method_exists($renewal, 'recoverRenewInvoice')) {
                                 $recovery = $renewal->recoverRenewInvoice($supplier, $hostId, $existingUpstreamInvoiceId);
                                 if (is_array($recovery)) {
+                                    throw_if(
+                                        ($recovery['payment_completed'] ?? true) !== true,
+                                        new BusinessException('上游续费账单仍未支付完成，请检查供应商余额')
+                                    );
+
                                     $recoveryHostDetail = is_array($recovery['host_detail'] ?? null) ? $recovery['host_detail'] : [];
                                     $recoveredExpiresAt = $this->resolveRenewedExpiry($currentService, $billingCycle, $recoveryHostDetail);
                                     $currentProvisionData['upstream_status'] = (string) ($recoveryHostDetail['domainstatus'] ?? '');

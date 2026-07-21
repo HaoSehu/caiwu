@@ -83,6 +83,8 @@ class ProvisionService
             return $service;
         }
 
+        $this->assertNoUnresolvedUpstreamProvisionInvoice($service);
+
         return $this->submitUpstreamProvision($order, $service);
     }
 
@@ -154,6 +156,8 @@ class ProvisionService
             return $service;
         }
 
+        $this->assertNoUnresolvedUpstreamProvisionInvoice($service);
+
         $this->prepareServiceForProvisionRetry($order, $service);
 
         return $this->submitUpstreamProvision($order, $service, true);
@@ -187,6 +191,8 @@ class ProvisionService
 
         $service = $this->ensureLocalService($order);
 
+        $this->assertNoUnresolvedUpstreamProvisionInvoice($service);
+
         return $this->submitUpstreamProvision($order, $service, true);
     }
 
@@ -196,7 +202,7 @@ class ProvisionService
         $providerKey = $this->resolveProviderKeyForProduct($order->product);
 
         try {
-            $result = $this->provisionViaUpstream($order);
+            $result = $this->provisionViaUpstream($order, $service);
             $hostDetail = $result['host_detail'];
             $serviceStatus = $this->resolveServiceStatusFromUpstream($hostDetail);
 
@@ -401,7 +407,7 @@ class ProvisionService
         return '';
     }
 
-    private function provisionViaUpstream(Order $order): array
+    private function provisionViaUpstream(Order $order, ?Service $service = null): array
     {
         $product = $order->product;
         $supplier = $this->resolveProductSupplier($product);
@@ -413,16 +419,16 @@ class ProvisionService
         $provisioning = $this->resolveProvisioningCapability($product);
         if (method_exists($provisioning, 'provisionOrder')) {
             $this->resolveProvisionHostname($order);
-            $cartLockKey = "lock:supplier:cart:{$supplier->id}";
+            $cartLockKey = $this->supplierCartLockKey($supplier);
 
-            return Cache::lock($cartLockKey, 30)->block(10, function () use ($order, $supplier, $provisioning) {
-                return $provisioning->provisionOrder($order, $supplier, $order->service);
+            return Cache::lock($cartLockKey, $this->supplierCartLockTtl())->block(10, function () use ($order, $supplier, $provisioning, $service) {
+                return $provisioning->provisionOrder($order, $supplier, $service ?? $order->service);
             });
         }
 
         // 幂等键回查：如果 service 已有 upstream_host_id，先查上游确认 host 存在且 Active，
         // 直接返回而不重新走购物车流程，避免重复开通。
-        $existingService = $order->service;
+        $existingService = $service ?? $order->service;
         $existingHostId = $existingService instanceof Service ? $this->resolveReusableServiceUpstreamServiceId($existingService) : null;
         if ($existingService instanceof Service && $existingHostId !== null) {
             $existingHostValue = $this->upstreamServiceIdPayloadValue($existingHostId);
@@ -457,11 +463,11 @@ class ProvisionService
             }
         }
 
-        $cartLockKey = "lock:supplier:cart:{$supplier->id}";
+        $cartLockKey = $this->supplierCartLockKey($supplier);
 
         $startedAt = microtime(true);
 
-        return Cache::lock($cartLockKey, 30)->block(10, function () use ($order, $product, $supplier, $startedAt, $provisioning) {
+        return Cache::lock($cartLockKey, $this->supplierCartLockTtl())->block(10, function () use ($order, $product, $supplier, $startedAt, $provisioning) {
             $latency = [
                 'cart_lock_wait_ms' => 0,
                 'login_ms' => 0,
@@ -913,14 +919,7 @@ class ProvisionService
         $provisionData = $this->serviceProvisionData($service, includeSecrets: true);
 
         foreach ([
-            'provider_key',
-            'supplier_id',
-            'requested_host',
-            'upstream_invoice_id',
-            'upstream_host_id',
-            'upstream_host_ids',
             'upstream_status',
-            'upstream_product_id',
             'upstream_product_name',
             'dedicated_ip',
             'assigned_ips',
@@ -1450,6 +1449,60 @@ class ProvisionService
         $normalized = trim((string) ($value ?? ''));
 
         return $normalized !== '' ? $normalized : null;
+    }
+
+    private function assertNoUnresolvedUpstreamProvisionInvoice(Service $service): void
+    {
+        $provisionData = $this->serviceProvisionData($service);
+        $upstreamInvoiceId = (int) ($provisionData['upstream_invoice_id'] ?? 0);
+        $upstreamHostId = $this->resolveServiceUpstreamServiceId($service)
+            ?? $this->nonBlank($provisionData['upstream_host_id'] ?? null);
+
+        throw_if(
+            $upstreamInvoiceId > 0 && $upstreamHostId === null,
+            new BusinessException('已创建上游账单但未取得实例标识，请先核实上游账单状态后再处理，禁止直接重新下单')
+        );
+    }
+
+    private function supplierCartLockTtl(): int
+    {
+        return max(90, (int) config('queue.caiwu_worker_timeout', 1200) + 60);
+    }
+
+    /**
+     * 魔方的购物车按上游登录账号共享，不能仅按本地 supplier_id 互斥。
+     * 多条供应商记录复用同一上游地址和账号时，必须落到同一个分布式锁。
+     */
+    private function supplierCartLockKey(Supplier $supplier): string
+    {
+        $baseUrl = $this->normalizeUpstreamCartLockBaseUrl((string) ($supplier->api_url ?? ''));
+        $accountName = strtolower(trim((string) ($supplier->api_username ?? '')));
+
+        if ($baseUrl === '' || $accountName === '') {
+            return "lock:supplier:cart:{$supplier->id}";
+        }
+
+        return 'lock:upstream:cart:'.hash('sha256', $baseUrl.'|'.$accountName);
+    }
+
+    private function normalizeUpstreamCartLockBaseUrl(string $baseUrl): string
+    {
+        $baseUrl = rtrim(trim($baseUrl), '/');
+        if ($baseUrl === '') {
+            return '';
+        }
+
+        $parts = parse_url($baseUrl);
+        if ($parts === false || ! isset($parts['host'])) {
+            return $baseUrl;
+        }
+
+        $scheme = strtolower((string) ($parts['scheme'] ?? 'https'));
+        $host = strtolower((string) $parts['host']);
+        $port = isset($parts['port']) ? ':'.(int) $parts['port'] : '';
+        $path = rtrim((string) ($parts['path'] ?? ''), '/');
+
+        return "{$scheme}://{$host}{$port}{$path}";
     }
 
     private function pluginBindingResolver(): PluginBindingResolver

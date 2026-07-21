@@ -529,12 +529,15 @@ class ProvisionServiceHostnameTest extends TestCase
         );
 
         [$order, $service] = $this->makeRetryOrderAndService('ser1234567890', 'srv034315321');
+        $provisionData = (array) $service->provision_data;
+        unset($provisionData['upstream_host_id']);
+        $service->forceFill(['provision_data' => $provisionData]);
 
         try {
             $provisionService->retryFailedProvision($order);
             $this->fail('预期应抛出上游购物车错误');
         } catch (BusinessException $exception) {
-            $this->assertSame('加入上游购物车失败，上游业务接口暂时不可用', $exception->getMessage());
+            $this->assertSame('加入上游购物车失败，请稍后重试', $exception->getMessage());
         }
 
         $this->assertSame('ser1234567890', (string) (($captured['payload']['host'] ?? '')));
@@ -542,10 +545,102 @@ class ProvisionServiceHostnameTest extends TestCase
         $this->assertSame(ServiceStatus::PENDING, (int) $service->status);
         $this->assertSame(OrderStatus::PROCESSING, (int) $order->status);
         $this->assertSame(
-            '加入上游购物车失败，上游业务接口暂时不可用',
+            '加入上游购物车失败，请稍后重试',
             (string) (($service->provision_data ?? [])['provision_error'] ?? '')
         );
         $this->assertFalse(array_key_exists('upstream_host_id', (array) ($service->provision_data ?? [])));
+    }
+
+    #[Test]
+    public function paid_order_retry_does_not_create_a_second_upstream_cart_when_the_first_invoice_has_no_host_id(): void
+    {
+        $provisionService = new ProvisionService(
+            $this->makeProviderResolver(new class extends HostingPanelApiTransport
+            {
+                public function login(Supplier $supplier): string
+                {
+                    throw new \RuntimeException('A pending upstream invoice must not open another cart.');
+                }
+            }),
+            new class extends SettingService
+            {
+                public function getProvisionHostnameConfig(): array
+                {
+                    return [
+                        'prefix' => 'ser',
+                        'length' => 15,
+                        'pool' => '0123456789',
+                    ];
+                }
+            }
+        );
+
+        [$order, $service] = $this->makeRetryOrderAndService('ser1234567890', 'srv034315321');
+        $provisionData = (array) $service->provision_data;
+        unset($provisionData['upstream_host_id']);
+        $provisionData['upstream_invoice_id'] = 7788;
+        $service->forceFill(['provision_data' => $provisionData]);
+
+        try {
+            $provisionService->processPaidOrder($order);
+            $this->fail('未取得上游实例 ID 的账单不得再次创建购物车。');
+        } catch (BusinessException $exception) {
+            $this->assertSame('已创建上游账单但未取得实例标识，请先核实上游账单状态后再处理，禁止直接重新下单', $exception->getMessage());
+        }
+    }
+
+    #[Test]
+    public function supplier_cart_lock_outlives_the_provision_worker_timeout(): void
+    {
+        config()->set('queue.caiwu_worker_timeout', 1200);
+
+        $provisionService = new ProvisionService(
+            new ProviderResolver(new ProviderRegistry([])),
+            new class extends SettingService {},
+        );
+
+        $method = new \ReflectionMethod($provisionService, 'supplierCartLockTtl');
+        $method->setAccessible(true);
+
+        $this->assertSame(1260, $method->invoke($provisionService));
+    }
+
+    #[Test]
+    public function supplier_cart_lock_is_shared_by_records_using_the_same_upstream_account(): void
+    {
+        $provisionService = new ProvisionService(
+            new ProviderResolver(new ProviderRegistry([])),
+            new class extends SettingService {},
+        );
+        $method = new \ReflectionMethod($provisionService, 'supplierCartLockKey');
+        $method->setAccessible(true);
+
+        $first = (new Supplier)->forceFill([
+            'id' => 1001,
+            'api_url' => 'HTTPS://zjmf.example.test/api/',
+            'api_username' => 'Shared-Account',
+        ]);
+        $sameUpstreamAccount = (new Supplier)->forceFill([
+            'id' => 1002,
+            'api_url' => 'https://ZJMF.example.test/api',
+            'api_username' => 'shared-account',
+        ]);
+        $differentUpstreamAccount = (new Supplier)->forceFill([
+            'id' => 1003,
+            'api_url' => 'https://zjmf.example.test/api',
+            'api_username' => 'other-account',
+        ]);
+        $withoutRuntimeCredentials = (new Supplier)->forceFill([
+            'id' => 1004,
+        ]);
+
+        $firstKey = (string) $method->invoke($provisionService, $first);
+
+        $this->assertSame($firstKey, $method->invoke($provisionService, $sameUpstreamAccount));
+        $this->assertNotSame($firstKey, $method->invoke($provisionService, $differentUpstreamAccount));
+        $this->assertSame('lock:supplier:cart:1004', $method->invoke($provisionService, $withoutRuntimeCredentials));
+        $this->assertStringStartsWith('lock:upstream:cart:', $firstKey);
+        $this->assertStringNotContainsString('Shared-Account', $firstKey);
     }
 
     #[Test]

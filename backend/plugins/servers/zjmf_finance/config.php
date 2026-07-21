@@ -10,14 +10,13 @@ use App\Services\Upstream\Contracts\ProvidesConsoleSecurity;
 use App\Services\Upstream\Contracts\ProvidesProvisioning;
 use App\Services\Upstream\Contracts\ProvidesRenewal;
 use App\Services\Upstream\Contracts\ProvidesScheduledAuthRefresh;
-use App\Services\Upstream\Contracts\ProvidesSynchronousNewPurchaseFulfillment;
 use App\Services\Upstream\Contracts\ProvidesStatusSync;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfInventoryAndServiceSyncHook;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfInventoryAndServiceSyncTask;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfScheduledAuthRefreshHook;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfScheduledAuthRefreshTask;
-use Caiwu\Plugins\Servers\ZjmfFinance\ZjmfFinancePlugin;
 use Caiwu\Plugins\Servers\ZjmfFinance\Providers\ZjmfFinanceServiceProvider;
+use Caiwu\Plugins\Servers\ZjmfFinance\ZjmfFinancePlugin;
 
 return [
     'info' => [
@@ -37,11 +36,9 @@ return [
             ProvidesProvisioning::class,
             ProvidesRenewal::class,
             ProvidesScheduledAuthRefresh::class,
-            ProvidesSynchronousNewPurchaseFulfillment::class,
             ProvidesStatusSync::class,
         ],
         'extra' => [
-            'sync_fulfillment_on_new_purchase' => true,
             'scheduled_tasks' => [
                 ZjmfScheduledAuthRefreshTask::class,
                 ZjmfInventoryAndServiceSyncTask::class,

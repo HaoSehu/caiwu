@@ -53,14 +53,32 @@ final class ZjmfRenewService
         $upstreamInvoiceId = $this->extractInvoiceId($renewResponse, $renewPayload);
         throw_if($upstreamInvoiceId <= 0, new BusinessException('上游未返回续费账单 ID'));
 
-        $fundResponse = $this->fundInvoice($supplier, $upstreamInvoiceId, $jwt);
-        $hostDetail = $this->readHostDetailSafely($supplier, $hostId, $jwt, $upstreamInvoiceId);
+        try {
+            $fundResponse = $this->fundInvoice($supplier, $upstreamInvoiceId, $jwt);
+        } catch (\Throwable $exception) {
+            return [
+                'upstream_invoice_id' => $upstreamInvoiceId,
+                'renew_response' => $renewResponse,
+                'fund_response' => [],
+                'fund_status' => 0,
+                'payment_completed' => false,
+                'fund_error' => $exception instanceof BusinessException
+                    ? $exception->getMessage()
+                    : '使用供应商余额支付续费账单失败',
+                'host_detail' => [],
+            ];
+        }
+        $paymentCompleted = $this->extractResponseStatus($fundResponse) === 1001;
 
         return [
             'upstream_invoice_id' => $upstreamInvoiceId,
             'renew_response' => $renewResponse,
             'fund_response' => $fundResponse,
-            'host_detail' => $hostDetail,
+            'fund_status' => $this->extractResponseStatus($fundResponse),
+            'payment_completed' => $paymentCompleted,
+            'host_detail' => $paymentCompleted
+                ? $this->readHostDetailSafely($supplier, $hostId, $jwt, $upstreamInvoiceId)
+                : [],
         ];
     }
 
@@ -82,19 +100,25 @@ final class ZjmfRenewService
                 'host_detail' => $this->readHostDetailSafely($supplier, $hostId, $jwt, $upstreamInvoiceId),
                 'recovered' => true,
                 'funded' => true,
+                'payment_completed' => true,
             ];
         }
 
         if ($upstreamStatus === 'Unpaid') {
             $fundResponse = $this->fundInvoice($supplier, $upstreamInvoiceId, $jwt);
+            $paymentCompleted = $this->extractResponseStatus($fundResponse) === 1001;
 
             return [
                 'upstream_invoice_id' => $upstreamInvoiceId,
                 'upstream_status' => $upstreamStatus,
                 'fund_response' => $fundResponse,
-                'host_detail' => $this->readHostDetailSafely($supplier, $hostId, $jwt, $upstreamInvoiceId),
+                'fund_status' => $this->extractResponseStatus($fundResponse),
+                'host_detail' => $paymentCompleted
+                    ? $this->readHostDetailSafely($supplier, $hostId, $jwt, $upstreamInvoiceId)
+                    : [],
                 'recovered' => true,
-                'funded' => true,
+                'funded' => $paymentCompleted,
+                'payment_completed' => $paymentCompleted,
             ];
         }
 
@@ -138,6 +162,11 @@ final class ZjmfRenewService
     private function extractInvoiceId(array $response, array $payload): int
     {
         return (int) ($payload['invoiceid'] ?? $response['invoiceid'] ?? 0);
+    }
+
+    private function extractResponseStatus(array $response): int
+    {
+        return (int) ($response['status'] ?? $response['code'] ?? $response['status_code'] ?? 0);
     }
 
     private function assertUpstreamSuccess(array $response, array $allowedStatuses, string $action): void
