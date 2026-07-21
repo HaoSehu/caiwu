@@ -34,7 +34,9 @@ class RunHeartbeatTaskJob implements ShouldQueue
         public ?int $taskRunId = null,
         public ?int $adminUserId = null,
         public string $source = 'heartbeat',
+        ?int $taskTimeout = null,
     ) {
+        $this->timeout = max(1, $taskTimeout ?? $this->timeout);
         $this->onQueue('default');
         $this->afterCommit();
     }
@@ -46,7 +48,7 @@ class RunHeartbeatTaskJob implements ShouldQueue
         return [
             (new WithoutOverlapping("job:heartbeat-task:{$this->taskKey}"))
                 ->releaseAfter(30)
-                ->expireAfter($task->lockTtlSeconds()),
+                ->expireAfter(max($task->lockTtlSeconds(), $this->timeout + 60)),
         ];
     }
 
@@ -87,6 +89,18 @@ class RunHeartbeatTaskJob implements ShouldQueue
 
     public function failed(\Throwable $exception): void
     {
+        try {
+            app(\App\Services\Automation\Heartbeat\ScheduleTaskRunRepository::class)
+                ->markFailed($this->taskRunId, $exception->getMessage(), 0);
+        } catch (\Throwable $statusException) {
+            Log::warning('[心跳定时任务] 写入失败状态时出错', [
+                'task' => $this->taskKey,
+                'task_run_id' => $this->taskRunId,
+                'message' => $statusException->getMessage(),
+                'exception' => $statusException::class,
+            ]);
+        }
+
         Log::error('[心跳定时任务] 执行失败，已交由队列失败机制记录', [
             'task' => $this->taskKey,
             'source' => $this->source,

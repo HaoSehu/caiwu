@@ -4,10 +4,6 @@ namespace App\Support;
 
 final class AutomationScheduleExpression
 {
-    public const MODE_EVERY_FIVE_MINUTES = 'every_five_minutes';
-
-    public const MODE_EVERY_TEN_MINUTES = 'every_ten_minutes';
-
     public const MODE_EVERY_FIFTEEN_MINUTES = 'every_fifteen_minutes';
 
     public const MODE_EVERY_THIRTY_MINUTES = 'every_thirty_minutes';
@@ -17,8 +13,6 @@ final class AutomationScheduleExpression
     public const MODE_DAILY = 'daily';
 
     private const CRON_BY_MODE = [
-        self::MODE_EVERY_FIVE_MINUTES => '*/5 * * * *',
-        self::MODE_EVERY_TEN_MINUTES => '*/10 * * * *',
         self::MODE_EVERY_FIFTEEN_MINUTES => '*/15 * * * *',
         self::MODE_EVERY_THIRTY_MINUTES => '*/30 * * * *',
     ];
@@ -29,8 +23,6 @@ final class AutomationScheduleExpression
     public static function modes(): array
     {
         return [
-            self::MODE_EVERY_FIVE_MINUTES,
-            self::MODE_EVERY_TEN_MINUTES,
             self::MODE_EVERY_FIFTEEN_MINUTES,
             self::MODE_EVERY_THIRTY_MINUTES,
             self::MODE_HOURLY,
@@ -72,8 +64,6 @@ final class AutomationScheduleExpression
         [$hour, $minute] = self::extractHourMinute($resolvedTime);
 
         return match ($resolvedMode) {
-            self::MODE_EVERY_FIVE_MINUTES => '每 5 分钟',
-            self::MODE_EVERY_TEN_MINUTES => '每 10 分钟',
             self::MODE_EVERY_FIFTEEN_MINUTES => '每 15 分钟',
             self::MODE_EVERY_THIRTY_MINUTES => '每 30 分钟',
             self::MODE_HOURLY => sprintf('每小时第 %02d 分钟', $minute),
@@ -94,13 +84,27 @@ final class AutomationScheduleExpression
     public static function normalizeTime(?string $time, string $defaultTime = '00:00:00'): string
     {
         $resolvedTime = trim((string) $time);
-        if (preg_match('/^\d{2}:\d{2}(:\d{2})?$/', $resolvedTime) === 1) {
+        if (self::isHeartbeatAlignedTime($resolvedTime)) {
             return strlen($resolvedTime) === 5 ? $resolvedTime.':00' : $resolvedTime;
         }
 
-        return preg_match('/^\d{2}:\d{2}(:\d{2})?$/', $defaultTime) === 1
+        return self::isHeartbeatAlignedTime($defaultTime)
             ? (strlen($defaultTime) === 5 ? $defaultTime.':00' : $defaultTime)
             : '00:00:00';
+    }
+
+    public static function isHeartbeatAlignedTime(?string $time): bool
+    {
+        $value = trim((string) $time);
+        if (preg_match('/^(\d{2}):(\d{2})(?::(\d{2}))?$/', $value, $matches) !== 1) {
+            return false;
+        }
+
+        $hour = (int) $matches[1];
+        $minute = (int) $matches[2];
+        $second = isset($matches[3]) ? (int) $matches[3] : 0;
+
+        return $hour <= 23 && $minute <= 59 && $second === 0 && $minute % 15 === 0;
     }
 
     /**

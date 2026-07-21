@@ -7,6 +7,7 @@ class RunScheduleTaskJob extends RunHeartbeatTaskJob
     public function __construct(
         string $taskKey,
         ?int $adminUserId = null,
+        ?int $taskTimeout = null,
     ) {
         parent::__construct(
             taskKey: $taskKey,
@@ -14,6 +15,7 @@ class RunScheduleTaskJob extends RunHeartbeatTaskJob
             taskRunId: null,
             adminUserId: $adminUserId,
             source: 'manual_trigger',
+            taskTimeout: $taskTimeout,
         );
     }
 }

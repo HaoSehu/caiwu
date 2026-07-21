@@ -110,7 +110,7 @@ class ServeBackendStackCommand extends Command
         $this->info(sprintf('统一入口已启动：http://%s:%d', $publicHost, $publicPort));
         $this->info(sprintf('VNC WebSocket 入口：ws://%s:%d%s', $publicHost, $publicPort, $relayPath));
         $this->line($this->scheduleProcess instanceof Process
-            ? '已同时托管 Laravel HTTP、VNC Relay、队列 Worker、调度 Worker。'
+            ? '已同时托管 Laravel HTTP、VNC Relay、调度 Worker；队列由每分钟心跳消费。'
             : '已托管 Laravel HTTP、VNC Relay、队列 Worker；计划任务需独立运行。');
         $this->line('对外只需要这一组地址，内部 HTTP 与 Relay 端口不需要暴露。');
         $this->line('按 Ctrl+C 可同时停止整个后端栈。');
@@ -178,7 +178,7 @@ class ServeBackendStackCommand extends Command
             '--port='.$relayPort,
         ], base_path());
 
-        if (! (bool) $this->option('without-queue')) {
+        if (! (bool) $this->option('without-queue') && ! (bool) $this->option('with-schedule')) {
             $this->queueProcess = new Process([
                 ...$phpProcessArgs,
                 $artisan,

@@ -33,10 +33,27 @@ class ScheduleTaskTriggerService
         }
 
         $task = $this->registry->get($taskKey);
+        $activeRun = $this->taskRuns->activeRunForTask($taskKey);
+        if ($activeRun !== null) {
+            return [
+                'task' => $taskKey,
+                'title' => $task->title(),
+                'execution_mode' => 'already_queued',
+                'task_run_id' => (int) $activeRun->id,
+            ];
+        }
+
         $run = $this->taskRuns->markManualQueued($task, $adminUserId);
 
         if (app()->runningInConsole() && ! app()->runningUnitTests()) {
-            RunHeartbeatTaskJob::dispatchSync($taskKey, null, $run?->id ? (int) $run->id : null, $adminUserId, 'manual_trigger');
+            RunHeartbeatTaskJob::dispatchSync(
+                $taskKey,
+                null,
+                $run?->id ? (int) $run->id : null,
+                $adminUserId,
+                'manual_trigger',
+                $task->timeout(),
+            );
 
             return [
                 'task' => $taskKey,
@@ -46,8 +63,20 @@ class ScheduleTaskTriggerService
         }
 
         if ($this->shouldUseQueue()) {
-            RunHeartbeatTaskJob::dispatch($taskKey, null, $run?->id ? (int) $run->id : null, $adminUserId, 'manual_trigger')
-                ->onQueue($task->queue());
+            try {
+                RunHeartbeatTaskJob::dispatch(
+                    $taskKey,
+                    null,
+                    $run?->id ? (int) $run->id : null,
+                    $adminUserId,
+                    'manual_trigger',
+                    $task->timeout(),
+                )->onQueue($task->queue());
+            } catch (\Throwable $exception) {
+                $this->taskRuns->markFailed($run?->id ? (int) $run->id : null, '队列派发失败：'.$exception->getMessage(), 0);
+
+                throw $exception;
+            }
 
             return [
                 'task' => $taskKey,
@@ -57,8 +86,14 @@ class ScheduleTaskTriggerService
         }
 
         $this->logFallbackDispatch($taskKey, $adminUserId);
-        RunHeartbeatTaskJob::dispatchAfterResponse($taskKey, null, $run?->id ? (int) $run->id : null, $adminUserId, 'manual_trigger')
-            ->onQueue($task->queue());
+        RunHeartbeatTaskJob::dispatchAfterResponse(
+            $taskKey,
+            null,
+            $run?->id ? (int) $run->id : null,
+            $adminUserId,
+            'manual_trigger',
+            $task->timeout(),
+        )->onQueue($task->queue());
 
         return [
             'task' => $taskKey,

@@ -446,8 +446,6 @@ const videoUrlInput = ref('');
 const videoUrlPreview = ref('');
 
 const automationScheduleModeOptions: FieldOption[] = [
-  { label: '每 5 分钟', value: 'every_five_minutes' },
-  { label: '每 10 分钟', value: 'every_ten_minutes' },
   { label: '每 15 分钟', value: 'every_fifteen_minutes' },
   { label: '每 30 分钟', value: 'every_thirty_minutes' },
   { label: '每小时', value: 'hourly' },
@@ -505,8 +503,8 @@ const configs: Record<Exclude<SettingsTab, 'site_hero'>, SettingsConfig> = {
           { key: 'expire_unsuspend_notify_enabled', label: '恢复后发送通知', type: 'switch', default: true },
           { key: 'expire_terminate_enabled', label: '启用自动终止', type: 'switch', default: false },
           { key: 'expire_terminate_after_days', label: '暂停后终止天数', type: 'number', default: 7, min: 1, max: 365 },
-          { key: 'service_lifecycle_schedule_mode', label: '任务执行周期', type: 'select', default: 'every_five_minutes', options: automationScheduleModeOptions },
-          { key: 'service_lifecycle_schedule_time', label: '执行时间', type: 'time', default: '00:05:00', placeholder: 'HH:mm:ss' },
+          { key: 'service_lifecycle_schedule_mode', label: '任务执行周期', type: 'select', default: 'every_fifteen_minutes', options: automationScheduleModeOptions },
+          { key: 'service_lifecycle_schedule_time', label: '执行时间', type: 'time', default: '00:00:00', placeholder: '分钟仅支持 00/15/30/45', pattern: /^\d{2}:(00|15|30|45):00$/, patternMessage: '分钟仅支持 00、15、30 或 45，秒必须为 00' },
         ],
       },
       {
@@ -519,7 +517,7 @@ const configs: Record<Exclude<SettingsTab, 'site_hero'>, SettingsConfig> = {
           { key: 'invoice_overdue_reminder_days', label: '逾期提醒天数', type: 'input', default: '1,3,5', wide: true, pattern: /^\d+(,\d+)*$/, patternMessage: '请使用英文逗号分隔天数，例如 1,3,5' },
           { key: 'invoice_overdue_after_days', label: '逾期标记天数', type: 'number', default: 0, min: 0, max: 365 },
           { key: 'billing_maintenance_schedule_mode', label: '任务执行周期', type: 'select', default: 'hourly', options: automationScheduleModeOptions },
-          { key: 'billing_maintenance_schedule_time', label: '执行时间', type: 'time', default: '00:00:00', placeholder: 'HH:mm:ss' },
+          { key: 'billing_maintenance_schedule_time', label: '执行时间', type: 'time', default: '00:00:00', placeholder: '分钟仅支持 00/15/30/45', pattern: /^\d{2}:(00|15|30|45):00$/, patternMessage: '分钟仅支持 00、15、30 或 45，秒必须为 00' },
         ],
       },
       {
@@ -532,9 +530,9 @@ const configs: Record<Exclude<SettingsTab, 'site_hero'>, SettingsConfig> = {
           { key: 'pending_recharge_cleanup_enabled', label: '启用未支付充值单清理', type: 'switch', default: true },
           { key: 'pending_recharge_cleanup_after_days', label: '未支付充值单保留天数', type: 'number', default: 3, min: 0, max: 365 },
           { key: 'ticket_auto_close_schedule_mode', label: '工单任务执行周期', type: 'select', default: 'hourly', options: automationScheduleModeOptions },
-          { key: 'ticket_auto_close_schedule_time', label: '工单执行时间', type: 'time', default: '00:00:00', placeholder: 'HH:mm:ss' },
-          { key: 'order_cleanup_schedule_mode', label: '账单清理执行周期', type: 'select', default: 'every_five_minutes', options: automationScheduleModeOptions },
-          { key: 'order_cleanup_schedule_time', label: '账单清理执行时间', type: 'time', default: '00:00:00', placeholder: 'HH:mm:ss' },
+          { key: 'ticket_auto_close_schedule_time', label: '工单执行时间', type: 'time', default: '00:00:00', placeholder: '分钟仅支持 00/15/30/45', pattern: /^\d{2}:(00|15|30|45):00$/, patternMessage: '分钟仅支持 00、15、30 或 45，秒必须为 00' },
+          { key: 'order_cleanup_schedule_mode', label: '账单清理执行周期', type: 'select', default: 'every_fifteen_minutes', options: automationScheduleModeOptions },
+          { key: 'order_cleanup_schedule_time', label: '账单清理执行时间', type: 'time', default: '00:00:00', placeholder: '分钟仅支持 00/15/30/45', pattern: /^\d{2}:(00|15|30|45):00$/, patternMessage: '分钟仅支持 00、15、30 或 45，秒必须为 00' },
         ],
       },
     ],

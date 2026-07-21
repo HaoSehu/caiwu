@@ -52,21 +52,21 @@ class LegacyScheduleHookTaskProvider implements ScheduledTaskProvider
             'title' => '调度扩展 Hook（每日）',
             'hook' => ScheduleHookService::HOOK_DAILY,
             'description' => '兼容 tick.daily 监听器名称。',
-            'cron' => '10 3 * * *',
+            'cron' => '0 3 * * *',
         ],
         [
             'key' => 'schedule-hook-before-daily-cron',
             'title' => '调度扩展 Hook（旧系统每日前）',
             'hook' => ScheduleHookService::HOOK_BEFORE_DAILY_CRON,
             'description' => '兼容旧系统 before_daily_cron 钩子。',
-            'cron' => '10 3 * * *',
+            'cron' => '0 3 * * *',
         ],
         [
             'key' => 'schedule-hook-after-daily-cron',
             'title' => '调度扩展 Hook（旧系统每日后）',
             'hook' => ScheduleHookService::HOOK_AFTER_DAILY_CRON,
             'description' => '兼容旧系统 after_daily_cron 钩子。',
-            'cron' => '10 3 * * *',
+            'cron' => '0 3 * * *',
         ],
     ];
 

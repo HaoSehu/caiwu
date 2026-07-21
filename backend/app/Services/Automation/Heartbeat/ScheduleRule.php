@@ -36,8 +36,6 @@ final class ScheduleRule
         $resolvedMode = AutomationScheduleExpression::normalizeMode($mode, $defaultMode);
 
         return match ($resolvedMode) {
-            AutomationScheduleExpression::MODE_EVERY_FIVE_MINUTES,
-            AutomationScheduleExpression::MODE_EVERY_TEN_MINUTES,
             AutomationScheduleExpression::MODE_EVERY_FIFTEEN_MINUTES => self::everyTicks(1),
             AutomationScheduleExpression::MODE_EVERY_THIRTY_MINUTES => self::everyTicks(2),
             default => self::cron(AutomationScheduleExpression::resolve(

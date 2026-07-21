@@ -157,7 +157,7 @@ class ScheduleTaskService
             [
                 'key' => 'schedule_run',
                 'title' => '调度入口',
-                'description' => '宝塔生产环境请仅保留这一条，每 1 分钟运行一次；Laravel Schedule 内只有 15 分钟心跳源。',
+                'description' => '宝塔生产环境请仅保留这一条，每 1 分钟运行一次；业务任务按 15 分钟槽位去重，队列也会每分钟尝试消费。',
                 'command' => "{$quotedPhp} {$quotedArtisan} schedule:run",
             ],
             [
@@ -268,7 +268,7 @@ class ScheduleTaskService
                             (string) $config['service_lifecycle_schedule_mode'],
                             (string) $config['service_lifecycle_schedule_time'],
                             AutomationScheduleExpression::MODE_EVERY_FIFTEEN_MINUTES,
-                            '00:05:00'
+                            '00:00:00'
                         )
                     : '不会自动暂停到期服务',
             ],

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Automation\Heartbeat;
 
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 
@@ -38,6 +39,17 @@ class QueueDrainService
             ];
         }
 
+        $lock = null;
+        if ($this->shouldUseDrainLock()) {
+            $lock = Cache::lock('scheduler:queue-drain', $this->drainLockTtl());
+            if (! $lock->get()) {
+                return [
+                    'status' => 'skipped',
+                    'reason' => 'queue_drain_in_progress',
+                ];
+            }
+        }
+
         $parameters = [
             '--queue' => (string) config('queue.caiwu_worker_queues', 'provision,referral,notification,coupon,default'),
             '--sleep' => 1,
@@ -47,18 +59,36 @@ class QueueDrainService
             '--max-time' => 50,
         ];
 
-        $exitCode = Artisan::call('queue:work', $parameters);
-        $output = trim(Artisan::output());
+        try {
+            $exitCode = Artisan::call('queue:work', $parameters);
+            $output = trim(Artisan::output());
 
-        if ($exitCode !== 0) {
-            throw new RuntimeException('队列积压消费执行失败，退出码：'.$exitCode.($output !== '' ? '，输出：'.mb_substr($output, 0, 1000) : ''));
+            if ($exitCode !== 0) {
+                throw new RuntimeException('队列积压消费执行失败，退出码：'.$exitCode.($output !== '' ? '，输出：'.mb_substr($output, 0, 1000) : ''));
+            }
+
+            return [
+                'status' => 'drained',
+                'exit_code' => $exitCode,
+                'parameters' => $parameters,
+                'output' => $output !== '' ? mb_substr($output, 0, 2000) : null,
+            ];
+        } finally {
+            $lock?->release();
         }
+    }
 
-        return [
-            'status' => 'drained',
-            'exit_code' => $exitCode,
-            'parameters' => $parameters,
-            'output' => $output !== '' ? mb_substr($output, 0, 2000) : null,
-        ];
+    private function shouldUseDrainLock(): bool
+    {
+        return ! (PHP_OS_FAMILY === 'Windows' && (string) config('cache.default', 'file') === 'file');
+    }
+
+    private function drainLockTtl(): int
+    {
+        return max(
+            (int) config('queue.caiwu_worker_drain_lock_ttl', 3960),
+            (int) config('queue.caiwu_worker_max_timeout', 3600) + 60,
+            (int) config('queue.connections.database.retry_after', 3900) + 60,
+        );
     }
 }

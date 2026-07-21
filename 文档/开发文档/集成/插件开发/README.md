@@ -324,7 +324,7 @@ return [
 
 ## 定时任务与调度 Hooks
 
-插件需要定时能力时只能通过插件清单接入平台调度，不要在插件里注册 Laravel `Schedule`、系统级 Cron、全局中间件或系统级 API 路由。生产环境仍只保留宝塔每分钟执行一次 `php artisan schedule:run`；`backend/routes/console.php` 只发出 15 分钟心跳，具体任务由 `HeartbeatTaskRegistry` 和插件 provider 发现。
+插件需要定时能力时只能通过插件清单接入平台调度，不要在插件里注册 Laravel `Schedule`、系统级 Cron、全局中间件或系统级 API 路由。生产环境仍只保留宝塔每分钟执行一次 `php artisan schedule:run`；`backend/routes/console.php` 每分钟驱动心跳，具体业务任务仍由 15 分钟槽位去重，并由 `HeartbeatTaskRegistry` 和插件 provider 发现。
 
 插件有两种接入方式：
 
@@ -502,7 +502,7 @@ final class ExampleScheduledTask implements ScheduledTask
 
 - `ScheduleRule::everyTicks(1)`：每个 15 分钟心跳执行一次。
 - `ScheduleRule::everyTicks(4)`：每 4 个心跳执行一次，约 1 小时。
-- `ScheduleRule::cron('10 3 * * *')`：按 cron 表达式匹配心跳槽位；不要写低于 15 分钟粒度的业务假设。
+- `ScheduleRule::cron('0 3 * * *')`：按 cron 表达式匹配心跳槽位；分钟只能使用 `00`、`15`、`30` 或 `45`。
 - `ScheduleRule::automation(...)`：仅在复用系统自动化配置模式时使用，普通插件优先用 `everyTicks()` 或 `cron()`。
 
 运行规则：

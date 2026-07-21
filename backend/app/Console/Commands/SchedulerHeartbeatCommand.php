@@ -10,7 +10,7 @@ class SchedulerHeartbeatCommand extends Command
 {
     protected $signature = 'scheduler:heartbeat {--at= : 指定心跳时间，供测试和排查使用}';
 
-    protected $description = '触发唯一 15 分钟心跳，并按注册表异步派发到期定时任务';
+    protected $description = '每分钟驱动队列消费，并按 15 分钟槽位异步派发到期定时任务';
 
     public function handle(HeartbeatScheduler $scheduler): int
     {
