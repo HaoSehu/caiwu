@@ -3,8 +3,9 @@
 use Illuminate\Support\Facades\Schedule;
 
 /**
- * 唯一时钟源：Laravel Schedule 只负责每 15 分钟发出一次全局心跳。
- * 具体业务任务由 HeartbeatTaskRegistry 注册，Scheduler 核心不承载业务逻辑。
+ * 唯一时钟源：Laravel Schedule 每分钟驱动一次全局心跳。
+ * 具体业务任务仍由 HeartbeatTaskRegistry 按其 15 分钟槽位规则去重派发，
+ * 队列则可在每分钟获得一次消费机会。
  */
 $shouldUseScheduleMutex = ! (
     PHP_OS_FAMILY === 'Windows'
@@ -32,9 +33,9 @@ config([
 ]);
 
 $heartbeat = Schedule::command('scheduler:heartbeat')
-    ->everyFifteenMinutes()
+    ->everyMinute()
     ->name('scheduler-heartbeat');
 
 if ($shouldUseScheduleMutex) {
-    $heartbeat->withoutOverlapping(14);
+    $heartbeat->withoutOverlapping(2);
 }

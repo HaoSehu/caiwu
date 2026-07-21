@@ -80,7 +80,7 @@ class SettingService
             'expire_terminate_enabled' => false,
             'expire_terminate_after_days' => 7,
             'service_lifecycle_schedule_mode' => AutomationScheduleExpression::MODE_EVERY_FIFTEEN_MINUTES,
-            'service_lifecycle_schedule_time' => '00:05:00',
+            'service_lifecycle_schedule_time' => '00:00:00',
             'renew_notice_enabled' => true,
             'renew_notice_days_before' => self::FIXED_RENEW_NOTICE_DAYS,
             'renew_create_invoice_enabled' => true,
@@ -111,6 +111,7 @@ class SettingService
 
         $fallbackSettingMap = $this->getGroupFallbackSettings($group);
         $storedSettings = $this->getStoredSettings($group);
+        $automationConfig = trim($group) === 'automation' ? $this->getAutomationConfig() : [];
 
         $fallbackSettings = collect($fallbackSettingMap)
             ->map(fn (mixed $fallbackValue, string $key) => $this->formatSettingPayload(
@@ -123,11 +124,19 @@ class SettingService
             ->reject(fn ($setting, string $key) => array_key_exists($key, $fallbackSettingMap))
             ->reject(fn ($setting, string $key) => $this->isPluginSettingKey($group, $key))
             ->reject(fn ($setting, string $key) => $this->isNotificationTemplateSettingKey($group, $key))
-            ->map(fn (SystemSetting $setting) => $this->formatSettingPayload(
-                (string) ($setting->group_key ?? $group),
-                (string) ($setting->item_key ?? ''),
-                $setting->item_value ?? ''
-            ));
+            ->map(function (SystemSetting $setting) use ($group, $automationConfig): array {
+                $key = (string) ($setting->item_key ?? '');
+                $shouldNormalizeScheduleValue = str_ends_with($key, '_schedule_mode')
+                    || str_ends_with($key, '_schedule_time');
+
+                return $this->formatSettingPayload(
+                    (string) ($setting->group_key ?? $group),
+                    $key,
+                    $shouldNormalizeScheduleValue
+                        ? ($automationConfig[$key] ?? $setting->item_value ?? '')
+                        : ($setting->item_value ?? ''),
+                );
+            });
 
         return $fallbackSettings
             ->concat($dynamicSettings)
@@ -140,7 +149,7 @@ class SettingService
             return;
         }
 
-        $prepared = $this->prepareSettingsForSave($settings);
+        $prepared = $this->prepareSettingsForSave($group, $settings);
         if (trim($group) === 'notification') {
             $templateSettingKeys = $this->notificationTemplateSettingKeys($group, $prepared);
             $prepared = app(NotificationTemplateService::class)->extractTemplateSettings($prepared);
@@ -235,9 +244,7 @@ class SettingService
             'expire_unsuspend_notify_enabled' => $this->getBool('automation', 'expire_unsuspend_notify_enabled', $defaults['expire_unsuspend_notify_enabled']),
             'expire_terminate_enabled' => $this->getBool('automation', 'expire_terminate_enabled', $defaults['expire_terminate_enabled']),
             'expire_terminate_after_days' => $this->getInt('automation', 'expire_terminate_after_days', $defaults['expire_terminate_after_days'], 1, 365),
-            'service_lifecycle_schedule_mode' => $this->normalizeMinimumFifteenMinuteScheduleMode(
-                $this->getScheduleMode('automation', 'service_lifecycle_schedule_mode', $defaults['service_lifecycle_schedule_mode'])
-            ),
+            'service_lifecycle_schedule_mode' => $this->getScheduleMode('automation', 'service_lifecycle_schedule_mode', $defaults['service_lifecycle_schedule_mode']),
             'service_lifecycle_schedule_time' => $this->getScheduleTime('automation', 'service_lifecycle_schedule_time', $defaults['service_lifecycle_schedule_time']),
             'renew_notice_enabled' => $this->getBool('automation', 'renew_notice_enabled', $defaults['renew_notice_enabled']),
             'renew_notice_days_before' => self::FIXED_RENEW_NOTICE_DAYS,
@@ -256,9 +263,7 @@ class SettingService
             'pending_order_cleanup_after_hours' => $this->getInt('automation', 'pending_order_cleanup_after_hours', $defaults['pending_order_cleanup_after_hours'], 1, 720),
             'pending_recharge_cleanup_enabled' => $this->getBool('automation', 'pending_recharge_cleanup_enabled', $defaults['pending_recharge_cleanup_enabled']),
             'pending_recharge_cleanup_after_days' => $this->getInt('automation', 'pending_recharge_cleanup_after_days', $defaults['pending_recharge_cleanup_after_days'], 0, 365),
-            'order_cleanup_schedule_mode' => $this->normalizeMinimumFifteenMinuteScheduleMode(
-                $this->getScheduleMode('automation', 'order_cleanup_schedule_mode', $defaults['order_cleanup_schedule_mode'])
-            ),
+            'order_cleanup_schedule_mode' => $this->getScheduleMode('automation', 'order_cleanup_schedule_mode', $defaults['order_cleanup_schedule_mode']),
             'order_cleanup_schedule_time' => $this->getScheduleTime('automation', 'order_cleanup_schedule_time', $defaults['order_cleanup_schedule_time']),
         ];
     }
@@ -508,7 +513,7 @@ class SettingService
      * @param  array<string, mixed>  $settings
      * @return array<string, mixed>
      */
-    private function prepareSettingsForSave(array $settings): array
+    private function prepareSettingsForSave(string $group, array $settings): array
     {
         foreach ($settings as $key => $value) {
             if (! Setting::isSensitiveKey((string) $key)) {
@@ -519,6 +524,8 @@ class SettingService
                 unset($settings[$key]);
             }
         }
+
+        $this->validateAutomationScheduleSettings($group, $settings);
 
         return $settings;
     }
@@ -637,14 +644,38 @@ class SettingService
         );
     }
 
-    private function normalizeMinimumFifteenMinuteScheduleMode(string $mode): string
+    /**
+     * @param  array<string, mixed>  $settings
+     */
+    private function validateAutomationScheduleSettings(string $group, array $settings): void
     {
-        return in_array($mode, [
-            AutomationScheduleExpression::MODE_EVERY_FIVE_MINUTES,
-            AutomationScheduleExpression::MODE_EVERY_TEN_MINUTES,
-        ], true)
-            ? AutomationScheduleExpression::MODE_EVERY_FIFTEEN_MINUTES
-            : $mode;
+        if (trim($group) !== 'automation') {
+            return;
+        }
+
+        $current = $this->getAutomationConfig();
+        $definitions = [
+            'service_lifecycle' => '服务生命周期',
+            'billing_maintenance' => '账单自动化',
+            'ticket_auto_close' => '工单自动关闭',
+            'order_cleanup' => '账单与充值清理',
+        ];
+
+        foreach ($definitions as $prefix => $label) {
+            $modeKey = $prefix.'_schedule_mode';
+            $timeKey = $prefix.'_schedule_time';
+            $mode = trim((string) ($settings[$modeKey] ?? $current[$modeKey] ?? ''));
+            $time = trim((string) ($settings[$timeKey] ?? $current[$timeKey] ?? '00:00:00'));
+
+            if (! in_array($mode, AutomationScheduleExpression::modes(), true)) {
+                throw new BusinessException("{$label}的执行周期不受支持");
+            }
+
+            if (in_array($mode, [AutomationScheduleExpression::MODE_HOURLY, AutomationScheduleExpression::MODE_DAILY], true)
+                && ! AutomationScheduleExpression::isHeartbeatAlignedTime($time)) {
+                throw new BusinessException("{$label}的执行时间仅支持分钟为 00、15、30 或 45，且秒必须为 00");
+            }
+        }
     }
 
     private function parseProvisionHostnameCharsets(string $value): array

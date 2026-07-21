@@ -53,11 +53,44 @@ class ScheduleTaskRunRepository
         ]);
     }
 
+    public function activeRunForTask(string $taskKey): ?ScheduleTaskRun
+    {
+        if (! $this->tableReady()) {
+            return null;
+        }
+
+        $taskKey = trim($taskKey);
+        if ($taskKey === '') {
+            return null;
+        }
+
+        return ScheduleTaskRun::query()
+            ->where('task_key', $taskKey)
+            ->whereIn('status', [
+                ScheduleTaskRun::STATUS_QUEUED,
+                ScheduleTaskRun::STATUS_RUNNING,
+            ])
+            ->oldest('queued_at')
+            ->first();
+    }
+
     public function markRunning(?int $runId): void
     {
+        if ($runId === null || $runId <= 0) {
+            return;
+        }
+
+        ScheduleTaskRun::query()
+            ->whereKey($runId)
+            ->whereNull('started_at')
+            ->update([
+                'started_at' => now(),
+            ]);
+
         $this->updateRun($runId, [
             'status' => ScheduleTaskRun::STATUS_RUNNING,
-            'started_at' => now(),
+            'finished_at' => null,
+            'error_msg' => null,
         ]);
     }
 

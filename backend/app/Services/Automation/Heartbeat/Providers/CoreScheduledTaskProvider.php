@@ -69,7 +69,7 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                     return $summary;
                 },
                 timeout: 900,
-                lockTtlSeconds: 240,
+                lockTtlSeconds: 960,
             ),
             $this->task(
                 key: 'referral-release-rewards',
@@ -95,9 +95,9 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 description: '处理服务到期暂停、暂停通知和到期后自动取消。',
                 triggers: [ScheduleRule::automation(
                     (string) ($automation['service_lifecycle_schedule_mode'] ?? AutomationScheduleExpression::MODE_EVERY_FIFTEEN_MINUTES),
-                    (string) ($automation['service_lifecycle_schedule_time'] ?? '00:05:00'),
+                    (string) ($automation['service_lifecycle_schedule_time'] ?? '00:00:00'),
                     AutomationScheduleExpression::MODE_EVERY_FIFTEEN_MINUTES,
-                    '00:05:00',
+                    '00:00:00',
                 )],
                 handler: function (): array {
                     $summary = app(ServiceLifecycleAutomationService::class)->handle();
@@ -158,7 +158,7 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                     return $summary;
                 },
                 timeout: 3600,
-                lockTtlSeconds: 10800,
+                lockTtlSeconds: 3660,
             ),
             $this->task(
                 key: 'coupon-campaign-dispatch',
@@ -220,52 +220,20 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 lockTtlSeconds: 900,
             ),
             $this->task(
-                key: 'db-archive-logs-dry-run',
-                title: '日志归档预检',
-                category: '日志维护',
-                description: '每月 1 日 03:30 预检可归档日志数量，生成 dry-run 报告。',
-                triggers: [ScheduleRule::cron('30 3 1 * *')],
-                handler: fn (): array => $this->archiveLogsDryRun(),
-                timeout: 1800,
-                lockTtlSeconds: 3600,
-            ),
-            $this->task(
-                key: 'db-archive-operation-logs',
-                title: 'operation_logs 归档',
-                category: '日志维护',
-                description: '每月 1 日 04:00 归档 operation_logs，默认保留最近 90 天。',
-                triggers: [ScheduleRule::cron('0 4 1 * *')],
-                handler: fn (): array => $this->runArtisan('db:archive-logs', [
-                    '--table' => ['operation_logs'],
-                    '--retain-days' => 90,
-                    '--execute' => true,
-                    '--json' => true,
-                ]),
-                timeout: 1800,
-                lockTtlSeconds: 3600,
-            ),
-            $this->task(
-                key: 'schedule-run-logs-prune-weekly',
-                title: 'schedule_run_logs 归档',
-                category: '日志维护',
-                description: '每周日 03:00 归档 30 天前的定时任务运行日志。',
-                triggers: [ScheduleRule::cron('0 3 * * 0')],
-                handler: fn (): array => $this->runArtisan('db:archive-logs', [
-                    '--table' => ['schedule_run_logs'],
-                    '--retain-days' => 30,
-                    '--execute' => true,
-                    '--json' => true,
-                ]),
-                timeout: 600,
-                lockTtlSeconds: 900,
-            ),
-            $this->task(
                 key: 'reconcile-account-balance',
                 title: '账户余额在线对账',
                 category: '财务对账',
                 description: '定时执行账户余额在线对账，及时发现余额投影异常。',
                 triggers: [ScheduleRule::everyTicks(4)],
-                handler: fn (): array => $this->runArtisan('reconcile:account-balance'),
+                handler: function (): array {
+                    $summary = $this->runArtisan('reconcile:account-balance', [], false);
+                    if (($summary['exit_code'] ?? 0) !== 0) {
+                        Log::warning('[定时任务] 账户余额对账发现差异，已记录告警且不进行队列重试', $summary);
+                        $summary['status'] = 'warning';
+                    }
+
+                    return $summary;
+                },
                 timeout: 1200,
                 lockTtlSeconds: 1800,
             ),
@@ -426,7 +394,7 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
      * @param  array<string, mixed>  $parameters
      * @return array<string, mixed>
      */
-    private function runArtisan(string $command, array $parameters = []): array
+    private function runArtisan(string $command, array $parameters = [], bool $throwOnFailure = true): array
     {
         $exitCode = Artisan::call($command, $parameters);
         $output = trim(Artisan::output());
@@ -444,7 +412,7 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
             $summary['output'] = mb_substr($output, 0, 2000);
         }
 
-        if ($exitCode !== 0) {
+        if ($exitCode !== 0 && $throwOnFailure) {
             $message = "Artisan command [{$command}] exited with code {$exitCode}.";
             if ($output !== '') {
                 $message .= ' Output: '.mb_substr($output, 0, 1000);
@@ -454,35 +422,5 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
         }
 
         return $summary;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function archiveLogsDryRun(): array
-    {
-        $summary = $this->runArtisan('db:archive-logs', [
-            '--dry-run' => true,
-            '--json' => true,
-        ]);
-
-        $decoded = json_decode((string) ($summary['output'] ?? ''), true);
-        if (! is_array($decoded)) {
-            return $summary;
-        }
-
-        return [
-            'command' => 'db:archive-logs',
-            'exit_code' => $summary['exit_code'],
-            'report_path' => $decoded['report_path'] ?? null,
-            'eligible_rows' => $decoded['totals']['eligible_rows'] ?? 0,
-            'tables' => array_map(
-                static fn (array $table): array => [
-                    'eligible_rows' => $table['eligible_rows'] ?? 0,
-                    'cutoff' => $table['cutoff'] ?? null,
-                ],
-                (array) ($decoded['tables'] ?? []),
-            ),
-        ];
     }
 }

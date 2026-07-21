@@ -180,6 +180,40 @@ class V2AdminSettingsScheduleApiTest extends TestCase
         $this->assertLessThan(100 * 1024, strlen($content));
     }
 
+    public function test_automation_schedule_rejects_unrepresentable_periods_and_times(): void
+    {
+        Sanctum::actingAs($this->createAdmin([AdminPermissions::SETTINGS_MANAGE]));
+
+        $this->postJson('/api/v2/admin/settings', [
+            'group' => 'automation',
+            'settings' => [
+                'billing_maintenance_schedule_mode' => 'every_five_minutes',
+            ],
+        ])
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 42200);
+
+        $this->postJson('/api/v2/admin/settings', [
+            'group' => 'automation',
+            'settings' => [
+                'billing_maintenance_schedule_mode' => 'hourly',
+                'billing_maintenance_schedule_time' => '00:05:00',
+            ],
+        ])
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 42200);
+
+        $this->postJson('/api/v2/admin/settings', [
+            'group' => 'automation',
+            'settings' => [
+                'billing_maintenance_schedule_mode' => 'hourly',
+                'billing_maintenance_schedule_time' => '00:15:00',
+            ],
+        ])
+            ->assertOk()
+            ->assertJsonPath('code', 0);
+    }
+
     /**
      * @param  list<string>  $permissions
      */

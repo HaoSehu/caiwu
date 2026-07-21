@@ -47,16 +47,16 @@ class HeartbeatScheduleRuleTest extends TestCase
         $this->assertFalse($rule->isDue(TickSlot::context(null, CarbonImmutable::parse('2026-07-05 12:15:00', 'Asia/Shanghai'))));
     }
 
-    public function test_automation_modes_below_fifteen_minutes_are_normalized_to_each_heartbeat(): void
+    public function test_unsupported_sub_fifteen_minute_modes_fall_back_to_the_declared_default(): void
     {
         $rule = ScheduleRule::automation(
-            AutomationScheduleExpression::MODE_EVERY_TEN_MINUTES,
+            'every_ten_minutes',
             '00:00:00',
             AutomationScheduleExpression::MODE_HOURLY,
             '00:00:00',
         );
 
-        $this->assertSame('每次心跳', $rule->describe());
-        $this->assertTrue($rule->isDue(TickSlot::context(null, CarbonImmutable::parse('2026-07-05 12:15:00', 'Asia/Shanghai'))));
+        $this->assertSame('0 * * * *', $rule->describe());
+        $this->assertFalse($rule->isDue(TickSlot::context(null, CarbonImmutable::parse('2026-07-05 12:15:00', 'Asia/Shanghai'))));
     }
 }

@@ -11,17 +11,17 @@ use PHPUnit\Framework\TestCase;
 class AutomationScheduleExpressionTest extends TestCase
 {
     #[Test]
-    public function it_resolves_hourly_expression_from_configured_minute(): void
+    public function it_resolves_hourly_expression_from_heartbeat_aligned_minute(): void
     {
         $expression = AutomationScheduleExpression::resolve(
             AutomationScheduleExpression::MODE_HOURLY,
-            '00:35:00'
+            '00:15:00'
         );
 
-        $this->assertSame('35 * * * *', $expression);
-        $this->assertSame('每小时第 35 分钟', AutomationScheduleExpression::describe(
+        $this->assertSame('15 * * * *', $expression);
+        $this->assertSame('每小时第 15 分钟', AutomationScheduleExpression::describe(
             AutomationScheduleExpression::MODE_HOURLY,
-            '00:35:00'
+            '00:15:00'
         ));
     }
 
@@ -47,9 +47,19 @@ class AutomationScheduleExpressionTest extends TestCase
             'invalid-mode',
             'bad-time',
             AutomationScheduleExpression::MODE_HOURLY,
-            '00:20:00'
+            '00:30:00'
         );
 
-        $this->assertSame('20 * * * *', $expression);
+        $this->assertSame('30 * * * *', $expression);
+    }
+
+    #[Test]
+    public function it_rejects_schedule_times_outside_the_fifteen_minute_heartbeat_grid(): void
+    {
+        $this->assertFalse(AutomationScheduleExpression::isHeartbeatAlignedTime('00:05:00'));
+        $this->assertFalse(AutomationScheduleExpression::isHeartbeatAlignedTime('00:15:30'));
+        $this->assertTrue(AutomationScheduleExpression::isHeartbeatAlignedTime('23:45:00'));
+        $this->assertSame('00:00:00', AutomationScheduleExpression::normalizeTime('00:05:00'));
+        $this->assertNotContains('every_five_minutes', AutomationScheduleExpression::modes());
     }
 }
