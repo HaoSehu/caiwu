@@ -8,7 +8,6 @@ use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
 use App\Exceptions\BusinessException;
 use App\Models\Invoice;
-use App\Models\InvoiceItem;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\Service;
@@ -26,11 +25,37 @@ use App\Services\Provisioning\ProvisionService;
 use App\Services\Provisioning\ServiceRenewService;
 use App\Services\Referral\ReferralService;
 use App\Services\System\OperationLogService;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class OrderQuantityCheckoutFlowTest extends TestCase
 {
-    public function test_order_creation_persists_quantity_and_invoice_item_quantity(): void
+    public function test_invoice_creation_api_rejects_multiple_quantity_before_checkout(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+        $user = User::query()->create([
+            'email' => "order-quantity-api-{$suffix}@example.com",
+            'password' => 'secret123',
+            'phone' => '137'.str_pad((string) random_int(0, 99999999), 8, '0', STR_PAD_LEFT),
+            'status' => 1,
+            'is_verified' => 1,
+            'verification_status' => 2,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/v2/client/invoices', [
+            'product_id' => 1,
+            'billing_cycle' => 'monthly',
+            'quantity' => 2,
+            'quote_token' => str_repeat('q', 20),
+        ])
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 42200)
+            ->assertJsonStructure(['data' => ['errors' => ['quantity']]]);
+    }
+
+    public function test_checkout_rejects_multiple_quantity_to_prevent_partial_provisioning(): void
     {
         $suffix = bin2hex(random_bytes(4));
         $user = User::query()->create([
@@ -57,9 +82,8 @@ class OrderQuantityCheckoutFlowTest extends TestCase
         $invoiceService = new InvoiceService;
 
         $productCatalogService = $this->createMock(ProductCatalogService::class);
-        $productCatalogService->expects($this->once())
-            ->method('assertProductCanBeProvisioned')
-            ->with($this->callback(fn (Product $candidate): bool => (int) $candidate->id === (int) $product->id), 2);
+        $productCatalogService->expects($this->never())
+            ->method('assertProductCanBeProvisioned');
 
         $couponService = $this->createMock(CouponService::class);
         $couponService->method('reserveOwnedCouponForInvoice')->willReturn([]);
@@ -86,34 +110,25 @@ class OrderQuantityCheckoutFlowTest extends TestCase
         ]);
         $tokenData = $checkoutSecurity->issueQuoteToken($product->id, 'monthly', [], $quotePayload);
 
-        $invoice = $checkoutService->create($user->id, [
-            'product_id' => (int) $product->id,
-            'billing_cycle' => 'monthly',
-            'quantity' => 2,
-            'config' => [],
-            'quote_token' => (string) ($tokenData['quote_token'] ?? ''),
-        ], [
-            'idempotency_key' => 'order-quantity-'.$suffix,
-            'trace_id' => 'trace-order-quantity-'.$suffix,
-        ]);
+        try {
+            $checkoutService->create($user->id, [
+                'product_id' => (int) $product->id,
+                'billing_cycle' => 'monthly',
+                'quantity' => 2,
+                'config' => [],
+                'quote_token' => (string) ($tokenData['quote_token'] ?? ''),
+            ], [
+                'idempotency_key' => 'order-quantity-'.$suffix,
+                'trace_id' => 'trace-order-quantity-'.$suffix,
+            ]);
 
-        $invoice->refresh()->load('order');
-        $order = $invoice->order;
+            $this->fail('多数量结算必须被拒绝');
+        } catch (BusinessException $exception) {
+            $this->assertSame('当前暂不支持一次购买多个服务实例，请分次下单', $exception->getMessage());
+        }
 
-        $this->assertNotNull($order, 'Shadow order should be created');
-        $this->assertSame(2, (int) $order->quantity);
-        $this->assertSame('218.00', number_format((float) $order->amount, 2, '.', ''));
-        $this->assertSame(2, (int) ($order->config_pricing_snapshot['quantity'] ?? 0));
-        $this->assertSame('218.00', (string) ($order->config_pricing_snapshot['total_amount'] ?? ''));
-
-        $invoiceItem = InvoiceItem::query()
-            ->where('invoice_id', (int) $invoice->id)
-            ->first();
-
-        $this->assertNotNull($invoiceItem);
-        $this->assertSame(2, (int) $invoiceItem->quantity);
-        $this->assertSame('109.00', number_format((float) $invoiceItem->unit_price, 2, '.', ''));
-        $this->assertSame('218.00', number_format((float) $invoiceItem->line_amount, 2, '.', ''));
+        $this->assertDatabaseMissing('invoices', ['user_id' => (int) $user->id]);
+        $this->assertDatabaseMissing('orders', ['user_id' => (int) $user->id]);
     }
 
     public function test_invoice_checkout_persists_full_instance_spec_snapshot(): void

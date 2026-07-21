@@ -584,10 +584,10 @@
                 </div>
               </div>
 
-              <!-- 购买数量 -->
+              <!-- 单笔订单仅支持创建一台服务实例，避免多台计价但仅开通一台。 -->
               <div class="spec-row">
                 <span class="spec-label">购买数量</span>
-                <el-input-number v-model="quantity" :min="1" :max="10" size="small" />
+                <span>1 台（多台请分次下单）</span>
               </div>
             </div>
           </div>
@@ -645,9 +645,6 @@
             </div>
             <div class="cost-item" v-if="selectedCycleLabel">
               <span>周期</span><span>{{ selectedCycleLabel }}</span>
-            </div>
-            <div class="cost-item" v-if="quantity > 1">
-              <span>购买数量</span><span>{{ quantity }}</span>
             </div>
           </div>
 
