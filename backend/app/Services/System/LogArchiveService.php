@@ -6,352 +6,445 @@ namespace App\Services\System;
 
 use App\Models\ArchiveAuditLog;
 use Carbon\CarbonImmutable;
+use Illuminate\Process\Pool;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
 use RuntimeException;
 use Throwable;
 
 class LogArchiveService
 {
-    /**
-     * Ordinary operational logs only. Financial audit tables such as
-     * payments/account_transactions/payment_callbacks are intentionally absent.
-     */
-    private const POLICIES = [
-        'operation_logs' => [
-            'date_column' => 'created_at',
-            'retain_days' => 90,
-            'description' => 'API/后台操作日志',
-        ],
-        'message_logs' => [
-            'date_column' => 'created_at',
-            'retain_days' => 180,
-            'description' => '短信/邮件统一消息日志',
-        ],
-        'automation_logs' => [
-            'date_column' => 'created_at',
-            'retain_days' => 180,
-            'description' => '自动化任务业务日志',
-        ],
-        'schedule_run_logs' => [
-            'date_column' => 'created_at',
-            'retain_days' => 30,
-            'description' => '调度任务运行日志',
-        ],
-        'integration_plugin_runtime_logs' => [
-            'date_column' => 'created_at',
-            'retain_days' => 180,
-            'description' => '插件运行审计日志',
-        ],
-    ];
-
-    private const EXCLUDED_AUDIT_TABLES = [
-        'account_transactions',
-        'payments',
-        'payment_callbacks',
-        'invoices',
-        'invoice_items',
-        'gateway_logs',
-        'activity_logs',
-    ];
+    private const ARCHIVE_WHERE = 'created_at < DATE_SUB(NOW(), INTERVAL 30 DAY)';
 
     /**
-     * @param  array{tables?: list<string>, retain_days?: int|null, chunk?: int|null, base_path?: string|null}  $options
+     * @param  array{tables?: list<string>, concurrency?: int|null, batch_size?: int|null, sleep_seconds?: int|null, base_path?: string|null}  $options
      * @return array<string, mixed>
      */
     public function dryRun(array $options = []): array
     {
-        $manifest = $this->buildManifest('dry_run', $options);
-        $manifest['report_path'] = $this->writeManifest($manifest, $options['base_path'] ?? null, 'dry-run');
+        $settings = $this->resolveSettings($options);
+        $policies = $this->resolvePolicies($options['tables'] ?? []);
+        $this->assertPreconditions($policies, $settings, false);
 
-        return $manifest;
+        $report = $this->buildReport('dry_run', $policies, $settings);
+        $this->writeReport($report);
+        $this->appendExecutionEvent($report, 'run_started');
+
+        try {
+            $report = $this->runPtArchiver($report, $settings, true);
+            $report = $this->finishReport($report);
+            $this->writeReport($report);
+            $this->appendExecutionEvent($report, 'run_finished');
+
+            return $report;
+        } catch (Throwable $exception) {
+            $report['status'] = 'failed';
+            $report['error_message'] = mb_substr($exception->getMessage(), 0, 500);
+            $report['finished_at'] = now()->toISOString();
+            $this->writeReport($report);
+            $this->appendExecutionEvent($report, 'run_failed');
+
+            throw $exception;
+        }
     }
 
     /**
-     * @param  array{tables?: list<string>, retain_days?: int|null, chunk?: int|null, base_path?: string|null}  $options
+     * @param  array{tables?: list<string>, concurrency?: int|null, batch_size?: int|null, sleep_seconds?: int|null, base_path?: string|null}  $options
      * @return array<string, mixed>
      */
     public function archive(array $options = []): array
     {
-        $manifest = $this->buildManifest('archive', $options);
-        $runDirectory = $this->makeRunDirectory(
-            $options['base_path'] ?? null,
-            'archive',
-            (string) $manifest['batch_id'],
-        );
-        $chunkSize = max(1, (int) ($options['chunk'] ?? 1000));
-        $manifest['manifest_path'] = $runDirectory.DIRECTORY_SEPARATOR.'manifest.json';
-        $this->writeManifestToPath($manifest, (string) $manifest['manifest_path']);
+        $settings = $this->resolveSettings($options);
+        $policies = $this->resolvePolicies($options['tables'] ?? []);
+        $lock = $this->acquireGlobalLock();
 
-        foreach ($manifest['tables'] as $table => &$tableReport) {
-            if (! $tableReport['exists'] || $tableReport['eligible_rows'] <= 0) {
-                $tableReport['status'] = 'skipped';
+        try {
+            $this->assertPreconditions($policies, $settings, true);
+            $report = $this->buildReport('archive', $policies, $settings);
+            $audits = [];
 
-                continue;
+            foreach (array_keys($policies) as $table) {
+                $this->ensureDirectory(dirname((string) $report['tables'][$table]['archive_file']));
+                $audits[$table] = $this->createAuditLog((string) $report['batch_id'], $table);
             }
 
-            $dateColumn = (string) $tableReport['date_column'];
-            $cutoff = (string) $tableReport['cutoff'];
-            $auditLog = $this->createAuditLog(
-                batchId: (string) $manifest['batch_id'],
-                table: $table,
-                mode: 'archive',
-            );
+            $this->writeReport($report);
+            $this->appendExecutionEvent($report, 'run_started');
 
             try {
-                $export = $this->exportTable(
-                    table: $table,
-                    dateColumn: $dateColumn,
-                    cutoff: $cutoff,
-                    chunkSize: $chunkSize,
-                    runDirectory: $runDirectory,
+                $report = $this->runPtArchiver($report, $settings, false, $audits);
+                $report['cleanup'] = $this->cleanupExpiredArchives(
+                    (string) $settings['archive_root'],
+                    (int) $settings['file_retention_days'],
                 );
+                $report = $this->finishReport($report);
+                if ($report['cleanup']['errors'] !== []) {
+                    $report['status'] = 'failed';
+                }
+                $this->writeReport($report);
+                $this->appendExecutionEvent($report, 'run_finished');
 
-                $tableReport = array_merge($tableReport, $export, [
-                    'status' => 'exported',
-                    'error_message' => null,
-                ]);
-                $manifest['totals']['exported_rows'] += (int) $export['exported_rows'];
-                $this->writeManifestToPath($manifest, (string) $manifest['manifest_path']);
-                $this->finishAuditLog($auditLog, [
-                    'row_count' => (int) $export['exported_rows'],
-                    'file_path' => (string) $export['archive_file'],
-                    'file_size' => (int) $export['file_size'],
-                    'checksum_sha256' => (string) $export['checksum_sha256'],
-                    'status' => 'exported',
-                ]);
-
-                $deleted = $this->deleteExportedRows(
-                    table: $table,
-                    dateColumn: $dateColumn,
-                    cutoff: $cutoff,
-                    maxId: (int) $export['max_id'],
-                    chunkSize: $chunkSize,
-                );
-
-                $tableReport['deleted_rows'] = $deleted;
-                $tableReport['status'] = 'completed';
-                $manifest['totals']['deleted_rows'] += $deleted;
-                $this->writeManifestToPath($manifest, (string) $manifest['manifest_path']);
-                $this->finishAuditLog($auditLog, [
-                    'row_count' => (int) $export['exported_rows'],
-                    'file_path' => (string) $export['archive_file'],
-                    'file_size' => (int) $export['file_size'],
-                    'checksum_sha256' => (string) $export['checksum_sha256'],
-                    'status' => 'completed',
-                ]);
+                return $report;
             } catch (Throwable $exception) {
-                $tableReport['status'] = 'failed';
-                $tableReport['error_message'] = $exception->getMessage();
-                $this->writeManifestToPath($manifest, (string) $manifest['manifest_path']);
-                $this->finishAuditLog($auditLog, [
-                    'status' => 'failed',
-                    'error_message' => mb_substr($exception->getMessage(), 0, 500),
-                ]);
+                foreach ($audits as $table => $audit) {
+                    if ((string) ($report['tables'][$table]['status'] ?? 'running') === 'running') {
+                        $this->finishAuditLog($audit, [
+                            'status' => 'failed',
+                            'error_message' => mb_substr($exception->getMessage(), 0, 500),
+                        ]);
+                    }
+                }
+
+                $report['status'] = 'failed';
+                $report['error_message'] = mb_substr($exception->getMessage(), 0, 500);
+                $report['finished_at'] = now()->toISOString();
+                $this->writeReport($report);
+                $this->appendExecutionEvent($report, 'run_failed');
 
                 throw $exception;
             }
+        } finally {
+            flock($lock, LOCK_UN);
+            fclose($lock);
         }
-        unset($tableReport);
-
-        $this->writeManifestToPath($manifest, (string) $manifest['manifest_path']);
-
-        return $manifest;
     }
 
     /**
+     * @param  array<string, string>  $policies
+     * @param  array<string, mixed>  $settings
+     */
+    private function assertPreconditions(array $policies, array $settings, bool $execute): void
+    {
+        $database = (string) DB::getDatabaseName();
+        if (! preg_match('/^[A-Za-z0-9_$-]+$/', $database)) {
+            throw new RuntimeException('Database name contains unsupported characters.');
+        }
+
+        foreach (array_keys($policies) as $table) {
+            if (! Schema::hasTable($table)) {
+                throw new RuntimeException("Required log table does not exist: {$table}");
+            }
+            if (! Schema::hasColumn($table, 'id') || ! Schema::hasColumn($table, 'created_at')) {
+                throw new RuntimeException("Log table must contain id and created_at columns: {$table}");
+            }
+
+            if (DB::getDriverName() === 'mysql') {
+                $metadata = DB::selectOne(
+                    'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?',
+                    [$database, $table],
+                );
+                if (strtoupper((string) ($metadata->ENGINE ?? '')) !== 'INNODB') {
+                    throw new RuntimeException("Log table must use InnoDB: {$table}");
+                }
+            }
+        }
+
+        $defaultsFile = (string) $settings['defaults_file'];
+        if (! is_file($defaultsFile) || ! is_readable($defaultsFile)) {
+            throw new RuntimeException("pt-archiver defaults file is not readable: {$defaultsFile}");
+        }
+        if (str_contains($defaultsFile, ',')) {
+            throw new RuntimeException('pt-archiver defaults file path cannot contain commas.');
+        }
+
+        $version = Process::timeout(10)->run([(string) $settings['binary'], '--version']);
+        if ($version->failed()) {
+            $message = trim($version->errorOutput() ?: $version->output());
+            throw new RuntimeException('pt-archiver is unavailable'.($message !== '' ? ": {$message}" : '.'));
+        }
+
+        $this->ensureDirectory((string) $settings['report_root']);
+        $this->ensureDirectory(dirname((string) $settings['lock_path']));
+
+        if ($execute) {
+            $this->ensureDirectory((string) $settings['archive_root']);
+        }
+
+        $mountPoint = trim((string) ($settings['mount_point'] ?? ''));
+        if ($mountPoint !== '' && PHP_OS_FAMILY !== 'Windows') {
+            $mountCheck = Process::timeout(10)->run(['/usr/bin/mountpoint', '-q', $mountPoint]);
+            if ($mountCheck->failed()) {
+                throw new RuntimeException("Configured archive mount point is not mounted: {$mountPoint}");
+            }
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $report
+     * @param  array<string, mixed>  $settings
+     * @param  array<string, ArchiveAuditLog>  $audits
      * @return array<string, mixed>
      */
-    public function restore(string $manifestPath, int $chunkSize = 1000): array
+    private function runPtArchiver(array $report, array $settings, bool $dryRun, array $audits = []): array
     {
-        if (! is_file($manifestPath)) {
-            throw new InvalidArgumentException("Manifest file not found: {$manifestPath}");
+        $tables = array_keys((array) $report['tables']);
+
+        foreach (array_chunk($tables, (int) $settings['concurrency']) as $group) {
+            $commands = [];
+            foreach ($group as $table) {
+                $commands[$table] = $this->buildCommand(
+                    $table,
+                    (string) $report['tables'][$table]['archive_file'],
+                    $settings,
+                    $dryRun,
+                );
+                $report['tables'][$table]['status'] = 'running';
+                $report['tables'][$table]['started_at'] = now()->toISOString();
+            }
+            $this->writeReport($report);
+
+            $results = Process::concurrently(function (Pool $pool) use ($commands): void {
+                foreach ($commands as $table => $command) {
+                    $pool->as($table)->forever()->command($command);
+                }
+            });
+
+            foreach ($group as $table) {
+                $result = $results[$table];
+                $output = trim($result->output().PHP_EOL.$result->errorOutput());
+                $tableReport = (array) $report['tables'][$table];
+                $tableReport['exit_code'] = $result->exitCode();
+                $tableReport['tool_output'] = $this->truncate($output, 8000);
+                $tableReport['finished_at'] = now()->toISOString();
+
+                if ($dryRun) {
+                    $tableReport['status'] = $result->successful() ? 'completed' : 'failed';
+                    $tableReport['error_message'] = $result->successful()
+                        ? null
+                        : $this->failureMessage($output, $result->exitCode());
+                } else {
+                    $tableReport = $this->finishArchiveTable($table, $tableReport, $result->successful(), $output);
+                    $audit = $audits[$table];
+                    $this->finishAuditLog($audit, [
+                        'row_count' => (int) $tableReport['deleted_rows'],
+                        'file_path' => (string) $tableReport['archive_file'],
+                        'file_size' => $tableReport['file_size'],
+                        'checksum_sha256' => $tableReport['checksum_sha256'],
+                        'status' => (string) $tableReport['status'],
+                        'error_message' => $tableReport['error_message'],
+                    ]);
+                }
+
+                $report['tables'][$table] = $tableReport;
+                $this->appendExecutionEvent($report, 'table_finished', $table, $tableReport);
+            }
+
+            $report = $this->refreshTotals($report);
+            $this->writeReport($report);
         }
 
-        $manifest = json_decode((string) file_get_contents($manifestPath), true);
-        if (! is_array($manifest) || ($manifest['mode'] ?? '') !== 'archive') {
-            throw new InvalidArgumentException('Only archive manifests can be restored.');
+        return $report;
+    }
+
+    /**
+     * @param  array<string, mixed>  $tableReport
+     * @return array<string, mixed>
+     */
+    private function finishArchiveTable(string $table, array $tableReport, bool $successful, string $output): array
+    {
+        $remaining = (int) DB::table($table)->whereRaw(self::ARCHIVE_WHERE)->count();
+        $countDifference = max(0, (int) $tableReport['eligible_rows'] - $remaining);
+        $toolCount = $this->parseDeletedRows($output);
+        $deletedRows = $toolCount ?? $countDifference;
+        $archiveFile = (string) $tableReport['archive_file'];
+        $fileExists = is_file($archiveFile);
+        $fileSize = $fileExists ? filesize($archiveFile) : false;
+        $checksum = $fileExists ? hash_file('sha256', $archiveFile) : false;
+        $headerValid = $fileExists && $this->hasHeader($archiveFile);
+
+        if ($fileExists) {
+            @chmod($archiveFile, 0640);
         }
 
-        $chunkSize = max(1, $chunkSize);
-        $summary = [
-            'manifest_path' => $manifestPath,
-            'restored_at' => now()->toISOString(),
-            'tables' => [],
+        $tableReport['eligible_remaining'] = $remaining;
+        $tableReport['exported_rows'] = $deletedRows;
+        $tableReport['deleted_rows'] = $deletedRows;
+        $tableReport['file_size'] = $fileSize === false ? null : $fileSize;
+        $tableReport['checksum_sha256'] = $checksum === false ? null : $checksum;
+        $tableReport['status'] = $successful && $fileExists && $headerValid ? 'completed' : 'failed';
+
+        if ($tableReport['status'] === 'failed') {
+            $tableReport['error_message'] = ! $successful
+                ? $this->failureMessage($output, (int) $tableReport['exit_code'])
+                : (! $fileExists
+                    ? 'pt-archiver completed without creating the archive file.'
+                    : 'Archive file does not contain a valid header row.');
+        } else {
+            $tableReport['error_message'] = null;
+        }
+
+        return $tableReport;
+    }
+
+    /**
+     * @param  array<string, mixed>  $settings
+     * @return list<string>
+     */
+    private function buildCommand(string $table, string $archiveFile, array $settings, bool $dryRun): array
+    {
+        $database = (string) DB::getDatabaseName();
+        $pidFile = dirname((string) $settings['lock_path']).DIRECTORY_SEPARATOR."pt-archiver-{$table}.pid";
+        $command = [
+            (string) $settings['binary'],
+            '--source=F='.(string) $settings['defaults_file'].",D={$database},t={$table},i=PRIMARY",
+            '--where='.self::ARCHIVE_WHERE,
+            '--file='.$archiveFile,
+            '--output-format=csv',
+            '--header',
+            '--purge',
+            '--limit='.(string) $settings['batch_size'],
+            '--commit-each',
+            '--sleep='.(string) $settings['sleep_seconds'],
+            '--progress='.(string) $settings['batch_size'],
+            '--retries=3',
+            '--statistics',
+            '--why-quit',
+            '--charset=utf8mb4',
+            '--pid='.$pidFile,
+            '--no-version-check',
         ];
 
-        foreach ((array) ($manifest['tables'] ?? []) as $table => $tableReport) {
-            $this->resolvePolicies([$table]);
-
-            $archiveFile = (string) ($tableReport['archive_file'] ?? '');
-            $auditLog = $this->createAuditLog(
-                batchId: (string) ($manifest['batch_id'] ?? Str::uuid()->toString()),
-                table: $table,
-                mode: 'restore',
-            );
-            if ($archiveFile === '' || ! is_file($archiveFile)) {
-                $summary['tables'][$table] = [
-                    'archive_file' => $archiveFile,
-                    'restored_rows' => 0,
-                    'status' => 'missing_archive_file',
-                ];
-                $this->finishAuditLog($auditLog, [
-                    'status' => 'failed',
-                    'error_message' => 'Archive file is missing.',
-                ]);
-
-                continue;
-            }
-
-            $expectedChecksum = trim((string) ($tableReport['checksum_sha256'] ?? ''));
-            $expectedFileSize = $tableReport['file_size'] ?? null;
-            $actualFileSize = filesize($archiveFile);
-            $actualChecksum = hash_file('sha256', $archiveFile);
-
-            if (
-                $expectedChecksum === ''
-                || $actualChecksum === false
-                || ! hash_equals($expectedChecksum, $actualChecksum)
-                || ($expectedFileSize !== null && (int) $expectedFileSize !== $actualFileSize)
-            ) {
-                $summary['tables'][$table] = [
-                    'archive_file' => $archiveFile,
-                    'restored_rows' => 0,
-                    'status' => 'integrity_check_failed',
-                ];
-                $this->finishAuditLog($auditLog, [
-                    'file_path' => $archiveFile,
-                    'file_size' => $actualFileSize === false ? null : $actualFileSize,
-                    'checksum_sha256' => $actualChecksum === false ? null : $actualChecksum,
-                    'status' => 'failed',
-                    'error_message' => 'Archive file checksum or size validation failed.',
-                ]);
-
-                continue;
-            }
-
-            try {
-                $restored = 0;
-                $buffer = [];
-                $handle = fopen($archiveFile, 'rb');
-                if ($handle === false) {
-                    throw new RuntimeException("Unable to open archive file: {$archiveFile}");
-                }
-
-                try {
-                    while (($line = fgets($handle)) !== false) {
-                        $row = json_decode($line, true);
-                        if (! is_array($row)) {
-                            continue;
-                        }
-
-                        $buffer[] = $row;
-                        if (count($buffer) >= $chunkSize) {
-                            $restored += $this->insertRows($table, $buffer);
-                            $buffer = [];
-                        }
-                    }
-
-                    if ($buffer !== []) {
-                        $restored += $this->insertRows($table, $buffer);
-                    }
-                } finally {
-                    fclose($handle);
-                }
-
-                $summary['tables'][$table] = [
-                    'archive_file' => $archiveFile,
-                    'restored_rows' => $restored,
-                    'status' => 'restored',
-                ];
-                $this->finishAuditLog($auditLog, [
-                    'row_count' => $restored,
-                    'file_path' => $archiveFile,
-                    'file_size' => $actualFileSize,
-                    'checksum_sha256' => $actualChecksum,
-                    'status' => 'completed',
-                ]);
-            } catch (Throwable $exception) {
-                $this->finishAuditLog($auditLog, [
-                    'file_path' => $archiveFile,
-                    'file_size' => $actualFileSize,
-                    'checksum_sha256' => $actualChecksum,
-                    'status' => 'failed',
-                    'error_message' => mb_substr($exception->getMessage(), 0, 500),
-                ]);
-
-                throw $exception;
-            }
+        if ($dryRun) {
+            $command[] = '--dry-run';
         }
 
-        return $summary;
+        return $command;
     }
 
     /**
-     * @param  array{tables?: list<string>, retain_days?: int|null, chunk?: int|null, base_path?: string|null}  $options
+     * @param  array<string, string>  $policies
+     * @param  array<string, mixed>  $settings
      * @return array<string, mixed>
      */
-    private function buildManifest(string $mode, array $options): array
+    private function buildReport(string $mode, array $policies, array $settings): array
     {
-        $policies = $this->resolvePolicies($options['tables'] ?? []);
-        $retainOverride = isset($options['retain_days']) ? (int) $options['retain_days'] : null;
+        $batchId = Str::uuid()->toString();
         $now = CarbonImmutable::now();
+        $runDate = $now->format('Ymd');
+        $reportPath = rtrim((string) $settings['report_root'], DIRECTORY_SEPARATOR.'/\\')
+            .DIRECTORY_SEPARATOR.'run_'.$now->format('Ymd_His').'_'.substr(str_replace('-', '', $batchId), 0, 8).'.json';
+        $executionLog = rtrim((string) $settings['report_root'], DIRECTORY_SEPARATOR.'/\\')
+            .DIRECTORY_SEPARATOR.'archive-'.$now->format('Y-m-d').'.log';
         $tables = [];
 
-        foreach ($policies as $table => $policy) {
-            $dateColumn = (string) $policy['date_column'];
-            $retainDays = $retainOverride !== null ? max(1, $retainOverride) : (int) $policy['retain_days'];
-            $cutoff = $now->subDays($retainDays);
-            $exists = Schema::hasTable($table) && Schema::hasColumn($table, $dateColumn);
+        foreach ($policies as $table => $description) {
+            $eligibleRows = (int) DB::table($table)->whereRaw(self::ARCHIVE_WHERE)->count();
+            $archiveFile = rtrim((string) $settings['archive_root'], DIRECTORY_SEPARATOR.'/\\')
+                .DIRECTORY_SEPARATOR.$table
+                .DIRECTORY_SEPARATOR.$table.'_'.$runDate.'.log';
 
             $tables[$table] = [
-                'description' => $policy['description'],
-                'exists' => $exists,
-                'date_column' => $dateColumn,
-                'retain_days' => $retainDays,
-                'cutoff' => $cutoff->toDateTimeString(),
-                'total_rows' => $exists ? (int) DB::table($table)->count() : 0,
-                'eligible_rows' => $exists ? (int) DB::table($table)->where($dateColumn, '<', $cutoff)->count() : 0,
-                'oldest_at' => $exists ? DB::table($table)->min($dateColumn) : null,
-                'newest_at' => $exists ? DB::table($table)->max($dateColumn) : null,
-                'archive_file' => null,
+                'description' => $description,
+                'date_column' => 'created_at',
+                'retention_days' => (int) $settings['retention_days'],
+                'where' => self::ARCHIVE_WHERE,
+                'cutoff' => $now->subDays((int) $settings['retention_days'])->toDateTimeString(),
+                'total_rows' => (int) DB::table($table)->count(),
+                'eligible_rows' => $eligibleRows,
+                'eligible_remaining' => $eligibleRows,
+                'oldest_at' => DB::table($table)->min('created_at'),
+                'newest_at' => DB::table($table)->max('created_at'),
+                'archive_file' => $archiveFile,
                 'file_size' => null,
                 'checksum_sha256' => null,
                 'exported_rows' => 0,
                 'deleted_rows' => 0,
-                'max_id' => null,
+                'exit_code' => null,
+                'tool_output' => null,
                 'status' => 'pending',
                 'error_message' => null,
+                'started_at' => null,
+                'finished_at' => null,
             ];
         }
 
         return [
-            'batch_id' => Str::uuid()->toString(),
+            'batch_id' => $batchId,
             'mode' => $mode,
+            'status' => 'running',
             'generated_at' => $now->toISOString(),
+            'finished_at' => null,
             'database' => DB::getDatabaseName(),
-            'chunk' => max(1, (int) ($options['chunk'] ?? 1000)),
+            'retention_days' => (int) $settings['retention_days'],
+            'file_retention_days' => (int) $settings['file_retention_days'],
+            'batch_size' => (int) $settings['batch_size'],
+            'sleep_seconds' => (int) $settings['sleep_seconds'],
+            'concurrency' => (int) $settings['concurrency'],
+            'archive_root' => (string) $settings['archive_root'],
+            'report_path' => $reportPath,
+            'execution_log' => $executionLog,
             'ordinary_log_tables' => array_keys($policies),
-            'excluded_audit_tables' => self::EXCLUDED_AUDIT_TABLES,
+            'excluded_audit_tables' => array_values((array) config('log_archive.excluded_tables', [])),
             'tables' => $tables,
             'totals' => [
                 'eligible_rows' => array_sum(array_column($tables, 'eligible_rows')),
                 'exported_rows' => 0,
                 'deleted_rows' => 0,
+                'failed_tables' => 0,
             ],
+            'cleanup' => [
+                'deleted_files' => 0,
+                'deleted_bytes' => 0,
+                'errors' => [],
+            ],
+            'error_message' => null,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $options
+     * @return array<string, mixed>
+     */
+    private function resolveSettings(array $options): array
+    {
+        $archiveRoot = trim((string) ($options['base_path'] ?? config('log_archive.archive_root')));
+        $reportRoot = trim((string) config('log_archive.report_root'));
+        $binary = trim((string) config('log_archive.pt_archiver_binary'));
+        $defaultsFile = trim((string) config('log_archive.pt_archiver_defaults_file'));
+
+        foreach (['archive root' => $archiveRoot, 'report root' => $reportRoot, 'defaults file' => $defaultsFile] as $label => $path) {
+            if (! $this->isAbsolutePath($path) || $this->containsParentTraversal($path)) {
+                throw new InvalidArgumentException("{$label} must be an absolute path without parent traversal.");
+            }
+        }
+        if ($binary === '') {
+            throw new InvalidArgumentException('pt-archiver binary path cannot be empty.');
+        }
+        if (str_contains($archiveRoot, '%')) {
+            throw new InvalidArgumentException('Archive root cannot contain percent format tokens.');
+        }
+
+        return [
+            'retention_days' => 30,
+            'file_retention_days' => 180,
+            'archive_root' => rtrim($archiveRoot, DIRECTORY_SEPARATOR.'/\\'),
+            'report_root' => rtrim($reportRoot, DIRECTORY_SEPARATOR.'/\\'),
+            'mount_point' => config('log_archive.mount_point'),
+            'binary' => $binary,
+            'defaults_file' => $defaultsFile,
+            'concurrency' => $this->boundedInteger($options['concurrency'] ?? config('log_archive.concurrency'), 1, 8, 'concurrency'),
+            'batch_size' => $this->boundedInteger($options['batch_size'] ?? config('log_archive.batch_size'), 100, 10000, 'batch size'),
+            'sleep_seconds' => $this->boundedInteger($options['sleep_seconds'] ?? config('log_archive.sleep_seconds'), 0, 60, 'sleep seconds'),
+            'lock_path' => storage_path('framework/cache/log-archive.lock'),
         ];
     }
 
     /**
      * @param  list<string>  $tables
-     * @return array<string, array<string, mixed>>
+     * @return array<string, string>
      */
     private function resolvePolicies(array $tables): array
     {
+        $configured = (array) config('log_archive.tables', []);
+        $excluded = array_values((array) config('log_archive.excluded_tables', []));
+
         if ($tables === []) {
-            return self::POLICIES;
+            return $configured;
         }
 
         $resolved = [];
@@ -360,180 +453,225 @@ class LogArchiveService
             if ($table === '') {
                 continue;
             }
-
-            if (in_array($table, self::EXCLUDED_AUDIT_TABLES, true)) {
-                throw new InvalidArgumentException("{$table} is an audit/financial table and is not part of ordinary log archiving.");
+            if (in_array($table, $excluded, true)) {
+                throw new InvalidArgumentException("{$table} is an audit/financial table and cannot be archived by this command.");
             }
-
-            if (! array_key_exists($table, self::POLICIES)) {
+            if (! array_key_exists($table, $configured)) {
                 throw new InvalidArgumentException("Unsupported log archive table: {$table}");
             }
 
-            $resolved[$table] = self::POLICIES[$table];
+            $resolved[$table] = (string) $configured[$table];
+        }
+
+        if ($resolved === []) {
+            throw new InvalidArgumentException('At least one supported log table is required.');
         }
 
         return $resolved;
     }
 
-    private function writeManifest(array $manifest, ?string $basePath, string $prefix): string
+    /** @return resource */
+    private function acquireGlobalLock(): mixed
     {
-        $directory = $this->makeRunDirectory($basePath, $prefix, (string) $manifest['batch_id']);
-        $path = $directory.DIRECTORY_SEPARATOR.'manifest.json';
-        $this->writeManifestToPath($manifest, $path);
-
-        return $path;
-    }
-
-    private function writeManifestToPath(array $manifest, string $path): void
-    {
-        $content = json_encode(
-            $manifest,
-            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR
-        ).PHP_EOL;
-
-        if (file_put_contents($path, $content, LOCK_EX) === false) {
-            throw new RuntimeException("Unable to write archive manifest: {$path}");
+        $path = storage_path('framework/cache/log-archive.lock');
+        $this->ensureDirectory(dirname($path));
+        $handle = fopen($path, 'c+');
+        if ($handle === false) {
+            throw new RuntimeException("Unable to open archive lock file: {$path}");
         }
-    }
-
-    private function makeRunDirectory(?string $basePath, string $prefix, string $batchId): string
-    {
-        $basePath = $basePath ?: storage_path('app/private/log-archives');
-        $directory = rtrim($basePath, DIRECTORY_SEPARATOR.'/\\')
-            .DIRECTORY_SEPARATOR.now()->format('Y-m')
-            .DIRECTORY_SEPARATOR.$prefix.'_'.now()->format('Ymd_His').'_'.substr(str_replace('-', '', $batchId), 0, 8);
-
-        if (! is_dir($directory)) {
-            mkdir($directory, 0775, true);
+        if (! flock($handle, LOCK_EX | LOCK_NB)) {
+            fclose($handle);
+            throw new RuntimeException('Another log archive process is already running.');
         }
 
-        return $directory;
+        return $handle;
     }
 
     /**
-     * @return array{archive_file: string, file_size: int, checksum_sha256: string, exported_rows: int, deleted_rows: int, max_id: int}
+     * @return array{deleted_files: int, deleted_bytes: int, errors: list<string>}
      */
-    private function exportTable(
-        string $table,
-        string $dateColumn,
-        string $cutoff,
-        int $chunkSize,
-        string $runDirectory,
-    ): array {
-        $archiveFile = $runDirectory.DIRECTORY_SEPARATOR.$table.'.jsonl';
-        $temporaryFile = $archiveFile.'.part';
-        $handle = fopen($temporaryFile, 'wb');
-        if ($handle === false) {
-            throw new RuntimeException("Unable to open archive file: {$temporaryFile}");
-        }
-
-        $checksum = hash_init('sha256');
-        $exported = 0;
-        $maxId = 0;
-
-        try {
-            try {
-                DB::table($table)
-                    ->where($dateColumn, '<', $cutoff)
-                    ->orderBy('id')
-                    ->chunkById($chunkSize, function ($rows) use ($handle, $checksum, &$exported, &$maxId): void {
-                        foreach ($rows as $row) {
-                            $payload = (array) $row;
-                            $line = json_encode(
-                                $payload,
-                                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
-                            ).PHP_EOL;
-                            $this->writeArchiveLine($handle, $line);
-                            hash_update($checksum, $line);
-                            $exported++;
-                            $maxId = max($maxId, (int) $payload['id']);
-                        }
-                    });
-
-                if (! fflush($handle)) {
-                    throw new RuntimeException("Unable to flush archive file: {$temporaryFile}");
-                }
-                if (function_exists('fsync') && ! fsync($handle)) {
-                    throw new RuntimeException("Unable to sync archive file: {$temporaryFile}");
-                }
-            } finally {
-                fclose($handle);
-            }
-        } catch (Throwable $exception) {
-            @unlink($temporaryFile);
-
-            throw $exception;
-        }
-
-        if (! rename($temporaryFile, $archiveFile)) {
-            @unlink($temporaryFile);
-
-            throw new RuntimeException("Unable to finalize archive file: {$archiveFile}");
-        }
-
-        $fileSize = filesize($archiveFile);
-        if ($fileSize === false) {
-            throw new RuntimeException("Unable to inspect archive file: {$archiveFile}");
-        }
-
-        return [
-            'archive_file' => $archiveFile,
-            'file_size' => $fileSize,
-            'checksum_sha256' => hash_final($checksum),
-            'exported_rows' => $exported,
-            'deleted_rows' => 0,
-            'max_id' => $maxId,
-        ];
-    }
-
-    private function writeArchiveLine(mixed $handle, string $line): void
+    private function cleanupExpiredArchives(string $archiveRoot, int $retentionDays): array
     {
-        $remaining = $line;
-
-        while ($remaining !== '') {
-            $written = fwrite($handle, $remaining);
-            if ($written === false || $written === 0) {
-                throw new RuntimeException('Unable to write archive data.');
-            }
-
-            $remaining = substr($remaining, $written);
+        $result = ['deleted_files' => 0, 'deleted_bytes' => 0, 'errors' => []];
+        if (! is_dir($archiveRoot)) {
+            return $result;
         }
-    }
 
-    private function deleteExportedRows(
-        string $table,
-        string $dateColumn,
-        string $cutoff,
-        int $maxId,
-        int $chunkSize,
-    ): int {
-        $deleted = 0;
+        $threshold = CarbonImmutable::now()->subDays($retentionDays)->getTimestamp();
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($archiveRoot, RecursiveDirectoryIterator::SKIP_DOTS),
+        );
 
-        do {
-            $ids = DB::table($table)
-                ->where($dateColumn, '<', $cutoff)
-                ->where('id', '<=', $maxId)
-                ->orderBy('id')
-                ->limit($chunkSize)
-                ->pluck('id');
-
-            $count = $ids->count();
-            if ($count === 0) {
-                break;
+        foreach ($iterator as $file) {
+            $path = $file->getPathname();
+            if (! $file->isFile() || $file->isLink() || strtolower($file->getExtension()) !== 'log') {
+                continue;
+            }
+            if ($file->getMTime() >= $threshold) {
+                continue;
             }
 
-            $deleted += DB::table($table)->whereIn('id', $ids->all())->delete();
-        } while ($count === $chunkSize);
+            $size = max(0, (int) $file->getSize());
+            if (@unlink($path)) {
+                $result['deleted_files']++;
+                $result['deleted_bytes'] += $size;
+            } else {
+                $result['errors'][] = "Unable to delete expired archive: {$path}";
+            }
+        }
 
-        return $deleted;
+        return $result;
     }
 
-    private function createAuditLog(string $batchId, string $table, string $mode): ArchiveAuditLog
+    /**
+     * @param  array<string, mixed>  $report
+     * @return array<string, mixed>
+     */
+    private function refreshTotals(array $report): array
+    {
+        $tables = (array) $report['tables'];
+        $report['totals'] = [
+            'eligible_rows' => array_sum(array_column($tables, 'eligible_rows')),
+            'exported_rows' => array_sum(array_column($tables, 'exported_rows')),
+            'deleted_rows' => array_sum(array_column($tables, 'deleted_rows')),
+            'failed_tables' => count(array_filter(
+                $tables,
+                static fn (array $table): bool => (string) ($table['status'] ?? '') === 'failed',
+            )),
+        ];
+
+        return $report;
+    }
+
+    /**
+     * @param  array<string, mixed>  $report
+     * @return array<string, mixed>
+     */
+    private function finishReport(array $report): array
+    {
+        $report = $this->refreshTotals($report);
+        $report['status'] = (int) $report['totals']['failed_tables'] > 0 ? 'failed' : 'completed';
+        $report['finished_at'] = now()->toISOString();
+
+        return $report;
+    }
+
+    /** @param array<string, mixed> $report */
+    private function writeReport(array $report): void
+    {
+        $path = (string) $report['report_path'];
+        $this->ensureDirectory(dirname($path));
+        $content = json_encode(
+            $report,
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR,
+        ).PHP_EOL;
+        if (file_put_contents($path, $content, LOCK_EX) === false) {
+            throw new RuntimeException("Unable to write archive report: {$path}");
+        }
+        @chmod($path, 0640);
+    }
+
+    /**
+     * @param  array<string, mixed>  $report
+     * @param  array<string, mixed>  $detail
+     */
+    private function appendExecutionEvent(array $report, string $event, ?string $table = null, array $detail = []): void
+    {
+        $path = (string) $report['execution_log'];
+        $payload = [
+            'timestamp' => now()->toISOString(),
+            'batch_id' => $report['batch_id'],
+            'mode' => $report['mode'],
+            'event' => $event,
+            'table' => $table,
+            'status' => $table === null ? ($report['status'] ?? null) : ($detail['status'] ?? null),
+            'eligible_rows' => $detail['eligible_rows'] ?? ($report['totals']['eligible_rows'] ?? null),
+            'deleted_rows' => $detail['deleted_rows'] ?? ($report['totals']['deleted_rows'] ?? null),
+            'error_message' => $detail['error_message'] ?? ($report['error_message'] ?? null),
+        ];
+        $line = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR).PHP_EOL;
+        if (file_put_contents($path, $line, FILE_APPEND | LOCK_EX) === false) {
+            throw new RuntimeException("Unable to write archive execution log: {$path}");
+        }
+        @chmod($path, 0640);
+    }
+
+    private function ensureDirectory(string $directory): void
+    {
+        if (! is_dir($directory) && ! mkdir($directory, 0750, true) && ! is_dir($directory)) {
+            throw new RuntimeException("Unable to create directory: {$directory}");
+        }
+        if (! is_writable($directory)) {
+            throw new RuntimeException("Directory is not writable: {$directory}");
+        }
+        @chmod($directory, 0750);
+    }
+
+    private function hasHeader(string $archiveFile): bool
+    {
+        $handle = fopen($archiveFile, 'rb');
+        if ($handle === false) {
+            return false;
+        }
+        try {
+            $header = fgets($handle);
+        } finally {
+            fclose($handle);
+        }
+
+        return is_string($header) && trim($header) !== '';
+    }
+
+    private function parseDeletedRows(string $output): ?int
+    {
+        if (! preg_match_all('/^\s*DELETE\s+(\d+)(?:\s|$)/mi', $output, $matches) || $matches[1] === []) {
+            return null;
+        }
+
+        return (int) end($matches[1]);
+    }
+
+    private function failureMessage(string $output, int $exitCode): string
+    {
+        $message = trim($output);
+
+        return $this->truncate($message !== '' ? $message : "pt-archiver exited with code {$exitCode}.", 500);
+    }
+
+    private function truncate(string $value, int $length): string
+    {
+        return mb_strlen($value) <= $length ? $value : mb_substr($value, 0, $length).'...';
+    }
+
+    private function boundedInteger(mixed $value, int $minimum, int $maximum, string $label): int
+    {
+        if (filter_var($value, FILTER_VALIDATE_INT) === false) {
+            throw new InvalidArgumentException("{$label} must be an integer.");
+        }
+        $value = (int) $value;
+        if ($value < $minimum || $value > $maximum) {
+            throw new InvalidArgumentException("{$label} must be between {$minimum} and {$maximum}.");
+        }
+
+        return $value;
+    }
+
+    private function isAbsolutePath(string $path): bool
+    {
+        return str_starts_with($path, '/') || preg_match('/^[A-Za-z]:[\\\\\/]/', $path) === 1;
+    }
+
+    private function containsParentTraversal(string $path): bool
+    {
+        return preg_match('#(^|[\\\\/])\.\.([\\\\/]|$)#', $path) === 1;
+    }
+
+    private function createAuditLog(string $batchId, string $table): ArchiveAuditLog
     {
         return ArchiveAuditLog::query()->create([
             'batch_id' => $batchId,
             'table_name' => $table,
-            'mode' => $mode,
+            'mode' => 'archive',
             'row_count' => 0,
             'status' => 'running',
             'started_at' => now(),
@@ -541,25 +679,9 @@ class LogArchiveService
         ]);
     }
 
-    /**
-     * @param  array<string, mixed>  $attributes
-     */
+    /** @param array<string, mixed> $attributes */
     private function finishAuditLog(ArchiveAuditLog $auditLog, array $attributes): void
     {
-        $auditLog->forceFill(array_merge($attributes, [
-            'finished_at' => now(),
-        ]))->save();
-    }
-
-    /**
-     * @param  list<array<string, mixed>>  $rows
-     */
-    private function insertRows(string $table, array $rows): int
-    {
-        if ($rows === []) {
-            return 0;
-        }
-
-        return (int) DB::table($table)->insertOrIgnore($rows);
+        $auditLog->forceFill(array_merge($attributes, ['finished_at' => now()]))->save();
     }
 }
