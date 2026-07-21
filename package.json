@@ -16,6 +16,7 @@
     "build:user-v3-www": "npm run build --workspace chuangouyun-user-v3-www",
     "build:user-v4-console": "npm run build --workspace chuangouyun-user-v4-console",
     "build:frontends": "npm run build:admin-v3 && npm run build:user-v3-www && npm run build:user-v4-console",
+    "build:integrated": "node backend/scripts/build_integrated_frontends.mjs",
     "lint:shared": "npm run lint --workspace shared",
     "lint:admin-v3": "npm run lint --workspace chuangouyun-admin-v3",
     "lint:user-v3-www": "npm run lint --workspace chuangouyun-user-v3-www",

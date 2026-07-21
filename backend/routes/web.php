@@ -1,30 +1,18 @@
 <?php
 
+use App\Http\Controllers\FrontendEntryController;
 use App\Http\Controllers\SecureAssetController;
 use Illuminate\Support\Facades\Route;
-
-Route::get('/', function () {
-    return ['message' => '创欧云 API'];
-});
 
 Route::get('/api/secure-assets/view', [SecureAssetController::class, 'show'])
     ->middleware('signed:relative')
     ->name('secure-assets.show');
 
-Route::get('/client/register', function () {
-    $frontendUrl = rtrim((string) config('app.frontend_url', ''), '/');
-    $currentRoot = rtrim(request()->getSchemeAndHttpHost(), '/');
+Route::get('/client/{path?}', [FrontendEntryController::class, 'client'])
+    ->where('path', '.*');
 
-    if ($frontendUrl === '' || $frontendUrl === $currentRoot) {
-        abort(404);
-    }
+Route::get('/admin/{path?}', [FrontendEntryController::class, 'admin'])
+    ->where('path', '.*');
 
-    $queryString = request()->getQueryString();
-    $target = $frontendUrl.'/client/register';
-
-    if ($queryString) {
-        $target .= '?'.$queryString;
-    }
-
-    return redirect()->away($target);
-});
+Route::get('/{path?}', [FrontendEntryController::class, 'site'])
+    ->where('path', '^(?!(?:api|sanctum|uploads|media|vnc|ws|zjmf)(?:/|$)).*');
