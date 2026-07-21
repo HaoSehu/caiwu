@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\EnsuresTraceId;
 use App\Models\Concerns\NormalizesTraceId;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Service extends Model
 {
-    use NormalizesTraceId;
+    use EnsuresTraceId, NormalizesTraceId;
 
     public const SUPPORTED_RENEW_BILLING_CYCLES = [
         'monthly' => '月付',

@@ -52,6 +52,7 @@ class BillingAutomationServiceTest extends TestCase
             $table->timestamp('expires_at')->nullable();
             $table->json('provision_data')->nullable();
             $table->string('suspended_reason')->nullable();
+            $table->string('trace_id', 64)->nullable();
             $table->unsignedTinyInteger('auto_renew')->default(0);
             $table->timestamps();
         });

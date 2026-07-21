@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HandlesProductSnapshot;
+use App\Models\Concerns\EnsuresTraceId;
 use App\Models\Concerns\NormalizesTraceId;
 use App\Support\OrderInvoiceNoGenerator;
 use App\Support\VersionedJson;
@@ -16,7 +17,7 @@ use Illuminate\Support\Facades\Schema;
 
 class Invoice extends Model
 {
-    use HandlesProductSnapshot, NormalizesTraceId, SoftDeletes;
+    use EnsuresTraceId, HandlesProductSnapshot, NormalizesTraceId, SoftDeletes;
 
     protected $fillable = [
         'invoice_no', 'user_id', 'order_id', 'origin_invoice_id', 'type', 'currency',
