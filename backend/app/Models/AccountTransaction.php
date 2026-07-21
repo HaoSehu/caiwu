@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\EnsuresTraceId;
 use App\Models\Concerns\NormalizesTraceId;
 use App\Support\UserBalanceCache;
 use Illuminate\Database\Eloquent\Model;
@@ -10,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class AccountTransaction extends Model
 {
-    use NormalizesTraceId;
+    use EnsuresTraceId, NormalizesTraceId;
 
     protected $fillable = [
         'user_id',

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Constants\PaymentGatewayCode;
+use App\Models\Concerns\EnsuresTraceId;
 use App\Models\Concerns\NormalizesTraceId;
 use App\Support\VersionedJson;
 use Illuminate\Database\Eloquent\Builder;
@@ -19,7 +20,7 @@ use InvalidArgumentException;
 
 class Payment extends Model
 {
-    use NormalizesTraceId, SoftDeletes;
+    use EnsuresTraceId, NormalizesTraceId, SoftDeletes;
 
     protected $fillable = [
         'payment_no', 'user_id',
