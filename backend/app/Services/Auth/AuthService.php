@@ -691,8 +691,8 @@ class AuthService
         }
 
         $adminUrl = $this->normalizeConfiguredUrl((string) config('app.admin_url', ''));
-        if ($adminUrl !== '' && $this->sameUrlOrigin($consoleUrl, $adminUrl)) {
-            throw new BusinessException('CLIENT_CONSOLE_URL 不能与 ADMIN_URL 相同，无法生成客户端代登录链接', 50000, 500);
+        if ($adminUrl !== '' && $this->sameConfiguredUrl($consoleUrl, $adminUrl)) {
+            throw new BusinessException('CLIENT_CONSOLE_URL 不能与 ADMIN_URL 配置为同一路径，无法生成客户端代登录链接', 50000, 500);
         }
 
         return $consoleUrl.'/client/login-as';
@@ -708,33 +708,9 @@ class AuthService
         return rtrim($normalized, '/');
     }
 
-    private function sameUrlOrigin(string $left, string $right): bool
+    private function sameConfiguredUrl(string $left, string $right): bool
     {
-        $leftOrigin = $this->urlOrigin($left);
-        $rightOrigin = $this->urlOrigin($right);
-
-        return $leftOrigin !== '' && $leftOrigin === $rightOrigin;
-    }
-
-    private function urlOrigin(string $url): string
-    {
-        $parts = parse_url($url);
-        if (! is_array($parts)) {
-            return '';
-        }
-
-        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
-        $host = strtolower((string) ($parts['host'] ?? ''));
-        if ($scheme === '' || $host === '') {
-            return '';
-        }
-
-        $port = (int) ($parts['port'] ?? 0);
-        if (($scheme === 'http' && $port === 80) || ($scheme === 'https' && $port === 443)) {
-            $port = 0;
-        }
-
-        return $scheme.'://'.$host.($port > 0 ? ':'.$port : '');
+        return rtrim($left, '/') === rtrim($right, '/');
     }
 
     public function exchangeAdminLoginAsCode(string $code, string $ip, ?string $userAgent = null): array
