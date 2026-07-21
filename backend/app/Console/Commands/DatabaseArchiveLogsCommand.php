@@ -7,58 +7,49 @@ namespace App\Console\Commands;
 use App\Services\System\LogArchiveService;
 use Illuminate\Console\Command;
 use InvalidArgumentException;
-use RuntimeException;
+use Throwable;
 
 class DatabaseArchiveLogsCommand extends Command
 {
     protected $signature = 'db:archive-logs
-        {--dry-run : 仅生成归档预检报告；未指定 --execute/--restore 时默认 dry-run}
-        {--execute : 先导出 JSONL 归档文件再删除符合策略的普通日志}
-        {--restore= : 从 archive manifest 恢复已归档日志}
-        {--table=* : 只处理指定普通日志表，可重复；禁止财务/审计表}
-        {--retain-days= : 临时覆盖所有表保留天数}
-        {--chunk=1000 : 每批导出、删除或恢复数量}
-        {--path= : 归档/报告输出根目录，默认 storage/app/private/log-archives}
+        {--dry-run : 仅预览影响行数并校验 pt-archiver 命令；未指定 --execute 时默认 dry-run}
+        {--execute : 使用 pt-archiver 导出 CSV 并通过 --purge 物理删除30天前日志}
+        {--table=* : 只处理指定日志表，可重复}
+        {--concurrency= : 最大并行表数量，默认读取 LOG_ARCHIVE_CONCURRENCY}
+        {--batch-size= : 每批处理行数，默认读取 LOG_ARCHIVE_BATCH_SIZE}
+        {--sleep-seconds= : 批次间隔秒数，默认读取 LOG_ARCHIVE_SLEEP_SECONDS}
+        {--path= : 归档根目录，默认读取 LOG_ARCHIVE_ROOT}
         {--json : 以 JSON 输出结果}';
 
-    protected $description = '按策略归档普通日志，支持 dry-run、JSONL 归档、manifest 恢复';
+    protected $description = '使用 pt-archiver 并行归档并物理删除30天前的日志记录';
 
     public function handle(LogArchiveService $service): int
     {
-        $chunkSize = max(1, (int) $this->option('chunk'));
-        $restorePath = trim((string) $this->option('restore'));
-
         try {
-            if ($restorePath !== '') {
-                $result = $service->restore($restorePath, $chunkSize);
-
-                return $this->outputResult($result, 'restore');
+            if ((bool) $this->option('execute') && (bool) $this->option('dry-run')) {
+                throw new InvalidArgumentException('--execute and --dry-run cannot be used together.');
             }
 
-            $options = [
-                'tables' => array_values((array) $this->option('table')),
-                'chunk' => $chunkSize,
-            ];
+            $options = ['tables' => array_values((array) $this->option('table'))];
+            $this->copyIntegerOption($options, 'concurrency', 'concurrency');
+            $this->copyIntegerOption($options, 'batch-size', 'batch_size');
+            $this->copyIntegerOption($options, 'sleep-seconds', 'sleep_seconds');
 
             $basePath = trim((string) $this->option('path'));
             if ($basePath !== '') {
                 $options['base_path'] = $basePath;
             }
 
-            $retainDays = $this->option('retain-days');
-            if ($retainDays !== null && $retainDays !== '') {
-                $options['retain_days'] = max(1, (int) $retainDays);
-            }
-
-            $execute = (bool) $this->option('execute') && ! (bool) $this->option('dry-run');
+            $execute = (bool) $this->option('execute');
             $result = $execute ? $service->archive($options) : $service->dryRun($options);
 
-            return $this->outputResult($result, $execute ? 'archive' : 'dry_run');
-        } catch (InvalidArgumentException|RuntimeException $exception) {
+            return $this->outputResult($result);
+        } catch (Throwable $exception) {
             if ((bool) $this->option('json')) {
-                $this->line(json_encode([
-                    'error' => $exception->getMessage(),
-                ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+                $this->line(json_encode(
+                    ['error' => $exception->getMessage()],
+                    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT,
+                ));
             } else {
                 $this->error($exception->getMessage());
             }
@@ -67,70 +58,70 @@ class DatabaseArchiveLogsCommand extends Command
         }
     }
 
-    /**
-     * @param  array<string, mixed>  $result
-     */
-    private function outputResult(array $result, string $mode): int
+    /** @param array<string, mixed> $result */
+    private function outputResult(array $result): int
     {
-        $hasRestoreFailure = $mode === 'restore' && collect((array) ($result['tables'] ?? []))
-            ->contains(static fn (array $tableReport): bool => (string) ($tableReport['status'] ?? '') !== 'restored');
+        $failed = (string) ($result['status'] ?? 'failed') !== 'completed';
 
         if ((bool) $this->option('json')) {
-            $this->line(json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+            $this->line(json_encode(
+                $result,
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT,
+            ));
 
-            return $hasRestoreFailure ? self::FAILURE : self::SUCCESS;
+            return $failed ? self::FAILURE : self::SUCCESS;
         }
 
-        if ($mode === 'restore') {
-            $this->info('日志归档恢复完成');
-            $this->line('Manifest: '.($result['manifest_path'] ?? ''));
-            $hasFailure = false;
-
-            foreach ((array) ($result['tables'] ?? []) as $table => $tableReport) {
-                $status = (string) ($tableReport['status'] ?? '');
-                $hasFailure = $hasFailure || $status !== 'restored';
-                $this->line(sprintf(
-                    '- %s: restored=%d status=%s',
-                    $table,
-                    (int) ($tableReport['restored_rows'] ?? 0),
-                    $status
-                ));
-            }
-
-            return $hasFailure || $hasRestoreFailure ? self::FAILURE : self::SUCCESS;
-        }
-
-        $this->info($mode === 'archive' ? '日志归档执行完成' : '日志归档 dry-run 完成');
+        $dryRun = (string) ($result['mode'] ?? '') === 'dry_run';
+        $this->info($dryRun ? '日志归档 dry-run 完成' : '日志归档执行完成');
         $this->line('数据库: '.($result['database'] ?? ''));
-        $this->line('批大小: '.($result['chunk'] ?? ''));
-        $this->line('报告/Manifest: '.($result['manifest_path'] ?? $result['report_path'] ?? ''));
-        $this->line('排除财务/审计表: '.implode(', ', (array) ($result['excluded_audit_tables'] ?? [])));
         $this->line(sprintf(
-            '合计: eligible=%d exported=%d deleted=%d',
+            '参数: retention=%sd batch=%d sleep=%ds concurrency=%d',
+            (int) ($result['retention_days'] ?? 30),
+            (int) ($result['batch_size'] ?? 0),
+            (int) ($result['sleep_seconds'] ?? 0),
+            (int) ($result['concurrency'] ?? 0),
+        ));
+        $this->line('执行报告: '.($result['report_path'] ?? ''));
+        $this->line(sprintf(
+            '合计: eligible=%d exported=%d deleted=%d failed=%d',
             (int) ($result['totals']['eligible_rows'] ?? 0),
             (int) ($result['totals']['exported_rows'] ?? 0),
-            (int) ($result['totals']['deleted_rows'] ?? 0)
+            (int) ($result['totals']['deleted_rows'] ?? 0),
+            (int) ($result['totals']['failed_tables'] ?? 0),
         ));
 
         foreach ((array) ($result['tables'] ?? []) as $table => $tableReport) {
             $this->line(sprintf(
-                '- %s: retain=%sd cutoff=%s total=%d eligible=%d exported=%d deleted=%d',
+                '- %s: eligible=%d exported=%d deleted=%d status=%s file=%s',
                 $table,
-                (string) ($tableReport['retain_days'] ?? ''),
-                (string) ($tableReport['cutoff'] ?? ''),
-                (int) ($tableReport['total_rows'] ?? 0),
                 (int) ($tableReport['eligible_rows'] ?? 0),
                 (int) ($tableReport['exported_rows'] ?? 0),
-                (int) ($tableReport['deleted_rows'] ?? 0)
+                (int) ($tableReport['deleted_rows'] ?? 0),
+                (string) ($tableReport['status'] ?? ''),
+                (string) ($tableReport['archive_file'] ?? ''),
             ));
         }
 
-        if ($mode === 'archive') {
-            $this->warn('已先写入 JSONL 归档文件，再删除同一批 id；需要恢复时执行 --restore=manifest.json。');
+        if ($dryRun) {
+            $this->warn('当前为 dry-run，未创建归档数据文件、未删除数据库记录、未清理历史文件。');
         } else {
-            $this->warn('当前为 dry-run，未删除任何日志；确认报告和备份策略后再显式追加 --execute。');
+            $this->line(sprintf(
+                '历史文件清理: files=%d bytes=%d',
+                (int) ($result['cleanup']['deleted_files'] ?? 0),
+                (int) ($result['cleanup']['deleted_bytes'] ?? 0),
+            ));
         }
 
-        return self::SUCCESS;
+        return $failed ? self::FAILURE : self::SUCCESS;
+    }
+
+    /** @param array<string, mixed> $options */
+    private function copyIntegerOption(array &$options, string $commandOption, string $serviceOption): void
+    {
+        $value = $this->option($commandOption);
+        if ($value !== null && $value !== '') {
+            $options[$serviceOption] = $value;
+        }
     }
 }
