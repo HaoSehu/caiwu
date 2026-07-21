@@ -63,6 +63,7 @@ class CheckoutService
 
         throw_if($productId <= 0, new BusinessException('商品信息错误'));
         throw_if($billingCycle === '', new BusinessException('计费周期不能为空'));
+        throw_if($quantity !== 1, new BusinessException('当前暂不支持一次购买多个服务实例，请分次下单'));
         throw_if($quoteToken === '', new BusinessException('报价凭证已失效，请刷新配置后重试'));
         throw_if($idempotencyKey === '', new BusinessException('请求缺少幂等标识，请刷新页面后重试'));
 

@@ -194,16 +194,11 @@
                   </div>
                 </div>
               </div>
-              <!-- 购买数量 -->
+              <!-- 单笔订单仅支持创建一台服务实例，避免多台计价但仅开通一台。 -->
               <div class="spec-row spec-row--last">
                 <div class="spec-label">购买数量</div>
                 <div class="spec-ctrl">
-                  <el-input-number
-                    v-model="quantity"
-                    :min="1"
-                    :max="10"
-                    controls-position="right"
-                  />
+                  <span>1 台（多台请分次下单）</span>
                 </div>
               </div>
             </div>
@@ -555,14 +550,6 @@ const summaryItems = computed(() => {
       key: 'billing_cycle',
       label: '周期',
       value: selectedCycleLabel.value,
-    })
-  }
-
-  if (quantity.value > 1) {
-    items.push({
-      key: 'quantity',
-      label: '数量',
-      value: `${quantity.value} 台`,
     })
   }
 
