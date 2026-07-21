@@ -16,10 +16,9 @@ use App\Services\Upstream\Contracts\ProvidesProvisioning;
 use App\Services\Upstream\Contracts\ProvidesRenewal;
 use App\Services\Upstream\Contracts\ProvidesScheduledAuthRefresh;
 use App\Services\Upstream\Contracts\ProvidesStatusSync;
-use App\Services\Upstream\Contracts\ProvidesSynchronousNewPurchaseFulfillment;
 use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiTransport;
 
-final class ZjmfFinanceAdapter implements ProvidesConsoleAccess, ProvidesConsoleCatalog, ProvidesConsoleNetwork, ProvidesConsoleRuntime, ProvidesConsoleSecurity, ProvidesProvisioning, ProvidesRenewal, ProvidesScheduledAuthRefresh, ProvidesStatusSync, ProvidesSynchronousNewPurchaseFulfillment
+final class ZjmfFinanceAdapter implements ProvidesConsoleAccess, ProvidesConsoleCatalog, ProvidesConsoleNetwork, ProvidesConsoleRuntime, ProvidesConsoleSecurity, ProvidesProvisioning, ProvidesRenewal, ProvidesScheduledAuthRefresh, ProvidesStatusSync
 {
     private readonly ZjmfFinanceTransport $transport;
 

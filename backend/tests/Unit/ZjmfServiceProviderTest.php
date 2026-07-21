@@ -14,6 +14,7 @@ use App\Services\Upstream\Contracts\UpstreamBillingRestoreProfile;
 use App\Services\Upstream\Data\UpstreamProviderDescriptor;
 use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\ProviderRegistry;
+use App\Services\Upstream\Support\WebSessionCookieParser;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfBillingRestoreProfile;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfBillingRestoreService;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfFinanceAdapter;
@@ -41,10 +42,8 @@ class ZjmfServiceProviderTest extends TestCase
             ZjmfFinanceAdapter::class,
             $driver?->resolve(ProvidesConsoleCatalog::class)
         );
-        $this->assertInstanceOf(
-            ProvidesSynchronousNewPurchaseFulfillment::class,
-            $driver?->resolve(ProvidesSynchronousNewPurchaseFulfillment::class)
-        );
+        $this->assertFalse($driver?->supports(ProvidesSynchronousNewPurchaseFulfillment::class) ?? true);
+        $this->assertNull($driver?->resolve(ProvidesSynchronousNewPurchaseFulfillment::class));
     }
 
     public function test_zjmf_adapter_declares_platform_used_methods_explicitly_without_dynamic_forwarding(): void
@@ -170,7 +169,7 @@ class ZjmfServiceProviderTest extends TestCase
 
         $this->app->forgetInstance(ProviderRegistry::class);
         $this->app->forgetInstance(LegacyPasswordVerifier::class);
-        $this->app->forgetInstance(\App\Services\Upstream\Support\WebSessionCookieParser::class);
+        $this->app->forgetInstance(WebSessionCookieParser::class);
     }
 
     private function ensurePluginTables(): void

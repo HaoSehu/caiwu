@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Constants\InvoiceStatus;
 use App\Constants\OrderStatus;
+use App\Exceptions\BusinessException;
 use App\Jobs\ProcessPaidOrderFulfillmentJob;
 use App\Jobs\ProcessPaidOrderReferralRewardJob;
 use App\Models\Invoice;
@@ -16,12 +17,13 @@ use App\Services\Finance\PaymentService;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\Order\PaidOrderBusinessFlowDispatcher;
 use App\Services\Provisioning\ProvisionService;
-use App\Services\User\AccountService;
+use App\Services\Provisioning\ServiceRenewService;
 use App\Services\Upstream\Contracts\ProvidesSynchronousNewPurchaseFulfillment;
 use App\Services\Upstream\Contracts\UpstreamDriver;
 use App\Services\Upstream\ProviderKey;
-use App\Services\Upstream\ProviderResolver;
 use App\Services\Upstream\ProviderRegistry;
+use App\Services\Upstream\ProviderResolver;
+use App\Services\User\AccountService;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
@@ -111,6 +113,68 @@ class PaidOrderBusinessFlowDispatcherTest extends TestCase
         Queue::assertNotPushed(ProcessPaidOrderFulfillmentJob::class);
     }
 
+    public function test_web_payment_queues_zjmf_new_purchase_after_sync_capability_is_removed(): void
+    {
+        Queue::fake();
+        config()->set('queue.default', 'database');
+
+        $product = new Product;
+        $product->setAttribute('id', 984);
+        $order = new Order;
+        $order->setAttribute('id', 985);
+        $order->setAttribute('type', 'new');
+        $order->setRelation('product', $product);
+        $invoice = new Invoice;
+        $invoice->setAttribute('id', 986);
+        $invoice->setRelation('order', $order);
+
+        $bindingResolver = $this->mock(PluginBindingResolver::class, function ($mock): void {
+            $mock->shouldReceive('providerKeyForProduct')
+                ->once()
+                ->andReturn(ProviderKey::ZJMF_FINANCE_API);
+        });
+
+        $driver = new class implements UpstreamDriver
+        {
+            public function key(): string
+            {
+                return ProviderKey::ZJMF_FINANCE_API;
+            }
+
+            public function label(): string
+            {
+                return 'ZJMF 财务接口';
+            }
+
+            public function capabilities(): array
+            {
+                return [];
+            }
+
+            public function supports(string $capability): bool
+            {
+                return false;
+            }
+
+            public function resolve(string $capability): ?object
+            {
+                return null;
+            }
+        };
+        $dispatcher = new PaidOrderBusinessFlowDispatcher(new ProviderResolver(
+            new ProviderRegistry([$driver]),
+            $bindingResolver,
+        ));
+
+        $this->runAsWebRequest(function () use ($dispatcher, $invoice): void {
+            $dispatcher->dispatchPaidInvoice($invoice, 'trace-zjmf-async');
+        });
+
+        Queue::assertPushedOn('provision', ProcessPaidOrderFulfillmentJob::class, function (ProcessPaidOrderFulfillmentJob $job) use ($order): bool {
+            return (int) $job->orderId === (int) $order->id;
+        });
+    }
+
     public function test_paid_order_jobs_are_unique_by_order_id(): void
     {
         $fulfillmentJob = new ProcessPaidOrderFulfillmentJob(123);
@@ -184,6 +248,34 @@ class PaidOrderBusinessFlowDispatcherTest extends TestCase
 
         $this->assertFalse((bool) ($configSnapshot['fulfillment_pending'] ?? true));
         $this->assertArrayHasKey('fulfillment_cleared_at', $configSnapshot);
+    }
+
+    public function test_fulfillment_pending_remains_when_renewal_is_not_completed(): void
+    {
+        [$invoice, $order] = $this->createPaidInvoiceWithOrder('renew');
+        $invoice->forceFill([
+            'config_snapshot' => [
+                'fulfillment_pending' => true,
+                'fulfillment_type' => 'renew',
+            ],
+        ])->save();
+
+        $this->mock(ServiceRenewService::class, function ($mock): void {
+            $mock->shouldReceive('processPaidRenewOrder')->once()->andReturn(null);
+            $mock->shouldReceive('isRenewInvoiceFulfilled')->once()->andReturnFalse();
+        });
+
+        try {
+            app(PaymentService::class)->processPaidOrderFulfillmentById((int) $order->id);
+            $this->fail('未完成的续费履约必须交由队列重试');
+        } catch (BusinessException $exception) {
+            $this->assertSame('支付后履约未完成，等待后续重试', $exception->getMessage());
+        }
+
+        $configSnapshot = (array) ($invoice->fresh()?->config_snapshot ?? []);
+
+        $this->assertTrue((bool) ($configSnapshot['fulfillment_pending'] ?? false));
+        $this->assertArrayNotHasKey('fulfillment_cleared_at', $configSnapshot);
     }
 
     /**

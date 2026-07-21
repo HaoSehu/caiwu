@@ -621,10 +621,17 @@ class BillingAutomationService
                     }
                 }
 
-                // 重新触发续费履约
-                $this->serviceRenewService->processPaidRenewInvoice($invoice);
+                // 重新触发续费履约；只有已实际完成时才能清除 pending。
+                $service = $this->serviceRenewService->processPaidRenewInvoice($invoice);
+                if (! $this->serviceRenewService->isRenewInvoiceFulfilled($invoice, $service)) {
+                    Log::warning('[定时任务] 续费履约补偿尚未完成，保留 pending 等待后续重试', [
+                        'invoice_id' => $invoice->id,
+                        'invoice_no' => $invoice->invoice_no ?? '',
+                    ]);
 
-                // 清除 pending 标记
+                    continue;
+                }
+
                 $config['fulfillment_pending'] = false;
                 $config['fulfillment_cleared_at'] = now()->toDateTimeString();
                 $invoice->forceFill(['config_snapshot' => $config])->saveQuietly();
