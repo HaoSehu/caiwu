@@ -45,7 +45,24 @@ class ZjmfProvisionCartSessionTest extends TestCase
             'id' => 771,
             'name' => 'ZJMF 测试云主机',
             'purchase_requires' => [],
-            'config_options' => [],
+            'config_options' => [
+                [
+                    'id' => 68001,
+                    'field' => 'cpu',
+                    'option_type' => 6,
+                    'sub' => [
+                        ['id' => 68011, 'option_name_first' => '2', 'option_name' => '2核'],
+                    ],
+                ],
+                [
+                    'id' => 68002,
+                    'field' => 'os',
+                    'option_type' => 5,
+                    'sub' => [
+                        ['id' => 68012, 'option_name_first' => 'ubuntu', 'option_name' => 'Ubuntu'],
+                    ],
+                ],
+            ],
         ]);
 
         $order = (new Order)->forceFill([
@@ -56,6 +73,8 @@ class ZjmfProvisionCartSessionTest extends TestCase
             'domain' => 'ser1881.example.test',
             'config_snapshot' => [
                 'hostname' => 'ser1881.example.test',
+                'cpu' => '2',
+                'os' => '68012',
             ],
         ]);
         $order->setRelation('product', $product);
@@ -73,15 +92,15 @@ class ZjmfProvisionCartSessionTest extends TestCase
                 array $headers = [],
                 array $query = []
             ): array {
-                if ($uri === '/v1/login_api') {
+                if ($uri === '/zjmf_api_login') {
                     return ['status' => 200, 'jwt' => 'jwt-test-token'];
                 }
 
-                if ($uri === '/v1/hosts/7788') {
+                if ($uri === '/host/header') {
                     return [
                         'status' => 200,
                         'data' => [
-                            'host' => [
+                            'host_data' => [
                                 'id' => 7788,
                                 'domain' => 'ser1881.example.test',
                                 'domainstatus' => 'Active',
@@ -105,25 +124,12 @@ class ZjmfProvisionCartSessionTest extends TestCase
                 $this->metaCalls[] = compact('method', 'uri', 'payload', 'jwt', 'headers', 'query');
 
                 return match ($uri) {
-                    '/v1/cart/products' => [
-                        'response' => ['status' => 200, 'msg' => 'Added successfully'],
-                        'headers' => [
-                            'HTTP/1.1 200 OK',
-                            'Set-Cookie: ZJMF_SESSION=cart-session-1881; path=/; HttpOnly',
-                        ],
-                        'http_code' => 200,
-                        'content_type' => 'application/json',
-                    ],
-                    '/v1/cart' => [
+                    '/cart/get_product_config' => [
                         'response' => [
                             'status' => 200,
                             'data' => [
-                                'default_gateway' => 'balance',
-                                'gateway_list' => [
-                                    ['name' => 'balance'],
-                                ],
-                                'cart_products' => [
-                                    ['productid' => 831],
+                                'product_pricings' => [
+                                    ['relid' => 831, 'currency' => 1],
                                 ],
                             ],
                         ],
@@ -131,10 +137,23 @@ class ZjmfProvisionCartSessionTest extends TestCase
                         'http_code' => 200,
                         'content_type' => 'application/json',
                     ],
-                    '/v1/cart/checkout' => [
+                    '/cart/add_to_shop' => [
                         'response' => [
-                            'status' => 1001,
-                            'msg' => 'Payment completed',
+                            'status' => 200,
+                            'msg' => 'Added successfully',
+                            'data' => [],
+                        ],
+                        'headers' => [
+                            'HTTP/1.1 200 OK',
+                            'Set-Cookie: ZJMF_SESSION=cart-session-1881; path=/; HttpOnly',
+                        ],
+                        'http_code' => 200,
+                        'content_type' => 'application/json',
+                    ],
+                    '/cart/settle' => [
+                        'response' => [
+                            'status' => 200,
+                            'msg' => 'Checkout created',
                             'data' => [
                                 'invoiceid' => 9901881,
                                 'hostid' => [7788],
@@ -144,7 +163,17 @@ class ZjmfProvisionCartSessionTest extends TestCase
                         'http_code' => 200,
                         'content_type' => 'application/json',
                     ],
-                    '/v1/cart/clear' => [
+                    '/apply_credit' => [
+                        'response' => [
+                            'status' => 200,
+                            'msg' => 'Payment completed',
+                            'data' => [],
+                        ],
+                        'headers' => [],
+                        'http_code' => 200,
+                        'content_type' => 'application/json',
+                    ],
+                    '/cart/clear' => [
                         'response' => ['status' => 200, 'msg' => 'Cart cleared'],
                         'headers' => [],
                         'http_code' => 200,
@@ -180,9 +209,33 @@ class ZjmfProvisionCartSessionTest extends TestCase
 
         $this->assertSame(7788, $result['upstream_host_id']);
         $this->assertFalse($this->callHasCookie($upstreamTransport->metaCalls[0] ?? []));
-        $this->assertTrue($this->callHasCookie($this->firstMetaCall($upstreamTransport->metaCalls, '/v1/cart')));
-        $this->assertTrue($this->callHasCookie($this->firstMetaCall($upstreamTransport->metaCalls, '/v1/cart/checkout')));
-        $this->assertTrue($this->callHasCookie($this->lastMetaCall($upstreamTransport->metaCalls, '/v1/cart/clear')));
+        $this->assertFalse($this->callHasCookie($this->firstMetaCall($upstreamTransport->metaCalls, '/cart/add_to_shop')));
+        $this->assertTrue($this->callHasCookie($this->firstMetaCall($upstreamTransport->metaCalls, '/cart/settle')));
+        $this->assertTrue($this->callHasCookie($this->firstMetaCall($upstreamTransport->metaCalls, '/apply_credit')));
+        $this->assertTrue($this->callHasCookie($this->lastMetaCall($upstreamTransport->metaCalls, '/cart/clear')));
+
+        $addCall = $this->firstMetaCall($upstreamTransport->metaCalls, '/cart/add_to_shop');
+        $this->assertSame(831, $addCall['payload']['pid'] ?? null);
+        $this->assertSame('monthly', $addCall['payload']['billingcycle'] ?? null);
+        $this->assertSame(1, $addCall['payload']['currencyid'] ?? null);
+        $this->assertSame(68011, $addCall['payload']['configoption'][68001] ?? null);
+        $this->assertSame(68012, $addCall['payload']['os']['id'] ?? null);
+        $this->assertSame(0, $addCall['payload']['checkout'] ?? null);
+        $this->assertTrue($this->callHasHeader($addCall, 'content-type: application/x-www-form-urlencoded'));
+
+        $settleCall = $this->firstMetaCall($upstreamTransport->metaCalls, '/cart/settle');
+        $this->assertSame([0], $settleCall['payload']['pos'] ?? null);
+        $this->assertSame(1, $settleCall['payload']['checkout'] ?? null);
+
+        $creditCall = $this->firstMetaCall($upstreamTransport->metaCalls, '/apply_credit');
+        $this->assertSame(9901881, $creditCall['payload']['invoiceid'] ?? null);
+        $this->assertSame(1, $creditCall['payload']['use_credit'] ?? null);
+        $this->assertSame(1, $creditCall['payload']['enough'] ?? null);
+
+        foreach ($upstreamTransport->metaCalls as $call) {
+            $this->assertStringNotContainsString('/v1/', (string) ($call['uri'] ?? ''));
+            $this->assertStringNotContainsString('/v10/', (string) ($call['uri'] ?? ''));
+        }
     }
 
     private function firstMetaCall(array $calls, string $uri): array
@@ -215,6 +268,19 @@ class ZjmfProvisionCartSessionTest extends TestCase
             $header = trim((string) $header);
             if (str_starts_with(strtolower($header), 'cookie:')
                 && str_contains($header, 'ZJMF_SESSION=cart-session-1881')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function callHasHeader(array $call, string $expectedHeader): bool
+    {
+        $expectedHeader = strtolower($expectedHeader);
+
+        foreach ((array) ($call['headers'] ?? []) as $header) {
+            if (strtolower(trim((string) $header)) === $expectedHeader) {
                 return true;
             }
         }

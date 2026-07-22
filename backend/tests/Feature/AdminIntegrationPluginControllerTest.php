@@ -325,6 +325,78 @@ class AdminIntegrationPluginControllerTest extends TestCase
         $this->assertDirectoryExists(base_path('plugins/servers/zjmf_finance'));
     }
 
+    public function test_admin_can_disable_and_remove_enabled_plugin_when_manifest_is_missing(): void
+    {
+        $this->ensurePluginTables();
+        Sanctum::actingAs($this->createAdmin());
+
+        $plugin = $this->createPlugin('upstream', 'missing_manifest_'.bin2hex(random_bytes(4)));
+        DB::table('integration_plugin_configs')->insert([
+            'plugin_id' => (int) $plugin->id,
+            'config_json' => json_encode(['api_url' => 'https://missing.example.test']),
+            'secret_json' => null,
+            'has_secret_json' => json_encode([]),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('integration_plugin_bindings')->insert([
+            'domain' => 'upstream',
+            'plugin_id' => (int) $plugin->id,
+            'binding_type' => 'global',
+            'bindable_type' => 'setting',
+            'bindable_id' => 0,
+            'binding_key' => 'missing-manifest-test',
+            'provider_key' => 'missing-manifest-test',
+            'priority' => 0,
+            'status' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $user = User::query()->create([
+            'email' => 'missing-manifest-'.bin2hex(random_bytes(4)).'@example.test',
+            'password' => 'secret123',
+            'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
+            'status' => 1,
+        ]);
+        $payment = Payment::query()->create([
+            'payment_no' => 'PAYMISSING'.strtoupper(bin2hex(random_bytes(4))),
+            'user_id' => (int) $user->id,
+            'plugin_id' => (int) $plugin->id,
+            'gateway' => 'alipay',
+            'trade_no' => 'ALI'.strtoupper(bin2hex(random_bytes(4))),
+            'amount' => '1.00',
+            'status' => 1,
+            'paid_at' => now(),
+        ]);
+
+        $this->patchJson("/api/v2/admin/integration-plugins/{$plugin->id}/status", ['enabled' => false])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'disabled');
+
+        $this->assertDatabaseHas('integration_plugins', [
+            'id' => $plugin->id,
+            'status' => IntegrationPlugin::STATUS_DISABLED,
+        ]);
+        $this->assertDatabaseHas('integration_plugin_bindings', [
+            'plugin_id' => $plugin->id,
+            'status' => 0,
+        ]);
+
+        $this->deleteJson("/api/v2/admin/integration-plugins/{$plugin->id}")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'deleted')
+            ->assertJsonPath('data.detail.deleted', true);
+
+        $this->assertDatabaseMissing('integration_plugins', ['id' => $plugin->id]);
+        $this->assertDatabaseMissing('integration_plugin_configs', ['plugin_id' => $plugin->id]);
+        $this->assertDatabaseMissing('integration_plugin_bindings', ['plugin_id' => $plugin->id]);
+        $this->assertDatabaseHas('payments', [
+            'id' => $payment->id,
+            'plugin_id' => null,
+        ]);
+    }
+
     private function createAdmin(): AdminUser
     {
         $suffix = bin2hex(random_bytes(4));

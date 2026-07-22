@@ -34,6 +34,26 @@ class HostingPanelApiTransportTest extends TestCase
         $this->assertFalse($options['allow_redirects']);
     }
 
+    public function test_explicit_authorization_header_overrides_default_jwt_scheme(): void
+    {
+        $transport = new HostingPanelApiTransport;
+
+        $this->assertSame([
+            'authorization: JWT default-jwt',
+        ], $this->invokePrivateMethod($transport, 'buildHeaders', [
+            'default-jwt',
+            [],
+        ]));
+
+        $headers = $this->invokePrivateMethod($transport, 'buildHeaders', [
+            'default-jwt',
+            ['authorization: Bearer legacy-jwt'],
+        ]);
+
+        $this->assertSame(['authorization: Bearer legacy-jwt'], $headers);
+        $this->assertTrue($this->invokePrivateMethod($transport, 'isLoginEndpoint', ['/zjmf_api_login']));
+    }
+
     public function test_it_normalizes_base_url_without_duplicate_v1_prefix(): void
     {
         $transport = new HostingPanelApiTransport;

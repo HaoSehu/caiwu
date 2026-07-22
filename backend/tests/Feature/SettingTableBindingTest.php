@@ -69,7 +69,7 @@ class SettingTableBindingTest extends TestCase
                 ->assertJsonPath('data.service_hours', $serviceHours)
                 ->assertJsonPath('data.support_group_title', $supportGroupTitle)
                 ->assertJsonPath('data.support_group_text', $supportGroupText)
-                ->assertJsonPath('data.support_group_qr', $supportGroupQr);
+                ->assertJsonPath('data.support_group_qr', rtrim((string) config('app.url'), '/').$supportGroupQr);
         } finally {
             DB::table('settings')
                 ->where('group_key', 'basic')

@@ -139,34 +139,26 @@ class ZjmfCloudConfigTemplateTest extends TestCase
                 array $headers = [],
                 array $query = []
             ): array {
-                if ($uri === '/v1/login_api') {
+                if ($uri === '/zjmf_api_login') {
                     return ['status' => 200, 'jwt' => 'zjmf-jwt'];
                 }
 
-                if ($uri === '/v1/products') {
+                if ($uri === '/cart/all') {
                     return [
                         'status' => 200,
                         'data' => [
-                            'first_group' => [
+                            'products' => [
                                 [
+                                    'id' => 'test-cloud-group',
                                     'name' => '云服务器',
-                                    'group' => [
-                                        [
-                                            'name' => '云服务器',
-                                            'products' => $this->products,
-                                        ],
-                                    ],
+                                    'products' => $this->products,
                                 ],
                             ],
                         ],
                     ];
                 }
 
-                if ($uri === '/v1/productsconfig') {
-                    return ['status' => 200, 'data' => ['first_group' => []]];
-                }
-
-                if (str_contains($uri, '/cart/get_product_config')) {
+                if ($uri === '/cart/get_product_config') {
                     return ['status' => 200, 'data' => ['config_groups' => []]];
                 }
 

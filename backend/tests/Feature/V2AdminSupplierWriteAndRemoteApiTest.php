@@ -11,6 +11,7 @@ use App\Services\Integrations\Plugins\UpstreamBindingWriter;
 use App\Services\Upstream\ProviderRegistry;
 use App\Support\AdminPermissions;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -66,6 +67,19 @@ class V2AdminSupplierWriteAndRemoteApiTest extends TestCase
         $this->assertSame(['supplier'], array_keys($updateResponse->json('data')));
         $this->assertSame($this->supplierWhitelist(), array_keys($updateResponse->json('data.supplier')));
         $this->assertNoSensitiveKeys($updateResponse->json());
+
+        $boundSupplierBindingId = (int) DB::table('supplier_plugin_bindings')
+            ->where('supplier_id', $supplierId)
+            ->value('id');
+
+        $this->deleteJson('/api/v2/admin/suppliers/'.$supplierId)
+            ->assertOk()
+            ->assertJsonPath('code', 0)
+            ->assertJsonPath('data.id', $supplierId)
+            ->assertJsonPath('data.status', 'deleted');
+
+        $this->assertDatabaseMissing('suppliers', ['id' => $supplierId]);
+        $this->assertDatabaseMissing('supplier_plugin_bindings', ['id' => $boundSupplierBindingId]);
 
         $standalone = Supplier::query()->create([
             'name' => 'V2 Delete Supplier '.$suffix,

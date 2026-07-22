@@ -56,6 +56,23 @@ class AdminLoginAsRedirectUrlTest extends TestCase
             ->issueAdminLoginAsCode($this->makeClientUser());
     }
 
+    public function test_issue_admin_login_as_code_rejects_non_http_client_console_url(): void
+    {
+        config([
+            'app.client_console_url' => 'ftp://console.example.test',
+            'app.admin_url' => 'https://admin.example.test',
+        ]);
+
+        $operationLogService = $this->createMock(OperationLogService::class);
+        $operationLogService->expects($this->never())->method('write');
+
+        $this->expectException(BusinessException::class);
+        $this->expectExceptionMessage('CLIENT_CONSOLE_URL');
+
+        $this->makeAuthService($operationLogService)
+            ->issueAdminLoginAsCode($this->makeClientUser());
+    }
+
     public function test_issue_admin_login_as_code_rejects_admin_url_as_client_console_url(): void
     {
         config([
@@ -74,7 +91,7 @@ class AdminLoginAsRedirectUrlTest extends TestCase
             ->issueAdminLoginAsCode($this->makeClientUser());
     }
 
-    public function test_issue_admin_login_as_code_allows_different_paths_on_the_same_origin(): void
+    public function test_issue_admin_login_as_code_rejects_admin_url_with_a_path(): void
     {
         config([
             'app.frontend_url' => 'https://cloud.example.test',
@@ -83,15 +100,13 @@ class AdminLoginAsRedirectUrlTest extends TestCase
         ]);
 
         $operationLogService = $this->createMock(OperationLogService::class);
-        $operationLogService->expects($this->once())->method('write');
+        $operationLogService->expects($this->never())->method('write');
 
-        $result = $this->makeAuthService($operationLogService)
+        $this->expectException(BusinessException::class);
+        $this->expectExceptionMessage('ADMIN_URL');
+
+        $this->makeAuthService($operationLogService)
             ->issueAdminLoginAsCode($this->makeClientUser());
-
-        $this->assertSame(
-            'https://cloud.example.test/client/login-as',
-            $result['target_url']
-        );
     }
 
     private function makeClientUser(): User

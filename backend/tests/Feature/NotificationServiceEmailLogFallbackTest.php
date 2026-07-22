@@ -115,6 +115,10 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
         $fakeMailDriver = $this->makeFakeMailDriver();
 
         try {
+            config([
+                'app.url' => 'https://api.example.test',
+                'app.frontend_url' => 'https://www.example.test',
+            ]);
             Setting::setValue('notification', 'email_enabled', '1');
             Setting::setValue('basic', 'site_name', 'Codex Billing');
             Setting::setValue('basic', 'site_logo', '/uploads/site/logo-test.png');
@@ -135,13 +139,30 @@ class NotificationServiceEmailLogFallbackTest extends TestCase
             $html = (string) ($fakeMailDriver->messages[0]['html'] ?? '');
 
             $this->assertStringContainsString('class="email-logo"', $html);
-            $this->assertStringContainsString('/uploads/site/logo-test.png', $html);
+            $this->assertStringContainsString(
+                'src="https://api.example.test/uploads/site/logo-test.png"',
+                $html
+            );
             $this->assertStringContainsString('<span>Codex Billing</span>', $html);
             $this->assertStringContainsString('<strong>482915</strong>', $html);
             $this->assertStringContainsString('.email-test-code { color: #1f5eff; font-weight: 700; }', $html);
             $this->assertStringNotContainsString('mail-shell', $html);
             $this->assertStringNotContainsString('mail-card', $html);
             $this->assertStringNotContainsString('自动通知邮件', $html);
+
+            Setting::setValue('basic', 'site_logo', '/branding/logo.svg');
+
+            app(NotificationService::class)->sendTemplateEmail($to, NotificationService::TEMPLATE_EMAIL_CODE, [
+                'code' => '482915',
+                'expire_minutes' => 10,
+            ]);
+
+            $this->assertCount(2, $fakeMailDriver->messages);
+            $brandingHtml = (string) ($fakeMailDriver->messages[1]['html'] ?? '');
+            $this->assertStringContainsString(
+                'src="https://www.example.test/branding/logo.svg"',
+                $brandingHtml
+            );
         } finally {
             $this->deleteEmailLogsByRecipient($to);
 
