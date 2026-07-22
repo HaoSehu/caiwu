@@ -379,7 +379,14 @@
           <t-descriptions-item label="公网 IP">{{ fieldValue(serviceDrawer.detail.connection?.dedicated_ip || serviceDrawer.detail.upstream?.dedicated_ip) }}</t-descriptions-item>
           <t-descriptions-item label="登录账号">{{ fieldValue(serviceDrawer.detail.connection?.username) }}</t-descriptions-item>
           <t-descriptions-item label="登录端口">{{ fieldValue(serviceDrawer.detail.connection?.port) }}</t-descriptions-item>
-          <t-descriptions-item label="运行状态">{{ fieldValue(serviceDrawer.detail.runtime?.power_label || serviceDrawer.detail.runtime?.description) }}</t-descriptions-item>
+          <t-descriptions-item label="运行状态">
+            <template v-if="serviceDrawer.detail.runtime?.power_label || serviceDrawer.detail.runtime?.description">
+              {{ fieldValue(serviceDrawer.detail.runtime?.power_label || serviceDrawer.detail.runtime?.description) }}
+            </template>
+            <t-tooltip v-else content="上游暂未返回实例的电源状态">
+              <t-tag theme="warning" variant="light">未获取到运行状态</t-tag>
+            </t-tooltip>
+          </t-descriptions-item>
           <t-descriptions-item label="到期时间">{{ formatDateTime(serviceDrawer.detail.expires_at) }}</t-descriptions-item>
         </t-descriptions>
         <div v-if="serviceDrawer.detail.upstream?.remote_error" class="drawer-alert">

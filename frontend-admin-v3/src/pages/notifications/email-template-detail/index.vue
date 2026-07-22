@@ -143,6 +143,7 @@ import { ChevronLeftIcon } from 'tdesign-icons-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 
 import { adminApi } from '@/api/admin';
+import { resolveApiAssetUrl } from '@/utils/apiAssetUrl';
 
 import './index.less';
 
@@ -452,8 +453,9 @@ function toBooleanValue(value) {
 
 function resolvePreviewLogo(value) {
   const logo = String(value || '').trim() || DEFAULT_SITE_LOGO;
-  if (/^(https?:)?\/\//i.test(logo) || logo.startsWith('data:') || logo.startsWith('/')) return logo;
-  return `/${logo}`;
+  const resolved = resolveApiAssetUrl(logo, import.meta.env.VITE_API_BASE_URL);
+  if (/^(https?:)?\/\//i.test(resolved) || resolved.startsWith('data:') || resolved.startsWith('/')) return resolved;
+  return `/${resolved}`;
 }
 
 function escapeHtml(value) {

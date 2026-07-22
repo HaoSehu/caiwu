@@ -117,6 +117,7 @@
                       :disabled="!form.supplier_id"
                       value-mode="onlyLeaf"
                       :show-all-levels="false"
+                      :popup-props="{ overlayClassName: 'product-edit-supplier-product-popup' }"
                     />
                     <t-button
                       theme="primary"
@@ -488,7 +489,8 @@ function supplierInterfaceTypeLabel(row: SupplierRecord) {
 
 function supplierProductOptionLabel(row: SupplierBatchProduct) {
   const typeLabel = row.type_label || row.remote_group_name || '';
-  return typeLabel ? `${row.name || row.id} · ${typeLabel}` : String(row.name || row.id || '-');
+  const productLabel = `#${row.id} · ${row.name || '-'}`;
+  return typeLabel ? `${productLabel} · ${typeLabel}` : productLabel;
 }
 
 function handleSupplierChange(value: string | number) {
@@ -515,13 +517,15 @@ async function loadSupplierProducts(supplierId: string | number, notify = false)
 
 function buildSupplierBatchProducts(response: unknown): SupplierBatchProduct[] {
   const raw = toPlainRecord(response);
-  const list = Array.isArray(raw.list) ? raw.list : (Array.isArray(response) ? response : []);
+  const list = Array.isArray(raw.products)
+    ? raw.products
+    : (Array.isArray(raw.list) ? raw.list : (Array.isArray(response) ? response : []));
   return list.map((item: Record<string, unknown>) => ({
-    id: Number(item.id || 0),
-    name: String(item.name || item.display_name || '-'),
-    type_label: String(item.type_label || ''),
-    remote_group_name: String(item.remote_group_name || ''),
-  }));
+    id: Number(item.id || item.product_id || 0),
+    name: String(item.name || item.product_name || item.display_name || '-'),
+    type_label: String(item.type_label || item.type_name || item.type || item.billingcycle || ''),
+    remote_group_name: String(item.remote_group_name || item.group_name || item.second_group_name || ''),
+  })).filter((item) => item.id > 0);
 }
 
 // --- Pricing helpers ---
@@ -1058,6 +1062,32 @@ function goBack() {
   }
 }
 
+:global(.product-edit-supplier-product-popup .t-popup__content) {
+  width: min(760px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+}
+
+:global(.product-edit-supplier-product-popup .t-cascader__panel) {
+  width: 100%;
+}
+
+:global(.product-edit-supplier-product-popup .t-cascader__menu) {
+  box-sizing: border-box;
+  flex: 0 0 36%;
+  min-width: 0;
+  width: 36%;
+}
+
+:global(.product-edit-supplier-product-popup .t-cascader__menu:last-child) {
+  flex-basis: 64%;
+  width: 64%;
+}
+
+:global(.product-edit-supplier-product-popup .t-cascader__menu:only-child) {
+  flex-basis: 100%;
+  width: 100%;
+}
+
 .product-edit-interface-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(220px, 1fr));
@@ -1242,6 +1272,11 @@ function goBack() {
 }
 
 @media (max-width: 768px) {
+  :global(.product-edit-supplier-product-popup .t-popup__content) {
+    width: calc(100vw - 24px);
+    max-width: calc(100vw - 24px);
+  }
+
   .product-edit-page {
     padding: 12px;
   }

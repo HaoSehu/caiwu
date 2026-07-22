@@ -11,8 +11,6 @@ import { viteMockServe } from 'vite-plugin-mock';
 import svgLoader from 'vite-svg-loader';
 
 const CWD = process.cwd();
-const backendProxyTarget = process.env.BACKEND_PROXY_TARGET || 'http://127.0.0.1:8000';
-const backendWsProxyTarget = process.env.BACKEND_WS_PROXY_TARGET || 'ws://127.0.0.1:8000';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const compressionExtensions = new Set(['.css', '.html', '.js', '.json', '.map', '.mjs', '.svg', '.txt', '.xml']);
 const compressionThreshold = 1024;
@@ -247,26 +245,6 @@ export default ({ mode }: ConfigEnv): UserConfig => {
       },
       port: 5174,
       host: '127.0.0.1',
-      proxy: {
-        '/api': {
-          target: backendProxyTarget,
-          changeOrigin: true,
-        },
-        '/uploads': {
-          target: backendProxyTarget,
-          changeOrigin: true,
-        },
-        '/media': {
-          target: backendProxyTarget,
-          changeOrigin: true,
-        },
-        '/ws/vnc': {
-          target: backendWsProxyTarget,
-          changeOrigin: true,
-          ws: true,
-          secure: false,
-        },
-      },
     },
 
     build: {
