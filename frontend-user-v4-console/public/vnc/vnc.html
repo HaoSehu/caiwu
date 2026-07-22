@@ -568,8 +568,10 @@
     if (/^https?:\/\//i.test(rawPath)) return rawPath
 
     const apiBase = String(q('api_base', '') || '').trim().replace(/\/+$/, '')
-    if (!apiBase) return rawPath
-    return apiBase + (rawPath.startsWith('/') ? rawPath : `/${rawPath}`)
+    if (!/^https?:\/\//i.test(apiBase)) {
+      throw new Error('VNC API 基址缺失或无效')
+    }
+    return new URL(rawPath, `${apiBase}/`).toString()
   }
 
   function isCrossOriginRequest(resolvedUrl) {
@@ -601,8 +603,16 @@
     const relayPath = String(p.relay_path || '').trim()
     if (!token || !relayPath) return ''
 
-    const relayUrl = new URL(relayPath, location.origin)
-    relayUrl.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
+    // relay_path 属于 API 站点；不能按 noVNC 页面所在 console 域名解析。
+    const apiBase = String(q('api_base', '') || '').trim().replace(/\/+$/, '')
+    if (!/^https?:\/\//i.test(apiBase)) return ''
+
+    const relayUrl = new URL(relayPath, `${apiBase}/`)
+    if (relayUrl.protocol === 'https:') {
+      relayUrl.protocol = 'wss:'
+    } else if (relayUrl.protocol === 'http:') {
+      relayUrl.protocol = 'ws:'
+    }
     relayUrl.searchParams.set('token', token)
     return relayUrl.toString()
   }

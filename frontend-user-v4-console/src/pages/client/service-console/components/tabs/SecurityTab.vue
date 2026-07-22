@@ -4,7 +4,7 @@
       <template #actions>
         <t-space>
           <t-button :loading="securityState.loading" @click="loadSecurityGroups(true)">刷新</t-button>
-          <t-button theme="primary" :disabled="securityState.supported === false" @click="openSecurityGroupDialog">新建安全组</t-button>
+          <t-button v-if="securityState.canCreate" theme="primary" :disabled="securityState.supported === false" @click="openSecurityGroupDialog">新建安全组</t-button>
         </t-space>
       </template>
 
@@ -29,7 +29,7 @@
               <p>{{ group.description || '暂无备注说明' }}</p>
             </div>
             <div class="security-group-card__actions">
-              <t-button size="small" variant="outline" :disabled="group.can_view === false || securityState.submitting" @click.stop="selectSecurityGroup(group)">查看</t-button>
+              <t-button v-if="group.can_view !== false" size="small" variant="outline" :disabled="securityState.submitting" @click.stop="selectSecurityGroup(group)">查看</t-button>
               <t-button
                 v-if="!group.is_applied"
                 size="small"
@@ -41,6 +41,7 @@
                 应用
               </t-button>
               <t-button
+                v-if="group.can_delete !== false"
                 size="small"
                 theme="danger"
                 variant="outline"
@@ -52,7 +53,7 @@
             </div>
           </article>
         </div>
-        <t-empty v-else description="当前没有安全组，可先创建后再添加规则" />
+        <t-empty v-else :description="securityState.canCreate ? '当前没有安全组，可先创建后再添加规则' : '当前没有可应用的安全组'" />
 
         <div v-if="activeSecurityGroup" class="security-rules-panel">
           <div class="security-rules-panel__head">

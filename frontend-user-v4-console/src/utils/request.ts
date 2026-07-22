@@ -97,8 +97,14 @@ function canDedupeSafeRequest(config: Partial<ClientRuntimeRequestConfig>, safeR
   return Boolean(safeRequest && config.dedupeSafeRequest !== false && !config.signal && !config.cancelToken);
 }
 
+const apiBaseUrl = String(import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '');
+
+if (!apiBaseUrl) {
+  throw new Error('VITE_API_BASE_URL 必须配置');
+}
+
 const httpClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+  baseURL: apiBaseUrl,
   timeout: DEFAULT_TIMEOUT,
   headers: {
     Accept: 'application/json',
