@@ -126,19 +126,9 @@ final class ZjmfFinanceAdapter implements ProvidesConsoleAccess, ProvidesConsole
         return $this->provisionService->getProductProvisionConfig($supplier, $productId);
     }
 
-    public function getHostRenewInfo(Supplier $supplier, int $hostId, ?string $billingCycle = null): array
-    {
-        return $this->renewService->getHostRenewInfo($supplier, $hostId, $billingCycle);
-    }
-
     public function renewHost(Supplier $supplier, int $hostId, string $billingCycle): array
     {
         return $this->renewService->renewHost($supplier, $hostId, $billingCycle);
-    }
-
-    public function setHostAutoRenew(Supplier $supplier, int $hostId, int $initiativeRenew): array
-    {
-        return $this->renewService->setHostAutoRenew($supplier, $hostId, $initiativeRenew);
     }
 
     public function renewServiceInvoice(Supplier $supplier, int $hostId, string $billingCycle): array
@@ -149,6 +139,15 @@ final class ZjmfFinanceAdapter implements ProvidesConsoleAccess, ProvidesConsole
     public function recoverRenewInvoice(Supplier $supplier, int $hostId, int $upstreamInvoiceId): ?array
     {
         return $this->renewService->recoverRenewInvoice($supplier, $hostId, $upstreamInvoiceId);
+    }
+
+    public function recoverRenewInvoiceWithContext(
+        Supplier $supplier,
+        int $hostId,
+        int $upstreamInvoiceId,
+        array $recoveryContext = [],
+    ): ?array {
+        return $this->renewService->recoverRenewInvoiceWithContext($supplier, $hostId, $upstreamInvoiceId, $recoveryContext);
     }
 
     public function syncServiceStatuses(Supplier $supplier, array $items, int $chunkSize = 10): array
@@ -194,6 +193,16 @@ final class ZjmfFinanceAdapter implements ProvidesConsoleAccess, ProvidesConsole
     public function getSupportedModules(Supplier $supplier, int $hostId, ?string $jwt = null): array
     {
         return $this->consoleService->getSupportedModules($supplier, $hostId, $jwt);
+    }
+
+    public function getMonitorChart(Supplier $supplier, int $hostId, array $query, ?string $jwt = null): array
+    {
+        return $this->consoleService->getMonitorChart($supplier, $hostId, $query, $jwt);
+    }
+
+    public function getMonitorCharts(Supplier $supplier, int $hostId, array $queries, ?string $jwt = null): array
+    {
+        return $this->consoleService->getMonitorCharts($supplier, $hostId, $queries, $jwt);
     }
 
     public function fetchCustomModulePage(Supplier $supplier, int $hostId, string $moduleKey, ?string $jwt = null): string
@@ -278,6 +287,16 @@ final class ZjmfFinanceAdapter implements ProvidesConsoleAccess, ProvidesConsole
         return $this->securityService->submitCustomModuleAction($supplier, $endpoint, $payload, $jwt);
     }
 
+    public function getSecurityGroups(Supplier $supplier, int $page = 1, int $limit = 9999, ?string $jwt = null): array
+    {
+        return $this->securityService->getSecurityGroups($supplier, $page, $limit, $jwt);
+    }
+
+    public function applySecurityGroup(Supplier $supplier, int $groupId, int $hostId, ?string $jwt = null): array
+    {
+        return $this->securityService->applySecurityGroup($supplier, $groupId, $hostId, $jwt);
+    }
+
     public function post(Supplier $supplier, string $uri, array|string $payload = [], ?string $jwt = null, array $headers = [], array $query = []): array
     {
         return $this->transport->post($supplier, $uri, $payload, $jwt, $headers, $query);
@@ -350,11 +369,10 @@ final class ZjmfFinanceAdapter implements ProvidesConsoleAccess, ProvidesConsole
             'fetchBatchProductStocks',
             'provisionOrder',
             'getProductProvisionConfig',
-            'getHostRenewInfo',
             'renewHost',
-            'setHostAutoRenew',
             'renewServiceInvoice',
             'recoverRenewInvoice',
+            'recoverRenewInvoiceWithContext',
             'syncServiceStatuses',
             'getHostDetail',
             'getVncUrl',
@@ -364,6 +382,8 @@ final class ZjmfFinanceAdapter implements ProvidesConsoleAccess, ProvidesConsole
             'resetPassword',
             'reinstall',
             'getSupportedModules',
+            'getMonitorChart',
+            'getMonitorCharts',
             'fetchCustomModulePage',
             'getHostUpgradeConfigOptions',
             'previewHostConfigUpgrade',
@@ -379,6 +399,8 @@ final class ZjmfFinanceAdapter implements ProvidesConsoleAccess, ProvidesConsole
             'purchaseTrafficPackage',
             'purchaseHostUpgrade',
             'submitCustomModuleAction',
+            'getSecurityGroups',
+            'applySecurityGroup',
             'post',
             'get',
             'getText',

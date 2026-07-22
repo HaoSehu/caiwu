@@ -95,8 +95,8 @@ final class ZjmfAuthManager
 
     public function loginResponse(Supplier $supplier): array
     {
-        return $this->transport->request($supplier, 'POST', '/v1/login_api', [
-            'account' => (string) $supplier->api_username,
+        return $this->transport->request($supplier, 'POST', '/zjmf_api_login', [
+            'username' => (string) $supplier->api_username,
             'password' => (string) $supplier->api_key,
         ]);
     }

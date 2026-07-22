@@ -6,7 +6,6 @@ namespace Caiwu\Plugins\Servers\ZjmfFinance\Lib;
 
 use App\Exceptions\BusinessException;
 use App\Models\Supplier;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 final class ZjmfCatalogService
@@ -65,7 +64,7 @@ final class ZjmfCatalogService
 
     public function getProductCatalog(Supplier $supplier): array
     {
-        $response = $this->transport->get($supplier, '/v1/products', $this->transport->login($supplier));
+        $response = $this->transport->get($supplier, '/cart/all', $this->transport->login($supplier));
 
         return $this->normalizeProductCatalog($response);
     }
@@ -108,21 +107,16 @@ final class ZjmfCatalogService
 
     public function fetchRealConfigOptions(Supplier $supplier, int $productId): array
     {
-        $response = $this->transport->get($supplier, '/v1/productsconfig', $this->transport->login($supplier), [
-            'product_id' => $productId,
-        ]);
-        $officialConfigOptions = $this->normalizeRemoteConfigOptions($this->extractApiConfigOptions($response, $productId));
+        $response = $this->transport->get(
+            $supplier,
+            '/cart/get_product_config',
+            $this->transport->login($supplier),
+            ['pid' => $productId],
+        );
 
-        if ($officialConfigOptions !== []) {
-            return $officialConfigOptions;
-        }
-
-        $storefrontConfigOptions = $this->fetchStorefrontConfigOptions($supplier, $productId);
-        if ($storefrontConfigOptions !== []) {
-            return $this->normalizeRemoteConfigOptions($storefrontConfigOptions);
-        }
-
-        return [];
+        return $this->normalizeRemoteConfigOptions(
+            $this->extractStorefrontConfigOptionsFromResponse($response)
+        );
     }
 
     public function fetchBatchProductConfigOptions(Supplier $supplier, array $productIds, int $chunkSize = 8): array
@@ -139,7 +133,7 @@ final class ZjmfCatalogService
         }
 
         $chunkSize = max(1, min($chunkSize, 12));
-        $rootUrl = $this->resolveSupplierRootUrl($supplier);
+        $jwt = $this->transport->login($supplier);
         $results = [];
 
         foreach (array_chunk($ids, $chunkSize) as $chunk) {
@@ -147,10 +141,11 @@ final class ZjmfCatalogService
                 $supplier,
                 collect($chunk)->mapWithKeys(fn (int $productId) => [
                     (string) $productId => [
-                        'uri' => $rootUrl.'/cart/get_product_config',
+                        'uri' => '/cart/get_product_config',
                         'query' => ['pid' => $productId],
                     ],
-                ])->all()
+                ])->all(),
+                $jwt,
             );
 
             foreach ($chunk as $productId) {
@@ -187,17 +182,17 @@ final class ZjmfCatalogService
                 $supplier,
                 collect($chunk)->mapWithKeys(fn (int $productId) => [
                     (string) $productId => [
-                        'uri' => '/v1/productsconfig',
-                        'query' => ['product_id' => $productId],
+                        'uri' => '/cart/get_product_config',
+                        'query' => ['pid' => $productId],
                     ],
                 ])->all(),
-                $jwt
+                $jwt,
             );
 
             foreach ($chunk as $productId) {
                 $response = $responses[(string) $productId]['response'] ?? null;
                 $results[$productId] = is_array($response)
-                    ? $this->extractApiProductStock($response, $productId)
+                    ? $this->extractLegacyProductStock($response, $productId)
                     : null;
             }
         }
@@ -208,124 +203,89 @@ final class ZjmfCatalogService
     private function normalizeProductCatalog(array $response): array
     {
         $payload = is_array($response['data'] ?? null) ? $response['data'] : $response;
-        $firstGroups = is_array($payload['first_group'] ?? null) ? $payload['first_group'] : [];
-        $groups = [];
+        $groupedProducts = [];
         $flatProducts = [];
 
-        foreach ($firstGroups as $firstGroup) {
-            $firstGroupName = trim((string) ($firstGroup['name'] ?? ''));
-            $productGroups = is_array($firstGroup['group'] ?? null) ? $firstGroup['group'] : [];
-
-            foreach ($productGroups as $group) {
-                $groupName = trim((string) ($group['name'] ?? ''));
-                $groupLabel = $groupName !== ''
-                    ? ($firstGroupName !== '' && $firstGroupName !== $groupName ? "{$firstGroupName} / {$groupName}" : $groupName)
-                    : ($firstGroupName !== '' ? $firstGroupName : '未分组');
-
-                $items = [];
-                $catalogProducts = is_array($group['products'] ?? null)
-                    ? $group['products']
-                    : (is_array($group['product'] ?? null) ? $group['product'] : []);
-
-                foreach ($catalogProducts as $product) {
-                    $productId = (int) ($product['id'] ?? 0);
-                    if ($productId <= 0) {
-                        continue;
-                    }
-
-                    $item = $this->productTypeMapper->normalizeProduct([
-                        'id' => $productId,
-                        'name' => trim((string) ($product['name'] ?? '未命名商品')),
-                        'type' => trim((string) ($product['type'] ?? '')),
-                        'description' => trim((string) ($product['description'] ?? '')),
-                        'billingcycle' => trim((string) ($product['billingcycle'] ?? '')),
-                        'product_price' => $this->normalizeCatalogAmount($product['product_price'] ?? null),
-                        'monthly_price' => $this->resolveCatalogMonthlyPrice($product),
-                        'setup_fee' => $this->normalizeCatalogAmount($product['setup_fee'] ?? null),
-                        'allow_qty' => (int) ($product['allow_qty'] ?? 0),
-                        'stock_control' => (int) ($product['stock_control'] ?? 0),
-                        'qty' => is_numeric($product['qty'] ?? null) ? max((int) $product['qty'], 0) : null,
-                        'stock' => $this->normalizeCatalogStock($product),
-                        'first_group_name' => $firstGroupName,
-                        'group_name' => $groupName,
-                        'group_label' => $groupLabel,
-                    ]);
-
-                    $items[] = $item;
-                    $flatProducts[] = $item;
-                }
-
-                if ($items !== []) {
-                    $groups[] = [
-                        'key' => 'group-'.md5($groupLabel),
-                        'label' => $groupLabel,
-                        'items' => $items,
-                    ];
-                }
-            }
-        }
+        $this->collectCartCatalogProducts(
+            is_array($payload['products'] ?? null) ? $payload['products'] : [],
+            '',
+            $groupedProducts,
+            $flatProducts,
+        );
 
         return [
-            'groups' => $groups,
+            'groups' => collect($groupedProducts)
+                ->map(fn (array $items, string $label): array => [
+                    'key' => 'group-'.md5($label),
+                    'label' => $label,
+                    'items' => $items,
+                ])
+                ->values()
+                ->all(),
             'products' => $flatProducts,
         ];
     }
 
-    private function fetchStorefrontConfigOptions(Supplier $supplier, int $productId): array
-    {
-        try {
-            $response = $this->transport->get(
-                $supplier,
-                $this->resolveSupplierRootUrl($supplier).'/cart/get_product_config',
-                null,
-                ['pid' => $productId]
-            );
-        } catch (\Throwable $exception) {
-            Log::info('[ZJMF 财务接口] 前台配置项接口不可用，回退到开放 API', [
-                'supplier_id' => $supplier->id,
-                'product_id' => $productId,
-                'message' => $exception->getMessage(),
+    /**
+     * @param  array<int, mixed>  $entries
+     * @param  array<string, array<int, array<string, mixed>>>  $groupedProducts
+     * @param  array<int, array<string, mixed>>  $flatProducts
+     */
+    private function collectCartCatalogProducts(
+        array $entries,
+        string $parentLabel,
+        array &$groupedProducts,
+        array &$flatProducts,
+    ): void {
+        foreach ($entries as $entry) {
+            if (! is_array($entry)) {
+                continue;
+            }
+
+            $name = trim((string) ($entry['name'] ?? ''));
+            $children = is_array($entry['products'] ?? null) ? $entry['products'] : [];
+            if ($children !== []) {
+                $label = $name === ''
+                    ? $parentLabel
+                    : ($parentLabel === '' ? $name : "{$parentLabel} / {$name}");
+                $this->collectCartCatalogProducts($children, $label, $groupedProducts, $flatProducts);
+
+                continue;
+            }
+
+            $productId = (int) ($entry['id'] ?? 0);
+            if ($productId <= 0) {
+                continue;
+            }
+
+            $groupLabel = $parentLabel !== '' ? $parentLabel : '未分组';
+            $item = $this->productTypeMapper->normalizeProduct([
+                'id' => $productId,
+                'name' => $name !== '' ? $name : '未命名商品',
+                'type' => trim((string) ($entry['type'] ?? '')),
+                'description' => trim((string) ($entry['description'] ?? '')),
+                'billingcycle' => trim((string) ($entry['upstream_cycle'] ?? $entry['billingcycle'] ?? '')),
+                'product_price' => $entry['upstream_price'] ?? null,
+                'monthly_price' => null,
+                'setup_fee' => null,
+                'allow_qty' => (int) ($entry['allow_qty'] ?? 0),
+                'stock_control' => (int) ($entry['stock_control'] ?? 0),
+                'qty' => is_numeric($entry['qty'] ?? null) ? max((int) $entry['qty'], 0) : null,
+                'stock' => $this->normalizeCatalogStock($entry),
+                'group_name' => $groupLabel,
+                'group_label' => $groupLabel,
             ]);
 
-            return [];
+            $groupedProducts[$groupLabel] ??= [];
+            $groupedProducts[$groupLabel][] = $item;
+            $flatProducts[] = $item;
         }
-
-        return $this->extractStorefrontConfigOptionsFromResponse($response);
     }
 
-    private function resolveSupplierRootUrl(Supplier $supplier): string
+    private function extractLegacyProductStock(array $response, int $productId): ?array
     {
-        $baseUrl = trim((string) $supplier->api_url);
-        $parts = parse_url($baseUrl);
-
-        if (! is_array($parts) || empty($parts['scheme']) || empty($parts['host'])) {
-            return rtrim($baseUrl, '/');
-        }
-
-        $rootUrl = $parts['scheme'].'://'.$parts['host'];
-
-        if (isset($parts['port'])) {
-            $rootUrl .= ':'.$parts['port'];
-        }
-
-        return $rootUrl;
-    }
-
-    private function extractApiConfigOptions(array $response, int $productId): array
-    {
-        $product = $this->extractApiProductData($response, $productId);
-
-        if (is_array($product)) {
-            return is_array($product['configoptions'] ?? null) ? $product['configoptions'] : [];
-        }
-
-        return [];
-    }
-
-    private function extractApiProductStock(array $response, int $productId): ?array
-    {
-        $product = $this->extractApiProductData($response, $productId);
-        if (! is_array($product)) {
+        $product = $response['data']['products'] ?? null;
+        if (! is_array($product) || (int) ($product['id'] ?? 0) !== $productId) {
             return null;
         }
 
@@ -335,21 +295,6 @@ final class ZjmfCatalogService
             'stock' => $this->normalizeCatalogStock($product),
             'allow_qty' => (int) ($product['allow_qty'] ?? 0),
         ];
-    }
-
-    private function extractApiProductData(array $response, int $productId): ?array
-    {
-        foreach ($response['data']['first_group'] ?? [] as $firstGroup) {
-            foreach ($firstGroup['group'] ?? [] as $group) {
-                foreach ($group['products'] ?? [] as $product) {
-                    if ((int) ($product['id'] ?? 0) === $productId) {
-                        return is_array($product) ? $product : null;
-                    }
-                }
-            }
-        }
-
-        return null;
     }
 
     private function extractStorefrontConfigOptionsFromResponse(?array $response): array

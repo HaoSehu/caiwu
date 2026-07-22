@@ -46,13 +46,17 @@ final class ZjmfFinanceTransport
 
     public function getBalance(Supplier $supplier): array
     {
-        $response = $this->getUserProfile($supplier);
-        $client = $response['client'];
+        $response = $this->get($supplier, '/cart/credit', $this->login($supplier));
+        $data = $response['data'] ?? null;
+
+        if (! is_array($data) || ! array_key_exists('credit', $data)) {
+            throw new BusinessException((string) ($response['msg'] ?? '获取上游余额失败'), 42200);
+        }
 
         return [
-            'balance' => (string) ($client['credit'] ?? '0.00'),
-            'client' => $client,
-            'country' => is_array($response['country'] ?? null) ? $response['country'] : [],
+            'balance' => (string) $data['credit'],
+            'client' => ['credit' => (string) $data['credit']],
+            'currency' => is_array($data['currency'] ?? null) ? $data['currency'] : [],
         ];
     }
 
@@ -76,33 +80,56 @@ final class ZjmfFinanceTransport
         return $this->transport->fetchBatchProductStocks($supplier, $productIds, $chunkSize);
     }
 
-    public function getHostRenewInfo(Supplier $supplier, int $hostId, ?string $billingCycle = null): array
-    {
-        $query = [];
-        if ($billingCycle !== null && trim($billingCycle) !== '') {
-            $query['billingcycle'] = trim($billingCycle);
-        }
-
-        return $this->get($supplier, "/v1/hosts/{$hostId}/renew", $this->login($supplier), $query);
-    }
-
-    public function renewHost(Supplier $supplier, int $hostId, string $billingCycle): array
-    {
-        return $this->post($supplier, "/v1/hosts/{$hostId}/renew", [
-            'billingcycle' => trim($billingCycle),
-        ], $this->login($supplier));
-    }
-
-    public function setHostAutoRenew(Supplier $supplier, int $hostId, int $initiativeRenew): array
-    {
-        return $this->put($supplier, "/v1/hosts/{$hostId}/renew", [
-            'initiative_renew' => $initiativeRenew === 1 ? 1 : 0,
-        ], $this->login($supplier));
-    }
-
     public function getHostDetail(Supplier $supplier, int $hostId, ?string $jwt = null): array
     {
-        return $this->get($supplier, "/v1/hosts/{$hostId}", $this->resolveJwt($supplier, $jwt));
+        $response = $this->get($supplier, '/host/header', $this->resolveJwt($supplier, $jwt), [
+            'host_id' => $hostId,
+            'source' => 'API',
+        ]);
+        $payload = is_array($response['data'] ?? null) ? $response['data'] : [];
+        $host = $this->normalizeHostDetailPayload($payload);
+
+        if ($host !== []) {
+            $response['data'] = [
+                ...$payload,
+                'host' => $host,
+            ];
+        }
+
+        return $response;
+    }
+
+    /**
+     * Converts the ZJMF same-system host/header payload to the plugin's host shape.
+     */
+    public function normalizeHostDetailPayload(array $payload): array
+    {
+        $host = is_array($payload['host_data'] ?? null)
+            ? $payload['host_data']
+            : (is_array($payload['host'] ?? null) ? $payload['host'] : []);
+
+        if ($host === []) {
+            return [];
+        }
+
+        $productId = (int) ($host['product_id'] ?? 0);
+        if ($productId <= 0) {
+            $productId = (int) ($host['productid'] ?? $host['pid'] ?? 0);
+        }
+
+        $productName = trim((string) ($host['product_name'] ?? ''));
+        if ($productName === '') {
+            $productName = trim((string) ($host['productname'] ?? ''));
+        }
+
+        $host['product_id'] = $productId;
+        $host['product_name'] = $productName;
+
+        if (is_array($payload['config_options'] ?? null)) {
+            $host['config_option'] = $this->normalizeHostConfigOptions($payload['config_options']);
+        }
+
+        return $host;
     }
 
     public function getHostUpgradeConfigOptions(Supplier $supplier, int $hostId, ?string $jwt = null): array
@@ -244,13 +271,15 @@ final class ZjmfFinanceTransport
         array $headers = [],
         array $query = []
     ): string {
+        $resolvedJwt = $this->resolveRequestJwt($supplier, $jwt, $uri, $headers);
+
         return $this->transport->requestText(
             $supplier,
             $method,
             $uri,
             $payload,
-            $this->resolveRequestJwt($supplier, $jwt, $uri, $headers),
-            $headers,
+            $resolvedJwt,
+            $this->withBearerAuthorization($resolvedJwt, $headers),
             $query
         );
     }
@@ -265,7 +294,15 @@ final class ZjmfFinanceTransport
         array $query = []
     ): array {
         $resolvedJwt = $this->resolveRequestJwt($supplier, $jwt, $uri, $headers);
-        $response = $this->transport->request($supplier, $method, $uri, $payload, $resolvedJwt, $headers, $query);
+        $response = $this->transport->request(
+            $supplier,
+            $method,
+            $uri,
+            $payload,
+            $resolvedJwt,
+            $this->withBearerAuthorization($resolvedJwt, $headers),
+            $query
+        );
         $this->authManager->forgetIfUnauthorizedResponse($supplier, 0, $response, $resolvedJwt);
 
         return $response;
@@ -284,7 +321,15 @@ final class ZjmfFinanceTransport
         array $query = []
     ): array {
         $resolvedJwt = $this->resolveRequestJwt($supplier, $jwt, $uri, $headers);
-        $meta = $this->transport->requestWithMeta($supplier, $method, $uri, $payload, $resolvedJwt, $headers, $query);
+        $meta = $this->transport->requestWithMeta(
+            $supplier,
+            $method,
+            $uri,
+            $payload,
+            $resolvedJwt,
+            $this->withBearerAuthorization($resolvedJwt, $headers),
+            $query
+        );
         $response = is_array($meta['response'] ?? null) ? $meta['response'] : [];
         $this->authManager->forgetIfUnauthorizedResponse(
             $supplier,
@@ -303,6 +348,29 @@ final class ZjmfFinanceTransport
         return $jwt !== '' ? $jwt : $this->login($supplier);
     }
 
+    private function normalizeHostConfigOptions(array $items): array
+    {
+        $normalized = [];
+
+        foreach ($items as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $normalized[] = [
+                'id' => (int) ($item['id'] ?? 0),
+                'key' => (string) ($item['name_k'] ?? $item['key'] ?? ''),
+                'name' => (string) ($item['name'] ?? ''),
+                'type' => (int) ($item['option_type'] ?? $item['type'] ?? 0),
+                'value' => (string) ($item['sub_name'] ?? $item['value'] ?? ''),
+                'code' => (string) ($item['code'] ?? ''),
+                'os_group' => (string) ($item['os_group'] ?? ''),
+            ];
+        }
+
+        return $normalized;
+    }
+
     private function resolveRequestJwt(Supplier $supplier, ?string $jwt, string $uri, array $headers = []): ?string
     {
         $jwt = trim((string) $jwt);
@@ -310,19 +378,40 @@ final class ZjmfFinanceTransport
             return $jwt;
         }
 
-        if ($this->isLoginEndpoint($uri) || $this->hasCookieHeader($headers)) {
+        if ($this->isLoginEndpoint($uri) || $this->hasCookieHeader($headers) || $this->hasAuthorizationHeader($headers)) {
             return null;
         }
 
         return $this->login($supplier);
     }
 
+    private function withBearerAuthorization(?string $jwt, array $headers): array
+    {
+        $jwt = trim((string) $jwt);
+        if ($jwt === '' || $this->hasAuthorizationHeader($headers)) {
+            return $headers;
+        }
+
+        return array_merge($headers, ['Authorization: Bearer '.$jwt]);
+    }
+
+    private function hasAuthorizationHeader(array $headers): bool
+    {
+        foreach ($headers as $header) {
+            if (str_starts_with(strtolower(trim((string) $header)), 'authorization:')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function isLoginEndpoint(string $uri): bool
     {
         $uri = strtolower(trim($uri));
 
-        return $uri === '/v1/login_api'
-            || str_contains($uri, '/v1/login_api?');
+        return $uri === '/zjmf_api_login'
+            || str_contains($uri, '/zjmf_api_login?');
     }
 
     private function hasCookieHeader(array $headers): bool

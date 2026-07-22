@@ -540,17 +540,6 @@ class KangHostx implements ProvidesConsoleCatalog, ProvidesConsoleRuntime, Provi
         ];
     }
 
-    public function setHostAutoRenew(Supplier $supplier, int $hostId, int $initiativeRenew): array
-    {
-        return [
-            'status' => 200,
-            'data' => [
-                'host_id' => $hostId,
-                'initiative_renew' => $initiativeRenew === 1 ? 1 : 0,
-            ],
-        ];
-    }
-
     public function renewServiceInvoice(Supplier $supplier, int $hostId, string $billingCycle): array
     {
         $renewResponse = $this->renewHost($supplier, $hostId, $billingCycle);
