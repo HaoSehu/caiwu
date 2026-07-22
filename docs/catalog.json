@@ -1,0 +1,181 @@
+{
+  "version": 1,
+  "records": [
+    {
+      "path": "ARCHITECTURE.md",
+      "status": "current",
+      "summary": "运行中的系统结构与边界。",
+      "review_by": "2026-08-21"
+    },
+    {
+      "path": "BACKEND.md",
+      "status": "needs-review",
+      "summary": "后端工程治理基线，需持续与实现核对。"
+    },
+    {
+      "path": "DATABASE.md",
+      "status": "generated",
+      "summary": "由实库结构导出的数据库快照。"
+    },
+    {
+      "path": "DESIGN.md",
+      "status": "current",
+      "summary": "视觉 token 与交互边界。",
+      "review_by": "2026-08-21"
+    },
+    {
+      "path": "FRONTEND.md",
+      "status": "current",
+      "summary": "三端前端与共享模块约束。",
+      "review_by": "2026-08-21"
+    },
+    {
+      "path": "设计文档/架构/插件架构说明.md",
+      "status": "needs-review",
+      "summary": "插件架构与扩展边界。"
+    },
+    {
+      "path": "设计文档/后端/API直接重构方案.md",
+      "status": "needs-review",
+      "summary": "API v2 重构方案。"
+    },
+    {
+      "path": "设计文档/产品/产品类型与一级菜单重构方案.md",
+      "status": "needs-review",
+      "summary": "产品类型与一级菜单设计。"
+    },
+    {
+      "path": "产品规格/进行中/报表中心方案.md",
+      "status": "needs-review",
+      "summary": "管理员报表中心产品方案。"
+    },
+    {
+      "path": "执行计划/已完成/Zjmf统一迁移方案.md",
+      "status": "completed",
+      "summary": "ZJMF 实时上游绑定切换、实例控制验证与旧接口下线记录。"
+    },
+    {
+      "path": "执行计划/已完成/本地IDC异构数据映射迁移-20260722.md",
+      "status": "completed",
+      "summary": "本地 IDC 异构表数据映射迁移的审计、执行与验收记录。"
+    },
+    {
+      "path": "参考资料/接口/API格式规范.md",
+      "status": "current",
+      "summary": "API 契约和工程化规范。",
+      "review_by": "2026-08-21"
+    },
+    {
+      "path": "参考资料/接口/API清单导航.md",
+      "status": "current",
+      "summary": "接口业务域导航。",
+      "review_by": "2026-08-21"
+    },
+    {
+      "path": "参考资料/后端/后端目录分类规范.md",
+      "status": "needs-review",
+      "summary": "后端目录分层建议。"
+    },
+    {
+      "path": "参考资料/后端/财务单据生成规则.md",
+      "status": "current",
+      "summary": "财务单据生成规则。",
+      "review_by": "2026-08-21"
+    },
+    {
+      "path": "参考资料/数据库/本地IDC数据迁移流程.md",
+      "status": "current",
+      "summary": "本地 IDC 数据迁移操作。",
+      "review_by": "2026-08-21"
+    },
+    {
+      "path": "参考资料/数据库/日志归档与MySQL日志维护.md",
+      "status": "current",
+      "summary": "日志归档与 MySQL 维护。",
+      "review_by": "2026-08-21"
+    },
+    {
+      "path": "参考资料/集成/本地对接说明.md",
+      "status": "needs-review",
+      "summary": "上游本地联调说明。"
+    },
+    {
+      "path": "参考资料/集成/插件/demo-ali-pay.md",
+      "status": "current",
+      "summary": "支付插件示例。",
+      "review_by": "2026-08-21"
+    },
+    {
+      "path": "参考资料/运维/前端Nginx伪静态配置.md",
+      "status": "current",
+      "summary": "前端站点 Nginx 规则。",
+      "review_by": "2026-08-21"
+    },
+    {
+      "path": "参考资料/运维/宝塔部署项目指南.md",
+      "status": "current",
+      "summary": "全新服务器部署流程。",
+      "review_by": "2026-08-21"
+    },
+    {
+      "path": "参考资料/运维/本地启动指南.md",
+      "status": "current",
+      "summary": "本地启动与构建命令。",
+      "review_by": "2026-08-21"
+    },
+    {
+      "path": "参考资料/运维/测试指南.md",
+      "status": "current",
+      "summary": "测试环境和验证方法。",
+      "review_by": "2026-08-21"
+    },
+    {
+      "path": "参考资料/运维/部署与调度指南.md",
+      "status": "current",
+      "summary": "生产部署、调度与队列规则。",
+      "review_by": "2026-08-21"
+    },
+    {
+      "path": "参考资料/迁移记录/frontend-admin-v3-migration-ledger.md",
+      "status": "archived",
+      "summary": "管理端迁移覆盖台账。"
+    },
+    {
+      "path": "参考资料/迁移记录/frontend-admin-v3-final-acceptance-report.md",
+      "status": "archived",
+      "summary": "管理端最终验收报告。"
+    },
+    {
+      "path": "参考资料/迁移记录/frontend-user-v3-www-migration-ledger.md",
+      "status": "archived",
+      "summary": "官网与用户入口迁移覆盖台账。"
+    },
+    {
+      "path": "参考资料/迁移记录/frontend-user-v3-www-final-acceptance-report.md",
+      "status": "archived",
+      "summary": "官网与用户入口最终验收报告。"
+    },
+    {
+      "path": "自动生成/接口/后端API清单.md",
+      "status": "generated",
+      "summary": "由路由导出的后端 API 清单。"
+    },
+    {
+      "path": "治理/WORKING_RULES.md",
+      "status": "current",
+      "summary": "协作、验证和安全工作规则。",
+      "review_by": "2026-10-20"
+    },
+    {
+      "path": "治理/DOCUMENTATION_POLICY.md",
+      "status": "current",
+      "summary": "文档分类、生命周期和自动化规则。",
+      "review_by": "2026-10-20"
+    },
+    {
+      "path": "模板/exec-plan.md",
+      "status": "template",
+      "summary": "执行计划模板。"
+    }
+  ]
+}
