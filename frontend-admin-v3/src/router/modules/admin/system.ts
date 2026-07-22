@@ -215,6 +215,19 @@ export const systemRoutes: RouteRecordRaw[] = [
     },
   },
   {
+    path: 'log-archive',
+    name: 'AdminLogArchiveSettings',
+    component: () => import('@/pages/settings/index.vue'),
+    meta: {
+      title: {
+        zh_CN: '日志归档',
+        en_US: 'Log Archive',
+      },
+      permission: 'settings.view',
+      settingsTab: 'log_archive',
+    },
+  },
+  {
     path: 'payment',
     name: 'AdminPayment',
     redirect: '/admin/integration-plugins/payment',

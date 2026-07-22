@@ -363,6 +363,7 @@ import './index.less';
 type SettingsTab =
   | 'referral'
   | 'automation'
+  | 'log_archive'
   | 'site_basic'
   | 'site_hero';
 type FieldType = 'input' | 'password' | 'textarea' | 'switch' | 'select' | 'number' | 'image' | 'time';
@@ -459,6 +460,7 @@ const tabGroups: Array<{ group: string; label: string; tabs: Array<{ label: stri
     tabs: [
       { label: '推荐奖励', value: 'referral' },
       { label: '自动化策略', value: 'automation' },
+      { label: '日志归档', value: 'log_archive' },
     ],
   },
   {
@@ -533,6 +535,30 @@ const configs: Record<Exclude<SettingsTab, 'site_hero'>, SettingsConfig> = {
           { key: 'ticket_auto_close_schedule_time', label: '工单执行时间', type: 'time', default: '00:00:00', placeholder: '分钟仅支持 00/15/30/45', pattern: /^\d{2}:(00|15|30|45):00$/, patternMessage: '分钟仅支持 00、15、30 或 45，秒必须为 00' },
           { key: 'order_cleanup_schedule_mode', label: '账单清理执行周期', type: 'select', default: 'every_fifteen_minutes', options: automationScheduleModeOptions },
           { key: 'order_cleanup_schedule_time', label: '账单清理执行时间', type: 'time', default: '00:00:00', placeholder: '分钟仅支持 00/15/30/45', pattern: /^\d{2}:(00|15|30|45):00$/, patternMessage: '分钟仅支持 00、15、30 或 45，秒必须为 00' },
+        ],
+      },
+    ],
+  },
+  log_archive: {
+    group: 'log_archive',
+    title: '日志归档设置',
+    description: '配置 pt-archiver 的运行参数与日志保留策略。',
+    sections: [
+      {
+        title: '运行参数',
+        fields: [
+          { key: 'pt_archiver_binary', label: 'pt-archiver 二进制路径', type: 'input', default: '/usr/bin/pt-archiver', required: true, maxlength: 255 },
+          { key: 'pt_archiver_defaults_file', label: '默认配置文件', type: 'input', default: '/etc/caiwu/pt-archiver.cnf', required: true, maxlength: 255 },
+          { key: 'concurrency', label: '最大并发数', type: 'number', default: 2, min: 1, max: 8 },
+          { key: 'batch_size', label: '每批处理行数', type: 'number', default: 1000, min: 100, max: 10000 },
+          { key: 'sleep_seconds', label: '批次间隔（秒）', type: 'number', default: 1, min: 0, max: 60 },
+        ],
+      },
+      {
+        title: '保留策略',
+        fields: [
+          { key: 'retention_days', label: '日志保留天数', type: 'number', default: 30, min: 1, max: 3650 },
+          { key: 'file_retention_days', label: '归档文件保留天数', type: 'number', default: 180, min: 1, max: 3650 },
         ],
       },
     ],

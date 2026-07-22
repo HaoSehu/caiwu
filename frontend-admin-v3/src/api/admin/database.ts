@@ -44,13 +44,11 @@ export type DatabaseOptimizeResult = {
 const DATABASE_OPTIMIZE_TIMEOUT = 5 * 60 * 1000;
 
 function resolveApiBase(): string {
-  const env = import.meta.env.MODE || 'development';
-  const rawApiUrl = String(import.meta.env.VITE_API_BASE_URL || '');
-  const usesLocalProxy = import.meta.env.VITE_IS_REQUEST_PROXY === 'true' && rawApiUrl.startsWith('/');
-  if (env === 'mock' || usesLocalProxy) {
-    return '/api';
+  const apiBaseUrl = String(import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '');
+  if (!apiBaseUrl) {
+    throw new Error('VITE_API_BASE_URL 必须配置');
   }
-  return rawApiUrl.replace(/\/$/, '');
+  return apiBaseUrl;
 }
 
 export const databaseApi = {

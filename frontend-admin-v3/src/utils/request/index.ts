@@ -11,13 +11,11 @@ import { VAxios } from './Axios';
 import type { AxiosTransform, CreateAxiosOptions } from './AxiosTransform';
 import { formatRequestDate, joinTimestamp, setObjToUrlParams } from './utils';
 
-const env = import.meta.env.MODE || 'development';
+const host = String(import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '');
 
-const rawApiUrl = String(import.meta.env.VITE_API_BASE_URL || '');
-const usesLocalProxy = import.meta.env.VITE_IS_REQUEST_PROXY === 'true' && rawApiUrl.startsWith('/');
-
-// mock 或本地 Vite proxy 模式不配置 host，只通过 urlPrefix 进入 /api 代理。
-const host = env === 'mock' || usesLocalProxy ? '' : rawApiUrl;
+if (!host) {
+  throw new Error('VITE_API_BASE_URL 必须配置');
+}
 
 // 数据处理，方便区分多种处理方式
 const transform: AxiosTransform = {
@@ -192,10 +190,8 @@ function createAxios(opt?: Partial<CreateAxiosOptions>) {
           apiUrl: host,
           // 是否自动添加接口前缀
           isJoinPrefix: true,
-          // 接口前缀
-          // 例如: https://www.baidu.com/api
-          // urlPrefix: '/api'
-          urlPrefix: import.meta.env.VITE_API_URL_PREFIX,
+          // VITE_API_BASE_URL 已包含完整 /api 前缀。
+          urlPrefix: '',
           // 是否返回原生响应头 比如：需要获取响应头时使用该属性
           isReturnNativeResponse: false,
           // 需要对返回数据进行处理
