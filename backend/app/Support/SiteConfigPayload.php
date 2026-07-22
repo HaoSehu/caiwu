@@ -46,16 +46,16 @@ class SiteConfigPayload
         return [
             'site_name' => $siteName !== '' ? $siteName : $defaultSiteName,
             'browser_title' => $browserTitle !== '' ? $browserTitle : ($siteName !== '' ? $siteName : $defaultSiteName),
-            'site_logo' => $siteLogo !== '' ? $siteLogo : self::DEFAULT_SITE_LOGO,
-            'site_favicon' => $siteFavicon !== '' ? $siteFavicon : self::DEFAULT_SITE_FAVICON,
-            'client_console_icon' => $clientConsoleIcon !== '' ? $clientConsoleIcon : $siteFavicon,
+            'site_logo' => self::resolveManagedAsset($siteLogo !== '' ? $siteLogo : self::DEFAULT_SITE_LOGO),
+            'site_favicon' => self::resolveManagedAsset($siteFavicon !== '' ? $siteFavicon : self::DEFAULT_SITE_FAVICON),
+            'client_console_icon' => self::resolveManagedAsset($clientConsoleIcon !== '' ? $clientConsoleIcon : $siteFavicon),
             'service_qq_group' => $serviceQqGroup !== '' ? $serviceQqGroup : self::DEFAULT_SERVICE_QQ_GROUP,
             'service_phone' => $serviceQqGroup !== '' ? $serviceQqGroup : self::DEFAULT_SERVICE_QQ_GROUP,
             'service_email' => self::read(self::SETTING_GROUP_BASIC, 'service_email', ''),
             'service_hours' => self::read(self::SETTING_GROUP_BASIC, 'service_hours', ''),
             'support_group_title' => self::read(self::SETTING_GROUP_BASIC, 'support_group_title', ''),
             'support_group_text' => self::read(self::SETTING_GROUP_BASIC, 'support_group_text', ''),
-            'support_group_qr' => self::read(self::SETTING_GROUP_BASIC, 'support_group_qr', self::DEFAULT_SUPPORT_GROUP_QR),
+            'support_group_qr' => self::resolveManagedAsset(self::read(self::SETTING_GROUP_BASIC, 'support_group_qr', self::DEFAULT_SUPPORT_GROUP_QR)),
             'support_group_link' => self::read(self::SETTING_GROUP_BASIC, 'support_group_link', self::DEFAULT_SUPPORT_GROUP_LINK),
             'terms_url' => self::read(self::SETTING_GROUP_BASIC, 'terms_url', ''),
             'privacy_url' => self::read(self::SETTING_GROUP_BASIC, 'privacy_url', ''),
@@ -82,5 +82,10 @@ class SiteConfigPayload
         }
 
         return $default;
+    }
+
+    private static function resolveManagedAsset(string $value): string
+    {
+        return UploadUrl::resolve($value) ?? '';
     }
 }

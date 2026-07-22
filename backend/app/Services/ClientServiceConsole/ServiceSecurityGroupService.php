@@ -51,6 +51,7 @@ class ServiceSecurityGroupService
                 'directions' => [],
                 'protocols' => [],
                 'groups' => [],
+                'can_create' => false,
             ];
         }
 
@@ -67,6 +68,7 @@ class ServiceSecurityGroupService
                 'directions' => $context['directions'],
                 'protocols' => $context['protocols'],
                 'groups' => $context['groups'],
+                'can_create' => (bool) ($context['can_create'] ?? true),
             ];
         } catch (\Throwable $exception) {
             Log::warning('[服务控制台] 读取安全组失败', [
@@ -84,6 +86,7 @@ class ServiceSecurityGroupService
                 'directions' => [],
                 'protocols' => [],
                 'groups' => [],
+                'can_create' => false,
             ];
         }
     }
@@ -95,6 +98,8 @@ class ServiceSecurityGroupService
             'product.productGroup.secondProductGroup.firstProductGroup',
             'product.supplier',
         ]);
+        $securityGroupContext = $this->resolveSecurityGroupContext($service, true);
+        $this->throwIfNativeSecurityGroupContext($securityGroupContext);
         $this->assertSecurityGroupBoundToCurrentHost($service, $groupId);
 
         $result = $this->callSecurityGroupAction($service, 'showSecurityRules', ['id' => $groupId], '读取安全组规则');
@@ -150,14 +155,31 @@ class ServiceSecurityGroupService
         ]);
 
         $securityGroupContext = $this->assertSecurityGroupVisibleToCurrentHost($service, $groupId);
+        $runtime = $this->detailService->resolveRuntimeCapabilityForSupplier($securityGroupContext['supplier']);
 
-        $result = $this->callSecurityGroupAction(
-            $service,
-            'linkSecurityGroup',
-            ['id' => $groupId],
-            '应用安全组',
-            $securityGroupContext
-        );
+        if ($this->isNativeSecurityGroupContext($securityGroupContext)) {
+            throw_if(
+                ! is_callable([$runtime, 'applySecurityGroup']),
+                new BusinessException('当前上游未提供安全组应用能力', 42200)
+            );
+
+            $response = $runtime->applySecurityGroup(
+                $securityGroupContext['supplier'],
+                $groupId,
+                (int) $securityGroupContext['host_id'],
+                $securityGroupContext['jwt']
+            );
+            $this->detailService->assertSuccess($response, '应用安全组');
+            $result = ['response' => $response, 'context' => $securityGroupContext];
+        } else {
+            $result = $this->callSecurityGroupAction(
+                $service,
+                'linkSecurityGroup',
+                ['id' => $groupId],
+                '应用安全组',
+                $securityGroupContext
+            );
+        }
         $this->forgetSecurityGroupContextCache($service);
 
         $message = trim((string) ($result['response']['msg'] ?? '')) ?: '安全组已应用';
@@ -293,16 +315,65 @@ class ServiceSecurityGroupService
     {
         [$supplier, $hostId] = $this->detailService->resolveManagedSupplierAndHost($service);
         $cacheKey = $this->buildSecurityGroupContextCacheKey($service);
+        $runtime = $this->detailService->resolveRuntimeCapabilityForSupplier($supplier);
+        $mode = is_callable([$runtime, 'getSecurityGroups']) ? 'native' : 'custom';
 
         if (! $fresh && ($cached = Cache::get($cacheKey)) && is_array($cached)) {
             $cached['supplier'] = $supplier;
-            if (trim((string) ($cached['jwt'] ?? '')) !== '') {
+            if (
+                trim((string) ($cached['jwt'] ?? '')) !== ''
+                && (($cached['mode'] ?? 'custom') === $mode)
+            ) {
                 return $cached;
             }
         }
 
-        $runtime = $this->detailService->resolveRuntimeCapabilityForSupplier($supplier);
         $jwt = $runtime->login($supplier);
+
+        if ($mode === 'native') {
+            $response = $runtime->getSecurityGroups($supplier, 1, 9999, $jwt);
+            $this->detailService->assertSuccess($response, '读取安全组');
+            $payload = $this->detailService->extractPayload($response);
+            $rawGroups = $this->extractNativeSecurityGroupRows($payload);
+            $ownedBindings = $this->resolveOwnedSecurityGroupBindingsForService($service);
+            $groups = collect($rawGroups)
+                ->map(fn (array $item) => $this->normalizeNativeSecurityGroupItem($item, $hostId))
+                ->filter()
+                ->filter(function (array $item) use ($ownedBindings, $rawGroups): bool {
+                    if ((bool) ($item['is_applied'] ?? false)) {
+                        return true;
+                    }
+
+                    return $this->isSecurityGroupBoundToBindings($ownedBindings, (int) ($item['id'] ?? 0), $rawGroups);
+                })
+                ->values()
+                ->all();
+
+            $context = [
+                'mode' => 'native',
+                'supplier' => $supplier,
+                'supplier_id' => $supplier->id,
+                'host_id' => $hostId,
+                'jwt' => $jwt,
+                'module_key' => 'security_group',
+                'module_name' => '安全组',
+                'host_type' => '',
+                'directions' => [],
+                'protocols' => [],
+                'raw_groups' => $rawGroups,
+                'groups' => $groups,
+                'can_create' => false,
+            ];
+
+            Cache::put(
+                $cacheKey,
+                collect($context)->except('supplier')->all(),
+                now()->addSeconds(self::SECURITY_GROUP_CONTEXT_CACHE_TTL_SECONDS)
+            );
+
+            return $context;
+        }
+
         $modules = $this->detailService->fetchSupportedModules($supplier, $hostId, $jwt);
         $module = collect($modules)->first(fn ($item) => is_array($item) && $this->isSecurityGroupModule($item));
 
@@ -316,6 +387,7 @@ class ServiceSecurityGroupService
         $page = $this->parseSecurityGroupPage($service, $html);
 
         $context = [
+            'mode' => 'custom',
             'supplier' => $supplier,
             'supplier_id' => $supplier->id,
             'host_id' => $hostId,
@@ -329,6 +401,7 @@ class ServiceSecurityGroupService
             'raw_groups' => $page['raw_groups'],
             'groups' => $page['groups'],
             'html' => $page['html'],
+            'can_create' => true,
         ];
 
         Cache::put(
@@ -354,6 +427,7 @@ class ServiceSecurityGroupService
     private function callSecurityGroupAction(Service $service, string $func, array $payload, string $action, ?array $context = null): array
     {
         $context ??= $this->resolveSecurityGroupContext($service);
+        $this->throwIfNativeSecurityGroupContext($context);
         $runtime = $this->detailService->resolveRuntimeCapabilityForSupplier($context['supplier']);
         $requestPayload = array_merge($payload, ['func' => $func]);
         $response = is_callable([$runtime, 'submitCustomModuleAction'])
@@ -368,6 +442,95 @@ class ServiceSecurityGroupService
         $this->detailService->assertSuccess($response, $action);
 
         return ['context' => $context, 'response' => $response];
+    }
+
+    private function isNativeSecurityGroupContext(array $context): bool
+    {
+        return ($context['mode'] ?? '') === 'native';
+    }
+
+    private function throwIfNativeSecurityGroupContext(array $context): void
+    {
+        throw_if(
+            $this->isNativeSecurityGroupContext($context),
+            new BusinessException('当前上游仅支持安全组列表和应用操作', 42200)
+        );
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function extractNativeSecurityGroupRows(array $payload): array
+    {
+        $rows = $payload['list'] ?? $payload['security_groups'] ?? [];
+        if (! is_array($rows)) {
+            return [];
+        }
+
+        if (! array_is_list($rows) && isset($rows['id'])) {
+            $rows = [$rows];
+        }
+
+        return array_values(array_filter($rows, 'is_array'));
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function normalizeNativeSecurityGroupItem(array $item, int $hostId): ?array
+    {
+        $id = (int) (($item['id'] ?? $item['security_group_id'] ?? 0) ?: 0);
+        if ($id <= 0) {
+            return null;
+        }
+
+        return [
+            'id' => $id,
+            'name' => trim((string) ($item['name'] ?? $item['security_group_name'] ?? $item['title'] ?? '')),
+            'description' => trim((string) ($item['description'] ?? $item['remark'] ?? $item['notes'] ?? '')),
+            'can_view' => false,
+            'can_add_rule' => false,
+            'can_apply' => true,
+            'can_delete' => false,
+            'apply_disabled' => false,
+            'delete_disabled' => true,
+            'is_applied' => $this->isNativeSecurityGroupAppliedToHost($item, $hostId),
+            'raw' => $item,
+        ];
+    }
+
+    private function isNativeSecurityGroupAppliedToHost(array $item, int $hostId): bool
+    {
+        foreach (['is_applied', 'applied'] as $key) {
+            if (array_key_exists($key, $item)) {
+                return in_array($item[$key], [true, 1, '1', 'true', 'yes'], true);
+            }
+        }
+
+        foreach (['host_id', 'hostid', 'service_id'] as $key) {
+            if ((int) ($item[$key] ?? 0) === $hostId) {
+                return true;
+            }
+        }
+
+        foreach (['host_ids', 'hosts'] as $key) {
+            $hosts = $item[$key] ?? [];
+            if (is_string($hosts)) {
+                $hosts = preg_split('/[\s,]+/', trim($hosts), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+            }
+
+            foreach ((array) $hosts as $host) {
+                $candidateId = is_array($host)
+                    ? (int) (($host['id'] ?? $host['host_id'] ?? 0) ?: 0)
+                    : (int) $host;
+
+                if ($candidateId === $hostId) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private function assertSecurityGroupNameAvailable(Service $service, string $name): void

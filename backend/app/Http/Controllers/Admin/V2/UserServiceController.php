@@ -18,6 +18,7 @@ use App\Http\Resources\Admin\V2\AdminUserServiceListItemResource;
 use App\Http\Resources\Admin\V2\AdminUserServiceRefreshResultResource;
 use App\Http\Resources\Service\V2\ServiceConnectionResource;
 use App\Http\Resources\Service\V2\ServiceDetailResource;
+use App\Http\Resources\Service\V2\ServiceRuntimeResource;
 use App\Models\User;
 use App\Services\User\UserService;
 use Illuminate\Http\JsonResponse;
@@ -81,7 +82,7 @@ class UserServiceController extends Controller
         $detail = $this->users->serviceRemoteStatusPatch($user, $service, true);
 
         return $this->success([
-            'service' => ServiceDetailResource::make($detail)->resolve(),
+            'service' => ServiceRuntimeResource::make($detail)->resolve(),
         ]);
     }
 

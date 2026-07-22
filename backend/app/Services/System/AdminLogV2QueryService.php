@@ -361,6 +361,10 @@ class AdminLogV2QueryService
      */
     private function runtimeDetail(string $log): ?array
     {
+        if (! str_starts_with($log, 'plugin-runtime-')) {
+            return $this->runtimeFileDetail($log);
+        }
+
         $id = $this->stripLogPrefix($log, 'plugin-runtime-');
         $model = IntegrationPluginRuntimeLog::query()->find($id);
         if (! $model instanceof IntegrationPluginRuntimeLog) {
@@ -390,6 +394,35 @@ class AdminLogV2QueryService
                 'response_meta' => $row['response_meta_json'] ?? [],
             ]),
             'created_at' => $this->dateValue($model, 'created_at'),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function runtimeFileDetail(string $log): ?array
+    {
+        $entry = $this->adminLogService->findRuntimeFileLog($log);
+        if ($entry === null) {
+            return null;
+        }
+
+        $message = (string) ($entry['message'] ?? '');
+
+        return [
+            'id' => (string) ($entry['id'] ?? $log),
+            'channel' => 'runtime',
+            'source' => 'laravel_log',
+            'fields' => [
+                'id' => (string) ($entry['id'] ?? $log),
+                'level' => (string) ($entry['level'] ?? ''),
+                'time' => $entry['time'] ?? null,
+            ],
+            'message' => $message,
+            'context' => [
+                'raw' => (string) ($entry['raw'] ?? $message),
+            ],
+            'created_at' => $entry['time'] ?? null,
         ];
     }
 

@@ -248,15 +248,6 @@ class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsole
         ], $jwt);
     }
 
-    public function setHostAutoRenew(Supplier $supplier, int $hostId, int $initiativeRenew): array
-    {
-        $jwt = $this->login($supplier);
-
-        return $this->put($supplier, "/v1/hosts/{$hostId}/renew", [
-            'initiative_renew' => $initiativeRenew === 1 ? 1 : 0,
-        ], $jwt);
-    }
-
     public function getHostDetail(Supplier $supplier, int $hostId, ?string $jwt = null): array
     {
         $resolvedJwt = $jwt !== null && trim($jwt) !== ''
@@ -726,7 +717,7 @@ class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsole
     {
         $requestHeaders = [];
 
-        if ($jwt !== null && trim($jwt) !== '') {
+        if ($jwt !== null && trim($jwt) !== '' && ! $this->hasAuthorizationHeader($headers)) {
             $requestHeaders[] = 'authorization: JWT '.trim($jwt);
         }
 
@@ -738,6 +729,17 @@ class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsole
         }
 
         return $requestHeaders;
+    }
+
+    private function hasAuthorizationHeader(array $headers): bool
+    {
+        foreach ($headers as $header) {
+            if (preg_match('/^authorization\s*:/i', trim((string) $header)) === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function buildRequestBody(string $method, array|string $payload): ?string
@@ -947,7 +949,8 @@ class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsole
             }
         }
 
-        if ($shouldBypassLocalTestDns) {
+        // 本地开发常通过代理把上游域名映射到保留地址；生产与测试环境仍保留 SSRF 防护。
+        if ($shouldBypassLocalTestDns || app()->environment('local')) {
             return;
         }
 
@@ -1431,7 +1434,9 @@ PHP;
         $uri = strtolower(trim($uri));
 
         return $uri === '/v1/login_api'
-            || str_contains($uri, '/v1/login_api?');
+            || str_contains($uri, '/v1/login_api?')
+            || $uri === '/zjmf_api_login'
+            || str_contains($uri, '/zjmf_api_login?');
     }
 
     private function resolveJwtCacheTtlSeconds(string $jwt): int

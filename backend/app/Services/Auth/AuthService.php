@@ -690,9 +690,14 @@ class AuthService
             throw new BusinessException('CLIENT_CONSOLE_URL 未配置，无法生成客户端代登录链接', 50000, 500);
         }
 
-        $adminUrl = $this->normalizeConfiguredUrl((string) config('app.admin_url', ''));
-        if ($adminUrl !== '' && $this->sameConfiguredUrl($consoleUrl, $adminUrl)) {
-            throw new BusinessException('CLIENT_CONSOLE_URL 不能与 ADMIN_URL 配置为同一路径，无法生成客户端代登录链接', 50000, 500);
+        $configuredAdminUrl = trim((string) config('app.admin_url', ''));
+        $adminUrl = $this->normalizeConfiguredUrl($configuredAdminUrl);
+        if ($configuredAdminUrl !== '' && $adminUrl === '') {
+            throw new BusinessException('ADMIN_URL 配置无效，无法生成客户端代登录链接', 50000, 500);
+        }
+
+        if ($adminUrl !== '' && $this->sameUrlOrigin($consoleUrl, $adminUrl)) {
+            throw new BusinessException('CLIENT_CONSOLE_URL 不能与 ADMIN_URL 相同，无法生成客户端代登录链接', 50000, 500);
         }
 
         return $consoleUrl.'/client/login-as';
@@ -701,16 +706,57 @@ class AuthService
     private function normalizeConfiguredUrl(string $url): string
     {
         $normalized = trim($url);
-        if ($normalized === '' || ! preg_match('/^[a-z][a-z\d+\-.]*:\/\//i', $normalized)) {
+        if ($normalized === '') {
+            return '';
+        }
+
+        $parts = parse_url($normalized);
+        if (! is_array($parts)) {
+            return '';
+        }
+
+        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+        $path = (string) ($parts['path'] ?? '');
+        if (! in_array($scheme, ['http', 'https'], true)
+            || trim((string) ($parts['host'] ?? '')) === ''
+            || isset($parts['user'])
+            || isset($parts['pass'])
+            || isset($parts['query'])
+            || isset($parts['fragment'])
+            || ($path !== '' && $path !== '/')) {
             return '';
         }
 
         return rtrim($normalized, '/');
     }
 
-    private function sameConfiguredUrl(string $left, string $right): bool
+    private function sameUrlOrigin(string $left, string $right): bool
     {
-        return rtrim($left, '/') === rtrim($right, '/');
+        $leftOrigin = $this->urlOrigin($left);
+        $rightOrigin = $this->urlOrigin($right);
+
+        return $leftOrigin !== '' && $leftOrigin === $rightOrigin;
+    }
+
+    private function urlOrigin(string $url): string
+    {
+        $parts = parse_url($url);
+        if (! is_array($parts)) {
+            return '';
+        }
+
+        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+        $host = strtolower((string) ($parts['host'] ?? ''));
+        if ($scheme === '' || $host === '') {
+            return '';
+        }
+
+        $port = (int) ($parts['port'] ?? 0);
+        if (($scheme === 'http' && $port === 80) || ($scheme === 'https' && $port === 443)) {
+            $port = 0;
+        }
+
+        return $scheme.'://'.$host.($port > 0 ? ':'.$port : '');
     }
 
     public function exchangeAdminLoginAsCode(string $code, string $ip, ?string $userAgent = null): array

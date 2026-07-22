@@ -450,16 +450,12 @@ trait HandlesClientServiceConsoleMonitoring
         if ($missingTypes !== []) {
             $responses = $this->fetchMonitorChartResponses(
                 $supplier,
+                $hostId,
                 collect($missingTypes)->mapWithKeys(fn (string $type) => [
                     $type => [
-                        'uri' => "/v1/hosts/{$hostId}/module/charts",
-                        'query' => [
-                            'type' => $type,
-                            'start' => $range['start'],
-                            'end' => $range['end'],
-                        ],
-                        'connect_timeout' => self::MONITOR_UPSTREAM_CONNECT_TIMEOUT_SECONDS,
-                        'timeout' => self::MONITOR_UPSTREAM_TIMEOUT_SECONDS,
+                        'type' => $type,
+                        'start' => $range['start'],
+                        'end' => $range['end'],
                     ],
                 ])->all(),
                 $jwt
@@ -539,7 +535,7 @@ trait HandlesClientServiceConsoleMonitoring
 
     private const MONITOR_MAX_POINTS_LONG = 72;
 
-    private const MONITOR_CACHE_SCHEMA_VERSION = 'v3';
+    private const MONITOR_CACHE_SCHEMA_VERSION = 'v4';
 
     private const MONITOR_CHART_CACHE_TTL_SECONDS = 600;
 

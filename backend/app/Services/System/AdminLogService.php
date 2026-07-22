@@ -301,6 +301,22 @@ class AdminLogService
         return $this->buildPaginatorPayload($paginator);
     }
 
+    /**
+     * Locate a runtime entry originating from the Laravel log file.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function findRuntimeFileLog(string $id): ?array
+    {
+        foreach ($this->readLaravelLogEntries() as $entry) {
+            if ((string) ($entry['id'] ?? '') === $id && empty($entry['task_key'])) {
+                return $entry;
+            }
+        }
+
+        return null;
+    }
+
     public function getRuntimeLogsSummary(array $filters): array
     {
         return Cache::remember(

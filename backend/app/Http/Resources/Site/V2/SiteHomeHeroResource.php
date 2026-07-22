@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Resources\Site\V2;
 
+use App\Support\UploadUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -55,9 +56,15 @@ class SiteHomeHeroResource extends JsonResource
         return collect($items)
             ->filter(static fn (mixed $item): bool => is_array($item))
             ->map(static function (array $item) use ($fields): array {
-                return collect($fields)
+                $projected = collect($fields)
                     ->mapWithKeys(static fn (string $field): array => [$field => (string) ($item[$field] ?? '')])
                     ->all();
+
+                if (array_key_exists('video', $projected)) {
+                    $projected['video'] = UploadUrl::resolve($projected['video']) ?? '';
+                }
+
+                return $projected;
             })
             ->values()
             ->all();

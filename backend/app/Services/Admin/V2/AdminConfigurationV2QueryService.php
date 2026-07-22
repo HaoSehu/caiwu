@@ -274,15 +274,29 @@ class AdminConfigurationV2QueryService
      */
     public function deleteSupplier(Supplier $supplier): array
     {
-        $usage = $this->supplierUsageSummary($supplier);
-        if (($usage['total'] ?? 0) > 0) {
-            throw new BusinessException('供应商已被商品或服务引用，请先解绑或停用', 40900, 409);
-        }
-
         $supplierId = (int) $supplier->id;
-        $supplier->delete();
 
-        return $this->actionResult($supplierId, 'deleted', '删除成功');
+        return DB::transaction(function () use ($supplierId): array {
+            $lockedSupplier = Supplier::query()
+                ->lockForUpdate()
+                ->findOrFail($supplierId);
+            $bindingIds = $this->supplierPluginBindingIds($supplierId, lockForUpdate: true);
+            $usage = $this->supplierUsageSummary($lockedSupplier, $bindingIds);
+
+            if (($usage['total'] ?? 0) > 0) {
+                throw new BusinessException('供应商已被商品或服务引用，请先解绑或停用', 40900, 409);
+            }
+
+            if ($bindingIds !== []) {
+                DB::table('supplier_plugin_bindings')
+                    ->whereIn('id', $bindingIds)
+                    ->delete();
+            }
+
+            $lockedSupplier->delete();
+
+            return $this->actionResult($supplierId, 'deleted', '删除成功');
+        });
     }
 
     /**
@@ -772,10 +786,10 @@ class AdminConfigurationV2QueryService
     /**
      * @return array<string, int>
      */
-    private function supplierUsageSummary(Supplier $supplier): array
+    private function supplierUsageSummary(Supplier $supplier, ?array $bindingIds = null): array
     {
         $supplierId = (int) $supplier->id;
-        $bindingIds = $this->supplierPluginBindingIds($supplierId);
+        $bindingIds ??= $this->supplierPluginBindingIds($supplierId);
         $productCount = $this->countBoundProducts($bindingIds);
         $serviceCount = $this->countBoundServices($bindingIds);
         $serviceInstanceCount = $this->countBoundServiceInstances($supplierId);
@@ -791,14 +805,20 @@ class AdminConfigurationV2QueryService
     /**
      * @return array<int, int>
      */
-    private function supplierPluginBindingIds(int $supplierId): array
+    private function supplierPluginBindingIds(int $supplierId, bool $lockForUpdate = false): array
     {
         if ($supplierId <= 0 || ! Schema::hasTable('supplier_plugin_bindings')) {
             return [];
         }
 
-        return DB::table('supplier_plugin_bindings')
-            ->where('supplier_id', $supplierId)
+        $query = DB::table('supplier_plugin_bindings')
+            ->where('supplier_id', $supplierId);
+
+        if ($lockForUpdate) {
+            $query->lockForUpdate();
+        }
+
+        return $query
             ->pluck('id')
             ->map(fn ($id) => (int) $id)
             ->filter(fn (int $id): bool => $id > 0)

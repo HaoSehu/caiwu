@@ -23,6 +23,7 @@ use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\System\OperationLogService;
 use App\Services\User\AccountService;
 use App\Support\AdminPrivacy;
+use App\Support\PublicUrl;
 use App\Support\TextSanitizer;
 use Carbon\CarbonInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -1446,22 +1447,7 @@ class ReferralService
 
     private function resolveFrontendBaseUrl(string $origin): string
     {
-        $frontendUrl = trim((string) config('app.frontend_url', ''));
-        if ($frontendUrl !== '') {
-            return rtrim($frontendUrl, '/');
-        }
-
-        $origin = trim($origin);
-        if ($origin !== '') {
-            return rtrim($origin, '/');
-        }
-
-        $appUrl = rtrim((string) config('app.url', ''), '/');
-        if ($appUrl !== '') {
-            return $appUrl;
-        }
-
-        return 'http://localhost';
+        return PublicUrl::website();
     }
 
     private function maskAccountNo(string $accountNo): string

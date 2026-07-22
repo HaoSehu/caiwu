@@ -87,12 +87,7 @@ class SecureAsset
             absolute: false
         );
 
-        $base = rtrim((string) config('app.frontend_url', ''), '/');
-        if ($base === '') {
-            $base = rtrim((string) config('app.url', ''), '/');
-        }
-
-        return $base.$relativeUrl;
+        return PublicUrl::api($relativeUrl);
     }
 
     private static function assertWithinRoot(string $path, string $root): string

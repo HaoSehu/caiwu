@@ -366,6 +366,7 @@ class ServiceUpstreamBindingWriter
         $supplierId = (int) (
             $this->bindingResolver()->supplierIdForService($service)
             ?? ($product instanceof Product ? $this->bindingResolver()->supplierIdForProduct($product) : null)
+            ?? ($provisionData['supplier_id'] ?? null)
         );
 
         return $supplierId > 0 ? Supplier::query()->find($supplierId) : null;

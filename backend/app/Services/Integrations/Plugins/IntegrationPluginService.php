@@ -84,13 +84,24 @@ class IntegrationPluginService
 
     public function detail(IntegrationPlugin $plugin): array
     {
-        $manifest = $this->scanner->requireManifest((string) $plugin->domain, (string) $plugin->slug);
-        $payload = $this->manifestPayload($manifest, $plugin->fresh('config') ?? $plugin);
-        $displayConfig = $this->configRepository->displayConfig($plugin->fresh('config') ?? $plugin);
+        $currentPlugin = $plugin->fresh('config') ?? $plugin;
+        $manifest = $this->scanner->find((string) $currentPlugin->domain, (string) $currentPlugin->slug);
+        if (! $manifest instanceof PluginManifest) {
+            $payload = $this->missingManifestPayload($currentPlugin);
+            $displayConfig = $this->configRepository->displayConfig($currentPlugin);
+            $payload['config'] = $displayConfig['config'];
+            $payload['has_secret_values'] = $displayConfig['has_secret_values'];
+            $payload['secret_previews'] = [];
+
+            return $payload;
+        }
+
+        $payload = $this->manifestPayload($manifest, $currentPlugin);
+        $displayConfig = $this->configRepository->displayConfig($currentPlugin);
 
         $payload['config'] = $displayConfig['config'];
         $payload['has_secret_values'] = $displayConfig['has_secret_values'];
-        $payload['secret_previews'] = $this->configRepository->secretPreviews($plugin->fresh('config') ?? $plugin, $manifest);
+        $payload['secret_previews'] = $this->configRepository->secretPreviews($currentPlugin, $manifest);
 
         return $payload;
     }

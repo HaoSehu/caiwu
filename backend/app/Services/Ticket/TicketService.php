@@ -20,6 +20,7 @@ use App\Services\System\NotificationService;
 use App\Services\System\UploadedAssetReferenceService;
 use App\Support\AdminPermissions;
 use App\Support\AdminPrivacy;
+use App\Support\PublicUrl;
 use App\Support\SecureAsset;
 use App\Support\ServiceHostname;
 use App\Support\TextSanitizer;
@@ -808,9 +809,7 @@ class TicketService
 
     private function clientTicketsUrl(): string
     {
-        $frontendUrl = trim((string) config('app.frontend_url', ''));
-
-        return $frontendUrl !== '' ? rtrim($frontendUrl, '/').'/client/tickets' : '';
+        return PublicUrl::console('/client/tickets');
     }
 
     public function uploadImage(int $actorId, string $actorType, UploadedFile $file): array
