@@ -17,6 +17,7 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
     submitting: false,
     rulesLoading: false,
     supported: true,
+    canCreate: true,
     message: '',
     error: '',
     directions: [] as ConsoleSelectOption[],
@@ -113,13 +114,15 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
       const res = await clientApi.serviceSecurityGroups(serviceId.value, fresh ? { fresh: true } : undefined);
       const payload = res.data || {};
       securityState.supported = payload.supported !== false;
+      securityState.canCreate = payload.can_create !== false;
       securityState.message = String(payload.message || '');
       securityState.error = String(payload.error || '');
       securityState.directions = Array.isArray(payload.directions) ? payload.directions : [];
       securityState.protocols = Array.isArray(payload.protocols) ? payload.protocols : [];
       securityState.groups = Array.isArray(payload.groups) ? payload.groups : [];
-      const current = securityState.groups.find((item) => Number(item.id || 0) === activeSecurityGroupId.value);
-      const active = current || securityState.groups.find((item) => item.is_applied) || securityState.groups[0];
+      const viewableGroups = securityState.groups.filter((item) => item.can_view !== false);
+      const current = viewableGroups.find((item) => Number(item.id || 0) === activeSecurityGroupId.value);
+      const active = current || viewableGroups.find((item) => item.is_applied) || viewableGroups[0];
       if (active?.id) {
         await selectSecurityGroup(active, true);
       } else {
@@ -147,6 +150,12 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
 
   async function selectSecurityGroup(group: SecurityGroupRecord, silent = false) {
     const groupId = Number(group.id || 0);
+    if (group.can_view === false) {
+      activeSecurityGroupId.value = 0;
+      securityState.rules = [];
+      return;
+    }
+
     activeSecurityGroupId.value = groupId;
     if (!groupId) {
       securityState.rules = [];

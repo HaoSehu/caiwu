@@ -843,6 +843,7 @@ export interface SecurityRuleRecord {
 
 export interface SecurityGroupPayload {
   supported?: boolean;
+  can_create?: boolean;
   message?: string;
   error?: string;
   module_key?: string;

@@ -4,6 +4,7 @@ import { applyDocumentTitle, deriveInitials, syncDocumentTitle, updateFavicon } 
 
 import siteApi from '@/api/site';
 import { DEFAULT_SUPPORT_CONTACTS } from '@/data/supportContacts';
+import { resolveApiManagedAssetUrl } from '@/utils/apiOrigin';
 
 const DEFAULT_SITE_NAME = import.meta.env.VITE_APP_TITLE || '创欧云';
 const DEFAULT_SITE_LOGO = '/favicon.ico';
@@ -31,9 +32,9 @@ function normalizeBrandAsset(raw: unknown, fallback: string) {
     return DEFAULT_FAVICON;
   }
 
-  const uploadsMatch = normalized.match(/(\/uploads\/.+)$/i);
-  if (uploadsMatch?.[1]) {
-    return uploadsMatch[1];
+  const managedAssetUrl = resolveApiManagedAssetUrl(normalized, import.meta.env.VITE_API_BASE_URL);
+  if (managedAssetUrl) {
+    return managedAssetUrl;
   }
 
   return normalized.startsWith('/') ? normalized : `/${normalized.replace(/^\/+/, '')}`;
