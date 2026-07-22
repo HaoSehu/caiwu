@@ -18,12 +18,17 @@ class UploadUrlTest extends TestCase
         $this->assertSame('https://www.coyjs.cn/uploads/content/20260419/img_181559_6183.png', $resolved);
     }
 
-    public function test_media_relative_path_uses_frontend_base_url(): void
+    public function test_media_relative_path_uses_api_base_url(): void
     {
-        config()->set('app.frontend_url', 'http://127.0.0.1:5173');
+        config()->set('app.url', 'http://127.0.0.1:8000');
 
         $resolved = UploadUrl::resolve('/media/logo.svg');
 
-        $this->assertSame('http://127.0.0.1:5173/media/logo.svg', $resolved);
+        $this->assertSame('http://127.0.0.1:8000/media/logo.svg', $resolved);
+    }
+
+    public function test_frontend_branding_path_stays_relative(): void
+    {
+        $this->assertSame('/branding/logo.svg', UploadUrl::resolve('/branding/logo.svg'));
     }
 }

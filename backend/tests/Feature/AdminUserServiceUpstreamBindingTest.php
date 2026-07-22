@@ -77,6 +77,15 @@ class AdminUserServiceUpstreamBindingTest extends TestCase
             'expires_at' => now()->addMonth(),
             'auto_renew' => 1,
         ]);
+        DB::table('service_runtime_snapshots')->insert([
+            'service_id' => (int) $service->id,
+            'provider_key' => 'mofang_finance_api',
+            'status_key' => 'off',
+            'resource_json' => json_encode(['provider_key' => 'mofang_finance_api']),
+            'synced_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
         app(UserService::class)->updateServiceMeta($user, (int) $service->id, [
             'supplier_id' => (int) $supplier->id,
@@ -102,6 +111,90 @@ class AdminUserServiceUpstreamBindingTest extends TestCase
         $this->assertDatabaseHas('service_runtime_snapshots', [
             'service_id' => (int) $service->id,
             'service_upstream_binding_id' => (int) $binding->id,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
+        ]);
+    }
+
+    public function test_service_specific_supplier_binding_uses_saved_supplier_id_without_product_binding(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+
+        $user = User::query()->create([
+            'email' => 'service-specific-binding-'.$suffix.'@example.com',
+            'password' => 'Temp@123456',
+            'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
+            'status' => 1,
+        ]);
+        $supplier = Supplier::query()->create([
+            'name' => 'Service Specific Supplier '.$suffix,
+            'code' => 'service-specific-'.$suffix,
+            'interface_type' => ProviderKey::ZJMF_FINANCE_API,
+            'api_url' => 'https://service-specific-'.$suffix.'.example.com',
+            'api_username' => 'demo',
+            'api_key' => 'secret',
+            'status' => 1,
+            'sort_order' => 1,
+        ]);
+        $pluginId = (int) DB::table('integration_plugins')
+            ->where('domain', 'upstream')
+            ->where('plugin_key', ProviderKey::ZJMF_FINANCE_API)
+            ->value('id');
+        DB::table('supplier_plugin_bindings')->insert([
+            'supplier_id' => (int) $supplier->id,
+            'plugin_id' => $pluginId,
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
+            'environment' => 'production',
+            'status' => 1,
+            'priority' => 1,
+            'base_url' => 'https://service-specific-'.$suffix.'.example.com',
+            'account_name' => 'demo',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $product = Product::query()->create([
+            'name' => 'Service Specific Product '.$suffix,
+            'product_type' => 'server',
+            'pricing' => ['monthly' => '66.00'],
+            'setup_fee' => '0.00',
+            'config_options' => [],
+            'purchase_requires' => [],
+            'stock' => -1,
+            'status' => 1,
+            'auto_setup' => 0,
+        ]);
+        $service = Service::query()->create([
+            'user_id' => (int) $user->id,
+            'product_id' => (int) $product->id,
+            'name' => 'Service Specific Instance '.$suffix,
+            'domain' => 'service-specific-'.$suffix.'.example.com',
+            'billing_cycle' => 'monthly',
+            'amount' => '66.00',
+            'status' => ServiceStatus::ACTIVE,
+            'locked_pricing' => [],
+            'provision_data' => [],
+            'expires_at' => now()->addMonth(),
+            'auto_renew' => 1,
+        ]);
+
+        app(UserService::class)->updateServiceMeta($user, (int) $service->id, [
+            'supplier_id' => (int) $supplier->id,
+            'upstream_product_id' => 55501,
+            'upstream_host_id' => 66601,
+        ]);
+
+        $binding = DB::table('service_upstream_bindings')
+            ->where('service_id', (int) $service->id)
+            ->where('provider_key', ProviderKey::ZJMF_FINANCE_API)
+            ->where('upstream_service_id', '66601')
+            ->first(['product_upstream_binding_id', 'supplier_plugin_binding_id']);
+
+        $this->assertNotNull($binding);
+        $this->assertNull($binding->product_upstream_binding_id);
+        $this->assertSame((int) $supplier->id, (int) DB::table('supplier_plugin_bindings')
+            ->where('id', (int) $binding->supplier_plugin_binding_id)
+            ->value('supplier_id'));
+        $this->assertDatabaseHas('service_runtime_snapshots', [
+            'service_id' => (int) $service->id,
             'provider_key' => ProviderKey::ZJMF_FINANCE_API,
         ]);
     }

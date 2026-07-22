@@ -197,12 +197,22 @@ class AdminLogBoundaryTest extends TestCase
             $suffix = 'runtime-boundary-'.bin2hex(random_bytes(4));
             file_put_contents(storage_path('logs/laravel.log'), '['.now()->format('Y-m-d H:i:s')."] local.ERROR: {$suffix}\n");
 
-            $this->getJson('/api/v2/admin/logs/runtime?keyword='.$suffix)
+            $response = $this->getJson('/api/v2/admin/logs/runtime?keyword='.$suffix)
                 ->assertOk()
                 ->assertJsonPath('code', 0)
                 ->assertJsonPath('data.total', 1)
                 ->assertJsonPath('data.list.0.level', 'ERROR')
                 ->assertJsonPath('data.list.0.message_excerpt', $suffix);
+
+            $logId = (string) $response->json('data.list.0.id');
+
+            $this->getJson('/api/v2/admin/logs/runtime/'.$logId)
+                ->assertOk()
+                ->assertJsonPath('code', 0)
+                ->assertJsonPath('data.log.id', $logId)
+                ->assertJsonPath('data.log.channel', 'runtime')
+                ->assertJsonPath('data.log.source', 'laravel_log')
+                ->assertJsonPath('data.log.message', $suffix);
         } finally {
             app()->useStoragePath($originalStoragePath);
             File::deleteDirectory($tempStoragePath);

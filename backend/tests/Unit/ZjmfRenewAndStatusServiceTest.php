@@ -22,19 +22,26 @@ final class ZjmfRenewAndStatusServiceTest extends TestCase
     {
         parent::setUp();
 
+        config([
+            'cache.default' => 'array',
+            'idc.hosting_panel_api.jwt_cache_store' => 'array',
+        ]);
+        Cache::clearResolvedInstances();
+        Cache::store('array')->flush();
+
         app(PluginFileLoader::class)->ensureLoaded(
             app(PluginScanner::class)->requireManifest('upstream', 'zjmf_finance')
         );
-
-        Cache::flush();
     }
 
     #[Test]
-    public function renew_service_invoice_submits_funds_and_reads_host_detail_inside_plugin(): void
+    public function renew_service_invoice_uses_zjmf_same_system_payment_flow_when_order_is_paid(): void
     {
         $fakeTransport = new class extends HostingPanelApiTransport
         {
-            public array $uris = [];
+            public array $requests = [];
+
+            public array $textRequests = [];
 
             public function request(
                 Supplier $supplier,
@@ -45,30 +52,35 @@ final class ZjmfRenewAndStatusServiceTest extends TestCase
                 array $headers = [],
                 array $query = []
             ): array {
-                $this->uris[] = "{$method} {$uri}";
+                $this->requests[] = [
+                    'method' => $method,
+                    'uri' => $uri,
+                    'payload' => $payload,
+                    'jwt' => $jwt,
+                    'headers' => $headers,
+                    'query' => $query,
+                ];
 
                 return match ($uri) {
-                    '/v1/login_api' => [
+                    '/zjmf_api_login' => [
                         'status' => 200,
                         'code' => 200,
                         'jwt' => 'jwt-renew-test',
                     ],
-                    '/v1/hosts/7788/renew' => [
+                    '/host/renew' => [
                         'status' => 200,
                         'data' => [
                             'invoiceid' => 8899,
+                            'payment' => 'credit',
                         ],
                     ],
-                    '/v1/invoices/8899/fund' => [
-                        'status' => 1001,
-                        'data' => [
-                            'paid' => true,
-                        ],
+                    '/check_order' => [
+                        'status' => 1000,
                     ],
-                    '/v1/hosts/7788' => [
+                    '/host/header' => [
                         'status' => 200,
                         'data' => [
-                            'host' => [
+                            'host_data' => [
                                 'id' => 7788,
                                 'domain' => 'srv7788.example.test',
                                 'domainstatus' => 'Active',
@@ -82,24 +94,72 @@ final class ZjmfRenewAndStatusServiceTest extends TestCase
                     ],
                 };
             }
+
+            public function requestText(
+                Supplier $supplier,
+                string $method,
+                string $uri,
+                array|string $payload = [],
+                ?string $jwt = null,
+                array $headers = [],
+                array $query = []
+            ): string {
+                $this->textRequests[] = [
+                    'method' => $method,
+                    'uri' => $uri,
+                    'payload' => $payload,
+                    'jwt' => $jwt,
+                    'headers' => $headers,
+                    'query' => $query,
+                ];
+
+                return '<!doctype html><html><body>payment submitted</body></html>';
+            }
         };
 
         $service = new ZjmfRenewService($this->makeZjmfTransport($fakeTransport));
         $result = $service->renewServiceInvoice($this->makeSupplier(), 7788, 'monthly');
 
         $this->assertSame(8899, $result['upstream_invoice_id']);
+        $this->assertSame(1000, $result['fund_status']);
+        $this->assertTrue($result['payment_completed']);
         $this->assertSame('Active', $result['host_detail']['domainstatus'] ?? null);
-        $this->assertContains('POST /v1/hosts/7788/renew', $fakeTransport->uris);
-        $this->assertContains('POST /v1/invoices/8899/fund', $fakeTransport->uris);
-        $this->assertContains('GET /v1/hosts/7788', $fakeTransport->uris);
+
+        $renewRequest = collect($fakeTransport->requests)->firstWhere('uri', '/host/renew');
+        $this->assertSame('POST', $renewRequest['method'] ?? null);
+        $this->assertSame([
+            'hostid' => 7788,
+            'billingcycles' => 'monthly',
+            'duration' => 1,
+        ], $renewRequest['payload'] ?? null);
+
+        $paymentRequest = $fakeTransport->textRequests[0] ?? null;
+        $this->assertSame('POST', $paymentRequest['method'] ?? null);
+        $this->assertSame('/pay', $paymentRequest['uri'] ?? null);
+        $this->assertSame([
+            'invoiceid' => 8899,
+            'use_credit' => 1,
+            'payment' => 'credit',
+            'use_credit_limit' => 0,
+        ], $paymentRequest['payload'] ?? null);
+        $this->assertSame([
+            'action' => 'billing',
+            'pay' => 'true',
+        ], $paymentRequest['query'] ?? null);
+
+        $checkOrderRequest = collect($fakeTransport->requests)->firstWhere('uri', '/check_order');
+        $this->assertSame('POST', $checkOrderRequest['method'] ?? null);
+        $this->assertSame(['id' => 8899], $checkOrderRequest['payload'] ?? null);
     }
 
     #[Test]
-    public function renew_service_invoice_keeps_local_fulfillment_pending_when_upstream_fund_is_not_paid(): void
+    public function renew_service_invoice_keeps_local_fulfillment_pending_when_order_is_not_paid(): void
     {
         $fakeTransport = new class extends HostingPanelApiTransport
         {
-            public array $uris = [];
+            public array $requests = [];
+
+            public array $textRequests = [];
 
             public function request(
                 Supplier $supplier,
@@ -110,31 +170,57 @@ final class ZjmfRenewAndStatusServiceTest extends TestCase
                 array $headers = [],
                 array $query = []
             ): array {
-                $this->uris[] = "{$method} {$uri}";
+                $this->requests[] = [
+                    'method' => $method,
+                    'uri' => $uri,
+                    'payload' => $payload,
+                    'jwt' => $jwt,
+                    'headers' => $headers,
+                    'query' => $query,
+                ];
 
                 return match ($uri) {
-                    '/v1/login_api' => [
+                    '/zjmf_api_login' => [
                         'status' => 200,
                         'code' => 200,
                         'jwt' => 'jwt-renew-pending-test',
                     ],
-                    '/v1/hosts/7788/renew' => [
+                    '/host/renew' => [
                         'status' => 200,
                         'data' => [
                             'invoiceid' => 8899,
+                            'payment' => 'credit',
                         ],
                     ],
-                    '/v1/invoices/8899/fund' => [
+                    '/check_order' => [
                         'status' => 200,
-                        'data' => [
-                            'invoiceid' => 8899,
-                        ],
                     ],
                     default => [
                         'status' => 404,
                         'msg' => 'not found',
                     ],
                 };
+            }
+
+            public function requestText(
+                Supplier $supplier,
+                string $method,
+                string $uri,
+                array|string $payload = [],
+                ?string $jwt = null,
+                array $headers = [],
+                array $query = []
+            ): string {
+                $this->textRequests[] = [
+                    'method' => $method,
+                    'uri' => $uri,
+                    'payload' => $payload,
+                    'jwt' => $jwt,
+                    'headers' => $headers,
+                    'query' => $query,
+                ];
+
+                return '<!doctype html><html><body>payment submitted</body></html>';
             }
         };
 
@@ -145,7 +231,16 @@ final class ZjmfRenewAndStatusServiceTest extends TestCase
         $this->assertSame(200, $result['fund_status']);
         $this->assertFalse($result['payment_completed']);
         $this->assertSame([], $result['host_detail']);
-        $this->assertNotContains('GET /v1/hosts/7788', $fakeTransport->uris);
+
+        $this->assertSame('/pay', $fakeTransport->textRequests[0]['uri'] ?? null);
+        $this->assertSame([
+            'action' => 'billing',
+            'pay' => 'true',
+        ], $fakeTransport->textRequests[0]['query'] ?? null);
+        $checkOrderRequest = collect($fakeTransport->requests)->firstWhere('uri', '/check_order');
+        $this->assertSame('POST', $checkOrderRequest['method'] ?? null);
+        $this->assertSame(['id' => 8899], $checkOrderRequest['payload'] ?? null);
+        $this->assertNull(collect($fakeTransport->requests)->firstWhere('uri', '/host/header'));
     }
 
     #[Test]
@@ -154,6 +249,8 @@ final class ZjmfRenewAndStatusServiceTest extends TestCase
         $fakeTransport = new class extends HostingPanelApiTransport
         {
             public array $batchRequests = [];
+
+            public array $requests = [];
 
             public function request(
                 Supplier $supplier,
@@ -164,11 +261,32 @@ final class ZjmfRenewAndStatusServiceTest extends TestCase
                 array $headers = [],
                 array $query = []
             ): array {
-                return [
-                    'status' => 200,
-                    'code' => 200,
-                    'jwt' => 'jwt-status-test',
+                $this->requests[] = [
+                    'method' => $method,
+                    'uri' => $uri,
+                    'payload' => $payload,
+                    'jwt' => $jwt,
+                    'headers' => $headers,
                 ];
+
+                return match ($uri) {
+                    '/zjmf_api_login' => [
+                        'status' => 200,
+                        'code' => 200,
+                        'jwt' => 'jwt-status-test',
+                    ],
+                    '/provision/default' => [
+                        'status' => 200,
+                        'data' => [
+                            'status' => 'on',
+                            'des' => '开机',
+                        ],
+                    ],
+                    default => [
+                        'status' => 404,
+                        'msg' => 'not found',
+                    ],
+                };
             }
 
             public function parallelGet(Supplier $supplier, array $requests, ?string $jwt = null, array $headers = []): array
@@ -181,11 +299,11 @@ final class ZjmfRenewAndStatusServiceTest extends TestCase
                         'response' => [
                             'status' => 200,
                             'data' => [
-                                'host' => [
+                                'host_data' => [
                                     'domain' => 'srv501.example.test',
                                     'domainstatus' => 'Active',
-                                    'product_id' => '9001',
-                                    'product_name' => 'Zjmf VPS',
+                                    'productid' => '9001',
+                                    'productname' => 'Zjmf VPS',
                                     'dedicatedip' => '203.0.113.10',
                                     'assignedips' => ['203.0.113.10', '203.0.113.11'],
                                     'config_option' => ['cpu' => 2],
@@ -196,16 +314,6 @@ final class ZjmfRenewAndStatusServiceTest extends TestCase
                                     'internalip' => '10.0.0.5',
                                     'nextduedate' => 1785600000,
                                 ],
-                            ],
-                        ],
-                    ],
-                    'runtime_501' => [
-                        'status_code' => 200,
-                        'response' => [
-                            'status' => 200,
-                            'data' => [
-                                'status' => 'running',
-                                'des' => 'running',
                             ],
                         ],
                     ],
@@ -221,12 +329,21 @@ final class ZjmfRenewAndStatusServiceTest extends TestCase
             ],
         ]);
 
-        $this->assertSame('/v1/hosts/7788', $fakeTransport->batchRequests['detail_501']['uri'] ?? null);
-        $this->assertSame('/v1/hosts/7788/module/status', $fakeTransport->batchRequests['runtime_501']['uri'] ?? null);
+        $this->assertSame('/host/header', $fakeTransport->batchRequests['detail_501']['uri'] ?? null);
+        $this->assertSame(['host_id' => 7788, 'source' => 'API'], $fakeTransport->batchRequests['detail_501']['query'] ?? null);
+        $this->assertArrayNotHasKey('runtime_501', $fakeTransport->batchRequests);
+        $runtimeRequest = collect($fakeTransport->requests)->firstWhere('uri', '/provision/default');
+        $this->assertSame('POST', $runtimeRequest['method'] ?? null);
+        $this->assertSame(['id' => 7788, 'func' => 'status'], $runtimeRequest['payload'] ?? null);
+        $this->assertSame([
+            'content-type: application/x-www-form-urlencoded',
+            'Authorization: Bearer jwt-status-test',
+        ], $runtimeRequest['headers'] ?? null);
         $this->assertSame('Active', $result['services'][501]['host']['domainstatus'] ?? null);
         $this->assertSame(9001, $result['services'][501]['host']['product_id'] ?? null);
         $this->assertSame(['203.0.113.10', '203.0.113.11'], $result['services'][501]['host']['assignedips'] ?? null);
-        $this->assertSame('running', $result['services'][501]['runtime']['status'] ?? null);
+        $this->assertSame('on', $result['services'][501]['runtime']['status'] ?? null);
+        $this->assertSame('开机', $result['services'][501]['runtime']['des'] ?? null);
     }
 
     private function makeSupplier(): Supplier

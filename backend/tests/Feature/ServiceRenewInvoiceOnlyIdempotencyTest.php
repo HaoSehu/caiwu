@@ -12,13 +12,17 @@ use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\Service;
+use App\Models\Supplier;
 use App\Models\User;
 use App\Services\Finance\CouponService;
 use App\Services\Finance\InvoiceService;
+use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\Provisioning\ServiceRenewService;
 use App\Services\System\NotificationService;
 use App\Services\System\OperationLogService;
 use App\Services\System\SettingService;
+use App\Services\Upstream\Contracts\ProvidesRenewal;
+use App\Services\Upstream\Contracts\UpstreamDriver;
 use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiDriver;
 use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiTransport;
 use App\Services\Upstream\ProviderRegistry;
@@ -71,6 +75,164 @@ class ServiceRenewInvoiceOnlyIdempotencyTest extends TestCase
 
         DB::connection()->table('users')->updateOrInsert(['id' => (int) $user->id], $payload);
         DB::connection()->table('users')->updateOrInsert(['id' => (int) $user->id], $payload);
+    }
+
+    /**
+     * @return array{service: Service, invoice: Invoice}
+     */
+    private function createUpstreamRenewFixture(string $suffix): array
+    {
+        $user = User::query()->create([
+            'email' => 'renew-upstream-'.$suffix.'@example.com',
+            'password' => 'Temp@123456',
+            'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
+            'status' => 1,
+            'nickname' => 'Renew Upstream',
+            'real_name' => '',
+            'id_card' => '',
+            'verification_status' => 0,
+            'verification_message' => '',
+            'verification_certify_id' => null,
+            'member_level_id' => null,
+            'total_sales_amount' => '0.00',
+            'referrer_user_id' => null,
+            'verified_at' => null,
+        ]);
+        $this->mirrorUserToIdc($user, 'renew-upstream-'.$suffix);
+
+        $product = Product::query()->create([
+            'name' => 'Renew Upstream Product '.$suffix,
+            'product_type' => 'vps',
+            'pricing' => ['monthly' => '48.00'],
+            'setup_fee' => '0.00',
+            'config_options' => [],
+            'purchase_requires' => [],
+            'stock' => -1,
+            'status' => 1,
+            'auto_setup' => 0,
+        ]);
+        $this->mirrorProductToIdc($product, $suffix);
+
+        $service = Service::query()->create([
+            'user_id' => (int) $user->id,
+            'product_id' => (int) $product->id,
+            'name' => 'Renew Upstream Service '.$suffix,
+            'domain' => 'renew-upstream-'.$suffix.'.example.com',
+            'billing_cycle' => 'monthly',
+            'amount' => '48.00',
+            'status' => ServiceStatus::ACTIVE,
+            'locked_pricing' => ['monthly' => '48.00'],
+            'provision_data' => [],
+            'expires_at' => Carbon::parse('2026-06-20 00:00:00'),
+            'auto_renew' => 0,
+        ]);
+
+        $invoice = Invoice::query()->create([
+            'invoice_no' => 'INVRENEWUPSTREAM'.strtoupper($suffix),
+            'user_id' => (int) $user->id,
+            'product_id' => (int) $product->id,
+            'service_id' => (int) $service->id,
+            'type' => 'renew',
+            'amount' => '48.00',
+            'paid_amount' => '48.00',
+            'billing_cycle' => 'monthly',
+            'status' => InvoiceStatus::PAID,
+            'paid_at' => now(),
+            'due_date' => now()->addDay(),
+        ]);
+
+        return compact('service', 'invoice');
+    }
+
+    private function makeUpstreamRenewService(FakeInvoiceRenewalCapability $capability): ServiceRenewService
+    {
+        $supplier = new Supplier(['name' => 'Fake renewal supplier']);
+        $bindingResolver = new FakeInvoiceRenewalBindingResolver($supplier);
+
+        return new ServiceRenewService(
+            new InvoiceService,
+            new ProviderResolver(
+                new ProviderRegistry([
+                    new FakeInvoiceRenewalDriver($capability),
+                ]),
+                $bindingResolver,
+            ),
+            $this->createMock(CouponService::class),
+            $this->createMock(OperationLogService::class),
+            new class extends SettingService
+            {
+                public function getAutomationConfig(): array
+                {
+                    return array_merge(parent::defaultAutomationConfig(), [
+                        'expire_unsuspend_notify_enabled' => false,
+                    ]);
+                }
+            },
+            $this->createMock(NotificationService::class),
+            $bindingResolver,
+        );
+    }
+
+    #[Test]
+    public function process_paid_renew_invoice_recovers_the_current_upstream_invoice_without_creating_another_one(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+        ['service' => $service, 'invoice' => $invoice] = $this->createUpstreamRenewFixture($suffix);
+        $capability = new FakeInvoiceRenewalCapability;
+
+        $service->forceFill([
+            'provision_data' => [
+                'renew_invoice_id' => (int) $invoice->id,
+                'upstream_invoice_id' => 78123,
+                'renew_recovery_context' => ['payment' => 'credit'],
+            ],
+        ])->save();
+
+        $result = $this->makeUpstreamRenewService($capability)->processPaidRenewInvoice($invoice);
+
+        $this->assertNotNull($result);
+        $this->assertSame(0, $capability->renewServiceInvoiceCalls);
+        $this->assertSame(1, $capability->recoverCalls);
+        $this->assertSame(78123, $capability->lastRecoveredUpstreamInvoiceId);
+        $this->assertSame(['payment' => 'credit'], $capability->lastRecoveryContext);
+        $this->assertSame(78123, (int) (($result->provision_data ?? [])['upstream_invoice_id'] ?? 0));
+        $this->assertSame('上游续费账单仍未支付完成', (string) (($result->provision_data ?? [])['renew_error'] ?? ''));
+    }
+
+    #[Test]
+    public function process_paid_renew_invoice_does_not_recover_an_upstream_invoice_owned_by_an_older_local_invoice(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+        ['service' => $service, 'invoice' => $olderInvoice] = $this->createUpstreamRenewFixture($suffix);
+        $currentInvoice = Invoice::query()->create([
+            'invoice_no' => 'INVRENEWCURRENT'.strtoupper($suffix),
+            'user_id' => (int) $olderInvoice->user_id,
+            'product_id' => (int) $olderInvoice->product_id,
+            'service_id' => (int) $service->id,
+            'type' => 'renew',
+            'amount' => '48.00',
+            'paid_amount' => '48.00',
+            'billing_cycle' => 'monthly',
+            'status' => InvoiceStatus::PAID,
+            'paid_at' => now(),
+            'due_date' => now()->addDay(),
+        ]);
+        $capability = new FakeInvoiceRenewalCapability(throwOnRenew: true);
+
+        $service->forceFill([
+            'provision_data' => [
+                'renew_invoice_id' => (int) $olderInvoice->id,
+                'upstream_invoice_id' => 78124,
+            ],
+        ])->save();
+
+        $result = $this->makeUpstreamRenewService($capability)->processPaidRenewInvoice($currentInvoice);
+
+        $this->assertNotNull($result);
+        $this->assertSame(1, $capability->renewServiceInvoiceCalls);
+        $this->assertSame(0, $capability->recoverCalls);
+        $this->assertNull(($result->provision_data ?? [])['upstream_invoice_id'] ?? null);
+        $this->assertSame((int) $currentInvoice->id, (int) (($result->provision_data ?? [])['renew_invoice_id'] ?? 0));
     }
 
     #[Test]
@@ -1004,5 +1166,121 @@ class ServiceRenewInvoiceOnlyIdempotencyTest extends TestCase
         $this->assertSame(OrderStatus::PAID, (int) ($storedOrder?->status ?? -1));
         $this->assertNull($service->fresh()?->invoice_id);
         $this->assertNull(($service->fresh()?->provision_data ?? [])['last_renew_invoice_id'] ?? null);
+    }
+}
+
+final class FakeInvoiceRenewalCapability implements ProvidesRenewal
+{
+    public int $renewServiceInvoiceCalls = 0;
+
+    public int $recoverCalls = 0;
+
+    public int $lastRecoveredUpstreamInvoiceId = 0;
+
+    /** @var array<string, mixed> */
+    public array $lastRecoveryContext = [];
+
+    public function __construct(private readonly bool $throwOnRenew = false) {}
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function renewServiceInvoice(Supplier $supplier, int $hostId, string $billingCycle): array
+    {
+        $this->renewServiceInvoiceCalls++;
+
+        if ($this->throwOnRenew) {
+            throw new BusinessException('模拟创建上游续费账单失败');
+        }
+
+        return [
+            'upstream_invoice_id' => 99999,
+            'payment_completed' => false,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     * @return array<string, mixed>
+     */
+    public function recoverRenewInvoiceWithContext(
+        Supplier $supplier,
+        int $hostId,
+        int $upstreamInvoiceId,
+        array $context,
+    ): array {
+        $this->recoverCalls++;
+        $this->lastRecoveredUpstreamInvoiceId = $upstreamInvoiceId;
+        $this->lastRecoveryContext = $context;
+
+        return [
+            'payment_completed' => false,
+            'fund_error' => '上游续费账单仍未支付完成',
+        ];
+    }
+}
+
+final class FakeInvoiceRenewalBindingResolver extends PluginBindingResolver
+{
+    public function __construct(private readonly Supplier $supplier) {}
+
+    public function providerKeyForService(Service $service): ?string
+    {
+        return FakeInvoiceRenewalDriver::KEY;
+    }
+
+    public function upstreamServiceIdForService(Service $service): ?string
+    {
+        return '88001';
+    }
+
+    public function supplierForService(Service $service): ?Supplier
+    {
+        return $this->supplier;
+    }
+
+    public function supplierForProduct(Product $product): ?Supplier
+    {
+        return $this->supplier;
+    }
+
+    public function supplierWithRuntimeCredentials(Supplier $supplier, bool $includeSecrets = true): Supplier
+    {
+        return $supplier;
+    }
+}
+
+final class FakeInvoiceRenewalDriver implements UpstreamDriver
+{
+    public const KEY = 'test_invoice_renewal';
+
+    public function __construct(private readonly FakeInvoiceRenewalCapability $capability) {}
+
+    public function key(): string
+    {
+        return self::KEY;
+    }
+
+    public function label(): string
+    {
+        return '测试续费能力';
+    }
+
+    /**
+     * @return array<int, class-string>
+     */
+    public function capabilities(): array
+    {
+        return [ProvidesRenewal::class];
+    }
+
+    public function supports(string $capability): bool
+    {
+        return $capability === ProvidesRenewal::class;
+    }
+
+    public function resolve(string $capability): ?object
+    {
+        return $this->supports($capability) ? $this->capability : null;
     }
 }

@@ -18,7 +18,7 @@ class VerificationQrSessionTest extends TestCase
 {
     public function test_qr_session_uses_proxy_url_for_five_minutes_and_can_be_closed(): void
     {
-        config(['app.frontend_url' => 'https://console.example.test']);
+        config(['app.url' => 'https://api.example.test']);
 
         $driver = new FakeQrSessionVerificationDriver;
         $service = new VerificationService(new VerificationDriverManager([$driver]));
@@ -27,7 +27,7 @@ class VerificationQrSessionTest extends TestCase
         $payload = $service->generateQrCode('CERT-5MIN');
 
         $this->assertSame(300, $payload['expires_in_seconds']);
-        $this->assertStringStartsWith('https://console.example.test/api/v2/client/verification/scan?', $payload['url']);
+        $this->assertStringStartsWith('https://api.example.test/api/v2/client/verification/scan?', $payload['url']);
         $this->assertStringContainsString('certify_id=CERT-5MIN', $payload['url']);
         $this->assertSame($payload['url'], $payload['qrcode_url']);
         $this->assertGreaterThanOrEqual($startedAt + 295, strtotime((string) $payload['expires_at']));

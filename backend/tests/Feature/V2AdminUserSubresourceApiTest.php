@@ -115,9 +115,13 @@ class V2AdminUserSubresourceApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('code', 0)
             ->assertJsonPath('data.service.id', 321)
+            ->assertJsonMissingPath('data.service.billing_cycle')
+            ->assertJsonMissingPath('data.service.amount')
+            ->assertJsonMissingPath('data.service.invoice')
             ->assertJsonMissingPath('data.service.connection')
             ->assertJsonMissingPath('data.service.raw_response');
 
+        $this->assertSame($this->serviceRuntimeFields(), array_keys($remoteResponse->json('data.service')));
         $this->assertNoSensitiveKeys($remoteResponse->json());
 
         Sanctum::actingAs($this->createAdmin([AdminPermissions::USER_MANAGE]));
@@ -479,6 +483,25 @@ class V2AdminUserSubresourceApiTest extends TestCase
         ];
     }
 
+    /**
+     * @return list<string>
+     */
+    private function serviceRuntimeFields(): array
+    {
+        return [
+            'id',
+            'status',
+            'status_label',
+            'status_tone',
+            'expires_at',
+            'upstream',
+            'runtime',
+            'traffic',
+            'actions',
+            'specs',
+        ];
+    }
+
     private function assertNoSensitiveKeys(mixed $payload): void
     {
         if (! is_array($payload)) {
@@ -489,7 +512,7 @@ class V2AdminUserSubresourceApiTest extends TestCase
             if (is_string($key)) {
                 $normalized = strtolower($key);
 
-                if ($normalized !== 'has_password') {
+                if (! in_array($normalized, ['has_password', 'password_reset'], true)) {
                     $this->assertStringNotContainsString('password', $normalized);
                 }
 

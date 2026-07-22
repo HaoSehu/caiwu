@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Console\Commands\VncRelayCommand;
 use App\Services\Auth\VerificationService;
+use App\Services\ClientServiceConsole\ClientServiceConsoleService;
 use App\Services\ClientServiceConsole\ServiceDetailService;
 use App\Services\ClientServiceConsole\ServiceTransformService;
 use App\Services\ClientServiceConsole\ServiceVncService;
@@ -24,177 +25,128 @@ class ConfigRuntimeAccessTest extends TestCase
         $this->assertStringNotContainsString("'proxy_url' =>", $content);
     }
 
-    public function test_verification_service_builds_urls_from_config_frontend_url(): void
+    public function test_verification_service_builds_http_urls_from_api_origin(): void
     {
         config([
-            'app.frontend_url' => 'https://frontend.example.com',
-            'app.url' => 'https://backend.example.com',
+            'app.frontend_url' => 'http://www.example.test',
+            'app.url' => 'http://api.example.test:8000',
         ]);
 
         $service = app(VerificationService::class);
 
-        $callbackUrl = $this->invokePrivateMethod($service, 'resolveCallbackUrl');
-        $proxyUrl = $this->invokePrivateMethod($service, 'buildQrCodeProxyUrl', ['cert-123']);
-
         $this->assertSame(
-            'https://frontend.example.com/api/v2/client/verification/callback',
-            $callbackUrl
+            'http://api.example.test:8000/api/v2/client/verification/callback',
+            $this->invokePrivateMethod($service, 'resolveCallbackUrl')
         );
         $this->assertSame(
-            'https://frontend.example.com/api/v2/client/verification/scan?certify_id=cert-123',
-            $proxyUrl
+            'http://api.example.test:8000/api/v2/client/verification/scan?certify_id=cert-123',
+            $this->invokePrivateMethod($service, 'buildQrCodeProxyUrl', ['cert-123'])
         );
     }
 
-    public function test_verification_service_falls_back_to_app_url_when_frontend_url_is_empty(): void
+    public function test_vnc_uses_console_for_viewer_and_api_for_requests(): void
     {
         config([
-            'app.frontend_url' => '',
-            'app.url' => 'https://backend.example.com',
+            'app.url' => 'https://api.example.test',
+            'app.frontend_url' => 'https://www.example.test',
+            'app.client_console_url' => 'https://console.example.test',
+            'app.admin_url' => 'https://admin.example.test',
         ]);
 
-        $service = app(VerificationService::class);
-
-        $callbackUrl = $this->invokePrivateMethod($service, 'resolveCallbackUrl');
-        $proxyUrl = $this->invokePrivateMethod($service, 'buildQrCodeProxyUrl', ['cert-456']);
+        $service = $this->makeVncService();
 
         $this->assertSame(
-            'https://backend.example.com/api/v2/client/verification/callback',
-            $callbackUrl
+            'https://console.example.test/vnc',
+            $this->invokePrivateMethod($service, 'resolveNoVncBaseUrl')
         );
         $this->assertSame(
-            'https://backend.example.com/api/v2/client/verification/scan?certify_id=cert-456',
-            $proxyUrl
+            'https://api.example.test',
+            $this->invokePrivateMethod($service, 'resolveVncApiBase')
+        );
+        $this->assertSame(
+            'https://console.example.test',
+            $this->invokePrivateMethod($service, 'resolveAllowedVncOrigin')
         );
     }
 
-    public function test_vnc_relay_command_origin_header_uses_config_values(): void
+    public function test_vnc_supports_http_api_origin_for_local_development(): void
     {
         config([
-            'app.frontend_url' => 'https://frontend.example.com',
-            'app.url' => 'https://backend.example.com',
+            'app.url' => 'http://127.0.0.1:8000',
+            'app.client_console_url' => 'http://127.0.0.1:5173',
         ]);
+
+        $service = $this->makeVncService();
+
+        $this->assertSame('http://127.0.0.1:5173/vnc', $this->invokePrivateMethod($service, 'resolveNoVncBaseUrl'));
+        $this->assertSame('http://127.0.0.1:8000', $this->invokePrivateMethod($service, 'resolveVncApiBase'));
+    }
+
+    public function test_vnc_relay_command_uses_console_origin_when_upstream_does_not_supply_one(): void
+    {
+        config(['app.client_console_url' => 'https://console.example.test']);
 
         $command = new VncRelayCommand;
 
+        $this->assertSame('https://console.example.test', $this->invokePrivateMethod($command, 'resolveOriginHeader'));
         $this->assertSame(
-            'https://frontend.example.com',
-            $this->invokePrivateMethod($command, 'resolveOriginHeader')
-        );
-
-        config(['app.frontend_url' => '']);
-
-        $this->assertSame(
-            'https://backend.example.com',
-            $this->invokePrivateMethod($command, 'resolveOriginHeader')
+            'https://upstream.example.test',
+            $this->invokePrivateMethod($command, 'resolveOriginHeader', [['origin' => 'https://upstream.example.test']])
         );
     }
 
-    public function test_vnc_service_prefers_frontend_url_as_public_api_base(): void
+    public function test_vnc_relay_allows_only_console_origin_before_consuming_a_token(): void
     {
-        config([
-            'app.frontend_url' => 'https://frontend.example.com',
-            'app.url' => 'https://backend.example.com',
-        ]);
+        config(['app.client_console_url' => 'https://console.example.test']);
 
-        $service = $this->makeVncService();
+        $command = new VncRelayCommand;
+        $params = ['allowed_origin' => 'https://console.example.test'];
 
-        $this->assertSame(
+        $this->assertTrue($this->invokePrivateMethod($command, 'isAllowedClientOrigin', [
+            'https://console.example.test',
+            $params,
+        ]));
+        $this->assertFalse($this->invokePrivateMethod($command, 'isAllowedClientOrigin', [
             '',
-            $this->invokePrivateMethod($service, 'resolveVncApiBase', ['https://frontend.example.com/vnc'])
-        );
-        $this->assertSame(
-            'https://frontend.example.com',
-            $this->invokePrivateMethod($service, 'resolveVncApiBase', ['https://viewer.example.com/vnc'])
-        );
-    }
+            $params,
+        ]));
+        $this->assertFalse($this->invokePrivateMethod($command, 'isAllowedClientOrigin', [
+            'https://admin.example.test',
+            $params,
+        ]));
+        $this->assertFalse($this->invokePrivateMethod($command, 'isAllowedClientOrigin', [
+            'https://admin.example.test',
+        ]));
 
-    public function test_vnc_service_no_vnc_base_url_uses_frontend_url(): void
-    {
-        config([
-            'app.frontend_url' => 'https://frontend.example.com',
-            'app.url' => 'https://backend.example.com',
-        ]);
+        $rejectedConsoleService = $this->createMock(ClientServiceConsoleService::class);
+        $rejectedConsoleService->expects($this->once())
+            ->method('previewVncToken')
+            ->with('launch-token')
+            ->willReturn($params);
+        $rejectedConsoleService->expects($this->never())
+            ->method('resolveVncToken');
 
-        $service = $this->makeVncService();
+        $this->assertNull($this->invokePrivateMethod($command, 'resolveVncTokenForClient', [
+            $rejectedConsoleService,
+            'launch-token',
+            'https://admin.example.test',
+        ]));
 
-        $this->assertSame(
-            'https://frontend.example.com/vnc',
-            $this->invokePrivateMethod($service, 'resolveNoVncBaseUrl')
-        );
-    }
+        $acceptedConsoleService = $this->createMock(ClientServiceConsoleService::class);
+        $acceptedConsoleService->expects($this->once())
+            ->method('previewVncToken')
+            ->with('launch-token')
+            ->willReturn($params);
+        $acceptedConsoleService->expects($this->once())
+            ->method('resolveVncToken')
+            ->with('launch-token')
+            ->willReturn(['host' => 'vnc.example.test']);
 
-    public function test_vnc_service_no_vnc_base_url_prefers_request_origin(): void
-    {
-        config([
-            'app.frontend_url' => 'https://admin.example.com',
-            'app.url' => 'https://backend.example.com',
-        ]);
-
-        $service = $this->makeVncService();
-
-        $this->assertSame(
-            'https://www.example.com/vnc',
-            $this->invokePrivateMethod($service, 'resolveNoVncBaseUrl', [[
-                'actor_type' => 'client',
-                'request_origin' => 'https://www.example.com',
-            ]])
-        );
-    }
-
-    public function test_vnc_service_public_api_base_falls_back_to_app_url(): void
-    {
-        config([
-            'app.frontend_url' => '',
-            'app.url' => 'https://backend.example.com',
-        ]);
-
-        $service = $this->makeVncService();
-
-        $this->assertSame(
-            '',
-            $this->invokePrivateMethod($service, 'resolveVncApiBase', ['https://backend.example.com/vnc'])
-        );
-        $this->assertSame(
-            'https://backend.example.com',
-            $this->invokePrivateMethod($service, 'resolveVncApiBase', ['https://viewer.example.com/vnc'])
-        );
-    }
-
-    public function test_vnc_service_vnc_api_base_prefers_request_origin(): void
-    {
-        config([
-            'app.frontend_url' => 'https://admin.example.com',
-            'app.url' => 'https://backend.example.com',
-        ]);
-
-        $service = $this->makeVncService();
-
-        $this->assertSame(
-            '',
-            $this->invokePrivateMethod($service, 'resolveVncApiBase', [
-                'https://www.example.com/vnc',
-                [
-                    'actor_type' => 'client',
-                    'request_origin' => 'https://www.example.com',
-                ],
-            ])
-        );
-    }
-
-    public function test_vnc_service_no_vnc_base_url_falls_back_to_app_url(): void
-    {
-        config([
-            'app.frontend_url' => '',
-            'app.url' => 'https://backend.example.com',
-        ]);
-
-        $service = $this->makeVncService();
-
-        $this->assertSame(
-            'https://backend.example.com/vnc',
-            $this->invokePrivateMethod($service, 'resolveNoVncBaseUrl')
-        );
+        $this->assertSame(['host' => 'vnc.example.test'], $this->invokePrivateMethod($command, 'resolveVncTokenForClient', [
+            $acceptedConsoleService,
+            'launch-token',
+            'https://console.example.test',
+        ]));
     }
 
     public function test_runtime_target_files_no_longer_use_env_directly(): void
