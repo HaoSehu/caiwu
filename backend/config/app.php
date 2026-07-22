@@ -1,57 +1,23 @@
 <?php
 
-$normalizeFrontendUrl = static function (?string $url, ?string $schemeSourceUrl): string {
+$normalizePublicUrl = static function (?string $url): string {
     $normalized = trim((string) $url);
     if ($normalized === '') {
         return '';
     }
 
-    if (preg_match('/^[a-z][a-z\d+\-.]*:\/\//i', $normalized)) {
-        return rtrim($normalized, '/');
-    }
-
-    $fallback = trim((string) $schemeSourceUrl);
-    $scheme = 'http';
-    if (preg_match('/^([a-z][a-z\d+\-.]*):\/\//i', $fallback, $matches)) {
-        $scheme = strtolower((string) ($matches[1] ?? 'http'));
-    }
-
-    return rtrim($scheme.'://'.ltrim($normalized, '/'), '/');
-};
-
-$deriveConsoleUrl = static function (?string $consoleUrl, ?string $frontendUrl, ?string $schemeSourceUrl) use ($normalizeFrontendUrl): string {
-    $configured = $normalizeFrontendUrl($consoleUrl, $schemeSourceUrl);
-    if ($configured !== '') {
-        return $configured;
-    }
-
-    $frontend = $normalizeFrontendUrl($frontendUrl, $schemeSourceUrl);
-    if ($frontend === '') {
-        return '';
-    }
-
-    $parts = parse_url($frontend);
-    $host = strtolower((string) ($parts['host'] ?? ''));
-    if (! str_starts_with($host, 'www.')) {
-        return $frontend;
-    }
-
-    $scheme = (string) ($parts['scheme'] ?? 'https');
-    $port = isset($parts['port']) ? ':'.(string) $parts['port'] : '';
-    $path = isset($parts['path']) ? rtrim((string) $parts['path'], '/') : '';
-
-    return rtrim($scheme.'://console.'.substr($host, 4).$port.$path, '/');
+    return rtrim($normalized, '/');
 };
 
 return [
-    'name' => env('APP_NAME', 'Laravel'),
+    'name' => env('APP_NAME', '创欧云'),
     'env' => env('APP_ENV', 'production'),
     'debug' => (bool) env('APP_DEBUG', false),
-    'url' => env('APP_URL', 'http://localhost'),
-    'frontend_url' => $normalizeFrontendUrl(env('FRONTEND_URL', ''), env('APP_URL', 'http://localhost')),
-    'client_console_url' => $deriveConsoleUrl(env('CLIENT_CONSOLE_URL', ''), env('FRONTEND_URL', ''), env('APP_URL', 'http://localhost')),
-    'admin_url' => $normalizeFrontendUrl(env('ADMIN_URL', ''), env('APP_URL', 'http://localhost')),
-    'timezone' => env('APP_TIMEZONE', 'Asia/Shanghai'),
+    'url' => $normalizePublicUrl(env('APP_URL', 'http://127.0.0.1:8000')),
+    'frontend_url' => $normalizePublicUrl(env('FRONTEND_URL', '')),
+    'client_console_url' => $normalizePublicUrl(env('CLIENT_CONSOLE_URL', '')),
+    'admin_url' => $normalizePublicUrl(env('ADMIN_URL', '')),
+    'timezone' => 'Asia/Shanghai',
     'locale' => env('APP_LOCALE', 'zh_CN'),
     'fallback_locale' => env('APP_FALLBACK_LOCALE', 'zh_CN'),
     'faker_locale' => env('APP_FAKER_LOCALE', 'en_US'),

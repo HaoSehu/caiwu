@@ -108,12 +108,6 @@ frontend-client/frontend-client/
 *.log
 backend/.env.bak*
 backend/public/uploads/
-backend/public/frontend/
-backend/public/vnc/
-backend/public/branding/
-backend/public/img/
-backend/public/robots.txt
-backend/public/sitemap.xml
 backend/storage/app/account-user-account-backfills/
 backend/storage/app/invoice-order-reconciliations/
 backend/storage/app/json-schema-version-backfills/

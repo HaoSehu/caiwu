@@ -3,7 +3,7 @@
 use Illuminate\Support\Str;
 
 return [
-    'driver' => env('SESSION_DRIVER', 'file'),
+    'driver' => 'file',
 
     'lifetime' => (int) env('SESSION_LIFETIME', 120),
 
@@ -34,5 +34,5 @@ return [
 
     'http_only' => env('SESSION_HTTP_ONLY', true),
 
-    'same_site' => env('SESSION_SAME_SITE', 'lax'),
+    'same_site' => 'lax',
 ];
