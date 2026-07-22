@@ -48,13 +48,22 @@ if (trackedSqlite.length > 0) {
   addPaths(errors, 'tracked sqlite artifact', trackedSqlite);
 }
 
+for (const forbiddenDirectory of [
+  'backend/public/frontend',
+  'backend/public/site',
+  'backend/public/client',
+  'backend/public/admin',
+  'backend/public/vnc',
+]) {
+  if (existsSync(path.join(root, forbiddenDirectory))) {
+    errors.push(`frontend artifact must not live under backend public: ${forbiddenDirectory}`);
+  }
+}
+
 const rootAllowedMarkdown = new Set([
   'AGENTS.md',
   'CLAUDE.md',
   'README.md',
-  '开发规范.md',
-  '启动指南.md',
-  '页面风格.md',
 ]);
 
 for (const entry of readdirSync(root)) {

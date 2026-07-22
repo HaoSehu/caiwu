@@ -361,7 +361,7 @@ foreach ($tables as $offset => $table) {
     }
 }
 
-$target = dirname($basePath).'/文档/开发文档/数据库/当前数据库结构.md';
+$target = dirname($basePath).'/docs/DATABASE.md';
 file_put_contents($target, implode("\n", $lines)."\n");
 
 fwrite(STDOUT, sprintf(
