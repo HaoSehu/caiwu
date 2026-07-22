@@ -3,11 +3,11 @@
 return [
     'default' => env('QUEUE_CONNECTION', 'database'),
 
-    'caiwu_worker_queues' => env('CAIWU_WORKER_QUEUES', 'provision,referral,notification,coupon,default'),
-    'caiwu_worker_timeout' => (int) env('CAIWU_WORKER_TIMEOUT', 1200),
-    'caiwu_worker_max_timeout' => (int) env('CAIWU_WORKER_MAX_TIMEOUT', 3600),
-    'caiwu_worker_tries' => (int) env('CAIWU_WORKER_TRIES', 3),
-    'caiwu_worker_drain_lock_ttl' => (int) env('CAIWU_WORKER_DRAIN_LOCK_TTL', 3960),
+    'caiwu_worker_queues' => 'provision,referral,notification,coupon,default',
+    'caiwu_worker_timeout' => 1200,
+    'caiwu_worker_max_timeout' => 3600,
+    'caiwu_worker_tries' => 3,
+    'caiwu_worker_drain_lock_ttl' => 3960,
 
     'connections' => [
         'sync' => [
@@ -19,7 +19,7 @@ return [
             'connection' => env('DB_QUEUE_CONNECTION'),
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             'queue' => env('DB_QUEUE', 'default'),
-            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 3900),
+            'retry_after' => 3900,
             'after_commit' => false,
         ],
 

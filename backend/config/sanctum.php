@@ -24,39 +24,10 @@ $formatStatefulDomain = static function (?string $url): ?string {
     return $port ? "{$host}:{$port}" : $host;
 };
 
-$deriveConsoleUrl = static function (?string $frontendUrl): ?string {
-    $frontendUrl = trim((string) $frontendUrl);
-    if ($frontendUrl === '') {
-        return null;
-    }
-
-    $parts = parse_url($frontendUrl);
-    $host = strtolower((string) ($parts['host'] ?? ''));
-    if (! str_starts_with($host, 'www.')) {
-        return null;
-    }
-
-    $scheme = (string) ($parts['scheme'] ?? 'https');
-    $port = isset($parts['port']) ? ':'.(string) $parts['port'] : '';
-
-    return $scheme.'://console.'.substr($host, 4).$port;
-};
-
 $defaultStatefulDomains = array_values(array_filter([
-    'localhost',
-    'localhost:3000',
-    'localhost:5173',
-    'localhost:5174',
-    'localhost:5175',
-    '127.0.0.1',
-    '127.0.0.1:8000',
-    '127.0.0.1:5173',
-    '127.0.0.1:5174',
-    '127.0.0.1:5175',
-    '::1',
     $formatStatefulDomain(env('APP_URL')),
     $formatStatefulDomain(env('FRONTEND_URL')),
-    $formatStatefulDomain(env('CLIENT_CONSOLE_URL') ?: $deriveConsoleUrl(env('FRONTEND_URL'))),
+    $formatStatefulDomain(env('CLIENT_CONSOLE_URL')),
     $formatStatefulDomain(env('ADMIN_URL')),
 ]));
 

@@ -6,16 +6,17 @@ return [
     'retention_days' => 30,
     'file_retention_days' => 180,
 
-    'archive_root' => env('LOG_ARCHIVE_ROOT', storage_path('app/private/log-archives')),
-    'report_root' => env('LOG_ARCHIVE_REPORT_ROOT', storage_path('logs/log-archive')),
-    'mount_point' => env('LOG_ARCHIVE_MOUNT_POINT'),
+    // 归档文件始终落在后端 storage 目录内，不支持 NAS 或外部挂载目录。
+    'archive_root' => storage_path('app/private/log-archives'),
+    'report_root' => storage_path('logs/log-archive'),
 
-    'pt_archiver_binary' => env('PT_ARCHIVER_BINARY', '/usr/bin/pt-archiver'),
-    'pt_archiver_defaults_file' => env('PT_ARCHIVER_DEFAULTS_FILE', '/etc/caiwu/pt-archiver.cnf'),
+    // 可执行参数的运行时默认值；管理员后台可覆盖。
+    'pt_archiver_binary' => '/usr/bin/pt-archiver',
+    'pt_archiver_defaults_file' => '/etc/caiwu/pt-archiver.cnf',
 
-    'concurrency' => (int) env('LOG_ARCHIVE_CONCURRENCY', 2),
-    'batch_size' => (int) env('LOG_ARCHIVE_BATCH_SIZE', 1000),
-    'sleep_seconds' => (int) env('LOG_ARCHIVE_SLEEP_SECONDS', 1),
+    'concurrency' => 2,
+    'batch_size' => 1000,
+    'sleep_seconds' => 1,
 
     'tables' => [
         'operation_logs' => 'API/后台操作及管理员登录日志',
