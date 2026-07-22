@@ -110,7 +110,11 @@ final class ZjmfNetworkService
         $response = $this->transport->post($supplier, "/v1/invoices/{$invoiceId}/fund", [], $this->resolveJwt($supplier, $jwt));
         $this->assertUpstreamSuccess($response, [200, 1001], $action);
 
-        return $response;
+        return [
+            ...$response,
+            'fund_status' => $this->responseStatus($response),
+            'payment_completed' => $this->responseStatus($response) === 1001,
+        ];
     }
 
     public function purchaseTrafficPackage(
@@ -137,7 +141,8 @@ final class ZjmfNetworkService
             $this->assertUpstreamSuccess($checkoutResponse, [200, 1001], '生成流量包账单');
             $invoiceId = $this->extractInvoiceId($checkoutResponse, $this->extractPayload($checkoutResponse));
             throw_if($invoiceId <= 0, new BusinessException('上游未返回流量包账单 ID'));
-            $this->fundInvoice($supplier, $invoiceId, $resolvedJwt, '使用供应商余额支付流量包账单');
+            $fundResponse = $this->fundInvoice($supplier, $invoiceId, $resolvedJwt, '使用供应商余额支付流量包账单');
+            $this->assertFundPaymentCompleted($fundResponse, '流量包账单');
         }
 
         $detailResponse = $this->consoleService->getHostDetail($supplier, $hostId, $resolvedJwt);
@@ -164,7 +169,8 @@ final class ZjmfNetworkService
         $this->assertUpstreamSuccess($checkoutResponse, [200, 1001], '生成产品升降级账单');
         $invoiceId = $this->extractInvoiceId($checkoutResponse, $this->extractPayload($checkoutResponse));
         throw_if($invoiceId <= 0, new BusinessException('上游未返回产品升降级账单 ID', 42200));
-        $this->fundInvoice($supplier, $invoiceId, $resolvedJwt, '使用供应商余额支付产品升降级账单');
+        $fundResponse = $this->fundInvoice($supplier, $invoiceId, $resolvedJwt, '使用供应商余额支付产品升降级账单');
+        $this->assertFundPaymentCompleted($fundResponse, '产品升降级账单');
 
         $detailResponse = $this->consoleService->getHostDetail($supplier, $hostId, $resolvedJwt);
         $this->assertUpstreamSuccess($detailResponse, [200], '读取产品升降级结果');
@@ -198,6 +204,20 @@ final class ZjmfNetworkService
     private function extractInvoiceId(array $response, array $payload): int
     {
         return (int) ($payload['invoiceid'] ?? $response['invoiceid'] ?? 0);
+    }
+
+    private function assertFundPaymentCompleted(array $response, string $invoiceLabel): void
+    {
+        if (($response['payment_completed'] ?? false) === true) {
+            return;
+        }
+
+        throw new BusinessException($invoiceLabel.'已生成，但供应商余额付款仍在处理中', 42200);
+    }
+
+    private function responseStatus(array $response): int
+    {
+        return (int) ($response['status'] ?? $response['code'] ?? $response['status_code'] ?? 0);
     }
 
     private function assertUpstreamSuccess(array $response, array $allowedStatuses, string $action): void

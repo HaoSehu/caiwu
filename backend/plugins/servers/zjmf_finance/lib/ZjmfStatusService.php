@@ -50,13 +50,15 @@ final class ZjmfStatusService
 
             foreach ($chunk as $item) {
                 $serviceId = (int) ($item['service_id'] ?? 0);
+                $hostId = (int) ($item['host_id'] ?? 0);
                 if ($serviceId <= 0) {
                     continue;
                 }
 
                 try {
                     $host = $this->extractHostPayload($responses['detail_'.$serviceId] ?? []);
-                    $runtime = $this->extractRuntimePayload($responses['runtime_'.$serviceId] ?? [], $host);
+                    $runtimeResponse = $this->fetchRuntimeStatus($supplier, $hostId, $jwt);
+                    $runtime = $this->extractRuntimePayload($runtimeResponse, $host);
 
                     $results[$serviceId] = [
                         'host' => $this->normalizeHost($host),
@@ -88,17 +90,48 @@ final class ZjmfStatusService
             }
 
             $requests['detail_'.$serviceId] = [
-                'uri' => "/v1/hosts/{$hostId}",
-            ];
-            $requests['runtime_'.$serviceId] = [
-                'uri' => "/v1/hosts/{$hostId}/module/status",
+                'uri' => '/host/header',
                 'query' => [
-                    'type' => 'host',
+                    'host_id' => $hostId,
+                    'source' => 'API',
                 ],
             ];
         }
 
         return $requests;
+    }
+
+    private function fetchRuntimeStatus(Supplier $supplier, int $hostId, string &$jwt): array
+    {
+        $response = $this->requestRuntimeStatus($supplier, $hostId, $jwt);
+        if ($this->isUnauthorizedPayload($response)) {
+            $jwt = $this->transport->refreshJwt($supplier);
+            $response = $this->requestRuntimeStatus($supplier, $hostId, $jwt);
+        }
+
+        return [
+            'status_code' => 0,
+            'response' => $response,
+        ];
+    }
+
+    private function requestRuntimeStatus(Supplier $supplier, int $hostId, string $jwt): array
+    {
+        return $this->transport->post(
+            $supplier,
+            '/provision/default',
+            [
+                'id' => $hostId,
+                'func' => 'status',
+            ],
+            $jwt,
+            ['content-type: application/x-www-form-urlencoded']
+        );
+    }
+
+    private function isUnauthorizedPayload(array $response): bool
+    {
+        return (int) ($response['status'] ?? $response['code'] ?? $response['status_code'] ?? 0) === 401;
     }
 
     private function shouldRetryWithFreshJwt(array $responses): bool
@@ -126,7 +159,7 @@ final class ZjmfStatusService
     private function extractHostPayload(array $response): array
     {
         $payload = $this->extractParallelPayload($response, '读取主机详情');
-        $host = is_array($payload['host'] ?? null) ? $payload['host'] : [];
+        $host = $this->transport->normalizeHostDetailPayload($payload);
 
         if ($host === []) {
             throw new BusinessException('读取主机详情失败：上游未返回实例数据', 42200);

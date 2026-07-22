@@ -13,69 +13,60 @@ use Illuminate\Support\Facades\Log;
 
 final class ZjmfRenewService
 {
+    private const RENEWAL_DURATION_BY_BILLING_CYCLE = [
+        'monthly' => 1,
+        'quarterly' => 3,
+        'semiannually' => 6,
+        'annually' => 12,
+    ];
+
     public function __construct(
         private readonly ZjmfFinanceTransport $transport,
     ) {}
 
-    public function getHostRenewInfo(Supplier $supplier, int $hostId, ?string $billingCycle = null): array
-    {
-        $query = [];
-        if ($billingCycle !== null && trim($billingCycle) !== '') {
-            $query['billingcycle'] = trim($billingCycle);
-        }
-
-        return $this->transport->get($supplier, "/v1/hosts/{$hostId}/renew", $this->transport->login($supplier), $query);
-    }
-
     public function renewHost(Supplier $supplier, int $hostId, string $billingCycle): array
     {
-        return $this->transport->post($supplier, "/v1/hosts/{$hostId}/renew", [
-            'billingcycle' => trim($billingCycle),
-        ], $this->transport->login($supplier));
-    }
-
-    public function setHostAutoRenew(Supplier $supplier, int $hostId, int $initiativeRenew): array
-    {
-        return $this->transport->put($supplier, "/v1/hosts/{$hostId}/renew", [
-            'initiative_renew' => $initiativeRenew === 1 ? 1 : 0,
-        ], $this->transport->login($supplier));
+        return $this->submitRenewal($supplier, $hostId, $billingCycle, $this->transport->login($supplier));
     }
 
     public function renewServiceInvoice(Supplier $supplier, int $hostId, string $billingCycle): array
     {
         $jwt = $this->transport->login($supplier);
-        $renewResponse = $this->transport->post($supplier, "/v1/hosts/{$hostId}/renew", [
-            'billingcycle' => trim($billingCycle),
-        ], $jwt);
+        $renewResponse = $this->submitRenewal($supplier, $hostId, $billingCycle, $jwt);
         $this->assertUpstreamSuccess($renewResponse, [200], '提交上游续费');
 
         $renewPayload = $this->extractPayload($renewResponse);
         $upstreamInvoiceId = $this->extractInvoiceId($renewResponse, $renewPayload);
         throw_if($upstreamInvoiceId <= 0, new BusinessException('上游未返回续费账单 ID'));
 
+        $payment = $this->extractPaymentMethod($renewResponse, $renewPayload);
+        $recoveryContext = $this->buildRecoveryContext($payment);
+
         try {
-            $fundResponse = $this->fundInvoice($supplier, $upstreamInvoiceId, $jwt);
+            $paymentResponse = $this->payAndCheckInvoice($supplier, $upstreamInvoiceId, $payment, $jwt);
         } catch (\Throwable $exception) {
-            return [
-                'upstream_invoice_id' => $upstreamInvoiceId,
-                'renew_response' => $renewResponse,
-                'fund_response' => [],
-                'fund_status' => 0,
-                'payment_completed' => false,
-                'fund_error' => $exception instanceof BusinessException
+            return $this->pendingRenewalInvoice(
+                $upstreamInvoiceId,
+                $renewResponse,
+                [],
+                $recoveryContext,
+                $exception instanceof BusinessException
                     ? $exception->getMessage()
                     : '使用供应商余额支付续费账单失败',
-                'host_detail' => [],
-            ];
+            );
         }
-        $paymentCompleted = $this->extractResponseStatus($fundResponse) === 1001;
+
+        $paymentStatus = $this->extractPaymentStatus($paymentResponse);
+        $paymentCompleted = $this->isPaymentCompleted($paymentResponse);
 
         return [
             'upstream_invoice_id' => $upstreamInvoiceId,
             'renew_response' => $renewResponse,
-            'fund_response' => $fundResponse,
-            'fund_status' => $this->extractResponseStatus($fundResponse),
+            'fund_response' => $paymentResponse,
+            'fund_status' => $paymentStatus,
             'payment_completed' => $paymentCompleted,
+            'fund_error' => $paymentCompleted ? '' : '上游续费账单仍未支付完成，请检查供应商余额',
+            'recovery_context' => $recoveryContext,
             'host_detail' => $paymentCompleted
                 ? $this->readHostDetailSafely($supplier, $hostId, $jwt, $upstreamInvoiceId)
                 : [],
@@ -84,59 +75,146 @@ final class ZjmfRenewService
 
     public function recoverRenewInvoice(Supplier $supplier, int $hostId, int $upstreamInvoiceId): ?array
     {
+        return $this->recoverRenewInvoiceWithContext($supplier, $hostId, $upstreamInvoiceId);
+    }
+
+    public function recoverRenewInvoiceWithContext(
+        Supplier $supplier,
+        int $hostId,
+        int $upstreamInvoiceId,
+        array $recoveryContext = [],
+    ): ?array {
         if ($upstreamInvoiceId <= 0) {
             return null;
         }
 
         $jwt = $this->transport->login($supplier);
-        $invoiceResponse = $this->transport->get($supplier, "/v1/invoices/{$upstreamInvoiceId}", $jwt);
-        $invoicePayload = $this->extractPayload($invoiceResponse);
-        $upstreamStatus = (string) ($invoicePayload['status'] ?? '');
+        $paymentResponse = $this->checkInvoicePayment($supplier, $upstreamInvoiceId, $jwt);
 
-        if ($upstreamStatus === 'Paid') {
-            return [
-                'upstream_invoice_id' => $upstreamInvoiceId,
-                'upstream_status' => $upstreamStatus,
-                'host_detail' => $this->readHostDetailSafely($supplier, $hostId, $jwt, $upstreamInvoiceId),
-                'recovered' => true,
-                'funded' => true,
-                'payment_completed' => true,
-            ];
+        if (! $this->isPaymentCompleted($paymentResponse)) {
+            $payment = trim((string) ($recoveryContext['payment'] ?? ''));
+            if ($payment === '') {
+                return $this->recoveredPendingInvoice($upstreamInvoiceId, $paymentResponse, '上游续费账单仍未支付完成，请检查供应商余额');
+            }
+
+            try {
+                $paymentResponse = $this->payAndCheckInvoice($supplier, $upstreamInvoiceId, $payment, $jwt);
+            } catch (\Throwable $exception) {
+                return $this->recoveredPendingInvoice(
+                    $upstreamInvoiceId,
+                    [],
+                    $exception instanceof BusinessException
+                        ? $exception->getMessage()
+                        : '恢复供应商余额支付续费账单失败',
+                );
+            }
         }
 
-        if ($upstreamStatus === 'Unpaid') {
-            $fundResponse = $this->fundInvoice($supplier, $upstreamInvoiceId, $jwt);
-            $paymentCompleted = $this->extractResponseStatus($fundResponse) === 1001;
+        $paymentCompleted = $this->isPaymentCompleted($paymentResponse);
 
-            return [
-                'upstream_invoice_id' => $upstreamInvoiceId,
-                'upstream_status' => $upstreamStatus,
-                'fund_response' => $fundResponse,
-                'fund_status' => $this->extractResponseStatus($fundResponse),
-                'host_detail' => $paymentCompleted
-                    ? $this->readHostDetailSafely($supplier, $hostId, $jwt, $upstreamInvoiceId)
-                    : [],
-                'recovered' => true,
-                'funded' => $paymentCompleted,
-                'payment_completed' => $paymentCompleted,
-            ];
-        }
-
-        return null;
+        return [
+            'upstream_invoice_id' => $upstreamInvoiceId,
+            'fund_response' => $paymentResponse,
+            'fund_status' => $this->extractPaymentStatus($paymentResponse),
+            'host_detail' => $paymentCompleted
+                ? $this->readHostDetailSafely($supplier, $hostId, $jwt, $upstreamInvoiceId)
+                : [],
+            'recovered' => true,
+            'funded' => $paymentCompleted,
+            'payment_completed' => $paymentCompleted,
+            'fund_error' => $paymentCompleted ? '' : '上游续费账单仍未支付完成，请检查供应商余额',
+        ];
     }
 
-    private function fundInvoice(Supplier $supplier, int $upstreamInvoiceId, string $jwt): array
+    private function submitRenewal(Supplier $supplier, int $hostId, string $billingCycle, string $jwt): array
     {
-        $fundResponse = $this->transport->post($supplier, "/v1/invoices/{$upstreamInvoiceId}/fund", [], $jwt);
-        $this->assertUpstreamSuccess($fundResponse, [200, 1001], '使用供应商余额支付续费账单');
+        return $this->transport->post($supplier, '/host/renew', $this->buildRenewPayload($hostId, $billingCycle), $jwt);
+    }
 
-        return $fundResponse;
+    private function buildRenewPayload(int $hostId, string $billingCycle): array
+    {
+        $billingCycle = strtolower(trim($billingCycle));
+        $duration = self::RENEWAL_DURATION_BY_BILLING_CYCLE[$billingCycle] ?? null;
+        throw_if($duration === null, new BusinessException('不支持的续费周期'));
+
+        return [
+            'hostid' => $hostId,
+            'billingcycles' => $billingCycle,
+            'duration' => $duration,
+        ];
+    }
+
+    private function payAndCheckInvoice(Supplier $supplier, int $upstreamInvoiceId, string $payment, string $jwt): array
+    {
+        $this->payInvoiceWithBalance($supplier, $upstreamInvoiceId, $payment, $jwt);
+
+        return $this->checkInvoicePayment($supplier, $upstreamInvoiceId, $jwt);
+    }
+
+    private function payInvoiceWithBalance(Supplier $supplier, int $upstreamInvoiceId, string $payment, string $jwt): void
+    {
+        throw_if(trim($payment) === '', new BusinessException('上游未返回续费付款方式'));
+
+        $this->transport->requestText($supplier, 'POST', '/pay', [
+            'invoiceid' => $upstreamInvoiceId,
+            'use_credit' => 1,
+            'payment' => $payment,
+            'use_credit_limit' => 0,
+        ], $jwt, [], [
+            'action' => 'billing',
+            'pay' => 'true',
+        ]);
+    }
+
+    private function checkInvoicePayment(Supplier $supplier, int $upstreamInvoiceId, string $jwt): array
+    {
+        $response = $this->transport->post($supplier, '/check_order', ['id' => $upstreamInvoiceId], $jwt);
+        $status = $this->extractPaymentStatus($response);
+
+        if (! in_array($status, [0, 200, 1000, 1001], true)) {
+            $this->assertUpstreamSuccess($response, [200, 1000, 1001], '确认上游续费账单支付状态');
+        }
+
+        return $response;
+    }
+
+    private function pendingRenewalInvoice(
+        int $upstreamInvoiceId,
+        array $renewResponse,
+        array $paymentResponse,
+        array $recoveryContext,
+        string $error,
+    ): array {
+        return [
+            'upstream_invoice_id' => $upstreamInvoiceId,
+            'renew_response' => $renewResponse,
+            'fund_response' => $paymentResponse,
+            'fund_status' => $this->extractPaymentStatus($paymentResponse),
+            'payment_completed' => false,
+            'fund_error' => $error,
+            'recovery_context' => $recoveryContext,
+            'host_detail' => [],
+        ];
+    }
+
+    private function recoveredPendingInvoice(int $upstreamInvoiceId, array $paymentResponse, string $error): array
+    {
+        return [
+            'upstream_invoice_id' => $upstreamInvoiceId,
+            'fund_response' => $paymentResponse,
+            'fund_status' => $this->extractPaymentStatus($paymentResponse),
+            'host_detail' => [],
+            'recovered' => true,
+            'funded' => false,
+            'payment_completed' => false,
+            'fund_error' => $error,
+        ];
     }
 
     private function readHostDetailSafely(Supplier $supplier, int $hostId, string $jwt, int $upstreamInvoiceId): array
     {
         try {
-            $detailResponse = $this->transport->get($supplier, "/v1/hosts/{$hostId}", $jwt);
+            $detailResponse = $this->transport->getHostDetail($supplier, $hostId, $jwt);
             $this->assertUpstreamSuccess($detailResponse, [200], '读取上游续费结果');
             $detailPayload = $this->extractPayload($detailResponse);
 
@@ -164,9 +242,39 @@ final class ZjmfRenewService
         return (int) ($payload['invoiceid'] ?? $response['invoiceid'] ?? 0);
     }
 
-    private function extractResponseStatus(array $response): int
+    private function extractPaymentMethod(array $response, array $payload): string
     {
-        return (int) ($response['status'] ?? $response['code'] ?? $response['status_code'] ?? 0);
+        return trim((string) ($payload['payment'] ?? $response['payment'] ?? ''));
+    }
+
+    private function buildRecoveryContext(string $payment): array
+    {
+        return $payment === '' ? [] : ['payment' => $payment];
+    }
+
+    private function extractPaymentStatus(array $response): int
+    {
+        $statuses = [];
+        foreach ([$response, $this->extractPayload($response)] as $candidate) {
+            foreach (['status', 'code', 'status_code'] as $key) {
+                if (isset($candidate[$key]) && is_numeric($candidate[$key])) {
+                    $statuses[] = (int) $candidate[$key];
+                }
+            }
+        }
+
+        foreach ($statuses as $status) {
+            if (in_array($status, [1000, 1001], true)) {
+                return $status;
+            }
+        }
+
+        return $statuses[0] ?? 0;
+    }
+
+    private function isPaymentCompleted(array $response): bool
+    {
+        return in_array($this->extractPaymentStatus($response), [1000, 1001], true);
     }
 
     private function assertUpstreamSuccess(array $response, array $allowedStatuses, string $action): void

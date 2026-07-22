@@ -89,10 +89,10 @@ final class ZjmfProvisionService
         $latency = [
             'login_ms' => 0,
             'clear_cart_before_ms' => 0,
+            'product_config_ms' => 0,
             'add_cart_ms' => 0,
-            'get_cart_ms' => 0,
             'checkout_ms' => 0,
-            'fund_invoice_ms' => 0,
+            'apply_credit_ms' => 0,
             'find_host_ids_ms' => 0,
             'host_detail_ms' => 0,
             'clear_cart_after_ms' => 0,
@@ -112,29 +112,54 @@ final class ZjmfProvisionService
             $latency['login_ms'] = $this->elapsedMilliseconds($stepStartedAt);
 
             $stepStartedAt = microtime(true);
-            $this->requestCartWithSession($supplier, 'DELETE', '/v1/cart/clear', [], $jwt, $cartCookieJar);
+            $this->clearCart($supplier, $jwt, $cartCookieJar);
             $latency['clear_cart_before_ms'] = $this->elapsedMilliseconds($stepStartedAt);
 
-            $payload = $this->buildCartPayload($order, $product);
+            $upstreamProductId = $this->resolveProductUpstreamProductId($product);
+
+            $stepStartedAt = microtime(true);
+            $productConfigResponse = $this->requestCartWithSession(
+                $supplier,
+                'GET',
+                '/cart/get_product_config',
+                [],
+                $jwt,
+                $cartCookieJar,
+                [],
+                ['pid' => $upstreamProductId]
+            );
+            $latency['product_config_ms'] = $this->elapsedMilliseconds($stepStartedAt);
+            $this->assertUpstreamSuccess($productConfigResponse, [200], '读取上游商品配置');
+
+            $payload = $this->buildCartPayload(
+                $order,
+                $product,
+                $this->resolveCurrencyId($order, $product, $this->extractPayload($productConfigResponse), $upstreamProductId)
+            );
             $requestedHost = (string) ($payload['host'] ?? '');
 
             $stepStartedAt = microtime(true);
             $addCartResponse = $this->addProductToCart($supplier, $jwt, $payload, $cartCookieJar);
             $latency['add_cart_ms'] = $this->elapsedMilliseconds($stepStartedAt);
             $this->assertUpstreamSuccess($addCartResponse, [200], '加入上游购物车');
+            $cartPosition = $this->extractCartPosition($addCartResponse, $this->extractPayload($addCartResponse));
 
             $stepStartedAt = microtime(true);
-            $cartResponse = $this->requestCartWithSession($supplier, 'GET', '/v1/cart', [], $jwt, $cartCookieJar);
-            $latency['get_cart_ms'] = $this->elapsedMilliseconds($stepStartedAt);
-            $this->assertUpstreamSuccess($cartResponse, [200], '读取上游购物车');
-            $cartPayload = $this->extractPayload($cartResponse);
-            $gateway = $this->resolveGateway($cartPayload);
-
-            $stepStartedAt = microtime(true);
-            $checkoutResponse = $this->requestCartWithSession($supplier, 'POST', '/v1/cart/checkout', [
-                'payment' => $gateway,
-                'position' => [0],
-            ], $jwt, $cartCookieJar);
+            $checkoutResponse = $this->requestCartWithSession(
+                $supplier,
+                'POST',
+                '/cart/settle',
+                [
+                    'pos' => [$cartPosition],
+                    'checkout' => 1,
+                ],
+                $jwt,
+                $cartCookieJar,
+                [
+                    'Content-Type: application/x-www-form-urlencoded',
+                    'Accept: application/json',
+                ]
+            );
             $latency['checkout_ms'] = $this->elapsedMilliseconds($stepStartedAt);
             $this->assertUpstreamSuccess($checkoutResponse, [200, 1001], '上游购物车结算');
 
@@ -143,33 +168,42 @@ final class ZjmfProvisionService
             $hostIds = $this->extractHostIds($checkoutResponse, $checkoutPayload);
             $this->checkpointUpstreamProvision($existingService, $supplier, $product, $invoiceId, $hostIds, $requestedHost);
 
-            if ($hostIds === [] && $invoiceId > 0 && ! $this->isCompletedCheckoutResponse($checkoutResponse)) {
+            if ($invoiceId <= 0) {
+                throw new BusinessException('上游已接受结算，但未返回账单 ID');
+            }
+
+            if ($this->extractResponseStatus($checkoutResponse) !== 1001) {
                 $stepStartedAt = microtime(true);
-                $fundResponse = $this->requestCartWithSession(
+                $creditResponse = $this->requestCartWithSession(
                     $supplier,
                     'POST',
-                    "/v1/invoices/{$invoiceId}/fund",
-                    [],
+                    '/apply_credit',
+                    [
+                        'invoiceid' => $invoiceId,
+                        'use_credit' => 1,
+                        'enough' => 1,
+                    ],
                     $jwt,
-                    $cartCookieJar
+                    $cartCookieJar,
+                    [
+                        'Content-Type: application/x-www-form-urlencoded',
+                        'Accept: application/json',
+                    ]
                 );
-                $latency['fund_invoice_ms'] = $this->elapsedMilliseconds($stepStartedAt);
-                $this->assertUpstreamSuccess($fundResponse, [200, 1001], '使用供应商余额支付上游账单');
-                $fundPayload = $this->extractPayload($fundResponse);
-                $hostIds = $this->extractHostIds($fundResponse, $fundPayload);
-                $this->checkpointUpstreamProvision($existingService, $supplier, $product, $invoiceId, $hostIds, $requestedHost);
+                $latency['apply_credit_ms'] = $this->elapsedMilliseconds($stepStartedAt);
+                $this->assertUpstreamSuccess($creditResponse, [200, 1001], '使用供应商余额支付上游账单');
 
-                if ($hostIds === []) {
-                    $message = trim((string) ($fundResponse['msg'] ?? ''));
-                    throw new BusinessException($message !== ''
-                        ? "上游账单 {$invoiceId} 支付未完成：{$message}"
-                        : "上游账单 {$invoiceId} 未支付完成，请检查供应商余额是否充足");
-                }
+                $creditPayload = $this->extractPayload($creditResponse);
+                $hostIds = array_values(array_unique([
+                    ...$hostIds,
+                    ...$this->extractHostIds($creditResponse, $creditPayload),
+                ]));
+                $this->checkpointUpstreamProvision($existingService, $supplier, $product, $invoiceId, $hostIds, $requestedHost);
             }
 
             if ($hostIds === []) {
                 $stepStartedAt = microtime(true);
-                $hostIds = $this->findHostIdsByName($supplier, $jwt, (string) $payload['host']);
+                $hostIds = $this->findHostIdsForProvision($supplier, $jwt, $invoiceId, (string) $payload['host']);
                 $latency['find_host_ids_ms'] = $this->elapsedMilliseconds($stepStartedAt);
                 $this->checkpointUpstreamProvision($existingService, $supplier, $product, $invoiceId, $hostIds, $requestedHost);
             }
@@ -206,7 +240,7 @@ final class ZjmfProvisionService
 
             try {
                 if (is_string($jwt) && trim($jwt) !== '') {
-                    $this->requestCartWithSession($supplier, 'DELETE', '/v1/cart/clear', [], $jwt, $cartCookieJar);
+                    $this->clearCart($supplier, $jwt, $cartCookieJar);
                 }
             } catch (\Throwable $exception) {
                 Log::warning('[ZJMF 财务开通] 清理供应商购物车失败', [
@@ -243,12 +277,12 @@ final class ZjmfProvisionService
 
     public function getProductProvisionConfig(Supplier $supplier, int $productId): array
     {
-        return $this->transport->get($supplier, '/v1/productsconfig', $this->transport->login($supplier), [
-            'product_id' => $productId,
+        return $this->transport->get($supplier, '/cart/get_product_config', $this->transport->login($supplier), [
+            'pid' => $productId,
         ]);
     }
 
-    private function buildCartPayload(Order $order, Product $product): array
+    private function buildCartPayload(Order $order, Product $product, int $currencyId): array
     {
         $configSnapshot = array_merge(
             (array) (($product->purchase_requires ?? [])['upstream_default_config'] ?? []),
@@ -261,14 +295,26 @@ final class ZjmfProvisionService
             $password = $this->generateProvisionPassword();
         }
 
-        return [
-            'product_id' => $this->resolveProductUpstreamProductId($product),
+        $configOption = $this->buildConfigOptionMap($product, $configSnapshot);
+
+        $payload = [
+            'pid' => $this->resolveProductUpstreamProductId($product),
             'billingcycle' => (string) $order->billing_cycle,
             'qty' => 1,
+            'configoption' => $configOption,
+            'customfield' => (array) ($configSnapshot['customfield'] ?? []),
+            'currencyid' => $currencyId,
             'host' => $hostname,
             'password' => $password,
-            'configoption' => $this->buildConfigOptionMap($product, $configSnapshot),
+            'checkout' => 0,
         ];
+
+        $osSelectionId = $this->resolveOsSelectionId($product, $configOption);
+        if ($osSelectionId > 0) {
+            $payload['os'] = ['id' => $osSelectionId];
+        }
+
+        return $payload;
     }
 
     private function resolveExistingHostId(Service $service): int
@@ -444,23 +490,48 @@ final class ZjmfProvisionService
 
     private function addProductToCart(Supplier $supplier, string $jwt, array $payload, array &$cookieJar): array
     {
-        $requestPayload = $payload;
-        if (($requestPayload['configoption'] ?? []) === []) {
-            $requestPayload['configoption'] = (object) [];
-        }
-
         return $this->requestCartWithSession(
             $supplier,
             'POST',
-            '/v1/cart/products',
-            (string) json_encode($requestPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            '/cart/add_to_shop',
+            $payload,
             $jwt,
             $cookieJar,
             [
-                'Content-Type: application/json',
+                'Content-Type: application/x-www-form-urlencoded',
                 'Accept: application/json',
             ]
         );
+    }
+
+    private function clearCart(Supplier $supplier, string $jwt, array &$cookieJar): void
+    {
+        $response = $this->requestCartWithSession(
+            $supplier,
+            'POST',
+            '/cart/clear',
+            [],
+            $jwt,
+            $cookieJar,
+            [
+                'Content-Type: application/x-www-form-urlencoded',
+                'Accept: application/json',
+            ]
+        );
+
+        if ($this->extractResponseStatus($response) === 400 && $this->isKnownEmptyCartResponse($response)) {
+            return;
+        }
+
+        $this->assertUpstreamSuccess($response, [200], '清空上游购物车');
+    }
+
+    private function isKnownEmptyCartResponse(array $response): bool
+    {
+        $message = trim((string) ($response['msg'] ?? $response['message'] ?? ''));
+
+        return str_contains($message, '该订单已开通')
+            && str_contains($message, '请勿重新开通');
     }
 
     private function requestCartWithSession(
@@ -541,26 +612,6 @@ final class ZjmfProvisionService
         }
     }
 
-    private function resolveGateway(array $cartPayload): string
-    {
-        $gateway = trim((string) ($cartPayload['default_gateway'] ?? ''));
-        if ($gateway !== '') {
-            return $gateway;
-        }
-
-        $gatewayList = $cartPayload['gateway_list'] ?? [];
-        if (is_array($gatewayList)) {
-            foreach ($gatewayList as $item) {
-                $name = trim((string) ($item['name'] ?? ''));
-                if ($name !== '') {
-                    return $name;
-                }
-            }
-        }
-
-        throw new BusinessException('上游未配置可用支付网关，无法完成自动开通');
-    }
-
     private function extractPayload(array $response): array
     {
         return is_array($response['data'] ?? null) ? $response['data'] : $response;
@@ -568,12 +619,48 @@ final class ZjmfProvisionService
 
     private function extractInvoiceId(array $response, array $payload): int
     {
-        return (int) ($payload['invoiceid'] ?? $response['invoiceid'] ?? 0);
+        $invoice = is_array($payload['invoice'] ?? null) ? $payload['invoice'] : [];
+
+        return (int) (
+            $payload['invoiceid']
+            ?? $payload['invoice_id']
+            ?? $invoice['id']
+            ?? $response['invoiceid']
+            ?? $response['invoice_id']
+            ?? 0
+        );
+    }
+
+    private function extractCartPosition(array $response, array $payload): int
+    {
+        foreach ([
+            $payload['i'] ?? null,
+            $payload['position'] ?? null,
+            $response['i'] ?? null,
+            $response['position'] ?? null,
+            $response['data'] ?? null,
+        ] as $candidate) {
+            if (is_numeric($candidate) && (int) $candidate >= 0) {
+                return (int) $candidate;
+            }
+        }
+
+        // The standard endpoint omits i on some Mofang Finance releases.
+        // The cart is cleared under the supplier-scoped lock before adding one item.
+        return 0;
     }
 
     private function extractHostIds(array $response, array $payload): array
     {
-        $hostIds = $payload['hostid'] ?? $response['hostid'] ?? [];
+        $hostIds = $payload['hostid']
+            ?? $payload['host_id']
+            ?? $payload['hostids']
+            ?? $payload['host_ids']
+            ?? $response['hostid']
+            ?? $response['host_id']
+            ?? $response['hostids']
+            ?? $response['host_ids']
+            ?? [];
 
         if (! is_array($hostIds)) {
             $hostIds = [$hostIds];
@@ -610,42 +697,99 @@ final class ZjmfProvisionService
         throw new BusinessException(app(ProviderErrorMapper::class)->toUserMessage(ProviderKey::ZJMF_FINANCE_API, $action, $message));
     }
 
-    private function isCompletedCheckoutResponse(array $response): bool
-    {
-        return $this->extractResponseStatus($response) === 1001;
-    }
-
     private function extractResponseStatus(array $response): int
     {
         return (int) ($response['status'] ?? $response['code'] ?? $response['status_code'] ?? 0);
     }
 
-    private function findHostIdsByName(Supplier $supplier, string $jwt, string $hostname): array
+    private function findHostIdsForProvision(Supplier $supplier, string $jwt, int $invoiceId, string $hostname): array
     {
-        $response = $this->transport->get($supplier, '/v1/hosts', $jwt, [
-            'page' => 1,
-            'limit' => 20,
-            'keywords' => $hostname,
+        $response = $this->transport->get($supplier, '/host/list', $jwt, [
+            'show_type' => 'list',
+            'orderby' => 'id',
             'sort' => 'DESC',
         ]);
+        $this->assertUpstreamSuccess($response, [200], '查询上游已开通产品');
 
         $payload = $this->extractPayload($response);
-        $hosts = is_array($payload['host'] ?? null) ? $payload['host'] : [];
+        $hosts = is_array($payload['list'] ?? null) ? $payload['list'] : [];
 
-        return array_values(array_filter(array_map(function ($host) use ($hostname) {
+        return array_values(array_unique(array_filter(array_map(function ($host) use ($invoiceId, $hostname) {
             if (! is_array($host)) {
                 return null;
             }
 
             $domain = trim((string) ($host['domain'] ?? ''));
-            if ($domain !== '' && $domain !== $hostname) {
+            $hostInvoiceId = (int) ($host['invoice_id'] ?? $host['invoiceid'] ?? 0);
+            $matchesInvoice = $invoiceId > 0 && $hostInvoiceId === $invoiceId;
+            $matchesHostname = $hostname !== '' && $domain === $hostname;
+
+            if (! $matchesInvoice && ! $matchesHostname) {
                 return null;
             }
 
             $id = (int) ($host['id'] ?? 0);
-
             return $id > 0 ? $id : null;
-        }, $hosts)));
+        }, $hosts))));
+    }
+
+    private function resolveCurrencyId(Order $order, Product $product, array $upstreamProductConfig, int $upstreamProductId): int
+    {
+        $configSnapshot = (array) ($order->config_snapshot ?? []);
+        $candidates = [
+            $configSnapshot['currencyid'] ?? null,
+            $configSnapshot['currency_id'] ?? null,
+            $product->getAttribute('currency_id'),
+        ];
+
+        foreach ((array) ($upstreamProductConfig['product_pricings'] ?? []) as $pricing) {
+            if (! is_array($pricing)) {
+                continue;
+            }
+
+            $pricedProductId = (int) ($pricing['relid'] ?? 0);
+            if ($pricedProductId > 0 && $pricedProductId !== $upstreamProductId) {
+                continue;
+            }
+
+            $candidates[] = $pricing['currency'] ?? $pricing['currencyid'] ?? $pricing['currency_id'] ?? null;
+        }
+
+        foreach ((array) ($product->config_options ?? []) as $option) {
+            foreach ((array) ((array) $option)['sub'] as $subOption) {
+                foreach ((array) (((array) $subOption)['pricings'] ?? []) as $pricing) {
+                    if (is_array($pricing)) {
+                        $candidates[] = $pricing['currency'] ?? $pricing['currencyid'] ?? $pricing['currency_id'] ?? null;
+                    }
+                }
+            }
+        }
+
+        foreach ($candidates as $candidate) {
+            if (is_numeric($candidate) && (int) $candidate > 0) {
+                return (int) $candidate;
+            }
+        }
+
+        throw new BusinessException('无法确定上游商品币种，已停止创建上游订单');
+    }
+
+    private function resolveOsSelectionId(Product $product, array $configOption): int
+    {
+        foreach ((array) ($product->config_options ?? []) as $item) {
+            $item = (array) $item;
+            if ($this->parseField($item) !== 'os') {
+                continue;
+            }
+
+            $optionId = $this->resolveOptionId($item);
+            $selectionId = $configOption[$optionId] ?? null;
+            if (is_numeric($selectionId) && (int) $selectionId > 0) {
+                return (int) $selectionId;
+            }
+        }
+
+        return 0;
     }
 
     private function generateProvisionPassword(): string

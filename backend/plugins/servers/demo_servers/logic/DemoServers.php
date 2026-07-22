@@ -315,17 +315,6 @@ class DemoServers implements ProvidesConsoleAccess, ProvidesConsoleCatalog, Prov
         ];
     }
 
-    public function setHostAutoRenew(Supplier $supplier, int $hostId, int $initiativeRenew): array
-    {
-        return [
-            'status' => 200,
-            'data' => [
-                'host_id' => $hostId,
-                'initiative_renew' => $initiativeRenew === 1 ? 1 : 0,
-            ],
-        ];
-    }
-
     public function renewServiceInvoice(Supplier $supplier, int $hostId, string $billingCycle): array
     {
         $invoiceId = 700000 + $hostId;
