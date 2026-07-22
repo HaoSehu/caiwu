@@ -13,6 +13,16 @@ class SettingService
 {
     private const FIXED_RENEW_NOTICE_DAYS = [7, 3, 1];
 
+    private const LOG_ARCHIVE_SETTING_KEYS = [
+        'retention_days',
+        'file_retention_days',
+        'pt_archiver_binary',
+        'pt_archiver_defaults_file',
+        'concurrency',
+        'batch_size',
+        'sleep_seconds',
+    ];
+
     private const PLUGIN_OWNED_SETTING_GROUPS = [
         'message_limit',
     ];
@@ -103,6 +113,22 @@ class SettingService
         ];
     }
 
+    /**
+     * @return array{retention_days: int, file_retention_days: int, pt_archiver_binary: string, pt_archiver_defaults_file: string, concurrency: int, batch_size: int, sleep_seconds: int}
+     */
+    public static function defaultLogArchiveConfig(): array
+    {
+        return [
+            'retention_days' => (int) config('log_archive.retention_days', 30),
+            'file_retention_days' => (int) config('log_archive.file_retention_days', 180),
+            'pt_archiver_binary' => (string) config('log_archive.pt_archiver_binary', '/usr/bin/pt-archiver'),
+            'pt_archiver_defaults_file' => (string) config('log_archive.pt_archiver_defaults_file', '/etc/caiwu/pt-archiver.cnf'),
+            'concurrency' => (int) config('log_archive.concurrency', 2),
+            'batch_size' => (int) config('log_archive.batch_size', 1000),
+            'sleep_seconds' => (int) config('log_archive.sleep_seconds', 1),
+        ];
+    }
+
     public function getGroupSettings(string $group): Collection
     {
         if ($this->isPluginOwnedSettingGroup($group)) {
@@ -124,6 +150,7 @@ class SettingService
             ->reject(fn ($setting, string $key) => array_key_exists($key, $fallbackSettingMap))
             ->reject(fn ($setting, string $key) => $this->isPluginSettingKey($group, $key))
             ->reject(fn ($setting, string $key) => $this->isNotificationTemplateSettingKey($group, $key))
+            ->reject(fn ($setting, string $key) => $this->isUnsupportedLogArchiveSettingKey($group, $key))
             ->map(function (SystemSetting $setting) use ($group, $automationConfig): array {
                 $key = (string) ($setting->item_key ?? '');
                 $shouldNormalizeScheduleValue = str_ends_with($key, '_schedule_mode')
@@ -265,6 +292,24 @@ class SettingService
             'pending_recharge_cleanup_after_days' => $this->getInt('automation', 'pending_recharge_cleanup_after_days', $defaults['pending_recharge_cleanup_after_days'], 0, 365),
             'order_cleanup_schedule_mode' => $this->getScheduleMode('automation', 'order_cleanup_schedule_mode', $defaults['order_cleanup_schedule_mode']),
             'order_cleanup_schedule_time' => $this->getScheduleTime('automation', 'order_cleanup_schedule_time', $defaults['order_cleanup_schedule_time']),
+        ];
+    }
+
+    /**
+     * @return array{retention_days: int, file_retention_days: int, pt_archiver_binary: string, pt_archiver_defaults_file: string, concurrency: int, batch_size: int, sleep_seconds: int}
+     */
+    public function getLogArchiveConfig(): array
+    {
+        $defaults = self::defaultLogArchiveConfig();
+
+        return [
+            'retention_days' => $this->getInt('log_archive', 'retention_days', $defaults['retention_days'], 1, 3650),
+            'file_retention_days' => $this->getInt('log_archive', 'file_retention_days', $defaults['file_retention_days'], 1, 3650),
+            'pt_archiver_binary' => $this->getString('log_archive', 'pt_archiver_binary', $defaults['pt_archiver_binary']),
+            'pt_archiver_defaults_file' => $this->getString('log_archive', 'pt_archiver_defaults_file', $defaults['pt_archiver_defaults_file']),
+            'concurrency' => $this->getInt('log_archive', 'concurrency', $defaults['concurrency'], 1, 8),
+            'batch_size' => $this->getInt('log_archive', 'batch_size', $defaults['batch_size'], 100, 10000),
+            'sleep_seconds' => $this->getInt('log_archive', 'sleep_seconds', $defaults['sleep_seconds'], 0, 60),
         ];
     }
 
@@ -434,6 +479,7 @@ class SettingService
     {
         return match ($group) {
             'system' => [],
+            'log_archive' => self::defaultLogArchiveConfig(),
             'traffic_package' => [
                 'traffic_package_enabled' => '1',
                 'traffic_package_display_threshold_percent' => '0',
@@ -526,6 +572,7 @@ class SettingService
         }
 
         $this->validateAutomationScheduleSettings($group, $settings);
+        $this->validateLogArchiveSettings($group, $settings);
 
         return $settings;
     }
@@ -549,6 +596,12 @@ class SettingService
         $key = trim($key);
 
         return $key !== '' && in_array($key, self::PLUGIN_SETTING_KEYS[$group] ?? [], true);
+    }
+
+    private function isUnsupportedLogArchiveSettingKey(string $group, string $key): bool
+    {
+        return trim($group) === 'log_archive'
+            && ! in_array(trim($key), self::LOG_ARCHIVE_SETTING_KEYS, true);
     }
 
     private function isNotificationTemplateSettingKey(string $group, string $key): bool
@@ -676,6 +729,58 @@ class SettingService
                 throw new BusinessException("{$label}的执行时间仅支持分钟为 00、15、30 或 45，且秒必须为 00");
             }
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $settings
+     */
+    private function validateLogArchiveSettings(string $group, array $settings): void
+    {
+        if (trim($group) !== 'log_archive') {
+            return;
+        }
+
+        $keys = array_map('strval', array_keys($settings));
+        if (array_diff($keys, self::LOG_ARCHIVE_SETTING_KEYS) !== []) {
+            throw new BusinessException('日志归档配置包含不受支持的字段', 42200);
+        }
+
+        $resolved = array_replace($this->getLogArchiveConfig(), $settings);
+        $pathLabels = [
+            'pt_archiver_binary' => 'pt-archiver 可执行文件',
+            'pt_archiver_defaults_file' => 'pt-archiver 配置文件',
+        ];
+
+        foreach ($pathLabels as $key => $label) {
+            $path = trim((string) ($resolved[$key] ?? ''));
+            if (! $this->isAbsolutePathWithoutParentTraversal($path)) {
+                throw new BusinessException("{$label}必须为不含 .. 的绝对路径", 42200);
+            }
+        }
+
+        $integerRules = [
+            'retention_days' => ['日志保留天数', 1, 3650],
+            'file_retention_days' => ['归档文件保留天数', 1, 3650],
+            'concurrency' => ['并发数', 1, 8],
+            'batch_size' => ['批量大小', 100, 10000],
+            'sleep_seconds' => ['批次间隔', 0, 60],
+        ];
+
+        foreach ($integerRules as $key => [$label, $minimum, $maximum]) {
+            $value = $resolved[$key] ?? null;
+            if (filter_var($value, FILTER_VALIDATE_INT) === false
+                || (int) $value < $minimum
+                || (int) $value > $maximum) {
+                throw new BusinessException("{$label}必须在 {$minimum} 到 {$maximum} 之间", 42200);
+            }
+        }
+    }
+
+    private function isAbsolutePathWithoutParentTraversal(string $path): bool
+    {
+        return $path !== ''
+            && (str_starts_with($path, '/') || preg_match('/^[A-Za-z]:[\\\\\/]/', $path) === 1)
+            && preg_match('#(^|[\\\\/])\.\.([\\\\/]|$)#', $path) !== 1;
     }
 
     private function parseProvisionHostnameCharsets(string $value): array

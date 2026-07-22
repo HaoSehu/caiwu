@@ -110,7 +110,28 @@ class PluginInstaller
 
     public function disable(IntegrationPlugin $plugin): IntegrationPlugin
     {
-        $manifest = $this->scanner->requireManifest((string) $plugin->domain, (string) $plugin->slug);
+        $manifest = $this->scanner->find((string) $plugin->domain, (string) $plugin->slug);
+
+        if (! $manifest instanceof PluginManifest) {
+            DB::transaction(function () use ($plugin): void {
+                $plugin->forceFill([
+                    'status' => IntegrationPlugin::STATUS_DISABLED,
+                ])->save();
+
+                if (Schema::hasTable('integration_plugin_bindings')) {
+                    DB::table('integration_plugin_bindings')
+                        ->where('plugin_id', (int) $plugin->id)
+                        ->update([
+                            'status' => 0,
+                            'updated_at' => now(),
+                        ]);
+                }
+            });
+
+            $this->forgetDomainRuntime((string) $plugin->domain);
+
+            return $plugin->fresh('config') ?? $plugin;
+        }
 
         DB::transaction(function () use ($plugin, $manifest): void {
             $plugin->forceFill([

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Services\ClientServiceConsole\ClientServiceConsoleService;
+use App\Support\PublicUrl;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -279,6 +280,7 @@ class VncRelayCommand extends Command
         $headers = $request['headers'];
         $wsKey = trim((string) ($headers['sec-websocket-key'] ?? ''));
         $token = trim((string) ($request['query']['token'] ?? ''));
+        $clientOrigin = trim((string) ($headers['origin'] ?? ''));
 
         if ($wsKey === '' || $token === '') {
             $this->writeHttpError($connection['client'], 400, 'Bad Request', '缺少 token 或 WebSocket 握手头');
@@ -290,7 +292,18 @@ class VncRelayCommand extends Command
         $params = [];
 
         try {
-            $params = $consoleService->resolveVncToken($token);
+            $params = $this->resolveVncTokenForClient($consoleService, $token, $clientOrigin);
+            if ($params === null) {
+                Log::warning('[VNC Relay] 浏览器 Origin 未获授权', [
+                    'token' => $this->maskToken($token),
+                    'origin' => $clientOrigin,
+                ]);
+                $this->writeHttpError($connection['client'], 403, 'Forbidden', 'VNC 请求来源未获授权');
+                $this->closeConnection($connectionId);
+
+                return;
+            }
+
             [$upstream, $upstreamExtra] = $this->connectUpstream($params);
         } catch (Throwable $e) {
             Log::warning('[VNC Relay] 上游连接失败', [
@@ -478,19 +491,32 @@ class VncRelayCommand extends Command
             return $upstreamOrigin;
         }
 
-        $frontendUrl = trim((string) config('app.frontend_url', ''));
-        if ($frontendUrl !== '') {
-            return $frontendUrl;
+        return PublicUrl::console();
+    }
+
+    /**
+     * 先预览 token 并校验 Origin，避免跨域请求消费一次性 VNC 启动链接。
+     *
+     * @return array<string, mixed>|null
+     */
+    private function resolveVncTokenForClient(
+        ClientServiceConsoleService $consoleService,
+        string $token,
+        string $origin
+    ): ?array {
+        $previewParams = $consoleService->previewVncToken($token);
+        if (! $this->isAllowedClientOrigin($origin, $previewParams)) {
+            return null;
         }
 
-        return trim((string) config('app.url', ''));
+        return $consoleService->resolveVncToken($token);
     }
 
     private function isAllowedClientOrigin(string $origin, array $params = []): bool
     {
         $allowedOrigin = $this->normalizeOrigin((string) ($params['allowed_origin'] ?? ''));
         if ($allowedOrigin === '') {
-            return true;
+            $allowedOrigin = $this->normalizeOrigin(PublicUrl::console());
         }
 
         $actualOrigin = $this->normalizeOrigin($origin);

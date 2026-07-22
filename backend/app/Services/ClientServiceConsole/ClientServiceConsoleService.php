@@ -323,13 +323,30 @@ class ClientServiceConsoleService
     {
         $runtime = $this->detailService->resolveRuntimeCapabilityForSupplier($supplier);
 
+        if (is_callable([$runtime, 'getMonitorChart'])) {
+            return $runtime->getMonitorChart($supplier, $hostId, $query, $jwt);
+        }
+
         return $runtime->get($supplier, "/v1/hosts/{$hostId}/module/charts", $jwt, $query);
     }
 
     /** @internal 供监控 Trait 调用 */
-    private function fetchMonitorChartResponses(Supplier $supplier, array $requests, string $jwt): array
+    private function fetchMonitorChartResponses(Supplier $supplier, int $hostId, array $queries, string $jwt): array
     {
         $runtime = $this->detailService->resolveRuntimeCapabilityForSupplier($supplier);
+
+        if (is_callable([$runtime, 'getMonitorCharts'])) {
+            return $runtime->getMonitorCharts($supplier, $hostId, $queries, $jwt);
+        }
+
+        $requests = collect($queries)->mapWithKeys(fn (array $query, string $type) => [
+            $type => [
+                'uri' => "/v1/hosts/{$hostId}/module/charts",
+                'query' => $query,
+                'connect_timeout' => self::MONITOR_UPSTREAM_CONNECT_TIMEOUT_SECONDS,
+                'timeout' => self::MONITOR_UPSTREAM_TIMEOUT_SECONDS,
+            ],
+        ])->all();
 
         return $runtime->parallelGet($supplier, $requests, $jwt);
     }

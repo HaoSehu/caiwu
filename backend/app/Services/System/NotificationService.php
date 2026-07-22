@@ -7,7 +7,9 @@ use App\Models\Setting;
 use App\Models\User;
 use App\Services\Integrations\Plugins\IntegrationDriverBindingResolver;
 use App\Services\Mail\MailDriverManager;
+use App\Support\PublicUrl;
 use App\Support\SiteConfigPayload;
+use App\Support\UploadUrl;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -558,7 +560,16 @@ class NotificationService
             return $siteLogo;
         }
 
-        return url($siteLogo);
+        $resolved = UploadUrl::resolve($siteLogo);
+        if ($resolved === null || $resolved === '') {
+            return '';
+        }
+
+        if (preg_match('/^https?:\/\//i', $resolved) === 1) {
+            return $resolved;
+        }
+
+        return PublicUrl::website($resolved);
     }
 
     private function renderTemplateText(string $template, array $params): string

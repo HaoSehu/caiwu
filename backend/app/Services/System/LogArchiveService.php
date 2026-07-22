@@ -19,10 +19,10 @@ use Throwable;
 
 class LogArchiveService
 {
-    private const ARCHIVE_WHERE = 'created_at < DATE_SUB(NOW(), INTERVAL 30 DAY)';
+    public function __construct(private readonly SettingService $settings) {}
 
     /**
-     * @param  array{tables?: list<string>, concurrency?: int|null, batch_size?: int|null, sleep_seconds?: int|null, base_path?: string|null}  $options
+     * @param  array{tables?: list<string>, retention_days?: int|null, file_retention_days?: int|null, pt_archiver_binary?: string|null, pt_archiver_defaults_file?: string|null, concurrency?: int|null, batch_size?: int|null, sleep_seconds?: int|null}  $options
      * @return array<string, mixed>
      */
     public function dryRun(array $options = []): array
@@ -54,7 +54,7 @@ class LogArchiveService
     }
 
     /**
-     * @param  array{tables?: list<string>, concurrency?: int|null, batch_size?: int|null, sleep_seconds?: int|null, base_path?: string|null}  $options
+     * @param  array{tables?: list<string>, retention_days?: int|null, file_retention_days?: int|null, pt_archiver_binary?: string|null, pt_archiver_defaults_file?: string|null, concurrency?: int|null, batch_size?: int|null, sleep_seconds?: int|null}  $options
      * @return array<string, mixed>
      */
     public function archive(array $options = []): array
@@ -165,13 +165,6 @@ class LogArchiveService
             $this->ensureDirectory((string) $settings['archive_root']);
         }
 
-        $mountPoint = trim((string) ($settings['mount_point'] ?? ''));
-        if ($mountPoint !== '' && PHP_OS_FAMILY !== 'Windows') {
-            $mountCheck = Process::timeout(10)->run(['/usr/bin/mountpoint', '-q', $mountPoint]);
-            if ($mountCheck->failed()) {
-                throw new RuntimeException("Configured archive mount point is not mounted: {$mountPoint}");
-            }
-        }
     }
 
     /**
@@ -247,7 +240,9 @@ class LogArchiveService
      */
     private function finishArchiveTable(string $table, array $tableReport, bool $successful, string $output): array
     {
-        $remaining = (int) DB::table($table)->whereRaw(self::ARCHIVE_WHERE)->count();
+        $remaining = (int) DB::table($table)
+            ->whereRaw($this->archiveWhere((int) ($tableReport['retention_days'] ?? 30)))
+            ->count();
         $countDifference = max(0, (int) $tableReport['eligible_rows'] - $remaining);
         $toolCount = $this->parseDeletedRows($output);
         $deletedRows = $toolCount ?? $countDifference;
@@ -292,7 +287,7 @@ class LogArchiveService
         $command = [
             (string) $settings['binary'],
             '--source=F='.(string) $settings['defaults_file'].",D={$database},t={$table},i=PRIMARY",
-            '--where='.self::ARCHIVE_WHERE,
+            '--where='.$this->archiveWhere((int) $settings['retention_days']),
             '--file='.$archiveFile,
             '--output-format=csv',
             '--header',
@@ -330,10 +325,11 @@ class LogArchiveService
             .DIRECTORY_SEPARATOR.'run_'.$now->format('Ymd_His').'_'.substr(str_replace('-', '', $batchId), 0, 8).'.json';
         $executionLog = rtrim((string) $settings['report_root'], DIRECTORY_SEPARATOR.'/\\')
             .DIRECTORY_SEPARATOR.'archive-'.$now->format('Y-m-d').'.log';
+        $archiveWhere = $this->archiveWhere((int) $settings['retention_days']);
         $tables = [];
 
         foreach ($policies as $table => $description) {
-            $eligibleRows = (int) DB::table($table)->whereRaw(self::ARCHIVE_WHERE)->count();
+            $eligibleRows = (int) DB::table($table)->whereRaw($archiveWhere)->count();
             $archiveFile = rtrim((string) $settings['archive_root'], DIRECTORY_SEPARATOR.'/\\')
                 .DIRECTORY_SEPARATOR.$table
                 .DIRECTORY_SEPARATOR.$table.'_'.$runDate.'.log';
@@ -342,7 +338,7 @@ class LogArchiveService
                 'description' => $description,
                 'date_column' => 'created_at',
                 'retention_days' => (int) $settings['retention_days'],
-                'where' => self::ARCHIVE_WHERE,
+                'where' => $archiveWhere,
                 'cutoff' => $now->subDays((int) $settings['retention_days'])->toDateTimeString(),
                 'total_rows' => (int) DB::table($table)->count(),
                 'eligible_rows' => $eligibleRows,
@@ -402,34 +398,39 @@ class LogArchiveService
      */
     private function resolveSettings(array $options): array
     {
-        $archiveRoot = trim((string) ($options['base_path'] ?? config('log_archive.archive_root')));
+        $runtime = $this->settings->getLogArchiveConfig();
+        $archiveRoot = trim((string) config('log_archive.archive_root'));
         $reportRoot = trim((string) config('log_archive.report_root'));
-        $binary = trim((string) config('log_archive.pt_archiver_binary'));
-        $defaultsFile = trim((string) config('log_archive.pt_archiver_defaults_file'));
+        $binary = trim((string) ($options['pt_archiver_binary'] ?? $runtime['pt_archiver_binary']));
+        $defaultsFile = trim((string) ($options['pt_archiver_defaults_file'] ?? $runtime['pt_archiver_defaults_file']));
 
-        foreach (['archive root' => $archiveRoot, 'report root' => $reportRoot, 'defaults file' => $defaultsFile] as $label => $path) {
+        foreach (['archive root' => $archiveRoot, 'report root' => $reportRoot] as $label => $path) {
             if (! $this->isAbsolutePath($path) || $this->containsParentTraversal($path)) {
                 throw new InvalidArgumentException("{$label} must be an absolute path without parent traversal.");
             }
+            if (! $this->isPathWithinStorage($path)) {
+                throw new InvalidArgumentException("{$label} must remain inside the backend storage directory.");
+            }
         }
-        if ($binary === '') {
-            throw new InvalidArgumentException('pt-archiver binary path cannot be empty.');
+        foreach (['pt-archiver binary' => $binary, 'defaults file' => $defaultsFile] as $label => $path) {
+            if (! $this->isAbsolutePath($path) || $this->containsParentTraversal($path)) {
+                throw new InvalidArgumentException("{$label} must be an absolute path without parent traversal.");
+            }
         }
         if (str_contains($archiveRoot, '%')) {
             throw new InvalidArgumentException('Archive root cannot contain percent format tokens.');
         }
 
         return [
-            'retention_days' => 30,
-            'file_retention_days' => 180,
+            'retention_days' => $this->boundedInteger($options['retention_days'] ?? $runtime['retention_days'], 1, 3650, 'retention days'),
+            'file_retention_days' => $this->boundedInteger($options['file_retention_days'] ?? $runtime['file_retention_days'], 1, 3650, 'file retention days'),
             'archive_root' => rtrim($archiveRoot, DIRECTORY_SEPARATOR.'/\\'),
             'report_root' => rtrim($reportRoot, DIRECTORY_SEPARATOR.'/\\'),
-            'mount_point' => config('log_archive.mount_point'),
             'binary' => $binary,
             'defaults_file' => $defaultsFile,
-            'concurrency' => $this->boundedInteger($options['concurrency'] ?? config('log_archive.concurrency'), 1, 8, 'concurrency'),
-            'batch_size' => $this->boundedInteger($options['batch_size'] ?? config('log_archive.batch_size'), 100, 10000, 'batch size'),
-            'sleep_seconds' => $this->boundedInteger($options['sleep_seconds'] ?? config('log_archive.sleep_seconds'), 0, 60, 'sleep seconds'),
+            'concurrency' => $this->boundedInteger($options['concurrency'] ?? $runtime['concurrency'], 1, 8, 'concurrency'),
+            'batch_size' => $this->boundedInteger($options['batch_size'] ?? $runtime['batch_size'], 100, 10000, 'batch size'),
+            'sleep_seconds' => $this->boundedInteger($options['sleep_seconds'] ?? $runtime['sleep_seconds'], 0, 60, 'sleep seconds'),
             'lock_path' => storage_path('framework/cache/log-archive.lock'),
         ];
     }
@@ -656,6 +657,13 @@ class LogArchiveService
         return $value;
     }
 
+    private function archiveWhere(int $retentionDays): string
+    {
+        $retentionDays = $this->boundedInteger($retentionDays, 1, 3650, 'retention days');
+
+        return "created_at < DATE_SUB(NOW(), INTERVAL {$retentionDays} DAY)";
+    }
+
     private function isAbsolutePath(string $path): bool
     {
         return str_starts_with($path, '/') || preg_match('/^[A-Za-z]:[\\\\\/]/', $path) === 1;
@@ -664,6 +672,21 @@ class LogArchiveService
     private function containsParentTraversal(string $path): bool
     {
         return preg_match('#(^|[\\\\/])\.\.([\\\\/]|$)#', $path) === 1;
+    }
+
+    private function isPathWithinStorage(string $path): bool
+    {
+        $normalize = static function (string $value): string {
+            $value = rtrim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $value), DIRECTORY_SEPARATOR);
+
+            return DIRECTORY_SEPARATOR === '\\' ? strtolower($value) : $value;
+        };
+
+        $storageRoot = $normalize(storage_path());
+        $candidate = $normalize($path);
+
+        return $candidate === $storageRoot
+            || str_starts_with($candidate, $storageRoot.DIRECTORY_SEPARATOR);
     }
 
     private function createAuditLog(string $batchId, string $table): ArchiveAuditLog

@@ -17,6 +17,7 @@ use App\Services\Verification\Data\VerificationInitializeResult;
 use App\Services\Verification\Data\VerificationScanUrlResult;
 use App\Services\Verification\Data\VerificationStatusResult;
 use App\Services\Verification\VerificationDriverManager;
+use App\Support\PublicUrl;
 use App\Support\SensitiveDataSanitizer;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -490,12 +491,7 @@ class VerificationService
 
     private function resolveCallbackUrl(): string
     {
-        $frontendUrl = trim((string) config('app.frontend_url', ''));
-        if ($frontendUrl !== '') {
-            return rtrim($frontendUrl, '/').'/api/v2/client/verification/callback';
-        }
-
-        return rtrim((string) config('app.url', ''), '/').'/api/v2/client/verification/callback';
+        return PublicUrl::api('/api/v2/client/verification/callback');
     }
 
     private function cacheQrCodeUrl(string $certifyId, string $remoteUrl, ?\DateTimeInterface $expiresAt = null): void
@@ -514,12 +510,7 @@ class VerificationService
 
     private function buildQrCodeProxyUrl(string $certifyId): string
     {
-        $frontendUrl = trim((string) config('app.frontend_url', ''));
-        if ($frontendUrl !== '') {
-            return rtrim($frontendUrl, '/').'/api/v2/client/verification/scan?certify_id='.rawurlencode($certifyId);
-        }
-
-        return rtrim((string) config('app.url', ''), '/').'/api/v2/client/verification/scan?certify_id='.rawurlencode($certifyId);
+        return PublicUrl::api('/api/v2/client/verification/scan?certify_id='.rawurlencode($certifyId));
     }
 
     private function resolvedBizCode(): string

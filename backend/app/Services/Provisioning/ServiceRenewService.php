@@ -422,17 +422,6 @@ class ServiceRenewService
         $effectiveProduct = $this->resolveEffectiveProduct($service);
         $enabled = $autoRenew === 1 ? 1 : 0;
 
-        if ($this->supportsUpstreamRenew($service, $effectiveProduct)) {
-            $supplier = $this->supplierWithRuntimeCredentials(($effectiveProduct ?? $service->product)?->supplier);
-            $hostId = $this->resolveUpstreamHostId($service);
-
-            if ($supplier instanceof Supplier && $hostId > 0) {
-                $renewal = $this->resolveRenewalCapability($service, $effectiveProduct);
-                $response = $renewal->setHostAutoRenew($supplier, $hostId, $enabled);
-                $this->assertUpstreamSuccess($response, [200], '同步上游自动续费状态', $this->resolveProviderKeyForService($service, $effectiveProduct));
-            }
-        }
-
         $provisionData = $this->serviceProvisionData($service);
         $provisionData['initiative_renew'] = $enabled;
 
@@ -529,12 +518,26 @@ class ServiceRenewService
 
         // 尝试上游续费
         if ($this->supportsUpstreamRenew($service, $effectiveProduct)) {
-            $supplier = $this->supplierWithRuntimeCredentials($effectiveProduct?->supplier);
+            $boundSupplier = $this->pluginBindingResolver()->supplierForService($service)
+                ?? ($effectiveProduct instanceof Product
+                    ? $this->pluginBindingResolver()->supplierForProduct($effectiveProduct)
+                    : null);
+            $supplier = $this->supplierWithRuntimeCredentials($boundSupplier);
             $hostId = $this->resolveUpstreamHostId($service);
 
             if ($supplier instanceof Supplier && $hostId > 0) {
+                $existingProvisionData = $this->serviceProvisionData($service);
+                $hasCurrentUpstreamRenewInvoice = (int) ($existingProvisionData['upstream_invoice_id'] ?? 0) > 0
+                    && (int) ($existingProvisionData['renew_invoice_id'] ?? 0) === (int) $invoice->id;
+
                 try {
+                    if ($hasCurrentUpstreamRenewInvoice) {
+                        throw new BusinessException('检测到当前续费账单已创建上游账单，正在恢复支付状态');
+                    }
+
                     $service = $this->markRenewFulfillment($service, $invoice, self::RENEW_FULFILLMENT_PROCESSING, [
+                        'upstream_invoice_id' => null,
+                        'renew_recovery_context' => [],
                         'last_renew_attempt_at' => now()->format('Y-m-d H:i:s'),
                         'renew_error' => null,
                     ]);
@@ -548,7 +551,11 @@ class ServiceRenewService
                         $hostDetail = is_array($renewResult['host_detail'] ?? null) ? $renewResult['host_detail'] : [];
                         $paymentCompleted = (bool) ($renewResult['payment_completed'] ?? true);
                         $upstreamFundError = trim((string) ($renewResult['fund_error'] ?? ''));
+                        $renewRecoveryContext = is_array($renewResult['recovery_context'] ?? null)
+                            ? $renewResult['recovery_context']
+                            : [];
                     } else {
+                        $renewRecoveryContext = [];
                         $jwt = $renewal->login($supplier);
                         $renewResponse = $renewal->renewHost($supplier, $hostId, $billingCycle);
                         $this->assertUpstreamSuccess($renewResponse, [200], '提交上游续费', $this->resolveProviderKeyForService($service, $effectiveProduct));
@@ -589,6 +596,7 @@ class ServiceRenewService
 
                     $service = $this->markRenewFulfillment($service, $invoice, self::RENEW_FULFILLMENT_PROCESSING, [
                         'upstream_invoice_id' => $upstreamInvoiceId,
+                        'renew_recovery_context' => $renewRecoveryContext,
                         'last_renew_attempt_at' => now()->format('Y-m-d H:i:s'),
                         'renew_error' => null,
                     ]);
@@ -620,38 +628,58 @@ class ServiceRenewService
                     $currentService = $service->fresh(['product.supplier']) ?? $service;
                     $currentProvisionData = $this->serviceProvisionData($currentService);
                     $existingUpstreamInvoiceId = (int) ($currentProvisionData['upstream_invoice_id'] ?? 0);
+                    $currentRenewInvoiceId = (int) ($currentProvisionData['renew_invoice_id'] ?? 0);
+                    $recoveryError = '';
 
-                    if ($existingUpstreamInvoiceId > 0 && isset($supplier) && $supplier instanceof Supplier && $hostId > 0) {
+                    if (
+                        $existingUpstreamInvoiceId > 0
+                        && $currentRenewInvoiceId === (int) $invoice->id
+                        && isset($supplier)
+                        && $supplier instanceof Supplier
+                        && $hostId > 0
+                    ) {
                         try {
                             $renewal = $this->resolveRenewalCapability($currentService, $effectiveProduct);
 
-                            if (method_exists($renewal, 'recoverRenewInvoice')) {
-                                $recovery = $renewal->recoverRenewInvoice($supplier, $hostId, $existingUpstreamInvoiceId);
-                                if (is_array($recovery)) {
-                                    throw_if(
-                                        ($recovery['payment_completed'] ?? true) !== true,
-                                        new BusinessException('上游续费账单仍未支付完成，请检查供应商余额')
-                                    );
+                            if (method_exists($renewal, 'recoverRenewInvoiceWithContext') || method_exists($renewal, 'recoverRenewInvoice')) {
+                                $recovery = method_exists($renewal, 'recoverRenewInvoiceWithContext')
+                                    ? $renewal->recoverRenewInvoiceWithContext(
+                                        $supplier,
+                                        $hostId,
+                                        $existingUpstreamInvoiceId,
+                                        is_array($currentProvisionData['renew_recovery_context'] ?? null)
+                                            ? $currentProvisionData['renew_recovery_context']
+                                            : [],
+                                    )
+                                    : $renewal->recoverRenewInvoice($supplier, $hostId, $existingUpstreamInvoiceId);
+                                throw_if(! is_array($recovery), new BusinessException('上游续费账单状态尚未确认，请稍后重试'));
 
-                                    $recoveryHostDetail = is_array($recovery['host_detail'] ?? null) ? $recovery['host_detail'] : [];
-                                    $recoveredExpiresAt = $this->resolveRenewedExpiry($currentService, $billingCycle, $recoveryHostDetail);
-                                    $currentProvisionData['upstream_status'] = (string) ($recoveryHostDetail['domainstatus'] ?? '');
-                                    $currentProvisionData['renew_error'] = null;
-                                    $currentProvisionData[self::RENEW_FULFILLMENT_STATUS_KEY] = self::RENEW_FULFILLMENT_SUCCEEDED;
-                                    $currentProvisionData['last_renewed_at'] = now()->format('Y-m-d H:i:s');
-                                    $currentProvisionData['last_renew_billing_cycle'] = $billingCycle;
-                                    $currentProvisionData['last_renew_invoice_id'] = (int) $invoice->id;
-                                    $currentProvisionData['last_renew_invoice_no'] = (string) $invoice->invoice_no;
-                                    $currentProvisionData['last_renew_source'] = 'upstream';
-                                    $currentProvisionData['renew_invoice_id'] = (int) $invoice->id;
+                                $recoveryErrorMessage = trim((string) ($recovery['fund_error'] ?? ''));
+                                throw_if(
+                                    ($recovery['payment_completed'] ?? true) !== true,
+                                    new BusinessException($recoveryErrorMessage !== ''
+                                        ? $recoveryErrorMessage
+                                        : '上游续费账单仍未支付完成，请检查供应商余额')
+                                );
 
-                                    Log::info('[服务续费·恢复] 上游续费恢复成功，本地完成履约', [
-                                        'invoice_id' => $invoice->id,
-                                        'upstream_invoice_id' => $existingUpstreamInvoiceId,
-                                    ]);
+                                $recoveryHostDetail = is_array($recovery['host_detail'] ?? null) ? $recovery['host_detail'] : [];
+                                $recoveredExpiresAt = $this->resolveRenewedExpiry($currentService, $billingCycle, $recoveryHostDetail);
+                                $currentProvisionData['upstream_status'] = (string) ($recoveryHostDetail['domainstatus'] ?? '');
+                                $currentProvisionData['renew_error'] = null;
+                                $currentProvisionData[self::RENEW_FULFILLMENT_STATUS_KEY] = self::RENEW_FULFILLMENT_SUCCEEDED;
+                                $currentProvisionData['last_renewed_at'] = now()->format('Y-m-d H:i:s');
+                                $currentProvisionData['last_renew_billing_cycle'] = $billingCycle;
+                                $currentProvisionData['last_renew_invoice_id'] = (int) $invoice->id;
+                                $currentProvisionData['last_renew_invoice_no'] = (string) $invoice->invoice_no;
+                                $currentProvisionData['last_renew_source'] = 'upstream';
+                                $currentProvisionData['renew_invoice_id'] = (int) $invoice->id;
 
-                                    return $this->finalizeRenewInvoiceSuccess($currentService, $invoice, $currentProvisionData, $recoveredExpiresAt);
-                                }
+                                Log::info('[服务续费·恢复] 上游续费恢复成功，本地完成履约', [
+                                    'invoice_id' => $invoice->id,
+                                    'upstream_invoice_id' => $existingUpstreamInvoiceId,
+                                ]);
+
+                                return $this->finalizeRenewInvoiceSuccess($currentService, $invoice, $currentProvisionData, $recoveredExpiresAt);
                             }
 
                             $recoveryJwt = $renewal->login($supplier);
@@ -734,6 +762,9 @@ class ServiceRenewService
                                 return $this->finalizeRenewInvoiceSuccess($currentService, $invoice, $currentProvisionData, $recoveredExpiresAt);
                             }
                         } catch (\Throwable $recoveryException) {
+                            $recoveryError = $recoveryException instanceof BusinessException
+                                ? $recoveryException->getMessage()
+                                : '上游续费恢复失败，请稍后重试';
                             Log::warning('[服务续费·恢复] 上游续费恢复尝试失败', [
                                 'invoice_id' => $invoice->id,
                                 'upstream_invoice_id' => $existingUpstreamInvoiceId,
@@ -744,9 +775,11 @@ class ServiceRenewService
                         }
                     }
 
-                    $message = $exception instanceof BusinessException
-                        ? $exception->getMessage()
-                        : '上游续费失败，请联系管理员处理';
+                    $message = $recoveryError !== ''
+                        ? $recoveryError
+                        : ($exception instanceof BusinessException
+                            ? $exception->getMessage()
+                            : '上游续费失败，请联系管理员处理');
 
                     $service = $this->markRenewFulfillment($currentService ?? $service, $invoice, self::RENEW_FULFILLMENT_FAILED, [
                         'renew_error' => $message,

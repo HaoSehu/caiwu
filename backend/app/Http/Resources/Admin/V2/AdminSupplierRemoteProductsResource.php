@@ -9,35 +9,32 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 class AdminSupplierRemoteProductsResource extends JsonResource
 {
-    private const MAX_ITEMS = 200;
-
     /**
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array
     {
         $item = is_array($this->resource) ? $this->resource : [];
-        $products = $this->sliceItems($item['products'] ?? []);
 
         return [
             'supplier_id' => (int) ($item['supplier_id'] ?? 0),
             'supplier_name' => (string) ($item['supplier_name'] ?? ''),
             'groups' => $this->sanitizeGroups($item['groups'] ?? []),
-            'products' => array_map(fn (mixed $product): array => $this->sanitizeArray($product), $products),
-            'truncated' => $this->isTruncated($item['products'] ?? []),
+            'products' => $this->sanitizeItems($item['products'] ?? []),
+            'truncated' => false,
         ];
     }
 
     /**
      * @return array<int, mixed>
      */
-    private function sliceItems(mixed $items): array
+    private function sanitizeItems(mixed $items): array
     {
         if (! is_array($items)) {
             return [];
         }
 
-        return array_slice(array_values($items), 0, self::MAX_ITEMS);
+        return array_map(fn (mixed $item): array => $this->sanitizeArray($item), array_values($items));
     }
 
     /**
@@ -49,25 +46,16 @@ class AdminSupplierRemoteProductsResource extends JsonResource
             return [];
         }
 
-        $remaining = self::MAX_ITEMS;
         $result = [];
         foreach (array_values($groups) as $group) {
-            if (! is_array($group) || $remaining <= 0) {
+            if (! is_array($group)) {
                 continue;
             }
 
-            $items = is_array($group['items'] ?? null) ? array_slice(array_values($group['items']), 0, $remaining) : [];
-            $remaining -= count($items);
-            $group['items'] = array_map(fn (mixed $product): array => $this->sanitizeArray($product), $items);
             $result[] = $this->sanitizeArray($group);
         }
 
         return $result;
-    }
-
-    private function isTruncated(mixed $items): bool
-    {
-        return is_array($items) && count($items) > self::MAX_ITEMS;
     }
 
     /**

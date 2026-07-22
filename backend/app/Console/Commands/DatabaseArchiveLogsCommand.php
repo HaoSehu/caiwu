@@ -13,15 +13,16 @@ class DatabaseArchiveLogsCommand extends Command
 {
     protected $signature = 'db:archive-logs
         {--dry-run : 仅预览影响行数并校验 pt-archiver 命令；未指定 --execute 时默认 dry-run}
-        {--execute : 使用 pt-archiver 导出 CSV 并通过 --purge 物理删除30天前日志}
+        {--execute : 使用 pt-archiver 导出 CSV 并通过 --purge 物理删除超过保留期限的日志}
         {--table=* : 只处理指定日志表，可重复}
-        {--concurrency= : 最大并行表数量，默认读取 LOG_ARCHIVE_CONCURRENCY}
-        {--batch-size= : 每批处理行数，默认读取 LOG_ARCHIVE_BATCH_SIZE}
-        {--sleep-seconds= : 批次间隔秒数，默认读取 LOG_ARCHIVE_SLEEP_SECONDS}
-        {--path= : 归档根目录，默认读取 LOG_ARCHIVE_ROOT}
+        {--retain-days= : 日志保留天数，显式覆盖后台日志归档设置}
+        {--file-retain-days= : 归档文件保留天数，显式覆盖后台日志归档设置}
+        {--concurrency= : 最大并行表数量，默认读取后台日志归档设置}
+        {--batch-size= : 每批处理行数，默认读取后台日志归档设置}
+        {--sleep-seconds= : 批次间隔秒数，默认读取后台日志归档设置}
         {--json : 以 JSON 输出结果}';
 
-    protected $description = '使用 pt-archiver 并行归档并物理删除30天前的日志记录';
+    protected $description = '使用 pt-archiver 并行归档并物理删除超过保留期限的日志记录';
 
     public function handle(LogArchiveService $service): int
     {
@@ -31,14 +32,11 @@ class DatabaseArchiveLogsCommand extends Command
             }
 
             $options = ['tables' => array_values((array) $this->option('table'))];
+            $this->copyIntegerOption($options, 'retain-days', 'retention_days');
+            $this->copyIntegerOption($options, 'file-retain-days', 'file_retention_days');
             $this->copyIntegerOption($options, 'concurrency', 'concurrency');
             $this->copyIntegerOption($options, 'batch-size', 'batch_size');
             $this->copyIntegerOption($options, 'sleep-seconds', 'sleep_seconds');
-
-            $basePath = trim((string) $this->option('path'));
-            if ($basePath !== '') {
-                $options['base_path'] = $basePath;
-            }
 
             $execute = (bool) $this->option('execute');
             $result = $execute ? $service->archive($options) : $service->dryRun($options);

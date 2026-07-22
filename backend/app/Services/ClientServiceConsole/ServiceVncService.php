@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\System\OperationLogService;
 use App\Support\CacheKey;
+use App\Support\PublicUrl;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
@@ -62,7 +63,7 @@ class ServiceVncService
             throw new BusinessException('上游未返回VNC链接', 50000);
         }
 
-        $novncBaseUrl = $this->resolveNoVncBaseUrl($context);
+        $novncBaseUrl = $this->resolveNoVncBaseUrl();
 
         $message = trim((string) ($response['msg'] ?? '')) ?: '获取VNC链接成功';
         $vncUrl = $upstreamVncUrl;
@@ -87,7 +88,7 @@ class ServiceVncService
                 $token = bin2hex(random_bytes(24));
                 Cache::store('redis_volatile')->put(CacheKey::vncToken($token), array_merge($vncParams, [
                     'service_id' => $serviceId,
-                    'allowed_origin' => $this->resolveAllowedVncOrigin($context),
+                    'allowed_origin' => $this->resolveAllowedVncOrigin(),
                     'single_use' => ($context['actor_type'] ?? 'client') !== 'admin',
                     'token_scope' => 'public',
                 ]), now()->addSeconds(self::VNC_TOKEN_TTL_SECONDS));
@@ -99,13 +100,8 @@ class ServiceVncService
                     'relay_path' => $this->resolveVncRelayPath(),
                 ];
 
-                // 当 noVNC 被托管在与业务 API 不同的源（跨域 iframe 场景），
-                // vnc.html 需要通过 api_base 显式指向业务 API，否则相对路径
-                // 会打到 noVNC 宿主并触发 "sessionStorage cross-origin" 类错误。
-                $apiBase = $this->resolveVncApiBase($novncBaseUrl, $context);
-                if ($apiBase !== '') {
-                    $queryParams['api_base'] = $apiBase;
-                }
+                // noVNC 固定由 console 域名托管，API 与 WebSocket 一律由 API 域名承载。
+                $queryParams['api_base'] = $this->resolveVncApiBase();
 
                 $vncUrl = $viewerUrl.(str_contains($viewerUrl, '?') ? '&' : '?').http_build_query($queryParams);
             } else {
@@ -528,18 +524,9 @@ class ServiceVncService
         return sprintf('%s://%s', $scheme, $host);
     }
 
-    private function resolveNoVncBaseUrl(array $context = []): string
+    private function resolveNoVncBaseUrl(): string
     {
-        $frontendUrl = $this->resolveClientFacingBaseUrl($context);
-        if ($frontendUrl === '') {
-            $frontendUrl = rtrim((string) config('app.url', ''), '/');
-        }
-
-        if ($frontendUrl === '') {
-            return '';
-        }
-
-        return $frontendUrl.'/vnc';
+        return PublicUrl::console('/vnc');
     }
 
     private function resolveNoVncViewerUrl(string $novncBaseUrl): string
@@ -562,111 +549,18 @@ class ServiceVncService
         return rtrim($novncBaseUrl, '/').'/vnc.html';
     }
 
-    /**
-     * 判断 noVNC 宿主与业务 API 是否跨域：
-     *   - 若 noVNC 是相对路径或与 app.url 同源，返回空字符串（vnc.html 可直接用相对路径）
-     *   - 若跨域，返回业务 API 的绝对基址，供 vnc.html 拼接 /api/... 请求
-     */
-    private function resolveVncApiBase(string $novncBaseUrl, array $context = []): string
+    private function resolveVncApiBase(): string
     {
-        $apiBase = $this->resolvePublicApiBase($context);
-        if ($apiBase === '') {
-            return '';
-        }
-
-        $novncBaseUrl = trim($novncBaseUrl);
-        if ($novncBaseUrl === '') {
-            return '';
-        }
-
-        // 相对路径的 noVNC 部署一定同源，无需 api_base
-        if (! preg_match('#^https?://#i', $novncBaseUrl)) {
-            return '';
-        }
-
-        $novncOrigin = $this->resolveOriginFromUrl($novncBaseUrl);
-        $apiOrigin = $this->resolveOriginFromUrl($apiBase);
-
-        if ($novncOrigin === '' || $apiOrigin === '') {
-            return $apiBase;
-        }
-
-        return strcasecmp($novncOrigin, $apiOrigin) === 0 ? '' : $apiBase;
+        return $this->resolvePublicApiBase();
     }
 
-    private function resolveAllowedVncOrigin(array $context = []): string
+    private function resolveAllowedVncOrigin(): string
     {
-        return $this->resolveClientFacingBaseUrl($context);
+        return PublicUrl::console();
     }
 
-    private function resolvePublicApiBase(array $context = []): string
+    private function resolvePublicApiBase(): string
     {
-        $frontendUrl = $this->resolveClientFacingBaseUrl($context);
-        if ($frontendUrl !== '') {
-            return $frontendUrl;
-        }
-
-        return rtrim((string) config('app.url', ''), '/');
-    }
-
-    private function resolveClientFacingBaseUrl(array $context = []): string
-    {
-        $requestOrigin = $this->normalizeAbsoluteHttpUrl((string) ($context['request_origin'] ?? ''));
-        if ($requestOrigin !== '') {
-            return $requestOrigin;
-        }
-
-        return rtrim((string) config('app.frontend_url', ''), '/');
-    }
-
-    private function normalizeAbsoluteHttpUrl(string $url): string
-    {
-        $url = trim($url);
-        if ($url === '') {
-            return '';
-        }
-
-        $parts = parse_url($url);
-        if (! is_array($parts)) {
-            return '';
-        }
-
-        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
-        $host = strtolower((string) ($parts['host'] ?? ''));
-        if (! in_array($scheme, ['http', 'https'], true) || $host === '') {
-            return '';
-        }
-
-        $port = (int) ($parts['port'] ?? 0);
-        $defaultPort = $scheme === 'https' ? 443 : 80;
-
-        if ($port > 0 && $port !== $defaultPort) {
-            return sprintf('%s://%s:%d', $scheme, $host, $port);
-        }
-
-        return sprintf('%s://%s', $scheme, $host);
-    }
-
-    private function resolveOriginFromUrl(string $url): string
-    {
-        $parts = parse_url($url);
-        if (! is_array($parts)) {
-            return '';
-        }
-
-        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
-        $host = strtolower((string) ($parts['host'] ?? ''));
-        if ($scheme === '' || $host === '') {
-            return '';
-        }
-
-        $port = (int) ($parts['port'] ?? 0);
-        $defaultPort = $scheme === 'https' ? 443 : 80;
-
-        if ($port > 0 && $port !== $defaultPort) {
-            return sprintf('%s://%s:%d', $scheme, $host, $port);
-        }
-
-        return sprintf('%s://%s', $scheme, $host);
+        return PublicUrl::api();
     }
 }

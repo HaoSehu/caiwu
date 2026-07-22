@@ -351,7 +351,7 @@ trait HandlesAdminUserServices
             app(ServiceUpstreamBindingWriter::class)->syncServiceState(
                 $service,
                 $service->product,
-                $this->serviceProvisionData($service)
+                (array) ($service->provision_data ?? [])
             );
         }
         app(ServiceDetailService::class)->forgetDetailCaches($service);

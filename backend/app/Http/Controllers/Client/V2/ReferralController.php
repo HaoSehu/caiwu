@@ -8,6 +8,7 @@ use App\Http\Requests\Client\V2\Referral\ApplyWithdrawalRequest;
 use App\Http\Requests\Client\V2\Referral\RewardsRequest;
 use App\Http\Requests\Client\V2\Referral\WithdrawalsRequest;
 use App\Services\Referral\ReferralService;
+use App\Support\PublicUrl;
 use Illuminate\Http\Request;
 
 class ReferralController extends Controller
@@ -149,6 +150,6 @@ class ReferralController extends Controller
             }
         }
 
-        return trim((string) config('app.frontend_url', '')) ?: trim((string) config('app.url', ''));
+        return PublicUrl::website();
     }
 }

@@ -2,9 +2,11 @@
 
 namespace App\Providers;
 
+use App\Models\Setting;
 use App\Services\Auth\LegacyPasswordVerifier;
 use App\Services\System\UploadedAssetReferenceService;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Sanctum\PersonalAccessToken;
 use Laravel\Sanctum\Sanctum;
@@ -31,6 +33,8 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        $this->loadSiteNameFromSettings();
+
         Sanctum::authenticateAccessTokensUsing(function (PersonalAccessToken $accessToken, bool $isValid): bool {
             if (! $isValid) {
                 return false;
@@ -54,5 +58,23 @@ class AppServiceProvider extends ServiceProvider
 
             return true;
         });
+    }
+
+    /**
+     * 从数据库 settings 表加载管理员设置的站点名称，覆盖 config('app.name')。
+     * settings 表不存在时（首次迁移前）静默跳过。
+     */
+    private function loadSiteNameFromSettings(): void
+    {
+        if (! Schema::hasTable('settings')) {
+            return;
+        }
+
+        $siteName = trim((string) Setting::getValue('basic', 'site_name', ''));
+        if ($siteName === '') {
+            return;
+        }
+
+        config(['app.name' => $siteName]);
     }
 }

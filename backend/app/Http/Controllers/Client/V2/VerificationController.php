@@ -7,6 +7,7 @@ use App\Http\Requests\Client\V2\Verification\InitVerificationRequest;
 use App\Http\Requests\Client\V2\Verification\QrcodeRequest;
 use App\Http\Requests\Client\V2\Verification\StatusRequest;
 use App\Services\Auth\VerificationService;
+use App\Support\PublicUrl;
 use Illuminate\Http\Request;
 
 class VerificationController extends Controller
@@ -201,10 +202,6 @@ class VerificationController extends Controller
 
     private function buildFrontendVerificationResultUrl(string $certifyId, int $status, string $message): string
     {
-        $frontendUrl = trim((string) config('app.frontend_url', ''));
-        $baseUrl = $frontendUrl !== '' ? $frontendUrl : trim((string) config('app.url', ''));
-        $baseUrl = rtrim($baseUrl, '/');
-
         $query = http_build_query([
             'verification_callback' => 1,
             'certify_id' => $certifyId,
@@ -213,7 +210,7 @@ class VerificationController extends Controller
             't' => time(),
         ]);
 
-        return $baseUrl.'/client/verification?'.$query;
+        return PublicUrl::console('/client/verification?'.$query);
     }
 
     private function buildScanErrorHtml(string $message): string
