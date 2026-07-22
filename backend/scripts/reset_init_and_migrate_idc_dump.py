@@ -23,9 +23,8 @@ SCRIPT_PATH = Path(__file__).resolve()
 SCRIPT_DIR = SCRIPT_PATH.parent
 BACKEND_DIR = SCRIPT_DIR.parent
 REPO_ROOT = BACKEND_DIR.parent
-DEFAULT_DUMP = REPO_ROOT / "idc_2026-06-07_15-31-26_mysql_data_R5FN2.sql"
 DEFAULT_ENV = BACKEND_DIR / ".env"
-DEFAULT_LOG_DIR = REPO_ROOT / "文档" / "数据库" / "迁移记录"
+DEFAULT_LOG_DIR = REPO_ROOT / "migration-output" / "migration-records"
 
 
 class WorkflowError(RuntimeError):
@@ -58,8 +57,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--dump",
-        default=str(DEFAULT_DUMP),
-        help=f"要迁移的 MySQL dump 文件，默认：{DEFAULT_DUMP}",
+        required=True,
+        help="要迁移的 MySQL dump 文件。",
     )
     parser.add_argument(
         "--env",
@@ -72,16 +71,6 @@ def parse_args() -> argparse.Namespace:
         help="目标数据库名，默认读取 .env 的 DB_DATABASE。",
     )
     parser.add_argument(
-        "--staging-db",
-        default="",
-        help="临时库名，默认由 migrate_legacy_dump.py 自动生成。",
-    )
-    parser.add_argument(
-        "--keep-staging",
-        action="store_true",
-        help="迁移成功后保留临时库或临时前缀表，便于排查。",
-    )
-    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="只检查流程，不清空数据库、不写入数据。",
@@ -89,7 +78,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--log-file",
         default="",
-        help="迁移记录文件路径，默认写入 文档/数据库/迁移记录/。",
+        help="迁移记录文件路径，默认写入 migration-output/migration-records/。",
     )
 
     return parser.parse_args()
@@ -163,10 +152,6 @@ def build_migration_command(args: argparse.Namespace, dump_path: Path, env_file:
 
     if args.target_db.strip():
         command.extend(["--target-db", args.target_db.strip()])
-    if args.staging_db.strip():
-        command.extend(["--staging-db", args.staging_db.strip()])
-    if args.keep_staging:
-        command.append("--keep-staging")
     if args.dry_run:
         command.append("--dry-run")
 
