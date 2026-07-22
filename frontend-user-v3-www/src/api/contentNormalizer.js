@@ -1,3 +1,7 @@
+import { resolveApiAssetUrl } from '@/utils/apiAssetUrl'
+
+const API_BASE_URL = String(import.meta.env?.VITE_API_BASE_URL || '')
+
 function pickFirst(...values) {
   return values.find((value) => value !== undefined && value !== null && value !== '')
 }
@@ -12,15 +16,15 @@ function normalizeSiteConfig(config = {}) {
     ...config,
     site_name: String(pickFirst(config.site_name, config.siteName) || ''),
     browser_title: String(pickFirst(config.browser_title, config.browserTitle, config.site_name, config.siteName) || ''),
-    site_logo: String(pickFirst(config.site_logo, config.siteLogo) || ''),
-    site_favicon: String(pickFirst(config.site_favicon, config.siteFavicon) || ''),
+    site_logo: resolveApiAssetUrl(pickFirst(config.site_logo, config.siteLogo), API_BASE_URL),
+    site_favicon: resolveApiAssetUrl(pickFirst(config.site_favicon, config.siteFavicon), API_BASE_URL),
     service_qq_group: String(pickFirst(config.service_qq_group, config.serviceQqGroup, config.service_phone, config.servicePhone) || ''),
     service_phone: String(pickFirst(config.service_phone, config.servicePhone, config.service_qq_group, config.serviceQqGroup) || ''),
     service_email: String(pickFirst(config.service_email, config.serviceEmail) || ''),
     service_hours: String(pickFirst(config.service_hours, config.serviceHours) || ''),
     support_group_title: String(pickFirst(config.support_group_title, config.supportGroupTitle) || ''),
     support_group_text: String(pickFirst(config.support_group_text, config.supportGroupText) || ''),
-    support_group_qr: String(pickFirst(config.support_group_qr, config.supportGroupQr) || ''),
+    support_group_qr: resolveApiAssetUrl(pickFirst(config.support_group_qr, config.supportGroupQr), API_BASE_URL),
   }
 }
 
@@ -80,7 +84,7 @@ export function normalizeContentArticle(item = {}) {
     status: toNumber(pickFirst(item.status, item.state), 0),
     is_pinned: toNumber(pickFirst(item.is_pinned, item.is_top, item.isTop), 0),
     is_recommended: toNumber(pickFirst(item.is_recommended, item.is_hot, item.isHot, item.recommended), 0),
-    cover_image: String(pickFirst(item.cover_image, item.coverImage) || ''),
+    cover_image: resolveApiAssetUrl(pickFirst(item.cover_image, item.coverImage), API_BASE_URL),
     sort_order: toNumber(pickFirst(item.sort_order, item.sortOrder, item.sort), 0),
     view_count: toNumber(pickFirst(item.view_count, item.views, item.read_count, item.readCount), 0),
     publish_at: publishAt,

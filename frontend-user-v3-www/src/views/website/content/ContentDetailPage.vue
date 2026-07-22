@@ -85,6 +85,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ArrowRight } from '@element-plus/icons-vue'
 import siteApi from '@/api/site'
 import { renderMarkdown } from '@/utils/markdown'
+import { rewriteApiAssetUrlsInHtml } from '@/utils/apiAssetUrl'
 import { getContentConfig } from './contentConfig'
 
 const props = defineProps({
@@ -100,6 +101,7 @@ const props = defineProps({
 
 const route = useRoute()
 const router = useRouter()
+const apiBaseUrl = String(import.meta.env.VITE_API_BASE_URL || '')
 const api = computed(() => siteApi)
 const config = computed(() => getContentConfig(props.contentType, props.scope))
 
@@ -153,9 +155,9 @@ const currentPublishTime = computed(() => (
   || '--'
 ))
 
-const articleContentHtml = computed(() => renderMarkdown(currentArticle.value?.content, {
+const articleContentHtml = computed(() => rewriteApiAssetUrlsInHtml(renderMarkdown(currentArticle.value?.content, {
   imageAltFallback: currentArticle.value?.title || config.value.detailTitle || '相关配图',
-}))
+}), apiBaseUrl))
 
 async function loadOverview() {
   const res = await api.value.contentOverview()

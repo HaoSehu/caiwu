@@ -8,8 +8,6 @@ import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
-const backendProxyTarget = process.env.BACKEND_PROXY_TARGET || 'http://127.0.0.1:8000'
-const backendWsProxyTarget = process.env.BACKEND_WS_PROXY_TARGET || 'ws://127.0.0.1:8000'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const compressionExtensions = new Set([
   '.css',
@@ -197,26 +195,6 @@ export default defineConfig(({ mode }) => {
       },
       host: '127.0.0.1',
       port: 5175,
-      proxy: {
-        '/api': {
-          target: backendProxyTarget,
-          changeOrigin: true,
-        },
-        '/uploads': {
-          target: backendProxyTarget,
-          changeOrigin: true,
-        },
-        '/media': {
-          target: backendProxyTarget,
-          changeOrigin: true,
-        },
-        '/ws/vnc': {
-          target: backendWsProxyTarget,
-          changeOrigin: true,
-          ws: true,
-          secure: false,
-        },
-      },
     },
     optimizeDeps: {
       include: [

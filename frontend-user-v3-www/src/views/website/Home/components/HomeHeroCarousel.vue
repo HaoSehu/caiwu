@@ -142,6 +142,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch 
 import { useRouter } from 'vue-router'
 import { ElIcon } from 'element-plus/es/components/icon/index.mjs'
 import { ArrowRight } from '@element-plus/icons-vue'
+import { resolveApiAssetUrl } from '@/utils/apiAssetUrl'
 
 
 const props = defineProps({
@@ -153,6 +154,7 @@ const props = defineProps({
 
 
 const router = useRouter()
+const apiBaseUrl = String(import.meta.env.VITE_API_BASE_URL || '')
 const videoARef = ref(null)
 const videoBRef = ref(null)
 const videoReady = ref(false)
@@ -166,8 +168,7 @@ const heroSlides = shallowRef(Object.freeze([]))
 const heroFeatures = shallowRef(Object.freeze([]))
 
 function resolvedVideoSrc(url) {
-  if (!url) return ''
-  return url
+  return resolveApiAssetUrl(url, apiBaseUrl)
 }
 
 
