@@ -8,6 +8,7 @@ assert.equal(deriveInitials('Cloud Union'), 'CU')
 
 const storage = new Map()
 const cookies = new Map()
+const cookieWrites = []
 
 const documentMock = {}
 Object.defineProperty(documentMock, 'cookie', {
@@ -17,6 +18,7 @@ Object.defineProperty(documentMock, 'cookie', {
       .join('; ')
   },
   set(value) {
+    cookieWrites.push(String(value))
     const [pair, ...parts] = String(value).split('; ')
     const [rawKey, rawValue = ''] = pair.split('=')
     const key = decodeURIComponent(rawKey)
@@ -54,8 +56,13 @@ const driver = createSessionDriver({
 driver.setToken('abc')
 assert.equal(driver.getToken(), 'abc')
 assert.equal(driver.isLoggedIn(), true)
+assert.equal(cookieWrites.at(-1).includes('Secure'), false)
 driver.removeToken()
 assert.equal(driver.getToken(), null)
+
+global.window.location.protocol = 'https:'
+driver.setToken('secure-token')
+assert.equal(cookieWrites.at(-1).includes('Secure'), true)
 
 delete global.window
 delete global.document
