@@ -40,13 +40,6 @@ export interface ClientMemberLevel {
   [key: string]: unknown;
 }
 
-export interface ClientAgentInfo {
-  is_agent: boolean;
-  api_url: string;
-  app_id: string;
-  secret: string;
-}
-
 export interface ClientUserInfo {
   id?: number | string;
   name?: string;

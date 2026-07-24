@@ -63,7 +63,7 @@ function normalizeCaptchaError(error: unknown, fallback = '行为验证失败，
     return new Error(mappedMessage);
   }
 
-  if (/^[\x00-\x7F]+$/.test(message) && /(verification|vaptcha|geetest)/i.test(message)) {
+  if (/^\p{ASCII}+$/u.test(message) && /(?:verification|vaptcha|geetest)/i.test(message)) {
     return new Error(fallback);
   }
 

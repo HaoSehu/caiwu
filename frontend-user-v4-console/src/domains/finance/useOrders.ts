@@ -1,6 +1,6 @@
 import { onMounted, reactive, ref, shallowRef } from 'vue';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
-import { ORDER_STATUS_MAP, ORDER_TYPE_MAP, getStatusLabel, toSelectOptions } from '@caiwu/shared/statusConfig';
+import { ORDER_STATUS_MAP, ORDER_TYPE_MAP, toSelectOptions } from '@caiwu/shared/statusConfig';
 
 import clientApi from '@/api/client';
 import { formatMoney } from '@/utils/format';

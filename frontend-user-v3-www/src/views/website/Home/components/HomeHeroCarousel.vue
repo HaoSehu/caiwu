@@ -384,7 +384,6 @@ watch(
 
 const activeSlide = computed(() => heroSlides.value[activeIndex.value] || heroSlides.value[0] || DEFAULT_SLIDES[0])
 
-const CROSSFADE_DURATION = 800
 const MIN_ROTATION_INTERVAL = 6000
 const MAX_ROTATION_INTERVAL = 15000
 const PLAYBACK_RETRY_DELAY = 400
@@ -656,22 +655,6 @@ function switchToSlide(index, auto = false) {
 }
 
 function activateSlide(index) {
-  stopRotation()
-  switchToSlide(index)
-  startRotation()
-}
-
-function prevSlide() {
-  const count = heroSlides.value.length || 1
-  const index = (activeIndex.value - 1 + count) % count
-  stopRotation()
-  switchToSlide(index)
-  startRotation()
-}
-
-function nextSlide() {
-  const count = heroSlides.value.length || 1
-  const index = (activeIndex.value + 1) % count
   stopRotation()
   switchToSlide(index)
   startRotation()

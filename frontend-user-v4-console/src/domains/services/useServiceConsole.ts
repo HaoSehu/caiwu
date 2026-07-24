@@ -3,7 +3,7 @@ import { MessagePlugin } from 'tdesign-vue-next';
 import { useRouter } from 'vue-router';
 
 import { formatMoney, resolveServiceStatusLabel, resolveTdesignStatusTheme } from '@/domains/services/useServiceCenter';
-import { normalizeConsoleDetail, mergeConsoleDetail, isNatConsole, findSpecValue, copyText, DEFAULT_TAB } from './console/useConsoleCore';
+import { normalizeConsoleDetail, isNatConsole, findSpecValue, copyText, DEFAULT_TAB } from './console/useConsoleCore';
 import { useConsoleDetail } from './console/useConsoleDetail';
 import { useConsolePower, useConsoleAutoRenew } from './console/useConsolePower';
 import { useConsoleRenew } from './console/useConsoleRenew';
@@ -37,7 +37,6 @@ export function useServiceConsole() {
     setOperationStatus,
     clearOperationStatus,
     mergeDetail,
-    loadDetailBase,
     loadRemoteStatus,
     refreshHostStatus,
     bootstrap,
@@ -98,7 +97,6 @@ export function useServiceConsole() {
   // Security groups
   const {
     securityState,
-    activeSecurityGroupId,
     activeSecurityGroup,
     groupVisible,
     groupForm,

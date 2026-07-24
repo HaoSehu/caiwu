@@ -6,7 +6,7 @@ import { clientAuthApi } from '@/api/auth';
 import { useUserStore } from '@/store';
 import type { ClientUserInfo, ClientVerificationPayload } from '@/types/client';
 
-const IDENTITY_CARD_PATTERN = /(^\d{15}$)|(^\d{17}[\dXx]$)/;
+const IDENTITY_CARD_PATTERN = /^(?:\d{15}|\d{17}[\dXx])$/;
 const QR_SESSION_TTL_SECONDS = 300;
 
 function pickQrUrl(payload: Record<string, unknown>) {

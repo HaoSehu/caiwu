@@ -107,7 +107,6 @@ request.interceptors.request.use(
     const safeRequest = isSafeRequest(method)
     const writeRequest = isWriteRequest(method)
 
-    runtimeConfig.headers = runtimeConfig.headers
     runtimeConfig.silentError = Boolean(runtimeConfig.silentError || runtimeConfig.silent)
     runtimeConfig.__safeRequest = safeRequest
     runtimeConfig.timeout = resolveTimeout(runtimeConfig, safeRequest)

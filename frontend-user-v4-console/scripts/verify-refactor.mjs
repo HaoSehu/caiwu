@@ -75,7 +75,7 @@ function listFiles(targets, files = []) {
         if (['node_modules', 'dist', '.git'].includes(child)) continue;
         listFiles([path.join(target, child)], files);
       }
-    } else if (/\.(vue|ts|tsx|js|jsx|json|less|css|html)$/.test(target)) {
+    } else if (/\.(?:vue|ts|tsx|js|jsx|json|less|css|html)$/.test(target)) {
       files.push(target);
     }
   }
@@ -96,7 +96,8 @@ function extractClientRoutes() {
   const stack = [];
   let match;
 
-  while ((match = routeRegex.exec(source))) {
+  match = routeRegex.exec(source);
+  while (match) {
     const rawPath = match[1];
     if (rawPath === '/' || rawPath === '/client' || rawPath.startsWith('/client/')) {
       stack.length = 0;
@@ -104,6 +105,7 @@ function extractClientRoutes() {
     const parent = rawPath.startsWith('/client') ? '' : '/client';
     const fullPath = normalizePath(rawPath, parent);
     if (fullPath.startsWith('/client/')) routes.push(fullPath);
+    match = routeRegex.exec(source);
   }
 
   return new Set(routes);

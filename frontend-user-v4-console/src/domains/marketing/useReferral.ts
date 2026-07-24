@@ -8,7 +8,6 @@ import { copyText } from '@/utils/format';
 import { useUserStore } from '@/store';
 import type {
   ClientAlipayAccount,
-  ClientNotificationPreferences,
   ReferralAccountLogRecord,
   ReferralOverviewPayload,
   ReferralRewardRecord,
