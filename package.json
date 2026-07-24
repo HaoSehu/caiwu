@@ -69,6 +69,9 @@
   },
   "overrides": {
     "form-data": "4.0.6",
-    "js-yaml": "4.2.0"
+    "js-yaml": "4.3.0",
+    "tvision-color@1.6.0": {
+      "@babel/runtime-corejs3": "7.29.7"
+    }
   }
 }

@@ -1,7 +1,6 @@
 import type { RouteRecordRaw } from 'vue-router';
 import { shallowRef } from 'vue';
 import {
-  BookOpenIcon,
   CatalogIcon,
   CouponIcon,
   DashboardIcon,

@@ -58,6 +58,7 @@ export default antfu(
         /* Disallow person rules */
         'antfu/top-level-function': 'off',
         'antfu/if-newline': 'off',
+        'e18e/prefer-static-regex': 'off',
         'n/prefer-global/process': 'off',
 
         /* If you need control the imports sequence, must be off
@@ -129,6 +130,12 @@ export default antfu(
           },
         ],
         'vue/padding-line-between-blocks': ['error', 'never'],
+      },
+    },
+    {
+      files: ['tests/**/*.spec.ts'],
+      rules: {
+        'no-new-func': 'off',
       },
     },
     globalIgnores([

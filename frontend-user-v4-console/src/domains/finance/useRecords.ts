@@ -206,9 +206,9 @@ function formatSnapshotValue(value: unknown, key = ''): string {
   }
   const raw = String(value);
   if (BILLING_CYCLE_KEYS.has(key)) return formatBillingCycle(raw);
-  if (['bw', 'in_bw', 'out_bw'].includes(key) && /^\d+(\.\d+)?$/.test(raw)) return `${raw} Mbps`;
-  if (key === 'memory' && /^\d+(\.\d+)?$/.test(raw)) return `${raw} MB`;
-  if (['ip_num', 'ipv6_num', 'quantity'].includes(key) && /^\d+(\.\d+)?$/.test(raw)) return `${raw} 个`;
+  if (['bw', 'in_bw', 'out_bw'].includes(key) && /^\d+(?:\.\d+)?$/.test(raw)) return `${raw} Mbps`;
+  if (key === 'memory' && /^\d+(?:\.\d+)?$/.test(raw)) return `${raw} MB`;
+  if (['ip_num', 'ipv6_num', 'quantity'].includes(key) && /^\d+(?:\.\d+)?$/.test(raw)) return `${raw} 个`;
   return raw;
 }
 

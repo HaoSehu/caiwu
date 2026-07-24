@@ -170,17 +170,6 @@ function isPayable(row: InvoiceRecord | null) {
   return isPayableInvoice(row);
 }
 
-const BILLING_CYCLE_MAP: Record<string, string> = {
-  monthly: '月付',
-  quarterly: '季付',
-  semiannually: '半年付',
-  annually: '年付',
-  biennially: '两年付',
-  triennially: '三年付',
-  one_time: '一次性',
-  free: '免费',
-};
-
 function billingCycleLabel(value?: string) {
   return formatBillingCycle(value);
 }

@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue';
 
-import type { MonitorChartData, MonitorChartPoint, MonitorChartRecord, MonitorSummaryItem } from '@/types/client';
+import type { MonitorChartRecord, MonitorSummaryItem } from '@/types/client';
 
 type MonitorSeries = { key: string; name: string; rawPoints: MonitorPoint[] };
 type MonitorPoint = { time: string; timestamp: number; value: number; displayValue: string };

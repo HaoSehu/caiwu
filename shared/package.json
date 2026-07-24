@@ -15,8 +15,8 @@
   },
   "types": "./index.d.ts",
   "dependencies": {
-    "axios": "^1.7.0",
-    "markdown-it": "^14.2.0",
+    "axios": "^1.18.1",
+    "markdown-it": "^14.3.0",
     "vue": "^3.5.0"
   },
   "devDependencies": {

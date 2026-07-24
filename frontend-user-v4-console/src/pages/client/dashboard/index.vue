@@ -269,7 +269,6 @@ const loading = ref(false);
 const activeNoticeTab = ref<'notice' | 'help'>('notice');
 const balanceLogsDaily = ref<BalanceLog[]>([]);
 const paidInvoices = ref<InvoiceRecord[]>([]);
-const helpArticles = ref<ContentArticleRecord[]>([]);
 const balanceLogsLoaded = ref(false);
 const invoicesLoaded = ref(false);
 const recentNotices = ref<ContentArticleRecord[]>([]);
@@ -661,7 +660,7 @@ async function loadDashboard() {
     // 这些数据不阻塞首屏显示，提升感知速度
     async function loadSecondaryData() {
       try {
-        const [helpRes, unreadRes, balanceLogsRes, paidInvoicesRes] = await Promise.allSettled([
+        const [helpRes, _unreadRes, balanceLogsRes, paidInvoicesRes] = await Promise.allSettled([
           clientApi.helpArticles({ page: 1, page_size: 10 }),
           fetchUnreadCount(true),
           clientApi.balanceLogs({ ...last7DaysRange(), page_size: 200 }),

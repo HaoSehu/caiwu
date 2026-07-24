@@ -252,9 +252,8 @@ type ReferralTab = 'overview' | 'rewards' | 'withdrawals';
 type WithdrawalMode = 'approve' | 'reject';
 
 const route = useRoute();
-const activeTab = ref<ReferralTab>(resolveRouteTab());
-
 const validTabs: ReferralTab[] = ['overview', 'rewards', 'withdrawals'];
+const activeTab = ref<ReferralTab>(resolveRouteTab());
 
 function normalizeTab(value: unknown): ReferralTab | null {
   return validTabs.includes(value as ReferralTab) ? (value as ReferralTab) : null;

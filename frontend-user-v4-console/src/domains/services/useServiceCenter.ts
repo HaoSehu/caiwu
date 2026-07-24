@@ -45,7 +45,6 @@ const DEFAULT_SERVICE_STATUS_OPTION = {
   value: DEFAULT_SERVICE_STATUS_SCOPE,
 };
 
-type AnyRecord = Record<string, unknown>;
 type ServiceListParams = Record<string, string | number>;
 type TdesignTagTheme = 'primary' | 'success' | 'warning' | 'danger';
 type ServiceLike = Partial<ServiceInstance> & Record<string, unknown>;

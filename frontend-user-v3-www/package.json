@@ -17,16 +17,15 @@
   "dependencies": {
     "@caiwu/shared": "file:../shared",
     "@element-plus/icons-vue": "^2.3.0",
-    "axios": "^1.13.6",
+    "axios": "^1.18.1",
     "dayjs": "^1.11.21",
     "element-plus": "^2.9.0",
-    "markdown-it": "^14.2.0",
+    "markdown-it": "^14.3.0",
     "pinia": "^3.0.4",
     "vue": "^3.5.18",
     "vue-router": "^4.6.0"
   },
   "devDependencies": {
-    "@rollup/rollup-win32-x64-msvc": "^4.59.0",
     "@vitejs/plugin-vue": "^5.1.0",
     "sass": "^1.80.0",
     "unplugin-auto-import": "^0.18.0",

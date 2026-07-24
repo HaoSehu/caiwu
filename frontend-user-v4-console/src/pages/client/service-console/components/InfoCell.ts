@@ -25,8 +25,14 @@ export const InfoCell = defineComponent({
       isTruncated.value = el.scrollWidth > el.clientWidth;
     };
 
-    onMounted(() => nextTick(checkTruncated));
-    onUpdated(() => nextTick(checkTruncated));
+    onMounted(async () => {
+      await nextTick();
+      checkTruncated();
+    });
+    onUpdated(async () => {
+      await nextTick();
+      checkTruncated();
+    });
 
     return () => {
       const tag = props.strong ? 'strong' : 'span';

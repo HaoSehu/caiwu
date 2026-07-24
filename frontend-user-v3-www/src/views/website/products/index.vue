@@ -1077,7 +1077,6 @@ const {
   selectedProduct,
   configForm,
   selectedCycle,
-  quantity,
   quoteLoading,
   productStockLoading,
   productStockError,

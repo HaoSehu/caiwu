@@ -3,7 +3,11 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './tests/e2e',
   outputDir: './test-results',
-  fullyParallel: true,
+  // The smoke suite shares one Vite server and performs many first-load module
+  // compilations. Running every test in parallel can leave pages on the empty
+  // app shell before their assertions start, so keep each project serial.
+  fullyParallel: false,
+  workers: 3,
   retries: process.env.CI ? 1 : 0,
   reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
   use: {

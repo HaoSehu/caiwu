@@ -6,7 +6,6 @@ import type {
   BalanceLog,
   ClientFinanceListParams,
   ConsoleConnectionInfo,
-  ConsoleSelectOption,
   ConsoleServiceDetail,
   ContentDetailPayload,
   ContentListPayload,
@@ -52,7 +51,6 @@ import type {
   ServiceVncPayload,
   SecurityGroupPayload,
   SecurityRulePayload,
-  SummaryRecord,
   TicketImageUploadPayload,
   TicketRecord,
   TicketReplyRecord,
@@ -67,7 +65,6 @@ import {
 } from './contentNormalizer';
 
 type QueryParams = Record<string, unknown> | undefined;
-type UnknownEnvelope = ApiEnvelope<Record<string, unknown>>;
 type RequestConfig = (AxiosRequestConfig & { silentError?: boolean }) | undefined;
 
 const LONG_RUNNING_REQUEST_TIMEOUT = 45000;

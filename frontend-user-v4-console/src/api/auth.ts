@@ -3,7 +3,6 @@ import type { AxiosRequestConfig } from 'axios';
 import request from '@/utils/request';
 import type {
   ApiEnvelope,
-  ClientAgentInfo,
   ClientAlipayAccount,
   ClientAuthSessionPayload,
   ClientNotificationPreferences,
@@ -58,7 +57,4 @@ export const clientAuthApi = {
   sendEmailCode: (data: Record<string, unknown>) => request.post('/v2/client/auth/email-code', data),
   resetPassword: (data: Record<string, unknown>) => request.post('/v2/client/auth/reset-password', data),
   logout: () => request.post('/v2/client/auth/logout'),
-
-  applyAgent: (data: Record<string, unknown>) => postEnvelope('/v2/client/agent/apply', data, SILENT_ERROR_CONFIG),
-  getAgentInfo: () => getEnvelope<ClientAgentInfo>('/v2/client/agent/info', SILENT_ERROR_CONFIG),
 };

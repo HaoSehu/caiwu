@@ -61,7 +61,9 @@ export function useConsoleVnc(options: UseConsoleVncOptions) {
         `${VNC_CREDENTIAL_STORAGE_PREFIX}${token}`,
         JSON.stringify({ ...credentials, service_id: serviceId.value, saved_at: Date.now() }),
       );
-    } catch {}
+    } catch {
+      // sessionStorage can be unavailable in restricted or cross-origin windows.
+    }
   }
 
   async function requestVncUrl(targetWindow: Window | null = null): Promise<string> {

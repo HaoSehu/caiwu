@@ -121,7 +121,6 @@ httpClient.interceptors.request.use(
     const isPublicSiteGetRequest = method === 'get' && requestUrl.startsWith('/v2/site/');
     const token = getClientToken();
 
-    runtimeConfig.headers = runtimeConfig.headers;
     runtimeConfig.silentError = Boolean(runtimeConfig.silentError || runtimeConfig.silent);
     runtimeConfig.__safeRequest = safeRequest;
     runtimeConfig.timeout = resolveTimeout(runtimeConfig, safeRequest);

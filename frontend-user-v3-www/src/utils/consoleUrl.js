@@ -33,14 +33,12 @@ function normalizeConsoleOrigin() {
   }
 
   if (import.meta.env.DEV) {
-    // eslint-disable-next-line no-console
     console.warn('[consoleUrl] 无法推断控制台地址，请显式配置 VITE_CONSOLE_SITE_URL。')
   }
 
   // 最后兜底仍返回空，由调用侧保留 /client/* 路径，避免误跳回官网域名。
   if (publicSiteOrigin) {
     if (import.meta.env.DEV) {
-      // eslint-disable-next-line no-console
       console.warn('[consoleUrl] 控制台地址推断失败，保留 /client/* 路径，请显式配置 VITE_CONSOLE_SITE_URL。')
     }
   }

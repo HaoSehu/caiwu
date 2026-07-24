@@ -24,11 +24,11 @@ function normalizeBrandAsset(raw: unknown, fallback: string) {
     return normalized;
   }
 
-  if (/(^|\/)branding\/logo\.svg(?:[?#].*)?$/i.test(normalized)) {
+  if (/(?:^|\/)branding\/logo\.svg(?:[?#].*)?$/i.test(normalized)) {
     return DEFAULT_SITE_LOGO;
   }
 
-  if (/(^|\/)branding\/logo1\.svg(?:[?#].*)?$/i.test(normalized)) {
+  if (/(?:^|\/)branding\/logo1\.svg(?:[?#].*)?$/i.test(normalized)) {
     return DEFAULT_FAVICON;
   }
 

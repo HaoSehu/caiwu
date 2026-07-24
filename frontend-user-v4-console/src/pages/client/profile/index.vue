@@ -23,7 +23,6 @@
         <t-menu :value="activeTab" theme="light" @change="handleProfileTabChange">
           <t-menu-item value="profile">个人资料</t-menu-item>
           <t-menu-item value="security">账户安全</t-menu-item>
-          <t-menu-item value="agent">合作代理</t-menu-item>
           <t-menu-item value="notification">消息提醒</t-menu-item>
         </t-menu>
       </t-card>
@@ -72,43 +71,6 @@
             <t-button theme="primary" variant="text" @click="item.action">{{ item.actionLabel }}</t-button>
           </article>
         </div>
-      </t-card>
-
-      <t-card v-else-if="activeTab === 'agent'" class="profile-card" :bordered="false">
-        <template #title>合作代理</template>
-        <template v-if="agentInfo.is_agent">
-          <t-form label-align="left" label-width="6rem" class="profile-form">
-            <t-form-item label="对接地址">
-              <div class="profile-id-row">
-                <t-input :value="agentInfo.api_url" readonly />
-                <t-button variant="outline" shape="square" @click="copyText(agentInfo.api_url)">
-                  <CopyIcon />
-                </t-button>
-              </div>
-            </t-form-item>
-            <t-form-item label="账号"><t-input :value="agentInfo.app_id" readonly /></t-form-item>
-            <t-form-item label="API密钥">
-              <div class="profile-id-row">
-                <t-input :value="agentInfo.secret" readonly />
-                <t-button variant="outline" shape="square" @click="copyText(agentInfo.secret)">
-                  <CopyIcon />
-                </t-button>
-              </div>
-            </t-form-item>
-          </t-form>
-        </template>
-        <template v-else>
-          <t-empty description="代理合作功能暂未开通" />
-          <div class="agent-list">
-            <span>专属代理折扣与价格体系</span>
-            <span>邀请客户后的返佣统计</span>
-            <span>代理等级、结算与权益说明</span>
-          </div>
-          <div class="profile-footer">
-            <span>加入代理合作计划，享受专属权益</span>
-            <t-button theme="primary" :loading="agentLoading" @click="submitAgentApplication">立即申请</t-button>
-          </div>
-        </template>
       </t-card>
 
       <t-card v-else class="profile-card" :bordered="false">
@@ -205,15 +167,10 @@
 <script setup lang="ts">
 import { useProfile } from '@/domains/account/useProfile';
 import { CopyIcon } from 'tdesign-icons-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
-import { onMounted, reactive, ref, watch } from 'vue';
-import { clientAuthApi } from '@/api/auth';
-import type { ClientAgentInfo } from '@/types/client';
 
 const profileTabs = [
   { value: 'profile', label: '个人资料' },
   { value: 'security', label: '账户安全' },
-  { value: 'agent', label: '合作代理' },
   { value: 'notification', label: '消息提醒' },
 ] as const;
 
@@ -250,50 +207,6 @@ const {
   saveNotificationPreferences,
   handleProfileTabChange,
 } = useProfile();
-
-const agentLoading = ref(false);
-const agentInfo = reactive<ClientAgentInfo>({
-  is_agent: false,
-  api_url: '',
-  app_id: '',
-  secret: '',
-});
-
-async function fetchAgentInfo() {
-  try {
-    const res = await clientAuthApi.getAgentInfo();
-    const data = res.data;
-    if (data) {
-      agentInfo.is_agent = data.is_agent ?? false;
-      agentInfo.api_url = data.api_url ?? '';
-      agentInfo.app_id = data.app_id ?? '';
-      agentInfo.secret = data.secret ?? '';
-    }
-  } catch {
-    // 静默失败
-  }
-}
-
-async function submitAgentApplication() {
-  agentLoading.value = true;
-  try {
-    await clientAuthApi.applyAgent({});
-    MessagePlugin.success('代理申请已通过');
-  } catch {
-    // 409 等错误：可能已是代理，刷新状态
-  } finally {
-    await fetchAgentInfo();
-    agentLoading.value = false;
-  }
-}
-
-onMounted(() => {
-  fetchAgentInfo();
-});
-
-watch(activeTab, (tab) => {
-  if (tab === 'agent') fetchAgentInfo();
-});
 </script>
 
 <style scoped lang="less">

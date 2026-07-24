@@ -7,7 +7,6 @@ import vue from '@vitejs/plugin-vue';
 import vueJsx from '@vitejs/plugin-vue-jsx';
 import type { ConfigEnv, UserConfig } from 'vite';
 import { loadEnv } from 'vite';
-import { viteMockServe } from 'vite-plugin-mock';
 import Components from 'unplugin-vue-components/vite';
 import { TDesignResolver } from 'unplugin-vue-components/resolvers';
 import svgLoader from 'vite-svg-loader';
@@ -231,14 +230,6 @@ export default ({ mode }: ConfigEnv): UserConfig => {
           }),
         ],
       }),
-      ...(mode === 'mock'
-        ? [
-            viteMockServe({
-              mockPath: 'mock',
-              enable: true,
-            }),
-          ]
-        : []),
       svgLoader(),
       createIndexNetworkHintsPlugin(assetBase),
       createPrecompressedAssetsPlugin(),
