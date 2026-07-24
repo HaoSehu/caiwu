@@ -30,7 +30,7 @@ class AdminDatabaseStatusResource extends JsonResource
                     'name' => (string) ($item['name'] ?? ''),
                     'rows' => (int) ($item['rows'] ?? 0),
                     'size_mb' => round((float) ($item['size_mb'] ?? 0), 2),
-                    'update_time' => isset($item['update_time']) && $item['update_time'] !== null
+                    'update_time' => isset($item['update_time'])
                         ? (string) $item['update_time']
                         : null,
                 ];
@@ -63,7 +63,7 @@ class AdminDatabaseStatusResource extends JsonResource
                 'estimated_reclaimable_mb' => round((float) ($optimization['estimated_reclaimable_mb'] ?? 0), 2),
                 'candidates' => $candidates,
                 'cooldown_remaining_seconds' => max(0, (int) ($optimization['cooldown_remaining_seconds'] ?? 0)),
-                'last_optimized_at' => isset($optimization['last_optimized_at']) && $optimization['last_optimized_at'] !== null
+                'last_optimized_at' => isset($optimization['last_optimized_at'])
                     ? (string) $optimization['last_optimized_at']
                     : null,
             ],

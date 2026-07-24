@@ -4,15 +4,16 @@ declare(strict_types=1);
 
 namespace Tests\Unit;
 
+use App\Exceptions\BusinessException;
 use App\Models\Supplier;
 use App\Services\Integrations\Plugins\PluginFileLoader;
 use App\Services\Integrations\Plugins\PluginScanner;
 use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiTransport;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfAuthManager;
-use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfConsoleService;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfCloudConfigTemplate;
-use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfFinanceTransport;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfConsoleService;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfFinanceAdapter;
+use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfFinanceTransport;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfNetworkService;
 use Caiwu\Plugins\Servers\ZjmfFinance\Lib\ZjmfSecurityService;
 use Mockery;
@@ -372,7 +373,7 @@ class ZjmfConsoleAndNetworkServiceTest extends TestCase
     {
         $service = new ZjmfSecurityService($this->makeTransport(Mockery::mock(HostingPanelApiTransport::class)));
 
-        $this->expectException(\App\Exceptions\BusinessException::class);
+        $this->expectException(BusinessException::class);
         $service->submitCustomModuleAction($this->makeSupplier(), '/v1/security-groups', [], 'jwt-token');
     }
 
@@ -510,7 +511,7 @@ class ZjmfConsoleAndNetworkServiceTest extends TestCase
             new ZjmfConsoleService($this->makeTransport($hostingTransport))
         );
 
-        $this->expectException(\App\Exceptions\BusinessException::class);
+        $this->expectException(BusinessException::class);
         $networkService->purchaseHostUpgrade($supplier, 77, 88, 'monthly', '', 'jwt-token');
     }
 

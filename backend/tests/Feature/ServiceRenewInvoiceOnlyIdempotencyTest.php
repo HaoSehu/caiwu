@@ -352,7 +352,6 @@ class ServiceRenewInvoiceOnlyIdempotencyTest extends TestCase
     {
         $suffix = bin2hex(random_bytes(4));
 
-
         $user = User::query()->create([
             'email' => 'renew-bind-'.$suffix.'@example.com',
             'password' => 'Temp@123456',

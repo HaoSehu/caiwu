@@ -2707,8 +2707,14 @@ class PaymentService
             return true;
         }
 
-        return $invoiceType === 'new'
-            && (int) ($invoice->order?->product?->auto_setup ?? 0) === 1;
+        $order = $invoice->order;
+        if ($invoiceType !== 'new' || ! $order instanceof Order) {
+            return false;
+        }
+
+        $product = $order->product;
+
+        return $product instanceof Product && (int) $product->auto_setup === 1;
     }
 
     private function markFulfillmentPending(Invoice $invoice, string $invoiceType): Invoice
@@ -2799,11 +2805,12 @@ class PaymentService
             ->with($relations)
             ->find($orderId);
 
-        if (! $order || ! $order->invoice) {
+        if (! $order instanceof Order) {
             return null;
         }
 
-        if ((int) $order->invoice->status !== InvoiceStatus::PAID) {
+        $invoice = $order->invoice;
+        if (! $invoice instanceof Invoice || (int) $invoice->status !== InvoiceStatus::PAID) {
             return null;
         }
 

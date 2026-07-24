@@ -2,6 +2,7 @@
     "name": "idc/finance",
     "type": "project",
     "description": "创欧云 - Laravel 12",
+    "license": "proprietary",
     "require": {
         "php": "^8.2",
         "laravel/framework": "^12.0",

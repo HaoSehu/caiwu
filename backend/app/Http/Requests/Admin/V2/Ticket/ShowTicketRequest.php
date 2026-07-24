@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Admin\V2\Ticket;
 
-use App\Models\Ticket;
 use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
+use App\Models\Ticket;
 
 class ShowTicketRequest extends AdminFormRequest
 {

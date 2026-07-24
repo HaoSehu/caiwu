@@ -45,7 +45,7 @@ class AdminIntegrationPluginControllerTest extends TestCase
             fn (array $plugin): bool => str_starts_with((string) ($plugin['slug'] ?? ''), 'demo_')
         ));
         $this->assertTrue(collect($listResponse->json('data.list'))->contains(
-            fn (array $plugin): bool => ($plugin['domain'] ?? '') === 'addons'
+            fn (array $plugin): bool => ($plugin['slug'] ?? '') === 'stay33'
         ));
 
         $installResponse = $this->postJson('/api/v2/admin/integration-plugins', [

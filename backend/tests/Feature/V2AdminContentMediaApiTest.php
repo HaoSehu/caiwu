@@ -94,9 +94,24 @@ class V2AdminContentMediaApiTest extends TestCase
         $this->assertSame($this->summaryKeys(), array_keys($summaryResponse->json('data')));
         $this->assertNoSensitiveKeys($summaryResponse->json());
 
+        $category = $fixture['category'];
+        $categoryPosition = ContentCategory::query()
+            ->ofType(ContentArticle::TYPE_NOTICE)
+            ->where(function ($query) use ($category): void {
+                $query
+                    ->where('sort_order', '<', (int) $category->sort_order)
+                    ->orWhere(function ($sameOrder) use ($category): void {
+                        $sameOrder
+                            ->where('sort_order', (int) $category->sort_order)
+                            ->where('id', '<=', (int) $category->id);
+                    });
+            })
+            ->count();
+        $categoryPage = max((int) ceil($categoryPosition / 10), 1);
+
         $categoryResponse = $this->getJson('/api/v2/admin/content/categories?'.http_build_query([
             'content_type' => ContentArticle::TYPE_NOTICE,
-            'page' => 1,
+            'page' => $categoryPage,
             'page_size' => 10,
         ]))
             ->assertOk()

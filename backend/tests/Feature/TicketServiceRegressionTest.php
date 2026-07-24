@@ -83,13 +83,14 @@ class TicketServiceRegressionTest extends TestCase
 
     public function test_admin_list_ongoing_status_only_returns_unclosed_tickets(): void
     {
+        $suffix = bin2hex(random_bytes(4));
         $service = $this->makeTicketService();
         $user = $this->createClientUser('ticket-ongoing');
 
         $openTicket = Ticket::query()->create([
             'user_id' => (int) $user->id,
             'department' => 'support',
-            'subject' => 'Open Ticket',
+            'subject' => 'Open Ticket '.$suffix,
             'priority' => 2,
             'status' => TicketService::STATUS_OPEN,
         ]);
@@ -97,7 +98,7 @@ class TicketServiceRegressionTest extends TestCase
         $clientReplyTicket = Ticket::query()->create([
             'user_id' => (int) $user->id,
             'department' => 'support',
-            'subject' => 'Client Reply Ticket',
+            'subject' => 'Client Reply Ticket '.$suffix,
             'priority' => 2,
             'status' => TicketService::STATUS_CLIENT_REPLY,
         ]);
@@ -105,7 +106,7 @@ class TicketServiceRegressionTest extends TestCase
         $staffReplyTicket = Ticket::query()->create([
             'user_id' => (int) $user->id,
             'department' => 'support',
-            'subject' => 'Staff Reply Ticket',
+            'subject' => 'Staff Reply Ticket '.$suffix,
             'priority' => 2,
             'status' => TicketService::STATUS_STAFF_REPLY,
         ]);
@@ -113,12 +114,12 @@ class TicketServiceRegressionTest extends TestCase
         $closedTicket = Ticket::query()->create([
             'user_id' => (int) $user->id,
             'department' => 'support',
-            'subject' => 'Closed Ticket',
+            'subject' => 'Closed Ticket '.$suffix,
             'priority' => 2,
             'status' => TicketService::STATUS_CLOSED,
         ]);
 
-        $result = $service->adminList(['status' => 'ongoing'], 20);
+        $result = $service->adminList(['status' => 'ongoing', 'keyword' => $suffix], 20);
         $ticketIds = collect($result->items())->pluck('id')->map(fn ($id) => (int) $id)->all();
 
         $this->assertContains((int) $openTicket->id, $ticketIds);

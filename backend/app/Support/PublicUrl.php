@@ -55,7 +55,7 @@ final class PublicUrl
             || isset($parts['pass'])
             || isset($parts['query'])
             || isset($parts['fragment'])
-            || (($parts['path'] ?? '') !== '' && ($parts['path'] ?? '') !== '/')) {
+            || (isset($parts['path']) && $parts['path'] !== '' && $parts['path'] !== '/')) {
             throw new LogicException(sprintf('%s 必须是无路径、无账号信息的 HTTP(S) 根地址。', $environmentKey));
         }
 

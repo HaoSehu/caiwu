@@ -19,12 +19,15 @@ use App\Models\ThirdProductGroup;
 use App\Services\Site\SiteProductQuoteService;
 use App\Services\Site\SiteProductReadService;
 use App\Support\AdminPermissions;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Cache;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class V2ProductApiTest extends TestCase
 {
+    use DatabaseTransactions;
+
     public function test_admin_products_require_login_and_permission(): void
     {
         $this->getJson('/api/v2/admin/products')
@@ -342,6 +345,9 @@ class V2ProductApiTest extends TestCase
                 'available_coupons' => [
                     ['id' => 3, 'name' => '测试优惠券', 'discount_amount' => '16.00'],
                 ],
+                'items' => [
+                    ['field' => 'cpu', 'label' => 'CPU', 'amount' => '8.00', 'secret' => 'should-not-leak'],
+                ],
                 'quote_token' => 'quote-token-v2',
                 'quote_expires_at' => '2026-07-05T00:10:00+08:00',
                 'raw_response' => 'should-not-leak',
@@ -436,7 +442,8 @@ class V2ProductApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('code', 0)
             ->assertJsonPath('data.quote_token', 'quote-token-v2')
-            ->assertJsonPath('data.total_amount', '200.00');
+            ->assertJsonPath('data.total_amount', '200.00')
+            ->assertJsonPath('data.items.0.field', 'cpu');
 
         $this->assertSame([
             'product_id',
@@ -453,6 +460,7 @@ class V2ProductApiTest extends TestCase
             'available_coupons',
             'quote_token',
             'quote_expires_at',
+            'items',
         ], array_keys($quoteResponse->json('data')));
         $this->assertNoSensitiveKeys($typesResponse->json());
         $this->assertNoSensitiveKeys($stockResponse->json());

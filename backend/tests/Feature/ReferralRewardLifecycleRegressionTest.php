@@ -13,6 +13,7 @@ use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\ReferralReward;
+use App\Models\Setting;
 use App\Models\User;
 use App\Models\UserAccount;
 use App\Services\Finance\PaymentService;
@@ -23,6 +24,39 @@ use Tests\TestCase;
 
 class ReferralRewardLifecycleRegressionTest extends TestCase
 {
+    /** @var array<string, mixed> */
+    private array $referralSettingSnapshot = [];
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->referralSettingSnapshot = Setting::query()
+            ->where('group_key', 'referral')
+            ->whereIn('item_key', ['enabled', 'reward_rate'])
+            ->pluck('item_value', 'item_key')
+            ->all();
+        Setting::setValues('referral', [
+            'enabled' => '1',
+            'reward_rate' => '10',
+        ]);
+    }
+
+    protected function tearDown(): void
+    {
+        Setting::query()
+            ->where('group_key', 'referral')
+            ->whereIn('item_key', ['enabled', 'reward_rate'])
+            ->delete();
+
+        foreach ($this->referralSettingSnapshot as $key => $value) {
+            Setting::setValue('referral', (string) $key, $value);
+        }
+        Setting::forgetCachedGroup('referral');
+
+        parent::tearDown();
+    }
+
     public function test_reward_creation_and_overview_still_work_when_users_referrer_columns_are_stale(): void
     {
         $this->ensureReferralSupportTables();

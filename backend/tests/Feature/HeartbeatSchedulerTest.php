@@ -17,6 +17,7 @@ use App\Services\Automation\Heartbeat\ScheduleTaskRunRepository;
 use App\Services\Automation\Heartbeat\ScheduleTickRepository;
 use App\Services\Automation\Heartbeat\TriggerRuleMatcher;
 use App\Services\Automation\ScheduleTaskTriggerService;
+use App\Services\System\ProductionReadinessService;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Artisan;
@@ -121,6 +122,49 @@ class HeartbeatSchedulerTest extends TestCase
         $this->assertSame([], $secondSummary->queuedTasks);
         $this->assertSame(['heartbeat-test-due'], $secondSummary->duplicateTasks);
         Queue::assertPushed(RunHeartbeatTaskJob::class, 1);
+    }
+
+    public function test_repeated_heartbeat_updates_trigger_time_and_keeps_readiness_fresh_within_same_slot(): void
+    {
+        Queue::fake();
+
+        $registry = new class(app()) extends HeartbeatTaskRegistry
+        {
+            public function enabledTasks(): array
+            {
+                return [];
+            }
+        };
+
+        $scheduler = new HeartbeatScheduler(
+            app(ScheduleTickRepository::class),
+            app(ScheduleTaskRunRepository::class),
+            $registry,
+            app(TriggerRuleMatcher::class),
+            app(QueueDrainService::class),
+        );
+
+        $scheduler->tick(CarbonImmutable::parse('2026-07-05 12:00:00', 'Asia/Shanghai'));
+        $scheduler->tick(CarbonImmutable::parse('2026-07-05 12:04:00', 'Asia/Shanghai'));
+
+        $tick = ScheduleTick::query()
+            ->where('slot_started_at', '2026-07-05 12:00:00')
+            ->sole();
+
+        $this->assertSame('2026-07-05 12:04:00', $tick->triggered_at?->format('Y-m-d H:i:s'));
+        $this->assertSame(1, ScheduleTick::query()
+            ->where('slot_started_at', '2026-07-05 12:00:00')
+            ->count());
+
+        CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-07-05 12:04:30', 'Asia/Shanghai'));
+
+        try {
+            config(['health.scheduler_max_age_seconds' => 180]);
+
+            $this->assertTrue(app(ProductionReadinessService::class)->check()['checks']['scheduler']);
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
     }
 
     public function test_manual_trigger_uses_heartbeat_job_and_registry(): void

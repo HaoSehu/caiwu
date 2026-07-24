@@ -251,7 +251,7 @@ return new class extends Migration
             return;
         }
 
-        DB::statement("
+        DB::statement('
             INSERT INTO `notification_logs` (
                 `plugin_id`, `driver_key`, `trace_id`, `channel`, `recipient`,
                 `template_code`, `subject`, `content`, `params_json`, `provider`,
@@ -264,7 +264,7 @@ return new class extends Migration
                 `request_id`, `status`, `error_msg`, `sent_at`, LEFT(`origin_type`, 30),
                 `origin_id`, `created_at`, `updated_at`
             FROM `message_logs`
-        ");
+        ');
 
         DB::statement("
             INSERT INTO `email_logs` (

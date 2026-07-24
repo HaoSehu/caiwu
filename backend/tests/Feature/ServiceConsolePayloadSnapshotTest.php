@@ -8,10 +8,10 @@ use App\Constants\ServiceStatus;
 use App\Models\FirstProductGroup;
 use App\Models\Product;
 use App\Models\SecondProductGroup;
-use App\Models\ThirdProductGroup;
 use App\Models\Service;
 use App\Models\Setting;
 use App\Models\Supplier;
+use App\Models\ThirdProductGroup;
 use App\Models\User;
 use App\Services\ClientServiceConsole\ServiceDetailService;
 use App\Services\ClientServiceConsole\ServiceNatService;
@@ -172,7 +172,26 @@ class ServiceConsolePayloadSnapshotTest extends TestCase
         $catalogProduct = $fixture['product']->fresh();
         $this->assertInstanceOf(Product::class, $catalogProduct);
 
+        $trafficPackageSettingKeys = [
+            'traffic_package_enabled',
+            'traffic_package_option_field',
+            'traffic_package_option_keyword',
+            'traffic_package_allow_choice_mode',
+            'traffic_package_allow_quantity_mode',
+        ];
+        $originalTrafficPackageSettings = Setting::query()
+            ->where('group_key', 'traffic_package')
+            ->whereIn('item_key', $trafficPackageSettingKeys)
+            ->pluck('item_value', 'item_key')
+            ->all();
         $originalCatalog = Setting::getValue('traffic_package_catalog', 'items', '[]');
+        Setting::setValues('traffic_package', [
+            'traffic_package_enabled' => '1',
+            'traffic_package_option_field' => 'flow_limit',
+            'traffic_package_option_keyword' => '流量',
+            'traffic_package_allow_choice_mode' => '1',
+            'traffic_package_allow_quantity_mode' => '1',
+        ]);
         Setting::setValue('traffic_package_catalog', 'items', json_encode([[
             'category_id' => (int) $catalogProduct->product_group_id,
             'product_type' => (string) $catalogProduct->product_type,
@@ -196,6 +215,12 @@ class ServiceConsolePayloadSnapshotTest extends TestCase
             $payload = $trafficPackageService->previewForUser($fixture['user'], (int) $fixture['service']->id);
         } finally {
             Setting::setValue('traffic_package_catalog', 'items', (string) $originalCatalog);
+            Setting::query()
+                ->where('group_key', 'traffic_package')
+                ->whereIn('item_key', $trafficPackageSettingKeys)
+                ->delete();
+            Setting::setValues('traffic_package', $originalTrafficPackageSettings);
+            Setting::forgetCachedGroup('traffic_package');
         }
 
         $this->assertTrue($payload['supported'], json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));

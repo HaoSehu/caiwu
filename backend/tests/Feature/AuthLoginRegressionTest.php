@@ -40,7 +40,7 @@ class AuthLoginRegressionTest extends TestCase
             ->assertJsonMissingPath('data.user.balance');
     }
 
-    public function test_client_login_returns_not_found_reason_for_unknown_account(): void
+    public function test_client_login_returns_generic_reason_for_unknown_account(): void
     {
         $this->postJson('/api/v2/client/login', [
             'account' => 'missing-'.bin2hex(random_bytes(4)).'@example.com',
@@ -48,10 +48,10 @@ class AuthLoginRegressionTest extends TestCase
         ])
             ->assertStatus(422)
             ->assertJsonPath('code', 40100)
-            ->assertJsonPath('message', '未找到该账号');
+            ->assertJsonPath('message', '账号或密码错误');
     }
 
-    public function test_client_login_returns_wrong_password_reason_for_existing_account(): void
+    public function test_client_login_returns_generic_reason_for_wrong_password(): void
     {
         $user = User::query()->create([
             'email' => 'client-regression-'.bin2hex(random_bytes(4)).'@example.com',
@@ -76,7 +76,7 @@ class AuthLoginRegressionTest extends TestCase
         ])
             ->assertStatus(422)
             ->assertJsonPath('code', 40100)
-            ->assertJsonPath('message', '密码错误');
+            ->assertJsonPath('message', '账号或密码错误');
     }
 
     public function test_admin_login_success_does_not_require_admin_role_bridge_tables(): void

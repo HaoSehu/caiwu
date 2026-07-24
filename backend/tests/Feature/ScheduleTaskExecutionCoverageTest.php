@@ -440,6 +440,7 @@ class ScheduleTaskExecutionCoverageTest extends TestCase
         Schema::connection('sqlite')->create('services', function (Blueprint $table): void {
             $table->id();
             $table->unsignedTinyInteger('status')->default(0);
+            $table->string('trace_id')->nullable();
             $table->timestamps();
         });
     }

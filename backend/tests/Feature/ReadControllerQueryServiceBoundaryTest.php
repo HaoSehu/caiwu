@@ -13,11 +13,13 @@ use App\Models\ReferralWithdrawal;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\UserAccount;
+use App\Models\UserReferral;
 use App\Models\VerificationHistory;
 use App\Services\Auth\AdminVerificationQueryService;
 use App\Services\Finance\ClientFinanceQueryService;
 use App\Services\Referral\AdminReferralOverviewService;
 use App\Support\AdminPermissions;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -26,6 +28,8 @@ use Tests\TestCase;
 
 class ReadControllerQueryServiceBoundaryTest extends TestCase
 {
+    use DatabaseTransactions;
+
     public function test_client_finance_query_service_returns_expected_lists_and_summaries(): void
     {
         $suffix = bin2hex(random_bytes(4));
@@ -116,7 +120,7 @@ class ReadControllerQueryServiceBoundaryTest extends TestCase
 
         $topUser = $this->createClientUser("top-referrer-{$suffix}", [
             'member_level_id' => (int) $level->id,
-            'total_sales_amount' => '999999.00',
+            'total_sales_amount' => '999999999.00',
             'referrer_user_id' => (int) $seedReferrer->id,
             'nickname' => 'Top Referrer',
         ]);
@@ -132,6 +136,18 @@ class ReadControllerQueryServiceBoundaryTest extends TestCase
                 'version' => 0,
             ]
         );
+        if (Schema::hasTable('user_referrals')) {
+            UserReferral::query()->updateOrCreate(
+                ['user_id' => (int) $topUser->id],
+                [
+                    'referral_code' => 'TOP'.$suffix,
+                    'referrer_user_id' => (int) $seedReferrer->id,
+                    'referred_at' => now(),
+                    'member_level_id' => (int) $level->id,
+                    'total_sales_amount' => '999999999.00',
+                ]
+            );
+        }
 
         $rewardOrder = Order::query()->create([
             'order_no' => 'REF'.strtoupper($suffix).'001',
@@ -236,15 +252,34 @@ class ReadControllerQueryServiceBoundaryTest extends TestCase
 
         $referrer = $this->createClientUser("valid-referrer-{$suffix}");
 
-        $this->createClientUser("valid-referred-{$suffix}", [
+        $referredUser = $this->createClientUser("valid-referred-{$suffix}", [
             'referrer_user_id' => (int) $referrer->id,
         ]);
 
+        if (Schema::hasTable('user_referrals')) {
+            UserReferral::query()->create([
+                'user_id' => (int) $referredUser->id,
+                'referral_code' => 'VALID'.$suffix,
+                'referrer_user_id' => (int) $referrer->id,
+                'referred_at' => now(),
+                'member_level_id' => null,
+                'total_sales_amount' => '0.00',
+            ]);
+        }
+
+        $invalidReferredUser = $this->createClientUser("invalid-referred-{$suffix}");
+        $invalidReferrerId = max(
+            (int) $invalidReferredUser->id,
+            (int) User::withTrashed()->max('id')
+        ) + 1;
+
         DB::statement('SET FOREIGN_KEY_CHECKS=0');
         try {
-            $this->createClientUser("invalid-referred-{$suffix}", [
-                'referrer_user_id' => 999999,
-            ]);
+            User::query()
+                ->whereKey((int) $invalidReferredUser->id)
+                ->update([
+                    'referrer_user_id' => $invalidReferrerId,
+                ]);
         } finally {
             DB::statement('SET FOREIGN_KEY_CHECKS=1');
         }

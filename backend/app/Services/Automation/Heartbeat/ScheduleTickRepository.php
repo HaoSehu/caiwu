@@ -10,18 +10,24 @@ use Carbon\CarbonImmutable;
 
 class ScheduleTickRepository
 {
-    public function firstOrCreateSlot(CarbonImmutable $slot): ScheduleTick
+    public function firstOrCreateSlot(CarbonImmutable $triggeredAt): ScheduleTick
     {
-        $resolvedSlot = TickSlot::floorToFifteenMinutes($slot);
+        $resolvedSlot = TickSlot::floorToFifteenMinutes($triggeredAt);
 
-        return ScheduleTick::query()->firstOrCreate(
+        $tick = ScheduleTick::query()->firstOrCreate(
             ['slot_started_at' => $resolvedSlot],
             [
                 'global_number' => TickSlot::globalNumber($resolvedSlot),
                 'daily_index' => TickSlot::dailyIndex($resolvedSlot),
-                'triggered_at' => now(),
+                'triggered_at' => $triggeredAt,
             ],
         );
+
+        if (! $tick->wasRecentlyCreated) {
+            $tick->forceFill(['triggered_at' => $triggeredAt])->save();
+        }
+
+        return $tick;
     }
 
     public function toContext(ScheduleTick $tick): TickContext

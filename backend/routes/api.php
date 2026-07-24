@@ -4,6 +4,7 @@ use App\Http\Controllers\Site\V2\ContentController as V2SiteContentController;
 use App\Http\Controllers\Site\V2\HomeController as V2SiteHomeController;
 use App\Http\Controllers\Site\V2\ProductController as V2SiteProductController;
 use App\Http\Controllers\Site\V2\ProductGroupController as V2SiteProductGroupController;
+use App\Http\Controllers\System\HealthController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -29,12 +30,5 @@ Route::get('/v2/site/notices', [V2SiteContentController::class, 'notices']);
 Route::get('/v2/site/notices/{article}', [V2SiteContentController::class, 'noticeDetail']);
 Route::get('/v2/site/help-articles', [V2SiteContentController::class, 'helpArticles']);
 Route::get('/v2/site/help-articles/{article}', [V2SiteContentController::class, 'helpDetail']);
-// 健康检查
-Route::get('/health', function () {
-    return response()->json([
-        'code' => 0,
-        'message' => 'ok',
-        'data' => ['version' => '1.0.0'],
-        'timestamp' => time(),
-    ]);
-});
+Route::get('/health', [HealthController::class, 'live']);
+Route::get('/ready', [HealthController::class, 'ready']);

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Exceptions\BusinessException;
 use App\Models\IntegrationPlugin;
 use App\Models\Order;
 use App\Models\Product;
@@ -266,7 +267,7 @@ class KangHostxPluginTest extends TestCase
         $runtime = $driver?->resolve(ProvidesConsoleRuntime::class);
         $this->assertInstanceOf(KangHostx::class, $runtime);
 
-        $this->expectException(\App\Exceptions\BusinessException::class);
+        $this->expectException(BusinessException::class);
         $this->expectExceptionMessage('康乐连接检测失败：accesshash invalid');
 
         $runtime->execute([

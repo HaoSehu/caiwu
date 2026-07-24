@@ -4,14 +4,16 @@ declare(strict_types=1);
 
 namespace App\Services\Finance;
 
+use App\Constants\FinanceLedgerEventType;
+use App\Constants\InvoiceStatus;
 use App\Constants\InvoiceType;
+use App\Constants\PaymentStatus;
 use App\Exceptions\BusinessException;
 use App\Models\AccountTransaction;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\RechargeRecord;
 use App\Models\Refund;
-use Illuminate\Support\Facades\DB;
 
 class FinanceDocumentService
 {
@@ -139,7 +141,7 @@ class FinanceDocumentService
             'type' => InvoiceType::REFUND,
             'amount' => $this->money(-$refundAmount),
             'paid_amount' => $this->money(-$refundAmount),
-            'status' => \App\Constants\InvoiceStatus::PAID,
+            'status' => InvoiceStatus::PAID,
             'paid_at' => now(),
             'due_date' => null,
             'config_snapshot' => [
@@ -204,13 +206,13 @@ class FinanceDocumentService
 
         $thirdPartyAmount = (float) Payment::query()
             ->where('invoice_id', (int) $invoice->id)
-            ->whereIn('status', [\App\Constants\PaymentStatus::SUCCESS, \App\Constants\PaymentStatus::REFUNDED])
+            ->whereIn('status', [PaymentStatus::SUCCESS, PaymentStatus::REFUNDED])
             ->sum('amount');
         $balanceAmount = -1 * (float) AccountTransaction::query()
             ->where('user_id', (int) $invoice->user_id)
             ->whereIn('event_type', [
-                \App\Constants\FinanceLedgerEventType::INVOICE_PAYMENT,
-                \App\Constants\FinanceLedgerEventType::INVOICE_REFUND,
+                FinanceLedgerEventType::INVOICE_PAYMENT,
+                FinanceLedgerEventType::INVOICE_REFUND,
             ])
             ->where(function ($query) use ($invoice): void {
                 $query->where(function ($sourceQuery) use ($invoice): void {

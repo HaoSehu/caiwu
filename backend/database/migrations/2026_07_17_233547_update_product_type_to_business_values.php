@@ -12,15 +12,15 @@ return new class extends Migration
     {
         $map = [
             // 旧码 => 业务类型
-            'vps'           => 'cloud_server',
-            'dedicated'     => 'game_cloud',
-            'domain'        => 'cloud_desktop',
-            'type_iwjqnj'   => 'bare_metal',
-            'other'         => 'cdn',
-            'type_ipragu'   => 'other',
-            'type_tgynng'   => 'physical_machine',
-            'hosting'       => 'web_hosting',
-            'type_1'        => 'web_hosting',
+            'vps' => 'cloud_server',
+            'dedicated' => 'game_cloud',
+            'domain' => 'cloud_desktop',
+            'type_iwjqnj' => 'bare_metal',
+            'other' => 'cdn',
+            'type_ipragu' => 'other',
+            'type_tgynng' => 'physical_machine',
+            'hosting' => 'web_hosting',
+            'type_1' => 'web_hosting',
         ];
 
         $known = [

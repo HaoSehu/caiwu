@@ -29,6 +29,11 @@ function addPaths(target, label, paths) {
   }
 }
 
+function existingTrackedPaths(pathspec) {
+  return git(['ls-files', '--', pathspec])
+    .filter((trackedPath) => existsSync(path.join(root, trackedPath)));
+}
+
 const trackedForbiddenPathspecs = [
   'backend/storage/framework/testing/*.sqlite',
   'frontend-admin-v3/dist/*',
@@ -36,14 +41,16 @@ const trackedForbiddenPathspecs = [
   'frontend-user-v4-console/dist/*',
   'node_modules/*',
   '*/node_modules/*',
+  '*/package-lock.json',
   '*.zip',
+  'backend/storage/app/private/tmp*',
 ];
 
 for (const pathspec of trackedForbiddenPathspecs) {
-  addPaths(errors, 'tracked generated artifact', git(['ls-files', '--', pathspec]));
+  addPaths(errors, 'tracked generated artifact', existingTrackedPaths(pathspec));
 }
 
-const trackedSqlite = git(['ls-files', '--', '*.sqlite']);
+const trackedSqlite = existingTrackedPaths('*.sqlite');
 if (trackedSqlite.length > 0) {
   addPaths(errors, 'tracked sqlite artifact', trackedSqlite);
 }
@@ -69,6 +76,11 @@ const rootAllowedMarkdown = new Set([
 for (const entry of readdirSync(root)) {
   const fullPath = path.join(root, entry);
   const stat = statSync(fullPath);
+
+  if (stat.isFile() && /^idc_/i.test(entry)) {
+    errors.push(`root database artifact: ${entry}`);
+    continue;
+  }
 
   if (stat.isFile() && /\.md$/i.test(entry) && !rootAllowedMarkdown.has(entry)) {
     errors.push(`misplaced root markdown: ${entry}`);

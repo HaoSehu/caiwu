@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Admin\V2\Log;
 
-use App\Services\System\AdminLogV2QueryService;
 use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
+use App\Services\System\AdminLogV2QueryService;
 use Illuminate\Validation\Rule;
 
 class ListLogsRequest extends AdminFormRequest

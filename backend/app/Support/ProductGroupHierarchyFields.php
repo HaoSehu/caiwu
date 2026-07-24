@@ -64,5 +64,4 @@ class ProductGroupHierarchyFields
             'effective_product_group_level' => null,
         ];
     }
-
 }

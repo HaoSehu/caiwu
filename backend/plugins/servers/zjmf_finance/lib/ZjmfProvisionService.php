@@ -729,6 +729,7 @@ final class ZjmfProvisionService
             }
 
             $id = (int) ($host['id'] ?? 0);
+
             return $id > 0 ? $id : null;
         }, $hosts))));
     }

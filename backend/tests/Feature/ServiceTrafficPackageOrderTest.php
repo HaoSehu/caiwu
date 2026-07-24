@@ -55,6 +55,26 @@ class ServiceTrafficPackageOrderTest extends TestCase
         $invoiceId = null;
         $supplierBindingId = null;
         $productBindingId = null;
+        $trafficPackageSettingKeys = [
+            'traffic_package_enabled',
+            'traffic_package_option_field',
+            'traffic_package_option_keyword',
+            'traffic_package_allow_choice_mode',
+            'traffic_package_allow_quantity_mode',
+        ];
+        $originalTrafficPackageSettings = Setting::query()
+            ->where('group_key', 'traffic_package')
+            ->whereIn('item_key', $trafficPackageSettingKeys)
+            ->pluck('item_value', 'item_key')
+            ->all();
+
+        Setting::setValues('traffic_package', [
+            'traffic_package_enabled' => '1',
+            'traffic_package_option_field' => 'flow_limit',
+            'traffic_package_option_keyword' => '流量',
+            'traffic_package_allow_choice_mode' => '1',
+            'traffic_package_allow_quantity_mode' => '1',
+        ]);
 
         try {
             $user = User::query()->create([
@@ -325,6 +345,13 @@ class ServiceTrafficPackageOrderTest extends TestCase
                 'status' => OrderStatus::PENDING,
             ]);
         } finally {
+            Setting::query()
+                ->where('group_key', 'traffic_package')
+                ->whereIn('item_key', $trafficPackageSettingKeys)
+                ->delete();
+            Setting::setValues('traffic_package', $originalTrafficPackageSettings);
+            Setting::forgetCachedGroup('traffic_package');
+
             if ($invoiceId !== null && $invoiceId > 0) {
                 DB::table('invoices')->where('id', $invoiceId)->delete();
             }

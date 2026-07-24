@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\HandlesProductSnapshot;
 use App\Models\Concerns\EnsuresTraceId;
+use App\Models\Concerns\HandlesProductSnapshot;
 use App\Models\Concerns\NormalizesTraceId;
 use App\Support\OrderInvoiceNoGenerator;
 use App\Support\VersionedJson;
@@ -26,7 +26,7 @@ class Invoice extends Model
         'coupon_id', 'user_coupon_id', 'coupon_code',
         'amount', 'discount', 'paid_amount',
         'billing_cycle', 'quantity',
-        'config_snapshot', 'config_pricing_snapshot', 'coupon_snapshot',
+        'product_snapshot_json', 'config_snapshot', 'config_pricing_snapshot', 'coupon_snapshot',
         'status', 'due_date', 'paid_at',
         'refunded_at', 'refund_amount', 'refund_method', 'refund_trace_id',
         'remark', 'operator', 'trace_id',

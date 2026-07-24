@@ -574,46 +574,46 @@ class YiPayGatewayPluginTest extends TestCase
      */
     private function rsaKeyPair(): array
     {
-        return [
-            'private_key' => <<<'PEM'
------BEGIN RSA PRIVATE KEY-----
-MIIEogIBAAKCAQEAvcqGjgbvfqhoHnrq8HlHaTk1canPYMAVBRTZwNhrlOVI6VS2
-4dBWOhGEW7hdFRroZa8oJ8w9TdzyvS2asbpwesUVL1PwpY244pdgi/HHVxjEOJrC
-PbR9IQgejwEdKLzVpMXz6F9RO8/smGpoLoTIU5kqD6ol0Mp+NNuSBPqZN2gHPMV3
-3f7ysu0hHzxuV5i4rI2w6JOnHHKcTGvti1113koLAUMRLNSLFvbIqbeKJk31yQCF
-qeTdKVJFeMPzss3DAJ21ndIvisQBfcz/1THNVkSE2U8gGCghFiVBMtxAqWhONfAV
-N6kT51ViC1nIaPP8P9aLxihQo334psCqEADDxwIDAQABAoIBADMR40Emhp17bYD+
-LGgHCns7BLGQMxhit4VFhg7JbbGEPSlkPU3oRLudaRNROeLq+awbBOAoqjpggQT8
-14qJk6jFjZzNpoy15RE8EKO3rJ84L9zXb/swrRcNW0O51gHXRlnvVmGp/G7u1Uhy
-IZSa8FjmdxX9/+z+ABXzG4ixcjchFNHrefSjKL4AMOvU3qZdjbu+2TR2JZA+2fQQ
-3h7vh/Ui70zJaKJw4eEDdJLEII9mSNsdmy76KjAX5eM/11SWGsYGGpFm3r/XV5pT
-nBo2pJ2wNZcaoFYPv3m9eeZ6K6JZlsUJy+iJJUy28F8iZRQtrlhP3riXW/uis+MI
-kWveEikCgYEA84hAem0jfgRBh6jQ5zsp9GLnMyJYFMhBKOaZc/DLnds9rTLIsRa2
-5n+hkm979o65h6Eh/mH4bPXf5nTzm3+D8TWbd5+kY3JmD486jQQCZnB+foPDgEO7
-+YNifVwJtZJLJyz0Ku8polAwoIo5dfM16UALnW/IcHoRpyOfnK7lrP0CgYEAx4Hw
-fLTDoOl6XD7tGIjphH9acIuUoWfqSZ7F+TjR76KdvmOywGuu/iystZQJY1EaoebM
-mJr0ElU9eRWk5wmPti47PX3ykT/HNn+iGw1rDZYyNnsrVFVi+OjulM5btXxVtRXW
-Z7OhI5v9GGZNkTTxpOBgLPDUb3vwoSdvjSXisRMCgYBblkdhg4AQmXsnkMaX37lE
-jpmSsnzbvAA9aJQXdVyuTlCgvXOangdFIoTaNJEzRbPinSfSqneqSsHcwukG9urh
-IR8J2wEQ4Woeuef0NqjMa8w2ukkhCNg92zqEGMQSBCW9Yvuk1fMbdvsCtVks0b3Z
-rdtwZyTDoDTZXd1eKKx55QKBgFXAgyaG5+MdF6vYnD5EcuKxfqULSbpKmQhFx2BE
-zO+MXPL9lVJhtpiniSCO3a4jqSfXtS8Ow0OyAbcu1286y9uJaYsXvJAz8qN5Hqs0
-DESNv01tiYU5Ik5MiGfLft218HziQwLV0bgljxbSuhpkwEyW6J/Ib/bvNdF+ytLH
-avWjAoGAO19k/8x+aIUyxvS5c5gvYVgnk8SNoDi3RGamidRoYAy2CREmsNZydQzI
-lZz1ApLwzRS25ocdQHdnjD3MYDNaAPPi5TF8IlnhMcJZLQE2qdrWxeK1yPDP92IJ
-RZejljBXSihbtQvNR1GTm3cpShSXeq2szY6n0h35W57xedGxedY=
------END RSA PRIVATE KEY-----
-PEM,
-            'public_key' => <<<'PEM'
------BEGIN RSA PUBLIC KEY-----
-MIIBCgKCAQEAvcqGjgbvfqhoHnrq8HlHaTk1canPYMAVBRTZwNhrlOVI6VS24dBW
-OhGEW7hdFRroZa8oJ8w9TdzyvS2asbpwesUVL1PwpY244pdgi/HHVxjEOJrCPbR9
-IQgejwEdKLzVpMXz6F9RO8/smGpoLoTIU5kqD6ol0Mp+NNuSBPqZN2gHPMV33f7y
-su0hHzxuV5i4rI2w6JOnHHKcTGvti1113koLAUMRLNSLFvbIqbeKJk31yQCFqeTd
-KVJFeMPzss3DAJ21ndIvisQBfcz/1THNVkSE2U8gGCghFiVBMtxAqWhONfAVN6kT
-51ViC1nIaPP8P9aLxihQo334psCqEADDxwIDAQAB
------END RSA PUBLIC KEY-----
-PEM,
-        ];
+        $configPath = tempnam(sys_get_temp_dir(), 'caiwu-openssl-');
+        if ($configPath === false) {
+            throw new \RuntimeException('测试 OpenSSL 临时配置创建失败');
+        }
+
+        $config = "[req]\ndistinguished_name=req_distinguished_name\n[req_distinguished_name]\n";
+        if (file_put_contents($configPath, $config) === false) {
+            unlink($configPath);
+
+            throw new \RuntimeException('测试 OpenSSL 临时配置写入失败');
+        }
+
+        try {
+            $key = openssl_pkey_new([
+                'config' => $configPath,
+                'private_key_bits' => 2048,
+                'private_key_type' => OPENSSL_KEYTYPE_RSA,
+            ]);
+            if ($key === false) {
+                throw new \RuntimeException('测试 RSA 密钥生成失败');
+            }
+
+            $privateKey = '';
+            if (! openssl_pkey_export($key, $privateKey, null, ['config' => $configPath])) {
+                throw new \RuntimeException('测试 RSA 私钥导出失败');
+            }
+
+            $details = openssl_pkey_get_details($key);
+            if (! is_array($details) || ! is_string($details['key'] ?? null) || $details['key'] === '') {
+                throw new \RuntimeException('测试 RSA 公钥导出失败');
+            }
+
+            return [
+                'private_key' => $privateKey,
+                'public_key' => $details['key'],
+            ];
+        } finally {
+            if (is_file($configPath)) {
+                unlink($configPath);
+            }
+        }
     }
 }

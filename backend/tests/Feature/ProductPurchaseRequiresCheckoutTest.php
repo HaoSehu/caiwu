@@ -206,4 +206,3 @@ class ProductPurchaseRequiresCheckoutTest extends TestCase
         );
     }
 }
-

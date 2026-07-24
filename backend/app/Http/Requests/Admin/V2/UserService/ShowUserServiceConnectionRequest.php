@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Admin\V2\UserService;
 
-use App\Models\User;
 use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
+use App\Models\User;
 
 class ShowUserServiceConnectionRequest extends AdminFormRequest
 {
