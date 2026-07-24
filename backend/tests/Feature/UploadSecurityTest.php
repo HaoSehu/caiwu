@@ -76,9 +76,15 @@ class UploadSecurityTest extends TestCase
     public function test_media_upload_endpoint_accepts_video_and_stores_it_under_unified_media_directory(): void
     {
         Sanctum::actingAs($this->createAdmin());
+        $sourceVideo = public_path('media/3.mp4');
+        $this->assertFileExists($sourceVideo);
+        $videoContent = file_get_contents($sourceVideo);
+        $this->assertIsString($videoContent);
 
         $response = $this->post('/api/v2/admin/media-files', [
-            'file' => UploadedFile::fake()->create('hero.mp4', 128, 'video/mp4'),
+            'file' => UploadedFile::fake()
+                ->createWithContent('hero.mp4', $videoContent)
+                ->mimeType('video/mp4'),
             'group' => MediaFileService::HERO_VIDEO_GROUP,
         ]);
 

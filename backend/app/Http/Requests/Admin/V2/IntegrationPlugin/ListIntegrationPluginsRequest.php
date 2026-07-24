@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Admin\V2\IntegrationPlugin;
 
-use App\Services\Integrations\Plugins\PluginDomain;
 use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
+use App\Services\Integrations\Plugins\PluginDomain;
 use Illuminate\Validation\Rule;
 
 class ListIntegrationPluginsRequest extends AdminFormRequest

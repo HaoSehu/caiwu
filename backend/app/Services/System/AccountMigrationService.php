@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\System;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class AccountMigrationService
 {
@@ -914,7 +915,7 @@ class AccountMigrationService
     {
         $map = [];
 
-        foreach ($this->targetQuery('SELECT id, config_snapshot FROM invoices ORDER BY id ASC') as $row) {
+        foreach ($this->targetInvoiceSnapshotRows() as $row) {
             $targetInvoiceId = (int) ($row->id ?? 0);
             $snapshot = json_decode((string) ($row->config_snapshot ?? ''), true);
             $legacyInvoiceId = is_array($snapshot) && isset($snapshot['legacy_invoice_id'])
@@ -937,7 +938,7 @@ class AccountMigrationService
         $map = [];
 
         // 优先通过 legacy_order_id 映射（这是最可靠的方式）
-        foreach ($this->targetQuery('SELECT id, config_snapshot FROM invoices ORDER BY id ASC') as $row) {
+        foreach ($this->targetInvoiceSnapshotRows() as $row) {
             $targetInvoiceId = (int) ($row->id ?? 0);
             $snapshot = json_decode((string) ($row->config_snapshot ?? ''), true);
             $legacyOrderId = is_array($snapshot) && isset($snapshot['legacy_order_id'])
@@ -950,6 +951,24 @@ class AccountMigrationService
         }
 
         return $map;
+    }
+
+    /**
+     * @return array<int, object>
+     */
+    private function targetInvoiceSnapshotRows(): array
+    {
+        $schema = Schema::connection($this->targetConnection);
+
+        if ($schema->hasColumn('invoices', 'config_snapshot')) {
+            return $this->targetQuery('SELECT id, config_snapshot FROM invoices ORDER BY id ASC');
+        }
+
+        if ($schema->hasColumn('invoices', 'product_snapshot_json')) {
+            return $this->targetQuery('SELECT id, product_snapshot_json AS config_snapshot FROM invoices ORDER BY id ASC');
+        }
+
+        return [];
     }
 
     private function mapReferralEventToAccountType(string $eventType): string

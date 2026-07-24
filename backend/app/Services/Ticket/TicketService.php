@@ -37,6 +37,8 @@ use Predis\Client;
 
 class TicketService
 {
+    private const ADMIN_ASSIGNABLE_USERS_LIMIT = 100;
+
     private static array $tableExistsCache = [];
 
     private ?bool $databaseQueueReady = null;
@@ -512,20 +514,34 @@ class TicketService
             $columns[] = 'email';
         }
 
-        return AdminUser::query()
+        $assignableUsers = [];
+
+        AdminUser::query()
+            ->select($columns)
             ->withResolvedPermissionRelations()
             ->where('status', 1)
-            ->orderBy('id')
-            ->get($columns)
-            ->filter(fn (AdminUser $admin): bool => $admin->hasPermission(AdminPermissions::TICKET_REPLY))
-            ->map(fn (AdminUser $admin): array => [
-                'id' => (int) $admin->id,
-                'username' => (string) $admin->username,
-                'nickname' => (string) $admin->display_name,
-                'email' => $hasEmailColumn ? $privacy->email((string) ($admin->email ?? '')) : '',
-            ])
-            ->values()
-            ->all();
+            ->chunkByIdDesc(self::ADMIN_ASSIGNABLE_USERS_LIMIT, function ($admins) use (&$assignableUsers, $privacy, $hasEmailColumn): bool {
+                foreach ($admins as $admin) {
+                    if (! $admin->hasPermission(AdminPermissions::TICKET_REPLY)) {
+                        continue;
+                    }
+
+                    $assignableUsers[] = [
+                        'id' => (int) $admin->id,
+                        'username' => (string) $admin->username,
+                        'nickname' => (string) $admin->display_name,
+                        'email' => $hasEmailColumn ? $privacy->email((string) ($admin->email ?? '')) : '',
+                    ];
+
+                    if (count($assignableUsers) >= self::ADMIN_ASSIGNABLE_USERS_LIMIT) {
+                        return false;
+                    }
+                }
+
+                return true;
+            }, 'id');
+
+        return $assignableUsers;
     }
 
     public function clientServiceOptions(int $userId, string $keyword = '', int $limit = 20): array

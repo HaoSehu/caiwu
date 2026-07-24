@@ -6,11 +6,27 @@ namespace Tests\Feature;
 
 use App\Jobs\RunHeartbeatTaskJob;
 use App\Services\Automation\ScheduleTaskTriggerService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class ScheduleTaskTriggerServiceTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->clearServiceStatusSyncRuns();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->clearServiceStatusSyncRuns();
+
+        parent::tearDown();
+    }
+
     public function test_dispatch_uses_heartbeat_job_in_tests(): void
     {
         Queue::fake();
@@ -35,5 +51,14 @@ class ScheduleTaskTriggerServiceTest extends TestCase
 
         $this->assertFalse($service->supports('queue-backlog-drain'));
         $this->assertFalse($service->supports('sync-processing-order-status'));
+    }
+
+    private function clearServiceStatusSyncRuns(): void
+    {
+        if (Schema::hasTable('schedule_task_runs')) {
+            DB::table('schedule_task_runs')
+                ->where('task_key', 'service-status-sync')
+                ->delete();
+        }
     }
 }

@@ -49,7 +49,7 @@ class ZjmfBillingRestoreCommandTest extends TestCase
         }
     }
 
-    public function test_restore_zjmf_billing_rejects_legacy_zjmf_confirmation_phrase(): void
+    public function test_restore_zjmf_billing_rejects_legacy_mofang_confirmation_phrase(): void
     {
         $path = tempnam(sys_get_temp_dir(), 'restore-sql-');
         file_put_contents($path, '');
@@ -59,7 +59,7 @@ class ZjmfBillingRestoreCommandTest extends TestCase
         try {
             $this->artisan('finance:restore-zjmf-billing', [
                 'dump' => $path,
-                '--confirm' => 'RESTORE_ZJMF_BILLING',
+                '--confirm' => 'RESTORE_MOFANG_BILLING',
                 '--dry-run' => true,
             ])->assertExitCode(2);
         } finally {

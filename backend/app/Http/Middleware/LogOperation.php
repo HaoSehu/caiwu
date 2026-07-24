@@ -113,7 +113,7 @@ class LogOperation
             return false;
         }
 
-        if ($request->is('api/health')) {
+        if ($request->is('api/health', 'api/ready')) {
             return false;
         }
 

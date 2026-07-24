@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Unit;
 
-use App\Models\Product;
 use App\Models\FirstProductGroup;
+use App\Models\Product;
 use App\Models\SecondProductGroup;
 use App\Models\ThirdProductGroup;
 use App\Support\ProductGroupHierarchyFields;

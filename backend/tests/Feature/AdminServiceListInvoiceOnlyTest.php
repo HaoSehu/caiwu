@@ -16,16 +16,14 @@ use App\Models\ThirdProductGroup;
 use App\Models\User;
 use App\Services\Provisioning\AdminServiceListService;
 use App\Services\Upstream\ProviderKey;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class AdminServiceListInvoiceOnlyTest extends TestCase
 {
-    private function makeLegacyUserId(string $suffix): int
-    {
-        return 900000 + (hexdec(substr(md5('admin-service-'.$suffix), 0, 5)) % 90000);
-    }
+    use DatabaseTransactions;
 
     private function mirrorUserToIdc(User $user, string $suffix): void
     {
@@ -67,7 +65,6 @@ class AdminServiceListInvoiceOnlyTest extends TestCase
         ];
 
         DB::connection()->table('users')->updateOrInsert(['id' => (int) $user->id], $payload);
-        DB::connection()->table('users')->updateOrInsert(['id' => (int) $user->id], $payload);
     }
 
     private function mirrorProductToIdc(Product $product, string $suffix): void
@@ -83,7 +80,6 @@ class AdminServiceListInvoiceOnlyTest extends TestCase
         $suffix = bin2hex(random_bytes(4));
 
         $user = User::query()->forceCreate([
-            'id' => $this->makeLegacyUserId($suffix),
             'email' => 'admin-service-list-'.$suffix.'@example.com',
             'password' => 'Temp@123456',
             'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
@@ -179,7 +175,6 @@ class AdminServiceListInvoiceOnlyTest extends TestCase
         $suffix = bin2hex(random_bytes(4));
 
         $user = User::query()->forceCreate([
-            'id' => $this->makeLegacyUserId($suffix.'-snapshot'),
             'email' => 'admin-service-snapshot-'.$suffix.'@example.com',
             'password' => 'Temp@123456',
             'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
@@ -273,7 +268,6 @@ class AdminServiceListInvoiceOnlyTest extends TestCase
         $suffix = bin2hex(random_bytes(4));
 
         $user = User::query()->forceCreate([
-            'id' => $this->makeLegacyUserId($suffix.'-legacy-order'),
             'email' => 'admin-service-order-fallback-'.$suffix.'@example.com',
             'password' => 'Temp@123456',
             'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
@@ -386,7 +380,6 @@ class AdminServiceListInvoiceOnlyTest extends TestCase
         $suffix = bin2hex(random_bytes(4));
 
         $user = User::query()->forceCreate([
-            'id' => $this->makeLegacyUserId($suffix.'-runtime'),
             'email' => 'admin-service-runtime-'.$suffix.'@example.com',
             'password' => 'Temp@123456',
             'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),

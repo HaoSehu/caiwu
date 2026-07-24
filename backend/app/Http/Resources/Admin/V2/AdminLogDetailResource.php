@@ -62,11 +62,13 @@ class AdminLogDetailResource extends JsonResource
 
             if (in_array($key, self::PRIVACY_PROJECTED_FIELDS, true)) {
                 $sanitized[$key] = $value;
+
                 continue;
             }
 
             if (in_array($key, self::BUSINESS_IDENTIFIER_FIELDS, true)) {
                 $sanitized[$key] = is_string($value) ? SensitiveDataSanitizer::sanitizeText($value) : $value;
+
                 continue;
             }
 

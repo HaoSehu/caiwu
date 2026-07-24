@@ -21,16 +21,14 @@ use App\Services\System\NotificationService;
 use App\Services\System\OperationLogService;
 use App\Services\System\SettingService;
 use App\Services\User\UserService;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class AdminUserManualProvisionInvoiceOnlyTest extends TestCase
 {
-    private function makeLegacyUserId(string $suffix): int
-    {
-        return 900000 + (hexdec(substr(md5('manual-provision-'.$suffix), 0, 5)) % 90000);
-    }
+    use DatabaseTransactions;
 
     private function mirrorUserToIdc(User $user, string $suffix): void
     {
@@ -72,7 +70,6 @@ class AdminUserManualProvisionInvoiceOnlyTest extends TestCase
         ];
 
         DB::connection()->table('users')->updateOrInsert(['id' => (int) $user->id], $payload);
-        DB::connection()->table('users')->updateOrInsert(['id' => (int) $user->id], $payload);
     }
 
     private function mirrorProductToIdc(Product $product, string $suffix): void
@@ -88,7 +85,6 @@ class AdminUserManualProvisionInvoiceOnlyTest extends TestCase
         $suffix = bin2hex(random_bytes(4));
 
         $user = User::query()->forceCreate([
-            'id' => $this->makeLegacyUserId($suffix),
             'email' => 'manual-provision-invoice-only-'.$suffix.'@example.com',
             'password' => 'Temp@123456',
             'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),

@@ -5,6 +5,7 @@ namespace Tests\Unit;
 use App\Models\FirstProductGroup;
 use App\Models\SecondProductGroup;
 use App\Models\ThirdProductGroup;
+use Illuminate\Database\Eloquent\Model;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -16,9 +17,9 @@ class ProductGroupProjectionModelTest extends TestCase
         $this->assertSame('first_product_groups', (new FirstProductGroup)->getTable());
         $this->assertSame('second_product_groups', (new SecondProductGroup)->getTable());
         $this->assertSame('third_product_groups', (new ThirdProductGroup)->getTable());
-        $this->assertSame(\Illuminate\Database\Eloquent\Model::class, get_parent_class(FirstProductGroup::class));
-        $this->assertSame(\Illuminate\Database\Eloquent\Model::class, get_parent_class(SecondProductGroup::class));
-        $this->assertSame(\Illuminate\Database\Eloquent\Model::class, get_parent_class(ThirdProductGroup::class));
+        $this->assertSame(Model::class, get_parent_class(FirstProductGroup::class));
+        $this->assertSame(Model::class, get_parent_class(SecondProductGroup::class));
+        $this->assertSame(Model::class, get_parent_class(ThirdProductGroup::class));
 
         $this->assertTrue(method_exists(new FirstProductGroup, 'secondProductGroups'));
         $this->assertTrue(method_exists(new SecondProductGroup, 'thirdProductGroups'));

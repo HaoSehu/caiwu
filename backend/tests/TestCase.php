@@ -26,6 +26,18 @@ abstract class TestCase extends BaseTestCase
 
         parent::setUp();
 
+        // 应用已存在的后续测试也再次校验，防止测试中修改连接配置后继续执行。
+        $this->guardAgainstProductionDatabaseForTests();
+    }
+
+    /**
+     * Laravel 在父级 setUp 中创建应用后立刻执行 RefreshDatabase 等 trait。
+     * 必须在该阶段拦截错误连接，不能等父级 setUp 返回后才检查。
+     */
+    protected function refreshApplication()
+    {
+        parent::refreshApplication();
+
         $this->guardAgainstProductionDatabaseForTests();
     }
 
@@ -70,7 +82,7 @@ abstract class TestCase extends BaseTestCase
             return;
         }
 
-        if ($database !== '' && (str_contains(strtolower($database), 'test') || $database === 'idc')) {
+        if ($database !== '' && str_contains(strtolower($database), 'test')) {
             return;
         }
 

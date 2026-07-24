@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Services\Automation\Heartbeat\Data\TaskContext;
 use App\Services\Automation\Heartbeat\HeartbeatTaskRegistry;
 use App\Services\Automation\Heartbeat\HeartbeatTaskRunner;
+use App\Services\Automation\Heartbeat\ScheduleTaskRunRepository;
 use App\Services\Automation\Heartbeat\ScheduleTickRepository;
 use Carbon\CarbonImmutable;
 use Illuminate\Bus\Queueable;
@@ -90,7 +91,7 @@ class RunHeartbeatTaskJob implements ShouldQueue
     public function failed(\Throwable $exception): void
     {
         try {
-            app(\App\Services\Automation\Heartbeat\ScheduleTaskRunRepository::class)
+            app(ScheduleTaskRunRepository::class)
                 ->markFailed($this->taskRunId, $exception->getMessage(), 0);
         } catch (\Throwable $statusException) {
             Log::warning('[心跳定时任务] 写入失败状态时出错', [

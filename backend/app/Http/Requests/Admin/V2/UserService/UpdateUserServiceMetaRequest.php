@@ -64,16 +64,16 @@ class UpdateUserServiceMetaRequest extends AdminFormRequest
         }
 
         return [
-            'amount' => isset($validated['amount']) && $validated['amount'] !== null && $validated['amount'] !== ''
+            'amount' => isset($validated['amount']) && $validated['amount'] !== ''
                 ? round((float) $validated['amount'], 2)
                 : null,
-            'supplier_id' => isset($validated['supplier_id']) && $validated['supplier_id'] !== null
+            'supplier_id' => isset($validated['supplier_id'])
                 ? (int) $validated['supplier_id']
                 : null,
-            'upstream_product_id' => isset($validated['upstream_product_id']) && $validated['upstream_product_id'] !== null
+            'upstream_product_id' => isset($validated['upstream_product_id'])
                 ? (int) $validated['upstream_product_id']
                 : null,
-            'upstream_host_id' => isset($validated['upstream_host_id']) && $validated['upstream_host_id'] !== null
+            'upstream_host_id' => isset($validated['upstream_host_id'])
                 ? (int) $validated['upstream_host_id']
                 : null,
             'service_name' => array_key_exists('service_name', $validated)

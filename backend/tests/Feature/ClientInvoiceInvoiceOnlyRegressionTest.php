@@ -11,9 +11,10 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Models\SecondProductGroup;
-use App\Models\ThirdProductGroup;
 use App\Models\Service;
+use App\Models\ThirdProductGroup;
 use App\Models\User;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\Sanctum;
@@ -21,10 +22,7 @@ use Tests\TestCase;
 
 class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
 {
-    private function makeLegacyUserId(string $suffix): int
-    {
-        return 900000 + (hexdec(substr(md5('client-invoice-'.$suffix), 0, 5)) % 90000);
-    }
+    use DatabaseTransactions;
 
     private function mirrorUserToIdc(User $user, string $suffix): void
     {
@@ -117,7 +115,6 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
         $suffix = bin2hex(random_bytes(4));
 
         $user = User::query()->forceCreate([
-            'id' => $this->makeLegacyUserId($suffix.'-summary'),
             'email' => 'client-invoice-summary-'.$suffix.'@example.com',
             'password' => 'Temp@123456',
             'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
@@ -174,7 +171,6 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
         $suffix = bin2hex(random_bytes(4));
 
         $user = User::query()->forceCreate([
-            'id' => $this->makeLegacyUserId($suffix.'-show'),
             'email' => 'client-invoice-show-'.$suffix.'@example.com',
             'password' => 'Temp@123456',
             'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
@@ -279,7 +275,6 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
         $suffix = bin2hex(random_bytes(4));
 
         $user = User::query()->forceCreate([
-            'id' => $this->makeLegacyUserId($suffix.'-refund'),
             'email' => 'client-invoice-refund-'.$suffix.'@example.com',
             'password' => 'Temp@123456',
             'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
@@ -355,7 +350,6 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
         $suffix = bin2hex(random_bytes(4));
 
         $user = User::query()->forceCreate([
-            'id' => $this->makeLegacyUserId($suffix.'-display'),
             'email' => 'client-invoice-display-'.$suffix.'@example.com',
             'password' => 'Temp@123456',
             'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
@@ -447,7 +441,6 @@ class ClientInvoiceInvoiceOnlyRegressionTest extends TestCase
         $suffix = bin2hex(random_bytes(4));
 
         $user = User::query()->forceCreate([
-            'id' => $this->makeLegacyUserId($suffix.'-type-filter'),
             'email' => 'client-invoice-filter-'.$suffix.'@example.com',
             'password' => 'Temp@123456',
             'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),

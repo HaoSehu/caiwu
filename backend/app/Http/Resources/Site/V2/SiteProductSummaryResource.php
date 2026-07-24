@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Http\Resources\Site\V2;
 
-use App\Constants\ProductType;
 use App\Models\Product;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Support\ProductGroupHierarchyFields;

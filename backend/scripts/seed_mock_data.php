@@ -24,12 +24,17 @@ $app->make(Kernel::class)->bootstrap();
 
 require_once __DIR__.'/../database/seeders/SettingsSeeder.php';
 
+$mockUserPassword = trim((string) env('MOCK_USER_PASSWORD', ''));
+if ($mockUserPassword === '') {
+    throw new InvalidArgumentException('运行模拟数据脚本前必须通过受控环境变量设置 MOCK_USER_PASSWORD。');
+}
+
 $now = now();
 
 $json = static fn (array $value): string => json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 $money = static fn (float $value): string => number_format($value, 2, '.', '');
 
-$summary = DB::transaction(function () use ($now, $json, $money): array {
+$summary = DB::transaction(function () use ($now, $json, $money, $mockUserPassword): array {
     SettingsSeeder::seed();
 
     DB::table('member_levels')->insert([
@@ -60,12 +65,12 @@ $summary = DB::transaction(function () use ($now, $json, $money): array {
     ]);
 
     $userId = DB::table('users')->insertGetId([
-        'email' => '2908990438@qq.com',
-        'password' => Hash::make('Cheng2008li#7111'),
+        'email' => 'demo-user@example.test',
+        'password' => Hash::make($mockUserPassword),
         'nickname' => '演示用户',
         'phone' => '13900000001',
         'company' => '创欧云演示公司',
-        'qq' => '2908990438',
+        'qq' => '100000',
         'alipay_real_name' => '演示用户',
         'alipay_account' => 'demo@example.com',
         'referral_code' => 'DEMO'.strtoupper(substr(md5('demo-user'), 0, 8)),
@@ -98,7 +103,7 @@ $summary = DB::transaction(function () use ($now, $json, $money): array {
         'interface_type' => 'local_manual',
         'api_url' => 'http://127.0.0.1/mock-upstream',
         'api_username' => 'demo',
-        'api_key' => 'demo-key',
+        'api_key' => 'example',
         'contact_name' => '演示运维',
         'contact_phone' => '13900000002',
         'contact_email' => 'ops@example.com',
@@ -483,5 +488,4 @@ echo "[mock-seed] 模拟数据写入完成\n";
 foreach ($summary as $key => $value) {
     echo "[mock-seed] {$key}: {$value}\n";
 }
-echo "[mock-seed] 管理员：cerbo / Temp@123456\n";
-echo "[mock-seed] 用户：2908990438@qq.com / Cheng2008li#7111\n";
+echo "[mock-seed] 管理员与用户测试凭据必须通过受控渠道取得，禁止写入脚本或日志。\n";

@@ -1,7 +1,7 @@
 <?php
 
 return [
-    'default' => 'redis',
+    'default' => env('CACHE_STORE', 'redis'),
 
     'stores' => [
         'array' => [

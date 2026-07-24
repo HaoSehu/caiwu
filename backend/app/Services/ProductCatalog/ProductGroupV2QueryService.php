@@ -13,6 +13,7 @@ use App\Models\ThirdProductGroup;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 
 class ProductGroupV2QueryService
 {
@@ -55,9 +56,9 @@ class ProductGroupV2QueryService
     /**
      * @param  array<string, mixed>  $filters
      * @return array{
-     *     roots: \Illuminate\Support\Collection<int, FirstProductGroup>,
-     *     seconds_by_first: \Illuminate\Support\Collection<int, \Illuminate\Support\Collection<int, SecondProductGroup>>,
-     *     thirds_by_second: \Illuminate\Support\Collection<int, \Illuminate\Support\Collection<int, ThirdProductGroup>>
+     *     roots: Collection<int, FirstProductGroup>,
+     *     seconds_by_first: Collection<int, Collection<int, SecondProductGroup>>,
+     *     thirds_by_second: Collection<int, Collection<int, ThirdProductGroup>>
      * }
      */
     public function listAdminTreeGroups(array $filters): array

@@ -34,8 +34,8 @@ from pymysql.cursors import DictCursor
 
 
 TARGET_DATABASE = "idc"
-DEFAULT_OUTPUT_DIR = Path(r"E:\caiwu")
 DEFAULT_ENV_FILE = Path(__file__).resolve().parents[1] / ".env"
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PANEL_CONFIG_DATABASE = Path(r"D:\BtSoft\panel\data\db\panel.db")
 STAGING_DATABASE_PREFIX = "idc_temp_restore_"
 MAX_RUN_ID_LENGTH = 47
@@ -120,6 +120,15 @@ TEMPORAL_TYPES = {"date", "datetime", "timestamp", "time", "year"}
 
 class MigrationFailure(RuntimeError):
     pass
+
+
+def assert_path_outside_repository(path: Path, label: str) -> Path:
+    resolved = path.resolve()
+    try:
+        resolved.relative_to(REPOSITORY_ROOT)
+    except ValueError:
+        return resolved
+    raise MigrationFailure(label + "必须位于仓库之外，禁止把生产数据或迁移产物放入工作区。")
 
 
 def validate_run_id(run_id: str) -> str:
@@ -2544,7 +2553,7 @@ def prepare(
         )
         return state
 
-    dump_path = Path(args.dump).resolve()
+    dump_path = assert_path_outside_repository(Path(args.dump), "源 SQL dump")
     if not dump_path.is_file() or dump_path.stat().st_size == 0:
         raise MigrationFailure(f"源 SQL dump 不存在或为空：{dump_path}")
     source_dump_sha256 = hash_file(dump_path)
@@ -4047,8 +4056,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--dump",
-        default=r"E:\caiwu\idc_2026-07-21_16-49-44_mysql_data_5e736.sql",
-        help="源 MySQL dump 路径。",
+        required=True,
+        help="源 MySQL dump 路径；必须显式指定，禁止依赖仓库内默认文件。",
     )
     parser.add_argument("--env", default=str(DEFAULT_ENV_FILE), help="后端 .env 路径。")
     parser.add_argument("--target-db", default=TARGET_DATABASE, help="只能为 idc。")
@@ -4057,7 +4066,11 @@ def parse_args() -> argparse.Namespace:
         default="",
         help="仅接受当前 run-id 派生的受管中转库名称。",
     )
-    parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR), help="产物目录。")
+    parser.add_argument(
+        "--output-dir",
+        required=True,
+        help="仓库外的受控产物目录；必须显式指定。",
+    )
     parser.add_argument("--run-id", default=run_id_default(), help="批次标识。")
     parser.add_argument(
         "--phase",
@@ -4071,7 +4084,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     args.run_id = validate_run_id(args.run_id)
-    output_dir = Path(args.output_dir).resolve()
+    output_dir = assert_path_outside_repository(Path(args.output_dir), "产物目录")
     output_dir.mkdir(parents=True, exist_ok=True)
     paths = state_paths(output_dir, args.run_id)
     reporter = Reporter(paths["log"], args.run_id)

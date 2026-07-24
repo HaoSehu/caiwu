@@ -12,11 +12,22 @@
         <testsuite name="Unit">
             <directory>tests/Unit</directory>
         </testsuite>
+        <testsuite name="Plugins">
+            <directory suffix="Test.php">plugins</directory>
+        </testsuite>
     </testsuites>
 
     <php>
+        <ini name="memory_limit" value="1024M"/>
         <env name="APP_ENV" value="testing"/>
         <env name="APP_DEBUG" value="true"/>
+        <env name="APP_URL" value="http://api.example.test"/>
+        <env name="FRONTEND_URL" value="http://www.example.test"/>
+        <env name="CLIENT_CONSOLE_URL" value="http://console.example.test"/>
+        <env name="ADMIN_URL" value="http://admin.example.test"/>
+        <env name="SESSION_SECURE_COOKIE" value="false"/>
+        <env name="DB_CONNECTION" value="mysql"/>
+        <env name="DB_DATABASE" value="idc_testing"/>
         <env name="CACHE_STORE" value="array"/>
         <env name="CACHE_DRIVER" value="array"/>
         <env name="SESSION_DRIVER" value="array"/>

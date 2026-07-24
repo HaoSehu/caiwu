@@ -497,7 +497,8 @@ class V2ServiceDetailApiTest extends TestCase
             if (is_string($key)) {
                 $normalized = strtolower($key);
 
-                if ($normalized !== 'has_password' && ! in_array($normalized, $allowedSensitiveKeys, true)) {
+                if (! in_array($normalized, ['has_password', 'password_reset'], true)
+                    && ! in_array($normalized, $allowedSensitiveKeys, true)) {
                     $this->assertStringNotContainsString('password', $normalized);
                 }
 

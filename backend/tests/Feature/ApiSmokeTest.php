@@ -89,7 +89,7 @@ class ApiSmokeTest extends TestCase
                 default => $this->call($method, $uri, $payload, [], [], $server),
             };
 
-            if ($response->getStatusCode() >= 500) {
+            if ($response->getStatusCode() >= 500 && ! $this->isExpectedReadinessFailure($uri, $response->getStatusCode(), $response->getContent())) {
                 $failures[] = sprintf(
                     '[%s] %s => %d %s',
                     $method,
@@ -101,6 +101,19 @@ class ApiSmokeTest extends TestCase
         }
 
         $this->assertSame([], $failures, implode(PHP_EOL, $failures));
+    }
+
+    private function isExpectedReadinessFailure(string $uri, int $statusCode, string $content): bool
+    {
+        if ($uri !== '/api/ready' || $statusCode !== 503) {
+            return false;
+        }
+
+        $payload = json_decode($content, true);
+
+        return is_array($payload)
+            && ($payload['code'] ?? null) === 50300
+            && ($payload['data']['status'] ?? null) === 'not_ready';
     }
 
     /**

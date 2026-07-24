@@ -114,7 +114,7 @@ class UpsertSupplierRequest extends AdminFormRequest
         $validated['website'] = null;
         $validated['notes'] = trim((string) ($validated['notes'] ?? '')) ?: null;
         $validated['provider_key'] = app(ProviderResolver::class)->normalizeKey(
-            (string) ($validated['provider_key'] ?? '')
+            (string) $validated['provider_key']
         ) ?? '';
 
         return $validated;

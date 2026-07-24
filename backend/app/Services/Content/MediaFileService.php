@@ -166,8 +166,7 @@ class MediaFileService
         }
 
         return collect($allVideos)
-            ->filter(fn (array $item): bool =>
-                str_contains(strtolower((string) ($item['filename'] ?? '')), $keyword))
+            ->filter(fn (array $item): bool => str_contains(strtolower((string) ($item['filename'] ?? '')), $keyword))
             ->values()
             ->all();
     }

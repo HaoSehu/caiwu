@@ -17,6 +17,8 @@ use Illuminate\Support\Facades\Hash;
 
 class AdminStaffService
 {
+    private const ROLE_OPTIONS_LIMIT = 100;
+
     public function __construct(
         private readonly AdminRoleBridgeService $adminRoleBridgeService,
         private readonly OperationLogService $operationLogService,
@@ -54,7 +56,8 @@ class AdminStaffService
         $this->builtinAdminRoleService->sync();
 
         return Role::query()
-            ->orderBy('id')
+            ->orderByDesc('id')
+            ->limit(self::ROLE_OPTIONS_LIMIT)
             ->get(['id', 'name', 'label']);
     }
 

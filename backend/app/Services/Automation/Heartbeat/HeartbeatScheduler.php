@@ -23,7 +23,7 @@ class HeartbeatScheduler
     public function tick(CarbonImmutable $now): TickSummary
     {
         $slot = TickSlot::floorToFifteenMinutes($now);
-        $tickModel = $this->ticks->firstOrCreateSlot($slot);
+        $tickModel = $this->ticks->firstOrCreateSlot($now);
         $tick = $this->ticks->toContext($tickModel);
         $lock = Cache::lock('scheduler:heartbeat:'.$slot->format('YmdHi'), 840);
 

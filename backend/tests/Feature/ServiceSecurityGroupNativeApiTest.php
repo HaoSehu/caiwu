@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Exceptions\BusinessException;
 use App\Models\Service;
 use App\Models\Supplier;
 use App\Models\User;
@@ -119,12 +120,8 @@ class ServiceSecurityGroupNativeApiTest extends TestCase
         $operationLogs = Mockery::mock(OperationLogService::class);
         $operationLogs->shouldReceive('writeServiceConsoleLog')->once();
 
-        $securityGroups = new class(
-            $operationLogs,
-            $detailService,
-            Mockery::mock(ServiceTransformService::class),
-            Mockery::mock(ServiceNatService::class),
-        ) extends ServiceSecurityGroupService {
+        $securityGroups = new class($operationLogs, $detailService, Mockery::mock(ServiceTransformService::class), Mockery::mock(ServiceNatService::class)) extends ServiceSecurityGroupService
+        {
             public array $nativeContext = [];
 
             public function resolveSecurityGroupContext(Service $service, bool $fresh = false): array
@@ -153,19 +150,15 @@ class ServiceSecurityGroupNativeApiTest extends TestCase
         $detailService = Mockery::mock(ServiceDetailService::class);
         $detailService->shouldReceive('findUserService')->once()->andReturn($localService);
 
-        $securityGroups = new class(
-            Mockery::mock(OperationLogService::class),
-            $detailService,
-            Mockery::mock(ServiceTransformService::class),
-            Mockery::mock(ServiceNatService::class),
-        ) extends ServiceSecurityGroupService {
+        $securityGroups = new class(Mockery::mock(OperationLogService::class), $detailService, Mockery::mock(ServiceTransformService::class), Mockery::mock(ServiceNatService::class)) extends ServiceSecurityGroupService
+        {
             public function resolveSecurityGroupContext(Service $service, bool $fresh = false): array
             {
                 return ['mode' => 'native'];
             }
         };
 
-        $this->expectException(\App\Exceptions\BusinessException::class);
+        $this->expectException(BusinessException::class);
         $this->expectExceptionMessage('当前上游仅支持安全组列表和应用操作');
 
         $securityGroups->getSecurityGroupRulesForUser(new User, 903, 44);

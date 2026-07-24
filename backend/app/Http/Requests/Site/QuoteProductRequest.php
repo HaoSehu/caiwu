@@ -19,6 +19,7 @@ class QuoteProductRequest extends FormRequest
             'config.*' => ['required', function ($attribute, $value, $fail) {
                 if (is_array($value)) {
                     $fail('配置项不支持嵌套结构');
+
                     return;
                 }
                 if (is_string($value) && mb_strlen($value) > 128) {
