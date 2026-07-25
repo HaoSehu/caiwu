@@ -15,47 +15,17 @@ final class ZjmfSecurityService
 
     public function submitCustomModuleAction(Supplier $supplier, string $endpoint, array $payload, ?string $jwt = null): array
     {
+        $resolvedJwt = $this->resolveJwt($supplier, $jwt);
+
         return $this->transport->post(
             $supplier,
             $this->normalizeCustomModuleEndpoint($endpoint),
             $payload,
-            $this->resolveJwt($supplier, $jwt),
-            ['content-type: application/x-www-form-urlencoded']
-        );
-    }
-
-    /**
-     * Reads the same-system ZJMF security-group list used by the cloud and DCIM consoles.
-     */
-    public function getSecurityGroups(Supplier $supplier, int $page = 1, int $limit = 9999, ?string $jwt = null): array
-    {
-        return $this->transport->get(
-            $supplier,
-            '/security_group',
-            $this->resolveJwt($supplier, $jwt),
+            $resolvedJwt,
             [
-                'page' => max(1, $page),
-                'limit' => max(1, $limit),
+                'content-type: application/x-www-form-urlencoded',
+                'Authorization: JWT '.$resolvedJwt,
             ]
-        );
-    }
-
-    /**
-     * Associates a same-system ZJMF security group with one upstream host.
-     */
-    public function applySecurityGroup(Supplier $supplier, int $groupId, int $hostId, ?string $jwt = null): array
-    {
-        throw_if($groupId <= 0 || $hostId <= 0, new BusinessException('安全组或实例参数无效', 42200));
-
-        return $this->transport->post(
-            $supplier,
-            "/security_group/{$groupId}/host/{$hostId}",
-            [
-                'id' => $groupId,
-                'host_id' => $hostId,
-            ],
-            $this->resolveJwt($supplier, $jwt),
-            ['content-type: application/x-www-form-urlencoded']
         );
     }
 
@@ -72,7 +42,7 @@ final class ZjmfSecurityService
         $path = parse_url($endpoint, PHP_URL_PATH);
         $path = is_string($path) && $path !== '' ? $path : $endpoint;
 
-        if (! str_starts_with($path, '/provision/custom/')) {
+        if (preg_match('#^/provision/custom/[1-9]\d*$#', $path) !== 1) {
             throw new BusinessException('安全组模块未返回有效的同系统请求地址', 42200);
         }
 

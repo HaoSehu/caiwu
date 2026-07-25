@@ -22,9 +22,8 @@ use App\Models\Refund;
 use App\Models\User;
 use App\Services\ClientServiceConsole\ServiceTrafficPackageService;
 use App\Services\ClientServiceConsole\ServiceUpgradeService;
-use App\Services\Integrations\Payments\Data\PaymentPrecreateRequest;
-use App\Services\Integrations\Payments\Data\PaymentRefundRequest;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
+use App\Services\Integrations\Payments\PaymentGatewayOperationService;
 use App\Services\Integrations\Plugins\PaymentGatewayBindingResolver;
 use App\Services\Notification\UserNotificationService;
 use App\Services\Order\PaidOrderBusinessFlowDispatcher;
@@ -42,6 +41,8 @@ use Illuminate\Support\Facades\Schema;
 
 class PaymentService
 {
+    private ?PaymentGatewayOperationService $gatewayOperations = null;
+
     public function __construct(
         private ProvisionService $provisionService,
         private PaymentGatewayManager $paymentGatewayManager,
@@ -3068,7 +3069,7 @@ class PaymentService
 
     private function resolveGateway(string $gateway): PaymentGatewayInterface
     {
-        return $this->paymentGatewayManager->gateway($gateway);
+        return $this->gatewayOperations()->gateway($gateway);
     }
 
     /**
@@ -3077,61 +3078,25 @@ class PaymentService
      */
     private function paymentCreatePayload(array $payload): array
     {
-        $gateway = (string) ($payload['gateway_key'] ?? $payload['gateway'] ?? '');
-        unset($payload['gateway']);
-
-        return array_merge(
-            $payload,
-            $this->paymentGatewayAuditColumns($gateway)
-        );
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function paymentGatewayAuditColumns(string $gateway): array
-    {
-        $context = $this->paymentGatewayBindingResolver()->contextForGateway($gateway);
-        $columns = [];
-
-        if (Schema::hasColumn('payments', 'plugin_id')) {
-            $columns['plugin_id'] = $context['plugin_id'];
-        }
-
-        if (Schema::hasColumn('payments', 'gateway_key')) {
-            $columns['gateway_key'] = $context['gateway_key'];
-        }
-
-        return $columns;
+        return $this->gatewayOperations()->paymentCreatePayload($payload);
     }
 
     private function ensurePaymentGatewayAudit(Payment $payment, string $gateway, ?string $traceId = null): void
     {
-        $payload = [];
-        $context = $this->paymentGatewayBindingResolver()->contextForPayment($payment);
-
-        if ($context['plugin_id'] !== null && (int) ($payment->plugin_id ?? 0) <= 0 && Schema::hasColumn('payments', 'plugin_id')) {
-            $payload['plugin_id'] = $context['plugin_id'];
-        }
-
-        $gatewayKey = $context['gateway_key'] ?: $this->paymentGatewayBindingResolver()->normalizeGatewayKey($gateway);
-        if ($gatewayKey !== '' && trim((string) ($payment->gateway_key ?? '')) === '' && Schema::hasColumn('payments', 'gateway_key')) {
-            $payload['gateway_key'] = $gatewayKey;
-        }
-
-        $resolvedTraceId = trim((string) ($traceId ?? ''));
-        if ($resolvedTraceId !== '' && trim((string) ($payment->trace_id ?? '')) === '') {
-            $payload['trace_id'] = $resolvedTraceId;
-        }
-
-        if ($payload !== []) {
-            $payment->forceFill($payload)->save();
-        }
+        $this->gatewayOperations()->ensurePaymentAudit($payment, $gateway, $traceId);
     }
 
     private function paymentGatewayBindingResolver(): PaymentGatewayBindingResolver
     {
         return $this->paymentGatewayBindingResolver ??= app(PaymentGatewayBindingResolver::class);
+    }
+
+    private function gatewayOperations(): PaymentGatewayOperationService
+    {
+        return $this->gatewayOperations ??= new PaymentGatewayOperationService(
+            $this->paymentGatewayManager,
+            $this->paymentGatewayBindingResolver(),
+        );
     }
 
     /**
@@ -3144,15 +3109,7 @@ class PaymentService
 
     private function precreateGatewayPayment(string $gateway, string $outTradeNo, float $amount, string $subject, ?string $timeoutExpress = null, array $context = []): array
     {
-        return $this->resolveGateway($gateway)
-            ->precreate(new PaymentPrecreateRequest(
-                outTradeNo: $outTradeNo,
-                amount: $amount,
-                subject: $subject,
-                timeoutExpress: $timeoutExpress,
-                context: $context,
-            ))
-            ->toArray();
+        return $this->gatewayOperations()->precreate($gateway, $outTradeNo, $amount, $subject, $timeoutExpress, $context);
     }
 
     /**
@@ -3235,9 +3192,7 @@ class PaymentService
 
     private function queryGatewayPayment(string $gateway, string $outTradeNo): array
     {
-        return $this->resolveGateway($gateway)
-            ->query($outTradeNo)
-            ->toArray();
+        return $this->gatewayOperations()->query($gateway, $outTradeNo);
     }
 
     /**
@@ -3259,15 +3214,14 @@ class PaymentService
         ?string $tradeNo,
         string $outRequestNo,
     ): array {
-        return $this->resolveGateway($gateway)
-            ->refund(new PaymentRefundRequest(
-                outTradeNo: $outTradeNo,
-                refundAmount: $refundAmount,
-                refundReason: $refundReason,
-                tradeNo: $tradeNo,
-                outRequestNo: $outRequestNo,
-            ))
-            ->toArray();
+        return $this->gatewayOperations()->refund(
+            $gateway,
+            $outTradeNo,
+            $refundAmount,
+            $refundReason,
+            $tradeNo,
+            $outRequestNo,
+        );
     }
 
     /**

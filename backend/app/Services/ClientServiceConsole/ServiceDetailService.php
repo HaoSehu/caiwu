@@ -596,10 +596,10 @@ class ServiceDetailService
             ->all();
     }
 
-    public function fetchSupportedModules(Supplier $supplier, int $hostId, string $jwt): array
+    public function fetchSupportedModules(Supplier $supplier, int $hostId, string $jwt, bool $fresh = false): array
     {
         $cacheKey = $this->buildMonitorModuleCacheKey($supplier, $hostId);
-        $cachedModules = Cache::get($cacheKey);
+        $cachedModules = $fresh ? null : Cache::get($cacheKey);
         if (is_array($cachedModules)) {
             return $cachedModules;
         }
@@ -823,7 +823,7 @@ class ServiceDetailService
 
     public function buildMonitorModuleCacheKey(Supplier $supplier, int $hostId): string
     {
-        return 'upstream:'.$this->providerKeyForSupplier($supplier).":host_modules:{$supplier->id}:{$hostId}";
+        return 'upstream:'.$this->providerKeyForSupplier($supplier).":host_modules:v2:{$supplier->id}:{$hostId}";
     }
 
     private function providerKeyForSupplier(Supplier $supplier): string

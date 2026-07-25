@@ -6,8 +6,6 @@ namespace Caiwu\Plugins\Certification\BaiduFace\Logic;
 
 class BaiduFace
 {
-    private ?BaiduFaceClient $client = null;
-
     public function key(): string
     {
         return 'baidu_face';
@@ -60,11 +58,7 @@ class BaiduFace
      */
     private function client(array $config): BaiduFaceClient
     {
-        if ($this->client === null) {
-            $this->client = new BaiduFaceClient($config);
-        }
-
-        return $this->client;
+        return new BaiduFaceClient($config);
     }
 
     /**

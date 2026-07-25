@@ -2,7 +2,6 @@
 
 namespace App\Services\Auth;
 
-use App\Casts\LegacyEncrypted;
 use App\Exceptions\BusinessException;
 use App\Models\IntegrationPlugin;
 use App\Models\User;
@@ -689,7 +688,8 @@ class VerificationService
         }
 
         if (array_key_exists('id_card', $payload)) {
-            $userPayload['id_card'] = $this->encodeUserIdCard($lockedUser, $payload['id_card']);
+            // User 的 cast 统一负责加密；这里预加密会在模型保存时再次加密。
+            $userPayload['id_card'] = $payload['id_card'];
         }
 
         if (array_key_exists('certify_id', $payload)) {
@@ -709,11 +709,6 @@ class VerificationService
         }
 
         return $lockedUser->fresh() ?? $lockedUser;
-    }
-
-    private function encodeUserIdCard(User $user, mixed $value): string
-    {
-        return (new LegacyEncrypted)->set($user, 'id_card', $value, $user->getAttributes());
     }
 
     private function nullableString(mixed $value): ?string

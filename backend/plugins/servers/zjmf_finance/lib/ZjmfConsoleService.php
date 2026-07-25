@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Caiwu\Plugins\Servers\ZjmfFinance\Lib;
 
+use App\Exceptions\BusinessException;
 use App\Models\Supplier;
 
 final class ZjmfConsoleService
@@ -117,8 +118,19 @@ final class ZjmfConsoleService
             $supplier,
             $rootUrl.'/provision/custom/content',
             $resolvedJwt,
-            ['id' => $hostId, 'key' => $moduleKey]
+            ['id' => $hostId, 'key' => $moduleKey, 'jwt' => $resolvedJwt],
+            ['Authorization: JWT '.$resolvedJwt]
         ));
+    }
+
+    /**
+     * Returns the same-system form action used by ZJMF custom modules.
+     */
+    public function getCustomModuleActionEndpoint(Supplier $supplier, int $hostId): string
+    {
+        throw_if($hostId <= 0, new BusinessException('上游实例参数无效', 42200));
+
+        return $this->resolveSupplierRootUrl($supplier)."/provision/custom/{$hostId}";
     }
 
     private function postDefaultModuleAction(
@@ -238,6 +250,24 @@ final class ZjmfConsoleService
                     'select' => trim((string) ($item['select'] ?? $select)),
                 ];
             }
+        }
+
+        foreach ((array) ($payload['module_client_area'] ?? []) as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $function = trim((string) ($item['key'] ?? ''));
+            if ($function === '') {
+                continue;
+            }
+
+            $modules[] = [
+                'type' => 'custom',
+                'function' => $function,
+                'name' => trim((string) ($item['name'] ?? '')),
+                'select' => 'client_area',
+            ];
         }
 
         return $modules;

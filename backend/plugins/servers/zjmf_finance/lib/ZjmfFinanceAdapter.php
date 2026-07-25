@@ -287,14 +287,9 @@ final class ZjmfFinanceAdapter implements ProvidesConsoleAccess, ProvidesConsole
         return $this->securityService->submitCustomModuleAction($supplier, $endpoint, $payload, $jwt);
     }
 
-    public function getSecurityGroups(Supplier $supplier, int $page = 1, int $limit = 9999, ?string $jwt = null): array
+    public function getCustomModuleActionEndpoint(Supplier $supplier, int $hostId): string
     {
-        return $this->securityService->getSecurityGroups($supplier, $page, $limit, $jwt);
-    }
-
-    public function applySecurityGroup(Supplier $supplier, int $groupId, int $hostId, ?string $jwt = null): array
-    {
-        return $this->securityService->applySecurityGroup($supplier, $groupId, $hostId, $jwt);
+        return $this->consoleService->getCustomModuleActionEndpoint($supplier, $hostId);
     }
 
     public function post(Supplier $supplier, string $uri, array|string $payload = [], ?string $jwt = null, array $headers = [], array $query = []): array
@@ -399,8 +394,7 @@ final class ZjmfFinanceAdapter implements ProvidesConsoleAccess, ProvidesConsole
             'purchaseTrafficPackage',
             'purchaseHostUpgrade',
             'submitCustomModuleAction',
-            'getSecurityGroups',
-            'applySecurityGroup',
+            'getCustomModuleActionEndpoint',
             'post',
             'get',
             'getText',

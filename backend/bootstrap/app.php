@@ -130,4 +130,10 @@ return Application::configure(basePath: dirname(__DIR__))
                 throw new RuntimeException('APP_KEY is not set. Run: php artisan key:generate');
             }
         }
+
+        // 生产环境强制 APP_DEBUG=false，防止异常堆栈泄漏数据库凭证等敏感信息。
+        // 使用 config() 而非 env()，确保 config:cache 后仍能正确检测。
+        if (config('app.env') === 'production' && config('app.debug') === true) {
+            throw new RuntimeException('APP_DEBUG must be false in production.');
+        }
     })->create();
