@@ -198,11 +198,17 @@ class ClientServiceConsoleCategoryTitleFallbackTest extends TestCase
                 ->assertJsonPath('code', 0)
                 ->assertJsonPath('data.total', 3);
 
+            $cloudServerCatalogType = collect($overviewResponse->json('data.catalog_types'))
+                ->firstWhere('value', ProductType::VPS);
+            $this->assertSame('云服务器', $cloudServerCatalogType['label'] ?? null);
+            $this->assertSame(3, (int) ($cloudServerCatalogType['count'] ?? 0));
+
             // 验证分组结构能正确返回 children
             $list = $overviewResponse->json('data.list');
             $this->assertIsArray($list);
             $nonEmptyTypeCard = collect($list)->firstWhere('count', '>', 0);
             $this->assertIsArray($nonEmptyTypeCard);
+            $this->assertSame(ProductType::VPS, $nonEmptyTypeCard['key'] ?? null);
             $this->assertSame(3, (int) ($nonEmptyTypeCard['count'] ?? 0));
             $this->assertIsArray($nonEmptyTypeCard['children'] ?? null);
             $firstChild = $nonEmptyTypeCard['children'][0] ?? null;
