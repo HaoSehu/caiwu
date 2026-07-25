@@ -131,6 +131,55 @@ class CouponProductGroupQueryService
             ->paginate($pageSize, ['*'], 'page', $page);
     }
 
+    /**
+     * 批量拉取多个分组的产品，每个分组最多返回 500 条。
+     * @param array<int, array{id: int, level: int}> $groups
+     * @return array<int, array<string, mixed>>
+     */
+    public function batchProducts(array $groups): array
+    {
+        $result = [];
+
+        foreach ($groups as $group) {
+            $groupId = (int) ($group['id'] ?? 0);
+            $level = (int) ($group['level'] ?? 0);
+
+            if ($groupId <= 0 || !in_array($level, [1, 2, 3], true)) {
+                continue;
+            }
+
+            $query = Product::query()
+                ->select($this->productColumns())
+                ->with([
+                    'productGroup.secondProductGroup.firstProductGroup',
+                ]);
+
+            if ($level === 1) {
+                $query->whereIn('product_group_id', ThirdProductGroup::query()
+                    ->select('third_product_groups.id')
+                    ->join('second_product_groups', 'second_product_groups.id', '=', 'third_product_groups.second_product_group_id')
+                    ->where('second_product_groups.first_product_group_id', $groupId));
+            } elseif ($level === 2) {
+                $query->whereIn('product_group_id', ThirdProductGroup::query()
+                    ->select('id')
+                    ->where('second_product_group_id', $groupId));
+            } else {
+                $query->inCurrentProductGroup($groupId);
+            }
+
+            $products = $query
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->limit(500)
+                ->get()
+                ->toArray();
+
+            $result[$groupId] = $products;
+        }
+
+        return $result;
+    }
+
     private function firstGroup(int $id): FirstProductGroup
     {
         $group = FirstProductGroup::query()->find($id);

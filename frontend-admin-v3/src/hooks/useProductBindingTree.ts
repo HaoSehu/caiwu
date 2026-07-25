@@ -198,7 +198,8 @@ export type BindingTreeMode = 'multiple' | 'batch' | 'single';
 // ---- tree building ----
 
 function isBindingTreeNodeCheckDisabled(node: { data?: Record<string, unknown> }) {
-  return !toPlainRecord(node?.data).selectable;
+  // 只有明确标记 disabled 的节点才禁用，分类/类型节点均可展开/点击
+  return toPlainRecord(node?.data).disabled === true;
 }
 
 function ensureBindingTreeTypeNode(
@@ -215,7 +216,7 @@ function ensureBindingTreeTypeNode(
     value: key,
     label,
     text: label,
-    selectable: false,
+    selectable: true,
     children: [],
   };
   nodes.set(key, node);
@@ -281,8 +282,8 @@ function buildBindingCategoryTreeNode(
   const label = String(node.label || node.name || node.title || node.text || '未命名分类').trim();
   if (!label && result.length === 0) return null;
 
-  // 批量模式下分类节点可选
-  const selectable = mode === 'batch';
+  // 所有节点均可点击，产品/分类的选择过滤由 selectionToBindings 统一处理
+  const selectable = true;
   const rawValue = String(node.value || node.id || nodeKey).trim() || nodeKey;
 
   return {

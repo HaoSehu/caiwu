@@ -113,6 +113,12 @@ export const couponsApi = {
       url: `/v2/admin/coupon-product-groups/${group}/products`,
       params,
     }),
+  /** 批量拉取多个分组的产品 */
+  batchProducts: (groups: Array<{ id: number; level: number }>) =>
+    request.post<Record<number, CouponProductRecord[]>>({
+      url: '/v2/admin/coupon-product-groups/batch-products',
+      data: { groups },
+    }),
   productTree: () =>
     buildCouponProductTree(),
   summary: (params?: Record<string, unknown>) =>
@@ -130,42 +136,151 @@ export const couponsApi = {
   delete: (id: number | string) => request.delete({ url: `/v2/admin/coupons/${id}` }),
 };
 
+// 商品树加载单例缓存：避免并发重复请求
+let cachedTreePromise: Promise<{ tree?: ProductTreeNode[] }> | null = null;
+
 async function buildCouponProductTree(): Promise<{ tree?: ProductTreeNode[] }> {
+  // 单例缓存：同一次页面生命周期内复用结果，避免并发重复请求
+  if (cachedTreePromise) return cachedTreePromise;
+  cachedTreePromise = buildCouponProductTreeInternal();
+  return cachedTreePromise;
+}
+
+/** 内部实现，不缓存 */
+async function buildCouponProductTreeInternal(): Promise<{ tree?: ProductTreeNode[] }> {
   const roots = await fetchAllPages<CouponProductGroupRecord>((page) =>
     couponsApi.productGroups({ page, page_size: PRODUCT_TREE_PAGE_SIZE }),
   );
 
-  const tree = await Promise.all(roots.map((group) => buildCouponProductGroupTree(group)));
+  // 第一阶段：收集所有分组（不拉产品），构造成平面列表
+  const allGroups: Array<{ group: CouponProductGroupRecord; parentId: number | null; level: number }> = [];
+  const productGroups: Array<{ group: CouponProductGroupRecord; level: number }> = [];
+
+  function collectGroups(group: CouponProductGroupRecord, parentId: number | null) {
+    const level = Number(group.level || 0) as 1 | 2 | 3;
+    allGroups.push({ group, parentId, level });
+    if (Number(group.direct_products_count || 0) > 0) {
+      productGroups.push({ group, level });
+    }
+    return group;
+  }
+
+  // 递归收集（不拉产品，只拉子分组）
+  async function collectRecursive(group: CouponProductGroupRecord, parentId: number | null): Promise<void> {
+    const level = Number(group.level || 0) as 1 | 2 | 3;
+    collectGroups(group, parentId);
+    if (group.has_children && level < 3) {
+      const childGroups = await fetchAllPages<CouponProductGroupRecord>((page) =>
+        couponsApi.productGroupChildren(group.id, { level: level as 1 | 2, page, page_size: PRODUCT_TREE_PAGE_SIZE }),
+      );
+      await Promise.all(childGroups.map((child) => collectRecursive(child, group.id)));
+    }
+  }
+
+  await Promise.all(roots.map((root) => collectRecursive(root, null)));
+
+  // 第二阶段：一次性批量拉取所有分组的产品（1 次请求替代 N 次）
+  const productMap = new Map<number, CouponProductRecord[]>();
+  if (productGroups.length > 0) {
+    try {
+      const batchResponse = await couponsApi.batchProducts(
+        productGroups.map(({ group, level }) => ({ id: group.id, level })),
+      );
+      // batchResponse 已被 Axios 拦截器解包为 Record<number, CouponProductRecord[]>
+      const data = (batchResponse && typeof batchResponse === 'object' ? batchResponse : {}) as Record<string, unknown>;
+      for (const [groupId, products] of Object.entries(data)) {
+        if (Array.isArray(products)) {
+          productMap.set(Number(groupId), products as CouponProductRecord[]);
+        }
+      }
+      // 如果批量接口未返回全部数据，补漏
+      if (productMap.size < productGroups.length) {
+        const missing = productGroups.filter(({ group }) => !productMap.has(group.id));
+        if (missing.length > 0) {
+          const supplement = await Promise.all(
+            missing.map(async ({ group, level }) => {
+              const products = await fetchAllPages<CouponProductRecord>((page) =>
+                couponsApi.productGroupProducts(group.id, { level: level as 1 | 2 | 3, page, page_size: PRODUCT_TREE_PAGE_SIZE }),
+              );
+              return { groupId: group.id, products };
+            }),
+          );
+          for (const { groupId, products } of supplement) {
+            productMap.set(groupId, products);
+          }
+        }
+      }
+    } catch {
+      // 批量接口失败时回退到逐个请求
+      const productResults = await Promise.all(
+        productGroups.map(async ({ group, level }) => {
+          const response = await fetchAllPages<CouponProductRecord>((page) =>
+            couponsApi.productGroupProducts(group.id, { level: level as 1 | 2 | 3, page, page_size: PRODUCT_TREE_PAGE_SIZE }),
+          );
+          return { groupId: group.id, products: response };
+        }),
+      );
+      for (const { groupId, products } of productResults) {
+        productMap.set(groupId, products);
+      }
+    }
+  }
+
+  // 第三阶段：用缓存构建树
+  const groupNodeMap = new Map<number, ProductTreeNode>();
+
+  function buildNode(group: CouponProductGroupRecord, children: ProductTreeNode[] = []): ProductTreeNode {
+    const level = Number(group.level || 0) as 1 | 2 | 3;
+    const products = productMap.get(group.id) || [];
+    const productNodes = products.map(productTreeNode);
+    const mergedChildren = level === 2 && children.length > 0 && productNodes.length > 0
+      ? [...children, otherGroupNode(group, productNodes)]
+      : [...children, ...productNodes];
+    const node = productGroupTreeNode(group, mergedChildren);
+    groupNodeMap.set(group.id, node);
+    return node;
+  }
+
+  // 自底向上构建
+  const sorted = [...allGroups].sort((a, b) => b.level - a.level); // 最深优先
+  for (const entry of sorted) {
+    if (!groupNodeMap.has(entry.group.id)) {
+      buildNode(entry.group);
+    }
+  }
+
+  // 组装根节点
+  const tree = roots
+    .map((root) => {
+      const node = groupNodeMap.get(root.id);
+      if (!node) return null;
+
+      // 重组 children：将子分组节点挂回
+      const childIds = allGroups
+        .filter((g) => g.parentId === root.id)
+        .map((g) => groupNodeMap.get(g.group.id))
+        .filter(Boolean) as ProductTreeNode[];
+
+      if (childIds.length > 0) {
+        const products = productMap.get(root.id) || [];
+        const productNodes = products.map(productTreeNode);
+        return productGroupTreeNode(root, [
+          ...childIds,
+          ...productNodes,
+        ]);
+      }
+      return node;
+    })
+    .filter(Boolean) as ProductTreeNode[];
+
   return { tree };
 }
 
 async function buildCouponProductGroupTree(group: CouponProductGroupRecord): Promise<ProductTreeNode> {
-  const level = Number(group.level || 0) as 1 | 2 | 3;
-  const childGroups = group.has_children && level < 3
-    ? await fetchAllPages<CouponProductGroupRecord>((page) =>
-      couponsApi.productGroupChildren(group.id, {
-        level: level as 1 | 2,
-        page,
-        page_size: PRODUCT_TREE_PAGE_SIZE,
-      }),
-    )
-    : [];
-  const childNodes = await Promise.all(childGroups.map((child) => buildCouponProductGroupTree(child)));
-  const directProducts = Number(group.direct_products_count || 0) > 0
-    ? await fetchAllPages<CouponProductRecord>((page) =>
-      couponsApi.productGroupProducts(group.id, {
-        level,
-        page,
-        page_size: PRODUCT_TREE_PAGE_SIZE,
-      }),
-    )
-    : [];
-  const productNodes = directProducts.map(productTreeNode);
-  const children = level === 2 && childNodes.length > 0 && productNodes.length > 0
-    ? [...childNodes, otherGroupNode(group, productNodes)]
-    : [...childNodes, ...productNodes];
-
-  return productGroupTreeNode(group, children);
+  // 保留旧函数签名兼容，实际走 buildCouponProductTree 全并行路径
+  return buildCouponProductTree().then((r) => {
+    return (r.tree || []).find((n) => n.id === group.id) || productGroupTreeNode(group);
+  });
 }
 
 export const couponCampaignsApi = {
