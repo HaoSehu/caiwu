@@ -157,10 +157,11 @@ class ServiceConsolePayloadSnapshotTest extends TestCase
         $this->assertSame((int) $fixture['supplier']->id, (int) $securityContext['supplier_id']);
         $this->assertSame(88001, (int) $securityContext['host_id']);
         $this->assertSame('security_group', $securityContext['module_key']);
-        $this->assertSame('/provision/custom/security', $securityContext['endpoint']);
+        $this->assertSame('https://upstream.example/provision/custom/88001', $securityContext['endpoint']);
 
         $this->assertContains(['method' => 'login', 'supplier_id' => (int) $fixture['supplier']->id], $driver->calls);
         $this->assertContains(['method' => 'modules', 'supplier_id' => (int) $fixture['supplier']->id, 'host_id' => 88001], $driver->calls);
+        $this->assertContains(['method' => 'module_action_endpoint', 'supplier_id' => (int) $fixture['supplier']->id, 'host_id' => 88001], $driver->calls);
     }
 
     #[Test]
@@ -511,6 +512,13 @@ HTML;
 <tr><td>默认安全组</td><td>默认策略</td><td><button class="apply" data-id="601">应用</button><button class="deleteGroup" data-id="601">删除</button></td></tr>
 </tbody></table></div>
 HTML;
+            }
+
+            public function getCustomModuleActionEndpoint(Supplier $supplier, int $hostId): string
+            {
+                $this->calls[] = ['method' => 'module_action_endpoint', 'supplier_id' => (int) $supplier->id, 'host_id' => $hostId];
+
+                return "https://upstream.example/provision/custom/{$hostId}";
             }
 
             public function post(Supplier $supplier, string $uri, array|string $payload = [], ?string $jwt = null, array $headers = [], array $query = []): array

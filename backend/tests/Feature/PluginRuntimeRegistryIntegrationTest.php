@@ -158,12 +158,14 @@ class PluginRuntimeRegistryIntegrationTest extends TestCase
         $this->assertTrue((bool) ($schema['secret_key']['secret'] ?? false));
         $this->assertSame('v4', $schema['api_version']['default'] ?? null);
         $this->assertSame(25921, $schema['h5_plan_id']['default'] ?? null);
+        $this->assertSame(80, $schema['score_threshold']['default'] ?? null);
         $this->assertSame([
             'basic_notice',
             'api_key',
             'secret_key',
             'api_version',
             'h5_plan_id',
+            'score_threshold',
         ], $schema->keys()->all());
     }
 

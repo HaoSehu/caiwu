@@ -164,6 +164,50 @@ class ServiceSecurityGroupNativeApiTest extends TestCase
         $securityGroups->getSecurityGroupRulesForUser(new User, 903, 44);
     }
 
+    public function test_it_reports_a_missing_security_group_module_as_unsupported(): void
+    {
+        $supplier = $this->makeSupplier();
+        $localService = new Service;
+        $localService->id = 904;
+        $runtime = new class
+        {
+            public function login(Supplier $supplier): string
+            {
+                return 'custom-jwt';
+            }
+        };
+        $detailService = Mockery::mock(ServiceDetailService::class);
+        $detailService->shouldReceive('findUserService')->once()->andReturn($localService);
+        $detailService->shouldReceive('resolveManagedSupplierAndHost')->once()->with($localService)->andReturn([$supplier, 71462]);
+        $detailService->shouldReceive('resolveRuntimeCapabilityForSupplier')->once()->with($supplier)->andReturn($runtime);
+        $detailService
+            ->shouldReceive('fetchSupportedModules')
+            ->once()
+            ->with($supplier, 71462, 'custom-jwt', true)
+            ->andReturn([
+                'status' => 200,
+                'data' => [
+                    ['type' => 'custom', 'function' => 'exitRescue', 'name' => '退出救援系统'],
+                ],
+            ]);
+        $transformService = Mockery::mock(ServiceTransformService::class);
+        $transformService->shouldReceive('canManageService')->once()->with($localService)->andReturnTrue();
+
+        $securityGroups = new ServiceSecurityGroupService(
+            Mockery::mock(OperationLogService::class),
+            $detailService,
+            $transformService,
+            Mockery::mock(ServiceNatService::class),
+        );
+
+        $result = $securityGroups->getSecurityGroupsForUser(new User, 904, true);
+
+        $this->assertFalse($result['supported']);
+        $this->assertNotSame('', $result['message']);
+        $this->assertSame('', $result['error']);
+        $this->assertFalse($result['can_create']);
+    }
+
     private function makeSupplier(): Supplier
     {
         $supplier = new Supplier;

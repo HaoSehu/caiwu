@@ -197,6 +197,9 @@ class ZjmfConsoleAndNetworkServiceTest extends TestCase
                             ['func' => 'vnc', 'type' => 'default', 'name' => 'VNC'],
                         ],
                     ],
+                    'module_client_area' => [
+                        ['key' => 'security_groups', 'name' => '安全组'],
+                    ],
                 ],
             ]);
 
@@ -207,6 +210,7 @@ class ZjmfConsoleAndNetworkServiceTest extends TestCase
             ['type' => 'default', 'function' => 'on', 'name' => '开机', 'select' => 'control'],
             ['type' => 'default', 'function' => 'reinstall', 'name' => '重装系统', 'select' => 'control'],
             ['type' => 'default', 'function' => 'vnc', 'name' => 'VNC', 'select' => 'console'],
+            ['type' => 'custom', 'function' => 'security_groups', 'name' => '安全组', 'select' => 'client_area'],
         ], $response['data']);
     }
 
@@ -307,10 +311,10 @@ class ZjmfConsoleAndNetworkServiceTest extends TestCase
             ->with(
                 $supplier,
                 'POST',
-                '/provision/custom/security',
+                'https://upstream.example/provision/custom/123',
                 ['func' => 'linkSecurityGroup', 'id' => 44],
                 'jwt-token',
-                ['content-type: application/x-www-form-urlencoded', 'Authorization: Bearer jwt-token'],
+                ['content-type: application/x-www-form-urlencoded', 'Authorization: JWT jwt-token'],
                 [],
             )
             ->andReturn(['status' => 200, 'msg' => '操作成功']);
@@ -318,7 +322,7 @@ class ZjmfConsoleAndNetworkServiceTest extends TestCase
         $service = new ZjmfSecurityService($this->makeTransport($hostingTransport));
         $response = $service->submitCustomModuleAction(
             $supplier,
-            '/provision/custom/security',
+            'https://upstream.example/provision/custom/123',
             ['func' => 'linkSecurityGroup', 'id' => 44],
             'jwt-token',
         );
@@ -326,47 +330,16 @@ class ZjmfConsoleAndNetworkServiceTest extends TestCase
         $this->assertSame(200, $response['status']);
     }
 
-    public function test_security_service_uses_native_same_system_security_group_routes(): void
+    public function test_adapter_uses_same_system_custom_module_security_actions(): void
     {
         $supplier = $this->makeSupplier();
         $hostingTransport = Mockery::mock(HostingPanelApiTransport::class);
-        $hostingTransport
-            ->shouldReceive('request')
-            ->once()
-            ->with(
-                $supplier,
-                'GET',
-                '/security_group',
-                [],
-                'jwt-token',
-                ['Authorization: Bearer jwt-token'],
-                ['page' => 1, 'limit' => 9999],
-            )
-            ->andReturn([
-                'status' => 200,
-                'data' => ['list' => [['id' => 44, 'name' => '默认安全组']]],
-            ]);
-        $hostingTransport
-            ->shouldReceive('request')
-            ->once()
-            ->with(
-                $supplier,
-                'POST',
-                '/security_group/44/host/123',
-                ['id' => 44, 'host_id' => 123],
-                'jwt-token',
-                ['content-type: application/x-www-form-urlencoded', 'Authorization: Bearer jwt-token'],
-                [],
-            )
-            ->andReturn(['status' => 200, 'msg' => '安全组已应用']);
+        $adapter = new ZjmfFinanceAdapter($hostingTransport, new ZjmfCloudConfigTemplate);
 
-        $service = new ZjmfSecurityService($this->makeTransport($hostingTransport));
-
-        $list = $service->getSecurityGroups($supplier, 1, 9999, 'jwt-token');
-        $apply = $service->applySecurityGroup($supplier, 44, 123, 'jwt-token');
-
-        $this->assertSame('默认安全组', $list['data']['list'][0]['name']);
-        $this->assertSame('安全组已应用', $apply['msg']);
+        $this->assertTrue(method_exists($adapter, 'submitCustomModuleAction'));
+        $this->assertSame('https://upstream.example/provision/custom/123', $adapter->getCustomModuleActionEndpoint($supplier, 123));
+        $this->assertFalse(method_exists($adapter, 'getSecurityGroups'));
+        $this->assertFalse(method_exists($adapter, 'applySecurityGroup'));
     }
 
     public function test_security_service_rejects_non_custom_module_endpoint(): void
@@ -375,6 +348,14 @@ class ZjmfConsoleAndNetworkServiceTest extends TestCase
 
         $this->expectException(BusinessException::class);
         $service->submitCustomModuleAction($this->makeSupplier(), '/v1/security-groups', [], 'jwt-token');
+    }
+
+    public function test_security_service_rejects_custom_module_endpoint_without_host_id(): void
+    {
+        $service = new ZjmfSecurityService($this->makeTransport(Mockery::mock(HostingPanelApiTransport::class)));
+
+        $this->expectException(BusinessException::class);
+        $service->submitCustomModuleAction($this->makeSupplier(), '/provision/custom/security', [], 'jwt-token');
     }
 
     public function test_console_service_fetches_custom_module_page_from_same_system_entry(): void
@@ -390,8 +371,8 @@ class ZjmfConsoleAndNetworkServiceTest extends TestCase
                 'https://upstream.example/provision/custom/content',
                 [],
                 'jwt-token',
-                ['Authorization: Bearer jwt-token'],
-                ['id' => 123, 'key' => 'nat_acl']
+                ['Authorization: JWT jwt-token'],
+                ['id' => 123, 'key' => 'nat_acl', 'jwt' => 'jwt-token']
             )
             ->andReturn('{"status":200,"data":{"html":"<section>NAT</section>"}}');
 

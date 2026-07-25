@@ -42,7 +42,7 @@ class ZjmfProviderKeyMigrationTest extends TestCase
 
         $legacyPluginId = $this->insertLegacyPluginWhenNoZjmfPluginExists($suffix);
 
-        $migration = require database_path('migrations/2026_07_17_000002_rename_zjmf_finance_plugin_identity.php');
+        $migration = require database_path('_archive/migrations/2026_07_17_000002_rename_zjmf_finance_plugin_identity.php');
         $migration->up();
 
         $this->assertDatabaseHas('integration_plugin_runtime_logs', [
