@@ -1,22 +1,19 @@
 # 当前数据库结构说明
 
 - 文档性质：参考资料 / 实库结构快照
-- 生成时间：`2026-07-22 19:29:52 +08:00`
-- 数据来源：Laravel 默认连接 `mysql` 直连 MySQL `information_schema` 与业务库 `idc`
+- 更新时间：`2026-07-24`
+- 数据来源：`backend/database/schema/mysql-schema.sql`（schema baseline）
 - 数据库：`idc`
 - MySQL 版本：`8.0.29`
 - 当前表数量：`62`
-- 字段数量：`876`
-- 索引数量：`318`
-- 外键约束数量：`92`
-- CHECK 约束数量：`0`
 - 说明：
-  - 本文只导出表结构元数据，不包含任何业务行数据。
-  - 行数来自 `information_schema.TABLES.TABLE_ROWS`，InnoDB 下仅作估算。
-  - 字段、索引、外键与约束均来自当前实库，不以迁移文件或历史快照推断。
-  - 需要更新时在项目根目录执行：`php backend/scripts/export_database_structure.php`。
+  - 本文由 `php backend/scripts/export_database_structure.php` 从实库导出。
+  - **新环境初始化**使用 schema baseline，不再依赖历史迁移文件。
+  - 历史迁移已归档至 `backend/database/migrations/_archive/`。
 
-> **自动生成**：请优先通过脚本重刷本文档，避免手工维护结构信息产生漂移。
+> **数据库初始化方式**：
+> 1. **新环境**：`python backend/scripts/install_db.py`（自动导入 `mysql-schema.sql`）
+> 2. **增量更新**：`php artisan migrate`（仅运行 `migrations/` 中未归档的增量迁移）
 
 ## 1. 结构概览
 
