@@ -87,27 +87,8 @@ if (Schema::hasTable('settings')) {
     SettingsSeeder::seed();
 }
 
-if (Schema::hasTable('notification_templates')) {
-    $migrationFiles = [
-        '2026_07_06_124000_seed_notification_templates_defaults.php',
-        '2026_07_06_125000_convert_sms_template_variables_to_single_braces.php',
-        '2026_07_06_130000_renumber_sms_notification_template_codes.php',
-        '2026_07_07_100000_replace_email_notification_templates_with_legacy_catalog.php',
-        '2026_07_08_004000_remove_email_template_visual_cards.php',
-    ];
-
-    foreach ($migrationFiles as $migrationFile) {
-        $path = database_path('migrations/'.$migrationFile);
-        if (! is_file($path)) {
-            throw new RuntimeException('缺少默认通知模板迁移文件：'.$migrationFile);
-        }
-
-        $migration = require $path;
-        if (is_object($migration) && method_exists($migration, 'up')) {
-            $migration->up();
-        }
-    }
-}"""
+// 通知模板默认数据已包含在 schema baseline 中，无需额外迁移
+"""
 
 
 class InstallDbError(RuntimeError):
