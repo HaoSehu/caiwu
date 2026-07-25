@@ -50,12 +50,21 @@ frontend-user-v4-console/.auth/
 shared/node_modules/
 
 # Frontend local environment overrides
+frontend-admin-v3/.env
 frontend-admin-v3/.env.local
 frontend-admin-v3/.env.*.local
+frontend-admin-v3/.env.production
+frontend-admin-v3/.env.development
+frontend-user-v3-www/.env
 frontend-user-v3-www/.env.local
 frontend-user-v3-www/.env.*.local
+frontend-user-v3-www/.env.production
+frontend-user-v3-www/.env.development
+frontend-user-v4-console/.env
 frontend-user-v4-console/.env.local
 frontend-user-v4-console/.env.*.local
+frontend-user-v4-console/.env.production
+frontend-user-v4-console/.env.development
 
 # IDE
 .vscode/
