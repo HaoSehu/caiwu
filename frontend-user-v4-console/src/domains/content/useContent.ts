@@ -4,6 +4,7 @@ import { MessagePlugin } from 'tdesign-vue-next';
 import { useRoute, useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
+import { getErrorMessage } from '@/utils/error';
 import type {
   ApiEnvelope,
   ContentArticleRecord,
@@ -83,14 +84,6 @@ const CONTENT_CONFIG: Record<ContentType, ContentListConfig> = {
     keywordSuggestions: ['新手入门', '支付账单', '服务管理', '续费说明'],
   },
 };
-
-function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) return error.message;
-  if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') {
-    return error.message;
-  }
-  return fallback;
-}
 
 function parseQueryNumber(value: unknown, fallback = 0) {
   const normalized = Array.isArray(value) ? value[0] : value;

@@ -5,6 +5,7 @@ import { SERVICE_STATUS, SERVICE_STATUS_MAP, toSelectOptions } from '@shared/sta
 
 import clientApi from '@/api/client';
 import { copyText, formatMoney } from '@/utils/format';
+import { getErrorMessage } from '@/utils/error';
 import type {
   CouponOption,
   ServiceCatalogTypeOption,
@@ -51,10 +52,6 @@ type ServiceLike = Partial<ServiceInstance> & Record<string, unknown>;
 type StatusMapEntry = { label?: string };
 
 interface ServiceOverview extends ServiceOverviewPayload {}
-
-function getErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error && error.message ? error.message : fallback;
-}
 
 export function resolveServiceStatusLabel(status: unknown) {
   const serviceStatus = Number(status);

@@ -1,5 +1,5 @@
 import { computed, reactive, ref } from 'vue';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 
 import clientApi from '@/api/client';
 import type { ConsoleServiceDetail, ServiceReinstallOption } from '@/types/client';
@@ -86,6 +86,20 @@ export function useConsoleReinstall(options: UseConsoleReinstallOptions) {
       MessagePlugin.warning('请选择系统版本');
       return;
     }
+
+    const confirmed = await new Promise<boolean>((resolve) => {
+      const dialog = DialogPlugin.confirm({
+        header: '确认重装系统',
+        body: '重装系统后，当前系统盘中的所有数据将被永久清除且不可恢复，确定要重装系统吗？',
+        theme: 'danger',
+        confirmBtn: { content: '确认重装', theme: 'danger' },
+        onConfirm: () => { dialog.destroy(); resolve(true); },
+        onCancel: () => { dialog.destroy(); resolve(false); },
+        onClose: () => { dialog.destroy(); resolve(false); },
+      });
+    });
+    if (!confirmed) return;
+
     actionLoading.value = true;
     try {
       const res = await clientApi.serviceReinstall(serviceId.value, { os_id: reinstallState.os_id });

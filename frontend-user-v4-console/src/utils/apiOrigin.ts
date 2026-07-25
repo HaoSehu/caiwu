@@ -19,6 +19,18 @@ export function resolveApiOrigin(apiBaseUrl: unknown): string {
 }
 
 /**
+ * Resolves a backend-provided root-relative proxy URL against the API origin.
+ * Absolute and protocol-relative third-party URLs are intentionally preserved.
+ */
+export function resolveApiProxyUrl(value: unknown, apiBaseUrl: unknown): string {
+  const normalized = String(value || '').trim();
+  if (!/^\/(?!\/)/.test(normalized)) return normalized;
+
+  const apiOrigin = resolveApiOrigin(apiBaseUrl);
+  return apiOrigin ? `${apiOrigin}${normalized}` : normalized;
+}
+
+/**
  * Back-end hosted uploads must be loaded from the API deployment, not from a
  * separately deployed console host. Static console assets intentionally keep
  * their original relative path.

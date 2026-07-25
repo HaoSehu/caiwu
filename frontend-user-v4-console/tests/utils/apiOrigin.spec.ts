@@ -16,11 +16,25 @@ const { outputText } = ts.transpileModule(source, {
 const module = { exports: {} as Record<string, (...args: unknown[]) => string> };
 new Function('exports', 'require', 'module', outputText)(module.exports, require, module);
 
-const { resolveApiManagedAssetUrl, resolveApiOrigin } = module.exports;
+const { resolveApiManagedAssetUrl, resolveApiOrigin, resolveApiProxyUrl } = module.exports;
 
 assert.equal(resolveApiOrigin('https://api.coyjs.cn/api'), 'https://api.coyjs.cn');
 assert.equal(resolveApiOrigin('http://127.0.0.1:8000/api'), 'http://127.0.0.1:8000');
 assert.equal(resolveApiOrigin('/api'), '');
+
+assert.equal(
+  resolveApiProxyUrl('/api/v2/client/auth/captcha-script', 'https://api.coyjs.cn/api'),
+  'https://api.coyjs.cn/api/v2/client/auth/captcha-script',
+);
+assert.equal(
+  resolveApiProxyUrl('https://static.geetest.com/v4/gt4.js', 'https://api.coyjs.cn/api'),
+  'https://static.geetest.com/v4/gt4.js',
+);
+assert.equal(
+  resolveApiProxyUrl('//static.geetest.com/v4/gt4.js', 'https://api.coyjs.cn/api'),
+  '//static.geetest.com/v4/gt4.js',
+);
+assert.equal(resolveApiProxyUrl('/api/v2/client/auth/captcha-script', '/api'), '/api/v2/client/auth/captcha-script');
 
 assert.equal(
   resolveApiManagedAssetUrl('/uploads/content/logo.png', 'https://api.coyjs.cn/api'),

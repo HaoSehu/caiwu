@@ -4,6 +4,7 @@ import { ORDER_STATUS_MAP, ORDER_TYPE_MAP, toSelectOptions } from '@caiwu/shared
 
 import clientApi from '@/api/client';
 import { formatMoney } from '@/utils/format';
+import { getErrorMessage } from '@/utils/error';
 import type { ClientFinanceListParams, OrderListSummary, OrderRecord } from '@/types/client';
 
 import { resolveQuickDateRange } from './dateFilters';
@@ -14,10 +15,6 @@ export const ORDER_TYPE_OPTIONS = ['new', 'renew', 'upgrade'].map((value) => ({
   label: ORDER_TYPE_MAP[value] || value,
   value,
 }));
-
-function getErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error && error.message ? error.message : fallback;
-}
 
 export { formatMoney };
 

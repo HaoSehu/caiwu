@@ -5,6 +5,7 @@ import { INVOICE_STATUS_MAP, INVOICE_TYPE_MAP, getStatusLabel, toSelectOptions }
 
 import clientApi from '@/api/client';
 import { formatMoney } from '@/utils/format';
+import { getErrorMessage } from '@/utils/error';
 import { useUserStore } from '@/store';
 import type {
   InvoiceAlipayPaymentPayload,
@@ -30,10 +31,6 @@ function normalizeText(value: unknown) {
   if (typeof value === 'string') return value.trim();
   if (typeof value === 'number') return String(value);
   return '';
-}
-
-function getErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error && error.message ? error.message : fallback;
 }
 
 function pickText(...values: unknown[]) {

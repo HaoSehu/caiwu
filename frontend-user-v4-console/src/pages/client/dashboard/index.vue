@@ -234,6 +234,7 @@ import clientApi from '@/api/client';
 import { useSiteBrandingStore } from '@/app/stores/siteBranding';
 import { useNoticeReadStatus } from '@/domains/content/useNoticeReadStatus';
 import { formatMoney, formatShortDateTime as formatDate } from '@/utils/format';
+import { getErrorMessage } from '@/utils/error';
 import { useUserStore } from '@/store';
 import LoadingState from '@shared/user-v3/components/LoadingState.vue';
 import type {
@@ -295,14 +296,6 @@ const serviceOverview = ref<ServiceOverviewPayload>({
   list: [],
   catalog_types: [],
 });
-
-function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) return error.message;
-  if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') {
-    return error.message;
-  }
-  return fallback;
-}
 
 function isHandledError(error: unknown): error is { __handled: boolean } {
   return typeof error === 'object' && error !== null && '__handled' in error && Boolean(error.__handled);
@@ -429,7 +422,7 @@ const todayDateText = computed(() => {
 const productCards = computed<ProductCard[]>(() => {
   if (serviceOverview.value.list.length) {
     return serviceOverview.value.list.slice(0, 6).map((item, index) => {
-      const key = String(item.product_type || item.key || `product-${index}`);
+      const key = String(item.key || item.product_type || `product-${index}`);
       const meta = resolveProductMeta(item, key);
       return {
         key,

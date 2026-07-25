@@ -5,6 +5,7 @@ import { ACCOUNT_TRANSACTION_EVENT_MAP, getStatusLabel } from '@shared/statusCon
 import { clientAuthApi } from '@/api/auth';
 import clientApi from '@/api/client';
 import { copyText } from '@/utils/format';
+import { getErrorMessage } from '@/utils/error';
 import { useUserStore } from '@/store';
 import type {
   ClientAlipayAccount,
@@ -26,13 +27,6 @@ type WithdrawFormState = {
   amount: string;
 };
 
-function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) return error.message;
-  if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') {
-    return error.message;
-  }
-  return fallback;
-}
 
 export function money(value: unknown) {
   const amount = Number(value || 0);

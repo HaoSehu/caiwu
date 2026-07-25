@@ -3,17 +3,10 @@ import { MessagePlugin } from 'tdesign-vue-next';
 
 import clientApi from '@/api/client';
 import type { ApiEnvelope, CouponRecord, PagedList } from '@/types/client';
+import { getErrorMessage } from '@/utils/error';
 
 type CouponTab = 'owned' | 'plaza';
 type CouponTabChangeValue = CouponTab | { value?: CouponTab | string } | null | undefined;
-
-function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) return error.message;
-  if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') {
-    return error.message;
-  }
-  return fallback;
-}
 
 function createTabState() {
   return reactive({

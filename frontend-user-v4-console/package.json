@@ -23,7 +23,6 @@
     "@vueuse/core": "^14.2.0",
     "axios": "^1.18.1",
     "dayjs": "^1.11.13",
-    "echarts": "^6.1.0",
     "markdown-it": "^14.3.0",
     "nprogress": "^0.2.0",
     "pinia": "^3.0.4",

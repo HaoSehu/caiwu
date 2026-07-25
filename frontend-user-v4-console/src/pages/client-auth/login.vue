@@ -16,8 +16,9 @@
     <t-form v-if="loginMode === 'password'" ref="formRef" class="client-auth-form" :data="form" :rules="rules" label-width="0" @submit="handleLogin">
       <t-form-item name="account">
         <div class="client-auth-field">
-          <label class="client-auth-label is-required">手机号 / 邮箱</label>
+          <label class="client-auth-label is-required" for="login-account">手机号 / 邮箱</label>
           <t-input
+            id="login-account"
             v-model="form.account"
             size="large"
             clearable
@@ -32,8 +33,9 @@
 
       <t-form-item name="password">
         <div class="client-auth-field">
-          <label class="client-auth-label is-required">密码</label>
+          <label class="client-auth-label is-required" for="login-password">密码</label>
           <t-input
+            id="login-password"
             v-model="form.password"
             size="large"
             :type="showPassword ? 'text' : 'password'"
@@ -62,8 +64,9 @@
     <t-form v-if="loginMode === 'code'" ref="codeFormRef" class="client-auth-form" :data="codeForm" :rules="codeRules" label-width="0" @submit="handleCodeLogin">
       <t-form-item name="account">
         <div class="client-auth-field">
-          <label class="client-auth-label is-required">手机号 / 邮箱</label>
+          <label class="client-auth-label is-required" for="login-code-account">手机号 / 邮箱</label>
           <t-input
+            id="login-code-account"
             v-model="codeForm.account"
             size="large"
             clearable
@@ -77,7 +80,7 @@
 
       <t-form-item name="code">
         <div class="client-auth-field">
-          <label class="client-auth-label is-required">验证码</label>
+          <label class="client-auth-label is-required" for="login-code">验证码</label>
           <div class="client-auth-code-row">
             <t-input v-model="codeForm.code" size="large" maxlength="6" placeholder="请输入验证码" @enter="submitCodeForm" />
             <t-button variant="outline" :disabled="countdown > 0" :loading="sendingCode || captchaLoading" @click="handleSendCode">
