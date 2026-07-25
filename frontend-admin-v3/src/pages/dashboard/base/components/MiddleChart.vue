@@ -58,10 +58,7 @@
 </template>
 <script setup lang="ts">
 import { useWindowSize } from '@vueuse/core';
-import { LineChart, PieChart } from 'echarts/charts';
-import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components';
-import * as echarts from 'echarts/core';
-import { CanvasRenderer } from 'echarts/renderers';
+import echarts from '@/utils/echarts';
 import { computed, nextTick, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue';
 
 import { t } from '@/locales';
@@ -70,8 +67,6 @@ import { changeChartsTheme } from '@/utils/color';
 import { LAST_7_DAYS } from '@/utils/date';
 
 import { getLineChartDataSet, getPieChartDataSet } from '../index';
-
-echarts.use([TooltipComponent, LegendComponent, PieChart, GridComponent, LineChart, CanvasRenderer]);
 
 const getThisMonth = (checkedValues?: string[]) => {
   let date: Date;
@@ -186,12 +181,16 @@ onBeforeUnmount(() => {
     window.cancelAnimationFrame(resizeFrame);
     resizeFrame = 0;
   }
+  monitorChart?.dispose();
+  countChart?.dispose();
 });
 
 onDeactivated(() => {
   storeModeWatch();
   storeBrandThemeWatch();
   storeSidebarCompactWatch();
+  monitorChart?.dispose();
+  countChart?.dispose();
 });
 
 const currentMonth = ref(getThisMonth());

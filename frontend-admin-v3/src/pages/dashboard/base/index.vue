@@ -46,10 +46,7 @@
 </template>
 
 <script setup lang="ts">
-import { LineChart, PieChart } from 'echarts/charts';
-import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components';
-import * as echarts from 'echarts/core';
-import { CanvasRenderer } from 'echarts/renderers';
+import echarts from '@/utils/echarts';
 import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, shallowRef, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
@@ -63,8 +60,6 @@ import TopPanel from './components/TopPanel.vue';
 defineOptions({
   name: 'DashboardBase',
 });
-
-echarts.use([TooltipComponent, LegendComponent, GridComponent, LineChart, PieChart, CanvasRenderer]);
 
 const router = useRouter();
 const loading = ref(false);
