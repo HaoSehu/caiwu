@@ -1,5 +1,6 @@
 <template>
   <div class="website-layout">
+    <a class="skip-to-content" href="#main-content">跳到主内容</a>
     <header class="site-header" :class="{ scrolled: headerScrolled }">
       <div class="container header-bar">
         <router-link to="/" class="logo" :aria-label="appStore.siteName">
@@ -15,6 +16,7 @@
         <nav
           class="main-nav"
           @mouseleave="scheduleCloseMegaMenu()"
+          aria-label="主导航"
         >
           <router-link
             v-for="item in navigationItems"
@@ -438,7 +440,7 @@
       </div>
     </transition>
 
-  <main class="site-main">
+  <main id="main-content" class="site-main">
       <router-view v-slot="{ Component }">
         <transition name="page-fade" mode="out-in">
           <component :is="Component" />
