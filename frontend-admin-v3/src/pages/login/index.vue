@@ -18,6 +18,7 @@
             placeholder="请输入管理员账号"
             size="large"
             clearable
+            autocomplete="username"
           />
         </t-form-item>
         <t-form-item label="密码" name="password">
@@ -27,12 +28,14 @@
             placeholder="请输入密码"
             size="large"
             clearable
+            autocomplete="current-password"
           />
         </t-form-item>
         <t-form-item class="login-submit-item">
           <t-button block theme="primary" size="large" type="submit" :loading="loading">
             登录
           </t-button>
+          <span class="sr-only" role="alert" aria-live="assertive">{{ errorMessage }}</span>
         </t-form-item>
       </t-form>
       <div class="login-footer">
@@ -54,6 +57,7 @@ const router = useRouter();
 const userStore = useUserStore();
 const formRef = ref<FormInstanceFunctions>();
 const loading = ref(false);
+const errorMessage = ref('');
 const currentYear = computed(() => new Date().getFullYear());
 
 const formData = ref({
@@ -84,7 +88,9 @@ async function handleLogin() {
       router.push('/admin/dashboard');
     }
   } catch (error) {
-    MessagePlugin.error(error instanceof Error ? error.message : '登录失败，请检查账号密码');
+    const msg = error instanceof Error ? error.message : '登录失败，请检查账号密码';
+    errorMessage.value = msg;
+    MessagePlugin.error(msg);
   } finally {
     loading.value = false;
   }
