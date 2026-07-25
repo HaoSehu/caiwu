@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 
 import { clientAuthApi } from '@/api/auth';
 import { copyText as copyShared } from '@/utils/format';
+import { getErrorMessage } from '@/utils/error';
 import { useGeeTestCaptcha } from '@/composables/useGeeTestCaptcha';
 import { useUserStore } from '@/store';
 import type { ClientNotificationPreferences, ClientUserInfo } from '@/types/client';
@@ -19,10 +20,6 @@ type NotificationItem = {
 };
 
 const PROFILE_TABS = new Set<ProfileTab>(['profile', 'security', 'agent', 'notification']);
-
-function getErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error && error.message ? error.message : fallback;
-}
 
 export function useProfile() {
   const router = useRouter();
@@ -297,9 +294,18 @@ export function useProfile() {
   }
 
   async function updateProfile() {
+    const trimmed = (profileForm.nickname || '').trim();
+    if (!trimmed) {
+      MessagePlugin.warning('用户名不能为空');
+      return;
+    }
+    if (trimmed.length > 50) {
+      MessagePlugin.warning('用户名最多 50 个字符');
+      return;
+    }
     profileLoading.value = true;
     try {
-      await clientAuthApi.updateProfile({ nickname: profileForm.nickname });
+      await clientAuthApi.updateProfile({ nickname: trimmed });
       await loadProfile();
       MessagePlugin.success('用户名修改成功');
     } catch (error: unknown) {

@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
 import { copyText, formatMoney } from '@/utils/format';
+import { getErrorMessage } from '@/utils/error';
 import { useUserStore } from '@/store';
 import type { RechargeGatewayOption, RechargeOrderPayload, RechargeStatusPayload, ServiceInstance } from '@/types/client';
 
@@ -11,14 +12,6 @@ const ACTIVE_SERVICE_STATUS = 1;
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const RECHARGE_PRESET_AMOUNTS = [20, 50, 100, 200, 500];
-
-function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) return error.message;
-  if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') {
-    return error.message;
-  }
-  return fallback;
-}
 
 export { formatMoney };
 

@@ -1,18 +1,11 @@
 import { ref } from 'vue';
 
 import clientApi from '@/api/client';
+import { getErrorMessage } from '@/utils/error';
 
 const unreadCount = ref(0);
 let lastFetchTime = 0;
 const CACHE_TTL = 30_000;
-
-function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) return error.message;
-  if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') {
-    return error.message;
-  }
-  return fallback;
-}
 
 export function useNoticeReadStatus() {
   async function fetchUnreadCount(force = false) {

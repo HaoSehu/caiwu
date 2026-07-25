@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
 import { SERVICE_STATUS_MAP, getStatusLabel } from '@shared/statusConfig';
+import { getErrorMessage } from '@/utils/error';
 import type { TicketAttachment, TicketImageUploadPayload, TicketRecord, TicketReplyRecord, TicketServiceOption } from '@/types/client';
 
 type ServiceOption = TicketServiceOption;
@@ -32,10 +33,6 @@ export const TICKET_PRIORITY_OPTIONS = [
 const MAX_IMAGES = 9;
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_SIZE = 5 * 1024 * 1024;
-
-function getErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error && error.message ? error.message : fallback;
-}
 
 function normalizeList(data: unknown): TicketRecord[] {
   if (data && typeof data === 'object' && Array.isArray((data as { list?: unknown[] }).list)) {

@@ -10,6 +10,7 @@ import {
 
 import clientApi from '@/api/client';
 import { formatMoney } from '@/utils/format';
+import { getErrorMessage } from '@/utils/error';
 import type { ClientFinanceListParams, PaymentRecord } from '@/types/client';
 
 import { resolveQuickDateRange } from './dateFilters';
@@ -70,10 +71,6 @@ export function formatBillingCycle(value: unknown) {
 
 export function toRecord(value: unknown): AnyRecord {
   return value && typeof value === 'object' ? (value as AnyRecord) : {};
-}
-
-function getErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error && error.message ? error.message : fallback;
 }
 
 const SNAPSHOT_LABEL_MAP: Record<string, string> = {

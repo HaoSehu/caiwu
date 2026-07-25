@@ -18,7 +18,6 @@
             :src="vncUrl"
             title="VNC 控制台"
             allow="clipboard-read; clipboard-write; fullscreen"
-            allowfullscreen
             referrerpolicy="no-referrer"
           />
           <div v-else class="vnc-empty">等待连接</div>

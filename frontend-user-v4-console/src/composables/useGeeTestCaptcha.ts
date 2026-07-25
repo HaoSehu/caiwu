@@ -1,6 +1,7 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 
 import { clientAuthApi } from '@/api/auth';
+import { resolveApiProxyUrl } from '@/utils/apiOrigin';
 
 interface GeeTestConfig {
   enabled: boolean;
@@ -218,8 +219,12 @@ export function useGeeTestCaptcha(options: Record<string, unknown> = {}) {
       return initPromise;
     }
 
-    const initGeetest4 = await loadGeeTestScript(
+    const scriptUrl = resolveApiProxyUrl(
       config.script_url || defaultConfig.script_url || '',
+      import.meta.env.VITE_API_BASE_URL,
+    );
+    const initGeetest4 = await loadGeeTestScript(
+      scriptUrl,
       config.captcha_id,
     );
     initPromise = new Promise((resolve, reject) => {
