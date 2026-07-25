@@ -467,7 +467,7 @@ class BaiduFaceClient
         }
 
         $message = strtolower((string) ($result['error_msg'] ?? $result['message'] ?? $result['msg'] ?? ''));
-        foreach (['未查询', '未完成', '处理中', '进行中', '等待', 'openapi', 'no result', 'not found'] as $keyword) {
+        foreach (['未查询', '未完成', '处理中', '进行中', '等待', 'no result', 'not found'] as $keyword) {
             if (str_contains($message, strtolower($keyword))) {
                 return true;
             }
@@ -485,7 +485,12 @@ class BaiduFaceClient
             return true;
         }
 
-        $code = $result['error_code'] ?? $result['code'] ?? 0;
+        $code = $result['error_code'] ?? $result['code'] ?? null;
+        if ($code === null && ($result === [] || ! isset($result['error_code'], $result['code']))) {
+            return false;
+        }
+
+        $code = $code ?? 0;
         $message = strtoupper(trim((string) ($result['error_msg'] ?? $result['message'] ?? '')));
 
         return ((string) $code === '0' || $code === 0) && ! in_array($message, ['FAILED', 'FAIL'], true);
@@ -501,7 +506,7 @@ class BaiduFaceClient
             return $fallback;
         }
 
-        if (preg_match('/[a-z]{3,}|error|failed|exception|timeout|curl|http|openapi/i', $text) === 1) {
+        if (preg_match('/\b(?:error|exception|timeout|timed?\s*out|connection\s*(refused|reset|failed|timeout)|curl|unreachable|unauthorized|forbidden|internal\s*server\s*error|bad\s*gateway|service\s*unavailable)\b/i', $text) === 1) {
             return $fallback;
         }
 

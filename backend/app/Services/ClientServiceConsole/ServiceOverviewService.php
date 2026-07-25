@@ -251,6 +251,7 @@ class ServiceOverviewService
 
         $catalogTypes = $typeItems->map(function (array $item) use ($services, $knownTypeValues, $primaryTypeValueMap) {
             $typeValue = trim((string) ($item['product_type'] ?? $item['value'] ?? ''));
+            $databaseTypeValue = trim((string) ($item['value'] ?? $typeValue));
             $count = $services->filter(function (Service $service) use ($typeValue, $knownTypeValues, $primaryTypeValueMap) {
                 $resolvedType = $this->resolverService->resolveGroupedOverviewTypeValue($service);
 
@@ -263,7 +264,7 @@ class ServiceOverviewService
 
             return [
                 'label' => (string) ($item['label'] ?? $typeValue ?: '其他'),
-                'value' => $typeValue,
+                'value' => $databaseTypeValue,
                 'icon' => (string) ($item['icon'] ?? ProductType::iconOf($typeValue)),
                 'count' => $count,
             ];
@@ -308,6 +309,7 @@ class ServiceOverviewService
         /** @var Service|null $firstService */
         $firstService = $groupServices->first();
         $typeValue = trim((string) ($typeItem['product_type'] ?? $typeItem['value'] ?? ''));
+        $databaseTypeValue = trim((string) ($typeItem['value'] ?? $typeValue));
         $typeLabel = trim((string) ($typeItem['label'] ?? '')) ?: '其他服务';
         $children = $groupServices
             ->groupBy(fn (Service $service) => $this->resolveGroupedOverviewGroupKey($this->resolveServiceLeafGroup($service)))
@@ -340,7 +342,7 @@ class ServiceOverviewService
         $consoleMode = $firstService ? $this->resolverService->resolveConsoleMode($firstService) : 'default';
 
         return [
-            'key' => $typeValue !== '' ? $typeValue : 'other_services',
+            'key' => $databaseTypeValue !== '' ? $databaseTypeValue : 'other_services',
             'id' => null,
             'product_type' => $typeValue,
             'product_type_label' => $typeLabel,

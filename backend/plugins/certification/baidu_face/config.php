@@ -70,5 +70,15 @@ return [
             'step' => 1,
             'description' => '使用 H5 人脸实名认证方案时必填，用于获取 verify_token。',
         ],
+        'score_threshold' => [
+            'title' => '活体检测阈值',
+            'type' => 'number',
+            'value' => 80,
+            'required' => false,
+            'min' => 0,
+            'max' => 100,
+            'step' => 1,
+            'description' => '直连 V3/V4 接口的活体检测分数阈值（0-100），低于该分数判定为未通过。仅影响 direct_verify 动作。',
+        ],
     ],
 ];

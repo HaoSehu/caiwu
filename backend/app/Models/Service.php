@@ -8,10 +8,26 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Illuminate\Support\Facades\Schema;
 
 class Service extends Model
 {
-    use EnsuresTraceId, NormalizesTraceId;
+    use EnsuresTraceId, NormalizesTraceId, SoftDeletes;
+
+    /**
+     * The live database may predate the services soft-delete migration.
+     * Register the scope only when the column is available.
+     */
+    protected static function bootSoftDeletes(): void
+    {
+        $model = new static;
+
+        if (Schema::hasColumn($model->getTable(), $model->getDeletedAtColumn())) {
+            static::addGlobalScope(new SoftDeletingScope);
+        }
+    }
 
     public const SUPPORTED_RENEW_BILLING_CYCLES = [
         'monthly' => '月付',

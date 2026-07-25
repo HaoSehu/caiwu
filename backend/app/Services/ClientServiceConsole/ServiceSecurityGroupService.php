@@ -23,6 +23,8 @@ class ServiceSecurityGroupService
 {
     private const SECURITY_GROUP_CONTEXT_CACHE_TTL_SECONDS = 600;
 
+    private const SECURITY_GROUP_MODULE_UNAVAILABLE_ERROR_CODE = 42201;
+
     private const SECURITY_GROUP_MODULE_KEYWORDS = ['安全组', '安全', 'securitygroup', 'security_group', 'security-group', 'security', 'secgroup', 'firewall', 'acl'];
 
     public function __construct(
@@ -69,6 +71,26 @@ class ServiceSecurityGroupService
                 'protocols' => $context['protocols'],
                 'groups' => $context['groups'],
                 'can_create' => (bool) ($context['can_create'] ?? true),
+            ];
+        } catch (BusinessException $exception) {
+            Log::warning('[服务控制台] 读取安全组失败', [
+                'service_id' => $service->id,
+                'message' => SensitiveDataSanitizer::sanitizeText($exception->getMessage()),
+            ]);
+
+            $moduleUnavailable = $exception->getErrorCode() === self::SECURITY_GROUP_MODULE_UNAVAILABLE_ERROR_CODE;
+
+            return [
+                'supported' => false,
+                'message' => $moduleUnavailable ? $exception->getMessage() : '',
+                'error' => $moduleUnavailable ? '' : '读取安全组失败，请稍后重试',
+                'module_key' => '',
+                'module_name' => '',
+                'host_type' => '',
+                'directions' => [],
+                'protocols' => [],
+                'groups' => [],
+                'can_create' => false,
             ];
         } catch (\Throwable $exception) {
             Log::warning('[服务控制台] 读取安全组失败', [
@@ -374,17 +396,20 @@ class ServiceSecurityGroupService
             return $context;
         }
 
-        $modules = $this->detailService->fetchSupportedModules($supplier, $hostId, $jwt);
+        $modules = $this->detailService->fetchSupportedModules($supplier, $hostId, $jwt, $fresh);
         $module = collect($modules)->first(fn ($item) => is_array($item) && $this->isSecurityGroupModule($item));
 
-        throw_if(! is_array($module), new BusinessException('当前主机未开放安全组模块', 42200));
+        throw_if(! is_array($module), new BusinessException('当前主机未开放安全组模块', self::SECURITY_GROUP_MODULE_UNAVAILABLE_ERROR_CODE));
 
         $moduleKey = trim((string) ($module['function'] ?? ''));
         $moduleName = trim((string) ($module['name'] ?? '')) ?: '安全组';
         $html = is_callable([$runtime, 'fetchCustomModulePage'])
             ? $runtime->fetchCustomModulePage($supplier, $hostId, $moduleKey, $jwt)
             : $this->natService->fetchCustomModulePage($runtime, $supplier, $hostId, $jwt, $moduleKey);
-        $page = $this->parseSecurityGroupPage($service, $html);
+        $actionEndpoint = is_callable([$runtime, 'getCustomModuleActionEndpoint'])
+            ? $runtime->getCustomModuleActionEndpoint($supplier, $hostId)
+            : null;
+        $page = $this->parseSecurityGroupPage($service, $html, $actionEndpoint);
 
         $context = [
             'mode' => 'custom',
@@ -644,10 +669,13 @@ class ServiceSecurityGroupService
         return preg_replace('/\s+/u', '', mb_strtolower(trim($value), 'UTF-8')) ?? '';
     }
 
-    private function parseSecurityGroupPage(Service $service, string $html): array
+    private function parseSecurityGroupPage(Service $service, string $html, ?string $actionEndpoint = null): array
     {
         $html = html_entity_decode($html, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-        $endpoint = $this->extractSecurityGroupEndpoint($html);
+        $endpoint = trim((string) $actionEndpoint);
+        if ($endpoint === '') {
+            $endpoint = $this->extractSecurityGroupEndpoint($html);
+        }
         $ownedBindings = $this->resolveOwnedSecurityGroupBindingsForService($service);
 
         throw_if($endpoint === '', new BusinessException('已发现安全组模块，但未解析到上游请求地址', 50000));

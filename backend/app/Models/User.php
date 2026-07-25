@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Casts\LegacyEncrypted;
 use App\Services\User\AccountService;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -28,7 +29,7 @@ class User extends Authenticatable
         'login_email_alert', 'login_notify', 'login_location_alert', 'password_change_alert', 'phone_change_alert', 'email_change_alert', 'marketing_alert', 'last_login_ip', 'last_login_at',
     ];
 
-    protected $guarded = [];
+    // $fillable 已显式声明可填充字段，$guarded 无需重复定义
 
     // 从 JSON 序列化中隐藏密码
     protected $hidden = ['password'];
@@ -36,6 +37,7 @@ class User extends Authenticatable
     protected function casts(): array
     {
         return [
+            'id_card' => LegacyEncrypted::class,
             'login_email_alert' => 'boolean',
             'login_notify' => 'boolean',
             'login_location_alert' => 'boolean',

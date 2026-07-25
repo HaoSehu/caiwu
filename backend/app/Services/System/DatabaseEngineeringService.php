@@ -601,6 +601,12 @@ class DatabaseEngineeringService
 
     private function deleteOrphans(string $table, string $column, string $parentTable, string $parentColumn, string $primaryColumn = 'id'): int
     {
+        $this->assertSafeIdentifier($table, 'table');
+        $this->assertSafeIdentifier($column, 'column');
+        $this->assertSafeIdentifier($parentTable, 'parentTable');
+        $this->assertSafeIdentifier($parentColumn, 'parentColumn');
+        $this->assertSafeIdentifier($primaryColumn, 'primaryColumn');
+
         if (! Schema::hasTable($table) || ! Schema::hasTable($parentTable) || ! Schema::hasColumn($table, $column)) {
             return 0;
         }
@@ -620,6 +626,11 @@ class DatabaseEngineeringService
 
     private function clearOrphansToNull(string $table, string $column, string $parentTable, string $parentColumn): int
     {
+        $this->assertSafeIdentifier($table, 'table');
+        $this->assertSafeIdentifier($column, 'column');
+        $this->assertSafeIdentifier($parentTable, 'parentTable');
+        $this->assertSafeIdentifier($parentColumn, 'parentColumn');
+
         if (! Schema::hasTable($table) || ! Schema::hasTable($parentTable) || ! Schema::hasColumn($table, $column)) {
             return 0;
         }
@@ -639,6 +650,9 @@ class DatabaseEngineeringService
 
     private function countEquals(string $table, string $column, int $value): int
     {
+        $this->assertSafeIdentifier($table, 'table');
+        $this->assertSafeIdentifier($column, 'column');
+
         if (! Schema::hasTable($table) || ! Schema::hasColumn($table, $column)) {
             return 0;
         }
@@ -648,6 +662,9 @@ class DatabaseEngineeringService
 
     private function ensureNullableUnsignedBigInt(string $table, string $column): void
     {
+        $this->assertSafeIdentifier($table, 'table');
+        $this->assertSafeIdentifier($column, 'column');
+
         if (! Schema::hasTable($table) || ! Schema::hasColumn($table, $column)) {
             return;
         }
@@ -668,16 +685,53 @@ class DatabaseEngineeringService
         }
 
         $columnType = (string) ($columnInfo->column_type ?? 'bigint unsigned');
+        $this->assertSafeColumnType($columnType);
         DB::statement(sprintf(
-            'ALTER TABLE `%s` MODIFY `%s` %s NULL',
-            $table,
-            $column,
+            'ALTER TABLE %s MODIFY %s %s NULL',
+            $this->quoteIdentifier($table),
+            $this->quoteIdentifier($column),
             $columnType
         ));
     }
 
+    /**
+     * 校验标识符是否安全（字母/数字/下划线，最长 64 字符，符合 MySQL 限制）。
+     */
+    private function assertSafeIdentifier(string $name, string $label = 'identifier'): void
+    {
+        if ($name === '' || strlen($name) > 64 || preg_match('/^[A-Za-z0-9_]+$/', $name) !== 1) {
+            throw new \RuntimeException("非法数据库标识符({$label}): {$name}");
+        }
+    }
+
+    /**
+     * 校验列类型是否安全（仅允许 MySQL 标准类型字符）。
+     */
+    private function assertSafeColumnType(string $type): void
+    {
+        // 允许字母、数字、空格、括号、下划线、逗号
+        if ($type === '' || strlen($type) > 128 || preg_match('/^[A-Za-z0-9\s(),_]+$/', $type) !== 1) {
+            throw new \RuntimeException("非法列类型: {$type}");
+        }
+    }
+
+    /**
+     * 反引号包裹已校验的标识符。
+     */
+    private function quoteIdentifier(string $name): string
+    {
+        $this->assertSafeIdentifier($name);
+
+        return '`'.$name.'`';
+    }
+
     private function countOrphans(string $table, string $column, string $parentTable, string $parentColumn): int
     {
+        $this->assertSafeIdentifier($table, 'table');
+        $this->assertSafeIdentifier($column, 'column');
+        $this->assertSafeIdentifier($parentTable, 'parentTable');
+        $this->assertSafeIdentifier($parentColumn, 'parentColumn');
+
         if (! Schema::hasTable($table) || ! Schema::hasTable($parentTable) || ! Schema::hasColumn($table, $column)) {
             return 0;
         }
@@ -691,6 +745,8 @@ class DatabaseEngineeringService
 
     private function countMissingTraceId(string $table): int
     {
+        $this->assertSafeIdentifier($table, 'table');
+
         if (! Schema::hasTable($table) || ! Schema::hasColumn($table, 'trace_id')) {
             return 0;
         }

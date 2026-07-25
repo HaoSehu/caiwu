@@ -26,15 +26,8 @@ class PluginServiceProvider extends ServiceProvider
         $this->app->singleton(IntegrationPluginService::class);
     }
 
-    public function boot(PluginScanner $scanner, PluginProviderRegistry $providers): void
+    public function boot(PluginProviderRegistry $providers): void
     {
-        foreach ($scanner->scan() as $manifest) {
-            $migrationsPath = $manifest->basePath.DIRECTORY_SEPARATOR.'database'.DIRECTORY_SEPARATOR.'migrations';
-            if (is_dir($migrationsPath)) {
-                $this->loadMigrationsFrom($migrationsPath);
-            }
-        }
-
         $providers->bootEnabledProviders();
     }
 }

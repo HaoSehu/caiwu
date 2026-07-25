@@ -1,8 +1,9 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Client\V2;
 
-use App\Constants\InvoiceStatus;
 use App\Constants\PaymentGatewayCode;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Client\V2\Invoice\PayByAlipayRequest;
@@ -10,360 +11,104 @@ use App\Http\Requests\Client\V2\Invoice\PayByBalanceAndAlipayRequest;
 use App\Http\Requests\Client\V2\Invoice\PayByBalanceRequest;
 use App\Http\Requests\Client\V2\Invoice\QueryAlipayStatusRequest;
 use App\Http\Requests\Client\V2\Invoice\StoreRequest;
-use App\Models\Invoice;
-use App\Models\Payment;
-use App\Models\User;
-use App\Services\Finance\CheckoutSecurityService;
-use App\Services\Finance\CheckoutService;
-use App\Services\Finance\InvoiceService;
-use App\Services\Finance\PaymentService;
-use App\Services\Integrations\Payments\PaymentGatewayManager;
-use App\Support\VersionedJson;
+use App\Services\Finance\ClientInvoicePaymentWorkflowService;
 use Illuminate\Http\Request;
 
 class InvoiceWorkflowController extends Controller
 {
     public function __construct(
-        private InvoiceService $invoiceService,
-        private PaymentService $paymentService,
-        private PaymentGatewayManager $paymentGatewayManager,
-        private CheckoutSecurityService $checkoutSecurityService,
-        private CheckoutService $checkoutService,
+        private readonly ClientInvoicePaymentWorkflowService $workflow,
     ) {}
 
     public function summary(Request $request)
     {
-        $userId = (int) $request->user()->id;
-        $this->checkoutService->cancelExpiredUnpaidInvoicesForUser($userId, $this->buildPaymentWindowExpiredContext($request));
-
-        $row = Invoice::query()
-            ->where('user_id', $userId)
-            ->selectRaw('COUNT(*) AS total')
-            ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS unpaid', [InvoiceStatus::UNPAID])
-            ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS paid', [InvoiceStatus::PAID])
-            ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS overdue', [InvoiceStatus::OVERDUE])
-            ->selectRaw(
-                'COALESCE(SUM(CASE WHEN status IN (?,?) THEN amount - COALESCE(paid_amount,0) ELSE 0 END), 0) AS unpaid_amount',
-                [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE]
-            )
-            ->first();
-
-        return $this->success([
-            'total' => (int) ($row?->total ?? 0),
-            'unpaid' => (int) ($row?->unpaid ?? 0),
-            'paid' => (int) ($row?->paid ?? 0),
-            'overdue' => (int) ($row?->overdue ?? 0),
-            'unpaid_amount' => number_format((float) ($row?->unpaid_amount ?? 0), 2, '.', ''),
-        ]);
+        return $this->success($this->workflow->summary(
+            $request->user(),
+            $this->expiredContext($request),
+        ));
     }
 
     public function store(StoreRequest $request)
     {
-        $data = $request->validated();
-
-        $idempotencyKey = trim((string) $request->header('X-Idempotency-Key', ''));
-        $context = array_merge($this->buildOperationContext($request), [
-            'idempotency_key' => $idempotencyKey,
-        ]);
-
-        $invoice = $this->checkoutService->create($request->user()->id, $data, $context);
-        $invoice->loadMissing([
-            'product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
-            'order.product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
-            'service',
-            'payments',
-        ]);
-
-        return $this->success($this->transformInvoice($invoice, $request->user()), '账单创建成功');
+        return $this->success(
+            $this->workflow->create(
+                $request->user(),
+                $request->validated(),
+                trim((string) $request->header('X-Idempotency-Key', '')),
+                $this->operationContext($request),
+            ),
+            '账单创建成功',
+        );
     }
 
     public function payByBalance(PayByBalanceRequest $request, int $id)
     {
-        $data = $request->validated();
-
-        $user = $request->user();
-        $invoice = Invoice::with([
-            'product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
-            'order.product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
-            'service',
-            'payments',
-        ])
-            ->where('user_id', $user->id)
-            ->findOrFail($id);
-
-        $invoice = $this->checkoutService->cancelExpiredUnpaidInvoice($invoice, $this->buildPaymentWindowExpiredContext($request));
-
-        $this->checkoutSecurityService->assertInvoicePaymentSessionToken(
-            (string) $data['payment_session_token'],
-            $invoice,
-            (int) $user->id
+        return $this->success(
+            $this->workflow->payByBalance(
+                $request->user(),
+                $id,
+                (string) $request->validated('payment_session_token'),
+                $this->operationContext($request),
+                $this->expiredContext($request),
+            ),
+            '支付成功',
         );
-
-        $paidInvoice = $this->paymentService->payByBalance(
-            $invoice,
-            $user,
-            $this->buildOperationContext($request)
-        );
-
-        $invoice->refresh()->load(['product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires', 'service', 'payments']);
-        $user->refresh();
-
-        return $this->success([
-            'gateway' => 'balance',
-            'amount' => number_format((float) $paidInvoice->paid_amount, 2, '.', ''),
-            'paid_at' => $paidInvoice->paid_at?->format('Y-m-d H:i:s'),
-            'cash_balance' => number_format((float) $user->balance, 2, '.', ''),
-            'invoice' => $this->transformInvoice($invoice, $user),
-        ], '支付成功');
     }
 
     public function payByBalanceAndAlipay(PayByBalanceAndAlipayRequest $request, int $id)
     {
-        $data = $request->validated();
-
-        $user = $request->user();
-        $invoice = Invoice::with([
-            'product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
-            'order.product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
-            'service',
-            'payments',
-        ])
-            ->where('user_id', $user->id)
-            ->findOrFail($id);
-
-        $invoice = $this->checkoutService->cancelExpiredUnpaidInvoice($invoice, $this->buildPaymentWindowExpiredContext($request));
-
-        $this->checkoutSecurityService->assertInvoicePaymentSessionToken(
-            (string) $data['payment_session_token'],
-            $invoice,
-            (int) $user->id
+        return $this->success(
+            $this->workflow->payByBalanceAndAlipay(
+                $request->user(),
+                $id,
+                (string) $request->validated('payment_session_token'),
+                (float) $request->validated('balance_amount'),
+                $this->operationContext($request),
+                $this->expiredContext($request),
+                (string) $request->ip(),
+            ),
+            '组合支付二维码生成成功',
         );
-
-        $result = $this->paymentService->payByBalanceAndAlipay(
-            $invoice,
-            $user,
-            (float) $data['balance_amount'],
-            $this->buildOperationContext($request)
-        );
-
-        $invoice->refresh()->load(['product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires', 'service', 'payments']);
-        $payment = Payment::query()
-            ->where('payment_no', (string) ($result['payment_no'] ?? ''))
-            ->where('invoice_id', $invoice->id)
-            ->where('user_id', $user->id)
-            ->whereGatewayKey(PaymentGatewayCode::ALIPAY)
-            ->first();
-
-        if (! $payment) {
-            return $this->error(40400, '支付记录不存在');
-        }
-
-        $pollSecurity = $this->checkoutSecurityService->issueInvoicePaymentPollToken($payment, $invoice, (int) $user->id, $request->ip());
-
-        return $this->success([
-            ...$result,
-            ...$pollSecurity,
-            'invoice' => $this->transformInvoice($invoice, $user),
-        ], '组合支付二维码生成成功');
     }
 
     public function payByAlipay(PayByAlipayRequest $request, int $id)
     {
-        $data = $request->validated();
-
-        $user = $request->user();
-        $invoice = Invoice::with(['product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires', 'payments'])
-            ->where('user_id', $user->id)
-            ->findOrFail($id);
-
-        $invoice = $this->checkoutService->cancelExpiredUnpaidInvoice($invoice, $this->buildPaymentWindowExpiredContext($request));
-
-        $this->checkoutSecurityService->assertInvoicePaymentSessionToken(
-            (string) $data['payment_session_token'],
-            $invoice,
-            (int) $user->id
+        return $this->success(
+            $this->workflow->payByGateway(
+                $request->user(),
+                $id,
+                (string) $request->validated('payment_session_token'),
+                (string) ($request->validated('gateway') ?? PaymentGatewayCode::ALIPAY),
+                (string) ($request->validated('payment_type') ?? ''),
+                $this->operationContext($request),
+                $this->expiredContext($request),
+                (string) $request->ip(),
+            ),
+            '二维码生成成功',
         );
-
-        $gateway = PaymentGatewayCode::normalize((string) ($data['gateway'] ?? '')) ?: PaymentGatewayCode::ALIPAY;
-        $paymentType = trim((string) ($data['payment_type'] ?? ''));
-        $selectedOption = $this->findGatewayOption($gateway, $paymentType);
-        if (! $selectedOption) {
-            return $this->error(42200, '当前没有可用支付方式，请联系管理员开启支付渠道');
-        }
-
-        $gatewayContext = $paymentType !== '' ? ['payment_type' => $paymentType] : [];
-        $result = $this->paymentService->payByGateway(
-            $invoice,
-            $user,
-            $gateway,
-            array_merge($this->buildOperationContext($request), $gatewayContext)
-        );
-
-        $payment = Payment::query()
-            ->where('payment_no', (string) ($result['payment_no'] ?? ''))
-            ->where('invoice_id', $invoice->id)
-            ->where('user_id', $user->id)
-            ->whereGatewayKey($gateway)
-            ->first();
-
-        if (! $payment) {
-            return $this->error(40400, '支付记录不存在');
-        }
-
-        $pollSecurity = $this->checkoutSecurityService->issueInvoicePaymentPollToken($payment, $invoice, (int) $user->id, $request->ip());
-
-        $gatewayPayload = [
-            'gateway' => $gateway,
-            'gateway_key' => $gateway,
-            'gateway_label' => (string) ($selectedOption['name'] ?? PaymentGatewayCode::label($gateway)),
-        ];
-
-        if ($paymentType !== '') {
-            $gatewayPayload['payment_type'] = $paymentType;
-            $gatewayPayload['payment_type_label'] = (string) ($selectedOption['label'] ?? '');
-        }
-
-        return $this->success(array_merge($gatewayPayload, $result, $pollSecurity), '二维码生成成功');
     }
 
     public function queryAlipayStatus(QueryAlipayStatusRequest $request, int $id)
     {
-        $data = $request->validated();
-
-        $user = $request->user();
-        $invoice = Invoice::with([
-            'product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
-            'order.product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires',
-            'service',
-            'payments',
-        ])
-            ->where('user_id', $user->id)
-            ->findOrFail($id);
-
-        $gateway = PaymentGatewayCode::normalize((string) ($data['gateway'] ?? ''));
-        $paymentQuery = Payment::query()
-            ->where('payment_no', (string) $data['payment_no'])
-            ->where('invoice_id', $invoice->id)
-            ->where('user_id', $user->id);
-
-        if ($gateway !== '') {
-            $paymentQuery->whereGatewayKey($gateway);
-        } else {
-            $paymentQuery->whereGatewayKeyIn(PaymentGatewayCode::thirdPartyGateways());
-        }
-
-        $payment = $paymentQuery->first();
-
-        if (! $payment) {
-            return $this->error(40400, '未找到支付记录');
-        }
-
-        $this->checkoutSecurityService->assertInvoicePaymentPollToken(
-            (string) $data['poll_token'],
-            $payment,
-            $invoice,
-            (int) $user->id,
-            $request->ip()
-        );
-
-        $result = $this->paymentService->queryGatewayPaymentStatus($payment);
-        $responseData = $result;
-
-        if (($result['paid'] ?? false) === true) {
-            $invoice->refresh()->load(['product:id,product_type,product_group_id,service_type_code,remark,config_options,purchase_requires', 'service', 'payments']);
-            $responseData['invoice'] = $this->transformInvoice($invoice, $user);
-        }
-
-        return $this->success($responseData);
-    }
-
-    private function transformInvoice(Invoice $invoice, ?User $viewer = null): array
-    {
-        $invoiceDetail = $this->invoiceService->clientDetail($invoice);
-        $payableAmount = (string) ($invoiceDetail['payable_amount'] ?? number_format($this->resolveInvoicePayableAmount($invoice), 2, '.', ''));
-        $paymentSecurity = $this->checkoutSecurityService->issueInvoicePaymentSession($invoice, (int) $invoice->user_id);
-        $paymentSessionToken = (string) ($paymentSecurity['session_token'] ?? '');
-        $canCancel = in_array((int) $invoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE], true);
-        $canPay = $canCancel && $paymentSessionToken !== '';
-
-        $payMethods = $this->availableInvoicePayMethods((float) $payableAmount);
-
-        $configSnapshot = VersionedJson::withoutMeta(is_array($invoice->config_snapshot) ? $invoice->config_snapshot : []) ?? [];
-        $configPricingSnapshot = is_array($invoice->config_pricing_snapshot) && $invoice->config_pricing_snapshot !== []
-            ? (VersionedJson::withoutMeta($invoice->config_pricing_snapshot) ?? [])
-            : [];
-        $couponSnapshot = VersionedJson::withoutMeta(is_array($invoice->coupon_snapshot) ? $invoice->coupon_snapshot : []) ?? [];
-
-        return [
-            ...$invoiceDetail,
-            'service_id' => (int) ($invoiceDetail['service']['id'] ?? $invoice->service_id ?? 0),
-            'pay_methods' => $payMethods,
-            'can_cancel' => (bool) $canCancel,
-            'payable_amount' => $payableAmount,
-            'product' => array_merge(is_array($invoiceDetail['product'] ?? null) ? $invoiceDetail['product'] : [], [
-                'config_options' => (array) ($invoice->product?->config_options ?? $invoice->order?->product?->config_options ?? []),
-            ]),
-            'config_snapshot' => $configSnapshot,
-            'config_pricing_snapshot' => $configPricingSnapshot,
-            'coupon' => (int) ($invoice->coupon_id ?? 0) > 0 ? [
-                'id' => (int) $invoice->coupon_id,
-                'name' => (string) ($couponSnapshot['name'] ?? ''),
-                'description' => (string) ($couponSnapshot['description'] ?? ''),
-                'discount_label' => (string) ($couponSnapshot['discount_label'] ?? ''),
-                'discount_amount' => number_format((float) ($invoice->discount ?? 0), 2, '.', ''),
-            ] : null,
-            'payment_security' => [
-                'can_pay' => (bool) $canPay,
-                'session_token' => $paymentSessionToken,
-                'expires_at' => $paymentSecurity['expires_at'] ?? null,
-            ],
-        ];
-    }
-
-    private function resolveInvoicePayableAmount(Invoice $invoice): float
-    {
-        return round(max((float) ($invoice->amount ?? 0) - (float) ($invoice->paid_amount ?? 0), 0), 2);
-    }
-
-    private function availableInvoicePayMethods(float $payableAmount): array
-    {
-        if ($payableAmount <= 0) {
-            return [['key' => 'free', 'name' => '确认支付', 'label' => '零元账单', 'option_key' => 'free']];
-        }
-
-        return [
-            ['key' => 'balance', 'name' => '余额支付', 'label' => '账户余额', 'option_key' => 'balance'],
-            ...$this->paymentGatewayManager->availableThirdPartyGatewayOptions(),
-        ];
+        return $this->success($this->workflow->queryGatewayStatus(
+            $request->user(),
+            $id,
+            (string) $request->validated('payment_no'),
+            (string) ($request->validated('gateway') ?? ''),
+            (string) $request->validated('poll_token'),
+            (string) $request->ip(),
+        ));
     }
 
     /**
-     * @return array<string, mixed>|null
+     * @return array<string, mixed>
      */
-    private function findGatewayOption(string $gateway, string $paymentType): ?array
-    {
-        foreach ($this->paymentGatewayManager->availableThirdPartyGatewayOptions() as $option) {
-            if ((string) ($option['key'] ?? '') !== $gateway) {
-                continue;
-            }
-
-            $optionPaymentType = trim((string) ($option['payment_type'] ?? ''));
-            if ($paymentType !== '' && $paymentType !== $optionPaymentType) {
-                continue;
-            }
-
-            return $option;
-        }
-
-        return null;
-    }
-
-    private function buildOperationContext(Request $request, string $actorType = 'client'): array
+    private function operationContext(Request $request): array
     {
         $user = $request->user();
 
         return [
-            'actor_type' => $actorType,
+            'actor_type' => 'client',
             'actor_user_id' => (int) ($user?->id ?? 0),
             'actor_name' => (string) ($user?->display_name ?? $user?->nickname ?? $user?->email ?? ''),
             'ip_address' => (string) $request->ip(),
@@ -371,9 +116,13 @@ class InvoiceWorkflowController extends Controller
         ];
     }
 
-    private function buildPaymentWindowExpiredContext(Request $request): array
+    /**
+     * @return array<string, mixed>
+     */
+    private function expiredContext(Request $request): array
     {
-        return array_merge($this->buildOperationContext($request, 'system'), [
+        return array_merge($this->operationContext($request), [
+            'actor_type' => 'system',
             'actor_user_id' => 0,
             'actor_name' => 'payment-window-expired',
             'reason' => 'payment_window_expired',

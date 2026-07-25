@@ -226,9 +226,7 @@ class ReencryptIdCardsCommand extends Command
      * 单条记录独立事务：单条失败不影响其他。
      *
      * 直接用 LegacyEncrypted::set 手动加密后走 DB::table 直写。
-     * 原因：User 模型没有把 id_card 注册到 casts() 数组（只有读 accessor），
-     * 依赖 forceFill + save 的自动 cast 在 User 表上不会生效。
-     * 两个表统一走直写路径，避免依赖各模型的 cast 配置差异。
+     * 批处理读取和写入均使用原始列值，绕过模型事件，并保持两个表的处理一致。
      */
     private function reencryptRecord(Model $record, string $column, string $plaintext): void
     {
