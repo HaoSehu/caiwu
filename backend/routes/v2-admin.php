@@ -164,6 +164,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::get('/coupon-product-groups', [CouponProductGroupController::class, 'index']);
         Route::get('/coupon-product-groups/{group}/children', [CouponProductGroupController::class, 'children']);
         Route::get('/coupon-product-groups/{group}/products', [CouponProductGroupController::class, 'products']);
+        Route::post('/coupon-product-groups/batch-products', [CouponProductGroupController::class, 'batchProducts']);
         Route::get('/coupons/summary', [CouponController::class, 'summary']);
         Route::get('/coupons', [CouponController::class, 'index']);
         Route::get('/coupon-campaigns/summary', [CouponCampaignController::class, 'summary']);

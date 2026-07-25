@@ -58,4 +58,17 @@ class CouponProductGroupController extends Controller
             CouponProductResource::class
         );
     }
+
+    public function batchProducts(): JsonResponse
+    {
+        $groups = request()->input('groups', []);
+
+        if (!is_array($groups) || empty($groups)) {
+            return response()->json(['code' => 0, 'data' => []]);
+        }
+
+        $result = $this->queryService->batchProducts($groups);
+
+        return response()->json(['code' => 0, 'data' => $result]);
+    }
 }
