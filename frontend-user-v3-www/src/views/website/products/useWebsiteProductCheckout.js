@@ -565,9 +565,12 @@ export function useWebsiteProductCheckout({
     }
   }
 
-  watch(selectedCycle, fetchQuote)
-  watch(configForm, fetchQuote, { deep: true })
-  watch(quantity, fetchQuote)
+  // 用序列化键替代 deep watch，避免每次 configForm 深层遍历
+  const quoteTrigger = computed(() => {
+    const payload = buildConfigPayload()
+    return `${selectedCycle.value}|${quantity.value}|${JSON.stringify(payload)}`
+  })
+  watch(quoteTrigger, () => fetchQuote(), { flush: 'post' })
   onBeforeUnmount(() => {
     clearTimeout(quoteTimer)
     detailAbortController?.abort()

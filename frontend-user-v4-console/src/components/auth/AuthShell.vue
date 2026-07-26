@@ -20,7 +20,7 @@
 
     <div class="auth-shell__stage">
       <header class="auth-shell__header">
-        <router-link class="auth-brand" to="/client/login">
+        <a class="auth-brand" :href="authBrandHref">
           <img
             v-if="showLogo"
             :src="authLogoSrc"
@@ -34,7 +34,7 @@
           </template>
           <span class="auth-brand__divider" />
           <span class="auth-brand__context">用户控制台</span>
-        </router-link>
+        </a>
         <span class="auth-shell__header-spacer" />
         <button class="auth-shell__back" type="button" @click="handleBack">
           <chevron-left-icon />
@@ -110,6 +110,8 @@ const showLogo = computed(() => Boolean(authLogoSrc.value) && !logoLoadFailed.va
 function handleLogoError() {
   logoLoadFailed.value = true;
 }
+
+const authBrandHref = computed(() => siteBranding.frontendUrl || '/client/login');
 
 function handleBack() {
   if (window.history.length > 1) {

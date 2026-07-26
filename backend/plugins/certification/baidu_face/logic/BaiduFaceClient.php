@@ -350,28 +350,9 @@ class BaiduFaceClient
 
     private function http(): PendingRequest
     {
-        $request = Http::timeout(30)
+        return Http::timeout(30)
             ->connectTimeout(10)
-            ->withOptions($this->httpOptions());
-
-        return $request;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function httpOptions(): array
-    {
-        $sslVerify = $this->resolveSslVerify();
-        $caBundle = $this->resolveCaBundle();
-
-        if (! $sslVerify) {
-            return ['verify' => false];
-        }
-
-        return $caBundle !== '' && is_file($caBundle)
-            ? ['verify' => $caBundle]
-            : ['verify' => true];
+            ->withOptions(['verify' => true]);
     }
 
     private function buildH5Url(string $verifyToken): string
@@ -472,10 +453,9 @@ class BaiduFaceClient
             return false;
         }
 
-        $verifyStatus = (int) ($result['result']['verify_status'] ?? 0);
-        $score = (float) ($result['result']['score'] ?? 0);
+        $verifyStatus = $result['result']['verify_status'] ?? null;
 
-        return $verifyStatus === 0 && $score >= $this->scoreThreshold();
+        return $verifyStatus !== null && (int) $verifyStatus === 0;
     }
 
     /**
@@ -574,13 +554,6 @@ class BaiduFaceClient
         return $version === 'v3' ? 'v3' : 'v4';
     }
 
-    private function scoreThreshold(): float
-    {
-        $threshold = (float) ($this->config['score_threshold'] ?? 80);
-
-        return max(0.0, min(100.0, $threshold));
-    }
-
     private function endpoint(string $key, string $default): string
     {
         $endpoint = trim((string) ($this->config[$key] ?? ''));
@@ -608,23 +581,4 @@ class BaiduFaceClient
         return $value;
     }
 
-    private function resolveSslVerify(): bool
-    {
-        $value = $this->config['ssl_verify'] ?? null;
-        if ($value !== null && $value !== '') {
-            return filter_var($value, FILTER_VALIDATE_BOOL);
-        }
-
-        return filter_var(config('idc.verification.ssl_verify', true), FILTER_VALIDATE_BOOL);
-    }
-
-    private function resolveCaBundle(): string
-    {
-        $value = $this->config['ca_bundle'] ?? null;
-        if ($value !== null && $value !== '') {
-            return trim((string) $value);
-        }
-
-        return trim((string) config('idc.verification.ca_bundle', ''));
-    }
 }
