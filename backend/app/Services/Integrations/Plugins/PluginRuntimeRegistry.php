@@ -25,6 +25,9 @@ use Illuminate\Support\Str;
 
 class PluginRuntimeRegistry
 {
+    /** 支付回调验签动作：未认证入口，验签失败不落 runtime log */
+    private const VERIFY_NOTIFY_ACTION = 'payment.verify_notify';
+
     public function __construct(
         private readonly Container $container,
         private readonly PluginScanner $scanner,
@@ -152,6 +155,10 @@ class PluginRuntimeRegistry
             return;
         }
 
+        if ($this->shouldSkipRuntimeLog($action, $response)) {
+            return;
+        }
+
         try {
             IntegrationPluginRuntimeLog::query()->create([
                 'trace_id' => $traceId !== '' ? $traceId : null,
@@ -184,6 +191,25 @@ class PluginRuntimeRegistry
                 'message' => $logException->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * 支付回调验签是未认证入口，任何人都能高频触发。验签未通过时不落 runtime log，
+     * 避免被利用做磁盘/表膨胀；验签通过（真实回调）仍然完整落库，保留支付审计链路。
+     * 验签失败本身已由 VerifyPaymentCallbackSignature / VerifyAlipayCallbackSignature
+     * 中间件以脱敏方式写入应用日志，审计不丢失。
+     *
+     * @param  array<string, mixed>|null  $response
+     */
+    private function shouldSkipRuntimeLog(string $action, ?array $response): bool
+    {
+        if ($action !== self::VERIFY_NOTIFY_ACTION) {
+            return false;
+        }
+
+        $data = is_array($response['data'] ?? null) ? $response['data'] : [];
+
+        return ! (bool) ($data['verified'] ?? false);
     }
 
     /**
