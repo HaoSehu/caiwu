@@ -117,7 +117,9 @@ class BaiduFaceClient
             return ['status' => 1, 'message' => '审核通过', 'raw' => $result];
         }
 
-        if ($this->isPendingResult($result)) {
+        // 接口调用成功但拿不到任何结论字段时按"处理中"处理，避免把尚未完成的认证误判为失败。
+        if ($this->isPendingResult($result)
+            || ($this->isBaiduSuccess($result) && ! $this->hasVerificationConclusion($result))) {
             return ['status' => 4, 'message' => '认证处理中，请稍后再试', 'raw' => $result];
         }
 
@@ -419,26 +421,46 @@ class BaiduFaceClient
     }
 
     /**
+     * 顶层 success / error_code 只代表接口调用成功，认证结论必须取自 result 内部字段。
+     *
      * @param  array<string, mixed>  $result
      */
     private function isVerificationPassed(array $result): bool
     {
-        if (($result['success'] ?? null) === true) {
-            return true;
-        }
-
         if (! $this->isBaiduSuccess($result)) {
             return false;
         }
 
-        $status = strtolower($this->stringFromPaths($result, [
+        $status = strtolower($this->textVerificationStatus($result));
+        if ($status !== '') {
+            return in_array($status, ['success', 'passed', 'pass', '1', 'true'], true);
+        }
+
+        // 没有文本状态时才看 verify_status：数值语义，0 表示核身通过，与直连接口一致。
+        return $this->stringFromPaths($result, [['result', 'verify_status']]) === '0';
+    }
+
+    /**
+     * result 内是否存在任何可识别的认证结论字段。
+     *
+     * @param  array<string, mixed>  $result
+     */
+    private function hasVerificationConclusion(array $result): bool
+    {
+        return $this->textVerificationStatus($result) !== ''
+            || $this->stringFromPaths($result, [['result', 'verify_status']]) !== '';
+    }
+
+    /**
+     * @param  array<string, mixed>  $result
+     */
+    private function textVerificationStatus(array $result): string
+    {
+        return $this->stringFromPaths($result, [
             ['result', 'status'],
-            ['result', 'verify_status'],
             ['result', 'auth_status'],
             ['status'],
-        ]));
-
-        return in_array($status, ['success', 'passed', 'pass', '1', 'true'], true);
+        ]);
     }
 
     /**
@@ -486,14 +508,13 @@ class BaiduFaceClient
         }
 
         $code = $result['error_code'] ?? $result['code'] ?? null;
-        if ($code === null && ($result === [] || ! isset($result['error_code'], $result['code']))) {
+        if ($code === null) {
             return false;
         }
 
-        $code = $code ?? 0;
         $message = strtoupper(trim((string) ($result['error_msg'] ?? $result['message'] ?? '')));
 
-        return ((string) $code === '0' || $code === 0) && ! in_array($message, ['FAILED', 'FAIL'], true);
+        return (string) $code === '0' && ! in_array($message, ['FAILED', 'FAIL'], true);
     }
 
     /**

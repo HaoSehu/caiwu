@@ -13,7 +13,7 @@ return [
         'name' => '百度智能云人脸实名认证',
         'version' => '1.0.0',
         'entry' => BaiduFacePlugin::class,
-        'capabilities' => ['personal', 'scan_url', 'query_status', 'direct_verify', 'fee_config'],
+        'capabilities' => ['personal', 'scan_url', 'query_status', 'direct_verify', 'verify_callback', 'fee_config'],
         'extra' => [
             'driver_binding' => [
                 'binding_key' => 'verification_driver',
@@ -79,6 +79,44 @@ return [
             'max' => 100,
             'step' => 1,
             'description' => '直连 V3/V4 接口的活体检测分数阈值（0-100），低于该分数判定为未通过。仅影响 direct_verify 动作。',
+        ],
+        'ssl_verify' => [
+            'title' => 'SSL 证书校验',
+            'type' => 'switch',
+            'value' => true,
+            'description' => '开启后校验百度智能云 HTTPS 证书；证书链异常时请配置 CA 证书路径。',
+        ],
+        'ca_bundle' => [
+            'title' => 'CA 证书路径',
+            'type' => 'text',
+            'value' => '',
+            'required' => false,
+            'placeholder' => '例如 /etc/ssl/certs/cacert.pem',
+            'description' => '可选，填写服务器本地 CA bundle 文件路径。',
+        ],
+        'billing_divider' => ['title' => '计费设置', 'type' => 'divider'],
+        'charge_enabled' => [
+            'title' => '插件收费',
+            'type' => 'switch',
+            'value' => false,
+            'description' => '开启后，用户发起实名认证时按配置金额扣费。',
+        ],
+        'amount' => [
+            'title' => '收费金额',
+            'type' => 'number',
+            'value' => 0,
+            'min' => 0,
+            'step' => 0.01,
+            'description' => '单位：元。关闭收费时该字段不生效。',
+            'visible_when' => ['field' => 'charge_enabled', 'operator' => 'eq', 'value' => true],
+        ],
+        'free_times' => [
+            'title' => '免费次数',
+            'type' => 'number',
+            'value' => 0,
+            'min' => 0,
+            'step' => 1,
+            'description' => '每个用户可免费发起认证的次数。',
         ],
     ],
 ];

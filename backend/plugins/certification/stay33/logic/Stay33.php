@@ -6,8 +6,6 @@ namespace Caiwu\Plugins\Certification\Stay33\Logic;
 
 class Stay33
 {
-    private ?Stay33Client $client = null;
-
     public function key(): string
     {
         return 'stay33';
@@ -50,13 +48,14 @@ class Stay33
         };
     }
 
+    /**
+     * 每次按传入配置新建：插件实例可能被复用，缓存住的客户端会在管理员轮换凭据后继续用旧配置。
+     *
+     * @param  array<string, mixed>  $config
+     */
     private function client(array $config): Stay33Client
     {
-        if ($this->client === null) {
-            $this->client = new Stay33Client($config);
-        }
-
-        return $this->client;
+        return new Stay33Client($config);
     }
 
     private function success(string $action, array $data): array
