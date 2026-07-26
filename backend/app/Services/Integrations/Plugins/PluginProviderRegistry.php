@@ -31,9 +31,18 @@ class PluginProviderRegistry
                 return;
             }
 
+            // 只有声明了 provider 的插件需要在框架 boot 阶段读清单并注册。
+            // 不加这个过滤，每个请求都会为每个启用插件做一次 realpath + require config.php，
+            // 而绝大多数插件根本没有 provider。
             $plugins = IntegrationPlugin::query()
                 ->where('status', IntegrationPlugin::STATUS_ENABLED)
+                ->whereNotNull('provider_class')
+                ->where('provider_class', '<>', '')
                 ->get(['domain', 'slug']);
+
+            if ($plugins->isEmpty()) {
+                return;
+            }
         } catch (\Throwable $exception) {
             Log::warning('[plugins] enabled provider scan skipped', [
                 'message' => $exception->getMessage(),

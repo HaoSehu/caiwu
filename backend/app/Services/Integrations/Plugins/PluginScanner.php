@@ -11,6 +11,17 @@ class PluginScanner
 {
     private string $pluginsBasePath;
 
+    /**
+     * 清单缓存，键为 `domain:slug`。find() 会被运行时、绑定解析、列表接口和框架 boot
+     * 反复调用，没有这层缓存时每次都要 realpath + require config.php。
+     *
+     * 只缓存解析成功的清单，并附带来源文件的 mtime：队列 worker 是长驻进程，
+     * 容器单例跨任务存活，靠 mtime 校验才能在插件文件更新后自动失效。
+     *
+     * @var array<string, array{manifest: PluginManifest, path: string, mtime: int}>
+     */
+    private array $manifestCache = [];
+
     public function __construct(
         private readonly Filesystem $files,
     ) {
@@ -37,6 +48,7 @@ class PluginScanner
             foreach ($this->files->directories($domainDirectory) as $pluginDirectory) {
                 $manifest = $this->readManifest($currentDomain, $pluginDirectory);
                 if ($manifest instanceof PluginManifest) {
+                    $this->rememberManifest($manifest);
                     $manifests[] = $manifest;
                 }
             }
@@ -57,9 +69,63 @@ class PluginScanner
             return null;
         }
 
-        $directory = $this->domainDirectory($resolvedDomain).DIRECTORY_SEPARATOR.$resolvedSlug;
+        $cached = $this->cachedManifest($resolvedDomain.':'.$resolvedSlug);
+        if ($cached instanceof PluginManifest) {
+            return $cached;
+        }
 
-        return $this->readManifest($resolvedDomain, $directory, false);
+        $directory = $this->domainDirectory($resolvedDomain).DIRECTORY_SEPARATOR.$resolvedSlug;
+        $manifest = $this->readManifest($resolvedDomain, $directory, false);
+        $this->rememberManifest($manifest);
+
+        return $manifest;
+    }
+
+    private function cachedManifest(string $cacheKey): ?PluginManifest
+    {
+        $entry = $this->manifestCache[$cacheKey] ?? null;
+        if ($entry === null) {
+            return null;
+        }
+
+        clearstatcache(true, $entry['path']);
+        if (@filemtime($entry['path']) !== $entry['mtime']) {
+            unset($this->manifestCache[$cacheKey]);
+
+            return null;
+        }
+
+        return $entry['manifest'];
+    }
+
+    private function rememberManifest(?PluginManifest $manifest): void
+    {
+        if (! $manifest instanceof PluginManifest) {
+            return;
+        }
+
+        $path = $this->manifestSourcePath($manifest);
+        $mtime = $path === null ? false : @filemtime($path);
+        if ($path === null || $mtime === false) {
+            return;
+        }
+
+        $this->manifestCache[$manifest->domain.':'.$manifest->slug] = [
+            'manifest' => $manifest,
+            'path' => $path,
+            'mtime' => $mtime,
+        ];
+    }
+
+    private function manifestSourcePath(PluginManifest $manifest): ?string
+    {
+        foreach ([$manifest->configPath(), $manifest->basePath.DIRECTORY_SEPARATOR.'plugin.json'] as $path) {
+            if (is_file($path)) {
+                return $path;
+            }
+        }
+
+        return null;
     }
 
     public function requireManifest(string $domain, string $slug): PluginManifest

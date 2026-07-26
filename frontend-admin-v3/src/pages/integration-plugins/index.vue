@@ -23,7 +23,10 @@
           <div class="plugin-card__body">
             <div class="plugin-card__title">
               <strong>{{ plugin.name }}</strong>
-              <t-tag :theme="plugin.is_enabled ? 'success' : plugin.is_installed ? 'warning' : 'default'" variant="light">
+              <t-tag
+                :theme="plugin.is_enabled ? 'success' : plugin.is_installed ? 'warning' : 'default'"
+                variant="light"
+              >
                 {{ pluginStatusText(plugin) }}
               </t-tag>
             </div>
@@ -41,7 +44,12 @@
         </div>
 
         <div class="plugin-actions">
-          <t-button v-if="!plugin.is_installed && canManagePlugins" theme="primary" :loading="actionLoading === actionKey(plugin, 'install')" @click="installPlugin(plugin)">
+          <t-button
+            v-if="!plugin.is_installed && canManagePlugins"
+            theme="primary"
+            :loading="actionLoading === actionKey(plugin, 'install')"
+            @click="installPlugin(plugin)"
+          >
             安装
           </t-button>
           <template v-else>
@@ -66,13 +74,24 @@
             >
               启用
             </t-button>
-            <t-button v-if="canTestPlugins" variant="text" :loading="actionLoading === actionKey(plugin, 'health')" @click="healthCheck(plugin)">
+            <t-button
+              v-if="canTestPlugins"
+              variant="text"
+              :loading="actionLoading === actionKey(plugin, 'health')"
+              @click="healthCheck(plugin)"
+            >
               检测
             </t-button>
             <t-button v-if="plugin.id && plugin.is_enabled" variant="text" @click="openRuntimeLogs(plugin)">
               日志
             </t-button>
-            <t-button v-if="canManagePlugins && !plugin.is_enabled" theme="danger" variant="text" :loading="actionLoading === actionKey(plugin, 'delete')" @click="deletePlugin(plugin)">
+            <t-button
+              v-if="canManagePlugins && !plugin.is_enabled"
+              theme="danger"
+              variant="text"
+              :loading="actionLoading === actionKey(plugin, 'delete')"
+              @click="deletePlugin(plugin)"
+            >
               删除
             </t-button>
           </template>
@@ -91,10 +110,22 @@
       <template v-if="currentPlugin">
         <div class="plugin-detail">
           <dl>
-            <div><dt>插件目录</dt><dd>{{ currentPlugin.slug }}</dd></div>
-            <div><dt>业务标识</dt><dd>{{ currentPlugin.key }}</dd></div>
-            <div><dt>入口类</dt><dd>{{ currentPlugin.entry_class || '-' }}</dd></div>
-            <div><dt>安装时间</dt><dd>{{ currentPlugin.installed_at || '-' }}</dd></div>
+            <div>
+              <dt>插件目录</dt>
+              <dd>{{ currentPlugin.slug }}</dd>
+            </div>
+            <div>
+              <dt>业务标识</dt>
+              <dd>{{ currentPlugin.key }}</dd>
+            </div>
+            <div>
+              <dt>入口类</dt>
+              <dd>{{ currentPlugin.entry_class || '-' }}</dd>
+            </div>
+            <div>
+              <dt>安装时间</dt>
+              <dd>{{ currentPlugin.installed_at || '-' }}</dd>
+            </div>
           </dl>
         </div>
 
@@ -108,7 +139,11 @@
               :message="field.content || field.description || fieldLabel(field)"
             />
             <t-form-item v-else :label="fieldLabel(field)" :class="fieldWidthClass(field)">
-              <t-switch v-if="field.type === 'switch'" v-model="configForm[field.key]" :disabled="!canManagePlugins || field.disabled" />
+              <t-switch
+                v-if="field.type === 'switch'"
+                v-model="configForm[field.key]"
+                :disabled="!canManagePlugins || field.disabled"
+              />
               <t-select
                 v-else-if="field.type === 'select' || field.type === 'multi_select'"
                 v-model="configForm[field.key]"
@@ -117,12 +152,30 @@
                 :disabled="!canManagePlugins || field.disabled"
                 clearable
               >
-                <t-option v-for="option in fieldOptions(field)" :key="String(option.value)" :label="option.label" :value="option.value" />
+                <t-option
+                  v-for="option in fieldOptions(field)"
+                  :key="String(option.value)"
+                  :label="option.label"
+                  :value="option.value"
+                />
               </t-select>
-              <t-radio-group v-else-if="field.type === 'radio'" v-model="configForm[field.key]" :disabled="!canManagePlugins || field.disabled">
-                <t-radio-button v-for="option in fieldOptions(field)" :key="String(option.value)" :value="option.value" :label="option.label" />
+              <t-radio-group
+                v-else-if="field.type === 'radio'"
+                v-model="configForm[field.key]"
+                :disabled="!canManagePlugins || field.disabled"
+              >
+                <t-radio-button
+                  v-for="option in fieldOptions(field)"
+                  :key="String(option.value)"
+                  :value="option.value"
+                  :label="option.label"
+                />
               </t-radio-group>
-              <t-checkbox-group v-else-if="field.type === 'checkbox'" v-model="configForm[field.key]" :disabled="!canManagePlugins || field.disabled">
+              <t-checkbox-group
+                v-else-if="field.type === 'checkbox'"
+                v-model="configForm[field.key]"
+                :disabled="!canManagePlugins || field.disabled"
+              >
                 <t-checkbox v-for="option in fieldOptions(field)" :key="String(option.value)" :value="option.value">
                   {{ option.label }}
                 </t-checkbox>
@@ -140,7 +193,11 @@
               <t-input v-else-if="field.type === 'readonly'" :model-value="readonlyValue(field)" readonly />
               <div v-else-if="isSmtpAccountsField(field)" class="smtp-account-manager">
                 <div v-if="smtpAccounts.length" class="smtp-account-list">
-                  <div v-for="(account, index) in smtpAccounts" :key="`${account.__index ?? 'new'}-${index}`" class="smtp-account-item">
+                  <div
+                    v-for="(account, index) in smtpAccounts"
+                    :key="`${account.__index ?? 'new'}-${index}`"
+                    class="smtp-account-item"
+                  >
                     <div class="smtp-account-item__main">
                       <div class="smtp-account-item__title">
                         <strong>{{ account.host || '-' }}</strong>
@@ -155,7 +212,13 @@
                         <span>{{ account.password_configured || account.password ? '密码已配置' : '密码未配置' }}</span>
                       </div>
                     </div>
-                    <t-dropdown v-if="smtpAccountActionOptions(account).length" trigger="click" placement="bottom-right" :options="smtpAccountActionOptions(account)" @click="(data: { value: unknown }) => handleSmtpAccountAction(String(data.value), index)">
+                    <t-dropdown
+                      v-if="smtpAccountActionOptions(account).length"
+                      trigger="click"
+                      placement="bottom-right"
+                      :options="smtpAccountActionOptions(account)"
+                      @click="handleSmtpAccountActionHandler(index)"
+                    >
                       <t-button variant="text" shape="square">
                         <more-icon />
                       </t-button>
@@ -163,7 +226,12 @@
                   </div>
                 </div>
                 <t-empty v-else description="暂无 SMTP 账号" />
-                <t-button v-if="canManagePlugins" variant="outline" class="smtp-account-add" @click="openSmtpAccountDialog()">
+                <t-button
+                  v-if="canManagePlugins"
+                  variant="outline"
+                  class="smtp-account-add"
+                  @click="openSmtpAccountDialog()"
+                >
                   添加账号
                 </t-button>
               </div>
@@ -223,9 +291,7 @@
           </div>
           <t-space direction="vertical" style="width: 100%">
             <t-input v-model="smsTestPhone" placeholder="请输入手机号码" maxlength="20" />
-            <t-button block variant="outline" :loading="smsTesting" @click="sendTestSms">
-              发送测试短信
-            </t-button>
+            <t-button block variant="outline" :loading="smsTesting" @click="sendTestSms"> 发送测试短信 </t-button>
           </t-space>
         </div>
       </template>
@@ -260,7 +326,12 @@
             @edited-change="(value: boolean) => (smtpAccountPasswordEdited = value)"
             @reveal-error="(error: unknown) => MessagePlugin.error(errorMessage(error, '读取 SMTP 密码失败'))"
           />
-          <t-input v-else v-model="smtpAccountForm.password" type="password" :placeholder="editingSmtpAccountIndex >= 0 ? '已配置，留空表示不修改' : '请输入密码'" />
+          <t-input
+            v-else
+            v-model="smtpAccountForm.password"
+            type="password"
+            :placeholder="editingSmtpAccountIndex >= 0 ? '已配置，留空表示不修改' : '请输入密码'"
+          />
         </t-form-item>
         <t-form-item label="发件名称">
           <t-input v-model="smtpAccountForm.from_name" placeholder="请输入发件名称" />
@@ -293,20 +364,25 @@
     </t-dialog>
   </div>
 </template>
-
 <script setup lang="ts">
+import './index.less';
+
+import { BrowseIcon, BrowseOffIcon, MoreIcon } from 'tdesign-icons-vue-next';
+import type { DropdownOption } from 'tdesign-vue-next';
+import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { MessagePlugin } from 'tdesign-vue-next';
-import { BrowseIcon, BrowseOffIcon, MoreIcon } from 'tdesign-icons-vue-next';
 
+import type {
+  IntegrationPluginConfigSchema,
+  IntegrationPluginDomain,
+  IntegrationPluginRecord,
+} from '@/api/admin/plugins';
+import { pluginsApi } from '@/api/admin/plugins';
 import SecretInput from '@/components/secret-input/index.vue';
-import { pluginsApi, type IntegrationPluginConfigSchema, type IntegrationPluginDomain, type IntegrationPluginRecord } from '@/api/admin/plugins';
 import { AdminPermissions } from '@/constants/permissions';
 import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
-
-import './index.less';
 
 const router = useRouter();
 const route = useRoute();
@@ -371,7 +447,7 @@ const emailTestErrors = reactive<Record<'to', string>>({
 const canManagePlugins = computed(() => hasAdminPermission(AdminPermissions.INTEGRATION_PLUGIN_MANAGE));
 const canTestPlugins = computed(() => hasAdminPermission(AdminPermissions.INTEGRATION_PLUGIN_TEST));
 const canRevealPluginSecrets = computed(() => hasAdminPermission(AdminPermissions.INTEGRATION_PLUGIN_SECRET_REVEAL));
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/;
 
 const smsTestPhone = ref('');
 const smsTesting = ref(false);
@@ -470,16 +546,43 @@ async function disablePlugin(plugin: IntegrationPluginRecord) {
   });
 }
 
-async function deletePlugin(plugin: IntegrationPluginRecord) {
+const BINDING_TABLE_LABELS: Record<string, string> = {
+  integration_plugin_bindings: '插件绑定',
+  supplier_plugin_bindings: '供应商绑定',
+  product_upstream_bindings: '商品上游绑定',
+  service_upstream_bindings: '服务上游绑定',
+};
+
+function bindingSummary(plugin: IntegrationPluginRecord): string {
+  return Object.entries(plugin.binding_counts || {})
+    .filter(([, count]) => Number(count) > 0)
+    .map(([table, count]) => `${BINDING_TABLE_LABELS[table] || table} ${count} 条`)
+    .join('、');
+}
+
+function deletePlugin(plugin: IntegrationPluginRecord) {
   if (!canManagePlugins.value) return;
   if (!plugin.id) return;
-  if (!window.confirm(`确定删除插件「${plugin.name}」的安装记录和配置吗？插件目录文件不会被删除。`)) return;
 
-  await runAction(plugin, 'delete', async () => {
-    await pluginsApi.remove(plugin.id as string | number);
-    MessagePlugin.success('插件已删除');
-    await loadPlugins();
-    if (currentPlugin.value?.id === plugin.id) configVisible.value = false;
+  // 插件仍被业务绑定引用时，卸载会硬删这些绑定且无法恢复，必须让管理员看到影响范围再确认。
+  const summary = bindingSummary(plugin);
+  const force = Number(plugin.business_reference_count || 0) > 0 || summary !== '';
+
+  const dialog = DialogPlugin.confirm({
+    header: force ? '强制卸载插件' : '删除插件',
+    body: force
+      ? `插件「${plugin.name}」仍被业务数据引用${summary ? `（${summary}）` : ''}。卸载会一并删除这些绑定关系且无法恢复，确定继续吗？`
+      : `确定删除插件「${plugin.name}」的安装记录和配置吗？插件目录文件不会被删除。`,
+    confirmBtn: { content: force ? '强制卸载' : '确认删除', theme: 'danger' },
+    async onConfirm() {
+      dialog.destroy();
+      await runAction(plugin, 'delete', async () => {
+        await pluginsApi.remove(plugin.id as string | number, force);
+        MessagePlugin.success('插件已删除');
+        await loadPlugins();
+        if (currentPlugin.value?.id === plugin.id) configVisible.value = false;
+      });
+    },
   });
 }
 
@@ -665,7 +768,12 @@ function handleSecretFocus(field: IntegrationPluginConfigSchema) {
 }
 
 function handleSecretInput(field: IntegrationPluginConfigSchema, value: string) {
-  if (fieldHasSecretValue(field) && !isSecretVisible(field) && !editedSecretKeys[field.key] && value === MASKED_SECRET_VALUE) {
+  if (
+    fieldHasSecretValue(field) &&
+    !isSecretVisible(field) &&
+    !editedSecretKeys[field.key] &&
+    value === MASKED_SECRET_VALUE
+  ) {
     return;
   }
 
@@ -813,6 +921,10 @@ function smtpAccountActionOptions(account: SmtpAccountForm) {
   return actions;
 }
 
+function handleSmtpAccountActionHandler(index: number) {
+  return (data: DropdownOption) => handleSmtpAccountAction(String(data.value), index);
+}
+
 async function handleSmtpAccountAction(action: string, index: number) {
   if (action === 'edit') {
     openSmtpAccountDialog(index);
@@ -839,9 +951,16 @@ async function handleSmtpAccountAction(action: string, index: number) {
 
   if (action === 'delete') {
     if (!canManagePlugins.value) return;
-    if (!window.confirm('确定删除这个 SMTP 账号吗？')) return;
-    smtpAccounts.value.splice(index, 1);
-    await saveConfig();
+    const dialog = DialogPlugin.confirm({
+      header: '删除 SMTP 账号',
+      body: '确定删除这个 SMTP 账号吗？',
+      confirmBtn: { content: '确认删除', theme: 'danger' },
+      async onConfirm() {
+        dialog.destroy();
+        smtpAccounts.value.splice(index, 1);
+        await saveConfig();
+      },
+    });
   }
 }
 
@@ -958,8 +1077,12 @@ function clearEmailTestErrors() {
   });
 }
 
+interface FieldErrorPayload {
+  response?: { data?: { data?: { errors?: Record<string, string[]> } } };
+}
+
 function extractFieldErrors(error: unknown) {
-  const errors = (error as { response?: { data?: { data?: { errors?: Record<string, string[]> } } } })?.response?.data?.data?.errors;
+  const errors = (error as FieldErrorPayload)?.response?.data?.data?.errors;
   return {
     to: firstError(errors?.to),
   };
