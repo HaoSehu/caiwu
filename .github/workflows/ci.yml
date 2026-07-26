@@ -10,6 +10,16 @@ jobs:
   backend-test:
     name: Backend Tests
     runs-on: ubuntu-latest
+    env:
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: caiwu_test
+      DB_USERNAME: root
+      DB_PASSWORD: root
+      REDIS_HOST: 127.0.0.1
+      # 加引号避免被 YAML 解析成 null 标量；Laravel 的 Env 会把字符串 "null" 还原成 PHP null
+      REDIS_PASSWORD: 'null'
     services:
       mysql:
         image: mysql:8.0
@@ -55,22 +65,39 @@ jobs:
         working-directory: backend
         run: php artisan key:generate
 
+      # Laravel 通过 mysql 命令行客户端导入 schema 基线（见 MySqlSchemaState::load），
+      # 该二进制不一定预装在 runner 镜像中，缺失时补装，已存在则跳过。
+      - name: Ensure MySQL client is available
+        run: |
+          if ! command -v mysql >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends mysql-client
+          fi
+          mysql --version
+
+      # 原先的 `php artisan test --parallel` 依赖未安装的 brianium/paratest，必然失败；
+      # 去掉 --parallel 后也失去了并行模式自动为新测试库执行迁移的副作用，
+      # 因此这里显式迁移：空库时 migrate 会先导入 database/schema/mysql-schema.sql 基线
+      # （基线内含 migrations 表数据），再执行 database/migrations 下的增量迁移。
+      - name: Run database migrations
+        working-directory: backend
+        run: php artisan migrate --force
+
       - name: Run tests
         working-directory: backend
-        env:
-          DB_CONNECTION: mysql
-          DB_HOST: 127.0.0.1
-          DB_PORT: 3306
-          DB_DATABASE: caiwu_test
-          DB_USERNAME: root
-          DB_PASSWORD: root
-          REDIS_HOST: 127.0.0.1
-          REDIS_PASSWORD: null
-        run: php artisan test --parallel
+        run: php artisan test
 
   frontend-build:
     name: Frontend Build
     runs-on: ubuntu-latest
+    # backend/scripts/build_frontends.mjs 对四个公开地址做强校验：
+    # 必须是无路径、无账号信息的 HTTP(S) 根地址，四个 origin 互不相同，且协议一致。
+    # CI 中不存在 backend/.env，只能由环境变量注入占位 origin，否则构建直接抛错。
+    env:
+      APP_URL: https://api.example.test
+      FRONTEND_URL: https://www.example.test
+      CLIENT_CONSOLE_URL: https://console.example.test
+      ADMIN_URL: https://admin.example.test
 
     steps:
       - uses: actions/checkout@v4
@@ -82,6 +109,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Verify build config
+        run: node backend/scripts/build_frontends.mjs --dry-run
 
       - name: Type check shared
         run: npm run typecheck:shared
@@ -106,8 +136,17 @@ jobs:
         with:
           node-version: 22
 
-      - name: npm audit
-        run: npm audit --omit=dev || true
+      # 阻断门禁：critical 漏洞直接让 CI 失败。
+      # 暂时定在 critical 而非 high，是因为当前依赖树里 postcss <= 8.5.17 存在
+      # 一个 high 漏洞（GHSA-r28c-9q8g-f849），提到 high 会立刻把 CI 打红。
+      # 升级 postcss 后请把下面这行改成 --audit-level=high 并删除后面的观察步骤。
+      - name: npm audit (critical blocks)
+        run: npm audit --omit=dev --audit-level=critical
+
+      # 观察门禁：high 及以上只在日志和步骤状态里可见，不阻断流水线。
+      - name: npm audit (high, non-blocking report)
+        continue-on-error: true
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -115,6 +154,10 @@ jobs:
           php-version: '8.2'
           coverage: none
 
+      # 去掉了原来的 `|| true`：已核对 composer.lock 中全部依赖，
+      # 当前没有任何命中的 Packagist 安全公告，此门禁应当是绿的。
+      # --abandoned=report 保持"仅列出废弃包、不因此失败"，
+      # 并避免 Composer 3 把该默认值改成 fail 后行为突变。
       - name: Composer audit
         working-directory: backend
-        run: composer audit || true
+        run: composer audit --abandoned=report

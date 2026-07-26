@@ -41,12 +41,27 @@
     "prepare": "husky"
   },
   "lint-staged": {
-    "*.{js,ts,vue}": [
-      "eslint --fix",
+    "frontend-admin-v3/**/*.{js,jsx,ts,tsx,vue}": [
+      "eslint --fix --no-warn-ignored --config frontend-admin-v3/eslint.config.js",
+      "prettier --write"
+    ],
+    "frontend-user-v3-www/**/*.{js,jsx,ts,tsx,vue}": [
+      "eslint --fix --no-warn-ignored --config frontend-user-v3-www/eslint.config.js",
+      "prettier --write"
+    ],
+    "frontend-user-v4-console/**/*.{js,jsx,ts,tsx,vue}": [
+      "eslint --fix --no-warn-ignored --config frontend-user-v4-console/eslint.config.js",
+      "prettier --write"
+    ],
+    "shared/**/*.{js,jsx,ts,tsx,vue}": [
+      "eslint --fix --no-warn-ignored --config shared/eslint.config.js",
       "prettier --write"
     ],
     "*.{css,scss,json,md}": [
       "prettier --write"
+    ],
+    "backend/**/*.php": [
+      "php backend/vendor/bin/pint --test"
     ]
   },
   "devDependencies": {

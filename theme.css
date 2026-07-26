@@ -388,15 +388,22 @@
 }
 
 #app .tdesign-starter-sidebar-compact .tdesign-starter-side-nav-logo-wrapper {
-  width: 64px;
+  width: auto;
   margin-left: 0 !important;
   padding: 0;
   justify-content: center;
+  overflow: hidden;
+}
+
+#app .tdesign-starter-sidebar-compact .tdesign-starter-side-nav-logo-t-logo {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
 }
 
 #app .tdesign-starter-sidebar-compact .tdesign-starter-side-nav .t-menu__logo {
   display: flex;
-  width: 64px;
+  width: auto;
   padding: 0;
   justify-content: center;
 }
