@@ -1263,6 +1263,11 @@ function normalizeMobileModelBaseName(value, cpuText, memoryText) {
       .replace(new RegExp(`[-_\\s]*${escaped.replace(/\\s\\+/g, '\\s*')}\\s*$`, 'i'), '')
   })
 
+  // Fallback: strip any remaining vCPU / memory spec patterns that may not have been
+  // caught above (e.g. when cpuText / memoryText were not separately available).
+  text = text.replace(/[-_\s]+\d+vcpu\s*$/i, '')
+  text = text.replace(/[-_\s]+\d+g(?:ib?)?\s*$/i, '')
+
   return text.replace(/[-_\s]+$/g, '').trim()
 }
 
@@ -1509,12 +1514,12 @@ function setMachineSpecSort(key, direction) {
   machineSpecSort.value = { key, direction }
 }
 
-const desktopProductSpecRows = computed(() => {
+const desktopMachineSpecRows = computed(() => {
   if (!visibleProducts.value.length) {
     return []
   }
 
-  return visibleProducts.value.map((product, index) => {
+  const rows = visibleProducts.value.map((product, index) => {
     const detailProduct = selectedProduct.value?.id === product.id ? selectedProduct.value : null
     const sourceProduct = mergeProductPresentationSource(product, detailProduct)
     const displayName = resolveProductDisplayName(sourceProduct)
@@ -1556,13 +1561,12 @@ const desktopProductSpecRows = computed(() => {
       originalIndex: index,
     }
   })
-})
-const desktopMachineSpecRows = computed(() => (
-  desktopProductSpecRows.value.slice().sort((left, right) => {
-    if (!machineSpecSort.value.key || !machineSpecSort.value.direction) {
-      return left.originalIndex - right.originalIndex
-    }
 
+  if (!machineSpecSort.value.key || !machineSpecSort.value.direction) {
+    return rows
+  }
+
+  return rows.slice().sort((left, right) => {
     const leftValue = resolveMachineSpecSortValue(left)
     const rightValue = resolveMachineSpecSortValue(right)
     const leftValid = Number.isFinite(leftValue)
@@ -1584,7 +1588,7 @@ const desktopMachineSpecRows = computed(() => (
     const result = (leftValue - rightValue) * factor
     return result === 0 ? left.originalIndex - right.originalIndex : result
   })
-))
+})
 
 const mobileProductSpecRows = computed(() => visibleProducts.value.map((product, index) => ({
   ...resolveMobileProductSpec(product),
@@ -1710,11 +1714,14 @@ const selectedMobileProductGroup = computed(() => {
     group.products.some((row) => row.productId === selectedId)
   )) || mobileProductGroups.value[0] || null
 })
-const selectedMobileProductModelLabel = computed(() => (
-  hasMobileProductGroups.value
-    ? (selectedMobileProductGroup.value?.label || '')
-    : selectedProductDisplayName.value
-))
+const selectedMobileProductModelLabel = computed(() => {
+  if (hasMobileProductGroups.value) {
+    return selectedMobileProductGroup.value?.label || ''
+  }
+  const selectedId = Number(selectedProductId.value || 0)
+  const matched = mobileProductSpecRows.value.find((row) => row.productId === selectedId)
+  return matched?.baseName || selectedProductDisplayName.value
+})
 const selectedMobileCpuLabel = computed(() => (
   selectedMobileProductGroup.value?.cpuText
   || selectedMobileProductGroup.value?.label

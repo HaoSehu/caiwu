@@ -44,7 +44,13 @@
       </div>
     </div>
 
-    <div class="container hero-stage">
+    <div
+      class="container hero-stage"
+      @mouseenter="pauseRotation"
+      @mouseleave="resumeRotation"
+      @touchstart="handleTouchStart"
+      @touchend="handleTouchEnd"
+    >
       <aside class="hero-rail" role="tablist" aria-label="产品入口">
         <button
           v-for="(slide, index) in heroSlides"
@@ -269,7 +275,7 @@ const DEFAULT_FEATURES = freezeConfigList([
     kicker: '活动内容',
     title: '新客首单 39 元/年',
     desc: '2H2G 云服务器覆盖建站、代理、轻量业务全场景。',
-    path: '/products',
+    path: '/notices',
   },
   {
     key: 'enterprise',
@@ -366,6 +372,7 @@ function normalizeHeroFeatures(data) {
   return freezeNormalizedList(DEFAULT_FEATURES, normalizeFeature)
 }
 
+// hero 是 computed，父组件传入新 hero 对象时引用即变化，无需 deep 遍历
 watch(
   hero,
   (value) => {
@@ -379,7 +386,7 @@ watch(
       activeIndex.value = 0
     }
   },
-  { immediate: true, deep: true },
+  { immediate: true },
 )
 
 const activeSlide = computed(() => heroSlides.value[activeIndex.value] || heroSlides.value[0] || DEFAULT_SLIDES[0])
@@ -391,12 +398,15 @@ const MAX_PLAYBACK_RETRIES = 3
 const HERO_VIDEO_IDLE_TIMEOUT = 1200
 const HERO_VIDEO_MOBILE_WIDTH = 768
 const SLOW_CONNECTION_TYPES = new Set(['slow-2g', '2g', '3g'])
+const SWIPE_THRESHOLD = 50
 let rotationTimer = null
 let playbackRetryTimer = null
 let videoEnableTimer = null
 let videoEnableIdleId = null
 let playbackRetryCount = 0
 let isUnmounting = false
+let isHovering = false
+let touchStartX = 0
 
 function getNavigatorConnection() {
   if (typeof navigator === 'undefined') return null
@@ -590,11 +600,42 @@ function queueActiveVideoPlayback(delay = 0) {
 
 function startRotation() {
   stopRotation()
+  if (isHovering) return
   rotationTimer = setTimeout(() => {
     const count = heroSlides.value.length || 1
     const nextIndex = (activeIndex.value + 1) % count
     switchToSlide(nextIndex, true)
   }, getRotationInterval())
+}
+
+function pauseRotation() {
+  isHovering = true
+  stopRotation()
+}
+
+function resumeRotation() {
+  isHovering = false
+  startRotation()
+}
+
+function handleTouchStart(event) {
+  if (!event.touches || event.touches.length !== 1) return
+  touchStartX = event.touches[0].clientX
+}
+
+function handleTouchEnd(event) {
+  if (!event.changedTouches || event.changedTouches.length !== 1) return
+  const deltaX = event.changedTouches[0].clientX - touchStartX
+  if (Math.abs(deltaX) < SWIPE_THRESHOLD) return
+  stopRotation()
+  const count = heroSlides.value.length || 1
+  if (deltaX < 0) {
+    activeIndex.value = (activeIndex.value + 1) % count
+  } else {
+    activeIndex.value = (activeIndex.value - 1 + count) % count
+  }
+  switchToSlide(activeIndex.value)
+  startRotation()
 }
 
 function switchToSlide(index, auto = false) {
@@ -810,7 +851,12 @@ onBeforeUnmount(() => {
   object-fit: cover;
   opacity: 0;
   transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-  will-change: opacity;
+}
+
+@media (min-width: 769px) {
+  .hero-bg__video {
+    will-change: opacity;
+  }
 }
 
 .hero-bg__video--active {
@@ -1055,7 +1101,7 @@ onBeforeUnmount(() => {
   margin: 24px 0 0;
   color: rgba(31, 42, 77, 0.78);
   font-size: 15px;
-  line-height: 1.9;
+  line-height: 1.7;
   text-wrap: pretty;
 }
 

@@ -18,17 +18,17 @@
       <HomeNewsSection :notices="notices" />
       <HomeRegisterBar />
     </template>
-    <template v-else>
+    <div v-else ref="deferredSkeletonRef">
       <HomeSectionSkeleton type="solutions" />
       <HomeSectionSkeleton type="partner" />
       <HomeSectionSkeleton type="news" />
       <HomeSectionSkeleton type="register" />
-    </template>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 'vue'
 import siteApi from '@/api/site'
 import { useAppStore } from '@/stores/app'
 import HomeHeroCarousel from '@/views/website/Home/components/HomeHeroCarousel.vue'
@@ -52,6 +52,8 @@ const loading = ref(true)
 const homeLoaded = ref(false)
 const homeLoadSucceeded = ref(false)
 const mountDeferredSections = ref(false)
+const deferredSkeletonRef = ref<HTMLElement | null>(null)
+let deferredObserver: IntersectionObserver | null = null
 const homeHero = ref<Record<string, unknown> | null>(null)
 const notices = ref<any[]>([])
 const rootGroups = ref<any[]>([])
@@ -138,13 +140,38 @@ onMounted(async () => {
     return
   }
 
-  if (typeof window !== 'undefined') {
-    window.requestAnimationFrame(() => {
-      mountDeferredSections.value = true
-    })
-    return
-  }
+  // 使用 IntersectionObserver 在骨架屏进入视口时才挂载延迟区域
+  if (typeof window !== 'undefined' && 'IntersectionObserver' in window) {
+    deferredObserver = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          mountDeferredSections.value = true
+          if (deferredObserver) {
+            deferredObserver.disconnect()
+            deferredObserver = null
+          }
+        }
+      },
+      { rootMargin: '200px' },
+    )
 
-  mountDeferredSections.value = true
+    // 骨架屏 ref 就绪后开始观察
+    if (deferredSkeletonRef.value) {
+      deferredObserver.observe(deferredSkeletonRef.value)
+    } else {
+      // ref 尚未挂载（数据就绪时骨架不会渲染），直接挂载
+      mountDeferredSections.value = true
+    }
+  } else {
+    // 不支持 IntersectionObserver 的旧浏览器直接挂载
+    mountDeferredSections.value = true
+  }
+})
+
+onBeforeUnmount(() => {
+  if (deferredObserver) {
+    deferredObserver.disconnect()
+    deferredObserver = null
+  }
 })
 </script>

@@ -199,14 +199,16 @@ class PluginRuntimeRegistryIntegrationTest extends TestCase
         $this->assertTrue((bool) ($schema['secret_key']['secret'] ?? false));
         $this->assertSame('v4', $schema['api_version']['default'] ?? null);
         $this->assertSame(25921, $schema['h5_plan_id']['default'] ?? null);
-        $this->assertSame(80, $schema['score_threshold']['default'] ?? null);
         $this->assertSame([
             'basic_notice',
             'api_key',
             'secret_key',
             'api_version',
             'h5_plan_id',
-            'score_threshold',
+            'billing_divider',
+            'charge_enabled',
+            'amount',
+            'free_times',
         ], $schema->keys()->all());
     }
 
@@ -240,40 +242,6 @@ class PluginRuntimeRegistryIntegrationTest extends TestCase
             $this->assertSame($legacyCaBundle, $this->invokeStay33ClientMethod($legacyConfiguredClient, 'resolveCaBundle'));
         } finally {
             @unlink($legacyCaBundle);
-            @unlink($pluginCaBundle);
-        }
-    }
-
-    public function test_baidu_face_client_prefers_plugin_ssl_configuration_before_system_config(): void
-    {
-        $systemCaBundle = tempnam(sys_get_temp_dir(), 'baidu-system-ca-');
-        $pluginCaBundle = tempnam(sys_get_temp_dir(), 'baidu-plugin-ca-');
-        $this->assertIsString($systemCaBundle);
-        $this->assertIsString($pluginCaBundle);
-
-        try {
-            config([
-                'idc.verification.ssl_verify' => false,
-                'idc.verification.ca_bundle' => $systemCaBundle,
-            ]);
-
-            $manifest = app(PluginScanner::class)->requireManifest('verification', 'baidu_face');
-            app(PluginFileLoader::class)->ensureLoaded($manifest);
-
-            $pluginConfiguredClient = new BaiduFaceClient([
-                'ssl_verify' => true,
-                'ca_bundle' => $pluginCaBundle,
-            ]);
-
-            $this->assertTrue($this->invokeBaiduFaceClientMethod($pluginConfiguredClient, 'resolveSslVerify'));
-            $this->assertSame($pluginCaBundle, $this->invokeBaiduFaceClientMethod($pluginConfiguredClient, 'resolveCaBundle'));
-
-            $systemConfiguredClient = new BaiduFaceClient([]);
-
-            $this->assertFalse($this->invokeBaiduFaceClientMethod($systemConfiguredClient, 'resolveSslVerify'));
-            $this->assertSame($systemCaBundle, $this->invokeBaiduFaceClientMethod($systemConfiguredClient, 'resolveCaBundle'));
-        } finally {
-            @unlink($systemCaBundle);
             @unlink($pluginCaBundle);
         }
     }

@@ -450,7 +450,7 @@ class BaiduFacePluginTest extends TestCase
         $this->assertSame('审核通过', $result['message']);
     }
 
-    public function test_direct_verify_v4_fails_on_low_score(): void
+    public function test_direct_verify_v4_accepts_provider_success_without_score_threshold(): void
     {
         Http::fake([
             'aip.baidubce.com/oauth/2.0/token*' => Http::response([
@@ -469,7 +469,7 @@ class BaiduFacePluginTest extends TestCase
             'id_card' => '110101199001010011',
         ]);
 
-        $this->assertSame(400, $result['status']);
+        $this->assertSame(200, $result['status']);
     }
 
     public function test_direct_verify_v3_passes(): void
@@ -702,15 +702,15 @@ class BaiduFacePluginTest extends TestCase
     // Unit tests: isDirectVerificationPassed
     // ============================================================
 
-    public function test_direct_verification_passed_requires_score_above_threshold(): void
+    public function test_direct_verification_passed_depends_on_provider_verify_status(): void
     {
         $client = new BaiduFaceClient($this->defaultConfig());
 
         $this->assertTrue($this->invokeClientMethod($client, 'isDirectVerificationPassed', [[
-            'success' => true, 'result' => ['verify_status' => 0, 'score' => 80.0],
+            'success' => true, 'result' => ['verify_status' => 0, 'score' => 0],
         ]]));
         $this->assertFalse($this->invokeClientMethod($client, 'isDirectVerificationPassed', [[
-            'success' => true, 'result' => ['verify_status' => 0, 'score' => 79.9],
+            'success' => true, 'result' => ['score' => 100],
         ]]));
     }
 
@@ -721,33 +721,6 @@ class BaiduFacePluginTest extends TestCase
         $this->assertFalse($this->invokeClientMethod($client, 'isDirectVerificationPassed', [[
             'success' => true, 'result' => ['verify_status' => 1, 'score' => 90.0],
         ]]));
-    }
-
-    // ============================================================
-    // Unit tests: score threshold
-    // ============================================================
-
-    public function test_score_threshold_default_is_80(): void
-    {
-        $client = new BaiduFaceClient($this->defaultConfig());
-
-        $this->assertSame(80.0, $this->invokeClientMethod($client, 'scoreThreshold'));
-    }
-
-    public function test_score_threshold_respects_config(): void
-    {
-        $client = new BaiduFaceClient(array_merge($this->defaultConfig(), ['score_threshold' => 90]));
-
-        $this->assertSame(90.0, $this->invokeClientMethod($client, 'scoreThreshold'));
-    }
-
-    public function test_score_threshold_clamped_to_range(): void
-    {
-        $client = new BaiduFaceClient(array_merge($this->defaultConfig(), ['score_threshold' => -10]));
-        $this->assertSame(0.0, $this->invokeClientMethod($client, 'scoreThreshold'));
-
-        $client2 = new BaiduFaceClient(array_merge($this->defaultConfig(), ['score_threshold' => 150]));
-        $this->assertSame(100.0, $this->invokeClientMethod($client2, 'scoreThreshold'));
     }
 
     // ============================================================
@@ -850,82 +823,6 @@ class BaiduFacePluginTest extends TestCase
         $result = $this->invokeClientMethod($client, 'callbackUrl', ['https://example.test/cb', null]);
 
         $this->assertSame('https://example.test/cb', $result);
-    }
-
-    // ============================================================
-    // Unit tests: resolveSslVerify / resolveCaBundle
-    // ============================================================
-
-    public function test_resolve_ssl_verify_prefers_plugin_config(): void
-    {
-        config(['idc.verification.ssl_verify' => false]);
-
-        $client = new BaiduFaceClient(['ssl_verify' => true]);
-
-        $this->assertTrue($this->invokeClientMethod($client, 'resolveSslVerify'));
-    }
-
-    public function test_resolve_ssl_verify_falls_back_to_system(): void
-    {
-        config(['idc.verification.ssl_verify' => false]);
-
-        $client = new BaiduFaceClient([]);
-
-        $this->assertFalse($this->invokeClientMethod($client, 'resolveSslVerify'));
-    }
-
-    public function test_resolve_ca_bundle_prefers_plugin_config(): void
-    {
-        $caFile = tempnam(sys_get_temp_dir(), 'baidu-test-ca-');
-        $this->assertIsString($caFile);
-
-        try {
-            config(['idc.verification.ca_bundle' => '/system/ca.pem']);
-
-            $client = new BaiduFaceClient(['ca_bundle' => $caFile]);
-
-            $this->assertSame($caFile, $this->invokeClientMethod($client, 'resolveCaBundle'));
-        } finally {
-            @unlink($caFile);
-        }
-    }
-
-    // ============================================================
-    // Unit tests: httpOptions
-    // ============================================================
-
-    public function test_http_options_disables_verify_when_ssl_verify_false(): void
-    {
-        $client = new BaiduFaceClient(['ssl_verify' => false]);
-
-        $options = $this->invokeClientMethod($client, 'httpOptions');
-
-        $this->assertSame(['verify' => false], $options);
-    }
-
-    public function test_http_options_uses_ca_bundle_when_available(): void
-    {
-        $caFile = tempnam(sys_get_temp_dir(), 'baidu-test-ca-');
-        $this->assertIsString($caFile);
-
-        try {
-            $client = new BaiduFaceClient(['ssl_verify' => true, 'ca_bundle' => $caFile]);
-
-            $options = $this->invokeClientMethod($client, 'httpOptions');
-
-            $this->assertSame(['verify' => $caFile], $options);
-        } finally {
-            @unlink($caFile);
-        }
-    }
-
-    public function test_http_options_verifies_true_when_no_ca_bundle(): void
-    {
-        $client = new BaiduFaceClient(['ssl_verify' => true]);
-
-        $options = $this->invokeClientMethod($client, 'httpOptions');
-
-        $this->assertSame(['verify' => true], $options);
     }
 
     // ============================================================
@@ -1076,10 +973,10 @@ class BaiduFacePluginTest extends TestCase
     }
 
     // ============================================================
-    // Manifest: 计费/SSL 配置项必须在 schema 中声明才能落库
+    // Manifest: 计费配置项必须在 schema 中声明才能落库
     // ============================================================
 
-    public function test_manifest_declares_billing_and_ssl_config_keys(): void
+    public function test_manifest_declares_billing_config_keys(): void
     {
         $manifest = app(PluginScanner::class)->requireManifest('verification', 'baidu_face');
         $keys = array_map(
@@ -1088,7 +985,7 @@ class BaiduFacePluginTest extends TestCase
         );
 
         // PluginConfigRepository 按 schema 遍历入库，未声明的键无法保存。
-        foreach (['charge_enabled', 'amount', 'free_times', 'ssl_verify', 'ca_bundle'] as $key) {
+        foreach (['charge_enabled', 'amount', 'free_times'] as $key) {
             $this->assertContains($key, $keys, "配置项 [{$key}] 缺失将导致对应功能无法配置");
         }
 
