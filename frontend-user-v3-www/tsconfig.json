@@ -12,6 +12,9 @@
       ],
       "@caiwu/shared": [
         "../shared/index.ts"
+      ],
+      "@caiwu/shared/*": [
+        "../shared/*"
       ]
     },
     "types": [
