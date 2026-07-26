@@ -28,7 +28,9 @@ const sideMenu = computed(() => {
   const { layout, splitMenu } = settingStore;
   if (layout === 'mix' && splitMenu) {
     const active = menuRouters.value.find((m: MenuRoute) => route.path.startsWith(m.path));
-    return active?.children?.map((subMenu: MenuRoute) => ({ ...subMenu, path: `${active.path}/${subMenu.path}` })) ?? [];
+    return (
+      active?.children?.map((subMenu: MenuRoute) => ({ ...subMenu, path: `${active.path}/${subMenu.path}` })) ?? []
+    );
   }
   return menuRouters.value as Array<MenuRoute>;
 });

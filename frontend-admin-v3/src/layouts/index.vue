@@ -1,6 +1,6 @@
 <template>
   <div>
-    <a href="#main-content" class="skip-to-content">{{ $t('layout.skipToContent') || '跳到主内容' }}</a>
+    <a href="#main-content" class="skip-to-content">{{ $t('layout.skipToContent') }}</a>
     <template v-if="setting.layout.value === 'side'">
       <t-layout key="side" :class="mainLayoutCls">
         <t-aside><layout-side-nav /></t-aside>

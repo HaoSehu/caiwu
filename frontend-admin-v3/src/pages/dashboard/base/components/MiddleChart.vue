@@ -10,8 +10,8 @@
         <template #actions>
           <div class="dashboard-chart-title-container card-date-picker-pair">
             <t-date-picker
-              class="card-date-picker-container"
               v-model="currencyStartDate"
+              class="card-date-picker-container"
               clearable
               theme="primary"
               mode="date"
@@ -21,8 +21,8 @@
               @change="onCurrencyDateChange"
             />
             <t-date-picker
-              class="card-date-picker-container"
               v-model="currencyEndDate"
+              class="card-date-picker-container"
               clearable
               theme="primary"
               mode="date"
@@ -58,13 +58,13 @@
 </template>
 <script setup lang="ts">
 import { useWindowSize } from '@vueuse/core';
-import echarts from '@/utils/echarts';
 import { computed, nextTick, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue';
 
 import { t } from '@/locales';
 import { useSettingStore } from '@/store';
 import { changeChartsTheme } from '@/utils/color';
 import { LAST_7_DAYS } from '@/utils/date';
+import echarts from '@/utils/echarts';
 
 import { getLineChartDataSet, getPieChartDataSet } from '../index';
 

@@ -1,4 +1,3 @@
-import { shallowRef } from 'vue';
 import type { RouteRecordRaw } from 'vue-router';
 
 export const dashboardRoutes: RouteRecordRaw[] = [

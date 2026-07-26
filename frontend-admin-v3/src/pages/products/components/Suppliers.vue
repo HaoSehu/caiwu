@@ -2,8 +2,8 @@
   <t-card :bordered="false">
     <div class="filter-row supplier-filter-row">
       <t-input
-        class="supplier-filter-keyword"
         v-model="supplierFilters.keyword"
+        class="supplier-filter-keyword"
         clearable
         placeholder="搜索接口名称 / 用户名"
         @enter="handleSupplierSearch"
@@ -12,8 +12,8 @@
         <template #suffix-icon><search-icon /></template>
       </t-input>
       <t-select
-        class="supplier-filter-status"
         v-model="supplierFilters.status"
+        class="supplier-filter-status"
         clearable
         placeholder="接口状态"
         @change="handleSupplierSearch"
@@ -36,7 +36,11 @@
             <strong>{{ supplierCardTitle(row) }}</strong>
             <span v-if="supplierCardSubtitle(row)">{{ supplierCardSubtitle(row) }}</span>
           </div>
-          <t-tag v-if="supplierCardStatus(row).label" :theme="supplierCardStatus(row).theme" :variant="supplierCardStatus(row).variant">
+          <t-tag
+            v-if="supplierCardStatus(row).label"
+            :theme="supplierCardStatus(row).theme"
+            :variant="supplierCardStatus(row).variant"
+          >
             {{ supplierCardStatus(row).label }}
           </t-tag>
         </div>
@@ -50,7 +54,9 @@
           </div>
         </dl>
         <div class="supplier-card__actions">
-          <t-button size="small" variant="text" theme="primary" @click="openSupplierDialog(row)">{{ canManageSuppliers ? '编辑' : '查看' }}</t-button>
+          <t-button size="small" variant="text" theme="primary" @click="openSupplierDialog(row)">{{
+            canManageSuppliers ? '编辑' : '查看'
+          }}</t-button>
           <t-button
             v-for="action in supplierCardActions(row)"
             :key="action.key"
@@ -63,10 +69,23 @@
           >
             {{ action.label }}
           </t-button>
-          <t-button v-if="canManageSuppliers" size="small" variant="text" :loading="supplierActionLoading === row.id" @click="handleToggleSupplier(row)">
+          <t-button
+            v-if="canManageSuppliers"
+            size="small"
+            variant="text"
+            :loading="supplierActionLoading === row.id"
+            @click="handleToggleSupplier(row)"
+          >
             {{ Number(row.status) === 1 ? '停用' : '启用' }}
           </t-button>
-          <t-button v-if="canManageSuppliers" size="small" variant="text" theme="danger" @click="handleDeleteSupplier(row)">删除</t-button>
+          <t-button
+            v-if="canManageSuppliers"
+            size="small"
+            variant="text"
+            theme="danger"
+            @click="handleDeleteSupplier(row)"
+            >删除</t-button
+          >
         </div>
       </article>
       <t-empty v-if="!supplierLoading && suppliers.length === 0" description="暂无提供商" />
@@ -93,7 +112,10 @@
   >
     <div class="split-dialog-intro">
       <strong>左右穿梭对接商品</strong>
-      <p>左侧选择 ZJMF 财务未对接商品，右侧选择当前系统分类作为导入位置，执行后会创建或更新本地商品并绑定当前提供商商品 ID。</p>
+      <p>
+        左侧选择 ZJMF 财务未对接商品，右侧选择当前系统分类作为导入位置，执行后会创建或更新本地商品并绑定当前提供商商品
+        ID。
+      </p>
     </div>
 
     <t-form class="supplier-batch-form" :data="supplierBatchForm" label-width="90px">
@@ -116,11 +138,23 @@
         <template v-if="supplierBatchTargetGroupLabel">，对接到：{{ supplierBatchTargetGroupLabel }}</template>
       </span>
       <t-space size="small">
-        <t-button size="small" variant="outline" :loading="supplierBatchLoading" @click="reloadSupplierBatchProducts">刷新商品</t-button>
-        <t-button size="small" variant="text" :disabled="!supplierBatchPendingProducts.length" @click="selectPendingSupplierBatchProducts">
+        <t-button size="small" variant="outline" :loading="supplierBatchLoading" @click="reloadSupplierBatchProducts"
+          >刷新商品</t-button
+        >
+        <t-button
+          size="small"
+          variant="text"
+          :disabled="!supplierBatchPendingProducts.length"
+          @click="selectPendingSupplierBatchProducts"
+        >
           选择未对接
         </t-button>
-        <t-button size="small" variant="text" :disabled="!supplierBatchSelectedKeys.length" @click="supplierBatchSelectedKeys = []">
+        <t-button
+          size="small"
+          variant="text"
+          :disabled="!supplierBatchSelectedKeys.length"
+          @click="supplierBatchSelectedKeys = []"
+        >
           清空
         </t-button>
       </t-space>
@@ -134,11 +168,23 @@
             <span>ZJMF 财务商品结构（含已对接）</span>
           </div>
           <div class="supplier-batch-panel__actions">
-            <t-tag variant="light" theme="warning">未对接 {{ supplierBatchPendingProducts.length }}/{{ supplierBatchProducts.length }}</t-tag>
-            <t-button size="small" variant="text" :disabled="!supplierBatchRemoteRows.length" @click="setAllSupplierBatchRemoteExpanded(true)">
+            <t-tag variant="light" theme="warning"
+              >未对接 {{ supplierBatchPendingProducts.length }}/{{ supplierBatchProducts.length }}</t-tag
+            >
+            <t-button
+              size="small"
+              variant="text"
+              :disabled="!supplierBatchRemoteRows.length"
+              @click="setAllSupplierBatchRemoteExpanded(true)"
+            >
               展开
             </t-button>
-            <t-button size="small" variant="text" :disabled="!supplierBatchRemoteRows.length" @click="setAllSupplierBatchRemoteExpanded(false)">
+            <t-button
+              size="small"
+              variant="text"
+              :disabled="!supplierBatchRemoteRows.length"
+              @click="setAllSupplierBatchRemoteExpanded(false)"
+            >
               收起
             </t-button>
           </div>
@@ -179,7 +225,10 @@
                   <t-checkbox
                     :checked="supplierBatchSelectedKeySet.has(row.productId || 0)"
                     :disabled="row.product?.is_connected"
-                    @change="(checked: boolean) => !row.product?.is_connected && handleSupplierBatchProductCheck(row.productId || 0, checked)"
+                    @change="
+                      (checked: boolean) =>
+                        !row.product?.is_connected && handleSupplierBatchProductCheck(row.productId || 0, checked)
+                    "
                   />
                   <div class="supplier-tree-product">
                     <strong>{{ row.product?.name || '-' }}</strong>
@@ -215,10 +264,20 @@
           </div>
           <div class="supplier-batch-panel__actions">
             <t-tag variant="light" theme="success">{{ supplierBatchLocalProducts.length }}</t-tag>
-            <t-button size="small" variant="text" :disabled="!supplierBatchConnectedRows.length" @click="setAllSupplierBatchLocalExpanded(true)">
+            <t-button
+              size="small"
+              variant="text"
+              :disabled="!supplierBatchConnectedRows.length"
+              @click="setAllSupplierBatchLocalExpanded(true)"
+            >
               展开
             </t-button>
-            <t-button size="small" variant="text" :disabled="!supplierBatchConnectedRows.length" @click="setAllSupplierBatchLocalExpanded(false)">
+            <t-button
+              size="small"
+              variant="text"
+              :disabled="!supplierBatchConnectedRows.length"
+              @click="setAllSupplierBatchLocalExpanded(false)"
+            >
               收起
             </t-button>
           </div>
@@ -229,10 +288,7 @@
               v-for="row in supplierBatchVisibleConnectedRows"
               :key="row.key"
               class="supplier-tree-node"
-              :class="[
-                `supplier-tree-node--${row.node_type}`,
-                `supplier-tree-node--level-${Math.min(row.level, 3)}`,
-              ]"
+              :class="[`supplier-tree-node--${row.node_type}`, `supplier-tree-node--level-${Math.min(row.level, 3)}`]"
             >
               <span class="supplier-tree-node__indent" :style="{ width: `${row.level * 18}px` }" />
               <button
@@ -291,7 +347,13 @@
     :confirm-btn="canManageSuppliers ? { content: '保存', loading: supplierSubmitting } : null"
     @confirm="submitSupplier"
   >
-    <t-form ref="supplierFormRef" :data="supplierForm" :rules="supplierRules" label-width="110px" :disabled="!canManageSuppliers">
+    <t-form
+      ref="supplierFormRef"
+      :data="supplierForm"
+      :rules="supplierRules"
+      label-width="110px"
+      :disabled="!canManageSuppliers"
+    >
       <t-form-item label="插件提供商" name="provider_key">
         <t-select v-model="supplierForm.provider_key" filterable @change="handleSupplierProviderChange">
           <t-option v-for="item in providerTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
@@ -351,30 +413,32 @@
         />
         <p v-if="field.description" class="supplier-field-tip">{{ field.description }}</p>
       </t-form-item>
-      <t-form-item label="状态" name="status"><t-switch v-model="supplierForm.status" :custom-value="[1, 0]" /></t-form-item>
+      <t-form-item label="状态" name="status"
+        ><t-switch v-model="supplierForm.status" :custom-value="[1, 0]"
+      /></t-form-item>
     </t-form>
   </t-dialog>
 </template>
-
 <script setup lang="ts">
-import { AddIcon, ChevronRightIcon, RefreshIcon, SearchIcon } from 'tdesign-icons-vue-next';
+import { AddIcon, ChevronRightIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import type { PageInfo } from 'tdesign-vue-next';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref } from 'vue';
 
-import SecretInput from '@/components/secret-input/index.vue';
-import { productApi, type ProductCategoryRecord, type ProductRecord } from '@/api/product';
-import {
-  supplierApi,
-  type ProviderTypeRecord,
-  type SupplierCardAction,
-  type SupplierCardField,
-  type SupplierCardStatus,
-  type SupplierFormField,
-  type SupplierFormSchema,
-  type SupplierRecord,
-  type SupplierUpsertPayload,
+import type { ProductCategoryRecord, ProductRecord } from '@/api/product';
+import { productApi } from '@/api/product';
+import type {
+  ProviderTypeRecord,
+  SupplierCardAction,
+  SupplierCardField,
+  SupplierCardStatus,
+  SupplierFormField,
+  SupplierFormSchema,
+  SupplierRecord,
+  SupplierUpsertPayload,
 } from '@/api/supplier';
+import { supplierApi } from '@/api/supplier';
+import SecretInput from '@/components/secret-input/index.vue';
 import { AdminPermissions } from '@/constants/permissions';
 import { hasAdminPermission } from '@/utils/permission';
 
@@ -539,12 +603,20 @@ const supplierCredentialFields = computed(() => selectedSupplierForm.value.field
 const supplierBatchPendingProducts = computed(() => supplierBatchProducts.value.filter((item) => !item.is_connected));
 const supplierBatchSelectedKeySet = computed(() => new Set(supplierBatchSelectedKeys.value.map((id) => Number(id))));
 const supplierBatchRemoteRows = computed(() => buildRemoteProductTreeRows(supplierBatchProducts.value));
-const supplierBatchConnectedRows = computed(() => buildLocalProductTreeRows(supplierBatchCategoryTree.value, supplierBatchLocalProducts.value));
+const supplierBatchConnectedRows = computed(() =>
+  buildLocalProductTreeRows(supplierBatchCategoryTree.value, supplierBatchLocalProducts.value),
+);
 const supplierBatchRemoteExpandedKeySet = computed(() => new Set(supplierBatchRemoteExpandedKeys.value));
 const supplierBatchLocalExpandedKeySet = computed(() => new Set(supplierBatchLocalExpandedKeys.value));
-const supplierBatchVisibleRemoteRows = computed(() => visibleSupplierBatchTreeRows(supplierBatchRemoteRows.value, supplierBatchRemoteExpandedKeySet.value));
-const supplierBatchVisibleConnectedRows = computed(() => visibleSupplierBatchTreeRows(supplierBatchConnectedRows.value, supplierBatchLocalExpandedKeySet.value));
-const supplierBatchTargetGroup = computed(() => findProductGroupByKey(supplierBatchCategories.value, supplierBatchTargetGroupKey.value));
+const supplierBatchVisibleRemoteRows = computed(() =>
+  visibleSupplierBatchTreeRows(supplierBatchRemoteRows.value, supplierBatchRemoteExpandedKeySet.value),
+);
+const supplierBatchVisibleConnectedRows = computed(() =>
+  visibleSupplierBatchTreeRows(supplierBatchConnectedRows.value, supplierBatchLocalExpandedKeySet.value),
+);
+const supplierBatchTargetGroup = computed(() =>
+  findProductGroupByKey(supplierBatchCategories.value, supplierBatchTargetGroupKey.value),
+);
 const supplierBatchTargetGroupLabel = computed(() => {
   return supplierBatchTargetGroup.value ? productGroupOptionLabel(supplierBatchTargetGroup.value) : '';
 });
@@ -573,7 +645,11 @@ function supplierCardStatus(row: SupplierRecord): Required<SupplierCardStatus> {
 
 function supplierCardFields(row: SupplierRecord): SupplierCardField[] {
   const fields = supplierCard(row).fields;
-  return Array.isArray(fields) ? fields.map((field) => toPlainRecord(field) as SupplierCardField).filter((field) => String(field.label || '').trim()) : [];
+  return Array.isArray(fields)
+    ? fields
+        .map((field) => toPlainRecord(field) as SupplierCardField)
+        .filter((field) => String(field.label || '').trim())
+    : [];
 }
 
 function supplierCardActions(row: SupplierRecord): SupplierCardAction[] {
@@ -593,7 +669,10 @@ function supplierCardActions(row: SupplierRecord): SupplierCardAction[] {
         disabled_reason: String(record.disabled_reason || '').trim(),
       };
     })
-    .filter((action) => String(action.key || '').trim() && String(action.action || '').trim() && String(action.label || '').trim());
+    .filter(
+      (action) =>
+        String(action.key || '').trim() && String(action.action || '').trim() && String(action.label || '').trim(),
+    );
 }
 
 function supplierCardEmptyText(row: SupplierRecord) {
@@ -627,13 +706,6 @@ function supplierCardActionLoadingKey(row: SupplierRecord, action: SupplierCardA
 }
 
 function handleSupplierSearch() {
-  supplierPage.value = 1;
-  void loadSuppliers();
-}
-
-function resetSupplierFilters() {
-  supplierFilters.keyword = '';
-  supplierFilters.status = '';
   supplierPage.value = 1;
   void loadSuppliers();
 }
@@ -748,7 +820,9 @@ function resetSupplierBatchState() {
 async function loadSupplierBatchCategories() {
   const response = await productApi.categories();
   supplierBatchCategoryTree.value = response.tree || response.list || [];
-  supplierBatchCategories.value = flattenCategories(response.tree || response.list || []).filter((item) => isSelectableProductGroup(item));
+  supplierBatchCategories.value = flattenCategories(response.tree || response.list || []).filter((item) =>
+    isSelectableProductGroup(item),
+  );
   syncSupplierBatchLocalExpandedKeys();
 }
 
@@ -759,12 +833,18 @@ function normalizeSupplierBatchProduct(itemValue: unknown): SupplierBatchProduct
     id: Number(item.id || item.product_id || 0),
     name: String(item.name || item.product_name || '').trim(),
     type_label: String(item.type_label || item.type_name || item.type || item.billingcycle || '').trim(),
-    remote_group_name: String(item.remote_group_name || item.group_name || item.second_group_name || item._group_label || '').trim(),
+    remote_group_name: String(
+      item.remote_group_name || item.group_name || item.second_group_name || item._group_label || '',
+    ).trim(),
     is_connected: Boolean(item.is_connected ?? item.is_bound),
-    connected_display_name: String(item.connected_display_name || item.local_product_name || item.local_product_full_path || '').trim(),
+    connected_display_name: String(
+      item.connected_display_name || item.local_product_name || item.local_product_full_path || '',
+    ).trim(),
     local_product_id: Number(item.local_product_id || 0) || null,
     local_product_name: String(item.local_product_name || item.local_product_full_path || '').trim() || null,
-    local_group_path: Array.isArray(item.local_group_path) ? item.local_group_path.map((name) => String(name || '').trim()).filter(Boolean) : [],
+    local_group_path: Array.isArray(item.local_group_path)
+      ? item.local_group_path.map((name) => String(name || '').trim()).filter(Boolean)
+      : [],
   };
 }
 
@@ -776,12 +856,14 @@ function buildSupplierBatchProducts(payloadValue: unknown) {
   }
 
   const groups = Array.isArray(payload.groups) ? payload.groups : [];
-  return groups.flatMap((groupValue) => {
-    const group = toPlainRecord(groupValue);
-    const groupLabel = String(group.label || group.name || '').trim();
-    const items = Array.isArray(group.items) ? group.items : [];
-    return items.map((item) => normalizeSupplierBatchProduct({ ...toPlainRecord(item), _group_label: groupLabel }));
-  }).filter((item) => item.id > 0);
+  return groups
+    .flatMap((groupValue) => {
+      const group = toPlainRecord(groupValue);
+      const groupLabel = String(group.label || group.name || '').trim();
+      const items = Array.isArray(group.items) ? group.items : [];
+      return items.map((item) => normalizeSupplierBatchProduct({ ...toPlainRecord(item), _group_label: groupLabel }));
+    })
+    .filter((item) => item.id > 0);
 }
 
 function buildRemoteProductTreeRows(products: SupplierBatchProduct[]): SupplierBatchTreeRow[] {
@@ -864,11 +946,7 @@ function normalizeSupplierTreeKeyPart(value: string) {
 }
 
 function remoteProductGroupPath(product: SupplierBatchProduct): string[] {
-  const pathCandidates = [
-    product.remote_group_path,
-    product.group_path,
-    product.category_path,
-  ];
+  const pathCandidates = [product.remote_group_path, product.group_path, product.category_path];
 
   for (const value of pathCandidates) {
     if (Array.isArray(value)) {
@@ -877,12 +955,10 @@ function remoteProductGroupPath(product: SupplierBatchProduct): string[] {
     }
   }
 
-  return [
-    product.remote_group_name,
-    product.group_name,
-    product.second_group_name,
-    product.type_label,
-  ].map((name) => String(name || '').trim()).filter(Boolean).slice(0, 2);
+  return [product.remote_group_name, product.group_name, product.second_group_name, product.type_label]
+    .map((name) => String(name || '').trim())
+    .filter(Boolean)
+    .slice(0, 2);
 }
 
 function buildLocalProductTreeRows(groups: ProductCategoryRecord[], products: ProductRecord[]): SupplierBatchTreeRow[] {
@@ -931,7 +1007,10 @@ function appendLocalGroupRows(
   });
 }
 
-function countLocalGroupProducts(group: ProductCategoryRecord, productsByGroupKey: Map<string, ProductRecord[]>): number {
+function countLocalGroupProducts(
+  group: ProductCategoryRecord,
+  productsByGroupKey: Map<string, ProductRecord[]>,
+): number {
   const groupKey = productGroupOptionKey(group);
   const ownCount = groupKey ? productsByGroupKey.get(groupKey)?.length || 0 : 0;
   const children = Array.isArray(group.children) ? group.children : [];
@@ -975,21 +1054,24 @@ function localProductGroupPath(product: ProductRecord) {
 
   const fullName = String(product.effective_product_group_full_name || product.category_full_name || '').trim();
   if (fullName) {
-    return fullName.split(/\s*(?:\/|>|＞)\s*/).map((name) => name.trim()).filter(Boolean);
+    return fullName
+      .split(/\s*[/>＞]\s*/)
+      .map((name) => name.trim())
+      .filter(Boolean);
   }
 
-  return [
-    product.first_product_group_name,
-    product.second_product_group_name,
-    product.third_product_group_name,
-  ].map((name) => String(name || '').trim()).filter(Boolean);
+  return [product.first_product_group_name, product.second_product_group_name, product.third_product_group_name]
+    .map((name) => String(name || '').trim())
+    .filter(Boolean);
 }
 
 function buildLocalGroupPathKeyMap(groups: ProductCategoryRecord[]) {
   const result = new Map<string, string>();
   const append = (items: ProductCategoryRecord[], parentPath: string[]) => {
     items.forEach((item) => {
-      const label = String(item.name || item.label || '').replace(/^　+/, '').trim();
+      const label = String(item.name || item.label || '')
+        .replace(/^\u3000+/, '')
+        .trim();
       const path = label ? [...parentPath, label] : parentPath;
       const key = normalizeLocalGroupPath(path);
       const groupKey = productGroupOptionKey(item);
@@ -1003,12 +1085,28 @@ function buildLocalGroupPathKeyMap(groups: ProductCategoryRecord[]) {
 }
 
 function normalizeLocalGroupPath(path: unknown[]) {
-  return path.map((name) => String(name || '').replace(/^　+/, '').trim()).filter(Boolean).join(' / ');
+  return path
+    .map((name) =>
+      String(name || '')
+        .replace(/^\u3000+/, '')
+        .trim(),
+    )
+    .filter(Boolean)
+    .join(' / ');
 }
 
 function localProductDisplayName(product?: ProductRecord) {
   if (!product) return '-';
-  return String(product.display_name || product.product_display_name || product.custom_display_name || product.name || product.id || '-').trim() || '-';
+  return (
+    String(
+      product.display_name ||
+        product.product_display_name ||
+        product.custom_display_name ||
+        product.name ||
+        product.id ||
+        '-',
+    ).trim() || '-'
+  );
 }
 
 function localProductSubtitle(product?: ProductRecord) {
@@ -1018,7 +1116,9 @@ function localProductSubtitle(product?: ProductRecord) {
   const upstreamProductId = String(upstreamBinding.upstream_product_id || '').trim();
   if (supplierName && upstreamProductId) return `提供商：${supplierName} · 上游ID：${upstreamProductId}`;
   if (supplierName) return `提供商：${supplierName}`;
-  return String(product.effective_product_group_full_name || product.product_type_label || '本地商品').trim() || '本地商品';
+  return (
+    String(product.effective_product_group_full_name || product.product_type_label || '本地商品').trim() || '本地商品'
+  );
 }
 
 function visibleSupplierBatchTreeRows(rows: SupplierBatchTreeRow[], expandedKeySet: Set<string>) {
@@ -1028,7 +1128,11 @@ function visibleSupplierBatchTreeRows(rows: SupplierBatchTreeRow[], expandedKeyS
     .map((row) => (row.node_type === 'group' ? { ...row, isExpanded: expandedKeySet.has(row.key) } : row));
 }
 
-function isSupplierBatchTreeRowVisible(row: SupplierBatchTreeRow, rowMap: Map<string, SupplierBatchTreeRow>, expandedKeySet: Set<string>) {
+function isSupplierBatchTreeRowVisible(
+  row: SupplierBatchTreeRow,
+  rowMap: Map<string, SupplierBatchTreeRow>,
+  expandedKeySet: Set<string>,
+) {
   let parentKey = row.parentKey;
   while (parentKey) {
     if (!expandedKeySet.has(parentKey)) return false;
@@ -1041,7 +1145,11 @@ function expandableSupplierBatchTreeKeys(rows: SupplierBatchTreeRow[]) {
   return rows.filter((row) => row.node_type === 'group' && row.hasChildren).map((row) => row.key);
 }
 
-function syncSupplierBatchExpandedKeys(expandedKeys: { value: string[] }, initialized: { value: boolean }, rows: SupplierBatchTreeRow[]) {
+function syncSupplierBatchExpandedKeys(
+  expandedKeys: { value: string[] },
+  initialized: { value: boolean },
+  rows: SupplierBatchTreeRow[],
+) {
   const availableKeys = expandableSupplierBatchTreeKeys(rows);
   if (!initialized.value) {
     if (!availableKeys.length) return;
@@ -1055,11 +1163,19 @@ function syncSupplierBatchExpandedKeys(expandedKeys: { value: string[] }, initia
 }
 
 function syncSupplierBatchRemoteExpandedKeys() {
-  syncSupplierBatchExpandedKeys(supplierBatchRemoteExpandedKeys, supplierBatchRemoteExpansionInitialized, supplierBatchRemoteRows.value);
+  syncSupplierBatchExpandedKeys(
+    supplierBatchRemoteExpandedKeys,
+    supplierBatchRemoteExpansionInitialized,
+    supplierBatchRemoteRows.value,
+  );
 }
 
 function syncSupplierBatchLocalExpandedKeys() {
-  syncSupplierBatchExpandedKeys(supplierBatchLocalExpandedKeys, supplierBatchLocalExpansionInitialized, supplierBatchConnectedRows.value);
+  syncSupplierBatchExpandedKeys(
+    supplierBatchLocalExpandedKeys,
+    supplierBatchLocalExpansionInitialized,
+    supplierBatchConnectedRows.value,
+  );
 }
 
 function toggleSupplierBatchExpandedKey(expandedKeys: { value: string[] }, key: string) {
@@ -1081,12 +1197,16 @@ function toggleSupplierBatchLocalGroup(key: string) {
 }
 
 function setAllSupplierBatchRemoteExpanded(expanded: boolean) {
-  supplierBatchRemoteExpandedKeys.value = expanded ? expandableSupplierBatchTreeKeys(supplierBatchRemoteRows.value) : [];
+  supplierBatchRemoteExpandedKeys.value = expanded
+    ? expandableSupplierBatchTreeKeys(supplierBatchRemoteRows.value)
+    : [];
   supplierBatchRemoteExpansionInitialized.value = true;
 }
 
 function setAllSupplierBatchLocalExpanded(expanded: boolean) {
-  supplierBatchLocalExpandedKeys.value = expanded ? expandableSupplierBatchTreeKeys(supplierBatchConnectedRows.value) : [];
+  supplierBatchLocalExpandedKeys.value = expanded
+    ? expandableSupplierBatchTreeKeys(supplierBatchConnectedRows.value)
+    : [];
   supplierBatchLocalExpansionInitialized.value = true;
 }
 
@@ -1133,7 +1253,9 @@ async function loadSupplierBatchProducts() {
   try {
     const response = await supplierApi.products(supplierBatchSupplier.value.id, { silent: true });
     supplierBatchProducts.value = buildSupplierBatchProducts(response);
-    const selectableIds = new Set(supplierBatchProducts.value.filter((item) => !item.is_connected).map((item) => Number(item.id)));
+    const selectableIds = new Set(
+      supplierBatchProducts.value.filter((item) => !item.is_connected).map((item) => Number(item.id)),
+    );
     supplierBatchSelectedKeys.value = supplierBatchSelectedKeys.value.filter((id) => selectableIds.has(Number(id)));
     syncSupplierBatchRemoteExpandedKeys();
     syncSupplierBatchLocalExpandedKeys();
@@ -1375,7 +1497,8 @@ function normalizeProviderTypeOptions(value: unknown): ProviderTypeRecord[] {
       if (!val) return null;
 
       const rawLabel = rec.label ?? rec.name ?? rec.title;
-      const label = providerTypeFallbackLabels[val] || (typeof rawLabel === 'string' ? rawLabel : String(rawLabel || val));
+      const label =
+        providerTypeFallbackLabels[val] || (typeof rawLabel === 'string' ? rawLabel : String(rawLabel || val));
       return { ...rec, value: val, label };
     })
     .filter((item): item is ProviderTypeRecord => !!item);
@@ -1408,7 +1531,8 @@ function resetSupplierCredentialValues(source: SupplierRecord | null) {
       supplierCredentialValues[field.key] = '';
       return;
     }
-    supplierCredentialValues[field.key] = providerConfig[field.key] ?? field.default ?? defaultSupplierFieldValue(field);
+    supplierCredentialValues[field.key] =
+      providerConfig[field.key] ?? field.default ?? defaultSupplierFieldValue(field);
   });
 }
 
@@ -1475,9 +1599,10 @@ function buildSupplierPayload(): SupplierUpsertPayload {
   };
 
   supplierCredentialFields.value.forEach((field) => {
-    const value = field.secret && hasExistingSupplierSecret(field) && !supplierSecretEdited[field.key]
-      ? ''
-      : supplierCredentialValues[field.key];
+    const value =
+      field.secret && hasExistingSupplierSecret(field) && !supplierSecretEdited[field.key]
+        ? ''
+        : supplierCredentialValues[field.key];
     if (field.key === 'api_url') {
       payload.api_url = value;
       if (payload.upstream_binding) payload.upstream_binding.base_url = value;

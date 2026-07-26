@@ -15,7 +15,14 @@
         </div>
 
         <div v-if="!isMobile" class="table-scroll">
-          <t-table row-key="code" :data="filteredTemplates" :columns="templateColumns" hover table-layout="fixed" @row-click="openTemplate">
+          <t-table
+            row-key="code"
+            :data="filteredTemplates"
+            :columns="templateColumns"
+            hover
+            table-layout="fixed"
+            @row-click="openTemplate"
+          >
             <template #name="{ row }">
               <div class="stack-cell">
                 <strong>{{ row.name }}</strong>
@@ -31,13 +38,19 @@
               </t-space>
             </template>
             <template #preview="{ row }">{{ row.preview }}</template>
-            <template #subject="{ row }">{{ row.channel === 'email' ? fieldValue(row.subject) : row.preview }}</template>
+            <template #subject="{ row }">{{
+              row.channel === 'email' ? fieldValue(row.subject) : row.preview
+            }}</template>
             <template #variables="{ row }">{{ row.variables.length }}</template>
             <template #templateType="{ row }">
-              <t-tag :theme="row.channel === 'email' ? 'primary' : 'success'" variant="light">{{ row.channel === 'email' ? '邮件' : '短信' }}</t-tag>
+              <t-tag :theme="row.channel === 'email' ? 'primary' : 'success'" variant="light">{{
+                row.channel === 'email' ? '邮件' : '短信'
+              }}</t-tag>
             </template>
             <template #bodyType="{ row }">
-              <t-tag :theme="row.isHtml ? 'primary' : 'default'" variant="light">{{ row.isHtml ? 'HTML' : '文本' }}</t-tag>
+              <t-tag :theme="row.isHtml ? 'primary' : 'default'" variant="light">{{
+                row.isHtml ? 'HTML' : '文本'
+              }}</t-tag>
             </template>
             <template #status="{ row }">
               <span class="template-status-switch" @click.stop>
@@ -67,10 +80,22 @@
             </div>
             <p>{{ row.description }}</p>
             <dl>
-              <div><dt>{{ row.channel === 'email' ? '主题' : '正文' }}</dt><dd>{{ row.channel === 'email' ? fieldValue(row.subject) : row.preview }}</dd></div>
-              <div><dt>模板类型</dt><dd>{{ row.channel === 'email' ? '邮件' : '短信' }}</dd></div>
-              <div><dt>变量数</dt><dd>{{ row.variables.length }}</dd></div>
-              <div><dt>正文类型</dt><dd>{{ row.isHtml ? 'HTML' : '文本' }}</dd></div>
+              <div>
+                <dt>{{ row.channel === 'email' ? '主题' : '正文' }}</dt>
+                <dd>{{ row.channel === 'email' ? fieldValue(row.subject) : row.preview }}</dd>
+              </div>
+              <div>
+                <dt>模板类型</dt>
+                <dd>{{ row.channel === 'email' ? '邮件' : '短信' }}</dd>
+              </div>
+              <div>
+                <dt>变量数</dt>
+                <dd>{{ row.variables.length }}</dd>
+              </div>
+              <div>
+                <dt>正文类型</dt>
+                <dd>{{ row.isHtml ? 'HTML' : '文本' }}</dd>
+              </div>
               <div>
                 <dt>发送状态</dt>
                 <dd>
@@ -83,7 +108,10 @@
                   />
                 </dd>
               </div>
-              <div v-if="row.channel === 'email'"><dt>面向对象</dt><dd>{{ row.audience === 'admin' ? '管理员' : '用户' }}</dd></div>
+              <div v-if="row.channel === 'email'">
+                <dt>面向对象</dt>
+                <dd>{{ row.audience === 'admin' ? '管理员' : '用户' }}</dd>
+              </div>
             </dl>
             <div class="template-mobile-card__actions">
               <t-button variant="outline" @click="openTestSend(row)">测试发送</t-button>
@@ -99,10 +127,18 @@
         <t-card :bordered="false" class="api-sidebar">
           <template #title>接口分类</template>
           <div class="api-meta-grid">
-            <article><span>接口</span><strong>{{ apiMeta.total || apiItems.length }}</strong></article>
-            <article><span>模块</span><strong>{{ apiMeta.moduleCount || apiModules.length }}</strong></article>
-            <article><span>权限</span><strong>{{ apiMeta.accessCounts?.permission || 0 }}</strong></article>
-            <article><span>登录</span><strong>{{ apiMeta.accessCounts?.auth || 0 }}</strong></article>
+            <article>
+              <span>接口</span><strong>{{ apiMeta.total || apiItems.length }}</strong>
+            </article>
+            <article>
+              <span>模块</span><strong>{{ apiMeta.moduleCount || apiModules.length }}</strong>
+            </article>
+            <article>
+              <span>权限</span><strong>{{ apiMeta.accessCounts?.permission || 0 }}</strong>
+            </article>
+            <article>
+              <span>登录</span><strong>{{ apiMeta.accessCounts?.auth || 0 }}</strong>
+            </article>
           </div>
           <div class="api-category-list">
             <button type="button" :class="{ active: selectedApiModule === 'all' }" @click="selectedApiModule = 'all'">
@@ -127,7 +163,11 @@
             <div class="api-directory-head">
               <div>
                 <h2>API 接口页</h2>
-                <p>数据来源：{{ apiMeta.dataSource || '-' }}，生成时间：{{ apiMeta.generatedAt || '-' }}，基础地址：{{ apiMeta.baseURL || '/api' }}</p>
+                <p>
+                  数据来源：{{ apiMeta.dataSource || '-' }}，生成时间：{{ apiMeta.generatedAt || '-' }}，基础地址：{{
+                    apiMeta.baseURL || '/api'
+                  }}
+                </p>
               </div>
               <t-button variant="outline" @click="resetApiFilters">重置筛选</t-button>
             </div>
@@ -228,12 +268,20 @@
           </t-form-item>
         </t-form>
 
-        <div v-if="testSendResult" class="template-test-feedback" :class="`template-test-feedback--${testSendResult.status}`">
+        <div
+          v-if="testSendResult"
+          class="template-test-feedback"
+          :class="`template-test-feedback--${testSendResult.status}`"
+        >
           <strong>{{ testSendSummaryText }}</strong>
           <span>成功 {{ testSendResult.success_count }} 条，失败 {{ testSendResult.failed_count }} 条</span>
         </div>
         <div v-if="testSendResult?.results?.length" class="template-test-results">
-          <div v-for="item in testSendResult.results" :key="`${item.recipient}:${item.status}`" class="template-test-result-row">
+          <div
+            v-for="item in testSendResult.results"
+            :key="`${item.recipient}:${item.status}`"
+            class="template-test-result-row"
+          >
             <span>{{ item.recipient }}</span>
             <t-tag :theme="item.status === 'success' ? 'success' : 'danger'" variant="light">
               {{ item.status === 'success' ? '成功' : '失败' }}
@@ -245,20 +293,20 @@
     </t-dialog>
   </div>
 </template>
-
 <script setup lang="ts">
+import './index.less';
+
+import { SearchIcon } from 'tdesign-icons-vue-next';
+import type { PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { SearchIcon } from 'tdesign-icons-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
-import type { PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 
-import { adminApi, type NotificationTemplateItem, type NotificationTemplateTestSendResponse, type SettingItem } from '@/api/admin';
+import type { NotificationTemplateItem, NotificationTemplateTestSendResponse, SettingItem } from '@/api/admin';
+import { adminApi } from '@/api/admin';
+import apiCatalogData from '@/data/apiCatalog.generated.json';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { errorMessage } from '@/utils/userMessage';
-import apiCatalogData from '@/data/apiCatalog.generated.json';
-
-import './index.less';
 
 type NotificationTab = 'email-templates' | 'sms-templates' | 'api-directory';
 type TemplateChannel = 'email' | 'sms';
@@ -335,14 +383,18 @@ const templateChannel = computed<TemplateChannel>(() => (activeTab.value === 'sm
 const templateTitle = computed(() => (templateChannel.value === 'sms' ? '短信模板' : '邮件模板'));
 const templateDescription = computed(() => {
   if (templateChannel.value === 'sms') {
-    return '\u77ed\u4fe1\u6a21\u677f\u7528\u4e8e\u9a8c\u8bc1\u7801\u3001\u8d26\u5355\u3001\u670d\u52a1\u3001\u5de5\u5355\u548c\u5b89\u5168\u63d0\u9192\u7b49\u77ed\u4fe1\u5185\u5bb9\u7ba1\u7406\u3002';
+    return '\u77ED\u4FE1\u6A21\u677F\u7528\u4E8E\u9A8C\u8BC1\u7801\u3001\u8D26\u5355\u3001\u670D\u52A1\u3001\u5DE5\u5355\u548C\u5B89\u5168\u63D0\u9192\u7B49\u77ED\u4FE1\u5185\u5BB9\u7BA1\u7406\u3002';
   }
 
   return '点击编辑进入独立详情页，维护每封邮件自己的主题和 HTML 正文。';
 });
-const testSendDialogTitle = computed(() => (testSendTemplate.value?.channel === 'sms' ? '测试发送短信' : '测试发送邮件'));
+const testSendDialogTitle = computed(() =>
+  testSendTemplate.value?.channel === 'sms' ? '测试发送短信' : '测试发送邮件',
+);
 const testSendPlaceholder = computed(() =>
-  testSendTemplate.value?.channel === 'sms' ? '请输入接收手机号，例如：13900001234' : '请输入接收邮箱，例如：tester@example.com',
+  testSendTemplate.value?.channel === 'sms'
+    ? '请输入接收手机号，例如：13900001234'
+    : '请输入接收邮箱，例如：tester@example.com',
 );
 const testSendSummaryText = computed(() => {
   if (!testSendResult.value) return '';
@@ -357,7 +409,8 @@ const templateAudienceOptions = computed(() => [
 const templateRows = computed<TemplateRow[]>(() =>
   templateSummaries.value.map((template) => {
     const subjectKey = stringValue(template.setting_keys?.subject) || `email_template_subject_${template.code}`;
-    const contentKey = stringValue(template.setting_keys?.content) || `${template.channel}_template_content_${template.code}`;
+    const contentKey =
+      stringValue(template.setting_keys?.content) || `${template.channel}_template_content_${template.code}`;
     const subject = stringValue(settingsMap.value[subjectKey]) || stringValue(template.subject);
     const content = stringValue(settingsMap.value[contentKey]) || template.content;
     const preview = stripHtml(content);
@@ -365,13 +418,15 @@ const templateRows = computed<TemplateRow[]>(() =>
       ...template,
       subject,
       preview: preview ? (preview.length > 88 ? `${preview.slice(0, 88)}...` : preview) : '-',
-      isHtml: /<([a-z][a-z0-9]*)(\s|>)/i.test(content.trim()),
+      isHtml: /<[a-z][a-z0-9]*(?:\s|>)/i.test(content.trim()),
       is_enabled: toBooleanValue(template.is_enabled ?? true),
     };
   }),
 );
 const filteredTemplates = computed(() =>
-  templateChannel.value === 'email' ? templateRows.value.filter((item) => item.audience === templateAudience.value) : templateRows.value,
+  templateChannel.value === 'email'
+    ? templateRows.value.filter((item) => item.audience === templateAudience.value)
+    : templateRows.value,
 );
 const apiModules = computed(() => {
   const moduleMap = new Map<string, { key: string; label: string; count: number }>();
@@ -391,7 +446,13 @@ const filteredApiItems = computed(() => {
     if (apiFilters.access !== 'all' && item.access !== apiFilters.access) return false;
     if (apiFilters.method !== 'all' && item.method !== apiFilters.method) return false;
     if (apiFilters.source === 'untracked' && item.sourceApps.length > 0) return false;
-    if (apiFilters.source !== 'all' && apiFilters.source !== 'untracked' && !item.sourceApps.includes(apiFilters.source)) return false;
+    if (
+      apiFilters.source !== 'all' &&
+      apiFilters.source !== 'untracked' &&
+      !item.sourceApps.includes(apiFilters.source)
+    ) {
+      return false;
+    }
     if (!keyword) return true;
     return [
       item.scopeLabel,
@@ -542,7 +603,8 @@ async function updateTemplateEnabled(row: TemplateRow | TableRowData, value: unk
   const template = row as TemplateRow;
   const key = templateRowKey(template);
   const previous = toBooleanValue(
-    templateSummaries.value.find((item) => item.channel === template.channel && item.code === template.code)?.is_enabled ?? template.is_enabled,
+    templateSummaries.value.find((item) => item.channel === template.channel && item.code === template.code)
+      ?.is_enabled ?? template.is_enabled,
   );
   const enabled = toBooleanValue(value);
 
@@ -641,7 +703,6 @@ function fieldValue(value: unknown) {
 function toRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
-
 
 watch(
   () => [route.path, route.query.tab, route.meta.notificationTab],

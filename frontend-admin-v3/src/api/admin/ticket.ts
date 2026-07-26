@@ -1,30 +1,25 @@
 import { request } from '@/utils/request';
-import type {
-  TicketListParams,
-  TicketRecord,
-  TicketDetail,
-  TicketAdminUser,
-  TicketAttachment,
-} from './types';
 
-type TicketV2DetailPayload = {
+import type { TicketAdminUser, TicketAttachment, TicketDetail, TicketListParams, TicketRecord } from './types';
+
+interface TicketV2DetailPayload {
   ticket?: TicketDetail | null;
-};
+}
 
-type TicketV2RepliesPayload = {
+interface TicketV2RepliesPayload {
   list?: TicketDetail['replies'];
   total?: number;
   page?: number;
   page_size?: number;
-};
+}
 
-type TicketV2AdminUsersPayload = {
+interface TicketV2AdminUsersPayload {
   list?: TicketAdminUser[];
-};
+}
 
-type TicketV2UploadPayload = {
+interface TicketV2UploadPayload {
   attachment?: TicketAttachment;
-};
+}
 
 async function v2TicketDetail(id: number | string): Promise<TicketDetail> {
   const [detailPayload, repliesPayload] = await Promise.all([
@@ -50,21 +45,20 @@ export const ticketsApi = {
     }),
   summary: () => request.get<Record<string, unknown>>({ url: '/v2/admin/tickets/summary' }),
   detail: (id: number | string) => v2TicketDetail(id),
-  adminUsers: () =>
-    request.get<TicketV2AdminUsersPayload>({ url: '/v2/admin/tickets/admin-users' }),
+  adminUsers: () => request.get<TicketV2AdminUsersPayload>({ url: '/v2/admin/tickets/admin-users' }),
   close: (id: number | string) => request.post({ url: `/v2/admin/tickets/${id}/closures` }),
   assign: (id: number | string, data: { assignee_id?: number | string | null }) =>
     request.put({ url: `/v2/admin/tickets/${id}/assignment`, data }),
-  reply: (
-    id: number | string,
-    data: { content?: string; attachments?: string[]; quote_reply_id?: number | string }
-  ) => request.post({ url: `/v2/admin/tickets/${id}/replies`, data }),
+  reply: (id: number | string, data: { content?: string; attachments?: string[]; quote_reply_id?: number | string }) =>
+    request.post({ url: `/v2/admin/tickets/${id}/replies`, data }),
   recall: (id: number | string, replyId: number | string) =>
     request.post({ url: `/v2/admin/tickets/${id}/replies/${replyId}/recalls` }),
   uploadImage: (data: FormData) =>
-    request.post<TicketV2UploadPayload>({
-      url: '/v2/admin/tickets/upload-images',
-      data,
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }).then((response) => response.attachment || {}),
+    request
+      .post<TicketV2UploadPayload>({
+        url: '/v2/admin/tickets/upload-images',
+        data,
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      .then((response) => response.attachment || {}),
 };

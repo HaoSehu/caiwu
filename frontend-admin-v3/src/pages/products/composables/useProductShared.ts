@@ -37,7 +37,8 @@ export function flattenCategories<
       label,
       parent_id: node.parent_id ?? parent?.id ?? null,
       product_type: node.product_type || parent?.product_type || '',
-      first_product_group_code: node.first_product_group_code || parent?.first_product_group_code || catalogProductType || '',
+      first_product_group_code:
+        node.first_product_group_code || parent?.first_product_group_code || catalogProductType || '',
     } as T;
     return [current, ...flattenCategories(node.children || [], level + 1, current, catalogProductType)];
   });
@@ -109,7 +110,10 @@ export function isSelectableProductGroup(row: ProductGroupLike): boolean {
   return childCount <= 0;
 }
 
-export function productGroupPayload(row: ProductGroupLike | null | undefined, prefix = ''): Record<string, number | null> {
+export function productGroupPayload(
+  row: ProductGroupLike | null | undefined,
+  prefix = '',
+): Record<string, number | null> {
   if (!row) return {};
   const firstId = Number(row.first_product_group_id || 0) || null;
   const secondId = Number(row.second_product_group_id || (productGroupLevel(row) === 2 ? row.id : 0) || 0) || null;
@@ -231,7 +235,8 @@ export function normalizeProviderTypeOptions(value: unknown): ProviderTypeRecord
       if (!val) return null;
 
       const rawLabel = rec.label ?? rec.name ?? rec.title;
-      const label = providerTypeFallbackLabels[val] || (typeof rawLabel === 'string' ? rawLabel : String(rawLabel || val));
+      const label =
+        providerTypeFallbackLabels[val] || (typeof rawLabel === 'string' ? rawLabel : String(rawLabel || val));
       return { ...rec, value: val, label };
     })
     .filter((item): item is ProviderTypeRecord => !!item);

@@ -1,9 +1,13 @@
 function normalizeApiBaseUrl(value: unknown): string {
-  return String(value || '').trim().replace(/\/+$/, '');
+  return String(value || '')
+    .trim()
+    .replace(/\/+$/, '');
 }
 
 export function resolveApiAssetUrl(value: unknown, apiBaseUrl: unknown): string {
-  const normalized = String(value || '').trim().replace(/\\/g, '/');
+  const normalized = String(value || '')
+    .trim()
+    .replace(/\\/g, '/');
   if (!normalized || /^(?:https?:)?\/\//i.test(normalized) || normalized.startsWith('data:')) {
     return normalized;
   }

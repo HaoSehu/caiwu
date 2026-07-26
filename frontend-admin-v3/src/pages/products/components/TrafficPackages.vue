@@ -7,10 +7,20 @@
       </div>
       <div class="traffic-actions">
         <t-button theme="primary" variant="outline" @click="openTrafficGroupDialog()">新增分组</t-button>
-        <t-button variant="outline" :loading="trafficPulling" :disabled="!selectedTrafficGroup" @click="pullTrafficPackages">
+        <t-button
+          variant="outline"
+          :loading="trafficPulling"
+          :disabled="!selectedTrafficGroup"
+          @click="pullTrafficPackages"
+        >
           上游拉取
         </t-button>
-        <t-button theme="primary" :loading="trafficSaving" :disabled="!selectedTrafficGroup" @click="saveTrafficPackages">
+        <t-button
+          theme="primary"
+          :loading="trafficSaving"
+          :disabled="!selectedTrafficGroup"
+          @click="saveTrafficPackages"
+        >
           保存当前分组
         </t-button>
       </div>
@@ -27,10 +37,14 @@
           <button type="button" @click="handleTrafficGroupChange(group.id)">
             <strong>{{ group.name || '未命名分组' }}</strong>
             <span>{{ group.product_group_label || `分类 #${group.effective_product_group_id || '--'}` }}</span>
-            <small>已绑定 {{ group.product_ids.length }} 个配置 · {{ trafficGroupPackageCount(group.id) }} 个档位</small>
+            <small
+              >已绑定 {{ group.product_ids.length }} 个配置 · {{ trafficGroupPackageCount(group.id) }} 个档位</small
+            >
           </button>
           <t-space size="small">
-            <t-button size="small" variant="text" theme="primary" @click.stop="openTrafficGroupDialog(group)">编辑</t-button>
+            <t-button size="small" variant="text" theme="primary" @click.stop="openTrafficGroupDialog(group)"
+              >编辑</t-button
+            >
             <t-button size="small" variant="text" theme="danger" @click.stop="removeTrafficGroup(group)">删除</t-button>
           </t-space>
         </article>
@@ -42,7 +56,9 @@
           <div class="traffic-package-head">
             <div>
               <strong>{{ selectedTrafficGroup.name }}</strong>
-              <span>{{ selectedTrafficGroup.product_group_label || `分类 #${selectedTrafficGroup.effective_product_group_id}` }}</span>
+              <span>{{
+                selectedTrafficGroup.product_group_label || `分类 #${selectedTrafficGroup.effective_product_group_id}`
+              }}</span>
               <small>绑定配置：{{ trafficBoundProductSummary(selectedTrafficGroup) }}</small>
             </div>
             <t-space size="small">
@@ -79,7 +95,7 @@
         <t-input v-model="trafficGroupForm.name" placeholder="例如 基础流量包" maxlength="30" />
       </t-form-item>
       <t-form-item label="绑定配置" name="product_ids">
-        <ProductBindingTreeSelect
+        <product-binding-tree-select
           v-model="trafficGroupForm.product_ids"
           mode="batch"
           compact
@@ -91,14 +107,14 @@
     </t-form>
   </t-dialog>
 </template>
-
 <script setup lang="ts">
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import { computed, reactive, ref } from 'vue';
 
-import { adminApi, type ProductBindingRecord } from '@/api/admin';
-import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
+import type { ProductBindingRecord } from '@/api/admin';
+import { adminApi } from '@/api/admin';
 import { productApi } from '@/api/product';
+import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
 
 import { errorMessage, normalizeProductIds } from '../composables/useProductShared';
 
@@ -159,17 +175,9 @@ const selectedTrafficGroupId = ref('');
 const trafficRows = ref<TrafficPackageItem[]>([]);
 
 // --- Computeds ---
-const selectedTrafficGroup = computed(() =>
-  trafficGroupItems.value.find((group) => String(group.id) === String(selectedTrafficGroupId.value)) || null,
+const selectedTrafficGroup = computed(
+  () => trafficGroupItems.value.find((group) => String(group.id) === String(selectedTrafficGroupId.value)) || null,
 );
-
-const trafficGroupBindingSummary = computed(() => {
-  const categoryLabel = String(trafficGroupForm.product_group_label || '').trim();
-  const categoryId = Number(trafficGroupForm.effective_product_group_id || 0);
-  if (categoryLabel) return categoryLabel;
-  if (categoryId > 0) return `分类 #${categoryId}`;
-  return trafficGroupForm.product_ids.length ? '已选择配置，等待解析分类' : '';
-});
 
 // --- Methods ---
 function handleTrafficGroupChange(groupId: string) {
@@ -444,7 +452,9 @@ async function pullTrafficPackages() {
       source_product_id: group.product_ids[0] || undefined,
     })) as Record<string, unknown>;
     const packages = Array.isArray(response.packages) ? response.packages : [];
-    trafficRows.value = packages.map((item, index) => createTrafficRow({ ...(item as Record<string, unknown>), sort_order: index + 1 }, group));
+    trafficRows.value = packages.map((item, index) =>
+      createTrafficRow({ ...(item as Record<string, unknown>), sort_order: index + 1 }, group),
+    );
     MessagePlugin.success('流量包配置已从上游拉取');
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '拉取流量包配置失败'));
@@ -502,7 +512,11 @@ function getSettingValue(response: unknown, key: string) {
 }
 
 function createTrafficRow(item: Record<string, unknown> = {}, group = selectedTrafficGroup.value): TrafficPackageItem {
-  const effectiveProductGroupId = numberFrom(item.effective_product_group_id, item.category_id, group?.effective_product_group_id);
+  const effectiveProductGroupId = numberFrom(
+    item.effective_product_group_id,
+    item.category_id,
+    group?.effective_product_group_id,
+  );
   return {
     _rowKey: String(item._rowKey || `traffic-package-${Date.now()}-${Math.random().toString(36).slice(2)}`),
     traffic_group_id: stringFrom(item.traffic_group_id, item.group_id, group?.id),
@@ -575,7 +589,9 @@ function createTrafficGroupsFromItems(items: TrafficPackageItem[]): TrafficPacka
   return Array.from(map.values());
 }
 
-function resolveTrafficGroupKey(item: Pick<TrafficPackageItem, 'traffic_group_id' | 'product_type' | 'effective_product_group_id'>) {
+function resolveTrafficGroupKey(
+  item: Pick<TrafficPackageItem, 'traffic_group_id' | 'product_type' | 'effective_product_group_id'>,
+) {
   return String(item.traffic_group_id || `${item.product_type || 'default'}:${item.effective_product_group_id || 0}`);
 }
 
@@ -590,9 +606,10 @@ function trafficBoundProductSummary(group: TrafficPackageGroup) {
 
 function trafficPullCategoryPayload(group: TrafficPackageGroup) {
   const thirdProductGroupId = Number(group.third_product_group_id || 0) || 0;
-  const secondProductGroupId = thirdProductGroupId > 0
-    ? Number(group.second_product_group_id || 0) || 0
-    : Number(group.second_product_group_id || group.effective_product_group_id || 0) || 0;
+  const secondProductGroupId =
+    thirdProductGroupId > 0
+      ? Number(group.second_product_group_id || 0) || 0
+      : Number(group.second_product_group_id || group.effective_product_group_id || 0) || 0;
 
   return {
     second_product_group_id: secondProductGroupId || undefined,
@@ -603,7 +620,9 @@ function trafficPullCategoryPayload(group: TrafficPackageGroup) {
 function syncTrafficRowsFromSelection() {
   const group = selectedTrafficGroup.value;
   trafficRows.value = group
-    ? trafficPackageItems.value.filter((item) => resolveTrafficGroupKey(item) === group.id).map((item) => createTrafficRow(item, group))
+    ? trafficPackageItems.value
+        .filter((item) => resolveTrafficGroupKey(item) === group.id)
+        .map((item) => createTrafficRow(item, group))
     : [];
 }
 

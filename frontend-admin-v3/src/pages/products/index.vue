@@ -1,16 +1,15 @@
 <template>
   <div class="products-page">
-    <ProductCatalog v-if="activeTab === 'catalog'" />
-    <TrafficPackages v-else-if="activeTab === 'traffic-packages'" />
-    <Suppliers v-else />
+    <product-catalog v-if="activeTab === 'catalog'" />
+    <traffic-packages v-else-if="activeTab === 'traffic-packages'" />
+    <suppliers v-else />
   </div>
 </template>
-
 <script setup lang="ts">
+import './index.less';
+
 import { defineAsyncComponent, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-
-import './index.less';
 
 defineOptions({ name: 'AdminProducts' });
 

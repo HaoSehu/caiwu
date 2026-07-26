@@ -3,8 +3,8 @@
     <t-card :bordered="false">
       <div class="order-filter">
         <t-input
-          class="filter-keyword"
           v-model="filters.keyword"
+          class="filter-keyword"
           clearable
           placeholder="搜索订单号 / 账单号 / 用户 / 服务"
           @enter="handleSearch"
@@ -12,19 +12,33 @@
         >
           <template #suffix-icon><search-icon /></template>
         </t-input>
-        <t-select v-if="mode === 'orders' || mode === 'all'" class="filter-type" v-model="filters.type" clearable placeholder="类型" @change="handleSearch">
+        <t-select
+          v-if="mode === 'orders' || mode === 'all'"
+          v-model="filters.type"
+          class="filter-type"
+          clearable
+          placeholder="类型"
+          @change="handleSearch"
+        >
           <t-option v-for="item in orderTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
         </t-select>
-        <t-select v-if="mode === 'upgrade'" class="filter-type" v-model="filters.upgrade_kind" clearable placeholder="配置类型" @change="handleSearch">
+        <t-select
+          v-if="mode === 'upgrade'"
+          v-model="filters.upgrade_kind"
+          class="filter-type"
+          clearable
+          placeholder="配置类型"
+          @change="handleSearch"
+        >
           <t-option label="全部" value="all" />
           <t-option label="流量包" value="traffic_package" />
         </t-select>
-        <t-select class="filter-status" v-model="filters.status" clearable placeholder="状态" @change="handleSearch">
+        <t-select v-model="filters.status" class="filter-status" clearable placeholder="状态" @change="handleSearch">
           <t-option v-for="item in orderStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
         </t-select>
         <t-date-picker
-          class="filter-start"
           v-model="filters.start_date"
+          class="filter-start"
           clearable
           mode="date"
           format="YYYY-MM-DD"
@@ -33,8 +47,8 @@
           @change="handleSearch"
         />
         <t-date-picker
-          class="filter-end"
           v-model="filters.end_date"
+          class="filter-end"
           clearable
           mode="date"
           format="YYYY-MM-DD"
@@ -68,7 +82,7 @@
           <template #amount="{ row }">{{ formatMoney(row.amount) }}</template>
           <template #quantity="{ row }">{{ row.quantity || 1 }}</template>
           <template #status="{ row }">
-            <StatusTag :status-map="ORDER_STATUS_MAP" :status="row.status" />
+            <status-tag :status-map="ORDER_STATUS_MAP" :status="row.status" />
           </template>
           <template #invoice="{ row }">
             <div class="stack-cell">
@@ -86,7 +100,7 @@
       <div v-else class="order-mobile-list">
         <t-loading :loading="loading" size="small">
           <div v-if="orders.length" class="order-mobile-stack">
-            <MobileRecordCard
+            <mobile-record-card
               v-for="row in orders"
               :key="row.id"
               :title="fieldValue(row.order_no || row.id)"
@@ -119,23 +133,23 @@
     </t-card>
   </div>
 </template>
-
 <script setup lang="ts">
-import { computed, ref, watch, onMounted } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import { MessagePlugin } from 'tdesign-vue-next';
-import type { PrimaryTableCol } from 'tdesign-vue-next';
+import './index.less';
 
-import { adminApi, type OrderRecord } from '@/api/admin';
-import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
-import { errorMessage } from '@/utils/userMessage';
+import { ORDER_STATUS_MAP, ORDER_TYPE_MAP, toSelectOptions } from '@shared/statusConfig';
+import type { PrimaryTableCol } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next';
+import { computed, onMounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+
+import type { OrderRecord } from '@/api/admin';
+import { adminApi } from '@/api/admin';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import StatusTag from '@/components/status-tag/index.vue';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useListPage } from '@/hooks/useListPage';
-import { ORDER_STATUS_MAP, ORDER_TYPE_MAP, toSelectOptions } from '@shared/statusConfig';
-
-import './index.less';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
+import { errorMessage } from '@/utils/userMessage';
 
 type FinanceOrderMode = 'all' | 'orders' | 'renewals' | 'upgrade';
 
@@ -181,7 +195,6 @@ const {
   total,
   loading,
   pagination,
-  loadList,
   handleSearch,
   resetFilters,
   handlePaginationChange,

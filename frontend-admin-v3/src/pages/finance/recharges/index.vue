@@ -3,8 +3,8 @@
     <t-card :bordered="false">
       <div class="recharge-filter">
         <t-input
-          class="filter-keyword"
           v-model="filters.keyword"
+          class="filter-keyword"
           clearable
           placeholder="搜索支付号 / 第三方单号 / 用户"
           @enter="handleSearch"
@@ -12,12 +12,12 @@
         >
           <template #suffix-icon><search-icon /></template>
         </t-input>
-        <t-select class="filter-status" v-model="filters.status" clearable placeholder="状态" @change="handleSearch">
+        <t-select v-model="filters.status" class="filter-status" clearable placeholder="状态" @change="handleSearch">
           <t-option v-for="item in paymentStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
         </t-select>
         <t-date-picker
-          class="filter-start"
           v-model="filters.start_date"
+          class="filter-start"
           clearable
           mode="date"
           format="YYYY-MM-DD"
@@ -26,8 +26,8 @@
           @change="handleSearch"
         />
         <t-date-picker
-          class="filter-end"
           v-model="filters.end_date"
+          class="filter-end"
           clearable
           mode="date"
           format="YYYY-MM-DD"
@@ -54,7 +54,7 @@
           <template #amount="{ row }">{{ formatMoney(row.amount) }}</template>
           <template #paid="{ row }">{{ formatMoney(row.paid_amount) }}</template>
           <template #status="{ row }">
-            <StatusTag :status-map="PAYMENT_STATUS_MAP" :status="row.status" />
+            <status-tag :status-map="PAYMENT_STATUS_MAP" :status="row.status" />
           </template>
           <template #createdAt="{ row }">{{ formatDateTime(row.created_at) }}</template>
           <template #paidAt="{ row }">{{ formatDateTime(row.paid_at) }}</template>
@@ -67,7 +67,7 @@
       <div v-else class="recharge-mobile-list">
         <t-loading :loading="loading" size="small">
           <div v-if="recharges.length" class="recharge-mobile-stack">
-            <MobileRecordCard
+            <mobile-record-card
               v-for="row in recharges"
               :key="row.id"
               :title="fieldValue(row.payment_no)"
@@ -79,7 +79,7 @@
               :status-map="PAYMENT_STATUS_MAP"
               :status="row.status"
               :rows="rechargeMobileRows(row)"
-              :action-options="mobileActionOptions(row)"
+              :action-options="mobileActionOptions()"
               @action="(value) => handleMobileAction(value, row)"
             />
           </div>
@@ -99,7 +99,7 @@
       </div>
     </t-card>
 
-    <InvoiceDetailDrawer
+    <invoice-detail-drawer
       v-model:visible="detailState.visible"
       :loading="detailState.loading"
       :invoice="currentInvoice"
@@ -115,23 +115,23 @@
     />
   </div>
 </template>
-
 <script setup lang="ts">
+import './index.less';
+
+import { PAYMENT_STATUS_MAP, toLabelMap, toTagTypeMap } from '@shared/statusConfig';
+import type { PrimaryTableCol } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { MessagePlugin } from 'tdesign-vue-next';
-import type { PrimaryTableCol } from 'tdesign-vue-next';
 
-import { adminApi, type InvoiceRecord, type RechargeRecord } from '@/api/admin';
-import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
-import { errorMessage } from '@/utils/userMessage';
+import type { InvoiceRecord, RechargeRecord } from '@/api/admin';
+import { adminApi } from '@/api/admin';
 import InvoiceDetailDrawer from '@/components/finance-record-detail/InvoiceDetailDrawer.vue';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import StatusTag from '@/components/status-tag/index.vue';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { PAYMENT_STATUS_MAP, toLabelMap, toTagTypeMap } from '@shared/statusConfig';
-
-import './index.less';
+import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
+import { errorMessage } from '@/utils/userMessage';
 
 const loading = ref(false);
 const recharges = ref<RechargeRecord[]>([]);
@@ -258,7 +258,10 @@ function closeDetail() {
 }
 
 function normalizeInvoiceDetail(payload: Record<string, unknown> = {}, fallback: InvoiceRecord = {}) {
-  const invoice = payload.invoice && typeof payload.invoice === 'object' ? (payload.invoice as InvoiceRecord) : (payload as InvoiceRecord);
+  const invoice =
+    payload.invoice && typeof payload.invoice === 'object'
+      ? (payload.invoice as InvoiceRecord)
+      : (payload as InvoiceRecord);
   return {
     invoice: {
       ...fallback,
@@ -269,7 +272,9 @@ function normalizeInvoiceDetail(payload: Record<string, unknown> = {}, fallback:
       product: invoice.product || fallback.product || null,
       scene: invoice.scene || fallback.scene || {},
     },
-    payments: Array.isArray(payload.payments) ? (payload.payments as Record<string, unknown>[]) : detailState.detail.payments,
+    payments: Array.isArray(payload.payments)
+      ? (payload.payments as Record<string, unknown>[])
+      : detailState.detail.payments,
     items: Array.isArray(payload.items) ? (payload.items as Record<string, unknown>[]) : [],
     logs: Array.isArray(payload.logs) ? (payload.logs as Record<string, unknown>[]) : [],
   };
@@ -310,10 +315,8 @@ function handleMobileAction(value: unknown, row: RechargeRecord) {
   if (value === 'detail') openDetail(row);
 }
 
-function mobileActionOptions(row: RechargeRecord) {
-  return [
-    { content: '详情', value: 'detail' },
-  ];
+function mobileActionOptions() {
+  return [{ content: '详情', value: 'detail' }];
 }
 
 function rechargeMobileRows(row: RechargeRecord) {
@@ -349,7 +352,6 @@ function invoiceStatusTheme(status: unknown) {
 function toRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
-
 
 onMounted(() => loadList());
 </script>

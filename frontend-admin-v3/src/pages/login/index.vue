@@ -5,13 +5,7 @@
         <h1>管理后台</h1>
         <p>请登录您的管理员账号</p>
       </div>
-      <t-form
-        ref="formRef"
-        :data="formData"
-        :rules="formRules"
-        label-align="top"
-        @submit="handleLogin"
-      >
+      <t-form ref="formRef" :data="formData" :rules="formRules" label-align="top" @submit="handleLogin">
         <t-form-item label="账号" name="account">
           <t-input
             v-model="formData.account"
@@ -32,9 +26,7 @@
           />
         </t-form-item>
         <t-form-item class="login-submit-item">
-          <t-button block theme="primary" size="large" type="submit" :loading="loading">
-            登录
-          </t-button>
+          <t-button block theme="primary" size="large" type="submit" :loading="loading"> 登录 </t-button>
           <span class="sr-only" role="alert" aria-live="assertive">{{ errorMessage }}</span>
         </t-form-item>
       </t-form>
@@ -44,7 +36,6 @@
     </div>
   </div>
 </template>
-
 <script setup lang="ts">
 import type { FormInstanceFunctions, FormRule } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
@@ -96,7 +87,6 @@ async function handleLogin() {
   }
 }
 </script>
-
 <style lang="less" scoped>
 .login-container {
   min-height: 100vh;
@@ -123,7 +113,7 @@ async function handleLogin() {
     right: -120px;
     width: 520px;
     height: 520px;
-    background: radial-gradient(circle, rgba(22, 93, 255, 0.10), rgba(22, 93, 255, 0) 70%);
+    background: radial-gradient(circle, rgba(22, 93, 255, 0.1), rgba(22, 93, 255, 0) 70%);
   }
 
   &::after {
@@ -141,7 +131,9 @@ async function handleLogin() {
   padding: 48px 40px 36px;
   background: var(--td-bg-color-container, #fff);
   border-radius: var(--td-radius-extraLarge, 12px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06), 0 1px 4px rgba(0, 0, 0, 0.04);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.06),
+    0 1px 4px rgba(0, 0, 0, 0.04);
   position: relative;
   z-index: 1;
 }

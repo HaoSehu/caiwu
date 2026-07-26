@@ -1,4 +1,4 @@
-import { readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { brotliCompressSync, constants as zlibConstants, gzipSync } from 'node:zlib';
@@ -39,8 +39,7 @@ function resolveHintOrigin(assetBase: string) {
 
   try {
     return new URL(assetBase).origin;
-  }
-  catch {
+  } catch {
     return '';
   }
 }
@@ -57,10 +56,10 @@ function resolveManualChunk(id: string) {
   }
 
   if (
-    normalized.includes('/vue/')
-    || normalized.includes('/vue-router/')
-    || normalized.includes('/pinia/')
-    || normalized.includes('/@vue/')
+    normalized.includes('/vue/') ||
+    normalized.includes('/vue-router/') ||
+    normalized.includes('/pinia/') ||
+    normalized.includes('/@vue/')
   ) {
     return 'vendor-vue';
   }
@@ -73,7 +72,11 @@ function resolveManualChunk(id: string) {
     return 'vendor-tdesign';
   }
 
-  if (normalized.includes('/echarts/charts/') || normalized.includes('/echarts/components/') || normalized.includes('/echarts/renderers/')) {
+  if (
+    normalized.includes('/echarts/charts/') ||
+    normalized.includes('/echarts/components/') ||
+    normalized.includes('/echarts/renderers/')
+  ) {
     return 'vendor-echarts-modules';
   }
 
@@ -94,15 +97,17 @@ function resolveManualChunk(id: string) {
 
 async function collectOutputFiles(rootDirectory: string): Promise<string[]> {
   const entries = await readdir(rootDirectory, { withFileTypes: true });
-  const files = await Promise.all(entries.map(async (entry) => {
-    const nextPath = path.join(rootDirectory, entry.name);
+  const files = await Promise.all(
+    entries.map(async (entry) => {
+      const nextPath = path.join(rootDirectory, entry.name);
 
-    if (entry.isDirectory()) {
-      return collectOutputFiles(nextPath);
-    }
+      if (entry.isDirectory()) {
+        return collectOutputFiles(nextPath);
+      }
 
-    return [nextPath];
-  }));
+      return [nextPath];
+    }),
+  );
 
   return files.flat();
 }
@@ -121,34 +126,36 @@ function createPrecompressedAssetsPlugin() {
 
       const files = await collectOutputFiles(distDirectory);
 
-      await Promise.all(files.map(async (filePath) => {
-        const extension = path.extname(filePath).toLowerCase();
+      await Promise.all(
+        files.map(async (filePath) => {
+          const extension = path.extname(filePath).toLowerCase();
 
-        if (!compressionExtensions.has(extension)) {
-          return;
-        }
+          if (!compressionExtensions.has(extension)) {
+            return;
+          }
 
-        const buffer = await readFile(filePath);
+          const buffer = await readFile(filePath);
 
-        if (buffer.byteLength < compressionThreshold) {
-          return;
-        }
+          if (buffer.byteLength < compressionThreshold) {
+            return;
+          }
 
-        const gzipBuffer = gzipSync(buffer, { level: 9 });
-        const brotliBuffer = brotliCompressSync(buffer, {
-          params: {
-            [zlibConstants.BROTLI_PARAM_QUALITY]: 11,
-          },
-        });
+          const gzipBuffer = gzipSync(buffer, { level: 9 });
+          const brotliBuffer = brotliCompressSync(buffer, {
+            params: {
+              [zlibConstants.BROTLI_PARAM_QUALITY]: 11,
+            },
+          });
 
-        if (gzipBuffer.byteLength < buffer.byteLength) {
-          await writeFile(`${filePath}.gz`, gzipBuffer);
-        }
+          if (gzipBuffer.byteLength < buffer.byteLength) {
+            await writeFile(`${filePath}.gz`, gzipBuffer);
+          }
 
-        if (brotliBuffer.byteLength < buffer.byteLength) {
-          await writeFile(`${filePath}.br`, brotliBuffer);
-        }
-      }));
+          if (brotliBuffer.byteLength < buffer.byteLength) {
+            await writeFile(`${filePath}.br`, brotliBuffer);
+          }
+        }),
+      );
     },
   };
 }
@@ -195,7 +202,9 @@ function resolveAssetFileName(assetInfo: { name?: string }) {
 // https://vitejs.dev/config/
 export default ({ mode }: ConfigEnv): UserConfig => {
   const env = loadEnv(mode, CWD, '');
-  const assetBase = resolveAssetBase(env.VITE_ADMIN_ASSET_BASE_URL || env.VITE_CDN_ASSET_HOST || env.VITE_ASSET_BASE_URL || env.VITE_BASE_URL || '');
+  const assetBase = resolveAssetBase(
+    env.VITE_ADMIN_ASSET_BASE_URL || env.VITE_CDN_ASSET_HOST || env.VITE_ASSET_BASE_URL || env.VITE_BASE_URL || '',
+  );
   return {
     base: assetBase,
     resolve: {

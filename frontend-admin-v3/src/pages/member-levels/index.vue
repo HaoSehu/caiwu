@@ -52,12 +52,23 @@
               <strong>{{ fieldValue(row.name) }}</strong>
               <t-tag theme="success" variant="light">{{ formatPercent(row.reward_rate) }}</t-tag>
             </div>
-            <t-dropdown trigger="click" placement="bottom-right" :options="mobileActionOptions" @click="handleMobileAction(row, $event)">
+            <t-dropdown
+              trigger="click"
+              placement="bottom-right"
+              :options="mobileActionOptions"
+              @click="handleMobileAction(row, $event)"
+            >
               <t-button class="member-mobile-card__more" variant="text" shape="square">...</t-button>
             </t-dropdown>
           </div>
           <dl>
-            <div><dt>门槛</dt><dd>{{ formatMoney(row.sales_amount_min) }} ~ {{ row.sales_amount_max ? formatMoney(row.sales_amount_max) : '不封顶' }}</dd></div>
+            <div>
+              <dt>门槛</dt>
+              <dd>
+                {{ formatMoney(row.sales_amount_min) }} ~
+                {{ row.sales_amount_max ? formatMoney(row.sales_amount_max) : '不封顶' }}
+              </dd>
+            </div>
             <div>
               <dt>状态</dt>
               <dd>
@@ -110,20 +121,20 @@
     </t-dialog>
   </div>
 </template>
-
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
-import { AddIcon } from 'tdesign-icons-vue-next';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
-import type { DropdownOption, FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
+import './index.less';
 
-import { adminApi, type MemberLevelPayload, type MemberLevelRecord } from '@/api/admin';
+import { AddIcon } from 'tdesign-icons-vue-next';
+import type { DropdownOption, FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
+import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { onMounted, reactive, ref } from 'vue';
+
+import type { MemberLevelPayload, MemberLevelRecord } from '@/api/admin';
+import { adminApi } from '@/api/admin';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
 import { required } from '@/utils/formRules';
 import { errorMessage } from '@/utils/userMessage';
-
-import './index.less';
 
 interface MemberLevelForm {
   id: number | string | null;
@@ -204,7 +215,8 @@ function openEditDialog(row: MemberLevelRecord) {
     name: String(row.name || ''),
     code: String(row.code || ''),
     sales_amount_min: Number(row.sales_amount_min || 0),
-    sales_amount_max: row.sales_amount_max === null || row.sales_amount_max === undefined ? '' : String(row.sales_amount_max),
+    sales_amount_max:
+      row.sales_amount_max === null || row.sales_amount_max === undefined ? '' : String(row.sales_amount_max),
     reward_rate: Number(row.reward_rate || 0),
     status: Number(row.status ?? 1),
     sort_order: Number(row.sort_order || 0),
@@ -286,8 +298,6 @@ function handleMobileAction(row: MemberLevelRecord, option: DropdownOption) {
 function formatPercent(value: unknown) {
   return `${Number(value || 0).toFixed(2)}%`;
 }
-
-
 
 onMounted(loadLevels);
 </script>

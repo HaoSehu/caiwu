@@ -1,8 +1,6 @@
 import { request } from '@/utils/request';
-import type {
-  VerificationListParams,
-  VerificationRecord,
-} from './types';
+
+import type { VerificationListParams, VerificationRecord } from './types';
 
 export const verificationsApi = {
   list: (params: VerificationListParams) =>
@@ -15,8 +13,7 @@ export const verificationsApi = {
       stats?: Record<string, number>;
       config?: Record<string, unknown>;
     }>({ url: '/v2/admin/verifications/summary' }),
-  detail: (id: number | string) =>
-    request.get<VerificationRecord>({ url: `/v2/admin/verifications/${id}` }),
+  detail: (id: number | string) => request.get<VerificationRecord>({ url: `/v2/admin/verifications/${id}` }),
   history: (id: number | string) =>
     request.get<{ user_name?: string; list?: VerificationRecord[] }>({
       url: `/v2/admin/verifications/${id}/history`,

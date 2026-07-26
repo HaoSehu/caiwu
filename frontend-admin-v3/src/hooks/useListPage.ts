@@ -1,5 +1,5 @@
-import { onMounted, reactive, ref } from 'vue';
 import type { Ref } from 'vue';
+import { onMounted, reactive, ref } from 'vue';
 
 export interface ListPageResponse<T> {
   list?: T[];
@@ -97,7 +97,9 @@ export function useListPage<F extends Record<string, any>, T>(options: UseListPa
     error,
     pagination,
     loadList,
-    clearError: () => { error.value = null; },
+    clearError: () => {
+      error.value = null;
+    },
     handleSearch,
     resetFilters,
     handlePageChange,

@@ -1,11 +1,5 @@
 <template>
-  <t-drawer
-    :visible="visible"
-    :size="drawerSize"
-    :header="headerTitle"
-    :footer="false"
-    @close="emit('close')"
-  >
+  <t-drawer :visible="visible" :size="drawerSize" :header="headerTitle" :footer="false" @close="emit('close')">
     <template v-if="currentLog">
       <div class="detail-grid">
         <article v-for="item in detailFields" :key="item.label">
@@ -33,15 +27,16 @@
     </template>
   </t-drawer>
 </template>
-
 <script setup lang="ts">
-import { computed } from 'vue';
 import { ChevronLeftIcon } from 'tdesign-icons-vue-next';
+import { computed } from 'vue';
 
 import { fieldValue, formatDateTime } from '@/utils/format';
 
 type LogTab = 'system' | 'runtime' | 'admin-logins' | 'api' | 'sms' | 'email' | 'tasks' | 'gateway';
 type RecordRow = Record<string, unknown>;
+
+defineOptions({ name: 'LogDetailDrawer' });
 
 const props = defineProps<{
   visible: boolean;
@@ -54,8 +49,6 @@ const emit = defineEmits<{
   (e: 'close'): void;
 }>();
 
-defineOptions({ name: 'LogDetailDrawer' });
-
 const headerTitle = computed(() => {
   const row = props.currentLog || {};
   if (props.activeTab === 'admin-logins') return `管理员登录 · ${fieldValue(row.admin_username) || '详情'}`;
@@ -63,7 +56,8 @@ const headerTitle = computed(() => {
   if (props.activeTab === 'sms') return `短信日志 · ${fieldValue(row.phone) || '详情'}`;
   if (props.activeTab === 'email') return `邮件日志 · ${fieldValue(row.to_email) || '详情'}`;
   if (props.activeTab === 'tasks') return `自动任务日志 · ${fieldValue(row.task_key) || '详情'}`;
-  if (props.activeTab === 'gateway') return `网关日志 · ${fieldValue(row.gateway) || ''} ${fieldValue(row.action) || ''}`;
+  if (props.activeTab === 'gateway')
+    return `网关日志 · ${fieldValue(row.gateway) || ''} ${fieldValue(row.action) || ''}`;
   if (props.activeTab === 'system') return `系统日志 · ${fieldValue(row.actor_name) || '详情'}`;
   if (props.activeTab === 'runtime') return `运行日志 · ${fieldValue(row.id) || '详情'}`;
   return `系统日志 · ${fieldValue(row.id) || '详情'}`;
@@ -318,7 +312,7 @@ function buildContentPreviewDoc(value: unknown) {
     return '<!doctype html><html lang="zh-CN"><body style="margin:0;padding:24px;color:#86909c;">暂无正文内容</body></html>';
   }
   if (/<!doctype\s+html|<html\b|<body\b/i.test(normalized)) return sanitizeHtmlDoc(normalized);
-  if (/<([a-z][a-z0-9]*)(\s|>)/i.test(normalized)) {
+  if (/<[a-z][a-z0-9]*(?:\s|>)/i.test(normalized)) {
     const sanitized = sanitizeHtml(normalized);
     return `<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:;"><style>body{margin:0;padding:24px;background:#f5f7fa;font-family:Arial,sans-serif;color:#1f2329}.mail-preview{max-width:680px;margin:0 auto;padding:24px;border:1px solid #dce7ff;border-radius: var(--td-radius-extraLarge, 12px);background:#fff}</style></head><body><div class="mail-preview">${sanitized}</div></body></html>`;
   }
@@ -331,16 +325,17 @@ function sanitizeHtml(html: string): string {
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
     .replace(/<iframe\b[^>]*>[\s\S]*?<\/iframe>/gi, '')
     .replace(/<object\b[^>]*>[\s\S]*?<\/object>/gi, '')
-    .replace(/<embed\b[^>]*\/?>/gi, '')
+    .replace(/<embed\b[^>]*>/gi, '')
     .replace(/\bon\w+\s*=\s*["'][^"']*["']/gi, '')
     .replace(/\bon\w+\s*=\s*[^\s>]+/gi, '')
     .replace(/javascript\s*:/gi, '')
-    .replace(/<link\b[^>]*\/?>/gi, '');
+    .replace(/<link\b[^>]*>/gi, '');
 }
 
 /** 消毒完整 HTML 文档：注入 CSP 头部 */
 function sanitizeHtmlDoc(doc: string): string {
-  const csp = '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data:;">';
+  const csp =
+    '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data:;">';
   if (/<head\b/i.test(doc)) {
     return doc.replace(/<head\b[^>]*>/i, `$&${csp}`);
   }
@@ -351,6 +346,11 @@ function sanitizeHtmlDoc(doc: string): string {
 }
 
 function escapeHtml(value: string) {
-  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 </script>

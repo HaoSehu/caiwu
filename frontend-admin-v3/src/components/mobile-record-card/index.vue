@@ -10,7 +10,7 @@
         <t-tag v-if="subtitle" variant="light">{{ subtitle }}</t-tag>
       </div>
       <div class="mobile-record-card__tools">
-        <StatusTag v-if="statusMap" :status-map="statusMap" :status="status ?? ''" />
+        <status-tag v-if="statusMap" :status-map="statusMap" :status="status ?? ''" />
         <t-tag v-else-if="statusLabel" :theme="statusTheme" variant="light">{{ statusLabel }}</t-tag>
         <t-dropdown v-if="actionOptions.length" :options="actionOptions" @click="handleAction">
           <t-button class="mobile-record-card__more" variant="text" shape="square">...</t-button>
@@ -33,10 +33,9 @@
     </dl>
   </article>
 </template>
-
 <script setup lang="ts">
-import { computed } from 'vue';
 import type { DropdownOption } from 'tdesign-vue-next';
+import { computed } from 'vue';
 
 import StatusTag from '@/components/status-tag/index.vue';
 
@@ -97,7 +96,6 @@ function handleAction(option: DropdownOption) {
   emit('action', option.value);
 }
 </script>
-
 <style lang="less" scoped>
 .mobile-record-card {
   position: relative;

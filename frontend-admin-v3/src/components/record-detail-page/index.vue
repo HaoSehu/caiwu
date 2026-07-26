@@ -37,7 +37,11 @@
         </div>
 
         <section class="record-detail-body">
-          <t-tabs v-if="visibleTabs.length > 1" :value="activeTab" @change="(value: string | number) => emit('update:activeTab', String(value))">
+          <t-tabs
+            v-if="visibleTabs.length > 1"
+            :value="activeTab"
+            @change="(value: string | number) => emit('update:activeTab', String(value))"
+          >
             <t-tab-panel v-for="tab in visibleTabs" :key="tab.value" :value="tab.value" :label="tab.label" />
           </t-tabs>
           <div class="record-detail-body__content">
@@ -49,10 +53,9 @@
     </t-loading>
   </div>
 </template>
-
 <script setup lang="ts">
-import { computed } from 'vue';
 import { ChevronLeftIcon, RefreshIcon } from 'tdesign-icons-vue-next';
+import { computed } from 'vue';
 
 export interface RecordDetailMetric {
   label: string;
@@ -113,7 +116,6 @@ function displayValue(value: string | number | null | undefined) {
   return String(value);
 }
 </script>
-
 <style lang="less" scoped>
 .record-detail-page {
   display: flex;
@@ -147,9 +149,7 @@ function displayValue(value: string | number | null | undefined) {
   overflow: hidden;
   border: 1px solid var(--td-component-border);
   border-radius: var(--td-radius-large, 8px);
-  background:
-    linear-gradient(135deg, rgba(0, 82, 217, 0.07), transparent 42%),
-    var(--td-bg-color-container);
+  background: linear-gradient(135deg, rgba(0, 82, 217, 0.07), transparent 42%), var(--td-bg-color-container);
   box-shadow: 0 8px 20px rgba(28, 45, 84, 0.06);
 }
 

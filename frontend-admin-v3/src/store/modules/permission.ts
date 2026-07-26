@@ -13,10 +13,10 @@ import {
 import { shallowRef } from 'vue';
 import type { RouteRecordRaw } from 'vue-router';
 
-import router, { fixedRouterList, homepageRouterList } from '@/router';
-import { store } from '@/store';
 import { hasPermissionInList } from '@/constants/permissions';
 import type { LocalizedTitle } from '@/locales';
+import router, { homepageRouterList } from '@/router';
+import { store } from '@/store';
 
 interface MenuRouteConfig {
   path: string;
@@ -100,7 +100,10 @@ const ADMIN_MENU_GROUPS: MenuGroupConfig[] = [
       {
         path: '/admin/menu/ticket-processing/services-tickets',
         title: { zh_CN: '服务与工单', en_US: 'Services & Tickets' },
-        children: [{ path: '/admin/services', title: { zh_CN: '服务实例', en_US: 'Service Instances' } }, '/admin/tickets'],
+        children: [
+          { path: '/admin/services', title: { zh_CN: '服务实例', en_US: 'Service Instances' } },
+          '/admin/tickets',
+        ],
       },
     ],
   },
@@ -123,7 +126,10 @@ const ADMIN_MENU_GROUPS: MenuGroupConfig[] = [
       {
         path: '/admin/menu/finance/accounting-management',
         title: { zh_CN: '账务管理', en_US: 'Accounting Management' },
-        children: ['/admin/finance/invoices', { path: '/admin/finance/recharges', title: { zh_CN: '充值记录', en_US: 'Recharge Records' } }],
+        children: [
+          '/admin/finance/invoices',
+          { path: '/admin/finance/recharges', title: { zh_CN: '充值记录', en_US: 'Recharge Records' } },
+        ],
       },
     ],
   },
@@ -141,7 +147,12 @@ const ADMIN_MENU_GROUPS: MenuGroupConfig[] = [
       {
         path: '/admin/menu/marketing-promotion/referral-management',
         title: { zh_CN: '推广管理', en_US: 'Referral Management' },
-        children: ['/admin/referral', '/admin/referral/rewards', '/admin/referral/withdrawals', '/admin/referral-settings'],
+        children: [
+          '/admin/referral',
+          '/admin/referral/rewards',
+          '/admin/referral/withdrawals',
+          '/admin/referral-settings',
+        ],
       },
     ],
   },
@@ -259,7 +270,7 @@ export const usePermissionStore = defineStore('permission', {
         await this.initRoutes(permissions);
         return this.asyncRoutes;
       } catch (error) {
-      throw new Error("Can't build routes", { cause: error });
+        throw new Error("Can't build routes", { cause: error });
       }
     },
     async restoreRoutes() {

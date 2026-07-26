@@ -141,19 +141,19 @@
     </t-dialog>
   </div>
 </template>
-
 <script setup lang="ts">
+import './index.less';
+
 import { CheckCircleFilledIcon, SearchIcon, UserAddIcon } from 'tdesign-icons-vue-next';
 import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { userApi, type AdminUser } from '@/api/user';
+import type { AdminUser } from '@/api/user';
+import { userApi } from '@/api/user';
 import { formatDateTime, formatMoney } from '@/utils/format';
 import { required } from '@/utils/formRules';
-
-import './index.less';
 
 defineOptions({
   name: 'AdminUsers',
@@ -191,10 +191,7 @@ const createVisible = ref(false);
 const createFormRef = ref<FormInstanceFunctions>();
 const createForm = reactive({ email: '', nickname: '', phone: '', password: '' });
 const createRules: Record<string, FormRule[]> = {
-  email: [
-    required('请输入有效邮箱'),
-    { email: true, message: '请输入有效邮箱', type: 'warning' },
-  ],
+  email: [required('请输入有效邮箱'), { email: true, message: '请输入有效邮箱', type: 'warning' }],
   password: [required('请输入密码')],
 };
 

@@ -33,8 +33,18 @@
               </div>
               <div class="field-control">
                 <t-switch v-if="field.type === 'switch'" v-model="form[field.key]" />
-                <t-select v-else-if="field.type === 'select'" v-model="form[field.key]" clearable :placeholder="field.placeholder || `请选择${field.label}`">
-                  <t-option v-for="option in field.options || []" :key="String(option.value)" :label="option.label" :value="option.value" />
+                <t-select
+                  v-else-if="field.type === 'select'"
+                  v-model="form[field.key]"
+                  clearable
+                  :placeholder="field.placeholder || `请选择${field.label}`"
+                >
+                  <t-option
+                    v-for="option in field.options || []"
+                    :key="String(option.value)"
+                    :label="option.label"
+                    :value="option.value"
+                  />
                 </t-select>
                 <t-input-number
                   v-else-if="field.type === 'number'"
@@ -60,7 +70,9 @@
                 />
                 <div v-else-if="field.type === 'image'" class="cover-image-selector" @click="selectImage(field)">
                   <image-icon />
-                  <span v-if="form[field.key]" class="cover-image-selector__name">{{ String(form[field.key]).split('/').pop() }}</span>
+                  <span v-if="form[field.key]" class="cover-image-selector__name">{{
+                    String(form[field.key]).split('/').pop()
+                  }}</span>
                   <span v-else class="cover-image-selector__placeholder">点击选择{{ field.label }}</span>
                   <chevron-right-icon />
                 </div>
@@ -94,16 +106,11 @@
           保存设置
         </t-button>
       </div>
-
     </template>
 
     <template v-else>
       <t-card :bordered="false" :loading="heroLoading" class="slides-config-card">
-        <t-alert
-          v-if="heroDirty"
-          theme="warning"
-          message="当前存在未保存修改。保存后官网首页最长约 2 分钟同步。"
-        />
+        <t-alert v-if="heroDirty" theme="warning" message="当前存在未保存修改。保存后官网首页最长约 2 分钟同步。" />
 
         <section class="slides-section">
           <div class="slides-section-head">
@@ -128,10 +135,21 @@
                 <t-button variant="text" size="small" :disabled="index === 0" @click="moveSlide(index, -1)">
                   <template #icon><arrow-up-icon /></template>
                 </t-button>
-                <t-button variant="text" size="small" :disabled="index === heroForm.slides.length - 1" @click="moveSlide(index, 1)">
+                <t-button
+                  variant="text"
+                  size="small"
+                  :disabled="index === heroForm.slides.length - 1"
+                  @click="moveSlide(index, 1)"
+                >
                   <template #icon><arrow-down-icon /></template>
                 </t-button>
-                <t-button theme="danger" variant="text" size="small" :disabled="heroForm.slides.length <= 1" @click="removeSlide(index)">
+                <t-button
+                  theme="danger"
+                  variant="text"
+                  size="small"
+                  :disabled="heroForm.slides.length <= 1"
+                  @click="removeSlide(index)"
+                >
                   <template #icon><delete-icon /></template>
                 </t-button>
               </div>
@@ -141,7 +159,12 @@
               <div class="slide-row">
                 <label class="slide-label">标题</label>
                 <t-input v-model="slide.rail_title" maxlength="20" placeholder="导航名" class="slide-field--sm" />
-                <t-input v-model="slide.title" maxlength="80" placeholder="主标题，例如：官网焕新 · 云上新体验" class="slide-field--lg" />
+                <t-input
+                  v-model="slide.title"
+                  maxlength="80"
+                  placeholder="主标题，例如：官网焕新 · 云上新体验"
+                  class="slide-field--lg"
+                />
               </div>
 
               <div class="slide-row">
@@ -149,18 +172,39 @@
                 <div class="slide-btn-group">
                   <span class="slide-btn-group__tag">主</span>
                   <t-input v-model="slide.primary_text" maxlength="20" placeholder="按钮文案" class="slide-field--sm" />
-                  <t-input v-model="slide.primary_path" maxlength="255" placeholder="跳转路径" class="slide-field--lg" />
+                  <t-input
+                    v-model="slide.primary_path"
+                    maxlength="255"
+                    placeholder="跳转路径"
+                    class="slide-field--lg"
+                  />
                 </div>
                 <div class="slide-btn-group">
                   <span class="slide-btn-group__tag">次</span>
-                  <t-input v-model="slide.secondary_text" maxlength="20" placeholder="按钮文案" class="slide-field--sm" />
-                  <t-input v-model="slide.secondary_path" maxlength="255" placeholder="跳转路径" class="slide-field--lg" />
+                  <t-input
+                    v-model="slide.secondary_text"
+                    maxlength="20"
+                    placeholder="按钮文案"
+                    class="slide-field--sm"
+                  />
+                  <t-input
+                    v-model="slide.secondary_path"
+                    maxlength="255"
+                    placeholder="跳转路径"
+                    class="slide-field--lg"
+                  />
                 </div>
               </div>
 
               <div class="slide-row">
                 <label class="slide-label">描述</label>
-                <t-textarea v-model="slide.desc" :autosize="{ minRows: 2, maxRows: 4 }" maxlength="300" placeholder="轮播描述文案" class="slide-field--full" />
+                <t-textarea
+                  v-model="slide.desc"
+                  :autosize="{ minRows: 2, maxRows: 4 }"
+                  maxlength="300"
+                  placeholder="轮播描述文案"
+                  class="slide-field--full"
+                />
               </div>
 
               <div class="slide-row">
@@ -197,15 +241,29 @@
                 <t-button variant="text" :disabled="index === 0" @click="moveFeature(index, -1)">
                   <template #icon><arrow-up-icon /></template>
                 </t-button>
-                <t-button variant="text" :disabled="index === heroForm.features.length - 1" @click="moveFeature(index, 1)">
+                <t-button
+                  variant="text"
+                  :disabled="index === heroForm.features.length - 1"
+                  @click="moveFeature(index, 1)"
+                >
                   <template #icon><arrow-down-icon /></template>
                 </t-button>
               </div>
               <t-input v-model="feature.kicker" maxlength="20" placeholder="标签 kicker" />
               <t-input v-model="feature.title" maxlength="50" placeholder="标题" />
-              <t-textarea v-model="feature.desc" :autosize="{ minRows: 2, maxRows: 3 }" maxlength="120" placeholder="描述" />
+              <t-textarea
+                v-model="feature.desc"
+                :autosize="{ minRows: 2, maxRows: 3 }"
+                maxlength="120"
+                placeholder="描述"
+              />
               <t-input v-model="feature.path" maxlength="255" placeholder="跳转路径，可选" />
-              <t-button theme="danger" variant="text" :disabled="heroForm.features.length <= 1" @click="removeFeature(index)">
+              <t-button
+                theme="danger"
+                variant="text"
+                :disabled="heroForm.features.length <= 1"
+                @click="removeFeature(index)"
+              >
                 <template #icon><delete-icon /></template>
                 删除
               </t-button>
@@ -220,16 +278,21 @@
           保存设置
         </t-button>
       </div>
-
     </template>
 
     <input ref="fileInputRef" class="hidden-file-input" type="file" accept="image/*" @change="handleImageFileChange" />
-    <input ref="mediaDrawerUploadRef" class="hidden-file-input" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" @change="handleMediaDrawerUpload" />
+    <input
+      ref="mediaDrawerUploadRef"
+      class="hidden-file-input"
+      type="file"
+      accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"
+      @change="handleMediaDrawerUpload"
+    />
 
     <t-drawer
       :visible="mediaDrawerVisible"
       header="选择媒体"
-      :size="'520px'"
+      size="520px"
       placement="right"
       :footer="null"
       @close="closeMediaDrawer"
@@ -261,18 +324,23 @@
           ></video>
           <img v-else class="cover-drawer-card__img" :src="item.url" :alt="item.filename" loading="lazy" />
           <div class="cover-drawer-card__label">
-            <check-circle-filled-icon v-if="pendingImageField && String(form[pendingImageField.key]) === item.url" class="cover-drawer-card__check" />
+            <check-circle-filled-icon
+              v-if="pendingImageField && String(form[pendingImageField.key]) === item.url"
+              class="cover-drawer-card__check"
+            />
             <span>{{ item.filename }}</span>
           </div>
         </div>
-        <div v-if="!mediaDrawerList.length && !mediaDrawerLoading" class="cover-drawer-empty">暂无已上传媒体，请先上传</div>
+        <div v-if="!mediaDrawerList.length && !mediaDrawerLoading" class="cover-drawer-empty">
+          暂无已上传媒体，请先上传
+        </div>
       </div>
     </t-drawer>
 
     <t-drawer
       :visible="videoDrawerVisible"
       :header="videoDrawerTitle"
-      :size="'560px'"
+      size="560px"
       placement="right"
       :footer="null"
       @close="closeVideoDrawer"
@@ -292,23 +360,14 @@
           @mouseenter="onVideoCardEnter($event)"
           @mouseleave="onVideoCardLeave($event)"
         >
-          <video
-            class="video-drawer-card__video"
-            :src="opt.value"
-            muted
-            loop
-            playsinline
-            preload="metadata"
-          ></video>
+          <video class="video-drawer-card__video" :src="opt.value" muted loop playsinline preload="metadata"></video>
           <div class="video-drawer-card__overlay">
             <check-circle-filled-icon v-if="videoDrawerCurrentSrc === opt.value" class="video-drawer-card__check" />
             <span class="video-drawer-card__name">{{ opt.filename || opt.value.split('/').pop() }}</span>
             <span v-if="opt.size" class="video-drawer-card__size">{{ formatFileSize(opt.size) }}</span>
           </div>
         </div>
-        <div v-if="!heroVideoOptions.length" class="video-drawer-empty">
-          后端 uploads/hero-videos 目录暂无视频
-        </div>
+        <div v-if="!heroVideoOptions.length" class="video-drawer-empty">后端 uploads/hero-videos 目录暂无视频</div>
       </div>
 
       <div v-else class="video-drawer-url-mode">
@@ -332,10 +391,9 @@
     </t-drawer>
   </div>
 </template>
-
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import './index.less';
+
 import {
   AddIcon,
   ArrowDownIcon,
@@ -345,27 +403,21 @@ import {
   ChevronRightIcon,
   DeleteIcon,
   ImageIcon,
-  RefreshIcon,
   UploadIcon,
   VideoIcon,
 } from 'tdesign-icons-vue-next';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
-import type { TableRowData } from 'tdesign-vue-next';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 
+import type { HomeHeroFeature, HomeHeroPayload, HomeHeroSlide, MediaFileRecord, SettingItem } from '@/api/admin';
+import { adminApi } from '@/api/admin';
 import SecretInput from '@/components/secret-input/index.vue';
-import { adminApi, type HomeHeroFeature, type HomeHeroPayload, type HomeHeroSlide, type MediaFileRecord, type SettingItem } from '@/api/admin';
 import { AdminPermissions } from '@/constants/permissions';
 import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
 
-import './index.less';
-
-type SettingsTab =
-  | 'referral'
-  | 'automation'
-  | 'log_archive'
-  | 'site_basic'
-  | 'site_hero';
+type SettingsTab = 'referral' | 'automation' | 'log_archive' | 'site_basic' | 'site_hero';
 type FieldType = 'input' | 'password' | 'textarea' | 'switch' | 'select' | 'number' | 'image' | 'time';
 type FieldValue = string | number | boolean | null;
 
@@ -410,7 +462,6 @@ interface SettingsConfig {
 }
 
 const route = useRoute();
-const router = useRouter();
 const settingsLoading = ref(false);
 const settingsSaving = ref(false);
 const heroLoading = ref(false);
@@ -505,8 +556,22 @@ const configs: Record<Exclude<SettingsTab, 'site_hero'>, SettingsConfig> = {
           { key: 'expire_unsuspend_notify_enabled', label: '恢复后发送通知', type: 'switch', default: true },
           { key: 'expire_terminate_enabled', label: '启用自动终止', type: 'switch', default: false },
           { key: 'expire_terminate_after_days', label: '暂停后终止天数', type: 'number', default: 7, min: 1, max: 365 },
-          { key: 'service_lifecycle_schedule_mode', label: '任务执行周期', type: 'select', default: 'every_fifteen_minutes', options: automationScheduleModeOptions },
-          { key: 'service_lifecycle_schedule_time', label: '执行时间', type: 'time', default: '00:00:00', placeholder: '分钟仅支持 00/15/30/45', pattern: /^\d{2}:(00|15|30|45):00$/, patternMessage: '分钟仅支持 00、15、30 或 45，秒必须为 00' },
+          {
+            key: 'service_lifecycle_schedule_mode',
+            label: '任务执行周期',
+            type: 'select',
+            default: 'every_fifteen_minutes',
+            options: automationScheduleModeOptions,
+          },
+          {
+            key: 'service_lifecycle_schedule_time',
+            label: '执行时间',
+            type: 'time',
+            default: '00:00:00',
+            placeholder: '分钟仅支持 00/15/30/45',
+            pattern: /^\d{2}:(00|15|30|45):00$/,
+            patternMessage: '分钟仅支持 00、15、30 或 45，秒必须为 00',
+          },
         ],
       },
       {
@@ -515,26 +580,104 @@ const configs: Record<Exclude<SettingsTab, 'site_hero'>, SettingsConfig> = {
           { key: 'renew_notice_enabled', label: '启用续费提醒', type: 'switch', default: true },
           { key: 'renew_create_invoice_enabled', label: '自动创建续费账单', type: 'switch', default: true },
           { key: 'invoice_unpaid_reminder_enabled', label: '启用未支付提醒', type: 'switch', default: true },
-          { key: 'invoice_unpaid_before_due_days', label: '到期前提醒天数', type: 'number', default: 1, min: 0, max: 30 },
-          { key: 'invoice_overdue_reminder_days', label: '逾期提醒天数', type: 'input', default: '1,3,5', wide: true, pattern: /^\d+(,\d+)*$/, patternMessage: '请使用英文逗号分隔天数，例如 1,3,5' },
+          {
+            key: 'invoice_unpaid_before_due_days',
+            label: '到期前提醒天数',
+            type: 'number',
+            default: 1,
+            min: 0,
+            max: 30,
+          },
+          {
+            key: 'invoice_overdue_reminder_days',
+            label: '逾期提醒天数',
+            type: 'input',
+            default: '1,3,5',
+            wide: true,
+            pattern: /^\d+(,\d+)*$/,
+            patternMessage: '请使用英文逗号分隔天数，例如 1,3,5',
+          },
           { key: 'invoice_overdue_after_days', label: '逾期标记天数', type: 'number', default: 0, min: 0, max: 365 },
-          { key: 'billing_maintenance_schedule_mode', label: '任务执行周期', type: 'select', default: 'hourly', options: automationScheduleModeOptions },
-          { key: 'billing_maintenance_schedule_time', label: '执行时间', type: 'time', default: '00:00:00', placeholder: '分钟仅支持 00/15/30/45', pattern: /^\d{2}:(00|15|30|45):00$/, patternMessage: '分钟仅支持 00、15、30 或 45，秒必须为 00' },
+          {
+            key: 'billing_maintenance_schedule_mode',
+            label: '任务执行周期',
+            type: 'select',
+            default: 'hourly',
+            options: automationScheduleModeOptions,
+          },
+          {
+            key: 'billing_maintenance_schedule_time',
+            label: '执行时间',
+            type: 'time',
+            default: '00:00:00',
+            placeholder: '分钟仅支持 00/15/30/45',
+            pattern: /^\d{2}:(00|15|30|45):00$/,
+            patternMessage: '分钟仅支持 00、15、30 或 45，秒必须为 00',
+          },
         ],
       },
       {
         title: '工单与待支付清理',
         fields: [
           { key: 'ticket_auto_close_enabled', label: '启用工单自动关闭', type: 'switch', default: true },
-          { key: 'ticket_auto_close_after_hours', label: '工单自动关闭时长（小时）', type: 'number', default: 48, min: 1, max: 720 },
+          {
+            key: 'ticket_auto_close_after_hours',
+            label: '工单自动关闭时长（小时）',
+            type: 'number',
+            default: 48,
+            min: 1,
+            max: 720,
+          },
           { key: 'pending_order_cleanup_enabled', label: '启用未支付账单清理', type: 'switch', default: true },
-          { key: 'pending_order_cleanup_after_hours', label: '未支付账单保留时长（小时）', type: 'number', default: 1, min: 1, max: 720 },
+          {
+            key: 'pending_order_cleanup_after_hours',
+            label: '未支付账单保留时长（小时）',
+            type: 'number',
+            default: 1,
+            min: 1,
+            max: 720,
+          },
           { key: 'pending_recharge_cleanup_enabled', label: '启用未支付充值单清理', type: 'switch', default: true },
-          { key: 'pending_recharge_cleanup_after_days', label: '未支付充值单保留天数', type: 'number', default: 3, min: 0, max: 365 },
-          { key: 'ticket_auto_close_schedule_mode', label: '工单任务执行周期', type: 'select', default: 'hourly', options: automationScheduleModeOptions },
-          { key: 'ticket_auto_close_schedule_time', label: '工单执行时间', type: 'time', default: '00:00:00', placeholder: '分钟仅支持 00/15/30/45', pattern: /^\d{2}:(00|15|30|45):00$/, patternMessage: '分钟仅支持 00、15、30 或 45，秒必须为 00' },
-          { key: 'order_cleanup_schedule_mode', label: '账单清理执行周期', type: 'select', default: 'every_fifteen_minutes', options: automationScheduleModeOptions },
-          { key: 'order_cleanup_schedule_time', label: '账单清理执行时间', type: 'time', default: '00:00:00', placeholder: '分钟仅支持 00/15/30/45', pattern: /^\d{2}:(00|15|30|45):00$/, patternMessage: '分钟仅支持 00、15、30 或 45，秒必须为 00' },
+          {
+            key: 'pending_recharge_cleanup_after_days',
+            label: '未支付充值单保留天数',
+            type: 'number',
+            default: 3,
+            min: 0,
+            max: 365,
+          },
+          {
+            key: 'ticket_auto_close_schedule_mode',
+            label: '工单任务执行周期',
+            type: 'select',
+            default: 'hourly',
+            options: automationScheduleModeOptions,
+          },
+          {
+            key: 'ticket_auto_close_schedule_time',
+            label: '工单执行时间',
+            type: 'time',
+            default: '00:00:00',
+            placeholder: '分钟仅支持 00/15/30/45',
+            pattern: /^\d{2}:(00|15|30|45):00$/,
+            patternMessage: '分钟仅支持 00、15、30 或 45，秒必须为 00',
+          },
+          {
+            key: 'order_cleanup_schedule_mode',
+            label: '账单清理执行周期',
+            type: 'select',
+            default: 'every_fifteen_minutes',
+            options: automationScheduleModeOptions,
+          },
+          {
+            key: 'order_cleanup_schedule_time',
+            label: '账单清理执行时间',
+            type: 'time',
+            default: '00:00:00',
+            placeholder: '分钟仅支持 00/15/30/45',
+            pattern: /^\d{2}:(00|15|30|45):00$/,
+            patternMessage: '分钟仅支持 00、15、30 或 45，秒必须为 00',
+          },
         ],
       },
     ],
@@ -547,8 +690,22 @@ const configs: Record<Exclude<SettingsTab, 'site_hero'>, SettingsConfig> = {
       {
         title: '运行参数',
         fields: [
-          { key: 'pt_archiver_binary', label: 'pt-archiver 二进制路径', type: 'input', default: '/usr/bin/pt-archiver', required: true, maxlength: 255 },
-          { key: 'pt_archiver_defaults_file', label: '默认配置文件', type: 'input', default: '/etc/caiwu/pt-archiver.cnf', required: true, maxlength: 255 },
+          {
+            key: 'pt_archiver_binary',
+            label: 'pt-archiver 二进制路径',
+            type: 'input',
+            default: '/usr/bin/pt-archiver',
+            required: true,
+            maxlength: 255,
+          },
+          {
+            key: 'pt_archiver_defaults_file',
+            label: '默认配置文件',
+            type: 'input',
+            default: '/etc/caiwu/pt-archiver.cnf',
+            required: true,
+            maxlength: 255,
+          },
           { key: 'concurrency', label: '最大并发数', type: 'number', default: 2, min: 1, max: 8 },
           { key: 'batch_size', label: '每批处理行数', type: 'number', default: 1000, min: 100, max: 10000 },
           { key: 'sleep_seconds', label: '批次间隔（秒）', type: 'number', default: 1, min: 0, max: 60 },
@@ -571,11 +728,47 @@ const configs: Record<Exclude<SettingsTab, 'site_hero'>, SettingsConfig> = {
       {
         title: '站点信息',
         fields: [
-          { key: 'site_name', label: '站点名称', type: 'input', default: '', maxlength: 50, placeholder: '例如：创欧云' },
-          { key: 'browser_title', label: '浏览器标题', type: 'input', default: '', maxlength: 80, placeholder: '留空则默认使用站点名称' },
-          { key: 'site_logo', label: '站点 Logo', type: 'image', default: '', maxlength: 255, placeholder: '/branding/logo.svg' },
-          { key: 'site_favicon', label: '站点 Favicon', type: 'image', default: '', maxlength: 255, placeholder: '/branding/logo1.svg' },
-          { key: 'client_console_icon', label: '用户控制台图标', type: 'image', default: '', maxlength: 255, placeholder: '/branding/logo1.svg', help: '用于用户控制台侧边栏与登录页 Logo，留空则使用站点 Favicon。' },
+          {
+            key: 'site_name',
+            label: '站点名称',
+            type: 'input',
+            default: '',
+            maxlength: 50,
+            placeholder: '例如：创欧云',
+          },
+          {
+            key: 'browser_title',
+            label: '浏览器标题',
+            type: 'input',
+            default: '',
+            maxlength: 80,
+            placeholder: '留空则默认使用站点名称',
+          },
+          {
+            key: 'site_logo',
+            label: '站点 Logo',
+            type: 'image',
+            default: '',
+            maxlength: 255,
+            placeholder: '/branding/logo.svg',
+          },
+          {
+            key: 'site_favicon',
+            label: '站点 Favicon',
+            type: 'image',
+            default: '',
+            maxlength: 255,
+            placeholder: '/branding/logo1.svg',
+          },
+          {
+            key: 'client_console_icon',
+            label: '用户控制台图标',
+            type: 'image',
+            default: '',
+            maxlength: 255,
+            placeholder: '/branding/logo1.svg',
+            help: '用于用户控制台侧边栏与登录页 Logo，留空则使用站点 Favicon。',
+          },
           { key: 'service_phone', label: '官方QQ群', type: 'input', default: '', maxlength: 40 },
           { key: 'support_group_qr', label: '官方群聊二维码', type: 'image', default: '', maxlength: 255 },
           { key: 'support_group_link', label: '入群链接', type: 'input', default: '', maxlength: 255 },
@@ -587,24 +780,26 @@ const configs: Record<Exclude<SettingsTab, 'site_hero'>, SettingsConfig> = {
   },
 };
 
-const pageConfig = computed<SettingsConfig | null>(() => (activeTab.value === 'site_hero' ? null : configs[activeTab.value]));
-const pageDescription = computed(() =>
-  activeTab.value === 'site_hero' ? '维护官网首页 Banner 与底部特色卡片。' : pageConfig.value?.description || '',
+const pageConfig = computed<SettingsConfig | null>(() =>
+  activeTab.value === 'site_hero' ? null : configs[activeTab.value],
 );
 const sections = computed(() =>
   (pageConfig.value?.sections || []).map((section, index) => ({ ...section, anchor: `${activeTab.value}-${index}` })),
 );
-const currentSection = computed(() => sections.value.find((section) => section.anchor === activeSection.value) || sections.value[0]);
+const currentSection = computed(
+  () => sections.value.find((section) => section.anchor === activeSection.value) || sections.value[0],
+);
 const allFields = computed(() => sections.value.flatMap((section) => section.fields));
-const activeGroups = computed(() => Array.from(new Set(allFields.value.map((field) => field.group || pageConfig.value?.group || 'system'))));
-const currentLoading = computed(() => (activeTab.value === 'site_hero' ? heroLoading.value : settingsLoading.value));
+const activeGroups = computed(() =>
+  Array.from(new Set(allFields.value.map((field) => field.group || pageConfig.value?.group || 'system'))),
+);
 const currentSaving = computed(() => (activeTab.value === 'site_hero' ? heroSaving.value : settingsSaving.value));
 const heroDirty = computed(() => JSON.stringify(heroForm) !== heroSnapshot.value);
 
 const videoDrawerTitle = computed(() => {
   if (videoDrawerSlideIndex.value < 0) return '选择背景视频';
   const slide = heroForm.slides[videoDrawerSlideIndex.value];
-  return `背景视频 · 第 ${videoDrawerSlideIndex.value + 1} 项${slide?.rail_title ? '（' + slide.rail_title + '）' : ''}`;
+  return `背景视频 · 第 ${videoDrawerSlideIndex.value + 1} 项${slide?.rail_title ? `（${slide.rail_title}）` : ''}`;
 });
 
 function normalizeTab(value: unknown): SettingsTab {
@@ -625,7 +820,9 @@ const activeTab = ref<SettingsTab>(resolveInitialTab());
 const canManageSettings = computed(() => hasAdminPermission(AdminPermissions.SETTINGS_MANAGE));
 const canManageSite = computed(() => hasAdminPermission(AdminPermissions.SITE_MANAGE));
 const canRevealSettingsSecret = computed(() => hasAdminPermission(AdminPermissions.SETTINGS_SECRET_REVEAL));
-const canManageCurrentTab = computed(() => (activeTab.value === 'site_hero' ? canManageSite.value : canManageSettings.value));
+const canManageCurrentTab = computed(() =>
+  activeTab.value === 'site_hero' ? canManageSite.value : canManageSettings.value,
+);
 
 function refreshCurrentTab() {
   if (activeTab.value === 'site_hero') return loadHero();
@@ -666,9 +863,13 @@ async function loadSettings() {
   settingsLoading.value = true;
   resetFormDefaults();
   try {
-    const maps = Object.fromEntries(await Promise.all(
-      activeGroups.value.map(async (group): Promise<[string, Record<string, unknown>]> => [group, await loadSettingsGroup(group)]),
-    ));
+    const maps = Object.fromEntries(
+      await Promise.all(
+        activeGroups.value.map(
+          async (group): Promise<[string, Record<string, unknown>]> => [group, await loadSettingsGroup(group)],
+        ),
+      ),
+    );
     allFields.value.forEach((field) => {
       const group = field.group || pageConfig.value?.group || 'system';
       form[field.key] = parseFieldValue(field, maps[group]?.[field.key]);
@@ -737,7 +938,13 @@ function buildSettingsPayload() {
     const group = field.group || pageConfig.value?.group || 'system';
     let value = form[field.key];
     if (field.type === 'switch') value = value ? 1 : 0;
-    if (isSecretSettingField(field) && hasSettingSecretValue(field) && !settingsSecretEdited[settingSecretEditKey(field)]) value = '';
+    if (
+      isSecretSettingField(field) &&
+      hasSettingSecretValue(field) &&
+      !settingsSecretEdited[settingSecretEditKey(field)]
+    ) {
+      value = '';
+    }
     if (!payload[group]) payload[group] = {};
     payload[group][field.key] = value;
     return payload;
@@ -755,14 +962,16 @@ async function loadSettingsGroup(group: string) {
 function normalizeSettings(response: SettingItem[] | Record<string, unknown>) {
   if (Array.isArray(response)) return Object.fromEntries(response.map((item) => [item.key, item.value]));
   const record = toRecord(response);
-  if (Array.isArray(record.list)) return Object.fromEntries((record.list as SettingItem[]).map((item) => [item.key, item.value]));
+  if (Array.isArray(record.list))
+    return Object.fromEntries((record.list as SettingItem[]).map((item) => [item.key, item.value]));
   return record;
 }
 
 function normalizeSettingItems(response: SettingItem[] | Record<string, unknown>) {
   if (Array.isArray(response)) return Object.fromEntries(response.map((item) => [item.key, item]));
   const record = toRecord(response);
-  if (Array.isArray(record.list)) return Object.fromEntries((record.list as SettingItem[]).map((item) => [item.key, item]));
+  if (Array.isArray(record.list))
+    return Object.fromEntries((record.list as SettingItem[]).map((item) => [item.key, item]));
   return {};
 }
 
@@ -788,11 +997,6 @@ function isSecretSettingField(field: SettingField) {
 
 function hasSettingSecretValue(field: SettingField) {
   return settingMeta(field)?.has_value === true;
-}
-
-function secretSettingFieldValue(field: SettingField) {
-  const value = form[field.key];
-  return value === null || value === undefined ? '' : String(value);
 }
 
 async function revealSettingSecret(field: SettingField) {
@@ -839,14 +1043,19 @@ async function loadMediaDrawerList() {
       page_size: 100,
     });
     mediaDrawerList.value = (res.list || [])
-      .map(function(item) {
+      .map(function (item) {
         return {
           url: String(item.url || ''),
-          filename: String(item.filename || '').split('/').pop() || '',
+          filename:
+            String(item.filename || '')
+              .split('/')
+              .pop() || '',
           isVideo: isMediaDrawerVideo(item),
         };
       })
-      .filter(function(item) { return item.url; });
+      .filter(function (item) {
+        return item.url;
+      });
   } catch {
     mediaDrawerList.value = [];
   } finally {
@@ -885,7 +1094,10 @@ async function handleMediaDrawerUpload(event: Event) {
     if (url) {
       mediaDrawerList.value.unshift({
         url,
-        filename: String(response.filename || '').split('/').pop() || file.name,
+        filename:
+          String(response.filename || '')
+            .split('/')
+            .pop() || file.name,
         isVideo: isMediaDrawerVideo(response),
       });
     }
@@ -932,7 +1144,9 @@ function applyHeroPayload(payload: HomeHeroPayload = {}) {
   heroDefaults.features = cloneList(payload.defaults?.features);
   heroVideoOptions.value = normalizeHeroVideoOptions(payload.options?.videos);
   heroForm.slides = cloneList(payload.slides).length ? cloneList(payload.slides) : cloneList(heroDefaults.slides);
-  heroForm.features = cloneList(payload.features).length ? cloneList(payload.features) : cloneList(heroDefaults.features);
+  heroForm.features = cloneList(payload.features).length
+    ? cloneList(payload.features)
+    : cloneList(heroDefaults.features);
   heroSnapshot.value = JSON.stringify(heroForm);
 }
 
@@ -950,7 +1164,11 @@ async function saveHero() {
       features: heroForm.features.map((item) => ({ ...item })),
     };
     const response = await adminApi.siteHero.save(payload);
-    applyHeroPayload({ ...response, slides: response.slides || payload.slides, features: response.features || payload.features });
+    applyHeroPayload({
+      ...response,
+      slides: response.slides || payload.slides,
+      features: response.features || payload.features,
+    });
     MessagePlugin.success('首页 Banner 已保存');
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '保存首页 Banner 失败'));
@@ -1085,85 +1303,85 @@ function formatFileSize(size: number) {
 }
 
 function onVideoCardEnter(event: MouseEvent) {
-  const el = event.currentTarget as HTMLElement
-  const video = el.querySelector('video') as HTMLVideoElement | null
+  const el = event.currentTarget as HTMLElement;
+  const video = el.querySelector('video') as HTMLVideoElement | null;
   if (video) {
-    video.currentTime = 0
-    video.play().catch(() => {})
+    video.currentTime = 0;
+    video.play().catch(() => {});
   }
 }
 
 function onVideoCardLeave(event: MouseEvent) {
-  const el = event.currentTarget as HTMLElement
-  const video = el.querySelector('video') as HTMLVideoElement | null
+  const el = event.currentTarget as HTMLElement;
+  const video = el.querySelector('video') as HTMLVideoElement | null;
   if (video) {
-    video.pause()
-    video.currentTime = 0
+    video.pause();
+    video.currentTime = 0;
   }
 }
 
 function openVideoDrawer(slideIndex: number) {
-  videoDrawerSlideIndex.value = slideIndex
-  const current = String(heroForm.slides[slideIndex]?.video || '')
-  videoDrawerCurrentSrc.value = current
-  const isPredefined = heroVideoOptions.value.some((opt) => opt.value === current)
+  videoDrawerSlideIndex.value = slideIndex;
+  const current = String(heroForm.slides[slideIndex]?.video || '');
+  videoDrawerCurrentSrc.value = current;
+  const isPredefined = heroVideoOptions.value.some((opt) => opt.value === current);
   if (current && !isPredefined) {
-    videoDrawerMode.value = 'url'
-    videoUrlInput.value = current
-    videoUrlPreview.value = current
+    videoDrawerMode.value = 'url';
+    videoUrlInput.value = current;
+    videoUrlPreview.value = current;
   } else {
-    videoDrawerMode.value = 'select'
-    videoUrlInput.value = ''
-    videoUrlPreview.value = ''
+    videoDrawerMode.value = 'select';
+    videoUrlInput.value = '';
+    videoUrlPreview.value = '';
   }
-  videoDrawerVisible.value = true
+  videoDrawerVisible.value = true;
 }
 
 function closeVideoDrawer() {
-  videoDrawerVisible.value = false
-  videoDrawerSlideIndex.value = -1
-  videoUrlInput.value = ''
-  videoUrlPreview.value = ''
+  videoDrawerVisible.value = false;
+  videoDrawerSlideIndex.value = -1;
+  videoUrlInput.value = '';
+  videoUrlPreview.value = '';
 }
 
 function selectVideoFromDrawer(value: string) {
-  const idx = videoDrawerSlideIndex.value
+  const idx = videoDrawerSlideIndex.value;
   if (idx >= 0 && idx < heroForm.slides.length) {
-    heroForm.slides[idx].video = heroForm.slides[idx].video === value ? '' : value
+    heroForm.slides[idx].video = heroForm.slides[idx].video === value ? '' : value;
   }
-  closeVideoDrawer()
+  closeVideoDrawer();
 }
 
 function confirmVideoUrl() {
-  const url = videoUrlInput.value.trim()
+  const url = videoUrlInput.value.trim();
   if (!url) {
-    MessagePlugin.warning('请输入视频 URL')
-    return
+    MessagePlugin.warning('请输入视频 URL');
+    return;
   }
   if (!/^https?:\/\/.+/.test(url)) {
-    MessagePlugin.warning('请输入以 http:// 或 https:// 开头的有效 URL')
-    return
+    MessagePlugin.warning('请输入以 http:// 或 https:// 开头的有效 URL');
+    return;
   }
-  const idx = videoDrawerSlideIndex.value
+  const idx = videoDrawerSlideIndex.value;
   if (idx >= 0 && idx < heroForm.slides.length) {
-    heroForm.slides[idx].video = url
+    heroForm.slides[idx].video = url;
   }
-  MessagePlugin.success('已设置第三方视频 URL')
-  closeVideoDrawer()
+  MessagePlugin.success('已设置第三方视频 URL');
+  closeVideoDrawer();
 }
 
 function videoDisplayName(src: string) {
-  if (!src) return ''
-  const opt = heroVideoOptions.value.find((item) => item.value === src)
-  if (opt?.size) return `${opt.filename || src.split('/').pop()} · ${formatFileSize(opt.size)}`
-  if (opt) return opt.filename || src.split('/').pop() || src
+  if (!src) return '';
+  const opt = heroVideoOptions.value.find((item) => item.value === src);
+  if (opt?.size) return `${opt.filename || src.split('/').pop()} · ${formatFileSize(opt.size)}`;
+  if (opt) return opt.filename || src.split('/').pop() || src;
   // External URL — show shortened domain path
   try {
-    const url = new URL(src)
-    const path = url.pathname.split('/').filter(Boolean).pop() || url.hostname
-    return `外部 · ${path}`
+    const url = new URL(src);
+    const path = url.pathname.split('/').filter(Boolean).pop() || url.hostname;
+    return `外部 · ${path}`;
   } catch {
-    return src.split('/').pop() || src
+    return src.split('/').pop() || src;
   }
 }
 
@@ -1182,14 +1400,13 @@ function toRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
 
-
 watch(videoUrlInput, (value) => {
   if (/^https?:\/\/.+/.test(value)) {
-    videoUrlPreview.value = value
+    videoUrlPreview.value = value;
   } else {
-    videoUrlPreview.value = ''
+    videoUrlPreview.value = '';
   }
-})
+});
 
 watch(
   () => route.query.tab,

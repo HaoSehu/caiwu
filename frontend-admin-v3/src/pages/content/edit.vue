@@ -12,7 +12,6 @@
 
     <t-card :bordered="false" :loading="pageLoading">
       <t-form ref="formRef" :data="form" :rules="rules" label-align="top" class="content-edit-form">
-
         <section class="edit-section">
           <h3 class="edit-section__title">基本信息</h3>
           <div class="edit-section__body">
@@ -59,10 +58,20 @@
           </div>
           <div class="edit-flag-row">
             <t-form-item label="置顶" name="is_pinned">
-              <t-switch v-model="form.is_pinned" :custom-value="[1, 0]" :label="['置顶', '普通']" @change="handlePinnedChange" />
+              <t-switch
+                v-model="form.is_pinned"
+                :custom-value="[1, 0]"
+                :label="['置顶', '普通']"
+                @change="handlePinnedChange"
+              />
             </t-form-item>
             <t-form-item label="推荐" name="is_recommended">
-              <t-switch v-model="form.is_recommended" :custom-value="[1, 0]" :label="['推荐', '不推荐']" @change="handleRecommendedChange" />
+              <t-switch
+                v-model="form.is_recommended"
+                :custom-value="[1, 0]"
+                :label="['推荐', '不推荐']"
+                @change="handleRecommendedChange"
+              />
             </t-form-item>
             <t-form-item v-if="isEditing && contentType === 'notice'" label="要求重新查看" name="require_reread">
               <t-switch v-model="form.require_reread" :custom-value="[true, false]" :label="['是', '否']" />
@@ -78,13 +87,20 @@
               <div class="cover-image-selector" @click="openCoverImageDrawer">
                 <image-icon v-if="!isCoverVideo" />
                 <video-icon v-else />
-                <span v-if="form.cover_image" class="cover-image-selector__name">{{ form.cover_image.split('/').pop() }}</span>
+                <span v-if="form.cover_image" class="cover-image-selector__name">{{
+                  form.cover_image.split('/').pop()
+                }}</span>
                 <span v-else class="cover-image-selector__placeholder">点击选择封面图片或视频</span>
                 <chevron-right-icon />
               </div>
             </t-form-item>
             <t-form-item label="摘要" name="summary">
-              <t-textarea v-model="form.summary" :autosize="{ minRows: 2, maxRows: 4 }" :maxlength="500" placeholder="简要描述内容，用于列表预览" />
+              <t-textarea
+                v-model="form.summary"
+                :autosize="{ minRows: 2, maxRows: 4 }"
+                :maxlength="500"
+                placeholder="简要描述内容，用于列表预览"
+              />
             </t-form-item>
             <t-form-item label="关键词" name="keywords">
               <t-input v-model="form.keywords" placeholder="多个关键词用逗号分隔" />
@@ -96,7 +112,12 @@
           <h3 class="edit-section__title">正文内容</h3>
           <div class="edit-section__body edit-section__body--single">
             <t-form-item name="content">
-              <t-textarea v-model="form.content" :autosize="{ minRows: 14, maxRows: 24 }" :maxlength="30000" placeholder="请输入正文内容" />
+              <t-textarea
+                v-model="form.content"
+                :autosize="{ minRows: 14, maxRows: 24 }"
+                :maxlength="30000"
+                placeholder="请输入正文内容"
+              />
             </t-form-item>
           </div>
         </section>
@@ -105,7 +126,12 @@
           <h3 class="edit-section__title">备注</h3>
           <div class="edit-section__body edit-section__body--single">
             <t-form-item name="remark">
-              <t-textarea v-model="form.remark" :autosize="{ minRows: 2, maxRows: 4 }" :maxlength="255" placeholder="内部备注，不对外展示" />
+              <t-textarea
+                v-model="form.remark"
+                :autosize="{ minRows: 2, maxRows: 4 }"
+                :maxlength="255"
+                placeholder="内部备注，不对外展示"
+              />
             </t-form-item>
           </div>
         </section>
@@ -156,17 +182,24 @@
             <span>{{ item.filename }}</span>
           </div>
         </div>
-        <div v-if="!coverImageList.length && !coverImageLoading" class="cover-drawer-empty">暂无已上传媒体，请先上传</div>
+        <div v-if="!coverImageList.length && !coverImageLoading" class="cover-drawer-empty">
+          暂无已上传媒体，请先上传
+        </div>
       </div>
     </t-drawer>
 
-    <input ref="coverImageInputRef" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/ogg,video/quicktime,video/x-m4v" style="display:none" @change="handleCoverImageUpload" />
+    <input
+      ref="coverImageInputRef"
+      type="file"
+      accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/ogg,video/quicktime,video/x-m4v"
+      style="display: none"
+      @change="handleCoverImageUpload"
+    />
   </div>
 </template>
-
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import './index.less';
+
 import {
   ArrowLeftIcon,
   CheckCircleFilledIcon,
@@ -175,18 +208,13 @@ import {
   UploadIcon,
   VideoIcon,
 } from 'tdesign-icons-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
 import type { FormInstanceFunctions, FormRule } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next';
+import { computed, onMounted, reactive, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 
-import {
-  adminApi,
-  type ContentArticlePayload,
-  type ContentArticleRecord,
-  type ContentCategoryRecord,
-  type MediaFileRecord,
-} from '@/api/admin';
-
-import './index.less';
+import type { ContentArticlePayload, ContentArticleRecord, ContentCategoryRecord, MediaFileRecord } from '@/api/admin';
+import { adminApi } from '@/api/admin';
 
 interface CoverMediaItem {
   url: string;
@@ -200,7 +228,13 @@ function isMediaVideo(row: MediaFileRecord): boolean {
 
 function isUrlVideo(url: string): boolean {
   const lower = url.toLowerCase();
-  return lower.endsWith('.mp4') || lower.endsWith('.webm') || lower.endsWith('.ogg') || lower.endsWith('.mov') || lower.endsWith('.m4v');
+  return (
+    lower.endsWith('.mp4') ||
+    lower.endsWith('.webm') ||
+    lower.endsWith('.ogg') ||
+    lower.endsWith('.mov') ||
+    lower.endsWith('.m4v')
+  );
 }
 
 interface ArticleForm {
@@ -386,7 +420,10 @@ async function loadCoverMediaList() {
     coverImageList.value = (res.list || [])
       .map((item) => ({
         url: String(item.url || ''),
-        filename: String(item.filename || '').split('/').pop() || '',
+        filename:
+          String(item.filename || '')
+            .split('/')
+            .pop() || '',
         isVideo: isMediaVideo(item),
       }))
       .filter((item) => item.url);
@@ -426,7 +463,10 @@ async function handleCoverImageUpload(event: Event) {
     if (url) {
       coverImageList.value.unshift({
         url,
-        filename: String(response.filename || '').split('/').pop() || file.name,
+        filename:
+          String(response.filename || '')
+            .split('/')
+            .pop() || file.name,
         isVideo: isMediaVideo(response),
       });
     }
@@ -443,9 +483,7 @@ onMounted(async () => {
   pageLoading.value = true;
   try {
     const id = articleId.value;
-    const [catRes] = await Promise.allSettled([
-      adminApi.content.categories.list({ content_type: contentType.value }),
-    ]);
+    const [catRes] = await Promise.allSettled([adminApi.content.categories.list({ content_type: contentType.value })]);
     if (catRes.status === 'fulfilled') categories.value = catRes.value;
 
     if (id) {

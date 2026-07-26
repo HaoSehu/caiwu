@@ -4,9 +4,9 @@ import NProgress from 'nprogress'; // progress bar
 import { MessagePlugin } from 'tdesign-vue-next';
 import type { RouteRecordRaw } from 'vue-router';
 
+import { hasPermissionInList } from '@/constants/permissions';
 import router from '@/router';
 import { getPermissionStore, useUserStore } from '@/store';
-import { hasPermissionInList } from '@/constants/permissions';
 import { PAGE_NOT_FOUND_ROUTE } from '@/utils/route/constant';
 import { toUserMessage } from '@/utils/userMessage';
 

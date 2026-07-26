@@ -121,12 +121,7 @@
                 </t-button>
               </t-upload>
 
-              <t-button
-                theme="primary"
-                :loading="replyLoading"
-                :disabled="replySubmitDisabled"
-                @click="handleReply"
-              >
+              <t-button theme="primary" :loading="replyLoading" :disabled="replySubmitDisabled" @click="handleReply">
                 发送
               </t-button>
             </div>
@@ -145,7 +140,9 @@
               </t-descriptions-item>
               <t-descriptions-item label="工单分类">{{ departmentLabel(detail.department) }}</t-descriptions-item>
               <t-descriptions-item label="优先级">
-                <t-tag :theme="priorityTheme(detail.priority)" variant="light">{{ priorityLabel(detail.priority) }}</t-tag>
+                <t-tag :theme="priorityTheme(detail.priority)" variant="light">{{
+                  priorityLabel(detail.priority)
+                }}</t-tag>
               </t-descriptions-item>
               <t-descriptions-item label="处理人">{{ assigneeName }}</t-descriptions-item>
               <t-descriptions-item label="关联服务">{{ linkedServiceId }}</t-descriptions-item>
@@ -229,29 +226,23 @@
     </t-dialog>
   </div>
 </template>
-
 <script setup lang="ts">
+import './index.less';
+
 import { ChevronLeftIcon, CloseCircleIcon, UploadIcon } from 'tdesign-icons-vue-next';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import {
-  adminApi,
-  type TicketAdminUser,
-  type TicketAttachment,
-  type TicketDetail,
-  type TicketReply,
-} from '@/api/admin';
-import { errorMessage } from '@/utils/userMessage';
+import type { TicketAdminUser, TicketAttachment, TicketDetail, TicketReply } from '@/api/admin';
+import { adminApi } from '@/api/admin';
 import { formatDateTime } from '@/utils/format';
-
-import './index.less';
+import { errorMessage } from '@/utils/userMessage';
 
 const MAX_TICKET_IMAGES = 9;
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
-type UploadFileLike = {
+interface UploadFileLike {
   name?: string;
   size?: number;
   type?: string;
@@ -261,7 +252,7 @@ type UploadFileLike = {
   url?: string;
   path?: string;
   [key: string]: unknown;
-};
+}
 
 type ConversationMessage = TicketReply & {
   messageKey: string;
@@ -336,7 +327,8 @@ const assigneeName = computed(() => {
 
 const linkedServiceId = computed(() => detail.value?.service?.id || detail.value?.service_id || '--');
 const linkedServiceDisplayName = computed(
-  () => detail.value?.service?.display_name || detail.value?.service?.product_name || detail.value?.service?.name || '--',
+  () =>
+    detail.value?.service?.display_name || detail.value?.service?.product_name || detail.value?.service?.name || '--',
 );
 const linkedServiceConnection = computed(() => ({
   dedicated_ip: '',
@@ -348,7 +340,11 @@ const linkedServiceConnection = computed(() => ({
   ...(detail.value?.service?.connection || {}),
 }));
 const linkedServicePassword = computed(() =>
-  linkedServiceConnection.value.has_password ? (linkedServicePasswordVisible.value ? linkedServiceConnection.value.password || '******' : '******') : '--',
+  linkedServiceConnection.value.has_password
+    ? linkedServicePasswordVisible.value
+      ? linkedServiceConnection.value.password || '******'
+      : '******'
+    : '--',
 );
 const linkedServiceSpecs = computed(() => {
   const specs = detail.value?.service?.specs;
@@ -368,25 +364,6 @@ const replySubmitDisabled = computed(
 
 function resolveTicketId() {
   return String(route.params.id || '');
-}
-
-function statusLabel(value: unknown) {
-  return (
-    {
-      0: '开启',
-      1: '客户回复',
-      2: '员工回复',
-      3: '已关闭',
-    } as Record<number, string>
-  )[Number(value)] || '--';
-}
-
-function statusTheme(value: unknown): 'default' | 'success' | 'warning' | 'danger' {
-  const number = Number(value);
-  if (number === 0) return 'warning';
-  if (number === 1) return 'danger';
-  if (number === 2) return 'success';
-  return 'default';
 }
 
 function priorityLabel(value: unknown) {
@@ -414,7 +391,9 @@ function isClosed(status: unknown) {
   return Number(status) === 3;
 }
 
-function parseAttachments(item: { attachments?: TicketAttachment[]; attachment_urls?: Array<string | TicketAttachment> } | null) {
+function parseAttachments(
+  item: { attachments?: TicketAttachment[]; attachment_urls?: Array<string | TicketAttachment> } | null,
+) {
   const attachments = item?.attachments || item?.attachment_urls || [];
   return attachments
     .map((attachment, index) => {

@@ -13,7 +13,13 @@
           <span class="type-count">{{ item.usage_count || 0 }}</span>
         </t-button>
         <t-tooltip content="管理一级分类">
-          <t-button class="type-manage-button" shape="square" variant="outline" aria-label="管理一级分类" @click="openTypeManagerDialog()">
+          <t-button
+            class="type-manage-button"
+            shape="square"
+            variant="outline"
+            aria-label="管理一级分类"
+            @click="openTypeManagerDialog()"
+          >
             <template #icon><setting-icon /></template>
           </t-button>
         </t-tooltip>
@@ -47,7 +53,11 @@
             v-for="{ node: item, level, childCount } in categoryTreeRows"
             :key="String(item.id)"
             class="category-tree-row"
-            :class="{ active: isCategoryRowActive(item), 'active-parent': isCategoryRowParentOfSelected(item), disabled: categorySortLoadingId }"
+            :class="{
+              active: isCategoryRowActive(item),
+              'active-parent': isCategoryRowParentOfSelected(item),
+              disabled: categorySortLoadingId,
+            }"
             :style="{ '--category-level': level }"
           >
             <button
@@ -60,7 +70,9 @@
             <button type="button" class="category-drag" aria-label="排序占位" disabled>::</button>
             <button type="button" class="category-tree-main" @click="handleCategorySelect(item)">
               <span class="category-title-line">
-                <span class="category-level-tag" :class="`category-level-${level}`">{{ level === 0 ? '一级' : '二级' }}</span>
+                <span class="category-level-tag" :class="`category-level-${level}`">{{
+                  level === 0 ? '一级' : '二级'
+                }}</span>
                 <span class="category-name" :class="{ 'is-hidden': !isCategoryVisible(item) }">
                   {{ categoryDisplayName(item) }}
                 </span>
@@ -88,8 +100,8 @@
 
         <div class="filter-row catalog-filter-row">
           <t-input
-            class="catalog-filter-keyword"
             v-model="catalogFilters.keyword"
+            class="catalog-filter-keyword"
             clearable
             placeholder="搜索商品名称"
             @enter="handleCatalogSearch"
@@ -98,8 +110,8 @@
             <template #suffix-icon><search-icon /></template>
           </t-input>
           <t-select
-            class="catalog-filter-status"
             v-model="catalogFilters.status"
+            class="catalog-filter-status"
             clearable
             placeholder="显示状态"
             @change="handleCatalogSearch"
@@ -108,12 +120,17 @@
             <t-option :value="0" label="已隐藏" />
           </t-select>
           <t-select
-            class="catalog-filter-status"
             v-model="catalogFilters.lifecycle_status"
+            class="catalog-filter-status"
             placeholder="商品范围"
             @change="handleCatalogSearch"
           >
-            <t-option v-for="item in lifecycleStatusOptions" :key="item.value" :value="item.value" :label="item.label" />
+            <t-option
+              v-for="item in lifecycleStatusOptions"
+              :key="item.value"
+              :value="item.value"
+              :label="item.label"
+            />
           </t-select>
           <div class="catalog-filter-actions">
             <t-button theme="primary" @click="router.push({ name: 'AdminProductCreate' })">
@@ -140,7 +157,9 @@
             <t-button variant="outline" :disabled="!selectedProductKeys.length" @click="openProvisionHostnameDialog">
               批量主机名
             </t-button>
-            <t-button variant="text" :disabled="!selectedProductKeys.length" @click="clearProductSelection">清空选择</t-button>
+            <t-button variant="text" :disabled="!selectedProductKeys.length" @click="clearProductSelection"
+              >清空选择</t-button
+            >
           </t-space>
         </div>
 
@@ -164,7 +183,10 @@
               </div>
             </template>
             <template #status="{ row }">
-              <span class="visibility-status-text" :class="{ 'is-hidden': !isProductVisible(row), 'is-deleted': row.is_deleted }">
+              <span
+                class="visibility-status-text"
+                :class="{ 'is-hidden': !isProductVisible(row), 'is-deleted': row.is_deleted }"
+              >
                 {{ productVisibilityLabel(row) }}
               </span>
             </template>
@@ -200,8 +222,19 @@
                   </t-button>
                 </template>
                 <template v-else>
-                  <t-button size="small" variant="text" theme="primary" @click="router.push({ name: 'AdminProductEdit', params: { id: row.id } })">编辑</t-button>
-                  <t-button size="small" variant="text" :loading="productActionLoading === row.id" @click="handleToggleProduct(row)">
+                  <t-button
+                    size="small"
+                    variant="text"
+                    theme="primary"
+                    @click="router.push({ name: 'AdminProductEdit', params: { id: row.id } })"
+                    >编辑</t-button
+                  >
+                  <t-button
+                    size="small"
+                    variant="text"
+                    :loading="productActionLoading === row.id"
+                    @click="handleToggleProduct(row)"
+                  >
                     {{ Number(row.status) === 1 ? '隐藏' : '显示' }}
                   </t-button>
                   <t-button size="small" variant="text" theme="danger" @click="handleDeleteProduct(row)">删除</t-button>
@@ -254,7 +287,13 @@
             <strong>{{ item.label }}</strong>
             <span>{{ item.usage_count || 0 }}</span>
           </button>
-          <button type="button" class="mobile-type-tool mobile-type-tool--icon" aria-label="管理一级分类" title="管理一级分类" @click="openTypeManagerDialog()">
+          <button
+            type="button"
+            class="mobile-type-tool mobile-type-tool--icon"
+            aria-label="管理一级分类"
+            title="管理一级分类"
+            @click="openTypeManagerDialog()"
+          >
             <setting-icon />
           </button>
         </aside>
@@ -285,7 +324,11 @@
               v-for="{ node: item, level, childCount } in categoryTreeRows"
               :key="String(item.id)"
               class="category-tree-row"
-              :class="{ active: isCategoryRowActive(item), 'active-parent': isCategoryRowParentOfSelected(item), disabled: categorySortLoadingId }"
+              :class="{
+                active: isCategoryRowActive(item),
+                'active-parent': isCategoryRowParentOfSelected(item),
+                disabled: categorySortLoadingId,
+              }"
               :style="{ '--category-level': level }"
             >
               <button
@@ -298,7 +341,9 @@
               <button type="button" class="category-drag" aria-label="排序占位" disabled>::</button>
               <button type="button" class="category-tree-main" @click="handleMobileCategorySelect(item)">
                 <span class="category-title-line">
-                  <span class="category-level-tag" :class="`category-level-${level}`">{{ level === 0 ? '一级' : '二级' }}</span>
+                  <span class="category-level-tag" :class="`category-level-${level}`">{{
+                    level === 0 ? '一级' : '二级'
+                  }}</span>
                   <span class="category-name" :class="{ 'is-hidden': !isCategoryVisible(item) }">
                     {{ categoryDisplayName(item) }}
                   </span>
@@ -336,7 +381,8 @@
               v-for="section in productDrawerSections"
               :key="section.key"
               type="button"
-              :class="['product-drawer-nav-item', { active: activeProductDrawerSection === section.key }]"
+              class="product-drawer-nav-item"
+              :class="[{ active: activeProductDrawerSection === section.key }]"
               @click="setProductDrawerSection(section.key)"
             >
               <strong>{{ section.label }}</strong>
@@ -345,7 +391,13 @@
           </aside>
 
           <div class="product-drawer-main">
-            <t-form ref="productFormRef" class="product-drawer-form" :data="productForm" :rules="productRules" label-width="120px">
+            <t-form
+              ref="productFormRef"
+              class="product-drawer-form"
+              :data="productForm"
+              :rules="productRules"
+              label-width="120px"
+            >
               <section v-show="activeProductDrawerSection === 'basic'" class="product-drawer-section" data-title="详情">
                 <div class="product-drawer-grid">
                   <t-form-item label="商品名称" name="display_name">
@@ -361,14 +413,30 @@
                       />
                     </t-select>
                   </t-form-item>
-                  <t-form-item label="状态" name="status"><t-switch v-model="productForm.status" :custom-value="[1, 0]" /></t-form-item>
+                  <t-form-item label="状态" name="status"
+                    ><t-switch v-model="productForm.status" :custom-value="[1, 0]"
+                  /></t-form-item>
                 </div>
               </section>
 
-              <section v-show="activeProductDrawerSection === 'pricing'" class="product-drawer-section" data-title="定价">
+              <section
+                v-show="activeProductDrawerSection === 'pricing'"
+                class="product-drawer-section"
+                data-title="定价"
+              >
                 <div class="product-pricing-actions">
-                  <t-select v-model="productPricingPlan" size="small" style="width: 150px" @change="syncProductPricingCycles">
-                    <t-option v-for="item in productPricingPlanOptions" :key="item.value" :label="item.label" :value="item.value" />
+                  <t-select
+                    v-model="productPricingPlan"
+                    size="small"
+                    style="width: 150px"
+                    @change="syncProductPricingCycles"
+                  >
+                    <t-option
+                      v-for="item in productPricingPlanOptions"
+                      :key="item.value"
+                      :label="item.label"
+                      :value="item.value"
+                    />
                   </t-select>
                 </div>
                 <div class="product-drawer-grid">
@@ -387,7 +455,11 @@
                 </div>
               </section>
 
-              <section v-show="activeProductDrawerSection === 'interface'" class="product-drawer-section product-interface-section" data-title="自动开通">
+              <section
+                v-show="activeProductDrawerSection === 'interface'"
+                class="product-drawer-section product-interface-section"
+                data-title="自动开通"
+              >
                 <div class="product-interface-tip">配置开通模块、支付方式和上架状态。</div>
                 <div class="product-interface-panel">
                   <t-form-item label="提供商" name="supplier_id">
@@ -399,34 +471,34 @@
                       :loading="productSupplierLoading"
                       @change="handleProductSupplierChange"
                     >
-                        <t-option
-                          v-for="item in productSupplierOptions"
-                          :key="item.id"
-                          :label="supplierOptionLabel(item)"
-                          :value="item.id"
-                        >
-                          <div class="supplier-option-row">
-                            <span>{{ item.name || item.id }}</span>
-                            <span>{{ supplierInterfaceTypeLabel(item) }}</span>
-                          </div>
-                        </t-option>
-                      </t-select>
-                    </t-form-item>
-                    <t-form-item label="提供商商品" name="upstream_product_id">
-                      <div class="supplier-product-row">
-                        <t-cascader
+                      <t-option
+                        v-for="item in productSupplierOptions"
+                        :key="item.id"
+                        :label="supplierOptionLabel(item)"
+                        :value="item.id"
+                      >
+                        <div class="supplier-option-row">
+                          <span>{{ item.name || item.id }}</span>
+                          <span>{{ supplierInterfaceTypeLabel(item) }}</span>
+                        </div>
+                      </t-option>
+                    </t-select>
+                  </t-form-item>
+                  <t-form-item label="提供商商品" name="upstream_product_id">
+                    <div class="supplier-product-row">
+                      <t-cascader
                         v-model="productForm.upstream_product_id"
                         :options="supplierProductCascaderOptions"
                         filterable
                         clearable
                         placeholder="请选择提供商商品"
-                          :loading="supplierProductLoading"
-                          :disabled="!productForm.supplier_id"
-                          value-mode="onlyLeaf"
-                          :show-all-levels="false"
-                        />
-                        <t-button
-                          theme="primary"
+                        :loading="supplierProductLoading"
+                        :disabled="!productForm.supplier_id"
+                        value-mode="onlyLeaf"
+                        :show-all-levels="false"
+                      />
+                      <t-button
+                        theme="primary"
                         :loading="supplierProductLoading"
                         :disabled="!productForm.supplier_id"
                         @click="loadProductSupplierProducts(productForm.supplier_id, true)"
@@ -454,15 +526,28 @@
                 </div>
               </section>
 
-              <section v-show="activeProductDrawerSection === 'config'" class="product-drawer-section" data-title="产品配置">
+              <section
+                v-show="activeProductDrawerSection === 'config'"
+                class="product-drawer-section"
+                data-title="产品配置"
+              >
                 <div class="product-config-actions">
-                  <t-button size="small" variant="outline" :loading="configTemplateLoading" @click="pullProductConfigTemplate">
+                  <t-button
+                    size="small"
+                    variant="outline"
+                    :loading="configTemplateLoading"
+                    @click="pullProductConfigTemplate"
+                  >
                     拉取模板
                   </t-button>
-                  <t-button size="small" theme="primary" variant="outline" @click="openConfigOptionDialog()">新增配置</t-button>
+                  <t-button size="small" theme="primary" variant="outline" @click="openConfigOptionDialog()"
+                    >新增配置</t-button
+                  >
                 </div>
                 <div class="config-option-panel">
-                  <div class="config-option-count">{{ productForm.config_options.length }} 项配置，保存商品后生效。</div>
+                  <div class="config-option-count">
+                    {{ productForm.config_options.length }} 项配置，保存商品后生效。
+                  </div>
                   <div v-if="productForm.config_options.length" class="config-option-list">
                     <article v-for="(item, index) in productForm.config_options" :key="item.uid || item.field || index">
                       <div>
@@ -470,8 +555,16 @@
                         <span>{{ item.field || '-' }} · {{ item.option_mode || 'select' }}</span>
                       </div>
                       <t-space size="small">
-                        <t-button size="small" variant="text" theme="primary" @click="openConfigOptionDialog(item, index)">编辑</t-button>
-                        <t-button size="small" variant="text" theme="danger" @click="removeConfigOption(index)">删除</t-button>
+                        <t-button
+                          size="small"
+                          variant="text"
+                          theme="primary"
+                          @click="openConfigOptionDialog(item, index)"
+                          >编辑</t-button
+                        >
+                        <t-button size="small" variant="text" theme="danger" @click="removeConfigOption(index)"
+                          >删除</t-button
+                        >
                       </t-space>
                     </article>
                   </div>
@@ -550,7 +643,7 @@
               :disabled="configOptionSubItemRows.length <= 1"
               @click="removeConfigSubItemRow(index)"
             >
-              <DeleteIcon />
+              <delete-icon />
             </t-button>
           </div>
         </div>
@@ -579,7 +672,12 @@
       <div class="batch-dialog-summary">将 {{ batchCategoryTargetKeys.length }} 个商品移动到目标分类。</div>
       <t-form :data="batchCategoryForm" label-width="110px">
         <t-form-item label="目标分类" name="target_product_group_key">
-          <t-select v-model="batchCategoryForm.target_product_group_key" filterable clearable placeholder="请选择目标分类">
+          <t-select
+            v-model="batchCategoryForm.target_product_group_key"
+            filterable
+            clearable
+            placeholder="请选择目标分类"
+          >
             <t-option
               v-for="item in selectableProductGroupOptions"
               :key="productGroupOptionKey(item)"
@@ -697,7 +795,12 @@
             :disabled="categoryProductTypeDisabled"
             @change="handleCategoryProductTypeChange"
           >
-            <t-option v-for="item in categoryProductTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
+            <t-option
+              v-for="item in categoryProductTypeOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </t-select>
         </t-form-item>
         <t-form-item v-if="categoryParentFieldVisible" label="二级分类父级" name="parent_id">
@@ -717,12 +820,22 @@
           </t-select>
         </t-form-item>
         <t-form-item label="一句话说明" name="slogan"><t-input v-model="categoryForm.slogan" /></t-form-item>
-        <t-form-item label="排序" name="sort_order"><t-input-number v-model="categoryForm.sort_order" :min="0" /></t-form-item>
-        <t-form-item label="前台可见" name="is_visible"><t-switch v-model="categoryForm.is_visible" :custom-value="[1, 0]" /></t-form-item>
+        <t-form-item label="排序" name="sort_order"
+          ><t-input-number v-model="categoryForm.sort_order" :min="0"
+        /></t-form-item>
+        <t-form-item label="前台可见" name="is_visible"
+          ><t-switch v-model="categoryForm.is_visible" :custom-value="[1, 0]"
+        /></t-form-item>
       </t-form>
     </t-dialog>
 
-    <t-dialog v-model:visible="typeManagerDialogVisible" class="type-manager-dialog" header="管理一级分类" width="880px" :footer="false">
+    <t-dialog
+      v-model:visible="typeManagerDialogVisible"
+      class="type-manager-dialog"
+      header="管理一级分类"
+      width="880px"
+      :footer="false"
+    >
       <div class="type-manager">
         <section class="type-manager-editor" :class="{ 'is-editing': editingTypeValue }">
           <div class="type-manager-editor__head">
@@ -762,7 +875,9 @@
                   <template #icon><add-icon v-if="!editingTypeValue" /><edit-icon v-else /></template>
                   {{ editingTypeValue ? '保存' : '新增' }}
                 </t-button>
-                <t-button variant="outline" @click="resetTypeForm">{{ editingTypeValue ? '取消编辑' : '重置' }}</t-button>
+                <t-button variant="outline" @click="resetTypeForm">{{
+                  editingTypeValue ? '取消编辑' : '重置'
+                }}</t-button>
               </t-form-item>
             </div>
           </t-form>
@@ -772,7 +887,10 @@
           <div class="type-manager-list-head">
             <div>
               <strong>分类列表</strong>
-              <span>{{ productTypes.length }} 个分类 · {{ typeManagerProductCount }} 个商品 · {{ typeManagerHiddenCount }} 个隐藏</span>
+              <span
+                >{{ productTypes.length }} 个分类 · {{ typeManagerProductCount }} 个商品 ·
+                {{ typeManagerHiddenCount }} 个隐藏</span
+              >
             </div>
             <t-button size="small" variant="outline" :loading="typeLoading" @click="loadProductTypes">
               <template #icon><refresh-icon /></template>
@@ -840,17 +958,40 @@
                   </t-tooltip>
                 </div>
                 <t-tooltip content="编辑">
-                  <t-button size="small" shape="square" variant="text" theme="primary" aria-label="编辑一级分类" :disabled="typeSubmitting" @click="editType(item)">
+                  <t-button
+                    size="small"
+                    shape="square"
+                    variant="text"
+                    theme="primary"
+                    aria-label="编辑一级分类"
+                    :disabled="typeSubmitting"
+                    @click="editType(item)"
+                  >
                     <template #icon><edit-icon /></template>
                   </t-button>
                 </t-tooltip>
                 <t-tooltip :content="item.is_hidden ? '显示' : '隐藏'">
-                  <t-button size="small" shape="square" variant="text" aria-label="切换一级分类显示状态" :disabled="typeSubmitting" @click="toggleTypeHidden(item)">
+                  <t-button
+                    size="small"
+                    shape="square"
+                    variant="text"
+                    aria-label="切换一级分类显示状态"
+                    :disabled="typeSubmitting"
+                    @click="toggleTypeHidden(item)"
+                  >
                     <template #icon><browse-icon v-if="item.is_hidden" /><browse-off-icon v-else /></template>
                   </t-button>
                 </t-tooltip>
                 <t-tooltip content="删除">
-                  <t-button size="small" shape="square" variant="text" theme="danger" aria-label="删除一级分类" :disabled="typeSubmitting" @click="deleteType(item)">
+                  <t-button
+                    size="small"
+                    shape="square"
+                    variant="text"
+                    theme="danger"
+                    aria-label="删除一级分类"
+                    :disabled="typeSubmitting"
+                    @click="deleteType(item)"
+                  >
                     <template #icon><delete-icon /></template>
                   </t-button>
                 </t-tooltip>
@@ -866,7 +1007,6 @@
     </t-dialog>
   </div>
 </template>
-
 <script setup lang="ts">
 import {
   AddIcon,
@@ -885,19 +1025,20 @@ import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { productApi, type ProductCategoryRecord, type ProductRecord, type ProductTypeRecord } from '@/api/product';
-import { supplierApi, type ProviderTypeRecord, type SupplierFormField, type SupplierRecord } from '@/api/supplier';
+import type { ProductCategoryRecord, ProductRecord, ProductTypeRecord } from '@/api/product';
+import { productApi } from '@/api/product';
+import type { ProviderTypeRecord, SupplierFormField, SupplierRecord } from '@/api/supplier';
+import { supplierApi } from '@/api/supplier';
 
 import {
   errorMessage,
+  findProductGroupByKey,
   flattenCategories,
   formatCount,
   formatMonthlyPrice,
   formatStock,
-  findProductGroupByKey,
   isSelectableProductGroup,
   mergeProviderTypeOptions,
-  normalizeProductIds,
   normalizeProviderTypeOptions,
   productGroupEffectiveId,
   productGroupLevel,
@@ -1135,14 +1276,14 @@ const productTypeOptions = computed(() => {
   return [{ value: '', label: '全部商品', usage_count: productTotal.value }];
 });
 const businessProductTypeOptions = [
-  { value: 'cloud_server', label: 'cloud_server' },
-  { value: 'game_cloud', label: 'game_cloud' },
-  { value: 'cloud_desktop', label: 'cloud_desktop' },
-  { value: 'bare_metal', label: 'bare_metal' },
-  { value: 'cdn', label: 'cdn' },
-  { value: 'other', label: 'other' },
-  { value: 'physical_machine', label: 'physical_machine' },
-  { value: 'web_hosting', label: 'web_hosting' },
+  { value: 'cloud_server', label: '云服务器 (cloud_server)' },
+  { value: 'game_cloud', label: '游戏云 (game_cloud)' },
+  { value: 'cloud_desktop', label: '云电脑 (cloud_desktop)' },
+  { value: 'bare_metal', label: '裸金属 (bare_metal)' },
+  { value: 'cdn', label: 'CDN' },
+  { value: 'other', label: '其他 (other)' },
+  { value: 'physical_machine', label: '物理机 (physical_machine)' },
+  { value: 'web_hosting', label: '虚拟主机 (web_hosting)' },
 ];
 const businessProductTypeValueSet = new Set(businessProductTypeOptions.map((item) => item.value));
 const typeManagerProductCount = computed(() =>
@@ -1157,17 +1298,21 @@ const selectedProductTypeLabel = computed(() => {
 const categoryProductTypeOptions = computed(() => {
   const options = productTypeOptions.value.filter((item) => String(item.value || '').trim());
   if (options.length) return options;
-  return catalogFilters.product_type ? [{ value: catalogFilters.product_type, label: selectedProductTypeLabel.value }] : [];
+  return catalogFilters.product_type
+    ? [{ value: catalogFilters.product_type, label: selectedProductTypeLabel.value }]
+    : [];
 });
 const categoryTree = computed(() => buildCategoryTree(categoryOptions.value));
 // 顶部 type-strip 已展示一级分类（L1，例如"云服务器"），分类树里跳过该层，
 // 将 L2（例如"襄阳"）作为树根展示，L3（例如"高宽"）作为其子节点，形成一级 + 二级菜单。
 const displayCategoryTree = computed(() => toDisplayCategoryTree(categoryTree.value));
-const filteredCategoryTree = computed(() => filterCategoryTree(displayCategoryTree.value, categoryKeyword.value.trim().toLowerCase()));
+const filteredCategoryTree = computed(() =>
+  filterCategoryTree(displayCategoryTree.value, categoryKeyword.value.trim().toLowerCase()),
+);
 const categoryTreeRows = computed(() => flattenCategoryTreeRows(filteredCategoryTree.value));
-const selectableProductGroupOptions = computed(() => categoryOptions.value.filter((item) => isSelectableProductGroup(item)));
-const visibleCategoryCount = computed(() => categoryTreeRows.value.length);
-const displayCategoryTotalCount = computed(() => countCategoryTreeNodes(displayCategoryTree.value));
+const selectableProductGroupOptions = computed(() =>
+  categoryOptions.value.filter((item) => isSelectableProductGroup(item)),
+);
 const editingCategoryHasChildren = computed(() => {
   const current = editingCategory.value;
   if (!current) return false;
@@ -1194,7 +1339,13 @@ const categoryParentCategoryOptions = computed(() => {
   return categoryOptions.value.filter((item) => {
     if (editingCategoryKey && productGroupOptionKey(item) === editingCategoryKey) return false;
     if (productGroupLevel(item) !== 2) return false;
-    if (selectedFirstGroupCode && String(item.first_product_group_code || '') && String(item.first_product_group_code) !== selectedFirstGroupCode) return false;
+    if (
+      selectedFirstGroupCode &&
+      String(item.first_product_group_code || '') &&
+      String(item.first_product_group_code) !== selectedFirstGroupCode
+    ) {
+      return false;
+    }
     return true;
   });
 });
@@ -1245,9 +1396,6 @@ const provisionHostnamePreviewText = computed(() => {
 const providerTypeOptions = computed(() => {
   return mergeProviderTypeOptions(providerTypes.value);
 });
-const selectedProductSupplier = computed(() =>
-  productSupplierOptions.value.find((item) => String(item.id) === String(productForm.supplier_id)) || null,
-);
 const supplierProductCascaderOptions = computed(() => {
   const groups = new Map<string, SupplierBatchProduct[]>();
   supplierProductOptions.value.forEach((item) => {
@@ -1295,18 +1443,6 @@ function categoryTotalProductCount(row: ProductCategoryRecord) {
   return total > 0 ? total : categoryActiveProductCount(row);
 }
 
-function categoryCountLabel(row: ProductCategoryRecord, childCount: number) {
-  if (childCount > 0) return `${childCount} 个子分类`;
-
-  const activeCount = categoryActiveProductCount(row);
-  const totalCount = categoryTotalProductCount(row);
-  const deletedCount = Math.max(totalCount - activeCount, 0);
-
-  if (deletedCount > 0) return `${totalCount} 个商品（含 ${deletedCount} 个已删除）`;
-
-  return `${activeCount} 个商品`;
-}
-
 function productVisibilityLabel(row: ProductRecord) {
   if (row.is_deleted) return '已删除';
   return isProductVisible(row) ? '显示中' : '已隐藏';
@@ -1341,7 +1477,8 @@ function buildCategoryTree(list: ProductCategoryRecord[]): CategoryTreeNode[] {
     const node = nodeMap.get(categoryIdKey(item));
     if (!node) return;
 
-    const parentId = item.parent_id === undefined || item.parent_id === null || item.parent_id === '' ? '' : String(item.parent_id);
+    const parentId =
+      item.parent_id === undefined || item.parent_id === null || item.parent_id === '' ? '' : String(item.parent_id);
     if (!parentId) {
       roots.push(node);
       return;
@@ -1376,7 +1513,11 @@ function filterCategoryTree(nodes: CategoryTreeNode[], keyword: string): Categor
   return nodes
     .map((node) => {
       const children = filterCategoryTree(node.children, keyword);
-      const matched = [node.item.name, node.item.label].some((value) => String(value || '').toLowerCase().includes(keyword));
+      const matched = [node.item.name, node.item.label].some((value) =>
+        String(value || '')
+          .toLowerCase()
+          .includes(keyword),
+      );
       if (matched) return { ...node, children: node.children };
       if (children.length) return { ...node, children };
       return null;
@@ -1399,11 +1540,10 @@ function toDisplayCategoryTree(nodes: CategoryTreeNode[]): CategoryTreeNode[] {
   return lifted;
 }
 
-function countCategoryTreeNodes(nodes: CategoryTreeNode[]): number {
-  return nodes.reduce((total, node) => total + 1 + countCategoryTreeNodes(node.children), 0);
-}
-
-function flattenCategoryTreeRows(nodes: CategoryTreeNode[], level = 0): Array<{ node: ProductCategoryRecord; level: number; childCount: number }> {
+function flattenCategoryTreeRows(
+  nodes: CategoryTreeNode[],
+  level = 0,
+): Array<{ node: ProductCategoryRecord; level: number; childCount: number }> {
   const rows: Array<{ node: ProductCategoryRecord; level: number; childCount: number }> = [];
   const keyword = categoryKeyword.value.trim();
 
@@ -1623,11 +1763,17 @@ function resolveFirstProductGroupId(firstGroupCode: string) {
 function resolveSelectedParentCategory() {
   const parentId = String(categoryForm.parent_id || '');
   if (!parentId) return null;
-  return categoryOptions.value.find((item) => productGroupLevel(item) === 2 && String(productGroupEffectiveId(item)) === parentId) || null;
+  return (
+    categoryOptions.value.find(
+      (item) => productGroupLevel(item) === 2 && String(productGroupEffectiveId(item)) === parentId,
+    ) || null
+  );
 }
 
 function categoryParentOptionLabel(item: ProductCategoryRecord) {
-  return String(item.second_product_group_name || item.name || item.label || `二级分类 #${productGroupEffectiveId(item)}`).trim();
+  return String(
+    item.second_product_group_name || item.name || item.label || `二级分类 #${productGroupEffectiveId(item)}`,
+  ).trim();
 }
 
 // --- Data loading ---
@@ -1799,7 +1945,12 @@ async function loadCategories() {
   categoryLoading.value = true;
   try {
     const response = await productApi.categories({ first_product_group_code: catalogFilters.product_type });
-    categoryOptions.value = flattenCategories(response.tree || response.list || [], 0, null, catalogFilters.product_type);
+    categoryOptions.value = flattenCategories(
+      response.tree || response.list || [],
+      0,
+      null,
+      catalogFilters.product_type,
+    );
     const tree = buildCategoryTree(categoryOptions.value);
     const displayTree = toDisplayCategoryTree(tree);
     syncDefaultCatalogCategory(displayTree);
@@ -1940,16 +2091,6 @@ function handleCatalogSearch() {
   void loadProducts();
 }
 
-function resetCatalogFilters() {
-  catalogFilters.keyword = '';
-  catalogFilters.product_group_key = '';
-  catalogFilters.status = '';
-  catalogFilters.lifecycle_status = 'active';
-  syncDefaultCatalogCategory();
-  productPage.value = 1;
-  void loadProducts();
-}
-
 function handleProductSelectChange(value: Array<string | number>) {
   selectedProductKeys.value = value;
 }
@@ -2019,7 +2160,9 @@ function normalizeProvisionHostnameRule(ruleValue: unknown) {
 function isSameProvisionHostnameRule(left: unknown, right: unknown) {
   const current = normalizeProvisionHostnameRule(left);
   const target = normalizeProvisionHostnameRule(right);
-  return current.mode === target.mode && current.value === target.value && Number(current.length) === Number(target.length);
+  return (
+    current.mode === target.mode && current.value === target.value && Number(current.length) === Number(target.length)
+  );
 }
 
 function openProvisionHostnameDialog() {
@@ -2031,7 +2174,9 @@ function openProvisionHostnameDialog() {
 
   const currentRule = normalizeProvisionHostnameRule(targetRows[0]?.provision_hostname);
   provisionHostnameTargetKeys.value = targetRows.map((row) => row.id);
-  provisionHostnameHasMixedRules.value = targetRows.some((row) => !isSameProvisionHostnameRule(row.provision_hostname, currentRule));
+  provisionHostnameHasMixedRules.value = targetRows.some(
+    (row) => !isSameProvisionHostnameRule(row.provision_hostname, currentRule),
+  );
   provisionHostnameForm.mode = currentRule.mode;
   provisionHostnameForm.value = currentRule.value;
   provisionHostnameForm.length = currentRule.length;
@@ -2065,9 +2210,9 @@ async function submitBatchCategory() {
     const responseRecord = response && typeof response === 'object' ? (response as Record<string, unknown>) : {};
     const updatedCount = Number(responseRecord.updated_count ?? productIds.length);
     const targetLabel = String(
-      responseRecord.target_effective_product_group_full_name
-        || responseRecord.target_effective_product_group_name
-        || resolveProductGroupLabel(batchCategoryForm.target_product_group_key),
+      responseRecord.target_effective_product_group_full_name ||
+        responseRecord.target_effective_product_group_name ||
+        resolveProductGroupLabel(batchCategoryForm.target_product_group_key),
     );
 
     if (updatedCount > 0) {
@@ -2158,42 +2303,6 @@ function handleProductPageChange(pageInfo: PageInfo) {
   void loadProducts();
 }
 
-// --- Product dialog ---
-async function openProductDialog(row?: ProductRecord) {
-  const [detail] = await Promise.all([row?.id ? loadProductDetail(row) : null, ensureProductSupplierOptions(), ensureProviderTypes()]);
-  const source = detail || row;
-  const upstreamBinding = toPlainRecord(source?.upstream_binding);
-  editingProduct.value = source || null;
-  activeProductDrawerSection.value = 'basic';
-  Object.assign(productForm, {
-    display_name: resolveProductFormDisplayName(source),
-    custom_display_name: source?.custom_display_name || '',
-    product_spec_display: source?.product_spec_display || source?.cpu_memory_display || '',
-    selected_product_group_key: source ? productGroupOptionKey(source) : catalogFilters.product_group_key,
-    monthly_price: productPricingValue(source, 'monthly', source?.monthly_price),
-    quarterly_price: productPricingValue(source, 'quarterly'),
-    semiannually_price: productPricingValue(source, 'semiannually'),
-    annually_price: productPricingValue(source, 'annually'),
-    auto_setup: Number(source?.auto_setup ?? 1),
-    status: Number(source?.status ?? 1),
-    supplier_id: upstreamBinding.supplier_id || '',
-    upstream_product_id: upstreamBinding.upstream_product_id || '',
-    config_options: normalizeConfigOptions(source?.config_options),
-  });
-  supplierProductOptions.value = [];
-  if (productForm.supplier_id) {
-    void loadProductSupplierProducts(productForm.supplier_id);
-  }
-  productDialogVisible.value = true;
-}
-
-function productPricingValue(source: ProductRecord | null | undefined, cycle: string, fallback?: unknown) {
-  const pricing = toPlainRecord(source?.pricing);
-  const value = pricing[cycle] ?? fallback;
-  if (value === null || value === undefined || value === '') return 0;
-  return Number(value) || 0;
-}
-
 function syncProductPricingCycles(planValue?: unknown) {
   const planKey = String(planValue || productPricingPlan.value || 'standard');
   const plan = productPricingPlanOptions.find((item) => item.value === planKey) || productPricingPlanOptions[0];
@@ -2230,26 +2339,6 @@ function closeProductDrawer() {
 
 function setProductDrawerSection(key: string) {
   activeProductDrawerSection.value = key;
-}
-
-async function loadProductDetail(row: ProductRecord) {
-  try {
-    return await productApi.detail(row.id);
-  } catch {
-    return row;
-  }
-}
-
-function resolveProductFormDisplayName(source?: ProductRecord | null) {
-  return String(
-    source?.custom_display_name
-      || source?.product_spec_display
-      || source?.cpu_memory_display
-      || source?.product_display_name
-      || source?.display_name
-      || source?.name
-      || '',
-  ).trim();
 }
 
 function resolveProductCustomDisplayNamePayload() {
@@ -2318,10 +2407,12 @@ function normalizeConfigOptions(value: unknown): ProductConfigOptionRecord[] {
       option_name: name,
       option_mode: String(item.option_mode || (item.option_type === 'quantity' ? 'range' : 'select')),
       parameter: String(item.parameter || ''),
-      sub: Array.isArray(item.sub) ? item.sub as Array<Record<string, unknown>> : [],
+      sub: Array.isArray(item.sub) ? (item.sub as Array<Record<string, unknown>>) : [],
       sub_items: Array.isArray(item.sub_items)
-        ? item.sub_items as Array<Record<string, unknown>>
-        : (Array.isArray(item.sub) ? item.sub as Array<Record<string, unknown>> : []),
+        ? (item.sub_items as Array<Record<string, unknown>>)
+        : Array.isArray(item.sub)
+          ? (item.sub as Array<Record<string, unknown>>)
+          : [],
       required: Boolean(item.required ?? true),
       hidden: Boolean(item.hidden ?? false),
       sort_order: Number(item.sort_order || index + 1),
@@ -2361,7 +2452,12 @@ function resetConfigOptionForm() {
 }
 
 function formatConfigSubItems(items: Array<Record<string, unknown>> = []) {
-  return items.map((item) => `${item.value || item.option_name_first || item.label || item.option_name || ''}|${item.label || item.option_name || item.value || ''}`).join(',');
+  return items
+    .map(
+      (item) =>
+        `${item.value || item.option_name_first || item.label || item.option_name || ''}|${item.label || item.option_name || item.value || ''}`,
+    )
+    .join(',');
 }
 
 function createConfigSubItemRow(item: Record<string, unknown> = {}, index = 0): ConfigOptionSubItemFormRow {
@@ -2371,7 +2467,8 @@ function createConfigSubItemRow(item: Record<string, unknown> = {}, index = 0): 
     uid: String(item.uid || `config-subitem-${Date.now()}-${index}-${Math.random().toString(36).slice(2)}`),
     name: String(item.label || item.option_name || item.name || '').trim(),
     value: String(item.value || item.option_name_first || '').trim(),
-    monthly_price: monthlyPrice === '' || monthlyPrice === undefined || monthlyPrice === null ? '0.00' : String(monthlyPrice),
+    monthly_price:
+      monthlyPrice === '' || monthlyPrice === undefined || monthlyPrice === null ? '0.00' : String(monthlyPrice),
     sort_order: Number(item.sort_order || index + 1),
   };
 }
@@ -2412,9 +2509,8 @@ function openConfigOptionDialog(row?: ProductConfigOptionRecord, index = -1) {
       hidden: Boolean(row.hidden ?? false),
       sort_order: Number(row.sort_order || index + 1),
     });
-    const sourceSubItems = Array.isArray(row.sub_items) && row.sub_items.length
-      ? row.sub_items
-      : (Array.isArray(row.sub) ? row.sub : []);
+    const sourceSubItems =
+      Array.isArray(row.sub_items) && row.sub_items.length ? row.sub_items : Array.isArray(row.sub) ? row.sub : [];
     const rowSubItems = sourceSubItems.length
       ? sourceSubItems.map((item) => toPlainRecord(item))
       : configSubItemRecordsFromParameter(String(row.parameter || ''));
@@ -2452,24 +2548,23 @@ function splitConfigSubItemText(rawValue: string) {
 }
 
 function parseConfigSubItems(rawValue: string) {
-  return splitConfigSubItemText(rawValue)
-    .map((item, index) => {
-      const separatorIndex = item.indexOf('|');
-      const rawValue = separatorIndex >= 0 ? item.slice(0, separatorIndex).trim() : item.trim();
-      const rawLabel = separatorIndex >= 0 ? item.slice(separatorIndex + 1).trim() : '';
-      const value = rawValue || rawLabel || '';
-      const label = rawLabel || rawValue || '';
-      return {
-        id: value || index,
-        value: value || label,
-        label: label || value,
-        option_name: label || value,
-        option_name_first: value || label,
-        pricing: {},
-        sort_order: index + 1,
-        hidden: 0,
-      };
-    });
+  return splitConfigSubItemText(rawValue).map((item, index) => {
+    const separatorIndex = item.indexOf('|');
+    const rawValue = separatorIndex >= 0 ? item.slice(0, separatorIndex).trim() : item.trim();
+    const rawLabel = separatorIndex >= 0 ? item.slice(separatorIndex + 1).trim() : '';
+    const value = rawValue || rawLabel || '';
+    const label = rawLabel || rawValue || '';
+    return {
+      id: value || index,
+      value: value || label,
+      label: label || value,
+      option_name: label || value,
+      option_name_first: value || label,
+      pricing: {},
+      sort_order: index + 1,
+      hidden: 0,
+    };
+  });
 }
 
 function buildConfigSubItemsFromRows() {
@@ -2679,11 +2774,17 @@ function openThirdCategoryDialog(parent: ProductCategoryRecord) {
 function openCategoryDialog(row?: ProductCategoryRecord, thirdCategoryParent?: ProductCategoryRecord) {
   editingCategory.value = row || null;
   creatingThirdCategoryParent.value = !row && thirdCategoryParent ? thirdCategoryParent : null;
-  const level = row ? productGroupLevel(row) : (thirdCategoryParent ? 3 : 2);
+  const level = row ? productGroupLevel(row) : thirdCategoryParent ? 3 : 2;
   const parentFirstGroupCode = thirdCategoryParent?.first_product_group_code || '';
   Object.assign(categoryForm, {
     name: row?.name || row?.label || '',
-    product_type: String(row?.first_product_group_code || parentFirstGroupCode || catalogFilters.product_type || categoryProductTypeOptions.value[0]?.value || ''),
+    product_type: String(
+      row?.first_product_group_code ||
+        parentFirstGroupCode ||
+        catalogFilters.product_type ||
+        categoryProductTypeOptions.value[0]?.value ||
+        '',
+    ),
     parent_id: level === 3 ? row?.second_product_group_id || productGroupEffectiveId(thirdCategoryParent) || '' : '',
     slogan: String(row?.slogan || ''),
     sort_order: Number(row?.sort_order || 0),
@@ -2700,7 +2801,11 @@ async function submitCategory() {
     const firstGroupCode = categoryForm.product_type || catalogFilters.product_type || '';
     let firstProductGroupId = resolveFirstProductGroupId(firstGroupCode);
     const selectedParent = resolveSelectedParentCategory();
-    const targetLevel = editingCategory.value ? productGroupLevel(editingCategory.value) : (creatingThirdCategoryParent.value ? 3 : 2);
+    const targetLevel = editingCategory.value
+      ? productGroupLevel(editingCategory.value)
+      : creatingThirdCategoryParent.value
+        ? 3
+        : 2;
     if (targetLevel === 2 && !firstProductGroupId) {
       await loadProductTypes();
       firstProductGroupId = resolveFirstProductGroupId(firstGroupCode);
@@ -2718,9 +2823,13 @@ async function submitCategory() {
       effective_product_group_level: targetLevel,
       first_product_group_id: targetLevel === 2 ? firstProductGroupId || undefined : undefined,
       first_product_group_code: targetLevel === 1 ? firstGroupCode || undefined : undefined,
-      product_type: targetLevel === 1
-        ? normalizeBusinessProductType(categoryProductTypeOptions.value.find((item) => String(item.value) === String(firstGroupCode))?.product_type)
-        : undefined,
+      product_type:
+        targetLevel === 1
+          ? normalizeBusinessProductType(
+              categoryProductTypeOptions.value.find((item) => String(item.value) === String(firstGroupCode))
+                ?.product_type,
+            )
+          : undefined,
       second_product_group_id: targetLevel === 3 ? productGroupEffectiveId(selectedParent) || undefined : undefined,
       slogan: categoryForm.slogan,
       sort_order: categoryForm.sort_order,
@@ -2771,21 +2880,6 @@ function handleDeleteCategory(row: ProductCategoryRecord) {
 }
 
 // --- Supplier helpers (used within catalog for product editing) ---
-async function ensureProductSupplierOptions() {
-  if (productSupplierOptions.value.length) return;
-
-  productSupplierLoading.value = true;
-  try {
-    const response = await supplierApi.list({ status: 1, page: 1, page_size: 100 });
-    productSupplierOptions.value = Array.isArray(response.list) ? response.list : [];
-  } catch (error) {
-    productSupplierOptions.value = [];
-    MessagePlugin.error(errorMessage(error, '加载提供商选项失败'));
-  } finally {
-    productSupplierLoading.value = false;
-  }
-}
-
 function supplierOptionLabel(row: SupplierRecord) {
   const typeLabel = supplierInterfaceTypeLabel(row);
   return typeLabel ? `${row.name || row.id} / ${typeLabel}` : String(row.name || row.id || '-');
@@ -2811,8 +2905,8 @@ function canSupplierBatchConnect(row: SupplierRecord) {
   if (!fields.length) {
     return Boolean(
       (upstreamBinding.has_base_url || row.has_api_url || row.api_url) &&
-        (upstreamBinding.account_name || row.api_username) &&
-        (row.has_api_key || row.api_key),
+      (upstreamBinding.account_name || row.api_username) &&
+      (row.has_api_key || row.api_key),
     );
   }
 
@@ -2820,9 +2914,12 @@ function canSupplierBatchConnect(row: SupplierRecord) {
     if (!field.required) return true;
     if (field.key === 'api_url') return Boolean(upstreamBinding.has_base_url || row.has_api_url || row.api_url);
     if (field.key === 'api_username') return Boolean(upstreamBinding.account_name || row.api_username);
-    if (field.key === 'api_key') return Boolean(toPlainRecord(upstreamBinding.has_secret_values).api_key || row.has_api_key || row.api_key);
+    if (field.key === 'api_key')
+      return Boolean(toPlainRecord(upstreamBinding.has_secret_values).api_key || row.has_api_key || row.api_key);
     if (field.secret) {
-      return Boolean(toPlainRecord(upstreamBinding.has_secret_values)[field.key] || row.has_provider_secret_values?.[field.key]);
+      return Boolean(
+        toPlainRecord(upstreamBinding.has_secret_values)[field.key] || row.has_provider_secret_values?.[field.key],
+      );
     }
 
     return hasSupplierCredentialValue(toPlainRecord(row.provider_config)[field.key]);
@@ -2892,7 +2989,9 @@ async function loadProductSupplierProducts(supplierId: string | number, notify =
     const response = await supplierApi.products(supplierId, { silent: true });
     supplierProductOptions.value = buildSupplierBatchProducts(response);
     if (productForm.upstream_product_id) {
-      const hasCurrent = supplierProductOptions.value.some((item) => String(item.id) === String(productForm.upstream_product_id));
+      const hasCurrent = supplierProductOptions.value.some(
+        (item) => String(item.id) === String(productForm.upstream_product_id),
+      );
       if (!hasCurrent) {
         supplierProductOptions.value.unshift({
           id: Number(productForm.upstream_product_id),
@@ -2920,7 +3019,9 @@ function normalizeSupplierBatchProduct(itemValue: unknown): SupplierBatchProduct
     id: Number(item.id || item.product_id || 0),
     name: String(item.name || item.product_name || '').trim(),
     type_label: String(item.type_label || item.type_name || item.type || item.billingcycle || '').trim(),
-    remote_group_name: String(item.remote_group_name || item.group_name || item.second_group_name || item._group_label || '').trim(),
+    remote_group_name: String(
+      item.remote_group_name || item.group_name || item.second_group_name || item._group_label || '',
+    ).trim(),
     is_connected: Boolean(item.is_connected),
     connected_display_name: String(item.connected_display_name || '').trim(),
   };
@@ -2934,12 +3035,14 @@ function buildSupplierBatchProducts(payloadValue: unknown) {
   }
 
   const groups = Array.isArray(payload.groups) ? payload.groups : [];
-  return groups.flatMap((groupValue) => {
-    const group = toPlainRecord(groupValue);
-    const groupLabel = String(group.label || group.name || '').trim();
-    const items = Array.isArray(group.items) ? group.items : [];
-    return items.map((item) => normalizeSupplierBatchProduct({ ...toPlainRecord(item), _group_label: groupLabel }));
-  }).filter((item) => item.id > 0);
+  return groups
+    .flatMap((groupValue) => {
+      const group = toPlainRecord(groupValue);
+      const groupLabel = String(group.label || group.name || '').trim();
+      const items = Array.isArray(group.items) ? group.items : [];
+      return items.map((item) => normalizeSupplierBatchProduct({ ...toPlainRecord(item), _group_label: groupLabel }));
+    })
+    .filter((item) => item.id > 0);
 }
 
 function formatSplitAction(action: string) {

@@ -17,31 +17,35 @@
     @change="handleChange"
   />
 </template>
-
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import type { ProductBindingRecord } from '@/api/admin';
-import { useProductBindingTree, type BindingTreeMode } from '@/hooks/useProductBindingTree';
 
-const props = withDefaults(defineProps<{
-  modelValue: string | number | (string | number)[] | null | undefined;
-  existingBindings?: ProductBindingRecord[];
-  mode?: BindingTreeMode;
-  placeholder?: string;
-  compact?: boolean;
-  hideTypeGroup?: boolean;
-  expandAll?: boolean;
-  popupMaxHeight?: number;
-  disabled?: boolean;
-}>(), {
-  mode: 'multiple',
-  placeholder: '',
-  compact: false,
-  hideTypeGroup: false,
-  expandAll: false,
-  popupMaxHeight: 360,
-  disabled: false,
-});
+import type { ProductBindingRecord } from '@/api/admin';
+import type { BindingTreeMode } from '@/hooks/useProductBindingTree';
+import { useProductBindingTree } from '@/hooks/useProductBindingTree';
+
+const props = withDefaults(
+  defineProps<{
+    modelValue: string | number | (string | number)[] | null | undefined;
+    existingBindings?: ProductBindingRecord[];
+    mode?: BindingTreeMode;
+    placeholder?: string;
+    compact?: boolean;
+    hideTypeGroup?: boolean;
+    expandAll?: boolean;
+    popupMaxHeight?: number;
+    disabled?: boolean;
+  }>(),
+  {
+    mode: 'multiple',
+    placeholder: '',
+    compact: false,
+    hideTypeGroup: false,
+    expandAll: false,
+    popupMaxHeight: 360,
+    disabled: false,
+  },
+);
 
 const emit = defineEmits<{
   'update:modelValue': [value: (string | number)[]];
@@ -61,15 +65,20 @@ const {
   expandAll: () => props.expandAll,
 });
 
-const localValue = ref<string | string[]>(props.mode === 'single' ? firstSelectionForTree(props.modelValue) : normalizeSelectionForTree(props.modelValue));
+const localValue = ref<string | string[]>(
+  props.mode === 'single' ? firstSelectionForTree(props.modelValue) : normalizeSelectionForTree(props.modelValue),
+);
 
 const placeholderText = computed(() => {
   if (props.placeholder) return props.placeholder;
 
   switch (props.mode) {
-    case 'single': return '选择一个商品配置';
-    case 'batch': return '按分类批量选择绑定配置';
-    default: return '按分类选择绑定配置';
+    case 'single':
+      return '选择一个商品配置';
+    case 'batch':
+      return '按分类批量选择绑定配置';
+    default:
+      return '按分类选择绑定配置';
   }
 });
 
@@ -91,20 +100,17 @@ const treePopupProps = computed(() => ({
   },
 }));
 
-watch(
-  [() => props.modelValue, treeOptions],
-  ([modelValue]) => {
-    if (props.mode === 'single') {
-      const strVal = firstSelectionForTree(modelValue);
-      if (localValue.value !== strVal) localValue.value = strVal;
-    } else {
-      const arrVal = normalizeSelectionForTree(modelValue);
-      if (JSON.stringify(arrVal) !== JSON.stringify(localValue.value)) {
-        localValue.value = arrVal;
-      }
+watch([() => props.modelValue, treeOptions], ([modelValue]) => {
+  if (props.mode === 'single') {
+    const strVal = firstSelectionForTree(modelValue);
+    if (localValue.value !== strVal) localValue.value = strVal;
+  } else {
+    const arrVal = normalizeSelectionForTree(modelValue);
+    if (JSON.stringify(arrVal) !== JSON.stringify(localValue.value)) {
+      localValue.value = arrVal;
     }
-  },
-);
+  }
+});
 
 function handleChange(value: unknown) {
   const result = selectionToBindings(value, props.existingBindings);
@@ -123,7 +129,7 @@ function handleChange(value: unknown) {
   const currentValue = normalizeRawModelValue(props.modelValue);
   const useNumber = currentValue.length > 0 && typeof currentValue[0] === 'number';
   const emitValue: (string | number)[] = useNumber
-    ? result.binding_ids.map((id) => Number(id)).filter((n) => !isNaN(n))
+    ? result.binding_ids.map((id) => Number(id)).filter((n) => !Number.isNaN(n))
     : result.binding_ids;
   emit('update:modelValue', emitValue);
   emit('change', result);
@@ -135,9 +141,7 @@ function normalizeRawModelValue(value: string | number | (string | number)[] | n
 }
 
 function normalizeTreeValue(value: unknown): string[] {
-  return (Array.isArray(value) ? value : [value])
-    .map((item) => String(item || '').trim())
-    .filter(Boolean);
+  return (Array.isArray(value) ? value : [value]).map((item) => String(item || '').trim()).filter(Boolean);
 }
 
 function firstTreeValue(value: unknown): string {
@@ -146,7 +150,6 @@ function firstTreeValue(value: unknown): string {
 
 loadTree();
 </script>
-
 <style scoped lang="less">
 .binding-tree-select {
   width: 100%;

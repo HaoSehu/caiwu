@@ -1,17 +1,18 @@
 import { request } from '@/utils/request';
-import type { LogListParams, PaginatedList, LogCleanupPayload } from './types';
+
+import type { LogCleanupPayload, LogListParams, PaginatedList } from './types';
 
 type LogChannel = 'system' | 'runtime' | 'admin-logins' | 'api' | 'sms' | 'email' | 'tasks' | 'gateway' | 'activity';
 
-type V2LogPage = {
+interface V2LogPage {
   list?: Record<string, unknown>[];
   total?: number;
   page?: number;
   page_size?: number;
   summary?: Record<string, unknown>;
-};
+}
 
-type V2LogDetail = {
+interface V2LogDetail {
   id?: string | number;
   channel?: string;
   source?: string;
@@ -19,7 +20,7 @@ type V2LogDetail = {
   message?: string;
   context?: Record<string, unknown>;
   created_at?: string;
-};
+}
 
 function toV2Params(params: LogListParams = {}) {
   const { include_summary = false, ...rest } = params;
@@ -31,7 +32,7 @@ function toV2Params(params: LogListParams = {}) {
 }
 
 function toV2SummaryParams(params: LogListParams = {}) {
-  const { page, page_size, include_summary, ...rest } = params;
+  const { page: _page, page_size: _pageSize, include_summary: _includeSummary, ...rest } = params;
   return rest;
 }
 

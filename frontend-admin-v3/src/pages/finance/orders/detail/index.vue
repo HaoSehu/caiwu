@@ -1,6 +1,6 @@
 <template>
   <div class="order-detail-page">
-    <RecordDetailPage
+    <record-detail-page
       :loading="detailLoading"
       :ready="Boolean(order.id)"
       back-text="返回订单列表"
@@ -21,7 +21,12 @@
         <t-button v-if="order.invoice_id" variant="outline" size="small" @click="openInvoiceDetail(order.invoice_id)">
           查看账单详情
         </t-button>
-        <t-button v-if="order.user_id" variant="outline" size="small" @click="router.push(`/admin/users/${order.user_id}`)">
+        <t-button
+          v-if="order.user_id"
+          variant="outline"
+          size="small"
+          @click="router.push(`/admin/users/${order.user_id}`)"
+        >
           查看用户详情
         </t-button>
       </template>
@@ -102,7 +107,13 @@
               <span>账单号</span>
               <div class="detail-inline-action">
                 <strong>{{ fieldValue(order.invoice?.invoice_no) }}</strong>
-                <t-button v-if="order.invoice_id" size="small" variant="text" theme="primary" @click="openInvoiceDetail(order.invoice_id)">
+                <t-button
+                  v-if="order.invoice_id"
+                  size="small"
+                  variant="text"
+                  theme="primary"
+                  @click="openInvoiceDetail(order.invoice_id)"
+                >
                   查看
                 </t-button>
               </div>
@@ -223,9 +234,9 @@
           </div>
         </section>
       </template>
-    </RecordDetailPage>
+    </record-detail-page>
 
-    <InvoiceDetailDrawer
+    <invoice-detail-drawer
       v-model:visible="invoiceDrawer.visible"
       :loading="invoiceDrawer.loading"
       :invoice="currentInvoice"
@@ -241,32 +252,33 @@
     />
   </div>
 </template>
-
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import { MessagePlugin } from 'tdesign-vue-next';
+import './index.less';
 
-import { adminApi, type InvoiceRecord, type OrderRecord } from '@/api/admin';
-import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
-import { errorMessage } from '@/utils/userMessage';
-import InvoiceDetailDrawer from '@/components/finance-record-detail/InvoiceDetailDrawer.vue';
-import RecordDetailPage, { type RecordDetailMetric, type RecordDetailTab } from '@/components/record-detail-page/index.vue';
 import {
+  getStatusLabel,
+  getStatusTagType,
   INVOICE_STATUS_MAP,
-  INVOICE_TYPE_MAP,
   ORDER_STATUS_MAP,
   ORDER_TYPE_MAP,
   PAYMENT_STATUS_MAP,
-  getStatusLabel,
-  getStatusTagType,
   toLabelMap,
   toTagTypeMap,
 } from '@shared/statusConfig';
+import { MessagePlugin } from 'tdesign-vue-next';
+import { computed, onMounted, reactive, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 
-import './index.less';
+import type { InvoiceRecord, OrderRecord } from '@/api/admin';
+import { adminApi } from '@/api/admin';
+import InvoiceDetailDrawer from '@/components/finance-record-detail/InvoiceDetailDrawer.vue';
+import type { RecordDetailMetric, RecordDetailTab } from '@/components/record-detail-page/index.vue';
+import RecordDetailPage from '@/components/record-detail-page/index.vue';
+import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
+import { errorMessage } from '@/utils/userMessage';
 
 const SNAPSHOT_LABEL_MAP: Record<string, string> = {
+  // ── 产品配置 ──
   bw: '带宽',
   in_bw: '下行带宽',
   out_bw: '上行带宽',
@@ -282,6 +294,7 @@ const SNAPSHOT_LABEL_MAP: Record<string, string> = {
   memory: '内存',
   hostname: '主机名',
   quantity: '数量',
+  // ── 金额 ──
   setup_fee: '初装费',
   base_amount: '基础金额',
   total_amount: '合计金额',
@@ -291,20 +304,58 @@ const SNAPSHOT_LABEL_MAP: Record<string, string> = {
   amount: '金额',
   price: '价格',
   pricing: '价格',
+  // ── 通用 ──
   items: '配置项',
   meta: '扩展信息',
   configoption: '配置参数',
   kind: '类型',
   mode: '模式',
+  source_type: '来源类型',
+  created_by: '创建者',
+  source: '来源',
+  remark: '备注',
+  // ── 产品/服务 ──
   target_label: '目标服务',
   target_service_id: '目标服务ID',
   product_id: '产品ID',
   product_name: '产品名称',
+  product_full_path: '产品路径',
+  product_path_segments: '产品路径段',
+  first_product_group_name: '一级分组',
+  second_product_group_name: '二级分组',
+  third_product_group_name: '三级分组',
+  // ── 计费周期 ──
   billing_cycle: '周期',
   billingcycle: '周期',
   billingcycle_zh: '周期',
   period: '周期',
-  remark: '备注',
+  // ── 续费 ──
+  renew_service_id: '续费服务ID',
+  renew_service_name: '续费服务名称',
+  auto_renew: '自动续费',
+  auto_renew_trace_id: '自动续费追踪',
+  local_renew_amount: '本地续费金额',
+  // ── 上游供应商 ──
+  upstream_host_id: '上游主机ID',
+  upstream_host_ids: '上游主机列表',
+  upstream_invoice_id: '上游账单ID',
+  upstream_product_id: '上游产品ID',
+  upstream_product_name: '上游产品名称',
+  upstream_amount: '上游金额',
+  upstream_status: '上游状态',
+  supports_upstream: '支持上游开通',
+  provider_key: '供应商标识',
+  supplier_id: '供应商ID',
+  // ── 开通 ──
+  requested_host: '请求主机名',
+  dedicated_ip: '独立IP',
+  assigned_ips: '分配IP',
+  host_config_option: '主机配置',
+  connection_secret: '连接信息',
+  connection_cached_at: '连接缓存时间',
+  last_provisioned_at: '开通时间',
+  last_provision_attempt_at: '开通尝试时间',
+  provision_error: '开通失败原因',
 };
 
 const route = useRoute();
@@ -374,13 +425,18 @@ const pricingItems = computed(() => {
 const configValueLabelMap = computed<Record<string, string>>(() => {
   const snapshot = order.value.config_pricing_snapshot as Record<string, unknown> | null | undefined;
   const items = Array.isArray(snapshot?.items) ? snapshot.items : [];
-  return items.reduce((result, item) => {
-    const record = toRecord(item);
-    const field = String(record.field || '').trim();
-    const label = String(record.value_label || record.suboption_name || record.option_name || record.value || '').trim();
-    if (field && label) result[field] = label;
-    return result;
-  }, {} as Record<string, string>);
+  return items.reduce(
+    (result, item) => {
+      const record = toRecord(item);
+      const field = String(record.field || '').trim();
+      const label = String(
+        record.value_label || record.suboption_name || record.option_name || record.value || '',
+      ).trim();
+      if (field && label) result[field] = label;
+      return result;
+    },
+    {} as Record<string, string>,
+  );
 });
 
 const currentInvoice = computed(() => invoiceDrawer.detail.invoice || ({} as InvoiceRecord));
@@ -392,16 +448,23 @@ const invoiceItems = computed(() => {
   return invoiceDrawer.detail.items || [];
 });
 
-function flattenSnapshot(obj: Record<string, unknown>, valueLabelMap: Record<string, string> = {}): { label: string; value: string }[] {
+function flattenSnapshot(
+  obj: Record<string, unknown>,
+  valueLabelMap: Record<string, string> = {},
+): { label: string; value: string }[] {
   const result: { label: string; value: string }[] = [];
   for (const [key, val] of Object.entries(obj)) {
     if (['unit_setup_fee', 'unit_base_amount', 'unit_total_amount', 'unit_config_amount'].includes(key)) continue;
+    if (key.startsWith('_')) continue;
     if (val === null || val === undefined || val === '') continue;
+    if (key === 'connection_secret') continue;
     if (key === 'items' && Array.isArray(val)) {
       val.forEach((item, index) => {
         const record = toRecord(item);
         result.push({
-          label: snapshotLabel(record.label || record.name || record.option_name || record.spec_key || `${key}.${index + 1}`),
+          label: snapshotLabel(
+            record.label || record.name || record.option_name || record.spec_key || `${key}.${index + 1}`,
+          ),
           value: formatSnapshotItem(record),
         });
       });
@@ -450,7 +513,8 @@ function formatSnapshotValue(value: unknown, key = ''): string {
   if (Array.isArray(value)) {
     return value
       .map((item, index) => {
-        if (item && typeof item === 'object') return `${index + 1}. ${formatSnapshotItem(item as Record<string, unknown>)}`;
+        if (item && typeof item === 'object')
+          return `${index + 1}. ${formatSnapshotItem(item as Record<string, unknown>)}`;
         return fieldValue(item);
       })
       .join('；');
@@ -463,9 +527,9 @@ function formatSnapshotValue(value: unknown, key = ''): string {
       .join('；');
   }
   const raw = String(value);
-  if (['bw', 'in_bw', 'out_bw'].includes(key) && /^\d+(\.\d+)?$/.test(raw)) return `${raw} Mbps`;
-  if (key === 'memory' && /^\d+(\.\d+)?$/.test(raw)) return `${raw} MB`;
-  if (['ip_num', 'ipv6_num', 'quantity'].includes(key) && /^\d+(\.\d+)?$/.test(raw)) return `${raw} 个`;
+  if (['bw', 'in_bw', 'out_bw'].includes(key) && /^\d+(?:\.\d+)?$/.test(raw)) return `${raw} Mbps`;
+  if (key === 'memory' && /^\d+(?:\.\d+)?$/.test(raw)) return `${raw} MB`;
+  if (['ip_num', 'ipv6_num', 'quantity'].includes(key) && /^\d+(?:\.\d+)?$/.test(raw)) return `${raw} 个`;
   return raw;
 }
 
@@ -520,7 +584,10 @@ function closeInvoiceDetail() {
 }
 
 function normalizeInvoiceDetail(payload: Record<string, unknown> = {}, fallback: InvoiceRecord = {}) {
-  const invoice = payload.invoice && typeof payload.invoice === 'object' ? (payload.invoice as InvoiceRecord) : (payload as InvoiceRecord);
+  const invoice =
+    payload.invoice && typeof payload.invoice === 'object'
+      ? (payload.invoice as InvoiceRecord)
+      : (payload as InvoiceRecord);
   return {
     invoice: {
       ...fallback,
@@ -547,10 +614,6 @@ function orderStatusLabel(status: unknown) {
 function orderStatusTheme(status: unknown) {
   const value = orderStatusTypeMap[String(status ?? '')] || 'default';
   return value === 'info' ? 'default' : value;
-}
-
-function invoiceTypeLabel(type: unknown) {
-  return INVOICE_TYPE_MAP[String(type || '')] || fieldValue(type);
 }
 
 function invoiceStatusLabel(status: unknown) {
@@ -584,7 +647,6 @@ function serviceIdLabel(service: unknown) {
 function toRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
-
 
 onMounted(loadDetail);
 </script>

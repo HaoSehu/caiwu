@@ -47,7 +47,13 @@
               preload="metadata"
               playsinline
             ></video>
-            <img v-else class="media-preview__asset" :src="String(row.url || '')" :alt="String(row.filename || 'media')" loading="lazy" />
+            <img
+              v-else
+              class="media-preview__asset"
+              :src="String(row.url || '')"
+              :alt="String(row.filename || 'media')"
+              loading="lazy"
+            />
           </div>
         </template>
 
@@ -80,7 +86,13 @@
               :confirm-btn="{ theme: 'danger', content: '删除' }"
               @confirm="removeMedia(row)"
             >
-              <t-button variant="text" theme="danger" :disabled="!canDelete(row)" :loading="deletingId === String(row.id || '')">删除</t-button>
+              <t-button
+                variant="text"
+                theme="danger"
+                :disabled="!canDelete(row)"
+                :loading="deletingId === String(row.id || '')"
+                >删除</t-button
+              >
             </t-popconfirm>
           </t-space>
         </template>
@@ -98,15 +110,16 @@
     />
   </div>
 </template>
-
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
-import { MessagePlugin, DialogPlugin, type PageInfo, type PrimaryTableCol } from 'tdesign-vue-next';
-import { RefreshIcon, SearchIcon, UploadIcon } from 'tdesign-icons-vue-next';
-
-import { adminApi, type MediaFileRecord } from '@/api/admin';
-
 import './media-library.less';
+
+import { RefreshIcon, SearchIcon, UploadIcon } from 'tdesign-icons-vue-next';
+import type { PageInfo, PrimaryTableCol } from 'tdesign-vue-next';
+import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { computed, onMounted, reactive, ref } from 'vue';
+
+import type { MediaFileRecord } from '@/api/admin';
+import { adminApi } from '@/api/admin';
 
 const PAGE_SIZE = 24;
 
@@ -278,9 +291,18 @@ async function removeMedia(row: MediaFileRecord) {
         body: `该媒体文件被以下内容引用：${refList}。删除后将导致这些内容出现死链，确认继续？`,
         confirmBtn: { theme: 'danger', content: '仍然删除' },
         cancelBtn: '取消',
-        onConfirm: () => { dialog.destroy(); resolve(true); },
-        onCancel: () => { dialog.destroy(); resolve(false); },
-        onClose: () => { dialog.destroy(); resolve(false); },
+        onConfirm: () => {
+          dialog.destroy();
+          resolve(true);
+        },
+        onCancel: () => {
+          dialog.destroy();
+          resolve(false);
+        },
+        onClose: () => {
+          dialog.destroy();
+          resolve(false);
+        },
       });
     });
 

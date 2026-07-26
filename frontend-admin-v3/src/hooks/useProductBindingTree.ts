@@ -1,4 +1,5 @@
 import { computed, ref } from 'vue';
+
 import type { ProductBindingRecord } from '@/api/admin';
 import { adminApi } from '@/api/admin';
 
@@ -19,6 +20,7 @@ export interface BindingTreeNode {
   label: string;
   text: string;
   selectable: boolean;
+  activable?: boolean;
   product_id?: number;
   binding_value?: string;
   raw_value?: string;
@@ -63,21 +65,52 @@ export interface BindingParentContext {
   effective_product_group_full_name?: string;
 }
 
-function mergeParentContext(source: Record<string, unknown>, parent?: BindingParentContext | null): BindingParentContext {
+function mergeParentContext(
+  source: Record<string, unknown>,
+  parent?: BindingParentContext | null,
+): BindingParentContext {
   if (!parent) return {};
   const sourceEffectiveId = Number(source.effective_product_group_id || 0) || 0;
   return {
     product_type: String(source.product_type || parent.product_type || '').trim() || undefined,
-    first_product_group_id: Number(source.first_product_group_id || parent.first_product_group_id || 0) || parent.first_product_group_id || null,
-    first_product_group_code: String(source.first_product_group_code || parent.first_product_group_code || '').trim() || parent.first_product_group_code || null,
-    first_product_group_name: String(source.first_product_group_name || parent.first_product_group_name || '').trim() || parent.first_product_group_name || null,
-    second_product_group_id: Number(source.second_product_group_id || parent.second_product_group_id || 0) || parent.second_product_group_id || null,
-    second_product_group_name: String(source.second_product_group_name || parent.second_product_group_name || '').trim() || parent.second_product_group_name || null,
-    third_product_group_id: Number(source.third_product_group_id || parent.third_product_group_id || 0) || parent.third_product_group_id || null,
-    third_product_group_name: String(source.third_product_group_name || parent.third_product_group_name || '').trim() || parent.third_product_group_name || null,
+    first_product_group_id:
+      Number(source.first_product_group_id || parent.first_product_group_id || 0) ||
+      parent.first_product_group_id ||
+      null,
+    first_product_group_code:
+      String(source.first_product_group_code || parent.first_product_group_code || '').trim() ||
+      parent.first_product_group_code ||
+      null,
+    first_product_group_name:
+      String(source.first_product_group_name || parent.first_product_group_name || '').trim() ||
+      parent.first_product_group_name ||
+      null,
+    second_product_group_id:
+      Number(source.second_product_group_id || parent.second_product_group_id || 0) ||
+      parent.second_product_group_id ||
+      null,
+    second_product_group_name:
+      String(source.second_product_group_name || parent.second_product_group_name || '').trim() ||
+      parent.second_product_group_name ||
+      null,
+    third_product_group_id:
+      Number(source.third_product_group_id || parent.third_product_group_id || 0) ||
+      parent.third_product_group_id ||
+      null,
+    third_product_group_name:
+      String(source.third_product_group_name || parent.third_product_group_name || '').trim() ||
+      parent.third_product_group_name ||
+      null,
     effective_product_group_id: sourceEffectiveId || Number(parent.effective_product_group_id || 0) || undefined,
-    effective_product_group_level: Number(source.effective_product_group_level || parent.effective_product_group_level || 0) || undefined,
-    effective_product_group_full_name: String(source.effective_product_group_full_name || source.category_full_name || parent.effective_product_group_full_name || '').trim() || undefined,
+    effective_product_group_level:
+      Number(source.effective_product_group_level || parent.effective_product_group_level || 0) || undefined,
+    effective_product_group_full_name:
+      String(
+        source.effective_product_group_full_name ||
+          source.category_full_name ||
+          parent.effective_product_group_full_name ||
+          '',
+      ).trim() || undefined,
   };
 }
 
@@ -94,17 +127,22 @@ function createBindingRecord(sourceValue: unknown, parent?: BindingParentContext
   const productDisplayName = String(source.product_display_name || '').trim();
   const combinedDisplayName = String(source.combined_display_name || '').trim();
   const displayName = String(source.display_name || source.label || '').trim();
-  const bindingLabel = (
-    customDisplayName
-    || cpuMemorySlugDisplay
-    || productSpecDisplay
-    || cpuMemoryDisplay
-    || productDisplayName
-    || combinedDisplayName
-    || displayName
-    || `商品 #${productId}`
-  );
-  const categoryName = String(source.category_full_name || source.group_full_name || source.effective_product_group_full_name || parent?.effective_product_group_full_name || '').trim();
+  const bindingLabel =
+    customDisplayName ||
+    cpuMemorySlugDisplay ||
+    productSpecDisplay ||
+    cpuMemoryDisplay ||
+    productDisplayName ||
+    combinedDisplayName ||
+    displayName ||
+    `商品 #${productId}`;
+  const categoryName = String(
+    source.category_full_name ||
+      source.group_full_name ||
+      source.effective_product_group_full_name ||
+      parent?.effective_product_group_full_name ||
+      '',
+  ).trim();
   const context = mergeParentContext(source, parent);
   return {
     value: String(productId),
@@ -178,7 +216,11 @@ export function normalizeProductBindings(bindings: unknown): ProductBindingRecor
 
 // ---- tree flattening ----
 
-export function flattenProductTree(nodes: unknown[], result: BindingOption[] = [], parent?: BindingParentContext | null) {
+export function flattenProductTree(
+  nodes: unknown[],
+  result: BindingOption[] = [],
+  parent?: BindingParentContext | null,
+) {
   if (!Array.isArray(nodes)) return result;
   nodes.forEach((nodeValue) => {
     const node = toPlainRecord(nodeValue);
@@ -206,7 +248,7 @@ function ensureBindingTreeTypeNode(
   nodes: Map<string, BindingTreeNode>,
   productType: string,
   label: string,
-  _mode: BindingTreeMode = 'multiple',
+  mode: BindingTreeMode = 'multiple',
 ) {
   const key = `type:${productType}`;
   const existing = nodes.get(key);
@@ -217,6 +259,8 @@ function ensureBindingTreeTypeNode(
     label,
     text: label,
     selectable: true,
+    // 添加实例使用单选树：类型仅用于分组，不能作为商品写入表单。
+    activable: mode === 'single' ? false : undefined,
     children: [],
   };
   nodes.set(key, node);
@@ -244,9 +288,11 @@ function categoryTreeValue(nodeKey: string, rawValue: string): string {
 }
 
 function shouldHoistDuplicateTypeNode(categoryNode: BindingTreeNode, typeLabel: string) {
-  return normalizedTreeLabel(categoryNode.label) === normalizedTreeLabel(typeLabel)
-    && Array.isArray(categoryNode.children)
-    && categoryNode.children.length > 0;
+  return (
+    normalizedTreeLabel(categoryNode.label) === normalizedTreeLabel(typeLabel) &&
+    Array.isArray(categoryNode.children) &&
+    categoryNode.children.length > 0
+  );
 }
 
 function buildBindingCategoryTreeNode(
@@ -282,7 +328,8 @@ function buildBindingCategoryTreeNode(
   const label = String(node.label || node.name || node.title || node.text || '未命名分类').trim();
   if (!label && result.length === 0) return null;
 
-  // 所有节点均可点击，产品/分类的选择过滤由 selectionToBindings 统一处理
+  // 添加实例使用单选树：分类仅用于导航，不能作为商品写入表单。
+  // 批量模式保留按分类勾选并展开为商品的语义。
   const selectable = true;
   const rawValue = String(node.value || node.id || nodeKey).trim() || nodeKey;
 
@@ -291,6 +338,7 @@ function buildBindingCategoryTreeNode(
     label: label || '未命名分类',
     text: label || '未命名分类',
     selectable,
+    activable: mode === 'single' ? false : undefined,
     raw_value: rawValue,
     children: result,
     ...currentContext,
@@ -313,20 +361,15 @@ export function buildBindingTreeOptions(
       node.product_type_label || node.service_type_label || PRODUCT_TYPE_LABELS[productType] || productType,
     ).trim();
     const typeNode = ensureBindingTreeTypeNode(typeNodes, productType, typeLabel, mode);
-    const categoryNode = buildBindingCategoryTreeNode(
-      node,
-      `${_parentKey}-${productType}-${index}`,
-      mode,
-      {
-        product_type: productType,
-        first_product_group_id: Number(node.first_product_group_id || 0) || null,
-        first_product_group_code: String(node.first_product_group_code || '').trim() || null,
-        first_product_group_name: String(node.first_product_group_name || '').trim() || null,
-        effective_product_group_id: Number(node.first_product_group_id || 0) || undefined,
-        effective_product_group_level: 1,
-        effective_product_group_full_name: String(node.label || node.name || '').trim() || undefined,
-      },
-    );
+    const categoryNode = buildBindingCategoryTreeNode(node, `${_parentKey}-${productType}-${index}`, mode, {
+      product_type: productType,
+      first_product_group_id: Number(node.first_product_group_id || 0) || null,
+      first_product_group_code: String(node.first_product_group_code || '').trim() || null,
+      first_product_group_name: String(node.first_product_group_name || '').trim() || null,
+      effective_product_group_id: Number(node.first_product_group_id || 0) || undefined,
+      effective_product_group_level: 1,
+      effective_product_group_full_name: String(node.label || node.name || '').trim() || undefined,
+    });
     if (categoryNode) {
       const nextNodes = shouldHoistDuplicateTypeNode(categoryNode, typeLabel)
         ? categoryNode.children || []
@@ -371,9 +414,7 @@ export function expandToLeafIds(selectedIds: string[], treeNodes: BindingTreeNod
   }
 
   walk(treeNodes);
-  selectedIds
-    .filter((id) => /^\d+$/.test(id) && Number(id) > 0)
-    .forEach((id) => result.add(id));
+  selectedIds.filter((id) => /^\d+$/.test(id) && Number(id) > 0).forEach((id) => result.add(id));
 
   return Array.from(result);
 }
@@ -407,10 +448,12 @@ export function useProductBindingTree(
   });
 
   const flatOptions = computed(() => flattenProductTree(treeData.value));
-  const optionMap = computed(() => flatOptions.value.reduce((map, item) => {
-    if (!map.has(item.value)) map.set(item.value, item);
-    return map;
-  }, new Map<string, BindingOption>()));
+  const optionMap = computed(() =>
+    flatOptions.value.reduce((map, item) => {
+      if (!map.has(item.value)) map.set(item.value, item);
+      return map;
+    }, new Map<string, BindingOption>()),
+  );
   const treeOptions = computed(() => buildBindingTreeOptions(treeData.value, 'root', mode, hideTypeGroupRef.value));
 
   const treeValueProductIdMap = computed(() => {
@@ -464,10 +507,7 @@ export function useProductBindingTree(
     existingBindings?: ProductBindingRecord[],
   ): ProductBindingRecord[] {
     const existingMap = new Map(
-      normalizeProductBindings(existingBindings).map((item) => [
-        String(item.product_id || '').trim(),
-        item,
-      ]),
+      normalizeProductBindings(existingBindings).map((item) => [String(item.product_id || '').trim(), item]),
     );
     return bindingIds
       .map((id) => optionMap.value.get(id) || existingMap.get(id))
@@ -509,10 +549,12 @@ export function useProductBindingTree(
   function normalizeSelectionForTree(value: unknown): string[] {
     const values = (Array.isArray(value) ? value : [value]).map(normalizeTreeValue).filter(Boolean);
 
-    return uniqueValues(values.map((item) => {
-      const productId = resolveProductIdFromTreeValue(item);
-      return productId ? productTreeValueMap.value.get(productId) || item : item;
-    }));
+    return uniqueValues(
+      values.map((item) => {
+        const productId = resolveProductIdFromTreeValue(item);
+        return productId ? productTreeValueMap.value.get(productId) || item : item;
+      }),
+    );
   }
 
   function firstSelectionForTree(value: unknown): string {
@@ -524,9 +566,7 @@ export function useProductBindingTree(
     existingBindings?: ProductBindingRecord[],
   ): { binding_ids: string[]; bindings: ProductBindingRecord[] } {
     // 统一为数组：single 模式下 TDesign 传回的是 string
-    const rawValues = (Array.isArray(value) ? value : [value])
-      .map((item) => String(item || '').trim())
-      .filter(Boolean);
+    const rawValues = (Array.isArray(value) ? value : [value]).map((item) => String(item || '').trim()).filter(Boolean);
 
     let selectedIds: string[];
 

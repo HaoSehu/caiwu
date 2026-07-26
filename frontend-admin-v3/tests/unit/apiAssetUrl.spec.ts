@@ -31,6 +31,9 @@ assert.equal(
   'https://api.coyjs.cn/uploads/content/logo.png',
 );
 assert.equal(resolveApiAssetUrl('/branding/logo.svg', 'https://api.coyjs.cn/api'), '/branding/logo.svg');
-assert.equal(resolveApiAssetUrl('https://cdn.example.com/logo.svg', 'https://api.coyjs.cn/api'), 'https://cdn.example.com/logo.svg');
+assert.equal(
+  resolveApiAssetUrl('https://cdn.example.com/logo.svg', 'https://api.coyjs.cn/api'),
+  'https://cdn.example.com/logo.svg',
+);
 
 console.log('admin API asset URL tests passed');

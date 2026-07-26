@@ -7,7 +7,7 @@
     @update:visible="(value: boolean) => emit('update:visible', value)"
     @close="emit('close')"
   >
-    <RecordDetailPage
+    <record-detail-page
       :loading="loading"
       :ready="Boolean(invoice.id || invoice.invoice_no)"
       back-text="关闭详情"
@@ -31,10 +31,20 @@
       </template>
 
       <template #relations>
-        <t-button v-if="invoice.order?.id || invoice.order_id" variant="outline" size="small" @click="emit('view-order', invoice.order?.id || invoice.order_id)">
+        <t-button
+          v-if="invoice.order?.id || invoice.order_id"
+          variant="outline"
+          size="small"
+          @click="emit('view-order', invoice.order?.id || invoice.order_id)"
+        >
           查看订单
         </t-button>
-        <t-button v-if="invoice.user?.id || invoice.user_id" variant="outline" size="small" @click="emit('view-user', invoice.user?.id || invoice.user_id)">
+        <t-button
+          v-if="invoice.user?.id || invoice.user_id"
+          variant="outline"
+          size="small"
+          @click="emit('view-user', invoice.user?.id || invoice.user_id)"
+        >
           查看用户
         </t-button>
       </template>
@@ -81,7 +91,11 @@
         <section v-if="items.length" class="finance-detail-section">
           <h4>账单项目</h4>
           <div class="finance-line-list">
-            <div v-for="item in items" :key="String(item.id || item.description || item.name)" class="finance-line-item">
+            <div
+              v-for="item in items"
+              :key="String(item.id || item.description || item.name)"
+              class="finance-line-item"
+            >
               <span>{{ fieldValue(item.description || item.name || item.title) }}</span>
               <strong>{{ formatMoney(item.amount) }}</strong>
             </div>
@@ -93,7 +107,11 @@
         <section class="finance-detail-section">
           <h4>支付记录</h4>
           <div class="finance-line-list">
-            <div v-for="payment in payments" :key="String(payment.id || payment.payment_no)" class="finance-line-item finance-line-item--stacked">
+            <div
+              v-for="payment in payments"
+              :key="String(payment.id || payment.payment_no)"
+              class="finance-line-item finance-line-item--stacked"
+            >
               <div class="finance-line-item__head">
                 <strong>{{ fieldValue(payment.payment_no) }}</strong>
                 <t-tag :theme="paymentStatusTheme(payment)" variant="light">{{ paymentStatusLabel(payment) }}</t-tag>
@@ -111,24 +129,28 @@
         <section class="finance-detail-section">
           <h4>操作日志</h4>
           <div class="finance-line-list">
-            <div v-for="log in logs" :key="String(log.id || log.created_at)" class="finance-line-item finance-line-item--stacked">
+            <div
+              v-for="log in logs"
+              :key="String(log.id || log.created_at)"
+              class="finance-line-item finance-line-item--stacked"
+            >
               <strong>{{ fieldValue(log.summary || log.action || log.message) }}</strong>
               <span>{{ formatDateTime(log.created_at) }}</span>
             </div>
           </div>
         </section>
       </template>
-    </RecordDetailPage>
+    </record-detail-page>
   </t-drawer>
 </template>
-
 <script setup lang="ts">
+import { getStatusLabel, getStatusTagType, INVOICE_TYPE_MAP, PAYMENT_STATUS_MAP } from '@shared/statusConfig';
 import { computed, ref } from 'vue';
 
 import type { InvoiceRecord } from '@/api/admin';
-import RecordDetailPage, { type RecordDetailMetric, type RecordDetailTab } from '@/components/record-detail-page/index.vue';
+import type { RecordDetailMetric, RecordDetailTab } from '@/components/record-detail-page/index.vue';
+import RecordDetailPage from '@/components/record-detail-page/index.vue';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { INVOICE_TYPE_MAP, PAYMENT_STATUS_MAP, getStatusLabel, getStatusTagType } from '@shared/statusConfig';
 
 const props = withDefaults(
   defineProps<{
@@ -190,7 +212,13 @@ const tabs = computed<RecordDetailTab[]>(() => [
 ]);
 
 function invoiceTitle(row: InvoiceRecord) {
-  return fieldValue(row.combined_display_name || row.product_display_name || row.product_spec_display || row.type_label || invoiceTypeLabel(row.type));
+  return fieldValue(
+    row.combined_display_name ||
+      row.product_display_name ||
+      row.product_spec_display ||
+      row.type_label ||
+      invoiceTypeLabel(row.type),
+  );
 }
 
 function invoiceTypeLabel(type: unknown) {
@@ -232,7 +260,6 @@ function toRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
 </script>
-
 <style lang="less" scoped>
 .finance-detail-section {
   display: flex;

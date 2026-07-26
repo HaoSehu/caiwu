@@ -8,13 +8,18 @@
         </t-button>
         <div v-if="templateDefinition" class="template-title">
           <h2>{{ templateDefinition.name }}</h2>
-          <span>{{ templateDefinition.channel === 'sms' ? '短信模板' : '邮件模板' }} · {{ templateDefinition.code }} · {{ templateDefinition.isEnabled ? '启用' : '停用' }}</span>
+          <span
+            >{{ templateDefinition.channel === 'sms' ? '短信模板' : '邮件模板' }} · {{ templateDefinition.code }} ·
+            {{ templateDefinition.isEnabled ? '启用' : '停用' }}</span
+          >
         </div>
       </div>
       <t-space>
         <t-button variant="outline" :disabled="!templateDefinition" @click="openTestSendDialog">测试发送</t-button>
         <t-button variant="outline" :disabled="!templateDefinition" @click="resetCurrentTemplate">恢复默认</t-button>
-        <t-button theme="primary" :loading="saving" :disabled="!templateDefinition" @click="saveCurrentTemplate">保存模板</t-button>
+        <t-button theme="primary" :loading="saving" :disabled="!templateDefinition" @click="saveCurrentTemplate"
+          >保存模板</t-button
+        >
       </t-space>
     </div>
 
@@ -36,7 +41,11 @@
         <t-form :data="templateDefinition" label-align="top">
           <t-form-item label="发送状态" name="isEnabled">
             <div class="status-control">
-              <t-switch v-model="templateDefinition.isEnabled" :custom-value="[true, false]" :label="['启用', '停用']" />
+              <t-switch
+                v-model="templateDefinition.isEnabled"
+                :custom-value="[true, false]"
+                :label="['启用', '停用']"
+              />
             </div>
           </t-form-item>
           <t-form-item v-if="templateDefinition.channel === 'email'" label="邮件主题" name="subject">
@@ -55,7 +64,11 @@
               <section class="editor-pane">
                 <div class="pane-header">
                   <strong>{{ templateDefinition.channel === 'sms' ? '短信正文' : 'HTML 正文' }}</strong>
-                  <span>{{ templateDefinition.channel === 'sms' ? '业务层会先渲染正文，再连同供应商模板 ID 一起交给短信插件发送。' : '可填写完整 HTML 文档或正文 HTML。' }}</span>
+                  <span>{{
+                    templateDefinition.channel === 'sms'
+                      ? '业务层会先渲染正文，再连同供应商模板 ID 一起交给短信插件发送。'
+                      : '可填写完整 HTML 文档或正文 HTML。'
+                  }}</span>
                 </div>
                 <t-textarea
                   v-model="templateDefinition.content"
@@ -64,7 +77,6 @@
                   :autosize="{ minRows: templateDefinition.channel === 'sms' ? 18 : 14, maxRows: 26 }"
                 />
               </section>
-
             </div>
 
             <section class="preview-pane">
@@ -104,7 +116,9 @@
       <div class="template-test-dialog">
         <div v-if="templateDefinition" class="template-test-target">
           <strong>{{ templateDefinition.name }}</strong>
-          <span>{{ templateDefinition.channel === 'sms' ? '短信模板' : '邮件模板' }} · {{ templateDefinition.code }}</span>
+          <span
+            >{{ templateDefinition.channel === 'sms' ? '短信模板' : '邮件模板' }} · {{ templateDefinition.code }}</span
+          >
         </div>
         <t-form label-align="top">
           <t-form-item :label="templateChannel === 'sms' ? '接收手机号' : '接收邮箱地址'">
@@ -118,12 +132,20 @@
           </t-form-item>
         </t-form>
 
-        <div v-if="testSendResult" class="template-test-feedback" :class="`template-test-feedback--${testSendResult.status}`">
+        <div
+          v-if="testSendResult"
+          class="template-test-feedback"
+          :class="`template-test-feedback--${testSendResult.status}`"
+        >
           <strong>{{ testSendSummaryText }}</strong>
           <span>成功 {{ testSendResult.success_count }} 条，失败 {{ testSendResult.failed_count }} 条</span>
         </div>
         <div v-if="testSendResult?.results?.length" class="template-test-results">
-          <div v-for="item in testSendResult.results" :key="`${item.recipient}:${item.status}`" class="template-test-result-row">
+          <div
+            v-for="item in testSendResult.results"
+            :key="`${item.recipient}:${item.status}`"
+            class="template-test-result-row"
+          >
             <span>{{ item.recipient }}</span>
             <t-tag :theme="item.status === 'success' ? 'success' : 'danger'" variant="light">
               {{ item.status === 'success' ? '成功' : '失败' }}
@@ -135,17 +157,50 @@
     </t-dialog>
   </div>
 </template>
+<script setup lang="ts">
+import './index.less';
 
-<script setup>
-import { computed, onMounted, ref } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
 import { ChevronLeftIcon } from 'tdesign-icons-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
+import { computed, onMounted, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 
 import { adminApi } from '@/api/admin';
 import { resolveApiAssetUrl } from '@/utils/apiAssetUrl';
 
-import './index.less';
+interface NotificationTemplateSource {
+  code: string;
+  name: string;
+  channel: 'email' | 'sms';
+  audience?: string;
+  variables: string[];
+  subject?: string;
+  content?: string;
+  provider_template_id?: string;
+  is_enabled?: unknown;
+  setting_keys?: Record<string, string>;
+}
+
+interface NotificationTemplate extends NotificationTemplateSource {
+  subject: string;
+  content: string;
+  providerTemplateId: string;
+  isEnabled: boolean;
+  defaultSubject: string;
+  defaultContent: string;
+  defaultProviderTemplateId: string;
+  defaultIsEnabled: boolean;
+}
+
+interface TestSendResult {
+  status: string;
+  success_count: number;
+  failed_count: number;
+  results?: Array<{ recipient: string; status: string; error?: string }>;
+}
+
+type PreviewParams = Record<string, string>;
+type SettingsMap = Record<string, unknown>;
 
 const route = useRoute();
 const router = useRouter();
@@ -154,12 +209,12 @@ const saving = ref(false);
 const testSendVisible = ref(false);
 const testSending = ref(false);
 const testSendRecipient = ref('');
-const testSendResult = ref(null);
+const testSendResult = ref<TestSendResult | null>(null);
 const DEFAULT_SITE_NAME = '创欧云';
 const DEFAULT_SITE_LOGO = '/branding/logo.svg';
 const siteName = ref(DEFAULT_SITE_NAME);
 const siteLogo = ref(DEFAULT_SITE_LOGO);
-const templateDefinitions = ref([]);
+const templateDefinitions = ref<NotificationTemplate[]>([]);
 
 const templateCode = computed(() => String(route.params.code || '').trim());
 const templateChannel = computed(() => (route.path.includes('/sms-templates/') ? 'sms' : 'email'));
@@ -242,17 +297,28 @@ const previewBaseParams = computed(() => ({
   bound_at: '2026-04-01 09:30:00',
 }));
 
-function normalizeSettings(response) {
-  if (Array.isArray(response)) return Object.fromEntries(response.map((item) => [item.key, item.value]));
-  if (response && Array.isArray(response.list)) return Object.fromEntries(response.list.map((item) => [item.key, item.value]));
-  return response && typeof response === 'object' ? response : {};
+interface SettingEntry {
+  key: string;
+  value: unknown;
 }
 
-function applySettings(template, settings) {
+function normalizeSettings(response: unknown): SettingsMap {
+  if (Array.isArray(response)) {
+    return Object.fromEntries((response as SettingEntry[]).map((item) => [item.key, item.value]));
+  }
+  const list = (response as { list?: unknown })?.list;
+  if (Array.isArray(list)) {
+    return Object.fromEntries((list as SettingEntry[]).map((item) => [item.key, item.value]));
+  }
+  return response && typeof response === 'object' ? (response as SettingsMap) : {};
+}
+
+function applySettings(template: NotificationTemplateSource, settings: SettingsMap): NotificationTemplate {
   const settingKeys = template.setting_keys || {};
   const subjectKey = settingKeys.subject || `email_template_subject_${template.code}`;
   const contentKey = settingKeys.content || `${template.channel}_template_content_${template.code}`;
-  const providerTemplateIdKey = settingKeys.provider_template_id || `sms_template_provider_template_id_${template.code}`;
+  const providerTemplateIdKey =
+    settingKeys.provider_template_id || `sms_template_provider_template_id_${template.code}`;
   const enabledKey = settingKeys.enabled || `${template.channel}_template_enabled_${template.code}`;
   const defaultSubject = template.subject || '';
   const defaultContent = template.content || '';
@@ -298,16 +364,20 @@ async function saveCurrentTemplate() {
   try {
     const settingKeys = templateDefinition.value.setting_keys || {};
     const settings = {
-      [settingKeys.content || `${templateDefinition.value.channel}_template_content_${templateDefinition.value.code}`]: templateDefinition.value.content,
-      [settingKeys.enabled || `${templateDefinition.value.channel}_template_enabled_${templateDefinition.value.code}`]: templateDefinition.value.isEnabled ? 1 : 0,
+      [settingKeys.content || `${templateDefinition.value.channel}_template_content_${templateDefinition.value.code}`]:
+        templateDefinition.value.content,
+      [settingKeys.enabled || `${templateDefinition.value.channel}_template_enabled_${templateDefinition.value.code}`]:
+        templateDefinition.value.isEnabled ? 1 : 0,
     };
 
     if (templateDefinition.value.channel === 'email') {
-      settings[settingKeys.subject || `email_template_subject_${templateDefinition.value.code}`] = templateDefinition.value.subject;
+      settings[settingKeys.subject || `email_template_subject_${templateDefinition.value.code}`] =
+        templateDefinition.value.subject;
     }
     if (templateDefinition.value.channel === 'sms') {
-      settings[settingKeys.provider_template_id || `sms_template_provider_template_id_${templateDefinition.value.code}`] =
-        templateDefinition.value.providerTemplateId || '';
+      settings[
+        settingKeys.provider_template_id || `sms_template_provider_template_id_${templateDefinition.value.code}`
+      ] = templateDefinition.value.providerTemplateId || '';
     }
 
     await adminApi.settings.save({
@@ -364,7 +434,7 @@ async function submitTestSend() {
   }
 }
 
-function resetTemplate(template) {
+function resetTemplate(template: NotificationTemplate) {
   template.subject = template.defaultSubject || '';
   template.content = template.defaultContent;
   template.providerTemplateId = template.defaultProviderTemplateId || '';
@@ -372,31 +442,34 @@ function resetTemplate(template) {
 }
 
 function goBack() {
-  router.push({ path: '/admin/notifications', query: templateChannel.value === 'sms' ? { tab: 'sms-templates' } : { tab: currentTab.value } });
+  router.push({
+    path: '/admin/notifications',
+    query: templateChannel.value === 'sms' ? { tab: 'sms-templates' } : { tab: currentTab.value },
+  });
 }
 
-function getPreviewParams(template) {
-  const params = { ...previewBaseParams.value };
-  template.variables.forEach((key) => {
+function getPreviewParams(template: NotificationTemplate): PreviewParams {
+  const params: PreviewParams = { ...previewBaseParams.value };
+  template.variables.forEach((key: string) => {
     if (!(key in params)) params[key] = `示例${key}`;
   });
   return params;
 }
 
-function getPreviewValue(key) {
+function getPreviewValue(key: string) {
   if (!templateDefinition.value) return '-';
   return String(getPreviewParams(templateDefinition.value)[key] ?? '-');
 }
 
-function renderPreviewSubject(template) {
+function renderPreviewSubject(template: NotificationTemplate) {
   return renderTemplateText(template.subject, getPreviewParams(template)) || '未设置主题';
 }
 
-function renderPreviewSmsContent(template) {
+function renderPreviewSmsContent(template: NotificationTemplate) {
   return renderTemplateText(template.content, getPreviewParams(template)) || '未设置短信正文';
 }
 
-function buildPreviewDocument(template) {
+function buildPreviewDocument(template: NotificationTemplate) {
   const params = getPreviewParams(template);
   const subject = renderPreviewSubject(template);
   const content = renderTemplateContent(template.content, params);
@@ -404,61 +477,72 @@ function buildPreviewDocument(template) {
   return `<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${escapeHtml(subject)}</title></head><body>${content}</body></html>`;
 }
 
-function renderTemplateContent(template, params) {
-  if (looksLikeHtml(template)) return renderTemplateWithResolver(template, params, (key) => escapeHtml(params[key] ?? ''), true);
+function renderTemplateContent(template: string, params: PreviewParams) {
+  if (looksLikeHtml(template))
+    return renderTemplateWithResolver(template, params, (key) => escapeHtml(params[key] ?? ''), true);
   return String(renderTemplateText(template, params) || '')
     .split(/\n{2,}/)
     .map((block) => `<p>${escapeHtml(block).replace(/\n/g, '<br>')}</p>`)
     .join('');
 }
 
-function renderTemplateText(template, params) {
+function renderTemplateText(template: string, params: PreviewParams) {
   return renderTemplateWithResolver(template, params, (key) => String(params[key] ?? ''));
 }
 
-function renderTemplateWithResolver(template, params, resolver, htmlMode = false) {
-  let rendered = String(template || '').replace(/\{\{#([a-zA-Z0-9_]+)\}\}([\s\S]*?)\{\{\/\1\}\}/g, (_match, key, content) =>
-    hasValue(params[key]) ? content : '',
-  );
-  rendered = rendered.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, key) => resolver(key));
-  return htmlMode ? rendered.trim() : rendered.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+function renderTemplateWithResolver(
+  template: string,
+  params: PreviewParams,
+  resolver: (key: string) => string,
+  htmlMode = false,
+) {
+  let rendered = String(template || '').replace(/\{\{#(\w+)\}\}([\s\S]*?)\{\{\/\1\}\}/g, (_match, key, content) => {
+    return hasValue(params[key]) ? content : '';
+  });
+  rendered = rendered.replace(/\{\{\s*(\w+)\s*\}\}/g, (_match, key) => resolver(key));
+  return htmlMode
+    ? rendered.trim()
+    : rendered
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
 }
 
-function looksLikeHtml(template) {
-  return /<([a-z][a-z0-9]*)(\s|>)/i.test(String(template || '').trim());
+function looksLikeHtml(template: string) {
+  return /<[a-z][a-z0-9]*(?:\s|>)/i.test(String(template || '').trim());
 }
 
-function looksLikeFullHtmlDocument(template) {
-  return /^(<!doctype\s+html|<html\b)/i.test(String(template || '').trim());
+function looksLikeFullHtmlDocument(template: string) {
+  return /^(?:<!doctype\s+html|<html\b)/i.test(String(template || '').trim());
 }
 
-function hasValue(value) {
-  return ![null, undefined, '', false].includes(value);
+function hasValue(value: unknown) {
+  return ![null, undefined, '', false].includes(value as null | undefined | string | boolean);
 }
 
-function settingValue(settings, key, fallback) {
-  return Object.prototype.hasOwnProperty.call(settings, key) ? settings[key] ?? '' : fallback;
+function settingValue<T>(settings: SettingsMap, key: string, fallback: T): T {
+  return Object.hasOwn(settings, key) ? ((settings[key] ?? '') as T) : fallback;
 }
 
-function normalizeRecipient(value) {
+function normalizeRecipient(value: unknown) {
   const recipient = String(value || '').trim();
   if (templateChannel.value === 'sms') return recipient.replace(/[\s-]+/g, '');
   return recipient;
 }
 
-function toBooleanValue(value) {
+function toBooleanValue(value: unknown) {
   if (value === true || value === 1) return true;
   return ['1', 'true', 'on', 'yes'].includes(String(value).trim().toLowerCase());
 }
 
-function resolvePreviewLogo(value) {
+function resolvePreviewLogo(value: unknown) {
   const logo = String(value || '').trim() || DEFAULT_SITE_LOGO;
   const resolved = resolveApiAssetUrl(logo, import.meta.env.VITE_API_BASE_URL);
-  if (/^(https?:)?\/\//i.test(resolved) || resolved.startsWith('data:') || resolved.startsWith('/')) return resolved;
+  if (/^(?:https?:)?\/\//i.test(resolved) || resolved.startsWith('data:') || resolved.startsWith('/')) return resolved;
   return `/${resolved}`;
 }
 
-function escapeHtml(value) {
+function escapeHtml(value: unknown) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -467,8 +551,9 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
-function errorMessage(error, fallback) {
-  return String(error?.response?.data?.message || error?.message || fallback);
+function errorMessage(error: unknown, fallback: string) {
+  const payload = error as { response?: { data?: { message?: string } }; message?: string } | null;
+  return String(payload?.response?.data?.message || payload?.message || fallback);
 }
 
 onMounted(loadSettings);

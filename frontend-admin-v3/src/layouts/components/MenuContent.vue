@@ -79,7 +79,11 @@ function getMenuList(list: MenuRoute[], basePath?: string): MenuRoute[] {
   return list
     .map((item) => {
       const rawPath = String(item.path);
-      const path = rawPath.startsWith('/') ? rawPath : basePath && !rawPath.includes(basePath) ? `${basePath}/${rawPath}` : rawPath;
+      const path = rawPath.startsWith('/')
+        ? rawPath
+        : basePath && !rawPath.includes(basePath)
+          ? `${basePath}/${rawPath}`
+          : rawPath;
 
       return {
         path,

@@ -1,10 +1,11 @@
 import { request } from '@/utils/request';
+
 import type {
   ReferralListParams,
   ReferralOverview,
   ReferralRewardRecord,
-  ReferralWithdrawalRecord,
   ReferralWithdrawalPayload,
+  ReferralWithdrawalRecord,
 } from './types';
 
 export const referralApi = {

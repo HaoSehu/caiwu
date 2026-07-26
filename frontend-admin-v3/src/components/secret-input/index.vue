@@ -7,7 +7,11 @@
       :disabled="disabled"
       @update:model-value="handleInput"
     />
-    <span v-if="hasValue && canReveal" class="secret-input__toggle secret-input__toggle--textarea" @click.stop="toggleVisible">
+    <span
+      v-if="hasValue && canReveal"
+      class="secret-input__toggle secret-input__toggle--textarea"
+      @click.stop="toggleVisible"
+    >
       <browse-off-icon v-if="visible" />
       <browse-icon v-else />
     </span>
@@ -29,38 +33,40 @@
     </template>
   </t-input>
 </template>
-
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
 import { BrowseIcon, BrowseOffIcon } from 'tdesign-icons-vue-next';
+import { computed, ref, watch } from 'vue';
 
-const props = withDefaults(defineProps<{
-  modelValue?: string | number | boolean | null;
-  hasValue?: boolean;
-  placeholder?: string;
-  disabled?: boolean;
-  clearable?: boolean;
-  mask?: string;
-  type?: 'text' | 'password';
-  resetKey?: string | number;
-  multiline?: boolean;
-  autosize?: unknown;
-  canReveal?: boolean;
-  reveal?: () => Promise<unknown>;
-}>(), {
-  modelValue: '',
-  hasValue: false,
-  placeholder: '',
-  disabled: false,
-  clearable: false,
-  mask: '********',
-  type: 'password',
-  resetKey: '',
-  multiline: false,
-  autosize: undefined,
-  canReveal: true,
-  reveal: undefined,
-});
+const props = withDefaults(
+  defineProps<{
+    modelValue?: string | number | boolean | null;
+    hasValue?: boolean;
+    placeholder?: string;
+    disabled?: boolean;
+    clearable?: boolean;
+    mask?: string;
+    type?: 'text' | 'password';
+    resetKey?: string | number;
+    multiline?: boolean;
+    autosize?: unknown;
+    canReveal?: boolean;
+    reveal?: () => Promise<unknown>;
+  }>(),
+  {
+    modelValue: '',
+    hasValue: false,
+    placeholder: '',
+    disabled: false,
+    clearable: false,
+    mask: '********',
+    type: 'password',
+    resetKey: '',
+    multiline: false,
+    autosize: undefined,
+    canReveal: true,
+    reveal: undefined,
+  },
+);
 
 const emit = defineEmits<{
   'update:modelValue': [value: string];
@@ -74,8 +80,13 @@ const loadedValue = ref<string | null>(null);
 const loading = ref(false);
 
 const displayValue = computed(() => {
-  if (!props.hasValue) return props.modelValue === null || props.modelValue === undefined ? '' : String(props.modelValue);
-  if (visible.value) return props.modelValue === null || props.modelValue === undefined || props.modelValue === '' ? loadedValue.value || '' : String(props.modelValue);
+  if (!props.hasValue)
+    return props.modelValue === null || props.modelValue === undefined ? '' : String(props.modelValue);
+  if (visible.value) {
+    return props.modelValue === null || props.modelValue === undefined || props.modelValue === ''
+      ? loadedValue.value || ''
+      : String(props.modelValue);
+  }
   if (edited.value) return props.modelValue === null || props.modelValue === undefined ? '' : String(props.modelValue);
   return props.mask;
 });
@@ -147,7 +158,6 @@ function resetState() {
   emit('edited-change', false);
 }
 </script>
-
 <style scoped lang="less">
 .secret-input {
   position: relative;

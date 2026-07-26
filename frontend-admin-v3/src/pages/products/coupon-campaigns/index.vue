@@ -28,7 +28,9 @@
               <div class="campaign-title-row">
                 <strong>{{ row.name || '-' }}</strong>
                 <t-tag size="small" variant="light">自动发放</t-tag>
-                <t-tag v-if="Number(row.generated_coupon_count || 0) > 0" size="small" theme="default" variant="light">已生成</t-tag>
+                <t-tag v-if="Number(row.generated_coupon_count || 0) > 0" size="small" theme="default" variant="light"
+                  >已生成</t-tag
+                >
               </div>
               <span>{{ row.description || '暂无描述' }}</span>
             </div>
@@ -38,7 +40,9 @@
             <div class="campaign-meta">
               <strong>{{ row.schedule_text || scheduleText(row) }}</strong>
               <span>下次执行：{{ row.next_run_at || '未配置' }}</span>
-              <span>{{ row.valid_duration_hours ? `生成后 ${row.valid_duration_hours} 小时失效` : '生成后长期有效' }}</span>
+              <span>{{
+                row.valid_duration_hours ? `生成后 ${row.valid_duration_hours} 小时失效` : '生成后长期有效'
+              }}</span>
             </div>
           </template>
 
@@ -69,7 +73,10 @@
           </template>
 
           <template #status="{ row }">
-            <t-tag :theme="Number(row.status) === 1 || row.display_status === 'active' ? 'success' : 'default'" variant="light">
+            <t-tag
+              :theme="Number(row.status) === 1 || row.display_status === 'active' ? 'success' : 'default'"
+              variant="light"
+            >
               {{ row.display_status_label || (Number(row.status) === 1 ? '运行中' : '已停用') }}
             </t-tag>
           </template>
@@ -78,7 +85,13 @@
 
           <template #operation="{ row }">
             <t-space v-if="!isMobile" size="small">
-              <t-button size="small" variant="text" theme="primary" :disabled="campaignEditDisabled(row)" @click="openCampaignDialog(row)">
+              <t-button
+                size="small"
+                variant="text"
+                theme="primary"
+                :disabled="campaignEditDisabled(row)"
+                @click="openCampaignDialog(row)"
+              >
                 编辑
               </t-button>
               <t-button
@@ -111,7 +124,7 @@
                 删除
               </t-button>
             </t-space>
-            <t-dropdown v-else :options="mobileActionOptions(row)" @click="(data: { value: unknown }) => handleMobileAction(data.value, row)">
+            <t-dropdown v-else :options="mobileActionOptions(row)" @click="handleMobileActionHandler(row)">
               <t-button size="small" variant="text">更多</t-button>
             </t-dropdown>
           </template>
@@ -121,7 +134,7 @@
       <div v-else class="campaign-mobile-list">
         <t-loading :loading="loading" size="small">
           <div v-if="campaigns.length" class="campaign-mobile-stack">
-            <MobileRecordCard
+            <mobile-record-card
               v-for="row in campaigns"
               :key="row.id"
               :title="row.name || '-'"
@@ -205,8 +218,15 @@
                   <t-option value="renew" label="续费优惠" />
                 </t-select>
               </t-form-item>
-              <t-form-item :label="form.discount_type === 'percentage' ? '优惠值（百分比）' : '优惠金额'" name="discount_value">
-                <t-input-number v-model="form.discount_value" :min="0" :max="form.discount_type === 'percentage' ? 100 : 999999999" />
+              <t-form-item
+                :label="form.discount_type === 'percentage' ? '优惠值（百分比）' : '优惠金额'"
+                name="discount_value"
+              >
+                <t-input-number
+                  v-model="form.discount_value"
+                  :min="0"
+                  :max="form.discount_type === 'percentage' ? 100 : 999999999"
+                />
               </t-form-item>
               <t-form-item label="最低消费金额" name="min_amount">
                 <t-input-number v-model="form.min_amount" :min="0" :decimal-places="2" />
@@ -230,11 +250,16 @@
             <div class="campaign-form-grid">
               <t-form-item label="适用计费周期" name="billing_cycles" class="form-span-2">
                 <t-select v-model="form.billing_cycles" multiple clearable placeholder="留空表示全部周期可用">
-                  <t-option v-for="item in billingCycleOptions" :key="item.value" :label="item.label" :value="item.value" />
+                  <t-option
+                    v-for="item in billingCycleOptions"
+                    :key="item.value"
+                    :label="item.label"
+                    :value="item.value"
+                  />
                 </t-select>
               </t-form-item>
               <t-form-item label="适用商品" name="product_ids" class="form-span-2">
-                <ProductBindingTreeSelect
+                <product-binding-tree-select
                   v-model="form.product_ids"
                   mode="batch"
                   placeholder="按分类批量选择适用商品，留空表示全站商品可用"
@@ -263,25 +288,25 @@
     </t-drawer>
   </div>
 </template>
-
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
-import { AddIcon, SearchIcon } from 'tdesign-icons-vue-next';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
-import type { FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
-
-import { adminApi, type CouponCampaignPayload, type CouponCampaignRecord } from '@/api/admin';
-import { AdminPermissions } from '@/constants/permissions';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { hasAdminPermission } from '@/utils/permission';
-import { formatDateTime } from '@/utils/format';
-import { errorMessage } from '@/utils/userMessage';
-import MobileRecordCard from '@/components/mobile-record-card/index.vue';
-import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
-
 import './index.less';
 
-type CampaignForm = {
+import { AddIcon, SearchIcon } from 'tdesign-icons-vue-next';
+import type { DropdownOption, FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
+import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { computed, onMounted, reactive, ref } from 'vue';
+
+import type { CouponCampaignPayload, CouponCampaignRecord } from '@/api/admin';
+import { adminApi } from '@/api/admin';
+import MobileRecordCard from '@/components/mobile-record-card/index.vue';
+import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
+import { AdminPermissions } from '@/constants/permissions';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { formatDateTime } from '@/utils/format';
+import { hasAdminPermission } from '@/utils/permission';
+import { errorMessage } from '@/utils/userMessage';
+
+interface CampaignForm {
   id: number | null;
   name: string;
   weekdays: number[];
@@ -301,7 +326,7 @@ type CampaignForm = {
   sort_order: number;
   description: string;
   remark: string;
-};
+}
 
 const billingCycleOptions = [
   { label: '月付', value: 'monthly' },
@@ -410,7 +435,6 @@ function campaignLockReason(row: CouponCampaignRecord) {
   return String(row.lock_reason || '活动已生成优惠券批次，不允许删除；编辑仅影响后续批次');
 }
 
-
 async function loadList() {
   loading.value = true;
   try {
@@ -457,7 +481,10 @@ async function openCampaignDialog(row?: CouponCampaignRecord) {
     form.weekdays = Array.isArray(row.weekdays) ? row.weekdays.map(Number) : [5];
     form.trigger_time = String(row.trigger_time || '18:00:00');
     form.issue_quantity = Number(row.issue_quantity || 1);
-    form.valid_duration_hours = row.valid_duration_hours === null || row.valid_duration_hours === undefined ? null : Number(row.valid_duration_hours || 0);
+    form.valid_duration_hours =
+      row.valid_duration_hours === null || row.valid_duration_hours === undefined
+        ? null
+        : Number(row.valid_duration_hours || 0);
     form.discount_type = String(row.discount_type || 'fixed');
     form.discount_scope = String(row.discount_scope || 'first_month');
     form.discount_value = Number(row.discount_value_raw ?? row.discount_value ?? 0);
@@ -469,7 +496,8 @@ async function openCampaignDialog(row?: CouponCampaignRecord) {
     form.billing_cycles = Array.isArray(row.billing_cycles) ? [...row.billing_cycles] : [];
     form.product_ids = Array.isArray(row.product_ids) ? row.product_ids.map(Number).filter(Boolean) : [];
     form.first_order_only = Boolean(row.first_order_only);
-    form.per_user_limit = row.per_user_limit === null || row.per_user_limit === undefined ? null : Number(row.per_user_limit || 0);
+    form.per_user_limit =
+      row.per_user_limit === null || row.per_user_limit === undefined ? null : Number(row.per_user_limit || 0);
     form.status = Number(row.status ?? 1);
     form.sort_order = Number(row.sort_order || 0);
     form.description = String(row.description || '');
@@ -551,7 +579,12 @@ function isRowBusy(rowId: number | string) {
   return Boolean(rowActionState[rowKey(rowId)]);
 }
 
-async function runRowAction(row: CouponCampaignRecord, action: string, fallbackMessage: string, task: () => Promise<void>) {
+async function runRowAction(
+  row: CouponCampaignRecord,
+  action: string,
+  fallbackMessage: string,
+  task: () => Promise<void>,
+) {
   const key = rowKey(row.id);
   if (!canManage.value) {
     MessagePlugin.warning('您没有管理优惠券活动的权限');
@@ -631,8 +664,16 @@ function handleDelete(row: CouponCampaignRecord) {
 function mobileActionOptions(row: CouponCampaignRecord) {
   return [
     { content: '编辑', value: 'edit', disabled: campaignEditDisabled(row) },
-    { content: '立即发放', value: 'trigger', disabled: !canManage.value || Number(row.status) !== 1 || isRowBusy(row.id) },
-    { content: Number(row.status) === 1 ? '停用' : '启用', value: 'toggle', disabled: !canManage.value || isRowBusy(row.id) },
+    {
+      content: '立即发放',
+      value: 'trigger',
+      disabled: !canManage.value || Number(row.status) !== 1 || isRowBusy(row.id),
+    },
+    {
+      content: Number(row.status) === 1 ? '停用' : '启用',
+      value: 'toggle',
+      disabled: !canManage.value || isRowBusy(row.id),
+    },
     { content: '删除', value: 'delete', disabled: campaignDeleteDisabled(row) },
   ];
 }
@@ -656,6 +697,10 @@ function campaignMobileRows(row: CouponCampaignRecord) {
 
 function handleCampaignCardAction(row: CouponCampaignRecord, action: unknown) {
   handleMobileAction(action, row);
+}
+
+function handleMobileActionHandler(row: CouponCampaignRecord) {
+  return (data: DropdownOption) => handleMobileAction(data.value, row);
 }
 
 function handleMobileAction(action: unknown, row: CouponCampaignRecord) {
@@ -689,7 +734,6 @@ function scheduleText(row: CouponCampaignRecord) {
   const dayText = weekdays.length ? weekdays.map((item) => map.get(Number(item)) || item).join('、') : '未配置星期';
   return `${dayText} ${row.trigger_time || '未配置时间'}`;
 }
-
 
 onMounted(async () => {
   await loadData();

@@ -2,371 +2,409 @@
   <div class="coupons-page">
     <!-- 优惠券列表 -->
     <template v-if="activeTab === 'coupons'">
-    <t-alert
-      v-if="!couponFeatureEnabled"
-      theme="warning"
-      message="当前环境未启用优惠券功能，新增、编辑、启停和删除操作已禁用。"
-    />
+      <t-alert
+        v-if="!couponFeatureEnabled"
+        theme="warning"
+        message="当前环境未启用优惠券功能，新增、编辑、启停和删除操作已禁用。"
+      />
 
-    <t-card :bordered="false">
-      <div class="coupons-filter">
-        <t-input
-          v-model="filters.keyword"
-          clearable
-          placeholder="搜索优惠券名称 / 描述"
-          @enter="handleSearch"
-          @clear="handleSearch"
-        >
-          <template #suffix-icon><search-icon /></template>
-        </t-input>
-        <t-select v-model="filters.status" clearable placeholder="状态" @change="handleSearch">
-          <t-option value="1" label="生效中" />
-          <t-option value="0" label="已停用" />
-          <t-option value="expired" label="已过期" />
-        </t-select>
-        <t-select v-model="filters.discount_type" clearable placeholder="类型" @change="handleSearch">
-          <t-option value="fixed" label="满减券" />
-          <t-option value="percentage" label="折扣券" />
-        </t-select>
-        <t-select v-model="filters.discount_scope" clearable placeholder="优惠阶段" @change="handleSearch">
-          <t-option value="first_month" label="首月优惠" />
-          <t-option value="recurring" label="持续优惠" />
-          <t-option value="renew" label="续费优惠" />
-        </t-select>
-        <t-select v-model="filters.distribution_type" clearable placeholder="发放方式" @change="handleSearch">
-          <t-option value="public" label="公开优惠券" />
-          <t-option value="private" label="私有优惠券" />
-        </t-select>
-        <t-button theme="primary" :disabled="!couponFeatureEnabled || !canManage" @click="openCouponDialog()">
-          <template #icon><add-icon /></template>
-          新增优惠券
-        </t-button>
-      </div>
-
-      <div v-if="!isMobile" class="table-scroll">
-        <t-table row-key="id" :data="coupons" :columns="columns" :loading="loading" hover table-layout="fixed">
-          <template #coupon="{ row }">
-            <div class="coupon-main">
-              <div class="coupon-title-row">
-                <strong>{{ row.name || '-' }}</strong>
-                <t-tag size="small" variant="light">{{ row.distribution_type_label || distributionLabel(row.distribution_type) }}</t-tag>
-                <t-tag v-if="row.coupon_campaign_name" size="small" theme="warning" variant="light">
-                  活动：{{ row.coupon_campaign_name }}
-                </t-tag>
-                <t-tag v-if="couponHasLockedFields(row)" size="small" theme="default" variant="light">部分锁定</t-tag>
-              </div>
-              <span>{{ row.description || '暂无描述' }}</span>
-            </div>
-          </template>
-
-          <template #rule="{ row }">
-            <div class="coupon-meta">
-              <div class="coupon-title-row">
-                <t-tag size="small" :theme="row.discount_type === 'fixed' ? 'danger' : 'warning'" variant="light">
-                  {{ row.discount_type_label || discountTypeLabel(row.discount_type) }}
-                </t-tag>
-                <t-tag size="small" theme="primary" variant="light">
-                  {{ row.discount_scope_label || discountScopeLabel(row.discount_scope) }}
-                </t-tag>
-              </div>
-              <strong>{{ row.discount_label || formatDiscount(row) }}</strong>
-              <span>最低消费：{{ moneyText(row.min_amount) }}</span>
-              <span v-if="row.max_discount_amount">最高优惠：{{ moneyText(row.max_discount_amount) }}</span>
-            </div>
-          </template>
-
-          <template #usage="{ row }">
-            <div class="coupon-meta">
-              <span>已使用 {{ row.used_count || 0 }} 次</span>
-              <span>{{ formatLimitText(row.total_usage_limit, row.remaining_stock, '总量') }}</span>
-              <span>{{ formatLimitText(row.per_user_limit, null, '每人') }}</span>
-            </div>
-          </template>
-
-          <template #status="{ row }">
-            <t-tag :theme="statusTheme(row.display_status)" variant="light">
-              {{ row.display_status_label || statusLabel(row) }}
-            </t-tag>
-          </template>
-
-          <template #validity="{ row }">
-            <div class="coupon-meta">
-              <span>{{ row.validity_text || validityText(row) }}</span>
-              <span>{{ row.display_status_reason || '-' }}</span>
-            </div>
-          </template>
-
-          <template #updatedAt="{ row }">{{ formatDateTime(row.updated_at) }}</template>
-
-          <template #operation="{ row }">
-            <t-space v-if="!isMobile" size="small">
-              <t-button size="small" variant="text" theme="primary" :disabled="couponEditDisabled(row)" @click="openCouponDialog(row)">
-                编辑
-              </t-button>
-              <t-button
-                size="small"
-                variant="text"
-                :loading="actionLoading === row.id"
-                :disabled="!couponFeatureEnabled || !canManage"
-                @click="handleToggleStatus(row)"
-              >
-                {{ Number(row.status) === 1 ? '停用' : '启用' }}
-              </t-button>
-              <t-button
-                size="small"
-                variant="text"
-                theme="danger"
-                :disabled="couponDeleteDisabled(row)"
-                @click="handleDelete(row)"
-              >
-                删除
-              </t-button>
-            </t-space>
-            <t-dropdown v-else :options="mobileActionOptions(row)" @click="(data: { value: unknown }) => handleMobileAction(data.value, row)">
-              <t-button size="small" variant="text">更多</t-button>
-            </t-dropdown>
-          </template>
-        </t-table>
-      </div>
-
-      <div v-else class="coupon-mobile-list">
-        <t-loading :loading="loading" size="small">
-          <div v-if="coupons.length" class="coupon-mobile-stack">
-            <MobileRecordCard
-              v-for="row in coupons"
-              :key="row.id"
-              :title="row.name || '-'"
-              :subtitle="row.distribution_type_label || distributionLabel(row.distribution_type)"
-              :description="row.description || ''"
-              :status-label="row.display_status_label || statusLabel(row)"
-              :status-theme="statusTheme(row.display_status)"
-              :rows="couponMobileRows(row)"
-              :action-options="mobileActionOptions(row)"
-              @action="handleCouponCardAction(row, $event)"
-            />
-          </div>
-          <t-empty v-else-if="!loading" description="暂无优惠券" />
-        </t-loading>
-      </div>
-
-      <div v-if="total > 0" class="pagination-row">
-        <t-pagination
-          :current="page"
-          :page-size="pageSize"
-          :total="total"
-          :page-size-options="[20, 50, 100]"
-          show-jumper
-          @change="handlePageChange"
-        />
-      </div>
-    </t-card>
-
-    <t-drawer
-      v-model:visible="dialogVisible"
-      :header="form.id ? '编辑优惠券' : '新增优惠券'"
-      size="820px"
-      class="coupon-edit-drawer"
-      :close-on-overlay-click="false"
-      :footer="false"
-      @close="handleDialogClosed"
-    >
-      <div class="coupon-drawer-shell">
-        <t-alert
-          v-if="lockedFields.length"
-          theme="warning"
-          :message="`${lockReason}，部分关键字段不允许修改`"
-          style="margin-bottom: 16px"
-        />
-        <t-form ref="formRef" class="coupon-drawer-form" :data="form" :rules="formRules" label-align="top">
-          <section class="coupon-drawer-section" data-title="基础信息">
-            <div class="coupon-form-grid">
-              <t-form-item label="优惠券名称" name="name">
-                <t-input v-model="form.name" maxlength="120" placeholder="例如：新客首单立减券" />
-              </t-form-item>
-              <t-form-item label="发放方式" name="distribution_type">
-                <t-select v-model="form.distribution_type" :disabled="isFieldLocked('distribution_type')">
-                  <t-option value="public" label="公开优惠券" />
-                  <t-option value="private" label="私有优惠券" />
-                </t-select>
-              </t-form-item>
-              <t-form-item label="优惠类型" name="discount_type">
-                <t-select v-model="form.discount_type" :disabled="isFieldLocked('discount_type')">
-                  <t-option value="fixed" label="满减券" />
-                  <t-option value="percentage" label="折扣券" />
-                </t-select>
-              </t-form-item>
-              <t-form-item label="优惠阶段" name="discount_scope">
-                <t-select v-model="form.discount_scope" :disabled="isFieldLocked('discount_scope')">
-                  <t-option value="first_month" label="首月优惠" />
-                  <t-option value="recurring" label="持续优惠" />
-                  <t-option value="renew" label="续费优惠" />
-                </t-select>
-              </t-form-item>
-            </div>
-          </section>
-
-          <section class="coupon-drawer-section" data-title="优惠规则">
-            <div class="coupon-form-grid">
-              <t-form-item :label="form.discount_type === 'percentage' ? '优惠值（百分比）' : '优惠金额'" name="discount_value">
-                <t-input-number v-model="form.discount_value" :min="0" :max="form.discount_type === 'percentage' ? 100 : 999999999" />
-              </t-form-item>
-              <t-form-item label="最低消费金额" name="min_amount">
-                <t-input-number v-model="form.min_amount" :min="0" :decimal-places="2" />
-              </t-form-item>
-              <t-form-item label="最高优惠金额" name="max_discount_amount">
-                <t-input-number v-model="form.max_discount_amount" :min="0" :decimal-places="2" placeholder="留空表示不限制" />
-              </t-form-item>
-              <t-form-item label="总发放次数上限" name="total_usage_limit">
-                <t-input-number v-model="form.total_usage_limit" :min="0" placeholder="留空表示不限" />
-              </t-form-item>
-              <t-form-item label="每人可用次数" name="per_user_limit">
-                <t-input-number v-model="form.per_user_limit" :min="0" placeholder="留空表示不限" />
-              </t-form-item>
-              <t-form-item label="排序值" name="sort_order">
-                <t-input-number v-model="form.sort_order" :min="0" />
-              </t-form-item>
-              <t-form-item label="状态" name="status">
-                <div class="coupon-switch-line">
-                  <span>停用</span>
-                  <t-switch v-model="form.status" :custom-value="[1, 0]" />
-                  <span>启用</span>
-                </div>
-              </t-form-item>
-              <t-form-item label="仅限首单可用" name="first_order_only">
-                <t-switch v-model="form.first_order_only" />
-              </t-form-item>
-            </div>
-          </section>
-
-          <section class="coupon-drawer-section" data-title="时间与范围">
-            <div class="coupon-form-grid">
-              <t-form-item label="开始时间" name="starts_at">
-                <t-date-picker
-                  v-model="form.starts_at"
-                  clearable
-                  enable-time-picker
-                  mode="date"
-                  format="YYYY-MM-DD HH:mm:ss"
-                  value-type="YYYY-MM-DD HH:mm:ss"
-                  placeholder="请选择开始时间，留空立即生效"
-                />
-              </t-form-item>
-              <t-form-item label="结束时间" name="expires_at">
-                <t-date-picker
-                  v-model="form.expires_at"
-                  clearable
-                  enable-time-picker
-                  mode="date"
-                  format="YYYY-MM-DD HH:mm:ss"
-                  value-type="YYYY-MM-DD HH:mm:ss"
-                  placeholder="请选择结束时间，留空长期有效"
-                />
-              </t-form-item>
-              <t-form-item label="适用计费周期" name="billing_cycles" class="form-span-2">
-                <t-select v-model="form.billing_cycles" multiple clearable placeholder="留空表示全部周期可用">
-                  <t-option v-for="item in billingCycleOptions" :key="item.value" :label="item.label" :value="item.value" />
-                </t-select>
-              </t-form-item>
-              <t-form-item label="适用商品" name="product_ids" class="form-span-2">
-                <ProductBindingTreeSelect
-                  v-model="form.product_ids"
-                  mode="batch"
-                  placeholder="按分类批量选择适用商品，留空表示全站商品可用"
-                />
-              </t-form-item>
-            </div>
-          </section>
-
-          <section class="coupon-drawer-section" data-title="发放用户">
-            <div class="user-picker-head">
-              <div>
-                <strong>发放用户</strong>
-                <span>{{ form.distribution_type === 'private' ? '私有优惠券至少选择一个用户' : '公开优惠券无需指定客户' }}</span>
-              </div>
-              <t-tag :theme="form.distribution_type === 'private' ? 'primary' : 'default'" variant="light">
-                {{ distributionLabel(form.distribution_type) }}
-              </t-tag>
-            </div>
-            <div v-if="form.distribution_type === 'private'" class="user-picker-body">
-              <div class="user-search-row">
-                <t-input
-                  v-model="userSearchKeyword"
-                  clearable
-                  :loading="userOptionsLoading"
-                  placeholder="搜索用户 ID / 邮箱 / 手机号 / 昵称"
-                  @enter="searchUsers"
-                  @clear="searchUsers"
-                />
-              </div>
-              <div class="user-picker-grid">
-                <div>
-                  <div class="user-picker-title">搜索结果 {{ userSearchResults.length }} 条</div>
-                  <div class="user-list">
-                    <button v-for="item in userSearchResults" :key="item.value" type="button" @click="toggleUserSelection(item)">
-                      <strong>{{ item.title }}</strong>
-                      <span>{{ item.meta }}</span>
-                      <em>{{ form.user_ids.includes(item.value) ? '已选' : '添加' }}</em>
-                    </button>
-                    <t-empty v-if="!userSearchResults.length" description="暂无搜索结果" />
-                  </div>
-                </div>
-                <div>
-                  <div class="user-picker-title">已选用户 {{ selectedUsers.length }} 人</div>
-                  <div class="user-list">
-                    <button v-for="item in selectedUsers" :key="item.value" type="button" @click="removeSelectedUser(item.value)">
-                      <strong>{{ item.title }}</strong>
-                      <span>{{ item.meta }}</span>
-                      <em>移除</em>
-                    </button>
-                    <t-empty v-if="!selectedUsers.length" description="还没有选择发放用户" />
-                  </div>
-                </div>
-              </div>
-            </div>
-            <t-alert v-else theme="info" message="公开优惠券会在客户端公开列表展示，用户领取后再使用。" />
-          </section>
-
-          <section class="coupon-drawer-section" data-title="备注">
-            <div class="coupon-form-grid">
-              <t-form-item label="描述" name="description" class="form-span-2">
-                <t-textarea v-model="form.description" :autosize="{ minRows: 3, maxRows: 5 }" maxlength="255" />
-              </t-form-item>
-              <t-form-item label="后台备注" name="remark" class="form-span-2">
-                <t-textarea v-model="form.remark" :autosize="{ minRows: 3, maxRows: 5 }" maxlength="255" />
-              </t-form-item>
-            </div>
-          </section>
-        </t-form>
-
-        <div class="coupon-drawer-footer">
-          <t-button variant="outline" @click="closeCouponDrawer">取消</t-button>
-          <t-button theme="primary" :loading="saving" @click="submitForm">保存更改</t-button>
+      <t-card :bordered="false">
+        <div class="coupons-filter">
+          <t-input
+            v-model="filters.keyword"
+            clearable
+            placeholder="搜索优惠券名称 / 描述"
+            @enter="handleSearch"
+            @clear="handleSearch"
+          >
+            <template #suffix-icon><search-icon /></template>
+          </t-input>
+          <t-select v-model="filters.status" clearable placeholder="状态" @change="handleSearch">
+            <t-option value="1" label="生效中" />
+            <t-option value="0" label="已停用" />
+            <t-option value="expired" label="已过期" />
+          </t-select>
+          <t-select v-model="filters.discount_type" clearable placeholder="类型" @change="handleSearch">
+            <t-option value="fixed" label="满减券" />
+            <t-option value="percentage" label="折扣券" />
+          </t-select>
+          <t-select v-model="filters.discount_scope" clearable placeholder="优惠阶段" @change="handleSearch">
+            <t-option value="first_month" label="首月优惠" />
+            <t-option value="recurring" label="持续优惠" />
+            <t-option value="renew" label="续费优惠" />
+          </t-select>
+          <t-select v-model="filters.distribution_type" clearable placeholder="发放方式" @change="handleSearch">
+            <t-option value="public" label="公开优惠券" />
+            <t-option value="private" label="私有优惠券" />
+          </t-select>
+          <t-button theme="primary" :disabled="!couponFeatureEnabled || !canManage" @click="openCouponDialog()">
+            <template #icon><add-icon /></template>
+            新增优惠券
+          </t-button>
         </div>
-      </div>
-    </t-drawer>
+
+        <div v-if="!isMobile" class="table-scroll">
+          <t-table row-key="id" :data="coupons" :columns="columns" :loading="loading" hover table-layout="fixed">
+            <template #coupon="{ row }">
+              <div class="coupon-main">
+                <div class="coupon-title-row">
+                  <strong>{{ row.name || '-' }}</strong>
+                  <t-tag size="small" variant="light">{{
+                    row.distribution_type_label || distributionLabel(row.distribution_type)
+                  }}</t-tag>
+                  <t-tag v-if="row.coupon_campaign_name" size="small" theme="warning" variant="light">
+                    活动：{{ row.coupon_campaign_name }}
+                  </t-tag>
+                  <t-tag v-if="couponHasLockedFields(row)" size="small" theme="default" variant="light">部分锁定</t-tag>
+                </div>
+                <span>{{ row.description || '暂无描述' }}</span>
+              </div>
+            </template>
+
+            <template #rule="{ row }">
+              <div class="coupon-meta">
+                <div class="coupon-title-row">
+                  <t-tag size="small" :theme="row.discount_type === 'fixed' ? 'danger' : 'warning'" variant="light">
+                    {{ row.discount_type_label || discountTypeLabel(row.discount_type) }}
+                  </t-tag>
+                  <t-tag size="small" theme="primary" variant="light">
+                    {{ row.discount_scope_label || discountScopeLabel(row.discount_scope) }}
+                  </t-tag>
+                </div>
+                <strong>{{ row.discount_label || formatDiscount(row) }}</strong>
+                <span>最低消费：{{ moneyText(row.min_amount) }}</span>
+                <span v-if="row.max_discount_amount">最高优惠：{{ moneyText(row.max_discount_amount) }}</span>
+              </div>
+            </template>
+
+            <template #usage="{ row }">
+              <div class="coupon-meta">
+                <span>已使用 {{ row.used_count || 0 }} 次</span>
+                <span>{{ formatLimitText(row.total_usage_limit, row.remaining_stock, '总量') }}</span>
+                <span>{{ formatLimitText(row.per_user_limit, null, '每人') }}</span>
+              </div>
+            </template>
+
+            <template #status="{ row }">
+              <t-tag :theme="statusTheme(row.display_status)" variant="light">
+                {{ row.display_status_label || statusLabel(row) }}
+              </t-tag>
+            </template>
+
+            <template #validity="{ row }">
+              <div class="coupon-meta">
+                <span>{{ row.validity_text || validityText(row) }}</span>
+                <span>{{ row.display_status_reason || '-' }}</span>
+              </div>
+            </template>
+
+            <template #updatedAt="{ row }">{{ formatDateTime(row.updated_at) }}</template>
+
+            <template #operation="{ row }">
+              <t-space v-if="!isMobile" size="small">
+                <t-button
+                  size="small"
+                  variant="text"
+                  theme="primary"
+                  :disabled="couponEditDisabled(row)"
+                  @click="openCouponDialog(row)"
+                >
+                  编辑
+                </t-button>
+                <t-button
+                  size="small"
+                  variant="text"
+                  :loading="actionLoading === row.id"
+                  :disabled="!couponFeatureEnabled || !canManage"
+                  @click="handleToggleStatus(row)"
+                >
+                  {{ Number(row.status) === 1 ? '停用' : '启用' }}
+                </t-button>
+                <t-button
+                  size="small"
+                  variant="text"
+                  theme="danger"
+                  :disabled="couponDeleteDisabled(row)"
+                  @click="handleDelete(row)"
+                >
+                  删除
+                </t-button>
+              </t-space>
+              <t-dropdown v-else :options="mobileActionOptions(row)" @click="handleMobileActionHandler(row)">
+                <t-button size="small" variant="text">更多</t-button>
+              </t-dropdown>
+            </template>
+          </t-table>
+        </div>
+
+        <div v-else class="coupon-mobile-list">
+          <t-loading :loading="loading" size="small">
+            <div v-if="coupons.length" class="coupon-mobile-stack">
+              <mobile-record-card
+                v-for="row in coupons"
+                :key="row.id"
+                :title="row.name || '-'"
+                :subtitle="row.distribution_type_label || distributionLabel(row.distribution_type)"
+                :description="row.description || ''"
+                :status-label="row.display_status_label || statusLabel(row)"
+                :status-theme="statusTheme(row.display_status)"
+                :rows="couponMobileRows(row)"
+                :action-options="mobileActionOptions(row)"
+                @action="handleCouponCardAction(row, $event)"
+              />
+            </div>
+            <t-empty v-else-if="!loading" description="暂无优惠券" />
+          </t-loading>
+        </div>
+
+        <div v-if="total > 0" class="pagination-row">
+          <t-pagination
+            :current="page"
+            :page-size="pageSize"
+            :total="total"
+            :page-size-options="[20, 50, 100]"
+            show-jumper
+            @change="handlePageChange"
+          />
+        </div>
+      </t-card>
+
+      <t-drawer
+        v-model:visible="dialogVisible"
+        :header="form.id ? '编辑优惠券' : '新增优惠券'"
+        size="820px"
+        class="coupon-edit-drawer"
+        :close-on-overlay-click="false"
+        :footer="false"
+        @close="handleDialogClosed"
+      >
+        <div class="coupon-drawer-shell">
+          <t-alert
+            v-if="lockedFields.length"
+            theme="warning"
+            :message="`${lockReason}，部分关键字段不允许修改`"
+            style="margin-bottom: 16px"
+          />
+          <t-form ref="formRef" class="coupon-drawer-form" :data="form" :rules="formRules" label-align="top">
+            <section class="coupon-drawer-section" data-title="基础信息">
+              <div class="coupon-form-grid">
+                <t-form-item label="优惠券名称" name="name">
+                  <t-input v-model="form.name" maxlength="120" placeholder="例如：新客首单立减券" />
+                </t-form-item>
+                <t-form-item label="发放方式" name="distribution_type">
+                  <t-select v-model="form.distribution_type" :disabled="isFieldLocked('distribution_type')">
+                    <t-option value="public" label="公开优惠券" />
+                    <t-option value="private" label="私有优惠券" />
+                  </t-select>
+                </t-form-item>
+                <t-form-item label="优惠类型" name="discount_type">
+                  <t-select v-model="form.discount_type" :disabled="isFieldLocked('discount_type')">
+                    <t-option value="fixed" label="满减券" />
+                    <t-option value="percentage" label="折扣券" />
+                  </t-select>
+                </t-form-item>
+                <t-form-item label="优惠阶段" name="discount_scope">
+                  <t-select v-model="form.discount_scope" :disabled="isFieldLocked('discount_scope')">
+                    <t-option value="first_month" label="首月优惠" />
+                    <t-option value="recurring" label="持续优惠" />
+                    <t-option value="renew" label="续费优惠" />
+                  </t-select>
+                </t-form-item>
+              </div>
+            </section>
+
+            <section class="coupon-drawer-section" data-title="优惠规则">
+              <div class="coupon-form-grid">
+                <t-form-item
+                  :label="form.discount_type === 'percentage' ? '优惠值（百分比）' : '优惠金额'"
+                  name="discount_value"
+                >
+                  <t-input-number
+                    v-model="form.discount_value"
+                    :min="0"
+                    :max="form.discount_type === 'percentage' ? 100 : 999999999"
+                  />
+                </t-form-item>
+                <t-form-item label="最低消费金额" name="min_amount">
+                  <t-input-number v-model="form.min_amount" :min="0" :decimal-places="2" />
+                </t-form-item>
+                <t-form-item label="最高优惠金额" name="max_discount_amount">
+                  <t-input-number
+                    v-model="form.max_discount_amount"
+                    :min="0"
+                    :decimal-places="2"
+                    placeholder="留空表示不限制"
+                  />
+                </t-form-item>
+                <t-form-item label="总发放次数上限" name="total_usage_limit">
+                  <t-input-number v-model="form.total_usage_limit" :min="0" placeholder="留空表示不限" />
+                </t-form-item>
+                <t-form-item label="每人可用次数" name="per_user_limit">
+                  <t-input-number v-model="form.per_user_limit" :min="0" placeholder="留空表示不限" />
+                </t-form-item>
+                <t-form-item label="排序值" name="sort_order">
+                  <t-input-number v-model="form.sort_order" :min="0" />
+                </t-form-item>
+                <t-form-item label="状态" name="status">
+                  <div class="coupon-switch-line">
+                    <span>停用</span>
+                    <t-switch v-model="form.status" :custom-value="[1, 0]" />
+                    <span>启用</span>
+                  </div>
+                </t-form-item>
+                <t-form-item label="仅限首单可用" name="first_order_only">
+                  <t-switch v-model="form.first_order_only" />
+                </t-form-item>
+              </div>
+            </section>
+
+            <section class="coupon-drawer-section" data-title="时间与范围">
+              <div class="coupon-form-grid">
+                <t-form-item label="开始时间" name="starts_at">
+                  <t-date-picker
+                    v-model="form.starts_at"
+                    clearable
+                    enable-time-picker
+                    mode="date"
+                    format="YYYY-MM-DD HH:mm:ss"
+                    value-type="YYYY-MM-DD HH:mm:ss"
+                    placeholder="请选择开始时间，留空立即生效"
+                  />
+                </t-form-item>
+                <t-form-item label="结束时间" name="expires_at">
+                  <t-date-picker
+                    v-model="form.expires_at"
+                    clearable
+                    enable-time-picker
+                    mode="date"
+                    format="YYYY-MM-DD HH:mm:ss"
+                    value-type="YYYY-MM-DD HH:mm:ss"
+                    placeholder="请选择结束时间，留空长期有效"
+                  />
+                </t-form-item>
+                <t-form-item label="适用计费周期" name="billing_cycles" class="form-span-2">
+                  <t-select v-model="form.billing_cycles" multiple clearable placeholder="留空表示全部周期可用">
+                    <t-option
+                      v-for="item in billingCycleOptions"
+                      :key="item.value"
+                      :label="item.label"
+                      :value="item.value"
+                    />
+                  </t-select>
+                </t-form-item>
+                <t-form-item label="适用商品" name="product_ids" class="form-span-2">
+                  <product-binding-tree-select
+                    v-model="form.product_ids"
+                    mode="batch"
+                    placeholder="按分类批量选择适用商品，留空表示全站商品可用"
+                  />
+                </t-form-item>
+              </div>
+            </section>
+
+            <section class="coupon-drawer-section" data-title="发放用户">
+              <div class="user-picker-head">
+                <div>
+                  <strong>发放用户</strong>
+                  <span>{{
+                    form.distribution_type === 'private' ? '私有优惠券至少选择一个用户' : '公开优惠券无需指定客户'
+                  }}</span>
+                </div>
+                <t-tag :theme="form.distribution_type === 'private' ? 'primary' : 'default'" variant="light">
+                  {{ distributionLabel(form.distribution_type) }}
+                </t-tag>
+              </div>
+              <div v-if="form.distribution_type === 'private'" class="user-picker-body">
+                <div class="user-search-row">
+                  <t-input
+                    v-model="userSearchKeyword"
+                    clearable
+                    :loading="userOptionsLoading"
+                    placeholder="搜索用户 ID / 邮箱 / 手机号 / 昵称"
+                    @enter="searchUsers"
+                    @clear="searchUsers"
+                  />
+                </div>
+                <div class="user-picker-grid">
+                  <div>
+                    <div class="user-picker-title">搜索结果 {{ userSearchResults.length }} 条</div>
+                    <div class="user-list">
+                      <button
+                        v-for="item in userSearchResults"
+                        :key="item.value"
+                        type="button"
+                        @click="toggleUserSelection(item)"
+                      >
+                        <strong>{{ item.title }}</strong>
+                        <span>{{ item.meta }}</span>
+                        <em>{{ form.user_ids.includes(item.value) ? '已选' : '添加' }}</em>
+                      </button>
+                      <t-empty v-if="!userSearchResults.length" description="暂无搜索结果" />
+                    </div>
+                  </div>
+                  <div>
+                    <div class="user-picker-title">已选用户 {{ selectedUsers.length }} 人</div>
+                    <div class="user-list">
+                      <button
+                        v-for="item in selectedUsers"
+                        :key="item.value"
+                        type="button"
+                        @click="removeSelectedUser(item.value)"
+                      >
+                        <strong>{{ item.title }}</strong>
+                        <span>{{ item.meta }}</span>
+                        <em>移除</em>
+                      </button>
+                      <t-empty v-if="!selectedUsers.length" description="还没有选择发放用户" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <t-alert v-else theme="info" message="公开优惠券会在客户端公开列表展示，用户领取后再使用。" />
+            </section>
+
+            <section class="coupon-drawer-section" data-title="备注">
+              <div class="coupon-form-grid">
+                <t-form-item label="描述" name="description" class="form-span-2">
+                  <t-textarea v-model="form.description" :autosize="{ minRows: 3, maxRows: 5 }" maxlength="255" />
+                </t-form-item>
+                <t-form-item label="后台备注" name="remark" class="form-span-2">
+                  <t-textarea v-model="form.remark" :autosize="{ minRows: 3, maxRows: 5 }" maxlength="255" />
+                </t-form-item>
+              </div>
+            </section>
+          </t-form>
+
+          <div class="coupon-drawer-footer">
+            <t-button variant="outline" @click="closeCouponDrawer">取消</t-button>
+            <t-button theme="primary" :loading="saving" @click="submitForm">保存更改</t-button>
+          </div>
+        </div>
+      </t-drawer>
     </template>
 
     <!-- 活动券管理 -->
-    <CouponCampaigns v-else />
+    <coupon-campaigns v-else />
   </div>
 </template>
-
 <script setup lang="ts">
+import { AddIcon, SearchIcon } from 'tdesign-icons-vue-next';
+import type { DropdownOption, FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
+import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import { computed, defineAsyncComponent, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { AddIcon, SearchIcon } from 'tdesign-icons-vue-next';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
-import type { FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
 
-import { adminApi, type CouponPayload, type CouponRecord } from '@/api/admin';
-import { AdminPermissions } from '@/constants/permissions';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { userApi, type AdminUser } from '@/api/user';
-import { hasAdminPermission } from '@/utils/permission';
-import { formatDateTime } from '@/utils/format';
-import { errorMessage } from '@/utils/userMessage';
+import type { CouponPayload, CouponRecord } from '@/api/admin';
+import { adminApi } from '@/api/admin';
+import type { AdminUser } from '@/api/user';
+import { userApi } from '@/api/user';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
+import { AdminPermissions } from '@/constants/permissions';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { formatDateTime } from '@/utils/format';
+import { hasAdminPermission } from '@/utils/permission';
+import { errorMessage } from '@/utils/userMessage';
 
 const CouponCampaigns = defineAsyncComponent(() => import('@/pages/products/coupon-campaigns/index.vue'));
 
@@ -379,7 +417,7 @@ interface UserOption {
   label: string;
 }
 
-type CouponForm = {
+interface CouponForm {
   id: number | null;
   name: string;
   distribution_type: string;
@@ -400,7 +438,7 @@ type CouponForm = {
   expires_at: string;
   description: string;
   remark: string;
-};
+}
 
 const billingCycleOptions = [
   { label: '月付', value: 'monthly' },
@@ -546,7 +584,6 @@ function couponHasLockedFields(row: CouponRecord): boolean {
   return Array.isArray(row.locked_fields) && row.locked_fields.length > 0;
 }
 
-
 function normalizeUserOption(row: AdminUser): UserOption {
   const id = Number(row.id);
   return {
@@ -562,7 +599,6 @@ function mergeUserOptions(items: UserOption[]) {
   items.forEach((item) => map.set(item.value, item));
   userOptions.value = Array.from(map.values());
 }
-
 
 async function loadUserOptions(keyword = '') {
   userOptionsLoading.value = true;
@@ -678,8 +714,10 @@ async function openCouponDialog(row?: CouponRecord) {
     form.product_ids = Array.isArray(row.product_ids) ? row.product_ids.map(Number).filter(Boolean) : [];
     form.first_order_only = Boolean(row.first_order_only);
     form.user_ids = Array.isArray(row.user_ids) ? row.user_ids.map(Number).filter(Boolean) : [];
-    form.total_usage_limit = row.total_usage_limit === null || row.total_usage_limit === undefined ? null : Number(row.total_usage_limit || 0);
-    form.per_user_limit = row.per_user_limit === null || row.per_user_limit === undefined ? null : Number(row.per_user_limit || 0);
+    form.total_usage_limit =
+      row.total_usage_limit === null || row.total_usage_limit === undefined ? null : Number(row.total_usage_limit || 0);
+    form.per_user_limit =
+      row.per_user_limit === null || row.per_user_limit === undefined ? null : Number(row.per_user_limit || 0);
     form.status = Number(row.status ?? 1);
     form.sort_order = Number(row.sort_order || 0);
     form.starts_at = String(row.starts_at || '');
@@ -817,7 +855,11 @@ function handleDelete(row: CouponRecord) {
 function mobileActionOptions(row: CouponRecord) {
   return [
     { content: '编辑', value: 'edit', disabled: couponEditDisabled(row) },
-    { content: Number(row.status) === 1 ? '停用' : '启用', value: 'toggle', disabled: !couponFeatureEnabled.value || !canManage.value },
+    {
+      content: Number(row.status) === 1 ? '停用' : '启用',
+      value: 'toggle',
+      disabled: !couponFeatureEnabled.value || !canManage.value,
+    },
     { content: '删除', value: 'delete', disabled: couponDeleteDisabled(row) },
   ];
 }
@@ -840,6 +882,10 @@ function couponMobileRows(row: CouponRecord) {
 
 function handleCouponCardAction(row: CouponRecord, action: unknown) {
   handleMobileAction(action, row);
+}
+
+function handleMobileActionHandler(row: CouponRecord) {
+  return (data: DropdownOption) => handleMobileAction(data.value, row);
 }
 
 function handleMobileAction(action: unknown, row: CouponRecord) {
@@ -907,7 +953,6 @@ function validityText(row: CouponRecord) {
   if (!row.starts_at && !row.expires_at) return '长期有效';
   return `${row.starts_at || '立即'} 至 ${row.expires_at || '长期'}`;
 }
-
 
 onMounted(async () => {
   await Promise.all([loadData(), loadUserOptions('')]);

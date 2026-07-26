@@ -67,7 +67,9 @@
         <template #actions="{ row }">
           <t-space size="small">
             <t-button v-if="canManage" theme="primary" variant="text" @click="openEditDialog(row)">编辑</t-button>
-            <t-button v-if="canEditStaffIdentity" theme="warning" variant="text" @click="openResetDialog(row)">重置密码</t-button>
+            <t-button v-if="canEditStaffIdentity" theme="warning" variant="text" @click="openResetDialog(row)"
+              >重置密码</t-button
+            >
             <t-button
               v-if="canManage"
               :theme="Number(row.status) === 1 ? 'danger' : 'success'"
@@ -76,7 +78,9 @@
             >
               {{ Number(row.status) === 1 ? '停用' : '启用' }}
             </t-button>
-            <t-button v-if="canDeleteStaff(row)" theme="danger" variant="text" @click="handleDelete(row)">删除</t-button>
+            <t-button v-if="canDeleteStaff(row)" theme="danger" variant="text" @click="handleDelete(row)"
+              >删除</t-button
+            >
           </t-space>
         </template>
       </t-table>
@@ -84,7 +88,7 @@
       <div v-else class="staff-mobile-list">
         <t-loading :loading="loading" size="small">
           <div v-if="list.length" class="staff-mobile-stack">
-            <MobileRecordCard
+            <mobile-record-card
               v-for="row in list"
               :key="row.id"
               :title="fieldValue(row.username)"
@@ -94,7 +98,10 @@
               :status-theme="Number(row.status) === 1 ? 'success' : 'danger'"
               :rows="[
                 { label: '昵称', value: fieldValue(row.nickname) },
-                { label: '权限', value: row.permissions?.includes('*') ? '全部权限' : `${row.permissions?.length || 0} 项` },
+                {
+                  label: '权限',
+                  value: row.permissions?.includes('*') ? '全部权限' : `${row.permissions?.length || 0} 项`,
+                },
                 { label: '最近登录', value: fieldValue(row.last_login_at) },
                 { label: '登录IP', value: fieldValue(row.last_login_ip) },
               ]"
@@ -126,7 +133,11 @@
       <t-form ref="formRef" :data="form" :rules="formRules" label-align="top">
         <div class="staff-form-grid">
           <t-form-item label="登录账号" name="username">
-            <t-input v-model="form.username" :disabled="form.id ? !canEditStaffIdentity : false" placeholder="字母、数字、下划线、点、横线或 @" />
+            <t-input
+              v-model="form.username"
+              :disabled="form.id ? !canEditStaffIdentity : false"
+              placeholder="字母、数字、下划线、点、横线或 @"
+            />
           </t-form-item>
           <t-form-item label="昵称" name="nickname">
             <t-input v-model="form.nickname" />
@@ -168,22 +179,22 @@
     </t-dialog>
   </div>
 </template>
-
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
-import { SearchIcon, UserAddIcon } from 'tdesign-icons-vue-next';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
-import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
-
-import { adminStaffApi, type CreateStaffPayload, type StaffPayload, type StaffRecord, type StaffRoleOption } from '@/api/admin-staff';
-import MobileRecordCard from '@/components/mobile-record-card/index.vue';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { errorMessage } from '@/utils/userMessage';
-import { required } from '@/utils/formRules';
-import { AdminPermissions, hasPermissionInList } from '@/constants/permissions';
-import { useUserStore } from '@/store';
-
 import './index.less';
+
+import { SearchIcon, UserAddIcon } from 'tdesign-icons-vue-next';
+import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
+import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { computed, onMounted, reactive, ref } from 'vue';
+
+import type { CreateStaffPayload, StaffPayload, StaffRecord, StaffRoleOption } from '@/api/admin-staff';
+import { adminStaffApi } from '@/api/admin-staff';
+import MobileRecordCard from '@/components/mobile-record-card/index.vue';
+import { AdminPermissions, hasPermissionInList } from '@/constants/permissions';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useUserStore } from '@/store';
+import { required } from '@/utils/formRules';
+import { errorMessage } from '@/utils/userMessage';
 
 defineOptions({
   name: 'AdminStaff',
@@ -237,25 +248,17 @@ const formRules = computed<Record<string, FormRule[]>>(() => ({
   username: [
     required('请输入登录账号'),
     {
-      pattern: /^[A-Za-z0-9_.@-]+$/,
+      pattern: /^[\w.@-]+$/,
       message: '登录账号仅支持字母、数字、下划线、点、横线和 @',
       type: 'error',
       trigger: 'blur',
     },
   ],
   role_id: [required('请选择角色')],
-  password: form.id
-    ? []
-    : [
-        required('请输入初始密码'),
-        { min: 8, message: '初始密码至少 8 位', type: 'error' },
-      ],
+  password: form.id ? [] : [required('请输入初始密码'), { min: 8, message: '初始密码至少 8 位', type: 'error' }],
 }));
 const resetRules: Record<string, FormRule[]> = {
-  password: [
-    required('请输入新密码'),
-    { min: 8, message: '新密码至少 8 位', type: 'error' },
-  ],
+  password: [required('请输入新密码'), { min: 8, message: '新密码至少 8 位', type: 'error' }],
   password_confirmation: [required('请再次输入新密码')],
 };
 const columns: PrimaryTableCol<TableRowData>[] = [
@@ -508,5 +511,4 @@ function hasPermission(permission: string) {
 function canDeleteStaff(row: StaffRecord) {
   return canEditStaffIdentity.value && Number(row.status) !== 1 && Number(row.id) !== Number(userStore.userInfo?.id);
 }
-
 </script>

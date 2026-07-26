@@ -1,7 +1,7 @@
 <template>
   <t-loading :loading="loading" show-overlay>
     <div class="dashboard-page">
-      <TopPanel :stats="dashboardStats" />
+      <top-panel :stats="dashboardStats" />
 
       <section class="chart-grid">
         <t-card :bordered="false" title="商品收入占比" :subtitle="monthLabel || '本月'">
@@ -31,28 +31,40 @@
             <strong>{{ formatCurrency(row.amount) }}</strong>
           </template>
           <template #status="{ row }">
-            <StatusTag :status-map="INVOICE_STATUS_MAP" :status="row.status" />
+            <status-tag :status-map="INVOICE_STATUS_MAP" :status="row.status" />
           </template>
           <template #created_at="{ row }">
             <span class="muted">{{ formatDateTime(row.created_at) }}</span>
           </template>
         </t-table>
         <t-empty v-else title="暂无最近账单" description="有新购、续费或充值账单后会显示在这里。">
-          <t-button theme="primary" variant="outline" @click="router.push('/admin/finance/invoices')">进入账单列表</t-button>
+          <t-button theme="primary" variant="outline" @click="router.push('/admin/finance/invoices')"
+            >进入账单列表</t-button
+          >
         </t-empty>
       </t-card>
     </div>
   </t-loading>
 </template>
-
 <script setup lang="ts">
-import echarts from '@/utils/echarts';
-import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, shallowRef, watch } from 'vue';
+import { INVOICE_STATUS_MAP } from '@shared/statusConfig';
+import {
+  computed,
+  nextTick,
+  onActivated,
+  onBeforeUnmount,
+  onDeactivated,
+  onMounted,
+  ref,
+  shallowRef,
+  watch,
+} from 'vue';
 import { useRouter } from 'vue-router';
 
-import { adminApi, type DashboardStats, type MonthlyRevenue, type RecentInvoice } from '@/api/admin';
+import type { DashboardStats, MonthlyRevenue, RecentInvoice } from '@/api/admin';
+import { adminApi } from '@/api/admin';
 import StatusTag from '@/components/status-tag/index.vue';
-import { INVOICE_STATUS_MAP } from '@shared/statusConfig';
+import echarts from '@/utils/echarts';
 import { formatDateTime } from '@/utils/format';
 
 import TopPanel from './components/TopPanel.vue';
@@ -212,7 +224,6 @@ onBeforeUnmount(() => {
   dailyChart = null;
 });
 </script>
-
 <style lang="less" scoped>
 .dashboard-page {
   display: flex;

@@ -2,16 +2,18 @@
 import type { AxiosInstance } from 'axios';
 import { isString, merge } from 'lodash-es';
 
+import { getAdminToken, removeAdminToken } from '@/app/runtime/session';
 import { ContentTypeEnum } from '@/constants';
 import router from '@/router';
-import { getAdminToken, removeAdminToken } from '@/app/runtime/session';
 import { toUserMessage } from '@/utils/userMessage';
 
 import { VAxios } from './Axios';
 import type { AxiosTransform, CreateAxiosOptions } from './AxiosTransform';
 import { formatRequestDate, joinTimestamp, setObjToUrlParams } from './utils';
 
-const host = String(import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '');
+const host = String(import.meta.env.VITE_API_BASE_URL || '')
+  .trim()
+  .replace(/\/+$/, '');
 
 if (!host) {
   throw new Error('VITE_API_BASE_URL 必须配置');
@@ -164,7 +166,10 @@ const transform: AxiosTransform = {
         resolve(config);
       }, config.requestOptions.retry.delay || 1);
     });
-    config.headers = { ...config.headers, 'Content-Type': ContentTypeEnum.Json };
+    // FormData 请求不覆盖 Content-Type，避免损坏文件上传
+    if (!(config.data instanceof FormData)) {
+      config.headers = { ...config.headers, 'Content-Type': ContentTypeEnum.Json };
+    }
     return backoff.then((config) => instance.request(config));
   },
 };

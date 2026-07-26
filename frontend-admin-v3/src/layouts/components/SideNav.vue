@@ -1,6 +1,10 @@
 <template>
   <template v-if="settingStore.showSidebar">
-    <div v-if="isMobile && settingStore.isMobileSidebarVisible" :class="`${prefix}-side-nav-mask`" @click="closeMobileSidebar"></div>
+    <div
+      v-if="isMobile && settingStore.isMobileSidebarVisible"
+      :class="`${prefix}-side-nav-mask`"
+      @click="closeMobileSidebar"
+    ></div>
     <nav :class="sideNavCls" :aria-label="t('common.appName')">
       <t-menu
         :class="menuCls"
@@ -112,7 +116,7 @@ watch(
 
 const onExpanded = (value: MenuValue[]) => {
   const openedMenus = value.filter((item) => !hasMenuValue(expanded.value, item));
-  const latestOpenedMenu = openedMenus[openedMenus.length - 1];
+  const latestOpenedMenu = openedMenus.at(-1);
 
   if (latestOpenedMenu) {
     expanded.value = findExpandedMenuBranch(menu as MenuRoute[], latestOpenedMenu) || [latestOpenedMenu];
@@ -186,7 +190,7 @@ onUnmounted(() => {
 
 const goHome = () => {
   closeMobileSidebar();
-  router.push('/dashboard/base');
+  router.push('/admin/dashboard');
 };
 
 const getLogo = () => {
@@ -234,7 +238,9 @@ function removeClosedMenuDescendants(list: MenuRoute[], nextExpanded: MenuValue[
 
   if (!closedMenus.length) return nextExpanded;
 
-  return nextExpanded.filter((item) => !closedMenus.some((closedItem) => isDescendantMenuValue(list, item, closedItem)));
+  return nextExpanded.filter(
+    (item) => !closedMenus.some((closedItem) => isDescendantMenuValue(list, item, closedItem)),
+  );
 }
 
 function isDescendantMenuValue(list: MenuRoute[], target: MenuValue, ancestor: MenuValue) {

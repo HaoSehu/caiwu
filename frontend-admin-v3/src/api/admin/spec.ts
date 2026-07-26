@@ -1,5 +1,6 @@
 import { request } from '@/utils/request';
-import type { InstanceSpecRecord, CpuModelGroupRecord } from './types';
+
+import type { CpuModelGroupRecord, InstanceSpecRecord } from './types';
 
 export const instanceSpecCatalogApi = {
   list: (params?: Record<string, unknown>) =>
@@ -9,8 +10,7 @@ export const instanceSpecCatalogApi = {
 };
 
 export const cpuModelCatalogApi = {
-  list: () =>
-    request.get<{ list?: CpuModelGroupRecord[] }>({ url: '/v2/admin/cpu-model-catalog' }),
+  list: () => request.get<{ list?: CpuModelGroupRecord[] }>({ url: '/v2/admin/cpu-model-catalog' }),
   save: (data: { list: CpuModelGroupRecord[] }) =>
     request.post<{ list?: CpuModelGroupRecord[] }>({ url: '/v2/admin/cpu-model-catalog', data }),
 };
