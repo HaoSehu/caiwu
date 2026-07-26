@@ -1,10 +1,11 @@
-import { computed, reactive, ref } from 'vue';
 import { MessagePlugin } from 'tdesign-vue-next';
+import { computed, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
-import type { CouponOption, RenewCycleOption, ServiceRenewPreview } from '@/types/client';
 import { formatMoney } from '@/domains/services/useServiceCenter';
+import type { CouponOption, RenewCycleOption, ServiceRenewPreview } from '@/types/client';
+
 import { resolveErrorMessage } from './useConsoleCore';
 
 export interface UseConsoleRenewOptions {
@@ -39,7 +40,9 @@ export function useConsoleRenew(options: UseConsoleRenewOptions) {
         user_coupon_id: renewForm.user_coupon_id || undefined,
       });
       renewData.value = res.data || null;
-      renewForm.billing_cycle = String(res.data?.default_cycle || res.data?.billing_cycle || res.data?.cycles?.[0]?.billing_cycle || '');
+      renewForm.billing_cycle = String(
+        res.data?.default_cycle || res.data?.billing_cycle || res.data?.cycles?.[0]?.billing_cycle || '',
+      );
       renewForm.user_coupon_id = Number(res.data?.selected_user_coupon_id || 0);
     } catch (error: unknown) {
       MessagePlugin.error(resolveErrorMessage(error, '加载续费信息失败'));

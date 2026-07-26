@@ -2,6 +2,7 @@ import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 
 import clientApi from '@/api/client';
 import type { ConsoleRuntimeInfo, ConsoleServiceDetail } from '@/types/client';
+
 import { mergeConsoleDetail, normalizeConsoleDetail, resolveErrorMessage } from './useConsoleCore';
 
 export const POWER_LABELS: Record<string, string> = {

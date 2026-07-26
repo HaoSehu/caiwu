@@ -24,10 +24,7 @@ interface CaptchaInstance {
 
 declare global {
   interface Window {
-    initGeetest4?: (
-      options: Record<string, unknown>,
-      callback: (instance: CaptchaInstance) => void,
-    ) => void;
+    initGeetest4?: (options: Record<string, unknown>, callback: (instance: CaptchaInstance) => void) => void;
   }
 }
 
@@ -64,7 +61,7 @@ function normalizeCaptchaError(error: unknown, fallback = '行为验证失败，
     return new Error(mappedMessage);
   }
 
-  if (/^\p{ASCII}+$/u.test(message) && /(?:verification|vaptcha|geetest)/i.test(message)) {
+  if (/^\p{ASCII}+$/u.test(message) && /verification|vaptcha|geetest/i.test(message)) {
     return new Error(fallback);
   }
 
@@ -98,7 +95,7 @@ function appendScriptCacheKey(src: string, cacheKey: string) {
 
 function loadGeeTestScript(src: string, cacheKey = '') {
   if (typeof window === 'undefined') {
-    throw new Error('浏览器环境不可用');
+    throw new TypeError('浏览器环境不可用');
   }
 
   const scriptKey = cacheKey || src;
@@ -223,10 +220,7 @@ export function useGeeTestCaptcha(options: Record<string, unknown> = {}) {
       config.script_url || defaultConfig.script_url || '',
       import.meta.env.VITE_API_BASE_URL,
     );
-    const initGeetest4 = await loadGeeTestScript(
-      scriptUrl,
-      config.captcha_id,
-    );
+    const initGeetest4 = await loadGeeTestScript(scriptUrl, config.captcha_id);
     initPromise = new Promise((resolve, reject) => {
       try {
         initGeetest4?.(

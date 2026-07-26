@@ -1,20 +1,20 @@
-import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue';
+import { getStatusLabel, INVOICE_STATUS_MAP, INVOICE_TYPE_MAP, toSelectOptions } from '@shared/statusConfig';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { INVOICE_STATUS_MAP, INVOICE_TYPE_MAP, getStatusLabel, toSelectOptions } from '@shared/statusConfig';
 
 import clientApi from '@/api/client';
-import { formatMoney } from '@/utils/format';
-import { getErrorMessage } from '@/utils/error';
 import { useUserStore } from '@/store';
 import type {
+  ClientFinanceListParams,
   InvoiceAlipayPaymentPayload,
   InvoiceListSummary,
   InvoicePaymentMethod,
   InvoicePaymentSecurity,
   InvoiceRecord,
-  ClientFinanceListParams,
 } from '@/types/client';
+import { getErrorMessage } from '@/utils/error';
+import { formatMoney } from '@/utils/format';
 
 import { resolveQuickDateRange } from './dateFilters';
 
@@ -22,7 +22,15 @@ export type PayMethodKey = string;
 
 export const INVOICE_STATUS_OPTIONS = toSelectOptions(INVOICE_STATUS_MAP, false);
 
-export const INVOICE_TYPE_OPTIONS = ['new', 'renew', 'upgrade', 'recharge', 'deduction', 'referral_credit', 'manual'].map((value) => ({
+export const INVOICE_TYPE_OPTIONS = [
+  'new',
+  'renew',
+  'upgrade',
+  'recharge',
+  'deduction',
+  'referral_credit',
+  'manual',
+].map((value) => ({
   label: INVOICE_TYPE_MAP[value] || value,
   value,
 }));
@@ -42,7 +50,10 @@ function pickText(...values: unknown[]) {
   return '--';
 }
 
-function resolveSummaryField(row: InvoiceRecord | null | undefined, field: keyof NonNullable<InvoiceRecord['summary']> | string) {
+function resolveSummaryField(
+  row: InvoiceRecord | null | undefined,
+  field: keyof NonNullable<InvoiceRecord['summary']> | string,
+) {
   const summary = row?.summary;
   if (!summary || typeof summary !== 'object' || Array.isArray(summary)) {
     return '';
@@ -57,7 +68,10 @@ function hasProductBinding(row: InvoiceRecord | null | undefined) {
 
 function normalizeTypeFilter(value: unknown) {
   const rawTypes = Array.isArray(value) ? value : String(value || '').split(',');
-  return rawTypes.map((item) => normalizeText(item)).filter(Boolean).join(',');
+  return rawTypes
+    .map((item) => normalizeText(item))
+    .filter(Boolean)
+    .join(',');
 }
 
 export { formatMoney };
@@ -139,7 +153,9 @@ function payMethodOptionKey(method: InvoicePaymentMethod | null | undefined) {
 }
 
 function resolveListPayload(response: unknown) {
-  const payload = (response as { data?: InvoiceRecord[] | { list?: InvoiceRecord[]; total?: number } } | null | undefined)?.data;
+  const payload = (
+    response as { data?: InvoiceRecord[] | { list?: InvoiceRecord[]; total?: number } } | null | undefined
+  )?.data;
   return {
     list: payload && !Array.isArray(payload) && Array.isArray(payload.list) ? payload.list : [],
     total: payload && !Array.isArray(payload) ? Number(payload.total || 0) : 0,
@@ -178,7 +194,8 @@ export function useInvoiceList(options: { fixedTypes?: unknown; pageSize?: numbe
       page_size: filters.page_size,
     };
     if (normalizeText(filters.keyword)) params.keyword = normalizeText(filters.keyword);
-    if (filters.status !== '' && filters.status !== null && filters.status !== undefined) params.status = filters.status;
+    if (filters.status !== '' && filters.status !== null && filters.status !== undefined)
+      params.status = filters.status;
     if (fixedTypes) {
       params.type = fixedTypes;
     } else if (normalizeText(filters.type)) {
@@ -388,7 +405,9 @@ export function useInvoiceDetail() {
   const pollTimer = ref<number | null>(null);
 
   const invoiceId = computed(() => Number(route.params.id || 0));
-  const payMethods = computed<InvoicePaymentMethod[]>(() => (Array.isArray(detail.value?.pay_methods) ? detail.value?.pay_methods : []));
+  const payMethods = computed<InvoicePaymentMethod[]>(() =>
+    Array.isArray(detail.value?.pay_methods) ? detail.value?.pay_methods : [],
+  );
   const hasPayMethods = computed(() => payMethods.value.length > 0);
   const selectedPayMethodRecord = computed(
     () => payMethods.value.find((item) => payMethodOptionKey(item) === selectedPayMethod.value) || null,
@@ -396,17 +415,24 @@ export function useInvoiceDetail() {
   const selectedGatewayKey = computed(() => normalizeText(selectedPayMethodRecord.value?.key));
   const selectedPaymentType = computed(() => normalizeText(selectedPayMethodRecord.value?.payment_type));
   const selectedPayMethodName = computed(
-    () => normalizeText(selectedPayMethodRecord.value?.name) || normalizeText(selectedPayMethodRecord.value?.label) || '支付',
+    () =>
+      normalizeText(selectedPayMethodRecord.value?.name) ||
+      normalizeText(selectedPayMethodRecord.value?.label) ||
+      '支付',
   );
   const paySecurity = computed<InvoicePaymentSecurity>(() => detail.value?.payment_security || {});
   const canPay = computed(() => Boolean(paySecurity.value.can_pay) && isPayableInvoice(detail.value));
-  const selectedIsAlipay = computed(() => selectedGatewayKey.value === 'alipay' || selectedPaymentType.value === 'alipay');
+  const selectedIsAlipay = computed(
+    () => selectedGatewayKey.value === 'alipay' || selectedPaymentType.value === 'alipay',
+  );
   const alipayPollingReady = computed(() => Boolean(alipayPaymentNo.value && alipayPollToken.value));
   const balanceAmount = computed(() => normalizeMoney(userStore.info?.cash_balance || 0));
   const payableAmount = computed(() => normalizeMoney(detail.value?.payable_amount || 0));
   const canDeductBalance = computed(() => balanceAmount.value > 0 && payableAmount.value > 0);
   const autoDeductionAmount = computed(() => normalizeMoney(Math.min(balanceAmount.value, payableAmount.value)));
-  const estimatedAlipayAmount = computed(() => normalizeMoney(Math.max(payableAmount.value - autoDeductionAmount.value, 0)));
+  const estimatedAlipayAmount = computed(() =>
+    normalizeMoney(Math.max(payableAmount.value - autoDeductionAmount.value, 0)),
+  );
   const balanceText = computed(() => `¥${formatMoney(balanceAmount.value)}`);
   const autoDeductionAmountText = computed(() => formatMoney(autoDeductionAmount.value));
   const estimatedAlipayAmountText = computed(() => formatMoney(estimatedAlipayAmount.value));
@@ -479,8 +505,12 @@ export function useInvoiceDetail() {
     alipayPaymentNo.value = String(data.payment_no || '');
     alipayPollToken.value = String(data.poll_token || '');
     alipayGateway.value = String(data.gateway || data.gateway_key || selectedGatewayKey.value || '');
-    appliedDeductionAmount.value = usedBalanceDeduction ? String(data.balance_amount || autoDeductionAmountText.value) : '0.00';
-    alipayAmount.value = String(data.amount || estimatedAlipayAmountText.value || detail.value?.payable_amount || '0.00');
+    appliedDeductionAmount.value = usedBalanceDeduction
+      ? String(data.balance_amount || autoDeductionAmountText.value)
+      : '0.00';
+    alipayAmount.value = String(
+      data.amount || estimatedAlipayAmountText.value || detail.value?.payable_amount || '0.00',
+    );
     alipayDialogVisible.value = Boolean(alipayQrCode.value);
   }
 

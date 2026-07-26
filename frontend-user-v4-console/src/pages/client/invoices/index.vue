@@ -24,7 +24,7 @@
           @clear="handleSearch"
         >
           <template #suffixIcon>
-            <SearchIcon />
+            <search-icon />
           </template>
         </t-input>
 
@@ -32,117 +32,128 @@
           <t-option v-for="item in INVOICE_STATUS_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
         </t-select>
 
-        <t-select v-if="showTypeSelector" v-model="filters.type" clearable placeholder="全部类型" @change="handleSearch">
+        <t-select
+          v-if="showTypeSelector"
+          v-model="filters.type"
+          clearable
+          placeholder="全部类型"
+          @change="handleSearch"
+        >
           <t-option v-for="item in INVOICE_TYPE_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
         </t-select>
       </div>
     </t-card>
 
     <section class="record-list-card">
-      <DataState :loading="loading" :empty="!list.length" description="暂无账单记录">
+      <data-state :loading="loading" :empty="!list.length" description="暂无账单记录">
         <t-table class="record-table" row-key="id" :data="list" :columns="columns" :pagination="null" hover>
-              <template #invoice="{ row }">
-                <div class="stack-cell">
-                  <strong>{{ resolveInvoiceNo(row) }}</strong>
-                  <span>{{ row.type_label || '--' }}</span>
-                </div>
-              </template>
-              <template #amount="{ row }">
-                <span class="invoice-money">¥{{ formatMoney(row.amount) }}</span>
-              </template>
-              <template #paid="{ row }">
-                <span class="invoice-money">¥{{ formatMoney(row.paid_amount) }}</span>
-              </template>
-              <template #related_refs="{ row }">
-                <div class="stack-cell">
-                  <div class="related-ref-line">
-                    <span class="related-ref-label">订单</span>
-                    <t-button
-                      v-if="row.order"
-                      variant="text"
-                      theme="primary"
-                      size="small"
-                      @click="goToOrder(row)"
-                    >
-                      {{ invoiceOrderNo(row) }}
-                    </t-button>
-                    <span v-else>--</span>
-                    <StatusTag v-if="row.order" :status-map="ORDER_STATUS_MAP" :status="Number(row.order.status)" size="small" />
-                  </div>
-                  <div class="related-ref-line">
-                    <span class="related-ref-label">充值</span>
-                    <t-button
-                      v-if="isRechargeInvoice(row) && row.payment_summary?.id"
-                      variant="text"
-                      theme="primary"
-                      size="small"
-                      @click="goToPayment(row)"
-                    >
-                      {{ rechargePaymentNo(row) }}
-                    </t-button>
-                    <span v-else>{{ rechargePaymentNo(row) }}</span>
-                    <StatusTag
-                      v-if="isRechargeInvoice(row) && row.payment_summary"
-                      :status-map="PAYMENT_STATUS_MAP"
-                      :status="Number(row.payment_summary.status)"
-                      size="small"
-                    />
-                  </div>
-                </div>
-              </template>
-              <template #status="{ row }">
-                <StatusTag :status-map="INVOICE_STATUS_MAP" :status="Number(row.status)" />
-              </template>
-              <template #operation="{ row }">
-                <t-space>
-                  <t-button size="small" theme="primary" variant="text" @click="goToDetail(row)">查看</t-button>
-                  <t-button
-                    v-if="isPayableInvoice(row)"
-                    size="small"
-                    theme="primary"
-                    variant="outline"
-                    @click="goToPay(row)"
-                  >
-                    去支付
-                  </t-button>
-                </t-space>
-              </template>
-            </t-table>
-
-          <div class="record-mobile-list">
-            <article v-for="row in list" :key="row.id" class="record-mobile-card">
-              <div class="record-mobile-card__head">
-                <strong>{{ resolveInvoiceNo(row) }}</strong>
-                <StatusTag :status-map="INVOICE_STATUS_MAP" :status="Number(row.status)" />
-              </div>
-
-              <div class="stack-cell">
-                <strong>{{ row.type_label || '--' }}</strong>
-                <span>账单金额：¥{{ formatMoney(row.amount) }}</span>
-                <span>已付金额：¥{{ formatMoney(row.paid_amount) }}</span>
-              </div>
-
-              <div class="record-mobile-card__meta">
-                <span>订单：{{ invoiceOrderNo(row) }}</span>
-                <span>充值：{{ rechargePaymentNo(row) }}</span>
-                <span>{{ row.created_at || '--' }}</span>
-              </div>
-
-              <div class="record-mobile-card__actions">
-                <t-button size="small" theme="primary" variant="text" @click="goToDetail(row)">查看</t-button>
-                <t-button v-if="isPayableInvoice(row)" size="small" theme="primary" variant="outline" @click="goToPay(row)">
-                  去支付
+          <template #invoice="{ row }">
+            <div class="stack-cell">
+              <strong>{{ resolveInvoiceNo(row) }}</strong>
+              <span>{{ row.type_label || '--' }}</span>
+            </div>
+          </template>
+          <template #amount="{ row }">
+            <span class="invoice-money">¥{{ formatMoney(row.amount) }}</span>
+          </template>
+          <template #paid="{ row }">
+            <span class="invoice-money">¥{{ formatMoney(row.paid_amount) }}</span>
+          </template>
+          <template #related_refs="{ row }">
+            <div class="stack-cell">
+              <div class="related-ref-line">
+                <span class="related-ref-label">订单</span>
+                <t-button v-if="row.order" variant="text" theme="primary" size="small" @click="goToOrder(row)">
+                  {{ invoiceOrderNo(row) }}
                 </t-button>
+                <span v-else>--</span>
+                <status-tag
+                  v-if="row.order"
+                  :status-map="ORDER_STATUS_MAP"
+                  :status="Number(row.order.status)"
+                  size="small"
+                />
               </div>
-            </article>
-          </div>
-      </DataState>
+              <div class="related-ref-line">
+                <span class="related-ref-label">充值</span>
+                <t-button
+                  v-if="isRechargeInvoice(row) && row.payment_summary?.id"
+                  variant="text"
+                  theme="primary"
+                  size="small"
+                  @click="goToPayment(row)"
+                >
+                  {{ rechargePaymentNo(row) }}
+                </t-button>
+                <span v-else>{{ rechargePaymentNo(row) }}</span>
+                <status-tag
+                  v-if="isRechargeInvoice(row) && row.payment_summary"
+                  :status-map="PAYMENT_STATUS_MAP"
+                  :status="Number(row.payment_summary.status)"
+                  size="small"
+                />
+              </div>
+            </div>
+          </template>
+          <template #status="{ row }">
+            <status-tag :status-map="INVOICE_STATUS_MAP" :status="Number(row.status)" />
+          </template>
+          <template #operation="{ row }">
+            <t-space>
+              <t-button size="small" theme="primary" variant="text" @click="goToDetail(row)">查看</t-button>
+              <t-button
+                v-if="isPayableInvoice(row)"
+                size="small"
+                theme="primary"
+                variant="outline"
+                @click="goToPay(row)"
+              >
+                去支付
+              </t-button>
+            </t-space>
+          </template>
+        </t-table>
+
+        <div class="record-mobile-list">
+          <article v-for="row in list" :key="row.id" class="record-mobile-card">
+            <div class="record-mobile-card__head">
+              <strong>{{ resolveInvoiceNo(row) }}</strong>
+              <status-tag :status-map="INVOICE_STATUS_MAP" :status="Number(row.status)" />
+            </div>
+
+            <div class="stack-cell">
+              <strong>{{ row.type_label || '--' }}</strong>
+              <span>账单金额：¥{{ formatMoney(row.amount) }}</span>
+              <span>已付金额：¥{{ formatMoney(row.paid_amount) }}</span>
+            </div>
+
+            <div class="record-mobile-card__meta">
+              <span>订单：{{ invoiceOrderNo(row) }}</span>
+              <span>充值：{{ rechargePaymentNo(row) }}</span>
+              <span>{{ row.created_at || '--' }}</span>
+            </div>
+
+            <div class="record-mobile-card__actions">
+              <t-button size="small" theme="primary" variant="text" @click="goToDetail(row)">查看</t-button>
+              <t-button
+                v-if="isPayableInvoice(row)"
+                size="small"
+                theme="primary"
+                variant="outline"
+                @click="goToPay(row)"
+              >
+                去支付
+              </t-button>
+            </div>
+          </article>
+        </div>
+      </data-state>
     </section>
 
     <div v-if="total > 0" class="record-pagination">
       <t-pagination
         v-model="filters.page"
-        v-model:pageSize="filters.page_size"
+        v-model:page-size="filters.page_size"
         :page-size-options="[10, 20, 50]"
         :total="total"
         show-total
@@ -150,18 +161,16 @@
         @page-size-change="handlePageSizeChange"
       />
     </div>
-
   </section>
 </template>
-
 <script setup lang="ts">
-import type { PrimaryTableCol } from 'tdesign-vue-next';
-import { SearchIcon } from 'tdesign-icons-vue-next';
-import { useRouter } from 'vue-router';
-
+import { INVOICE_STATUS_MAP, ORDER_STATUS_MAP, PAYMENT_STATUS_MAP } from '@caiwu/shared/statusConfig';
 import DataState from '@shared/user-v3/components/DataState.vue';
 import StatusTag from '@shared/user-v3/components/StatusTag.vue';
-import { INVOICE_STATUS_MAP, ORDER_STATUS_MAP, PAYMENT_STATUS_MAP } from '@caiwu/shared/statusConfig';
+import { SearchIcon } from 'tdesign-icons-vue-next';
+import type { PrimaryTableCol } from 'tdesign-vue-next';
+import { useRouter } from 'vue-router';
+
 import {
   formatMoney,
   INVOICE_STATUS_OPTIONS,
@@ -234,7 +243,6 @@ function rechargePaymentNo(row: InvoiceRecord) {
   return String(row.payment_summary?.payment_no || '--');
 }
 </script>
-
 <style scoped lang="less">
 @import '../record-page.less';
 

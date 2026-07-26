@@ -1,8 +1,9 @@
-import { computed, reactive, ref } from 'vue';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { computed, reactive, ref } from 'vue';
 
 import clientApi from '@/api/client';
 import type { ConsoleServiceDetail, ServiceReinstallOption } from '@/types/client';
+
 import { resolveErrorMessage } from './useConsoleCore';
 
 export interface UseConsoleReinstallOptions {
@@ -22,14 +23,8 @@ interface ReinstallGroupOption {
 }
 
 export function useConsoleReinstall(options: UseConsoleReinstallOptions) {
-  const {
-    serviceId,
-    actionLoading,
-    setOperationStatus,
-    loadRemoteStatus,
-    clearStatusSyncTimer,
-    scheduleStatusSync,
-  } = options;
+  const { serviceId, actionLoading, setOperationStatus, loadRemoteStatus, clearStatusSyncTimer, scheduleStatusSync } =
+    options;
 
   const reinstallVisible = ref(false);
   const reinstallState = reactive({
@@ -93,9 +88,18 @@ export function useConsoleReinstall(options: UseConsoleReinstallOptions) {
         body: '重装系统后，当前系统盘中的所有数据将被永久清除且不可恢复，确定要重装系统吗？',
         theme: 'danger',
         confirmBtn: { content: '确认重装', theme: 'danger' },
-        onConfirm: () => { dialog.destroy(); resolve(true); },
-        onCancel: () => { dialog.destroy(); resolve(false); },
-        onClose: () => { dialog.destroy(); resolve(false); },
+        onConfirm: () => {
+          dialog.destroy();
+          resolve(true);
+        },
+        onCancel: () => {
+          dialog.destroy();
+          resolve(false);
+        },
+        onClose: () => {
+          dialog.destroy();
+          resolve(false);
+        },
       });
     });
     if (!confirmed) return;

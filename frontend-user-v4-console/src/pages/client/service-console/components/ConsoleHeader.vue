@@ -4,7 +4,9 @@
       <div class="console-title-line">
         <h1>{{ detail.name || `服务 #${serviceId}` }}</h1>
         <t-button theme="primary" variant="text" @click="openNameDialog">修改名称</t-button>
-        <t-tag :theme="resolveTdesignStatusTheme(detail)" variant="light">{{ resolveServiceStatusLabel(detail.status) }}</t-tag>
+        <t-tag :theme="resolveTdesignStatusTheme(detail)" variant="light">{{
+          resolveServiceStatusLabel(detail.status)
+        }}</t-tag>
         <t-tag v-if="detail.product?.type_label" variant="light">{{ detail.product.type_label }}</t-tag>
       </div>
 
@@ -30,57 +32,90 @@
             :aria-label="detail.remark ? '编辑备注' : '添加备注'"
             @click="openRemarkDialog"
           >
-            <template #icon><EditIcon /></template>
+            <template #icon><edit-icon /></template>
           </t-button>
         </div>
       </div>
     </div>
 
     <div class="console-header-actions">
-      <t-button v-if="isInstanceRunning" variant="outline" :disabled="!detail.actions?.power || actionLoading" @click="handlePowerAction('off')">
-        <template #icon><PauseCircleFilledIcon /></template>
+      <t-button
+        v-if="isInstanceRunning"
+        variant="outline"
+        :disabled="!detail.actions?.power || actionLoading"
+        @click="handlePowerAction('off')"
+      >
+        <template #icon><pause-circle-filled-icon /></template>
         关机
       </t-button>
-      <t-button v-else theme="primary" :disabled="!detail.actions?.power || actionLoading" @click="handlePowerAction('on')">
-        <template #icon><PlayCircleFilledIcon /></template>
+      <t-button
+        v-else
+        theme="primary"
+        :disabled="!detail.actions?.power || actionLoading"
+        @click="handlePowerAction('on')"
+      >
+        <template #icon><play-circle-filled-icon /></template>
         开机
       </t-button>
-      <t-button variant="outline" :disabled="!detail.actions?.power || actionLoading" @click="handlePowerAction('reboot')">
-        <template #icon><RotateIcon /></template>
+      <t-button
+        variant="outline"
+        :disabled="!detail.actions?.power || actionLoading"
+        @click="handlePowerAction('reboot')"
+      >
+        <template #icon><rotate-icon /></template>
         重启
       </t-button>
-      <t-button variant="outline" :loading="statusSyncing" :disabled="!canSyncStatus || actionLoading" @click="handleSyncStatus">
-        <template #icon><RefreshIcon /></template>
+      <t-button
+        variant="outline"
+        :loading="statusSyncing"
+        :disabled="!canSyncStatus || actionLoading"
+        @click="handleSyncStatus"
+      >
+        <template #icon><refresh-icon /></template>
         状态同步
       </t-button>
       <t-dropdown trigger="click" :options="moreOptions" @click="handleMoreClick">
         <t-button variant="outline">
-          <template #icon><EllipsisIcon /></template>
+          <template #icon><ellipsis-icon /></template>
           更多
         </t-button>
       </t-dropdown>
     </div>
   </t-card>
 
-  <t-dialog v-model:visible="ipDialogVisible" :header="primaryConnectionLabel" width="min(24rem, calc(100vw - 2rem))" destroy-on-close>
+  <t-dialog
+    v-model:visible="ipDialogVisible"
+    :header="primaryConnectionLabel"
+    width="min(24rem, calc(100vw - 2rem))"
+    destroy-on-close
+  >
     <div class="ip-dialog-list">
       <div v-for="ip in primaryConnectionValues" :key="ip" class="ip-dialog-item">
         <strong>{{ ip }}</strong>
         <button type="button" class="copy-link" :aria-label="`复制${ip}`" @click="copyText(ip)">
-          <CopyIcon size="1rem" />
+          <copy-icon size="1rem" />
         </button>
       </div>
     </div>
     <template #footer>
-      <t-button v-if="primaryConnectionValues.length > 1" variant="outline" @click="copyText(primaryConnectionText)">复制全部</t-button>
+      <t-button v-if="primaryConnectionValues.length > 1" variant="outline" @click="copyText(primaryConnectionText)"
+        >复制全部</t-button
+      >
       <t-button theme="primary" @click="ipDialogVisible = false">关闭</t-button>
     </template>
   </t-dialog>
 </template>
-
 <script setup lang="ts">
+import {
+  CopyIcon,
+  EditIcon,
+  EllipsisIcon,
+  PauseCircleFilledIcon,
+  PlayCircleFilledIcon,
+  RefreshIcon,
+  RotateIcon,
+} from 'tdesign-icons-vue-next';
 import { computed, ref } from 'vue';
-import { CopyIcon, EditIcon, EllipsisIcon, PauseCircleFilledIcon, PlayCircleFilledIcon, RefreshIcon, RotateIcon } from 'tdesign-icons-vue-next';
 
 import { useServiceConsoleContext } from './context';
 

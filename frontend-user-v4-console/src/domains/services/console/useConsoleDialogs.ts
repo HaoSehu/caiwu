@@ -1,8 +1,9 @@
-import { reactive, ref } from 'vue';
 import { MessagePlugin } from 'tdesign-vue-next';
+import { reactive, ref } from 'vue';
 
 import clientApi from '@/api/client';
 import type { ConsoleServiceDetail } from '@/types/client';
+
 import { resolveErrorMessage } from './useConsoleCore';
 
 export interface UseConsoleDialogsOptions {
@@ -95,10 +96,7 @@ export function useConsoleDialogs(options: UseConsoleDialogsOptions) {
     const pools = [lower, upper, digits, symbols];
     const all = pools.join('');
     const pick = (pool: string) => pool[randomInt(pool.length)];
-    const chars = [
-      ...pools.map(pick),
-      ...Array.from({ length: 12 }, () => pick(all)),
-    ];
+    const chars = [...pools.map(pick), ...Array.from({ length: 12 }).fill(pick(all))];
 
     for (let index = chars.length - 1; index > 0; index -= 1) {
       const swapIndex = randomInt(index + 1);

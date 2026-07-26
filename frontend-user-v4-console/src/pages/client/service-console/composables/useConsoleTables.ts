@@ -1,5 +1,5 @@
-import type { PrimaryTableCol } from 'tdesign-vue-next';
 import { ACCOUNT_TRANSACTION_EVENT_MAP, getStatusLabel } from '@shared/statusConfig';
+import type { PrimaryTableCol } from 'tdesign-vue-next';
 
 import type { FinanceLedgerRecord } from '@/types/client';
 
@@ -60,11 +60,11 @@ export function resolveFinanceBusinessLabel(row: FinanceLedgerRecord) {
 
   const label = String(
     row?.business_scene_label ||
-    row?.invoice?.business_scene_label ||
-    row?.display?.business_scene_label ||
-    row?.invoice?.type_label ||
-    resolveFinanceEventLabel(row?.event_type) ||
-    '--',
+      row?.invoice?.business_scene_label ||
+      row?.display?.business_scene_label ||
+      row?.invoice?.type_label ||
+      resolveFinanceEventLabel(row?.event_type) ||
+      '--',
   );
   if (label.includes('退款')) return '已退款';
   if (label === '购买') return '产品购买';

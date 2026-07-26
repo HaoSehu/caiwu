@@ -2,16 +2,16 @@
   <section class="content-detail-page">
     <div class="reader-breadcrumb">
       <router-link :to="backToListRoute">{{ config.pageTitle }}</router-link>
-      <ChevronRightIcon />
+      <chevron-right-icon />
       <span>{{ currentCategoryName }}</span>
-      <ChevronRightIcon />
+      <chevron-right-icon />
       <strong>{{ currentArticle?.title || config.detailTitle }}</strong>
     </div>
 
     <div class="reader-layout">
       <main class="reader-main">
         <t-card class="reader-card" :bordered="false">
-          <DataState :loading="loading" :empty="!currentArticle" :description="config.emptyText">
+          <data-state :loading="loading" :empty="!currentArticle" :description="config.emptyText">
             <article id="article-top" class="reader-article">
               <header class="reader-header">
                 <h1>{{ currentArticle?.title || config.detailTitle }}</h1>
@@ -25,7 +25,7 @@
               <t-divider v-if="currentArticle" />
               <div ref="contentRef" class="reader-content" v-html="articleContentHtml"></div>
             </article>
-          </DataState>
+          </data-state>
         </t-card>
       </main>
 
@@ -48,7 +48,13 @@
 
         <t-card class="reader-card" :bordered="false">
           <template #title>目录结构</template>
-          <button v-for="item in tocItems" :key="item.id" type="button" class="toc-row" @click="scrollToAnchor(item.id)">
+          <button
+            v-for="item in tocItems"
+            :key="item.id"
+            type="button"
+            class="toc-row"
+            @click="scrollToAnchor(item.id)"
+          >
             {{ item.label }}
           </button>
         </t-card>
@@ -56,11 +62,10 @@
     </div>
   </section>
 </template>
-
 <script setup lang="ts">
+import DataState from '@shared/user-v3/components/DataState.vue';
 import { ChevronRightIcon } from 'tdesign-icons-vue-next';
 
-import DataState from '@shared/user-v3/components/DataState.vue';
 import { useContentDetail } from '@/domains/content/useContent';
 
 const props = defineProps<{
@@ -85,7 +90,6 @@ const {
   scrollToAnchor,
 } = useContentDetail(props.contentType);
 </script>
-
 <style scoped lang="less">
 .content-detail-page {
   display: flex;

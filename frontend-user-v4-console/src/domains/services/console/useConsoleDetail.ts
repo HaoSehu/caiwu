@@ -1,15 +1,16 @@
-import { computed, reactive, ref, shallowRef } from 'vue';
 import { MessagePlugin } from 'tdesign-vue-next';
+import { computed, reactive, ref, shallowRef } from 'vue';
 import { useRoute } from 'vue-router';
 
 import clientApi from '@/api/client';
 import type { ConsoleServiceDetail } from '@/types/client';
+
 import {
   CLOUD_TABS,
   DEFAULT_TAB,
-  NAT_TABS,
   isNatConsole,
   mergeConsoleDetail,
+  NAT_TABS,
   normalizeConsoleDetail,
   resolveErrorMessage,
 } from './useConsoleCore';
@@ -38,7 +39,9 @@ export function useConsoleDetail(_options?: UseConsoleDetailOptions) {
   });
 
   const availableTabs = computed(() => (isNatConsole(detail.value) ? NAT_TABS : CLOUD_TABS));
-  const canManageConsole = computed(() => Boolean(detail.value.actions?.module_status) || Number(detail.value.upstream?.host_id || 0) > 0);
+  const canManageConsole = computed(
+    () => Boolean(detail.value.actions?.module_status) || Number(detail.value.upstream?.host_id || 0) > 0,
+  );
   const canSyncStatus = computed(() => Boolean(detail.value.actions?.refresh) || canManageConsole.value);
 
   function clearStatusSyncTimer() {

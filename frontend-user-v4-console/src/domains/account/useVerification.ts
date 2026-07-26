@@ -1,12 +1,12 @@
-import { computed, onBeforeUnmount, reactive, ref } from 'vue';
 import { MessagePlugin } from 'tdesign-vue-next';
+import { computed, onBeforeUnmount, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { clientAuthApi } from '@/api/auth';
 import { useUserStore } from '@/store';
 import type { ClientUserInfo, ClientVerificationPayload } from '@/types/client';
 
-const IDENTITY_CARD_PATTERN = /^(?:\d{15}|\d{17}[\dXx])$/;
+const IDENTITY_CARD_PATTERN = /^(?:\d{15}|\d{17}[\dX])$/i;
 const QR_SESSION_TTL_SECONDS = 300;
 
 function pickQrUrl(payload: Record<string, unknown>) {
@@ -92,8 +92,12 @@ export function useVerification() {
       ? '当前账户已经通过实名校验，可继续购买需要实名的产品。'
       : '完成实名后，可继续购买受实名限制的商品并提升账户安全性。',
   );
-  const canSubmit = computed(() => verificationForm.realName.trim().length > 0 && verificationForm.idCard.trim().length > 0);
-  const isVerificationQrExpired = computed(() => Boolean(verificationUrl.value) && verificationRemainingSeconds.value <= 0);
+  const canSubmit = computed(
+    () => verificationForm.realName.trim().length > 0 && verificationForm.idCard.trim().length > 0,
+  );
+  const isVerificationQrExpired = computed(
+    () => Boolean(verificationUrl.value) && verificationRemainingSeconds.value <= 0,
+  );
   const verificationCountdownText = computed(() => formatRemainingSeconds(verificationRemainingSeconds.value));
 
   function syncFromUserInfo(info: ClientUserInfo = {}) {
@@ -253,7 +257,8 @@ export function useVerification() {
 
   function startPolling() {
     stopPolling();
-    if (!showVerificationDialog.value || !verificationUrl.value || !certifyId.value || isVerificationQrExpired.value) return;
+    if (!showVerificationDialog.value || !verificationUrl.value || !certifyId.value || isVerificationQrExpired.value)
+      return;
     pollingTimer = window.setInterval(() => {
       void checkVerificationStatus(true);
     }, 1000);

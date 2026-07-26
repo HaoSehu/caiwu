@@ -1,8 +1,9 @@
-import { computed, reactive, ref } from 'vue';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { computed, reactive, ref } from 'vue';
 
 import clientApi from '@/api/client';
 import type { ConsoleSelectOption, SecurityGroupRecord, SecurityRuleRecord } from '@/types/client';
+
 import { resolveErrorMessage } from './useConsoleCore';
 
 export interface UseConsoleSecurityOptions {
@@ -55,10 +56,12 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
   /** 解析当前选中协议的默认端口（兼容 全部/全部 TCP/UDP 这种组合标签） */
   function resolveProtocolDefaultPort(): string | null {
     const raw = String(ruleForm.protocol || '').toLowerCase();
-    const label = (securityState.protocols.find((p) => String(p.value).toLowerCase() === raw)?.label || '').toLowerCase();
+    const label = (
+      securityState.protocols.find((p) => String(p.value).toLowerCase() === raw)?.label || ''
+    ).toLowerCase();
 
     // 精确匹配 PROTOCOL_DEFAULT_PORT
-    if (Object.prototype.hasOwnProperty.call(PROTOCOL_DEFAULT_PORT, raw)) {
+    if (Object.hasOwn(PROTOCOL_DEFAULT_PORT, raw)) {
       return PROTOCOL_DEFAULT_PORT[raw];
     }
 
@@ -175,7 +178,7 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
     ruleForm.direction = String(securityState.directions[0]?.value || '');
     ruleForm.protocol = String(securityState.protocols[0]?.value || '');
     const defaultPort = resolveProtocolDefaultPort();
-    ruleForm.port = defaultPort === undefined || defaultPort === null ? '' : defaultPort;
+    ruleForm.port = defaultPort ?? '';
     ruleForm.ip = '0.0.0.0/0';
     ruleForm.description = '';
     ruleVisible.value = true;
@@ -249,13 +252,18 @@ export function useConsoleSecurity(options: UseConsoleSecurityOptions) {
     }
     const defaultPort = resolveProtocolDefaultPort();
     const isNoPortProtocol = defaultPort === null;
-    if (!ruleForm.direction || !ruleForm.protocol || (!isNoPortProtocol && !ruleForm.port.trim()) || !ruleForm.ip.trim()) {
+    if (
+      !ruleForm.direction ||
+      !ruleForm.protocol ||
+      (!isNoPortProtocol && !ruleForm.port.trim()) ||
+      !ruleForm.ip.trim()
+    ) {
       MessagePlugin.warning('请填写完整的规则信息');
       return;
     }
     securityState.submitting = true;
     try {
-      const portValue = isNoPortProtocol ? (ruleForm.port.trim() || '1-65535') : ruleForm.port.trim();
+      const portValue = isNoPortProtocol ? ruleForm.port.trim() || '1-65535' : ruleForm.port.trim();
       const res = await clientApi.createSecurityRule(serviceId.value, activeSecurityGroupId.value, {
         direction: ruleForm.direction,
         protocol: ruleForm.protocol,

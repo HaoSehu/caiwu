@@ -1,7 +1,3 @@
-import axios, { type AxiosRequestConfig, type InternalAxiosRequestConfig } from 'axios';
-import { MessagePlugin } from 'tdesign-vue-next';
-
-import router from '@/router';
 import {
   attachSafeRequestDedupe,
   buildSafeRequestKey,
@@ -12,7 +8,12 @@ import {
   isWriteRequest,
   retrySafeRequest,
 } from '@caiwu/shared/runtime';
+import type { AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios';
+import axios from 'axios';
+import { MessagePlugin } from 'tdesign-vue-next';
+
 import { getClientToken, removeClientToken } from '@/app/runtime/session';
+import router from '@/router';
 import { toUserMessage } from '@/utils/userMessage';
 
 const DEFAULT_TIMEOUT = 18000;
@@ -97,7 +98,9 @@ function canDedupeSafeRequest(config: Partial<ClientRuntimeRequestConfig>, safeR
   return Boolean(safeRequest && config.dedupeSafeRequest !== false && !config.signal && !config.cancelToken);
 }
 
-const apiBaseUrl = String(import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '');
+const apiBaseUrl = String(import.meta.env.VITE_API_BASE_URL || '')
+  .trim()
+  .replace(/\/+$/, '');
 
 if (!apiBaseUrl) {
   throw new Error('VITE_API_BASE_URL 必须配置');
@@ -162,12 +165,14 @@ httpClient.interceptors.response.use(
         return Promise.reject(new Error(msg));
       }
 
-      if (!captchaRequired && !runtimeConfig?.silentError) {
+      const shownByInterceptor = !captchaRequired && !runtimeConfig?.silentError;
+      if (shownByInterceptor) {
         showError(msg);
       }
 
       const err = new Error(msg) as RuntimeHandledError;
-      err.__handled = captchaRequired;
+      // __handled 表示提示已经由拦截器或验证码流程接管，调用方据此避免重复弹窗。
+      err.__handled = shownByInterceptor || captchaRequired;
       err.response = { ...response, data: res };
       err.config = response.config;
       return Promise.reject(err);
@@ -192,7 +197,12 @@ httpClient.interceptors.response.use(
 
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
       msg = '网络连接已断开，请检查后重试';
-    } else if (error.code === 'ECONNABORTED' || String(error.message || '').toLowerCase().includes('timeout')) {
+    } else if (
+      error.code === 'ECONNABORTED' ||
+      String(error.message || '')
+        .toLowerCase()
+        .includes('timeout')
+    ) {
       msg = '请求超时，请检查网络后重试';
     }
 
@@ -219,12 +229,14 @@ httpClient.interceptors.response.use(
     }
 
     const runtimeConfig = (error.config || {}) as ClientRuntimeRequestConfig;
-    if (!runtimeConfig.silentError) {
+    const shownByInterceptor = !runtimeConfig.silentError;
+    if (shownByInterceptor) {
       showError(msg);
     }
 
     const err = new Error(msg) as RuntimeHandledError;
-    err.__handled = true;
+    // silentError 的请求由调用方自行提示，这里不能谎报已处理，否则错误会被静默吞掉。
+    err.__handled = shownByInterceptor;
     err.response = error.response;
     err.config = error.config;
     return Promise.reject(err);
@@ -234,8 +246,8 @@ httpClient.interceptors.response.use(
 export default httpClient;
 
 interface StarterRequestCompat {
-  get<T = unknown>(config: { url: string; params?: unknown }): Promise<T>;
-  post<T = unknown>(config: { url: string; data?: unknown }): Promise<T>;
+  get: <T = unknown>(config: { url: string; params?: unknown }) => Promise<T>;
+  post: <T = unknown>(config: { url: string; data?: unknown }) => Promise<T>;
 }
 
 export const request: StarterRequestCompat = {

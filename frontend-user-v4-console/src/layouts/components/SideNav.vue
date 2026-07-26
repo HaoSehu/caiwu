@@ -1,6 +1,10 @@
 <template>
   <template v-if="settingStore.showSidebar">
-    <div v-if="isMobile && settingStore.isMobileSidebarVisible" :class="`${prefix}-side-nav-mask`" @click="closeMobileSidebar"></div>
+    <div
+      v-if="isMobile && settingStore.isMobileSidebarVisible"
+      :class="`${prefix}-side-nav-mask`"
+      @click="closeMobileSidebar"
+    ></div>
     <div :class="sideNavCls">
       <t-menu
         :class="menuCls"
@@ -40,10 +44,10 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { useSiteBrandingStore } from '@/app/stores/siteBranding';
+import { useDeviceLayout } from '@/composables/useDeviceLayout';
 import { prefix } from '@/config/global';
 import { getActive } from '@/router';
 import { useSettingStore } from '@/store';
-import { useDeviceLayout } from '@/composables/useDeviceLayout';
 import type { MenuRoute, ModeType } from '@/types/interface';
 
 import MenuContent from './MenuContent.vue';

@@ -11,7 +11,7 @@
           @clear="handleSearch"
         >
           <template #suffixIcon>
-            <SearchIcon />
+            <search-icon />
           </template>
         </t-input>
 
@@ -42,8 +42,8 @@
             @click="setViewMode(viewMode === 'grid' ? 'list' : 'grid')"
           >
             <template #icon>
-              <CatalogIcon v-if="viewMode === 'grid'" />
-              <DashboardIcon v-else />
+              <catalog-icon v-if="viewMode === 'grid'" />
+              <dashboard-icon v-else />
             </template>
             {{ viewMode === 'grid' ? '列表' : '卡片' }}
           </t-button>
@@ -52,7 +52,7 @@
     </t-card>
 
     <section class="service-list-section">
-      <DataState :loading="loading" :empty="!list.length" description="当前还没有任何服务实例">
+      <data-state :loading="loading" :empty="!list.length" description="当前还没有任何服务实例">
         <template #default>
           <div v-if="viewMode === 'grid'" class="service-card-grid">
             <article v-for="item in list" :key="item.id" class="service-row-card">
@@ -94,7 +94,11 @@
                         </div>
 
                         <div class="service-remark-line">
-                          <span class="service-remark-text" :class="{ empty: !item.remark }" :title="item.remark || '添加备注'">
+                          <span
+                            class="service-remark-text"
+                            :class="{ empty: !item.remark }"
+                            :title="item.remark || '添加备注'"
+                          >
                             {{ item.remark || '添加备注' }}
                           </span>
                           <button
@@ -103,7 +107,7 @@
                             :aria-label="item.remark ? '编辑备注' : '添加备注'"
                             @click="openRemark(item)"
                           >
-                            <EditIcon />
+                            <edit-icon />
                           </button>
                         </div>
                       </div>
@@ -152,13 +156,13 @@
               <template #service="{ row }">
                 <div class="service-table-service">
                   <div class="service-system-icon">
-                      <img
-                        v-if="shouldShowServiceOsIcon(row)"
-                        :src="resolveServiceOsIcon(row)"
-                        :alt="resolveServiceOsText(row) || resolveServiceName(row)"
-                        class="service-system-icon__image"
-                        @error="markServiceOsIconFailed(row)"
-                      />
+                    <img
+                      v-if="shouldShowServiceOsIcon(row)"
+                      :src="resolveServiceOsIcon(row)"
+                      :alt="resolveServiceOsText(row) || resolveServiceName(row)"
+                      class="service-system-icon__image"
+                      @error="markServiceOsIconFailed(row)"
+                    />
                     <span v-else class="service-system-icon__fallback">{{ resolveServiceMark(row) }}</span>
                   </div>
                   <div class="service-table-copy">
@@ -174,7 +178,7 @@
                       <span class="service-table-meta__dot"></span>
                       <span :class="{ empty: !row.remark }">{{ row.remark || '未添加备注' }}</span>
                       <t-button shape="square" variant="text" size="small" @click="openRemark(row)">
-                        <template #icon><EditIcon /></template>
+                        <template #icon><edit-icon /></template>
                       </t-button>
                     </div>
                   </div>
@@ -193,7 +197,9 @@
                 </span>
               </template>
               <template #status="{ row }">
-                <t-tag :theme="resolveTdesignStatusTheme(row)" variant="light">{{ resolveRuntimeStatusLabel(row) }}</t-tag>
+                <t-tag :theme="resolveTdesignStatusTheme(row)" variant="light">{{
+                  resolveRuntimeStatusLabel(row)
+                }}</t-tag>
               </template>
               <template #ip="{ row }">
                 <t-button
@@ -220,7 +226,7 @@
             </t-table>
           </div>
         </template>
-      </DataState>
+      </data-state>
 
       <div v-if="!loading && !list.length" class="service-empty-action">
         <t-button theme="primary" @click="router.push('/products')">去选购产品</t-button>
@@ -230,7 +236,7 @@
     <div v-if="total > 0" class="service-pagination">
       <t-pagination
         v-model="filters.page"
-        v-model:pageSize="filters.page_size"
+        v-model:page-size="filters.page_size"
         :page-size-options="[10, 20, 50]"
         :total="total"
         show-total
@@ -240,7 +246,7 @@
     </div>
 
     <t-dialog v-model:visible="renewVisible" header="服务续费" width="min(34rem, calc(100vw - 2rem))" destroy-on-close>
-      <LoadingState :loading="renewPreviewLoading" text="正在加载续费信息" compact>
+      <loading-state :loading="renewPreviewLoading" text="正在加载续费信息" compact>
         <template v-if="renewData">
           <div class="renew-summary-card">
             <div class="renew-summary-row">
@@ -257,11 +263,7 @@
             </div>
           </div>
 
-          <t-radio-group
-            v-model="renewForm.billing_cycle"
-            class="renew-cycle-group"
-            @change="handleRenewCycleChange"
-          >
+          <t-radio-group v-model="renewForm.billing_cycle" class="renew-cycle-group" @change="handleRenewCycleChange">
             <t-radio-button
               v-for="cycle in renewData.cycles || []"
               :key="cycle.billing_cycle"
@@ -295,7 +297,7 @@
         </template>
 
         <t-empty v-else description="未获取到可续费周期" />
-      </LoadingState>
+      </loading-state>
 
       <template #footer>
         <t-button variant="outline" @click="renewVisible = false">取消</t-button>
@@ -319,14 +321,13 @@
     </t-dialog>
   </section>
 </template>
-
 <script setup lang="ts">
-import { shallowRef, triggerRef } from 'vue';
-import type { PrimaryTableCol } from 'tdesign-vue-next';
-import { CatalogIcon, DashboardIcon, EditIcon, SearchIcon } from 'tdesign-icons-vue-next';
-
 import DataState from '@shared/user-v3/components/DataState.vue';
 import LoadingState from '@shared/user-v3/components/LoadingState.vue';
+import { CatalogIcon, DashboardIcon, EditIcon, SearchIcon } from 'tdesign-icons-vue-next';
+import type { PrimaryTableCol } from 'tdesign-vue-next';
+import { shallowRef, triggerRef } from 'vue';
+
 import {
   findListSpecValue,
   formatMoney,
@@ -409,7 +410,6 @@ function actionOptions(item: Record<string, any>) {
   return options;
 }
 </script>
-
 <style scoped lang="less">
 .client-services {
   display: flex;
@@ -460,7 +460,9 @@ function actionOptions(item: Record<string, any>) {
   background: var(--td-bg-color-container);
   box-shadow: var(--td-shadow-1);
   overflow: hidden;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 
   &:hover {
     border-color: var(--td-brand-color-focus);
@@ -680,7 +682,9 @@ function actionOptions(item: Record<string, any>) {
   border-radius: 0.5rem;
   color: var(--td-text-color-secondary);
   font-size: 0.8125rem;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
 
   &:hover {
     background: var(--td-brand-color-light);
@@ -910,7 +914,6 @@ function actionOptions(item: Record<string, any>) {
   .service-filter-actions {
     justify-content: flex-start;
   }
-
 }
 
 @media (max-width: 60rem) {

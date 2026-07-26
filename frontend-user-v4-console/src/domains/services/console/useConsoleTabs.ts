@@ -1,5 +1,5 @@
-import { reactive } from 'vue';
 import { MessagePlugin } from 'tdesign-vue-next';
+import { reactive } from 'vue';
 
 import clientApi from '@/api/client';
 import type {
@@ -13,6 +13,7 @@ import type {
   ServiceOperationLogRecord,
   ServiceOperationLogSummary,
 } from '@/types/client';
+
 import { resolveErrorMessage } from './useConsoleCore';
 
 type MonitorRangePreset = '3h' | '24h' | '7d' | '30d';
@@ -135,7 +136,10 @@ export function useConsoleTabs(options: UseConsoleTabsOptions) {
       if (logsState.category) params.category = logsState.category;
       if (logsState.keyword.trim()) params.keyword = logsState.keyword.trim();
       const res = await clientApi.serviceOperationLogs(serviceId.value, params);
-      const payload: PagedList<ServiceOperationLogRecord> & { summary?: ServiceOperationLogSummary } = res.data || { list: [], total: 0 };
+      const payload: PagedList<ServiceOperationLogRecord> & { summary?: ServiceOperationLogSummary } = res.data || {
+        list: [],
+        total: 0,
+      };
       logsState.list = Array.isArray(payload.list) ? payload.list : [];
       logsState.total = Number(payload.total || 0);
       logsState.summary = { ...logsState.summary, ...(payload.summary || {}) };

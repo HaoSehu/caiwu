@@ -1,28 +1,28 @@
 <template>
   <section class="service-console">
-    <ConsoleBreadcrumb />
+    <console-breadcrumb />
 
-    <LoadingState :loading="detailLoading" text="正在加载实例控制台">
-      <ConsoleHeader />
-      <ConsoleAlerts />
+    <loading-state :loading="detailLoading" text="正在加载实例控制台">
+      <console-header />
+      <console-alerts />
 
       <div class="console-workbench">
-        <ConsoleSidebar v-model:active-tab="activeTab" :items="consoleNavItems" />
+        <console-sidebar v-model:active-tab="activeTab" :items="consoleNavItems" />
         <main class="console-content">
           <component :is="activeTabComponent" />
         </main>
       </div>
-    </LoadingState>
+    </loading-state>
 
-    <ConsoleDialogs />
+    <console-dialogs />
   </section>
 </template>
-
 <script setup lang="ts">
+import LoadingState from '@shared/user-v3/components/LoadingState.vue';
 import { computed } from 'vue';
 
 import { useServiceConsole } from '@/domains/services/useServiceConsole';
-import LoadingState from '@shared/user-v3/components/LoadingState.vue';
+
 import ConsoleAlerts from './components/ConsoleAlerts.vue';
 import ConsoleBreadcrumb from './components/ConsoleBreadcrumb.vue';
 import ConsoleDialogs from './components/ConsoleDialogs.vue';
@@ -39,5 +39,4 @@ const { detailLoading, activeTab, availableTabs } = serviceConsole;
 const consoleNavItems = computed(() => resolveConsoleNavItems(availableTabs.value));
 const activeTabComponent = computed(() => resolveConsoleTabComponent(activeTab.value));
 </script>
-
 <style src="./components/styles.less" lang="less"></style>

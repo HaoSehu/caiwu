@@ -26,7 +26,6 @@
     </t-card>
   </section>
 </template>
-
 <script setup lang="ts">
 import { useServiceConsoleContext } from '../context';
 

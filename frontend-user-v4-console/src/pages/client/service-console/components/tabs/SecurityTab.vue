@@ -4,12 +4,23 @@
       <template #actions>
         <t-space>
           <t-button :loading="securityState.loading" @click="loadSecurityGroups(true)">刷新</t-button>
-          <t-button v-if="securityState.canCreate" theme="primary" :disabled="securityState.supported === false" @click="openSecurityGroupDialog">新建安全组</t-button>
+          <t-button
+            v-if="securityState.canCreate"
+            theme="primary"
+            :disabled="securityState.supported === false"
+            @click="openSecurityGroupDialog"
+            >新建安全组</t-button
+          >
         </t-space>
       </template>
 
-      <t-alert v-if="securityState.error" theme="warning" class="console-inline-alert">{{ securityState.error }}</t-alert>
-      <t-empty v-else-if="securityState.supported === false" :description="securityState.message || '当前实例暂不支持安全组'" />
+      <t-alert v-if="securityState.error" theme="warning" class="console-inline-alert">{{
+        securityState.error
+      }}</t-alert>
+      <t-empty
+        v-else-if="securityState.supported === false"
+        :description="securityState.message || '当前实例暂不支持安全组'"
+      />
       <template v-else>
         <div v-if="securityState.groups.length" class="security-group-list">
           <article
@@ -29,7 +40,14 @@
               <p>{{ group.description || '暂无备注说明' }}</p>
             </div>
             <div class="security-group-card__actions">
-              <t-button v-if="group.can_view !== false" size="small" variant="outline" :disabled="securityState.submitting" @click.stop="selectSecurityGroup(group)">查看</t-button>
+              <t-button
+                v-if="group.can_view !== false"
+                size="small"
+                variant="outline"
+                :disabled="securityState.submitting"
+                @click.stop="selectSecurityGroup(group)"
+                >查看</t-button
+              >
               <t-button
                 v-if="!group.is_applied"
                 size="small"
@@ -53,7 +71,10 @@
             </div>
           </article>
         </div>
-        <t-empty v-else :description="securityState.canCreate ? '当前没有安全组，可先创建后再添加规则' : '当前没有可应用的安全组'" />
+        <t-empty
+          v-else
+          :description="securityState.canCreate ? '当前没有安全组，可先创建后再添加规则' : '当前没有可应用的安全组'"
+        />
 
         <div v-if="activeSecurityGroup" class="security-rules-panel">
           <div class="security-rules-panel__head">
@@ -61,12 +82,31 @@
               <strong>{{ activeSecurityGroup.name || `安全组 #${activeSecurityGroup.id}` }} 规则</strong>
               <span>{{ securityState.rules.length }} 条规则</span>
             </div>
-            <t-button theme="primary" :disabled="!activeSecurityGroup.can_add_rule || securityState.submitting" @click="openSecurityRuleDialog">新增规则</t-button>
+            <t-button
+              theme="primary"
+              :disabled="!activeSecurityGroup.can_add_rule || securityState.submitting"
+              @click="openSecurityRuleDialog"
+              >新增规则</t-button
+            >
           </div>
 
-          <t-table class="security-rules-table" row-key="id" :data="securityState.rules" :columns="securityColumns" :pagination="null" :loading="securityState.rulesLoading" size="small">
+          <t-table
+            class="security-rules-table"
+            row-key="id"
+            :data="securityState.rules"
+            :columns="securityColumns"
+            :pagination="null"
+            :loading="securityState.rulesLoading"
+            size="small"
+          >
             <template #operation="{ row }">
-              <t-button theme="danger" variant="text" :disabled="securityState.submitting" @click="deleteSecurityRule(row)">删除</t-button>
+              <t-button
+                theme="danger"
+                variant="text"
+                :disabled="securityState.submitting"
+                @click="deleteSecurityRule(row)"
+                >删除</t-button
+              >
             </template>
           </t-table>
 
@@ -93,7 +133,14 @@
                 <span class="security-rule-card__value">{{ rule.description }}</span>
               </div>
               <div class="security-rule-card__actions">
-                <t-button theme="danger" variant="text" size="small" :disabled="securityState.submitting" @click="deleteSecurityRule(rule)">删除</t-button>
+                <t-button
+                  theme="danger"
+                  variant="text"
+                  size="small"
+                  :disabled="securityState.submitting"
+                  @click="deleteSecurityRule(rule)"
+                  >删除</t-button
+                >
               </div>
             </div>
           </div>
@@ -102,7 +149,6 @@
     </t-card>
   </section>
 </template>
-
 <script setup lang="ts">
 import { securityColumns } from '../../composables/useConsoleTables';
 import { useServiceConsoleContext } from '../context';

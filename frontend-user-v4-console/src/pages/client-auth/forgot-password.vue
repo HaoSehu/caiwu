@@ -13,7 +13,13 @@
       <t-form-item name="account">
         <div class="client-auth-field">
           <label class="client-auth-label is-required">手机号 / 邮箱</label>
-          <t-input v-model="form.account" size="large" clearable autocomplete="username" placeholder="请输入注册手机号或邮箱" />
+          <t-input
+            v-model="form.account"
+            size="large"
+            clearable
+            autocomplete="username"
+            placeholder="请输入注册手机号或邮箱"
+          />
         </div>
       </t-form-item>
 
@@ -22,7 +28,12 @@
           <label class="client-auth-label is-required">验证码</label>
           <div class="client-auth-code-row">
             <t-input v-model="form.code" size="large" maxlength="6" placeholder="请输入验证码" />
-            <t-button variant="outline" :disabled="countdown > 0" :loading="sendingCode || captchaLoading" @click="handleSendCode">
+            <t-button
+              variant="outline"
+              :disabled="countdown > 0"
+              :loading="sendingCode || captchaLoading"
+              @click="handleSendCode"
+            >
               {{ countdown > 0 ? `${countdown}s` : '发送验证码' }}
             </t-button>
           </div>
@@ -63,7 +74,11 @@
           >
             <template #prefix-icon><lock-on-icon /></template>
             <template #suffix-icon>
-              <browse-icon v-if="showConfirmPassword" class="client-auth-password-icon" @click="showConfirmPassword = false" />
+              <browse-icon
+                v-if="showConfirmPassword"
+                class="client-auth-password-icon"
+                @click="showConfirmPassword = false"
+              />
               <browse-off-icon v-else class="client-auth-password-icon" @click="showConfirmPassword = true" />
             </template>
           </t-input>
@@ -76,7 +91,6 @@
     </t-form>
   </auth-shell>
 </template>
-
 <script setup lang="ts">
 import { BrowseIcon, BrowseOffIcon, LockOnIcon } from 'tdesign-icons-vue-next';
 import type { FormInstanceFunctions, FormRule, FormValidateMessage, SubmitContext } from 'tdesign-vue-next';
@@ -88,6 +102,7 @@ import { clientAuthApi } from '@/api/auth';
 import AuthShell from '@/components/auth/AuthShell.vue';
 import { useGeeTestCaptcha } from '@/composables/useGeeTestCaptcha';
 import { buildAccountPayload, detectAccountType, normalizeAccountValue } from '@/utils/account';
+import { toUserMessage } from '@/utils/userMessage';
 
 interface ResetPasswordForm {
   account: string;
@@ -197,7 +212,7 @@ async function handleSendCode() {
   } catch (error: unknown) {
     const runtimeError = error as RuntimeHandledError;
     if (!runtimeError.__handled) {
-      MessagePlugin.error(runtimeError.message || '验证码发送失败');
+      MessagePlugin.error(toUserMessage(runtimeError.message, '验证码发送失败'));
     }
   } finally {
     sendingCode.value = false;
@@ -221,7 +236,9 @@ function setFormErrors(errors: Partial<Record<keyof ResetPasswordForm, string>>)
     account: errors.account ? [{ type: 'error', message: errors.account }] : [],
     code: errors.code ? [{ type: 'error', message: errors.code }] : [],
     password: errors.password ? [{ type: 'error', message: errors.password }] : [],
-    password_confirmation: errors.password_confirmation ? [{ type: 'error', message: errors.password_confirmation }] : [],
+    password_confirmation: errors.password_confirmation
+      ? [{ type: 'error', message: errors.password_confirmation }]
+      : [],
   };
   formRef.value?.setValidateMessage(validateMessage);
 }
@@ -273,7 +290,7 @@ async function runResetPassword() {
   } catch (error: unknown) {
     const runtimeError = error as RuntimeHandledError;
     if (!runtimeError.__handled) {
-      MessagePlugin.error(runtimeError.message || '密码重置失败');
+      MessagePlugin.error(toUserMessage(runtimeError.message, '密码重置失败'));
     }
   } finally {
     loading.value = false;
@@ -284,7 +301,6 @@ onBeforeUnmount(() => {
   clearTimer();
 });
 </script>
-
 <style scoped lang="less">
 @import './shared-auth.less';
 </style>

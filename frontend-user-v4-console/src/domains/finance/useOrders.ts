@@ -1,11 +1,11 @@
-import { onMounted, reactive, ref, shallowRef } from 'vue';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import { ORDER_STATUS_MAP, ORDER_TYPE_MAP, toSelectOptions } from '@caiwu/shared/statusConfig';
+import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { onMounted, reactive, ref, shallowRef } from 'vue';
 
 import clientApi from '@/api/client';
-import { formatMoney } from '@/utils/format';
-import { getErrorMessage } from '@/utils/error';
 import type { ClientFinanceListParams, OrderListSummary, OrderRecord } from '@/types/client';
+import { getErrorMessage } from '@/utils/error';
+import { formatMoney } from '@/utils/format';
 
 import { resolveQuickDateRange } from './dateFilters';
 
@@ -46,7 +46,8 @@ export function useOrderList(options: { pageSize?: number } = {}) {
       page_size: filters.page_size,
     };
     if (filters.keyword?.trim()) params.keyword = filters.keyword.trim();
-    if (filters.status !== '' && filters.status !== null && filters.status !== undefined) params.status = filters.status;
+    if (filters.status !== '' && filters.status !== null && filters.status !== undefined)
+      params.status = filters.status;
     if (filters.type?.trim()) params.type = filters.type.trim();
     if (filters.start_date) params.start_date = filters.start_date;
     if (filters.end_date) params.end_date = filters.end_date;

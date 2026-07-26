@@ -66,13 +66,10 @@
         </div>
       </section>
 
-      <footer class="auth-shell__footer">
-        Copyright © {{ currentYear }} {{ siteBranding.siteName }}
-      </footer>
+      <footer class="auth-shell__footer">Copyright © {{ currentYear }} {{ siteBranding.siteName }}</footer>
     </div>
   </main>
 </template>
-
 <script setup lang="ts">
 import { ChevronLeftIcon } from 'tdesign-icons-vue-next';
 import { computed, onMounted, ref, watch } from 'vue';
@@ -122,18 +119,14 @@ function handleBack() {
   }
 }
 
-watch(
-  authLogoSrc,
-  () => {
-    logoLoadFailed.value = false;
-  },
-);
+watch(authLogoSrc, () => {
+  logoLoadFailed.value = false;
+});
 
 onMounted(() => {
   void siteBranding.fetchSiteConfig();
 });
 </script>
-
 <style scoped lang="less">
 .auth-shell {
   --auth-bg-start: #f8fafc;

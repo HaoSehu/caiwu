@@ -19,17 +19,22 @@
         </template>
         <div class="referral-link-row">
           <t-input :value="referralLink" readonly>
-            <template #prefixIcon><LinkIcon /></template>
+            <template #prefixIcon><link-icon /></template>
           </t-input>
           <t-button @click="copyReferralLink">复制链接</t-button>
         </div>
-        <p>好友通过此链接注册并消费，您可获得 {{ rewardRateText }} 佣金，冻结 {{ freezeDaysText }} 天后自动释放。最低提现金额 ¥{{ withdrawMinAmountText }}。</p>
+        <p>
+          好友通过此链接注册并消费，您可获得 {{ rewardRateText }} 佣金，冻结
+          {{ freezeDaysText }} 天后自动释放。最低提现金额 ¥{{ withdrawMinAmountText }}。
+        </p>
       </t-card>
 
       <t-card class="referral-card" :bordered="false">
         <template #title>提现支付宝</template>
         <template #actions>
-          <t-tag :theme="isAlipayBound ? 'success' : 'warning'" variant="light">{{ isAlipayBound ? '已绑定' : '提现前需先绑定' }}</t-tag>
+          <t-tag :theme="isAlipayBound ? 'success' : 'warning'" variant="light">{{
+            isAlipayBound ? '已绑定' : '提现前需先绑定'
+          }}</t-tag>
         </template>
         <div v-if="!isAlipayBound" class="referral-empty">
           <t-empty description="提现前需要先绑定支付宝，并完成该手机号的短信验证，无需上传支付宝图片。" />
@@ -52,11 +57,17 @@
         <t-tabs v-model="activeTab">
           <t-tab-panel value="rewards" label="奖励明细">
             <t-table row-key="id" :data="rewards" :columns="rewardColumns" :pagination="null">
-              <template #user="{ row }">{{ row.referred_user?.display_name || row.referred_user?.nickname || row.referred_user?.email || '--' }}</template>
-              <template #product="{ row }">{{ row.invoice?.product_display_name || row.product?.display_name || row.product?.name || '--' }}</template>
+              <template #user="{ row }">{{
+                row.referred_user?.display_name || row.referred_user?.nickname || row.referred_user?.email || '--'
+              }}</template>
+              <template #product="{ row }">{{
+                row.invoice?.product_display_name || row.product?.display_name || row.product?.name || '--'
+              }}</template>
               <template #amount="{ row }">¥{{ money(row.reward_amount) }}</template>
               <template #status="{ row }">
-                <t-tag :theme="rewardStatus(row.status).theme" variant="light">{{ rewardStatus(row.status).label }}</t-tag>
+                <t-tag :theme="rewardStatus(row.status).theme" variant="light">{{
+                  rewardStatus(row.status).label
+                }}</t-tag>
               </template>
             </t-table>
           </t-tab-panel>
@@ -66,7 +77,9 @@
               <template #amount="{ row }">¥{{ money(row.amount) }}</template>
               <template #account="{ row }">{{ row.account_name || '--' }} {{ row.account_no || '' }}</template>
               <template #status="{ row }">
-                <t-tag :theme="withdrawStatus(row.status).theme" variant="light">{{ withdrawStatus(row.status).label }}</t-tag>
+                <t-tag :theme="withdrawStatus(row.status).theme" variant="light">{{
+                  withdrawStatus(row.status).label
+                }}</t-tag>
               </template>
             </t-table>
           </t-tab-panel>
@@ -83,8 +96,12 @@
     <t-dialog v-model:visible="bindDialogVisible" header="绑定提现支付宝" width="min(30rem, calc(100vw - 2rem))">
       <t-form label-align="top">
         <p class="bind-dialog-tip">仅需填写实名、支付宝绑定手机号和短信验证码，无需上传支付宝图片。</p>
-        <t-form-item label="真实姓名"><t-input v-model="bindForm.real_name" placeholder="请输入支付宝实名姓名" /></t-form-item>
-        <t-form-item label="支付宝手机号"><t-input v-model="bindForm.account" placeholder="请输入支付宝绑定手机号" /></t-form-item>
+        <t-form-item label="真实姓名"
+          ><t-input v-model="bindForm.real_name" placeholder="请输入支付宝实名姓名"
+        /></t-form-item>
+        <t-form-item label="支付宝手机号"
+          ><t-input v-model="bindForm.account" placeholder="请输入支付宝绑定手机号"
+        /></t-form-item>
         <t-form-item label="短信验证码"><t-input v-model="bindForm.code" placeholder="请输入短信验证码" /></t-form-item>
       </t-form>
       <template #footer>
@@ -94,10 +111,9 @@
     </t-dialog>
   </section>
 </template>
-
 <script setup lang="ts">
-import type { PrimaryTableCol } from 'tdesign-vue-next';
 import { LinkIcon } from 'tdesign-icons-vue-next';
+import type { PrimaryTableCol } from 'tdesign-vue-next';
 
 import { accountEventLabel, money, rewardStatus, useReferral, withdrawStatus } from '@/domains/marketing/useReferral';
 
@@ -147,7 +163,6 @@ const logColumns: PrimaryTableCol[] = [
   { colKey: 'remark', title: '说明', minWidth: '14rem' },
 ];
 </script>
-
 <style scoped lang="less">
 .referral-page {
   display: flex;

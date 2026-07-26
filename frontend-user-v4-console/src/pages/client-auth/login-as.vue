@@ -26,7 +26,6 @@
     </div>
   </auth-shell>
 </template>
-
 <script setup lang="ts">
 import { CheckCircleIcon, ErrorCircleIcon, LoadingIcon } from 'tdesign-icons-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
@@ -35,6 +34,7 @@ import { useRoute, useRouter } from 'vue-router';
 
 import AuthShell from '@/components/auth/AuthShell.vue';
 import { useUserStore } from '@/store';
+import { toUserMessage } from '@/utils/userMessage';
 
 interface RuntimeHandledError {
   __handled?: boolean;
@@ -107,7 +107,7 @@ async function runExchange(code: string) {
     const runtimeError = error as RuntimeHandledError;
     status.value = 'error';
     if (!runtimeError.__handled) {
-      MessagePlugin.error(runtimeError.message || '代登录失败');
+      MessagePlugin.error(toUserMessage(runtimeError.message, '代登录失败'));
     }
   } finally {
     loading.value = false;
@@ -172,7 +172,6 @@ onBeforeUnmount(() => {
   window.removeEventListener('message', handleLoginAsMessage);
 });
 </script>
-
 <style lang="less" scoped>
 .login-as-result {
   display: flex;

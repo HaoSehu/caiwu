@@ -1,11 +1,9 @@
-import { computed, onMounted, reactive, ref } from 'vue';
-import { MessagePlugin } from 'tdesign-vue-next';
 import { ACCOUNT_TRANSACTION_EVENT_MAP, getStatusLabel } from '@shared/statusConfig';
+import { MessagePlugin } from 'tdesign-vue-next';
+import { computed, onMounted, reactive, ref } from 'vue';
 
 import { clientAuthApi } from '@/api/auth';
 import clientApi from '@/api/client';
-import { copyText } from '@/utils/format';
-import { getErrorMessage } from '@/utils/error';
 import { useUserStore } from '@/store';
 import type {
   ClientAlipayAccount,
@@ -14,19 +12,20 @@ import type {
   ReferralRewardRecord,
   ReferralWithdrawalRecord,
 } from '@/types/client';
+import { getErrorMessage } from '@/utils/error';
+import { copyText } from '@/utils/format';
 
 type TagTheme = 'default' | 'success' | 'warning' | 'primary' | 'danger';
 
-type BindFormState = {
+interface BindFormState {
   real_name: string;
   account: string;
   code: string;
-};
+}
 
-type WithdrawFormState = {
+interface WithdrawFormState {
   amount: string;
-};
-
+}
 
 export function money(value: unknown) {
   const amount = Number(value || 0);
@@ -83,7 +82,9 @@ export function useReferral() {
   const totalRewardText = computed(() => money(overview.total_reward_amount));
   const withdrawnAmountText = computed(() => money(overview.referral_withdrawn_amount));
   const withdrawMinAmountText = computed(() => money(overview.withdraw_min_amount || 20));
-  const rewardRateText = computed(() => `${money(overview.reward_rate || overview.current_member_level?.reward_rate || 0)}%`);
+  const rewardRateText = computed(
+    () => `${money(overview.reward_rate || overview.current_member_level?.reward_rate || 0)}%`,
+  );
   const freezeDaysText = computed(() => String(Number(overview.reward_freeze_days || 0)));
   const levelName = computed(() => overview.current_member_level?.name || 'V1');
   const isAlipayBound = computed(() => Boolean(alipayAccount.is_bound && alipayAccount.account));
@@ -108,7 +109,9 @@ export function useReferral() {
       alipayAccount.is_bound = Boolean(response.data?.is_bound && response.data?.account);
     } catch {
       Object.assign(alipayAccount, userStore.info?.alipay_account || {});
-      alipayAccount.is_bound = Boolean(userStore.info?.alipay_account?.is_bound && userStore.info?.alipay_account?.account);
+      alipayAccount.is_bound = Boolean(
+        userStore.info?.alipay_account?.is_bound && userStore.info?.alipay_account?.account,
+      );
     }
   }
 

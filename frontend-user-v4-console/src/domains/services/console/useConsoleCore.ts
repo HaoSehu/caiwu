@@ -103,7 +103,10 @@ export function normalizeConsoleDetail(payload: ConsoleDetailPatch = {}): Consol
   };
 }
 
-export function mergeConsoleDetail(current: ConsoleServiceDetail, patch: ConsoleDetailPatch = {}): ConsoleServiceDetail {
+export function mergeConsoleDetail(
+  current: ConsoleServiceDetail,
+  patch: ConsoleDetailPatch = {},
+): ConsoleServiceDetail {
   return normalizeConsoleDetail({
     ...current,
     ...patch,
@@ -133,7 +136,10 @@ export function resolveErrorMessage(error: unknown, fallback: string): string {
 
 export function isNatConsole(detail: ConsoleServiceDetail): boolean {
   const type = normalizeToken(detail.product?.catalog_type || detail.product?.type || '');
-  return ['nat', 'clouddesktop', 'cloudpc', 'natconsole'].includes(type) || String(detail.console_mode || '').toLowerCase() === 'nat';
+  return (
+    ['nat', 'clouddesktop', 'cloudpc', 'natconsole'].includes(type) ||
+    String(detail.console_mode || '').toLowerCase() === 'nat'
+  );
 }
 
 export function findSpecValue(detail: Ref<ConsoleServiceDetail>, aliases: string[], fallback = '--'): string {

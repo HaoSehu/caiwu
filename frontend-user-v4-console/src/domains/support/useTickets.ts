@@ -1,11 +1,17 @@
-import { computed, reactive, ref, shallowRef } from 'vue';
+import { getStatusLabel, SERVICE_STATUS_MAP } from '@shared/statusConfig';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { computed, reactive, ref, shallowRef } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
-import { SERVICE_STATUS_MAP, getStatusLabel } from '@shared/statusConfig';
+import type {
+  TicketAttachment,
+  TicketImageUploadPayload,
+  TicketRecord,
+  TicketReplyRecord,
+  TicketServiceOption,
+} from '@/types/client';
 import { getErrorMessage } from '@/utils/error';
-import type { TicketAttachment, TicketImageUploadPayload, TicketRecord, TicketReplyRecord, TicketServiceOption } from '@/types/client';
 
 type ServiceOption = TicketServiceOption;
 
@@ -94,8 +100,11 @@ export function parseAttachments(item: TicketRecord | TicketReplyRecord | null |
 function resolveServiceName(option?: ServiceOption) {
   const rawName = String(option?.name || option?.display_name || option?.product_name || '').trim();
   if (!rawName) return '';
-  const parts = rawName.split('/').map((item) => item.trim()).filter(Boolean);
-  return parts.length >= 2 ? parts[parts.length - 1] : rawName;
+  const parts = rawName
+    .split('/')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return parts.length >= 2 ? parts.at(-1) : rawName;
 }
 
 export function formatTicketServiceOptionLabel(option?: ServiceOption, includeStatus = true) {
@@ -328,7 +337,9 @@ export function useTicketDetail() {
   const userName = computed(() =>
     String(detail.value?.user?.display_name || detail.value?.user?.nickname || detail.value?.user?.email || '客户'),
   );
-  const assigneeName = computed(() => String(detail.value?.assignee?.nickname || detail.value?.assignee?.username || '未分配'));
+  const assigneeName = computed(() =>
+    String(detail.value?.assignee?.nickname || detail.value?.assignee?.username || '未分配'),
+  );
   const isClosed = computed(() => Number(detail.value?.status) === 3);
   const canSubmitReply = computed(() => replyContent.value.trim().length > 0 || replyAttachments.value.length > 0);
   const titleText = computed(() => String(detail.value?.subject || '工单详情'));

@@ -1,5 +1,7 @@
 function normalizeApiBaseUrl(value: unknown): string {
-  return String(value || '').trim().replace(/\/+$/, '');
+  return String(value || '')
+    .trim()
+    .replace(/\/+$/, '');
 }
 
 /**
@@ -36,7 +38,9 @@ export function resolveApiProxyUrl(value: unknown, apiBaseUrl: unknown): string 
  * their original relative path.
  */
 export function resolveApiManagedAssetUrl(value: unknown, apiBaseUrl: unknown): string {
-  const normalized = String(value || '').trim().replace(/\\/g, '/');
+  const normalized = String(value || '')
+    .trim()
+    .replace(/\\/g, '/');
   const managedPath = normalized.match(/^(?:\.\/|\/+)?((?:uploads|media)\/.+)$/i)?.[1];
   if (!managedPath) return '';
 

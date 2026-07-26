@@ -1,23 +1,23 @@
-import { computed, onMounted, reactive, ref } from 'vue';
 import { MessagePlugin } from 'tdesign-vue-next';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { clientAuthApi } from '@/api/auth';
-import { copyText as copyShared } from '@/utils/format';
-import { getErrorMessage } from '@/utils/error';
 import { useGeeTestCaptcha } from '@/composables/useGeeTestCaptcha';
 import { useUserStore } from '@/store';
 import type { ClientNotificationPreferences, ClientUserInfo } from '@/types/client';
+import { getErrorMessage } from '@/utils/error';
+import { copyText as copyShared } from '@/utils/format';
 
 type TagTheme = 'default' | 'success' | 'warning' | 'primary' | 'danger';
 type ProfileTab = 'profile' | 'security' | 'agent' | 'notification';
 type NotificationKey = keyof ClientNotificationPreferences;
-type NotificationItem = {
+interface NotificationItem {
   key: NotificationKey;
   name: string;
   desc: string;
   enabled: boolean;
-};
+}
 
 const PROFILE_TABS = new Set<ProfileTab>(['profile', 'security', 'agent', 'notification']);
 
@@ -54,11 +54,36 @@ export function useProfile() {
   const resetCountdown = ref(0);
   let resetTimer: ReturnType<typeof setInterval> | null = null;
   const notificationList = reactive<NotificationItem[]>([
-    { key: 'login_notify', name: '账号登录提醒', desc: '每次账户成功登录后，向绑定邮箱发送登录安全提醒。', enabled: false },
-    { key: 'login_location_alert', name: '异地登录提醒', desc: '检测到新的登录 IP 环境时，额外发送一次异地登录风险提醒。', enabled: false },
-    { key: 'password_change_alert', name: '更改密码提醒', desc: '账户密码修改成功后，立即发送安全提醒邮件。', enabled: false },
-    { key: 'phone_change_alert', name: '更改手机号提醒', desc: '安全手机号发生变更时，及时发送变更提醒。', enabled: false },
-    { key: 'email_change_alert', name: '更改邮箱提醒', desc: '安全邮箱发生变更时，向原邮箱和新邮箱发送提醒。', enabled: false },
+    {
+      key: 'login_notify',
+      name: '账号登录提醒',
+      desc: '每次账户成功登录后，向绑定邮箱发送登录安全提醒。',
+      enabled: false,
+    },
+    {
+      key: 'login_location_alert',
+      name: '异地登录提醒',
+      desc: '检测到新的登录 IP 环境时，额外发送一次异地登录风险提醒。',
+      enabled: false,
+    },
+    {
+      key: 'password_change_alert',
+      name: '更改密码提醒',
+      desc: '账户密码修改成功后，立即发送安全提醒邮件。',
+      enabled: false,
+    },
+    {
+      key: 'phone_change_alert',
+      name: '更改手机号提醒',
+      desc: '安全手机号发生变更时，及时发送变更提醒。',
+      enabled: false,
+    },
+    {
+      key: 'email_change_alert',
+      name: '更改邮箱提醒',
+      desc: '安全邮箱发生变更时，向原邮箱和新邮箱发送提醒。',
+      enabled: false,
+    },
     { key: 'marketing_alert', name: '营销提醒接收', desc: '接收产品更新、活动优惠和运营消息。', enabled: false },
   ]);
 
@@ -106,13 +131,22 @@ export function useProfile() {
   ]);
 
   function clearPhoneTimer() {
-    if (phoneTimer) { clearInterval(phoneTimer); phoneTimer = null; }
+    if (phoneTimer) {
+      clearInterval(phoneTimer);
+      phoneTimer = null;
+    }
   }
   function clearEmailTimer() {
-    if (emailTimer) { clearInterval(emailTimer); emailTimer = null; }
+    if (emailTimer) {
+      clearInterval(emailTimer);
+      emailTimer = null;
+    }
   }
   function clearResetTimer() {
-    if (resetTimer) { clearInterval(resetTimer); resetTimer = null; }
+    if (resetTimer) {
+      clearInterval(resetTimer);
+      resetTimer = null;
+    }
   }
 
   function openPasswordDialog() {
@@ -146,7 +180,10 @@ export function useProfile() {
       resetCountdown.value = 60;
       resetTimer = setInterval(() => {
         resetCountdown.value -= 1;
-        if (resetCountdown.value <= 0) { clearResetTimer(); resetCountdown.value = 0; }
+        if (resetCountdown.value <= 0) {
+          clearResetTimer();
+          resetCountdown.value = 0;
+        }
       }, 1000);
     } catch (error: unknown) {
       MessagePlugin.error(getErrorMessage(error, '验证码发送失败'));
@@ -154,9 +191,18 @@ export function useProfile() {
   }
 
   async function submitResetPassword() {
-    if (!resetForm.code || resetForm.code.length !== 6) { MessagePlugin.warning('请输入 6 位验证码'); return; }
-    if (!resetForm.password) { MessagePlugin.warning('请输入新密码'); return; }
-    if (resetForm.password !== resetForm.confirmPassword) { MessagePlugin.warning('两次密码输入不一致'); return; }
+    if (!resetForm.code || resetForm.code.length !== 6) {
+      MessagePlugin.warning('请输入 6 位验证码');
+      return;
+    }
+    if (!resetForm.password) {
+      MessagePlugin.warning('请输入新密码');
+      return;
+    }
+    if (resetForm.password !== resetForm.confirmPassword) {
+      MessagePlugin.warning('两次密码输入不一致');
+      return;
+    }
     profileLoading.value = true;
     try {
       const account = resetForm.type === 'phone' ? profileForm.phone : profileForm.email;
@@ -195,7 +241,10 @@ export function useProfile() {
   }
 
   async function sendPhoneVerificationCode() {
-    if (!phoneForm.phone) { MessagePlugin.warning('请输入新手机号'); return; }
+    if (!phoneForm.phone) {
+      MessagePlugin.warning('请输入新手机号');
+      return;
+    }
     try {
       await runWithCaptcha(async (captcha: unknown) => {
         await clientAuthApi.sendPhoneCode({
@@ -208,7 +257,10 @@ export function useProfile() {
       phoneCountdown.value = 60;
       phoneTimer = setInterval(() => {
         phoneCountdown.value -= 1;
-        if (phoneCountdown.value <= 0) { clearPhoneTimer(); phoneCountdown.value = 0; }
+        if (phoneCountdown.value <= 0) {
+          clearPhoneTimer();
+          phoneCountdown.value = 0;
+        }
       }, 1000);
     } catch (error: unknown) {
       MessagePlugin.error(getErrorMessage(error, '验证码发送失败'));
@@ -216,7 +268,10 @@ export function useProfile() {
   }
 
   async function sendEmailVerificationCode() {
-    if (!emailForm.email) { MessagePlugin.warning('请输入新邮箱'); return; }
+    if (!emailForm.email) {
+      MessagePlugin.warning('请输入新邮箱');
+      return;
+    }
     try {
       await runWithCaptcha(async (captcha: unknown) => {
         await clientAuthApi.sendEmailCode({ email: emailForm.email, captcha });
@@ -225,7 +280,10 @@ export function useProfile() {
       emailCountdown.value = 60;
       emailTimer = setInterval(() => {
         emailCountdown.value -= 1;
-        if (emailCountdown.value <= 0) { clearEmailTimer(); emailCountdown.value = 0; }
+        if (emailCountdown.value <= 0) {
+          clearEmailTimer();
+          emailCountdown.value = 0;
+        }
       }, 1000);
     } catch (error: unknown) {
       MessagePlugin.error(getErrorMessage(error, '验证码发送失败'));
@@ -233,8 +291,14 @@ export function useProfile() {
   }
 
   async function submitPhoneChange() {
-    if (!phoneForm.phone) { MessagePlugin.warning('请输入新手机号'); return; }
-    if (!phoneForm.code || phoneForm.code.length !== 6) { MessagePlugin.warning('请输入 6 位验证码'); return; }
+    if (!phoneForm.phone) {
+      MessagePlugin.warning('请输入新手机号');
+      return;
+    }
+    if (!phoneForm.code || phoneForm.code.length !== 6) {
+      MessagePlugin.warning('请输入 6 位验证码');
+      return;
+    }
     profileLoading.value = true;
     try {
       await clientAuthApi.updatePhone({ phone: phoneForm.phone, code: phoneForm.code });
@@ -250,8 +314,14 @@ export function useProfile() {
   }
 
   async function submitEmailChange() {
-    if (!emailForm.email) { MessagePlugin.warning('请输入新邮箱'); return; }
-    if (!emailForm.code || emailForm.code.length !== 6) { MessagePlugin.warning('请输入 6 位验证码'); return; }
+    if (!emailForm.email) {
+      MessagePlugin.warning('请输入新邮箱');
+      return;
+    }
+    if (!emailForm.code || emailForm.code.length !== 6) {
+      MessagePlugin.warning('请输入 6 位验证码');
+      return;
+    }
     profileLoading.value = true;
     try {
       await clientAuthApi.updateEmail({ email: emailForm.email, code: emailForm.code });

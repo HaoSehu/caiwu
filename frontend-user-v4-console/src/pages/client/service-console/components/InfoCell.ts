@@ -1,6 +1,6 @@
-import { defineComponent, h, ref, nextTick, onMounted, onUpdated } from 'vue';
 import { CopyIcon } from 'tdesign-icons-vue-next';
 import { Popup as TPopup } from 'tdesign-vue-next';
+import { defineComponent, h, nextTick, onMounted, onUpdated, ref } from 'vue';
 
 export const InfoCell = defineComponent({
   name: 'InfoCell',

@@ -7,7 +7,6 @@
     </template>
   </t-dialog>
 </template>
-
 <script setup lang="ts">
 import { useServiceConsoleContext } from '../context';
 

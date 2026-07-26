@@ -1,18 +1,19 @@
-import { computed, onUnmounted, ref, watch } from 'vue';
 import { MessagePlugin } from 'tdesign-vue-next';
+import { computed, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { formatMoney, resolveServiceStatusLabel, resolveTdesignStatusTheme } from '@/domains/services/useServiceCenter';
-import { normalizeConsoleDetail, isNatConsole, findSpecValue, copyText, DEFAULT_TAB } from './console/useConsoleCore';
+
+import { copyText, DEFAULT_TAB, findSpecValue, isNatConsole, normalizeConsoleDetail } from './console/useConsoleCore';
 import { useConsoleDetail } from './console/useConsoleDetail';
-import { useConsolePower, useConsoleAutoRenew } from './console/useConsolePower';
+import { useConsoleDialogs } from './console/useConsoleDialogs';
+import { useConsoleAutoRenew, useConsolePower } from './console/useConsolePower';
+import { useConsoleReinstall } from './console/useConsoleReinstall';
 import { useConsoleRenew } from './console/useConsoleRenew';
 import { useConsoleSecurity } from './console/useConsoleSecurity';
-import { useConsoleReinstall } from './console/useConsoleReinstall';
-import { useConsoleVnc } from './console/useConsoleVnc';
-import { useConsoleDialogs } from './console/useConsoleDialogs';
 import { useConsoleTabs } from './console/useConsoleTabs';
 import { useConsoleTrafficPackages } from './console/useConsoleTrafficPackages';
+import { useConsoleVnc } from './console/useConsoleVnc';
 
 export function useServiceConsole() {
   const router = useRouter();
@@ -201,13 +202,23 @@ export function useServiceConsole() {
   }
 
   // Computed: detail derivatives
-  const serviceRegion = computed(() => String(detail.value.machine_category?.label || '').trim() || findSpecValue(detail, ['区域', '地区', '机房', 'region'], '--'));
-  const serviceOs = computed(() => String(detail.value.upstream?.os || '').trim() || findSpecValue(detail, ['操作系统', 'os'], '--'));
+  const serviceRegion = computed(
+    () =>
+      String(detail.value.machine_category?.label || '').trim() ||
+      findSpecValue(detail, ['区域', '地区', '机房', 'region'], '--'),
+  );
+  const serviceOs = computed(
+    () => String(detail.value.upstream?.os || '').trim() || findSpecValue(detail, ['操作系统', 'os'], '--'),
+  );
   const primaryConnectionLabel = computed(() => (isNatConsole(detail.value) ? '远程地址' : '公网 IP'));
   const publicIpValues = computed(() => {
     const connection = detail.value.connection || {};
 
-    return normalizeConnectionValues([connection.dedicated_ip, detail.value.upstream?.dedicated_ip, connection.assigned_ips]);
+    return normalizeConnectionValues([
+      connection.dedicated_ip,
+      detail.value.upstream?.dedicated_ip,
+      connection.assigned_ips,
+    ]);
   });
   const primaryConnectionValues = computed(() => {
     const connection = detail.value.connection || {};
@@ -218,8 +229,12 @@ export function useServiceConsole() {
 
     return publicIpValues.value;
   });
-  const primaryConnectionText = computed(() => (primaryConnectionValues.value.length ? primaryConnectionValues.value.join(' / ') : '--'));
-  const connectionEndpointText = computed(() => String(detail.value.connection?.hostname || detail.value.domain || '').trim() || '--');
+  const primaryConnectionText = computed(() =>
+    primaryConnectionValues.value.length ? primaryConnectionValues.value.join(' / ') : '--',
+  );
+  const connectionEndpointText = computed(
+    () => String(detail.value.connection?.hostname || detail.value.domain || '').trim() || '--',
+  );
   const connectionPortText = computed(() => {
     const port = Number(detail.value.connection?.nat_remote_port || detail.value.connection?.port || 0);
     return Number.isFinite(port) && port > 0 ? String(port) : '--';
@@ -428,7 +443,7 @@ export function useServiceConsole() {
 }
 
 // Re-export utilities for external use
-export { normalizeConsoleDetail, mergeConsoleDetail } from './console/useConsoleCore';
+export { mergeConsoleDetail, normalizeConsoleDetail } from './console/useConsoleCore';
 
 function normalizeConnectionValues(values: unknown[]): string[] {
   const normalized: string[] = [];

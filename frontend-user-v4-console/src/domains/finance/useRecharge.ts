@@ -1,12 +1,17 @@
-import { computed, onBeforeUnmount, reactive, ref, shallowRef, watch } from 'vue';
 import { MessagePlugin } from 'tdesign-vue-next';
+import { computed, onBeforeUnmount, reactive, ref, shallowRef, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
-import { copyText, formatMoney } from '@/utils/format';
-import { getErrorMessage } from '@/utils/error';
 import { useUserStore } from '@/store';
-import type { RechargeGatewayOption, RechargeOrderPayload, RechargeStatusPayload, ServiceInstance } from '@/types/client';
+import type {
+  RechargeGatewayOption,
+  RechargeOrderPayload,
+  RechargeStatusPayload,
+  ServiceInstance,
+} from '@/types/client';
+import { getErrorMessage } from '@/utils/error';
+import { copyText, formatMoney } from '@/utils/format';
 
 const ACTIVE_SERVICE_STATUS = 1;
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -100,8 +105,12 @@ export function useRecharge() {
   const qrCodeValue = computed(() => String(paymentPayload.value?.qr_code || ''));
   const paymentNo = computed(() => String(paymentPayload.value?.payment_no || ''));
   const hasPaymentGateways = computed(() => paymentGateways.value.length > 0);
-  const selectedPaymentGateway = computed(() => paymentGateways.value.find((item) => gatewayOptionKey(item) === selectedGateway.value) || null);
-  const selectedPaymentGatewayName = computed(() => selectedPaymentGateway.value?.name || selectedPaymentGateway.value?.label || '支付');
+  const selectedPaymentGateway = computed(
+    () => paymentGateways.value.find((item) => gatewayOptionKey(item) === selectedGateway.value) || null,
+  );
+  const selectedPaymentGatewayName = computed(
+    () => selectedPaymentGateway.value?.name || selectedPaymentGateway.value?.label || '支付',
+  );
   const paymentButtonText = computed(() => {
     if (paymentGatewaysLoading.value) return '正在加载支付方式';
     if (!hasPaymentGateways.value) return '暂无可用支付方式';
@@ -189,7 +198,8 @@ export function useRecharge() {
       return paymentPayload.value;
     } catch (error: unknown) {
       // interceptor 对 HTTP 错误已调用 showError，避免重复弹窗
-      const alreadyHandled = typeof error === 'object' && error !== null && (error as Record<string, unknown>).__handled === true;
+      const alreadyHandled =
+        typeof error === 'object' && error !== null && (error as Record<string, unknown>).__handled === true;
       if (!alreadyHandled) {
         MessagePlugin.error(getErrorMessage(error, '创建充值账单失败'));
       }
@@ -220,7 +230,9 @@ export function useRecharge() {
         };
         clearPollingTimer();
         await refreshClientInfo();
-        rechargeSummary.cashBalance = formatMoney(payload.cash_balance ?? userStore.info?.cash_balance ?? rechargeSummary.cashBalance);
+        rechargeSummary.cashBalance = formatMoney(
+          payload.cash_balance ?? userStore.info?.cash_balance ?? rechargeSummary.cashBalance,
+        );
         MessagePlugin.success('充值成功，余额已刷新');
       } else if (!options.silentPending) {
         MessagePlugin.info(payload.message || '当前仍未支付成功');

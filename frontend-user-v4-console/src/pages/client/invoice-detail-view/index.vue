@@ -12,7 +12,7 @@
       <t-button variant="outline" @click="router.push('/client/invoices')">返回列表</t-button>
       <div class="detail-toolbar__actions">
         <t-button variant="outline" :loading="loading" @click="loadInvoice">
-          <template #icon><RefreshIcon /></template>
+          <template #icon><refresh-icon /></template>
           刷新
         </t-button>
         <t-button
@@ -42,7 +42,7 @@
                 </div>
                 <div class="detail-kv-item">
                   <span>账单状态</span>
-                  <StatusTag :status-map="INVOICE_STATUS_MAP" :status="Number(detail.status)" />
+                  <status-tag :status-map="INVOICE_STATUS_MAP" :status="Number(detail.status)" />
                 </div>
                 <div class="detail-kv-item">
                   <span>账单金额</span>
@@ -97,7 +97,7 @@
                   </div>
                   <div class="detail-kv-item">
                     <span>订单状态</span>
-                    <StatusTag :status-map="ORDER_STATUS_MAP" :status="Number(detail.order.status)" />
+                    <status-tag :status-map="ORDER_STATUS_MAP" :status="Number(detail.order.status)" />
                   </div>
                 </div>
               </section>
@@ -127,7 +127,7 @@
                 >
                   <template #amount="{ row }">¥{{ formatMoney(row.amount) }}</template>
                   <template #status="{ row }">
-                    <StatusTag :status-map="PAYMENT_STATUS_MAP" :status="Number(row.status)" />
+                    <status-tag :status-map="PAYMENT_STATUS_MAP" :status="Number(row.status)" />
                   </template>
                   <template #gateway="{ row }">{{ paymentGatewayDisplay(row) }}</template>
                 </t-table>
@@ -144,18 +144,17 @@
     </t-loading>
   </section>
 </template>
-
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { INVOICE_STATUS_MAP, ORDER_STATUS_MAP, PAYMENT_STATUS_MAP } from '@caiwu/shared/statusConfig';
+import StatusTag from '@shared/user-v3/components/StatusTag.vue';
 import { RefreshIcon } from 'tdesign-icons-vue-next';
 import type { PrimaryTableCol } from 'tdesign-vue-next';
-import { INVOICE_STATUS_MAP, ORDER_STATUS_MAP, PAYMENT_STATUS_MAP } from '@caiwu/shared/statusConfig';
+import { computed, onMounted, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 
-import StatusTag from '@shared/user-v3/components/StatusTag.vue';
+import clientApi from '@/api/client';
 import { formatMoney, isPayableInvoice } from '@/domains/finance/useInvoices';
 import { formatBillingCycle } from '@/domains/finance/useRecords';
-import clientApi from '@/api/client';
 import type { InvoiceRecord } from '@/types/client';
 
 const route = useRoute();
@@ -185,7 +184,7 @@ function typeLabel(type?: string) {
     referral_credit: '推荐奖励',
     manual: '手工账单',
   };
-  return type ? (map[type] || type) : '--';
+  return type ? map[type] || type : '--';
 }
 
 const paymentRecords = computed(() => {
@@ -224,7 +223,6 @@ onMounted(() => {
   void loadInvoice();
 });
 </script>
-
 <style scoped lang="less">
 .invoice-breadcrumb {
   margin-bottom: var(--td-comp-margin-m);

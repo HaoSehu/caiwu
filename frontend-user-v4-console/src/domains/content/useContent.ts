@@ -1,10 +1,9 @@
+import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, nextTick, ref, watch } from 'vue';
 import type { LocationQueryRaw, RouteLocationRaw } from 'vue-router';
-import { MessagePlugin } from 'tdesign-vue-next';
 import { useRoute, useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
-import { getErrorMessage } from '@/utils/error';
 import type {
   ApiEnvelope,
   ContentArticleRecord,
@@ -13,6 +12,7 @@ import type {
   ContentListPayload,
   ContentOverviewPayload,
 } from '@/types/client';
+import { getErrorMessage } from '@/utils/error';
 import { renderMarkdown } from '@/utils/markdown';
 
 type ContentType = 'notice' | 'help';
@@ -148,7 +148,10 @@ export function useContentList(contentType: ContentType) {
   const activeCategoryId = ref(0);
 
   const heroKeywords = computed(() => {
-    const names = categories.value.slice(0, 5).map((item) => String(item.name || '')).filter(Boolean);
+    const names = categories.value
+      .slice(0, 5)
+      .map((item) => String(item.name || ''))
+      .filter(Boolean);
     return names.length ? names : [...config.keywordSuggestions];
   });
 
@@ -324,7 +327,9 @@ export function useContentDetail(contentType: ContentType) {
 
   async function loadArticleDetail(articleId: unknown) {
     const normalizedId = Number(articleId);
-    const response = await config.fetchDetail(Number.isFinite(normalizedId) && normalizedId > 0 ? normalizedId : String(articleId));
+    const response = await config.fetchDetail(
+      Number.isFinite(normalizedId) && normalizedId > 0 ? normalizedId : String(articleId),
+    );
     currentArticle.value = response.data || null;
     currentCategoryId.value = Number(response.data?.category_id || 0) || null;
   }

@@ -1,17 +1,17 @@
-import { computed, onMounted, reactive, ref, shallowRef } from 'vue';
-import { MessagePlugin } from 'tdesign-vue-next';
-import { useRouter } from 'vue-router';
 import {
   ACCOUNT_TRANSACTION_EVENT_MAP,
-  PAYMENT_STATUS_MAP,
   getStatusLabel,
+  PAYMENT_STATUS_MAP,
   toSelectOptions,
 } from '@shared/statusConfig';
+import { MessagePlugin } from 'tdesign-vue-next';
+import { computed, onMounted, reactive, ref, shallowRef } from 'vue';
+import { useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
-import { formatMoney } from '@/utils/format';
-import { getErrorMessage } from '@/utils/error';
 import type { ClientFinanceListParams, PaymentRecord } from '@/types/client';
+import { getErrorMessage } from '@/utils/error';
+import { formatMoney } from '@/utils/format';
 
 import { resolveQuickDateRange } from './dateFilters';
 
@@ -121,19 +121,35 @@ export function snapshotLabel(value: unknown) {
   return SNAPSHOT_LABEL_MAP[key] || key;
 }
 
-export function flattenSnapshot(obj: unknown, valueLabelMap: Record<string, string> = {}): { label: string; value: string }[] {
+export function flattenSnapshot(
+  obj: unknown,
+  valueLabelMap: Record<string, string> = {},
+): { label: string; value: string }[] {
   const source = toRecord(obj);
   const result: { label: string; value: string }[] = [];
 
   for (const [key, val] of Object.entries(source)) {
     if (SNAPSHOT_DISPLAY_META_KEYS.has(key)) continue;
-    if (['unit_setup_fee', 'unit_base_amount', 'unit_total_amount', 'unit_config_amount', '_schema_version', '_schema_type'].includes(key)) continue;
+    if (
+      [
+        'unit_setup_fee',
+        'unit_base_amount',
+        'unit_total_amount',
+        'unit_config_amount',
+        '_schema_version',
+        '_schema_type',
+      ].includes(key)
+    ) {
+      continue;
+    }
     if (val === null || val === undefined || val === '') continue;
     if (key === 'items' && Array.isArray(val)) {
       val.forEach((item, index) => {
         const record = toRecord(item);
         result.push({
-          label: snapshotLabel(record.label || record.name || record.option_name || record.spec_key || `${key}.${index + 1}`),
+          label: snapshotLabel(
+            record.label || record.name || record.option_name || record.spec_key || `${key}.${index + 1}`,
+          ),
           value: formatSnapshotItem(record),
         });
       });
@@ -154,13 +170,18 @@ export function flattenSnapshot(obj: unknown, valueLabelMap: Record<string, stri
 export function configValueLabelMap(row: AnyRecord | null | undefined): Record<string, string> {
   const snapshot = toRecord(row?.config_pricing_snapshot);
   const items = Array.isArray(snapshot.items) ? snapshot.items : [];
-  return items.reduce((result, item) => {
-    const record = toRecord(item);
-    const field = String(record.field || '').trim();
-    const label = String(record.value_label || record.suboption_name || record.option_name || record.value || '').trim();
-    if (field && label) result[field] = label;
-    return result;
-  }, {} as Record<string, string>);
+  return items.reduce(
+    (result, item) => {
+      const record = toRecord(item);
+      const field = String(record.field || '').trim();
+      const label = String(
+        record.value_label || record.suboption_name || record.option_name || record.value || '',
+      ).trim();
+      if (field && label) result[field] = label;
+      return result;
+    },
+    {} as Record<string, string>,
+  );
 }
 
 function formatSnapshotItem(record: AnyRecord) {

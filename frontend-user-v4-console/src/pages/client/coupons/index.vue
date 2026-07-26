@@ -13,7 +13,7 @@
           @enter="handleSearch(activeTab)"
           @clear="handleSearch(activeTab)"
         >
-          <template #suffixIcon><SearchIcon /></template>
+          <template #suffixIcon><search-icon /></template>
         </t-input>
         <t-select v-model="currentState.status" clearable placeholder="全部状态" @change="handleSearch(activeTab)">
           <t-option v-for="item in currentStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
@@ -22,111 +22,122 @@
     </t-card>
 
     <div class="coupon-tabs" role="tablist" aria-label="优惠券分类">
-      <t-button :theme="activeTab === 'owned' ? 'primary' : 'default'" @click="switchTab('owned')">我拥有的优惠券</t-button>
+      <t-button :theme="activeTab === 'owned' ? 'primary' : 'default'" @click="switchTab('owned')"
+        >我拥有的优惠券</t-button
+      >
       <t-button :theme="activeTab === 'plaza' ? 'primary' : 'default'" @click="switchTab('plaza')">优惠券广场</t-button>
     </div>
 
     <template v-if="activeTab === 'owned'">
-        <div class="coupon-list-shell">
-          <DataState :loading="ownedState.loading" :empty="!ownedState.list.length" description="你还没有优惠券">
-            <div class="coupon-grid">
-              <article v-for="item in ownedState.list" :key="item.id" class="coupon-item">
-                <button class="coupon-item__detail" type="button" @click="openCouponDetail(item)">详情</button>
-                <div class="coupon-item__head">
-                  <div class="coupon-item__value">
-                    <span>{{ resolveDiscountTypeLabel(item.discount_type) }}</span>
-                    <strong>{{ resolveDiscountValue(item) }}</strong>
-                  </div>
-                  <t-tag :theme="resolveStatusTheme(item)" variant="light">
-                    {{ item.status_label || item.status || '--' }}
-                  </t-tag>
+      <div class="coupon-list-shell">
+        <data-state :loading="ownedState.loading" :empty="!ownedState.list.length" description="你还没有优惠券">
+          <div class="coupon-grid">
+            <article v-for="item in ownedState.list" :key="item.id" class="coupon-item">
+              <button class="coupon-item__detail" type="button" @click="openCouponDetail(item)">详情</button>
+              <div class="coupon-item__head">
+                <div class="coupon-item__value">
+                  <span>{{ resolveDiscountTypeLabel(item.discount_type) }}</span>
+                  <strong>{{ resolveDiscountValue(item) }}</strong>
                 </div>
-                <div class="coupon-item__body">
-                  <strong>{{ item.name || '优惠券' }}</strong>
-                  <p>{{ item.description || item.status_reason || '满足条件后可在结算时直接抵扣' }}</p>
-                  <div class="coupon-item__chips">
-                    <span>{{ resolveThresholdText(item) }}</span>
-                    <span>{{ resolveDiscountAmountText(item) }}</span>
-                    <span v-if="item.first_order_only">限首单</span>
-                    <span v-if="item.per_user_limit">可使用 {{ item.remaining_times ?? 0 }}/{{ item.per_user_limit }} 次</span>
-                    <span v-else>不限次</span>
-                  </div>
+                <t-tag :theme="resolveStatusTheme(item)" variant="light">
+                  {{ item.status_label || item.status || '--' }}
+                </t-tag>
+              </div>
+              <div class="coupon-item__body">
+                <strong>{{ item.name || '优惠券' }}</strong>
+                <p>{{ item.description || item.status_reason || '满足条件后可在结算时直接抵扣' }}</p>
+                <div class="coupon-item__chips">
+                  <span>{{ resolveThresholdText(item) }}</span>
+                  <span>{{ resolveDiscountAmountText(item) }}</span>
+                  <span v-if="item.first_order_only">限首单</span>
+                  <span v-if="item.per_user_limit"
+                    >可使用 {{ item.remaining_times ?? 0 }}/{{ item.per_user_limit }} 次</span
+                  >
+                  <span v-else>不限次</span>
                 </div>
-                <div class="coupon-item__foot">
-                  <span>{{ item.validity_text || item.expires_at || '--' }}</span>
-                </div>
-              </article>
-            </div>
-          </DataState>
-        </div>
-        <div v-if="ownedState.total > 0" class="coupon-pagination">
-          <t-pagination
-            v-model="ownedState.page"
-            v-model:pageSize="ownedState.pageSize"
-            :total="ownedState.total"
-            :page-size-options="[10, 20, 50]"
-            show-total
-            @change="handlePageChange('owned')"
-            @page-size-change="handlePageSizeChange('owned')"
-          />
-        </div>
+              </div>
+              <div class="coupon-item__foot">
+                <span>{{ item.validity_text || item.expires_at || '--' }}</span>
+              </div>
+            </article>
+          </div>
+        </data-state>
+      </div>
+      <div v-if="ownedState.total > 0" class="coupon-pagination">
+        <t-pagination
+          v-model="ownedState.page"
+          v-model:page-size="ownedState.pageSize"
+          :total="ownedState.total"
+          :page-size-options="[10, 20, 50]"
+          show-total
+          @change="handlePageChange('owned')"
+          @page-size-change="handlePageSizeChange('owned')"
+        />
+      </div>
     </template>
 
     <template v-else>
-        <div class="coupon-list-shell">
-          <DataState :loading="plazaState.loading" :empty="!plazaState.list.length" description="当前暂无可领取的优惠券">
-            <div class="coupon-grid">
-              <article v-for="item in plazaState.list" :key="item.id" class="coupon-item">
-                <button class="coupon-item__detail" type="button" @click="openCouponDetail(item)">详情</button>
-                <div class="coupon-item__head">
-                  <div class="coupon-item__value">
-                    <span>{{ resolveDiscountTypeLabel(item.discount_type) }}</span>
-                    <strong>{{ resolveDiscountValue(item) }}</strong>
-                  </div>
-                  <t-tag :theme="resolveStatusTheme(item)" variant="light">
-                    {{ item.status_label || item.status || '--' }}
-                  </t-tag>
+      <div class="coupon-list-shell">
+        <data-state :loading="plazaState.loading" :empty="!plazaState.list.length" description="当前暂无可领取的优惠券">
+          <div class="coupon-grid">
+            <article v-for="item in plazaState.list" :key="item.id" class="coupon-item">
+              <button class="coupon-item__detail" type="button" @click="openCouponDetail(item)">详情</button>
+              <div class="coupon-item__head">
+                <div class="coupon-item__value">
+                  <span>{{ resolveDiscountTypeLabel(item.discount_type) }}</span>
+                  <strong>{{ resolveDiscountValue(item) }}</strong>
                 </div>
-                <div class="coupon-item__body">
-                  <strong>{{ item.name || '优惠券' }}</strong>
-                  <p>{{ item.description || item.status_reason || '领取后可在结算时使用' }}</p>
-                  <div class="coupon-item__chips">
-                    <span>{{ resolveThresholdText(item) }}</span>
-                    <span>{{ resolveDiscountAmountText(item) }}</span>
-                    <span v-if="item.first_order_only">限首单</span>
-                    <span v-if="item.total_usage_limit">剩余 {{ item.remaining_stock }}/{{ item.total_usage_limit }} 张</span>
-                  </div>
-                </div>
-                <div class="coupon-item__foot">
-                  <span>{{ item.validity_text || item.expires_at || '--' }}</span>
-                  <t-button
-                    size="small"
-                    theme="primary"
-                    :disabled="!item.can_claim"
-                    :loading="claimingId === item.id"
-                    @click="claimCoupon(item.id)"
+                <t-tag :theme="resolveStatusTheme(item)" variant="light">
+                  {{ item.status_label || item.status || '--' }}
+                </t-tag>
+              </div>
+              <div class="coupon-item__body">
+                <strong>{{ item.name || '优惠券' }}</strong>
+                <p>{{ item.description || item.status_reason || '领取后可在结算时使用' }}</p>
+                <div class="coupon-item__chips">
+                  <span>{{ resolveThresholdText(item) }}</span>
+                  <span>{{ resolveDiscountAmountText(item) }}</span>
+                  <span v-if="item.first_order_only">限首单</span>
+                  <span v-if="item.total_usage_limit"
+                    >剩余 {{ item.remaining_stock }}/{{ item.total_usage_limit }} 张</span
                   >
-                    {{ item.can_claim ? '领取' : item.status_label || '不可领' }}
-                  </t-button>
                 </div>
-              </article>
-            </div>
-          </DataState>
-        </div>
-        <div v-if="plazaState.total > 0" class="coupon-pagination">
-          <t-pagination
-            v-model="plazaState.page"
-            v-model:pageSize="plazaState.pageSize"
-            :total="plazaState.total"
-            :page-size-options="[10, 20, 50]"
-            show-total
-            @change="handlePageChange('plaza')"
-            @page-size-change="handlePageSizeChange('plaza')"
-          />
-        </div>
+              </div>
+              <div class="coupon-item__foot">
+                <span>{{ item.validity_text || item.expires_at || '--' }}</span>
+                <t-button
+                  size="small"
+                  theme="primary"
+                  :disabled="!item.can_claim"
+                  :loading="claimingId === item.id"
+                  @click="claimCoupon(item.id)"
+                >
+                  {{ item.can_claim ? '领取' : item.status_label || '不可领' }}
+                </t-button>
+              </div>
+            </article>
+          </div>
+        </data-state>
+      </div>
+      <div v-if="plazaState.total > 0" class="coupon-pagination">
+        <t-pagination
+          v-model="plazaState.page"
+          v-model:page-size="plazaState.pageSize"
+          :total="plazaState.total"
+          :page-size-options="[10, 20, 50]"
+          show-total
+          @change="handlePageChange('plaza')"
+          @page-size-change="handlePageSizeChange('plaza')"
+        />
+      </div>
     </template>
 
-    <t-drawer v-model:visible="detailVisible" header="优惠券详情" size="min(42rem, calc(100vw - 2rem))" destroy-on-close>
+    <t-drawer
+      v-model:visible="detailVisible"
+      header="优惠券详情"
+      size="min(42rem, calc(100vw - 2rem))"
+      destroy-on-close
+    >
       <div v-if="selectedCoupon" class="coupon-detail">
         <section v-if="selectedCoupon.uid" class="coupon-detail-section">
           <div class="coupon-detail-section__head">
@@ -167,13 +178,11 @@
     </t-drawer>
   </section>
 </template>
-
 <script setup lang="ts">
-import { computed } from 'vue';
-import { SearchIcon } from 'tdesign-icons-vue-next';
-
 import DataState from '@shared/user-v3/components/DataState.vue';
-import type { CouponProductScopeItem } from '@/types/client';
+import { SearchIcon } from 'tdesign-icons-vue-next';
+import { computed } from 'vue';
+
 import {
   resolveDiscountAmountText,
   resolveDiscountTypeLabel,
@@ -182,6 +191,7 @@ import {
   resolveThresholdText,
   useCoupons,
 } from '@/domains/marketing/useCoupons';
+import type { CouponProductScopeItem } from '@/types/client';
 
 const {
   activeTab,
@@ -200,13 +210,13 @@ const {
   claimCoupon,
 } = useCoupons();
 
-type CouponHierarchyItem = {
+interface CouponHierarchyItem {
   productId: number;
   level1: string;
   level2: string;
   level3: string;
   productName: string;
-};
+}
 
 type MergedCouponHierarchyItem = CouponHierarchyItem & {
   index: number;
@@ -219,13 +229,15 @@ const couponProductHierarchy = computed(() => {
   const products = Array.isArray(selectedCoupon.value?.products) ? selectedCoupon.value.products : [];
 
   return products
-    .map((item: CouponProductScopeItem): CouponHierarchyItem => ({
-      productId: Number(item?.id || 0),
-      level1: String(item?.type_label || item?.service_type_label || '--').trim() || '--',
-      level2: String(item?.parent_group_name || item?.second_product_group_name || '--').trim() || '--',
-      level3: String(item?.group_name || item?.third_product_group_name || '--').trim() || '--',
-      productName: String(item?.name || item?.product_name || '--').trim() || '--',
-    }))
+    .map(
+      (item: CouponProductScopeItem): CouponHierarchyItem => ({
+        productId: Number(item?.id || 0),
+        level1: String(item?.type_label || item?.service_type_label || '--').trim() || '--',
+        level2: String(item?.parent_group_name || item?.second_product_group_name || '--').trim() || '--',
+        level3: String(item?.group_name || item?.third_product_group_name || '--').trim() || '--',
+        productName: String(item?.name || item?.product_name || '--').trim() || '--',
+      }),
+    )
     .filter((item: CouponHierarchyItem) => item.productId > 0 || item.productName !== '--');
 });
 
@@ -289,7 +301,6 @@ function mergeCouponProductHierarchy(data: CouponHierarchyItem[]): MergedCouponH
   return result;
 }
 </script>
-
 <style scoped lang="less">
 .coupon-page {
   display: flex;

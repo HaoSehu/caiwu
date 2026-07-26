@@ -1,6 +1,5 @@
 import type { AxiosRequestConfig } from 'axios';
 
-import request from '@/utils/request';
 import type {
   ApiEnvelope,
   ClientAlipayAccount,
@@ -9,6 +8,7 @@ import type {
   ClientUserInfo,
   ClientVerificationPayload,
 } from '@/types/client';
+import request from '@/utils/request';
 
 type RequestConfig = AxiosRequestConfig & { silentError?: boolean };
 
@@ -28,7 +28,8 @@ function putEnvelope<T>(url: string, data?: Record<string, unknown>) {
 
 export const clientAuthApi = {
   login: (data: Record<string, unknown>) => postEnvelope<ClientAuthSessionPayload>('/v2/client/login', data),
-  loginByCode: (data: Record<string, unknown>) => postEnvelope<ClientAuthSessionPayload>('/v2/client/auth/login-by-code', data),
+  loginByCode: (data: Record<string, unknown>) =>
+    postEnvelope<ClientAuthSessionPayload>('/v2/client/auth/login-by-code', data),
   register: (data: Record<string, unknown>) => postEnvelope<ClientAuthSessionPayload>('/v2/client/register', data),
   exchangeLoginAsCode: (data: Record<string, unknown>) =>
     postEnvelope<ClientAuthSessionPayload>('/v2/client/auth/login-as/exchange', data),
@@ -39,7 +40,8 @@ export const clientAuthApi = {
   updatePhone: (data: Record<string, unknown>) => request.put('/v2/client/auth/phone', data),
   updateEmail: (data: Record<string, unknown>) => request.put('/v2/client/auth/email', data),
   alipayAccount: () => getEnvelope<ClientAlipayAccount>('/v2/client/auth/alipay-account'),
-  updateAlipayAccount: (data: Record<string, unknown>) => putEnvelope<ClientAlipayAccount>('/v2/client/auth/alipay-account', data),
+  updateAlipayAccount: (data: Record<string, unknown>) =>
+    putEnvelope<ClientAlipayAccount>('/v2/client/auth/alipay-account', data),
   initVerification: (data: Record<string, unknown>) =>
     postEnvelope<ClientVerificationPayload>('/v2/client/verification/init', data, SILENT_ERROR_CONFIG),
   verificationQrcode: (data: Record<string, unknown>) =>
@@ -48,7 +50,8 @@ export const clientAuthApi = {
     postEnvelope<ClientVerificationPayload>('/v2/client/verification/close', data, SILENT_ERROR_CONFIG),
   verificationStatus: (params?: Record<string, unknown>) =>
     getEnvelope<ClientVerificationPayload>('/v2/client/verification/status', { params, ...SILENT_ERROR_CONFIG }),
-  restartVerification: () => postEnvelope<ClientVerificationPayload>('/v2/client/verification/restart', undefined, SILENT_ERROR_CONFIG),
+  restartVerification: () =>
+    postEnvelope<ClientVerificationPayload>('/v2/client/verification/restart', undefined, SILENT_ERROR_CONFIG),
   verificationFeeConfig: () => request.get('/v2/client/verification/fee-config'),
   notificationPreferences: () => getEnvelope<ClientNotificationPreferences>('/v2/client/auth/notification-preferences'),
   updateNotificationPreferences: (data: Record<string, unknown>) =>

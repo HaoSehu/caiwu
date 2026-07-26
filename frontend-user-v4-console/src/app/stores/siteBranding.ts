@@ -1,6 +1,6 @@
-import { computed, ref } from 'vue';
-import { defineStore } from 'pinia';
 import { applyDocumentTitle, deriveInitials, syncDocumentTitle, updateFavicon } from '@caiwu/shared/runtime';
+import { defineStore } from 'pinia';
+import { computed, ref } from 'vue';
 
 import siteApi from '@/api/site';
 import { DEFAULT_SUPPORT_CONTACTS } from '@/data/supportContacts';
@@ -93,13 +93,18 @@ export const useSiteBrandingStore = defineStore('site-branding', () => {
     const previousBaseTitle = browserTitle.value || siteName.value || DEFAULT_SITE_NAME;
     siteName.value = pick(data, ['site_name'], siteName.value || DEFAULT_SITE_NAME);
     browserTitle.value = pick(data, ['browser_title'], siteName.value || DEFAULT_SITE_NAME);
-    siteLogo.value = normalizeBrandAsset(pick(data, ['site_logo'], siteLogo.value || DEFAULT_SITE_LOGO), DEFAULT_SITE_LOGO);
+    siteLogo.value = normalizeBrandAsset(
+      pick(data, ['site_logo'], siteLogo.value || DEFAULT_SITE_LOGO),
+      DEFAULT_SITE_LOGO,
+    );
     siteFavicon.value = normalizeBrandAsset(
       pick(data, ['site_favicon'], siteFavicon.value || DEFAULT_FAVICON),
       DEFAULT_FAVICON,
     );
     clientConsoleIcon.value = normalizeBrandAsset(
-      pickOptional(data, ['client_console_icon', 'clientConsoleIcon']) || siteFavicon.value || DEFAULT_CLIENT_CONSOLE_ICON,
+      pickOptional(data, ['client_console_icon', 'clientConsoleIcon']) ||
+        siteFavicon.value ||
+        DEFAULT_CLIENT_CONSOLE_ICON,
       siteFavicon.value || DEFAULT_CLIENT_CONSOLE_ICON,
     );
     serviceQqGroup.value = pick(
@@ -107,11 +112,23 @@ export const useSiteBrandingStore = defineStore('site-branding', () => {
       ['service_qq_group', 'serviceQqGroup', 'service_phone', 'servicePhone'],
       serviceQqGroup.value || DEFAULT_SUPPORT_CONTACTS.qqGroup,
     );
-    serviceEmail.value = pick(data, ['service_email', 'serviceEmail'], serviceEmail.value || DEFAULT_SUPPORT_CONTACTS.email);
-    serviceHours.value = pick(data, ['service_hours', 'serviceHours'], serviceHours.value || DEFAULT_SUPPORT_CONTACTS.hours);
+    serviceEmail.value = pick(
+      data,
+      ['service_email', 'serviceEmail'],
+      serviceEmail.value || DEFAULT_SUPPORT_CONTACTS.email,
+    );
+    serviceHours.value = pick(
+      data,
+      ['service_hours', 'serviceHours'],
+      serviceHours.value || DEFAULT_SUPPORT_CONTACTS.hours,
+    );
     supportGroupTitle.value = pick(data, ['support_group_title', 'supportGroupTitle'], supportGroupTitle.value || '');
     supportGroupText.value = pick(data, ['support_group_text', 'supportGroupText'], supportGroupText.value || '');
-    supportGroupQr.value = pick(data, ['support_group_qr', 'supportGroupQr'], supportGroupQr.value || DEFAULT_SUPPORT_CONTACTS.groupQr);
+    supportGroupQr.value = pick(
+      data,
+      ['support_group_qr', 'supportGroupQr'],
+      supportGroupQr.value || DEFAULT_SUPPORT_CONTACTS.groupQr,
+    );
     supportGroupLink.value = pick(data, ['support_group_link', 'supportGroupLink'], supportGroupLink.value || '');
     termsUrl.value = pick(data, ['terms_url'], termsUrl.value || '');
     privacyUrl.value = pick(data, ['privacy_url'], privacyUrl.value || '');
@@ -124,14 +141,18 @@ export const useSiteBrandingStore = defineStore('site-branding', () => {
       return fetchPromise;
     }
 
-    fetchPromise = siteApi.config({ silentError: true })
+    fetchPromise = siteApi
+      .config({ silentError: true })
       .then((res: any) => {
         hydrateSiteConfig(res.data || {});
       })
       .catch(() => {
         siteLogo.value = normalizeBrandAsset(siteLogo.value || DEFAULT_SITE_LOGO, DEFAULT_SITE_LOGO);
         siteFavicon.value = normalizeBrandAsset(siteFavicon.value || DEFAULT_FAVICON, DEFAULT_FAVICON);
-        clientConsoleIcon.value = normalizeBrandAsset(clientConsoleIcon.value || siteFavicon.value || DEFAULT_CLIENT_CONSOLE_ICON, siteFavicon.value || DEFAULT_CLIENT_CONSOLE_ICON);
+        clientConsoleIcon.value = normalizeBrandAsset(
+          clientConsoleIcon.value || siteFavicon.value || DEFAULT_CLIENT_CONSOLE_ICON,
+          siteFavicon.value || DEFAULT_CLIENT_CONSOLE_ICON,
+        );
       })
       .finally(() => {
         updateFavicon(siteFavicon.value || DEFAULT_FAVICON, DEFAULT_FAVICON);

@@ -1,11 +1,9 @@
-import { computed, onMounted, reactive, ref, shallowRef } from 'vue';
-import { MessagePlugin } from 'tdesign-vue-next';
-import { useRoute, useRouter } from 'vue-router';
 import { SERVICE_STATUS, SERVICE_STATUS_MAP, toSelectOptions } from '@shared/statusConfig';
+import { MessagePlugin } from 'tdesign-vue-next';
+import { computed, onMounted, reactive, ref, shallowRef } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
-import { copyText, formatMoney } from '@/utils/format';
-import { getErrorMessage } from '@/utils/error';
 import type {
   CouponOption,
   ServiceCatalogTypeOption,
@@ -14,6 +12,8 @@ import type {
   ServiceOverviewPayload,
   ServiceRenewPreview,
 } from '@/types/client';
+import { getErrorMessage } from '@/utils/error';
+import { copyText, formatMoney } from '@/utils/format';
 
 export const OS_ICON_MAP: Record<string, string> = {
   windows: '/img/os/Windows.svg',
@@ -49,7 +49,9 @@ const DEFAULT_SERVICE_STATUS_OPTION = {
 type ServiceListParams = Record<string, string | number>;
 type TdesignTagTheme = 'primary' | 'success' | 'warning' | 'danger';
 type ServiceLike = Partial<ServiceInstance> & Record<string, unknown>;
-type StatusMapEntry = { label?: string };
+interface StatusMapEntry {
+  label?: string;
+}
 
 interface ServiceOverview extends ServiceOverviewPayload {}
 
@@ -99,17 +101,25 @@ export function resolveServiceOsIcon(item: ServiceLike) {
 
 export function resolveServiceMark(item: ServiceLike) {
   const osText = resolveServiceOsText(item);
-  const text = osText || item?.product?.type_label || item?.product?.group_name || item?.product?.display_name || '服务';
+  const text =
+    osText || item?.product?.type_label || item?.product?.group_name || item?.product?.display_name || '服务';
   return String(text).replace(/\s+/g, '').slice(0, 2);
 }
 
 export function findListSpecValue(item: ServiceLike, aliases: string[] = [], fallback = '--') {
   const specs = Array.isArray(item?.specs) ? item.specs : [];
   for (const alias of aliases) {
-    const keyword = String(alias || '').trim().toLowerCase();
+    const keyword = String(alias || '')
+      .trim()
+      .toLowerCase();
     if (!keyword) continue;
 
-    const matched = specs.find((spec) => String(spec?.label || '').trim().toLowerCase().includes(keyword));
+    const matched = specs.find((spec) =>
+      String(spec?.label || '')
+        .trim()
+        .toLowerCase()
+        .includes(keyword),
+    );
     const value = String(matched?.value || '').trim();
     if (value) return value;
   }
@@ -204,9 +214,18 @@ export function useServiceCenter() {
 
   const metricCards = computed(() => {
     const groups = Array.isArray(overview.value.list) ? overview.value.list : [];
-    const activeCount = groups.reduce((sum: number, item: ServiceOverviewGroup) => sum + Number(item?.active_count || 0), 0);
-    const pendingCount = groups.reduce((sum: number, item: ServiceOverviewGroup) => sum + Number(item?.pending_count || 0), 0);
-    const expiringCount = groups.reduce((sum: number, item: ServiceOverviewGroup) => sum + Number(item?.expiring_count || 0), 0);
+    const activeCount = groups.reduce(
+      (sum: number, item: ServiceOverviewGroup) => sum + Number(item?.active_count || 0),
+      0,
+    );
+    const pendingCount = groups.reduce(
+      (sum: number, item: ServiceOverviewGroup) => sum + Number(item?.pending_count || 0),
+      0,
+    );
+    const expiringCount = groups.reduce(
+      (sum: number, item: ServiceOverviewGroup) => sum + Number(item?.expiring_count || 0),
+      0,
+    );
 
     return [
       {
@@ -305,9 +324,13 @@ export function useServiceCenter() {
   }
 
   function hydrateFiltersFromRoute() {
-    const routeCatalogType = Array.isArray(route.query.catalog_type) ? route.query.catalog_type[0] : route.query.catalog_type;
+    const routeCatalogType = Array.isArray(route.query.catalog_type)
+      ? route.query.catalog_type[0]
+      : route.query.catalog_type;
     const nextCatalogType = String(routeCatalogType || '').trim();
-    const routeQuickFilter = Array.isArray(route.query.quick_filter) ? route.query.quick_filter[0] : route.query.quick_filter;
+    const routeQuickFilter = Array.isArray(route.query.quick_filter)
+      ? route.query.quick_filter[0]
+      : route.query.quick_filter;
     const nextQuickFilter = String(routeQuickFilter || '').trim();
 
     if (nextCatalogType !== '') {

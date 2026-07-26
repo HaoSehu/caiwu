@@ -12,7 +12,7 @@
       <t-button variant="outline" @click="router.push('/client/orders')">返回列表</t-button>
       <div class="detail-toolbar__actions">
         <t-button variant="outline" :loading="loading" @click="loadDetail(orderId)">
-          <template #icon><RefreshIcon /></template>
+          <template #icon><refresh-icon /></template>
           刷新
         </t-button>
         <t-button
@@ -51,7 +51,7 @@
                 </div>
                 <div class="detail-kv-item">
                   <span>订单状态</span>
-                  <StatusTag :status-map="ORDER_STATUS_MAP" :status="Number(detail.status)" />
+                  <status-tag :status-map="ORDER_STATUS_MAP" :status="Number(detail.status)" />
                 </div>
                 <div class="detail-kv-item">
                   <span>订单金额</span>
@@ -119,7 +119,9 @@
                   </div>
                 </section>
               </div>
-              <div v-if="!configSnapshotView.length && !pricingSnapshotView.length" class="order-detail-empty">暂无配置快照</div>
+              <div v-if="!configSnapshotView.length && !pricingSnapshotView.length" class="order-detail-empty">
+                暂无配置快照
+              </div>
             </t-tab-panel>
 
             <t-tab-panel value="related" label="关联信息">
@@ -140,7 +142,7 @@
                   </div>
                   <div class="detail-kv-item">
                     <span>账单状态</span>
-                    <StatusTag :status-map="INVOICE_STATUS_MAP" :status="Number(detail.invoice.status)" />
+                    <status-tag :status-map="INVOICE_STATUS_MAP" :status="Number(detail.invoice.status)" />
                   </div>
                 </div>
               </section>
@@ -187,16 +189,15 @@
     </t-loading>
   </section>
 </template>
-
 <script setup lang="ts">
+import { INVOICE_STATUS_MAP, ORDER_STATUS_MAP } from '@caiwu/shared/statusConfig';
+import StatusTag from '@shared/user-v3/components/StatusTag.vue';
+import { RefreshIcon } from 'tdesign-icons-vue-next';
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { RefreshIcon } from 'tdesign-icons-vue-next';
-import { INVOICE_STATUS_MAP, ORDER_STATUS_MAP } from '@caiwu/shared/statusConfig';
 
-import StatusTag from '@shared/user-v3/components/StatusTag.vue';
-import { configValueLabelMap, flattenSnapshot } from '@/domains/finance/useRecords';
 import { formatMoney, orderProductDisplay, useOrderDetail } from '@/domains/finance/useOrders';
+import { configValueLabelMap, flattenSnapshot } from '@/domains/finance/useRecords';
 
 const route = useRoute();
 const router = useRouter();
@@ -240,7 +241,6 @@ onMounted(() => {
   }
 });
 </script>
-
 <style scoped lang="less">
 .order-breadcrumb {
   margin-bottom: var(--td-comp-margin-m);
