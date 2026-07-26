@@ -13,7 +13,14 @@
       <t-form-item name="account">
         <div class="client-auth-field">
           <label class="client-auth-label is-required" for="register-account">手机号 / 邮箱</label>
-          <t-input id="register-account" v-model="form.account" size="large" clearable autocomplete="username" placeholder="请输入手机号或邮箱" />
+          <t-input
+            id="register-account"
+            v-model="form.account"
+            size="large"
+            clearable
+            autocomplete="username"
+            placeholder="请输入手机号或邮箱"
+          />
         </div>
       </t-form-item>
 
@@ -22,7 +29,12 @@
           <label class="client-auth-label is-required" for="register-code">验证码</label>
           <div class="client-auth-code-row">
             <t-input id="register-code" v-model="form.code" size="large" maxlength="6" placeholder="请输入验证码" />
-            <t-button variant="outline" :disabled="countdown > 0" :loading="sendingCode || captchaLoading" @click="handleSendCode">
+            <t-button
+              variant="outline"
+              :disabled="countdown > 0"
+              :loading="sendingCode || captchaLoading"
+              @click="handleSendCode"
+            >
               {{ countdown > 0 ? `${countdown}s` : '发送验证码' }}
             </t-button>
           </div>
@@ -32,14 +44,26 @@
       <t-form-item name="nickname">
         <div class="client-auth-field">
           <label class="client-auth-label" for="register-nickname">用户名</label>
-          <t-input id="register-nickname" v-model="form.nickname" size="large" maxlength="50" placeholder="选填，最多 50 个字符" />
+          <t-input
+            id="register-nickname"
+            v-model="form.nickname"
+            size="large"
+            maxlength="50"
+            placeholder="选填，最多 50 个字符"
+          />
         </div>
       </t-form-item>
 
       <t-form-item name="referral_code">
         <div class="client-auth-field">
           <label class="client-auth-label" for="register-referral">推荐码</label>
-          <t-input id="register-referral" v-model="form.referral_code" size="large" maxlength="24" placeholder="选填，如有邀请推荐可填写" />
+          <t-input
+            id="register-referral"
+            v-model="form.referral_code"
+            size="large"
+            maxlength="24"
+            placeholder="选填，如有邀请推荐可填写"
+          />
         </div>
       </t-form-item>
 
@@ -79,7 +103,11 @@
           >
             <template #prefix-icon><lock-on-icon /></template>
             <template #suffix-icon>
-              <browse-icon v-if="showConfirmPassword" class="client-auth-password-icon" @click="showConfirmPassword = false" />
+              <browse-icon
+                v-if="showConfirmPassword"
+                class="client-auth-password-icon"
+                @click="showConfirmPassword = false"
+              />
               <browse-off-icon v-else class="client-auth-password-icon" @click="showConfirmPassword = true" />
             </template>
           </t-input>
@@ -92,7 +120,6 @@
     </t-form>
   </auth-shell>
 </template>
-
 <script setup lang="ts">
 import { BrowseIcon, BrowseOffIcon, LockOnIcon } from 'tdesign-icons-vue-next';
 import type { FormInstanceFunctions, FormRule, FormValidateMessage, SubmitContext } from 'tdesign-vue-next';
@@ -105,6 +132,7 @@ import AuthShell from '@/components/auth/AuthShell.vue';
 import { useGeeTestCaptcha } from '@/composables/useGeeTestCaptcha';
 import { useUserStore } from '@/store';
 import { buildAccountPayload, detectAccountType, normalizeAccountValue } from '@/utils/account';
+import { toUserMessage } from '@/utils/userMessage';
 
 interface RegisterForm {
   account: string;
@@ -226,7 +254,7 @@ async function handleSendCode() {
   } catch (error: unknown) {
     const runtimeError = error as RuntimeHandledError;
     if (!runtimeError.__handled) {
-      MessagePlugin.error(runtimeError.message || '验证码发送失败');
+      MessagePlugin.error(toUserMessage(runtimeError.message, '验证码发送失败'));
     }
   } finally {
     sendingCode.value = false;
@@ -252,7 +280,9 @@ function setFormErrors(errors: Partial<Record<keyof RegisterForm, string>>) {
     nickname: errors.nickname ? [{ type: 'error', message: errors.nickname }] : [],
     referral_code: errors.referral_code ? [{ type: 'error', message: errors.referral_code }] : [],
     password: errors.password ? [{ type: 'error', message: errors.password }] : [],
-    password_confirmation: errors.password_confirmation ? [{ type: 'error', message: errors.password_confirmation }] : [],
+    password_confirmation: errors.password_confirmation
+      ? [{ type: 'error', message: errors.password_confirmation }]
+      : [],
   };
   formRef.value?.setValidateMessage(validateMessage);
 }
@@ -309,7 +339,7 @@ async function runRegister() {
   } catch (error: unknown) {
     const runtimeError = error as RuntimeHandledError;
     if (!runtimeError.__handled) {
-      MessagePlugin.error(runtimeError.message || '注册失败');
+      MessagePlugin.error(toUserMessage(runtimeError.message, '注册失败'));
     }
   } finally {
     loading.value = false;
@@ -320,7 +350,6 @@ onBeforeUnmount(() => {
   clearTimer();
 });
 </script>
-
 <style scoped lang="less">
 @import './shared-auth.less';
 </style>

@@ -24,7 +24,7 @@
           @clear="handleSearch"
         >
           <template #suffixIcon>
-            <SearchIcon />
+            <search-icon />
           </template>
         </t-input>
 
@@ -39,7 +39,7 @@
     </t-card>
 
     <section class="record-list-card">
-      <DataState :loading="loading" :empty="!list.length" description="暂无订单记录">
+      <data-state :loading="loading" :empty="!list.length" description="暂无订单记录">
         <t-table class="record-table" row-key="id" :data="list" :columns="columns" :pagination="null" hover>
           <template #order="{ row }">
             <div class="stack-cell">
@@ -57,7 +57,7 @@
             <span class="order-money">¥{{ formatMoney(row.amount) }}</span>
           </template>
           <template #status="{ row }">
-            <StatusTag :status-map="ORDER_STATUS_MAP" :status="Number(row.status)" />
+            <status-tag :status-map="ORDER_STATUS_MAP" :status="Number(row.status)" />
           </template>
           <template #invoice_ref="{ row }">
             <div v-if="row.invoice" class="stack-cell">
@@ -69,7 +69,7 @@
               >
                 {{ row.invoice.invoice_no || '--' }}
               </t-button>
-              <StatusTag :status-map="INVOICE_STATUS_MAP" :status="Number(row.invoice.status)" size="small" />
+              <status-tag :status-map="INVOICE_STATUS_MAP" :status="Number(row.invoice.status)" size="small" />
             </div>
             <span v-else>--</span>
           </template>
@@ -103,10 +103,15 @@
         </t-table>
 
         <div class="record-mobile-list">
-          <article v-for="row in list" :key="row.id" class="record-mobile-card" @click="router.push(`/client/orders/${row.id}`)">
+          <article
+            v-for="row in list"
+            :key="row.id"
+            class="record-mobile-card"
+            @click="router.push(`/client/orders/${row.id}`)"
+          >
             <div class="record-mobile-card__head">
               <strong>{{ row.order_no || '--' }}</strong>
-              <StatusTag :status-map="ORDER_STATUS_MAP" :status="Number(row.status)" />
+              <status-tag :status-map="ORDER_STATUS_MAP" :status="Number(row.status)" />
             </div>
             <div class="stack-cell">
               <strong>{{ orderProductDisplay(row) }}</strong>
@@ -118,7 +123,12 @@
               <span>{{ row.created_at || '--' }}</span>
             </div>
             <div class="record-mobile-card__actions">
-              <t-button size="small" theme="primary" variant="text" @click.stop="router.push(`/client/orders/${row.id}`)">
+              <t-button
+                size="small"
+                theme="primary"
+                variant="text"
+                @click.stop="router.push(`/client/orders/${row.id}`)"
+              >
                 详情
               </t-button>
               <t-button
@@ -143,13 +153,13 @@
             </div>
           </article>
         </div>
-      </DataState>
+      </data-state>
     </section>
 
     <div v-if="total > 0" class="record-pagination">
       <t-pagination
         v-model="filters.page"
-        v-model:pageSize="filters.page_size"
+        v-model:page-size="filters.page_size"
         :page-size-options="[10, 20, 50]"
         :total="total"
         show-total
@@ -159,20 +169,19 @@
     </div>
   </section>
 </template>
-
 <script setup lang="ts">
-import type { PrimaryTableCol } from 'tdesign-vue-next';
-import { SearchIcon } from 'tdesign-icons-vue-next';
-import { useRouter } from 'vue-router';
 import { INVOICE_STATUS_MAP, ORDER_STATUS_MAP } from '@caiwu/shared/statusConfig';
-
 import DataState from '@shared/user-v3/components/DataState.vue';
 import StatusTag from '@shared/user-v3/components/StatusTag.vue';
+import { SearchIcon } from 'tdesign-icons-vue-next';
+import type { PrimaryTableCol } from 'tdesign-vue-next';
+import { useRouter } from 'vue-router';
+
 import {
   formatMoney,
-  orderProductDisplay,
   ORDER_STATUS_OPTIONS,
   ORDER_TYPE_OPTIONS,
+  orderProductDisplay,
   useOrderList,
 } from '@/domains/finance/useOrders';
 
@@ -208,7 +217,6 @@ const columns: PrimaryTableCol[] = [
   { colKey: 'operation', title: '操作', width: '14rem', fixed: 'right', align: 'right' },
 ];
 </script>
-
 <style scoped lang="less">
 @import '../record-page.less';
 

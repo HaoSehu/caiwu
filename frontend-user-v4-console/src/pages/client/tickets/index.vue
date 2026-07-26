@@ -15,7 +15,7 @@
         </t-select>
         <div class="ticket-filter-actions">
           <t-button theme="primary" @click="openCreateDialog">
-            <template #icon><AddIcon /></template>
+            <template #icon><add-icon /></template>
             提交工单
           </t-button>
         </div>
@@ -23,49 +23,53 @@
     </t-card>
 
     <section class="ticket-list-card">
-      <DataState :loading="loading" :empty="!list.length" description="暂无工单记录">
-          <div class="ticket-table-shell">
-            <t-table row-key="id" :data="list" :columns="columns" :pagination="null" hover>
-              <template #subject="{ row }">
-                <button type="button" class="ticket-link" @click="openDetail(row)">#{{ row.id }} {{ row.subject || '--' }}</button>
-              </template>
-              <template #status="{ row }">
-                <t-tag :theme="resolveTicketTagTheme(row.status)" variant="light">
-                  {{ resolveTicketStatusLabel(row.status) }}
-                </t-tag>
-              </template>
-              <template #priority="{ row }">
-                <t-tag :theme="resolvePriorityTheme(row.priority)" variant="light">
-                  {{ resolvePriorityLabel(row.priority) }}
-                </t-tag>
-              </template>
-              <template #updated_at="{ row }">{{ formatTicketTime(row.updated_at) }}</template>
-              <template #operation="{ row }">
-                <t-button size="small" theme="primary" variant="text" @click="openDetail(row)">查看交流</t-button>
-              </template>
-            </t-table>
-          </div>
+      <data-state :loading="loading" :empty="!list.length" description="暂无工单记录">
+        <div class="ticket-table-shell">
+          <t-table row-key="id" :data="list" :columns="columns" :pagination="null" hover>
+            <template #subject="{ row }">
+              <button type="button" class="ticket-link" @click="openDetail(row)">
+                #{{ row.id }} {{ row.subject || '--' }}
+              </button>
+            </template>
+            <template #status="{ row }">
+              <t-tag :theme="resolveTicketTagTheme(row.status)" variant="light">
+                {{ resolveTicketStatusLabel(row.status) }}
+              </t-tag>
+            </template>
+            <template #priority="{ row }">
+              <t-tag :theme="resolvePriorityTheme(row.priority)" variant="light">
+                {{ resolvePriorityLabel(row.priority) }}
+              </t-tag>
+            </template>
+            <template #updated_at="{ row }">{{ formatTicketTime(row.updated_at) }}</template>
+            <template #operation="{ row }">
+              <t-button size="small" theme="primary" variant="text" @click="openDetail(row)">查看交流</t-button>
+            </template>
+          </t-table>
+        </div>
 
-          <div class="mobile-ticket-list">
-            <button v-for="row in list" :key="row.id" type="button" class="mobile-ticket-card" @click="openDetail(row)">
-              <span class="mobile-ticket-card__top">
-                <strong>#{{ row.id }}</strong>
-                <t-tag :theme="resolveTicketTagTheme(row.status)" variant="light">{{ resolveTicketStatusLabel(row.status) }}</t-tag>
-              </span>
-              <span class="mobile-ticket-card__title">{{ row.subject || '--' }}</span>
-              <span class="mobile-ticket-card__meta">
-                <span>优先级：{{ resolvePriorityLabel(row.priority) }}</span>
-                <span>{{ formatTicketTime(row.updated_at) }}</span>
-              </span>
-            </button>
-          </div>
-      </DataState>
+        <div class="mobile-ticket-list">
+          <button v-for="row in list" :key="row.id" type="button" class="mobile-ticket-card" @click="openDetail(row)">
+            <span class="mobile-ticket-card__top">
+              <strong>#{{ row.id }}</strong>
+              <t-tag :theme="resolveTicketTagTheme(row.status)" variant="light">{{
+                resolveTicketStatusLabel(row.status)
+              }}</t-tag>
+            </span>
+            <span class="mobile-ticket-card__title">{{ row.subject || '--' }}</span>
+            <span class="mobile-ticket-card__meta">
+              <span>优先级：{{ resolvePriorityLabel(row.priority) }}</span>
+              <span>{{ formatTicketTime(row.updated_at) }}</span>
+            </span>
+          </button>
+        </div>
+      </data-state>
     </section>
 
     <div v-if="total > 0" class="ticket-pagination">
       <t-pagination
         v-model="filters.page"
-        v-model:pageSize="filters.page_size"
+        v-model:page-size="filters.page_size"
         :total="total"
         :page-size-options="[10, 20, 50]"
         show-total
@@ -87,7 +91,12 @@
       <t-form label-align="top" class="ticket-create-form">
         <t-form-item label="问题分类" required-mark>
           <t-select v-model="createForm.department">
-            <t-option v-for="item in TICKET_DEPARTMENT_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+            <t-option
+              v-for="item in TICKET_DEPARTMENT_OPTIONS"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </t-select>
         </t-form-item>
         <t-form-item label="工单标题" required-mark>
@@ -106,7 +115,12 @@
         </t-form-item>
         <t-form-item label="优先级">
           <t-select v-model="createForm.priority">
-            <t-option v-for="item in TICKET_PRIORITY_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+            <t-option
+              v-for="item in TICKET_PRIORITY_OPTIONS"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </t-select>
         </t-form-item>
         <t-form-item label="问题描述">
@@ -121,7 +135,7 @@
           <div class="ticket-attachment-box">
             <label class="upload-trigger">
               <input type="file" accept=".jpg,.jpeg,.png,.webp" multiple @change="handleCreateUpload" />
-              <span><AddIcon /> 上传图片</span>
+              <span><add-icon /> 上传图片</span>
             </label>
             <span class="upload-tip">支持 jpg/png/webp，最多 9 张，单张不超过 5MB</span>
             <div v-if="uploadFiles.length" class="attachment-list">
@@ -141,18 +155,21 @@
       </t-form>
     </t-dialog>
 
-    <t-dialog v-model:visible="previewVisible" header="附件预览" width="min(45rem, calc(100vw - var(--td-comp-margin-xl)))">
+    <t-dialog
+      v-model:visible="previewVisible"
+      header="附件预览"
+      width="min(45rem, calc(100vw - var(--td-comp-margin-xl)))"
+    >
       <img v-if="previewUrl" :src="previewUrl" class="preview-image" alt="附件预览" />
     </t-dialog>
   </section>
 </template>
-
 <script setup lang="ts">
-import { onMounted } from 'vue';
-import type { PrimaryTableCol } from 'tdesign-vue-next';
-import { AddIcon } from 'tdesign-icons-vue-next';
-
 import DataState from '@shared/user-v3/components/DataState.vue';
+import { AddIcon } from 'tdesign-icons-vue-next';
+import type { PrimaryTableCol } from 'tdesign-vue-next';
+import { onMounted } from 'vue';
+
 import {
   formatTicketTime,
   resolvePriorityLabel,
@@ -212,7 +229,6 @@ onMounted(() => {
   void loadTickets();
 });
 </script>
-
 <style scoped lang="less">
 .client-tickets {
   display: flex;

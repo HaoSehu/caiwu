@@ -23,7 +23,6 @@
     </t-card>
   </section>
 </template>
-
 <script setup lang="ts">
 import { logColumns } from '../../composables/useConsoleTables';
 import { useServiceConsoleContext } from '../context';

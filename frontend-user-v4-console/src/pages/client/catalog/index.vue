@@ -9,13 +9,11 @@
     </t-card>
   </section>
 </template>
-
 <script setup lang="ts">
 import { useRouter } from 'vue-router';
 
 const router = useRouter();
 </script>
-
 <style scoped lang="less">
 .catalog-page {
   // padding 由 Starter 布局层统一提供

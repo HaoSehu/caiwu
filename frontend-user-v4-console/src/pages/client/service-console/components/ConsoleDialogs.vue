@@ -1,14 +1,13 @@
 <template>
-  <SecurityGroupDialog />
-  <SecurityRuleDialog />
-  <PasswordResetDialog />
-  <ReinstallDialog />
-  <RenewDialog />
-  <TrafficPackageDialog />
-  <NameDialog />
-  <RemarkDialog />
+  <security-group-dialog />
+  <security-rule-dialog />
+  <password-reset-dialog />
+  <reinstall-dialog />
+  <renew-dialog />
+  <traffic-package-dialog />
+  <name-dialog />
+  <remark-dialog />
 </template>
-
 <script setup lang="ts">
 import NameDialog from './dialogs/NameDialog.vue';
 import PasswordResetDialog from './dialogs/PasswordResetDialog.vue';

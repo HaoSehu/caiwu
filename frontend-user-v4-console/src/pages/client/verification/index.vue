@@ -1,6 +1,6 @@
 <template>
   <section class="client-verification">
-    <LoadingState :loading="loading" text="正在加载实名信息">
+    <loading-state :loading="loading" text="正在加载实名信息">
       <t-card class="verification-status-card" :bordered="false">
         <div class="verification-status-card__main">
           <div>
@@ -54,13 +54,15 @@
           </ul>
         </t-card>
       </div>
-    </LoadingState>
+    </loading-state>
 
     <t-dialog
       v-model:visible="showVerificationDialog"
       header="实名认证"
       width="min(32rem, calc(100vw - var(--td-comp-margin-xl)))"
-      :confirm-btn="verificationUrl ? null : { content: '提交认证', loading: verificationLoading, disabled: !canSubmit }"
+      :confirm-btn="
+        verificationUrl ? null : { content: '提交认证', loading: verificationLoading, disabled: !canSubmit }
+      "
       cancel-btn="取消"
       destroy-on-close
       @confirm="submitVerification"
@@ -83,9 +85,15 @@
         </p>
         <p v-if="verificationMessage" class="verification-message">{{ verificationMessage }}</p>
         <div class="verification-link-actions">
-          <t-button variant="outline" :loading="verificationLoading" @click="refreshVerificationLink">刷新二维码</t-button>
-          <t-button theme="primary" :loading="checkingStatus" @click="checkVerificationStatus(false)">查询认证状态</t-button>
-          <t-button variant="outline" :loading="closingSession" @click="closeVerificationSession(false)">关闭会话</t-button>
+          <t-button variant="outline" :loading="verificationLoading" @click="refreshVerificationLink"
+            >刷新二维码</t-button
+          >
+          <t-button theme="primary" :loading="checkingStatus" @click="checkVerificationStatus(false)"
+            >查询认证状态</t-button
+          >
+          <t-button variant="outline" :loading="closingSession" @click="closeVerificationSession(false)"
+            >关闭会话</t-button
+          >
           <t-button
             v-if="canRestartVerification"
             theme="warning"
@@ -115,10 +123,9 @@
     </t-dialog>
   </section>
 </template>
-
 <script setup lang="ts">
-import { defineAsyncComponent, onMounted } from 'vue';
 import LoadingState from '@shared/user-v3/components/LoadingState.vue';
+import { defineAsyncComponent, onMounted } from 'vue';
 
 const QrcodeVue = defineAsyncComponent(() => import('qrcode.vue'));
 
@@ -160,7 +167,6 @@ onMounted(async () => {
   await handleCallbackQuery();
 });
 </script>
-
 <style scoped lang="less">
 .client-verification {
   display: flex;

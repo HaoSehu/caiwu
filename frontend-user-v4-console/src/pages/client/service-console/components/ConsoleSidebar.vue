@@ -13,7 +13,6 @@
     </button>
   </aside>
 </template>
-
 <script setup lang="ts">
 import type { ServiceConsoleNavItem } from './registry';
 

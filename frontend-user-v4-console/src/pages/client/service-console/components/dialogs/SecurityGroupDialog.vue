@@ -7,7 +7,12 @@
       </label>
       <label>
         <span>描述</span>
-        <t-textarea v-model="groupForm.description" :autosize="{ minRows: 3, maxRows: 5 }" :maxlength="200" placeholder="选填" />
+        <t-textarea
+          v-model="groupForm.description"
+          :autosize="{ minRows: 3, maxRows: 5 }"
+          :maxlength="200"
+          placeholder="选填"
+        />
       </label>
     </div>
     <template #footer>
@@ -16,7 +21,6 @@
     </template>
   </t-dialog>
 </template>
-
 <script setup lang="ts">
 import { useServiceConsoleContext } from '../context';
 

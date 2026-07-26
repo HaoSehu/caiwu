@@ -25,7 +25,7 @@
                   @click="handleMobilePresetSelect(item)"
                 >
                   <span class="mobile-select-card__value">¥{{ item }}</span>
-                  <CheckIcon v-if="!mobileCustomSelected && activePreset === item" class="mobile-select-card__mark" />
+                  <check-icon v-if="!mobileCustomSelected && activePreset === item" class="mobile-select-card__mark" />
                 </button>
                 <button
                   type="button"
@@ -34,7 +34,7 @@
                   @click="activateMobileCustomAmount"
                 >
                   <span class="mobile-select-card__value">自定义</span>
-                  <CheckIcon v-if="mobileCustomSelected" class="mobile-select-card__mark" />
+                  <check-icon v-if="mobileCustomSelected" class="mobile-select-card__mark" />
                 </button>
               </div>
 
@@ -78,7 +78,7 @@
                     <small>{{ method.label || '扫码支付' }}</small>
                   </span>
                   <span v-if="selectedGateway === paymentOptionKey(method)" class="pay-method-card__check">
-                    <CheckIcon />
+                    <check-icon />
                   </span>
                 </button>
               </div>
@@ -92,7 +92,9 @@
 
             <div class="mobile-agreement">
               <t-checkbox v-model="mobileAgreementChecked">我已了解充值说明</t-checkbox>
-              <t-button variant="text" theme="primary" size="small" @click="router.push('/client/help')">帮助中心</t-button>
+              <t-button variant="text" theme="primary" size="small" @click="router.push('/client/help')"
+                >帮助中心</t-button
+              >
             </div>
 
             <t-button
@@ -179,7 +181,11 @@
                   @click="handleGatewayCreate(method)"
                 >
                   <template #icon><component :is="paymentMethodIcon(method)" /></template>
-                  {{ selectedGateway === paymentOptionKey(method) ? paymentButtonText : `生成${method.name || method.label || '支付'}二维码` }}
+                  {{
+                    selectedGateway === paymentOptionKey(method)
+                      ? paymentButtonText
+                      : `生成${method.name || method.label || '支付'}二维码`
+                  }}
                 </t-button>
               </div>
             </div>
@@ -205,7 +211,7 @@
               <transition name="payment-success">
                 <div v-if="rechargePaid" class="qrcode-success" aria-live="polite">
                   <span class="success-icon">
-                    <CheckCircleIcon />
+                    <check-circle-icon />
                   </span>
                   <strong>充值成功</strong>
                   <small>余额已刷新</small>
@@ -235,9 +241,7 @@
     </t-card>
   </section>
 </template>
-
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onMounted, ref } from 'vue';
 import {
   CheckCircleIcon,
   CheckIcon,
@@ -245,6 +249,8 @@ import {
   LogoAlipayFilledIcon,
   LogoWechatpayFilledIcon,
 } from 'tdesign-icons-vue-next';
+import { computed, defineAsyncComponent, onMounted, ref } from 'vue';
+
 import { formatMoney, RECHARGE_PRESET_AMOUNTS, useRecharge } from '@/domains/finance/useRecharge';
 import type { RechargeGatewayOption } from '@/types/client';
 
@@ -335,7 +341,6 @@ onMounted(() => {
   void loadPaymentGateways();
 });
 </script>
-
 <style scoped lang="less">
 .client-recharge {
   display: flex;

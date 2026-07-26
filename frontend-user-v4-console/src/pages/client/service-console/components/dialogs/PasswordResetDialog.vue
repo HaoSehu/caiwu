@@ -1,5 +1,10 @@
 <template>
-  <t-dialog v-model:visible="passwordVisible" header="重置实例密码" width="min(30rem, calc(100vw - 2rem))" destroy-on-close>
+  <t-dialog
+    v-model:visible="passwordVisible"
+    header="重置实例密码"
+    width="min(30rem, calc(100vw - 2rem))"
+    destroy-on-close
+  >
     <div class="dialog-form">
       <label>
         <span>新密码</span>
@@ -7,7 +12,7 @@
           <t-input v-model="passwordForm.password" type="password" placeholder="至少 8 位" />
           <t-tooltip content="随机生成强密码">
             <button type="button" class="dice-icon-button" aria-label="随机生成强密码" @click="generateStrongPassword">
-              <DiceIcon />
+              <dice-icon />
             </button>
           </t-tooltip>
         </div>
@@ -23,10 +28,10 @@
     </template>
   </t-dialog>
 </template>
-
 <script setup lang="ts">
-import { DiceIcon } from '../DiceIcon';
 import { useServiceConsoleContext } from '../context';
+import { DiceIcon } from '../DiceIcon';
 
-const { passwordVisible, passwordForm, actionLoading, generateStrongPassword, submitResetPassword } = useServiceConsoleContext();
+const { passwordVisible, passwordForm, actionLoading, generateStrongPassword, submitResetPassword } =
+  useServiceConsoleContext();
 </script>

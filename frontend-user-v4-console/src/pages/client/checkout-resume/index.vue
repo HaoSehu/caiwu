@@ -1,7 +1,7 @@
 <template>
   <section class="checkout-resume-page">
     <t-card class="checkout-resume-card" :bordered="false">
-      <LoadingState :loading="status === 'loading'" text="正在创建账单">
+      <loading-state :loading="status === 'loading'" text="正在创建账单">
         <div class="checkout-resume-state">
           <t-tag :theme="statusTheme" variant="light">{{ statusLabel }}</t-tag>
           <h1>{{ title }}</h1>
@@ -22,26 +22,25 @@
             <t-button v-if="status !== 'loading'" variant="outline" @click="openInvoices">前往资金中心</t-button>
           </div>
         </div>
-      </LoadingState>
+      </loading-state>
     </t-card>
   </section>
 </template>
-
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
-import { MessagePlugin } from 'tdesign-vue-next';
-import { useRoute, useRouter } from 'vue-router';
 import LoadingState from '@shared/user-v3/components/LoadingState.vue';
+import { MessagePlugin } from 'tdesign-vue-next';
+import { computed, onMounted, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
+import { formatBillingCycle } from '@/domains/finance/useRecords';
+import type { PendingWebsiteCheckout } from '@/utils/websiteCheckout';
 import {
   clearPendingWebsiteCheckout,
   decodePendingWebsiteCheckout,
   getPendingWebsiteCheckout,
   savePendingWebsiteCheckout,
-  type PendingWebsiteCheckout,
 } from '@/utils/websiteCheckout';
-import { formatBillingCycle } from '@/domains/finance/useRecords';
 
 type ResumeStatus = 'loading' | 'empty' | 'error';
 
@@ -184,7 +183,6 @@ onMounted(async () => {
   await resumeCheckout();
 });
 </script>
-
 <style scoped lang="less">
 .checkout-resume-page {
   display: flex;

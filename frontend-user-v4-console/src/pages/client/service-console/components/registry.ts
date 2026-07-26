@@ -1,5 +1,13 @@
+import {
+  BillIcon,
+  CatalogIcon,
+  ChartLineDataIcon,
+  DashboardIcon,
+  DesktopIcon,
+  ForwardIcon,
+  LockOnIcon,
+} from 'tdesign-icons-vue-next';
 import type { Component } from 'vue';
-import { BillIcon, CatalogIcon, ChartLineDataIcon, DashboardIcon, DesktopIcon, ForwardIcon, LockOnIcon } from 'tdesign-icons-vue-next';
 
 import FinanceTab from './tabs/FinanceTab.vue';
 import LogsTab from './tabs/LogsTab.vue';

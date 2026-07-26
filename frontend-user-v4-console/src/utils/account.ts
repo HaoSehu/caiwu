@@ -1,5 +1,5 @@
 const PHONE_REGEX = /^1[3-9]\d{9}$/;
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/;
 
 export type AccountType = 'phone' | 'email';
 
@@ -37,7 +37,5 @@ export function buildAccountPayload(value = '') {
     return null;
   }
 
-  return accountType === 'phone'
-    ? { accountType, account, phone: account }
-    : { accountType, account, email: account };
+  return accountType === 'phone' ? { accountType, account, phone: account } : { accountType, account, email: account };
 }

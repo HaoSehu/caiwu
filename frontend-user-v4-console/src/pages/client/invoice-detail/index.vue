@@ -4,7 +4,7 @@
       <t-button variant="outline" @click="router.push('/client/invoices')">返回账单</t-button>
       <div class="pay-toolbar__actions">
         <t-button variant="outline" :loading="loading" @click="loadDetail">
-          <template #icon><RefreshIcon /></template>
+          <template #icon><refresh-icon /></template>
           刷新详情
         </t-button>
         <t-button v-if="showPayActions" theme="danger" variant="outline" :loading="canceling" @click="handleCancel">
@@ -100,7 +100,12 @@
               <div class="payment-record-grid">
                 <div>
                   <span>支付方式</span>
-                  <strong>{{ detail.payment_summary.gateway_label || detail.payment_summary.gateway_key || detail.payment_summary.gateway || '--' }}</strong>
+                  <strong>{{
+                    detail.payment_summary.gateway_label ||
+                    detail.payment_summary.gateway_key ||
+                    detail.payment_summary.gateway ||
+                    '--'
+                  }}</strong>
                 </div>
                 <div>
                   <span>支付状态</span>
@@ -150,7 +155,11 @@
                 </div>
                 <div class="summary-status-row">
                   <span>状态</span>
-                  <StatusTag class="summary-status-tag" :status-map="INVOICE_STATUS_MAP" :status="Number(detail.status)" />
+                  <status-tag
+                    class="summary-status-tag"
+                    :status-map="INVOICE_STATUS_MAP"
+                    :status="Number(detail.status)"
+                  />
                 </div>
                 <div>
                   <span>账单金额</span>
@@ -204,7 +213,7 @@
                     <small>{{ method.label || method.key || '扫码支付' }}</small>
                   </span>
                   <span class="pay-method-card__check">
-                    <CheckCircleIcon v-if="selectedPayMethod === paymentOptionKey(method)" />
+                    <check-circle-icon v-if="selectedPayMethod === paymentOptionKey(method)" />
                     <span v-else />
                   </span>
                 </button>
@@ -244,12 +253,18 @@
                   :disabled="!canPay"
                   @click="handlePayByAlipay"
                 >
-                  {{ allowBalanceDeduction && balanceAmount >= payableAmount ? '使用余额完成支付' : `生成${selectedPayMethodName}二维码` }}
+                  {{
+                    allowBalanceDeduction && balanceAmount >= payableAmount
+                      ? '使用余额完成支付'
+                      : `生成${selectedPayMethodName}二维码`
+                  }}
                 </t-button>
                 <t-button v-else-if="selectedPayMethod === 'free'" theme="primary" size="large" disabled>
                   零元账单无需操作
                 </t-button>
-                <t-button variant="outline" size="large" :disabled="paying || loading" @click="loadDetail">刷新</t-button>
+                <t-button variant="outline" size="large" :disabled="paying || loading" @click="loadDetail"
+                  >刷新</t-button
+                >
               </div>
 
               <t-alert v-if="payTip" theme="info" :message="payTip" />
@@ -275,21 +290,14 @@
         <p>商家订单号 {{ alipayPaymentNo || '--' }}</p>
       </div>
       <template #footer>
-        <t-button
-          theme="primary"
-          :loading="polling"
-          :disabled="!alipayPollingReady"
-          @click="pollAlipayStatus(false)"
-        >
+        <t-button theme="primary" :loading="polling" :disabled="!alipayPollingReady" @click="pollAlipayStatus(false)">
           我已完成支付，刷新状态
         </t-button>
       </template>
     </t-dialog>
   </section>
 </template>
-
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import {
   CheckCircleIcon,
   CreditcardIcon,
@@ -298,18 +306,15 @@ import {
   RefreshIcon,
   WalletIcon,
 } from 'tdesign-icons-vue-next';
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 const QrcodeVue = defineAsyncComponent(() => import('qrcode.vue'));
 
-import StatusTag from '@shared/user-v3/components/StatusTag.vue';
 import { INVOICE_STATUS_MAP } from '@shared/statusConfig';
-import { flattenSnapshot, formatBillingCycle } from '@/domains/finance/useRecords';
-import {
-  formatMoney,
-  resolveInvoiceNo,
-  useInvoiceDetail,
-} from '@/domains/finance/useInvoices';
-import { resolvePaymentStatusLabel } from '@/domains/finance/useRecords';
+import StatusTag from '@shared/user-v3/components/StatusTag.vue';
+
+import { formatMoney, resolveInvoiceNo, useInvoiceDetail } from '@/domains/finance/useInvoices';
+import { flattenSnapshot, formatBillingCycle, resolvePaymentStatusLabel } from '@/domains/finance/useRecords';
 import type { InvoicePaymentMethod, InvoiceRecord } from '@/types/client';
 
 const {
@@ -360,7 +365,9 @@ const isRenewInvoiceView = computed(() => isRenewInvoice(detail.value));
 const renewInfoItemsView = computed(() => renewInfoItems(detail.value));
 const pricingItemsView = computed(() => pricingItems(detail.value));
 const productPathView = computed(() => productPath(detail.value));
-const formattedSessionExpiresAt = computed(() => formatSessionExpiresAt(sessionExpiresTime.value, sessionExpiresAt.value));
+const formattedSessionExpiresAt = computed(() =>
+  formatSessionExpiresAt(sessionExpiresTime.value, sessionExpiresAt.value),
+);
 const sessionRemainingMs = computed(() => (sessionExpiresTime.value ? sessionExpiresTime.value - now.value : 0));
 const sessionExpired = computed(() => Boolean(sessionExpiresTime.value) && sessionRemainingMs.value <= 0);
 const sessionCountdownText = computed(() => {
@@ -442,7 +449,9 @@ function renewedExpiresAt(row: InvoiceRecord | null | undefined) {
   const currentTime = current === '--' ? 0 : parseSessionExpiresTime(String(current));
   const baseTime = currentTime > Date.now() ? currentTime : Date.now();
   const date = new Date(baseTime);
-  const cycle = String(row?.billing_cycle || '').trim().toLowerCase();
+  const cycle = String(row?.billing_cycle || '')
+    .trim()
+    .toLowerCase();
 
   if (cycle === 'monthly') date.setMonth(date.getMonth() + 1);
   else if (cycle === 'quarterly') date.setMonth(date.getMonth() + 3);
@@ -533,7 +542,6 @@ onBeforeUnmount(() => {
   stopSessionCountdown();
 });
 </script>
-
 <style scoped lang="less">
 .invoice-pay-page {
   display: flex;

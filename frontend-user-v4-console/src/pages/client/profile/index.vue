@@ -37,12 +37,14 @@
             <div class="profile-id-row">
               <t-input :value="profileForm.id" readonly />
               <t-button variant="outline" shape="square" @click="copyText(profileForm.id)">
-                <CopyIcon />
+                <copy-icon />
               </t-button>
             </div>
           </t-form-item>
           <t-form-item label="注册时间"><t-input :value="profileForm.createdAt || '--'" readonly /></t-form-item>
-          <t-form-item label="用户名"><t-input v-model="profileForm.nickname" maxlength="50" placeholder="请输入用户名" /></t-form-item>
+          <t-form-item label="用户名"
+            ><t-input v-model="profileForm.nickname" maxlength="50" placeholder="请输入用户名"
+          /></t-form-item>
           <t-form-item label="账户余额"><t-input :value="balanceText" readonly /></t-form-item>
           <t-form-item label="登录邮箱"><t-input :value="profileForm.email || '--'" readonly /></t-form-item>
           <t-form-item label="账户状态">
@@ -75,7 +77,9 @@
 
       <t-card v-else class="profile-card" :bordered="false">
         <template #title>消息提醒</template>
-        <template #actions><t-tag variant="light">已开启 {{ enabledNotificationCount }}</t-tag></template>
+        <template #actions
+          ><t-tag variant="light">已开启 {{ enabledNotificationCount }}</t-tag></template
+        >
         <div class="notification-list">
           <article v-for="item in notificationList" :key="item.key" class="notification-item">
             <div>
@@ -87,12 +91,18 @@
         </div>
         <div class="profile-footer">
           <span>关闭安全提醒可能会错过密码、邮箱或手机号变更通知。</span>
-          <t-button theme="primary" :loading="notificationLoading" @click="saveNotificationPreferences">保存设置</t-button>
+          <t-button theme="primary" :loading="notificationLoading" @click="saveNotificationPreferences"
+            >保存设置</t-button
+          >
         </div>
       </t-card>
     </main>
 
-    <t-dialog v-model:visible="passwordDialogVisible" :header="passwordMode === 'old' ? '修改登录密码' : '验证码重置密码'" width="min(30rem, calc(100vw - 2rem))">
+    <t-dialog
+      v-model:visible="passwordDialogVisible"
+      :header="passwordMode === 'old' ? '修改登录密码' : '验证码重置密码'"
+      width="min(30rem, calc(100vw - 2rem))"
+    >
       <t-form v-if="passwordMode === 'old'" label-align="top">
         <t-form-item label="原密码"><t-input v-model="passwordForm.oldPassword" type="password" /></t-form-item>
         <t-form-item label="新密码"><t-input v-model="passwordForm.newPassword" type="password" /></t-form-item>
@@ -100,13 +110,15 @@
         <div class="password-forgot" @click="togglePasswordMode">忘记原密码？</div>
       </t-form>
       <t-form v-else label-align="top">
-        <t-tabs v-if="profileForm.phone && profileForm.email" v-model="resetForm.type" :theme="'normal'">
+        <t-tabs v-if="profileForm.phone && profileForm.email" v-model="resetForm.type" theme="normal">
           <t-tab-panel value="phone" label="手机验证" />
           <t-tab-panel value="email" label="邮箱验证" />
         </t-tabs>
         <div v-else-if="profileForm.phone" class="reset-single-tip">验证方式：手机验证</div>
         <div v-else class="reset-single-tip">验证方式：邮箱验证</div>
-        <t-form-item label="验证对象"><t-input :value="resetForm.type === 'phone' ? profileForm.phone : profileForm.email" readonly /></t-form-item>
+        <t-form-item label="验证对象"
+          ><t-input :value="resetForm.type === 'phone' ? profileForm.phone : profileForm.email" readonly
+        /></t-form-item>
         <t-form-item label="验证码">
           <div class="bind-code-row">
             <t-input v-model="resetForm.code" placeholder="请输入 6 位验证码" maxlength="6" />
@@ -115,13 +127,17 @@
             </t-button>
           </div>
         </t-form-item>
-        <t-form-item label="新密码"><t-input v-model="resetForm.password" type="password" placeholder="至少 6 位" /></t-form-item>
+        <t-form-item label="新密码"
+          ><t-input v-model="resetForm.password" type="password" placeholder="至少 6 位"
+        /></t-form-item>
         <t-form-item label="确认密码"><t-input v-model="resetForm.confirmPassword" type="password" /></t-form-item>
         <div class="password-forgot" @click="togglePasswordMode">使用原密码修改</div>
       </t-form>
       <template #footer>
         <t-button variant="outline" @click="passwordDialogVisible = false">取消</t-button>
-        <t-button v-if="passwordMode === 'old'" theme="primary" :loading="profileLoading" @click="changePassword">确定</t-button>
+        <t-button v-if="passwordMode === 'old'" theme="primary" :loading="profileLoading" @click="changePassword"
+          >确定</t-button
+        >
         <t-button v-else theme="primary" :loading="profileLoading" @click="submitResetPassword">确定</t-button>
       </template>
     </t-dialog>
@@ -163,10 +179,10 @@
     </t-dialog>
   </section>
 </template>
-
 <script setup lang="ts">
-import { useProfile } from '@/domains/account/useProfile';
 import { CopyIcon } from 'tdesign-icons-vue-next';
+
+import { useProfile } from '@/domains/account/useProfile';
 
 const profileTabs = [
   { value: 'profile', label: '个人资料' },
@@ -208,7 +224,6 @@ const {
   handleProfileTabChange,
 } = useProfile();
 </script>
-
 <style scoped lang="less">
 .profile-page {
   display: grid;
@@ -389,7 +404,9 @@ const {
       font: var(--td-font-body-medium);
       white-space: nowrap;
       cursor: pointer;
-      transition: background 0.2s, color 0.2s;
+      transition:
+        background 0.2s,
+        color 0.2s;
 
       &.is-active {
         color: var(--td-brand-color);

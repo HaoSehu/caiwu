@@ -158,6 +158,9 @@ export default antfu(
       '**/_site',
       '**/temp*',
       '**/static/',
+      // Playwright 产物：跑完 e2e 后这些目录会让 lint 扫到压缩包体并撑爆 formatter。
+      '**/playwright-report',
+      '**/test-results',
       'public/vnc/**',
       '!**/.prettierrc.js',
     ]),

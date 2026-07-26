@@ -43,12 +43,7 @@ const forbiddenTerms = [
   'BaseCard',
 ];
 
-const scanTargets = [
-  'package.json',
-  'vite.config.ts',
-  'index.html',
-  'src',
-].map((item) => path.join(root, item));
+const scanTargets = ['package.json', 'vite.config.ts', 'index.html', 'src'].map((item) => path.join(root, item));
 
 const pxScanTargets = [
   'src/app',
@@ -160,7 +155,7 @@ function assertNoIndexAndTheme() {
   }
 
   const styleIndex = readFile(path.join(root, 'src/style/index.less'));
-  if (!styleIndex.includes("../../../theme.css")) {
+  if (!styleIndex.includes('../../../theme.css')) {
     fail('src/style/index.less does not import repository theme.css');
   }
 }

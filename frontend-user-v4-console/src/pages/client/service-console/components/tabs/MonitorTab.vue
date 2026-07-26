@@ -52,7 +52,13 @@
                       :y2="tick.y"
                     />
                   </g>
-                  <line x1="0" :y1="MONITOR_CHART_BOTTOM" :x2="MONITOR_CHART_WIDTH" :y2="MONITOR_CHART_BOTTOM" class="monitor-chart-axis" />
+                  <line
+                    x1="0"
+                    :y1="MONITOR_CHART_BOTTOM"
+                    :x2="MONITOR_CHART_WIDTH"
+                    :y2="MONITOR_CHART_BOTTOM"
+                    class="monitor-chart-axis"
+                  />
                   <line x1="0" :y1="MONITOR_CHART_TOP" x2="0" :y2="MONITOR_CHART_BOTTOM" class="monitor-chart-axis" />
                   <path
                     v-for="series in chart.series"
@@ -63,16 +69,39 @@
                     :stroke-width="series.lineWidth"
                   />
                   <g v-if="resolveActiveMonitorPoint(chart)" class="monitor-chart-pointer">
-                    <line :x1="resolveActiveMonitorPoint(chart)?.x" :y1="MONITOR_CHART_TOP" :x2="resolveActiveMonitorPoint(chart)?.x" :y2="MONITOR_CHART_BOTTOM" />
-                    <template v-for="seriesPoint in resolveActiveMonitorPoint(chart)?.seriesPoints || []" :key="`${seriesPoint.key}-point`">
-                      <circle class="monitor-point-halo" :cx="seriesPoint.x" :cy="seriesPoint.y" r="4.8" :stroke="seriesPoint.color" stroke-width="1.5" />
+                    <line
+                      :x1="resolveActiveMonitorPoint(chart)?.x"
+                      :y1="MONITOR_CHART_TOP"
+                      :x2="resolveActiveMonitorPoint(chart)?.x"
+                      :y2="MONITOR_CHART_BOTTOM"
+                    />
+                    <template
+                      v-for="seriesPoint in resolveActiveMonitorPoint(chart)?.seriesPoints || []"
+                      :key="`${seriesPoint.key}-point`"
+                    >
+                      <circle
+                        class="monitor-point-halo"
+                        :cx="seriesPoint.x"
+                        :cy="seriesPoint.y"
+                        r="4.8"
+                        :stroke="seriesPoint.color"
+                        stroke-width="1.5"
+                      />
                       <circle :cx="seriesPoint.x" :cy="seriesPoint.y" r="2.2" :fill="seriesPoint.color" />
                     </template>
                   </g>
                 </svg>
-                <div v-if="resolveActiveMonitorPoint(chart)" class="monitor-tooltip" :style="resolveMonitorTooltipStyle(chart)">
+                <div
+                  v-if="resolveActiveMonitorPoint(chart)"
+                  class="monitor-tooltip"
+                  :style="resolveMonitorTooltipStyle(chart)"
+                >
                   <strong>{{ resolveActiveMonitorPoint(chart)?.time }}</strong>
-                  <span v-for="seriesPoint in resolveActiveMonitorPoint(chart)?.seriesPoints || []" :key="seriesPoint.key" class="monitor-tooltip-row">
+                  <span
+                    v-for="seriesPoint in resolveActiveMonitorPoint(chart)?.seriesPoints || []"
+                    :key="seriesPoint.key"
+                    class="monitor-tooltip-row"
+                  >
                     <i :style="{ backgroundColor: seriesPoint.color }"></i>
                     <b>{{ seriesPoint.name || chart.label }}</b>
                     <em>{{ seriesPoint.valueText }}</em>
@@ -88,9 +117,15 @@
           </div>
           <div v-else class="monitor-chart-empty">{{ chart.message || '当前时间范围内暂无趋势数据' }}</div>
           <div class="monitor-metrics">
-            <span>平均 <strong>{{ chart.averageText }}</strong></span>
-            <span>峰值 <strong>{{ chart.peakText }}</strong></span>
-            <span>最低 <strong>{{ chart.lowestText }}</strong></span>
+            <span
+              >平均 <strong>{{ chart.averageText }}</strong></span
+            >
+            <span
+              >峰值 <strong>{{ chart.peakText }}</strong></span
+            >
+            <span
+              >最低 <strong>{{ chart.lowestText }}</strong></span
+            >
           </div>
         </article>
         <t-empty v-if="!monitorState.loading && !monitorState.charts.length" description="当前时间范围内暂无监控数据" />
@@ -98,10 +133,15 @@
     </t-card>
   </section>
 </template>
-
 <script setup lang="ts">
+import {
+  MONITOR_CHART_BOTTOM,
+  MONITOR_CHART_HEIGHT,
+  MONITOR_CHART_TOP,
+  MONITOR_CHART_WIDTH,
+  useConsoleMonitor,
+} from '../../composables/useConsoleMonitor';
 import { useServiceConsoleContext } from '../context';
-import { MONITOR_CHART_BOTTOM, MONITOR_CHART_HEIGHT, MONITOR_CHART_TOP, MONITOR_CHART_WIDTH, useConsoleMonitor } from '../../composables/useConsoleMonitor';
 
 const { monitorState, loadMonitor } = useServiceConsoleContext();
 

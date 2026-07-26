@@ -30,7 +30,13 @@
               <div class="inbox-panel">
                 <div class="inbox-panel__head">
                   <span class="inbox-panel__title">站内信</span>
-                  <t-button v-if="inboxUnread > 0" theme="primary" variant="text" size="small" @click="handleMarkAllReadClick">
+                  <t-button
+                    v-if="inboxUnread > 0"
+                    theme="primary"
+                    variant="text"
+                    size="small"
+                    @click="handleMarkAllReadClick"
+                  >
                     全部已读
                   </t-button>
                 </div>
@@ -44,7 +50,9 @@
                       @click="handleInboxItemClick(item)"
                     >
                       <div class="inbox-item__top">
-                        <t-tag size="small" variant="light" :theme="resolveTagTheme(item.type)">{{ item.type_label }}</t-tag>
+                        <t-tag size="small" variant="light" :theme="resolveTagTheme(item.type)">{{
+                          item.type_label
+                        }}</t-tag>
                         <span class="inbox-item__time">{{ formatInboxTime(item.created_at) }}</span>
                       </div>
                       <div class="inbox-item__title">{{ item.title }}</div>
@@ -96,12 +104,12 @@ import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { useSiteBrandingStore } from '@/app/stores/siteBranding';
+import { useDeviceLayout } from '@/composables/useDeviceLayout';
 import { prefix } from '@/config/global';
 import type { InboxItem } from '@/domains/content/useInbox';
 import { useInbox } from '@/domains/content/useInbox';
 import { getActive } from '@/router';
 import { useSettingStore, useUserStore } from '@/store';
-import { useDeviceLayout } from '@/composables/useDeviceLayout';
 import type { MenuRoute, ModeType } from '@/types/interface';
 
 import MenuContent from './MenuContent.vue';
@@ -141,7 +149,15 @@ const router = useRouter();
 const settingStore = useSettingStore();
 const user = useUserStore();
 const siteBranding = useSiteBrandingStore();
-const { unreadCount: inboxUnread, feedItems, feedLoading, fetchUnreadCount, fetchFeed, markRead, markAllRead } = useInbox();
+const {
+  unreadCount: inboxUnread,
+  feedItems,
+  feedLoading,
+  fetchUnreadCount,
+  fetchFeed,
+  markRead,
+  markAllRead,
+} = useInbox();
 const { isMobile } = useDeviceLayout();
 
 const active = computed(() => getActive());
@@ -214,9 +230,18 @@ const handleMarkAllRead = async () => {
       header: '全部标记已读',
       body: '确认将所有未读消息标记为已读吗？此操作不可撤销。',
       confirmBtn: '确认',
-      onConfirm: () => { dialog.destroy(); resolve(true); },
-      onCancel: () => { dialog.destroy(); resolve(false); },
-      onClose: () => { dialog.destroy(); resolve(false); },
+      onConfirm: () => {
+        dialog.destroy();
+        resolve(true);
+      },
+      onCancel: () => {
+        dialog.destroy();
+        resolve(false);
+      },
+      onClose: () => {
+        dialog.destroy();
+        resolve(false);
+      },
     });
   });
   if (!confirmed) return;
@@ -258,9 +283,18 @@ const handleLogout = async () => {
       header: '退出登录',
       body: '确认退出当前账户吗？',
       confirmBtn: '确认退出',
-      onConfirm: () => { dialog.destroy(); resolve(true); },
-      onCancel: () => { dialog.destroy(); resolve(false); },
-      onClose: () => { dialog.destroy(); resolve(false); },
+      onConfirm: () => {
+        dialog.destroy();
+        resolve(true);
+      },
+      onCancel: () => {
+        dialog.destroy();
+        resolve(false);
+      },
+      onClose: () => {
+        dialog.destroy();
+        resolve(false);
+      },
     });
   });
   if (!confirmed) return;
@@ -566,7 +600,6 @@ onMounted(() => {
     overflow: hidden;
   }
 }
-
 </style>
 <!-- eslint-disable-next-line vue-scoped-css/enforce-style-type -->
 <style lang="less">

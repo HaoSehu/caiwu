@@ -8,19 +8,35 @@
             <p>{{ config.heroDescription }}</p>
             <div class="hero-keywords">
               <span>热门搜索:</span>
-              <t-button v-for="item in heroKeywords" :key="item" theme="primary" variant="text" @click="applyKeyword(item)">
+              <t-button
+                v-for="item in heroKeywords"
+                :key="item"
+                theme="primary"
+                variant="text"
+                @click="applyKeyword(item)"
+              >
                 {{ item }}
               </t-button>
             </div>
           </div>
-          <t-input v-model="keyword" clearable :placeholder="config.searchPlaceholder" @enter="submitSearch" @clear="submitSearch">
-            <template #suffixIcon><SearchIcon /></template>
+          <t-input
+            v-model="keyword"
+            clearable
+            :placeholder="config.searchPlaceholder"
+            @enter="submitSearch"
+            @clear="submitSearch"
+          >
+            <template #suffixIcon><search-icon /></template>
           </t-input>
         </t-card>
 
         <t-card class="content-card category-card" :bordered="false">
           <t-space break-line>
-            <t-button :theme="activeCategoryId === 0 ? 'primary' : 'default'" variant="outline" @click="selectCategory(0)">
+            <t-button
+              :theme="activeCategoryId === 0 ? 'primary' : 'default'"
+              variant="outline"
+              @click="selectCategory(0)"
+            >
               {{ config.allCategoryLabel }}
             </t-button>
             <t-button
@@ -37,9 +53,11 @@
 
         <t-card class="content-card list-card" :bordered="false">
           <template v-if="isNotice && unreadCount > 0" #actions>
-            <t-button theme="primary" variant="text" @click="handleMarkAllRead">全部标记已读 ({{ unreadCount }})</t-button>
+            <t-button theme="primary" variant="text" @click="handleMarkAllRead"
+              >全部标记已读 ({{ unreadCount }})</t-button
+            >
           </template>
-          <DataState :loading="loading" :empty="!articleList.length" :description="config.emptyText">
+          <data-state :loading="loading" :empty="!articleList.length" :description="config.emptyText">
             <article v-for="item in articleList" :key="item.id" class="article-row">
               <div class="article-row__head">
                 <router-link class="article-row__title" :to="buildDetailRoute(item)">{{ item.title }}</router-link>
@@ -52,7 +70,7 @@
                 <span>浏览量 {{ item.view_count || 0 }}</span>
               </div>
             </article>
-          </DataState>
+          </data-state>
         </t-card>
 
         <div v-if="total > pageSize" class="content-pagination">
@@ -64,7 +82,12 @@
         <t-card class="content-card" :bordered="false">
           <template #title>{{ config.hotTitle }}</template>
           <div v-if="hotArticles.length" class="rank-list">
-            <router-link v-for="(item, index) in hotArticles" :key="item.id" :to="buildDetailRoute(item)" class="rank-row">
+            <router-link
+              v-for="(item, index) in hotArticles"
+              :key="item.id"
+              :to="buildDetailRoute(item)"
+              class="rank-row"
+            >
               <span>{{ index + 1 }}</span>
               <strong>{{ item.title }}</strong>
             </router-link>
@@ -86,11 +109,10 @@
     </div>
   </section>
 </template>
-
 <script setup lang="ts">
+import DataState from '@shared/user-v3/components/DataState.vue';
 import { SearchIcon } from 'tdesign-icons-vue-next';
 
-import DataState from '@shared/user-v3/components/DataState.vue';
 import { useContentList } from '@/domains/content/useContent';
 import { useNoticeReadStatus } from '@/domains/content/useNoticeReadStatus';
 
@@ -127,7 +149,6 @@ async function handleMarkAllRead() {
   await fetchUnreadCount(true);
 }
 </script>
-
 <style scoped lang="less">
 .content-list-page {
   // padding 由 Starter 布局层统一提供

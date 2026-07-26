@@ -134,7 +134,7 @@ const MODE_OPTIONS = computed(() => [
 const initStyleConfig = () => {
   const styleConfig = STYLE_CONFIG;
   for (const key in styleConfig) {
-    if (Object.prototype.hasOwnProperty.call(styleConfig, key)) {
+    if (Object.hasOwn(styleConfig, key)) {
       (styleConfig[key as keyof typeof STYLE_CONFIG] as any) = settingStore[key as keyof typeof STYLE_CONFIG];
     }
   }
@@ -219,7 +219,9 @@ function createLayoutThumbnail(type: string): string {
   const contentWidth = hasSide ? 48 : 72;
   const contentHeight = hasTop ? 19 : 32;
   const sideWidth = type === 'mix' ? 18 : 20;
-  const side = hasSide ? `<rect x="8" y="8" width="${sideWidth}" height="32" rx="3" fill="#165DFF" fill-opacity="0.88"/>` : '';
+  const side = hasSide
+    ? `<rect x="8" y="8" width="${sideWidth}" height="32" rx="3" fill="#165DFF" fill-opacity="0.88"/>`
+    : '';
   const top = hasTop ? '<rect x="8" y="8" width="72" height="9" rx="3" fill="#165DFF" fill-opacity="0.18"/>' : '';
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="88" height="48" viewBox="0 0 88 48" fill="none"><rect x="1" y="1" width="86" height="46" rx="8" fill="#F8FAFC" stroke="#DCE6F5"/><rect x="${contentX}" y="${contentY}" width="${contentWidth}" height="${contentHeight}" rx="4" fill="#FFFFFF" stroke="#C8D7EE"/><rect x="${contentX + 7}" y="${contentY + 6}" width="${Math.max(16, contentWidth - 14)}" height="3" rx="1.5" fill="#A8B8D2"/><rect x="${contentX + 7}" y="${contentY + 12}" width="${Math.max(10, contentWidth - 28)}" height="3" rx="1.5" fill="#D2DCEE"/>${side}${top}</svg>`;
 

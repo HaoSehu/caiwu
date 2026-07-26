@@ -1,4 +1,5 @@
-import { inject, provide, type InjectionKey } from 'vue';
+import type { InjectionKey } from 'vue';
+import { inject, provide } from 'vue';
 
 import type { useServiceConsole } from '@/domains/services/useServiceConsole';
 

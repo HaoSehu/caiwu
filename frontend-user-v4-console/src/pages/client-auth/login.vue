@@ -13,7 +13,15 @@
     </t-tabs>
 
     <!-- 密码登录 -->
-    <t-form v-if="loginMode === 'password'" ref="formRef" class="client-auth-form" :data="form" :rules="rules" label-width="0" @submit="handleLogin">
+    <t-form
+      v-if="loginMode === 'password'"
+      ref="formRef"
+      class="client-auth-form"
+      :data="form"
+      :rules="rules"
+      label-width="0"
+      @submit="handleLogin"
+    >
       <t-form-item name="account">
         <div class="client-auth-field">
           <label class="client-auth-label is-required" for="login-account">手机号 / 邮箱</label>
@@ -57,11 +65,21 @@
         <router-link to="/client/forgot-password">忘记密码？</router-link>
       </div>
 
-      <t-button block size="large" theme="primary" :loading="loading || captchaLoading" @click="submitForm">登录</t-button>
+      <t-button block size="large" theme="primary" :loading="loading || captchaLoading" @click="submitForm"
+        >登录</t-button
+      >
     </t-form>
 
     <!-- 验证码登录 -->
-    <t-form v-if="loginMode === 'code'" ref="codeFormRef" class="client-auth-form" :data="codeForm" :rules="codeRules" label-width="0" @submit="handleCodeLogin">
+    <t-form
+      v-if="loginMode === 'code'"
+      ref="codeFormRef"
+      class="client-auth-form"
+      :data="codeForm"
+      :rules="codeRules"
+      label-width="0"
+      @submit="handleCodeLogin"
+    >
       <t-form-item name="account">
         <div class="client-auth-field">
           <label class="client-auth-label is-required" for="login-code-account">手机号 / 邮箱</label>
@@ -82,19 +100,37 @@
         <div class="client-auth-field">
           <label class="client-auth-label is-required" for="login-code">验证码</label>
           <div class="client-auth-code-row">
-            <t-input v-model="codeForm.code" size="large" maxlength="6" placeholder="请输入验证码" @enter="submitCodeForm" />
-            <t-button variant="outline" :disabled="countdown > 0" :loading="sendingCode || captchaLoading" @click="handleSendCode">
+            <t-input
+              v-model="codeForm.code"
+              size="large"
+              maxlength="6"
+              placeholder="请输入验证码"
+              @enter="submitCodeForm"
+            />
+            <t-button
+              variant="outline"
+              :disabled="countdown > 0"
+              :loading="sendingCode || captchaLoading"
+              @click="handleSendCode"
+            >
               {{ countdown > 0 ? `${countdown}s` : '发送验证码' }}
             </t-button>
           </div>
         </div>
       </t-form-item>
 
-      <t-button class="client-auth-submit" block size="large" theme="primary" :loading="codeLoading" @click="submitCodeForm">登录</t-button>
+      <t-button
+        class="client-auth-submit"
+        block
+        size="large"
+        theme="primary"
+        :loading="codeLoading"
+        @click="submitCodeForm"
+        >登录</t-button
+      >
     </t-form>
   </auth-shell>
 </template>
-
 <script setup lang="ts">
 import { BrowseIcon, BrowseOffIcon, LockOnIcon, UserIcon } from 'tdesign-icons-vue-next';
 import type { FormInstanceFunctions, FormRule, FormValidateMessage, SubmitContext } from 'tdesign-vue-next';
@@ -204,7 +240,8 @@ const rules: Record<keyof LoginForm, FormRule[]> = {
   password: [{ required: true, message: '请输入登录密码', type: 'error', trigger: 'blur' }],
 };
 
-const isCaptchaRequiredError = (error: unknown) => Boolean(asRuntimeLoginError(error).response?.data?.data?.captcha_required);
+const isCaptchaRequiredError = (error: unknown) =>
+  Boolean(asRuntimeLoginError(error).response?.data?.data?.captcha_required);
 
 async function performLogin(captcha: unknown = null) {
   await userStore.clientLogin({
@@ -256,9 +293,12 @@ async function runLogin() {
   loading.value = true;
   try {
     if (enabled.value) {
-      await runWithCaptcha(async (captcha: unknown) => {
-        await performLogin(captcha);
-      }, { required: true });
+      await runWithCaptcha(
+        async (captcha: unknown) => {
+          await performLogin(captcha);
+        },
+        { required: true },
+      );
     } else {
       await performLogin();
     }
@@ -268,9 +308,12 @@ async function runLogin() {
     const runtimeError = asRuntimeLoginError(error);
     if (!enabled.value && isCaptchaRequiredError(runtimeError)) {
       try {
-        await runWithCaptcha(async (captcha: unknown) => {
-          await performLogin(captcha);
-        }, { required: true });
+        await runWithCaptcha(
+          async (captcha: unknown) => {
+            await performLogin(captcha);
+          },
+          { required: true },
+        );
         MessagePlugin.success('登录成功');
         await router.push(redirectPath.value);
         return;
@@ -399,7 +442,6 @@ onBeforeUnmount(() => {
   clearTimer();
 });
 </script>
-
 <style scoped lang="less">
 @import './shared-auth.less';
 

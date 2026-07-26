@@ -12,7 +12,7 @@
       <t-button variant="outline" @click="router.push('/client/payments')">返回列表</t-button>
       <div class="detail-toolbar__actions">
         <t-button variant="outline" :loading="loading" @click="loadPayment">
-          <template #icon><RefreshIcon /></template>
+          <template #icon><refresh-icon /></template>
           刷新
         </t-button>
       </div>
@@ -42,7 +42,7 @@
             </div>
             <div class="detail-kv-item">
               <span>支付状态</span>
-              <StatusTag :status-map="PAYMENT_STATUS_MAP" :status="Number(detail.status)" />
+              <status-tag :status-map="PAYMENT_STATUS_MAP" :status="Number(detail.status)" />
             </div>
             <div class="detail-kv-item">
               <span>创建时间</span>
@@ -72,7 +72,7 @@
             </div>
             <div class="detail-kv-item">
               <span>账单状态</span>
-              <StatusTag :status-map="INVOICE_STATUS_MAP" :status="Number(detail.invoice.status)" />
+              <status-tag :status-map="INVOICE_STATUS_MAP" :status="Number(detail.invoice.status)" />
             </div>
             <div class="detail-kv-item">
               <span>账单金额</span>
@@ -92,16 +92,15 @@
     </t-loading>
   </section>
 </template>
-
 <script setup lang="ts">
+import { INVOICE_STATUS_MAP, PAYMENT_STATUS_MAP } from '@shared/statusConfig';
+import StatusTag from '@shared/user-v3/components/StatusTag.vue';
+import { RefreshIcon } from 'tdesign-icons-vue-next';
 import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { RefreshIcon } from 'tdesign-icons-vue-next';
-import { INVOICE_STATUS_MAP, PAYMENT_STATUS_MAP } from '@shared/statusConfig';
 
-import StatusTag from '@shared/user-v3/components/StatusTag.vue';
-import { formatMoney } from '@/domains/finance/useRecords';
 import clientApi from '@/api/client';
+import { formatMoney } from '@/domains/finance/useRecords';
 import type { PaymentRecord } from '@/types/client';
 
 const route = useRoute();
@@ -128,7 +127,6 @@ onMounted(() => {
   void loadPayment();
 });
 </script>
-
 <style scoped lang="less">
 .payment-breadcrumb {
   margin-bottom: var(--td-comp-margin-m);

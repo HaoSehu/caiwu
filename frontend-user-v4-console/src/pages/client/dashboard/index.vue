@@ -1,6 +1,6 @@
 <template>
   <section class="client-dashboard">
-    <LoadingState :loading="loading" text="正在加载控制台数据">
+    <loading-state :loading="loading" text="正在加载控制台数据">
       <div class="summary-grid">
         <t-card class="account-card dashboard-card" :bordered="false">
           <div class="account-card__user">
@@ -9,19 +9,25 @@
               <h2>{{ greetingText }}，{{ displayName }}</h2>
               <p>{{ todayDateText }}</p>
               <div class="account-card__tags">
-                <t-tag :theme="isVerified ? 'success' : 'warning'" variant="light">{{ isVerified ? '已实名' : '未实名' }}</t-tag>
-                <t-tag :theme="isPhoneBound ? 'success' : 'default'" variant="light">{{ isPhoneBound ? '已绑手机' : '未绑手机' }}</t-tag>
-                <t-tag :theme="isEmailBound ? 'success' : 'default'" variant="light">{{ isEmailBound ? '已绑邮箱' : '未绑邮箱' }}</t-tag>
+                <t-tag :theme="isVerified ? 'success' : 'warning'" variant="light">{{
+                  isVerified ? '已实名' : '未实名'
+                }}</t-tag>
+                <t-tag :theme="isPhoneBound ? 'success' : 'default'" variant="light">{{
+                  isPhoneBound ? '已绑手机' : '未绑手机'
+                }}</t-tag>
+                <t-tag :theme="isEmailBound ? 'success' : 'default'" variant="light">{{
+                  isEmailBound ? '已绑邮箱' : '未绑邮箱'
+                }}</t-tag>
               </div>
             </div>
           </div>
           <div class="account-card__actions">
             <t-button theme="primary" @click="router.push('/client/recharge')">
-              <template #icon><WalletIcon /></template>
+              <template #icon><wallet-icon /></template>
               在线充值
             </t-button>
             <t-button variant="outline" @click="router.push('/client/payments')">
-              <template #icon><FileIcon /></template>
+              <template #icon><file-icon /></template>
               充值记录
             </t-button>
           </div>
@@ -111,13 +117,7 @@
 
               <t-loading :loading="!balanceLogsLoaded" text="加载中">
                 <div v-if="dailyBarsHasData" class="bar-chart bar-chart--daily" aria-label="近 7 天每日消费">
-                  <t-tooltip
-                    v-for="bar in dailyBars"
-                    :key="bar.date"
-                    :content="bar.tooltip"
-                    placement="top"
-                    show-arrow
-                  >
+                  <t-tooltip v-for="bar in dailyBars" :key="bar.date" :content="bar.tooltip" placement="top" show-arrow>
                     <div class="bar-chart__slot">
                       <span class="bar-chart__bar" :style="{ height: bar.height }"></span>
                       <span v-if="bar.showLabel" class="bar-chart__label">{{ bar.label }}</span>
@@ -132,7 +132,11 @@
           <t-card class="dashboard-card" :bordered="false">
             <template #title>消息中心</template>
             <template #actions>
-              <t-button theme="primary" variant="text" @click="router.push(activeNoticeTab === 'notice' ? '/client/notices' : '/client/help')">
+              <t-button
+                theme="primary"
+                variant="text"
+                @click="router.push(activeNoticeTab === 'notice' ? '/client/notices' : '/client/help')"
+              >
                 查看全部
               </t-button>
             </template>
@@ -140,7 +144,12 @@
             <t-tabs v-model="activeNoticeTab" class="message-tabs">
               <t-tab-panel value="notice" label="新闻公告">
                 <div v-if="recentNotices.length" class="message-list">
-                  <router-link v-for="item in recentNotices" :key="item.id" class="message-row" :to="`/client/notices/${item.id}`">
+                  <router-link
+                    v-for="item in recentNotices"
+                    :key="item.id"
+                    class="message-row"
+                    :to="`/client/notices/${item.id}`"
+                  >
                     <span class="message-row__title">{{ item.title }}</span>
                     <span class="message-row__time">{{ formatDate(item.publish_at || item.created_at) }}</span>
                   </router-link>
@@ -149,7 +158,12 @@
               </t-tab-panel>
               <t-tab-panel value="help" label="帮助中心">
                 <div v-if="recentHelpArticles.length" class="message-list">
-                  <router-link v-for="item in recentHelpArticles" :key="item.id" class="message-row" :to="`/client/help/${item.id}`">
+                  <router-link
+                    v-for="item in recentHelpArticles"
+                    :key="item.id"
+                    class="message-row"
+                    :to="`/client/help/${item.id}`"
+                  >
                     <span class="message-row__title">{{ item.title }}</span>
                     <span class="message-row__time">{{ formatDate(item.publish_at || item.created_at) }}</span>
                   </router-link>
@@ -164,7 +178,13 @@
           <t-card class="dashboard-card" :bordered="false">
             <template #title>待办事项</template>
             <div class="todo-list">
-              <button v-for="item in todoItems" :key="item.key" type="button" class="todo-row" @click="router.push(item.path)">
+              <button
+                v-for="item in todoItems"
+                :key="item.key"
+                type="button"
+                class="todo-row"
+                @click="router.push(item.path)"
+              >
                 <span class="todo-row__left">
                   <span class="todo-row__icon" :class="item.tone"><component :is="item.icon" /></span>
                   <span>{{ item.label }}</span>
@@ -207,14 +227,11 @@
           </t-card>
         </aside>
       </div>
-    </LoadingState>
+    </loading-state>
   </section>
 </template>
-
 <script setup lang="ts">
-import type { Component } from 'vue';
-import { computed, onMounted, ref } from 'vue';
-import { MessagePlugin } from 'tdesign-vue-next';
+import LoadingState from '@shared/user-v3/components/LoadingState.vue';
 import {
   CouponIcon,
   DashboardIcon,
@@ -228,15 +245,15 @@ import {
   UserSafetyIcon,
   WalletIcon,
 } from 'tdesign-icons-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next';
+import type { Component } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import clientApi from '@/api/client';
 import { useSiteBrandingStore } from '@/app/stores/siteBranding';
 import { useNoticeReadStatus } from '@/domains/content/useNoticeReadStatus';
-import { formatMoney, formatShortDateTime as formatDate } from '@/utils/format';
-import { getErrorMessage } from '@/utils/error';
 import { useUserStore } from '@/store';
-import LoadingState from '@shared/user-v3/components/LoadingState.vue';
 import type {
   BalanceLog,
   ClientUserInfo,
@@ -249,6 +266,8 @@ import type {
   ServiceOverviewPayload,
   TicketRecord,
 } from '@/types/client';
+import { getErrorMessage } from '@/utils/error';
+import { formatMoney, formatShortDateTime as formatDate } from '@/utils/format';
 
 interface ProductCard {
   key: string;
@@ -354,7 +373,9 @@ function resolveProductMeta(item: ServiceOverviewGroup, key: string) {
 
 const userInfo = computed<ClientUserInfo>(() => (userStore.info || {}) as ClientUserInfo);
 const displayName = computed(() =>
-  String(userInfo.value.nickname || userInfo.value.display_name || userInfo.value.email || userInfo.value.name || '客户账户'),
+  String(
+    userInfo.value.nickname || userInfo.value.display_name || userInfo.value.email || userInfo.value.name || '客户账户',
+  ),
 );
 const avatarText = computed(() => displayName.value.slice(0, 1) || '客');
 const avatarUrl = computed(() => '');
@@ -438,12 +459,66 @@ const productCards = computed<ProductCard[]>(() => {
   }
 
   return [
-    { key: 'cloud_server', title: '云服务器', countText: '0 个', count: 0, path: '/client/services', primaryServiceId: 0, icon: ServerIcon, tone: 'is-brand' },
-    { key: 'game_cloud', title: '游戏云', countText: '0 个', count: 0, path: '/client/services', primaryServiceId: 0, icon: DashboardIcon, tone: 'is-info' },
-    { key: 'cloud_desktop', title: '云电脑', countText: '0 个', count: 0, path: '/client/services', primaryServiceId: 0, icon: HelpCircleIcon, tone: 'is-info' },
-    { key: 'bare_metal', title: '裸金属', countText: '0 个', count: 0, path: '/client/services', primaryServiceId: 0, icon: DashboardIcon, tone: 'is-success' },
-    { key: 'cdn', title: 'CDN', countText: '0 个', count: 0, path: '/client/services', primaryServiceId: 0, icon: ServiceIcon, tone: 'is-warning' },
-    { key: 'web_hosting', title: '虚拟主机', countText: '0 个', count: 0, path: '/client/services', primaryServiceId: 0, icon: UserSafetyIcon, tone: 'is-success' },
+    {
+      key: 'cloud_server',
+      title: '云服务器',
+      countText: '0 个',
+      count: 0,
+      path: '/client/services',
+      primaryServiceId: 0,
+      icon: ServerIcon,
+      tone: 'is-brand',
+    },
+    {
+      key: 'game_cloud',
+      title: '游戏云',
+      countText: '0 个',
+      count: 0,
+      path: '/client/services',
+      primaryServiceId: 0,
+      icon: DashboardIcon,
+      tone: 'is-info',
+    },
+    {
+      key: 'cloud_desktop',
+      title: '云电脑',
+      countText: '0 个',
+      count: 0,
+      path: '/client/services',
+      primaryServiceId: 0,
+      icon: HelpCircleIcon,
+      tone: 'is-info',
+    },
+    {
+      key: 'bare_metal',
+      title: '裸金属',
+      countText: '0 个',
+      count: 0,
+      path: '/client/services',
+      primaryServiceId: 0,
+      icon: DashboardIcon,
+      tone: 'is-success',
+    },
+    {
+      key: 'cdn',
+      title: 'CDN',
+      countText: '0 个',
+      count: 0,
+      path: '/client/services',
+      primaryServiceId: 0,
+      icon: ServiceIcon,
+      tone: 'is-warning',
+    },
+    {
+      key: 'web_hosting',
+      title: '虚拟主机',
+      countText: '0 个',
+      count: 0,
+      path: '/client/services',
+      primaryServiceId: 0,
+      icon: UserSafetyIcon,
+      tone: 'is-success',
+    },
   ];
 });
 
@@ -487,8 +562,8 @@ const dailyBars = computed(() => {
 
 const dailyBarsHasData = computed(() => dailyExpenseData.value.some((item) => item.amount > 0));
 
-const last7DaysConsumptionTotal = computed(() =>
-  Math.round(dailyExpenseData.value.reduce((sum, item) => sum + item.amount, 0) * 100) / 100,
+const last7DaysConsumptionTotal = computed(
+  () => Math.round(dailyExpenseData.value.reduce((sum, item) => sum + item.amount, 0) * 100) / 100,
 );
 
 const monthlyConsumptionData = computed(() => {
@@ -525,8 +600,8 @@ const monthlyBars = computed(() => {
 });
 
 const monthlyBarsHasData = computed(() => monthlyConsumptionData.value.some((item) => item.amount > 0));
-const currentYearConsumptionTotal = computed(() =>
-  Math.round(monthlyConsumptionData.value.reduce((sum, item) => sum + item.amount, 0) * 100) / 100,
+const currentYearConsumptionTotal = computed(
+  () => Math.round(monthlyConsumptionData.value.reduce((sum, item) => sum + item.amount, 0) * 100) / 100,
 );
 
 const expiringServiceCount = computed(() =>
@@ -595,14 +670,7 @@ async function loadDashboard() {
 
     const monthRange = currentMonthRange();
     // 首屏核心数据：余额、服务概览、待办项、公告（优先加载）
-    const [
-      noticesRes,
-      ticketsRes,
-      financeRes,
-      couponsRes,
-      serviceOverviewRes,
-      referralRes,
-    ] = await Promise.allSettled([
+    const [noticesRes, ticketsRes, financeRes, couponsRes, serviceOverviewRes, referralRes] = await Promise.allSettled([
       clientApi.notices({ page: 1, page_size: 5 }),
       clientApi.tickets({ page: 1, page_size: 5 }),
       clientApi.financeLedgerSummary(monthRange),
@@ -691,7 +759,6 @@ onMounted(() => {
   void loadDashboard();
 });
 </script>
-
 <style scoped lang="less">
 .client-dashboard {
   // padding 由 Starter 布局层统一提供

@@ -12,7 +12,6 @@
     </t-card>
   </section>
 </template>
-
 <script setup lang="ts">
 import { useRouter } from 'vue-router';
 
@@ -22,7 +21,6 @@ function openProducts() {
   router.push('/products');
 }
 </script>
-
 <style scoped lang="less">
 .client-order-create {
   display: flex;

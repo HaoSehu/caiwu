@@ -2,14 +2,47 @@ import { computed, ref } from 'vue';
 
 import type { MonitorChartRecord, MonitorSummaryItem } from '@/types/client';
 
-type MonitorSeries = { key: string; name: string; rawPoints: MonitorPoint[] };
-type MonitorPoint = { time: string; timestamp: number; value: number; displayValue: string };
+interface MonitorSeries {
+  key: string;
+  name: string;
+  rawPoints: MonitorPoint[];
+}
+interface MonitorPoint {
+  time: string;
+  timestamp: number;
+  value: number;
+  displayValue: string;
+}
 type MonitorRenderPoint = MonitorPoint & { key: string; index: number; x: number; y: number };
-type MonitorRenderSeries = { key: string; name: string; color: string; lineWidth: number; points: MonitorRenderPoint[]; path: string };
-type MonitorAxisTick = { key: string; label: string; y: number; top: number };
-type ActiveMonitorSeriesPoint = { key: string; name: string; color: string; x: number; y: number; valueText: string };
-type ActiveMonitorPoint = { x: number; y: number; time: string; seriesPoints: ActiveMonitorSeriesPoint[] };
-type MonitorChartView = {
+interface MonitorRenderSeries {
+  key: string;
+  name: string;
+  color: string;
+  lineWidth: number;
+  points: MonitorRenderPoint[];
+  path: string;
+}
+interface MonitorAxisTick {
+  key: string;
+  label: string;
+  y: number;
+  top: number;
+}
+interface ActiveMonitorSeriesPoint {
+  key: string;
+  name: string;
+  color: string;
+  x: number;
+  y: number;
+  valueText: string;
+}
+interface ActiveMonitorPoint {
+  x: number;
+  y: number;
+  time: string;
+  seriesPoints: ActiveMonitorSeriesPoint[];
+}
+interface MonitorChartView {
   key: string;
   label: string;
   message: string;
@@ -21,7 +54,7 @@ type MonitorChartView = {
   yAxisTicks: MonitorAxisTick[];
   xAxisLabels: { start: string; middle: string; end: string };
   series: MonitorRenderSeries[];
-};
+}
 
 export const MONITOR_CHART_WIDTH = 320;
 export const MONITOR_CHART_HEIGHT = 140;
@@ -32,7 +65,9 @@ export const MONITOR_AXIS_SEGMENTS = 3;
 const monitorPalette = ['#0052d9', '#00a870', '#e37318', '#7b61ff'];
 
 export function useConsoleMonitor(monitorState: { charts: MonitorChartRecord[] }) {
-  const monitorChartViews = computed(() => monitorState.charts.map((chart, index) => buildMonitorChartView(chart, index)));
+  const monitorChartViews = computed(() =>
+    monitorState.charts.map((chart, index) => buildMonitorChartView(chart, index)),
+  );
   const activeMonitorPoint = ref<{ chartKey: string; index: number } | null>(null);
 
   function buildMonitorChartView(chart: MonitorChartRecord, index: number): MonitorChartView {
@@ -71,9 +106,16 @@ export function useConsoleMonitor(monitorState: { charts: MonitorChartRecord[] }
 
   function normalizeMonitorSeries(chart: MonitorChartRecord): MonitorSeries[] {
     const chartData = chart.chart || {};
-    const sourceSeries = Array.isArray(chartData.series) && chartData.series.length
-      ? chartData.series
-      : [{ key: chart.type || 'series', name: chart.label || chart.type || '', list: Array.isArray(chartData.list) ? chartData.list : [] }];
+    const sourceSeries =
+      Array.isArray(chartData.series) && chartData.series.length
+        ? chartData.series
+        : [
+            {
+              key: chart.type || 'series',
+              name: chart.label || chart.type || '',
+              list: Array.isArray(chartData.list) ? chartData.list : [],
+            },
+          ];
 
     return sourceSeries
       .map((series, index) => {
@@ -98,7 +140,9 @@ export function useConsoleMonitor(monitorState: { charts: MonitorChartRecord[] }
   }
 
   function resolveMonitorValueRange(series: MonitorSeries[]) {
-    const values = series.flatMap((item) => item.rawPoints.map((point) => point.value)).filter((value) => Number.isFinite(value));
+    const values = series
+      .flatMap((item) => item.rawPoints.map((point) => point.value))
+      .filter((value) => Number.isFinite(value));
     if (!values.length) return { min: 0, max: 1, range: 1 };
     const dataMin = Math.min(...values);
     const dataMax = Math.max(...values);
@@ -107,7 +151,11 @@ export function useConsoleMonitor(monitorState: { charts: MonitorChartRecord[] }
     return { min, max, range: max - min || 1 };
   }
 
-  function buildMonitorRenderPoints(points: MonitorPoint[], range: { min: number; max: number; range: number }, seriesKey: string): MonitorRenderPoint[] {
+  function buildMonitorRenderPoints(
+    points: MonitorPoint[],
+    range: { min: number; max: number; range: number },
+    seriesKey: string,
+  ): MonitorRenderPoint[] {
     if (!points.length) return [];
     const height = MONITOR_CHART_BOTTOM - MONITOR_CHART_TOP;
     const denominator = Math.max(points.length - 1, 1);
@@ -144,11 +192,11 @@ export function useConsoleMonitor(monitorState: { charts: MonitorChartRecord[] }
   function buildMonitorXAxisLabels(points: MonitorPoint[]) {
     if (!points.length) return { start: '--', middle: '--', end: '--' };
     const middle = points[Math.floor((points.length - 1) / 2)];
-    const sameDay = isSameMonitorDate(points[0], points[points.length - 1]);
+    const sameDay = isSameMonitorDate(points[0], points.at(-1));
     return {
       start: formatMonitorAxisTime(points[0], sameDay),
       middle: formatMonitorAxisTime(middle, sameDay),
-      end: formatMonitorAxisTime(points[points.length - 1], sameDay),
+      end: formatMonitorAxisTime(points.at(-1), sameDay),
     };
   }
 
@@ -186,17 +234,20 @@ export function useConsoleMonitor(monitorState: { charts: MonitorChartRecord[] }
       return String(summaryItem.text);
     }
 
-    const values = series.flatMap((item) => item.rawPoints.map((point) => point.value)).filter((value) => Number.isFinite(value));
+    const values = series
+      .flatMap((item) => item.rawPoints.map((point) => point.value))
+      .filter((value) => Number.isFinite(value));
     if (!values.length) return '';
     if (mode === 'latest') {
       const latestPoint = series[0]?.rawPoints[series[0].rawPoints.length - 1];
       return latestPoint?.displayValue || '';
     }
-    const value = mode === 'average'
-      ? values.reduce((sum, item) => sum + item, 0) / values.length
-      : mode === 'peak'
-        ? Math.max(...values)
-        : Math.min(...values);
+    const value =
+      mode === 'average'
+        ? values.reduce((sum, item) => sum + item, 0) / values.length
+        : mode === 'peak'
+          ? Math.max(...values)
+          : Math.min(...values);
     return Number.isInteger(value) ? String(value) : value.toFixed(2);
   }
 
@@ -301,7 +352,9 @@ function formatMonitorAxisValue(value: number, unit: string) {
 }
 
 function trimMonitorZeros(text: string) {
-  return String(text).replace(/(\.\d*?[1-9])0+$/u, '$1').replace(/\.0+$/u, '');
+  return String(text)
+    .replace(/(\.\d*?[1-9])0+$/u, '$1')
+    .replace(/\.0+$/u, '');
 }
 
 function clampMonitorNumber(value: number, min: number, max: number) {
@@ -348,9 +401,11 @@ function isSameMonitorDate(left: MonitorPoint, right: MonitorPoint) {
   if (left.timestamp > 0 && right.timestamp > 0) {
     const leftDate = new Date(left.timestamp);
     const rightDate = new Date(right.timestamp);
-    return leftDate.getFullYear() === rightDate.getFullYear()
-      && leftDate.getMonth() === rightDate.getMonth()
-      && leftDate.getDate() === rightDate.getDate();
+    return (
+      leftDate.getFullYear() === rightDate.getFullYear() &&
+      leftDate.getMonth() === rightDate.getMonth() &&
+      leftDate.getDate() === rightDate.getDate()
+    );
   }
   const leftText = String(left.time || '').slice(0, 10);
   const rightText = String(right.time || '').slice(0, 10);

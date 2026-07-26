@@ -1,5 +1,3 @@
-import type { RouteRecordRaw } from 'vue-router';
-import { shallowRef } from 'vue';
 import {
   CatalogIcon,
   CouponIcon,
@@ -14,6 +12,8 @@ import {
   UserSafetyIcon,
   WalletIcon,
 } from 'tdesign-icons-vue-next';
+import { shallowRef } from 'vue';
+import type { RouteRecordRaw } from 'vue-router';
 
 import Layout from '@/layouts/index.vue';
 
@@ -53,7 +53,12 @@ export default [
     path: '/client',
     component: Layout,
     redirect: '/client/dashboard',
-    meta: { title: title('用户控制台', 'Client Console'), requireAuth: true, role: 'client', robots: 'noindex,nofollow' },
+    meta: {
+      title: title('用户控制台', 'Client Console'),
+      requireAuth: true,
+      role: 'client',
+      robots: 'noindex,nofollow',
+    },
     children: [
       {
         path: '/client/overview',
@@ -121,7 +126,13 @@ export default [
             path: '/client/recharge',
             name: 'ClientRecharge',
             component: () => import('@/pages/client/recharge/index.vue'),
-            meta: { title: title('账户充值'), icon: icon(WalletIcon), requireAuth: true, orderNo: 10, keepAlive: false },
+            meta: {
+              title: title('账户充值'),
+              icon: icon(WalletIcon),
+              requireAuth: true,
+              orderNo: 10,
+              keepAlive: false,
+            },
           },
           {
             path: '/client/payments',
@@ -210,13 +221,25 @@ export default [
         path: 'services/:id',
         name: 'ClientServiceDetail',
         component: () => import('@/pages/client/service-console/index.vue'),
-        meta: { title: title('实例控制台'), requireAuth: true, hidden: true, activeMenu: '/client/services', keepAlive: false },
+        meta: {
+          title: title('实例控制台'),
+          requireAuth: true,
+          hidden: true,
+          activeMenu: '/client/services',
+          keepAlive: false,
+        },
       },
       {
         path: 'invoices/:id/pay',
         name: 'ClientInvoicePay',
         component: () => import('@/pages/client/invoice-detail/index.vue'),
-        meta: { title: title('账单支付'), requireAuth: true, hidden: true, activeMenu: '/client/invoices', keepAlive: false },
+        meta: {
+          title: title('账单支付'),
+          requireAuth: true,
+          hidden: true,
+          activeMenu: '/client/invoices',
+          keepAlive: false,
+        },
       },
       {
         path: 'invoices/:id',

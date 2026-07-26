@@ -7,7 +7,6 @@
     <strong>{{ detail.name || `实例 #${serviceId}` }}</strong>
   </div>
 </template>
-
 <script setup lang="ts">
 import { useServiceConsoleContext } from './context';
 

@@ -1,5 +1,5 @@
-import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { MessagePlugin } from 'tdesign-vue-next';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 
 import clientApi from '@/api/client';
 import type { ApiEnvelope, CouponRecord, PagedList } from '@/types/client';
@@ -27,8 +27,7 @@ export function formatCouponAmount(value: unknown) {
 }
 
 export function resolveStatusTheme(statusOrItem: unknown, statusLabel?: unknown) {
-  const item =
-    typeof statusOrItem === 'object' && statusOrItem !== null ? (statusOrItem as CouponRecord) : null;
+  const item = typeof statusOrItem === 'object' && statusOrItem !== null ? (statusOrItem as CouponRecord) : null;
   const status = item?.status ?? statusOrItem;
   const label = item?.status_label ?? statusLabel;
 
@@ -63,7 +62,9 @@ export function resolveThresholdText(item: CouponRecord) {
 export function resolveDiscountAmountText(item: CouponRecord) {
   if (item.discount_type === 'fixed') return `减 ￥${formatCouponAmount(item.discount_value)}`;
   if (item.discount_type === 'percentage') {
-    return item.max_discount_amount ? `最高减 ￥${formatCouponAmount(item.max_discount_amount)}` : item.discount_label || '--';
+    return item.max_discount_amount
+      ? `最高减 ￥${formatCouponAmount(item.max_discount_amount)}`
+      : item.discount_label || '--';
   }
   return item.discount_amount ? `减 ￥${formatCouponAmount(item.discount_amount)}` : item.discount_label || '--';
 }

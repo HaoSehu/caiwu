@@ -10,7 +10,6 @@
     当前实例未接入完整控制能力，页面将以只读模式展示基础信息。
   </t-alert>
 </template>
-
 <script setup lang="ts">
 import { computed } from 'vue';
 

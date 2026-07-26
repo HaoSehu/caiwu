@@ -71,7 +71,9 @@ export function normalizeContentArticle(item: GenericRecord = {}): ContentArticl
     content: String(pickFirst(item.content, item.body, item.details, item.html) || ''),
     category_name: categoryName,
     category: categoryName,
-    category_slug: String(pickFirst(item.category_slug, item.categorySlug, item.category_alias, item.categoryAlias) || ''),
+    category_slug: String(
+      pickFirst(item.category_slug, item.categorySlug, item.category_alias, item.categoryAlias) || '',
+    ),
     keywords: Array.isArray(keywords) ? keywords.map((entry) => String(entry)) : String(keywords || ''),
     status: toNumber(pickFirst(item.status, item.state), 0),
     is_pinned: toNumber(pickFirst(item.is_pinned, item.is_top, item.isTop), 0),

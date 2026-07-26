@@ -111,9 +111,10 @@ router.onError((error, to) => {
     return;
   }
 
-  const targetPath = typeof to?.fullPath === 'string'
-    ? to.fullPath
-    : `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  const targetPath =
+    typeof to?.fullPath === 'string'
+      ? to.fullPath
+      : `${window.location.pathname}${window.location.search}${window.location.hash}`;
 
   if (window.sessionStorage.getItem(DYNAMIC_IMPORT_RELOAD_KEY) === targetPath) {
     window.sessionStorage.removeItem(DYNAMIC_IMPORT_RELOAD_KEY);

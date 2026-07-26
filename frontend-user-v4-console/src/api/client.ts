@@ -1,6 +1,5 @@
 import type { AxiosRequestConfig } from 'axios';
 
-import request from '@/utils/request';
 import type {
   ApiEnvelope,
   BalanceLog,
@@ -35,27 +34,28 @@ import type {
   ReferralRewardRecord,
   ReferralWithdrawalApplyResult,
   ReferralWithdrawalRecord,
+  SecurityGroupPayload,
+  SecurityRulePayload,
+  ServiceInstance,
   ServiceNameUpdatePayload,
   ServiceOperationLogPayload,
+  ServiceOverviewPayload,
   ServicePasswordResetPayload,
   ServicePowerActionPayload,
   ServiceReinstallOptionsPayload,
   ServiceReinstallPayload,
-  ServiceInstance,
-  ServiceOverviewPayload,
   ServiceRemarkUpdatePayload,
   ServiceRenewPreview,
   ServiceTrafficPackageOrderPayload,
   ServiceTrafficPackagePreview,
   ServiceTrafficPackageQuote,
   ServiceVncPayload,
-  SecurityGroupPayload,
-  SecurityRulePayload,
   TicketImageUploadPayload,
   TicketRecord,
   TicketReplyRecord,
   TicketServiceOption,
 } from '@/types/client';
+import request from '@/utils/request';
 
 import {
   normalizeContentDetailPayload,
@@ -83,27 +83,27 @@ function putEnvelope<T>(url: string, data?: Record<string, unknown> | FormData, 
   return request.put<ApiEnvelope<T>, ApiEnvelope<T>>(url, data, config);
 }
 
-type V2ServiceDetailPayload = {
+interface V2ServiceDetailPayload {
   service?: ConsoleServiceDetail | null;
-};
+}
 
-type V2ServiceConnectionPayload = {
+interface V2ServiceConnectionPayload {
   connection?: ConsoleConnectionInfo | null;
-};
+}
 
-type V2ServiceRuntimePayload = {
+interface V2ServiceRuntimePayload {
   runtime?: Partial<ConsoleServiceDetail> | null;
-};
+}
 
-type V2TicketDetailPayload = {
+interface V2TicketDetailPayload {
   ticket?: TicketRecord | null;
-};
+}
 
 type V2TicketRepliesPayload = PagedList<TicketReplyRecord>;
 
-type V2InvoiceDetailPayload = {
+interface V2InvoiceDetailPayload {
   invoice?: Record<string, unknown> | null;
-};
+}
 
 type V2ClientLedgerPayload = PagedList<FinanceLedgerRecord> & {
   summary?: FinanceLedgerSummary;
@@ -165,7 +165,9 @@ function normalizeV2InvoiceDetail(payload: V2InvoiceDetailPayload | null | undef
     coupon: configuration.coupon,
     payment_summary: paymentChain.payment_summary as InvoiceRecord['payment_summary'],
     payments: Array.isArray(paymentChain.payments) ? (paymentChain.payments as PaymentRecord[]) : [],
-    pay_methods: Array.isArray(paymentOptions.pay_methods) ? (paymentOptions.pay_methods as InvoiceRecord['pay_methods']) : [],
+    pay_methods: Array.isArray(paymentOptions.pay_methods)
+      ? (paymentOptions.pay_methods as InvoiceRecord['pay_methods'])
+      : [],
     payment_security: (paymentOptions.payment_security as InvoiceRecord['payment_security']) || null,
     can_cancel: paymentOptions.can_cancel,
     items: Array.isArray(invoice.items) ? invoice.items : [],
@@ -283,7 +285,10 @@ const clientApi = {
   serviceMonitor: (id: number | string, params?: QueryParams, config: Record<string, unknown> = {}) =>
     request.get(`/v2/client/services/${id}/monitor`, { params, ...config }),
   serviceMonitorBatch: (id: number | string, params?: QueryParams, config: Record<string, unknown> = {}) =>
-    request.get<ApiEnvelope<MonitorBatchPayload>, ApiEnvelope<MonitorBatchPayload>>(`/v2/client/services/${id}/monitor/batch`, { params, ...config }),
+    request.get<ApiEnvelope<MonitorBatchPayload>, ApiEnvelope<MonitorBatchPayload>>(
+      `/v2/client/services/${id}/monitor/batch`,
+      { params, ...config },
+    ),
   serviceNatForwardings: (id: number | string) =>
     request.get<ApiEnvelope<NatForwardingPayload>, ApiEnvelope<NatForwardingPayload>>(
       `/v2/client/services/${id}/nat-forwardings`,
@@ -302,7 +307,9 @@ const clientApi = {
   applySecurityGroup: (id: number | string, groupId: number | string) =>
     postEnvelope<{ message?: string }>(`/v2/client/services/${id}/security-groups/${groupId}/apply`),
   deleteSecurityGroup: (id: number | string, groupId: number | string) =>
-    request.delete<ApiEnvelope<{ message?: string }>, ApiEnvelope<{ message?: string }>>(`/v2/client/services/${id}/security-groups/${groupId}`),
+    request.delete<ApiEnvelope<{ message?: string }>, ApiEnvelope<{ message?: string }>>(
+      `/v2/client/services/${id}/security-groups/${groupId}`,
+    ),
   createSecurityRule: (id: number | string, groupId: number | string, data: Record<string, unknown>) =>
     postEnvelope<{ message?: string }>(`/v2/client/services/${id}/security-groups/${groupId}/rules`, data),
   deleteSecurityRule: (id: number | string, groupId: number | string, ruleId: number | string) =>
@@ -320,8 +327,10 @@ const clientApi = {
   financeLedgerDetail: (id: number | string) => request.get(`/v2/client/finance/ledger/${id}`),
   coupons: (params?: QueryParams) => getEnvelope<PagedList<CouponRecord>>('/v2/client/coupons', { params }),
   couponsSummary: (params?: QueryParams) => getEnvelope<CouponSummary>('/v2/client/coupons/summary', { params }),
-  publicCoupons: (params?: QueryParams) => getEnvelope<PagedList<CouponRecord>>('/v2/client/coupons/public', { params }),
-  publicCouponsSummary: (params?: QueryParams) => getEnvelope<CouponSummary>('/v2/client/coupons/public/summary', { params }),
+  publicCoupons: (params?: QueryParams) =>
+    getEnvelope<PagedList<CouponRecord>>('/v2/client/coupons/public', { params }),
+  publicCouponsSummary: (params?: QueryParams) =>
+    getEnvelope<CouponSummary>('/v2/client/coupons/public/summary', { params }),
   claimCoupon: (couponId: number | string) => postEnvelope<CouponRecord>(`/v2/client/coupons/${couponId}/claim`),
 
   rechargeGateways: () => getEnvelope<RechargeGatewayOptionsPayload>('/v2/client/recharge/gateways'),
@@ -329,12 +338,15 @@ const clientApi = {
   rechargeStatus: (paymentNo: string, params?: QueryParams) =>
     getEnvelope<RechargeStatusPayload>(`/v2/client/recharge/${paymentNo}/status`, { params }),
 
-  invoices: (params?: ClientFinanceListParams) => getEnvelope<PagedList<InvoiceRecord>>('/v2/client/invoices', { params }),
-  invoicesSummary: (params?: ClientFinanceListParams) => getEnvelope<InvoiceListSummary>('/v2/client/invoices/summary', { params }),
+  invoices: (params?: ClientFinanceListParams) =>
+    getEnvelope<PagedList<InvoiceRecord>>('/v2/client/invoices', { params }),
+  invoicesSummary: (params?: ClientFinanceListParams) =>
+    getEnvelope<InvoiceListSummary>('/v2/client/invoices/summary', { params }),
   createInvoice: (data: Record<string, unknown>, config?: Record<string, unknown>) =>
     postEnvelope<InvoiceCreatePayload>('/v2/client/invoices', data, config),
   invoiceDetail: (id: number | string) => v2InvoiceDetail(id),
-  cancelInvoice: (id: number | string) => postEnvelope<Record<string, unknown>>(`/v2/client/invoices/${id}/cancellations`),
+  cancelInvoice: (id: number | string) =>
+    postEnvelope<Record<string, unknown>>(`/v2/client/invoices/${id}/cancellations`),
   payInvoiceByBalance: (id: number | string, data: Record<string, unknown>) =>
     postEnvelope<InvoiceBalancePaymentResult>(`/v2/client/invoices/${id}/pay/balance`, data),
   payInvoiceByBalanceAndAlipay: (id: number | string, data: Record<string, unknown>) =>
@@ -344,17 +356,20 @@ const clientApi = {
   queryInvoiceAlipayStatus: (id: number | string, params?: QueryParams) =>
     getEnvelope<InvoiceAlipayStatusPayload>(`/v2/client/invoices/${id}/pay/alipay/status`, { params }),
 
-  payments: (params?: ClientFinanceListParams) => getEnvelope<PagedList<PaymentRecord>>('/v2/client/payments', { params }),
+  payments: (params?: ClientFinanceListParams) =>
+    getEnvelope<PagedList<PaymentRecord>>('/v2/client/payments', { params }),
   paymentsSummary: (params?: ClientFinanceListParams) => request.get('/v2/client/payments/summary', { params }),
   paymentDetail: (id: number | string) => getEnvelope<PaymentRecord>(`/v2/client/payments/${id}`),
 
   orders: (params?: ClientFinanceListParams) => getEnvelope<PagedList<OrderRecord>>('/v2/client/orders', { params }),
-  orderSummary: (params?: ClientFinanceListParams) => getEnvelope<OrderListSummary>('/v2/client/orders/summary', { params }),
+  orderSummary: (params?: ClientFinanceListParams) =>
+    getEnvelope<OrderListSummary>('/v2/client/orders/summary', { params }),
   orderDetail: (id: number | string) => getEnvelope<OrderRecord>(`/v2/client/orders/${id}`),
   cancelOrder: (id: number | string) => postEnvelope<Record<string, unknown>>(`/v2/client/orders/${id}/cancellations`),
 
   referralOverview: () => getEnvelope<ReferralOverviewPayload>('/v2/client/referral/overview'),
-  referralRewards: (params?: QueryParams) => getEnvelope<PagedList<ReferralRewardRecord>>('/v2/client/referral/rewards', { params }),
+  referralRewards: (params?: QueryParams) =>
+    getEnvelope<PagedList<ReferralRewardRecord>>('/v2/client/referral/rewards', { params }),
   referralAccountLogs: (params?: QueryParams) =>
     getEnvelope<PagedList<ReferralAccountLogRecord>>('/v2/client/referral/account-logs', { params }),
   referralWithdrawals: (params?: QueryParams) =>
@@ -367,7 +382,8 @@ const clientApi = {
     getEnvelope<TicketServiceOption[]>('/v2/client/tickets/service-options', { params }),
   ticketDetail: (id: number | string) => v2TicketDetail(id),
   createTicket: (data: Record<string, unknown>) => request.post('/v2/client/tickets', data),
-  replyTicket: (id: number | string, data: Record<string, unknown>) => request.post(`/v2/client/tickets/${id}/replies`, data),
+  replyTicket: (id: number | string, data: Record<string, unknown>) =>
+    request.post(`/v2/client/tickets/${id}/replies`, data),
   recallTicketReply: (id: number | string, replyId: number | string) =>
     postEnvelope<Record<string, unknown>>(`/v2/client/tickets/${id}/replies/${replyId}/recalls`),
   closeTicket: (id: number | string) => request.post(`/v2/client/tickets/${id}/closures`),
@@ -407,7 +423,6 @@ const clientApi = {
     getEnvelope<Record<string, unknown>>(`/v2/client/help-articles/${id}`).then((response) =>
       withNormalizedData<ContentDetailPayload>(response, normalizeContentDetailPayload),
     ),
-
 };
 
 export default clientApi;

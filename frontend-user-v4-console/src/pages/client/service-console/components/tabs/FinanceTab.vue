@@ -10,7 +10,14 @@
         <span>支出 ¥{{ formatMoney(financeState.summary.total_out || 0) }}</span>
         <span>退款 ¥{{ formatMoney(financeState.summary.refund_in || 0) }}</span>
       </div>
-      <t-table row-key="id" :data="financeState.list" :columns="financeColumns" :loading="financeState.loading" :pagination="null" size="small">
+      <t-table
+        row-key="id"
+        :data="financeState.list"
+        :columns="financeColumns"
+        :loading="financeState.loading"
+        :pagination="null"
+        size="small"
+      >
         <template #event_type="{ row }">
           <div class="finance-type-cell">
             <t-tag size="small" :theme="resolveFinanceTagTheme(row)" variant="light">
@@ -20,7 +27,13 @@
           </div>
         </template>
         <template #amount="{ row }">
-          <span class="finance-amount" :class="{ 'is-income': Number(row.change_amount || 0) > 0, 'is-outcome': Number(row.change_amount || 0) < 0 }">
+          <span
+            class="finance-amount"
+            :class="{
+              'is-income': Number(row.change_amount || 0) > 0,
+              'is-outcome': Number(row.change_amount || 0) < 0,
+            }"
+          >
             {{ Number(row.change_amount || 0) > 0 ? '+' : '' }}¥{{ formatMoney(row.change_amount || 0) }}
           </span>
         </template>
@@ -47,9 +60,13 @@
     </t-card>
   </section>
 </template>
-
 <script setup lang="ts">
-import { financeColumns, resolveFinanceBusinessLabel, resolveFinanceEventLabel, resolveFinanceTagTheme } from '../../composables/useConsoleTables';
+import {
+  financeColumns,
+  resolveFinanceBusinessLabel,
+  resolveFinanceEventLabel,
+  resolveFinanceTagTheme,
+} from '../../composables/useConsoleTables';
 import { useServiceConsoleContext } from '../context';
 
 const { financeState, formatMoney, loadFinanceLogs } = useServiceConsoleContext();

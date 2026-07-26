@@ -8,7 +8,7 @@
       </t-button>
     </div>
 
-    <LoadingState :loading="loading" text="正在加载工单详情">
+    <loading-state :loading="loading" text="正在加载工单详情">
       <template v-if="detail">
         <div class="ticket-detail-shell">
           <aside class="ticket-meta-card">
@@ -23,7 +23,9 @@
                 {{ userName }}
                 <span class="meta-id">id: {{ detail.user?.id || detail.user_id || '--' }}</span>
               </t-descriptions-item>
-              <t-descriptions-item label="工单分类">{{ resolveDepartmentLabel(detail.department) }}</t-descriptions-item>
+              <t-descriptions-item label="工单分类">{{
+                resolveDepartmentLabel(detail.department)
+              }}</t-descriptions-item>
               <t-descriptions-item label="优先级">
                 <t-tag :theme="resolvePriorityTheme(detail.priority)" variant="light">
                   {{ resolvePriorityLabel(detail.priority) }}
@@ -52,7 +54,9 @@
 
             <div class="mobile-detail-card">
               <t-descriptions :column="1" bordered>
-                <t-descriptions-item label="工单分类">{{ resolveDepartmentLabel(detail.department) }}</t-descriptions-item>
+                <t-descriptions-item label="工单分类">{{
+                  resolveDepartmentLabel(detail.department)
+                }}</t-descriptions-item>
                 <t-descriptions-item label="优先级">{{ resolvePriorityLabel(detail.priority) }}</t-descriptions-item>
                 <t-descriptions-item label="状态">{{ resolveTicketStatusLabel(detail.status) }}</t-descriptions-item>
                 <t-descriptions-item label="处理人">{{ assigneeName }}</t-descriptions-item>
@@ -131,7 +135,14 @@
                     </template>
                   </div>
                   <div class="message-actions">
-                    <t-button v-if="canRecall(reply)" size="small" theme="danger" variant="text" :loading="recalling" @click="recallReply(reply)">
+                    <t-button
+                      v-if="canRecall(reply)"
+                      size="small"
+                      theme="danger"
+                      variant="text"
+                      :loading="recalling"
+                      @click="recallReply(reply)"
+                    >
                       撤回
                     </t-button>
                   </div>
@@ -154,7 +165,7 @@
                 <div class="reply-composer__bar">
                   <label class="composer-upload-trigger">
                     <input type="file" accept=".jpg,.jpeg,.png,.webp" multiple @change="handleReplyUpload" />
-                    <span><AddIcon /></span>
+                    <span><add-icon /></span>
                   </label>
                   <t-textarea
                     v-model="replyContent"
@@ -164,7 +175,12 @@
                     placeholder="输入回复内容..."
                     @enter="submitReply"
                   />
-                  <t-button theme="primary" :loading="replying" :disabled="!canSubmitReply || replyUploading" @click="submitReply">
+                  <t-button
+                    theme="primary"
+                    :loading="replying"
+                    :disabled="!canSubmitReply || replyUploading"
+                    @click="submitReply"
+                  >
                     发送
                   </t-button>
                 </div>
@@ -176,18 +192,21 @@
         </div>
       </template>
       <t-empty v-else description="工单不存在" />
-    </LoadingState>
+    </loading-state>
 
-    <t-dialog v-model:visible="previewVisible" header="附件预览" width="min(45rem, calc(100vw - var(--td-comp-margin-xl)))">
+    <t-dialog
+      v-model:visible="previewVisible"
+      header="附件预览"
+      width="min(45rem, calc(100vw - var(--td-comp-margin-xl)))"
+    >
       <img v-if="previewUrl" :src="previewUrl" class="preview-image" alt="附件预览" />
     </t-dialog>
   </section>
 </template>
-
 <script setup lang="ts">
-import { onMounted } from 'vue';
-import { AddIcon } from 'tdesign-icons-vue-next';
 import LoadingState from '@shared/user-v3/components/LoadingState.vue';
+import { AddIcon } from 'tdesign-icons-vue-next';
+import { onMounted } from 'vue';
 
 import {
   formatTicketTime,
@@ -241,7 +260,6 @@ onMounted(() => {
   void loadDetail();
 });
 </script>
-
 <style scoped lang="less">
 .ticket-detail-page {
   display: flex;

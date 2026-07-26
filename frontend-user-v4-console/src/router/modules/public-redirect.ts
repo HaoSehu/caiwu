@@ -1,8 +1,10 @@
-import type { RouteRecordRaw } from 'vue-router';
 import { defineComponent, h } from 'vue';
+import type { RouteRecordRaw } from 'vue-router';
 
 function resolvePublicSiteOrigin() {
-  const configuredOrigin = String(import.meta.env.VITE_PUBLIC_SITE_URL || '').trim().replace(/\/+$/, '');
+  const configuredOrigin = String(import.meta.env.VITE_PUBLIC_SITE_URL || '')
+    .trim()
+    .replace(/\/+$/, '');
   if (configuredOrigin) {
     return configuredOrigin;
   }
