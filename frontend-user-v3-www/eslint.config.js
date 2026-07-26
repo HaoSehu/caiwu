@@ -29,6 +29,15 @@ export default [
     },
     rules: {
       'no-console': 'off',
+      // 与 ts/vue 覆盖块保持一致：`_` 前缀表示解构丢弃或占位，不算未使用。
+      'no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+        },
+      ],
     },
   },
   {
