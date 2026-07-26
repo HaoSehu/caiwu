@@ -29,7 +29,12 @@ class DemoPayService
      */
     public function isEnabled(array $config = []): bool
     {
-        return filter_var($config['enabled'] ?? true, FILTER_VALIDATE_BOOL);
+        // 演示网关只模拟资金流，生产环境一律不可用
+        if (function_exists('app') && app()->environment('production')) {
+            return false;
+        }
+
+        return filter_var($config['enabled'] ?? false, FILTER_VALIDATE_BOOL);
     }
 
     /**
@@ -77,9 +82,33 @@ class DemoPayService
         );
     }
 
-    public function verifyNotify(array $payload): bool
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>  $config
+     */
+    public function verifyNotify(array $payload, array $config = []): bool
     {
-        return ($payload['demo_sign'] ?? '') === 'ok';
+        $secret = trim((string) ($config['secret_key'] ?? ''));
+        $provided = trim((string) ($payload['demo_sign'] ?? ''));
+
+        // 未配置密钥时不得放行：否则任何人都能伪造本网关的回调
+        if ($secret === '' || $provided === '') {
+            return false;
+        }
+
+        return hash_equals(self::signPayload($payload, $secret), $provided);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    public static function signPayload(array $payload, string $secret): string
+    {
+        unset($payload['demo_sign']);
+        $payload = array_filter($payload, static fn (mixed $value): bool => is_scalar($value));
+        ksort($payload);
+
+        return hash_hmac('sha256', http_build_query($payload), $secret);
     }
 
     public function buildNotifyResponse(bool $success): Response
@@ -120,7 +149,7 @@ class DemoPayService
                 tradeNo: isset($payload['trade_no']) ? (string) $payload['trade_no'] : null,
                 outRequestNo: isset($payload['out_request_no']) ? (string) $payload['out_request_no'] : null,
             ))->toArray()),
-            'payment.verify_notify' => $this->success($action, ['verified' => $this->verifyNotify($payload)]),
+            'payment.verify_notify' => $this->success($action, ['verified' => $this->verifyNotify($payload, $config)]),
             default => ['success' => false, 'action' => $action, 'message' => 'Unsupported plugin action', 'data' => []],
         };
     }
