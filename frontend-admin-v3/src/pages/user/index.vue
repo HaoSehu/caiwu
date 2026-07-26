@@ -39,10 +39,9 @@
     </t-card>
   </div>
 </template>
-
 <script setup lang="ts">
-import { MessagePlugin } from 'tdesign-vue-next';
 import type { FormInstanceFunctions, FormRule } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next';
 import { onMounted, reactive, ref } from 'vue';
 
 import { adminAuthApi } from '@/api/auth';
@@ -74,10 +73,10 @@ const fetchProfile = async () => {
   loading.value = true;
   try {
     const info = await userStore.getUserInfo();
-    formData.username = (info as Record<string, unknown>).username as string || '';
-    formData.nickname = (info as Record<string, unknown>).nickname as string || '';
-    formData.email = (info as Record<string, unknown>).email as string || '';
-    formData.role = (info as Record<string, unknown>).role as string || '';
+    formData.username = ((info as Record<string, unknown>).username as string) || '';
+    formData.nickname = ((info as Record<string, unknown>).nickname as string) || '';
+    formData.email = ((info as Record<string, unknown>).email as string) || '';
+    formData.role = ((info as Record<string, unknown>).role as string) || '';
   } catch {
     // getUserInfo 内部已处理错误
   } finally {
@@ -120,7 +119,6 @@ const handleSave = async () => {
   }
 };
 </script>
-
 <style lang="less" scoped>
 .profile-card {
   max-width: 600px;

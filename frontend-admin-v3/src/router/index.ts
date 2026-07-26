@@ -1,4 +1,4 @@
-import { isObject, uniq } from 'lodash-es';
+import { isObject } from 'lodash-es';
 import type { RouteRecordRaw } from 'vue-router';
 import { createRouter, createWebHistory } from 'vue-router';
 
@@ -8,9 +8,7 @@ const env = import.meta.env.MODE || 'development';
 const homepageModules = import.meta.glob('./modules/**/homepage.ts', { eager: true });
 const routeModules = import.meta.glob('./modules/**/*.ts', { eager: true });
 const auxiliaryModules = Object.fromEntries(
-  Object.entries(routeModules).filter(
-    ([key]) => !key.endsWith('/homepage.ts') && !key.includes('/modules/admin/'),
-  ),
+  Object.entries(routeModules).filter(([key]) => !key.endsWith('/homepage.ts') && !key.includes('/modules/admin/')),
 );
 
 // 其他固定路由

@@ -10,7 +10,7 @@ export function required(message: string, trigger: Trigger = 'all'): FormRule {
 /** 邮箱规则 */
 export function emailRule(message = '请输入正确的邮箱地址'): FormRule {
   return {
-    pattern: /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/,
+    pattern: /^[\w.%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
     message,
     type: 'warning',
     trigger: 'blur',

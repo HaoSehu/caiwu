@@ -67,7 +67,7 @@
                 </div>
               </template>
               <template #bindings="{ row }">
-                <ProductBindingTreeSelect
+                <product-binding-tree-select
                   v-model="row.binding_ids"
                   mode="batch"
                   :existing-bindings="row.bindings"
@@ -135,24 +135,19 @@
     </t-dialog>
   </div>
 </template>
-
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
-import { AddIcon, RefreshIcon } from 'tdesign-icons-vue-next';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
-import type { FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
+import './index.less';
 
-import {
-  adminApi,
-  type CpuModelGroupRecord,
-  type CpuModelRecord,
-  type ProductBindingRecord,
-} from '@/api/admin';
+import { AddIcon } from 'tdesign-icons-vue-next';
+import type { FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
+import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { computed, onMounted, reactive, ref } from 'vue';
+
+import type { CpuModelGroupRecord, CpuModelRecord, ProductBindingRecord } from '@/api/admin';
+import { adminApi } from '@/api/admin';
 import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
 import { normalizeProductBindings as normalizeBindings } from '@/hooks/useProductBindingTree';
 import { errorMessage } from '@/utils/userMessage';
-
-import './index.less';
 
 const FREQUENCY_UNIT = 'GHz';
 
@@ -221,13 +216,15 @@ function slugify(value: unknown) {
   return String(value || '')
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, '_')
+    .replace(/[^a-z0-9\u4E00-\u9FA5]+/g, '_')
     .replace(/^_+|_+$/g, '')
     .slice(0, 60);
 }
 
 function stripFrequencyUnit(value: unknown) {
-  return String(value || '').trim().replace(/\s*GHz$/i, '');
+  return String(value || '')
+    .trim()
+    .replace(/\s*GHz$/i, '');
 }
 
 function buildFrequencyPayload(value: unknown) {
@@ -454,7 +451,10 @@ function handleDeleteModel(model: CpuModel) {
   });
 }
 
-function handleBindingSelectionChange(row: CpuModel, payload: { binding_ids: string[]; bindings: ProductBindingRecord[] }) {
+function handleBindingSelectionChange(
+  row: CpuModel,
+  payload: { binding_ids: string[]; bindings: ProductBindingRecord[] },
+) {
   row.binding_ids = payload.binding_ids;
   row.bindings = payload.bindings;
 }
@@ -497,7 +497,6 @@ async function handleSave() {
 function toPlainRecord(value: unknown) {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
-
 
 onMounted(() => {
   void loadCatalog();

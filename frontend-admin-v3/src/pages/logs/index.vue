@@ -3,51 +3,198 @@
     <template v-if="isLogTab(activeTab)">
       <t-card :bordered="false">
         <div class="log-filter-grid" :class="`log-filter-grid--${activeTab}`">
-          <t-select v-if="showFilter('level')" v-model="filters.level" clearable placeholder="日志级别" @change="handleLogSearch">
+          <t-select
+            v-if="showFilter('level')"
+            v-model="filters.level"
+            clearable
+            placeholder="日志级别"
+            @change="handleLogSearch"
+          >
             <t-option v-for="item in logLevelOptions" :key="item" :label="item" :value="item" />
           </t-select>
-          <t-select v-if="showFilter('task_key')" v-model="filters.task_key" clearable placeholder="任务名称" @change="handleLogSearch">
+          <t-select
+            v-if="showFilter('task_key')"
+            v-model="filters.task_key"
+            clearable
+            placeholder="任务名称"
+            @change="handleLogSearch"
+          >
             <t-option v-for="item in taskLogOptions" :key="item.value" :label="item.label" :value="item.value" />
           </t-select>
-          <t-select v-if="showFilter('method')" v-model="filters.method" clearable placeholder="请求方法" @change="handleLogSearch">
+          <t-select
+            v-if="showFilter('method')"
+            v-model="filters.method"
+            clearable
+            placeholder="请求方法"
+            @change="handleLogSearch"
+          >
             <t-option v-for="item in methodOptions" :key="item" :label="item" :value="item" />
           </t-select>
-          <t-input v-if="showFilter('actor_keyword')" v-model="filters.actor_keyword" clearable placeholder="操作人" @enter="handleLogSearch" @clear="handleLogSearch" />
-          <t-input v-if="showFilter('description_keyword')" v-model="filters.description_keyword" clearable placeholder="描述关键词" @enter="handleLogSearch" @clear="handleLogSearch" />
-          <t-input v-if="showFilter('ip_address')" v-model="filters.ip_address" clearable placeholder="IP 地址" @enter="handleLogSearch" @clear="handleLogSearch" />
-          <t-input v-if="showFilter('module')" v-model="filters.module" clearable placeholder="模块，例如 auth / order" @enter="handleLogSearch" @clear="handleLogSearch" />
-          <t-select v-if="showFilter('user_type')" v-model="filters.user_type" clearable placeholder="调用端" @change="handleLogSearch">
+          <t-input
+            v-if="showFilter('actor_keyword')"
+            v-model="filters.actor_keyword"
+            clearable
+            placeholder="操作人"
+            @enter="handleLogSearch"
+            @clear="handleLogSearch"
+          />
+          <t-input
+            v-if="showFilter('description_keyword')"
+            v-model="filters.description_keyword"
+            clearable
+            placeholder="描述关键词"
+            @enter="handleLogSearch"
+            @clear="handleLogSearch"
+          />
+          <t-input
+            v-if="showFilter('ip_address')"
+            v-model="filters.ip_address"
+            clearable
+            placeholder="IP 地址"
+            @enter="handleLogSearch"
+            @clear="handleLogSearch"
+          />
+          <t-input
+            v-if="showFilter('module')"
+            v-model="filters.module"
+            clearable
+            placeholder="模块，例如 auth / order"
+            @enter="handleLogSearch"
+            @clear="handleLogSearch"
+          />
+          <t-select
+            v-if="showFilter('user_type')"
+            v-model="filters.user_type"
+            clearable
+            placeholder="调用端"
+            @change="handleLogSearch"
+          >
             <t-option label="管理员" value="admin" />
             <t-option label="客户" value="client" />
             <t-option label="访客" value="guest" />
           </t-select>
-          <t-select v-if="showFilter('status')" v-model="filters.status" clearable :placeholder="statusPlaceholder" @change="handleLogSearch">
+          <t-select
+            v-if="showFilter('status')"
+            v-model="filters.status"
+            clearable
+            :placeholder="statusPlaceholder"
+            @change="handleLogSearch"
+          >
             <t-option v-for="item in statusOptions" :key="String(item.value)" :label="item.label" :value="item.value" />
           </t-select>
-          <t-input v-if="showFilter('phone')" v-model="filters.phone" clearable placeholder="输入接收手机号" @enter="handleLogSearch" @clear="handleLogSearch" />
-          <t-input v-if="showFilter('email')" v-model="filters.email" clearable placeholder="输入收件邮箱" @enter="handleLogSearch" @clear="handleLogSearch" />
-          <t-select v-if="showFilter('gateway')" v-model="filters.gateway" clearable placeholder="支付网关" @change="handleLogSearch">
+          <t-input
+            v-if="showFilter('phone')"
+            v-model="filters.phone"
+            clearable
+            placeholder="输入接收手机号"
+            @enter="handleLogSearch"
+            @clear="handleLogSearch"
+          />
+          <t-input
+            v-if="showFilter('email')"
+            v-model="filters.email"
+            clearable
+            placeholder="输入收件邮箱"
+            @enter="handleLogSearch"
+            @clear="handleLogSearch"
+          />
+          <t-select
+            v-if="showFilter('gateway')"
+            v-model="filters.gateway"
+            clearable
+            placeholder="支付网关"
+            @change="handleLogSearch"
+          >
             <t-option v-for="item in gatewayOptions" :key="item.value" :label="item.label" :value="item.value" />
           </t-select>
-          <t-input v-if="showFilter('plugin_id')" v-model="filters.plugin_id" clearable placeholder="插件 ID" @enter="handleLogSearch" @clear="handleLogSearch" />
-          <t-input v-if="showFilter('gateway_key')" v-model="filters.gateway_key" clearable placeholder="业务网关 key" @enter="handleLogSearch" @clear="handleLogSearch" />
-          <t-input v-if="showFilter('driver_key')" v-model="filters.driver_key" clearable placeholder="驱动 key" @enter="handleLogSearch" @clear="handleLogSearch" />
-          <t-input v-if="showFilter('trace_id')" v-model="filters.trace_id" clearable placeholder="Trace ID" @enter="handleLogSearch" @clear="handleLogSearch" />
-          <t-select v-if="showFilter('action')" v-model="filters.action" clearable placeholder="网关操作" @change="handleLogSearch">
+          <t-input
+            v-if="showFilter('plugin_id')"
+            v-model="filters.plugin_id"
+            clearable
+            placeholder="插件 ID"
+            @enter="handleLogSearch"
+            @clear="handleLogSearch"
+          />
+          <t-input
+            v-if="showFilter('gateway_key')"
+            v-model="filters.gateway_key"
+            clearable
+            placeholder="业务网关 key"
+            @enter="handleLogSearch"
+            @clear="handleLogSearch"
+          />
+          <t-input
+            v-if="showFilter('driver_key')"
+            v-model="filters.driver_key"
+            clearable
+            placeholder="驱动 key"
+            @enter="handleLogSearch"
+            @clear="handleLogSearch"
+          />
+          <t-input
+            v-if="showFilter('trace_id')"
+            v-model="filters.trace_id"
+            clearable
+            placeholder="Trace ID"
+            @enter="handleLogSearch"
+            @clear="handleLogSearch"
+          />
+          <t-select
+            v-if="showFilter('action')"
+            v-model="filters.action"
+            clearable
+            placeholder="网关操作"
+            @change="handleLogSearch"
+          >
             <t-option v-for="item in gatewayActionOptions" :key="item.value" :label="item.label" :value="item.value" />
           </t-select>
-          <t-select v-if="showFilter('result_status')" v-model="filters.result_status" clearable placeholder="结果状态" @change="handleLogSearch">
-            <t-option v-for="item in gatewayResultOptions" :key="String(item.value)" :label="item.label" :value="item.value" />
+          <t-select
+            v-if="showFilter('result_status')"
+            v-model="filters.result_status"
+            clearable
+            placeholder="结果状态"
+            @change="handleLogSearch"
+          >
+            <t-option
+              v-for="item in gatewayResultOptions"
+              :key="String(item.value)"
+              :label="item.label"
+              :value="item.value"
+            />
           </t-select>
-          <t-select v-if="showFilter('actor_type')" v-model="filters.actor_type" clearable placeholder="操作人类型" @change="handleLogSearch">
+          <t-select
+            v-if="showFilter('actor_type')"
+            v-model="filters.actor_type"
+            clearable
+            placeholder="操作人类型"
+            @change="handleLogSearch"
+          >
             <t-option label="管理员" value="admin" />
             <t-option label="客户" value="client" />
             <t-option label="系统" value="system" />
           </t-select>
-          <t-select v-if="showFilter('subject_type')" v-model="filters.subject_type" clearable placeholder="关联类型" @change="handleLogSearch">
-            <t-option v-for="item in activitySubjectOptions" :key="item.value" :label="item.label" :value="item.value" />
+          <t-select
+            v-if="showFilter('subject_type')"
+            v-model="filters.subject_type"
+            clearable
+            placeholder="关联类型"
+            @change="handleLogSearch"
+          >
+            <t-option
+              v-for="item in activitySubjectOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </t-select>
-          <t-input v-if="showFilter('keyword')" v-model="filters.keyword" clearable :placeholder="keywordPlaceholder" @enter="handleLogSearch" @clear="handleLogSearch">
+          <t-input
+            v-if="showFilter('keyword')"
+            v-model="filters.keyword"
+            clearable
+            :placeholder="keywordPlaceholder"
+            @enter="handleLogSearch"
+            @clear="handleLogSearch"
+          >
             <template #suffix-icon><search-icon /></template>
           </t-input>
           <t-date-picker
@@ -73,7 +220,14 @@
         </div>
 
         <div v-if="!isMobile" class="table-scroll">
-          <t-table row-key="id" :data="logRows" :columns="logTableColumns" :loading="logLoading" hover table-layout="fixed">
+          <t-table
+            row-key="id"
+            :data="logRows"
+            :columns="logTableColumns"
+            :loading="logLoading"
+            hover
+            table-layout="fixed"
+          >
             <template #time="{ row }">{{ formatDate(row.time || row.created_at || row.sent_at) }}</template>
             <template #primary="{ row }">
               <div class="stack-cell">
@@ -104,7 +258,9 @@
             </template>
             <template #message="{ row }">
               <div v-if="isTextLog" class="log-message">
-                <t-tag v-if="messageTag(row)" size="small" variant="light" class="log-message__tag">{{ messageTag(row) }}</t-tag>
+                <t-tag v-if="messageTag(row)" size="small" variant="light" class="log-message__tag">{{
+                  messageTag(row)
+                }}</t-tag>
                 <span class="log-message__body">
                   <template v-for="(seg, si) in parseMessageSegments(row)" :key="si">
                     <span v-if="seg.type === 'text'">{{ seg.text }}</span>
@@ -115,7 +271,8 @@
                       class="log-message__id-tag"
                       :title="idSegmentTitle(seg)"
                       @click="copyId(seg.label, seg.id)"
-                    >{{ seg.label }}:{{ seg.id }}</t-tag>
+                      >{{ seg.label }}:{{ seg.id }}</t-tag
+                    >
                   </template>
                 </span>
               </div>
@@ -128,7 +285,9 @@
               {{ gatewayLabel(row.gateway) }}
             </template>
             <template #result_status="{ row }">
-              <t-tag :theme="gatewayResultStatusTheme(row.result_status)" variant="light">{{ gatewayResultStatusLabel(row.result_status) }}</t-tag>
+              <t-tag :theme="gatewayResultStatusTheme(row.result_status)" variant="light">{{
+                gatewayResultStatusLabel(row.result_status)
+              }}</t-tag>
             </template>
             <template #actions="{ row }">
               <t-button theme="primary" variant="text" @click="openDetail(row)">详情</t-button>
@@ -139,23 +298,31 @@
         <div v-else class="table-scroll">
           <t-loading :loading="logLoading" size="small">
             <div v-if="logRows.length" class="log-mobile-stack">
-              <article v-for="row in logRows" :key="String(row.id || row.order_no || row.sent_no)" class="log-mobile-card">
+              <article
+                v-for="row in logRows"
+                :key="String(row.id || row.order_no || row.sent_no)"
+                class="log-mobile-card"
+              >
                 <div class="log-mobile-card__head">
                   <span class="log-mobile-card__time">{{ formatDate(row.time || row.created_at || row.sent_at) }}</span>
-                  <t-tag v-if="row.level" :theme="levelTheme(row.level)" variant="light" size="small">{{ fieldValue(row.level) }}</t-tag>
+                  <t-tag v-if="row.level" :theme="levelTheme(row.level)" variant="light" size="small">{{
+                    fieldValue(row.level)
+                  }}</t-tag>
                   <t-tag v-if="isTextLog && messageTag(row)" size="small" variant="light">{{ messageTag(row) }}</t-tag>
                   <t-tag
                     v-if="logStatusValue(row)"
                     :theme="statusTheme(logStatusValue(row))"
                     variant="light"
                     size="small"
-                  >{{ statusLabel(logStatusValue(row)) }}</t-tag>
+                    >{{ statusLabel(logStatusValue(row)) }}</t-tag
+                  >
                   <t-tag
                     v-if="row.result_status"
                     :theme="gatewayResultStatusTheme(row.result_status)"
                     variant="light"
                     size="small"
-                  >{{ gatewayResultStatusLabel(row.result_status) }}</t-tag>
+                    >{{ gatewayResultStatusLabel(row.result_status) }}</t-tag
+                  >
                 </div>
                 <div class="log-mobile-card__body">{{ logCardMessage(row) }}</div>
                 <div class="log-mobile-card__meta">
@@ -287,14 +454,17 @@
             </section>
           </div>
         </t-card>
-
       </template>
     </template>
 
     <template v-else>
       <t-card :bordered="false" :loading="cleanupLoading">
         <t-alert theme="warning" message="日志清理为不可逆操作，请确认保留天数、清理类型和确认文本。" />
-        <t-alert v-if="!canManageLogCleanup" theme="warning" message="当前账号缺少 log.manage 权限，只能查看清理概览，不能执行清理。" />
+        <t-alert
+          v-if="!canManageLogCleanup"
+          theme="warning"
+          message="当前账号缺少 log.manage 权限，只能查看清理概览，不能执行清理。"
+        />
 
         <section class="cleanup-section">
           <div class="section-title">
@@ -355,7 +525,13 @@
               <t-input v-model="cleanupForm.confirm_text" clearable placeholder="请输入 立即清理" />
             </t-form-item>
             <div class="cleanup-actions">
-              <t-button theme="danger" :loading="cleanupSubmitting" :disabled="cleanupSubmitDisabled" @click="handleCleanup">立即清理</t-button>
+              <t-button
+                theme="danger"
+                :loading="cleanupSubmitting"
+                :disabled="cleanupSubmitDisabled"
+                @click="handleCleanup"
+                >立即清理</t-button
+              >
               <t-button variant="outline" @click="cleanupForm.confirm_text = ''">清空确认</t-button>
             </div>
           </t-form>
@@ -389,7 +565,7 @@
       </t-card>
     </template>
 
-    <LogDetailDrawer
+    <log-detail-drawer
       :visible="detailVisible"
       :current-log="currentLog"
       :active-tab="activeTab"
@@ -398,24 +574,24 @@
     />
   </div>
 </template>
-
 <script setup lang="ts">
+import './index.less';
+
+import { SearchIcon } from 'tdesign-icons-vue-next';
+import type { PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { SearchIcon } from 'tdesign-icons-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
-import type { PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 
-import { adminApi, type PaginatedList, type LogListParams } from '@/api/admin';
-import { fieldValue, formatDateTime } from '@/utils/format';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { errorMessage } from '@/utils/userMessage';
+import type { LogListParams, PaginatedList } from '@/api/admin';
+import { adminApi } from '@/api/admin';
 import { AdminPermissions, hasPermissionInList } from '@/constants/permissions';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserStore } from '@/store';
+import { fieldValue, formatDateTime } from '@/utils/format';
+import { errorMessage } from '@/utils/userMessage';
 
 import LogDetailDrawer from './components/LogDetailDrawer.vue';
-
-import './index.less';
 
 type LogTab = 'system' | 'runtime' | 'admin-logins' | 'api' | 'sms' | 'email' | 'tasks' | 'gateway';
 type LogsTab = LogTab | 'schedules' | 'cleanup';
@@ -425,7 +601,18 @@ const route = useRoute();
 const router = useRouter();
 const userStore = useUserStore();
 const isMobile = useMediaQuery('(max-width: 768px)');
-const validTabs: LogsTab[] = ['system', 'runtime', 'admin-logins', 'api', 'sms', 'email', 'tasks', 'gateway', 'schedules', 'cleanup'];
+const validTabs: LogsTab[] = [
+  'system',
+  'runtime',
+  'admin-logins',
+  'api',
+  'sms',
+  'email',
+  'tasks',
+  'gateway',
+  'schedules',
+  'cleanup',
+];
 const activeTab = ref<LogsTab>(resolveRouteTab());
 const logLoading = ref(false);
 const scheduleLoading = ref(false);
@@ -480,7 +667,10 @@ const cleanupForm = reactive({
 
 const logLevelOptions = ['DEBUG', 'INFO', 'NOTICE', 'WARNING', 'ERROR', 'CRITICAL', 'ALERT', 'EMERGENCY'];
 const methodOptions = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'];
-const httpStatusOptions = [200, 201, 204, 400, 401, 403, 404, 422, 500].map((value) => ({ label: String(value), value }));
+const httpStatusOptions = [200, 201, 204, 400, 401, 403, 404, 422, 500].map((value) => ({
+  label: String(value),
+  value,
+}));
 const notifyStatusOptions = [
   { label: '待发送', value: 'pending' },
   { label: '发送成功', value: 'success' },
@@ -669,10 +859,11 @@ const scheduleColumns: PrimaryTableCol<RecordRow>[] = [
   { colKey: 'next', title: '下次执行', width: 170 },
   { colKey: 'actions', title: '操作', fixed: 'right', width: 120 },
 ];
-const currentLoading = computed(() => logLoading.value || scheduleLoading.value || cleanupLoading.value || cleanupSubmitting.value);
 const currentLogMeta = computed(() => (isLogTab(activeTab.value) ? logMeta[activeTab.value] : logMeta.system));
 const logTableColumns = computed(() => (isLogTab(activeTab.value) ? baseLogColumns[activeTab.value] : []));
-const isTextLog = computed(() => activeTab.value === 'system' || activeTab.value === 'runtime' || activeTab.value === 'tasks');
+const isTextLog = computed(
+  () => activeTab.value === 'system' || activeTab.value === 'runtime' || activeTab.value === 'tasks',
+);
 const keywordPlaceholder = computed(() => currentLogMeta.value.keyword);
 const statusPlaceholder = computed(() => {
   if (activeTab.value === 'api') return '全部状态码';
@@ -691,8 +882,12 @@ const statusOptions = computed(() => {
 });
 const drawerSize = computed(() => (isMobile.value ? '100%' : '700px'));
 const scheduleTasks = computed(() => asArray(scheduleOverview.value.tasks));
-const scheduleSystemTasks = computed(() => scheduleTasks.value.filter((task) => scheduleTaskSourceType(task) === 'system'));
-const scheduleThirdPartyTasks = computed(() => scheduleTasks.value.filter((task) => scheduleTaskSourceType(task) === 'third_party'));
+const scheduleSystemTasks = computed(() =>
+  scheduleTasks.value.filter((task) => scheduleTaskSourceType(task) === 'system'),
+);
+const scheduleThirdPartyTasks = computed(() =>
+  scheduleTasks.value.filter((task) => scheduleTaskSourceType(task) === 'third_party'),
+);
 const scheduleSourceOptions = computed(() => [
   { label: `全部 ${scheduleTasks.value.length}`, value: 'all' },
   { label: `系统 ${scheduleSystemTasks.value.length}`, value: 'system' },
@@ -724,7 +919,13 @@ const scheduleAutomationConfig = computed(() => toRecord(scheduleEnvironment.val
 const scheduleEnvAlerts = computed(() => {
   const env = scheduleEnvironment.value;
   if (Object.keys(env).length === 0) return [];
-  const alerts: Array<{ key: string; label: string; value: string; detail?: string; theme: 'success' | 'warning' | 'danger' }> = [];
+  const alerts: Array<{
+    key: string;
+    label: string;
+    value: string;
+    detail?: string;
+    theme: 'success' | 'warning' | 'danger';
+  }> = [];
 
   const mutex = scheduleMutex.value;
   const mutexEnabled = Boolean(mutex.enabled);
@@ -802,7 +1003,11 @@ const fileCards = computed(() => {
     { key: 'exists', label: '日志文件状态', value: file.exists ? '存在' : '缺失' },
     { key: 'size_bytes', label: '文件大小', value: formatBytes(file.size_bytes) },
     { key: 'task_log_count', label: '自动任务日志条数', value: numberText(file.task_log_count) },
-    { key: 'runtime_log_count', label: '运行日志条数', value: numberText(file.runtime_log_count ?? file.system_log_count) },
+    {
+      key: 'runtime_log_count',
+      label: '运行日志条数',
+      value: numberText(file.runtime_log_count ?? file.system_log_count),
+    },
   ];
 });
 const affectedCountText = computed(() => {
@@ -813,10 +1018,6 @@ const affectedCountText = computed(() => {
 function resolveTabValue(value: unknown): LogsTab | null {
   const tab = Array.isArray(value) ? value[0] : value;
   return validTabs.includes(tab as LogsTab) ? (tab as LogsTab) : null;
-}
-
-function normalizeTab(value: unknown): LogsTab {
-  return resolveTabValue(value) || 'system';
 }
 
 function resolveRouteTab(): LogsTab {
@@ -1068,7 +1269,8 @@ function primaryTitle(row: RecordRow) {
 }
 
 function primarySubText(row: RecordRow) {
-  if (activeTab.value === 'system') return fieldValue(row.actor_type === 'system' ? '系统操作' : `ID: ${row.actor_id || '-'}`);
+  if (activeTab.value === 'system')
+    return fieldValue(row.actor_type === 'system' ? '系统操作' : `ID: ${row.actor_id || '-'}`);
   if (activeTab.value === 'admin-logins') return fieldValue(row.admin_nickname || row.actor_name || '未设置昵称');
   if (activeTab.value === 'api') return userTypeLabel(row.user_type);
   if (activeTab.value === 'sms' || activeTab.value === 'email') return `发送时间：${formatDate(row.sent_at)}`;
@@ -1126,14 +1328,15 @@ function parseMessageSegments(row: RecordRow): MessageSegment[] {
 
   for (const pattern of ID_PATTERNS) {
     pattern.regex.lastIndex = 0;
-    let match: RegExpExecArray | null;
-    while ((match = pattern.regex.exec(text)) !== null) {
+    let match: RegExpExecArray | null = pattern.regex.exec(text);
+    while (match !== null) {
       matches.push({
         index: match.index,
         end: match.index + match[0].length,
         label: pattern.label,
         id: match[1],
       });
+      match = pattern.regex.exec(text);
     }
   }
 
@@ -1172,7 +1375,9 @@ function copyId(label: string, id: string) {
 }
 
 function idSegmentTitle(seg: Extract<MessageSegment, { type: 'id' }>) {
-  return routeForIdSegment(seg.label, seg.id) ? `点击复制并跳转 ${seg.label}:${seg.id}` : `点击复制 ${seg.label}:${seg.id}`;
+  return routeForIdSegment(seg.label, seg.id)
+    ? `点击复制并跳转 ${seg.label}:${seg.id}`
+    : `点击复制 ${seg.label}:${seg.id}`;
 }
 
 function routeForIdSegment(label: string, id: string) {
@@ -1214,7 +1419,7 @@ function logCardMessage(row: RecordRow) {
   const text = messageText(row);
   if (text) {
     const cleaned = String(text).replace(/\n+/g, ' ').trim();
-    return cleaned.length > 160 ? cleaned.slice(0, 160) + '…' : cleaned;
+    return cleaned.length > 160 ? `${cleaned.slice(0, 160)}…` : cleaned;
   }
   return primaryTitle(row) || primarySubText(row) || '-';
 }
@@ -1352,7 +1557,9 @@ function gatewayResultStatusLabel(value: unknown) {
       success: '成功',
       failed: '失败',
       pending: '处理中',
-    }[String(value || '').toLowerCase()] || fieldValue(value) || '未知'
+    }[String(value || '').toLowerCase()] ||
+    fieldValue(value) ||
+    '未知'
   );
 }
 
@@ -1384,7 +1591,6 @@ function formatScheduleCycle(row: RecordRow) {
   if (dailyMatch) return `每天 ${String(dailyMatch[2]).padStart(2, '0')}:${String(dailyMatch[1]).padStart(2, '0')}`;
   return '自定义周期';
 }
-
 
 watch(
   () => [route.path, route.query.tab, route.meta.logTab],

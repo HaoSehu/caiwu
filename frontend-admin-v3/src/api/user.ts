@@ -72,6 +72,9 @@ export interface UserServicePayload {
   name?: string;
   amount: number;
   auto_renew?: number;
+  create_order?: number;
+  create_invoice?: number;
+  deduct_balance?: number;
   upstream_host_id?: number | null;
   upstream_status?: string;
   os?: string;
@@ -93,16 +96,19 @@ export interface RefundPayload {
   remark: string;
 }
 
-type UserServiceV2DetailPayload = {
+interface UserServiceV2DetailPayload {
   service?: Record<string, unknown> | null;
-};
+}
 
-type UserServiceV2ConnectionPayload = {
+interface UserServiceV2ConnectionPayload {
   connection?: Record<string, unknown> | null;
-};
+}
 
 function normalizeV2ServicePayload(payload: UserServiceV2DetailPayload | Record<string, unknown> | null | undefined) {
-  const service = ((payload as UserServiceV2DetailPayload | undefined)?.service || payload || {}) as Record<string, unknown>;
+  const service = ((payload as UserServiceV2DetailPayload | undefined)?.service || payload || {}) as Record<
+    string,
+    unknown
+  >;
   const renewal = (service.renewal || {}) as Record<string, unknown>;
 
   return {
@@ -166,12 +172,24 @@ export const userApi = {
   refundInvoice: (id: number | string, invoiceId: number | string, data: RefundPayload) =>
     request.post({ url: `/v2/admin/users/${id}/invoices/${invoiceId}/refunds`, data }),
   balanceLogs: (id: number | string, params: PageParams) =>
-    request.get<{ list?: Record<string, unknown>[]; total?: number; page?: number; page_size?: number; summary?: unknown }>({
+    request.get<{
+      list?: Record<string, unknown>[];
+      total?: number;
+      page?: number;
+      page_size?: number;
+      summary?: unknown;
+    }>({
       url: `/v2/admin/users/${id}/balance-logs`,
       params,
     }),
   tickets: (id: number | string, params: PageParams) =>
-    request.get<{ list?: Record<string, unknown>[]; total?: number; page?: number; page_size?: number; summary?: unknown }>({
+    request.get<{
+      list?: Record<string, unknown>[];
+      total?: number;
+      page?: number;
+      page_size?: number;
+      summary?: unknown;
+    }>({
       url: `/v2/admin/users/${id}/tickets`,
       params,
     }),
@@ -202,7 +220,11 @@ export const userApi = {
       url: `/v2/admin/users/${id}/services/${serviceId}/power-actions`,
       data,
     }),
-  serviceResetPassword: (id: number | string, serviceId: number | string, data: { password: string; password_confirmation?: string }) =>
+  serviceResetPassword: (
+    id: number | string,
+    serviceId: number | string,
+    data: { password: string; password_confirmation?: string },
+  ) =>
     request.post({
       url: `/v2/admin/users/${id}/services/${serviceId}/password-resets`,
       data: {

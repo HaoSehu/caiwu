@@ -21,7 +21,9 @@
             <template #level="{ row }">
               <div class="stack-cell">
                 <strong>{{ fieldValue(row.member_level?.name || '未分级') }}</strong>
-                <span>{{ row.member_level?.reward_rate ? formatPercent(row.member_level.reward_rate) : '默认比例' }}</span>
+                <span>{{
+                  row.member_level?.reward_rate ? formatPercent(row.member_level.reward_rate) : '默认比例'
+                }}</span>
               </div>
             </template>
             <template #sales="{ row }">{{ formatMoney(row.total_sales_amount) }}</template>
@@ -77,7 +79,9 @@
             <template #time="{ row }">
               <div class="stack-cell">
                 <strong>{{ fieldValue(row.rewarded_at) }}</strong>
-                <span>{{ row.released_at ? `释放：${row.released_at}` : `可用：${fieldValue(row.available_at)}` }}</span>
+                <span>{{
+                  row.released_at ? `释放：${row.released_at}` : `可用：${fieldValue(row.available_at)}`
+                }}</span>
               </div>
             </template>
             <template #remark="{ row }">{{ fieldValue(row.remark) }}</template>
@@ -91,10 +95,22 @@
               <t-tag :theme="rewardStatusTheme(row.status)" variant="light">{{ rewardStatusLabel(row.status) }}</t-tag>
             </div>
             <dl>
-              <div><dt>下级</dt><dd>{{ userName(row.referred_user) }}</dd></div>
-              <div><dt>订单</dt><dd>{{ fieldValue(row.order?.order_no) }}</dd></div>
-              <div><dt>奖励金额</dt><dd>{{ formatMoney(row.reward_amount) }}</dd></div>
-              <div><dt>奖励比例</dt><dd>{{ formatPercent(row.reward_rate) }}</dd></div>
+              <div>
+                <dt>下级</dt>
+                <dd>{{ userName(row.referred_user) }}</dd>
+              </div>
+              <div>
+                <dt>订单</dt>
+                <dd>{{ fieldValue(row.order?.order_no) }}</dd>
+              </div>
+              <div>
+                <dt>奖励金额</dt>
+                <dd>{{ formatMoney(row.reward_amount) }}</dd>
+              </div>
+              <div>
+                <dt>奖励比例</dt>
+                <dd>{{ formatPercent(row.reward_rate) }}</dd>
+              </div>
             </dl>
           </article>
         </div>
@@ -124,8 +140,18 @@
           >
             <template #suffix-icon><search-icon /></template>
           </t-input>
-          <t-select v-model="withdrawalFilters.status" clearable placeholder="提现状态" @change="handleWithdrawalSearch">
-            <t-option v-for="item in withdrawalStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
+          <t-select
+            v-model="withdrawalFilters.status"
+            clearable
+            placeholder="提现状态"
+            @change="handleWithdrawalSearch"
+          >
+            <t-option
+              v-for="item in withdrawalStatusOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </t-select>
         </div>
       </t-card>
@@ -148,7 +174,9 @@
               </div>
             </template>
             <template #status="{ row }">
-              <t-tag :theme="withdrawalStatusTheme(row.status)" variant="light">{{ withdrawalStatusLabel(row.status) }}</t-tag>
+              <t-tag :theme="withdrawalStatusTheme(row.status)" variant="light">{{
+                withdrawalStatusLabel(row.status)
+              }}</t-tag>
             </template>
             <template #time="{ row }">
               <div class="stack-cell">
@@ -176,13 +204,27 @@
           <article v-for="row in withdrawalList" :key="row.id" class="referral-mobile-card">
             <div class="referral-mobile-card__head">
               <strong>{{ userName(row.user) }}</strong>
-              <t-tag :theme="withdrawalStatusTheme(row.status)" variant="light">{{ withdrawalStatusLabel(row.status) }}</t-tag>
+              <t-tag :theme="withdrawalStatusTheme(row.status)" variant="light">{{
+                withdrawalStatusLabel(row.status)
+              }}</t-tag>
             </div>
             <dl>
-              <div><dt>金额</dt><dd>{{ formatMoney(row.amount) }}</dd></div>
-              <div><dt>方式</dt><dd>{{ withdrawalMethodLabel(row.method) }}</dd></div>
-              <div><dt>账号</dt><dd>{{ fieldValue(row.account_no) }}</dd></div>
-              <div><dt>申请时间</dt><dd>{{ formatDateTime(row.created_at) }}</dd></div>
+              <div>
+                <dt>金额</dt>
+                <dd>{{ formatMoney(row.amount) }}</dd>
+              </div>
+              <div>
+                <dt>方式</dt>
+                <dd>{{ withdrawalMethodLabel(row.method) }}</dd>
+              </div>
+              <div>
+                <dt>账号</dt>
+                <dd>{{ fieldValue(row.account_no) }}</dd>
+              </div>
+              <div>
+                <dt>申请时间</dt>
+                <dd>{{ formatDateTime(row.created_at) }}</dd>
+              </div>
             </dl>
             <div v-if="Number(row.status) === 0" class="referral-mobile-card__actions">
               <t-button theme="primary" variant="outline" @click="openWithdrawalDialog('approve', row)">通过</t-button>
@@ -208,15 +250,15 @@
       v-model:visible="withdrawalDialog.visible"
       :header="withdrawalDialog.mode === 'approve' ? '通过提现申请' : '拒绝提现申请'"
       width="520px"
-      :confirm-btn="{ content: withdrawalDialog.mode === 'approve' ? '确认通过' : '确认拒绝', theme: withdrawalDialog.mode === 'approve' ? 'primary' : 'danger' }"
+      :confirm-btn="{
+        content: withdrawalDialog.mode === 'approve' ? '确认通过' : '确认拒绝',
+        theme: withdrawalDialog.mode === 'approve' ? 'primary' : 'danger',
+      }"
       :confirm-loading="withdrawalSubmitting"
       @confirm="submitWithdrawalAction"
     >
       <div class="withdrawal-dialog">
-        <p>
-          申请 #{{ withdrawalDialog.row?.id || '-' }}，
-          金额 {{ formatMoney(withdrawalDialog.row?.amount) }}
-        </p>
+        <p>申请 #{{ withdrawalDialog.row?.id || '-' }}， 金额 {{ formatMoney(withdrawalDialog.row?.amount) }}</p>
         <t-textarea
           v-model="withdrawalDialog.remark"
           :placeholder="withdrawalDialog.mode === 'approve' ? '通过备注，可留空' : '拒绝原因，必填'"
@@ -227,26 +269,21 @@
     </t-dialog>
   </div>
 </template>
-
 <script setup lang="ts">
+import './index.less';
+
+import { REWARD_STATUS_MAP, toLabelMap, toSelectOptions, toTagTypeMap } from '@shared/statusConfig';
+import { SearchIcon } from 'tdesign-icons-vue-next';
+import type { PrimaryTableCol } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { SearchIcon } from 'tdesign-icons-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
-import type { PrimaryTableCol } from 'tdesign-vue-next';
 
-import {
-  adminApi,
-  type ReferralOverview,
-  type ReferralRewardRecord,
-  type ReferralWithdrawalRecord,
-} from '@/api/admin';
-import { REWARD_STATUS_MAP, toLabelMap, toSelectOptions, toTagTypeMap } from '@shared/statusConfig';
+import type { ReferralOverview, ReferralRewardRecord, ReferralWithdrawalRecord } from '@/api/admin';
+import { adminApi } from '@/api/admin';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
-
-import './index.less';
 
 type ReferralTab = 'overview' | 'rewards' | 'withdrawals';
 type WithdrawalMode = 'approve' | 'reject';
@@ -263,13 +300,16 @@ function resolveRouteTab(): ReferralTab {
   return normalizeTab(route.query.tab) || normalizeTab(route.meta.referralTab) || 'overview';
 }
 
-watch(() => [route.path, route.query.tab, route.meta.referralTab], () => {
-  const next = resolveRouteTab();
-  if (activeTab.value !== next) {
-    activeTab.value = next;
-    refreshCurrentTab();
-  }
-});
+watch(
+  () => [route.path, route.query.tab, route.meta.referralTab],
+  () => {
+    const next = resolveRouteTab();
+    if (activeTab.value !== next) {
+      activeTab.value = next;
+      refreshCurrentTab();
+    }
+  },
+);
 const overviewLoading = ref(false);
 const rewardsLoading = ref(false);
 const withdrawalsLoading = ref(false);
@@ -313,11 +353,6 @@ const withdrawalDialog = reactive<{
 });
 
 const isMobile = useMediaQuery('(max-width: 768px)');
-const currentLoading = computed(() => {
-  if (activeTab.value === 'overview') return overviewLoading.value;
-  if (activeTab.value === 'rewards') return rewardsLoading.value;
-  return withdrawalsLoading.value;
-});
 
 const rewardLabelMap = toLabelMap(REWARD_STATUS_MAP);
 const rewardTypeMap = toTagTypeMap(REWARD_STATUS_MAP);
@@ -554,7 +589,6 @@ function formatPercent(value: unknown) {
 function toRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
-
 
 onMounted(loadAll);
 </script>

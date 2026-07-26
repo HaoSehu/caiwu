@@ -32,17 +32,17 @@
     </t-card>
   </div>
 </template>
-
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue';
-import { RefreshIcon } from 'tdesign-icons-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
-import type { PrimaryTableCol } from 'tdesign-vue-next';
-
-import { adminApi, type NewCustomerDailyRecord } from '@/api/admin';
-import { errorMessage } from '@/utils/userMessage';
-
 import './index.less';
+
+import { RefreshIcon } from 'tdesign-icons-vue-next';
+import type { PrimaryTableCol } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next';
+import { onMounted, reactive, ref } from 'vue';
+
+import type { NewCustomerDailyRecord } from '@/api/admin';
+import { adminApi } from '@/api/admin';
+import { errorMessage } from '@/utils/userMessage';
 
 const loading = ref(false);
 const dailyList = ref<NewCustomerDailyRecord[]>([]);
@@ -97,8 +97,6 @@ function currentMonthRange() {
 function formatDate(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
-
-
 
 onMounted(() => loadData());
 </script>

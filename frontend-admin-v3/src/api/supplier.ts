@@ -14,7 +14,15 @@ export interface SupplierFormOption {
   value: string | number | boolean;
 }
 
-export type SupplierFormFieldType = 'text' | 'url' | 'password' | 'select' | 'switch' | 'boolean' | 'number' | 'textarea';
+export type SupplierFormFieldType =
+  | 'text'
+  | 'url'
+  | 'password'
+  | 'select'
+  | 'switch'
+  | 'boolean'
+  | 'number'
+  | 'textarea';
 
 export interface SupplierFormField {
   key: string;
@@ -156,16 +164,16 @@ type V2SupplierRecord = SupplierRecord & {
   };
 };
 
-type V2SupplierDetailResponse = {
+interface V2SupplierDetailResponse {
   supplier?: V2SupplierRecord;
-};
+}
 
-type V2SupplierListResponse = {
+interface V2SupplierListResponse {
   list?: V2SupplierRecord[];
   total?: number;
   page?: number;
   page_size?: number;
-};
+}
 
 function normalizeV2Supplier(record: V2SupplierRecord): SupplierRecord {
   const connection = record.connection || {};
@@ -198,18 +206,23 @@ function normalizeV2SupplierList(response: V2SupplierListResponse) {
 
 export const supplierApi = {
   list: (params: SupplierListParams) =>
-    request.get<V2SupplierListResponse>({
-      url: '/v2/admin/suppliers',
-      params,
-    }).then((response) => normalizeV2SupplierList(response)),
+    request
+      .get<V2SupplierListResponse>({
+        url: '/v2/admin/suppliers',
+        params,
+      })
+      .then((response) => normalizeV2SupplierList(response)),
   summary: () => request.get<SupplierSummary>({ url: '/v2/admin/suppliers/summary' }),
-  providerTypes: () => request.get<ProviderTypeRecord[] | Record<string, string>>({ url: '/v2/admin/suppliers/provider-types' }),
+  providerTypes: () =>
+    request.get<ProviderTypeRecord[] | Record<string, string>>({ url: '/v2/admin/suppliers/provider-types' }),
   detail: async (id: number | string) => {
     const response = await request.get<V2SupplierDetailResponse>({ url: `/v2/admin/suppliers/${id}` });
     return normalizeV2Supplier((response.supplier || {}) as V2SupplierRecord);
   },
   revealSecret: (id: number | string, key: string) =>
-    request.get<{ key: string; value: unknown }>({ url: `/v2/admin/suppliers/${id}/secrets/${encodeURIComponent(key)}` }),
+    request.get<{ key: string; value: unknown }>({
+      url: `/v2/admin/suppliers/${id}/secrets/${encodeURIComponent(key)}`,
+    }),
   create: async (data: SupplierUpsertPayload) => {
     const response = await request.post<V2SupplierDetailResponse>({ url: '/v2/admin/suppliers', data });
     return normalizeV2Supplier((response.supplier || {}) as V2SupplierRecord);
@@ -229,11 +242,17 @@ export const supplierApi = {
       ...config,
     }),
   executeAction: (id: number | string, action: string, payload: Record<string, unknown> = {}) =>
-    request.post<SupplierActionResult>({
-      url: `/v2/admin/suppliers/${id}/tasks`,
-      data: { type: action, payload },
-    }).then((response) => response.detail?.result || {}),
-  productConfigTemplate: (supplierId: number | string, productId: number | string, config: Record<string, unknown> = {}) =>
+    request
+      .post<SupplierActionResult>({
+        url: `/v2/admin/suppliers/${id}/tasks`,
+        data: { type: action, payload },
+      })
+      .then((response) => response.detail?.result || {}),
+  productConfigTemplate: (
+    supplierId: number | string,
+    productId: number | string,
+    config: Record<string, unknown> = {},
+  ) =>
     request.get<Record<string, unknown>>({
       url: `/v2/admin/suppliers/${supplierId}/products/${productId}/config-template`,
       ...config,

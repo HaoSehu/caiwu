@@ -1,11 +1,6 @@
 <template>
   <div class="top-panel">
-    <t-card
-      v-for="card in cards"
-      :key="card.key"
-      :bordered="false"
-      class="stat-card"
-    >
+    <t-card v-for="card in cards" :key="card.key" :bordered="false" class="stat-card">
       <div class="stat-card__body">
         <div class="stat-card__info">
           <span class="stat-card__label">{{ card.label }}</span>
@@ -18,7 +13,6 @@
     </t-card>
   </div>
 </template>
-
 <script setup lang="ts">
 import { computed } from 'vue';
 
@@ -73,7 +67,6 @@ const cards = computed(() => [
   },
 ]);
 </script>
-
 <style lang="less" scoped>
 .top-panel {
   display: grid;

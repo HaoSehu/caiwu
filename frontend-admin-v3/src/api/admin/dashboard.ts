@@ -1,5 +1,6 @@
 import { request } from '@/utils/request';
-import type { DashboardStats, RecentInvoice, MonthlyRevenue } from './types';
+
+import type { DashboardStats, MonthlyRevenue, RecentInvoice } from './types';
 
 export const dashboardApi = {
   stats: () => request.get<DashboardStats>({ url: '/v2/admin/dashboard/stats' }),

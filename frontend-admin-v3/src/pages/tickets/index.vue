@@ -2,7 +2,13 @@
   <div class="tickets-page">
     <t-card :bordered="false">
       <div class="tickets-filter">
-        <t-input v-model="filters.keyword" clearable placeholder="搜索工单标题或 ID" @enter="handleSearch" @clear="handleSearch">
+        <t-input
+          v-model="filters.keyword"
+          clearable
+          placeholder="搜索工单标题或 ID"
+          @enter="handleSearch"
+          @clear="handleSearch"
+        >
           <template #suffix-icon><search-icon /></template>
         </t-input>
         <t-select v-model="filters.status" clearable placeholder="工单状态" @change="handleSearch">
@@ -12,7 +18,12 @@
           <t-option v-for="option in priorityOptions" :key="option.value" :label="option.label" :value="option.value" />
         </t-select>
         <t-select v-model="filters.department" clearable placeholder="工单分类" @change="handleSearch">
-          <t-option v-for="option in departmentOptions" :key="option.value" :label="option.label" :value="option.value" />
+          <t-option
+            v-for="option in departmentOptions"
+            :key="option.value"
+            :label="option.label"
+            :value="option.value"
+          />
         </t-select>
       </div>
     </t-card>
@@ -56,19 +67,19 @@
     </div>
   </div>
 </template>
-
 <script setup lang="ts">
+import './index.less';
+
 import { SearchIcon, UserIcon } from 'tdesign-icons-vue-next';
 import type { PageInfo } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { adminApi, type TicketRecord } from '@/api/admin';
+import type { TicketRecord } from '@/api/admin';
+import { adminApi } from '@/api/admin';
 import { formatDateTime } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
-
-import './index.less';
 
 const DEFAULT_STATUS_FILTER = 'ongoing';
 
@@ -174,13 +185,15 @@ function priorityTheme(value: unknown): 'default' | 'success' | 'warning' | 'dan
 
 function statusLabel(value: unknown) {
   return (
-    {
-      0: '开启',
-      1: '客户回复',
-      2: '员工回复',
-      3: '已关闭',
-    } as Record<number, string>
-  )[Number(value)] || '--';
+    (
+      {
+        0: '开启',
+        1: '客户回复',
+        2: '员工回复',
+        3: '已关闭',
+      } as Record<number, string>
+    )[Number(value)] || '--'
+  );
 }
 
 function statusTheme(value: unknown): 'default' | 'success' | 'warning' | 'danger' {

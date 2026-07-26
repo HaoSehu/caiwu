@@ -50,8 +50,7 @@ export const adminStaffApi = {
   detail: (id: number | string) => request.get<StaffRecord>({ url: `/v2/admin/staff/${id}` }),
   roles: () => request.get<{ list?: StaffRoleOption[] }>({ url: '/v2/admin/staff/roles' }),
   create: (data: CreateStaffPayload) => request.post<StaffRecord>({ url: '/v2/admin/staff', data }),
-  update: (id: number | string, data: StaffPayload) =>
-    request.put<StaffRecord>({ url: `/v2/admin/staff/${id}`, data }),
+  update: (id: number | string, data: StaffPayload) => request.put<StaffRecord>({ url: `/v2/admin/staff/${id}`, data }),
   toggleStatus: (id: number | string, enabled: boolean) =>
     request.patch({ url: `/v2/admin/staff/${id}/status`, data: { enabled } }),
   resetPassword: (id: number | string, data: { password: string; password_confirmation: string }) =>

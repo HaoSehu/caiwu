@@ -10,7 +10,11 @@
           :disabled="optimizationCoolingDown"
           @click="handleOptimizeAll"
         >
-          {{ optimizationCoolingDown ? `冷却中 ${formatDuration(status.optimization.cooldown_remaining_seconds)}` : '智能优化表' }}
+          {{
+            optimizationCoolingDown
+              ? `冷却中 ${formatDuration(status.optimization.cooldown_remaining_seconds)}`
+              : '智能优化表'
+          }}
         </t-button>
         <t-button v-if="canManage" theme="primary" :loading="exporting" @click="handleExportBackup">
           导出备份
@@ -22,28 +26,30 @@
         <span>表数量：{{ status.total_count }}</span>
         <span>总行数：{{ formatNumber(status.total_rows) }}</span>
         <span>总大小：{{ formatSizeMb(status.total_size_mb) }}</span>
-        <span>建议优化：{{ status.optimization.candidate_count }} 张，预计回收 {{ formatSizeMb(status.optimization.estimated_reclaimable_mb) }}</span>
+        <span
+          >建议优化：{{ status.optimization.candidate_count }} 张，预计回收
+          {{ formatSizeMb(status.optimization.estimated_reclaimable_mb) }}</span
+        >
         <span v-if="optimizationCoolingDown">上次优化：{{ status.optimization.last_optimized_at || '-' }}</span>
       </div>
 
       <div class="database-optimization-candidates">
         <span class="candidates-label">候选表：</span>
         <template v-if="status.optimization.candidates.length">
-          <t-tag v-for="candidate in status.optimization.candidates" :key="candidate.name" theme="warning" variant="light">
-            {{ candidate.name }} · {{ formatSizeMb(candidate.reclaimable_mb) }} · {{ formatPercent(candidate.fragmentation_ratio) }}
+          <t-tag
+            v-for="candidate in status.optimization.candidates"
+            :key="candidate.name"
+            theme="warning"
+            variant="light"
+          >
+            {{ candidate.name }} · {{ formatSizeMb(candidate.reclaimable_mb) }} ·
+            {{ formatPercent(candidate.fragmentation_ratio) }}
           </t-tag>
         </template>
         <span v-else class="candidates-empty">暂无达到优化阈值的数据表</span>
       </div>
 
-      <t-table
-        row-key="name"
-        :data="filteredList"
-        :columns="columns"
-        :loading="loading"
-        hover
-        table-layout="fixed"
-      >
+      <t-table row-key="name" :data="filteredList" :columns="columns" :loading="loading" hover table-layout="fixed">
         <template #name="{ row }">
           <strong>{{ row.name }}</strong>
         </template>
@@ -54,21 +60,18 @@
     </t-card>
   </div>
 </template>
-
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import type { PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
+import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { computed, onMounted, ref } from 'vue';
 
-import { useMediaQuery } from '@vueuse/core';
-
-import { databaseApi, type DatabaseOptimizationCandidate, type DatabaseStatus, type DatabaseTableItem } from '@/api/admin/database';
+import type { DatabaseOptimizationCandidate, DatabaseStatus, DatabaseTableItem } from '@/api/admin/database';
+import { databaseApi } from '@/api/admin/database';
 import { AdminPermissions, hasPermissionInList } from '@/constants/permissions';
 import { useUserStore } from '@/store';
 import { errorMessage } from '@/utils/userMessage';
 
 const userStore = useUserStore();
-const isMobile = useMediaQuery('(max-width: 768px)');
 
 const loading = ref(false);
 const optimizing = ref(false);
@@ -116,7 +119,6 @@ async function loadStatus() {
       total_size_mb: Number(payload.total_size_mb || 0),
       optimization: normalizeOptimization(payload.optimization),
     };
-
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '加载数据库状态失败'));
   } finally {
@@ -134,7 +136,9 @@ function handleOptimizeTables(tables: string[]) {
   }
 
   if (tables.length === 0 && optimizationCoolingDown.value) {
-    MessagePlugin.warning(`数据库优化冷却中，请在 ${formatDuration(status.value.optimization.cooldown_remaining_seconds)} 后重试`);
+    MessagePlugin.warning(
+      `数据库优化冷却中，请在 ${formatDuration(status.value.optimization.cooldown_remaining_seconds)} 后重试`,
+    );
     return;
   }
 
@@ -247,7 +251,6 @@ function hasPermission(permission: string) {
   return hasPermissionInList(permissions, permission);
 }
 </script>
-
 <style scoped lang="less">
 .admin-database-page {
   .database-card {
@@ -287,6 +290,5 @@ function hasPermission(permission: string) {
   .candidates-empty {
     color: var(--td-text-color-placeholder);
   }
-
 }
 </style>

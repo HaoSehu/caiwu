@@ -1,10 +1,5 @@
 <template>
   <div class="specs-page">
-    <t-alert
-      theme="info"
-      message="这里管理的是实例规格文本本身。绑定配置后只保存关联关系，不会自动改动原始商品数据。"
-    />
-
     <t-card :bordered="false">
       <div class="specs-filter">
         <t-input
@@ -28,14 +23,7 @@
       </div>
 
       <div class="table-scroll">
-        <t-table
-          row-key="id"
-          :data="specs"
-          :columns="columns"
-          :loading="loading"
-          hover
-          table-layout="fixed"
-        >
+        <t-table row-key="id" :data="specs" :columns="columns" :loading="loading" hover table-layout="fixed">
           <template #spec="{ row }">
             <div class="spec-cell">
               <strong>{{ row.text || '-' }}</strong>
@@ -51,7 +39,7 @@
             </t-tag>
           </template>
           <template #bindings="{ row }">
-            <ProductBindingTreeSelect
+            <product-binding-tree-select
               v-model="row.binding_ids"
               mode="batch"
               :existing-bindings="row.bindings"
@@ -86,7 +74,12 @@
           <t-input v-model="specForm.alias" maxlength="80" placeholder="例如：2 核 2G" />
         </t-form-item>
         <t-form-item label="说明" name="note">
-          <t-textarea v-model="specForm.note" :autosize="{ minRows: 3, maxRows: 5 }" maxlength="255" placeholder="例如：入门款实例规格" />
+          <t-textarea
+            v-model="specForm.note"
+            :autosize="{ minRows: 3, maxRows: 5 }"
+            maxlength="255"
+            placeholder="例如：入门款实例规格"
+          />
         </t-form-item>
         <t-form-item label="状态" name="status">
           <t-select v-model="specForm.status">
@@ -98,19 +91,19 @@
     </t-dialog>
   </div>
 </template>
-
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue';
-import { AddIcon, SearchIcon } from 'tdesign-icons-vue-next';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
-import type { FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
+import './index.less';
 
-import { adminApi, type InstanceSpecRecord, type ProductBindingRecord } from '@/api/admin';
+import { AddIcon, SearchIcon } from 'tdesign-icons-vue-next';
+import type { FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
+import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { onMounted, reactive, ref } from 'vue';
+
+import type { InstanceSpecRecord, ProductBindingRecord } from '@/api/admin';
+import { adminApi } from '@/api/admin';
 import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
 import { normalizeProductBindings } from '@/hooks/useProductBindingTree';
 import { errorMessage } from '@/utils/userMessage';
-
-import './index.less';
 
 type SpecRecord = Omit<
   InstanceSpecRecord,
@@ -168,7 +161,7 @@ function slugify(value: unknown) {
   return String(value || '')
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, '_')
+    .replace(/[^a-z0-9\u4E00-\u9FA5]+/g, '_')
     .replace(/^_+|_+$/g, '')
     .slice(0, 60);
 }
@@ -295,7 +288,10 @@ function handleDeleteSpec(row: SpecRecord) {
   });
 }
 
-function handleBindingSelectionChange(row: SpecRecord, payload: { binding_ids: string[]; bindings: ProductBindingRecord[] }) {
+function handleBindingSelectionChange(
+  row: SpecRecord,
+  payload: { binding_ids: string[]; bindings: ProductBindingRecord[] },
+) {
   row.bindings = payload.bindings;
   row.binding_ids = payload.binding_ids;
 }
@@ -333,8 +329,6 @@ async function handleSave() {
 function toPlainRecord(value: unknown) {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
-
-
 
 onMounted(() => {
   void loadCatalog();

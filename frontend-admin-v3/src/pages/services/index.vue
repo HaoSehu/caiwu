@@ -17,7 +17,9 @@
         <t-button v-if="!isMobile" variant="outline" :disabled="!selectedRowKeys.length" @click="openHostnameDialog">
           批量主机名<span v-if="selectedRowKeys.length">({{ selectedRowKeys.length }})</span>
         </t-button>
-        <t-button v-if="!isMobile" variant="text" :disabled="!selectedRowKeys.length" @click="clearSelection">清空选择</t-button>
+        <t-button v-if="!isMobile" variant="text" :disabled="!selectedRowKeys.length" @click="clearSelection"
+          >清空选择</t-button
+        >
       </div>
 
       <div v-if="!isMobile" class="table-scroll">
@@ -59,10 +61,16 @@
             </button>
           </template>
           <template #product="{ row }">
-            {{ fieldValue(row.product_display_name || row.product?.display_name || (row.product_id ? `未配置规格 #${row.product_id}` : '')) }}
+            {{
+              fieldValue(
+                row.product_display_name ||
+                  row.product?.display_name ||
+                  (row.product_id ? `未配置规格 #${row.product_id}` : ''),
+              )
+            }}
           </template>
           <template #status="{ row }">
-            <StatusTag :status-map="SERVICE_STATUS_MAP" :status="row.status" />
+            <status-tag :status-map="SERVICE_STATUS_MAP" :status="row.status" />
           </template>
           <template #billing="{ row }">
             <div class="billing-cell">
@@ -80,12 +88,18 @@
       <div v-else class="service-mobile-list">
         <t-loading :loading="loading" size="small">
           <div v-if="services.length" class="service-mobile-stack">
-            <MobileRecordCard
+            <mobile-record-card
               v-for="row in services"
               :key="row.id"
               :title="serviceTitle(row)"
               eyebrow="服务列表"
-              :subtitle="fieldValue(row.invoice?.invoice_no ? `账单 ${row.invoice.invoice_no}` : row.upstream_host_id_text || row.upstream_host_id)"
+              :subtitle="
+                fieldValue(
+                  row.invoice?.invoice_no
+                    ? `账单 ${row.invoice.invoice_no}`
+                    : row.upstream_host_id_text || row.upstream_host_id,
+                )
+              "
               :description="fieldValue(row.product_display_name || row.product?.display_name || row.domain)"
               highlight-label="服务金额"
               :highlight-value="formatMoney(row.amount)"
@@ -121,7 +135,13 @@
     >
       <t-alert theme="info" message="留空目标主机名会清空对应服务的自定义主机名。" />
       <div class="hostname-table">
-        <t-table row-key="service_id" :data="hostnameRows" :columns="hostnameColumns" table-layout="fixed" max-height="420">
+        <t-table
+          row-key="service_id"
+          :data="hostnameRows"
+          :columns="hostnameColumns"
+          table-layout="fixed"
+          max-height="420"
+        >
           <template #service="{ row }">
             <div class="hostname-service">
               <strong>{{ fieldValue(row.service_name) }}</strong>
@@ -143,23 +163,23 @@
     </t-dialog>
   </div>
 </template>
-
 <script setup lang="ts">
+import './index.less';
+
+import { SERVICE_STATUS_MAP, toSelectOptions } from '@shared/statusConfig';
+import { SearchIcon } from 'tdesign-icons-vue-next';
+import type { PageInfo, PrimaryTableCol } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { SearchIcon } from 'tdesign-icons-vue-next';
-import { MessagePlugin } from 'tdesign-vue-next';
-import type { PageInfo, PrimaryTableCol } from 'tdesign-vue-next';
 
+import type { ServiceRecord } from '@/api/service';
+import { serviceApi } from '@/api/service';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import StatusTag from '@/components/status-tag/index.vue';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { serviceApi, type ServiceRecord } from '@/api/service';
 import { fieldValue, formatMoney } from '@/utils/format';
 import { errorMessage } from '@/utils/userMessage';
-import { SERVICE_STATUS_MAP, toSelectOptions } from '@shared/statusConfig';
-
-import './index.less';
 
 interface HostnameRow {
   service_id: number;
@@ -191,7 +211,9 @@ const pagination = reactive({
   page_size: 20,
 });
 
-const statusOptions = computed(() => toSelectOptions(SERVICE_STATUS_MAP, false).map((item) => ({ ...item, value: String(item.value) })));
+const statusOptions = computed(() =>
+  toSelectOptions(SERVICE_STATUS_MAP, false).map((item) => ({ ...item, value: String(item.value) })),
+);
 
 const columns: PrimaryTableCol<ServiceRecord>[] = [
   { colKey: 'row-select', type: 'multiple', width: 54, fixed: 'left' },
@@ -293,7 +315,9 @@ function buildHostnameRow(row: ServiceRecord): HostnameRow {
   return {
     service_id: Number(row.id || 0),
     service_name: String(row.service_id || row.id || ''),
-    product_name: String(row.product_display_name || row.product?.display_name || (row.product_id ? `未配置规格 #${row.product_id}` : '')),
+    product_name: String(
+      row.product_display_name || row.product?.display_name || (row.product_id ? `未配置规格 #${row.product_id}` : ''),
+    ),
     user_name: userName(row.user),
     current_domain: String(row.domain || ''),
     current_custom_hostname: String(row.custom_hostname || ''),
@@ -342,10 +366,10 @@ function userName(user: unknown) {
 function hasHostInfo(row: ServiceRecord) {
   return Boolean(
     row.upstream_host_id_text ||
-      row.upstream_host_id ||
-      row.host_ips?.length ||
-      row.host_username ||
-      row.connection?.username,
+    row.upstream_host_id ||
+    row.host_ips?.length ||
+    row.host_username ||
+    row.connection?.username,
   );
 }
 
@@ -376,7 +400,6 @@ function shortDate(value: unknown) {
 function toRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
-
 
 onMounted(() => loadList());
 </script>

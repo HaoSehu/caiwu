@@ -2,13 +2,7 @@
   <div class="admin-roles-page">
     <t-card class="roles-card" :bordered="false">
       <div class="roles-filter">
-        <t-input
-          v-model="keyword"
-          clearable
-          placeholder="搜索角色编码/名称"
-          @enter="loadRoles"
-          @clear="loadRoles"
-        >
+        <t-input v-model="keyword" clearable placeholder="搜索角色编码/名称" @enter="loadRoles" @clear="loadRoles">
           <template #suffix-icon><search-icon /></template>
         </t-input>
         <t-button v-if="canManage" theme="primary" @click="openCreateDialog">
@@ -45,9 +39,13 @@
         <template #updatedAt="{ row }">{{ row.updated_at || '-' }}</template>
         <template #actions="{ row }">
           <t-space size="small">
-            <t-button theme="primary" variant="text" @click="openEditDialog(row)">{{ canManage ? '权限' : '查看' }}</t-button>
+            <t-button theme="primary" variant="text" @click="openEditDialog(row)">{{
+              canManage ? '权限' : '查看'
+            }}</t-button>
             <t-button v-if="canManage" theme="default" variant="text" @click="handleCopy(row)">复制</t-button>
-            <t-button v-if="canManage && canDeleteRole(row)" theme="danger" variant="text" @click="handleDelete(row)">删除</t-button>
+            <t-button v-if="canManage && canDeleteRole(row)" theme="danger" variant="text" @click="handleDelete(row)"
+              >删除</t-button
+            >
           </t-space>
         </template>
       </t-table>
@@ -55,7 +53,7 @@
       <div v-else class="roles-mobile-list">
         <t-loading :loading="loading" size="small">
           <div v-if="roles.length" class="roles-mobile-stack">
-            <MobileRecordCard
+            <mobile-record-card
               v-for="row in roles"
               :key="row.id"
               :title="row.label || row.name || '-'"
@@ -86,7 +84,11 @@
       <t-form ref="formRef" :data="form" :rules="rules" label-align="top">
         <div class="role-form-grid">
           <t-form-item label="角色编码" name="name">
-            <t-input v-model="form.name" :disabled="!canManage || currentRoleLocked || isReadonlySuperRole" placeholder="例如：operator" />
+            <t-input
+              v-model="form.name"
+              :disabled="!canManage || currentRoleLocked || isReadonlySuperRole"
+              placeholder="例如：operator"
+            />
           </t-form-item>
           <t-form-item label="角色名称" name="label">
             <t-input v-model="form.label" :disabled="!canManage || currentRoleLocked" placeholder="例如：运营人员" />
@@ -137,7 +139,9 @@
                   <span>{{ group.parentLabel }} · {{ group.selectedCount }} / {{ group.items.length }}</span>
                 </div>
                 <t-space v-if="canEditCurrentRole" size="small">
-                  <t-button size="small" variant="text" theme="primary" @click="selectGroupPermissions(group)">全选</t-button>
+                  <t-button size="small" variant="text" theme="primary" @click="selectGroupPermissions(group)"
+                    >全选</t-button
+                  >
                   <t-button size="small" variant="text" @click="clearGroupPermissions(group)">清空</t-button>
                 </t-space>
               </div>
@@ -152,7 +156,9 @@
                     {{ item.name || item.key }}
                     <t-tag v-if="item.action_label" variant="light" size="small">{{ item.action_label }}</t-tag>
                     <t-tag v-if="item.is_dangerous" theme="danger" variant="light" size="small">高危</t-tag>
-                    <t-tag v-else-if="item.risk_level === 'medium'" theme="warning" variant="light" size="small">敏感</t-tag>
+                    <t-tag v-else-if="item.risk_level === 'medium'" theme="warning" variant="light" size="small"
+                      >敏感</t-tag
+                    >
                   </span>
                   <em>{{ item.key }}</em>
                 </t-checkbox>
@@ -165,28 +171,28 @@
     </t-dialog>
   </div>
 </template>
-
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue';
-import { AddIcon, SearchIcon } from 'tdesign-icons-vue-next';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
-import type { FormInstanceFunctions, FormRule, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
+import './index.less';
 
-import { adminRoleApi, type PermissionItem, type RolePayload, type RoleRecord } from '@/api/admin-roles';
+import { AddIcon, SearchIcon } from 'tdesign-icons-vue-next';
+import type { FormInstanceFunctions, FormRule, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
+import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
+
+import type { PermissionItem, RolePayload, RoleRecord } from '@/api/admin-roles';
+import { adminRoleApi } from '@/api/admin-roles';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { errorMessage } from '@/utils/userMessage';
-import { required } from '@/utils/formRules';
 import {
   ADMIN_DEFAULT_PERMISSION_CODES,
   AdminPermissions,
   BUILTIN_ROLE_LABELS,
-  VISITOR_PERMISSION_CODES,
   hasPermissionInList,
+  VISITOR_PERMISSION_CODES,
 } from '@/constants/permissions';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserStore } from '@/store';
-
-import './index.less';
+import { required } from '@/utils/formRules';
+import { errorMessage } from '@/utils/userMessage';
 
 defineOptions({
   name: 'AdminRoles',
@@ -253,7 +259,9 @@ const isReadonlySuperRole = computed(() => hasAllPermissionSelected.value);
 const currentRole = computed(() => roles.value.find((item) => String(item.id) === String(form.id)) || null);
 const currentRoleLocked = computed(() => Boolean(currentRole.value?.is_locked || currentRole.value?.is_builtin));
 const canEditCurrentRole = computed(() => canManage.value && !currentRoleLocked.value);
-const selectedPermissionCount = computed(() => (hasAllPermissionSelected.value ? permissions.value.length : form.permissions.length));
+const selectedPermissionCount = computed(() =>
+  hasAllPermissionSelected.value ? permissions.value.length : form.permissions.length,
+);
 const dialogConfirmBtn = computed(() => (canEditCurrentRole.value ? { content: '保存', theme: 'primary' } : null));
 const permissionMap = computed(() => new Map(permissions.value.map((item) => [item.key, item])));
 const filteredPermissions = computed(() => {
@@ -530,25 +538,27 @@ function hasPermissionSelected(permission: string) {
 }
 
 function groupFallbackLabel(group: string) {
-  return {
-    system_root: '超级权限',
-    organization_staff: '员工账号',
-    organization_role: '角色授权',
-    organization_permission: '权限目录',
-    dashboard_workbench: '工作台',
-    customer_profile: '客户资料',
-    customer_verification: '实名审核',
-    finance_order: '订单管理',
-    finance_invoice: '账单管理',
-    finance_funds: '资金操作',
-    finance_report: '财务报表',
-    support_ticket: '工单支持',
-    product_catalog: '商品配置',
-    content_ops: '内容运营',
-    marketing_growth: '推广会员',
-    system_config: '系统设置',
-    system_audit: '日志审计',
-  }[group] || group;
+  return (
+    {
+      system_root: '超级权限',
+      organization_staff: '员工账号',
+      organization_role: '角色授权',
+      organization_permission: '权限目录',
+      dashboard_workbench: '工作台',
+      customer_profile: '客户资料',
+      customer_verification: '实名审核',
+      finance_order: '订单管理',
+      finance_invoice: '账单管理',
+      finance_funds: '资金操作',
+      finance_report: '财务报表',
+      support_ticket: '工单支持',
+      product_catalog: '商品配置',
+      content_ops: '内容运营',
+      marketing_growth: '推广会员',
+      system_config: '系统设置',
+      system_audit: '日志审计',
+    }[group] || group
+  );
 }
 
 function confirmAllPermission() {
@@ -578,5 +588,4 @@ function hasPermission(permission: string) {
   const userPermissions = userStore.userInfo?.permissions || [];
   return hasPermissionInList(userPermissions, permission);
 }
-
 </script>

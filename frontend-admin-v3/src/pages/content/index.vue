@@ -32,7 +32,12 @@
       </div>
 
       <div class="category-strip">
-        <button type="button" class="category-chip" :class="{ active: filters.category_id === '' }" @click="applyCategoryFilter('')">
+        <button
+          type="button"
+          class="category-chip"
+          :class="{ active: filters.category_id === '' }"
+          @click="applyCategoryFilter('')"
+        >
           全部分类
         </button>
         <button
@@ -56,7 +61,9 @@
       <div v-if="!isMobile" class="table-scroll">
         <t-table row-key="id" :data="articles" :columns="columns" hover table-layout="fixed">
           <template #title="{ row }">
-            <button class="title-button" type="button" @click="goEditArticle(row.id)">{{ fieldValue(row.title) }}</button>
+            <button class="title-button" type="button" @click="goEditArticle(row.id)">
+              {{ fieldValue(row.title) }}
+            </button>
             <p>{{ fieldValue(row.summary || row.excerpt) }}</p>
           </template>
           <template #category="{ row }">
@@ -66,13 +73,17 @@
             </div>
           </template>
           <template #status="{ row }">
-            <t-tag :theme="contentStatusTheme(row.status)" variant="light">{{ row.status_label || contentStatusLabel(row.status) }}</t-tag>
+            <t-tag :theme="contentStatusTheme(row.status)" variant="light">{{
+              row.status_label || contentStatusLabel(row.status)
+            }}</t-tag>
           </template>
           <template #flags="{ row }">
             <t-space size="small">
               <t-tag v-if="Number(row.is_pinned) === 1" theme="danger" variant="light">置顶</t-tag>
               <t-tag v-if="Number(row.is_recommended) === 1" theme="success" variant="light">推荐</t-tag>
-              <span v-if="Number(row.is_pinned) !== 1 && Number(row.is_recommended) !== 1" class="muted-text">普通</span>
+              <span v-if="Number(row.is_pinned) !== 1 && Number(row.is_recommended) !== 1" class="muted-text"
+                >普通</span
+              >
             </t-space>
           </template>
           <template #publish="{ row }">
@@ -103,17 +114,36 @@
               {{ fieldValue(row.title) }}
             </button>
             <div class="content-mobile-card__tools">
-              <t-tag :theme="contentStatusTheme(row.status)" variant="light">{{ row.status_label || contentStatusLabel(row.status) }}</t-tag>
-              <t-dropdown trigger="click" placement="bottom-right" :options="mobileActionOptions(row)" @click="(data: { value: unknown }) => handleMobileAction(data.value, row)">
+              <t-tag :theme="contentStatusTheme(row.status)" variant="light">{{
+                row.status_label || contentStatusLabel(row.status)
+              }}</t-tag>
+              <t-dropdown
+                trigger="click"
+                placement="bottom-right"
+                :options="mobileActionOptions()"
+                @click="handleMobileActionHandler(row)"
+              >
                 <t-button class="content-mobile-card__more" variant="text" shape="square">...</t-button>
               </t-dropdown>
             </div>
           </div>
           <dl class="content-mobile-card__meta">
-            <div><dt>分类</dt><dd>{{ fieldValue(row.category_name || row.content_category?.name) }}</dd></div>
-            <div><dt>属性</dt><dd>{{ Number(row.is_pinned) === 1 ? '置顶' : Number(row.is_recommended) === 1 ? '推荐' : '普通' }}</dd></div>
-            <div><dt>发布</dt><dd>{{ formatDateTime(row.publish_at || row.created_at) }}</dd></div>
-            <div><dt>浏览</dt><dd>{{ row.view_count || 0 }}</dd></div>
+            <div>
+              <dt>分类</dt>
+              <dd>{{ fieldValue(row.category_name || row.content_category?.name) }}</dd>
+            </div>
+            <div>
+              <dt>属性</dt>
+              <dd>{{ Number(row.is_pinned) === 1 ? '置顶' : Number(row.is_recommended) === 1 ? '推荐' : '普通' }}</dd>
+            </div>
+            <div>
+              <dt>发布</dt>
+              <dd>{{ formatDateTime(row.publish_at || row.created_at) }}</dd>
+            </div>
+            <div>
+              <dt>浏览</dt>
+              <dd>{{ row.view_count || 0 }}</dd>
+            </div>
           </dl>
         </article>
       </div>
@@ -149,7 +179,11 @@
                 <t-switch v-model="categoryForm.status" :custom-value="[1, 0]" :label="['启用', '停用']" />
               </t-form-item>
               <t-form-item class="category-form-span" label="分类说明" name="description">
-                <t-textarea v-model="categoryForm.description" :autosize="{ minRows: 3, maxRows: 5 }" :maxlength="255" />
+                <t-textarea
+                  v-model="categoryForm.description"
+                  :autosize="{ minRows: 3, maxRows: 5 }"
+                  :maxlength="255"
+                />
               </t-form-item>
             </div>
           </t-form>
@@ -182,26 +216,21 @@
     </t-dialog>
   </div>
 </template>
-
 <script setup lang="ts">
+import './index.less';
+
+import { AddIcon, FolderIcon, SearchIcon } from 'tdesign-icons-vue-next';
+import type { DropdownOption, FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
+import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { AddIcon, FolderIcon, SearchIcon } from 'tdesign-icons-vue-next';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
-import type { FormInstanceFunctions, FormRule, PrimaryTableCol } from 'tdesign-vue-next';
 
-import {
-  adminApi,
-  type ContentCategoryPayload,
-  type ContentCategoryRecord,
-  type ContentArticleRecord,
-} from '@/api/admin';
+import type { ContentArticleRecord, ContentCategoryPayload, ContentCategoryRecord } from '@/api/admin';
+import { adminApi } from '@/api/admin';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { fieldValue, formatDateTime } from '@/utils/format';
 import { required } from '@/utils/formRules';
 import { errorMessage } from '@/utils/userMessage';
-
-import './index.less';
 
 type ContentType = 'notice' | 'help';
 
@@ -312,11 +341,15 @@ function handlePageChange(data: { current: number; pageSize: number }) {
   loadArticles();
 }
 
-function mobileActionOptions(row: ContentArticleRecord) {
+function mobileActionOptions() {
   return [
     { content: '编辑', value: 'edit' },
     { content: '删除', value: 'delete', theme: 'error' },
   ];
+}
+
+function handleMobileActionHandler(row: ContentArticleRecord) {
+  return (data: DropdownOption) => handleMobileAction(data.value, row);
 }
 
 function handleMobileAction(value: unknown, row: ContentArticleRecord) {
@@ -458,7 +491,6 @@ function contentStatusTheme(status: unknown) {
   const themes: Record<string, 'default' | 'success' | 'warning'> = { 0: 'default', 1: 'success', 2: 'warning' };
   return themes[String(status ?? '')] || 'default';
 }
-
 
 onMounted(() => {
   loadAll();

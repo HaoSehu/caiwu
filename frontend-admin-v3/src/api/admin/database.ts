@@ -1,20 +1,20 @@
-import { request } from '@/utils/request';
 import { getAdminToken } from '@/app/runtime/session';
+import { request } from '@/utils/request';
 
-export type DatabaseTableItem = {
+export interface DatabaseTableItem {
   name: string;
   rows: number;
   size_mb: number;
   update_time?: string | null;
-};
+}
 
-export type DatabaseOptimizationCandidate = {
+export interface DatabaseOptimizationCandidate {
   name: string;
   reclaimable_mb: number;
   fragmentation_ratio: number;
-};
+}
 
-export type DatabaseStatus = {
+export interface DatabaseStatus {
   database: string;
   list: DatabaseTableItem[];
   total_count: number;
@@ -27,9 +27,9 @@ export type DatabaseStatus = {
     cooldown_remaining_seconds: number;
     last_optimized_at?: string | null;
   };
-};
+}
 
-export type DatabaseOptimizeResult = {
+export interface DatabaseOptimizeResult {
   id?: string;
   status?: string;
   message?: string;
@@ -39,12 +39,14 @@ export type DatabaseOptimizeResult = {
     optimized_tables?: string[];
     failed_tables?: Array<{ table?: string; message?: string } | string>;
   };
-};
+}
 
 const DATABASE_OPTIMIZE_TIMEOUT = 5 * 60 * 1000;
 
 function resolveApiBase(): string {
-  const apiBaseUrl = String(import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '');
+  const apiBaseUrl = String(import.meta.env.VITE_API_BASE_URL || '')
+    .trim()
+    .replace(/\/+$/, '');
   if (!apiBaseUrl) {
     throw new Error('VITE_API_BASE_URL 必须配置');
   }
@@ -90,7 +92,7 @@ export const databaseApi = {
 
     const blob = await response.blob();
     const disposition = String(response.headers.get('content-disposition') || '');
-    const matched = disposition.match(/filename\*?=(?:UTF-8''|")?([^\";]+)/i);
+    const matched = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i);
     const filename = matched?.[1] ? decodeURIComponent(matched[1].replace(/"/g, '')) : `backup_${Date.now()}.sql`;
 
     const objectUrl = URL.createObjectURL(blob);

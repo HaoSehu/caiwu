@@ -2,7 +2,13 @@
   <div class="verification-panel">
     <section v-if="activePane === 'list'" class="verification-section">
       <div class="verification-filter">
-        <t-input v-model="filters.keyword" clearable placeholder="输入关键字" @enter="handleSearch" @clear="handleSearch">
+        <t-input
+          v-model="filters.keyword"
+          clearable
+          placeholder="输入关键字"
+          @enter="handleSearch"
+          @clear="handleSearch"
+        >
           <template #suffix-icon><search-icon /></template>
         </t-input>
         <t-select v-model="quickStatus" placeholder="状态筛选" @change="handleQuickStatusChange">
@@ -113,18 +119,38 @@
       </t-form>
     </section>
 
-    <t-drawer v-model:visible="detailVisible" size="560px" header="实名认证详情" :footer="false" @close="closeVerificationDetail">
+    <t-drawer
+      v-model:visible="detailVisible"
+      size="560px"
+      header="实名认证详情"
+      :footer="false"
+      @close="closeVerificationDetail"
+    >
       <t-loading :loading="detailLoading" size="small">
         <t-descriptions :column="1" bordered>
           <t-descriptions-item label="用户名称">{{ formatDetailValue(detail.display_name) }}</t-descriptions-item>
           <t-descriptions-item label="真实姓名">{{ formatDetailValue(detail.real_name) }}</t-descriptions-item>
-          <t-descriptions-item label="认证方式">{{ formatDetailValue(detail.verification_method_label) }}</t-descriptions-item>
-          <t-descriptions-item label="认证类型">{{ formatDetailValue(detail.verification_type_label) }}</t-descriptions-item>
-          <t-descriptions-item label="证件类型">{{ formatDetailValue(detail.document_type_label) }}</t-descriptions-item>
-          <t-descriptions-item label="身份地区">{{ formatDetailValue(detail.identity_region_label) }}</t-descriptions-item>
-          <t-descriptions-item label="证件号码">{{ formatDetailValue(detail.id_card || detail.id_card_masked) }}</t-descriptions-item>
-          <t-descriptions-item label="接口单号">{{ formatDetailValue(detail.verification_certify_id) }}</t-descriptions-item>
-          <t-descriptions-item label="状态说明">{{ formatDetailValue(detail.verification_message) }}</t-descriptions-item>
+          <t-descriptions-item label="认证方式">{{
+            formatDetailValue(detail.verification_method_label)
+          }}</t-descriptions-item>
+          <t-descriptions-item label="认证类型">{{
+            formatDetailValue(detail.verification_type_label)
+          }}</t-descriptions-item>
+          <t-descriptions-item label="证件类型">{{
+            formatDetailValue(detail.document_type_label)
+          }}</t-descriptions-item>
+          <t-descriptions-item label="身份地区">{{
+            formatDetailValue(detail.identity_region_label)
+          }}</t-descriptions-item>
+          <t-descriptions-item label="证件号码">{{
+            formatDetailValue(detail.id_card || detail.id_card_masked)
+          }}</t-descriptions-item>
+          <t-descriptions-item label="接口单号">{{
+            formatDetailValue(detail.verification_certify_id)
+          }}</t-descriptions-item>
+          <t-descriptions-item label="状态说明">{{
+            formatDetailValue(detail.verification_message)
+          }}</t-descriptions-item>
         </t-descriptions>
         <div class="verification-drawer-actions">
           <t-button variant="outline" @click="closeVerificationDetail">
@@ -135,7 +161,13 @@
       </t-loading>
     </t-drawer>
 
-    <t-drawer v-model:visible="historyVisible" size="620px" :header="historyTitle" :footer="false" @close="closeVerificationHistory">
+    <t-drawer
+      v-model:visible="historyVisible"
+      size="620px"
+      :header="historyTitle"
+      :footer="false"
+      @close="closeVerificationHistory"
+    >
       <t-loading :loading="historyLoading" size="small">
         <t-table row-key="id" :data="historyList" :columns="historyColumns" table-layout="fixed">
           <template #historyStatus="{ row }">
@@ -164,7 +196,6 @@
     </t-dialog>
   </div>
 </template>
-
 <script setup lang="ts">
 import { ChevronLeftIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
@@ -172,10 +203,11 @@ import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
-import { adminApi, type VerificationRecord } from '@/api/admin';
+import type { VerificationRecord } from '@/api/admin';
+import { adminApi } from '@/api/admin';
+import { useUserStore } from '@/store';
 import { formatDateTime } from '@/utils/format';
 import { required } from '@/utils/formRules';
-import { useUserStore } from '@/store';
 
 const userStore = useUserStore();
 const route = useRoute();
@@ -255,7 +287,7 @@ watch(
   () => [route.path, route.query.tab, route.meta.verificationPane],
   () => {
     activePane.value = resolveRoutePane();
-  }
+  },
 );
 
 function buildListParams() {
@@ -361,7 +393,10 @@ function normalizeVerificationMessage(message?: string) {
 
 function canReject(row: VerificationRecord) {
   const permissions = userStore.userInfo?.permissions || [];
-  return (permissions.includes('*') || permissions.includes('verification.unbind')) && Number(row.verification_status || 0) === 2;
+  return (
+    (permissions.includes('*') || permissions.includes('verification.unbind')) &&
+    Number(row.verification_status || 0) === 2
+  );
 }
 
 async function openDetail(row: VerificationRecord) {
@@ -463,7 +498,6 @@ onMounted(() => {
   loadSummary();
 });
 </script>
-
 <style scoped lang="less">
 .verification-panel {
   display: flex;

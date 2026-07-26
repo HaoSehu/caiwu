@@ -40,7 +40,7 @@ export const useTabsRouterStore = defineStore('tabsRouter', {
     appendTabRouterList(newRoute: TRouterInfo) {
       // 不要将判断条件newRoute.meta.keepAlive !== false修改为newRoute.meta.keepAlive，starter默认开启保活，所以meta.keepAlive未定义时也需要进行保活，只有显式说明false才禁用保活。
       const needAlive = !ignoreCacheRoutes.includes(newRoute.name as string) && newRoute.meta?.keepAlive !== false;
-      if (!this.tabRouters.find((route: TRouterInfo) => route.path === newRoute.path)) {
+      if (!this.tabRouters.some((route: TRouterInfo) => route.path === newRoute.path)) {
         // 超过最大标签数时，移除最早的非首页标签
         if (this.tabRouterList.length >= MAX_TAB_COUNT) {
           const removeIdx = this.tabRouterList.findIndex((r: TRouterInfo) => !r.isHome);

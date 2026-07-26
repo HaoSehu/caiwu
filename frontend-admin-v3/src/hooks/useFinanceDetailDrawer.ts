@@ -1,7 +1,8 @@
-import { reactive } from 'vue';
 import { MessagePlugin } from 'tdesign-vue-next';
-import { errorMessage } from '@/utils/userMessage';
+import { reactive } from 'vue';
+
 import type { InvoiceRecord } from '@/api/admin';
+import { errorMessage } from '@/utils/userMessage';
 
 export interface InvoiceDetailState {
   visible: boolean;

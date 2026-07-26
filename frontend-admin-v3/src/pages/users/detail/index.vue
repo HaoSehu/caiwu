@@ -7,7 +7,9 @@
           返回用户列表
         </t-button>
         <div class="user-detail-actions">
-          <t-button theme="primary" :disabled="!user.id" :loading="loginAsLoading" @click="handleLoginAs">代登录</t-button>
+          <t-button theme="primary" :disabled="!user.id" :loading="loginAsLoading" @click="handleLoginAs"
+            >代登录</t-button
+          >
           <t-button theme="default" :disabled="!user.id" @click="openEditDialog">编辑资料</t-button>
         </div>
       </div>
@@ -18,7 +20,12 @@
         <div class="user-stat-card">
           <div class="user-stat-card__label">
             <span>{{ item.label }}</span>
-            <edit-icon v-if="item.key === 'cash_balance'" class="balance-action-icon" :class="{ 'is-disabled': !user.id }" @click="user.id && openRechargeDialog()" />
+            <edit-icon
+              v-if="item.key === 'cash_balance'"
+              class="balance-action-icon"
+              :class="{ 'is-disabled': !user.id }"
+              @click="user.id && openRechargeDialog()"
+            />
           </div>
           <strong :class="`is-${item.tone}`">{{ item.value }}</strong>
         </div>
@@ -53,17 +60,35 @@
             <template #header>
               <div class="note-header">
                 <span>管理员备注</span>
-                <t-button v-if="!noteEditing" variant="text" theme="primary" size="small" @click="startEditNote">编辑</t-button>
+                <t-button v-if="!noteEditing" variant="text" theme="primary" size="small" @click="startEditNote"
+                  >编辑</t-button
+                >
               </div>
             </template>
-            <div v-if="!noteEditing" class="user-note" :class="{ 'is-empty': !user.admin_note }">{{ user.admin_note || '暂无备注' }}</div>
+            <div v-if="!noteEditing" class="user-note" :class="{ 'is-empty': !user.admin_note }">
+              {{ user.admin_note || '暂无备注' }}
+            </div>
             <div v-else class="note-edit">
-              <t-textarea v-model="noteForm" placeholder="输入管理员备注" :maxlength="500" :autosize="{ minRows: 3, maxRows: 6 }" />
+              <t-textarea
+                v-model="noteForm"
+                placeholder="输入管理员备注"
+                :maxlength="500"
+                :autosize="{ minRows: 3, maxRows: 6 }"
+              />
               <div class="note-edit-footer">
-                <span class="note-char-count" :class="{ 'is-over': noteForm.length >= 500 }">{{ noteForm.length }} / 500</span>
+                <span class="note-char-count" :class="{ 'is-over': noteForm.length >= 500 }"
+                  >{{ noteForm.length }} / 500</span
+                >
                 <div class="note-edit-actions">
                   <t-button size="small" theme="default" @click="noteEditing = false">取消</t-button>
-                  <t-button size="small" theme="primary" :loading="noteSaving" :disabled="noteForm.length > 500" @click="saveNote">保存</t-button>
+                  <t-button
+                    size="small"
+                    theme="primary"
+                    :loading="noteSaving"
+                    :disabled="noteForm.length > 500"
+                    @click="saveNote"
+                    >保存</t-button
+                  >
                 </div>
               </div>
             </div>
@@ -89,14 +114,27 @@
 
       <section v-else-if="activeTab === 'services'" class="user-detail-section">
         <div class="detail-toolbar">
-          <t-input v-model="services.filters.keyword" clearable placeholder="搜索服务名、域名、账单号、配置名" @enter="searchServices" @clear="searchServices">
+          <t-input
+            v-model="services.filters.keyword"
+            clearable
+            placeholder="搜索服务名、域名、账单号、配置名"
+            @enter="searchServices"
+            @clear="searchServices"
+          >
             <template #suffix-icon><search-icon /></template>
           </t-input>
           <t-select v-model="services.filters.status" clearable placeholder="状态" @change="searchServices">
-            <t-option v-for="option in serviceStatusOptions" :key="option.value" :label="option.label" :value="option.value" />
+            <t-option
+              v-for="option in serviceStatusOptions"
+              :key="option.value"
+              :label="option.label"
+              :value="option.value"
+            />
           </t-select>
           <t-button theme="primary" @click="openAddServiceDialog">添加实例</t-button>
-          <t-button theme="default" :loading="services.refreshingStatus" @click="handleRefreshServicesStatus">批量刷新状态</t-button>
+          <t-button theme="default" :loading="services.refreshingStatus" @click="handleRefreshServicesStatus"
+            >批量刷新状态</t-button
+          >
         </div>
         <div class="table-scroll">
           <t-table
@@ -114,15 +152,26 @@
             </template>
             <template #serviceAmount="{ row }">{{ formatMoney(row.amount) }}</template>
             <template #serviceStatus="{ row }">
-              <t-tag :theme="serviceStatusTheme(row.status)" variant="light">{{ serviceStatusLabel(row.status) }}</t-tag>
+              <t-tag :theme="serviceStatusTheme(row.status)" variant="light">{{
+                serviceStatusLabel(row.status)
+              }}</t-tag>
             </template>
             <template #serviceCreated="{ row }">{{ formatDateTime(row.created_at) }}</template>
             <template #serviceExpires="{ row }">{{ formatDateTime(row.expires_at) }}</template>
             <template #serviceOperation="{ row }">
               <div class="row-actions">
                 <t-button variant="text" theme="primary" size="small" @click="openServiceDrawer(row)">管理</t-button>
-                <t-button variant="text" theme="default" size="small" :loading="services.refreshing" @click="handleRefreshService(row)">刷新</t-button>
-                <t-button variant="text" theme="danger" size="small" @click="handleDeleteServiceRow(row)">删除</t-button>
+                <t-button
+                  variant="text"
+                  theme="default"
+                  size="small"
+                  :loading="services.refreshing"
+                  @click="handleRefreshService(row)"
+                  >刷新</t-button
+                >
+                <t-button variant="text" theme="danger" size="small" @click="handleDeleteServiceRow(row)"
+                  >删除</t-button
+                >
               </div>
             </template>
           </t-table>
@@ -132,10 +181,20 @@
       <section v-else-if="activeTab === 'invoices'" class="user-detail-section">
         <div class="detail-toolbar compact">
           <t-select v-model="invoices.filters.status" clearable placeholder="状态" @change="searchInvoices">
-            <t-option v-for="option in invoiceStatusOptions" :key="option.value" :label="option.label" :value="option.value" />
+            <t-option
+              v-for="option in invoiceStatusOptions"
+              :key="option.value"
+              :label="option.label"
+              :value="option.value"
+            />
           </t-select>
           <t-select v-model="invoices.filters.type" clearable placeholder="类型" @change="searchInvoices">
-            <t-option v-for="option in invoiceTypeOptions" :key="option.value" :label="option.label" :value="option.value" />
+            <t-option
+              v-for="option in invoiceTypeOptions"
+              :key="option.value"
+              :label="option.label"
+              :value="option.value"
+            />
           </t-select>
         </div>
         <div class="table-scroll">
@@ -150,7 +209,9 @@
           >
             <template #invoiceAmount="{ row }">{{ formatMoney(row.amount) }}</template>
             <template #invoiceStatus="{ row }">
-              <t-tag :theme="invoiceStatusTheme(row.status)" variant="light">{{ invoiceStatusLabel(row.status) }}</t-tag>
+              <t-tag :theme="invoiceStatusTheme(row.status)" variant="light">{{
+                invoiceStatusLabel(row.status)
+              }}</t-tag>
             </template>
             <template #invoiceType="{ row }">{{ row.type_label || invoiceTypeLabel(row.type) }}</template>
             <template #invoiceCreated="{ row }">{{ formatDateTime(row.created_at) }}</template>
@@ -158,7 +219,14 @@
             <template #invoiceOperation="{ row }">
               <div class="row-actions">
                 <t-button variant="text" theme="primary" size="small" @click="openInvoiceDrawer(row)">详情</t-button>
-                <t-button v-if="isCancelableInvoice(row)" variant="text" theme="danger" size="small" @click="handleCancelInvoice(row)">取消</t-button>
+                <t-button
+                  v-if="isCancelableInvoice(row)"
+                  variant="text"
+                  theme="danger"
+                  size="small"
+                  @click="handleCancelInvoice(row)"
+                  >取消</t-button
+                >
               </div>
             </template>
           </t-table>
@@ -178,7 +246,9 @@
           >
             <template #balanceTime="{ row }">{{ formatDateTime(row.occurred_at || row.created_at) }}</template>
             <template #balanceType="{ row }">
-              <t-tag :theme="balanceTheme(row.event_type)" variant="light">{{ balanceTypeLabel(row.event_type) }}</t-tag>
+              <t-tag :theme="balanceTheme(row.event_type)" variant="light">{{
+                balanceTypeLabel(row.event_type)
+              }}</t-tag>
             </template>
             <template #balanceChange="{ row }">
               <span :class="amountClass(row.change_amount)">{{ signedMoney(row.change_amount) }}</span>
@@ -214,8 +284,20 @@
         <div class="detail-toolbar compact">
           <t-date-picker v-model="logs.filters.start_date" clearable placeholder="开始日期" @change="searchLogs" />
           <t-date-picker v-model="logs.filters.end_date" clearable placeholder="结束日期" @change="searchLogs" />
-          <t-input v-model="logs.filters.keyword" clearable placeholder="描述" @enter="searchLogs" @clear="searchLogs" />
-          <t-input v-model="logs.filters.ip_address" clearable placeholder="IP 地址" @enter="searchLogs" @clear="searchLogs" />
+          <t-input
+            v-model="logs.filters.keyword"
+            clearable
+            placeholder="描述"
+            @enter="searchLogs"
+            @clear="searchLogs"
+          />
+          <t-input
+            v-model="logs.filters.ip_address"
+            clearable
+            placeholder="IP 地址"
+            @enter="searchLogs"
+            @clear="searchLogs"
+          />
           <t-select v-model="logs.filters.source" clearable placeholder="来源" @change="searchLogs">
             <t-option value="web" label="Web" />
             <t-option value="api" label="API" />
@@ -254,7 +336,9 @@
             @page-change="handleNoticesPageChange"
           >
             <template #noticeTarget="{ row }">{{ notices.channel === 'email' ? row.to_email : row.phone }}</template>
-            <template #noticeTitle="{ row }">{{ notices.channel === 'email' ? row.subject : row.template_code }}</template>
+            <template #noticeTitle="{ row }">{{
+              notices.channel === 'email' ? row.subject : row.template_code
+            }}</template>
             <template #noticeStatus="{ row }">
               <t-tag :theme="noticeTheme(row.status)" variant="light">{{ noticeLabel(row.status) }}</t-tag>
             </template>
@@ -310,7 +394,13 @@
           </t-radio-group>
         </t-form-item>
         <t-form-item label="金额" name="amount">
-          <t-input-number v-model="rechargeForm.amount" :min="0.01" :max="999999" :decimal-places="2" style="width: 100%" />
+          <t-input-number
+            v-model="rechargeForm.amount"
+            :min="0.01"
+            :max="999999"
+            :decimal-places="2"
+            style="width: 100%"
+          />
         </t-form-item>
         <t-form-item label="备注" name="remark">
           <t-input v-model="rechargeForm.remark" placeholder="请填写操作原因" />
@@ -322,33 +412,67 @@
       v-model:visible="addServiceVisible"
       header="添加实例"
       width="760px"
-      :confirm-btn="{ content: '确认添加', loading: addServiceSubmitting }"
+      :confirm-btn="{ content: '确认创建', loading: addServiceSubmitting }"
       @cancel="addServiceVisible = false"
       @confirm="handleSubmitAddService"
     >
-      <t-alert theme="info" message="录入实例信息只创建本地服务记录，不会自动发起上游控制。需要对接上游时，在服务控制台绑定上游实例。" />
-      <t-form ref="addServiceFormRef" :data="addServiceForm" :rules="addServiceRules" label-align="top" class="dialog-form">
+      <t-alert
+        theme="info"
+        message="确认后会创建本地服务；可按开关选择自动创建订单、账单和从余额扣款。余额扣款需同时创建账单，余额不足时会回滚本次创建。不会自动发起上游控制，需要时请在服务控制台绑定上游实例。"
+      />
+      <t-form
+        ref="addServiceFormRef"
+        :data="addServiceForm"
+        :rules="addServiceRules"
+        label-align="top"
+        class="dialog-form"
+      >
         <div class="dialog-grid">
           <t-form-item label="选择商品" name="product_id" class="form-item-full">
-            <ProductBindingTreeSelect
+            <product-binding-tree-select
               v-model="addServiceProductIdArray"
               mode="single"
               @change="handleAddServiceProductChange"
             />
           </t-form-item>
           <t-form-item label="计费周期" name="billing_cycle">
-            <t-select v-model="addServiceForm.billing_cycle" placeholder="请选择计费周期" @change="syncAddServiceAmountFromCycle">
-              <t-option v-for="item in addServiceBillingOptions" :key="item.value" :label="item.label" :value="item.value" />
+            <t-select
+              v-model="addServiceForm.billing_cycle"
+              placeholder="请选择计费周期"
+              @change="syncAddServiceAmountFromCycle"
+            >
+              <t-option
+                v-for="item in addServiceBillingOptions"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
+              />
             </t-select>
           </t-form-item>
           <t-form-item label="系统类型">
-            <t-select v-model="addServiceForm.os" clearable filterable :loading="addServiceOsLoading" placeholder="请选择系统">
-              <t-option v-for="item in addServiceOsFlatOptions" :key="item.value" :label="item.label" :value="item.value" />
+            <t-select
+              v-model="addServiceForm.os"
+              clearable
+              filterable
+              :loading="addServiceOsLoading"
+              placeholder="请选择系统"
+            >
+              <t-option
+                v-for="item in addServiceOsFlatOptions"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
+              />
             </t-select>
           </t-form-item>
           <t-form-item label="服务状态" name="status">
             <t-select v-model="addServiceForm.status" placeholder="请选择状态">
-              <t-option v-for="item in serviceStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
+              <t-option
+                v-for="item in serviceStatusOptions"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
+              />
             </t-select>
           </t-form-item>
           <t-form-item label="服务金额" name="amount">
@@ -357,8 +481,33 @@
           <t-form-item label="服务名称">
             <t-input v-model="addServiceForm.name" placeholder="为空时默认使用配置名" />
           </t-form-item>
-          <t-form-item label="自动续费">
-            <t-switch v-model="addServiceForm.auto_renew" :custom-value="[1, 0]" />
+          <t-form-item class="form-item-full">
+            <div class="add-service-automation-switches">
+              <div class="add-service-automation-switch">
+                <span>自动续费</span>
+                <t-switch v-model="addServiceForm.auto_renew" :custom-value="[1, 0]" />
+              </div>
+              <div class="add-service-automation-switch">
+                <span>自动创建订单</span>
+                <t-switch v-model="addServiceForm.create_order" :custom-value="[1, 0]" />
+              </div>
+              <div class="add-service-automation-switch">
+                <span>自动创建账单</span>
+                <t-switch
+                  v-model="addServiceForm.create_invoice"
+                  :custom-value="[1, 0]"
+                  @change="handleAddServiceCreateInvoiceChange"
+                />
+              </div>
+              <div class="add-service-automation-switch">
+                <span>从余额扣款</span>
+                <t-switch
+                  v-model="addServiceForm.deduct_balance"
+                  :custom-value="[1, 0]"
+                  :disabled="!addServiceForm.create_invoice"
+                />
+              </div>
+            </div>
           </t-form-item>
         </div>
         <t-form-item label="备注">
@@ -370,15 +519,32 @@
     <t-drawer v-model:visible="serviceDrawer.visible" size="620px" header="服务控制台" @close="closeServiceDrawer">
       <t-loading :loading="serviceDrawer.loading" size="small">
         <t-descriptions :column="1" bordered>
-          <t-descriptions-item label="服务名称">{{ fieldValue(serviceDrawer.detail.name || serviceDrawer.detail.domain) }}</t-descriptions-item>
+          <t-descriptions-item label="服务名称">{{
+            fieldValue(serviceDrawer.detail.name || serviceDrawer.detail.domain)
+          }}</t-descriptions-item>
           <t-descriptions-item label="状态">{{ serviceStatusLabel(serviceDrawer.detail.status) }}</t-descriptions-item>
-          <t-descriptions-item label="计费周期">{{ fieldValue(serviceDrawer.detail.billing_cycle_label) }}</t-descriptions-item>
+          <t-descriptions-item label="计费周期">{{
+            fieldValue(serviceDrawer.detail.billing_cycle_label)
+          }}</t-descriptions-item>
           <t-descriptions-item label="金额">{{ formatMoney(serviceDrawer.detail.amount) }}</t-descriptions-item>
-          <t-descriptions-item label="账单号">{{ fieldValue(serviceDrawer.detail.invoice?.invoice_no || serviceDrawer.detail.order?.invoice_no) }}</t-descriptions-item>
-          <t-descriptions-item label="上游">{{ fieldValue(serviceDrawer.detail.upstream?.provider_key) }}<template v-if="serviceDrawer.detail.upstream?.host_id"> / host #{{ serviceDrawer.detail.upstream.host_id }}</template></t-descriptions-item>
-          <t-descriptions-item label="公网 IP">{{ fieldValue(serviceDrawer.detail.connection?.dedicated_ip || serviceDrawer.detail.upstream?.dedicated_ip) }}</t-descriptions-item>
-          <t-descriptions-item label="登录账号">{{ fieldValue(serviceDrawer.detail.connection?.username) }}</t-descriptions-item>
-          <t-descriptions-item label="登录端口">{{ fieldValue(serviceDrawer.detail.connection?.port) }}</t-descriptions-item>
+          <t-descriptions-item label="账单号">{{
+            fieldValue(serviceDrawer.detail.invoice?.invoice_no || serviceDrawer.detail.order?.invoice_no)
+          }}</t-descriptions-item>
+          <t-descriptions-item label="上游"
+            >{{ fieldValue(serviceDrawer.detail.upstream?.provider_key)
+            }}<template v-if="serviceDrawer.detail.upstream?.host_id">
+              / host #{{ serviceDrawer.detail.upstream.host_id }}</template
+            ></t-descriptions-item
+          >
+          <t-descriptions-item label="公网 IP">{{
+            fieldValue(serviceDrawer.detail.connection?.dedicated_ip || serviceDrawer.detail.upstream?.dedicated_ip)
+          }}</t-descriptions-item>
+          <t-descriptions-item label="登录账号">{{
+            fieldValue(serviceDrawer.detail.connection?.username)
+          }}</t-descriptions-item>
+          <t-descriptions-item label="登录端口">{{
+            fieldValue(serviceDrawer.detail.connection?.port)
+          }}</t-descriptions-item>
           <t-descriptions-item label="运行状态">
             <template v-if="serviceDrawer.detail.runtime?.power_label || serviceDrawer.detail.runtime?.description">
               {{ fieldValue(serviceDrawer.detail.runtime?.power_label || serviceDrawer.detail.runtime?.description) }}
@@ -387,7 +553,9 @@
               <t-tag theme="warning" variant="light">未获取到运行状态</t-tag>
             </t-tooltip>
           </t-descriptions-item>
-          <t-descriptions-item label="到期时间">{{ formatDateTime(serviceDrawer.detail.expires_at) }}</t-descriptions-item>
+          <t-descriptions-item label="到期时间">{{
+            formatDateTime(serviceDrawer.detail.expires_at)
+          }}</t-descriptions-item>
         </t-descriptions>
         <div v-if="serviceDrawer.detail.upstream?.remote_error" class="drawer-alert">
           <t-alert theme="warning" :message="serviceDrawer.detail.upstream.remote_error" />
@@ -399,16 +567,66 @@
           </div>
         </div>
         <div class="drawer-actions">
-          <t-button v-if="canPowerOn" theme="success" size="small" :loading="serviceDrawer.actionLoading === 'power:on'" @click="handleServicePower('on')">开机</t-button>
-          <t-button v-if="canPowerOff" theme="danger" variant="outline" size="small" :loading="serviceDrawer.actionLoading === 'power:off'" @click="handleServicePower('off')">关机</t-button>
-          <t-button v-if="canReboot" theme="warning" variant="outline" size="small" :loading="serviceDrawer.actionLoading === 'power:reboot'" @click="handleServicePower('reboot')">重启</t-button>
-          <t-button theme="default" size="small" :loading="serviceDrawer.actionLoading === 'remote-status'" @click="handleRefreshConsoleRemoteStatus">刷新远程</t-button>
-          <t-button theme="default" size="small" :disabled="!serviceActions.password_reset" :loading="serviceDrawer.actionLoading === 'reset-password'" @click="openResetPasswordDialog">重置密码</t-button>
+          <t-button
+            v-if="canPowerOn"
+            theme="success"
+            size="small"
+            :loading="serviceDrawer.actionLoading === 'power:on'"
+            @click="handleServicePower('on')"
+            >开机</t-button
+          >
+          <t-button
+            v-if="canPowerOff"
+            theme="danger"
+            variant="outline"
+            size="small"
+            :loading="serviceDrawer.actionLoading === 'power:off'"
+            @click="handleServicePower('off')"
+            >关机</t-button
+          >
+          <t-button
+            v-if="canReboot"
+            theme="warning"
+            variant="outline"
+            size="small"
+            :loading="serviceDrawer.actionLoading === 'power:reboot'"
+            @click="handleServicePower('reboot')"
+            >重启</t-button
+          >
+          <t-button
+            theme="default"
+            size="small"
+            :loading="serviceDrawer.actionLoading === 'remote-status'"
+            @click="handleRefreshConsoleRemoteStatus"
+            >刷新远程</t-button
+          >
+          <t-button
+            theme="default"
+            size="small"
+            :disabled="!serviceActions.password_reset"
+            :loading="serviceDrawer.actionLoading === 'reset-password'"
+            @click="openResetPasswordDialog"
+            >重置密码</t-button
+          >
           <t-button theme="default" size="small" @click="openServiceUpstreamDialog">上游绑定</t-button>
           <t-button theme="default" size="small" @click="openServicePricingDialog">调价</t-button>
           <t-button theme="default" size="small" @click="openServiceNameDialog">改名称</t-button>
-          <t-button theme="default" size="small" :disabled="!serviceActions.manual_provision" :loading="serviceDrawer.actionLoading === 'manual-provision'" @click="openManualProvisionDialog">手动开通</t-button>
-          <t-button v-if="canRefundService" theme="danger" size="small" :loading="serviceDrawer.actionLoading === 'refund'" @click="openServiceRefundDialog">退款</t-button>
+          <t-button
+            theme="default"
+            size="small"
+            :disabled="!serviceActions.manual_provision"
+            :loading="serviceDrawer.actionLoading === 'manual-provision'"
+            @click="openManualProvisionDialog"
+            >手动开通</t-button
+          >
+          <t-button
+            v-if="canRefundService"
+            theme="danger"
+            size="small"
+            :loading="serviceDrawer.actionLoading === 'refund'"
+            @click="openServiceRefundDialog"
+            >退款</t-button
+          >
           <t-tag v-else-if="isServiceRefunded" theme="danger" variant="light">已退款</t-tag>
         </div>
         <div class="drawer-close-actions">
@@ -460,7 +678,13 @@
     >
       <t-form ref="serviceUpstreamFormRef" :data="serviceUpstreamForm" :rules="serviceUpstreamRules" label-align="top">
         <t-form-item label="上游接口" name="supplier_id">
-          <t-select v-model="serviceUpstreamForm.supplier_id" clearable filterable :loading="serviceUpstreamLoading" placeholder="请选择上游接口">
+          <t-select
+            v-model="serviceUpstreamForm.supplier_id"
+            clearable
+            filterable
+            :loading="serviceUpstreamLoading"
+            placeholder="请选择上游接口"
+          >
             <t-option v-for="item in serviceUpstreamOptions" :key="item.id" :label="item.label" :value="item.id" />
           </t-select>
         </t-form-item>
@@ -489,7 +713,12 @@
               <span>基础价 {{ item.base_amount ? formatMoney(item.base_amount) : '未配置' }}</span>
             </div>
             <t-switch v-model="servicePricingForm.locked_pricing[item.cycle].enabled" />
-            <t-input-number v-model="servicePricingForm.locked_pricing[item.cycle].manual_amount" :min="0" :decimal-places="2" placeholder="手动价" />
+            <t-input-number
+              v-model="servicePricingForm.locked_pricing[item.cycle].manual_amount"
+              :min="0"
+              :decimal-places="2"
+              placeholder="手动价"
+            />
           </div>
           <t-checkbox v-model="servicePricingForm.clear_locked_pricing">恢复默认续费价格</t-checkbox>
         </div>
@@ -520,7 +749,13 @@
       @confirm="handleServiceRefund"
     >
       <t-alert theme="warning" message="退款将把对应账单标记为已退款，并关闭该实例的计费流程，当前仅支持全额退款。" />
-      <t-form ref="serviceRefundFormRef" :data="serviceRefundForm" :rules="refundRules" label-align="top" class="dialog-form">
+      <t-form
+        ref="serviceRefundFormRef"
+        :data="serviceRefundForm"
+        :rules="refundRules"
+        label-align="top"
+        class="dialog-form"
+      >
         <t-form-item label="退款金额">
           <t-input :value="formatMoney(serviceRefundAmount)" disabled />
         </t-form-item>
@@ -543,11 +778,21 @@
             <div class="invoice-summary__main">
               <span>账单编号</span>
               <strong>{{ fieldValue(currentInvoice.invoice_no) }}</strong>
-              <p>{{ fieldValue(currentInvoice.product_spec_display || currentInvoice.product_display_name || currentInvoice.product?.display_name) }}</p>
+              <p>
+                {{
+                  fieldValue(
+                    currentInvoice.product_spec_display ||
+                      currentInvoice.product_display_name ||
+                      currentInvoice.product?.display_name,
+                  )
+                }}
+              </p>
             </div>
             <div>
               <span>状态</span>
-              <t-tag :theme="invoiceStatusTheme(currentInvoice.status)" variant="light">{{ invoiceStatusLabel(currentInvoice.status) }}</t-tag>
+              <t-tag :theme="invoiceStatusTheme(currentInvoice.status)" variant="light">{{
+                invoiceStatusLabel(currentInvoice.status)
+              }}</t-tag>
             </div>
             <div>
               <span>金额</span>
@@ -561,8 +806,21 @@
 
           <div class="drawer-actions">
             <t-button theme="default" :loading="invoiceDrawer.loading" @click="reloadInvoiceDrawer">刷新</t-button>
-            <t-button v-if="isCancelableInvoice(currentInvoice)" theme="danger" variant="outline" :loading="invoiceDrawer.cancelLoading" @click="handleDrawerCancelInvoice">取消账单</t-button>
-            <t-button v-if="canRefundInvoice" theme="danger" :loading="invoiceRefundLoading" @click="openInvoiceRefundDialog">退款</t-button>
+            <t-button
+              v-if="isCancelableInvoice(currentInvoice)"
+              theme="danger"
+              variant="outline"
+              :loading="invoiceDrawer.cancelLoading"
+              @click="handleDrawerCancelInvoice"
+              >取消账单</t-button
+            >
+            <t-button
+              v-if="canRefundInvoice"
+              theme="danger"
+              :loading="invoiceRefundLoading"
+              @click="openInvoiceRefundDialog"
+              >退款</t-button
+            >
           </div>
 
           <section class="invoice-detail-section">
@@ -656,28 +914,35 @@
     </t-dialog>
   </div>
 </template>
-
 <script setup lang="ts">
-import { ChevronLeftIcon, SearchIcon, EditIcon } from 'tdesign-icons-vue-next';
+import './index.less';
+
+import {
+  INVOICE_STATUS_MAP,
+  SERVICE_STATUS_MAP,
+  toLabelMap,
+  toSelectOptions,
+  toTagTypeMap,
+} from '@shared/statusConfig';
+import { ChevronLeftIcon, EditIcon, SearchIcon } from 'tdesign-icons-vue-next';
 import type { FormInstanceFunctions, FormRule, PageInfo, PrimaryTableCol, TableRowData } from 'tdesign-vue-next';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import { adminApi, type ProductBindingRecord } from '@/api/admin';
-import { productApi, type ProductRecord } from '@/api/product';
+import type { ProductBindingRecord } from '@/api/admin';
+import { adminApi } from '@/api/admin';
+import type { ProductRecord } from '@/api/product';
+import { productApi } from '@/api/product';
 import { supplierApi } from '@/api/supplier';
-import { userApi, type AdminUser, type PageParams } from '@/api/user';
+import type { AdminUser, PageParams } from '@/api/user';
+import { userApi } from '@/api/user';
 import ProductBindingTreeSelect from '@/components/product-binding-tree-select/index.vue';
 import { AdminPermissions } from '@/constants/permissions';
 import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
 import { required } from '@/utils/formRules';
 import { hasAdminPermission } from '@/utils/permission';
-import { toUserMessage, errorMessage } from '@/utils/userMessage';
-
-import { INVOICE_STATUS_MAP, SERVICE_STATUS_MAP, toLabelMap, toSelectOptions, toTagTypeMap } from '@shared/statusConfig';
-
-import './index.less';
+import { errorMessage } from '@/utils/userMessage';
 
 type TabName = 'basic' | 'referral' | 'services' | 'invoices' | 'balance' | 'tickets' | 'logs' | 'notices';
 type Row = Record<string, any>;
@@ -700,11 +965,21 @@ const router = useRouter();
 const detailLoading = ref(false);
 const saveLoading = ref(false);
 const rechargeLoading = ref(false);
-const actionLoading = ref(false);
 const loginAsLoading = ref(false);
-const VALID_DETAIL_TABS: TabName[] = ['basic', 'referral', 'services', 'invoices', 'balance', 'tickets', 'logs', 'notices'];
+const VALID_DETAIL_TABS: TabName[] = [
+  'basic',
+  'referral',
+  'services',
+  'invoices',
+  'balance',
+  'tickets',
+  'logs',
+  'notices',
+];
 const initialTab = route.query.tab as string;
-const activeTab = ref<TabName>(initialTab && VALID_DETAIL_TABS.includes(initialTab as TabName) ? (initialTab as TabName) : 'basic');
+const activeTab = ref<TabName>(
+  initialTab && VALID_DETAIL_TABS.includes(initialTab as TabName) ? (initialTab as TabName) : 'basic',
+);
 const loadedTabs = reactive<Record<string, boolean>>({});
 const user = ref<AdminUser>({ id: 0, status: 1 });
 const stats = ref<Record<string, number | string>>({});
@@ -749,13 +1024,22 @@ const addServiceForm = reactive({
   name: '',
   amount: 0,
   auto_renew: 1,
+  create_order: 1,
+  create_invoice: 1,
+  deduct_balance: 1,
   os: '',
   remark: '',
 });
-const serviceUpstreamForm = reactive({ supplier_id: undefined as number | undefined, upstream_host_id: undefined as number | undefined });
+const serviceUpstreamForm = reactive({
+  supplier_id: undefined as number | undefined,
+  upstream_host_id: undefined as number | undefined,
+});
 const servicePricingForm = reactive({
   amount: 0,
-  locked_pricing: {} as Record<string, { enabled: boolean; base_amount?: number | string | null; manual_amount?: number | null | '' }>,
+  locked_pricing: {} as Record<
+    string,
+    { enabled: boolean; base_amount?: number | string | null; manual_amount?: number | null | '' }
+  >,
   clear_locked_pricing: false,
 });
 const serviceNameForm = reactive({ service_name: '' });
@@ -787,12 +1071,43 @@ const addServiceProductDetail = ref<ProductRecord | null>(null);
 const addServiceOsOptions = ref<Row[]>([]);
 const serviceUpstreamOptions = ref<Array<{ id: number; label: string }>>([]);
 
-const services = reactive<PageState>({ loading: false, refreshing: false, refreshingStatus: false, list: [], total: 0, page: 1, pageSize: 10, filters: { keyword: '', status: '' } });
-const invoices = reactive<PageState>({ loading: false, list: [], total: 0, page: 1, pageSize: 10, filters: { status: '', type: '' } });
+const services = reactive<PageState>({
+  loading: false,
+  refreshing: false,
+  refreshingStatus: false,
+  list: [],
+  total: 0,
+  page: 1,
+  pageSize: 10,
+  filters: { keyword: '', status: '' },
+});
+const invoices = reactive<PageState>({
+  loading: false,
+  list: [],
+  total: 0,
+  page: 1,
+  pageSize: 10,
+  filters: { status: '', type: '' },
+});
 const balance = reactive<PageState>({ loading: false, list: [], total: 0, page: 1, pageSize: 10, filters: {} });
 const tickets = reactive<PageState>({ loading: false, list: [], total: 0, page: 1, pageSize: 10, filters: {} });
-const logs = reactive<PageState>({ loading: false, list: [], total: 0, page: 1, pageSize: 10, filters: { keyword: '', start_date: '', end_date: '', ip_address: '', source: '' } });
-const notices = reactive<PageState>({ loading: false, list: [], total: 0, page: 1, pageSize: 10, filters: {}, channel: 'email' });
+const logs = reactive<PageState>({
+  loading: false,
+  list: [],
+  total: 0,
+  page: 1,
+  pageSize: 10,
+  filters: { keyword: '', start_date: '', end_date: '', ip_address: '', source: '' },
+});
+const notices = reactive<PageState>({
+  loading: false,
+  list: [],
+  total: 0,
+  page: 1,
+  pageSize: 10,
+  filters: {},
+  channel: 'email',
+});
 
 const editRules: Record<string, FormRule[]> = {
   password: [{ validator: (val) => !val || String(val).length >= 6, message: '密码至少需要 6 位', type: 'warning' }],
@@ -896,28 +1211,44 @@ const noticeColumns: PrimaryTableCol<TableRowData>[] = [
 ];
 
 const userId = computed(() => String(route.params.id || ''));
-const isEnabled = computed(() => Number(user.value.status) === 1);
-const isVerified = computed(() => Number(user.value.is_verified || 0) === 1 || Number(user.value.verification_status || 0) === 2);
-const pageTitle = computed(() => user.value.nickname || user.value.display_name || user.value.email || `用户 #${userId.value}`);
-const recentReferrals = computed(() => (Array.isArray(referral.value.recent_referrals) ? referral.value.recent_referrals : []));
+const isVerified = computed(
+  () => Number(user.value.is_verified || 0) === 1 || Number(user.value.verification_status || 0) === 2,
+);
+const recentReferrals = computed(() =>
+  Array.isArray(referral.value.recent_referrals) ? referral.value.recent_referrals : [],
+);
 const addServiceBillingOptions = computed(() => resolveBillingOptions(addServiceProductDetail.value));
 const addServiceOsFlatOptions = computed(() => flattenOptionTree(addServiceOsOptions.value));
 const serviceActions = computed(() => serviceDrawer.detail.actions || {});
-const serviceSpecs = computed(() => (Array.isArray(serviceDrawer.detail.specs) ? serviceDrawer.detail.specs : []).map((item: Row) => ({
-  label: item.label || item.name || '-',
-  value: item.value || '-',
-})));
+const serviceSpecs = computed(() =>
+  (Array.isArray(serviceDrawer.detail.specs) ? serviceDrawer.detail.specs : []).map((item: Row) => ({
+    label: item.label || item.name || '-',
+    value: item.value || '-',
+  })),
+);
 const canPowerOn = computed(() => {
   const available = serviceActions.value.available || [];
-  return Array.isArray(available) && available.includes('power:on') && serviceDrawer.detail.runtime?.power_state !== 'running';
+  return (
+    Array.isArray(available) &&
+    available.includes('power:on') &&
+    serviceDrawer.detail.runtime?.power_state !== 'running'
+  );
 });
 const canPowerOff = computed(() => {
   const available = serviceActions.value.available || [];
-  return Array.isArray(available) && available.includes('power:off') && serviceDrawer.detail.runtime?.power_state === 'running';
+  return (
+    Array.isArray(available) &&
+    available.includes('power:off') &&
+    serviceDrawer.detail.runtime?.power_state === 'running'
+  );
 });
 const canReboot = computed(() => {
   const available = serviceActions.value.available || [];
-  return Array.isArray(available) && available.includes('power:reboot') && serviceDrawer.detail.runtime?.power_state === 'running';
+  return (
+    Array.isArray(available) &&
+    available.includes('power:reboot') &&
+    serviceDrawer.detail.runtime?.power_state === 'running'
+  );
 });
 const canRefundService = computed(() => {
   const status = Number(serviceDrawer.detail.status);
@@ -927,7 +1258,9 @@ const canRefundService = computed(() => {
 });
 const isServiceRefunded = computed(() => [5, 6].includes(Number(serviceDrawer.detail.status)));
 const canOriginalServiceRefund = computed(() => serviceDrawer.detail.refund?.can_original !== false);
-const serviceRefundAmount = computed(() => serviceDrawer.detail.refund?.amount ?? serviceDrawer.detail.amount ?? serviceDrawer.detail.order?.amount ?? 0);
+const serviceRefundAmount = computed(
+  () => serviceDrawer.detail.refund?.amount ?? serviceDrawer.detail.amount ?? serviceDrawer.detail.order?.amount ?? 0,
+);
 const servicePricingEntries = computed(() =>
   Object.entries(servicePricingForm.locked_pricing || {}).map(([cycle, item]) => ({
     cycle,
@@ -939,7 +1272,9 @@ const currentInvoice = computed(() => {
   const detail = invoiceDrawer.detail || {};
   return detail.invoice && typeof detail.invoice === 'object' ? detail.invoice : detail;
 });
-const invoicePayments = computed(() => (Array.isArray(invoiceDrawer.detail.payments) ? invoiceDrawer.detail.payments : []));
+const invoicePayments = computed(() =>
+  Array.isArray(invoiceDrawer.detail.payments) ? invoiceDrawer.detail.payments : [],
+);
 const invoiceLogs = computed(() => (Array.isArray(invoiceDrawer.detail.logs) ? invoiceDrawer.detail.logs : []));
 const invoiceSceneItems = computed(() => {
   const sceneItems = currentInvoice.value.scene?.items;
@@ -964,7 +1299,11 @@ const referralItems = computed(() => [
 const infoItems = computed(() => [
   { label: '邮箱', value: fieldValue(user.value.email) },
   { label: '手机号', value: fieldValue(user.value.phone) },
-  { label: '账号状态', value: Number(user.value.status) === 1 ? '正常' : '禁用', tone: Number(user.value.status) === 1 ? 'success' : 'danger' },
+  {
+    label: '账号状态',
+    value: Number(user.value.status) === 1 ? '正常' : '禁用',
+    tone: Number(user.value.status) === 1 ? 'success' : 'danger',
+  },
   { label: '公司', value: fieldValue(user.value.company) },
   { label: 'QQ', value: fieldValue(user.value.qq) },
   { label: '账户余额', value: formatMoney(user.value.cash_balance), tone: 'success' },
@@ -1011,7 +1350,11 @@ function handleTabChange(value: string | number) {
   if (activeTab.value === 'notices' && !loadedTabs.notices) loadNotices();
 }
 
-async function loadPageState(state: PageState, loader: (params: PageParams) => Promise<{ list?: Row[]; total?: number; page?: number; page_size?: number }>, loadedKey: string) {
+async function loadPageState(
+  state: PageState,
+  loader: (params: PageParams) => Promise<{ list?: Row[]; total?: number; page?: number; page_size?: number }>,
+  loadedKey: string,
+) {
   state.loading = true;
   try {
     const response = await loader({ ...state.filters, page: state.page, page_size: state.pageSize });
@@ -1163,6 +1506,9 @@ function resetAddServiceForm() {
     name: '',
     amount: 0,
     auto_renew: 1,
+    create_order: 1,
+    create_invoice: 1,
+    deduct_balance: 1,
     os: '',
     remark: '',
   });
@@ -1171,10 +1517,13 @@ function resetAddServiceForm() {
   addServiceFormRef.value?.clearValidate?.();
 }
 
-async function handleAddServiceProductChange(payload: { binding_ids?: unknown; bindings?: ProductBindingRecord[] } | string | number | Array<string | number>) {
-  const bindingIds = typeof payload === 'object' && !Array.isArray(payload) && payload !== null && 'binding_ids' in payload
-    ? normalizeSelectionArray(payload.binding_ids)
-    : normalizeSelectionArray(payload);
+async function handleAddServiceProductChange(
+  payload: { binding_ids?: unknown; bindings?: ProductBindingRecord[] } | string | number | Array<string | number>,
+) {
+  const bindingIds =
+    typeof payload === 'object' && !Array.isArray(payload) && payload !== null && 'binding_ids' in payload
+      ? normalizeSelectionArray(payload.binding_ids)
+      : normalizeSelectionArray(payload);
   const productId = Number(bindingIds[0] || 0);
   addServiceForm.product_id = productId || undefined;
   addServiceProductDetail.value = null;
@@ -1217,6 +1566,12 @@ function syncAddServiceAmountFromCycle() {
   addServiceForm.amount = matched?.amount || 0;
 }
 
+function handleAddServiceCreateInvoiceChange(value: unknown) {
+  if (Number(value) !== 1) {
+    addServiceForm.deduct_balance = 0;
+  }
+}
+
 async function handleSubmitAddService() {
   const result = await addServiceFormRef.value?.validate?.();
   if (!isValidationPass(result)) return;
@@ -1229,12 +1584,20 @@ async function handleSubmitAddService() {
       name: addServiceForm.name,
       amount: toNumber(addServiceForm.amount),
       auto_renew: Number(addServiceForm.auto_renew ? 1 : 0),
+      create_order: Number(addServiceForm.create_order ? 1 : 0),
+      create_invoice: Number(addServiceForm.create_invoice ? 1 : 0),
+      deduct_balance: Number(addServiceForm.deduct_balance ? 1 : 0),
       os: addServiceForm.os,
       remark: addServiceForm.remark,
     });
-    MessagePlugin.success('实例已添加');
+    MessagePlugin.success('实例已创建');
     addServiceVisible.value = false;
-    await Promise.all([loadServices(), loadDetail()]);
+    await Promise.all([
+      loadServices(),
+      loadDetail(),
+      ...(loadedTabs.invoices ? [loadInvoices()] : []),
+      ...(loadedTabs.balance ? [loadBalance()] : []),
+    ]);
   } catch (error) {
     MessagePlugin.error(errorMessage(error, '添加实例失败'));
   } finally {
@@ -1289,28 +1652,6 @@ function handleDeleteServiceRow(row: Row) {
         MessagePlugin.error(errorMessage(error, '删除服务记录失败'));
       } finally {
         services.refreshing = false;
-      }
-    },
-  });
-}
-
-function handleToggleStatus() {
-  const label = isEnabled.value ? '禁用' : '启用';
-  const dialog = DialogPlugin.confirm({
-    header: `${label}账号`,
-    body: `确认${label}用户“${pageTitle.value}”吗？`,
-    confirmBtn: `确认${label}`,
-    cancelBtn: '取消',
-    theme: 'warning',
-    async onConfirm() {
-      actionLoading.value = true;
-      try {
-        await userApi.toggleStatus(userId.value, !isEnabled.value);
-        MessagePlugin.success(`用户已${label}`);
-        dialog.hide();
-        await loadDetail();
-      } finally {
-        actionLoading.value = false;
       }
     },
   });
@@ -1528,9 +1869,8 @@ async function loadServiceUpstreamOptions() {
     serviceUpstreamOptions.value = (Array.isArray(response.list) ? response.list : [])
       .map((item) => {
         const id = Number(item.id || 0);
-        const upstreamBinding = item.upstream_binding && typeof item.upstream_binding === 'object'
-          ? (item.upstream_binding as Row)
-          : {};
+        const upstreamBinding =
+          item.upstream_binding && typeof item.upstream_binding === 'object' ? (item.upstream_binding as Row) : {};
         const type = item.provider_label || upstreamBinding.provider_key || '上游';
         return { id, label: `${item.name || `接口 #${item.id}`} · ${type}` };
       })
@@ -1579,13 +1919,19 @@ async function submitServicePricing() {
   if (servicePricingForm.clear_locked_pricing) {
     payload.clear_locked_pricing = true;
   } else {
-    payload.locked_pricing = Object.entries(servicePricingForm.locked_pricing).reduce((resultMap, [cycle, item]) => {
-      resultMap[cycle] = {
-        enabled: Boolean(item.enabled),
-        manual_amount: item.manual_amount === '' || item.manual_amount === null || item.manual_amount === undefined ? null : toNumber(item.manual_amount),
-      };
-      return resultMap;
-    }, {} as Record<string, { enabled: boolean; manual_amount: number | null }>);
+    payload.locked_pricing = Object.entries(servicePricingForm.locked_pricing).reduce(
+      (resultMap, [cycle, item]) => {
+        resultMap[cycle] = {
+          enabled: Boolean(item.enabled),
+          manual_amount:
+            item.manual_amount === '' || item.manual_amount === null || item.manual_amount === undefined
+              ? null
+              : toNumber(item.manual_amount),
+        };
+        return resultMap;
+      },
+      {} as Record<string, { enabled: boolean; manual_amount: number | null }>,
+    );
   }
   servicePricingSubmitting.value = true;
   serviceDrawer.actionLoading = 'meta-update';
@@ -1758,10 +2104,21 @@ function goBack() {
 }
 
 function paginationOf(state: PageState) {
-  return { current: state.page, pageSize: state.pageSize, total: state.total, pageSizeOptions: [10, 20, 50], showJumper: true };
+  return {
+    current: state.page,
+    pageSize: state.pageSize,
+    total: state.total,
+    pageSizeOptions: [10, 20, 50],
+    showJumper: true,
+  };
 }
 function serviceName(row: Row) {
-  return row.name || row.product_display_name || row.product?.display_name || (row.product_id ? `未配置规格 #${row.product_id}` : '-');
+  return (
+    row.name ||
+    row.product_display_name ||
+    row.product?.display_name ||
+    (row.product_id ? `未配置规格 #${row.product_id}` : '-')
+  );
 }
 function normalizeServiceDetail(payload: Row = {}) {
   const empty = {
@@ -1855,23 +2212,34 @@ function normalizeInvoiceDetail(payload: Row = {}, fallback: Row = {}) {
 }
 function createLockedPricingForm(detail: Row = {}) {
   const cycles = Array.isArray(detail.renew_pricing_cycles) ? detail.renew_pricing_cycles : [];
-  return cycles.reduce((result, item) => {
-    const cycle = String(item?.billing_cycle || '').trim();
-    if (!cycle) return result;
-    result[cycle] = {
-      enabled: Boolean(item?.enabled),
-      base_amount: item?.base_amount || null,
-      manual_amount: item?.manual_amount || '',
-    };
-    return result;
-  }, {} as Record<string, { enabled: boolean; base_amount?: number | string | null; manual_amount?: number | null | '' }>);
+  return cycles.reduce(
+    (result, item) => {
+      const cycle = String(item?.billing_cycle || '').trim();
+      if (!cycle) return result;
+      result[cycle] = {
+        enabled: Boolean(item?.enabled),
+        base_amount: item?.base_amount || null,
+        manual_amount: item?.manual_amount || '',
+      };
+      return result;
+    },
+    {} as Record<
+      string,
+      { enabled: boolean; base_amount?: number | string | null; manual_amount?: number | null | '' }
+    >,
+  );
 }
 function productLabel(product: ProductRecord | null | undefined) {
   if (!product) return '';
-  return String(product.display_name || product.name || product.product_name || (product.id ? `商品 #${product.id}` : '')).trim();
+  return String(
+    product.display_name || product.name || product.product_name || (product.id ? `商品 #${product.id}` : ''),
+  ).trim();
 }
 function resolveBillingOptions(product: ProductRecord | null) {
-  const pricing = product && product.pricing && typeof product.pricing === 'object' && !Array.isArray(product.pricing) ? product.pricing : {};
+  const pricing =
+    product && product.pricing && typeof product.pricing === 'object' && !Array.isArray(product.pricing)
+      ? product.pricing
+      : {};
   return Object.entries(pricing)
     .filter(([, amount]) => toNumber(amount) > 0)
     .map(([value, amount]) => ({
@@ -1882,16 +2250,18 @@ function resolveBillingOptions(product: ProductRecord | null) {
 }
 function billingCycleLabel(value: unknown) {
   return (
-    {
-      monthly: '月付',
-      quarterly: '季付',
-      semiannually: '半年付',
-      annually: '年付',
-      biennially: '两年付',
-      triennially: '三年付',
-      one_time: '一次性',
-    } as Record<string, string>
-  )[String(value)] || fieldValue(value);
+    (
+      {
+        monthly: '月付',
+        quarterly: '季付',
+        semiannually: '半年付',
+        annually: '年付',
+        biennially: '两年付',
+        triennially: '三年付',
+        one_time: '一次性',
+      } as Record<string, string>
+    )[String(value)] || fieldValue(value)
+  );
 }
 function flattenOptionTree(items: Row[] = []) {
   const result: Array<{ value: string | number; label: string }> = [];
@@ -1907,9 +2277,7 @@ function flattenOptionTree(items: Row[] = []) {
   return result;
 }
 function normalizeSelectionArray(value: unknown): string[] {
-  return (Array.isArray(value) ? value : [value])
-    .map((item) => String(item || '').trim())
-    .filter(Boolean);
+  return (Array.isArray(value) ? value : [value]).map((item) => String(item || '').trim()).filter(Boolean);
 }
 function validateUpstreamPair() {
   const supplierId = Number(serviceUpstreamForm.supplier_id || 0);
@@ -1921,7 +2289,8 @@ function isValidationPass(result: unknown) {
 }
 function serviceTone(tone: unknown): 'default' | 'success' | 'primary' | 'warning' | 'danger' {
   const normalized = String(tone || '').toLowerCase();
-  if (['success', 'primary', 'warning', 'danger'].includes(normalized)) return normalized as 'success' | 'primary' | 'warning' | 'danger';
+  if (['success', 'primary', 'warning', 'danger'].includes(normalized))
+    return normalized as 'success' | 'primary' | 'warning' | 'danger';
   return 'default';
 }
 function serviceStatusLabel(status: unknown) {
@@ -1941,7 +2310,19 @@ function invoiceStatusLabel(status: unknown) {
   return invoiceStatusLabelMap[String(status ?? '')] || '-';
 }
 function invoiceTypeLabel(type: unknown) {
-  return ({ new: '新购', renew: '续费', recharge: '充值', deduction: '扣款', referral_credit: '推荐奖励', manual: '手工', upgrade: '升降级账单' } as Record<string, string>)[String(type)] || '-';
+  return (
+    (
+      {
+        new: '新购',
+        renew: '续费',
+        recharge: '充值',
+        deduction: '扣款',
+        referral_credit: '推荐奖励',
+        manual: '手工',
+        upgrade: '升降级账单',
+      } as Record<string, string>
+    )[String(type)] || '-'
+  );
 }
 function invoiceStatusTheme(status: unknown): 'default' | 'success' | 'warning' | 'danger' {
   const value = invoiceStatusTypeMap[String(status ?? '')] || 'default';
@@ -1966,13 +2347,31 @@ function balanceTypeLabel(type: unknown) {
 }
 function balanceTheme(type: unknown): 'default' | 'success' | 'warning' | 'danger' {
   const value = String(type || '').toLowerCase();
-  if (['recharge', 'refund', 'invoice_refund', 'manual_recharge', 'referral_credit_cash', 'referral_withdraw_approved'].includes(value)) return 'success';
+  if (
+    [
+      'recharge',
+      'refund',
+      'invoice_refund',
+      'manual_recharge',
+      'referral_credit_cash',
+      'referral_withdraw_approved',
+    ].includes(value)
+  ) {
+    return 'success';
+  }
   if (['admin_deduct', 'deduct', 'manual_deduction', 'invoice_payment', 'consume'].includes(value)) return 'danger';
   if (['payment', 'pay'].includes(value)) return 'warning';
   return 'default';
 }
 function priorityLabel(priority: unknown) {
-  return ({ 1: '低', 2: '中', 3: '高', 4: '紧急', low: '低', medium: '中', high: '高', urgent: '紧急' } as Record<string, string>)[String(priority)] || '-';
+  return (
+    (
+      { 1: '低', 2: '中', 3: '高', 4: '紧急', low: '低', medium: '中', high: '高', urgent: '紧急' } as Record<
+        string,
+        string
+      >
+    )[String(priority)] || '-'
+  );
 }
 function priorityTheme(priority: unknown): 'default' | 'warning' | 'danger' {
   const value = String(priority).toLowerCase();
@@ -1990,7 +2389,10 @@ function ticketStatusTheme(status: unknown): 'default' | 'success' | 'warning' {
   return 'default';
 }
 function noticeLabel(status: unknown) {
-  return ({ success: '成功', failed: '失败', pending: '待发送' } as Record<string, string>)[String(status)] || fieldValue(status);
+  return (
+    ({ success: '成功', failed: '失败', pending: '待发送' } as Record<string, string>)[String(status)] ||
+    fieldValue(status)
+  );
 }
 function noticeTheme(status: unknown): 'default' | 'success' | 'warning' | 'danger' {
   if (status === 'success') return 'success';
@@ -2023,10 +2425,13 @@ onMounted(() => {
 });
 
 // 监听 URL tab 变化（同路由复用时触发）
-watch(() => route.query.tab, (val) => {
-  const q = Array.isArray(val) ? val[0] : val;
-  if (q && VALID_DETAIL_TABS.includes(q as TabName) && activeTab.value !== q) {
-    handleTabChange(q);
-  }
-});
+watch(
+  () => route.query.tab,
+  (val) => {
+    const q = Array.isArray(val) ? val[0] : val;
+    if (q && VALID_DETAIL_TABS.includes(q as TabName) && activeTab.value !== q) {
+      handleTabChange(q);
+    }
+  },
+);
 </script>

@@ -1,23 +1,24 @@
 import { request } from '@/utils/request';
+
 import type {
+  InvoiceDetailResponse,
   InvoiceListParams,
   InvoiceRecord,
-  InvoiceDetailResponse,
+  NewCustomerDailySummary,
+  NewCustomerSummaryParams,
   OrderListParams,
   OrderRecord,
   RechargeListParams,
   RechargeRecord,
-  NewCustomerSummaryParams,
-  NewCustomerDailySummary,
 } from './types';
 
-type V2AdminOrderDetailPayload = {
+interface V2AdminOrderDetailPayload {
   order?: Record<string, unknown> | null;
-};
+}
 
-type V2AdminInvoiceDetailPayload = {
+interface V2AdminInvoiceDetailPayload {
   invoice?: Record<string, unknown> | null;
-};
+}
 
 function normalizeV2AdminInvoiceDetail(payload: V2AdminInvoiceDetailPayload): InvoiceDetailResponse {
   const invoice = toRecord(payload.invoice);

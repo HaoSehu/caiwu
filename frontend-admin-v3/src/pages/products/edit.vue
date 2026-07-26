@@ -15,7 +15,8 @@
             v-for="(section, index) in sections"
             :key="section.key"
             type="button"
-            :class="['product-edit-nav-item', { 'is-active': activeSection === section.key }]"
+            class="product-edit-nav-item"
+            :class="[{ 'is-active': activeSection === section.key }]"
             :aria-current="activeSection === section.key ? 'step' : undefined"
             @click="activeSection = section.key"
           >
@@ -57,9 +58,14 @@
               <div class="product-edit-section-head">
                 <h3 class="product-edit-section-title">定价</h3>
                 <div class="product-edit-section-actions">
-                <t-select v-model="pricingPlan" size="small" style="width: 150px" @change="syncPricingCycles">
-                  <t-option v-for="item in pricingPlanOptions" :key="item.value" :label="item.label" :value="item.value" />
-                </t-select>
+                  <t-select v-model="pricingPlan" size="small" style="width: 150px" @change="syncPricingCycles">
+                    <t-option
+                      v-for="item in pricingPlanOptions"
+                      :key="item.value"
+                      :label="item.label"
+                      :value="item.value"
+                    />
+                  </t-select>
                 </div>
               </div>
               <div class="product-edit-grid">
@@ -153,10 +159,12 @@
               <div class="product-edit-section-head">
                 <h3 class="product-edit-section-title">产品配置</h3>
                 <div class="product-edit-section-actions">
-                <t-button size="small" variant="outline" :loading="configTemplateLoading" @click="pullConfigTemplate">
-                  拉取模板
-                </t-button>
-                <t-button size="small" theme="primary" variant="outline" @click="openConfigOptionDialog()">新增配置</t-button>
+                  <t-button size="small" variant="outline" :loading="configTemplateLoading" @click="pullConfigTemplate">
+                    拉取模板
+                  </t-button>
+                  <t-button size="small" theme="primary" variant="outline" @click="openConfigOptionDialog()"
+                    >新增配置</t-button
+                  >
                 </div>
               </div>
               <div class="product-edit-config-panel">
@@ -168,8 +176,12 @@
                       <span>{{ item.field || '-' }} · {{ item.option_mode || 'select' }}</span>
                     </div>
                     <t-space size="small">
-                      <t-button size="small" variant="text" theme="primary" @click="openConfigOptionDialog(item, index)">编辑</t-button>
-                      <t-button size="small" variant="text" theme="danger" @click="removeConfigOption(index)">删除</t-button>
+                      <t-button size="small" variant="text" theme="primary" @click="openConfigOptionDialog(item, index)"
+                        >编辑</t-button
+                      >
+                      <t-button size="small" variant="text" theme="danger" @click="removeConfigOption(index)"
+                        >删除</t-button
+                      >
                     </t-space>
                   </article>
                 </div>
@@ -245,7 +257,7 @@
               :disabled="configOptionSubItemRows.length <= 1"
               @click="removeConfigSubItemRow(index)"
             >
-              <DeleteIcon />
+              <delete-icon />
             </t-button>
           </div>
         </div>
@@ -264,25 +276,25 @@
     </t-dialog>
   </div>
 </template>
-
 <script setup lang="ts">
 import { ChevronLeftIcon, DeleteIcon } from 'tdesign-icons-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import { productApi, type ProductCategoryRecord, type ProductRecord } from '@/api/product';
-import { supplierApi, type SupplierRecord } from '@/api/supplier';
+import type { ProductCategoryRecord } from '@/api/product';
+import { productApi } from '@/api/product';
+import type { SupplierRecord } from '@/api/supplier';
+import { supplierApi } from '@/api/supplier';
+
 import {
   errorMessage,
+  findProductGroupByKey,
   flattenCategories,
   isSelectableProductGroup,
-  productGroupEffectiveId,
-  productGroupLevel,
   productGroupOptionKey,
   productGroupOptionLabel,
   productGroupPayload,
-  findProductGroupByKey,
   providerTypeFallbackLabels,
   toPlainRecord,
 } from './composables/useProductShared';
@@ -519,13 +531,19 @@ function buildSupplierBatchProducts(response: unknown): SupplierBatchProduct[] {
   const raw = toPlainRecord(response);
   const list = Array.isArray(raw.products)
     ? raw.products
-    : (Array.isArray(raw.list) ? raw.list : (Array.isArray(response) ? response : []));
-  return list.map((item: Record<string, unknown>) => ({
-    id: Number(item.id || item.product_id || 0),
-    name: String(item.name || item.product_name || item.display_name || '-'),
-    type_label: String(item.type_label || item.type_name || item.type || item.billingcycle || ''),
-    remote_group_name: String(item.remote_group_name || item.group_name || item.second_group_name || ''),
-  })).filter((item) => item.id > 0);
+    : Array.isArray(raw.list)
+      ? raw.list
+      : Array.isArray(response)
+        ? response
+        : [];
+  return list
+    .map((item: Record<string, unknown>) => ({
+      id: Number(item.id || item.product_id || 0),
+      name: String(item.name || item.product_name || item.display_name || '-'),
+      type_label: String(item.type_label || item.type_name || item.type || item.billingcycle || ''),
+      remote_group_name: String(item.remote_group_name || item.group_name || item.second_group_name || ''),
+    }))
+    .filter((item) => item.id > 0);
 }
 
 // --- Pricing helpers ---
@@ -626,7 +644,8 @@ function createConfigSubItemRow(item: Record<string, unknown> = {}, index = 0): 
     uid: String(item.uid || `config-subitem-${Date.now()}-${index}-${Math.random().toString(36).slice(2)}`),
     name: String(item.label || item.option_name || item.name || '').trim(),
     value: String(item.value || item.option_name_first || '').trim(),
-    monthly_price: monthlyPrice === '' || monthlyPrice === undefined || monthlyPrice === null ? '0.00' : String(monthlyPrice),
+    monthly_price:
+      monthlyPrice === '' || monthlyPrice === undefined || monthlyPrice === null ? '0.00' : String(monthlyPrice),
     sort_order: Number(item.sort_order || index + 1),
   };
 }
@@ -663,11 +682,8 @@ function openConfigOptionDialog(row?: ConfigOptionRecord, index = -1) {
       hidden: Boolean(row.hidden ?? false),
       sort_order: Number(row.sort_order || index + 1),
     });
-    const sourceSubItems = Array.isArray(row.sub_items) && row.sub_items.length
-      ? row.sub_items
-      : Array.isArray(row.sub)
-        ? row.sub
-        : [];
+    const sourceSubItems =
+      Array.isArray(row.sub_items) && row.sub_items.length ? row.sub_items : Array.isArray(row.sub) ? row.sub : [];
     const rowSubItems = sourceSubItems.length
       ? sourceSubItems.map((item) => toPlainRecord(item))
       : parseConfigSubItems(String(row.parameter || ''));
@@ -847,13 +863,13 @@ async function submit() {
 
 function resolveDisplayName(source?: Record<string, unknown> | null) {
   return String(
-    source?.custom_display_name
-    || source?.product_spec_display
-    || source?.cpu_memory_display
-    || source?.product_display_name
-    || source?.display_name
-    || source?.name
-    || '',
+    source?.custom_display_name ||
+      source?.product_spec_display ||
+      source?.cpu_memory_display ||
+      source?.product_display_name ||
+      source?.display_name ||
+      source?.name ||
+      '',
   ).trim();
 }
 
@@ -868,7 +884,6 @@ function goBack() {
   router.push({ name: 'AdminProductCatalog' });
 }
 </script>
-
 <style lang="less" scoped>
 .product-edit-page {
   display: flex;

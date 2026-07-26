@@ -166,15 +166,15 @@ type V2ProductDetailRecord = Record<string, unknown> & {
   timestamps?: Record<string, unknown>;
 };
 
-type V2ProductDetailResponse = {
+interface V2ProductDetailResponse {
   product?: V2ProductDetailRecord;
-};
+}
 
-type V2ProductGroupTreeResponse = {
+interface V2ProductGroupTreeResponse {
   tree?: ProductGroupV2Record[];
   list?: ProductGroupV2Record[];
   total?: number;
-};
+}
 
 export interface ProductSummary {
   groups_total?: number;
@@ -203,7 +203,8 @@ function normalizeV2ProductListItem(item: ProductV2SummaryRecord): ProductRecord
   const primaryPrice = toRecord(item.primary_price);
   const lifecycleStatus = String(item.lifecycle_status || 'active');
   const monthlyPriceValue = item.monthly_price ?? (primaryPrice.cycle === 'monthly' ? primaryPrice.amount : undefined);
-  const monthlyPrice = monthlyPriceValue === undefined || monthlyPriceValue === null ? undefined : String(monthlyPriceValue);
+  const monthlyPrice =
+    monthlyPriceValue === undefined || monthlyPriceValue === null ? undefined : String(monthlyPriceValue);
 
   return {
     ...item,
@@ -222,7 +223,12 @@ function normalizeV2ProductListItem(item: ProductV2SummaryRecord): ProductRecord
   };
 }
 
-function normalizeV2ProductList(response: { list?: ProductV2SummaryRecord[]; total?: number; page?: number; page_size?: number }) {
+function normalizeV2ProductList(response: {
+  list?: ProductV2SummaryRecord[];
+  total?: number;
+  page?: number;
+  page_size?: number;
+}) {
   return {
     ...response,
     list: Array.isArray(response.list) ? response.list.map((item) => normalizeV2ProductListItem(item)) : [],
@@ -253,7 +259,9 @@ function normalizeV2ProductDetail(response: V2ProductDetailResponse): ProductRec
 
   return {
     id: (product.id as number | string) || 0,
-    effective_product_group_name: String(classification.third_product_group_name || classification.second_product_group_name || ''),
+    effective_product_group_name: String(
+      classification.third_product_group_name || classification.second_product_group_name || '',
+    ),
     effective_product_group_parent_name: String(classification.second_product_group_name || ''),
     effective_product_group_full_name: String(classification.category_full_name || ''),
     name: displayName,
@@ -297,7 +305,10 @@ function normalizeV2ProductDetail(response: V2ProductDetailResponse): ProductRec
   };
 }
 
-function normalizeV2ProductGroup(item: ProductGroupV2Record, children: ProductCategoryRecord[] = []): ProductCategoryRecord {
+function normalizeV2ProductGroup(
+  item: ProductGroupV2Record,
+  children: ProductCategoryRecord[] = [],
+): ProductCategoryRecord {
   const level = Number(item.effective_product_group_level || item.level || 0);
   const productType = String(item.product_type || '');
   const firstGroupCode = String(item.first_product_group_code || '');
@@ -320,7 +331,8 @@ function normalizeV2ProductGroup(item: ProductGroupV2Record, children: ProductCa
     second_product_group_id: secondGroupId,
     second_product_group_name: String(item.second_product_group_name || (level === 2 ? name : '')),
     third_product_group_id: thirdGroupId,
-    third_product_group_name: level === 3 ? String(item.third_product_group_name || name) : item.third_product_group_name,
+    third_product_group_name:
+      level === 3 ? String(item.third_product_group_name || name) : item.third_product_group_name,
     effective_product_group_id: item.effective_product_group_id || item.id,
     effective_product_group_level: level,
     parent_id: item.parent_id ?? null,
@@ -359,7 +371,9 @@ function compactQueryParams<T extends Record<string, unknown>>(params?: T): T | 
 function normalizeV2ProductGroupTree(items?: ProductGroupV2Record[]): ProductCategoryRecord[] {
   if (!Array.isArray(items)) return [];
 
-  return items.map((item) => normalizeV2ProductGroup(item, normalizeV2ProductGroupTree(item.children as ProductGroupV2Record[] | undefined)));
+  return items.map((item) =>
+    normalizeV2ProductGroup(item, normalizeV2ProductGroupTree(item.children as ProductGroupV2Record[] | undefined)),
+  );
 }
 
 async function fetchV2ProductCategoryTree(params?: Record<string, unknown>) {
@@ -380,28 +394,35 @@ async function fetchV2ProductCategoryTree(params?: Record<string, unknown>) {
 export const productApi = {
   summary: () => request.get<ProductSummary>({ url: '/v2/admin/products/summary' }),
   list: (params: ProductListParams) =>
-    request.get<{ list?: ProductV2SummaryRecord[]; total?: number; page?: number; page_size?: number }>({
-      url: '/v2/admin/products',
-      params: compactQueryParams(params),
-    }).then((response) => normalizeV2ProductList(response)),
+    request
+      .get<{ list?: ProductV2SummaryRecord[]; total?: number; page?: number; page_size?: number }>({
+        url: '/v2/admin/products',
+        params: compactQueryParams(params),
+      })
+      .then((response) => normalizeV2ProductList(response)),
   detail: (id: number | string) =>
-    request.get<V2ProductDetailResponse>({ url: `/v2/admin/products/${id}` }).then((response) => normalizeV2ProductDetail(response)),
+    request
+      .get<V2ProductDetailResponse>({ url: `/v2/admin/products/${id}` })
+      .then((response) => normalizeV2ProductDetail(response)),
   create: (data: Record<string, unknown>) =>
-    request.post<V2ProductDetailResponse>({ url: '/v2/admin/products', data }).then((response) => normalizeV2ProductDetail(response)),
+    request
+      .post<V2ProductDetailResponse>({ url: '/v2/admin/products', data })
+      .then((response) => normalizeV2ProductDetail(response)),
   update: (id: number | string, data: Record<string, unknown>) =>
-    request.put<V2ProductDetailResponse>({ url: `/v2/admin/products/${id}`, data }).then((response) => normalizeV2ProductDetail(response)),
+    request
+      .put<V2ProductDetailResponse>({ url: `/v2/admin/products/${id}`, data })
+      .then((response) => normalizeV2ProductDetail(response)),
   delete: (id: number | string) => request.delete({ url: `/v2/admin/products/${id}` }),
   restore: (id: number | string) =>
-    request.post<V2ProductDetailResponse>({ url: `/v2/admin/products/${id}/restorations` }).then((response) => normalizeV2ProductDetail(response)),
+    request
+      .post<V2ProductDetailResponse>({ url: `/v2/admin/products/${id}/restorations` })
+      .then((response) => normalizeV2ProductDetail(response)),
   forceDelete: (id: number | string) => request.delete({ url: `/v2/admin/products/${id}/force` }),
   toggleStatus: (id: number | string, enabled: boolean) =>
     request.patch({ url: `/v2/admin/products/${id}/status`, data: { enabled } }),
-  reorderProduct: (data: Record<string, unknown>) =>
-    request.post({ url: '/v2/admin/products/reorders', data }),
-  splitPreview: (data: Record<string, unknown>) =>
-    request.post({ url: '/v2/admin/products/split-previews', data }),
-  splitProducts: (data: Record<string, unknown>) =>
-    request.post({ url: '/v2/admin/products/splits', data }),
+  reorderProduct: (data: Record<string, unknown>) => request.post({ url: '/v2/admin/products/reorders', data }),
+  splitPreview: (data: Record<string, unknown>) => request.post({ url: '/v2/admin/products/split-previews', data }),
+  splitProducts: (data: Record<string, unknown>) => request.post({ url: '/v2/admin/products/splits', data }),
   batchUpdateCategory: (data: Record<string, unknown>) =>
     request.post({ url: '/v2/admin/products/category-batches', data }),
   batchUpdateProvisionHostname: (data: Record<string, unknown>) =>
@@ -436,12 +457,10 @@ export const productApi = {
       url: `/v2/admin/products/${id}`,
     }),
   categories: (params?: Record<string, unknown>) => fetchV2ProductCategoryTree(params),
-  createCategory: (data: Record<string, unknown>) =>
-    request.post({ url: '/v2/admin/product-groups', data }),
+  createCategory: (data: Record<string, unknown>) => request.post({ url: '/v2/admin/product-groups', data }),
   updateCategory: (id: number | string, data: Record<string, unknown>) =>
     request.put({ url: `/v2/admin/product-groups/${id}`, data }),
   deleteCategory: (id: number | string, params?: Record<string, unknown>) =>
     request.delete({ url: `/v2/admin/product-groups/${id}`, params }),
-  reorderCategory: (data: Record<string, unknown>) =>
-    request.post({ url: '/v2/admin/product-groups/reorders', data }),
+  reorderCategory: (data: Record<string, unknown>) => request.post({ url: '/v2/admin/product-groups/reorders', data }),
 };

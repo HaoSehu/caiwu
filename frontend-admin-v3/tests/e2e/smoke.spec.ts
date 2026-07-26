@@ -1,6 +1,8 @@
-﻿import { expect, test } from '@playwright/test';
+import { Buffer } from 'node:buffer';
 import { readFileSync } from 'node:fs';
+
 import type { Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 test('keeps core API fixtures on v2 admin contracts', () => {
   const source = readFileSync(new URL('./smoke.spec.ts', import.meta.url), 'utf8');
@@ -322,7 +324,7 @@ async function mockTicketConversation(page: import('@playwright/test').Page) {
     }
 
     const detail = detailPayload();
-    const { replies, ...ticket } = detail;
+    const { replies: _replies, ...ticket } = detail;
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({ code: 0, data: { ticket } }),
@@ -410,6 +412,116 @@ async function mockCouponProductTree(
   });
   await page.route(/\/api\/v2\/admin\/coupon-product-groups\/12\/products(?:\?.*)?$/, async (route) => {
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify(paginate([product])) });
+  });
+  await page.route('**/api/v2/admin/coupon-product-groups/batch-products', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ code: 0, data: { '2:12': [product] } }),
+    });
+  });
+}
+
+async function mockNestedCouponProductTree(page: import('@playwright/test').Page) {
+  const paginate = (list: Record<string, unknown>[]) => ({
+    code: 0,
+    data: { list, total: list.length, page: 1, page_size: 100 },
+  });
+  const root = {
+    id: 1,
+    node_key: '1:1',
+    name: '云服务器',
+    label: '云服务器',
+    level: 1,
+    product_type: 'cloud_server',
+    product_type_label: '云服务器',
+    first_product_group_id: 1,
+    first_product_group_name: '云服务器',
+    effective_product_group_id: 1,
+    effective_product_group_level: 1,
+    group_path: '云服务器',
+    has_children: true,
+    direct_products_count: 0,
+    status: 1,
+  };
+  const secondGroup = {
+    id: 4,
+    node_key: '2:4',
+    name: '特价云服务器',
+    label: '特价云服务器',
+    parent_id: 1,
+    parent_level: 1,
+    level: 2,
+    product_type: 'cloud_server',
+    product_type_label: '云服务器',
+    first_product_group_id: 1,
+    first_product_group_name: '云服务器',
+    second_product_group_id: 4,
+    second_product_group_name: '特价云服务器',
+    effective_product_group_id: 4,
+    effective_product_group_level: 2,
+    group_path: '云服务器 / 特价云服务器',
+    has_children: true,
+    direct_products_count: 0,
+    status: 1,
+  };
+  const thirdGroup = {
+    id: 4,
+    node_key: '3:4',
+    name: '高宽',
+    label: '高宽',
+    parent_id: 4,
+    parent_level: 2,
+    level: 3,
+    product_type: 'cloud_server',
+    product_type_label: '云服务器',
+    first_product_group_id: 1,
+    first_product_group_name: '云服务器',
+    second_product_group_id: 4,
+    second_product_group_name: '特价云服务器',
+    third_product_group_id: 4,
+    third_product_group_name: '高宽',
+    effective_product_group_id: 4,
+    effective_product_group_level: 3,
+    group_path: '云服务器 / 特价云服务器 / 高宽',
+    has_children: false,
+    direct_products_count: 1,
+    status: 1,
+  };
+  const product = {
+    id: 101,
+    product_id: 101,
+    node_type: 'product',
+    label: '高宽云服务器 2C4G',
+    product_display_name: '高宽云服务器 2C4G',
+    product_type: 'cloud_server',
+    service_type_code: 'cloud_server',
+    category_full_name: '云服务器 / 特价云服务器 / 高宽',
+    first_product_group_id: 1,
+    first_product_group_name: '云服务器',
+    second_product_group_id: 4,
+    second_product_group_name: '特价云服务器',
+    third_product_group_id: 4,
+    third_product_group_name: '高宽',
+    effective_product_group_id: 4,
+    effective_product_group_level: 3,
+    primary_price: { cycle: 'monthly', amount: '99.00' },
+    status: 1,
+  };
+
+  await page.route(/\/api\/v2\/admin\/coupon-product-groups(?:\?.*)?$/, async (route) => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify(paginate([root])) });
+  });
+  await page.route(/\/api\/v2\/admin\/coupon-product-groups\/1\/children(?:\?.*)?$/, async (route) => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify(paginate([secondGroup])) });
+  });
+  await page.route(/\/api\/v2\/admin\/coupon-product-groups\/4\/children(?:\?.*)?$/, async (route) => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify(paginate([thirdGroup])) });
+  });
+  await page.route('**/api/v2/admin/coupon-product-groups/batch-products', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ code: 0, data: { '3:4': [product] } }),
+    });
   });
 }
 
@@ -1783,7 +1895,7 @@ async function mockNotifications(page: import('@playwright/test').Page) {
   const emailContentDefault = notificationEmailContentDefault;
   const emailContentOverride =
     '<p>{{#site_logo}}<img class="email-logo" src="{{site_logo}}" alt="{{site_name}}">{{/site_logo}}验证码 {{code}}</p>';
-  type MockNotificationTemplate = {
+  interface MockNotificationTemplate {
     channel: 'email' | 'sms';
     code: string;
     name: string;
@@ -1795,7 +1907,7 @@ async function mockNotifications(page: import('@playwright/test').Page) {
     variables: string[];
     provider_variables: string[];
     setting_keys: Record<string, string>;
-  };
+  }
 
   await page.route(/\/api\/v2\/admin\/notification-templates(?:\?.*)?$/, async (route) => {
     const url = new URL(route.request().url());
@@ -2295,6 +2407,7 @@ async function mockServices(page: import('@playwright/test').Page) {
 }
 
 async function mockUserDetail(page: import('@playwright/test').Page) {
+  await mockNestedCouponProductTree(page);
   await page.route('**/api/v2/admin/product-groups**', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
@@ -2304,7 +2417,7 @@ async function mockUserDetail(page: import('@playwright/test').Page) {
       }),
     });
   });
-  await page.route(/\/api\/v2\/admin\/products(?:\?.*)?$/, async (route) => {
+  await page.route(/\/api\/v2\/admin\/products(?:\/\d+)?(?:\?.*)?$/, async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const pathname = url.pathname;
@@ -2315,11 +2428,15 @@ async function mockUserDetail(page: import('@playwright/test').Page) {
         body: JSON.stringify({
           code: 0,
           data: {
-            id: 101,
-            name: '测试云服务器套餐',
-            display_name: '测试云服务器套餐',
-            product_type_label: '云服务器',
-            pricing: { monthly: 88, annually: 880 },
+            product: {
+              id: 101,
+              display: { display_name: '高宽云服务器 2C4G' },
+              classification: { product_type: 'cloud_server', product_type_label: '云服务器' },
+              pricing: {
+                items: { monthly: 99 },
+                primary_price: { cycle: 'monthly', amount: '99.00' },
+              },
+            },
           },
         }),
       });
@@ -2826,7 +2943,7 @@ async function mockLogin(page: import('@playwright/test').Page) {
 
 async function mockLogs(page: import('@playwright/test').Page) {
   await page.route(
-    /\/api\/v2\/admin\/(?:logs(?:\/.*)?|log-summaries\/[^/?]+|log-cleanups(?:\/.*)?)(?:\?.*)?$/,
+    /\/api\/v2\/admin\/(?:logs(?:\/[^?]*)?|log-summaries\/[^/?]+|log-cleanups(?:\/[^?]*)?)(?:\?.*)?$/,
     async (route) => {
       const request = route.request();
       const url = new URL(request.url());
@@ -5140,11 +5257,40 @@ test.describe('frontend-admin-v3 shell smoke', () => {
       window.localStorage.setItem('admin_last_active_at', String(Date.now()));
     });
 
+    const productTreeRequest = page.waitForRequest(
+      (request) =>
+        request.url().includes('/api/v2/admin/coupon-product-groups/batch-products') && request.method() === 'POST',
+    );
     await page.goto('/admin/users/1', { waitUntil: 'domcontentloaded' });
+    expect((await productTreeRequest).postDataJSON()).toEqual({ groups: [{ id: 4, level: 3 }] });
 
     await userDetailTab(page, '产品/服务').click();
     await page.getByRole('button', { name: '添加实例' }).click();
-    await expect(page.locator('.t-dialog:visible').getByText('选择商品')).toBeVisible();
+    const addServiceDialog = page.locator('.t-dialog:visible');
+    const selectedProductRequests: string[] = [];
+    page.on('request', (request) => {
+      if (new URL(request.url()).pathname.endsWith('/products/101')) {
+        selectedProductRequests.push(request.url());
+      }
+    });
+    await expect(addServiceDialog.getByText('选择商品')).toBeVisible();
+    await expect(addServiceDialog.getByText('自动创建订单', { exact: true })).toBeVisible();
+    await expect(addServiceDialog.getByText('自动创建账单', { exact: true })).toBeVisible();
+    await expect(addServiceDialog.getByText('从余额扣款', { exact: true })).toBeVisible();
+    await addServiceDialog.locator('.binding-tree-select').click();
+    const productTreePopup = page.locator('.binding-tree-select-popup:visible');
+    await productTreePopup.locator('[data-value="type:cloud_server"] .t-tree__icon').click();
+    await productTreePopup.getByText('特价云服务器', { exact: true }).click();
+    await expect(productTreePopup).toBeVisible();
+    await productTreePopup.getByText('高宽', { exact: true }).click();
+    await expect(productTreePopup).toBeVisible();
+    expect(selectedProductRequests).toEqual([]);
+    await expect(productTreePopup.getByText('高宽云服务器 2C4G', { exact: true })).toBeVisible();
+    await productTreePopup.getByText('高宽云服务器 2C4G', { exact: true }).click();
+    await expect.poll(() => selectedProductRequests).toHaveLength(1);
+    await expect(
+      addServiceDialog.locator('.t-form__item').filter({ hasText: '服务名称' }).locator('input'),
+    ).toHaveValue('高宽云服务器 2C4G');
     await page
       .locator('.t-dialog:visible')
       .getByRole('button', { name: /Cancel|取消/ })

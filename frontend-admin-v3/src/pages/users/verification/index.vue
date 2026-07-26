@@ -5,11 +5,10 @@
     </t-card>
   </div>
 </template>
-
 <script setup lang="ts">
-import VerificationPanel from '@/pages/users/components/VerificationPanel.vue';
-
 import './index.less';
+
+import VerificationPanel from '@/pages/users/components/VerificationPanel.vue';
 
 defineOptions({
   name: 'AdminUserVerification',

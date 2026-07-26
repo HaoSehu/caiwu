@@ -1,10 +1,11 @@
 import { request } from '@/utils/request';
+
 import type {
   NotificationTemplateItem,
   NotificationTemplateTestSendPayload,
   NotificationTemplateTestSendResponse,
-  SettingItem,
   ScheduleOverview,
+  SettingItem,
 } from './types';
 
 type V2SettingItem = SettingItem & {
@@ -13,17 +14,17 @@ type V2SettingItem = SettingItem & {
   display_value?: string | number | boolean | null;
 };
 
-type V2SettingListResponse = {
+interface V2SettingListResponse {
   list?: V2SettingItem[];
   total?: number;
   page?: number;
   page_size?: number;
-};
+}
 
-type NotificationTemplateListResponse = {
+interface NotificationTemplateListResponse {
   list?: NotificationTemplateItem[];
   total?: number;
-};
+}
 
 function normalizeV2Setting(item: V2SettingItem): SettingItem {
   return {

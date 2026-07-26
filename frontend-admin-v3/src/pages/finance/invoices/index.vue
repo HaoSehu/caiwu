@@ -3,8 +3,8 @@
     <t-card :bordered="false">
       <div class="invoice-filter">
         <t-input
-          class="filter-keyword"
           v-model="filters.keyword"
+          class="filter-keyword"
           clearable
           placeholder="搜索账单号 / 订单号 / 用户"
           @enter="handleSearch"
@@ -12,15 +12,15 @@
         >
           <template #suffix-icon><search-icon /></template>
         </t-input>
-        <t-select class="filter-type" v-model="filters.type" clearable placeholder="类型" @change="handleSearch">
+        <t-select v-model="filters.type" class="filter-type" clearable placeholder="类型" @change="handleSearch">
           <t-option v-for="item in invoiceTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
         </t-select>
-        <t-select class="filter-status" v-model="filters.status" clearable placeholder="状态" @change="handleSearch">
+        <t-select v-model="filters.status" class="filter-status" clearable placeholder="状态" @change="handleSearch">
           <t-option v-for="item in invoiceStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
         </t-select>
         <t-date-picker
-          class="filter-start"
           v-model="filters.start_date"
+          class="filter-start"
           clearable
           mode="date"
           format="YYYY-MM-DD"
@@ -29,8 +29,8 @@
           @change="handleSearch"
         />
         <t-date-picker
-          class="filter-end"
           v-model="filters.end_date"
+          class="filter-end"
           clearable
           mode="date"
           format="YYYY-MM-DD"
@@ -58,7 +58,7 @@
           <template #amount="{ row }">{{ formatMoney(row.amount) }}</template>
           <template #paid="{ row }">{{ formatMoney(row.paid_amount) }}</template>
           <template #status="{ row }">
-            <StatusTag :status-map="INVOICE_STATUS_MAP" :status="row.status" />
+            <status-tag :status-map="INVOICE_STATUS_MAP" :status="row.status" />
           </template>
           <template #createdAt="{ row }">{{ formatDateTime(row.created_at) }}</template>
           <template #paidAt="{ row }">{{ formatDateTime(row.paid_at) }}</template>
@@ -76,7 +76,7 @@
                 取消
               </t-button>
             </t-space>
-            <t-dropdown v-else :options="mobileActionOptions(row)" @click="(data: { value: unknown }) => handleMobileAction(data.value, row)">
+            <t-dropdown v-else :options="mobileActionOptions(row)" @click="handleMobileActionHandler(row)">
               <t-button size="small" variant="text">更多</t-button>
             </t-dropdown>
           </template>
@@ -86,7 +86,7 @@
       <div v-else class="invoice-mobile-list">
         <t-loading :loading="loading" size="small">
           <div v-if="invoices.length" class="invoice-mobile-stack">
-            <MobileRecordCard
+            <mobile-record-card
               v-for="row in invoices"
               :key="row.id"
               :title="fieldValue(row.invoice_no || row.id)"
@@ -118,7 +118,7 @@
       </div>
     </t-card>
 
-    <InvoiceDetailDrawer
+    <invoice-detail-drawer
       v-model:visible="detailState.visible"
       :loading="detailState.loading"
       :invoice="currentInvoice"
@@ -137,25 +137,25 @@
     />
   </div>
 </template>
-
 <script setup lang="ts">
+import './index.less';
+
+import { INVOICE_STATUS_MAP, INVOICE_TYPE_MAP, toLabelMap, toTagTypeMap } from '@shared/statusConfig';
+import type { DropdownOption, PrimaryTableCol } from 'tdesign-vue-next';
+import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
-import type { PrimaryTableCol } from 'tdesign-vue-next';
 
-import { adminApi, type InvoiceRecord } from '@/api/admin';
-import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
-import { errorMessage } from '@/utils/userMessage';
+import type { InvoiceRecord } from '@/api/admin';
+import { adminApi } from '@/api/admin';
 import InvoiceDetailDrawer from '@/components/finance-record-detail/InvoiceDetailDrawer.vue';
 import MobileRecordCard from '@/components/mobile-record-card/index.vue';
 import StatusTag from '@/components/status-tag/index.vue';
 import { AdminPermissions, hasPermissionInList } from '@/constants/permissions';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserStore } from '@/store';
-import { INVOICE_STATUS_MAP, INVOICE_TYPE_MAP, toLabelMap, toTagTypeMap } from '@shared/statusConfig';
-
-import './index.less';
+import { fieldValue, formatDateTime, formatMoney } from '@/utils/format';
+import { errorMessage } from '@/utils/userMessage';
 
 const loading = ref(false);
 const invoices = ref<InvoiceRecord[]>([]);
@@ -194,7 +194,9 @@ const detailState = reactive({
 const statusLabelMap = toLabelMap(INVOICE_STATUS_MAP);
 const statusTypeMap = toTagTypeMap(INVOICE_STATUS_MAP);
 
-const invoiceTypeOptions = Object.entries(INVOICE_TYPE_MAP).map(([value, label]) => ({ value, label }));
+const invoiceTypeOptions = Object.entries(INVOICE_TYPE_MAP)
+  .filter(([value]) => value !== 'normal') // 历史兼容别名，不单独列出
+  .map(([value, label]) => ({ value, label }));
 const invoiceStatusOptions = Object.entries(statusLabelMap).map(([value, label]) => ({ value, label }));
 
 const columns: PrimaryTableCol<InvoiceRecord>[] = [
@@ -290,7 +292,10 @@ async function reloadDetail() {
 }
 
 function normalizeInvoiceDetail(payload: Record<string, unknown> = {}, fallback: InvoiceRecord = {}) {
-  const invoice = payload.invoice && typeof payload.invoice === 'object' ? (payload.invoice as InvoiceRecord) : (payload as InvoiceRecord);
+  const invoice =
+    payload.invoice && typeof payload.invoice === 'object'
+      ? (payload.invoice as InvoiceRecord)
+      : (payload as InvoiceRecord);
   return {
     invoice: {
       ...fallback,
@@ -356,6 +361,10 @@ function mobileActionOptions(row: InvoiceRecord) {
   ];
 }
 
+function handleMobileActionHandler(row: InvoiceRecord) {
+  return (data: DropdownOption) => handleMobileAction(data.value, row);
+}
+
 function handleMobileAction(action: unknown, row: InvoiceRecord) {
   if (action === 'detail') openDetail(row);
   if (action === 'cancel' && canCancel(row)) confirmCancel(row);
@@ -372,7 +381,13 @@ function invoiceMobileRows(row: InvoiceRecord) {
 }
 
 function invoiceTitle(row: InvoiceRecord) {
-  return fieldValue(row.combined_display_name || row.product_display_name || row.product_spec_display || row.type_label || invoiceTypeLabel(row.type));
+  return fieldValue(
+    row.combined_display_name ||
+      row.product_display_name ||
+      row.product_spec_display ||
+      row.type_label ||
+      invoiceTypeLabel(row.type),
+  );
 }
 
 function invoiceTypeLabel(type: unknown) {
@@ -396,7 +411,6 @@ function userName(user: unknown) {
 function toRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
-
 
 onMounted(() => loadList());
 </script>
