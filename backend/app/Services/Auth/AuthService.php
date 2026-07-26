@@ -14,6 +14,7 @@ use App\Services\System\NotificationService;
 use App\Services\System\OperationLogService;
 use App\Services\User\AdminRoleBridgeService;
 use App\Support\AccountIdentifier;
+use App\Support\SensitiveDataSanitizer;
 use App\Support\TextSanitizer;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -883,11 +884,11 @@ class AuthService
                 ->whereKey($userId)
                 ->update($payload);
         } catch (\Throwable $exception) {
-            Log::warning('登录后更新用户登录状态失败', [
+            Log::warning('登录后更新用户登录状态失败', SensitiveDataSanitizer::sanitize([
                 'user_id' => $userId,
                 'ip' => $ip,
                 'message' => $exception->getMessage(),
-            ]);
+            ]));
         }
     }
 
@@ -909,12 +910,12 @@ class AuthService
                     $email, $displayName, $loginAt, $ip, $userAgent
                 );
             } catch (\Throwable $exception) {
-                Log::warning('同步发送用户登录邮件提醒失败', [
+                Log::warning('同步发送用户登录邮件提醒失败', SensitiveDataSanitizer::sanitize([
                     'user_id' => $userId,
                     'email' => $email,
                     'ip' => $ip,
                     'message' => $exception->getMessage(),
-                ]);
+                ]));
             }
 
             return;
@@ -930,12 +931,12 @@ class AuthService
                 userAgent: $userAgent,
             );
         } catch (\Throwable $exception) {
-            Log::warning('投递用户登录邮件提醒任务失败', [
+            Log::warning('投递用户登录邮件提醒任务失败', SensitiveDataSanitizer::sanitize([
                 'user_id' => $userId,
                 'email' => $email,
                 'ip' => $ip,
                 'message' => $exception->getMessage(),
-            ]);
+            ]));
         }
     }
 
@@ -959,13 +960,13 @@ class AuthService
                     $userAgent
                 );
             } catch (\Throwable $exception) {
-                Log::warning('同步发送用户登录失败提醒邮件失败', [
+                Log::warning('同步发送用户登录失败提醒邮件失败', SensitiveDataSanitizer::sanitize([
                     'user_id' => $userId,
                     'email' => $email,
                     'account' => $account,
                     'ip' => $ip,
                     'message' => $exception->getMessage(),
-                ]);
+                ]));
             }
 
             return;
@@ -982,13 +983,13 @@ class AuthService
                 userAgent: $userAgent,
             );
         } catch (\Throwable $exception) {
-            Log::warning('投递用户登录失败提醒邮件任务失败', [
+            Log::warning('投递用户登录失败提醒邮件任务失败', SensitiveDataSanitizer::sanitize([
                 'user_id' => $userId,
                 'email' => $email,
                 'account' => $account,
                 'ip' => $ip,
                 'message' => $exception->getMessage(),
-            ]);
+            ]));
         }
     }
 
@@ -1011,13 +1012,13 @@ class AuthService
                 $userAgent
             );
         } catch (\Throwable $exception) {
-            Log::warning('发送用户异地登录提醒失败', [
+            Log::warning('发送用户异地登录提醒失败', SensitiveDataSanitizer::sanitize([
                 'user_id' => $userId,
                 'email' => $email,
                 'ip' => $ip,
                 'previous_ip' => $previousIp,
                 'message' => $exception->getMessage(),
-            ]);
+            ]));
         }
     }
 
@@ -1037,11 +1038,11 @@ class AuthService
                 $userAgent
             );
         } catch (\Throwable $exception) {
-            Log::warning('发送密码变更提醒失败', [
+            Log::warning('发送密码变更提醒失败', SensitiveDataSanitizer::sanitize([
                 'email' => $email,
                 'ip' => $ip,
                 'message' => $exception->getMessage(),
-            ]);
+            ]));
         }
     }
 
@@ -1065,11 +1066,11 @@ class AuthService
                 $userAgent
             );
         } catch (\Throwable $exception) {
-            Log::warning('发送手机号变更提醒失败', [
+            Log::warning('发送手机号变更提醒失败', SensitiveDataSanitizer::sanitize([
                 'email' => $email,
                 'ip' => $ip,
                 'message' => $exception->getMessage(),
-            ]);
+            ]));
         }
     }
 
@@ -1091,12 +1092,12 @@ class AuthService
                 $userAgent
             );
         } catch (\Throwable $exception) {
-            Log::warning('发送邮箱变更提醒失败', [
+            Log::warning('发送邮箱变更提醒失败', SensitiveDataSanitizer::sanitize([
                 'old_email' => $oldEmail,
                 'new_email' => $newEmail,
                 'ip' => $ip,
                 'message' => $exception->getMessage(),
-            ]);
+            ]));
         }
     }
 
@@ -1127,11 +1128,11 @@ class AuthService
                 throw $exception;
             }
 
-            Log::warning('登录失败提醒用户解析失败', [
+            Log::warning('登录失败提醒用户解析失败', SensitiveDataSanitizer::sanitize([
                 'account_type' => $accountType,
                 'account' => $account,
                 'message' => $exception->getMessage(),
-            ]);
+            ]));
 
             return null;
         }

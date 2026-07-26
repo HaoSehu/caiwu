@@ -25,6 +25,7 @@ use App\Services\System\OperationLogService;
 use App\Services\System\SettingService;
 use App\Services\Upstream\Contracts\ProvidesRenewal;
 use App\Services\Upstream\ProviderResolver;
+use App\Support\OrderInvoiceNoGenerator;
 use App\Support\SensitiveDataSanitizer;
 use Carbon\Carbon;
 use Illuminate\Contracts\Cache\LockTimeoutException;
@@ -296,6 +297,37 @@ class ServiceRenewService
             ]);
 
             $this->invoiceService->syncProjection($invoice);
+
+            // 创建 shadow Order：续费需要同时产生订单，包含机器配置信息
+            $orderNo = OrderInvoiceNoGenerator::deriveOrderNoFromInvoiceNo((string) $invoice->invoice_no)
+                ?? Order::generateOrderNo();
+
+            $order = Order::query()->create([
+                'order_no' => $orderNo,
+                'projection_type' => Order::PROJECTION_TYPE_PROVISIONING,
+                'user_id' => $user->id,
+                'product_id' => $effectiveProduct->id,
+                'product_spec_snapshot' => $productSpecDisplay,
+                'product_type_snapshot' => (string) $effectiveProduct->product_type,
+                'service_id' => $service->id,
+                'type' => OrderType::RENEW,
+                'coupon_id' => $couponPayload['coupon_id'] ?? null,
+                'user_coupon_id' => $couponPayload['user_coupon_id'] ?? null,
+                'coupon_code' => $couponPayload['code'] ?? null,
+                'amount' => $amount,
+                'discount' => $discountAmount,
+                'paid_amount' => 0,
+                'billing_cycle' => $cycle,
+                'quantity' => 1,
+                'config_snapshot' => $invoice->config_snapshot,
+                'config_pricing_snapshot' => $invoice->config_pricing_snapshot,
+                'coupon_snapshot' => $couponPayload,
+                'status' => OrderStatus::PENDING,
+                'trace_id' => (string) ($context['trace_id'] ?? ''),
+            ]);
+
+            // 双向绑定
+            $invoice->forceFill(['order_id' => $order->id])->save();
 
             return $invoice->load(['product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires', 'service']);
         });
@@ -853,6 +885,16 @@ class ServiceRenewService
                 'renew_invoice_no' => (string) $invoice->invoice_no,
                 'renew_error' => null,
             ]);
+
+            // 续费账单的影子订单履约成功后需一并完结，否则订单列表永远停留在"已付款"。
+            // 只处理已付款的订单：历史遗留的未付订单可能挂在同一张账单上，不得被连带完结。
+            $renewOrder = $invoice->order;
+            if ($renewOrder instanceof Order && (int) $renewOrder->status === OrderStatus::PAID) {
+                $renewOrder->forceFill([
+                    'service_id' => (int) $service->id,
+                    'status' => OrderStatus::COMPLETED,
+                ])->save();
+            }
         });
 
         $updatedService = $service->fresh(['product.supplier']) ?? $service;

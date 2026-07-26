@@ -11,6 +11,7 @@ use App\Models\SecondProductGroup;
 use App\Models\ThirdProductGroup;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 
 class CouponProductGroupQueryService
 {
@@ -133,8 +134,11 @@ class CouponProductGroupQueryService
 
     /**
      * 批量拉取多个分组的产品，每个分组最多返回 500 条。
-     * @param array<int, array{id: int, level: int}> $groups
-     * @return array<int, array<string, mixed>>
+     *
+     * 结果以“层级:分组ID”为键，避免不同分组表中相同的数值 ID 相互覆盖。
+     *
+     * @param  array<int, array{id: int, level: int}>  $groups
+     * @return array<string, Collection<int, Product>>
      */
     public function batchProducts(array $groups): array
     {
@@ -144,7 +148,7 @@ class CouponProductGroupQueryService
             $groupId = (int) ($group['id'] ?? 0);
             $level = (int) ($group['level'] ?? 0);
 
-            if ($groupId <= 0 || !in_array($level, [1, 2, 3], true)) {
+            if ($groupId <= 0 || ! in_array($level, [1, 2, 3], true)) {
                 continue;
             }
 
@@ -171,10 +175,9 @@ class CouponProductGroupQueryService
                 ->orderBy('sort_order')
                 ->orderBy('id')
                 ->limit(500)
-                ->get()
-                ->toArray();
+                ->get();
 
-            $result[$groupId] = $products;
+            $result[$level.':'.$groupId] = $products;
         }
 
         return $result;

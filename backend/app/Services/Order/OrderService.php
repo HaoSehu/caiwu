@@ -184,6 +184,12 @@ class OrderService
         $count = 0;
 
         foreach ($query->get() as $order) {
+            // 管理员手动开通产生的挂账订单按 due_date 计费，不受 5 分钟支付会话窗口约束；
+            // 且这类订单从未扣过库存，被取消会触发 stock+1 造成库存虚增。
+            if ($this->isAdminManualOrder($order)) {
+                continue;
+            }
+
             $updated = $this->cancelExpiredPendingOrder($order, $context);
             if ((int) $updated->status === OrderStatus::CANCELLED) {
                 $count++;
@@ -191,6 +197,16 @@ class OrderService
         }
 
         return $count;
+    }
+
+    private function isAdminManualOrder(Order $order): bool
+    {
+        $snapshot = $order->config_snapshot;
+        if (! is_array($snapshot)) {
+            return false;
+        }
+
+        return filter_var($snapshot['admin_manual'] ?? false, FILTER_VALIDATE_BOOL);
     }
 
     /**

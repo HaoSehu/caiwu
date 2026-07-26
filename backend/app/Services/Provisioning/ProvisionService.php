@@ -67,6 +67,18 @@ class ProvisionService
 
         $service = $this->ensureLocalService($order);
 
+        // 管理员手动开通的服务在建单时就已就绪，事后付款只需完成订单，
+        // 不能因为商品非自动开通就把已激活的服务打回待开通。
+        if ($this->isAdminManualOrder($order) && $service->status !== ServiceStatus::PENDING) {
+            $order->forceFill([
+                'service_id' => $service->id,
+                'status' => OrderStatus::COMPLETED,
+                'service_snapshot' => $this->buildServiceSnapshot($service),
+            ])->save();
+
+            return $service;
+        }
+
         if (! $this->shouldAutoProvision($order->product)) {
             $this->markPending($order, $service, '待人工开通');
 
@@ -368,6 +380,16 @@ class ProvisionService
         ])->save();
 
         return $service;
+    }
+
+    private function isAdminManualOrder(Order $order): bool
+    {
+        $snapshot = $order->config_snapshot;
+        if (! is_array($snapshot)) {
+            return false;
+        }
+
+        return filter_var($snapshot['admin_manual'] ?? false, FILTER_VALIDATE_BOOL);
     }
 
     private function markPending(Order $order, Service $service, ?string $reason = null): void
