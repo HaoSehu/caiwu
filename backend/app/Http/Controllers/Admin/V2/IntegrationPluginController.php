@@ -80,7 +80,7 @@ class IntegrationPluginController extends Controller
 
     public function destroy(DeleteIntegrationPluginRequest $request, IntegrationPlugin $plugin)
     {
-        $result = $this->queryService->uninstallPlugin($plugin);
+        $result = $this->queryService->uninstallPlugin($plugin, $request->force());
 
         return $this->success(AdminActionResultResource::make($result)->resolve(), (string) $result['message']);
     }

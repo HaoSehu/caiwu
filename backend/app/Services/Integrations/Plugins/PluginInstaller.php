@@ -6,6 +6,7 @@ namespace App\Services\Integrations\Plugins;
 
 use App\Exceptions\BusinessException;
 use App\Models\IntegrationPlugin;
+use App\Services\Automation\Heartbeat\Contracts\ScheduledTask;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
 use App\Services\Integrations\Payments\PaymentGatewayRegistry;
 use App\Services\Mail\MailDriverManager;
@@ -96,10 +97,13 @@ class PluginInstaller
             return;
         }
 
-        throw new BusinessException($this->singleEnabledDomainMessage($enabledPlugin), 42200);
+        throw new BusinessException(self::singleEnabledDomainMessage($enabledPlugin), 42200);
     }
 
-    private function singleEnabledDomainMessage(IntegrationPlugin $enabledPlugin): string
+    /**
+     * 单启用域的冲突提示。安装流程和管理端列表都要用同一句话，因此放这里共用。
+     */
+    public static function singleEnabledDomainMessage(IntegrationPlugin $enabledPlugin): string
     {
         $pluginName = trim((string) $enabledPlugin->name) !== ''
             ? (string) $enabledPlugin->name
@@ -157,6 +161,65 @@ class PluginInstaller
         if (! method_exists($manifest->entryClass, 'execute')) {
             throw new BusinessException('插件入口类缺少 execute 方法', 42200);
         }
+
+        $this->assertScheduleDeclarationsValid($manifest);
+    }
+
+    /**
+     * 清单里声明的调度任务和 hook 只有到心跳运行时才会被实例化，坏声明的表现是
+     * “任务静默不执行”，排查成本很高。安装和启用时先校验一遍，把问题提前暴露。
+     */
+    private function assertScheduleDeclarationsValid(PluginManifest $manifest): void
+    {
+        foreach ((array) ($manifest->extra['scheduled_tasks'] ?? []) as $definition) {
+            $class = $this->scheduleListenerClass($definition);
+            if ($class === '') {
+                continue;
+            }
+
+            if (! class_exists($class)) {
+                throw new BusinessException("插件声明的定时任务类不存在 [{$class}]", 42200);
+            }
+
+            if (! is_subclass_of($class, ScheduledTask::class)) {
+                throw new BusinessException("插件定时任务未实现 ScheduledTask 接口 [{$class}]", 42200);
+            }
+        }
+
+        foreach ((array) ($manifest->extra['schedule_hooks'] ?? []) as $listeners) {
+            foreach ((array) $listeners as $definition) {
+                $class = $this->scheduleListenerClass($definition);
+                if ($class === '') {
+                    continue;
+                }
+
+                if (! class_exists($class)) {
+                    throw new BusinessException("插件声明的调度 Hook 类不存在 [{$class}]", 42200);
+                }
+
+                $method = is_array($definition) ? trim((string) ($definition['method'] ?? 'handle')) : 'handle';
+                if (! method_exists($class, $method ?: 'handle')) {
+                    throw new BusinessException("插件调度 Hook 缺少 {$method} 方法 [{$class}]", 42200);
+                }
+            }
+        }
+    }
+
+    /**
+     * 兼容 `Foo::class`、`[Foo::class, 'handle']` 和 `['class' => Foo::class, 'method' => 'handle']`
+     * 三种写法，与 config/schedule_hooks.php 保持一致。闭包等可调用对象跳过校验。
+     */
+    private function scheduleListenerClass(mixed $definition): string
+    {
+        if (is_string($definition)) {
+            return trim($definition);
+        }
+
+        if (! is_array($definition)) {
+            return '';
+        }
+
+        return trim((string) ($definition['class'] ?? $definition[0] ?? ''));
     }
 
     private function syncDriverBinding(IntegrationPlugin $plugin, PluginManifest $manifest, bool $enabled): void

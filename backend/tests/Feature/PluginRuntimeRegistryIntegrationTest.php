@@ -32,6 +32,7 @@ use Caiwu\Plugins\Captcha\Geetest\Lib\GeetestCaptchaService;
 use Caiwu\Plugins\Captcha\Vaptcha\Lib\VaptchaCaptchaService;
 use Caiwu\Plugins\Captcha\Vaptcha\VaptchaPlugin;
 use Caiwu\Plugins\Certification\BaiduFace\Logic\BaiduFaceClient;
+use Caiwu\Plugins\Certification\DemoVerification\DemoVerificationPlugin;
 use Caiwu\Plugins\Certification\Stay33\Logic\Stay33;
 use Caiwu\Plugins\Certification\Stay33\Logic\Stay33Client;
 use Caiwu\Plugins\Certification\Stay33\Stay33Plugin;
@@ -61,6 +62,46 @@ class PluginRuntimeRegistryIntegrationTest extends TestCase
     {
         $this->cleanPluginTables();
         parent::tearDown();
+    }
+
+    public function test_runtime_normalizes_non_boolean_success_returned_by_plugin(): void
+    {
+        $this->ensurePluginTables();
+        $this->activatePlugin('verification', 'demo_verification', [
+            'api_url' => 'https://example.test',
+            'app_id' => 'demo-app',
+            'app_secret' => 'demo-secret',
+        ]);
+
+        // 插件返回字符串 'false'：不做归一化的话 array_merge 会把它原样透出，
+        // 下游 `=== false` 判不出失败，等于把失败当成功放行。
+        $this->app->bind(DemoVerificationPlugin::class, fn (): object => new class
+        {
+            /**
+             * @param  array<string, mixed>  $request
+             * @return array<string, mixed>
+             */
+            public function execute(array $request): array
+            {
+                return [
+                    'success' => 'false',
+                    'action' => '伪造的动作',
+                    'message' => ['不是字符串'],
+                    'data' => ['verified' => false],
+                ];
+            }
+        });
+
+        $result = app(PluginRuntimeRegistry::class)->execute(
+            domain: 'verification',
+            slugOrKey: 'demo_verification',
+            action: 'certification.initialize',
+        );
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('certification.initialize', $result['action']);
+        $this->assertSame('', $result['message']);
+        $this->assertSame('demo_verification', $result['plugin']['slug']);
     }
 
     public function test_runtime_executes_enabled_plugin_through_standard_execute_entry(): void

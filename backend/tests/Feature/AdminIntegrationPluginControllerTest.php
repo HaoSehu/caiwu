@@ -10,6 +10,7 @@ use App\Models\Payment;
 use App\Models\Role;
 use App\Models\Setting;
 use App\Models\User;
+use App\Services\Integrations\Plugins\PluginInstaller;
 use App\Support\AdminPermissions;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -311,7 +312,12 @@ class AdminIntegrationPluginControllerTest extends TestCase
             'paid_at' => now(),
         ]);
 
+        // 存在支付历史时普通卸载会被拒绝，必须由管理端二次确认后强制卸载。
         $this->deleteJson("/api/v2/admin/integration-plugins/{$plugin->id}")
+            ->assertStatus(422);
+        $this->assertDatabaseHas('integration_plugins', ['id' => $plugin->id]);
+
+        $this->deleteJson("/api/v2/admin/integration-plugins/{$plugin->id}?force=1")
             ->assertOk()
             ->assertJsonPath('data.status', 'deleted')
             ->assertJsonPath('data.detail.deleted', true);
@@ -323,6 +329,77 @@ class AdminIntegrationPluginControllerTest extends TestCase
             'plugin_id' => null,
         ]);
         $this->assertDirectoryExists(base_path('plugins/servers/zjmf_finance'));
+    }
+
+    public function test_installed_demo_plugin_is_not_reported_as_missing_manifest(): void
+    {
+        $this->ensurePluginTables();
+        Sanctum::actingAs($this->createAdmin());
+
+        // demo 插件文件真实存在，安装记录也在，列表不能把它当成“文件已丢失”。
+        app(PluginInstaller::class)->install('payment', 'demo_pay');
+
+        $list = $this->getJson('/api/v2/admin/integration-plugins?domain=payment')
+            ->assertOk()
+            ->json('data.list');
+
+        $this->assertNotContains(
+            true,
+            array_map(fn (array $item): bool => (bool) ($item['manifest_missing'] ?? false), $list),
+            'demo 插件已安装且文件存在，不应出现 manifest_missing 条目'
+        );
+        $this->assertNull(collect($list)->firstWhere('slug', 'demo_pay'));
+    }
+
+    public function test_admin_cannot_install_demo_plugin(): void
+    {
+        $this->ensurePluginTables();
+        Sanctum::actingAs($this->createAdmin());
+
+        $this->postJson('/api/v2/admin/integration-plugins', [
+            'domain' => 'payment',
+            'slug' => 'demo_pay',
+        ])->assertStatus(422);
+
+        $this->assertDatabaseMissing('integration_plugins', [
+            'domain' => 'payment',
+            'slug' => 'demo_pay',
+        ]);
+    }
+
+    public function test_uninstall_without_force_is_rejected_when_plugin_is_still_bound(): void
+    {
+        $this->ensurePluginTables();
+        Sanctum::actingAs($this->createAdmin());
+
+        $plugin = $this->createPlugin('upstream', 'bound_plugin_'.bin2hex(random_bytes(4)));
+        DB::table('integration_plugin_bindings')->insert([
+            'domain' => 'upstream',
+            'plugin_id' => (int) $plugin->id,
+            'binding_type' => 'global',
+            'bindable_type' => 'setting',
+            'bindable_id' => 0,
+            'binding_key' => 'force-uninstall-test',
+            'provider_key' => 'force-uninstall-test',
+            'priority' => 0,
+            'status' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->deleteJson("/api/v2/admin/integration-plugins/{$plugin->id}")
+            ->assertStatus(422)
+            ->assertJsonPath('message', fn (string $message): bool => str_contains($message, '插件绑定'));
+
+        $this->assertDatabaseHas('integration_plugins', ['id' => $plugin->id]);
+        $this->assertDatabaseHas('integration_plugin_bindings', ['plugin_id' => $plugin->id]);
+
+        $this->deleteJson("/api/v2/admin/integration-plugins/{$plugin->id}?force=1")
+            ->assertOk()
+            ->assertJsonPath('data.detail.deleted', true);
+
+        $this->assertDatabaseMissing('integration_plugins', ['id' => $plugin->id]);
+        $this->assertDatabaseMissing('integration_plugin_bindings', ['plugin_id' => $plugin->id]);
     }
 
     public function test_admin_can_disable_and_remove_enabled_plugin_when_manifest_is_missing(): void
@@ -383,7 +460,7 @@ class AdminIntegrationPluginControllerTest extends TestCase
             'status' => 0,
         ]);
 
-        $this->deleteJson("/api/v2/admin/integration-plugins/{$plugin->id}")
+        $this->deleteJson("/api/v2/admin/integration-plugins/{$plugin->id}?force=1")
             ->assertOk()
             ->assertJsonPath('data.status', 'deleted')
             ->assertJsonPath('data.detail.deleted', true);

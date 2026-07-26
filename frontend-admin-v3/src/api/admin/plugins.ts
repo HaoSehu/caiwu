@@ -108,22 +108,27 @@ type V2IntegrationPluginRecord = IntegrationPluginRecord & {
   credential_previews?: Record<string, IntegrationPluginSecretPreview>;
 };
 
-type V2IntegrationPluginDetailResponse = {
+interface V2IntegrationPluginDetailResponse {
   plugin?: V2IntegrationPluginRecord;
-};
+}
 
-type V2IntegrationPluginSchemaResponse = {
+interface V2IntegrationPluginSchemaResponse {
   schema?: Array<IntegrationPluginConfigSchema & { sensitive?: boolean }>;
-};
+}
 
-function normalizeV2PluginSchemaField(field: IntegrationPluginConfigSchema & { sensitive?: boolean }): IntegrationPluginConfigSchema {
+function normalizeV2PluginSchemaField(
+  field: IntegrationPluginConfigSchema & { sensitive?: boolean },
+): IntegrationPluginConfigSchema {
   return {
     ...field,
     secret: Boolean(field.secret ?? field.sensitive),
   };
 }
 
-function normalizeV2PluginRecord(record?: V2IntegrationPluginRecord, schema?: V2IntegrationPluginSchemaResponse): IntegrationPluginRecord {
+function normalizeV2PluginRecord(
+  record?: V2IntegrationPluginRecord,
+  schema?: V2IntegrationPluginSchemaResponse,
+): IntegrationPluginRecord {
   const plugin = record || ({} as V2IntegrationPluginRecord);
 
   return {
@@ -140,12 +145,18 @@ export const pluginsApi = {
   list: (params?: { domain?: IntegrationPluginDomain | '' }) =>
     request.get<IntegrationPluginListResponse>({ url: '/v2/admin/integration-plugins', params }),
   scan: async (params?: { domain?: IntegrationPluginDomain | '' }) => {
-    await request.post<IntegrationPluginActionResult>({ url: '/v2/admin/integration-plugin-scans', data: params || {} });
+    await request.post<IntegrationPluginActionResult>({
+      url: '/v2/admin/integration-plugin-scans',
+      data: params || {},
+    });
 
     return request.get<IntegrationPluginListResponse>({ url: '/v2/admin/integration-plugins', params });
   },
   install: async (data: { domain: IntegrationPluginDomain; slug: string }) => {
-    const detail = await request.post<V2IntegrationPluginDetailResponse>({ url: '/v2/admin/integration-plugins', data });
+    const detail = await request.post<V2IntegrationPluginDetailResponse>({
+      url: '/v2/admin/integration-plugins',
+      data,
+    });
 
     return normalizeV2PluginRecord(detail.plugin);
   },
@@ -159,19 +170,33 @@ export const pluginsApi = {
   },
   updateConfig: async (id: number | string, config: Record<string, unknown>) => {
     const [detail, schema] = await Promise.all([
-      request.put<V2IntegrationPluginDetailResponse>({ url: `/v2/admin/integration-plugins/${id}/config`, data: { config } }),
+      request.put<V2IntegrationPluginDetailResponse>({
+        url: `/v2/admin/integration-plugins/${id}/config`,
+        data: { config },
+      }),
       request.get<V2IntegrationPluginSchemaResponse>({ url: `/v2/admin/integration-plugins/${id}/schema` }),
     ]);
 
     return normalizeV2PluginRecord(detail.plugin, schema);
   },
   revealSecret: (id: number | string, key: string) =>
-    request.get<IntegrationPluginSecretValueResponse>({ url: `/v2/admin/integration-plugins/${id}/secrets/${encodeURIComponent(key)}` }),
+    request.get<IntegrationPluginSecretValueResponse>({
+      url: `/v2/admin/integration-plugins/${id}/secrets/${encodeURIComponent(key)}`,
+    }),
   enable: (id: number | string) =>
-    request.patch<IntegrationPluginActionResult>({ url: `/v2/admin/integration-plugins/${id}/status`, data: { enabled: true } }),
+    request.patch<IntegrationPluginActionResult>({
+      url: `/v2/admin/integration-plugins/${id}/status`,
+      data: { enabled: true },
+    }),
   disable: (id: number | string) =>
-    request.patch<IntegrationPluginActionResult>({ url: `/v2/admin/integration-plugins/${id}/status`, data: { enabled: false } }),
-  remove: (id: number | string) => request.delete<IntegrationPluginActionResult>({ url: `/v2/admin/integration-plugins/${id}` }),
+    request.patch<IntegrationPluginActionResult>({
+      url: `/v2/admin/integration-plugins/${id}/status`,
+      data: { enabled: false },
+    }),
+  remove: (id: number | string, force = false) =>
+    request.delete<IntegrationPluginActionResult>({
+      url: `/v2/admin/integration-plugins/${id}${force ? '?force=1' : ''}`,
+    }),
   healthCheck: (id: number | string) =>
     request.post<IntegrationPluginActionResult>({
       url: `/v2/admin/integration-plugins/${id}/tasks`,
