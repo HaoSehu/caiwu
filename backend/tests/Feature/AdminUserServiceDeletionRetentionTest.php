@@ -83,7 +83,8 @@ class AdminUserServiceDeletionRetentionTest extends TestCase
             ->assertOk()
             ->assertJsonPath('code', 0);
 
-        $this->assertDatabaseMissing('services', [
+        // services 已启用软删除，记录保留但标记 deleted_at
+        $this->assertSoftDeleted('services', [
             'id' => (int) $service->id,
         ]);
 

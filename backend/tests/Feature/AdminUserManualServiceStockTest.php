@@ -4,12 +4,20 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Constants\FinanceLedgerEventType;
+use App\Constants\InvoiceStatus;
+use App\Constants\OrderStatus;
 use App\Constants\ServiceStatus;
+use App\Exceptions\BusinessException;
+use App\Models\AccountTransaction;
+use App\Models\Invoice;
+use App\Models\Order;
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\Supplier;
 use App\Models\User;
 use App\Services\Upstream\ProviderKey;
+use App\Services\User\AccountService;
 use App\Services\User\UserService;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -27,6 +35,7 @@ class AdminUserManualServiceStockTest extends TestCase
     {
         $suffix = bin2hex(random_bytes(4));
         [$user, $product] = $this->createUserAndProduct($suffix, 0);
+        app(AccountService::class)->setCashBalance($user, '20.00');
 
         $result = app(UserService::class)->createManualService($user, [
             'product_id' => (int) $product->id,
@@ -52,12 +61,31 @@ class AdminUserManualServiceStockTest extends TestCase
             'status' => ServiceStatus::ACTIVE,
         ]);
         $this->assertSame(0, (int) $product->refresh()->stock);
+        $service = Service::query()->findOrFail($serviceId);
+        $order = Order::query()->findOrFail((int) $service->order_id);
+        $invoice = Invoice::query()->findOrFail((int) $service->invoice_id);
+
+        $this->assertSame((int) $service->id, (int) $order->service_id);
+        $this->assertSame((int) $service->id, (int) $invoice->service_id);
+        $this->assertSame(OrderStatus::COMPLETED, (int) $order->status);
+        $this->assertSame(InvoiceStatus::PAID, (int) $invoice->status);
+        $this->assertSame('19.00', (string) $order->paid_amount);
+        $this->assertSame('19.00', (string) $invoice->paid_amount);
+        $this->assertSame('1.00', $user->refresh()->balance);
+        $this->assertDatabaseHas('account_transactions', [
+            'user_id' => (int) $user->id,
+            'event_type' => FinanceLedgerEventType::INVOICE_PAYMENT,
+            'change_amount' => '-19.00',
+            'balance_after' => '1.00',
+            'source_id' => (int) $invoice->id,
+        ]);
     }
 
     public function test_manual_admin_service_does_not_decrement_positive_stock(): void
     {
         $suffix = bin2hex(random_bytes(4));
         [$user, $product] = $this->createUserAndProduct($suffix, 3);
+        app(AccountService::class)->setCashBalance($user, '19.00');
 
         app(UserService::class)->createManualService($user, [
             'product_id' => (int) $product->id,
@@ -75,6 +103,113 @@ class AdminUserManualServiceStockTest extends TestCase
         ]);
 
         $this->assertSame(3, (int) $product->refresh()->stock);
+    }
+
+    public function test_manual_admin_service_rolls_back_when_user_balance_is_insufficient(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+        [$user, $product] = $this->createUserAndProduct($suffix, 3);
+        app(AccountService::class)->setCashBalance($user, '18.99');
+
+        try {
+            app(UserService::class)->createManualService($user, [
+                'product_id' => (int) $product->id,
+                'billing_cycle' => 'monthly',
+                'source_type' => 'manual',
+                'name' => 'Insufficient Balance Service '.$suffix,
+                'amount' => '19.00',
+                'status' => ServiceStatus::ACTIVE,
+                'auto_renew' => 1,
+            ]);
+            $this->fail('Expected insufficient balance exception was not thrown.');
+        } catch (BusinessException $exception) {
+            $this->assertSame('余额不足，无法创建实例', $exception->getMessage());
+        }
+
+        $this->assertSame(0, Service::query()->where('user_id', (int) $user->id)->count());
+        $this->assertSame(0, Order::query()->where('user_id', (int) $user->id)->count());
+        $this->assertSame(0, Invoice::query()->where('user_id', (int) $user->id)->count());
+        $this->assertSame(0, AccountTransaction::query()->where('user_id', (int) $user->id)->count());
+        $this->assertSame('18.99', $user->refresh()->balance);
+    }
+
+    public function test_manual_admin_service_can_skip_order_invoice_and_balance_deduction(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+        [$user, $product] = $this->createUserAndProduct($suffix, 3);
+        app(AccountService::class)->setCashBalance($user, '20.00');
+
+        $result = app(UserService::class)->createManualService($user, [
+            'product_id' => (int) $product->id,
+            'billing_cycle' => 'monthly',
+            'source_type' => 'manual',
+            'name' => 'Service Without Finance Documents '.$suffix,
+            'amount' => '19.00',
+            'status' => ServiceStatus::ACTIVE,
+            'auto_renew' => 1,
+            'create_order' => 0,
+            'create_invoice' => 0,
+            'deduct_balance' => 0,
+        ]);
+
+        $service = Service::query()->findOrFail((int) ($result['service_id'] ?? $result['id'] ?? 0));
+
+        $this->assertNull($service->order_id);
+        $this->assertNull($service->invoice_id);
+        $this->assertSame(0, Order::query()->where('user_id', (int) $user->id)->count());
+        $this->assertSame(0, Invoice::query()->where('user_id', (int) $user->id)->count());
+        $this->assertSame(0, AccountTransaction::query()->where('user_id', (int) $user->id)->count());
+        $this->assertSame('20.00', $user->refresh()->balance);
+    }
+
+    public function test_manual_admin_service_can_create_an_unpaid_invoice_without_an_order(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+        [$user, $product] = $this->createUserAndProduct($suffix, 3);
+        app(AccountService::class)->setCashBalance($user, '20.00');
+
+        $result = app(UserService::class)->createManualService($user, [
+            'product_id' => (int) $product->id,
+            'billing_cycle' => 'monthly',
+            'source_type' => 'manual',
+            'name' => 'Direct Invoice Service '.$suffix,
+            'amount' => '19.00',
+            'status' => ServiceStatus::ACTIVE,
+            'auto_renew' => 1,
+            'create_order' => 0,
+            'create_invoice' => 1,
+            'deduct_balance' => 0,
+        ]);
+
+        $service = Service::query()->findOrFail((int) ($result['service_id'] ?? $result['id'] ?? 0));
+        $invoice = Invoice::query()->findOrFail((int) $service->invoice_id);
+
+        $this->assertNull($service->order_id);
+        $this->assertNull($invoice->order_id);
+        $this->assertSame((int) $service->id, (int) $invoice->service_id);
+        $this->assertSame(InvoiceStatus::UNPAID, (int) $invoice->status);
+        $this->assertSame('0.00', (string) $invoice->paid_amount);
+        $this->assertSame('20.00', $user->refresh()->balance);
+    }
+
+    public function test_manual_admin_service_rejects_balance_deduction_without_an_invoice(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+        [$user, $product] = $this->createUserAndProduct($suffix, 3);
+
+        $this->expectException(BusinessException::class);
+        $this->expectExceptionMessage('从余额扣款需同时开启自动创建账单');
+
+        app(UserService::class)->createManualService($user, [
+            'product_id' => (int) $product->id,
+            'billing_cycle' => 'monthly',
+            'source_type' => 'manual',
+            'amount' => '19.00',
+            'status' => ServiceStatus::ACTIVE,
+            'auto_renew' => 1,
+            'create_invoice' => 0,
+            'deduct_balance' => 1,
+        ]);
     }
 
     public function test_upstream_admin_service_is_still_blocked_when_product_stock_is_zero(): void
@@ -138,6 +273,7 @@ class AdminUserManualServiceStockTest extends TestCase
             'provision_module' => ProviderKey::ZJMF_FINANCE_API,
         ]);
         $this->createProductUpstreamBinding($supplier, $product, 60001);
+        app(AccountService::class)->setCashBalance($user, '29.00');
 
         $result = app(UserService::class)->createManualService($user, [
             'product_id' => (int) $product->id,

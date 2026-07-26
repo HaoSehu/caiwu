@@ -170,13 +170,20 @@ class PluginSimulationTest extends TestCase
     public function test_demo_pay_verify_notify_passes_on_correct_sign(): void
     {
         $this->ensurePluginTables();
-        $this->activatePlugin('payment', 'demo_pay', ['merchant_id' => 'test_merchant', 'enabled' => true]);
+        $this->activatePlugin('payment', 'demo_pay', [
+            'merchant_id' => 'test_merchant',
+            'enabled' => true,
+            'secret_key' => 'demo-secret',
+        ]);
+
+        $payload = ['out_trade_no' => 'SIM-PAY-001', 'trade_status' => 'TRADE_SUCCESS'];
+        $payload['demo_sign'] = $this->signDemoPayload($payload, 'demo-secret');
 
         $result = app(PluginRuntimeRegistry::class)->execute(
             domain: 'payment',
             slugOrKey: 'demo_pay',
             action: 'payment.verify_notify',
-            payload: ['demo_sign' => 'ok', 'out_trade_no' => 'SIM-PAY-001', 'trade_status' => 'TRADE_SUCCESS'],
+            payload: $payload,
         );
 
         $this->assertTrue($result['success']);
@@ -186,13 +193,36 @@ class PluginSimulationTest extends TestCase
     public function test_demo_pay_verify_notify_rejects_bad_sign(): void
     {
         $this->ensurePluginTables();
-        $this->activatePlugin('payment', 'demo_pay', ['merchant_id' => 'test_merchant', 'enabled' => true]);
+        $this->activatePlugin('payment', 'demo_pay', [
+            'merchant_id' => 'test_merchant',
+            'enabled' => true,
+            'secret_key' => 'demo-secret',
+        ]);
 
         $result = app(PluginRuntimeRegistry::class)->execute(
             domain: 'payment',
             slugOrKey: 'demo_pay',
             action: 'payment.verify_notify',
             payload: ['demo_sign' => 'bad_sign', 'out_trade_no' => 'SIM-PAY-001'],
+        );
+
+        $this->assertTrue($result['success']);
+        $this->assertFalse($result['data']['verified'] ?? true);
+    }
+
+    public function test_demo_pay_verify_notify_rejects_when_secret_key_missing(): void
+    {
+        $this->ensurePluginTables();
+        $this->activatePlugin('payment', 'demo_pay', ['merchant_id' => 'test_merchant', 'enabled' => true]);
+
+        $payload = ['out_trade_no' => 'SIM-PAY-001', 'trade_status' => 'TRADE_SUCCESS'];
+        $payload['demo_sign'] = $this->signDemoPayload($payload, 'demo-secret');
+
+        $result = app(PluginRuntimeRegistry::class)->execute(
+            domain: 'payment',
+            slugOrKey: 'demo_pay',
+            action: 'payment.verify_notify',
+            payload: $payload,
         );
 
         $this->assertTrue($result['success']);
@@ -642,6 +672,20 @@ class PluginSimulationTest extends TestCase
     /**
      * @param  array<string, mixed>  $config
      */
+    /**
+     * 与 DemoPayService::signPayload 保持一致；插件类走 require_once 加载，测试不直接引用。
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    private function signDemoPayload(array $payload, string $secret): string
+    {
+        unset($payload['demo_sign']);
+        $payload = array_filter($payload, static fn (mixed $value): bool => is_scalar($value));
+        ksort($payload);
+
+        return hash_hmac('sha256', http_build_query($payload), $secret);
+    }
+
     private function activatePlugin(string $domain, string $slug, array $config): IntegrationPlugin
     {
         $scanner = app(PluginScanner::class);

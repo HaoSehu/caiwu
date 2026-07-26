@@ -447,6 +447,72 @@ class YiPayGatewayPluginTest extends TestCase
     }
 
     /**
+     * 回归：易支付回调不得确认属于其他网关的支付单，
+     * 否则任一验签较弱的网关都能替支付宝订单入账。
+     */
+    public function test_yipay_notify_rejects_payment_belonging_to_another_gateway(): void
+    {
+        $this->activateYiPayPlugin();
+
+        $suffix = bin2hex(random_bytes(4));
+        $user = User::query()->create([
+            'email' => 'yipay-cross-'.$suffix.'@example.com',
+            'password' => 'Temp@123456',
+            'phone' => '15'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
+            'status' => 1,
+            'nickname' => 'YiPay Cross',
+            'real_name' => '',
+            'id_card' => '',
+            'verification_status' => 0,
+            'verification_message' => '',
+            'verification_certify_id' => null,
+            'member_level_id' => null,
+            'total_sales_amount' => '0.00',
+            'referrer_user_id' => null,
+            'verified_at' => null,
+        ]);
+        $user->forceFill(['balance' => '0.00'])->save();
+
+        // 支付单属于支付宝，攻击者用易支付回调来确认它
+        $payment = Payment::query()->create([
+            'payment_no' => Payment::generatePaymentNo(),
+            'user_id' => (int) $user->id,
+            'invoice_id' => null,
+            'gateway' => PaymentGatewayCode::ALIPAY,
+            'amount' => '99.90',
+            'status' => PaymentStatus::PENDING,
+            'trace_id' => 'test-yipay-cross-gateway',
+        ]);
+
+        $payload = [
+            'pid' => 'merchant-10001',
+            'name' => 'Caiwu 跨网关测试',
+            'money' => '99.90',
+            'out_trade_no' => (string) $payment->payment_no,
+            'trade_no' => 'YIPAY'.now()->format('YmdHis').strtoupper($suffix),
+            'param' => '',
+            'trade_status' => 'TRADE_SUCCESS',
+            'type' => 'alipay',
+            'sign_type' => 'MD5',
+        ];
+        // 签名本身是合法的，唯一的问题就是支付单不属于易支付
+        $payload['sign'] = $this->sign($payload);
+
+        $this->get('/api/v2/client/payment/notify/yipay?'.http_build_query($payload))
+            ->assertOk()
+            ->assertSeeText('fail');
+
+        $payment->refresh();
+        $this->assertSame(PaymentStatus::PENDING, (int) $payment->status);
+        $this->assertNull($payment->invoice_id);
+        $this->assertSame('0.00', User::query()->findOrFail($user->id)->balance);
+        $this->assertSame(0, AccountTransaction::query()
+            ->where('user_id', (int) $user->id)
+            ->where('source_id', (int) $payment->id)
+            ->count());
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function config(): array

@@ -119,14 +119,16 @@ class UploadSecurityTest extends TestCase
 
         parse_str((string) parse_url((string) $image['url'], PHP_URL_QUERY), $query);
         $path = (string) ($query['path'] ?? '');
-        $absolutePath = public_path(str_replace('/', DIRECTORY_SEPARATOR, ltrim($path, '/')));
+        $absolutePath = storage_path('app/'.str_replace('/', DIRECTORY_SEPARATOR, ltrim($path, '/')));
         $this->uploadedFiles[] = $absolutePath;
 
         $this->assertSame('ticket.jpg', $image['name']);
         $this->assertSame('image/jpeg', $image['mime_type']);
-        $this->assertStringStartsWith('uploads/tickets/temp/', $path);
+        // 工单附件必须落在 storage/app/private 下，不能落到 Web 根，否则签名短链可被绕过
+        $this->assertStringStartsWith('private/tickets/temp/', $path);
         $this->assertStringEndsWith('.jpg', $path);
         $this->assertFileExists($absolutePath);
+        $this->assertFileDoesNotExist(public_path(str_replace('/', DIRECTORY_SEPARATOR, ltrim($path, '/'))));
     }
 
     public function test_secure_asset_signed_route_rejects_path_traversal(): void

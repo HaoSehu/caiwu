@@ -147,6 +147,9 @@ class V2AdminUserSubresourceApiTest extends TestCase
             'source_type' => 'manual',
             'status' => 1,
             'auto_renew' => 0,
+            'create_order' => 1,
+            'create_invoice' => 1,
+            'deduct_balance' => 1,
         ])
             ->assertOk()
             ->assertJsonPath('data.service.id', 321);

@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Exceptions\BusinessException;
+use App\Services\Integrations\Plugins\PluginConfigRepository;
+use App\Services\Integrations\Plugins\PluginFileLoader;
+use App\Services\Integrations\Plugins\PluginInstaller;
+use App\Services\Integrations\Plugins\PluginScanner;
 use Caiwu\Plugins\Certification\BaiduFace\Logic\BaiduFace;
 use Caiwu\Plugins\Certification\BaiduFace\Logic\BaiduFaceClient;
-use App\Services\Integrations\Plugins\PluginConfigRepository;
-use App\Services\Integrations\Plugins\PluginInstaller;
-use App\Services\Integrations\Plugins\PluginRuntimeRegistry;
-use App\Services\Integrations\Plugins\PluginScanner;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +24,15 @@ class BaiduFacePluginTest extends TestCase
     {
         parent::setUp();
         $this->cleanPluginTables();
+        // 插件类走 PluginFileLoader 的 require_once 加载，不在 PSR-4 autoload 内，
+        // 直接 new 之前必须先确保文件已载入。
+        $this->loadBaiduFacePlugin();
+    }
+
+    private function loadBaiduFacePlugin(): void
+    {
+        $manifest = app(PluginScanner::class)->requireManifest('verification', 'baidu_face');
+        app(PluginFileLoader::class)->ensureLoaded($manifest);
     }
 
     protected function tearDown(): void
@@ -37,7 +47,7 @@ class BaiduFacePluginTest extends TestCase
 
     public function test_execute_routes_initialize_action(): void
     {
-        $plugin = new BaiduFace();
+        $plugin = new BaiduFace;
 
         Http::fake([
             'aip.baidubce.com/oauth/2.0/token*' => Http::response([
@@ -70,7 +80,7 @@ class BaiduFacePluginTest extends TestCase
 
     public function test_execute_routes_scan_url_action(): void
     {
-        $plugin = new BaiduFace();
+        $plugin = new BaiduFace;
 
         $result = $plugin->execute([
             'action' => 'certification.scan_url',
@@ -86,7 +96,7 @@ class BaiduFacePluginTest extends TestCase
 
     public function test_execute_routes_fee_config_action(): void
     {
-        $plugin = new BaiduFace();
+        $plugin = new BaiduFace;
 
         $result = $plugin->execute([
             'action' => 'certification.fee_config',
@@ -106,7 +116,7 @@ class BaiduFacePluginTest extends TestCase
 
     public function test_execute_fee_config_defaults_when_no_config(): void
     {
-        $plugin = new BaiduFace();
+        $plugin = new BaiduFace;
 
         $result = $plugin->execute([
             'action' => 'certification.fee_config',
@@ -122,7 +132,7 @@ class BaiduFacePluginTest extends TestCase
 
     public function test_execute_returns_error_for_unknown_action(): void
     {
-        $plugin = new BaiduFace();
+        $plugin = new BaiduFace;
 
         $result = $plugin->execute([
             'action' => 'certification.unknown',
@@ -136,7 +146,7 @@ class BaiduFacePluginTest extends TestCase
 
     public function test_execute_handles_missing_action_key(): void
     {
-        $plugin = new BaiduFace();
+        $plugin = new BaiduFace;
 
         $result = $plugin->execute([
             'payload' => [],
@@ -153,7 +163,7 @@ class BaiduFacePluginTest extends TestCase
 
     public function test_verify_callback_accepts_non_empty_certify_id(): void
     {
-        $plugin = new BaiduFace();
+        $plugin = new BaiduFace;
 
         $result = $plugin->execute([
             'action' => 'certification.verify_callback',
@@ -168,7 +178,7 @@ class BaiduFacePluginTest extends TestCase
 
     public function test_verify_callback_accepts_token_fallback(): void
     {
-        $plugin = new BaiduFace();
+        $plugin = new BaiduFace;
 
         $result = $plugin->execute([
             'action' => 'certification.verify_callback',
@@ -182,7 +192,7 @@ class BaiduFacePluginTest extends TestCase
 
     public function test_verify_callback_rejects_empty_certify_id(): void
     {
-        $plugin = new BaiduFace();
+        $plugin = new BaiduFace;
 
         $result = $plugin->execute([
             'action' => 'certification.verify_callback',
@@ -198,7 +208,7 @@ class BaiduFacePluginTest extends TestCase
 
     public function test_verify_callback_rejects_empty_payload(): void
     {
-        $plugin = new BaiduFace();
+        $plugin = new BaiduFace;
 
         $result = $plugin->execute([
             'action' => 'certification.verify_callback',
@@ -266,7 +276,7 @@ class BaiduFacePluginTest extends TestCase
 
     public function test_initialize_throws_when_h5_plan_id_missing(): void
     {
-        $this->expectException(\App\Exceptions\BusinessException::class);
+        $this->expectException(BusinessException::class);
         $this->expectExceptionMessage('百度 H5 方案ID未配置');
 
         $client = new BaiduFaceClient([
@@ -924,7 +934,7 @@ class BaiduFacePluginTest extends TestCase
 
     public function test_access_token_throws_when_api_key_missing(): void
     {
-        $this->expectException(\App\Exceptions\BusinessException::class);
+        $this->expectException(BusinessException::class);
         $this->expectExceptionMessage('未配置');
 
         $client = new BaiduFaceClient(['api_key' => '', 'secret_key' => 'secret']);
@@ -933,7 +943,7 @@ class BaiduFacePluginTest extends TestCase
 
     public function test_access_token_throws_when_secret_key_missing(): void
     {
-        $this->expectException(\App\Exceptions\BusinessException::class);
+        $this->expectException(BusinessException::class);
         $this->expectExceptionMessage('未配置');
 
         $client = new BaiduFaceClient(['api_key' => 'key', 'secret_key' => '']);
@@ -942,7 +952,7 @@ class BaiduFacePluginTest extends TestCase
 
     public function test_access_token_throws_on_non_json_response(): void
     {
-        $this->expectException(\App\Exceptions\BusinessException::class);
+        $this->expectException(BusinessException::class);
         $this->expectExceptionMessage('返回异常');
 
         Http::fake([
@@ -955,7 +965,7 @@ class BaiduFacePluginTest extends TestCase
 
     public function test_access_token_throws_on_missing_token_in_response(): void
     {
-        $this->expectException(\App\Exceptions\BusinessException::class);
+        $this->expectException(BusinessException::class);
         $this->expectExceptionMessage('配置错误');
 
         Http::fake([
@@ -970,11 +980,72 @@ class BaiduFacePluginTest extends TestCase
     // Unit tests: isVerificationPassed
     // ============================================================
 
-    public function test_is_verification_passed_with_success_true(): void
+    public function test_is_verification_not_passed_without_conclusion_field(): void
     {
         $client = new BaiduFaceClient($this->defaultConfig());
 
-        $this->assertTrue($this->invokeClientMethod($client, 'isVerificationPassed', [['success' => true]]));
+        // 顶层 success 只代表接口调用成功，缺少 result 内的结论字段时不得判定为通过。
+        $this->assertFalse($this->invokeClientMethod($client, 'isVerificationPassed', [['success' => true]]));
+    }
+
+    public function test_is_verification_not_passed_when_result_status_failed(): void
+    {
+        $client = new BaiduFaceClient($this->defaultConfig());
+
+        $this->assertFalse($this->invokeClientMethod($client, 'isVerificationPassed', [[
+            'success' => true, 'result' => ['status' => 'failed'],
+        ]]));
+        $this->assertFalse($this->invokeClientMethod($client, 'isVerificationPassed', [[
+            'success' => true, 'result' => ['status' => 'rejected'],
+        ]]));
+    }
+
+    public function test_is_verification_passed_with_numeric_verify_status(): void
+    {
+        $client = new BaiduFaceClient($this->defaultConfig());
+
+        // verify_status 为数值语义：0 通过，非 0 不通过。
+        $this->assertTrue($this->invokeClientMethod($client, 'isVerificationPassed', [[
+            'success' => true, 'result' => ['verify_status' => 0],
+        ]]));
+        $this->assertFalse($this->invokeClientMethod($client, 'isVerificationPassed', [[
+            'success' => true, 'result' => ['verify_status' => 1],
+        ]]));
+    }
+
+    public function test_query_status_returns_pending_when_conclusion_missing(): void
+    {
+        Http::fake([
+            'aip.baidubce.com/oauth/2.0/token*' => Http::response([
+                'access_token' => 'token', 'expires_in' => 7200,
+            ], 200),
+            'aip.baidubce.com/rpc/2.0/brain/solution/faceprint/result/detail*' => Http::response([
+                'success' => true, 'log_id' => 123456,
+            ], 200),
+        ]);
+
+        $client = new BaiduFaceClient($this->defaultConfig());
+        $result = $client->queryStatus('VT-NO-CONCLUSION');
+
+        // 接口通了但没有结论字段：应为"处理中"，不能误判为通过或失败。
+        $this->assertSame(4, $result['status']);
+    }
+
+    public function test_query_status_does_not_pass_on_failed_result_status(): void
+    {
+        Http::fake([
+            'aip.baidubce.com/oauth/2.0/token*' => Http::response([
+                'access_token' => 'token', 'expires_in' => 7200,
+            ], 200),
+            'aip.baidubce.com/rpc/2.0/brain/solution/faceprint/result/detail*' => Http::response([
+                'success' => true, 'result' => ['status' => 'failed'],
+            ], 200),
+        ]);
+
+        $client = new BaiduFaceClient($this->defaultConfig());
+        $result = $client->queryStatus('VT-BIZ-FAIL');
+
+        $this->assertSame(2, $result['status']);
     }
 
     public function test_is_verification_passed_with_status_success(): void
@@ -1002,6 +1073,27 @@ class BaiduFacePluginTest extends TestCase
         $this->assertFalse($this->invokeClientMethod($client, 'isVerificationPassed', [[
             'success' => false, 'error_code' => 222351, 'error_msg' => '不匹配',
         ]]));
+    }
+
+    // ============================================================
+    // Manifest: 计费/SSL 配置项必须在 schema 中声明才能落库
+    // ============================================================
+
+    public function test_manifest_declares_billing_and_ssl_config_keys(): void
+    {
+        $manifest = app(PluginScanner::class)->requireManifest('verification', 'baidu_face');
+        $keys = array_map(
+            static fn (array $item): string => (string) ($item['key'] ?? ''),
+            $manifest->configSchema
+        );
+
+        // PluginConfigRepository 按 schema 遍历入库，未声明的键无法保存。
+        foreach (['charge_enabled', 'amount', 'free_times', 'ssl_verify', 'ca_bundle'] as $key) {
+            $this->assertContains($key, $keys, "配置项 [{$key}] 缺失将导致对应功能无法配置");
+        }
+
+        $this->assertContains('fee_config', $manifest->capabilities);
+        $this->assertContains('verify_callback', $manifest->capabilities);
     }
 
     // ============================================================
