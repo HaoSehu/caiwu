@@ -830,8 +830,10 @@ class TicketService
 
     public function uploadImage(int $actorId, string $actorType, UploadedFile $file): array
     {
-        $directoryPath = 'uploads/tickets/temp';
-        $directory = public_path($directoryPath);
+        // 落盘到 storage/app/private/tickets/，不在 Web 根下，只能通过 SecureAsset 签名短链读取。
+        // 历史文件仍在 public/uploads/tickets/ 下，读取端（normalizeAttachmentPath / SecureAsset）保留兼容。
+        $directoryPath = 'private/tickets/temp';
+        $directory = storage_path('app/'.str_replace('/', DIRECTORY_SEPARATOR, $directoryPath));
         File::ensureDirectoryExists($directory);
 
         $extension = UploadedImage::extension($file);

@@ -12,6 +12,7 @@ use App\Http\Resources\Admin\V2\CouponProductGroupResource;
 use App\Http\Resources\Admin\V2\CouponProductResource;
 use App\Services\ProductCatalog\CouponProductGroupQueryService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class CouponProductGroupController extends Controller
 {
@@ -59,16 +60,21 @@ class CouponProductGroupController extends Controller
         );
     }
 
-    public function batchProducts(): JsonResponse
+    public function batchProducts(Request $request): JsonResponse
     {
-        $groups = request()->input('groups', []);
+        $groups = $request->input('groups', []);
 
-        if (!is_array($groups) || empty($groups)) {
+        if (! is_array($groups) || empty($groups)) {
             return response()->json(['code' => 0, 'data' => []]);
         }
 
         $result = $this->queryService->batchProducts($groups);
+        $data = [];
 
-        return response()->json(['code' => 0, 'data' => $result]);
+        foreach ($result as $groupKey => $products) {
+            $data[$groupKey] = CouponProductResource::collection($products)->resolve($request);
+        }
+
+        return response()->json(['code' => 0, 'data' => $data]);
     }
 }

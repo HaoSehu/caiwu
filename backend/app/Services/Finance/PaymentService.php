@@ -1280,16 +1280,21 @@ class PaymentService
         $tradeStatus = $params['trade_status'] ?? '';
         $tradeNo = $params['trade_no'] ?? '';
 
-        $payment = Payment::where('payment_no', $paymentNo)->first();
+        // 支付单必须属于本次回调的网关，否则任一网关都能确认其他网关的订单
+        $payment = Payment::query()->whereGatewayKey($gateway)->where('payment_no', $paymentNo)->first();
         if (! $payment) {
-            Log::warning("[{$gatewayLabel}回调] 支付记录不存在", ['payment_no' => $paymentNo]);
+            Log::warning("[{$gatewayLabel}回调] 支付记录不存在或不属于该网关", [
+                'payment_no' => $paymentNo,
+                'gateway' => $gateway,
+            ]);
 
             return false;
         }
 
         // 商户号校验（支付宝: app_id, 微信: mch_id, 易支付: pid）
+        // 缺字段不得跳过：网关未配置商户号时各实现自身放行，配置了就必须匹配
         $merchantId = $params['app_id'] ?? $params['mch_id'] ?? $params['pid'] ?? '';
-        if ($merchantId !== '' && ! $resolvedGateway->matchesMerchantId($merchantId)) {
+        if (! $resolvedGateway->matchesMerchantId($merchantId)) {
             Log::warning("[{$gatewayLabel}回调] 商户号不匹配", [
                 'payment_no' => $paymentNo,
                 'merchant_id' => $merchantId,
@@ -1522,9 +1527,13 @@ class PaymentService
         $tradeStatus = $params['trade_status'] ?? '';
         $tradeNo = $params['trade_no'] ?? '';
 
-        $payment = Payment::where('payment_no', $paymentNo)->first();
+        // 支付单必须属于支付宝，否则其他网关的回调可确认支付宝订单
+        $payment = Payment::query()
+            ->whereGatewayKey(PaymentGatewayCode::ALIPAY)
+            ->where('payment_no', $paymentNo)
+            ->first();
         if (! $payment) {
-            Log::warning('[支付宝回调] 支付记录不存在', ['payment_no' => $paymentNo]);
+            Log::warning('[支付宝回调] 支付记录不存在或不属于支付宝', ['payment_no' => $paymentNo]);
 
             return false;
         }
@@ -2495,6 +2504,31 @@ class PaymentService
             }
 
             if ($invoiceType === 'upgrade') {
+                $upgradeKind = (string) data_get($invoice->config_pricing_snapshot ?? [], 'meta.kind', '');
+                if ($upgradeKind === 'host_upgrade') {
+                    $order = app(ServiceUpgradeService::class)
+                        ->ensureHostUpgradeOrderForInvoice($invoice);
+
+                    if (! $order instanceof Order) {
+                        Log::error('[支付后自动开通] 主机升降级账单缺少可恢复的履约订单', [
+                            'invoice_id' => (int) $invoice->id,
+                            'invoice_no' => (string) ($invoice->invoice_no ?? ''),
+                            'trace_id' => (string) ($invoice->trace_id ?? ''),
+                        ]);
+
+                        return false;
+                    }
+
+                    // 已付旧账单可能早于 Order 投影；补齐后交给同一订单队列，
+                    // 由成功路径清除 fulfillment_pending，避免在回调里同步调用上游。
+                    $this->paidOrderBusinessFlowDispatcher->dispatchPaidInvoice(
+                        $invoice->fresh(['order.product']) ?? $invoice,
+                        (string) ($invoice->trace_id ?? '')
+                    );
+
+                    return false;
+                }
+
                 app(ServiceTrafficPackageService::class)
                     ->processPaidTrafficPackageInvoice($invoice);
 
@@ -2665,8 +2699,12 @@ class PaymentService
                 $upgradeKind = (string) data_get($order->config_pricing_snapshot ?? [], 'meta.kind', '');
 
                 if ($upgradeKind === 'host_upgrade') {
-                    app(ServiceUpgradeService::class)
+                    $service = app(ServiceUpgradeService::class)
                         ->processPaidUpgradeOrder($order);
+
+                    if (! $service || (int) $order->getAttribute('status') !== OrderStatus::COMPLETED) {
+                        return false;
+                    }
                 } else {
                     app(ServiceTrafficPackageService::class)
                         ->processPaidTrafficPackageOrder($order);

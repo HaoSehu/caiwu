@@ -457,6 +457,10 @@ class ServiceTransformService
             return $directConnection;
         }
 
+        // 注意：$directConnection 的来源既可能是历史遗留的 provision_data 明文，也可能是
+        // service_connection_snapshots 归一化快照（secret_json 解密后的值）。快照是新的事实来源，
+        // 必须压过 legacy provision_data 里的 connection_secret 旧值，因此这里保持
+        // “direct 覆盖 decoded”。真正的明文风险改由写入端消除（见 cacheSubmittedPasswordForService）。
         return is_array($decoded) ? array_replace($decoded, $directConnection) : $directConnection;
     }
 
@@ -486,6 +490,11 @@ class ServiceTransformService
         $provisionData['connection_secret'] = $this->writeCachedConnection($connection);
         $provisionData['connection_cached_at'] = now()->format('Y-m-d H:i:s');
         $provisionData['last_password_reset_requested_at'] = now()->format('Y-m-d H:i:s');
+
+        // $provisionData 是 legacy provision_data 与快照投影（includeSecrets 已解密）的合并结果，
+        // 直接回写会把明文密码落进 services.provision_data JSON 列。密码只保留在 connection_secret
+        // （以及快照 secret_json）里，这里显式剔除明文，避免明文旁路加密字段。
+        unset($provisionData['password']);
 
         $service->forceFill(['provision_data' => $provisionData])->save();
         app(ServiceUpstreamBindingWriter::class)

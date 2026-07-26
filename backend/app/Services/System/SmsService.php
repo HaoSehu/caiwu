@@ -10,6 +10,7 @@ use App\Services\Sms\Contracts\SmsDriver;
 use App\Services\Sms\Data\SmsMessageRequest;
 use App\Services\Sms\Data\SmsSendRequest;
 use App\Services\Sms\SmsDriverManager;
+use App\Support\SensitiveDataSanitizer;
 use App\Support\SmsTemplateCatalog;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -273,11 +274,11 @@ class SmsService
 
             return ['id' => (int) $log->getKey()];
         } catch (\Throwable $exception) {
-            Log::warning('短信日志写入失败，已跳过日志写入继续发送', [
+            Log::warning('短信日志写入失败，已跳过日志写入继续发送', SensitiveDataSanitizer::sanitize([
                 'phone' => $phone,
                 'template_code' => $templateCode,
                 'message' => $exception->getMessage(),
-            ]);
+            ]));
         }
 
         return ['id' => null];
