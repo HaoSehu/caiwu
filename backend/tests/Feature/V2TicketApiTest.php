@@ -520,7 +520,9 @@ class V2TicketApiTest extends TestCase
      */
     private function ticketTempFiles(): array
     {
-        return collect(File::glob(public_path('uploads/tickets/temp/*')) ?: [])
+        // 新上传落在 storage/app/private/tickets/temp，历史文件仍可能在 public/uploads/tickets/temp
+        return collect(File::glob(storage_path('app/private/tickets/temp/*')) ?: [])
+            ->merge(File::glob(public_path('uploads/tickets/temp/*')) ?: [])
             ->map(fn (string $path): string => str_replace('\\', '/', $path))
             ->values()
             ->all();

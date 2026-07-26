@@ -189,6 +189,34 @@ class V2AdminCouponProductGroupTest extends TestCase
         $this->assertNoSensitiveKeys($productsResponse->json());
     }
 
+    public function test_batch_products_use_level_scoped_keys_and_the_product_resource(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+        $firstGroup = $this->createFirstGroup($suffix);
+        $secondGroup = $this->createSecondGroup($firstGroup, '批量二级分组 '.$suffix, 1);
+        $thirdGroup = $this->createThirdGroup($secondGroup, '批量三级分组 '.$suffix, 1);
+        $product = Product::query()->create($this->productPayload($secondGroup, $thirdGroup, '批量商品 '.$suffix, '66.00', 1));
+
+        Sanctum::actingAs($this->createAdmin([AdminPermissions::PRODUCT_LIST]));
+
+        $batchKey = '3:'.$thirdGroup->id;
+        $response = $this->postJson('/api/v2/admin/coupon-product-groups/batch-products', [
+            'groups' => [
+                ['id' => $thirdGroup->id, 'level' => 3],
+            ],
+        ])
+            ->assertOk()
+            ->assertJsonPath('code', 0)
+            ->assertJsonPath('data.'.$batchKey.'.0.id', $product->id)
+            ->assertJsonPath('data.'.$batchKey.'.0.product_id', $product->id)
+            ->assertJsonPath('data.'.$batchKey.'.0.label', '批量商品 '.$suffix)
+            ->assertJsonPath('data.'.$batchKey.'.0.primary_price.cycle', 'monthly')
+            ->assertJsonPath('data.'.$batchKey.'.0.primary_price.amount', '66.00');
+
+        $this->assertSame($this->productFieldWhitelist(), array_keys($response->json('data.'.$batchKey.'.0')));
+        $this->assertNoSensitiveKeys($response->json());
+    }
+
     private function createAdmin(array $permissions): AdminUser
     {
         $suffix = bin2hex(random_bytes(4));
