@@ -38,14 +38,15 @@
                   <t-input v-model="form.display_name" />
                 </t-form-item>
                 <t-form-item label="所属分类" name="selected_product_group_key">
-                  <t-select v-model="form.selected_product_group_key" filterable clearable>
-                    <t-option
-                      v-for="item in selectableGroups"
-                      :key="productGroupOptionKey(item)"
-                      :label="productGroupOptionLabel(item)"
-                      :value="productGroupOptionKey(item)"
-                    />
-                  </t-select>
+                  <t-cascader
+                    v-model="form.selected_product_group_key"
+                    :options="categoryTree"
+                    :keys="{ value: 'id', label: 'label', children: 'children' }"
+                    value-mode="onlyLeaf"
+                    filterable
+                    clearable
+                    placeholder="请选择所属分类"
+                  />
                 </t-form-item>
                 <t-form-item label="状态" name="status">
                   <t-switch v-model="form.status" :custom-value="[1, 0]" />
@@ -289,11 +290,8 @@ import { supplierApi } from '@/api/supplier';
 
 import {
   errorMessage,
-  findProductGroupByKey,
   flattenCategories,
   isSelectableProductGroup,
-  productGroupOptionKey,
-  productGroupOptionLabel,
   productGroupPayload,
   providerTypeFallbackLabels,
   toPlainRecord,
@@ -324,7 +322,7 @@ const submitting = ref(false);
 const form = reactive({
   display_name: '',
   product_spec_display: '',
-  selected_product_group_key: '' as string,
+  selected_product_group_key: null as string | number | null,
   monthly_price: 0,
   quarterly_price: 0,
   semiannually_price: 0,
@@ -342,6 +340,7 @@ const rules = {
 };
 
 // --- Categories ---
+const categoryTree = ref<ProductCategoryRecord[]>([]);
 const categoryOptions = ref<ProductCategoryRecord[]>([]);
 const selectableGroups = computed(() => categoryOptions.value.filter((item) => isSelectableProductGroup(item)));
 
@@ -442,7 +441,9 @@ onMounted(async () => {
 async function loadCategories() {
   try {
     const response = await productApi.categories();
-    categoryOptions.value = flattenCategories(response.tree || response.list || [], 0, null, '');
+    const tree = response.tree || response.list || [];
+    categoryTree.value = tree;
+    categoryOptions.value = flattenCategories(tree, 0, null, '');
   } catch {
     // ignore
   }
@@ -467,7 +468,10 @@ async function loadProductDetail() {
     Object.assign(form, {
       display_name: resolveDisplayName(detail),
       product_spec_display: detail.product_spec_display || detail.cpu_memory_display || '',
-      selected_product_group_key: productGroupOptionKey(detail as unknown as ProductCategoryRecord),
+      selected_product_group_key: (detail.effective_product_group_id ||
+        detail.third_product_group_id ||
+        detail.second_product_group_id ||
+        null) as string | number | null,
       monthly_price: pricingValue(detail, 'monthly', detail.monthly_price),
       quarterly_price: pricingValue(detail, 'quarterly'),
       semiannually_price: pricingValue(detail, 'semiannually'),
@@ -475,7 +479,7 @@ async function loadProductDetail() {
       auto_setup: Number(detail.auto_setup ?? 1),
       status: Number(detail.status ?? 1),
       supplier_id: upstreamBinding.supplier_id || '',
-      upstream_product_id: upstreamBinding.upstream_product_id || '',
+      upstream_product_id: Number(upstreamBinding.upstream_product_id) || upstreamBinding.upstream_product_id || '',
       config_options: normalizeConfigOptions(detail.config_options),
     });
     if (form.supplier_id) {
@@ -520,6 +524,20 @@ async function loadSupplierProducts(supplierId: string | number, notify = false)
   try {
     const response = await supplierApi.products(supplierId, { silent: true });
     supplierProductOptions.value = buildSupplierBatchProducts(response);
+    // 如果已绑定的上游商品不在同步列表中，补一个占位条目确保 cascader 能展示
+    if (form.upstream_product_id) {
+      const hasCurrent = supplierProductOptions.value.some(
+        (item) => String(item.id) === String(form.upstream_product_id),
+      );
+      if (!hasCurrent) {
+        supplierProductOptions.value.unshift({
+          id: Number(form.upstream_product_id),
+          name: `已绑定商品 #${form.upstream_product_id}`,
+          type_label: '当前绑定',
+          remote_group_name: '',
+        });
+      }
+    }
   } catch (error) {
     if (notify) MessagePlugin.error(errorMessage(error, '同步上游商品失败'));
   } finally {
@@ -828,7 +846,7 @@ async function submit() {
   }
   submitting.value = true;
   try {
-    const group = findProductGroupByKey(categoryOptions.value, form.selected_product_group_key);
+    const group = findProductGroupByCascaderValue(categoryOptions.value, form.selected_product_group_key);
     const payload = {
       custom_display_name: resolveCustomDisplayNamePayload(),
       ...productGroupPayload(group),
@@ -863,10 +881,10 @@ async function submit() {
 
 function resolveDisplayName(source?: Record<string, unknown> | null) {
   return String(
-    source?.custom_display_name ||
+    source?.product_display_name ||
+      source?.custom_display_name ||
       source?.product_spec_display ||
       source?.cpu_memory_display ||
-      source?.product_display_name ||
       source?.display_name ||
       source?.name ||
       '',
@@ -878,6 +896,21 @@ function resolveCustomDisplayNamePayload() {
   if (!value) return null;
   const defaultDisplayName = String(form.product_spec_display || '').trim();
   return defaultDisplayName && value === defaultDisplayName ? null : value;
+}
+
+function findProductGroupByCascaderValue(
+  options: ProductCategoryRecord[],
+  value: string | number | null,
+): ProductCategoryRecord | null {
+  if (value === null || value === '' || value === undefined) return null;
+  const numValue = Number(value);
+  if (!Number.isFinite(numValue) || numValue <= 0) return null;
+  return (
+    options.find((item) => {
+      const effectiveId = Number(item.effective_product_group_id || item.id || 0);
+      return effectiveId === numValue;
+    }) || null
+  );
 }
 
 function goBack() {

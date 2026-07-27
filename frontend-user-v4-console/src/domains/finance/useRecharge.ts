@@ -1,4 +1,4 @@
-import { MessagePlugin } from 'tdesign-vue-next';
+import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 import { computed, onBeforeUnmount, reactive, ref, shallowRef, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
@@ -174,6 +174,11 @@ export function useRecharge() {
     paymentPayload.value = null;
   }
 
+  function notifyScreenReader(message: string) {
+    const region = document.getElementById('aria-live-region');
+    if (region) region.textContent = message;
+  }
+
   async function createRechargeOrder(overrideAmount?: number) {
     const targetAmount = normalizeRechargeAmount(overrideAmount ?? amount.value);
     const gateway = selectedPaymentGateway.value;
@@ -233,8 +238,10 @@ export function useRecharge() {
         rechargeSummary.cashBalance = formatMoney(
           payload.cash_balance ?? userStore.info?.cash_balance ?? rechargeSummary.cashBalance,
         );
+        notifyScreenReader('支付已成功，充值金额已到账');
         MessagePlugin.success('充值成功，余额已刷新');
       } else if (!options.silentPending) {
+        notifyScreenReader('支付仍在处理中，请稍候');
         MessagePlugin.info(payload.message || '当前仍未支付成功');
       }
     } catch (error: unknown) {

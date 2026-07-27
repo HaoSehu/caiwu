@@ -237,9 +237,15 @@ const logColumns: PrimaryTableCol[] = [
   align-items: center;
 }
 
-@media (max-width: 72rem) {
+@media (max-width: 80rem) {
   .referral-stats {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 48rem) {
+  .referral-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

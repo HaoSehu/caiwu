@@ -81,8 +81,7 @@
           >
             <template #prefix-icon><lock-on-icon /></template>
             <template #suffix-icon>
-              <browse-icon v-if="showPassword" class="client-auth-password-icon" @click="showPassword = false" />
-              <browse-off-icon v-else class="client-auth-password-icon" @click="showPassword = true" />
+              <password-toggle v-model="showPassword" />
             </template>
           </t-input>
         </div>
@@ -103,12 +102,7 @@
           >
             <template #prefix-icon><lock-on-icon /></template>
             <template #suffix-icon>
-              <browse-icon
-                v-if="showConfirmPassword"
-                class="client-auth-password-icon"
-                @click="showConfirmPassword = false"
-              />
-              <browse-off-icon v-else class="client-auth-password-icon" @click="showConfirmPassword = true" />
+              <password-toggle v-model="showConfirmPassword" />
             </template>
           </t-input>
         </div>
@@ -121,7 +115,8 @@
   </auth-shell>
 </template>
 <script setup lang="ts">
-import { BrowseIcon, BrowseOffIcon, LockOnIcon } from 'tdesign-icons-vue-next';
+import { LockOnIcon } from 'tdesign-icons-vue-next';
+import PasswordToggle from '@/components/auth/PasswordToggle.vue';
 import type { FormInstanceFunctions, FormRule, FormValidateMessage, SubmitContext } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onBeforeUnmount, reactive, ref } from 'vue';

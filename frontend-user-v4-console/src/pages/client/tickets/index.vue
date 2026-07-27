@@ -27,9 +27,9 @@
         <div class="ticket-table-shell">
           <t-table row-key="id" :data="list" :columns="columns" :pagination="null" hover>
             <template #subject="{ row }">
-              <button type="button" class="ticket-link" @click="openDetail(row)">
+              <router-link class="ticket-link" :to="`/client/tickets/${row.id}`">
                 #{{ row.id }} {{ row.subject || '--' }}
-              </button>
+              </router-link>
             </template>
             <template #status="{ row }">
               <t-tag :theme="resolveTicketTagTheme(row.status)" variant="light">

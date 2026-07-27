@@ -175,6 +175,7 @@
                   :key="paymentOptionKey(method)"
                   :theme="selectedGateway === paymentOptionKey(method) ? 'primary' : 'default'"
                   :variant="selectedGateway === paymentOptionKey(method) ? 'base' : 'outline'"
+                  :aria-pressed="selectedGateway === paymentOptionKey(method)"
                   class="pay-method"
                   :loading="submitting && selectedGateway === paymentOptionKey(method)"
                   :disabled="submitting || paymentGatewaysLoading"
@@ -250,16 +251,16 @@ import {
   LogoWechatpayFilledIcon,
 } from 'tdesign-icons-vue-next';
 import { computed, defineAsyncComponent, onMounted, ref } from 'vue';
+import { DialogPlugin } from 'tdesign-vue-next';
 
 import { formatMoney, RECHARGE_PRESET_AMOUNTS, useRecharge } from '@/domains/finance/useRecharge';
 import type { RechargeGatewayOption } from '@/types/client';
 
 const QrcodeVue = defineAsyncComponent(() => import('qrcode.vue'));
 
-const isMobileScreen = computed(() => {
-  if (typeof window === 'undefined') return false;
-  return window.matchMedia('(max-width: 48rem)').matches;
-});
+import { useMediaQuery } from '@/composables/useMediaQuery';
+
+const isMobileScreen = useMediaQuery('(max-width: 48rem)');
 const mobileCustomMode = ref(false);
 const mobileAgreementChecked = ref(true);
 
@@ -334,6 +335,18 @@ function paymentMethodIcon(method: RechargeGatewayOption) {
 
 async function handleGatewayCreate(method: RechargeGatewayOption) {
   selectPaymentGateway(paymentOptionKey(method));
+  const confirmed = await new Promise<boolean>((resolve) => {
+    const dialog = DialogPlugin.confirm({
+      header: '确认充值',
+      body: `确认通过 ${method.name || method.label || '支付'} 充值 ¥${amountText.value}？`,
+      confirmBtn: '确认支付',
+      cancelBtn: '再想想',
+      onConfirm: () => { dialog.destroy(); resolve(true); },
+      onCancel: () => { dialog.destroy(); resolve(false); },
+      onClose: () => { dialog.destroy(); resolve(false); },
+    });
+  });
+  if (!confirmed) return;
   await handleCreateOrder(false);
 }
 

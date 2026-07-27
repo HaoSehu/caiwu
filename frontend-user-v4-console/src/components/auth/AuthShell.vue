@@ -441,7 +441,7 @@ onMounted(() => {
   width: 2.5rem;
   height: 2.5rem;
   border-radius: 0.75rem;
-  background: #165dff;
+  background: var(--td-brand-color);
   box-shadow: 0 0.875rem 1.75rem rgba(22, 93, 255, 0.2);
   color: #ffffff;
   font-size: 1rem;

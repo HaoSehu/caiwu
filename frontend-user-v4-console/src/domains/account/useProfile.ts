@@ -1,5 +1,5 @@
 import { MessagePlugin } from 'tdesign-vue-next';
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { clientAuthApi } from '@/api/auth';
@@ -439,6 +439,12 @@ export function useProfile() {
 
   onMounted(() => {
     void Promise.all([loadProfile(), loadNotificationPreferences()]);
+  });
+
+  onBeforeUnmount(() => {
+    clearPhoneTimer();
+    clearEmailTimer();
+    clearResetTimer();
   });
 
   return {
