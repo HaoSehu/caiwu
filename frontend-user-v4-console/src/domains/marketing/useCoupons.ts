@@ -1,5 +1,5 @@
 import { MessagePlugin } from 'tdesign-vue-next';
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 
 import clientApi from '@/api/client';
 import type { ApiEnvelope, CouponRecord, PagedList } from '@/types/client';
@@ -173,10 +173,6 @@ export function useCoupons() {
 
   onMounted(() => {
     void loadList('owned');
-  });
-
-  watch(activeTab, (tab) => {
-    void switchTab(tab);
   });
 
   return {

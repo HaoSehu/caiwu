@@ -269,9 +269,25 @@
   color: currentColor;
 }
 
-#app *,
-#app *::before,
-#app *::after {
+#app .t-card,
+#app .t-card__body,
+#app .t-card__header,
+#app .t-table,
+#app .t-table td,
+#app .t-table th,
+#app .t-layout,
+#app .t-layout__sider,
+#app .t-layout__content,
+#app .t-layout__header,
+#app .t-layout__footer,
+#app .t-menu,
+#app .t-menu__item,
+#app .t-tabs__nav-item,
+#app .t-input,
+#app .t-select,
+#app .t-textarea,
+#app [class*='-container'],
+#app [class*='-wrapper'] {
   border-radius: 0 !important;
 }
 

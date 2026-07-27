@@ -12,8 +12,9 @@
     <t-form ref="formRef" class="client-auth-form" :data="form" :rules="rules" label-width="0" @submit="handleSubmit">
       <t-form-item name="account">
         <div class="client-auth-field">
-          <label class="client-auth-label is-required">手机号 / 邮箱</label>
+          <label class="client-auth-label is-required" for="forgot-account">手机号 / 邮箱</label>
           <t-input
+            id="forgot-account"
             v-model="form.account"
             size="large"
             clearable
@@ -25,9 +26,9 @@
 
       <t-form-item name="code">
         <div class="client-auth-field">
-          <label class="client-auth-label is-required">验证码</label>
+          <label class="client-auth-label is-required" for="forgot-code">验证码</label>
           <div class="client-auth-code-row">
-            <t-input v-model="form.code" size="large" maxlength="6" placeholder="请输入验证码" />
+            <t-input id="forgot-code" v-model="form.code" size="large" maxlength="6" placeholder="请输入验证码" />
             <t-button
               variant="outline"
               :disabled="countdown > 0"
@@ -42,8 +43,9 @@
 
       <t-form-item name="password">
         <div class="client-auth-field">
-          <label class="client-auth-label is-required">新密码</label>
+          <label class="client-auth-label is-required" for="forgot-password">新密码</label>
           <t-input
+            id="forgot-password"
             v-model="form.password"
             size="large"
             :type="showPassword ? 'text' : 'password'"
@@ -53,8 +55,7 @@
           >
             <template #prefix-icon><lock-on-icon /></template>
             <template #suffix-icon>
-              <browse-icon v-if="showPassword" class="client-auth-password-icon" @click="showPassword = false" />
-              <browse-off-icon v-else class="client-auth-password-icon" @click="showPassword = true" />
+              <password-toggle v-model="showPassword" />
             </template>
           </t-input>
         </div>
@@ -62,8 +63,9 @@
 
       <t-form-item name="password_confirmation">
         <div class="client-auth-field">
-          <label class="client-auth-label is-required">确认新密码</label>
+          <label class="client-auth-label is-required" for="forgot-password-confirm">确认新密码</label>
           <t-input
+            id="forgot-password-confirm"
             v-model="form.password_confirmation"
             size="large"
             :type="showConfirmPassword ? 'text' : 'password'"
@@ -74,12 +76,7 @@
           >
             <template #prefix-icon><lock-on-icon /></template>
             <template #suffix-icon>
-              <browse-icon
-                v-if="showConfirmPassword"
-                class="client-auth-password-icon"
-                @click="showConfirmPassword = false"
-              />
-              <browse-off-icon v-else class="client-auth-password-icon" @click="showConfirmPassword = true" />
+              <password-toggle v-model="showConfirmPassword" />
             </template>
           </t-input>
         </div>
@@ -92,7 +89,8 @@
   </auth-shell>
 </template>
 <script setup lang="ts">
-import { BrowseIcon, BrowseOffIcon, LockOnIcon } from 'tdesign-icons-vue-next';
+import { LockOnIcon } from 'tdesign-icons-vue-next';
+import PasswordToggle from '@/components/auth/PasswordToggle.vue';
 import type { FormInstanceFunctions, FormRule, FormValidateMessage, SubmitContext } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onBeforeUnmount, reactive, ref } from 'vue';

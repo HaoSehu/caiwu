@@ -54,8 +54,7 @@
           >
             <template #prefix-icon><lock-on-icon /></template>
             <template #suffix-icon>
-              <browse-icon v-if="showPassword" @click="showPassword = false" />
-              <browse-off-icon v-else @click="showPassword = true" />
+              <password-toggle v-model="showPassword" />
             </template>
           </t-input>
         </div>
@@ -132,7 +131,8 @@
   </auth-shell>
 </template>
 <script setup lang="ts">
-import { BrowseIcon, BrowseOffIcon, LockOnIcon, UserIcon } from 'tdesign-icons-vue-next';
+import { LockOnIcon, UserIcon } from 'tdesign-icons-vue-next';
+import PasswordToggle from '@/components/auth/PasswordToggle.vue';
 import type { FormInstanceFunctions, FormRule, FormValidateMessage, SubmitContext } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';

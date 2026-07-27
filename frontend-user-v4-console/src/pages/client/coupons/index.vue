@@ -21,12 +21,10 @@
       </div>
     </t-card>
 
-    <div class="coupon-tabs" role="tablist" aria-label="优惠券分类">
-      <t-button :theme="activeTab === 'owned' ? 'primary' : 'default'" @click="switchTab('owned')"
-        >我拥有的优惠券</t-button
-      >
-      <t-button :theme="activeTab === 'plaza' ? 'primary' : 'default'" @click="switchTab('plaza')">优惠券广场</t-button>
-    </div>
+    <t-tabs v-model="activeTab" class="coupon-tabs" @change="switchTab">
+      <t-tab-panel value="owned" label="我拥有的优惠券" />
+      <t-tab-panel value="plaza" label="优惠券广场" />
+    </t-tabs>
 
     <template v-if="activeTab === 'owned'">
       <div class="coupon-list-shell">
