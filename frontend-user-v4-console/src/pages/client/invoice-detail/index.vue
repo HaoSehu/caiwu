@@ -421,7 +421,7 @@ function isRenewInvoice(row: InvoiceRecord | null | undefined) {
 }
 
 function productPath(row: InvoiceRecord | null | undefined) {
-  return row?.combined_display_name || row?.product_display_name || row?.product_spec_display || '--';
+  return row?.product_full_path || row?.combined_display_name || row?.product_display_name || row?.product_spec_display || '--';
 }
 
 function orderBillingCycle(row: InvoiceRecord | null | undefined) {

@@ -55,6 +55,16 @@
 
       <t-card class="referral-card" :bordered="false">
         <t-tabs v-model="activeTab">
+          <t-tab-panel value="direct" label="被邀请人列表">
+            <t-table row-key="id" :data="directReferrals" :columns="directColumns" :pagination="null">
+              <template #user="{ row }">{{
+                row.display_name || row.nickname || row.email || '--'
+              }}</template>
+              <template #referred_at="{ row }">{{ row.referred_at || row.created_at || '--' }}</template>
+              <template #consumption="{ row }">¥{{ money(row.customer_consumption) }}</template>
+              <template #earnings="{ row }">¥{{ money(row.my_earnings) }}</template>
+            </t-table>
+          </t-tab-panel>
           <t-tab-panel value="rewards" label="奖励明细">
             <t-table row-key="id" :data="rewards" :columns="rewardColumns" :pagination="null">
               <template #user="{ row }">{{
@@ -63,7 +73,9 @@
               <template #product="{ row }">{{
                 row.invoice?.product_display_name || row.product?.display_name || row.product?.name || '--'
               }}</template>
-              <template #amount="{ row }">¥{{ money(row.reward_amount) }}</template>
+              <template #order_type="{ row }">{{ row.order_type || '--' }}</template>
+              <template #order_amount="{ row }">¥{{ money(row.order_amount) }}</template>
+              <template #amount="{ row }">¥{{ money(row.reward_amount) }}({{ Number(row.reward_rate || 0) }}%)</template>
               <template #status="{ row }">
                 <t-tag :theme="rewardStatus(row.status).theme" variant="light">{{
                   rewardStatus(row.status).label
@@ -123,6 +135,7 @@ const {
   rewards,
   accountLogs,
   withdrawals,
+  directReferrals,
   alipayAccount,
   withdrawForm,
   bindForm,
@@ -146,8 +159,17 @@ const rewardColumns: PrimaryTableCol[] = [
   { colKey: 'rewarded_at', title: '时间', minWidth: '12rem' },
   { colKey: 'user', title: '来源用户', minWidth: '10rem' },
   { colKey: 'product', title: '产品', minWidth: '14rem' },
+  { colKey: 'order_type', title: '消费类型', width: '8rem' },
+  { colKey: 'order_amount', title: '消费金额', width: '8rem' },
   { colKey: 'amount', title: '奖励金额', width: '8rem' },
   { colKey: 'status', title: '状态', width: '8rem' },
+];
+const directColumns: PrimaryTableCol[] = [
+  { colKey: 'user', title: '用户', minWidth: '10rem' },
+  { colKey: 'email', title: '邮箱', minWidth: '14rem' },
+  { colKey: 'referred_at', title: '被邀请时间', minWidth: '12rem' },
+  { colKey: 'consumption', title: '客户消费', width: '8rem' },
+  { colKey: 'earnings', title: '我的收益', width: '8rem' },
 ];
 const withdrawColumns: PrimaryTableCol[] = [
   { colKey: 'created_at', title: '时间', minWidth: '12rem' },

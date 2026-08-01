@@ -2720,9 +2720,7 @@ class PaymentService
             }
 
             if ((int) $order->status !== OrderStatus::COMPLETED) {
-                $provisionData = is_array($service->provision_data ?? null) ? $service->provision_data : [];
-
-                return empty($provisionData['provision_error']);
+                return false;
             }
 
             $this->notifyOrderPaid($invoice, 'new');

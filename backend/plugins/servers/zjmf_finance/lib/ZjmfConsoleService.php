@@ -20,6 +20,14 @@ final class ZjmfConsoleService
         return $this->transport->getHostDetail($supplier, $hostId, $this->resolveJwt($supplier, $jwt));
     }
 
+    /**
+     * @return array{response: array, headers: array<int, string>, http_code: int, content_type: string}
+     */
+    public function getHostDetailWithMeta(Supplier $supplier, int $hostId, ?string $jwt = null): array
+    {
+        return $this->transport->getHostDetailWithMeta($supplier, $hostId, $this->resolveJwt($supplier, $jwt));
+    }
+
     public function getVncUrl(Supplier $supplier, int $hostId, ?string $jwt = null): array
     {
         return $this->postDefaultModuleAction($supplier, $hostId, 'vnc', [], $jwt);

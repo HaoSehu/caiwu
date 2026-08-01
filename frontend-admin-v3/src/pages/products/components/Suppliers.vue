@@ -819,10 +819,8 @@ function resetSupplierBatchState() {
 
 async function loadSupplierBatchCategories() {
   const response = await productApi.categories();
-  supplierBatchCategoryTree.value = response.tree || response.list || [];
-  supplierBatchCategories.value = flattenCategories(response.tree || response.list || []).filter((item) =>
-    isSelectableProductGroup(item),
-  );
+  supplierBatchCategoryTree.value = response.tree;
+  supplierBatchCategories.value = flattenCategories(response.tree).filter((item) => isSelectableProductGroup(item));
   syncSupplierBatchLocalExpandedKeys();
 }
 

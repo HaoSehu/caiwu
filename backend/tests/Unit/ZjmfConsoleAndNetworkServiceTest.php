@@ -358,6 +358,14 @@ class ZjmfConsoleAndNetworkServiceTest extends TestCase
         $service->submitCustomModuleAction($this->makeSupplier(), '/provision/custom/security', [], 'jwt-token');
     }
 
+    public function test_security_service_rejects_cross_origin_custom_module_endpoint(): void
+    {
+        $service = new ZjmfSecurityService($this->makeTransport(Mockery::mock(HostingPanelApiTransport::class)));
+
+        $this->expectException(BusinessException::class);
+        $service->submitCustomModuleAction($this->makeSupplier(), 'https://unexpected.example/provision/custom/123', [], 'jwt-token');
+    }
+
     public function test_console_service_fetches_custom_module_page_from_same_system_entry(): void
     {
         $supplier = $this->makeSupplier();
@@ -401,10 +409,15 @@ class ZjmfConsoleAndNetworkServiceTest extends TestCase
             ->with($supplier, 'POST', '/v1/invoices/456/fund', [], 'jwt-token', ['Authorization: Bearer jwt-token'], [])
             ->andReturn(['status' => 1001, 'data' => []]);
         $hostingTransport
-            ->shouldReceive('request')
+            ->shouldReceive('requestWithMeta')
             ->once()
             ->with($supplier, 'GET', '/host/header', [], 'jwt-token', ['Authorization: Bearer jwt-token'], ['host_id' => 123, 'source' => 'API'])
-            ->andReturn(['status' => 200, 'data' => ['host_data' => ['bwlimit' => 2048]]]);
+            ->andReturn([
+                'response' => ['status' => 200, 'data' => ['host_data' => ['bwlimit' => 2048]]],
+                'headers' => [],
+                'http_code' => 200,
+                'content_type' => 'application/json',
+            ]);
 
         $transport = $this->makeTransport($hostingTransport);
         $consoleService = new ZjmfConsoleService($transport);
@@ -449,10 +462,15 @@ class ZjmfConsoleAndNetworkServiceTest extends TestCase
             ->with($supplier, 'POST', '/v1/invoices/990/fund', [], 'jwt-token', ['Authorization: Bearer jwt-token'], [])
             ->andReturn(['status' => 1001, 'data' => []]);
         $hostingTransport
-            ->shouldReceive('request')
+            ->shouldReceive('requestWithMeta')
             ->once()
             ->with($supplier, 'GET', '/host/header', [], 'jwt-token', ['Authorization: Bearer jwt-token'], ['host_id' => 77, 'source' => 'API'])
-            ->andReturn(['status' => 200, 'data' => ['host_data' => ['productid' => 88]]]);
+            ->andReturn([
+                'response' => ['status' => 200, 'data' => ['host_data' => ['productid' => 88]]],
+                'headers' => [],
+                'http_code' => 200,
+                'content_type' => 'application/json',
+            ]);
 
         $transport = $this->makeTransport($hostingTransport);
         $consoleService = new ZjmfConsoleService($transport);
@@ -486,6 +504,45 @@ class ZjmfConsoleAndNetworkServiceTest extends TestCase
         $hostingTransport
             ->shouldNotReceive('request')
             ->with($supplier, 'GET', '/host/header', Mockery::any(), Mockery::any(), Mockery::any(), Mockery::any());
+
+        $networkService = new ZjmfNetworkService(
+            $this->makeTransport($hostingTransport),
+            new ZjmfConsoleService($this->makeTransport($hostingTransport))
+        );
+
+        $this->expectException(BusinessException::class);
+        $networkService->purchaseHostUpgrade($supplier, 77, 88, 'monthly', '', 'jwt-token');
+    }
+
+    public function test_network_service_does_not_confirm_host_upgrade_when_host_detail_http_fails(): void
+    {
+        $supplier = $this->makeSupplier();
+        $hostingTransport = Mockery::mock(HostingPanelApiTransport::class);
+        $hostingTransport
+            ->shouldReceive('request')
+            ->once()
+            ->with($supplier, 'POST', '/v1/hosts/77/actions/upgrade', ['product_id' => 88, 'billingcycle' => 'monthly'], 'jwt-token', ['Authorization: Bearer jwt-token'], [])
+            ->andReturn(['status' => 200, 'data' => []]);
+        $hostingTransport
+            ->shouldReceive('request')
+            ->once()
+            ->with($supplier, 'POST', '/v1/hosts/77/actions/upgrade/checkout', [], 'jwt-token', ['Authorization: Bearer jwt-token'], [])
+            ->andReturn(['status' => 200, 'data' => ['invoiceid' => 990]]);
+        $hostingTransport
+            ->shouldReceive('request')
+            ->once()
+            ->with($supplier, 'POST', '/v1/invoices/990/fund', [], 'jwt-token', ['Authorization: Bearer jwt-token'], [])
+            ->andReturn(['status' => 1001, 'data' => []]);
+        $hostingTransport
+            ->shouldReceive('requestWithMeta')
+            ->once()
+            ->with($supplier, 'GET', '/host/header', [], 'jwt-token', ['Authorization: Bearer jwt-token'], ['host_id' => 77, 'source' => 'API'])
+            ->andReturn([
+                'response' => ['data' => []],
+                'headers' => [],
+                'http_code' => 502,
+                'content_type' => 'application/json',
+            ]);
 
         $networkService = new ZjmfNetworkService(
             $this->makeTransport($hostingTransport),

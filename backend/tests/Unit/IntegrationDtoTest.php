@@ -28,7 +28,7 @@ class IntegrationDtoTest extends TestCase
 
     public function test_sms_result_keeps_legacy_array_shape_without_raw_payload(): void
     {
-        $result = new SmsSendResult('success', 'REQ123', 'TPL001', ['code' => '123456'], ['raw' => 'hidden']);
+        $result = new SmsSendResult('success', 'REQ123', null, 'TPL001', ['code' => '123456'], ['raw' => 'hidden']);
 
         $this->assertSame([
             'status' => 'success',

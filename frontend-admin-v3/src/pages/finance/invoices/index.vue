@@ -382,7 +382,8 @@ function invoiceMobileRows(row: InvoiceRecord) {
 
 function invoiceTitle(row: InvoiceRecord) {
   return fieldValue(
-    row.combined_display_name ||
+    row.product_full_path ||
+      row.combined_display_name ||
       row.product_display_name ||
       row.product_spec_display ||
       row.type_label ||

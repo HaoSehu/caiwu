@@ -140,6 +140,7 @@ class ProvisionService
                 $invoice->amount
             ),
             'status' => ServiceStatus::PENDING,
+            'auto_renew' => 0,
             'provision_data' => [
                 'created_from_invoice' => $invoice->invoice_no,
             ],
@@ -364,6 +365,7 @@ class ProvisionService
                 $order->amount
             ),
             'status' => ServiceStatus::PENDING,
+            'auto_renew' => 0,
             'provision_data' => [
                 'requested_config' => $this->sanitizeRequestedConfig(
                     array_merge((array) ($order->config_snapshot ?? []), [

@@ -41,7 +41,6 @@ return [
                 ['label' => '自动', 'value' => ''],
                 ['label' => 'SSL', 'value' => 'ssl'],
                 ['label' => 'TLS', 'value' => 'tls'],
-                ['label' => '无', 'value' => 'none'],
             ],
         ],
         'timeout_seconds' => ['title' => '超时秒数', 'type' => 'number', 'value' => 8, 'required' => false, 'min' => 1, 'step' => 1],

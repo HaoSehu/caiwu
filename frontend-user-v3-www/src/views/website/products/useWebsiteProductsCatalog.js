@@ -88,7 +88,6 @@ export function useWebsiteProductsCatalog({ onProductSelect, onResetSelection })
 
   const activeType = computed(() => productTypes.value.find((type) => type.value === activeTypeValue.value) || null)
   const activeTypeLabel = computed(() => activeType.value?.label || '')
-  const activeTypeId = computed(() => Number(activeType.value?.id || 0))
   const activeGroup = computed(() => rootGroups.value.find((group) => group.id === activeGroupId.value) || null)
   const activeGroupName = computed(() => activeGroup.value?.name || '')
   const activeChildName = computed(() => {
@@ -140,7 +139,7 @@ export function useWebsiteProductsCatalog({ onProductSelect, onResetSelection })
     }
 
     const targetPath = buildWebsiteProductPath({
-      typeId: activeTypeId.value,
+      typeId: activeTypeValue.value,
       groupId: activeGroupId.value,
       childGroupId: activeChildId.value,
       productId: selectedProductId.value,
@@ -463,7 +462,9 @@ export function useWebsiteProductsCatalog({ onProductSelect, onResetSelection })
       return false
     }
 
-    const targetType = productTypes.value.find((item) => Number(item.id) === routePayload.typeId)
+    const targetType = productTypes.value.find((item) => (
+      String(item.value || '') === String(routePayload.typeId)
+    ))
     const nextTypeValue = targetType?.value || activeTypeValue.value || productTypes.value[0]?.value || ''
 
     if (!nextTypeValue) {
@@ -624,12 +625,12 @@ export function useWebsiteProductsCatalog({ onProductSelect, onResetSelection })
       const routePayload = readWebsiteProductRouteParams(route)
 
       if (hasWebsiteProductRouteParams(routePayload)) {
-        const currentTypeId = activeTypeId.value
+        const currentTypeValue = activeTypeValue.value
         const currentGroupId = activeGroupId.value
         const currentChildId = activeChildId.value
         const currentProductId = selectedProductId.value
 
-        const changed = routePayload.typeId !== currentTypeId
+        const changed = String(routePayload.typeId) !== String(currentTypeValue)
           || routePayload.groupId !== currentGroupId
           || routePayload.childGroupId !== currentChildId
           || (routePayload.productId > 0 && routePayload.productId !== currentProductId)

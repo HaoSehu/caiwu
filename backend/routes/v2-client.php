@@ -117,6 +117,7 @@ Route::middleware(['auth:sanctum', 'ensure.client'])->group(function (): void {
     Route::get('/referral/rewards', [ReferralController::class, 'rewards']);
     Route::get('/referral/account-logs', [ReferralController::class, 'accountLogs']);
     Route::get('/referral/withdrawals', [ReferralController::class, 'withdrawals']);
+    Route::get('/referral/direct-referrals', [ReferralController::class, 'directReferrals']);
     Route::post('/referral/withdrawals', [ReferralController::class, 'applyWithdrawal'])->middleware('throttle:3,1,client-referral-withdraw');
 
     Route::get('/services', [ServiceConsoleController::class, 'index']);

@@ -9,14 +9,6 @@ import {
 } from 'tdesign-icons-vue-next';
 import type { Component } from 'vue';
 
-import FinanceTab from './tabs/FinanceTab.vue';
-import LogsTab from './tabs/LogsTab.vue';
-import MonitorTab from './tabs/MonitorTab.vue';
-import NatTab from './tabs/NatTab.vue';
-import OverviewTab from './tabs/OverviewTab.vue';
-import SecurityTab from './tabs/SecurityTab.vue';
-import VncTab from './tabs/VncTab.vue';
-
 export interface ServiceConsoleNavItem {
   key: string;
   label: string;
@@ -33,24 +25,10 @@ const consoleTabMeta: Record<string, Omit<ServiceConsoleNavItem, 'key'>> = {
   vnc: { label: 'VNC 控制台', icon: DesktopIcon },
 };
 
-export const consoleTabComponents: Record<string, Component> = {
-  overview: OverviewTab,
-  monitor: MonitorTab,
-  security: SecurityTab,
-  nat: NatTab,
-  logs: LogsTab,
-  finance: FinanceTab,
-  vnc: VncTab,
-};
-
 export function resolveConsoleNavItems(tabKeys: string[]): ServiceConsoleNavItem[] {
   return tabKeys.map((key) => ({
     key,
     label: consoleTabMeta[key]?.label || key,
     icon: consoleTabMeta[key]?.icon || DashboardIcon,
   }));
-}
-
-export function resolveConsoleTabComponent(tabKey: string): Component {
-  return consoleTabComponents[tabKey] || OverviewTab;
 }

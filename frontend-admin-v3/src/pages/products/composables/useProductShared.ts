@@ -29,7 +29,7 @@ export function flattenCategories<
     product_type?: string;
     first_product_group_code?: string;
   },
->(nodes: T[], level = 0, parent: T | null = null, catalogProductType = ''): T[] {
+>(nodes: T[], level = 0, parent: T | null = null): T[] {
   return nodes.flatMap((node) => {
     const label = `${'　'.repeat(level)}${node.label || node.name || `分类 #${node.id}`}`;
     const current = {
@@ -37,10 +37,9 @@ export function flattenCategories<
       label,
       parent_id: node.parent_id ?? parent?.id ?? null,
       product_type: node.product_type || parent?.product_type || '',
-      first_product_group_code:
-        node.first_product_group_code || parent?.first_product_group_code || catalogProductType || '',
+      first_product_group_code: node.first_product_group_code || parent?.first_product_group_code || '',
     } as T;
-    return [current, ...flattenCategories(node.children || [], level + 1, current, catalogProductType)];
+    return [current, ...flattenCategories(node.children || [], level + 1, current)];
   });
 }
 

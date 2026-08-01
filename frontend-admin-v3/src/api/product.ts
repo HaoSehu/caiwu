@@ -171,8 +171,7 @@ interface V2ProductDetailResponse {
 }
 
 interface V2ProductGroupTreeResponse {
-  tree?: ProductGroupV2Record[];
-  list?: ProductGroupV2Record[];
+  tree: ProductGroupV2Record[];
   total?: number;
 }
 
@@ -281,6 +280,7 @@ function normalizeV2ProductDetail(response: V2ProductDetailResponse): ProductRec
     primary_price: primaryPricePayload,
     primary_cycle: primaryPricePayload.cycle,
     setup_fee: String(pricing.setup_fee || '0.00'),
+    console_template: String(configuration.console_template || ''),
     config_options: Array.isArray(configuration.config_options) ? configuration.config_options : [],
     product_options: Array.isArray(configuration.config_options) ? configuration.config_options : [],
     purchase_requires: {
@@ -368,26 +368,22 @@ function compactQueryParams<T extends Record<string, unknown>>(params?: T): T | 
   return Object.keys(normalized).length ? (normalized as T) : undefined;
 }
 
-function normalizeV2ProductGroupTree(items?: ProductGroupV2Record[]): ProductCategoryRecord[] {
-  if (!Array.isArray(items)) return [];
-
+function normalizeV2ProductGroupTree(items: ProductGroupV2Record[]): ProductCategoryRecord[] {
   return items.map((item) =>
-    normalizeV2ProductGroup(item, normalizeV2ProductGroupTree(item.children as ProductGroupV2Record[] | undefined)),
+    normalizeV2ProductGroup(item, normalizeV2ProductGroupTree((item.children || []) as ProductGroupV2Record[])),
   );
 }
 
-async function fetchV2ProductCategoryTree(params?: Record<string, unknown>) {
+async function fetchV2ProductCategoryTree(params?: ProductGroupV2ListParams) {
   const response = await request.get<V2ProductGroupTreeResponse>({
     url: '/v2/admin/product-groups/tree',
     params: compactQueryParams(normalizeV2GroupParams(params)),
   });
-  const source = Array.isArray(response.tree) ? response.tree : response.list;
-  const tree = normalizeV2ProductGroupTree(source);
+  const tree = normalizeV2ProductGroupTree(response.tree);
 
   return {
     ...response,
     tree,
-    list: tree,
   };
 }
 
@@ -456,7 +452,7 @@ export const productApi = {
     request.get<{ product?: ProductRecord }>({
       url: `/v2/admin/products/${id}`,
     }),
-  categories: (params?: Record<string, unknown>) => fetchV2ProductCategoryTree(params),
+  categories: (params?: ProductGroupV2ListParams) => fetchV2ProductCategoryTree(params),
   createCategory: (data: Record<string, unknown>) => request.post({ url: '/v2/admin/product-groups', data }),
   updateCategory: (id: number | string, data: Record<string, unknown>) =>
     request.put({ url: `/v2/admin/product-groups/${id}`, data }),

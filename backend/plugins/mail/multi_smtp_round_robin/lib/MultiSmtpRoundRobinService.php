@@ -7,11 +7,12 @@ namespace Caiwu\Plugins\Mail\MultiSmtpRoundRobin\Lib;
 use App\Exceptions\BusinessException;
 use App\Services\Integrations\Plugins\PluginConfigRepository;
 use App\Services\Integrations\Plugins\PluginDomain;
+use App\Services\Mail\BaseMailPluginService;
 use App\Services\Mail\SmtpMailTransport;
 use App\Services\System\NotificationService;
 use Illuminate\Support\Facades\Cache;
 
-class MultiSmtpRoundRobinService
+class MultiSmtpRoundRobinService extends BaseMailPluginService
 {
     public function __construct(
         private readonly PluginConfigRepository $configRepository,
@@ -64,7 +65,7 @@ class MultiSmtpRoundRobinService
             }
         }
 
-        throw new BusinessException($lastException?->getMessage() ?: '多 SMTP 轮询发送失败', 42200);
+        throw new BusinessException('多 SMTP 轮询发送失败，已尝试 '.$accountCount.' 个账号', 42200);
     }
 
     public function testSmtp(int $accountIndex, string $to, string $subject, string $body = ''): void
@@ -125,7 +126,7 @@ class MultiSmtpRoundRobinService
             return [
                 'success' => false,
                 'action' => $action,
-                'message' => 'Unsupported plugin action',
+                'message' => '不支持的插件动作',
                 'data' => [],
             ];
         }
@@ -161,20 +162,5 @@ class MultiSmtpRoundRobinService
     private function cooldownKey(int $index): string
     {
         return 'plugin:mail:multi_smtp_round_robin:cooldown:'.$index;
-    }
-
-    /**
-     * @param  array<string, mixed>  $payload
-     */
-    private function verificationCode(array $payload): string
-    {
-        $code = trim((string) ($payload['code'] ?? ''));
-
-        return preg_match('/^\d{6}$/', $code) === 1 ? $code : (string) random_int(100000, 999999);
-    }
-
-    private function verificationBody(string $code): string
-    {
-        return "您的邮箱验证码为：{$code}，10分钟内有效。如非本人操作，请忽略此邮件。";
     }
 }

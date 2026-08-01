@@ -75,7 +75,7 @@
                   <img
                     v-else-if="shouldShowServiceOsIcon(item)"
                     :src="resolveServiceOsIcon(item)"
-                    :alt="resolveServiceOsText(item) || resolveServiceName(item)"
+                    :alt="String(resolveServiceOsText(item) || resolveServiceName(item))"
                     class="service-system-icon__image"
                     @error="markServiceOsIconFailed(item)"
                   />
@@ -159,7 +159,7 @@
                     <img
                       v-if="shouldShowServiceOsIcon(row)"
                       :src="resolveServiceOsIcon(row)"
-                      :alt="resolveServiceOsText(row) || resolveServiceName(row)"
+                      :alt="String(resolveServiceOsText(row) || resolveServiceName(row))"
                       class="service-system-icon__image"
                       @error="markServiceOsIconFailed(row)"
                     />

@@ -77,6 +77,7 @@ export function resolveServiceName(item: ServiceLike | null | undefined) {
   return (
     item?.custom_service_name ||
     item?.name ||
+    item?.product_full_path ||
     item?.product_spec_display ||
     item?.product_display_name ||
     item?.product?.display_name ||

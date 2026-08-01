@@ -13,6 +13,8 @@ class AliyunSmsClient
 {
     private const VERIFY_ENDPOINT = 'https://dypnsapi.aliyuncs.com/';
 
+    private const SMS_ENDPOINT = 'https://dysmsapi.aliyuncs.com/';
+
     private const DEFAULT_SIGN_NAME = '恒创联众';
 
     private const VERIFY_TEMPLATE_LOGIN_REGISTER = '100001';
@@ -81,6 +83,7 @@ class AliyunSmsClient
             'CodeLength' => 6,
             'ValidTime' => 300,
             'CodeType' => 1,
+            'AutoRetry' => $this->resolveAutoRetry($options),
         ];
 
         $result = $this->request(self::VERIFY_ENDPOINT, $params, $accessKeyId, $accessKeySecret, $phone);
@@ -102,9 +105,12 @@ class AliyunSmsClient
             return ['success' => false, 'message' => $this->resolveFailureMessage($result['Message'] ?? '')];
         }
 
+        $model = is_array($result['Model'] ?? null) ? $result['Model'] : [];
+
         return [
             'success' => true,
             'request_id' => isset($result['RequestId']) ? (string) $result['RequestId'] : null,
+            'biz_id' => isset($model['BizId']) ? (string) $model['BizId'] : null,
             'template_code' => $templateCode,
             'template_params' => $templateParams,
             'raw' => $result,
@@ -130,8 +136,8 @@ class AliyunSmsClient
         $fixedParams = [
             'Format' => 'json',
             'RegionId' => 'cn-hangzhou',
-            'SignatureMethod' => 'HMAC-SHA1',
-            'SignatureNonce' => uniqid((string) mt_rand(0, 0xFFFF), true),
+            'SignatureMethod' => 'HMAC-SHA256',
+            'SignatureNonce' => bin2hex(random_bytes(16)),
             'SignatureVersion' => '1.0',
             'Timestamp' => gmdate('Y-m-d\TH:i:s\Z'),
             'Version' => '2017-05-25',
@@ -148,7 +154,7 @@ class AliyunSmsClient
 
         $method = 'POST';
         $stringToSign = $method.'&%2F&'.$this->encode(substr($sortedQuery, 1));
-        $sign = base64_encode(hash_hmac('sha1', $stringToSign, $accessKeySecret.'&', true));
+        $sign = base64_encode(hash_hmac('sha256', $stringToSign, $accessKeySecret.'&', true));
         $body = 'Signature='.$this->encode($sign).$sortedQuery;
 
         $logContext = [
@@ -166,11 +172,16 @@ class AliyunSmsClient
         curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         curl_setopt($ch, CURLOPT_HTTPHEADER, ['x-sdk-client: php/2.0.0']);
         $this->configureCurlSsl($ch);
 
-        $result = curl_exec($ch);
+        try {
+            $result = curl_exec($ch);
+        } finally {
+            curl_close($ch);
+        }
         if ($result === false) {
             $this->lastCurlError = [
                 'errno' => curl_errno($ch),
@@ -182,12 +193,9 @@ class AliyunSmsClient
                 'ssl_verify' => $this->resolveSslVerify(),
                 'has_ca_bundle' => $this->resolveCaBundle() !== '',
             ]);
-            curl_close($ch);
 
             return false;
         }
-
-        curl_close($ch);
 
         return json_decode($result, true) ?: false;
     }
@@ -248,11 +256,52 @@ class AliyunSmsClient
     /**
      * @param  array<string, mixed>  $options
      */
+    private function resolveAutoRetry(array $options): int
+    {
+        if (array_key_exists('auto_retry', $options)) {
+            return filter_var($options['auto_retry'], FILTER_VALIDATE_BOOL) ? 1 : 0;
+        }
+
+        return 1;
+    }
+
+    /**
+     * @param  array<string, mixed>  $options
+     */
     private function resolveSignName(array $options): string
     {
         $signName = trim((string) ($options['sign_name'] ?? $this->config['sign_name'] ?? ''));
 
         return $signName !== '' ? $signName : self::DEFAULT_SIGN_NAME;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function fetchSignNames(): array
+    {
+        $accessKeyId = (string) ($this->config['access_key'] ?? '');
+        $accessKeySecret = (string) ($this->config['secret_key'] ?? '');
+
+        if ($accessKeyId === '' || $accessKeySecret === '') {
+            return [];
+        }
+
+        $result = $this->request(self::SMS_ENDPOINT, [
+            'Action' => 'QuerySmsSignList',
+            'PageIndex' => 1,
+            'PageSize' => 50,
+        ], $accessKeyId, $accessKeySecret);
+
+        if (! is_array($result) || ($result['Code'] ?? '') !== 'OK') {
+            Log::warning('[短信] 获取签名列表失败', [
+                'code' => (string) ($result['Code'] ?? ''),
+            ]);
+
+            return [];
+        }
+
+        return $this->extractSignNames($result);
     }
 
     /**

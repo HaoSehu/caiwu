@@ -86,7 +86,6 @@ class AccountService
             return $account;
         }
 
-        $payload['version'] = (int) ($account->version ?? 0) + 1;
         $account->forceFill($payload)->save();
 
         if (array_key_exists('cash_balance', $payload)) {

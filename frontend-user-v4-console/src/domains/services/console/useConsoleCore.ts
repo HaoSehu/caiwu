@@ -26,6 +26,7 @@ export function emptyDetail(): ConsoleServiceDetail {
     expires_at: '',
     created_at: '',
     auto_renew: 0,
+    console_template: '',
     console_mode: '',
     can_manage: false,
     machine_category: { key: '', label: '' },
@@ -135,11 +136,11 @@ export function resolveErrorMessage(error: unknown, fallback: string): string {
 }
 
 export function isNatConsole(detail: ConsoleServiceDetail): boolean {
-  const type = normalizeToken(detail.product?.catalog_type || detail.product?.type || '');
-  return (
-    ['nat', 'clouddesktop', 'cloudpc', 'natconsole'].includes(type) ||
-    String(detail.console_mode || '').toLowerCase() === 'nat'
-  );
+  const consoleTemplate = String(detail.console_template || detail.product?.console_template || '')
+    .trim()
+    .toLowerCase();
+
+  return consoleTemplate === 'port_mapping';
 }
 
 export function findSpecValue(detail: Ref<ConsoleServiceDetail>, aliases: string[], fallback = '--'): string {

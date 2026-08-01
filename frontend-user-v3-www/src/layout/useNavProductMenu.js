@@ -83,7 +83,6 @@ export function useNavProductMenu() {
         product_count: Number(g.product_count || 0),
         product_type: g.product_type || '',
         first_product_group_code: g.first_product_group_code || '',
-        product_type_id: Number(g.product_type_id || 0),
         children_count: Number(g.children_count || 0),
       }))
 

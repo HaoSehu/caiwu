@@ -20,6 +20,7 @@ use App\Models\UserAccount;
 use App\Models\UserReferral;
 use App\Services\Finance\InvoiceService;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
+use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Services\System\OperationLogService;
 use App\Services\User\AccountService;
 use App\Support\AdminPrivacy;
@@ -542,6 +543,39 @@ class ReferralService
             ->get();
     }
 
+    public function directReferrals(int $referrerUserId, int $perPage = 15): LengthAwarePaginator
+    {
+        if ($referrerUserId <= 0) {
+            return User::query()->whereRaw('1 = 0')->paginate($perPage);
+        }
+
+        $paginator = $this->buildDirectReferralUserQuery($referrerUserId)
+            ->orderByDesc('referred_at')
+            ->orderByDesc('users.id')
+            ->paginate($perPage);
+
+        $referredUserIds = collect($paginator->items())->pluck('id')->filter()->all();
+        $earnings = [];
+        if ($referredUserIds !== []) {
+            $earnings = ReferralReward::query()
+                ->where('referrer_user_id', $referrerUserId)
+                ->whereIn('referred_user_id', $referredUserIds)
+                ->selectRaw('referred_user_id, COALESCE(SUM(reward_amount), 0) as total')
+                ->groupBy('referred_user_id')
+                ->pluck('total', 'referred_user_id')
+                ->all();
+        }
+
+        $paginator->setCollection($paginator->getCollection()->map(function (User $referredUser) use ($earnings) {
+            $referredUser->setAttribute('customer_consumption', (float) $referredUser->total_sales_amount);
+            $referredUser->setAttribute('my_earnings', (float) ($earnings[$referredUser->id] ?? 0));
+
+            return $referredUser;
+        }));
+
+        return $paginator;
+    }
+
     public function rewardLogs(User $user, int $perPage = 15): LengthAwarePaginator
     {
         $this->releaseMaturedRewards($user);
@@ -551,7 +585,7 @@ class ReferralService
                 $this->referralUserWithRelations('referredUser'),
                 [
                     'invoice:id,invoice_no,product_id,product_spec_snapshot,config_snapshot,paid_at',
-                    'order:id,order_no,product_id,product_spec_snapshot,config_snapshot,paid_at',
+                    'order:id,order_no,type,product_id,product_spec_snapshot,config_snapshot,paid_at',
                     'product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
                 ]
             ))
@@ -743,6 +777,13 @@ class ReferralService
 
     public function resolveRewardProductDisplayName(ReferralReward $reward): string
     {
+        if ($reward->order instanceof Order) {
+            $fullPath = app(ProductFullPathResolver::class)->pathForOrder($reward->order);
+            if ($fullPath !== '') {
+                return $fullPath;
+            }
+        }
+
         $orderDisplayName = trim((string) ($reward->order?->display_product_name ?? ''));
         if ($orderDisplayName !== '') {
             return $orderDisplayName;

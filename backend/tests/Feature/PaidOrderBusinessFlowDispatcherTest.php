@@ -278,6 +278,30 @@ class PaidOrderBusinessFlowDispatcherTest extends TestCase
         $this->assertArrayNotHasKey('fulfillment_cleared_at', $configSnapshot);
     }
 
+    public function test_fulfillment_pending_remains_when_new_purchase_requires_manual_provisioning(): void
+    {
+        [$invoice, $order] = $this->createPaidInvoiceWithOrder();
+        $invoice->forceFill([
+            'config_snapshot' => [
+                'fulfillment_pending' => true,
+                'fulfillment_type' => 'new',
+            ],
+        ])->save();
+
+        try {
+            app(PaymentService::class)->processPaidOrderFulfillmentById((int) $order->id);
+            $this->fail('待人工开通的新购不能被当作已完成履约');
+        } catch (BusinessException $exception) {
+            $this->assertSame('支付后履约未完成，等待后续重试', $exception->getMessage());
+        }
+
+        $configSnapshot = (array) ($invoice->fresh()?->config_snapshot ?? []);
+
+        $this->assertTrue((bool) ($configSnapshot['fulfillment_pending'] ?? false));
+        $this->assertArrayNotHasKey('fulfillment_cleared_at', $configSnapshot);
+        $this->assertSame(OrderStatus::PROCESSING, (int) $order->fresh()->status);
+    }
+
     /**
      * @return array{0: Invoice, 1: Order, 2: User}
      */

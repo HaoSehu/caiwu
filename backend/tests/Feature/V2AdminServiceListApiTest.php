@@ -287,6 +287,7 @@ class V2AdminServiceListApiTest extends TestCase
             'name',
             'product_id',
             'product_display_name',
+            'product_full_path',
             'domain',
             'requested_hostname',
             'custom_hostname',

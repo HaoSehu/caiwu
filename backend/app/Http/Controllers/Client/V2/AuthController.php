@@ -96,25 +96,21 @@ class AuthController extends Controller
         $accountType = AccountIdentifier::detectType($account);
         $code = (string) $data['code'];
 
-        // 查找用户用于验证码校验
+        // 先校验验证码再解析用户，未注册与验证码错误统一文案并保持时序一致
         $user = $this->authService->findClientByAccount($accountType, $account);
-        if (! $user) {
-            return $this->error(42200, $accountType === 'phone' ? '手机号未注册' : '邮箱未注册');
-        }
 
-        // 验证码校验：先尝试 guest，再用用户ID重试
         $verified = $accountType === 'phone'
             ? $this->codeService->verifyPhoneCode('guest', $account, $code)
             : $this->codeService->verifyEmailCode('guest', $account, $code);
 
-        if (! $verified) {
+        if (! $verified && $user) {
             $verified = $accountType === 'phone'
                 ? $this->codeService->verifyPhoneCode((int) $user->id, $account, $code)
                 : $this->codeService->verifyEmailCode((int) $user->id, $account, $code);
         }
 
-        if (! $verified) {
-            return $this->error(42200, $accountType === 'phone' ? '短信验证码错误或已过期' : '邮箱验证码错误或已过期');
+        if (! $verified || ! $user) {
+            return $this->error(42200, '账号或验证码错误');
         }
 
         $result = $this->authService->clientLoginByCode(
@@ -505,24 +501,22 @@ class AuthController extends Controller
 
         $accountType = AccountIdentifier::detectType((string) $data['account']);
         $account = AccountIdentifier::normalizeAccount((string) $data['account']);
-        $user = $this->authService->findClientByAccount($accountType, $account);
 
-        if (! $user) {
-            return $this->error(42200, $accountType === 'phone' ? '手机号未注册' : '邮箱未注册');
-        }
-
+        // 先校验验证码再解析用户，未注册与验证码错误统一文案并保持时序一致
         $verified = $accountType === 'phone'
             ? $this->codeService->verifyPhoneCode('guest', $account, (string) $data['code'])
             : $this->codeService->verifyEmailCode('guest', $account, (string) $data['code']);
 
-        if (! $verified) {
+        $user = $this->authService->findClientByAccount($accountType, $account);
+
+        if (! $verified && $user) {
             $verified = $accountType === 'phone'
                 ? $this->codeService->verifyPhoneCode((int) $user->id, $account, (string) $data['code'])
                 : $this->codeService->verifyEmailCode((int) $user->id, $account, (string) $data['code']);
         }
 
-        if (! $verified) {
-            return $this->error(42200, $accountType === 'phone' ? '短信验证码错误或已过期' : '邮箱验证码错误或已过期');
+        if (! $verified || ! $user) {
+            return $this->error(42200, '账号或验证码错误');
         }
 
         $this->authService->resetClientPassword($user, (string) $data['password']);

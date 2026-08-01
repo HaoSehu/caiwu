@@ -86,6 +86,34 @@ final class ZjmfFinanceTransport
             'host_id' => $hostId,
             'source' => 'API',
         ]);
+
+        return $this->normalizeHostDetailResponse($response);
+    }
+
+    /**
+     * @return array{response: array, headers: array<int, string>, http_code: int, content_type: string}
+     */
+    public function getHostDetailWithMeta(Supplier $supplier, int $hostId, ?string $jwt = null): array
+    {
+        $meta = $this->requestWithMeta(
+            $supplier,
+            'GET',
+            '/host/header',
+            [],
+            $this->resolveJwt($supplier, $jwt),
+            [],
+            [
+                'host_id' => $hostId,
+                'source' => 'API',
+            ]
+        );
+        $meta['response'] = $this->normalizeHostDetailResponse((array) ($meta['response'] ?? []));
+
+        return $meta;
+    }
+
+    private function normalizeHostDetailResponse(array $response): array
+    {
         $payload = is_array($response['data'] ?? null) ? $response['data'] : [];
         $host = $this->normalizeHostDetailPayload($payload);
 
@@ -243,7 +271,12 @@ final class ZjmfFinanceTransport
     public function parallelGet(Supplier $supplier, array $requests, ?string $jwt = null, array $headers = []): array
     {
         $resolvedJwt = $this->resolveRequestJwt($supplier, $jwt, '', $headers);
-        $responses = $this->transport->parallelGet($supplier, $requests, $resolvedJwt, $headers);
+        $responses = $this->transport->parallelGet(
+            $supplier,
+            $requests,
+            $resolvedJwt,
+            $this->withBearerAuthorization($resolvedJwt, $headers)
+        );
 
         if ($this->containsUnauthorizedResponse($responses)) {
             $this->authManager->forget($supplier);
