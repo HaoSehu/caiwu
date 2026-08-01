@@ -17,6 +17,8 @@ use Illuminate\Support\Facades\Log;
 
 final class ZjmfProvisionService
 {
+    private const UPSTREAM_HTTP_CODE_META_KEY = '_zjmf_upstream_http_code';
+
     private const RANGE_TYPES = [4, 7, 9, 11, 14, 15, 16, 17, 18, 19];
 
     private const TYPE_FIELD_MAP = [
@@ -54,26 +56,26 @@ final class ZjmfProvisionService
             $existingProvisionData = (array) ($existingService->provision_data ?? []);
             try {
                 $jwt = $this->transport->login($supplier);
-                $detailResponse = $this->transport->getHostDetail($supplier, $existingHostId, $jwt);
-                if (($detailResponse['status'] ?? 0) === 200) {
-                    $detailPayload = $this->extractPayload($detailResponse);
-                    $hostDetail = is_array($detailPayload['host'] ?? null) ? $detailPayload['host'] : [];
+                $detailResponse = $this->responseWithHttpCode(
+                    $this->transport->getHostDetailWithMeta($supplier, $existingHostId, $jwt)
+                );
+                $this->assertUpstreamSuccess($detailResponse, [200], '确认已创建的上游实例状态');
+                $detailPayload = $this->extractPayload($detailResponse);
+                $hostDetail = is_array($detailPayload['host'] ?? null) ? $detailPayload['host'] : [];
+                $this->assertHostDetailPresent($hostDetail, $existingHostId);
 
-                    Log::info('[ZJMF 财务开通] 上游 host 已存在，跳过重复开通', [
-                        'order_id' => $order->id,
-                        'upstream_host_id' => $existingHostId,
-                    ]);
+                Log::info('[ZJMF 财务开通] 上游 host 已存在，跳过重复开通', [
+                    'order_id' => $order->id,
+                    'upstream_host_id' => $existingHostId,
+                ]);
 
-                    return [
-                        'requested_host' => (string) ($existingProvisionData['requested_host'] ?? ''),
-                        'upstream_invoice_id' => (int) ($existingProvisionData['upstream_invoice_id'] ?? 0),
-                        'upstream_host_ids' => $existingProvisionData['upstream_host_ids'] ?? [$existingHostId],
-                        'upstream_host_id' => $existingHostId,
-                        'host_detail' => $hostDetail,
-                    ];
-                }
-
-                throw new BusinessException('无法确认已创建的上游实例状态，已停止重复开通，请稍后重试或先核实上游实例');
+                return [
+                    'requested_host' => (string) ($existingProvisionData['requested_host'] ?? ''),
+                    'upstream_invoice_id' => (int) ($existingProvisionData['upstream_invoice_id'] ?? 0),
+                    'upstream_host_ids' => $existingProvisionData['upstream_host_ids'] ?? [$existingHostId],
+                    'upstream_host_id' => $existingHostId,
+                    'host_detail' => $hostDetail,
+                ];
             } catch (\Throwable $exception) {
                 Log::warning('[ZJMF 财务开通] 上游 host 幂等回查失败，已停止重复开通', [
                     'order_id' => $order->id,
@@ -215,11 +217,14 @@ final class ZjmfProvisionService
             $hostId = (int) $hostIds[0];
 
             $stepStartedAt = microtime(true);
-            $detailResponse = $this->transport->getHostDetail($supplier, $hostId, $jwt);
+            $detailResponse = $this->responseWithHttpCode(
+                $this->transport->getHostDetailWithMeta($supplier, $hostId, $jwt)
+            );
             $latency['host_detail_ms'] = $this->elapsedMilliseconds($stepStartedAt);
             $this->assertUpstreamSuccess($detailResponse, [200], '读取上游产品详情');
             $detailPayload = $this->extractPayload($detailResponse);
             $hostDetail = is_array($detailPayload['host'] ?? null) ? $detailPayload['host'] : [];
+            $this->assertHostDetailPresent($hostDetail, $hostId);
 
             $result = 'success';
 
@@ -519,7 +524,9 @@ final class ZjmfProvisionService
             ]
         );
 
-        if ($this->extractResponseStatus($response) === 400 && $this->isKnownEmptyCartResponse($response)) {
+        if ($this->hasSuccessfulUpstreamHttpStatus($response)
+            && $this->extractResponseStatus($response) === 400
+            && $this->isKnownEmptyCartResponse($response)) {
             return;
         }
 
@@ -556,7 +563,7 @@ final class ZjmfProvisionService
 
         $this->mergeResponseCookies($cookieJar, (array) ($meta['headers'] ?? []));
 
-        return is_array($meta['response'] ?? null) ? $meta['response'] : [];
+        return $this->responseWithHttpCode($meta);
     }
 
     private function buildCartSessionHeaders(array $cookieJar, array $headers = []): array
@@ -674,6 +681,11 @@ final class ZjmfProvisionService
 
     private function assertUpstreamSuccess(array $response, array $allowedStatuses, string $action): void
     {
+        if (array_key_exists(self::UPSTREAM_HTTP_CODE_META_KEY, $response)
+            && ! $this->hasSuccessfulUpstreamHttpStatus($response)) {
+            $this->throwUpstreamFailure($response, $action);
+        }
+
         $hasStatus = array_key_exists('status', $response)
             || array_key_exists('code', $response)
             || array_key_exists('status_code', $response);
@@ -687,10 +699,24 @@ final class ZjmfProvisionService
             return;
         }
 
+        $this->throwUpstreamFailure($response, $action);
+    }
+
+    private function hasSuccessfulUpstreamHttpStatus(array $response): bool
+    {
+        $httpCode = (int) ($response[self::UPSTREAM_HTTP_CODE_META_KEY] ?? 0);
+
+        return $httpCode >= 200 && $httpCode < 300;
+    }
+
+    private function throwUpstreamFailure(array $response, string $action): never
+    {
+        $status = $this->extractResponseStatus($response);
         $message = trim((string) ($response['msg'] ?? $response['message'] ?? ''));
         Log::warning('[ZJMF 财务开通] 返回失败', [
             'action' => $action,
             'status' => $status,
+            'http_code' => $response[self::UPSTREAM_HTTP_CODE_META_KEY] ?? null,
             'message' => SensitiveDataSanitizer::sanitizeText($message),
         ]);
 
@@ -704,11 +730,19 @@ final class ZjmfProvisionService
 
     private function findHostIdsForProvision(Supplier $supplier, string $jwt, int $invoiceId, string $hostname): array
     {
-        $response = $this->transport->get($supplier, '/host/list', $jwt, [
-            'show_type' => 'list',
-            'orderby' => 'id',
-            'sort' => 'DESC',
-        ]);
+        $response = $this->responseWithHttpCode($this->transport->requestWithMeta(
+            $supplier,
+            'GET',
+            '/host/list',
+            [],
+            $jwt,
+            [],
+            [
+                'show_type' => 'list',
+                'orderby' => 'id',
+                'sort' => 'DESC',
+            ]
+        ));
         $this->assertUpstreamSuccess($response, [200], '查询上游已开通产品');
 
         $payload = $this->extractPayload($response);
@@ -732,6 +766,30 @@ final class ZjmfProvisionService
 
             return $id > 0 ? $id : null;
         }, $hosts))));
+    }
+
+    /**
+     * 保留底层 HTTP 状态，避免上游 4xx/5xx JSON 缺少业务状态码时被误判为成功。
+     */
+    private function responseWithHttpCode(array $meta): array
+    {
+        $response = is_array($meta['response'] ?? null) ? $meta['response'] : [];
+        $response[self::UPSTREAM_HTTP_CODE_META_KEY] = (int) ($meta['http_code'] ?? 0);
+
+        return $response;
+    }
+
+    private function assertHostDetailPresent(array $hostDetail, int $hostId): void
+    {
+        if ($hostDetail !== []) {
+            return;
+        }
+
+        Log::warning('[ZJMF 财务开通] 上游实例详情为空，已停止标记开通成功', [
+            'upstream_host_id' => $hostId,
+        ]);
+
+        throw new BusinessException('上游未返回实例详情，无法确认开通结果，请稍后重试或先核实上游实例');
     }
 
     private function resolveCurrencyId(Order $order, Product $product, array $upstreamProductConfig, int $upstreamProductId): int

@@ -1,8 +1,8 @@
 # 后端 API 清单
 
-- 生成时间: `2026-07-22 19:30:00`
-- API 总数: `337`
-- 分组统计: `公共 / 健康检查=1, 公共 / 安全资源=1, 客户端 / VNC Token=1, 客户端 / 优惠券=5, 客户端 / 充值=3, 客户端 / 内容=8, 客户端 / 分销=5, 客户端 / 实名认证=8, 客户端 / 工单=9, 客户端 / 支付回调=2, 客户端 / 支付记录=3, 客户端 / 服务=36, 客户端 / 订单=4, 客户端 / 认证=16, 客户端 / 认证入口=3, 客户端 / 财务=6, 客户端 / 账单=9, 客户端 / 通知=5, 站点 / 产品=9, 站点 / 内容=5, 站点 / 首页=3, 管理端 / Integration Plugins=10, 管理端 / 产品=16, 管理端 / 产品分组=8, 管理端 / 产品类型=5, 管理端 / 仪表盘=3, 管理端 / 优惠券=16, 管理端 / 会员等级=4, 管理端 / 供应商=13, 管理端 / 其他=3, 管理端 / 内容=10, 管理端 / 分销=5, 管理端 / 员工=8, 管理端 / 媒体=5, 管理端 / 实名认证=5, 管理端 / 工单=10, 管理端 / 日志=5, 管理端 / 服务=3, 管理端 / 用户=28, 管理端 / 站点=2, 管理端 / 规格目录=4, 管理端 / 角色权限=7, 管理端 / 订单=2, 管理端 / 认证=5, 管理端 / 设置=5, 管理端 / 调度=2, 管理端 / 财务=8, 管理端 / 账单=3`
+- 生成时间: `2026-07-31 20:29:11`
+- API 总数: `340`
+- 分组统计: `公共 / 健康检查=1, 公共 / 其他=1, 公共 / 安全资源=1, 客户端 / VNC Token=1, 客户端 / 优惠券=5, 客户端 / 充值=3, 客户端 / 内容=8, 客户端 / 分销=6, 客户端 / 实名认证=8, 客户端 / 工单=9, 客户端 / 支付回调=2, 客户端 / 支付记录=3, 客户端 / 服务=36, 客户端 / 订单=4, 客户端 / 认证=16, 客户端 / 认证入口=3, 客户端 / 财务=6, 客户端 / 账单=9, 客户端 / 通知=5, 站点 / 产品=9, 站点 / 内容=5, 站点 / 首页=3, 管理端 / Integration Plugins=10, 管理端 / 产品=16, 管理端 / 产品分组=8, 管理端 / 产品类型=5, 管理端 / 仪表盘=3, 管理端 / 优惠券=17, 管理端 / 会员等级=4, 管理端 / 供应商=13, 管理端 / 其他=3, 管理端 / 内容=10, 管理端 / 分销=5, 管理端 / 员工=8, 管理端 / 媒体=5, 管理端 / 实名认证=5, 管理端 / 工单=10, 管理端 / 日志=5, 管理端 / 服务=3, 管理端 / 用户=28, 管理端 / 站点=2, 管理端 / 规格目录=4, 管理端 / 角色权限=7, 管理端 / 订单=2, 管理端 / 认证=5, 管理端 / 设置=5, 管理端 / 调度=2, 管理端 / 财务=8, 管理端 / 账单=3`
 
 > **自动生成**，由 `backend/scripts/export_api_inventory.php` 扫描 Laravel 路由表导出，**不要手工编辑**。
 >
@@ -11,7 +11,8 @@
 
 | 分组 | 方法 | 路径 | 控制器动作 | 鉴权 | 中间件 |
 | --- | --- | --- | --- | --- | --- |
-| 公共 / 健康检查 | `GET` | `/api/health` | `Closure` | `public` | `api` |
+| 公共 / 健康检查 | `GET` | `/api/health` | `App\Http\Controllers\System\HealthController@live` | `public` | `api` |
+| 公共 / 其他 | `GET` | `/api/ready` | `App\Http\Controllers\System\HealthController@ready` | `public` | `api` |
 | 公共 / 安全资源 | `GET` | `/api/secure-assets/view` | `App\Http\Controllers\SecureAssetController@show` | `public` | `web, signed:relative` |
 | 客户端 / VNC Token | `GET` | `/api/v2/client/vnc-tokens/{token}` | `App\Http\Controllers\Client\V2\ServiceConsoleController@vncToken` | `public` | `api, throttle:30,1,client-vnc-token` |
 | 客户端 / 优惠券 | `GET` | `/api/v2/client/coupons` | `App\Http\Controllers\Client\V2\CouponController@index` | `client` | `api, auth:sanctum, ensure.client` |
@@ -31,6 +32,7 @@
 | 客户端 / 内容 | `GET` | `/api/v2/client/notices/{article}` | `App\Http\Controllers\Client\V2\ContentController@noticeDetail` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 内容 | `PUT` | `/api/v2/client/notices/{article}/read-state` | `App\Http\Controllers\Client\V2\ActionController@markNoticeRead` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 分销 | `GET` | `/api/v2/client/referral/account-logs` | `App\Http\Controllers\Client\V2\ReferralController@accountLogs` | `client` | `api, auth:sanctum, ensure.client` |
+| 客户端 / 分销 | `GET` | `/api/v2/client/referral/direct-referrals` | `App\Http\Controllers\Client\V2\ReferralController@directReferrals` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 分销 | `GET` | `/api/v2/client/referral/overview` | `App\Http\Controllers\Client\V2\ReferralController@overview` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 分销 | `GET` | `/api/v2/client/referral/rewards` | `App\Http\Controllers\Client\V2\ReferralController@rewards` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 分销 | `GET` | `/api/v2/client/referral/withdrawals` | `App\Http\Controllers\Client\V2\ReferralController@withdrawals` | `client` | `api, auth:sanctum, ensure.client` |
@@ -52,8 +54,8 @@
 | 客户端 / 工单 | `GET` | `/api/v2/client/tickets/{ticket}` | `App\Http\Controllers\Client\V2\TicketController@show` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 工单 | `GET` | `/api/v2/client/tickets/{ticket}/replies` | `App\Http\Controllers\Client\V2\TicketController@replies` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 工单 | `POST` | `/api/v2/client/tickets/{ticket}/replies/{reply}/recalls` | `App\Http\Controllers\Client\V2\ActionController@recallTicketReply` | `client` | `api, auth:sanctum, ensure.client, throttle:10,1,client-ticket-recall` |
-| 客户端 / 支付回调 | `POST` | `/api/v2/client/payment/alipay/notify` | `App\Http\Controllers\Client\V2\PaymentCallbackController@alipayNotify` | `public` | `api, verify.alipay.callback` |
-| 客户端 / 支付回调 | `GET&#124;POST` | `/api/v2/client/payment/notify/{gateway}` | `App\Http\Controllers\Client\V2\PaymentCallbackController@notify` | `public` | `api, verify.payment.callback` |
+| 客户端 / 支付回调 | `POST` | `/api/v2/client/payment/alipay/notify` | `App\Http\Controllers\Client\V2\PaymentCallbackController@alipayNotify` | `public` | `api, throttle:60,1,client-payment-alipay-notify, verify.alipay.callback` |
+| 客户端 / 支付回调 | `GET&#124;POST` | `/api/v2/client/payment/notify/{gateway}` | `App\Http\Controllers\Client\V2\PaymentCallbackController@notify` | `public` | `api, throttle:60,1,client-payment-notify, verify.payment.callback` |
 | 客户端 / 支付记录 | `GET` | `/api/v2/client/payments` | `App\Http\Controllers\Client\V2\PaymentController@index` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 支付记录 | `GET` | `/api/v2/client/payments/summary` | `App\Http\Controllers\Client\V2\PaymentController@summary` | `client` | `api, auth:sanctum, ensure.client` |
 | 客户端 / 支付记录 | `GET` | `/api/v2/client/payments/{id}` | `App\Http\Controllers\Client\V2\PaymentController@show` | `client` | `api, auth:sanctum, ensure.client` |
@@ -203,6 +205,7 @@
 | 管理端 / 优惠券 | `PATCH` | `/api/v2/admin/coupon-campaigns/{couponCampaign}/status` | `App\Http\Controllers\Admin\V2\CouponCampaignController@updateStatus` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.manage` |
 | 管理端 / 优惠券 | `POST` | `/api/v2/admin/coupon-campaigns/{couponCampaign}/tasks` | `App\Http\Controllers\Admin\V2\CouponCampaignController@runTask` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.manage` |
 | 管理端 / 优惠券 | `GET` | `/api/v2/admin/coupon-product-groups` | `App\Http\Controllers\Admin\V2\CouponProductGroupController@index` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.list` |
+| 管理端 / 优惠券 | `POST` | `/api/v2/admin/coupon-product-groups/batch-products` | `App\Http\Controllers\Admin\V2\CouponProductGroupController@batchProducts` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.list` |
 | 管理端 / 优惠券 | `GET` | `/api/v2/admin/coupon-product-groups/{group}/children` | `App\Http\Controllers\Admin\V2\CouponProductGroupController@children` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.list` |
 | 管理端 / 优惠券 | `GET` | `/api/v2/admin/coupon-product-groups/{group}/products` | `App\Http\Controllers\Admin\V2\CouponProductGroupController@products` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.list` |
 | 管理端 / 优惠券 | `GET` | `/api/v2/admin/coupons` | `App\Http\Controllers\Admin\V2\CouponController@index` | `admin` | `api, auth:sanctum, ensure.admin, permission:product.list` |

@@ -461,6 +461,7 @@ class V2AdminUserSubresourceApiTest extends TestCase
             'id',
             'name',
             'product_display_name',
+            'product_full_path',
             'domain',
             'custom_hostname',
             'has_custom_hostname',

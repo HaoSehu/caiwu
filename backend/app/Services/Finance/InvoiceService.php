@@ -235,8 +235,11 @@ class InvoiceService
     {
         $invoice = Invoice::with([
             'user:id,email,nickname,phone',
-            'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle',
+            'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle,product_spec_snapshot,product_type_snapshot,config_snapshot',
             'order.product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
+            'order.product.productGroup:id,second_product_group_id,name',
+            'order.product.productGroup.secondProductGroup:id,first_product_group_id,name',
+            'order.product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
             'product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
             'service:id,name,status,expires_at',
             'payments',
@@ -258,6 +261,7 @@ class InvoiceService
             'product_spec_display' => $productSpecDisplay,
             'product_display_name' => $productDisplayName,
             'combined_display_name' => $combinedDisplayName,
+            'product_full_path' => $invoice->order ? $this->resolveOrderProductPath($invoice->order) : '',
             'user' => $this->adminUserPayload($invoice->user),
             'order_id' => (int) ($invoice->order_id ?? 0),
             'order' => $invoice->order ? [
@@ -407,6 +411,7 @@ class InvoiceService
             'product_spec_display' => $productSpecDisplay,
             'product_display_name' => $productDisplayName,
             'combined_display_name' => $combinedDisplayName,
+            'product_full_path' => $invoice->order ? $this->resolveOrderProductPath($invoice->order) : '',
             'product_id' => (int) ($invoice->product_id ?? 0),
             'product' => $invoice->product ? [
                 'id' => (int) $invoice->product->id,
@@ -462,8 +467,11 @@ class InvoiceService
     {
         $invoice->loadMissing([
             'user:id,email,nickname,phone',
-            'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle',
+            'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle,product_spec_snapshot,product_type_snapshot,config_snapshot',
             'order.product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
+            'order.product.productGroup:id,second_product_group_id,name',
+            'order.product.productGroup.secondProductGroup:id,first_product_group_id,name',
+            'order.product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
             'product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
             'service:id,name,status,expires_at',
             'payments',
@@ -489,6 +497,7 @@ class InvoiceService
             'product_spec_display' => $productSpecDisplay,
             'product_display_name' => $productDisplayName,
             'combined_display_name' => $combinedDisplayName,
+            'product_full_path' => $invoice->order ? $this->resolveOrderProductPath($invoice->order) : '',
             'user' => $this->adminUserPayload($invoice->user),
             'order_id' => (int) ($invoice->order_id ?? 0),
             'order' => $invoice->order ? [

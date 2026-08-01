@@ -96,33 +96,51 @@ class V2AdminProductCoreActionApiTest extends TestCase
 
         Sanctum::actingAs($this->createAdmin([AdminPermissions::PRODUCT_MANAGE]));
 
+        $this->postJson('/api/v2/admin/products', array_merge(
+            $this->productPayload($thirdGroup),
+            ['console_template' => 'unsupported_template']
+        ))
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 42200)
+            ->assertJsonStructure(['data' => ['errors' => ['console_template']]]);
+
         $this->postJson('/api/v2/admin/products?per_page=20', $this->productPayload($thirdGroup))
             ->assertUnprocessable()
             ->assertJsonPath('code', 42200)
             ->assertJsonStructure(['data' => ['errors' => ['per_page']]]);
 
-        $createResponse = $this->postJson('/api/v2/admin/products', $this->productPayload($thirdGroup))
+        $createResponse = $this->postJson('/api/v2/admin/products', array_merge(
+            $this->productPayload($thirdGroup),
+            ['console_template' => 'port_mapping']
+        ))
             ->assertOk()
             ->assertJsonPath('code', 0)
             ->assertJsonPath('message', '商品创建成功')
             ->assertJsonPath('data.product.classification.second_product_group_id', $secondGroup->id)
+            ->assertJsonPath('data.product.configuration.console_template', 'port_mapping')
             ->assertJsonMissingPath('data.product.configuration.config_options.0.api_key');
 
         $productId = (int) $createResponse->json('data.product.id');
+        $this->assertDatabaseHas('products', ['id' => $productId, 'console_template' => 'port_mapping']);
         $this->assertSame($this->productDetailWhitelist(), array_keys($createResponse->json('data.product')));
         $this->assertNoSensitiveKeys($createResponse->json());
 
         $updateResponse = $this->putJson('/api/v2/admin/products/'.$productId, array_merge(
             $this->productPayload($thirdGroup),
-            ['custom_display_name' => 'V2 Updated Product']
+            ['custom_display_name' => 'V2 Updated Product', 'console_template' => 'compute']
         ))
             ->assertOk()
             ->assertJsonPath('code', 0)
             ->assertJsonPath('message', '商品更新成功')
-            ->assertJsonPath('data.product.display.custom_display_name', 'V2 Updated Product');
+            ->assertJsonPath('data.product.display.custom_display_name', 'V2 Updated Product')
+            ->assertJsonPath('data.product.configuration.console_template', 'compute');
 
         $this->assertSame($this->productDetailWhitelist(), array_keys($updateResponse->json('data.product')));
         $this->assertNoSensitiveKeys($updateResponse->json());
+
+        $this->putJson('/api/v2/admin/products/'.$productId, $this->productPayload($thirdGroup))
+            ->assertOk()
+            ->assertJsonPath('data.product.configuration.console_template', 'compute');
 
         $this->deleteJson('/api/v2/admin/products/'.$productId)
             ->assertOk()

@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\Log;
 
 final class ZjmfNetworkService
 {
+    private const UPSTREAM_HTTP_CODE_META_KEY = '_zjmf_upstream_http_code';
+
     public function __construct(
         private readonly ZjmfFinanceTransport $transport,
         private readonly ZjmfConsoleService $consoleService,
@@ -145,12 +147,9 @@ final class ZjmfNetworkService
             $this->assertFundPaymentCompleted($fundResponse, '流量包账单');
         }
 
-        $detailResponse = $this->consoleService->getHostDetail($supplier, $hostId, $resolvedJwt);
-        $this->assertUpstreamSuccess($detailResponse, [200], '读取流量包购买结果');
-
         return [
             'upstream_invoice_id' => $invoiceId,
-            'host_detail' => $this->extractHostDetail($detailResponse),
+            'host_detail' => $this->readConfirmedHostDetail($supplier, $hostId, $resolvedJwt, '读取流量包购买结果'),
         ];
     }
 
@@ -172,12 +171,9 @@ final class ZjmfNetworkService
         $fundResponse = $this->fundInvoice($supplier, $invoiceId, $resolvedJwt, '使用供应商余额支付产品升降级账单');
         $this->assertFundPaymentCompleted($fundResponse, '产品升降级账单');
 
-        $detailResponse = $this->consoleService->getHostDetail($supplier, $hostId, $resolvedJwt);
-        $this->assertUpstreamSuccess($detailResponse, [200], '读取产品升降级结果');
-
         return [
             'upstream_invoice_id' => $invoiceId,
-            'host_detail' => $this->extractHostDetail($detailResponse),
+            'host_detail' => $this->readConfirmedHostDetail($supplier, $hostId, $resolvedJwt, '读取产品升降级结果'),
         ];
     }
 
@@ -206,6 +202,20 @@ final class ZjmfNetworkService
         return (int) ($payload['invoiceid'] ?? $response['invoiceid'] ?? 0);
     }
 
+    private function readConfirmedHostDetail(Supplier $supplier, int $hostId, string $jwt, string $action): array
+    {
+        $detailResponse = $this->responseWithHttpCode(
+            $this->consoleService->getHostDetailWithMeta($supplier, $hostId, $jwt)
+        );
+        $this->assertUpstreamSuccess($detailResponse, [200], $action);
+        $hostDetail = $this->extractHostDetail($detailResponse);
+        if ($hostDetail === []) {
+            throw new BusinessException('上游未返回实例详情，无法确认操作结果，请稍后重试或先核实上游实例', 42200);
+        }
+
+        return $hostDetail;
+    }
+
     private function assertFundPaymentCompleted(array $response, string $invoiceLabel): void
     {
         if (($response['payment_completed'] ?? false) === true) {
@@ -222,15 +232,42 @@ final class ZjmfNetworkService
 
     private function assertUpstreamSuccess(array $response, array $allowedStatuses, string $action): void
     {
+        if (array_key_exists(self::UPSTREAM_HTTP_CODE_META_KEY, $response)
+            && ! $this->hasSuccessfulUpstreamHttpStatus($response)) {
+            $this->throwUpstreamFailure($response, $action);
+        }
+
         $status = (int) ($response['status'] ?? $response['code'] ?? $response['status_code'] ?? 200);
         if (in_array($status, $allowedStatuses, true)) {
             return;
         }
 
+        $this->throwUpstreamFailure($response, $action);
+    }
+
+    private function responseWithHttpCode(array $meta): array
+    {
+        $response = is_array($meta['response'] ?? null) ? $meta['response'] : [];
+        $response[self::UPSTREAM_HTTP_CODE_META_KEY] = (int) ($meta['http_code'] ?? 0);
+
+        return $response;
+    }
+
+    private function hasSuccessfulUpstreamHttpStatus(array $response): bool
+    {
+        $httpCode = (int) ($response[self::UPSTREAM_HTTP_CODE_META_KEY] ?? 0);
+
+        return $httpCode >= 200 && $httpCode < 300;
+    }
+
+    private function throwUpstreamFailure(array $response, string $action): never
+    {
+        $status = (int) ($response['status'] ?? $response['code'] ?? $response['status_code'] ?? 0);
         $message = trim((string) ($response['msg'] ?? $response['message'] ?? ''));
         Log::warning('[ZJMF 财务控制台] 返回失败', [
             'action' => $action,
             'status' => $status,
+            'http_code' => $response[self::UPSTREAM_HTTP_CODE_META_KEY] ?? null,
             'message' => SensitiveDataSanitizer::sanitizeText($message),
         ]);
 

@@ -75,12 +75,32 @@ class V2ServiceDetailApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('code', 0)
             ->assertJsonPath('data.service.id', $service->id)
+            ->assertJsonPath('data.service.console_template', Product::CONSOLE_TEMPLATE_PORT_MAPPING)
+            ->assertJsonPath('data.service.product.console_template', Product::CONSOLE_TEMPLATE_PORT_MAPPING)
             ->assertJsonMissingPath('data.service.connection')
+            ->assertJsonMissingPath('data.service.upstream.provider_key')
+            ->assertJsonMissingPath('data.service.upstream.supplier_id')
+            ->assertJsonMissingPath('data.service.upstream.upstream_product_id')
+            ->assertJsonMissingPath('data.service.upstream.invoice_id')
             ->assertJsonPath('data.service.actions.power', false);
 
         $this->assertSame($this->serviceDetailWhitelist(), array_keys($response->json('data.service')));
         $this->assertNoSensitiveKeys($response->json());
         $this->assertLessThan(100 * 1024, strlen((string) $response->getContent()));
+    }
+
+    public function test_client_service_detail_exposes_the_port_mapping_console_template(): void
+    {
+        ['user' => $user, 'service' => $service] = $this->createServiceFixture();
+
+        Sanctum::actingAs($user);
+
+        $this->getJson('/api/v2/client/services/'.$service->id)
+            ->assertOk()
+            ->assertJsonPath('data.service.console_template', Product::CONSOLE_TEMPLATE_PORT_MAPPING)
+            ->assertJsonPath('data.service.product.console_template', Product::CONSOLE_TEMPLATE_PORT_MAPPING)
+            ->assertJsonPath('data.service.console_mode', 'nat')
+            ->assertJsonPath('data.service.is_nat_console', true);
     }
 
     public function test_client_service_connection_returns_owned_service_password(): void
@@ -119,7 +139,11 @@ class V2ServiceDetailApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('code', 0)
             ->assertJsonPath('data.runtime.id', $service->id)
-            ->assertJsonMissingPath('data.runtime.connection');
+            ->assertJsonMissingPath('data.runtime.connection')
+            ->assertJsonMissingPath('data.runtime.upstream.provider_key')
+            ->assertJsonMissingPath('data.runtime.upstream.supplier_id')
+            ->assertJsonMissingPath('data.runtime.upstream.upstream_product_id')
+            ->assertJsonMissingPath('data.runtime.upstream.invoice_id');
 
         $this->getJson('/api/v2/client/services/'.$service->id.'/runtime?page_size=20')
             ->assertUnprocessable()
@@ -172,7 +196,10 @@ class V2ServiceDetailApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('code', 0)
             ->assertJsonPath('data.service.id', $service->id)
-            ->assertJsonMissingPath('data.service.connection');
+            ->assertJsonMissingPath('data.service.connection')
+            ->assertJsonPath('data.service.upstream.provider_key', '')
+            ->assertJsonPath('data.service.upstream.supplier_id', 0)
+            ->assertJsonPath('data.service.upstream.upstream_product_id', '');
 
         $this->assertSame($this->serviceDetailWhitelist(), array_keys($detailResponse->json('data.service')));
         $this->assertNoSensitiveKeys($detailResponse->json());
@@ -350,6 +377,7 @@ class V2ServiceDetailApiTest extends TestCase
             'name' => 'V2 Service Product '.$suffix,
             'custom_display_name' => 'V2 Service Product '.$suffix,
             'product_type' => ProductType::VPS,
+            'console_template' => Product::CONSOLE_TEMPLATE_PORT_MAPPING,
             'description' => '',
             'pricing' => ['monthly' => '88.00'],
             'setup_fee' => '0.00',
@@ -426,6 +454,7 @@ class V2ServiceDetailApiTest extends TestCase
             'has_custom_service_name',
             'custom_hostname',
             'has_custom_hostname',
+            'console_template',
             'console_mode',
             'is_nat_console',
             'product',

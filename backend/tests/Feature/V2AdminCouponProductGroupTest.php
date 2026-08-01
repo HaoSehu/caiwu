@@ -207,14 +207,30 @@ class V2AdminCouponProductGroupTest extends TestCase
         ])
             ->assertOk()
             ->assertJsonPath('code', 0)
+            ->assertJsonPath('message', '操作成功')
             ->assertJsonPath('data.'.$batchKey.'.0.id', $product->id)
             ->assertJsonPath('data.'.$batchKey.'.0.product_id', $product->id)
             ->assertJsonPath('data.'.$batchKey.'.0.label', '批量商品 '.$suffix)
             ->assertJsonPath('data.'.$batchKey.'.0.primary_price.cycle', 'monthly')
-            ->assertJsonPath('data.'.$batchKey.'.0.primary_price.amount', '66.00');
+            ->assertJsonPath('data.'.$batchKey.'.0.primary_price.amount', '66.00')
+            ->assertJsonStructure(['code', 'message', 'data', 'timestamp']);
 
         $this->assertSame($this->productFieldWhitelist(), array_keys($response->json('data.'.$batchKey.'.0')));
         $this->assertNoSensitiveKeys($response->json());
+    }
+
+    public function test_batch_products_empty_groups_uses_the_standard_success_envelope(): void
+    {
+        Sanctum::actingAs($this->createAdmin([AdminPermissions::PRODUCT_LIST]));
+
+        $this->postJson('/api/v2/admin/coupon-product-groups/batch-products', [
+            'groups' => [],
+        ])
+            ->assertOk()
+            ->assertJsonPath('code', 0)
+            ->assertJsonPath('message', '操作成功')
+            ->assertJsonPath('data', [])
+            ->assertJsonStructure(['code', 'message', 'data', 'timestamp']);
     }
 
     private function createAdmin(array $permissions): AdminUser

@@ -65,7 +65,7 @@ class ClientServiceConsoleCategoryTitleFallbackTest extends TestCase
                     'sort_order' => 0,
                     'is_visible' => 1,
                     'is_system' => 0,
-                    'legacy_product_type' => ProductType::VPS,
+                    'product_type' => ProductType::VPS,
                 ]);
             }
             $rootGroupId = (int) $rootGroup->id;

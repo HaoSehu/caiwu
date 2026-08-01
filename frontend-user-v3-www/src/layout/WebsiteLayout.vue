@@ -636,12 +636,12 @@ function scheduleCloseMegaMenu() {
 }
 
 function resolveGroupPath(group) {
-  const typeId = Number(group.product_type_id || 0)
+  const typeCode = String(group.first_product_group_code || '')
   const groupId = Number(group.id || 0)
-  if (!typeId || !groupId) {
+  if (!typeCode || !groupId) {
     return '/products'
   }
-  return `/products?type=${typeId}&group=${groupId}`
+  return `/products?type=${encodeURIComponent(typeCode)}&group=${groupId}`
 }
 
 function formatDate(value) {

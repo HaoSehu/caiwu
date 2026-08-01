@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Constants\ProductType;
+use App\Constants\ServiceStatus;
 use App\Models\AdminUser;
 use App\Models\FirstProductGroup;
 use App\Models\IntegrationPlugin;
@@ -12,10 +13,12 @@ use App\Models\Product;
 use App\Models\ProductUpstreamBinding;
 use App\Models\Role;
 use App\Models\SecondProductGroup;
+use App\Models\Service;
 use App\Models\Setting;
 use App\Models\Supplier;
 use App\Models\SupplierPluginBinding;
 use App\Models\ThirdProductGroup;
+use App\Models\User;
 use App\Services\Site\SiteProductQuoteService;
 use App\Services\Site\SiteProductReadService;
 use App\Support\AdminPermissions;
@@ -74,6 +77,62 @@ class V2ProductApiTest extends TestCase
         $this->assertSame($this->adminProductListWhitelist(), array_keys($response->json('data.list.0')));
         $this->assertNoSensitiveKeys($response->json());
         $this->assertLessThan(100 * 1024, strlen((string) $response->getContent()));
+    }
+
+    public function test_admin_product_list_counts_services_in_all_statuses(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+        $firstGroup = $this->createFirstGroup('v2_service_count_'.$suffix, '服务统计 '.$suffix, true);
+        $secondGroup = $this->createSecondGroup($firstGroup, '服务统计二级 '.$suffix, 1, true);
+        $product = Product::query()->create($this->productPayload($secondGroup, null, '服务统计商品 '.$suffix, '19.00', 1));
+        $user = User::query()->create([
+            'email' => 'v2-product-service-'.$suffix.'@example.com',
+            'password' => 'Temp@123456',
+            'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
+            'status' => 1,
+            'nickname' => 'V2 商品服务 '.$suffix,
+            'real_name' => '',
+            'id_card' => '',
+            'verification_status' => 0,
+            'verification_message' => '',
+            'verification_certify_id' => null,
+            'member_level_id' => null,
+            'total_sales_amount' => '0.00',
+            'referrer_user_id' => null,
+            'verified_at' => null,
+        ]);
+
+        foreach ([ServiceStatus::ACTIVE, ServiceStatus::CANCELLED] as $index => $status) {
+            Service::query()->create([
+                'user_id' => (int) $user->id,
+                'product_id' => (int) $product->id,
+                'name' => 'V2 商品服务 '.$suffix.' '.$index,
+                'domain' => 'v2-product-service-'.$suffix.'-'.$index.'.example.test',
+                'billing_cycle' => 'monthly',
+                'amount' => '19.00',
+                'locked_pricing' => ['monthly' => '19.00'],
+                'status' => $status,
+                'provision_data' => [],
+                'expires_at' => $index === 0 ? now()->addMonth() : now()->subDay(),
+                'auto_renew' => 0,
+            ]);
+        }
+
+        Sanctum::actingAs($this->createAdmin([AdminPermissions::PRODUCT_LIST]));
+
+        $response = $this->getJson('/api/v2/admin/products?'.http_build_query([
+            'keyword' => $suffix,
+            'page' => 1,
+            'page_size' => 10,
+        ]))
+            ->assertOk()
+            ->assertJsonPath('code', 0);
+
+        $item = collect((array) $response->json('data.list'))->firstWhere('id', (int) $product->id);
+        $this->assertIsArray($item);
+        $this->assertSame(2, $item['services_count']);
+        $this->assertSame(2, $item['total_services_count']);
+        $this->assertSame(2, $item['active_services_count']);
     }
 
     public function test_admin_product_detail_is_modular_and_preserves_provider_key(): void

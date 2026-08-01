@@ -462,14 +462,16 @@ class ServiceConsoleController extends Controller
 
     public function vnc(Request $request, int $id)
     {
-        return $this->success(
-            $this->clientServiceConsoleService->getVncUrlForUser(
-                $request->user(),
-                $id,
-                $this->buildOperationContext($request)
-            ),
-            '获取VNC链接成功'
+        $result = $this->clientServiceConsoleService->getVncUrlForUser(
+            $request->user(),
+            $id,
+            $this->buildOperationContext($request)
         );
+        $result['detail'] = $this->clientServiceConsoleService->sanitizeClientDetail(
+            (array) ($result['detail'] ?? [])
+        );
+
+        return $this->success($result, '获取VNC链接成功');
     }
 
     public function vncToken(Request $request, string $token)

@@ -51,6 +51,17 @@
                 <t-form-item label="状态" name="status">
                   <t-switch v-model="form.status" :custom-value="[1, 0]" />
                 </t-form-item>
+                <t-form-item label="控制台面板" name="console_template">
+                  <div class="product-edit-console-template-field">
+                    <t-select
+                      v-model="form.console_template"
+                    >
+                      <t-option label="通用计算控制台" value="compute" />
+                      <t-option label="端口映射控制台" value="port_mapping" />
+                    </t-select>
+                    <span>默认通用计算控制台；选择后，关联服务下次打开控制台将按此页面进入。</span>
+                  </div>
+                </t-form-item>
               </div>
             </section>
 
@@ -164,7 +175,7 @@
                     拉取模板
                   </t-button>
                   <t-button size="small" theme="primary" variant="outline" @click="openConfigOptionDialog()"
-                    >新增配置</t-button
+                  >新增配置</t-button
                   >
                 </div>
               </div>
@@ -331,6 +342,7 @@ const form = reactive({
   status: 1,
   supplier_id: '' as number | string,
   upstream_product_id: '' as number | string,
+  console_template: 'compute' as ConsoleTemplate,
   config_options: [] as ConfigOptionRecord[],
 });
 
@@ -402,6 +414,8 @@ interface ConfigOptionRecord {
   [key: string]: unknown;
 }
 
+type ConsoleTemplate = 'compute' | 'port_mapping';
+
 interface ConfigOptionSubItemFormRow {
   uid: string;
   name: string;
@@ -441,9 +455,9 @@ onMounted(async () => {
 async function loadCategories() {
   try {
     const response = await productApi.categories();
-    const tree = response.tree || response.list || [];
+    const tree = response.tree;
     categoryTree.value = tree;
-    categoryOptions.value = flattenCategories(tree, 0, null, '');
+    categoryOptions.value = flattenCategories(tree);
   } catch {
     // ignore
   }
@@ -480,6 +494,7 @@ async function loadProductDetail() {
       status: Number(detail.status ?? 1),
       supplier_id: upstreamBinding.supplier_id || '',
       upstream_product_id: Number(upstreamBinding.upstream_product_id) || upstreamBinding.upstream_product_id || '',
+      console_template: normalizeConsoleTemplate(detail.console_template),
       config_options: normalizeConfigOptions(detail.config_options),
     });
     if (form.supplier_id) {
@@ -597,6 +612,10 @@ function hasPositivePrice() {
 }
 
 // --- Config option helpers ---
+function normalizeConsoleTemplate(value: unknown): ConsoleTemplate {
+  return value === 'port_mapping' ? value : 'compute';
+}
+
 function normalizeConfigOptions(value: unknown): ConfigOptionRecord[] {
   const items = Array.isArray(value) ? value : [];
   return items.map((itemValue, index) => {
@@ -858,6 +877,7 @@ async function submit() {
       },
       auto_setup: form.auto_setup,
       status: form.status,
+      console_template: form.console_template,
       upstream_binding: {
         supplier_id: form.supplier_id || undefined,
         upstream_product_id: form.upstream_product_id || undefined,
@@ -1303,8 +1323,24 @@ function goBack() {
     overflow-x: auto;
     border-right: 0;
     border-bottom: 1px solid var(--td-component-border);
-    padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
-  }
+  padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
+}
+
+.product-edit-console-template-field {
+  display: grid;
+  gap: var(--td-comp-margin-s);
+  width: 100%;
+}
+
+.product-edit-console-template-field .t-select {
+  max-width: 28rem;
+}
+
+.product-edit-console-template-field span {
+  color: var(--td-text-color-secondary);
+  font-size: var(--td-font-size-size-2, 13px);
+  line-height: 20px;
+}
 
   .product-edit-nav-item {
     min-width: 160px;

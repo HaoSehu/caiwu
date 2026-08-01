@@ -60,20 +60,23 @@ class SmsService
     private function sendAliyunVerifyCode(string $phone, string $code, array $options, ?SmsDriver $driver): void
     {
         $purpose = $this->normalizeVerifyCodePurpose($options);
+        $expireMinutes = (string) ($options['min'] ?? '5');
         $sendOptions = array_merge($options, [
             'purpose' => $purpose,
-            'min' => (string) ($options['min'] ?? '5'),
+            'min' => $expireMinutes,
         ]);
         $logParams = [
             'code' => $code,
-            'min' => (string) $sendOptions['min'],
+            'min' => $expireMinutes,
             'purpose' => $purpose,
         ];
 
+        $templateText = $this->aliyunVerifyTemplateText($purpose);
+        $content = str_replace(['${code}', '${min}'], [$code, $expireMinutes], $templateText);
         $logContext = $this->createSmsLog(
             $phone,
             'aliyun_verify_code',
-            "阿里云短信验证码已发送，验证码：{$code}",
+            $content,
             $logParams,
             'aliyun',
             'sms_verify'
@@ -93,7 +96,7 @@ class SmsService
 
             $this->updateSmsLog($logContext, [
                 'status' => 'success',
-                'request_id' => $result->requestId,
+                'request_id' => $result->bizId ?? $result->requestId,
                 'sent_at' => now(),
                 'template_code' => $providerTemplateCode !== '' ? $providerTemplateCode : 'aliyun_verify_code',
                 'params_json' => $updatedParams,
@@ -444,5 +447,21 @@ class SmsService
                 'message' => $exception->getMessage(),
             ]);
         }
+    }
+
+    private function aliyunVerifyTemplateText(string $purpose): string
+    {
+        return match ($purpose) {
+            'change_phone', 'phone_change', 'update_phone'
+                => '尊敬的客户，您正在进行修改手机号操作，您的验证码为${code}。以上验证码${min}分钟内有效，请注意保密，切勿告知他人。',
+            'reset', 'reset_password', 'password_reset'
+                => '尊敬的客户，您正在进行重置密码操作，您的验证码为${code}。以上验证码${min}分钟内有效，请注意保密，切勿告知他人。',
+            'bind_phone', 'new_phone'
+                => '尊敬的客户，您正在进行绑定手机号操作，您的验证码为${code}。以上验证码${min}分钟内有效，请注意保密，切勿告知他人。',
+            'verify_bound_phone', 'verify_phone'
+                => '尊敬的客户，您正在验证绑定手机号操作，您的验证码为${code}。以上验证码${min}分钟内有效，请注意保密，切勿告知他人。',
+            default // login, register, generic
+                => '您的验证码为${code}。尊敬的客户，以上验证码${min}分钟内有效，请注意保密，切勿告知他人。',
+        };
     }
 }

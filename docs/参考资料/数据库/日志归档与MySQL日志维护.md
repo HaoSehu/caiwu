@@ -112,15 +112,13 @@ cd /www/wwwroot/caiwu/backend
 - `backend/storage/logs/log-archive/run_*.json`：单次完整执行报告；
 - `backend/storage/logs/log-archive/archive-YYYY-MM-DD.log`：逐事件 JSON 日志。
 
-### 1.5 Crontab
+### 1.5 平台定时任务
 
-日志归档使用独立 Crontab，不再注册到应用内部的月度或周度任务：
+日志归档注册为平台核心定时任务 `log-archive`，Cron 表达式为 `0 2 * * *`。Laravel 的唯一调度入口仍是每分钟执行的 `schedule:run`，它触发 `scheduler:heartbeat`；心跳把到期归档任务投递到默认队列，并由既有任务运行记录保存结果。
 
-```cron
-0 2 * * * cd /www/wwwroot/caiwu/backend && /usr/bin/php artisan db:archive-logs --execute --no-interaction > /dev/null 2>&1
-```
+任务固定以 `--execute --json` 调用 `db:archive-logs`，最长运行 1 小时，任务锁为 61 分钟，以满足现有数据库队列的可见性超时约束。归档服务自身仍保留全局文件锁和每表 PID 文件，避免重叠归档同一张表。该任务不可从管理端手动触发；人工操作必须使用本节的命令并遵循预检流程。
 
-命令带全局文件锁和每表 PID 文件，上一轮仍在运行时新任务会失败退出，不会重复归档同一张表。
+生产只保留每分钟一次的 `schedule:run`。切换后必须移除原来直接执行 `db:archive-logs --execute` 的每日 02:00 Crontab，不能让两种触发方式同时运行。
 
 ## 二、MySQL 错误日志与慢查询日志轮转
 
@@ -186,5 +184,5 @@ expire_logs_days=30
 1. pt-archiver 版本、凭据文件权限和归档目录可写；
 2. 全表 dry-run 的影响行数符合预期；
 3. `gateway_logs` 小表试运行后，CSV 表头、行数、数据库剩余记录和审计日志一致；
-4. 启用每日 02:00 Crontab，并观察首轮完整报告；
+4. 确认每分钟 `schedule:run`、默认队列消费和 `log-archive` 定时任务均正常，并观察首轮完整报告；
 5. `logrotate -d` 无错误，Binlog 过期变量为 2592000 秒。

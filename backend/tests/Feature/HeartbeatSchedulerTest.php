@@ -9,6 +9,7 @@ use App\Models\ScheduleTaskRun;
 use App\Models\ScheduleTick;
 use App\Services\Automation\Heartbeat\CallbackScheduledTask;
 use App\Services\Automation\Heartbeat\Contracts\ScheduledTask;
+use App\Services\Automation\Heartbeat\Data\TaskContext;
 use App\Services\Automation\Heartbeat\HeartbeatScheduler;
 use App\Services\Automation\Heartbeat\HeartbeatTaskRegistry;
 use App\Services\Automation\Heartbeat\QueueDrainService;
@@ -50,6 +51,77 @@ class HeartbeatSchedulerTest extends TestCase
         $this->assertStringContainsString('* * * * *', $output);
         $this->assertStringNotContainsString('接口认证刷新', $output);
         $this->assertStringNotContainsString('队列积压消费', $output);
+    }
+
+    public function test_log_archive_task_is_dispatched_at_two_am_through_heartbeat(): void
+    {
+        Queue::fake();
+
+        $task = app(HeartbeatTaskRegistry::class)->get('log-archive');
+
+        $this->assertSame('日志归档', $task->title());
+        $this->assertSame('0 2 * * *', $task->triggers()[0]->describe());
+        $this->assertSame(3600, $task->timeout());
+        $this->assertSame(3660, $task->lockTtlSeconds());
+        $this->assertFalse($task->manualTriggerable());
+
+        ScheduleTaskRun::query()->where('task_key', 'log-archive')->delete();
+        ScheduleTick::query()
+            ->whereBetween('slot_started_at', ['2026-07-06 02:00:00', '2026-07-06 02:15:00'])
+            ->delete();
+
+        $registry = new class(app()) extends HeartbeatTaskRegistry
+        {
+            /** @var list<ScheduledTask> */
+            public array $tasks = [];
+
+            public function enabledTasks(): array
+            {
+                return $this->tasks;
+            }
+        };
+        $registry->tasks = [$task];
+
+        $scheduler = new HeartbeatScheduler(
+            app(ScheduleTickRepository::class),
+            app(ScheduleTaskRunRepository::class),
+            $registry,
+            app(TriggerRuleMatcher::class),
+            app(QueueDrainService::class),
+        );
+
+        $summary = $scheduler->tick(CarbonImmutable::parse('2026-07-06 02:00:00', 'Asia/Shanghai'));
+
+        $this->assertSame(['log-archive'], $summary->queuedTasks);
+        Queue::assertPushed(RunHeartbeatTaskJob::class, fn (RunHeartbeatTaskJob $job): bool => $job->taskKey === 'log-archive'
+            && $job->timeout === 3600);
+        $this->assertDatabaseHas('schedule_task_runs', [
+            'task_key' => 'log-archive',
+            'status' => 'queued',
+            'source' => 'heartbeat',
+        ]);
+    }
+
+    public function test_log_archive_task_invokes_archive_command_with_execute_enabled(): void
+    {
+        $task = app(HeartbeatTaskRegistry::class)->get('log-archive');
+
+        Artisan::shouldReceive('call')
+            ->once()
+            ->with('db:archive-logs', ['--execute' => true, '--json' => true])
+            ->andReturn(0);
+        Artisan::shouldReceive('output')
+            ->once()
+            ->andReturn('{"status":"completed"}');
+
+        $summary = $task->handle(new TaskContext(
+            taskKey: 'log-archive',
+            source: 'heartbeat',
+        ));
+
+        $this->assertSame('db:archive-logs', $summary['command']);
+        $this->assertSame(0, $summary['exit_code']);
+        $this->assertSame(['--execute' => true, '--json' => true], $summary['parameters']);
     }
 
     public function test_heartbeat_dispatches_due_tasks_once_per_tick(): void

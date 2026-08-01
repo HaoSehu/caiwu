@@ -26,6 +26,10 @@ class AuthService
 {
     private const ADMIN_LOGIN_AS_CODE_TTL_SECONDS = 120;
 
+    private const ADMIN_LOGIN_MAX_FAILED_ATTEMPTS = 5;
+
+    private const ADMIN_LOGIN_FAILED_WINDOW_SECONDS = 1800;
+
     private const PASSWORD_TIMING_GUARD_HASH = '$2y$10$9i4SuhzLa07GghDFTutcTeB5w1sRFYJhPguXpXxeSElBVdggfyff2';
 
     private const CLIENT_LOGIN_COLUMNS = [
@@ -590,19 +594,30 @@ class AuthService
             throw new BusinessException('后台管理员未初始化，请先执行数据初始化', 42200, 422);
         }
 
+        $normalizedUsername = mb_strtolower(trim($username));
+        $this->ensureAdminLoginNotLocked($normalizedUsername);
+
         $admin = AdminUser::query()
             ->with('role')
             ->where('username', $username)
             ->first();
 
         // 防止时序攻击：即使用户不存在也执行 Hash::check
-        if (! $admin || ! Hash::check($password, $admin->password ?? '')) {
+        $passwordValid = $admin !== null
+            ? Hash::check($password, (string) $admin->password)
+            : Hash::check($password, self::PASSWORD_TIMING_GUARD_HASH);
+
+        if ($admin === null || ! $passwordValid) {
+            $this->recordAdminLoginFailure($normalizedUsername);
+
             throw new BusinessException('用户名或密码错误', 40100, 401);
         }
 
         if ($admin->status !== 1) {
             throw new BusinessException('账号已被禁用', 40300, 403);
         }
+
+        $this->clearAdminLoginFailures($normalizedUsername);
 
         $admin->update([
             'last_login_at' => now(),
@@ -1179,6 +1194,32 @@ class AuthService
     private function buildAdminLoginAsCacheKey(string $code): string
     {
         return 'auth:admin_login_as:'.hash('sha256', $code);
+    }
+
+    private function ensureAdminLoginNotLocked(string $normalizedUsername): void
+    {
+        $attempts = (int) Cache::store('redis_volatile')->get($this->adminLoginFailureKey($normalizedUsername), 0);
+
+        if ($attempts >= self::ADMIN_LOGIN_MAX_FAILED_ATTEMPTS) {
+            throw new BusinessException('登录失败次数过多，请 30 分钟后再试', 42900, 429);
+        }
+    }
+
+    private function recordAdminLoginFailure(string $normalizedUsername): void
+    {
+        $key = $this->adminLoginFailureKey($normalizedUsername);
+        $attempts = (int) Cache::store('redis_volatile')->increment($key, 1);
+        Cache::store('redis_volatile')->put($key, $attempts, now()->addSeconds(self::ADMIN_LOGIN_FAILED_WINDOW_SECONDS));
+    }
+
+    private function clearAdminLoginFailures(string $normalizedUsername): void
+    {
+        Cache::store('redis_volatile')->forget($this->adminLoginFailureKey($normalizedUsername));
+    }
+
+    private function adminLoginFailureKey(string $normalizedUsername): string
+    {
+        return 'admin-login-fail:account:'.sha1($normalizedUsername);
     }
 
     private function hashLoginAsUserAgent(string $userAgent): string

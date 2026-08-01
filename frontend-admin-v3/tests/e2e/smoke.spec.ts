@@ -861,6 +861,7 @@ async function mockProductsHub(page: import('@playwright/test').Page) {
                 setup_fee: '0.00',
               },
               configuration: {
+                console_template: 'compute',
                 config_options: [
                   {
                     uid: 'cpu',
@@ -2503,7 +2504,7 @@ async function mockUserDetail(page: import('@playwright/test').Page) {
           code: 0,
           message: pathname.endsWith('/login-as') ? 'OK' : '操作成功',
           data: pathname.endsWith('/login-as')
-            ? { login_code: 'LOGIN-AS-CODE', redirect_url: '/login-as?code=LOGIN-AS-CODE' }
+            ? { login_code: 'LOGIN-AS-CODE', target_url: `${url.origin}/client/login-as` }
             : {},
         }),
       });
@@ -3619,7 +3620,14 @@ test.describe('frontend-admin-v3 shell smoke', () => {
       window.localStorage.setItem('admin_last_active_at', String(Date.now()));
     });
 
+    const initialCategoryTreeRequest = page.waitForRequest((request) => {
+      const url = new URL(request.url());
+      return url.pathname === '/api/v2/admin/product-groups/tree';
+    });
     await page.goto('/admin/products', { waitUntil: 'domcontentloaded' });
+    expect(new URL((await initialCategoryTreeRequest).url()).searchParams.get('first_product_group_code')).toBe(
+      'cloud_server',
+    );
     await expect(page).toHaveURL(/\/admin\/products/);
     await expect(page.getByText('商品分类').first()).toBeVisible();
     await expect(page.getByText('标准云服务器')).toBeVisible();
@@ -5247,6 +5255,63 @@ test.describe('frontend-admin-v3 shell smoke', () => {
 
     await page.getByRole('button', { name: '资金管理' }).click();
     await expect(page.locator('.t-dialog:visible').getByText('操作类型')).toBeVisible();
+  });
+
+  test('opens the client login page and hands over the login code without a URL query', async ({ page, context }) => {
+    await mockAdminInfo(page);
+    await mockUserDetail(page);
+    await context.addInitScript(() => {
+      window.localStorage.setItem('admin_token', 'test-token');
+      window.localStorage.setItem('admin_last_active_at', String(Date.now()));
+      window.addEventListener('message', (event) => {
+        if (event.data?.type === 'caiwu:login-as-code') {
+          (window as typeof window & { __loginAsCode?: unknown }).__loginAsCode = {
+            code: event.data.code,
+            origin: event.origin,
+          };
+        }
+      });
+    });
+
+    await page.goto('/admin/users/1', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('button', { name: '代登录', exact: true })).toBeVisible();
+
+    const popupPromise = page.waitForEvent('popup');
+    await page.getByRole('button', { name: '代登录', exact: true }).click();
+    const popup = await popupPromise;
+    await popup.waitForURL(/\/client\/login-as$/);
+    expect(new URL(popup.url()).searchParams.has('code')).toBe(false);
+    await popup.evaluate((openerOrigin) => {
+      window.opener?.postMessage({ type: 'caiwu:login-as-ready' }, openerOrigin);
+    }, new URL(page.url()).origin);
+    await expect(page.getByText('已打开客户端登录页')).toBeVisible();
+    await expect
+      .poll(() => popup.evaluate(() => (window as typeof window & { __loginAsCode?: unknown }).__loginAsCode ?? null))
+      .toEqual({ code: 'LOGIN-AS-CODE', origin: new URL(page.url()).origin });
+    await popup.close();
+  });
+
+  test('does not issue a login code when the browser blocks the login-as popup', async ({ page }) => {
+    await mockAdminInfo(page);
+    await mockUserDetail(page);
+    await page.addInitScript(() => {
+      window.localStorage.setItem('admin_token', 'test-token');
+      window.localStorage.setItem('admin_last_active_at', String(Date.now()));
+      window.open = () => null;
+    });
+
+    let loginAsRequestCount = 0;
+    page.on('request', (request) => {
+      if (new URL(request.url()).pathname.endsWith('/api/v2/admin/users/1/login-as')) {
+        loginAsRequestCount += 1;
+      }
+    });
+
+    await page.goto('/admin/users/1', { waitUntil: 'domcontentloaded' });
+    await page.getByRole('button', { name: '代登录', exact: true }).click();
+
+    await expect(page.getByText('浏览器拦截了代登录窗口，请允许弹窗后重试')).toBeVisible();
+    expect(loginAsRequestCount).toBe(0);
   });
 
   test('opens user detail deep service and invoice actions', async ({ page }) => {

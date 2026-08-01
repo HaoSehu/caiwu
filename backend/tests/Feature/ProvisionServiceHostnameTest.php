@@ -644,7 +644,7 @@ class ProvisionServiceHostnameTest extends TestCase
     }
 
     #[Test]
-    public function ensure_local_service_uses_resolved_hostname_as_instance_name(): void
+    public function ensure_local_service_uses_resolved_hostname_as_instance_name_with_auto_renew_disabled(): void
     {
         $provisionService = new ProvisionService(
             $this->makeProviderResolver(new class extends HostingPanelApiTransport
@@ -695,6 +695,26 @@ class ProvisionServiceHostnameTest extends TestCase
 
         $this->assertSame('通用NAT-2vcpu-1gib', (string) $service->name);
         $this->assertSame('ltser1234567890', (string) $service->domain);
+        $this->assertSame(0, (int) $service->auto_renew);
+    }
+
+    #[Test]
+    public function services_database_default_disables_auto_renew(): void
+    {
+        $order = $this->makeOrder('ltser1234567890', 506);
+
+        $service = Service::query()->create([
+            'user_id' => $order->user_id,
+            'product_id' => (int) $order->product_id,
+            'name' => '默认续费状态测试',
+            'domain' => '',
+            'billing_cycle' => 'monthly',
+            'amount' => '5.00',
+            'status' => ServiceStatus::PENDING,
+            'provision_data' => [],
+        ]);
+
+        $this->assertSame(0, (int) $service->auto_renew);
     }
 
     #[Test]

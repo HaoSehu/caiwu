@@ -7,7 +7,12 @@
           返回用户列表
         </t-button>
         <div class="user-detail-actions">
-          <t-button theme="primary" :disabled="!user.id" :loading="loginAsLoading" @click="handleLoginAs"
+          <t-button
+            v-if="canLoginAs"
+            theme="primary"
+            :disabled="!user.id"
+            :loading="loginAsLoading"
+            @click="handleLoginAs"
             >代登录</t-button
           >
           <t-button theme="default" :disabled="!user.id" @click="openEditDialog">编辑资料</t-button>
@@ -781,7 +786,8 @@
               <p>
                 {{
                   fieldValue(
-                    currentInvoice.product_spec_display ||
+                    currentInvoice.product_full_path ||
+                      currentInvoice.product_spec_display ||
                       currentInvoice.product_display_name ||
                       currentInvoice.product?.display_name,
                   )
@@ -1663,43 +1669,62 @@ async function handleLoginAs() {
     return;
   }
 
+  const popup = window.open('about:blank', '_blank');
+  if (!popup) {
+    MessagePlugin.error('浏览器拦截了代登录窗口，请允许弹窗后重试');
+    return;
+  }
+
   loginAsLoading.value = true;
   try {
     const response = await userApi.loginAs(userId.value);
     const code = String(response.login_code || '').trim();
     if (!code) {
+      closeLoginAsPopup(popup);
       MessagePlugin.error('未获取到代登录凭证');
       return;
     }
+
     const target = resolveLoginAsTarget(response.target_url);
-    const popup = window.open(target, '_blank');
-    if (!popup) {
-      MessagePlugin.error('娴忚鍣ㄦ嫤姝簡浠ｇ櫥褰曠獥鍙ｏ紝璇峰厑璁稿脊绐楀悗閲嶈瘯');
+    if (!target) {
+      closeLoginAsPopup(popup);
+      MessagePlugin.error('客户端代登录地址无效，请检查客户端控制台配置');
       return;
     }
 
+    popup.location.replace(target);
     await waitForLoginAsReady(popup, target);
     popup.postMessage({ type: LOGIN_AS_CODE_EVENT, code }, new URL(target, window.location.origin).origin);
     MessagePlugin.success('已打开客户端登录页');
   } catch (error) {
+    closeLoginAsPopup(popup);
     MessagePlugin.error(errorMessage(error, '代登录失败'));
   } finally {
     loginAsLoading.value = false;
   }
 }
 
+function closeLoginAsPopup(popup: Window) {
+  if (!popup.closed) {
+    popup.close();
+  }
+}
+
 function resolveLoginAsTarget(targetUrl: string | undefined) {
-  const fallbackPath = '/client/login-as';
   const rawTarget = String(targetUrl || '').trim();
-  if (!rawTarget) return fallbackPath;
+  if (!rawTarget) return '';
 
   try {
     const target = new URL(rawTarget, window.location.origin);
+    if (!['http:', 'https:'].includes(target.protocol)) {
+      return '';
+    }
     target.pathname = '/client/login-as';
-    target.searchParams.delete('code');
+    target.search = '';
+    target.hash = '';
     return target.toString();
   } catch {
-    return fallbackPath;
+    return '';
   }
 }
 
@@ -1709,7 +1734,7 @@ function waitForLoginAsReady(targetWindow: Window, targetUrl: string) {
   return new Promise<void>((resolve, reject) => {
     const timer = window.setTimeout(() => {
       window.removeEventListener('message', handleMessage);
-      reject(new Error('客户端模拟登录窗口未完成初始化'));
+      reject(new Error('客户端代登录窗口未完成初始化'));
     }, LOGIN_AS_READY_TIMEOUT_MS);
 
     function handleMessage(event: MessageEvent) {
@@ -2114,6 +2139,7 @@ function paginationOf(state: PageState) {
 }
 function serviceName(row: Row) {
   return (
+    row.product_full_path ||
     row.name ||
     row.product_display_name ||
     row.product?.display_name ||

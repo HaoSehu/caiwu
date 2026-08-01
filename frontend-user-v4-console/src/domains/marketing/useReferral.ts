@@ -10,6 +10,7 @@ import type {
   ReferralAccountLogRecord,
   ReferralOverviewPayload,
   ReferralRewardRecord,
+  ReferralUserBrief,
   ReferralWithdrawalRecord,
 } from '@/types/client';
 import { getErrorMessage } from '@/utils/error';
@@ -61,7 +62,7 @@ function resolveList<T>(list: T[] | undefined) {
 export function useReferral() {
   const userStore = useUserStore();
   const loading = ref(false);
-  const activeTab = ref<'rewards' | 'withdrawals' | 'logs'>('rewards');
+  const activeTab = ref<'rewards' | 'withdrawals' | 'logs' | 'direct'>('direct');
   const bindDialogVisible = ref(false);
   const withdrawSubmitting = ref(false);
   const bindSubmitting = ref(false);
@@ -69,6 +70,7 @@ export function useReferral() {
   const rewards = ref<ReferralRewardRecord[]>([]);
   const accountLogs = ref<ReferralAccountLogRecord[]>([]);
   const withdrawals = ref<ReferralWithdrawalRecord[]>([]);
+  const directReferrals = ref<ReferralUserBrief[]>([]);
   const alipayAccount = reactive<ClientAlipayAccount & { is_bound: boolean }>({
     real_name: '',
     account: '',
@@ -118,16 +120,18 @@ export function useReferral() {
   async function loadAll() {
     loading.value = true;
     try {
-      const [overviewRes, rewardsRes, logsRes, withdrawalsRes] = await Promise.all([
+      const [overviewRes, rewardsRes, logsRes, withdrawalsRes, directRes] = await Promise.all([
         clientApi.referralOverview(),
         clientApi.referralRewards({ page: 1, page_size: 10 }),
         clientApi.referralAccountLogs({ page: 1, page_size: 10 }),
         clientApi.referralWithdrawals({ page: 1, page_size: 10 }),
+        clientApi.referralDirectReferrals({ page: 1, page_size: 10 }),
       ]);
       Object.assign(overview, overviewRes.data || {});
       rewards.value = resolveList(rewardsRes.data?.list);
       accountLogs.value = resolveList(logsRes.data?.list);
       withdrawals.value = resolveList(withdrawalsRes.data?.list);
+      directReferrals.value = resolveList(directRes.data?.list);
     } catch (error: unknown) {
       MessagePlugin.error(getErrorMessage(error, '推荐奖励数据加载失败'));
     } finally {
@@ -203,6 +207,7 @@ export function useReferral() {
     rewards,
     accountLogs,
     withdrawals,
+    directReferrals,
     alipayAccount,
     withdrawForm,
     bindForm,

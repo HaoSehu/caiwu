@@ -10,8 +10,13 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 
+/**
+ * 按账单当前状态异步同步优惠券占用，避免阻塞支付响应链路。
+ */
 class SyncInvoiceCouponUsageJob implements ShouldQueue
 {
     use Dispatchable;
@@ -23,9 +28,22 @@ class SyncInvoiceCouponUsageJob implements ShouldQueue
 
     public int $timeout = 300;
 
-    public int $backoff = 5;
+    public array $backoff = [30, 120, 300];
 
-    public function __construct(public int $invoiceId) {}
+    public function __construct(public int $invoiceId)
+    {
+        $this->onQueue('coupon');
+        $this->afterCommit();
+    }
+
+    public function middleware(): array
+    {
+        return [
+            (new WithoutOverlapping("job:invoice-coupon:{$this->invoiceId}"))
+                ->releaseAfter(10)
+                ->expireAfter(600),
+        ];
+    }
 
     public function handle(CouponService $service): void
     {
@@ -34,5 +52,14 @@ class SyncInvoiceCouponUsageJob implements ShouldQueue
         if ($invoice instanceof Invoice) {
             $service->syncInvoiceCouponUsage($invoice);
         }
+    }
+
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('[账单优惠券同步] 队列任务失败', [
+            'invoice_id' => $this->invoiceId,
+            'message' => $exception->getMessage(),
+            'exception' => $exception::class,
+        ]);
     }
 }

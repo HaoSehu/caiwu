@@ -161,6 +161,20 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 lockTtlSeconds: 3660,
             ),
             $this->task(
+                key: 'log-archive',
+                title: '日志归档',
+                category: '系统维护',
+                description: '每天归档超过保留期限的普通日志，并写入归档审计与执行报告。',
+                triggers: [ScheduleRule::cron('0 2 * * *')],
+                handler: fn (): array => $this->runArtisan('db:archive-logs', [
+                    '--execute' => true,
+                    '--json' => true,
+                ]),
+                timeout: 3600,
+                lockTtlSeconds: 3660,
+                manualTriggerable: false,
+            ),
+            $this->task(
                 key: 'coupon-campaign-dispatch',
                 title: '优惠券活动发放',
                 category: '营销活动',

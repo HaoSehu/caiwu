@@ -66,6 +66,7 @@ final readonly class PluginSmsDriver implements SmsDriver
         return new SmsSendResult(
             status: (string) ($data['status'] ?? 'success'),
             requestId: isset($data['request_id']) ? (string) $data['request_id'] : null,
+            bizId: isset($data['biz_id']) ? (string) $data['biz_id'] : null,
             templateCode: (string) ($data['template_code'] ?? ''),
             templateParams: is_array($data['template_params'] ?? null) ? $data['template_params'] : [],
             raw: is_array($data['raw'] ?? null) ? $data['raw'] : $data,

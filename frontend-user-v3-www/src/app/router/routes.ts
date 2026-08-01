@@ -36,13 +36,13 @@ export const clientRoutes: RouteRecordRaw[] = [
       },
       ...seoLandingRoutes,
       {
-        path: 'products/:typeId(\\d+)/:groupId(\\d+)/:childGroupId(\\d+)/:productId(\\d+)',
+        path: 'products/:typeId/:groupId(\\d+)/:childGroupId(\\d+)/:productId(\\d+)',
         name: 'WwwProductsPurchaseWithChild',
         component: lazyRouteView(() => import('@/pages/website/products/index.vue')),
         meta: { title: '产品与服务', noSitemap: true, robots: 'noindex,nofollow' },
       },
       {
-        path: 'products/:typeId(\\d+)/:groupId(\\d+)/:productId(\\d+)',
+        path: 'products/:typeId/:groupId(\\d+)/:productId(\\d+)',
         name: 'WwwProductsPurchase',
         component: lazyRouteView(() => import('@/pages/website/products/index.vue')),
         meta: { title: '产品与服务', noSitemap: true, robots: 'noindex,nofollow' },

@@ -7,6 +7,15 @@ separate staging database, then performs target-side data DML only.
 The only DDL issued by this file is CREATE DATABASE for the separate staging
 database. Target AUTO_INCREMENT values are verified after inserts instead of
 being changed with ALTER TABLE.
+
+主键与自增说明（勿改！）：
+- users.id 等主键按 dump 原值导入，这是设计约束（外键引用完整性），严禁改成
+  迁移时丢弃或重排主键。
+- 后果：导入后 AUTO_INCREMENT 变为 max(旧 id)+1，新注册用户 ID 直接延续旧
+  系统编号（本地 2026-07-25 迁移后新用户曾从 988049 开始）。
+- 本地如需恢复连续小 ID：改大 ID 用户并同步引用表，再 TRUNCATE 按原 id 重导
+  （ALTER TABLE 不能调低计数器），不要在本脚本自动重置。
+- 2026-07-31 已修复本地库：用户 988048 -> 481，自增恢复为 482。
 """
 
 from __future__ import annotations

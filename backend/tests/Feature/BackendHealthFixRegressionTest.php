@@ -24,6 +24,7 @@ use App\Services\Integrations\Plugins\UpstreamBindingWriter;
 use App\Services\System\SettingService;
 use App\Services\Upstream\ProviderKey;
 use Illuminate\Http\Request;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -217,6 +218,22 @@ class BackendHealthFixRegressionTest extends TestCase
         $this->assertSame(300, (new ProcessPaidOrderReferralRewardJob(1))->timeout);
         $this->assertSame(300, (new SendPaidInvoiceAdminNotificationJob(1))->timeout);
         $this->assertSame(300, (new SyncPaidInvoiceCouponUsageJob(1))->timeout);
+    }
+
+    public function test_invoice_coupon_sync_job_defines_transaction_and_overlap_policy(): void
+    {
+        $job = new SyncInvoiceCouponUsageJob(42);
+
+        $this->assertSame('coupon', $job->queue);
+        $this->assertTrue((bool) $job->afterCommit);
+        $this->assertSame([30, 120, 300], $job->backoff);
+
+        $middleware = $job->middleware();
+        $this->assertCount(1, $middleware);
+        $this->assertInstanceOf(WithoutOverlapping::class, $middleware[0]);
+        $this->assertSame('job:invoice-coupon:42', $middleware[0]->key);
+        $this->assertSame(10, $middleware[0]->releaseAfter);
+        $this->assertSame(600, $middleware[0]->expiresAfter);
     }
 
     public function test_queue_jobs_define_timeout_policy(): void

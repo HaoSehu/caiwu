@@ -137,6 +137,33 @@ class ZjmfFinanceTransportTest extends TestCase
         $this->assertSame(['Authorization: Bearer zjmf-jwt'], $innerTransport->captured[0]['headers']);
     }
 
+    public function test_parallel_transport_sends_zjmf_jwt_as_bearer_authorization(): void
+    {
+        $supplier = (new Supplier)->forceFill([
+            'id' => 660,
+            'interface_type' => 'zjmf_finance_api',
+            'api_url' => 'https://zjmf.example.test',
+        ]);
+
+        $innerTransport = new class extends HostingPanelApiTransport
+        {
+            public array $captured = [];
+
+            public function parallelGet(Supplier $supplier, array $requests, ?string $jwt = null, array $headers = []): array
+            {
+                $this->captured[] = compact('requests', 'jwt', 'headers');
+
+                return [];
+            }
+        };
+
+        $transport = new ZjmfFinanceTransport($innerTransport, new ZjmfAuthManager($innerTransport));
+        $transport->parallelGet($supplier, ['product' => ['uri' => '/cart/get_product_config']], 'zjmf-jwt');
+
+        $this->assertSame('zjmf-jwt', $innerTransport->captured[0]['jwt']);
+        $this->assertSame(['Authorization: Bearer zjmf-jwt'], $innerTransport->captured[0]['headers']);
+    }
+
     public function test_balance_reads_credit_from_cart_credit(): void
     {
         config(['idc.hosting_panel_api.jwt_cache_store' => 'array']);

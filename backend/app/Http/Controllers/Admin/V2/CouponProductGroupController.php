@@ -65,7 +65,7 @@ class CouponProductGroupController extends Controller
         $groups = $request->input('groups', []);
 
         if (! is_array($groups) || empty($groups)) {
-            return response()->json(['code' => 0, 'data' => []]);
+            return $this->success([]);
         }
 
         $result = $this->queryService->batchProducts($groups);
@@ -75,6 +75,6 @@ class CouponProductGroupController extends Controller
             $data[$groupKey] = CouponProductResource::collection($products)->resolve($request);
         }
 
-        return response()->json(['code' => 0, 'data' => $data]);
+        return $this->success($data);
     }
 }
