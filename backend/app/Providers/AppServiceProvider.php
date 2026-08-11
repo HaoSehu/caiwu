@@ -2,10 +2,13 @@
 
 namespace App\Providers;
 
+use App\Listeners\HeartbeatTaskTimedOutListener;
 use App\Models\Setting;
 use App\Services\Auth\LegacyPasswordVerifier;
 use App\Services\System\UploadedAssetReferenceService;
 use Carbon\CarbonInterface;
+use Illuminate\Queue\Events\JobTimedOut;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Sanctum\PersonalAccessToken;
@@ -34,6 +37,10 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->loadSiteNameFromSettings();
+
+        // 心跳任务超时被杀时，Worker 在 SIGKILL 前同步派发 JobTimedOut；
+        // 监听器把运行台账收敛为 retrying/failed，避免队列重试被状态 CAS 永久拒绝。
+        Event::listen(JobTimedOut::class, HeartbeatTaskTimedOutListener::class);
 
         Sanctum::authenticateAccessTokensUsing(function (PersonalAccessToken $accessToken, bool $isValid): bool {
             if (! $isValid) {

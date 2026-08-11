@@ -18,6 +18,7 @@ const catalogStatuses = new Set([
   "current",
   "needs-review",
   "active",
+  "进行中",
   "completed",
   "tech-debt",
   "generated",

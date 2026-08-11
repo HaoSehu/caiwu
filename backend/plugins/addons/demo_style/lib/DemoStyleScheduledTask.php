@@ -66,7 +66,7 @@ final class DemoStyleScheduledTask implements ScheduledTask
 
     public function queue(): string
     {
-        return 'default';
+        return (string) config('queue.caiwu_schedule_queue', 'automation');
     }
 
     public function timeout(): int

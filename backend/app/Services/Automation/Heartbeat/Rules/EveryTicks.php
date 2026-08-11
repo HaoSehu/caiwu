@@ -34,6 +34,11 @@ final readonly class EveryTicks implements TriggerRule
             : "每 {$this->interval} 次心跳";
     }
 
+    public function interval(): int
+    {
+        return $this->interval;
+    }
+
     public function nextDueAfter(CarbonInterface $time): ?CarbonImmutable
     {
         $slot = TickSlot::floorToFifteenMinutes($time)->addMinutes(15);

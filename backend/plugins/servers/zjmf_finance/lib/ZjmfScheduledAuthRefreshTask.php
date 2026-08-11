@@ -60,7 +60,7 @@ final class ZjmfScheduledAuthRefreshTask implements ScheduledTask
 
     public function queue(): string
     {
-        return 'default';
+        return (string) config('queue.caiwu_schedule_queue', 'automation');
     }
 
     public function timeout(): int
@@ -70,7 +70,7 @@ final class ZjmfScheduledAuthRefreshTask implements ScheduledTask
 
     public function lockTtlSeconds(): int
     {
-        return 600;
+        return 660;
     }
 
     public function manualTriggerable(): bool

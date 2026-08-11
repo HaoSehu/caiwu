@@ -76,16 +76,25 @@ class V2AdminSettingsScheduleApiTest extends TestCase
                         'artisan_path' => 'C:\\app\\artisan',
                         'schedule_source' => 'C:\\app\\routes\\console.php',
                         'queue_driver' => 'database',
+                        'business_queue' => 'provision,referral,notification,coupon,default',
+                        'automation_queue' => 'automation',
                         'jobs_table_ready' => true,
                         'failed_jobs_table_ready' => true,
                         'pending_jobs' => 2,
                         'failed_jobs' => 1,
-                        'queue_runtime_mode' => 'database_queue_heartbeat_drained',
+                        'queue_runtime_mode' => 'database_queue_parallel_drained',
                         'schedule_mutex' => ['enabled' => true, 'cache_store' => 'array'],
                         'automation_config' => ['status' => 'loaded'],
                     ],
                     'commands' => [
                         ['command' => 'must-not-return'],
+                    ],
+                    'runs_summary' => [
+                        'active' => 1,
+                        'stale' => 0,
+                        'failed_24h' => 0,
+                        'success_24h' => 12,
+                        'manual_retry_24h' => 0,
                     ],
                     'tasks' => [
                         [
@@ -159,6 +168,8 @@ class V2AdminSettingsScheduleApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('code', 0)
             ->assertJsonPath('data.environment.app_env', 'testing')
+            ->assertJsonPath('data.environment.business_queue', 'provision,referral,notification,coupon,default')
+            ->assertJsonPath('data.environment.automation_queue', 'automation')
             ->assertJsonPath('data.tasks.0.key', 'billing-maintenance')
             ->assertJsonPath('data.tasks.0.source_type', 'system')
             ->assertJsonPath('data.tasks.0.source_label', '系统任务')
@@ -174,7 +185,9 @@ class V2AdminSettingsScheduleApiTest extends TestCase
 
         $content = (string) $response->getContent();
 
-        $this->assertSame(['environment', 'tasks', 'recent_logs', 'settings_snapshot'], array_keys($response->json('data')));
+        $this->assertSame(['environment', 'tasks', 'runs_summary', 'recent_logs', 'settings_snapshot'], array_keys($response->json('data')));
+        $this->assertIsInt($response->json('data.runs_summary.active'));
+        $this->assertIsInt($response->json('data.runs_summary.stale'));
         $this->assertNoSensitiveKeys($response->json());
         $this->assertStringNotContainsString('must-not-leak', $content);
         $this->assertLessThan(100 * 1024, strlen($content));

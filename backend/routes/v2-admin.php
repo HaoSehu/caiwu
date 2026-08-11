@@ -233,10 +233,16 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
 
     Route::middleware(['permission:'.AdminPermissions::SCHEDULE_VIEW])->group(function (): void {
         Route::get('/schedules/overview', [ScheduleTaskController::class, 'overview']);
+        Route::get('/schedule-runs', [ScheduleTaskController::class, 'index']);
+        Route::get('/schedule-runs/{run}', [ScheduleTaskController::class, 'show']);
     });
 
     Route::middleware(['permission:'.AdminPermissions::SCHEDULE_TRIGGER])->group(function (): void {
         Route::post('/schedule-triggers', [ScheduleTaskController::class, 'trigger']);
+    });
+
+    Route::middleware(['permission:'.AdminPermissions::SCHEDULE_RETRY])->group(function (): void {
+        Route::post('/schedule-runs/{run}/retry', [ScheduleTaskController::class, 'retry']);
     });
 
     Route::middleware(['permission:'.AdminPermissions::CONTENT_MANAGE])->group(function (): void {

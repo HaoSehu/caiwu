@@ -50,7 +50,7 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 triggers: [ScheduleRule::everyTicks(1)],
                 handler: fn (): array => $this->refreshHostingPanelAuth(),
                 timeout: 600,
-                lockTtlSeconds: 600,
+                lockTtlSeconds: 660,
             ),
             $this->task(
                 key: 'service-auto-renew',
@@ -108,7 +108,7 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                     return $summary;
                 },
                 timeout: 900,
-                lockTtlSeconds: 900,
+                lockTtlSeconds: 960,
             ),
             $this->task(
                 key: 'service-status-sync',
@@ -189,7 +189,7 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                     return $summary;
                 },
                 timeout: 900,
-                lockTtlSeconds: 900,
+                lockTtlSeconds: 960,
             ),
             $this->task(
                 key: 'ticket-auto-close',
@@ -231,7 +231,7 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                     return $summary;
                 },
                 timeout: 900,
-                lockTtlSeconds: 900,
+                lockTtlSeconds: 960,
             ),
             $this->task(
                 key: 'reconcile-account-balance',
@@ -259,17 +259,7 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 triggers: [ScheduleRule::everyTicks(1)],
                 handler: fn (): array => $this->runArtisan('provision:retry-failed'),
                 timeout: 900,
-                lockTtlSeconds: 900,
-            ),
-            $this->task(
-                key: 'vnc-ensure-relay',
-                title: 'VNC Relay 守护',
-                category: '运行时守护',
-                description: '检测并自动拉起 VNC WebSocket 中转服务。',
-                triggers: [ScheduleRule::everyTicks(1)],
-                handler: fn (): array => $this->runArtisan('vnc:ensure-relay'),
-                timeout: 600,
-                lockTtlSeconds: 900,
+                lockTtlSeconds: 960,
             ),
             $this->task(
                 key: 'site-cache-warmup',
@@ -279,7 +269,7 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 triggers: [ScheduleRule::everyTicks(1)],
                 handler: fn (): array => $this->runArtisan('app:warmup-site-cache'),
                 timeout: 900,
-                lockTtlSeconds: 900,
+                lockTtlSeconds: 960,
             ),
             $this->task(
                 key: 'compensate-recharge-invoices',
@@ -305,7 +295,7 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
         string $description,
         array $triggers,
         Closure $handler,
-        string $queue = 'default',
+        ?string $queue = null,
         int $timeout = 900,
         int $lockTtlSeconds = 1200,
         bool $manualTriggerable = true,

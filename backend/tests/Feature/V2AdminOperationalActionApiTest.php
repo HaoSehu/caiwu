@@ -12,6 +12,7 @@ use App\Services\System\AdminLogService;
 use App\Support\AdminPermissions;
 use Laravel\Sanctum\Sanctum;
 use Mockery\MockInterface;
+use RuntimeException;
 use Tests\TestCase;
 
 class V2AdminOperationalActionApiTest extends TestCase
@@ -154,6 +155,44 @@ class V2AdminOperationalActionApiTest extends TestCase
             ->assertJsonMissingPath('data.detail.secret');
 
         $this->assertActionResponse($response->json());
+    }
+
+    public function test_schedule_trigger_maps_runtime_failures_to_a_safe_api_error(): void
+    {
+        $this->mock(ScheduleTaskTriggerService::class, function (MockInterface $mock): void {
+            $mock->shouldReceive('dispatch')
+                ->once()
+                ->andThrow(new RuntimeException('queue password must not leak'));
+        });
+
+        Sanctum::actingAs($this->createAdmin([AdminPermissions::SCHEDULE_TRIGGER]));
+
+        $this->postJson('/api/v2/admin/schedule-triggers', [
+            'task' => 'billing-maintenance',
+        ])
+            ->assertStatus(500)
+            ->assertJsonPath('code', 50000)
+            ->assertJsonPath('message', '定时任务暂时不可触发，请稍后重试')
+            ->assertJsonMissing(['message' => 'queue password must not leak']);
+    }
+
+    public function test_schedule_trigger_maps_errors_from_plugin_extensions_to_a_safe_api_error(): void
+    {
+        $this->mock(ScheduleTaskTriggerService::class, function (MockInterface $mock): void {
+            $mock->shouldReceive('dispatch')
+                ->once()
+                ->andThrow(new \Error('plugin path and token must not leak'));
+        });
+
+        Sanctum::actingAs($this->createAdmin([AdminPermissions::SCHEDULE_TRIGGER]));
+
+        $this->postJson('/api/v2/admin/schedule-triggers', [
+            'task' => 'billing-maintenance',
+        ])
+            ->assertStatus(500)
+            ->assertJsonPath('code', 50000)
+            ->assertJsonPath('message', '定时任务暂时不可触发，请稍后重试')
+            ->assertJsonMissing(['message' => 'plugin path and token must not leak']);
     }
 
     public function test_media_reindex_action_requires_content_manage_and_returns_compact_result(): void
