@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Jobs;
 
 use App\Services\Automation\Heartbeat\Data\TaskContext;
@@ -38,7 +40,7 @@ class RunHeartbeatTaskJob implements ShouldQueue
         ?int $taskTimeout = null,
     ) {
         $this->timeout = max(1, $taskTimeout ?? $this->timeout);
-        $this->onQueue('default');
+        $this->onQueue((string) config('queue.caiwu_schedule_queue', 'automation'));
         $this->afterCommit();
     }
 
@@ -60,6 +62,7 @@ class RunHeartbeatTaskJob implements ShouldQueue
     ): void {
         $task = $registry->get($this->taskKey);
         $tick = $ticks->findContext($this->tickId);
+        $finalFailure = $this->isFinalAttempt();
 
         Log::info('[心跳定时任务] 开始执行', [
             'task' => $this->taskKey,
@@ -67,6 +70,8 @@ class RunHeartbeatTaskJob implements ShouldQueue
             'tick_id' => $this->tickId,
             'task_run_id' => $this->taskRunId,
             'admin_user_id' => $this->adminUserId,
+            'attempt' => $this->currentAttempt(),
+            'final_attempt' => $finalFailure,
         ]);
 
         $result = $runner->run($task, new TaskContext(
@@ -75,8 +80,9 @@ class RunHeartbeatTaskJob implements ShouldQueue
             tick: $tick,
             taskRunId: $this->taskRunId,
             adminUserId: $this->adminUserId,
+            attempt: $this->currentAttempt(),
             triggeredAt: CarbonImmutable::now(),
-        ));
+        ), $finalFailure);
 
         Log::info('[心跳定时任务] 执行完成', [
             'task' => $this->taskKey,
@@ -91,8 +97,9 @@ class RunHeartbeatTaskJob implements ShouldQueue
     public function failed(\Throwable $exception): void
     {
         try {
+            // failed() 只负责最终失败或在进入 Runner 前失败的 Job；条件更新不会覆盖 success。
             app(ScheduleTaskRunRepository::class)
-                ->markFailed($this->taskRunId, $exception->getMessage(), 0);
+                ->markTerminalFailed($this->taskRunId, $exception->getMessage(), null);
         } catch (\Throwable $statusException) {
             Log::warning('[心跳定时任务] 写入失败状态时出错', [
                 'task' => $this->taskKey,
@@ -111,5 +118,19 @@ class RunHeartbeatTaskJob implements ShouldQueue
             'message' => $exception->getMessage(),
             'exception' => $exception::class,
         ]);
+    }
+
+    private function currentAttempt(): int
+    {
+        try {
+            return max(1, (int) $this->attempts());
+        } catch (\Throwable) {
+            return 1;
+        }
+    }
+
+    private function isFinalAttempt(): bool
+    {
+        return $this->currentAttempt() >= max(1, $this->tries);
     }
 }

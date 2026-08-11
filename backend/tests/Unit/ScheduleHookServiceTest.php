@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit;
 
 use App\Services\Automation\Contracts\ScheduleHook;
+use App\Services\Automation\Heartbeat\Providers\LegacyScheduleHookTaskProvider;
 use App\Services\Automation\ScheduleHookService;
 use App\Services\System\ScheduleRunLogService;
 use Illuminate\Support\Facades\Log;
@@ -19,6 +20,7 @@ class ScheduleHookServiceTest extends TestCase
         parent::setUp();
 
         ScheduleHookServiceTestListener::$received = [];
+        NamedDescriptorScheduleHookServiceTestListener::$received = [];
     }
 
     public function test_it_runs_configured_hook_listeners(): void
@@ -34,6 +36,58 @@ class ScheduleHookServiceTest extends TestCase
         $this->assertTrue(app(ScheduleHookService::class)->hasListeners(ScheduleHookService::HOOK_TASK_BEFORE));
         $this->assertSame('success', $results[0]['status']);
         $this->assertSame('service-auto-renew', ScheduleHookServiceTestListener::$received[0]['context']['task_key']);
+    }
+
+    public function test_it_reads_literal_config_keys_for_hooks_with_dots(): void
+    {
+        config()->set('schedule_hooks.listeners', [
+            ScheduleHookService::HOOK_TASK_BEFORE => [
+                ScheduleHookServiceTestListener::class,
+            ],
+        ]);
+
+        $results = app(ScheduleHookService::class)->run(ScheduleHookService::HOOK_TASK_BEFORE, [
+            'task_key' => 'literal-config-hook',
+        ]);
+
+        $this->assertSame('success', $results[0]['status']);
+        $this->assertSame('literal-config-hook', ScheduleHookServiceTestListener::$received[0]['context']['task_key']);
+    }
+
+    public function test_it_runs_a_direct_callable_descriptor_from_system_config(): void
+    {
+        config()->set('schedule_hooks.listeners', [
+            ScheduleHookService::HOOK_TASK_BEFORE => [
+                ScheduleHookServiceTestListener::class,
+                'handle',
+            ],
+        ]);
+
+        $results = app(ScheduleHookService::class)->run(ScheduleHookService::HOOK_TASK_BEFORE, [
+            'task_key' => 'callable-descriptor-hook',
+        ]);
+
+        $this->assertCount(1, $results);
+        $this->assertSame('success', $results[0]['status']);
+        $this->assertSame('callable-descriptor-hook', ScheduleHookServiceTestListener::$received[0]['context']['task_key']);
+    }
+
+    public function test_it_preserves_named_callable_descriptors_from_system_config(): void
+    {
+        config()->set('schedule_hooks.listeners', [
+            ScheduleHookService::HOOK_TASK_BEFORE => [
+                'class' => NamedDescriptorScheduleHookServiceTestListener::class,
+                'method' => 'Handle',
+            ],
+        ]);
+
+        $results = app(ScheduleHookService::class)->run(ScheduleHookService::HOOK_TASK_BEFORE, [
+            'task_key' => 'named-callable-descriptor-hook',
+        ]);
+
+        $this->assertCount(1, $results);
+        $this->assertSame('success', $results[0]['status']);
+        $this->assertSame('named-callable-descriptor-hook', NamedDescriptorScheduleHookServiceTestListener::$received[0]['context']['task_key']);
     }
 
     public function test_listener_failures_are_reported_without_interrupting_scheduler(): void
@@ -142,6 +196,38 @@ class ScheduleHookServiceTest extends TestCase
             'subject_type' => 'schedule_task',
         ]);
     }
+
+    public function test_legacy_hook_tasks_declare_original_cadence_but_register_at_fifteen_minute_effective_cadence(): void
+    {
+        config()->set('schedule_hooks.listeners.'.ScheduleHookService::HOOK_EVERY_MINUTE, [
+            ScheduleHookServiceTestListener::class,
+        ]);
+        config()->set('schedule_hooks.listeners.'.ScheduleHookService::HOOK_EVERY_FIVE_MINUTES, [
+            ScheduleHookServiceTestListener::class,
+        ]);
+
+        $provider = app(LegacyScheduleHookTaskProvider::class);
+        $tasks = collect($provider->tasks())->keyBy(fn ($task): string => $task->key());
+
+        $everyMinute = $tasks->get('schedule-hook-every-minute');
+        $everyFiveMinutes = $tasks->get('schedule-hook-every-five-minutes');
+
+        $this->assertNotNull($everyMinute);
+        $this->assertSame('every_minute', $everyMinute->declaredCadence());
+        $this->assertSame('every_five_minutes', $everyFiveMinutes->declaredCadence());
+
+        // 兼容名称不能代表真实 1/5 分钟执行：有效频率仍由 15 分钟槽位决定。
+        $this->assertStringContainsString('15 分钟心跳触发', $everyMinute->description());
+        $this->assertStringContainsString('15 分钟心跳触发', $everyFiveMinutes->description());
+        $this->assertFalse($everyMinute->manualTriggerable());
+    }
+
+    public function test_legacy_hook_tasks_are_not_registered_without_listeners(): void
+    {
+        $provider = app(LegacyScheduleHookTaskProvider::class);
+
+        $this->assertSame([], $provider->tasks());
+    }
 }
 
 final class ScheduleHookServiceTestListener implements ScheduleHook
@@ -164,5 +250,22 @@ final class FailingScheduleHookServiceTestListener implements ScheduleHook
     public function handle(string $hook, array $context = []): mixed
     {
         throw new RuntimeException('hook failed for test');
+    }
+}
+
+final class NamedDescriptorScheduleHookServiceTestListener
+{
+    /** @var list<array{hook:string, context:array<string, mixed>}> */
+    public static array $received = [];
+
+    /** @param array<string, mixed> $context */
+    public function Handle(string $hook, array $context = []): array
+    {
+        self::$received[] = [
+            'hook' => $hook,
+            'context' => $context,
+        ];
+
+        return ['handled' => true];
     }
 }

@@ -78,9 +78,9 @@ class ScheduleTaskExecutionCoverageTest extends TestCase
             );
         }
 
-        $this->assertTrue(
-            $tasks->contains(fn (array $task): bool => ($task['key'] ?? null) === 'vnc-ensure-relay' && ($task['title'] ?? null) === 'VNC Relay 守护'),
-            'Missing vnc-ensure-relay schedule entry.'
+        $this->assertFalse(
+            $tasks->contains(fn (array $task): bool => ($task['key'] ?? null) === 'vnc-ensure-relay'),
+            'vnc-ensure-relay must not be registered as a heartbeat schedule task.'
         );
         $this->assertFalse(
             $tasks->contains(fn (array $task): bool => ($task['key'] ?? null) === 'sync-processing-order-status'),

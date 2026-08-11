@@ -7,6 +7,10 @@ namespace App\Services\Integrations\Plugins;
 use App\Exceptions\BusinessException;
 use App\Models\IntegrationPlugin;
 use App\Services\Automation\Heartbeat\Contracts\ScheduledTask;
+use App\Services\Automation\Heartbeat\Providers\CoreScheduledTaskProvider;
+use App\Services\Automation\Heartbeat\Providers\LegacyScheduleHookTaskProvider;
+use App\Services\Automation\Heartbeat\ScheduleDeclarationNormalizer;
+use App\Services\Automation\Heartbeat\ScheduledTaskValidator;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
 use App\Services\Integrations\Payments\PaymentGatewayRegistry;
 use App\Services\Mail\MailDriverManager;
@@ -16,6 +20,7 @@ use App\Services\Upstream\ProviderResolver;
 use App\Services\Verification\VerificationDriverManager;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 class PluginInstaller
@@ -25,6 +30,7 @@ class PluginInstaller
         private readonly PluginFileLoader $fileLoader,
         private readonly PluginConfigRepository $configRepository,
         private readonly PluginProviderRegistry $providerRegistry,
+        private readonly ScheduledTaskValidator $scheduledTaskValidator,
         private readonly Container $container,
     ) {}
 
@@ -63,6 +69,9 @@ class PluginInstaller
         $this->assertManifestExecutable($manifest);
 
         DB::transaction(function () use ($plugin, $manifest): void {
+            // 任务 key 是全局唯一约束；在同一事务内锁住插件注册行并再次校验，
+            // 避免两个并发启用请求同时通过预检后留下重复任务。
+            $this->assertScheduledTaskInstancesValid($manifest, true);
             $this->assertSingleEnabledDomainAvailable($plugin);
             $this->configRepository->assertConfigReady($plugin, $manifest);
 
@@ -74,7 +83,39 @@ class PluginInstaller
         });
 
         $this->forgetDomainRuntime($manifest->domain);
-        $this->providerRegistry->activate($manifest);
+        try {
+            $this->providerRegistry->activate($manifest);
+        } catch (\Throwable $exception) {
+            // 状态提交后 Provider 才激活；激活失败必须回写 disabled，避免出现“已启用但运行时不可用”的半状态。
+            Log::error('[插件] Provider 激活失败，准备回滚启用状态', [
+                'domain' => $manifest->domain,
+                'slug' => $manifest->slug,
+                'message' => $exception->getMessage(),
+                'exception' => $exception::class,
+            ]);
+
+            try {
+                DB::transaction(function () use ($plugin, $manifest): void {
+                    $plugin->forceFill([
+                        'status' => IntegrationPlugin::STATUS_DISABLED,
+                    ])->save();
+                    $this->syncDriverBinding($plugin, $manifest, false);
+                });
+            } catch (\Throwable $rollbackException) {
+                Log::critical('[插件] Provider 激活失败且状态回滚失败', [
+                    'domain' => $manifest->domain,
+                    'slug' => $manifest->slug,
+                    'activation_message' => $exception->getMessage(),
+                    'activation_exception' => $exception::class,
+                    'rollback_message' => $rollbackException->getMessage(),
+                    'rollback_exception' => $rollbackException::class,
+                ]);
+
+                throw new BusinessException('插件启用失败，状态回滚未完成，请联系管理员处理', 42200);
+            }
+
+            throw new BusinessException('插件启用失败，Provider 初始化未完成，请检查系统日志', 42200);
+        }
 
         return $plugin->fresh('config') ?? $plugin;
     }
@@ -90,6 +131,7 @@ class PluginInstaller
             ->where('domain', $domain)
             ->where('status', IntegrationPlugin::STATUS_ENABLED)
             ->where('id', '<>', (int) $plugin->id)
+            ->orderBy('id')
             ->lockForUpdate()
             ->first(['id', 'name', 'slug']);
 
@@ -171,8 +213,8 @@ class PluginInstaller
      */
     private function assertScheduleDeclarationsValid(PluginManifest $manifest): void
     {
-        foreach ((array) ($manifest->extra['scheduled_tasks'] ?? []) as $definition) {
-            $class = $this->scheduleListenerClass($definition);
+        foreach (ScheduleDeclarationNormalizer::list($manifest->extra['scheduled_tasks'] ?? []) as $definition) {
+            $class = ScheduleDeclarationNormalizer::className($definition);
             if ($class === '') {
                 continue;
             }
@@ -186,42 +228,192 @@ class PluginInstaller
             }
         }
 
+        $this->assertScheduledTaskInstancesValid($manifest);
+
         foreach ((array) ($manifest->extra['schedule_hooks'] ?? []) as $listeners) {
-            foreach ((array) $listeners as $definition) {
-                $class = $this->scheduleListenerClass($definition);
+            foreach (ScheduleDeclarationNormalizer::list($listeners) as $definition) {
+                $class = ScheduleDeclarationNormalizer::className($definition);
                 if ($class === '') {
-                    continue;
+                    if (is_callable($definition)) {
+                        continue;
+                    }
+
+                    throw new BusinessException('插件调度 Hook 声明缺少 class', 42200);
                 }
 
                 if (! class_exists($class)) {
                     throw new BusinessException("插件声明的调度 Hook 类不存在 [{$class}]", 42200);
                 }
 
-                $method = is_array($definition) ? trim((string) ($definition['method'] ?? 'handle')) : 'handle';
-                if (! method_exists($class, $method ?: 'handle')) {
-                    throw new BusinessException("插件调度 Hook 缺少 {$method} 方法 [{$class}]", 42200);
-                }
+                $method = ScheduleDeclarationNormalizer::methodName($definition);
+                $this->assertPublicHookMethod($class, $method ?: 'handle');
             }
         }
     }
 
-    /**
-     * 兼容 `Foo::class`、`[Foo::class, 'handle']` 和 `['class' => Foo::class, 'method' => 'handle']`
-     * 三种写法，与 config/schedule_hooks.php 保持一致。闭包等可调用对象跳过校验。
-     */
-    private function scheduleListenerClass(mixed $definition): string
+    private function assertPublicHookMethod(string $class, string $method): void
     {
-        if (is_string($definition)) {
-            return trim($definition);
+        if (! method_exists($class, $method)) {
+            throw new BusinessException("插件调度 Hook 缺少 {$method} 方法 [{$class}]", 42200);
         }
 
-        if (! is_array($definition)) {
-            return '';
+        try {
+            $reflection = new \ReflectionMethod($class, $method);
+        } catch (\ReflectionException) {
+            throw new BusinessException("插件调度 Hook 方法不可读取 [{$class}@{$method}]", 42200);
         }
 
-        return trim((string) ($definition['class'] ?? $definition[0] ?? ''));
+        if (! $reflection->isPublic()) {
+            throw new BusinessException("插件调度 Hook 方法必须为 public [{$class}@{$method}]", 42200);
+        }
     }
 
+    /**
+     * 实例化并校验任务契约，同时拒绝与系统任务冲突的 key。
+     *
+     * @throws BusinessException
+     */
+    private function assertScheduledTaskInstancesValid(PluginManifest $manifest, bool $lockPluginRows = false): void
+    {
+        $knownKeys = $this->knownTaskKeys($manifest, $lockPluginRows);
+
+        foreach (ScheduleDeclarationNormalizer::list($manifest->extra['scheduled_tasks'] ?? []) as $definition) {
+            $class = ScheduleDeclarationNormalizer::className($definition);
+            if ($class === '') {
+                throw new BusinessException('插件定时任务声明缺少 class', 42200);
+            }
+
+            try {
+                $task = $this->container->make($class);
+                if (! $task instanceof ScheduledTask) {
+                    throw new BusinessException("插件定时任务未实现 ScheduledTask 接口 [{$class}]", 42200);
+                }
+
+                $this->scheduledTaskValidator->validate($task, "插件 {$manifest->domain}/{$manifest->slug}");
+                $key = trim($task->key());
+                if (isset($knownKeys[$key])) {
+                    throw new BusinessException("插件定时任务 key 冲突：{$key}", 42200);
+                }
+
+                $knownKeys[$key] = true;
+            } catch (BusinessException $exception) {
+                throw $exception;
+            } catch (\Throwable $exception) {
+                throw new BusinessException("插件定时任务实例化失败 [{$class}]：{$exception->getMessage()}", 42200);
+            }
+        }
+    }
+
+    /** @return array<string, bool> */
+    private function knownTaskKeys(PluginManifest $candidate, bool $lockPluginRows = false): array
+    {
+        $keys = [];
+
+        foreach ([CoreScheduledTaskProvider::class, LegacyScheduleHookTaskProvider::class] as $providerClass) {
+            try {
+                $provider = $this->container->make($providerClass);
+                foreach ($provider->tasks() as $task) {
+                    if (trim($task->key()) !== '') {
+                        $keys[trim($task->key())] = true;
+                    }
+                }
+            } catch (\Throwable $exception) {
+                if ($lockPluginRows) {
+                    // 启用阶段必须能确认系统任务 key；否则不能把“注册成功”建立在
+                    // 一个不完整的冲突集合上，待系统任务恢复后才发现插件任务被跳过。
+                    Log::error('[插件] 系统定时任务 key 校验失败，已拒绝启用插件', [
+                        'provider' => $providerClass,
+                        'domain' => $candidate->domain,
+                        'slug' => $candidate->slug,
+                        'message' => $exception->getMessage(),
+                        'exception' => $exception::class,
+                    ]);
+
+                    throw new BusinessException('系统定时任务校验不可用，无法启用插件', 42200);
+                }
+
+                // 这里仅用于预检；正常注册链路会记录 Provider 本身的故障。
+            }
+        }
+
+        try {
+            if (! Schema::hasTable('integration_plugins')) {
+                return $keys;
+            }
+
+            $query = IntegrationPlugin::query();
+            if (! $lockPluginRows) {
+                $query
+                    ->where('status', IntegrationPlugin::STATUS_ENABLED)
+                    ->where(function ($nested) use ($candidate): void {
+                        $nested
+                            ->where('domain', '<>', $candidate->domain)
+                            ->orWhere('slug', '<>', $candidate->slug);
+                    });
+            } else {
+                // 锁住所有注册行（包括当前候选插件），使跨 domain 的全局 task key 校验串行化。
+                $query
+                    ->orderBy('id')
+                    ->lockForUpdate();
+            }
+
+            $plugins = $query->get(['domain', 'slug', 'status']);
+
+            foreach ($plugins as $plugin) {
+                if ((string) $plugin->domain === (string) $candidate->domain
+                    && (string) $plugin->slug === (string) $candidate->slug) {
+                    continue;
+                }
+
+                if ((int) $plugin->status !== IntegrationPlugin::STATUS_ENABLED) {
+                    continue;
+                }
+
+                try {
+                    $manifest = $this->scanner->find((string) $plugin->domain, (string) $plugin->slug);
+                    if (! $manifest instanceof PluginManifest) {
+                        continue;
+                    }
+                    $this->fileLoader->ensureLoaded($manifest);
+
+                    foreach (ScheduleDeclarationNormalizer::list($manifest->extra['scheduled_tasks'] ?? []) as $definition) {
+                        $class = ScheduleDeclarationNormalizer::className($definition);
+                        if ($class === '') {
+                            continue;
+                        }
+                        $task = $this->container->make($class);
+                        if ($task instanceof ScheduledTask && trim($task->key()) !== '') {
+                            $keys[trim($task->key())] = true;
+                        }
+                    }
+                } catch (\Throwable) {
+                    // 坏的既有插件由运行时 Provider 隔离，不应阻止当前插件完成独立预检。
+                }
+            }
+        } catch (BusinessException $exception) {
+            throw $exception;
+        } catch (\Throwable $exception) {
+            if ($lockPluginRows) {
+                // 启用阶段的串行化锁不可用时必须拒绝启用，不能退化为无保护预检。
+                Log::error('[插件] 定时任务 key 校验锁不可用，已拒绝启用插件', [
+                    'domain' => $candidate->domain,
+                    'slug' => $candidate->slug,
+                    'message' => $exception->getMessage(),
+                    'exception' => $exception::class,
+                ]);
+
+                throw new BusinessException('插件定时任务 key 校验不可用，无法启用插件', 42200);
+            }
+
+            // 数据表不可用时保留核心 key 校验；启用事务本身会报告数据库故障。
+        }
+
+        return $keys;
+    }
+
+    /**
+     * 兼容 `Foo::class`、`[Foo::class, 'handle']` 和 `['class' => Foo::class, 'method' => 'handle']`。
+     */
     private function syncDriverBinding(IntegrationPlugin $plugin, PluginManifest $manifest, bool $enabled): void
     {
         if (! Schema::hasTable('integration_plugin_bindings')) {

@@ -7,7 +7,10 @@ namespace Tests\Feature;
 use App\Exceptions\BusinessException;
 use App\Models\IntegrationPlugin;
 use App\Models\Supplier;
+use App\Services\Automation\Heartbeat\Contracts\ScheduledTaskProvider;
+use App\Services\Automation\Heartbeat\Providers\CoreScheduledTaskProvider;
 use App\Services\Automation\Heartbeat\Providers\PluginScheduledTaskProvider;
+use App\Services\Automation\Heartbeat\ScheduledTaskValidator;
 use App\Services\Automation\ScheduleHookService;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
 use App\Services\Integrations\Payments\PaymentGatewayRegistry;
@@ -16,6 +19,8 @@ use App\Services\Integrations\Plugins\PluginConfigRepository;
 use App\Services\Integrations\Plugins\PluginDomain;
 use App\Services\Integrations\Plugins\PluginFileLoader;
 use App\Services\Integrations\Plugins\PluginInstaller;
+use App\Services\Integrations\Plugins\PluginManifest;
+use App\Services\Integrations\Plugins\PluginProviderRegistry;
 use App\Services\Integrations\Plugins\PluginRuntimeRegistry;
 use App\Services\Integrations\Plugins\PluginScanner;
 use App\Services\System\NotificationService;
@@ -34,6 +39,8 @@ use Caiwu\Plugins\Sms\DemoSms\DemoSmsPlugin;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Mockery;
+use RuntimeException;
 use Tests\TestCase;
 
 class PluginSimulationTest extends TestCase
@@ -502,6 +509,120 @@ class PluginSimulationTest extends TestCase
         $this->assertNotNull($task);
         $this->assertSame('Demo Style 扩展刷新', $task->title());
         $this->assertTrue($task->manualTriggerable());
+    }
+
+    public function test_plugin_scheduled_task_provider_isolates_a_bad_declaration(): void
+    {
+        $this->ensurePluginTables();
+        $this->activatePlugin(PluginDomain::ADDONS, 'demo_style', [
+            'theme_name' => 'classic-blue',
+            'accent_color' => '#2563eb',
+            'enabled' => true,
+        ]);
+
+        $original = app(PluginScanner::class)->requireManifest(PluginDomain::ADDONS, 'demo_style');
+        $manifest = new PluginManifest(
+            domain: $original->domain,
+            slug: $original->slug,
+            key: $original->key,
+            name: $original->name,
+            version: $original->version,
+            entryClass: $original->entryClass,
+            providerClass: $original->providerClass,
+            capabilities: $original->capabilities,
+            configSchema: $original->configSchema,
+            basePath: $original->basePath,
+            extra: array_replace($original->extra, [
+                'scheduled_tasks' => [
+                    'Tests\\Fixtures\\MissingScheduledTask',
+                    DemoStyleScheduledTask::class,
+                ],
+            ]),
+        );
+
+        $scanner = Mockery::mock(PluginScanner::class);
+        $scanner->shouldReceive('find')
+            ->once()
+            ->with(PluginDomain::ADDONS, 'demo_style')
+            ->andReturn($manifest);
+        app()->instance(PluginScanner::class, $scanner);
+
+        $tasks = app(PluginScheduledTaskProvider::class)->tasks();
+
+        $this->assertCount(1, $tasks);
+        $this->assertSame(DemoStyleScheduledTask::KEY, $tasks[0]->key());
+    }
+
+    public function test_plugin_enable_refuses_to_skip_system_scheduled_task_key_validation(): void
+    {
+        $this->ensurePluginTables();
+        $this->app->instance(CoreScheduledTaskProvider::class, new class implements ScheduledTaskProvider
+        {
+            public function tasks(): array
+            {
+                throw new RuntimeException('fixture core task provider is unavailable');
+            }
+        });
+
+        try {
+            $manifest = app(PluginScanner::class)->requireManifest(PluginDomain::ADDONS, 'demo_style');
+            $installer = app(PluginInstaller::class);
+            $plugin = $installer->install(PluginDomain::ADDONS, 'demo_style');
+            app(PluginConfigRepository::class)->save($plugin, $manifest, [
+                'theme_name' => 'classic-blue',
+            ]);
+
+            try {
+                $installer->enable($plugin);
+                $this->fail('系统任务 key 无法校验时不应启用插件');
+            } catch (BusinessException $exception) {
+                $this->assertSame('系统定时任务校验不可用，无法启用插件', $exception->getMessage());
+            }
+
+            $this->assertDatabaseHas('integration_plugins', [
+                'id' => $plugin->id,
+                'status' => IntegrationPlugin::STATUS_DISABLED,
+            ]);
+        } finally {
+            $this->app->forgetInstance(CoreScheduledTaskProvider::class);
+        }
+    }
+
+    public function test_plugin_provider_activation_error_is_logged_but_not_exposed_to_the_admin_api(): void
+    {
+        $this->ensurePluginTables();
+        $providerRegistry = Mockery::mock(PluginProviderRegistry::class);
+        $providerRegistry
+            ->shouldReceive('activate')
+            ->once()
+            ->andThrow(new RuntimeException('fixture provider credential leaked'));
+        $installer = new PluginInstaller(
+            app(PluginScanner::class),
+            app(PluginFileLoader::class),
+            app(PluginConfigRepository::class),
+            $providerRegistry,
+            app(ScheduledTaskValidator::class),
+            app(),
+        );
+
+        $manifest = app(PluginScanner::class)->requireManifest(PluginDomain::ADDONS, 'demo_style');
+        $plugin = $installer->install(PluginDomain::ADDONS, 'demo_style');
+        app(PluginConfigRepository::class)->save($plugin, $manifest, [
+            'theme_name' => 'classic-blue',
+        ]);
+
+        try {
+            $installer->enable($plugin);
+            $this->fail('Provider 激活失败时不应保留插件已启用状态');
+        } catch (BusinessException $exception) {
+            $this->assertSame('插件启用失败，Provider 初始化未完成，请检查系统日志', $exception->getMessage());
+            $this->assertStringNotContainsString('fixture provider credential leaked', $exception->getMessage());
+        }
+
+        $this->assertDatabaseHas('integration_plugins', [
+            'id' => $plugin->id,
+            'status' => IntegrationPlugin::STATUS_DISABLED,
+        ]);
     }
 
     // ──────────────────────────────────────────────

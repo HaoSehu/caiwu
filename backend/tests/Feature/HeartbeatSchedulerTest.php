@@ -12,18 +12,23 @@ use App\Services\Automation\Heartbeat\Contracts\ScheduledTask;
 use App\Services\Automation\Heartbeat\Data\TaskContext;
 use App\Services\Automation\Heartbeat\HeartbeatScheduler;
 use App\Services\Automation\Heartbeat\HeartbeatTaskRegistry;
+use App\Services\Automation\Heartbeat\HeartbeatTaskRunner;
 use App\Services\Automation\Heartbeat\QueueDrainService;
 use App\Services\Automation\Heartbeat\ScheduleRule;
 use App\Services\Automation\Heartbeat\ScheduleTaskRunRepository;
 use App\Services\Automation\Heartbeat\ScheduleTickRepository;
+use App\Services\Automation\Heartbeat\TickSlot;
 use App\Services\Automation\Heartbeat\TriggerRuleMatcher;
 use App\Services\Automation\ScheduleTaskTriggerService;
 use App\Services\System\ProductionReadinessService;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
+use Mockery;
 use Tests\TestCase;
 
 class HeartbeatSchedulerTest extends TestCase
@@ -35,7 +40,7 @@ class HeartbeatSchedulerTest extends TestCase
         $this->ensureHeartbeatTables();
 
         ScheduleTaskRun::query()
-            ->whereIn('task_key', ['heartbeat-test-due', 'heartbeat-test-skip', 'product-upstream-config-sync'])
+            ->whereIn('task_key', ['heartbeat-test-due', 'heartbeat-test-skip', 'product-upstream-config-sync', 'heartbeat-test-stale', 'heartbeat-test-dispatch-retry'])
             ->delete();
         ScheduleTick::query()
             ->whereBetween('slot_started_at', ['2026-07-05 12:00:00', '2026-07-05 12:15:00'])
@@ -51,6 +56,26 @@ class HeartbeatSchedulerTest extends TestCase
         $this->assertStringContainsString('* * * * *', $output);
         $this->assertStringNotContainsString('接口认证刷新', $output);
         $this->assertStringNotContainsString('队列积压消费', $output);
+    }
+
+    public function test_all_registered_heartbeat_tasks_use_the_automation_queue(): void
+    {
+        foreach (app(HeartbeatTaskRegistry::class)->enabledTasks() as $task) {
+            $this->assertSame('automation', $task->queue(), $task->key().' must use the automation queue.');
+        }
+
+        $this->assertSame('automation', (new RunHeartbeatTaskJob('log-archive'))->queue);
+    }
+
+    public function test_all_registered_heartbeat_tasks_use_the_configured_schedule_queue(): void
+    {
+        config()->set('queue.caiwu_schedule_queue', 'scheduled-tasks');
+
+        foreach (app(HeartbeatTaskRegistry::class)->enabledTasks() as $task) {
+            $this->assertSame('scheduled-tasks', $task->queue(), $task->key().' must use the configured schedule queue.');
+        }
+
+        $this->assertSame('scheduled-tasks', (new RunHeartbeatTaskJob('log-archive'))->queue);
     }
 
     public function test_log_archive_task_is_dispatched_at_two_am_through_heartbeat(): void
@@ -127,6 +152,7 @@ class HeartbeatSchedulerTest extends TestCase
     public function test_heartbeat_dispatches_due_tasks_once_per_tick(): void
     {
         Queue::fake();
+        config()->set('queue.caiwu_schedule_queue', 'scheduled-tasks');
 
         $registry = new class(app()) extends HeartbeatTaskRegistry
         {
@@ -181,7 +207,9 @@ class HeartbeatSchedulerTest extends TestCase
 
         $this->assertSame(['heartbeat-test-due'], $summary->queuedTasks);
         Queue::assertPushed(RunHeartbeatTaskJob::class, 1);
-        Queue::assertPushed(RunHeartbeatTaskJob::class, fn (RunHeartbeatTaskJob $job): bool => $job->taskKey === 'heartbeat-test-due' && $job->timeout === 900);
+        Queue::assertPushed(RunHeartbeatTaskJob::class, fn (RunHeartbeatTaskJob $job): bool => $job->taskKey === 'heartbeat-test-due'
+            && $job->timeout === 900
+            && $job->queue === 'scheduled-tasks');
         Queue::assertNotPushed(RunHeartbeatTaskJob::class, fn (RunHeartbeatTaskJob $job): bool => $job->taskKey === 'heartbeat-test-skip');
         $this->assertDatabaseHas('schedule_task_runs', [
             'task_key' => 'heartbeat-test-due',
@@ -243,6 +271,7 @@ class HeartbeatSchedulerTest extends TestCase
     {
         Queue::fake();
         config(['queue.default' => 'database']);
+        config()->set('queue.caiwu_schedule_queue', 'scheduled-tasks');
         $this->ensureJobsTable();
 
         $result = app(ScheduleTaskTriggerService::class)->dispatch('product-upstream-config-sync', 123);
@@ -254,7 +283,8 @@ class HeartbeatSchedulerTest extends TestCase
                 && $job->source === 'manual_trigger'
                 && $job->adminUserId === 123
                 && $job->taskRunId !== null
-                && $job->timeout === 3600;
+                && $job->timeout === 3600
+                && $job->queue === 'scheduled-tasks';
         });
         $this->assertDatabaseHas('schedule_task_runs', [
             'task_key' => 'product-upstream-config-sync',
@@ -379,6 +409,238 @@ class HeartbeatSchedulerTest extends TestCase
         $this->assertSame(ScheduleTaskRun::STATUS_RUNNING, $run->fresh()->status);
     }
 
+    public function test_late_job_cannot_move_a_terminal_run_back_to_running_or_failed(): void
+    {
+        $run = ScheduleTaskRun::query()->create([
+            'task_key' => 'heartbeat-test-due',
+            'task_name' => 'Heartbeat Test Due',
+            'rule_description' => '每次心跳',
+            'source' => 'heartbeat',
+            'queue' => 'automation',
+            'status' => ScheduleTaskRun::STATUS_QUEUED,
+            'queued_at' => now(),
+        ]);
+        $repository = app(ScheduleTaskRunRepository::class);
+
+        $this->assertTrue($repository->markRunning((int) $run->id));
+        $this->assertTrue($repository->markSucceeded((int) $run->id, ['ok' => true], 12));
+        $this->assertFalse($repository->markRunning((int) $run->id));
+        $this->assertFalse($repository->markTerminalFailed((int) $run->id, 'late failure', 20));
+        $this->assertSame(ScheduleTaskRun::STATUS_SUCCESS, $run->fresh()->status);
+    }
+
+    public function test_same_slot_requeues_a_run_that_failed_before_dispatch(): void
+    {
+        Queue::fake();
+
+        $task = new CallbackScheduledTask(
+            key: 'heartbeat-test-dispatch-retry',
+            title: '派发重试测试',
+            description: '验证同槽位派发失败后的重派。',
+            category: '测试',
+            triggers: [ScheduleRule::everyTicks(1)],
+            handler: static fn (): array => ['ok' => true],
+        );
+        $registry = new class(app()) extends HeartbeatTaskRegistry
+        {
+            /** @var list<ScheduledTask> */
+            public array $tasks = [];
+
+            public function enabledTasks(): array
+            {
+                return $this->tasks;
+            }
+        };
+        $registry->tasks = [$task];
+
+        $slot = CarbonImmutable::parse('2026-07-05 12:30:00', 'Asia/Shanghai');
+        ScheduleTick::query()->where('slot_started_at', $slot)->delete();
+        $tick = ScheduleTick::query()->create([
+            'slot_started_at' => $slot,
+            'global_number' => TickSlot::globalNumber($slot),
+            'daily_index' => 3,
+            'triggered_at' => $slot,
+        ]);
+        $run = ScheduleTaskRun::query()->create([
+            'schedule_tick_id' => $tick->id,
+            'task_key' => $task->key(),
+            'task_name' => $task->title(),
+            'rule_description' => '每次心跳',
+            'source' => 'heartbeat',
+            'queue' => $task->queue(),
+            'status' => ScheduleTaskRun::STATUS_DISPATCH_FAILED,
+            'error_msg' => '模拟派发失败',
+            'finished_at' => now()->subMinute(),
+        ]);
+
+        $scheduler = new HeartbeatScheduler(
+            app(ScheduleTickRepository::class),
+            app(ScheduleTaskRunRepository::class),
+            $registry,
+            app(TriggerRuleMatcher::class),
+            app(QueueDrainService::class),
+        );
+
+        $summary = $scheduler->tick($slot);
+
+        $this->assertSame([$task->key()], $summary->queuedTasks);
+        $requeuedRun = $run->fresh();
+        $this->assertSame(ScheduleTaskRun::STATUS_QUEUED, $requeuedRun->status);
+        $this->assertSame('模拟派发失败', $requeuedRun->summary['dispatch_failures'][0]['message'] ?? null);
+        Queue::assertPushed(RunHeartbeatTaskJob::class, fn (RunHeartbeatTaskJob $job): bool => $job->taskRunId === (int) $run->id);
+    }
+
+    public function test_stale_run_with_missing_lease_timestamps_is_reclaimed_from_created_at(): void
+    {
+        $createdAt = now()->subHours(2);
+        DB::table('schedule_task_runs')->insert([
+            'task_key' => 'heartbeat-test-stale',
+            'task_name' => '陈旧运行测试',
+            'source' => 'heartbeat',
+            'status' => ScheduleTaskRun::STATUS_RUNNING,
+            'created_at' => $createdAt,
+            'updated_at' => null,
+            'queued_at' => null,
+            'started_at' => null,
+            'finished_at' => null,
+        ]);
+
+        $reclaimed = app(ScheduleTaskRunRepository::class)
+            ->reclaimStaleRunsForTask('heartbeat-test-stale', 60);
+
+        $this->assertSame(1, $reclaimed);
+        $this->assertDatabaseHas('schedule_task_runs', [
+            'task_key' => 'heartbeat-test-stale',
+            'status' => ScheduleTaskRun::STATUS_FAILED,
+        ]);
+    }
+
+    public function test_late_job_rejection_is_recorded_in_run_summary(): void
+    {
+        $run = ScheduleTaskRun::query()->create([
+            'task_key' => 'heartbeat-test-due',
+            'task_name' => 'Heartbeat Test Due',
+            'rule_description' => '每次心跳',
+            'source' => 'heartbeat',
+            'queue' => 'automation',
+            'status' => ScheduleTaskRun::STATUS_QUEUED,
+            'queued_at' => now(),
+        ]);
+        $repository = app(ScheduleTaskRunRepository::class);
+
+        $this->assertTrue($repository->markRunning((int) $run->id));
+        $this->assertTrue($repository->markSucceeded((int) $run->id, ['ok' => true], 12));
+
+        $result = app(HeartbeatTaskRunner::class)->run(
+            new CallbackScheduledTask(
+                key: 'heartbeat-test-due',
+                title: 'Heartbeat Test Due',
+                description: 'Test due task',
+                category: 'Test',
+                triggers: [ScheduleRule::everyTicks(1)],
+                handler: fn (): array => ['ok' => true],
+            ),
+            new TaskContext(
+                taskKey: 'heartbeat-test-due',
+                source: 'heartbeat',
+                taskRunId: (int) $run->id,
+                attempt: 2,
+            ),
+        );
+
+        $this->assertSame('skipped', $result['status']);
+        $this->assertSame('schedule_run_not_active', $result['reason']);
+        $fresh = $run->fresh();
+        $this->assertSame(ScheduleTaskRun::STATUS_SUCCESS, $fresh->status);
+        $rejections = $fresh->summary['late_job_rejections'] ?? [];
+        $this->assertCount(1, $rejections);
+        $this->assertSame(2, $rejections[0]['attempt']);
+        $this->assertSame('schedule_run_not_active', $rejections[0]['reason']);
+    }
+
+    public function test_late_job_rejection_history_is_limited_to_five(): void
+    {
+        $run = ScheduleTaskRun::query()->create([
+            'task_key' => 'heartbeat-test-due',
+            'task_name' => 'Heartbeat Test Due',
+            'rule_description' => '每次心跳',
+            'source' => 'heartbeat',
+            'queue' => 'automation',
+            'status' => ScheduleTaskRun::STATUS_QUEUED,
+            'queued_at' => now(),
+        ]);
+        $repository = app(ScheduleTaskRunRepository::class);
+
+        for ($attempt = 1; $attempt <= 7; $attempt++) {
+            $this->assertTrue($repository->recordLateJobRejection((int) $run->id, $attempt, 'schedule_run_not_active'));
+        }
+
+        $rejections = $run->fresh()->summary['late_job_rejections'];
+        $this->assertCount(5, $rejections);
+        $this->assertSame(3, $rejections[0]['attempt']);
+        $this->assertSame(7, $rejections[4]['attempt']);
+    }
+
+    public function test_heartbeat_reports_health_warning_when_stale_runs_are_reclaimed(): void
+    {
+        Queue::fake();
+
+        Log::shouldReceive('warning')
+            ->once()
+            ->with('[调度] 心跳槽位健康告警', Mockery::on(
+                fn (array $context): bool => ($context['reclaimed'] ?? 0) === 1
+                    && ($context['dispatch_failed'] ?? 0) === 0
+                    && ($context['queued'] ?? 0) === 1
+            ));
+
+        DB::table('schedule_task_runs')->insert([
+            'task_key' => 'heartbeat-test-stale',
+            'task_name' => '陈旧运行测试',
+            'source' => 'heartbeat',
+            'status' => ScheduleTaskRun::STATUS_RUNNING,
+            'created_at' => now()->subHours(2),
+            'updated_at' => now()->subHours(2),
+            'queued_at' => now()->subHours(2),
+        ]);
+
+        $registry = new class(app()) extends HeartbeatTaskRegistry
+        {
+            /** @var list<ScheduledTask> */
+            public array $tasks = [];
+
+            public function enabledTasks(): array
+            {
+                return $this->tasks;
+            }
+        };
+        $registry->tasks = [
+            new CallbackScheduledTask(
+                key: 'heartbeat-test-stale',
+                title: '陈旧运行测试',
+                description: 'Test stale task',
+                category: 'Test',
+                triggers: [ScheduleRule::everyTicks(1)],
+                handler: fn (): array => ['ok' => true],
+            ),
+        ];
+
+        $scheduler = new HeartbeatScheduler(
+            app(ScheduleTickRepository::class),
+            app(ScheduleTaskRunRepository::class),
+            $registry,
+            app(TriggerRuleMatcher::class),
+            app(QueueDrainService::class),
+        );
+
+        $summary = $scheduler->tick(CarbonImmutable::parse('2026-07-05 13:00:00', 'Asia/Shanghai'));
+
+        $this->assertSame(['heartbeat-test-stale'], $summary->queuedTasks);
+        $this->assertDatabaseHas('schedule_task_runs', [
+            'task_key' => 'heartbeat-test-stale',
+            'status' => ScheduleTaskRun::STATUS_FAILED,
+        ]);
+    }
+
     public function test_queue_visibility_timeout_covers_the_longest_registered_task(): void
     {
         $longestTaskTimeout = collect(app(HeartbeatTaskRegistry::class)->enabledTasks())
@@ -398,7 +660,8 @@ class HeartbeatSchedulerTest extends TestCase
 
         $this->assertIsString($source);
         $this->assertStringContainsString("&& ! (bool) \$this->option('with-schedule')", $source);
-        $this->assertStringContainsString('队列由每分钟心跳消费', $source);
+        $this->assertStringContainsString('{--without-vnc', $source);
+        $this->assertStringContainsString('队列由每分钟心跳并行消费', $source);
     }
 
     private function ensureHeartbeatTables(): void

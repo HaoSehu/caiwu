@@ -6,15 +6,15 @@
 
 插件统一放在 `backend/plugins` 下，目录按能力域划分：
 
-| 能力域 | 管理端 domain | 物理目录 | 平台适配器/契约 |
-| --- | --- | --- | --- |
-| 支付渠道 | `payment` | `backend/plugins/gateways` | `PluginPaymentGateway` → `PaymentGatewayInterface` |
-| 实名认证 | `verification` | `backend/plugins/certification` | `PluginVerificationDriver` → `VerificationDriver` |
-| 人机验证 | `captcha` | `backend/plugins/captcha` | `GeeTestService` / 登录风控验证码调用链 |
-| 邮件发送 | `mail` | `backend/plugins/mail` | `PluginMailDriver` → `MailDriver` |
-| 短信发送 | `sms` | `backend/plugins/sms` | `PluginSmsDriver` → `SmsDriver` |
-| 上游开通/控制 | `upstream` | `backend/plugins/servers` | `PluginUpstreamDriver` → `UpstreamDriver` |
-| 功能扩展 | `addons` | `backend/plugins/addons` | 受控 addon action、调度任务和 hook |
+| 能力域        | 管理端 domain  | 物理目录                        | 平台适配器/契约                                    |
+| ------------- | -------------- | ------------------------------- | -------------------------------------------------- |
+| 支付渠道      | `payment`      | `backend/plugins/gateways`      | `PluginPaymentGateway` → `PaymentGatewayInterface` |
+| 实名认证      | `verification` | `backend/plugins/certification` | `PluginVerificationDriver` → `VerificationDriver`  |
+| 人机验证      | `captcha`      | `backend/plugins/captcha`       | `GeeTestService` / 登录风控验证码调用链            |
+| 邮件发送      | `mail`         | `backend/plugins/mail`          | `PluginMailDriver` → `MailDriver`                  |
+| 短信发送      | `sms`          | `backend/plugins/sms`           | `PluginSmsDriver` → `SmsDriver`                    |
+| 上游开通/控制 | `upstream`     | `backend/plugins/servers`       | `PluginUpstreamDriver` → `UpstreamDriver`          |
+| 功能扩展      | `addons`       | `backend/plugins/addons`        | 受控 addon action、调度任务和 hook                 |
 
 `domain` 是后台 API 和数据库里使用的领域名；物理目录沿用ZJMF 财务的 `gateways/certification/mail/sms/servers` 风格，并按当前插件体系扩展了 `captcha/addons`。插件入口类不直接实现平台契约，入口类提供 `execute(array $request): array`，平台通过 `PluginRuntimeRegistry` 和领域 adapter 转换为内部契约。
 
@@ -83,14 +83,14 @@ return [
 
 配置字段支持：
 
-| 字段 | 说明 |
-| --- | --- |
-| `title` / `label` | 后台展示标签 |
-| `type` | `text`、`textarea`、`number`、`switch`、`select`、`json` |
-| `required` | 启用前是否必须填写 |
-| `secret` | 是否加密保存且不明文回显 |
-| `value` / `default` | 默认值 |
-| `options` | `select` 选项 |
+| 字段                | 说明                                                     |
+| ------------------- | -------------------------------------------------------- |
+| `title` / `label`   | 后台展示标签                                             |
+| `type`              | `text`、`textarea`、`number`、`switch`、`select`、`json` |
+| `required`          | 启用前是否必须填写                                       |
+| `secret`            | 是否加密保存且不明文回显                                 |
+| `value` / `default` | 默认值                                                   |
+| `options`           | `select` 选项                                            |
 
 ## 配置组件协议
 
@@ -100,24 +100,24 @@ return [
 
 当前管理端已支持以下类型：
 
-| 组件 | `type` | 说明 |
-| --- | --- | --- |
-| 单行文本 | `text` | API 标识、账号、名称等普通字符串 |
-| 多行文本 | `textarea` | 备注、模板内容等长文本 |
-| 数字输入 | `number` | 金额、端口、次数等数值 |
-| 开关 | `switch` | 是否启用某项能力 |
-| 下拉单选 | `select` | 环境、渠道、区域等枚举值 |
-| 下拉多选 | `multi_select` | 支持能力、可用区域 |
-| 单选按钮组 | `radio` | 少量互斥选项 |
-| 复选框组 | `checkbox` | 多项开关配置 |
-| JSON 编辑 | `json` | 高级配置、字段映射、数组配置 |
-| 密码/密钥 | `password` | Secret、Token、密码 |
-| URL 输入 | `url` | 回调地址、接口地址 |
-| 邮箱输入 | `email` | 发件邮箱、通知邮箱 |
-| 手机号输入 | `phone` | 测试手机号、联系人手机号 |
-| 提示文本 | `notice` | 配置说明、风险提示；不参与保存 |
-| 分割线 | `divider` | 表单分组分隔；不参与保存 |
-| 只读文本 | `readonly` | 展示系统生成值；不参与保存 |
+| 组件       | `type`         | 说明                             |
+| ---------- | -------------- | -------------------------------- |
+| 单行文本   | `text`         | API 标识、账号、名称等普通字符串 |
+| 多行文本   | `textarea`     | 备注、模板内容等长文本           |
+| 数字输入   | `number`       | 金额、端口、次数等数值           |
+| 开关       | `switch`       | 是否启用某项能力                 |
+| 下拉单选   | `select`       | 环境、渠道、区域等枚举值         |
+| 下拉多选   | `multi_select` | 支持能力、可用区域               |
+| 单选按钮组 | `radio`        | 少量互斥选项                     |
+| 复选框组   | `checkbox`     | 多项开关配置                     |
+| JSON 编辑  | `json`         | 高级配置、字段映射、数组配置     |
+| 密码/密钥  | `password`     | Secret、Token、密码              |
+| URL 输入   | `url`          | 回调地址、接口地址               |
+| 邮箱输入   | `email`        | 发件邮箱、通知邮箱               |
+| 手机号输入 | `phone`        | 测试手机号、联系人手机号         |
+| 提示文本   | `notice`       | 配置说明、风险提示；不参与保存   |
+| 分割线     | `divider`      | 表单分组分隔；不参与保存         |
+| 只读文本   | `readonly`     | 展示系统生成值；不参与保存       |
 
 密钥字段有两种等价写法：声明 `type=password`，或在任意文本类型上声明 `secret=true`。两者都会按密码框展示，后端加密保存且不明文回显。
 
@@ -164,14 +164,14 @@ return [
 
 以下组件尚未实现，可按真实插件需求在保持安全边界的前提下扩展。扩展前必须先完成管理端渲染、后端校验和保存兼容处理。
 
-| 组件 | 建议 `type` | 用途 |
-| --- | --- | --- |
-| 日期 | `date` | 有效期、开始日期 |
-| 日期时间 | `datetime` | 准确到时间的有效期配置 |
-| 时间 | `time` | 定时规则 |
-| 标签输入 | `tags` | IP 白名单、域名列表 |
-| Key-Value 配置 | `key_value` | 请求头、扩展参数 |
-| 可重复数组 | `array` | 多账号、多规则；需谨慎控制复杂度 |
+| 组件           | 建议 `type` | 用途                             |
+| -------------- | ----------- | -------------------------------- |
+| 日期           | `date`      | 有效期、开始日期                 |
+| 日期时间       | `datetime`  | 准确到时间的有效期配置           |
+| 时间           | `time`      | 定时规则                         |
+| 标签输入       | `tags`      | IP 白名单、域名列表              |
+| Key-Value 配置 | `key_value` | 请求头、扩展参数                 |
+| 可重复数组     | `array`     | 多账号、多规则；需谨慎控制复杂度 |
 
 ### 通用字段结构
 
@@ -179,39 +179,39 @@ return [
 
 ```json
 {
-    "key": "callback_url",
-    "label": "回调地址",
-    "type": "url",
-    "required": true,
-    "default": "",
-    "placeholder": "请输入 HTTPS 回调地址",
-    "description": "服务商回调会发送到该地址。",
-    "width": "full",
-    "disabled": false,
-    "visible": true,
-    "rules": {
-        "max": 255,
-        "pattern": "^https://",
-        "message": "回调地址必须使用 HTTPS"
-    }
+  "key": "callback_url",
+  "label": "回调地址",
+  "type": "url",
+  "required": true,
+  "default": "",
+  "placeholder": "请输入 HTTPS 回调地址",
+  "description": "服务商回调会发送到该地址。",
+  "width": "full",
+  "disabled": false,
+  "visible": true,
+  "rules": {
+    "max": 255,
+    "pattern": "^https://",
+    "message": "回调地址必须使用 HTTPS"
+  }
 }
 ```
 
-| 字段 | 必填 | 说明 |
-| --- | --- | --- |
-| `key` | 是 | 配置字段名，必须唯一 |
-| `label` / `title` | 是 | 后台展示名称 |
-| `type` | 是 | 组件类型 |
-| `required` | 否 | 是否必填 |
-| `secret` | 否 | 是否加密保存且不明文回显 |
-| `default` / `value` | 否 | 默认值 |
-| `placeholder` | 否 | 输入提示 |
-| `description` | 否 | 字段说明，纯文本，不支持 HTML 和 Markdown |
-| `options` | 否 | `select`、`multi_select`、`radio`、`checkbox` 的选项 |
-| `width` | 否 | `full` 或 `half`，默认 `full` |
-| `disabled` | 否 | 是否禁用 |
-| `visible` | 否 | 是否显示 |
-| `rules` | 否 | 基础校验规则 |
+| 字段                | 必填 | 说明                                                 |
+| ------------------- | ---- | ---------------------------------------------------- |
+| `key`               | 是   | 配置字段名，必须唯一                                 |
+| `label` / `title`   | 是   | 后台展示名称                                         |
+| `type`              | 是   | 组件类型                                             |
+| `required`          | 否   | 是否必填                                             |
+| `secret`            | 否   | 是否加密保存且不明文回显                             |
+| `default` / `value` | 否   | 默认值                                               |
+| `placeholder`       | 否   | 输入提示                                             |
+| `description`       | 否   | 字段说明，纯文本，不支持 HTML 和 Markdown            |
+| `options`           | 否   | `select`、`multi_select`、`radio`、`checkbox` 的选项 |
+| `width`             | 否   | `full` 或 `half`，默认 `full`                        |
+| `disabled`          | 否   | 是否禁用                                             |
+| `visible`           | 否   | 是否显示                                             |
+| `rules`             | 否   | 基础校验规则                                         |
 
 ### 选项字段格式
 
@@ -228,10 +228,10 @@ return [
 
 ```json
 {
-    "options": [
-        { "label": "正式环境", "value": "production" },
-        { "label": "测试环境", "value": "sandbox" }
-    ]
+  "options": [
+    { "label": "正式环境", "value": "production" },
+    { "label": "测试环境", "value": "sandbox" }
+  ]
 }
 ```
 
@@ -241,14 +241,23 @@ return [
 
 ```json
 {
-    "groups": [
-        { "key": "basic", "title": "基础配置", "description": "配置服务商接口访问参数。" },
-        { "key": "billing", "title": "计费配置" }
-    ],
-    "config_schema": [
-        { "group": "basic", "key": "app_id", "label": "API 标识", "type": "text" },
-        { "group": "billing", "key": "charge_enabled", "label": "插件收费", "type": "switch" }
-    ]
+  "groups": [
+    {
+      "key": "basic",
+      "title": "基础配置",
+      "description": "配置服务商接口访问参数。"
+    },
+    { "key": "billing", "title": "计费配置" }
+  ],
+  "config_schema": [
+    { "group": "basic", "key": "app_id", "label": "API 标识", "type": "text" },
+    {
+      "group": "billing",
+      "key": "charge_enabled",
+      "label": "插件收费",
+      "type": "switch"
+    }
+  ]
 }
 ```
 
@@ -256,14 +265,14 @@ return [
 
 ```json
 {
-    "key": "charge_amount",
-    "label": "收费金额",
-    "type": "number",
-    "visible_when": {
-        "field": "charge_enabled",
-        "operator": "eq",
-        "value": true
-    }
+  "key": "charge_amount",
+  "label": "收费金额",
+  "type": "number",
+  "visible_when": {
+    "field": "charge_enabled",
+    "operator": "eq",
+    "value": true
+  }
 }
 ```
 
@@ -273,15 +282,15 @@ return [
 
 插件配置 schema 禁止声明或变相实现以下能力：
 
-| 禁止项 | 原因 |
-| --- | --- |
-| `html` / 任意 HTML | XSS 风险高，破坏后台样式边界 |
-| `script` / 任意 JavaScript | 安全风险不可控 |
-| `iframe` | 权限、会话、点击劫持和数据边界复杂 |
-| `upload` | 涉及文件安全、存储、权限和清理策略 |
-| `rich_text` / Markdown 编辑器 | 存在 XSS 和样式污染风险 |
-| `custom_vue` / `remote_component` | 破坏构建、权限和审计边界 |
-| `action_button` | 会牵涉动作 API、权限、二次确认和审计，需单独设计 |
+| 禁止项                            | 原因                                             |
+| --------------------------------- | ------------------------------------------------ |
+| `html` / 任意 HTML                | XSS 风险高，破坏后台样式边界                     |
+| `script` / 任意 JavaScript        | 安全风险不可控                                   |
+| `iframe`                          | 权限、会话、点击劫持和数据边界复杂               |
+| `upload`                          | 涉及文件安全、存储、权限和清理策略               |
+| `rich_text` / Markdown 编辑器     | 存在 XSS 和样式污染风险                          |
+| `custom_vue` / `remote_component` | 破坏构建、权限和审计边界                         |
+| `action_button`                   | 会牵涉动作 API、权限、二次确认和审计，需单独设计 |
 
 前端保存时只提交真实配置字段；`notice`、`divider`、`readonly`、`description`、`groups` 等展示类元信息不参与提交。
 
@@ -303,12 +312,12 @@ return [
 
 插件安装记录只表达“系统识别到了哪个插件”，业务场景选择必须通过绑定表表达，不再通过 `settings` 中的旧 driver/provider key 反写。
 
-| 表 | 用途 |
-| --- | --- |
-| `integration_plugin_bindings` | 支付、实名、短信、邮件等全局或场景级默认插件绑定。 |
-| `supplier_plugin_bindings` | 供应商到上游插件账号、地址、密钥和运行环境的绑定。 |
-| `product_upstream_bindings` | 商品到上游商品 ID、配置模板和开通策略的绑定。 |
-| `service_upstream_bindings` | 服务实例到上游实例 ID、供应商绑定和状态快照的绑定。 |
+| 表                                | 用途                                                                               |
+| --------------------------------- | ---------------------------------------------------------------------------------- |
+| `integration_plugin_bindings`     | 支付、实名、短信、邮件等全局或场景级默认插件绑定。                                 |
+| `supplier_plugin_bindings`        | 供应商到上游插件账号、地址、密钥和运行环境的绑定。                                 |
+| `product_upstream_bindings`       | 商品到上游商品 ID、配置模板和开通策略的绑定。                                      |
+| `service_upstream_bindings`       | 服务实例到上游实例 ID、供应商绑定和状态快照的绑定。                                |
 | `integration_plugin_runtime_logs` | 每次插件 action 的 domain、plugin、binding、actor、耗时、状态和脱敏请求/响应摘要。 |
 
 运行规则：
@@ -325,10 +334,10 @@ return [
 
 插件有两种接入方式：
 
-| 方式 | 清单字段 | 适用场景 | 运行入口 |
-| --- | --- | --- | --- |
-| 监听调度 Hook | `info.extra.schedule_hooks` | 轻量扩展、跟随内置任务前后置逻辑、自定义插件 hook 监听 | `ScheduleHookService` |
-| 注册独立定时任务 | `info.extra.scheduled_tasks` | 插件自己的周期性同步、刷新、清理、巡检 | `PluginScheduledTaskProvider` → `RunHeartbeatTaskJob` |
+| 方式             | 清单字段                     | 适用场景                                               | 运行入口                                              |
+| ---------------- | ---------------------------- | ------------------------------------------------------ | ----------------------------------------------------- |
+| 监听调度 Hook    | `info.extra.schedule_hooks`  | 轻量扩展、跟随内置任务前后置逻辑、自定义插件 hook 监听 | `ScheduleHookService`                                 |
+| 注册独立定时任务 | `info.extra.scheduled_tasks` | 插件自己的周期性同步、刷新、清理、巡检                 | `PluginScheduledTaskProvider` → `RunHeartbeatTaskJob` |
 
 ### 方式一：监听调度 Hook
 
@@ -388,23 +397,25 @@ final class ExampleScheduleHook implements ScheduleHook
 
 当前内置 hook 名：
 
-| 常量 | 实际值 | 触发语义 |
-| --- | --- | --- |
-| `ScheduleHookService::HOOK_BEFORE_CRON` | `before_cron` | 每个被记录的调度任务执行前 |
-| `ScheduleHookService::HOOK_AFTER_CRON` | `after_cron` | 每个被记录的调度任务成功或失败后 |
-| `ScheduleHookService::HOOK_TASK_BEFORE` | `task.before` | 单个任务执行前，带 `task_key` / `task_name` |
-| `ScheduleHookService::HOOK_TASK_AFTER` | `task.after` | 单个任务成功后，带 `summary` |
-| `ScheduleHookService::HOOK_TASK_FAILED` | `task.failed` | 单个任务失败后，带异常摘要 |
-| `ScheduleHookService::HOOK_EVERY_MINUTE` | `tick.every_minute` | 兼容旧命名，当前按 15 分钟心跳触发 |
-| `ScheduleHookService::HOOK_EVERY_FIVE_MINUTES` | `tick.every_five_minutes` | 兼容旧命名，当前按 15 分钟心跳触发 |
-| `ScheduleHookService::HOOK_HOURLY` | `tick.hourly` | 每小时 hook |
-| `ScheduleHookService::HOOK_DAILY` | `tick.daily` | 每日 hook |
-| `ScheduleHookService::HOOK_BEFORE_DAILY_CRON` | `before_daily_cron` | 旧系统每日前置兼容 hook |
-| `ScheduleHookService::HOOK_AFTER_DAILY_CRON` | `after_daily_cron` | 旧系统每日后置兼容 hook |
-| `ScheduleHookService::HOOK_AFTER_FIVE_MINUTE_CRON` | `after_five_minute_cron` | 旧系统五分钟后置兼容 hook，当前不代表真实 5 分钟粒度 |
-| `ScheduleHookService::HOOK_AFTER_HALF_HOUR_MINUTE_CRON` | `after_half_hour_minute_cron` | 旧系统半小时后置兼容 hook |
+| 常量                                                    | 实际值                        | 触发语义                                             |
+| ------------------------------------------------------- | ----------------------------- | ---------------------------------------------------- |
+| `ScheduleHookService::HOOK_BEFORE_CRON`                 | `before_cron`                 | 每个被记录的调度任务执行前                           |
+| `ScheduleHookService::HOOK_AFTER_CRON`                  | `after_cron`                  | 每个被记录的调度任务成功或失败后                     |
+| `ScheduleHookService::HOOK_TASK_BEFORE`                 | `task.before`                 | 单个任务执行前，带 `task_key` / `task_name`          |
+| `ScheduleHookService::HOOK_TASK_AFTER`                  | `task.after`                  | 单个任务成功后，带 `summary`                         |
+| `ScheduleHookService::HOOK_TASK_FAILED`                 | `task.failed`                 | 单个任务失败后，带异常摘要                           |
+| `ScheduleHookService::HOOK_EVERY_MINUTE`                | `tick.every_minute`           | 兼容旧命名，当前按 15 分钟心跳触发                   |
+| `ScheduleHookService::HOOK_EVERY_FIVE_MINUTES`          | `tick.every_five_minutes`     | 兼容旧命名，当前按 15 分钟心跳触发                   |
+| `ScheduleHookService::HOOK_HOURLY`                      | `tick.hourly`                 | 每小时 hook                                          |
+| `ScheduleHookService::HOOK_DAILY`                       | `tick.daily`                  | 每日 hook                                            |
+| `ScheduleHookService::HOOK_BEFORE_DAILY_CRON`           | `before_daily_cron`           | 旧系统每日前置兼容 hook                              |
+| `ScheduleHookService::HOOK_AFTER_DAILY_CRON`            | `after_daily_cron`            | 旧系统每日后置兼容 hook                              |
+| `ScheduleHookService::HOOK_AFTER_FIVE_MINUTE_CRON`      | `after_five_minute_cron`      | 旧系统五分钟后置兼容 hook，当前不代表真实 5 分钟粒度 |
+| `ScheduleHookService::HOOK_AFTER_HALF_HOUR_MINUTE_CRON` | `after_half_hour_minute_cron` | 旧系统半小时后置兼容 hook                            |
 
 Hook 失败只会写警告日志，不会中断调度主流程。监听器必须自己控制幂等、限流和敏感字段脱敏。
+
+**声明频率与有效频率**：`tick.every_minute`、`tick.every_five_minutes`、`after_five_minute_cron` 等名称只表示“兼容旧命名的声明频率”，平台真实执行粒度为 15 分钟槽位，错过槽位不自动补跑。调度总览（`GET /api/v2/admin/schedules/overview`）对每个任务同时输出 `declared_cadence`（任务声明频率，未声明为 `null`）与 `effective_cadence`（按 15 分钟槽位推断的真实频率，如 `15分钟`、`60分钟`、`cron 0 3 * * *`）。插件不得把兼容名称当作真实 1/5 分钟执行依据；若业务 SLA 需要低于 15 分钟的独立执行，需要另立调度入口方案，不能直接改 Hook 频率。
 
 ### 方式二：注册独立定时任务
 
@@ -475,7 +486,7 @@ final class ExampleScheduledTask implements ScheduledTask
 
     public function queue(): string
     {
-        return 'default';
+        return (string) config('queue.caiwu_schedule_queue', 'automation');
     }
 
     public function timeout(): int
@@ -505,8 +516,11 @@ final class ExampleScheduledTask implements ScheduledTask
 运行规则：
 
 - 只有“已启用”的插件会被 `PluginScheduledTaskProvider` 扫描。
-- 任务 `key()` 在全局调度注册表中必须唯一，建议使用 `{plugin_slug}-{action}`。
-- 任务通过 `RunHeartbeatTaskJob` 执行，带队列、重试和 `WithoutOverlapping` 互斥；`lockTtlSeconds()` 必须大于任务最坏运行时间。
+- 任务 `key()` 在全局调度注册表中必须唯一，启用后不要改名；如需改名必须提供受控历史数据迁移。
+- `key()` 和 `queue()` 必须返回无首尾空格的规范值；`queue()` 必须是已配置且由 Worker 消费的业务队列或 `CAIWU_SCHEDULE_QUEUE`（默认 `automation`），不能使用未消费的任意队列。
+- 任务通过 `RunHeartbeatTaskJob` 执行，带队列、重试和 `WithoutOverlapping` 互斥；`lockTtlSeconds()` 必须至少比 `timeout()` 多 60 秒，队列 `retry_after` 也必须留出安全余量。
+- 插件安装/启用和运行时注册都会校验任务契约；单个坏任务或坏清单只会被隔离并记录，不得阻断系统任务。调度 Hook 的监听方法必须为可调用的 `public` 方法。
+- 心跳只处理当前 15 分钟槽位；错过的槽位默认不自动回放，需由任务自身的幂等补偿逻辑或管理端手动触发恢复。
 - `handle()` 只返回可记录的摘要数组，不返回第三方原始响应、token、密钥或大对象。
 - 需要在任务内部拆分扩展点时，可以让任务调用 `ScheduleHookService::run('plugins.{slug}.{action}', $context)`，再由 `extra.schedule_hooks` 注册监听器。`demo_style` 和 `zjmf_finance` 插件已按这个模式实现。
 
@@ -600,26 +614,26 @@ php artisan schedule:list
 
 以下插件直接放在 `backend/plugins/{能力域}/`，会像普通插件一样被后台扫描到。`demo_*` 用于开发研究，不建议在生产环境启用；真实插件启用前必须完成配置、测试和回调边界确认。
 
-| 能力域 | 插件目录 | 说明 |
-| --- | --- | --- |
-| 支付渠道 | `backend/plugins/gateways/ali_pay` | 支付宝当面付真实支付插件 |
-| 支付渠道 | `backend/plugins/gateways/demo_pay` | 模拟支付网关 |
-| 支付渠道 | `backend/plugins/gateways/yi_pay` | 易支付插件 |
-| 实名认证 | `backend/plugins/certification/stay33` | Stay33 实名认证插件 |
-| 实名认证 | `backend/plugins/certification/baidu_face` | 百度人脸实名认证插件 |
-| 实名认证 | `backend/plugins/certification/demo_verification` | 模拟实名插件 |
-| 人机验证 | `backend/plugins/captcha/geetest` | GeeTest 验证码插件 |
-| 人机验证 | `backend/plugins/captcha/vaptcha` | Vaptcha 验证码插件 |
-| 邮件发送 | `backend/plugins/mail/multi_smtp_round_robin` | 多 SMTP 轮询邮件插件 |
-| 邮件发送 | `backend/plugins/mail/smtp` | 单 SMTP 邮件插件 |
-| 邮件发送 | `backend/plugins/mail/demo_mail` | 模拟邮件插件 |
-| 短信发送 | `backend/plugins/sms/aliyun` | 阿里云短信插件 |
-| 短信发送 | `backend/plugins/sms/stay33` | Stay33 短信插件 |
-| 短信发送 | `backend/plugins/sms/demo_sms` | 模拟短信插件 |
-| 上游开通/控制 | `backend/plugins/servers/zjmf_finance` | ZJMF 财务上游插件 |
-| 上游开通/控制 | `backend/plugins/servers/kanghostx` | 康乐虚拟主机插件 |
-| 上游开通/控制 | `backend/plugins/servers/demo_servers` | 模拟上游插件 |
-| 功能扩展 | `backend/plugins/addons/demo_style` | Addon、调度任务和 hook 示例插件 |
+| 能力域        | 插件目录                                          | 说明                            |
+| ------------- | ------------------------------------------------- | ------------------------------- |
+| 支付渠道      | `backend/plugins/gateways/ali_pay`                | 支付宝当面付真实支付插件        |
+| 支付渠道      | `backend/plugins/gateways/demo_pay`               | 模拟支付网关                    |
+| 支付渠道      | `backend/plugins/gateways/yi_pay`                 | 易支付插件                      |
+| 实名认证      | `backend/plugins/certification/stay33`            | Stay33 实名认证插件             |
+| 实名认证      | `backend/plugins/certification/baidu_face`        | 百度人脸实名认证插件            |
+| 实名认证      | `backend/plugins/certification/demo_verification` | 模拟实名插件                    |
+| 人机验证      | `backend/plugins/captcha/geetest`                 | GeeTest 验证码插件              |
+| 人机验证      | `backend/plugins/captcha/vaptcha`                 | Vaptcha 验证码插件              |
+| 邮件发送      | `backend/plugins/mail/multi_smtp_round_robin`     | 多 SMTP 轮询邮件插件            |
+| 邮件发送      | `backend/plugins/mail/smtp`                       | 单 SMTP 邮件插件                |
+| 邮件发送      | `backend/plugins/mail/demo_mail`                  | 模拟邮件插件                    |
+| 短信发送      | `backend/plugins/sms/aliyun`                      | 阿里云短信插件                  |
+| 短信发送      | `backend/plugins/sms/stay33`                      | Stay33 短信插件                 |
+| 短信发送      | `backend/plugins/sms/demo_sms`                    | 模拟短信插件                    |
+| 上游开通/控制 | `backend/plugins/servers/zjmf_finance`            | ZJMF 财务上游插件               |
+| 上游开通/控制 | `backend/plugins/servers/kanghostx`               | 康乐虚拟主机插件                |
+| 上游开通/控制 | `backend/plugins/servers/demo_servers`            | 模拟上游插件                    |
+| 功能扩展      | `backend/plugins/addons/demo_style`               | Addon、调度任务和 hook 示例插件 |
 
 每个 demo 包都包含：
 
