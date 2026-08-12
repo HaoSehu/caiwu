@@ -57,13 +57,26 @@
           <div v-if="viewMode === 'grid'" class="service-card-grid">
             <article v-for="item in list" :key="item.id" class="service-row-card">
               <div class="service-row-actions service-row-actions--corner">
-                <button type="button" class="service-action-console" :aria-label="`${resolveServiceName(item)} 控制台`" @click="openDetail(item.id)">控制台</button>
+                <button
+                  type="button"
+                  class="service-action-console"
+                  :aria-label="`${resolveServiceName(item)} 控制台`"
+                  @click="openDetail(item.id)"
+                >
+                  控制台
+                </button>
                 <t-dropdown
                   trigger="click"
                   :options="actionOptions(item)"
                   @click="({ value }: { value: string | number }) => handleServiceAction(String(value), item)"
                 >
-                  <button type="button" class="service-action-more" :aria-label="`${resolveServiceName(item)} 更多操作`">更多</button>
+                  <button
+                    type="button"
+                    class="service-action-more"
+                    :aria-label="`${resolveServiceName(item)} 更多操作`"
+                  >
+                    更多
+                  </button>
                 </t-dropdown>
               </div>
               <div class="service-row-head">
@@ -906,7 +919,7 @@ function actionOptions(item: Record<string, any>) {
   }
 }
 
-@media (max-width: 67.5rem) {
+@media (width <= 67.5rem) {
   .service-filter-bar {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -916,7 +929,7 @@ function actionOptions(item: Record<string, any>) {
   }
 }
 
-@media (max-width: 60rem) {
+@media (width <= 60rem) {
   .service-card-grid {
     grid-template-columns: minmax(0, 1fr);
   }

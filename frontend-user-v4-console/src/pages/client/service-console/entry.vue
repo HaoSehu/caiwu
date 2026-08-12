@@ -3,7 +3,6 @@
     <t-loading :loading="loading" text="正在打开实例控制台" />
   </section>
 </template>
-
 <script setup lang="ts">
 import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, ref } from 'vue';
@@ -41,7 +40,6 @@ onMounted(async () => {
   }
 });
 </script>
-
 <style scoped lang="less">
 .service-console-entry {
   display: flex;

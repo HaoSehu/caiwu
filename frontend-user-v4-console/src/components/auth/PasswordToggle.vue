@@ -12,14 +12,12 @@
     <browse-off-icon v-else aria-hidden="true" />
   </button>
 </template>
-
 <script setup lang="ts">
 import { BrowseIcon, BrowseOffIcon } from 'tdesign-icons-vue-next';
 
 defineProps<{ modelValue: boolean }>();
 defineEmits<{ 'update:modelValue': [value: boolean] }>();
 </script>
-
 <style scoped>
 .password-toggle {
   background: none;
