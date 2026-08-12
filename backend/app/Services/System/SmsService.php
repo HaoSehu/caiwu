@@ -71,6 +71,8 @@ class SmsService
             'purpose' => $purpose,
         ];
 
+        // 短信日志含验证码明文，管理端需完整真实审计信息，不做脱敏（项目红线）
+
         $templateText = $this->aliyunVerifyTemplateText($purpose);
         $content = str_replace(['${code}', '${min}'], [$code, $expireMinutes], $templateText);
         $logContext = $this->createSmsLog(
@@ -452,16 +454,12 @@ class SmsService
     private function aliyunVerifyTemplateText(string $purpose): string
     {
         return match ($purpose) {
-            'change_phone', 'phone_change', 'update_phone'
-                => '尊敬的客户，您正在进行修改手机号操作，您的验证码为${code}。以上验证码${min}分钟内有效，请注意保密，切勿告知他人。',
-            'reset', 'reset_password', 'password_reset'
-                => '尊敬的客户，您正在进行重置密码操作，您的验证码为${code}。以上验证码${min}分钟内有效，请注意保密，切勿告知他人。',
-            'bind_phone', 'new_phone'
-                => '尊敬的客户，您正在进行绑定手机号操作，您的验证码为${code}。以上验证码${min}分钟内有效，请注意保密，切勿告知他人。',
-            'verify_bound_phone', 'verify_phone'
-                => '尊敬的客户，您正在验证绑定手机号操作，您的验证码为${code}。以上验证码${min}分钟内有效，请注意保密，切勿告知他人。',
+            'change_phone', 'phone_change', 'update_phone' => '尊敬的客户，您正在进行修改手机号操作，您的验证码为${code}。以上验证码${min}分钟内有效，请注意保密，切勿告知他人。',
+            'reset', 'reset_password', 'password_reset' => '尊敬的客户，您正在进行重置密码操作，您的验证码为${code}。以上验证码${min}分钟内有效，请注意保密，切勿告知他人。',
+            'bind_phone', 'new_phone' => '尊敬的客户，您正在进行绑定手机号操作，您的验证码为${code}。以上验证码${min}分钟内有效，请注意保密，切勿告知他人。',
+            'verify_bound_phone', 'verify_phone' => '尊敬的客户，您正在验证绑定手机号操作，您的验证码为${code}。以上验证码${min}分钟内有效，请注意保密，切勿告知他人。',
             default // login, register, generic
-                => '您的验证码为${code}。尊敬的客户，以上验证码${min}分钟内有效，请注意保密，切勿告知他人。',
+            => '您的验证码为${code}。尊敬的客户，以上验证码${min}分钟内有效，请注意保密，切勿告知他人。',
         };
     }
 }
