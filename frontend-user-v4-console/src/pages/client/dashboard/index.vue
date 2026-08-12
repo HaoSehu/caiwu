@@ -33,7 +33,14 @@
           </div>
         </t-card>
 
-        <t-card v-for="item in summaryCards" :key="item.key" class="metric-card dashboard-card" :bordered="false" role="region" :aria-label="`${item.label}：${item.value} ${item.unit}，${item.note}`">
+        <t-card
+          v-for="item in summaryCards"
+          :key="item.key"
+          class="metric-card dashboard-card"
+          :bordered="false"
+          role="region"
+          :aria-label="`${item.label}：${item.value} ${item.unit}，${item.note}`"
+        >
           <div class="metric-card__label">{{ item.label }}</div>
           <div class="metric-card__value" :class="{ 'is-warning': item.warning }">
             {{ item.value }}
@@ -90,7 +97,12 @@
                     placement="top"
                     show-arrow
                   >
-                    <div class="bar-chart__slot" tabindex="0" role="img" :aria-label="`${bar.label}：${bar.amountLabel ? '¥' + bar.amountLabel : '无消费'}`">
+                    <div
+                      class="bar-chart__slot"
+                      tabindex="0"
+                      role="img"
+                      :aria-label="`${bar.label}：${bar.amountLabel ? `¥${bar.amountLabel}` : '无消费'}`"
+                    >
                       <div class="bar-chart__col" :style="{ height: bar.height }">
                         <span v-if="bar.amountLabel" class="bar-chart__value">¥{{ bar.amountLabel }}</span>
                         <span class="bar-chart__bar"></span>
@@ -117,7 +129,12 @@
               <t-loading :loading="!balanceLogsLoaded" text="加载中">
                 <div v-if="dailyBarsHasData" class="bar-chart bar-chart--daily" aria-label="近 7 天每日消费">
                   <t-tooltip v-for="bar in dailyBars" :key="bar.date" :content="bar.tooltip" placement="top" show-arrow>
-                    <div class="bar-chart__slot" tabindex="0" role="img" :aria-label="`${bar.label} · 消费 ¥${formatMoney(bar.amount)}`">
+                    <div
+                      class="bar-chart__slot"
+                      tabindex="0"
+                      role="img"
+                      :aria-label="`${bar.label} · 消费 ¥${formatMoney(bar.amount)}`"
+                    >
                       <span class="bar-chart__bar" :style="{ height: bar.height }"></span>
                       <span v-if="bar.showLabel" class="bar-chart__label">{{ bar.label }}</span>
                     </div>
@@ -725,7 +742,13 @@ async function loadDashboard() {
           clientApi.helpArticles({ page: 1, page_size: 10 }),
           fetchUnreadCount(true),
           clientApi.balanceLogs({ ...last7DaysRange(), page_size: 200 }),
-          clientApi.invoices({ page: 1, page_size: 100, status: 1, start_date: `${currentYear}-01-01`, end_date: `${currentYear}-12-31` }),
+          clientApi.invoices({
+            page: 1,
+            page_size: 100,
+            status: 1,
+            start_date: `${currentYear}-01-01`,
+            end_date: `${currentYear}-12-31`,
+          }),
         ]);
 
         if (helpRes.status === 'fulfilled') {
@@ -1229,7 +1252,7 @@ onMounted(() => {
   }
 }
 
-@media (max-width: 73.75rem) {
+@media (width <= 73.75rem) {
   .summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1249,7 +1272,7 @@ onMounted(() => {
   }
 }
 
-@media (max-width: 56.25rem) {
+@media (width <= 56.25rem) {
   .chart-grid,
   .dashboard-aside {
     grid-template-columns: 1fr;
@@ -1260,7 +1283,7 @@ onMounted(() => {
   }
 }
 
-@media (max-width: 40rem) {
+@media (width <= 40rem) {
   .summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--td-comp-margin-s);
@@ -1331,7 +1354,7 @@ onMounted(() => {
   }
 }
 
-@media (max-width: 30rem) {
+@media (width <= 30rem) {
   .quick-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }

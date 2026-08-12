@@ -299,7 +299,7 @@ onMounted(() => {
   text-align: center;
 }
 
-@media (max-width: 40rem) {
+@media (width <= 40rem) {
   .detail-kv-grid {
     grid-template-columns: 1fr;
   }

@@ -539,10 +539,7 @@ function mergeCouponProductHierarchy(data: CouponHierarchyItem[]): MergedCouponH
     line-height: 1.5;
     text-align: left;
     vertical-align: middle;
-    word-break: break-word;
-  }
-
-  td {
+    overflow-wrap: break-word;
     background: var(--td-bg-color-container);
   }
 

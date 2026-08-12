@@ -1,4 +1,4 @@
-import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onBeforeUnmount, reactive, ref, shallowRef, watch } from 'vue';
 import { useRouter } from 'vue-router';
 

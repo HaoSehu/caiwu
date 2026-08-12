@@ -250,8 +250,8 @@ import {
   LogoAlipayFilledIcon,
   LogoWechatpayFilledIcon,
 } from 'tdesign-icons-vue-next';
-import { computed, defineAsyncComponent, onMounted, ref } from 'vue';
 import { DialogPlugin } from 'tdesign-vue-next';
+import { computed, defineAsyncComponent, onMounted, ref } from 'vue';
 
 import { formatMoney, RECHARGE_PRESET_AMOUNTS, useRecharge } from '@/domains/finance/useRecharge';
 import type { RechargeGatewayOption } from '@/types/client';
@@ -341,9 +341,18 @@ async function handleGatewayCreate(method: RechargeGatewayOption) {
       body: `确认通过 ${method.name || method.label || '支付'} 充值 ¥${amountText.value}？`,
       confirmBtn: '确认支付',
       cancelBtn: '再想想',
-      onConfirm: () => { dialog.destroy(); resolve(true); },
-      onCancel: () => { dialog.destroy(); resolve(false); },
-      onClose: () => { dialog.destroy(); resolve(false); },
+      onConfirm: () => {
+        dialog.destroy();
+        resolve(true);
+      },
+      onCancel: () => {
+        dialog.destroy();
+        resolve(false);
+      },
+      onClose: () => {
+        dialog.destroy();
+        resolve(false);
+      },
     });
   });
   if (!confirmed) return;
@@ -859,7 +868,7 @@ onMounted(() => {
   }
 }
 
-@media (max-width: 30rem) {
+@media (width <= 30rem) {
   .recharge-stage :deep(.t-card__body) {
     padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
   }
@@ -873,7 +882,7 @@ onMounted(() => {
   }
 }
 
-@media (max-width: 22rem) {
+@media (width <= 22rem) {
   .mobile-amount-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

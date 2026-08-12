@@ -5,14 +5,16 @@
         <info-cell label="实例名称" :value="detail.name || `服务 #${serviceId}`" strong />
         <info-cell
           label="实例规格"
-          :value="String(
-            detail.product_full_path ||
-            detail.combined_display_name ||
-            detail.product_display_name ||
-            detail.product?.display_name ||
-            detail.product?.type_label ||
-            '--'
-          )"
+          :value="
+            String(
+              detail.product_full_path ||
+                detail.combined_display_name ||
+                detail.product_display_name ||
+                detail.product?.display_name ||
+                detail.product?.type_label ||
+                '--',
+            )
+          "
           strong
         />
         <info-cell label="实例 ID" :value="String(detail.id || '--')" copyable @copy="copyText" />

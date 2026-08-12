@@ -22,14 +22,13 @@
     <console-dialogs />
   </section>
 </template>
-
 <script setup lang="ts">
 import LoadingState from '@shared/user-v3/components/LoadingState.vue';
 import { watch } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { useServiceConsole } from '@/domains/services/useServiceConsole';
 import { CLOUD_TABS, isNatConsole } from '@/domains/services/console/useConsoleCore';
+import { useServiceConsole } from '@/domains/services/useServiceConsole';
 
 import ConsoleAlerts from '../components/ConsoleAlerts.vue';
 import ConsoleBreadcrumb from '../components/ConsoleBreadcrumb.vue';
@@ -61,5 +60,4 @@ watch(
   },
 );
 </script>
-
-<style src="../components/styles.less" lang="less"></style>
+<style src="../components/styles.less" lang="less" scoped></style>

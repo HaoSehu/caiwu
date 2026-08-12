@@ -90,7 +90,6 @@
 </template>
 <script setup lang="ts">
 import { LockOnIcon } from 'tdesign-icons-vue-next';
-import PasswordToggle from '@/components/auth/PasswordToggle.vue';
 import type { FormInstanceFunctions, FormRule, FormValidateMessage, SubmitContext } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onBeforeUnmount, reactive, ref } from 'vue';
@@ -98,6 +97,7 @@ import { useRoute, useRouter } from 'vue-router';
 
 import { clientAuthApi } from '@/api/auth';
 import AuthShell from '@/components/auth/AuthShell.vue';
+import PasswordToggle from '@/components/auth/PasswordToggle.vue';
 import { useGeeTestCaptcha } from '@/composables/useGeeTestCaptcha';
 import { buildAccountPayload, detectAccountType, normalizeAccountValue } from '@/utils/account';
 import { toUserMessage } from '@/utils/userMessage';
