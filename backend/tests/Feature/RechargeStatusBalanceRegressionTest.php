@@ -571,4 +571,81 @@ class RechargeStatusBalanceRegressionTest extends TestCase
         $this->assertNotNull($payment->invoice_id);
         $this->assertInstanceOf(Invoice::class, Invoice::query()->find((int) $payment->invoice_id));
     }
+
+    public function test_query_recharge_status_rejects_mismatched_query_amount(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+
+        $user = User::query()->create([
+            'email' => 'recharge-amount-mismatch-'.$suffix.'@example.com',
+            'password' => 'Temp@123456',
+            'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
+            'status' => 1,
+            'nickname' => 'Recharge Amount Mismatch',
+            'real_name' => '',
+            'id_card' => '',
+            'verification_status' => 0,
+            'verification_message' => '',
+            'verification_certify_id' => null,
+            'member_level_id' => null,
+            'total_sales_amount' => '0.00',
+            'referrer_user_id' => null,
+            'verified_at' => null,
+        ]);
+        $user->forceFill(['balance' => '10.00'])->save();
+
+        $payment = Payment::query()->create([
+            'payment_no' => Payment::generatePaymentNo(),
+            'user_id' => (int) $user->id,
+            'invoice_id' => null,
+            'gateway' => 'alipay',
+            'amount' => '5.00',
+            'status' => PaymentStatus::PENDING,
+        ]);
+
+        $tradeNo = 'TRADE-MISMATCH-'.strtoupper(bin2hex(random_bytes(4)));
+        $alipayGateway = $this->makeFakePaymentGateway([
+            'query' => function (string $outTradeNo) use ($payment, $tradeNo): array {
+                return [
+                    'trade_status' => 'TRADE_SUCCESS',
+                    'trade_no' => $tradeNo,
+                    'out_trade_no' => (string) $payment->payment_no,
+                    // 网关返回金额与支付单不一致：轮询路径必须拒绝入账
+                    'total_amount' => '50.00',
+                    'raw' => [
+                        'trade_status' => 'TRADE_SUCCESS',
+                        'trade_no' => $tradeNo,
+                        'out_trade_no' => (string) $payment->payment_no,
+                        'total_amount' => '50.00',
+                    ],
+                ];
+            },
+        ]);
+
+        $service = new PaymentService(
+            $this->createMock(ProvisionService::class),
+            $this->makePaymentGatewayManagerForTest($alipayGateway),
+            $this->createMock(ServiceRenewService::class),
+            $this->createMock(ReferralService::class),
+            $this->createMock(PaidOrderBusinessFlowDispatcher::class),
+            $this->createMock(AdminOrderNotificationService::class),
+            $this->createMock(CouponService::class),
+            new InvoiceService,
+        );
+
+        $result = $service->queryRechargeStatus($payment);
+
+        $this->assertFalse($result['paid']);
+        $this->assertDatabaseHas('payments', [
+            'id' => (int) $payment->id,
+            'status' => PaymentStatus::PENDING,
+            'invoice_id' => null,
+        ]);
+        $this->assertSame('10.00', User::query()->findOrFail($user->id)->balance);
+        $this->assertSame(0, AccountTransaction::query()
+            ->where('user_id', (int) $user->id)
+            ->where('event_type', 'recharge')
+            ->where('source_id', (int) $payment->id)
+            ->count());
+    }
 }

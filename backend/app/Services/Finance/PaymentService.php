@@ -106,9 +106,10 @@ class PaymentService
                     'trace_id' => $traceId !== '' ? $traceId : $lockedInvoice->trace_id,
                 ])->save();
 
+                // 订单 paid_amount 投影账单累计实收额，补尾款不能覆盖此前已付金额。
                 $lockedInvoice->order?->forceFill([
                     'status' => OrderStatus::PAID,
-                    'paid_amount' => $amount,
+                    'paid_amount' => $lockedInvoice->amount,
                     'paid_at' => now(),
                 ])->save();
 
@@ -507,6 +508,24 @@ class PaymentService
         $result = $this->queryGatewayPayment($gateway, $payment->payment_no);
 
         if (in_array($result['trade_status'], ['TRADE_SUCCESS', 'TRADE_FINISHED', 'SUCCESS'], true)) {
+            // 金额校验：轮询路径不经过签名验证，必须与异步通知同级的金额比对，防止异常金额入账
+            $queryAmount = round((float) ($result['total_amount'] ?? 0), 2);
+            $expectedAmount = round((float) $payment->amount, 2);
+            if ($queryAmount <= 0 || abs($queryAmount - $expectedAmount) > 0.0001) {
+                Log::warning('[充值主动查询] 金额校验失败，拒绝入账', [
+                    'payment_no' => $payment->payment_no,
+                    'expected' => $expectedAmount,
+                    'query' => $queryAmount,
+                ]);
+
+                return [
+                    'paid' => false,
+                    'trade_status' => $result['trade_status'],
+                    'status' => (int) $payment->status,
+                    'status_label' => PaymentStatus::$labels[(int) $payment->status] ?? '未知',
+                ];
+            }
+
             $this->completeRechargePayment($payment, $result['trade_no'], $result['raw']);
 
             return ['paid' => true, 'trade_no' => $result['trade_no']];
@@ -2611,15 +2630,14 @@ class PaymentService
             $lock = Cache::lock("lock:paid-order-fulfillment:{$orderId}", 1500);
             $acquired = $lock->get();
         } catch (\Throwable $exception) {
-            Log::warning('[支付后自动开通] 订单履约锁不可用，降级继续履约', [
+            // 锁后端异常时不降级无锁履约，避免并发重复调用上游；抛错走队列重试
+            Log::error('[支付后自动开通] 订单履约锁不可用，终止本次履约等待重试', [
                 'order_id' => $orderId,
                 'message' => $exception->getMessage(),
                 'exception' => $exception::class,
             ]);
 
-            $this->fulfillPaidOrderById($orderId);
-
-            return;
+            throw $exception;
         }
 
         if (! $acquired) {
