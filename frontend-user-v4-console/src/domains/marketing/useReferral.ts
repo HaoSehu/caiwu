@@ -22,6 +22,7 @@ interface BindFormState {
   real_name: string;
   account: string;
   code: string;
+  password: string;
 }
 
 interface WithdrawFormState {
@@ -77,7 +78,7 @@ export function useReferral() {
     is_bound: false,
   });
   const withdrawForm = reactive<WithdrawFormState>({ amount: '' });
-  const bindForm = reactive<BindFormState>({ real_name: '', account: '', code: '' });
+  const bindForm = reactive<BindFormState>({ real_name: '', account: '', code: '', password: '' });
 
   const availableAmountText = computed(() => money(overview.referral_available_amount));
   const frozenAmountText = computed(() => money(overview.referral_frozen_amount));
@@ -151,6 +152,7 @@ export function useReferral() {
     bindForm.real_name = alipayAccount.real_name || String(userStore.info?.real_name || '');
     bindForm.account = alipayAccount.account || '';
     bindForm.code = '';
+    bindForm.password = '';
     bindDialogVisible.value = true;
   }
 
