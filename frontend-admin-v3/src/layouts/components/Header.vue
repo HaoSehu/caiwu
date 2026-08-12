@@ -359,7 +359,7 @@ const handleLogout = () => {
 }
 
 /* 手机端 side 布局：顶栏显示菜单按钮，隐藏 logo 为右侧操作区腾空间 */
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .header-mobile-logo-bar {
     display: inline-flex;
     align-items: center;

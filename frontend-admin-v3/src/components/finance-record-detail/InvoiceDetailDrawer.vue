@@ -368,7 +368,7 @@ function toRecord(value: unknown): Record<string, unknown> {
   min-width: 0;
 }
 
-@media (max-width: 560px) {
+@media (width <= 560px) {
   .finance-detail-grid {
     grid-template-columns: 1fr;
   }

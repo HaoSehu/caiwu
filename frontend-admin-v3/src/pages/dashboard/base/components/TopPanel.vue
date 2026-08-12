@@ -125,13 +125,13 @@ const cards = computed(() => [
   }
 }
 
-@media (max-width: 1200px) {
+@media (width <= 1200px) {
   .top-panel {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
-@media (max-width: 640px) {
+@media (width <= 640px) {
   .top-panel {
     grid-template-columns: 1fr;
   }

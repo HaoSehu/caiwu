@@ -101,7 +101,9 @@
                     : row.upstream_host_id_text || row.upstream_host_id,
                 )
               "
-              :description="fieldValue(row.product_full_path || row.product_display_name || row.product?.display_name || row.domain)"
+              :description="
+                fieldValue(row.product_full_path || row.product_display_name || row.product?.display_name || row.domain)
+              "
               highlight-label="服务金额"
               :highlight-value="formatMoney(row.amount)"
               :status-map="SERVICE_STATUS_MAP"

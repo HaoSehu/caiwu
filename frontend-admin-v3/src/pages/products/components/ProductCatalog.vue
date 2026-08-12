@@ -7,7 +7,7 @@
           :key="item.value"
           :theme="catalogFilters.product_type === item.value ? 'primary' : 'default'"
           :variant="catalogFilters.product_type === item.value ? 'base' : 'outline'"
-          :aria-label="item.label + '，共' + (item.usage_count || 0) + '个商品'"
+          :aria-label="`${item.label}，共${item.usage_count || 0}个商品`"
           :aria-pressed="catalogFilters.product_type === item.value ? 'true' : 'false'"
           @click="handleProductTypeChange(item.value)"
         >
@@ -35,7 +35,13 @@
             <strong>商品分类</strong>
           </div>
           <t-space size="small">
-            <t-button shape="square" variant="text" :loading="categoryLoading" aria-label="刷新分类列表" @click="loadCategories">
+            <t-button
+              shape="square"
+              variant="text"
+              :loading="categoryLoading"
+              aria-label="刷新分类列表"
+              @click="loadCategories"
+            >
               <template #icon><refresh-icon /></template>
             </t-button>
             <t-button theme="primary" size="small" aria-label="新增二级分类" @click="openSecondCategoryDialog()">
@@ -71,7 +77,9 @@
               class="category-expand"
               :class="{ visible: childCount > 0, expanded: isCategoryExpanded(item) }"
               :disabled="childCount <= 0"
-              :aria-label="isCategoryExpanded(item) ? '折叠' + categoryDisplayName(item) : '展开' + categoryDisplayName(item)"
+              :aria-label="
+                isCategoryExpanded(item) ? `折叠${categoryDisplayName(item)}` : `展开${categoryDisplayName(item)}`
+              "
               @click.stop="toggleCategoryExpanded(item)"
             />
             <button type="button" class="category-drag" aria-label="排序占位" disabled>::</button>
@@ -83,7 +91,14 @@
                 <span class="category-name" :class="{ 'is-hidden': !isCategoryVisible(item) }">
                   {{ categoryDisplayName(item) }}
                 </span>
-                <t-tag v-if="!isCategoryVisible(item)" theme="warning" variant="light" size="small" style="margin-left:4px;">隐藏</t-tag>
+                <t-tag
+                  v-if="!isCategoryVisible(item)"
+                  theme="warning"
+                  variant="light"
+                  size="small"
+                  style="margin-left: 4px"
+                  >隐藏</t-tag
+                >
               </span>
             </button>
             <t-dropdown
@@ -93,7 +108,14 @@
               :options="categoryMenuOptions(item)"
               @click="handleCategoryMenuClick(item, $event)"
             >
-              <t-button class="category-menu-trigger" size="small" shape="square" variant="text" :aria-label="'更多操作：' + categoryDisplayName(item)">...</t-button>
+              <t-button
+                class="category-menu-trigger"
+                size="small"
+                shape="square"
+                variant="text"
+                :aria-label="`更多操作：${categoryDisplayName(item)}`"
+                >...</t-button
+              >
             </t-dropdown>
           </div>
         </div>
@@ -155,19 +177,11 @@
         <div v-if="selectedProductKeys.length" class="product-batch-bar" aria-live="polite">
           <span>已选 {{ selectedProductKeys.length }} 个商品</span>
           <t-space size="small">
-            <t-button variant="outline" @click="openBatchCategoryDialog">
-              批量归类
-            </t-button>
-            <t-button
-              variant="outline"
-              :loading="splitProductPreviewLoading"
-              @click="openSplitProductDialog"
-            >
+            <t-button variant="outline" @click="openBatchCategoryDialog"> 批量归类 </t-button>
+            <t-button variant="outline" :loading="splitProductPreviewLoading" @click="openSplitProductDialog">
               拆分商品
             </t-button>
-            <t-button variant="outline" @click="openProvisionHostnameDialog">
-              批量主机名
-            </t-button>
+            <t-button variant="outline" @click="openProvisionHostnameDialog"> 批量主机名 </t-button>
             <t-button variant="text" @click="clearProductSelection">清空选择</t-button>
           </t-space>
         </div>
@@ -185,7 +199,17 @@
             @select-change="handleProductSelectChange"
           >
             <template #empty>
-              <t-empty :description="productLoading ? '正在加载...' : catalogFilters.keyword || catalogFilters.status !== '' || catalogFilters.lifecycle_status !== 'active' ? '筛选无匹配商品' : '暂无商品'" />
+              <t-empty
+                :description="
+                  productLoading
+                    ? '正在加载...'
+                    : catalogFilters.keyword ||
+                        catalogFilters.status !== '' ||
+                        catalogFilters.lifecycle_status !== 'active'
+                      ? '筛选无匹配商品'
+                      : '暂无商品'
+                "
+              />
             </template>
             <template #name="{ row }">
               <div class="product-name">
@@ -219,7 +243,13 @@
                 :options="productRowMenuOptions(row)"
                 @click="handleProductRowMenuClick(row, $event)"
               >
-                <t-button size="small" shape="square" variant="text" :aria-label="'更多操作：' + (row.display_name || row.name || row.id)">...</t-button>
+                <t-button
+                  size="small"
+                  shape="square"
+                  variant="text"
+                  :aria-label="`更多操作：${row.display_name || row.name || row.id}`"
+                  >...</t-button
+                >
               </t-dropdown>
             </template>
           </t-table>
@@ -300,7 +330,12 @@
             </t-input>
           </div>
 
-          <div v-if="categoryTreeRows.length" class="category-tree mobile-category-tree" role="tree" aria-label="商品分类树">
+          <div
+            v-if="categoryTreeRows.length"
+            class="category-tree mobile-category-tree"
+            role="tree"
+            aria-label="商品分类树"
+          >
             <div
               v-for="{ node: item, level, childCount } in categoryTreeRows"
               :key="String(item.id)"
@@ -321,7 +356,9 @@
                 class="category-expand"
                 :class="{ visible: childCount > 0, expanded: isCategoryExpanded(item) }"
                 :disabled="childCount <= 0"
-                :aria-label="isCategoryExpanded(item) ? '折叠' + categoryDisplayName(item) : '展开' + categoryDisplayName(item)"
+                :aria-label="
+                  isCategoryExpanded(item) ? `折叠${categoryDisplayName(item)}` : `展开${categoryDisplayName(item)}`
+                "
                 @click.stop="toggleCategoryExpanded(item)"
               />
               <button type="button" class="category-drag" aria-label="排序占位" disabled>::</button>
@@ -333,7 +370,14 @@
                   <span class="category-name" :class="{ 'is-hidden': !isCategoryVisible(item) }">
                     {{ categoryDisplayName(item) }}
                   </span>
-                  <t-tag v-if="!isCategoryVisible(item)" theme="warning" variant="light" size="small" style="margin-left:4px;">隐藏</t-tag>
+                  <t-tag
+                    v-if="!isCategoryVisible(item)"
+                    theme="warning"
+                    variant="light"
+                    size="small"
+                    style="margin-left: 4px"
+                    >隐藏</t-tag
+                  >
                 </span>
               </button>
               <t-dropdown
@@ -343,7 +387,14 @@
                 :options="categoryMenuOptions(item)"
                 @click="handleCategoryMenuClick(item, $event)"
               >
-                <t-button class="category-menu-trigger" size="small" shape="square" variant="text" :aria-label="'更多操作：' + categoryDisplayName(item)">...</t-button>
+                <t-button
+                  class="category-menu-trigger"
+                  size="small"
+                  shape="square"
+                  variant="text"
+                  :aria-label="`更多操作：${categoryDisplayName(item)}`"
+                  >...</t-button
+                >
               </t-dropdown>
             </div>
           </div>
@@ -374,7 +425,15 @@
               :aria-current="activeProductDrawerSection === section.key ? 'step' : undefined"
               @click="setProductDrawerSection(section.key)"
             >
-              <strong>{{ section.label }}<span v-if="activeProductDrawerSection !== section.key && productDrawerSectionValid(section.key)" class="nav-dot nav-dot--done" aria-label="已完成">●</span></strong>
+              <strong
+                >{{ section.label
+                }}<span
+                  v-if="activeProductDrawerSection !== section.key && productDrawerSectionValid(section.key)"
+                  class="nav-dot nav-dot--done"
+                  aria-label="已完成"
+                  >●</span
+                ></strong
+              >
               <span>{{ section.description }}</span>
             </button>
           </aside>
@@ -1278,11 +1337,16 @@ const typeManagerHiddenCount = computed(() => productTypes.value.filter((item) =
 const normalizedTypeFormIcon = computed(() => resolveProductTypeIconName(typeForm.icon));
 const productDrawerSectionValid = (key: string) => {
   switch (key) {
-    case 'basic': return !!(productForm.display_name || productForm.selected_product_group_key);
-    case 'pricing': return !!(productForm.monthly_price || productForm.quarterly_price || productForm.annually_price);
-    case 'interface': return !!(productForm.supplier_id || productForm.upstream_product_id);
-    case 'config': return productForm.config_options.length > 0;
-    default: return false;
+    case 'basic':
+      return !!(productForm.display_name || productForm.selected_product_group_key);
+    case 'pricing':
+      return !!(productForm.monthly_price || productForm.quarterly_price || productForm.annually_price);
+    case 'interface':
+      return !!(productForm.supplier_id || productForm.upstream_product_id);
+    case 'config':
+      return productForm.config_options.length > 0;
+    default:
+      return false;
   }
 };
 const selectedProductTypeLabel = computed(() => {
@@ -1451,13 +1515,28 @@ function productRowMenuOptions(
 ): Array<{ content: string; value: string; theme?: string; loading?: boolean }> {
   if (row.is_deleted) {
     return [
-      { content: '恢复', value: 'restore', theme: 'primary', loading: productActionLoading.value === `restore:${row.id}` },
-      { content: '彻底删除', value: 'force-delete', theme: 'error', loading: productActionLoading.value === `force:${row.id}` },
+      {
+        content: '恢复',
+        value: 'restore',
+        theme: 'primary',
+        loading: productActionLoading.value === `restore:${row.id}`,
+      },
+      {
+        content: '彻底删除',
+        value: 'force-delete',
+        theme: 'error',
+        loading: productActionLoading.value === `force:${row.id}`,
+      },
     ];
   }
   return [
     { content: '编辑', value: 'edit', theme: 'default' },
-    { content: Number(row.status) === 1 ? '隐藏' : '显示', value: 'toggle', theme: 'default', loading: productActionLoading.value === row.id },
+    {
+      content: Number(row.status) === 1 ? '隐藏' : '显示',
+      value: 'toggle',
+      theme: 'default',
+      loading: productActionLoading.value === row.id,
+    },
     { content: '删除', value: 'delete', theme: 'error' },
   ];
 }
@@ -2745,7 +2824,7 @@ async function handleToggleProduct(row: ProductRecord) {
 function handleDeleteProduct(row: ProductRecord) {
   const dialog = DialogPlugin.confirm({
     header: '删除商品',
-    body: `确认删除「${row.display_name || row.name || row.id}」吗？${Number(row.active_services_count ?? row.services_count ?? 0) > 0 ? ' 该商品下有 ' + (row.active_services_count ?? row.services_count) + ' 个现存服务，删除后可能影响已开通实例。' : ''}`,
+    body: `确认删除「${row.display_name || row.name || row.id}」吗？${Number(row.active_services_count ?? row.services_count ?? 0) > 0 ? ` 该商品下有 ${row.active_services_count ?? row.services_count} 个现存服务，删除后可能影响已开通实例。` : ''}`,
     theme: 'warning',
     confirmBtn: '确认删除',
     cancelBtn: '取消',
