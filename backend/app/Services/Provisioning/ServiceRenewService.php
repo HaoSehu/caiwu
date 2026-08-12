@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Services\Finance\CheckoutService;
 use App\Services\Finance\CouponService;
 use App\Services\Finance\InvoiceService;
+use App\Services\Finance\PaymentService;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\Integrations\Plugins\ServiceUpstreamBindingWriter;
 use App\Services\Integrations\Support\ProviderErrorMapper;
@@ -364,6 +365,77 @@ class ServiceRenewService
         $amount = round((float) ($cycleOption['amount'] ?? 0), 2);
         throw_if($amount <= 0, new BusinessException('当前续费周期金额无效'));
 
+        // 复用已支付未履约续费账单：用户已付过钱，直接返回既有订单，防止自动续费重复建单扣款
+        $blockingPaidInvoice = $this->findBlockingPaidRenewInvoice($user, $service, $cycle, $userCouponId);
+        if ($blockingPaidInvoice instanceof Invoice && $blockingPaidInvoice->order instanceof Order) {
+            $reusedOrder = $blockingPaidInvoice->order->loadMissing([
+                'invoice.product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
+                'invoice.service',
+            ]);
+
+            $this->operationLogService->writeServiceConsoleLog($service, 'service.console.renew.order.create', [
+                'category' => 'renew',
+                'summary' => '获取已支付待处理续费订单',
+                'billing_cycle' => $cycle,
+                'billing_cycle_label' => $this->resolveBillingCycleLabel($cycle),
+                'amount' => number_format((float) $blockingPaidInvoice->amount, 2, '.', ''),
+                'order_id' => (int) $reusedOrder->id,
+                'order_no' => (string) $reusedOrder->order_no,
+                'invoice_id' => (int) $blockingPaidInvoice->id,
+                'invoice_no' => (string) $blockingPaidInvoice->invoice_no,
+                'reused_order' => true,
+                'paid_unfulfilled' => true,
+            ], $context);
+
+            return $reusedOrder;
+        }
+
+        // 复用未付续费订单：金额与商品一致时直接支付既有订单，避免每次调度堆叠未付账单
+        $existingOrder = Order::query()
+            ->where('user_id', $user->id)
+            ->where('service_id', $service->id)
+            ->where('type', OrderType::RENEW)
+            ->where('billing_cycle', $cycle)
+            ->where('user_coupon_id', $userCouponId > 0 ? $userCouponId : null)
+            ->whereHas('invoice', fn ($query) => $query->where('status', InvoiceStatus::UNPAID))
+            ->latest('id')
+            ->first();
+
+        if ($existingOrder instanceof Order) {
+            $existingAmount = round((float) $existingOrder->amount + (float) ($existingOrder->discount ?? 0), 2);
+
+            if ($existingAmount === $amount && (int) $existingOrder->product_id === (int) $effectiveProduct->id) {
+                $reusedOrder = $existingOrder->loadMissing([
+                    'invoice.product:id,product_type,service_type_code,product_group_id,config_options,purchase_requires',
+                    'invoice.service',
+                ]);
+
+                $this->operationLogService->writeServiceConsoleLog($service, 'service.console.renew.order.create', [
+                    'category' => 'renew',
+                    'summary' => '获取待支付续费订单',
+                    'billing_cycle' => $cycle,
+                    'billing_cycle_label' => $this->resolveBillingCycleLabel($cycle),
+                    'amount' => number_format($amount, 2, '.', ''),
+                    'order_id' => (int) $reusedOrder->id,
+                    'order_no' => (string) $reusedOrder->order_no,
+                    'invoice_id' => (int) ($reusedOrder->invoice?->id ?? 0),
+                    'invoice_no' => (string) ($reusedOrder->invoice?->invoice_no ?? ''),
+                    'reused_order' => true,
+                ], $context);
+
+                return $reusedOrder;
+            }
+
+            if ($existingOrder->invoice instanceof Invoice) {
+                app(CheckoutService::class)->cancel($existingOrder->invoice, array_merge($context, [
+                    'actor_type' => (string) ($context['actor_type'] ?? 'system'),
+                    'actor_user_id' => (int) ($context['actor_user_id'] ?? $user->id),
+                    'actor_name' => (string) ($context['actor_name'] ?? ($user->display_name ?? $user->nickname ?? $user->email ?? '')),
+                    'reason' => 'renew_order_replaced',
+                ]));
+            }
+        }
+
         $sourceProvisionData = $this->serviceProvisionData($service);
 
         $order = DB::transaction(function () use ($user, $service, $cycle, $amount, $renewConfig, $cycleOption, $effectiveProduct, $userCouponId, $context, $sourceProvisionData) {
@@ -445,6 +517,20 @@ class ServiceRenewService
         ], $context);
 
         return $order;
+    }
+
+    /**
+     * 查询已支付但尚未履约完成的续费订单，供自动续费在扣款前复用，避免重复建单重复扣款。
+     */
+    public function findPaidUnfulfilledRenewOrder(User $user, Service $service, string $billingCycle, int $userCouponId = 0): ?Order
+    {
+        $blockingPaidInvoice = $this->findBlockingPaidRenewInvoice($user, $service, trim($billingCycle), $userCouponId);
+
+        if ($blockingPaidInvoice instanceof Invoice && $blockingPaidInvoice->order instanceof Order) {
+            return $blockingPaidInvoice->order->loadMissing(['invoice', 'invoice.service']);
+        }
+
+        return null;
     }
 
     public function updateAutoRenewForUser(User $user, int $serviceId, int $autoRenew, array $context = []): array
@@ -535,6 +621,11 @@ class ServiceRenewService
                 'superseded_by_invoice_id' => (int) $newerPaidInvoice->id,
                 'superseded_by_invoice_no' => (string) ($newerPaidInvoice->invoice_no ?? ''),
             ]);
+
+            // 旧账单钱已收但不会履约，自动退余额（仅 PAID 状态执行一次，REFUNDED 幂等跳过）
+            if ((int) $invoice->status === InvoiceStatus::PAID) {
+                $this->autoRefundSupersededRenewInvoice($invoice);
+            }
 
             return $service->fresh(['product.supplier']) ?? $service;
         }
@@ -873,7 +964,8 @@ class ServiceRenewService
                 'product_id' => (int) ($invoice->product_id ?: $service->product_id),
                 'invoice_id' => (int) $invoice->id,
                 'billing_cycle' => (string) ($invoice->billing_cycle ?? $service->billing_cycle),
-                'amount' => (float) $invoice->amount,
+                // 服务金额记录续费原价，优惠仅作用于本次账单，不能改变后续续费定价。
+                'amount' => round((float) $invoice->amount + (float) ($invoice->discount ?? 0), 2),
                 'expires_at' => $nextExpiresAt,
                 'status' => $resolvedStatus,
                 'provision_data' => $provisionData,
@@ -1098,6 +1190,44 @@ class ServiceRenewService
             ->where('id', '>', (int) $invoice->id)
             ->latest('id')
             ->first();
+    }
+
+    /**
+     * 旧续费账单被更新的已支付账单取代时自动退余额；失败时标记 requires_refund 供人工处理。
+     */
+    private function autoRefundSupersededRenewInvoice(Invoice $invoice): void
+    {
+        try {
+            $user = $invoice->user ?? User::query()->find((int) $invoice->user_id);
+
+            throw_if(! $user instanceof User, new BusinessException('续费账单用户不存在，无法自动退款'));
+
+            // 方法内延迟解析 PaymentService，避免构造器循环依赖（PaymentService 依赖本服务）
+            app(PaymentService::class)->refundInvoiceToBalance($user, $invoice, [], [
+                'actor_type' => 'system',
+                'operator' => 'auto_refund',
+                'actor_name' => '续费账单被更新账单取代自动退款',
+                'source' => 'renew_superseded_auto_refund',
+                'trace_id' => 'auto_refund:renew:'.$invoice->id,
+            ]);
+
+            Log::info('[服务续费·账单] 旧账单已被更新账单取代，自动退款完成', [
+                'invoice_id' => (int) $invoice->id,
+                'invoice_no' => (string) ($invoice->invoice_no ?? ''),
+            ]);
+        } catch (\Throwable $exception) {
+            Log::error('[服务续费·账单] 旧账单自动退款失败，需人工处理', [
+                'invoice_id' => (int) $invoice->id,
+                'invoice_no' => (string) ($invoice->invoice_no ?? ''),
+                'message' => $exception->getMessage(),
+                'exception' => $exception::class,
+            ]);
+
+            $configSnapshot = is_array($invoice->config_snapshot ?? null) ? $invoice->config_snapshot : [];
+            $invoice->forceFill([
+                'config_snapshot' => array_merge($configSnapshot, ['requires_refund' => true]),
+            ])->save();
+        }
     }
 
     private function markRenewFulfillment(Service $service, Invoice $invoice, string $status, array $payload = []): Service

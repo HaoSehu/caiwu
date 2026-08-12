@@ -124,6 +124,95 @@ class ServiceLifecycleAutomationServiceTest extends TestCase
         $this->assertArrayNotHasKey('expired_suspended_at', $service->provision_data);
     }
 
+    public function test_it_does_not_suspend_a_service_renewed_before_write(): void
+    {
+        // 模拟扫描窗口内完成续费：到期时间已延长，暂停任务必须跳过（锁内重读校验防覆盖续费）
+        $service = Service::query()->create([
+            'name' => '续费恢复服务',
+            'status' => ServiceStatus::ACTIVE,
+            'expires_at' => now()->addDays(30),
+            'provision_data' => [],
+        ]);
+
+        $automationService = new ServiceLifecycleAutomationService(
+            $this->fakeSettingService([
+                'expire_suspend_enabled' => true,
+                'expire_suspend_after_days' => 0,
+                'expire_suspend_notify_enabled' => false,
+                'expire_terminate_enabled' => false,
+                'expire_terminate_after_days' => 1,
+            ]),
+            $this->createMock(NotificationService::class),
+            $this->createMock(UserNotificationService::class),
+        );
+
+        $summary = $automationService->handle();
+        $service->refresh();
+
+        $this->assertSame(0, $summary['suspended']);
+        $this->assertSame(ServiceStatus::ACTIVE, (int) $service->status);
+        $this->assertArrayNotHasKey('expired_suspended_at', $service->provision_data);
+    }
+
+    public function test_it_does_not_cancel_a_service_restored_by_renewal_before_write(): void
+    {
+        // 模拟扫描窗口内用户续费恢复 ACTIVE：取消任务必须跳过，避免不可逆取消刚续费的服务
+        $service = Service::query()->create([
+            'name' => '取消前续费服务',
+            'status' => ServiceStatus::ACTIVE,
+            'expires_at' => now()->addDays(30),
+            'suspended_reason' => null,
+            'provision_data' => [],
+        ]);
+
+        $automationService = new ServiceLifecycleAutomationService(
+            $this->fakeSettingService([
+                'expire_suspend_enabled' => true,
+                'expire_suspend_after_days' => 0,
+                'expire_suspend_notify_enabled' => false,
+                'expire_terminate_enabled' => true,
+                'expire_terminate_after_days' => 1,
+            ]),
+            $this->createMock(NotificationService::class),
+            $this->createMock(UserNotificationService::class),
+        );
+
+        $summary = $automationService->handle();
+        $service->refresh();
+
+        $this->assertSame(0, $summary['cancelled']);
+        $this->assertSame(ServiceStatus::ACTIVE, (int) $service->status);
+    }
+
+    public function test_it_does_not_suspend_when_expires_at_is_still_in_future(): void
+    {
+        // 到期时间未超过阈值（严格小于才暂停）时保持 ACTIVE
+        $service = Service::query()->create([
+            'name' => '阈值边界服务',
+            'status' => ServiceStatus::ACTIVE,
+            'expires_at' => now()->addSeconds(30),
+            'provision_data' => [],
+        ]);
+
+        $automationService = new ServiceLifecycleAutomationService(
+            $this->fakeSettingService([
+                'expire_suspend_enabled' => true,
+                'expire_suspend_after_days' => 0,
+                'expire_suspend_notify_enabled' => false,
+                'expire_terminate_enabled' => false,
+                'expire_terminate_after_days' => 1,
+            ]),
+            $this->createMock(NotificationService::class),
+            $this->createMock(UserNotificationService::class),
+        );
+
+        $summary = $automationService->handle();
+        $service->refresh();
+
+        $this->assertSame(0, $summary['suspended']);
+        $this->assertSame(ServiceStatus::ACTIVE, (int) $service->status);
+    }
+
     private function fakeSettingService(array $config): SettingService
     {
         return new class($config) extends SettingService

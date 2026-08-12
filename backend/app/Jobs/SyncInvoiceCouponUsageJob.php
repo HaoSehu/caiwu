@@ -61,5 +61,19 @@ class SyncInvoiceCouponUsageJob implements ShouldQueue
             'message' => $exception->getMessage(),
             'exception' => $exception::class,
         ]);
+
+        // 补偿：失败后同步执行一次同步，缩小券重复占用的双花窗口；
+        // 同步仍失败时仅记日志，reserve 侧的"已支付账单"检查兜底拦截二次占用
+        try {
+            app(CouponService::class)->syncInvoiceCouponUsage(
+                Invoice::query()->find($this->invoiceId)
+            );
+        } catch (\Throwable $fallbackException) {
+            Log::error('[账单优惠券同步] 失败补偿同步未成功', [
+                'invoice_id' => $this->invoiceId,
+                'message' => $fallbackException->getMessage(),
+                'exception' => $fallbackException::class,
+            ]);
+        }
     }
 }

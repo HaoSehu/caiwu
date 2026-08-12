@@ -294,11 +294,14 @@ trait HandlesOrderCalculation
         $rangeMin = (int) ($item['qty_minimum'] ?? 0);
         $rangeStep = max((int) ($item['qty_stage'] ?? 1), 1);
         $value = max((int) ($config[$field] ?? $rangeMin), $rangeMin);
+        $visibleSubCount = 0;
 
         foreach ((array) ($item['sub'] ?? []) as $sub) {
             if ((int) ($sub['hidden'] ?? 0) === 1) {
                 continue;
             }
+
+            $visibleSubCount++;
 
             $subMin = (int) ($sub['qty_minimum'] ?? 0);
             $subMax = (int) ($sub['qty_maximum'] ?? 0);
@@ -326,6 +329,13 @@ trait HandlesOrderCalculation
                 'selected_value' => $value,
                 'steps' => $steps,
             ];
+        }
+
+        // 超出所有阶梯且不存在"无上限"兜底段：拒绝按 0 元计费，防止超大配置值绕过定价。
+        // 无可见阶梯的历史配置保持原行为（按 0 元），避免误伤既有产品。
+        if ($visibleSubCount > 0) {
+            $label = trim((string) ($item['name'] ?? $field));
+            throw new BusinessException($label !== '' ? "配置项「{$label}」超出可选范围" : '配置值超出可选范围');
         }
 
         return [
