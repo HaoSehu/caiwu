@@ -51,6 +51,7 @@ class RechargeGatewayFailureTest extends TestCase
         config([
             'alipay.gateway' => 'https://openapi.alipay.com/gateway.do',
             'alipay.notify_url' => '',
+            'app.url' => 'https://api.example.test',
             'app.frontend_url' => 'https://console.example.test',
         ]);
 
@@ -60,7 +61,7 @@ class RechargeGatewayFailureTest extends TestCase
         ]);
 
         $this->assertSame('https://openapi.alipay.com/gateway.do', $this->getPrivateProperty($client, 'gateway'));
-        $this->assertSame('https://console.example.test/api/v2/client/payment/alipay/notify', $this->getPrivateProperty($client, 'notifyUrl'));
+        $this->assertSame('https://api.example.test/api/v2/client/payment/alipay/notify', $this->getPrivateProperty($client, 'notifyUrl'));
     }
 
     public function test_alipay_client_passes_configured_ca_bundle_to_http_client(): void
@@ -127,12 +128,12 @@ class RechargeGatewayFailureTest extends TestCase
         );
     }
 
-    public function test_precreate_notify_url_falls_back_to_frontend_url(): void
+    public function test_precreate_notify_url_falls_back_to_backend_url(): void
     {
         config([
             'alipay.notify_url' => '',
-            'app.frontend_url' => 'http://47.109.144.223:6107',
-            'app.url' => 'http://127.0.0.1:8000',
+            'app.url' => 'http://47.109.144.223:6107',
+            'app.frontend_url' => 'http://console.example.test',
         ]);
 
         $service = $this->makeAlipayClient();

@@ -261,9 +261,18 @@ class BackendHealthFixRegressionTest extends TestCase
         $source = file_get_contents(app_path('Services/Automation/Heartbeat/QueueDrainService.php'));
 
         $this->assertIsString($source);
-        $this->assertSame('provision,referral,notification,coupon,default', config('queue.caiwu_worker_queues'));
-        $this->assertStringContainsString('queue.caiwu_worker_queues', $source);
+        $this->assertSame('provision,referral,notification,coupon,default', config('queue.caiwu_business_queues'));
+        $this->assertSame('automation', config('queue.caiwu_schedule_queue'));
+        $this->assertStringContainsString('queue.caiwu_business_queues', $source);
+        $this->assertStringContainsString('queue.caiwu_schedule_queue', $source);
+        $this->assertStringContainsString('queue:work', $source);
+        $this->assertStringContainsString('runWorkersInParallel', $source);
         $this->assertStringContainsString('queue.caiwu_worker_timeout', $source);
+
+        $environmentTemplate = file_get_contents(base_path('.env.example'));
+        $this->assertIsString($environmentTemplate);
+        $this->assertStringContainsString('CAIWU_BUSINESS_QUEUES=', $environmentTemplate);
+        $this->assertStringContainsString('CAIWU_SCHEDULE_QUEUE=automation', $environmentTemplate);
     }
 
     public function test_sentry_is_configurable_without_enabling_default_pii(): void

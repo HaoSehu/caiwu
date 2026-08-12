@@ -403,8 +403,9 @@ class ServiceRenewInvoiceOnlyIdempotencyTest extends TestCase
             'product_id' => (int) $product->id,
             'service_id' => (int) $service->id,
             'type' => 'renew',
-            'amount' => '45.00',
-            'paid_amount' => '45.00',
+            'amount' => '40.00',
+            'discount' => '5.00',
+            'paid_amount' => '40.00',
             'billing_cycle' => 'monthly',
             'status' => InvoiceStatus::PAID,
             'paid_at' => now(),
@@ -458,6 +459,7 @@ class ServiceRenewInvoiceOnlyIdempotencyTest extends TestCase
         $this->assertSame((int) $invoice->id, (int) ($result->invoice_id ?? 0));
         $this->assertSame((int) $invoice->id, (int) ($service->fresh()?->invoice_id ?? 0));
         $this->assertSame((int) $invoice->id, (int) (($result->provision_data ?? [])['last_renew_invoice_id'] ?? 0));
+        $this->assertSame('45.00', (string) $result->fresh()->amount);
         $this->assertDatabaseHas('service_provision_attempts', [
             'service_id' => (int) $service->id,
             'action' => 'renew',
