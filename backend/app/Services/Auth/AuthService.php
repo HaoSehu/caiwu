@@ -218,7 +218,7 @@ class AuthService
 
         $user = DB::transaction(function () use ($data, $ip, $email, $storablePhone) {
             $nickname = TextSanitizer::clean((string) ($data['nickname'] ?? ''));
-            $normalizedNickname = $nickname !== '' ? $nickname : null;
+            $normalizedNickname = $nickname !== '' ? $nickname : '';
 
             $user = User::create([
                 'email' => $email,

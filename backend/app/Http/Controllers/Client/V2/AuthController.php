@@ -29,6 +29,7 @@ use App\Services\System\NotificationService;
 use App\Services\System\SmsService;
 use App\Support\AccountIdentifier;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\PersonalAccessToken;
 
 class AuthController extends Controller
@@ -52,6 +53,11 @@ class AuthController extends Controller
 
         $normalizedAccount = AccountIdentifier::normalizeAccount((string) $data['account']);
         $requestIp = (string) $request->ip();
+
+        // 验证码插件未启用时的兜底锁定：失败次数超阈值直接拒绝登录
+        if ($this->loginRiskControlService->isLoginLocked($normalizedAccount, $requestIp)) {
+            return $this->error(42900, '登录尝试次数过多，请稍后再试');
+        }
 
         if (
             $this->loginRiskControlService->shouldRequireCaptcha($normalizedAccount, $requestIp)
@@ -95,6 +101,11 @@ class AuthController extends Controller
         $account = AccountIdentifier::normalizeAccount((string) $data['account']);
         $accountType = AccountIdentifier::detectType($account);
         $code = (string) $data['code'];
+
+        // 验证码插件未启用时的兜底锁定：防止验证码登录通道被爆破
+        if ($this->loginRiskControlService->isLoginLocked($account, (string) $request->ip())) {
+            return $this->error(42900, '登录尝试次数过多，请稍后再试');
+        }
 
         // 先校验验证码再解析用户，未注册与验证码错误统一文案并保持时序一致
         $user = $this->authService->findClientByAccount($accountType, $account);
@@ -293,11 +304,14 @@ class AuthController extends Controller
         $data = $request->validated();
 
         $user = $request->user();
+
+        // 提现账户改绑必须登录密码二次确认，防止登录态被滥用直接改绑提现账户
+        if (! Hash::check((string) $data['password'], (string) $user->password)) {
+            return $this->error(42200, '登录密码错误');
+        }
+
         $phone = trim((string) $data['account']);
         $verified = $this->codeService->verifyPhoneCode($user->id, $phone, (string) $data['code']);
-        if (! $verified) {
-            $verified = $this->codeService->verifyPhoneCode('guest', $phone, (string) $data['code']);
-        }
 
         if (! $verified) {
             return $this->error(42200, '短信验证码错误或已过期');
@@ -359,11 +373,14 @@ class AuthController extends Controller
 
         $user = $request->user();
         $phone = (string) $data['phone'];
-        $verified = $this->codeService->verifyPhoneCode($user->id, $phone, (string) $data['code']);
-        if (! $verified) {
-            $verified = $this->codeService->verifyPhoneCode('guest', $phone, (string) $data['code']);
+        $oldPhone = trim((string) ($user->phone ?? ''));
+
+        // 已有绑定手机时，必须验证旧手机验证码，防止登录态被直接换绑
+        if ($oldPhone !== '' && ! $this->codeService->verifyPhoneCode($user->id, $oldPhone, (string) $data['old_code'])) {
+            return $this->error(42200, '原手机验证码错误或已过期');
         }
 
+        $verified = $this->codeService->verifyPhoneCode($user->id, $phone, (string) $data['code']);
         if (! $verified) {
             return $this->error(42200, '短信验证码错误或已过期');
         }
@@ -401,6 +418,14 @@ class AuthController extends Controller
             }
         }
 
+        // 旧手机验证场景：目标必须是当前账号已绑定的手机，防止向任意号码发送旧码
+        if (in_array((string) ($data['purpose'] ?? ''), ['verify_bound_phone', 'verify_phone'], true)) {
+            $currentPhone = trim((string) ($request->user()->phone ?? ''));
+            if ($currentPhone === '' || $currentPhone !== $phone) {
+                return $this->error(42200, '目标手机号与当前绑定不一致');
+            }
+        }
+
         $userId = $this->resolveCodeOwnerId($request);
         $code = (string) random_int(100000, 999999);
         $ip = $request->ip();
@@ -431,11 +456,14 @@ class AuthController extends Controller
 
         $user = $request->user();
         $email = (string) $data['email'];
-        $verified = $this->codeService->verifyEmailCode($user->id, $email, (string) $data['code']);
-        if (! $verified) {
-            $verified = $this->codeService->verifyEmailCode('guest', $email, (string) $data['code']);
+        $oldEmail = trim((string) ($user->email ?? ''));
+
+        // 已有绑定邮箱时，必须验证旧邮箱验证码，防止登录态被直接换绑
+        if ($oldEmail !== '' && ! $this->codeService->verifyEmailCode($user->id, $oldEmail, (string) $data['old_code'])) {
+            return $this->error(42200, '原邮箱验证码错误或已过期');
         }
 
+        $verified = $this->codeService->verifyEmailCode($user->id, $email, (string) $data['code']);
         if (! $verified) {
             return $this->error(42200, '邮箱验证码错误或已过期');
         }
@@ -470,6 +498,14 @@ class AuthController extends Controller
             }
             if ($user->status !== 1) {
                 return $this->error(40300, '账号已被禁用');
+            }
+        }
+
+        // 旧邮箱验证场景：目标必须是当前账号已绑定的邮箱，防止向任意邮箱发送旧码
+        if (in_array((string) ($data['purpose'] ?? ''), ['verify_bound_email', 'change_email'], true)) {
+            $currentEmail = trim((string) ($request->user()->email ?? ''));
+            if ($currentEmail === '' || $currentEmail !== $email) {
+                return $this->error(42200, '目标邮箱与当前绑定不一致');
             }
         }
 
