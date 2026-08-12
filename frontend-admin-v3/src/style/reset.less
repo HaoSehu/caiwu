@@ -59,6 +59,7 @@ p {
   font-weight: 600;
   text-decoration: none;
   border-radius: var(--td-radius-default, 4px);
+
   &:focus {
     top: 12px;
   }
@@ -83,7 +84,7 @@ button,
   min-height: 32px;
 }
 
-@media (max-width: 768px) {
+@media (width <= 768px) {
   button,
   [role='button'],
   .t-button {

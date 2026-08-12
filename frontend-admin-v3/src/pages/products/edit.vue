@@ -53,9 +53,7 @@
                 </t-form-item>
                 <t-form-item label="控制台面板" name="console_template">
                   <div class="product-edit-console-template-field">
-                    <t-select
-                      v-model="form.console_template"
-                    >
+                    <t-select v-model="form.console_template">
                       <t-option label="通用计算控制台" value="compute" />
                       <t-option label="端口映射控制台" value="port_mapping" />
                     </t-select>
@@ -175,7 +173,7 @@
                     拉取模板
                   </t-button>
                   <t-button size="small" theme="primary" variant="outline" @click="openConfigOptionDialog()"
-                  >新增配置</t-button
+                    >新增配置</t-button
                   >
                 </div>
               </div>
@@ -302,7 +300,6 @@ import { supplierApi } from '@/api/supplier';
 import {
   errorMessage,
   flattenCategories,
-  isSelectableProductGroup,
   productGroupPayload,
   providerTypeFallbackLabels,
   toPlainRecord,
@@ -354,7 +351,6 @@ const rules = {
 // --- Categories ---
 const categoryTree = ref<ProductCategoryRecord[]>([]);
 const categoryOptions = ref<ProductCategoryRecord[]>([]);
-const selectableGroups = computed(() => categoryOptions.value.filter((item) => isSelectableProductGroup(item)));
 
 // --- Pricing ---
 const pricingPlan = ref('standard');
@@ -1312,7 +1308,7 @@ function goBack() {
   border-top: 1px solid var(--td-component-border);
 }
 
-@media (max-width: 1024px) {
+@media (width <= 1024px) {
   .product-edit-layout {
     grid-template-columns: 1fr;
     min-height: 0;
@@ -1323,24 +1319,24 @@ function goBack() {
     overflow-x: auto;
     border-right: 0;
     border-bottom: 1px solid var(--td-component-border);
-  padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
-}
+    padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-m);
+  }
 
-.product-edit-console-template-field {
-  display: grid;
-  gap: var(--td-comp-margin-s);
-  width: 100%;
-}
+  .product-edit-console-template-field {
+    display: grid;
+    gap: var(--td-comp-margin-s);
+    width: 100%;
+  }
 
-.product-edit-console-template-field .t-select {
-  max-width: 28rem;
-}
+  .product-edit-console-template-field .t-select {
+    max-width: 28rem;
+  }
 
-.product-edit-console-template-field span {
-  color: var(--td-text-color-secondary);
-  font-size: var(--td-font-size-size-2, 13px);
-  line-height: 20px;
-}
+  .product-edit-console-template-field span {
+    color: var(--td-text-color-secondary);
+    font-size: var(--td-font-size-size-2, 13px);
+    line-height: 20px;
+  }
 
   .product-edit-nav-item {
     min-width: 160px;
@@ -1355,7 +1351,7 @@ function goBack() {
   }
 }
 
-@media (max-width: 768px) {
+@media (width <= 768px) {
   :global(.product-edit-supplier-product-popup .t-popup__content) {
     width: calc(100vw - 24px);
     max-width: calc(100vw - 24px);

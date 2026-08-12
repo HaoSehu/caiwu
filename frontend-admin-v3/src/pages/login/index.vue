@@ -113,7 +113,7 @@ async function handleLogin() {
     right: -120px;
     width: 520px;
     height: 520px;
-    background: radial-gradient(circle, rgba(22, 93, 255, 0.1), rgba(22, 93, 255, 0) 70%);
+    background: radial-gradient(circle, rgb(22 93 255 / 10%), rgb(22 93 255 / 0%) 70%);
   }
 
   &::after {
@@ -121,7 +121,7 @@ async function handleLogin() {
     left: -100px;
     width: 440px;
     height: 440px;
-    background: radial-gradient(circle, rgba(22, 93, 255, 0.07), rgba(22, 93, 255, 0) 70%);
+    background: radial-gradient(circle, rgb(22 93 255 / 7%), rgb(22 93 255 / 0%) 70%);
   }
 }
 
@@ -132,8 +132,8 @@ async function handleLogin() {
   background: var(--td-bg-color-container, #fff);
   border-radius: var(--td-radius-extraLarge, 12px);
   box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.06),
-    0 1px 4px rgba(0, 0, 0, 0.04);
+    0 8px 32px rgb(0 0 0 / 6%),
+    0 1px 4px rgb(0 0 0 / 4%);
   position: relative;
   z-index: 1;
 }
@@ -173,7 +173,7 @@ async function handleLogin() {
 }
 
 /* responsive: remove decorative glow on small screens */
-@media (max-width: 640px) {
+@media (width <= 640px) {
   .login-container {
     padding: 24px 16px;
 
@@ -186,7 +186,7 @@ async function handleLogin() {
   .login-card {
     padding: 36px 24px 28px;
     border-radius: 10px;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 2px 12px rgb(0 0 0 / 5%);
   }
 
   .login-header {
