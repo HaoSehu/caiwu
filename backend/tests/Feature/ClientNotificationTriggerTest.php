@@ -125,6 +125,7 @@ class ClientNotificationTriggerTest extends TestCase
         Sanctum::actingAs($user);
 
         app(VerificationCodeService::class)->storePhoneCode((int) $user->id, '13800000099', '123456');
+        app(VerificationCodeService::class)->storePhoneCode((int) $user->id, '13800000003', '654321');
 
         $mock = Mockery::mock(NotificationService::class);
         $mock->shouldReceive('sendPhoneChangedEmailAlertToAddress')
@@ -151,6 +152,7 @@ class ClientNotificationTriggerTest extends TestCase
         $this->putJson('/api/v2/client/auth/phone', [
             'phone' => '13800000099',
             'code' => '123456',
+            'old_code' => '654321',
         ])->assertOk();
     }
 
@@ -164,6 +166,7 @@ class ClientNotificationTriggerTest extends TestCase
         Sanctum::actingAs($user);
 
         app(VerificationCodeService::class)->storeEmailCode((int) $user->id, 'new-email-alert@example.com', '654321');
+        app(VerificationCodeService::class)->storeEmailCode((int) $user->id, 'old-email-alert@example.com', '123456');
 
         $mock = Mockery::mock(NotificationService::class);
         $mock->shouldReceive('sendEmailChangedEmailAlertToAddress')
@@ -188,6 +191,7 @@ class ClientNotificationTriggerTest extends TestCase
         $this->putJson('/api/v2/client/auth/email', [
             'email' => 'new-email-alert@example.com',
             'code' => '654321',
+            'old_code' => '123456',
         ])->assertOk();
     }
 

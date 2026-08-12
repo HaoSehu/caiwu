@@ -145,11 +145,15 @@ class FinanceDocumentGenerationTest extends TestCase
         $refund = Refund::query()->findOrFail((int) $result['refund_id']);
         $redInvoice = Invoice::query()->findOrFail((int) $refund->refund_invoice_id);
         $negativeRecord = RechargeRecord::query()->findOrFail((int) $result['recharge_record_id']);
+        $redInvoice->load('items');
 
         $this->assertSame((int) $invoice->id, (int) $refund->invoice_id);
         $this->assertSame((int) $invoice->id, (int) $redInvoice->origin_invoice_id);
         $this->assertSame('refund', $redInvoice->type);
         $this->assertSame('-100.00', $redInvoice->amount);
+        $this->assertCount(1, $redInvoice->items);
+        $this->assertSame('refund', $redInvoice->items->first()->item_type);
+        $this->assertSame('-100.00', number_format((float) $redInvoice->items->first()->line_amount, 2, '.', ''));
         $this->assertSame('-100.00', $negativeRecord->amount);
         $this->assertSame((int) $originalRecord->id, (int) $negativeRecord->origin_recharge_record_id);
         $this->assertSame((int) $order->id, (int) $negativeRecord->order_id);

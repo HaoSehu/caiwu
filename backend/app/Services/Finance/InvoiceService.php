@@ -138,7 +138,7 @@ class InvoiceService
      */
     public function createForReferralCredit(User $user, float $amount, ?string $remark = null, ?string $traceId = null): Invoice
     {
-        return Invoice::create([
+        $invoice = Invoice::create([
             'invoice_no' => Invoice::generateInvoiceNo(),
             'user_id' => $user->id,
             'type' => InvoiceType::REFERRAL_CREDIT,
@@ -150,6 +150,8 @@ class InvoiceService
             'config_snapshot' => $remark ? ['remark' => $remark] : null,
             'trace_id' => $traceId,
         ]);
+
+        return $this->syncProjection($invoice);
     }
 
     /**
@@ -157,7 +159,7 @@ class InvoiceService
      */
     public function createForDeduction(User $user, float $amount, ?string $remark = null, ?string $traceId = null): Invoice
     {
-        return Invoice::create([
+        $invoice = Invoice::create([
             'invoice_no' => Invoice::generateInvoiceNo(),
             'user_id' => $user->id,
             'type' => InvoiceType::DEDUCTION,
@@ -169,6 +171,8 @@ class InvoiceService
             'config_snapshot' => $remark ? ['remark' => $remark] : null,
             'trace_id' => $traceId,
         ]);
+
+        return $this->syncProjection($invoice);
     }
 
     /**
