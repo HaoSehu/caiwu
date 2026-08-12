@@ -3,7 +3,8 @@
 return [
     'default' => env('QUEUE_CONNECTION', 'database'),
 
-    'caiwu_worker_queues' => 'provision,referral,notification,coupon,default',
+    'caiwu_business_queues' => env('CAIWU_BUSINESS_QUEUES', 'provision,referral,notification,coupon,default'),
+    'caiwu_schedule_queue' => env('CAIWU_SCHEDULE_QUEUE', 'automation'),
     'caiwu_worker_timeout' => 1200,
     'caiwu_worker_max_timeout' => 3600,
     'caiwu_worker_tries' => 3,

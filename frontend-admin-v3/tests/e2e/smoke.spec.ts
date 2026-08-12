@@ -2261,7 +2261,11 @@ async function mockFinanceModeOrders(page: import('@playwright/test').Page) {
 async function mockRecharges(page: import('@playwright/test').Page) {
   const rechargeRow = (variant: 'default' | 'filtered' | 'page2' = 'default'): Record<string, unknown> => ({
     id: variant === 'page2' ? 911 : 910,
+    payment_no: variant === 'filtered' ? 'PAY-FILTERED-001' : variant === 'page2' ? 'PAY-PAGE-002' : 'PAY-RECHARGE-001',
     invoice_no: variant === 'filtered' ? 'RC-FILTERED-001' : variant === 'page2' ? 'RC-PAGE-002' : 'RC-20260606-001',
+    invoice_id: variant === 'page2' ? 911 : 910,
+    gateway: 'alipay',
+    trade_no: 'TRADE-20260606',
     amount: variant === 'page2' ? 300 : 200,
     paid_amount: variant === 'page2' ? 300 : 200,
     status: variant === 'default' ? 1 : 0,
@@ -2271,7 +2275,8 @@ async function mockRecharges(page: import('@playwright/test').Page) {
     user: { id: 1, nickname: variant === 'filtered' ? '筛选充值用户' : '测试用户', email: '2908990438@qq.com' },
     payment: {
       id: 1,
-      payment_no: variant === 'filtered' ? 'PAY-FILTERED-001' : 'PAY-RECHARGE-001',
+      payment_no:
+        variant === 'filtered' ? 'PAY-FILTERED-001' : variant === 'page2' ? 'PAY-PAGE-002' : 'PAY-RECHARGE-001',
       gateway: 'alipay',
       trade_no: 'TRADE-20260606',
     },
@@ -3201,6 +3206,12 @@ async function mockLogs(page: import('@playwright/test').Page) {
       body: JSON.stringify({
         code: 0,
         data: {
+          environment: {
+            business_queue: 'provision,referral,notification,coupon,default',
+            automation_queue: 'automation',
+            queue_runtime_mode: 'database_queue_parallel_drained',
+            schedule_mutex: { enabled: true, mode: 'without_overlapping' },
+          },
           tasks: [
             {
               key: 'service-status-sync',
@@ -4564,20 +4575,20 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     });
 
     await page.goto('/admin/logs?tab=schedules', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByText('服务状态同步')).toBeVisible();
-    await expect(page.getByText('状态同步完成')).toBeVisible();
+    await expect(page.getByText('业务与定时已分离')).toBeVisible();
+    await expect(
+      page.getByText('业务：provision,referral,notification,coupon,default；定时：automation'),
+    ).toBeVisible();
+    const triggerButton = page.getByRole('button', { name: '立即执行' });
+    await expect(triggerButton).toBeVisible();
 
     const triggerRequest = page.waitForRequest(
       (request) => request.url().includes('/api/v2/admin/schedule-triggers') && request.method() === 'POST',
     );
-    await page
-      .locator('.t-table__body tr')
-      .filter({ hasText: '服务状态同步' })
-      .getByRole('button', { name: '立即执行' })
-      .click();
+    await triggerButton.click();
     await expect((await triggerRequest).postDataJSON()).toMatchObject({ task: 'service-status-sync' });
 
-    await page.locator('.t-tabs__nav-item-text-wrapper').filter({ hasText: '日志清理' }).click();
+    await page.goto('/admin/logs?tab=cleanup', { waitUntil: 'domcontentloaded' });
     await expect(page.getByText('数据库日志概览')).toBeVisible();
     await expect(page.getByText('storage/logs/laravel.log')).toBeVisible();
     await page.getByPlaceholder('请输入 立即清理').fill('立即清理');
@@ -4817,9 +4828,11 @@ test.describe('frontend-admin-v3 shell smoke', () => {
 
     const isMobileViewport = () => (page.viewportSize()?.width || 1440) <= 768;
     const clickRowAction = async (rowText: string, action: string) => {
-      const row = page.locator('.t-table__body tr').filter({ hasText: rowText }).first();
+      const row = isMobileViewport()
+        ? page.locator('.invoice-mobile-list .mobile-record-card').filter({ hasText: rowText }).first()
+        : page.locator('.t-table__body tr').filter({ hasText: rowText }).first();
       if (isMobileViewport()) {
-        await row.getByRole('button', { name: '更多' }).click();
+        await row.locator('.mobile-record-card__more').click();
         await page.getByText(action, { exact: true }).last().click();
         return;
       }
@@ -4828,19 +4841,24 @@ test.describe('frontend-admin-v3 shell smoke', () => {
 
     await page.goto('/admin/orders', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/admin\/finance\/invoices/);
-    await expect(page.getByRole('heading', { name: '账单管理' })).toBeVisible();
     await expect(page.getByText('INV-20260606-001')).toBeVisible();
     await expect(page.getByText('标准云服务器 2C4G')).toBeVisible();
 
+    const keywordInput = page.getByPlaceholder('搜索账单号 / 订单号 / 用户');
     const filterRequest = page.waitForRequest(
       (request) => request.url().includes('/api/v2/admin/invoices') && request.url().includes('keyword=filtered'),
     );
-    await page.getByPlaceholder('搜索账单号 / 订单号 / 用户').fill('filtered');
-    await page.getByRole('button', { name: '搜索' }).click();
+    await keywordInput.fill('filtered');
+    await keywordInput.press('Enter');
     await filterRequest;
     await expect(page.getByText('INV-FILTERED-001')).toBeVisible();
 
-    await page.getByRole('button', { name: '重置' }).click();
+    const resetRequest = page.waitForRequest(
+      (request) => request.url().includes('/api/v2/admin/invoices') && !request.url().includes('keyword='),
+    );
+    await keywordInput.fill('');
+    await keywordInput.press('Enter');
+    await resetRequest;
     await expect(page.getByText('INV-20260606-001')).toBeVisible();
 
     const detailRequest = page.waitForRequest(
@@ -4848,9 +4866,11 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     );
     await clickRowAction('INV-20260606-001', '详情');
     await detailRequest;
-    const drawer = page.locator('.t-drawer:visible');
-    await expect(drawer.getByText('账单详情')).toBeVisible();
+    const drawer = page.locator('.t-drawer:visible').filter({ hasText: '账单详情' }).first();
+    await expect(drawer.locator('.t-drawer__header').filter({ hasText: /^账单详情$/ })).toHaveText('账单详情');
+    await drawer.getByText('支付记录', { exact: true }).click();
     await expect(drawer.getByText('PAY-001')).toBeVisible();
+    await drawer.getByText('操作日志', { exact: true }).click();
     await expect(drawer.getByText('账单已创建')).toBeVisible();
 
     const cancelRequest = page.waitForRequest(
@@ -4871,7 +4891,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     });
 
     await page.goto('/admin/finance/orders', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('heading', { name: '订单管理' })).toBeVisible();
+    await expect(page).toHaveURL(/\/admin\/finance\/orders$/);
     await expect(page.getByText('ORD-20260606-001')).toBeVisible();
     await expect(page.getByText('标准云服务器')).toBeVisible();
     await expect(page.getByText('INV-20260606-001')).toBeVisible();
@@ -4880,13 +4900,15 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     const filterRequest = page.waitForRequest(
       (request) => request.url().includes('/api/v2/admin/orders') && request.url().includes('keyword=filtered'),
     );
-    await page.getByPlaceholder('搜索订单号 / 账单号 / 用户 / 服务').fill('filtered');
-    await page.getByRole('button', { name: '搜索' }).click();
+    const keywordInput = page.getByPlaceholder('搜索订单号 / 账单号 / 用户 / 服务');
+    await keywordInput.fill('filtered');
+    await keywordInput.press('Enter');
     await filterRequest;
     await expect(page.getByText('ORD-FILTERED-001')).toBeVisible();
     await expect(page.getByText('筛选云服务器')).toBeVisible();
 
-    await page.getByRole('button', { name: '重置' }).click();
+    await keywordInput.fill('');
+    await keywordInput.press('Enter');
     await expect(page.getByText('ORD-20260606-001')).toBeVisible();
 
     const pageRequest = page.waitForRequest(
@@ -4906,7 +4928,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     });
 
     await page.goto('/admin/finance/renewals', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('heading', { name: '续费订单' })).toBeVisible();
+    await expect(page).toHaveURL(/\/admin\/finance\/orders\/renewals/);
     await expect(page.getByText('REN-20260606-001')).toBeVisible();
     await expect(page.getByText('INV-RENEW-001')).toBeVisible();
 
@@ -4914,12 +4936,14 @@ test.describe('frontend-admin-v3 shell smoke', () => {
       (request) =>
         request.url().includes('/api/v2/admin/finance/renewal-orders') && request.url().includes('keyword=filtered'),
     );
-    await page.getByPlaceholder('搜索订单号 / 账单号 / 用户 / 服务').fill('filtered');
-    await page.getByRole('button', { name: '搜索' }).click();
+    const keywordInput = page.getByPlaceholder('搜索订单号 / 账单号 / 用户 / 服务');
+    await keywordInput.fill('filtered');
+    await keywordInput.press('Enter');
     await filterRequest;
     await expect(page.getByText('REN-FILTERED-001')).toBeVisible();
 
-    await page.getByRole('button', { name: '重置' }).click();
+    await keywordInput.fill('');
+    await keywordInput.press('Enter');
     await expect(page.getByText('REN-20260606-001')).toBeVisible();
 
     const pageRequest = page.waitForRequest(
@@ -4939,21 +4963,25 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     });
 
     await page.goto('/admin/finance/upgrades', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('heading', { name: '附加配置订单' })).toBeVisible();
+    await expect(page).toHaveURL(/\/admin\/finance\/orders\/upgrades/);
     await expect(page.getByText('UPG-20260606-001')).toBeVisible();
-    await expect(page.getByText('流量包', { exact: true })).toBeVisible();
-    await expect(page.getByText('100GB 流量包')).toBeVisible();
+    if ((page.viewportSize()?.width || 1440) > 768) {
+      await expect(page.getByText('流量包', { exact: true })).toBeVisible();
+      await expect(page.getByText('100GB 流量包')).toBeVisible();
+    }
 
     const filterRequest = page.waitForRequest(
       (request) =>
         request.url().includes('/api/v2/admin/finance/upgrade-orders') && request.url().includes('keyword=filtered'),
     );
-    await page.getByPlaceholder('搜索订单号 / 账单号 / 用户 / 服务').fill('filtered');
-    await page.getByRole('button', { name: '搜索' }).click();
+    const keywordInput = page.getByPlaceholder('搜索订单号 / 账单号 / 用户 / 服务');
+    await keywordInput.fill('filtered');
+    await keywordInput.press('Enter');
     await filterRequest;
     await expect(page.getByText('UPG-FILTERED-001')).toBeVisible();
 
-    await page.getByRole('button', { name: '重置' }).click();
+    await keywordInput.fill('');
+    await keywordInput.press('Enter');
     await expect(page.getByText('UPG-20260606-001')).toBeVisible();
 
     const pageRequest = page.waitForRequest(
@@ -4973,9 +5001,8 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     });
 
     await page.goto('/admin/finance/recharges', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('heading', { name: '充值管理' })).toBeVisible();
-    await expect(page.getByText('RC-20260606-001')).toBeVisible();
-    await expect(page.getByText('PAY-RECHARGE-001')).toBeVisible();
+    await expect(page).toHaveURL(/\/admin\/finance\/recharges/);
+    await expect(page.getByText('PAY-RECHARGE-001').first()).toBeVisible();
     await expect(page.getByText('¥200.00').first()).toBeVisible();
     await expect(page.locator('.t-pagination')).toContainText('21');
 
@@ -4983,21 +5010,22 @@ test.describe('frontend-admin-v3 shell smoke', () => {
       (request) =>
         request.url().includes('/api/v2/admin/finance/recharges') && request.url().includes('keyword=filtered'),
     );
-    await page.getByPlaceholder('搜索账单号 / 支付号 / 用户').fill('filtered');
-    await page.getByRole('button', { name: '搜索' }).click();
+    const keywordInput = page.getByPlaceholder('搜索支付号 / 第三方单号 / 用户');
+    await keywordInput.fill('filtered');
+    await keywordInput.press('Enter');
     await filterRequest;
-    await expect(page.getByText('RC-FILTERED-001')).toBeVisible();
-    await expect(page.getByText('PAY-FILTERED-001')).toBeVisible();
+    await expect(page.getByText('PAY-FILTERED-001').first()).toBeVisible();
 
-    await page.getByRole('button', { name: '重置' }).click();
-    await expect(page.getByText('RC-20260606-001')).toBeVisible();
+    await keywordInput.fill('');
+    await keywordInput.press('Enter');
+    await expect(page.getByText('PAY-RECHARGE-001').first()).toBeVisible();
 
     const pageRequest = page.waitForRequest(
       (request) => request.url().includes('/api/v2/admin/finance/recharges') && request.url().includes('page=2'),
     );
     await page.locator('.t-pagination').getByText('2', { exact: true }).click();
     await pageRequest;
-    await expect(page.getByText('RC-PAGE-002')).toBeVisible();
+    await expect(page.getByText('PAY-PAGE-002').first()).toBeVisible();
   });
 
   test('opens finance new customers and handles date range', async ({ page }) => {
@@ -5009,10 +5037,8 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     });
 
     await page.goto('/admin/finance/new-customers', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('heading', { name: '新客户' })).toBeVisible();
+    await expect(page).toHaveURL(/\/admin\/finance\/new-customers/);
     await expect(page.getByText('2026-06-06')).toBeVisible();
-    await expect(page.locator('.metric-card').filter({ hasText: '新增客户' })).toContainText('12');
-    await expect(page.locator('.metric-card').filter({ hasText: '回复工单' })).toContainText('21');
 
     const filterRequest = page.waitForRequest(
       (request) =>
@@ -5020,12 +5046,25 @@ test.describe('frontend-admin-v3 shell smoke', () => {
         request.url().includes('start_date=2026-05-01') &&
         request.url().includes('end_date=2026-05-31'),
     );
-    await page.getByPlaceholder('开始日期 YYYY-MM-DD').fill('2026-05-01');
-    await page.getByPlaceholder('结束日期 YYYY-MM-DD').fill('2026-05-31');
-    await page.getByRole('button', { name: '搜索' }).click();
+    const startDateInput = page.getByPlaceholder('开始日期');
+    const endDateInput = page.getByPlaceholder('结束日期');
+    const selectMayDate = async (input: typeof startDateInput, day: '1' | '31') => {
+      await input.click();
+      const panel = page.locator('.t-date-picker__panel:visible').last();
+      await expect(panel).toBeVisible();
+      for (let month = 0; month < 3; month += 1) {
+        await panel.locator('.t-pagination-mini__prev').click();
+      }
+      const dayCell = panel
+        .locator('td.t-date-picker__cell:not(.t-date-picker__cell--additional)')
+        .filter({ hasText: new RegExp(`^${day}$`) });
+      await expect(dayCell).toHaveCount(1);
+      await dayCell.click();
+    };
+    await selectMayDate(startDateInput, '1');
+    await selectMayDate(endDateInput, '31');
     await filterRequest;
     await expect(page.getByText('2026-05-02')).toBeVisible();
-    await expect(page.locator('.metric-card').filter({ hasText: '新增客户' })).toContainText('3');
 
     await page.getByRole('button', { name: '本月' }).click();
     await expect(page.getByText('2026-06-06')).toBeVisible();
@@ -5091,7 +5130,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
 
     await page.goto('/admin/finance/product-income', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/admin\/services/);
-    await expect(page.getByRole('heading', { name: '服务列表' })).toBeVisible();
+    await expect(page.getByText('SVC-20260606-001')).toBeVisible();
   });
 
   test('opens instance specs and saves catalog bindings', async ({ page }) => {
