@@ -152,7 +152,8 @@ npm run dev:user-v4-console
 ## 5. 生产运行
 
 - 后端生产入口：PHP-FPM 指向 `backend/public`。
-- 队列：不常驻 `queue:work`，由宝塔每分钟 `php artisan schedule:run` 驱动。
+- 业务队列与定时队列：由宝塔每分钟 `php artisan schedule:run` 并行启动两个独立 `queue:work`，分别消费 `provision,referral,notification,coupon,default` 与 `automation`；两类 Worker 使用独立互斥锁，任一队列的长任务不阻塞另一队列的下一轮消费。
+- VNC Relay：独立运行 `php artisan vnc:relay`，由宝塔守护或进程管理器自动重启，不由心跳任务拉起。
 - 异步任务可能有 0-60 秒延迟。
 - 前端分别构建后按站点静态发布：
   - `frontend-admin-v3/dist`

@@ -215,6 +215,7 @@ export interface NotificationTemplateTestSendResponse {
 }
 
 export interface ScheduleOverview {
+  environment?: Record<string, unknown>;
   tasks?: Record<string, unknown>[];
   recent_logs?: Record<string, unknown>[];
 }
