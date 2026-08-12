@@ -20,6 +20,8 @@ use App\Services\Integrations\Plugins\ServiceUpstreamBindingWriter;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\System\OperationLogService;
 use App\Support\OrderInvoiceNoGenerator;
+use Illuminate\Contracts\Cache\LockTimeoutException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -308,6 +310,21 @@ class ServiceUpgradeService
     }
 
     public function processPaidUpgradeOrder(Order $order): ?Service
+    {
+        try {
+            return Cache::lock("lock:host-upgrade:order:{$order->id}", 300)
+                ->block(3, fn () => $this->processPaidUpgradeOrderLocked($order));
+        } catch (LockTimeoutException) {
+            Log::info('[产品升降级] 同一订单正在处理，跳过本次重复履约', [
+                'order_id' => (int) $order->id,
+                'order_no' => (string) ($order->order_no ?? ''),
+            ]);
+
+            return $order->service?->fresh(['product.supplier', 'order']);
+        }
+    }
+
+    private function processPaidUpgradeOrderLocked(Order $order): ?Service
     {
         $order->loadMissing(['service.product.supplier']);
         $service = $order->service;

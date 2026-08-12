@@ -459,6 +459,35 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
         $this->assertSame('10.00', User::query()->findOrFail((int) $user->id)->balance);
     }
 
+    public function test_mix_payment_balance_tail_payment_sets_order_paid_amount_to_full_invoice_amount(): void
+    {
+        [$user, $order, $invoice] = $this->createUserOrderInvoice('mixtail', '50.00', '50.00');
+
+        $alipayGateway = $this->makeFakePaymentGateway([
+            'enabled' => true,
+            'precreate' => [
+                'qr_code' => 'https://qr.alipay.test/mix-tail',
+                'out_trade_no' => 'mock-out-trade-no',
+            ],
+        ]);
+        $service = $this->makePaymentService($alipayGateway);
+
+        $service->payByBalanceAndAlipay($invoice, $user, 20.00, ['trace_id' => 'mix-tail-precreate']);
+        $service->payByBalance($invoice->fresh(), $user->fresh(), ['trace_id' => 'mix-tail-balance']);
+
+        $this->assertDatabaseHas('invoices', [
+            'id' => (int) $invoice->id,
+            'status' => InvoiceStatus::PAID,
+            'paid_amount' => '50.00',
+        ]);
+        $this->assertDatabaseHas('orders', [
+            'id' => (int) $order->id,
+            'status' => OrderStatus::PAID,
+            'paid_amount' => '50.00',
+        ]);
+        $this->assertSame('0.00', User::query()->findOrFail((int) $user->id)->balance);
+    }
+
     public function test_mix_pay_precreate_failure_rolls_back_balance_deduction(): void
     {
         [$user, $order, $invoice] = $this->createUserOrderInvoice('mixfail');
@@ -838,6 +867,35 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
             'invoice_id' => (int) $invoice->id,
             'gateway_key' => 'manual',
         ]);
+        $this->assertDatabaseHas('invoices', [
+            'id' => (int) $invoice->id,
+            'status' => InvoiceStatus::PAID,
+            'paid_amount' => '50.00',
+        ]);
+        $this->assertDatabaseHas('orders', [
+            'id' => (int) $order->id,
+            'status' => OrderStatus::PAID,
+            'paid_amount' => '50.00',
+        ]);
+    }
+
+    public function test_admin_manual_tail_entry_sets_paid_amount_to_full_invoice_amount(): void
+    {
+        [, $order, $invoice] = $this->createUserOrderInvoice('manualtail');
+        $invoice->forceFill(['paid_amount' => '20.00'])->save();
+        $order->forceFill(['paid_amount' => '20.00'])->save();
+
+        app(OrderService::class)->updateManualPaymentStatus($order, [
+            'action' => 'mark_paid',
+            'amount' => '30.00',
+            'payment_gateway' => 'manual',
+            'remark' => '后台确认尾款入账',
+        ], [
+            'operator_id' => 1,
+            'operator_name' => 'tester',
+            'trace_id' => 'manual-tail-regression',
+        ]);
+
         $this->assertDatabaseHas('invoices', [
             'id' => (int) $invoice->id,
             'status' => InvoiceStatus::PAID,
