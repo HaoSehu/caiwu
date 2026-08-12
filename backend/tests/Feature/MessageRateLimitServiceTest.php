@@ -106,6 +106,52 @@ class MessageRateLimitServiceTest extends TestCase
         }
     }
 
+    public function test_message_limit_blocks_same_target_across_rotating_ips(): void
+    {
+        $this->ensurePluginTables();
+        $originalRows = $this->snapshotMessageLimitSettings();
+        $existingBindings = $this->removeDriverBindings('sms', 'sms_driver');
+        $createdPluginIds = [];
+        Cache::flush();
+
+        try {
+            DB::table('settings')->where('group_key', 'message_limit')->delete();
+
+            $plugin = $this->createPlugin('sms', 'rate_limit_target_sms', 'rate_limit_target_sms', [
+                'rate_limit_enabled' => true,
+                'ip_minute_limit' => 2,
+                'target_hour_limit' => 3,
+                'target_day_limit' => 10,
+            ]);
+            $createdPluginIds[] = (int) $plugin->id;
+            $this->bindPlugin($plugin, 'sms_driver', 'rate_limit_target_sms');
+
+            $service = app(MessageRateLimitService::class);
+            $target = '13800001111';
+
+            // 轮换 IP 对同一目标发送，IP 维度各自未超限，但 target 维度达到上限
+            foreach (['203.0.113.31', '203.0.113.32', '203.0.113.33'] as $ip) {
+                $this->assertTrue($service->check('sms', $target, $ip)['ok']);
+                $service->hit('sms', $target, $ip);
+            }
+
+            $blocked = $service->check('sms', $target, '203.0.113.99');
+            $this->assertFalse($blocked['ok']);
+            $this->assertSame('该接收方一小时内发送次数已达上限，请稍后再试', $blocked['message']);
+
+            // 其他目标不受影响
+            $this->assertTrue($service->check('sms', '13800002222', '203.0.113.99')['ok']);
+        } finally {
+            Cache::flush();
+            $this->deleteCreatedPlugins($createdPluginIds);
+            $this->restoreDriverBindings('sms', 'sms_driver', $existingBindings);
+            DB::table('settings')->where('group_key', 'message_limit')->delete();
+            if ($originalRows !== []) {
+                DB::table('settings')->insert($originalRows);
+            }
+        }
+    }
+
     /**
      * @param  array<string, mixed>  $config
      */

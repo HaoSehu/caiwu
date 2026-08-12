@@ -58,7 +58,7 @@ class AlipayClient
     /**
      * 解析支付宝异步通知回调 URL
      * 必须指向后端 API 地址（支付宝服务器直接 POST 到此地址）
-     * 优先使用 ALIPAY_NOTIFY_URL，fallback 到 APP_URL
+     * 优先使用 ALIPAY_NOTIFY_URL，fallback 到后端 APP_URL，绝不指向前端域名
      */
     private function resolveNotifyUrl(): string
     {
@@ -68,13 +68,7 @@ class AlipayClient
             return $notifyUrl;
         }
 
-        // fallback 到后端 APP_URL
-        $frontendUrl = trim((string) config('app.frontend_url', ''));
-        if ($frontendUrl !== '') {
-            return rtrim($frontendUrl, '/').'/api/v2/client/payment/alipay/notify';
-        }
-
-        return rtrim(config('app.url', ''), '/').'/api/v2/client/payment/alipay/notify';
+        return rtrim((string) config('app.url', ''), '/').'/api/v2/client/payment/alipay/notify';
     }
 
     public function isEnabled(): bool
