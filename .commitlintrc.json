@@ -15,9 +15,18 @@
         "chore",
         "ci",
         "build",
-        "revert"
+        "revert",
+        "Feat",
+        "Fix",
+        "Docs",
+        "Style",
+        "Refactor",
+        "Perf",
+        "Test",
+        "Chore"
       ]
     ],
+    "type-case": [0],
     "subject-min-length": [2, "always", 2],
     "subject-max-length": [2, "always", 100]
   }
