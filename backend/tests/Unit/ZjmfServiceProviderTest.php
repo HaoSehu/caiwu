@@ -9,7 +9,6 @@ use App\Services\Integrations\Plugins\Adapters\PluginUpstreamDriver;
 use App\Services\Integrations\Plugins\PluginInstaller;
 use App\Services\Integrations\Plugins\PluginScanner;
 use App\Services\Upstream\Contracts\ProvidesConsoleCatalog;
-use App\Services\Upstream\Contracts\ProvidesSynchronousNewPurchaseFulfillment;
 use App\Services\Upstream\Contracts\UpstreamBillingRestoreProfile;
 use App\Services\Upstream\Data\UpstreamProviderDescriptor;
 use App\Services\Upstream\ProviderKey;
@@ -42,8 +41,6 @@ class ZjmfServiceProviderTest extends TestCase
             ZjmfFinanceAdapter::class,
             $driver?->resolve(ProvidesConsoleCatalog::class)
         );
-        $this->assertFalse($driver?->supports(ProvidesSynchronousNewPurchaseFulfillment::class) ?? true);
-        $this->assertNull($driver?->resolve(ProvidesSynchronousNewPurchaseFulfillment::class));
     }
 
     public function test_zjmf_adapter_declares_platform_used_methods_explicitly_without_dynamic_forwarding(): void

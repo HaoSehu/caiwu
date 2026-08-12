@@ -12,167 +12,75 @@ use App\Jobs\ProcessPaidOrderReferralRewardJob;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Product;
+use App\Models\Service;
 use App\Models\User;
 use App\Services\Finance\PaymentService;
-use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\Order\PaidOrderBusinessFlowDispatcher;
 use App\Services\Provisioning\ProvisionService;
 use App\Services\Provisioning\ServiceRenewService;
-use App\Services\Upstream\Contracts\ProvidesSynchronousNewPurchaseFulfillment;
-use App\Services\Upstream\Contracts\UpstreamDriver;
-use App\Services\Upstream\ProviderKey;
-use App\Services\Upstream\ProviderRegistry;
-use App\Services\Upstream\ProviderResolver;
 use App\Services\User\AccountService;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class PaidOrderBusinessFlowDispatcherTest extends TestCase
 {
-    public function test_web_payment_dispatches_fulfillment_to_queue_instead_of_after_response_sync_execution(): void
+    public function test_web_payment_dispatches_upgrade_fulfillment_to_queue(): void
     {
         Queue::fake();
         config()->set('queue.default', 'database');
 
-        [$invoice, $order] = $this->createPaidInvoiceWithOrder();
+        [$invoice, $order] = $this->createPaidInvoiceWithOrder('upgrade');
 
         $this->runAsWebRequest(function () use ($invoice): void {
-            app(PaidOrderBusinessFlowDispatcher::class)->dispatchPaidInvoice($invoice->fresh(['order']), 'trace-web-payment');
+            app(PaidOrderBusinessFlowDispatcher::class)->dispatchPaidInvoice($invoice->fresh(['order']), 'trace-web-upgrade');
         });
 
-        Queue::assertPushedOn('referral', ProcessPaidOrderReferralRewardJob::class);
+        Queue::assertNotPushed(ProcessPaidOrderReferralRewardJob::class);
         Queue::assertPushedOn('provision', ProcessPaidOrderFulfillmentJob::class, function (ProcessPaidOrderFulfillmentJob $job) use ($order): bool {
             return (int) $job->orderId === (int) $order->id;
         });
     }
 
-    public function test_web_payment_fulfills_synchronously_when_provider_declares_capability(): void
+    public function test_web_payment_fulfills_new_purchase_synchronously(): void
     {
-        Queue::fake([ProcessPaidOrderReferralRewardJob::class]);
-        config()->set('queue.default', 'database');
+        [$invoice, $order] = $this->createPaidInvoiceWithOrder('new');
 
-        $product = new Product;
-        $product->setAttribute('id', 981);
-        $order = new Order;
-        $order->setAttribute('id', 982);
-        $order->setAttribute('type', 'new');
-        $order->setRelation('product', $product);
-        $invoice = new Invoice;
-        $invoice->setAttribute('id', 983);
-        $invoice->setRelation('order', $order);
-
-        $bindingResolver = $this->mock(PluginBindingResolver::class, function ($mock): void {
-            $mock->shouldReceive('providerKeyForProduct')
-                ->once()
-                ->andReturn('declared_sync_provider');
-        });
-
-        $driver = new class implements UpstreamDriver
-        {
-            public function key(): string
-            {
-                return 'declared_sync_provider';
-            }
-
-            public function label(): string
-            {
-                return 'Declared sync provider';
-            }
-
-            public function capabilities(): array
-            {
-                return [ProvidesSynchronousNewPurchaseFulfillment::class];
-            }
-
-            public function supports(string $capability): bool
-            {
-                return $capability === ProvidesSynchronousNewPurchaseFulfillment::class;
-            }
-
-            public function resolve(string $capability): ?object
-            {
-                return null;
-            }
-        };
-        $dispatcher = new PaidOrderBusinessFlowDispatcher(new ProviderResolver(
-            new ProviderRegistry([$driver]),
-            $bindingResolver,
-        ));
         $this->mock(PaymentService::class, function ($mock) use ($order): void {
+            $mock->shouldReceive('processPaidOrderReferralRewardById')
+                ->andReturnNull();
             $mock->shouldReceive('processPaidOrderFulfillmentById')
                 ->once()
                 ->with((int) $order->id)
-                ->andReturn(null);
+                ->andReturnNull();
         });
 
-        $this->runAsWebRequest(function () use ($dispatcher, $invoice): void {
-            $dispatcher->dispatchPaidInvoice($invoice, 'trace-declared-sync');
+        $this->runAsWebRequest(function () use ($invoice): void {
+            app(PaidOrderBusinessFlowDispatcher::class)->dispatchPaidInvoice($invoice->fresh(['order']), 'trace-sync-new');
         });
-
-        Queue::assertNotPushed(ProcessPaidOrderFulfillmentJob::class);
     }
 
-    public function test_web_payment_queues_zjmf_new_purchase_after_sync_capability_is_removed(): void
+    public function test_synchronous_fulfillment_failure_falls_back_to_queue(): void
     {
-        Queue::fake();
         config()->set('queue.default', 'database');
 
-        $product = new Product;
-        $product->setAttribute('id', 984);
-        $order = new Order;
-        $order->setAttribute('id', 985);
-        $order->setAttribute('type', 'new');
-        $order->setRelation('product', $product);
-        $invoice = new Invoice;
-        $invoice->setAttribute('id', 986);
-        $invoice->setRelation('order', $order);
+        [$invoice, $order] = $this->createPaidInvoiceWithOrder('new');
 
-        $bindingResolver = $this->mock(PluginBindingResolver::class, function ($mock): void {
-            $mock->shouldReceive('providerKeyForProduct')
+        $this->mock(PaymentService::class, function ($mock) use ($order): void {
+            $mock->shouldReceive('processPaidOrderReferralRewardById')
+                ->andReturnNull();
+            $mock->shouldReceive('processPaidOrderFulfillmentById')
                 ->once()
-                ->andReturn(ProviderKey::ZJMF_FINANCE_API);
+                ->with((int) $order->id)
+                ->andThrow(new BusinessException('上游开通暂时不可用'));
         });
 
-        $driver = new class implements UpstreamDriver
-        {
-            public function key(): string
-            {
-                return ProviderKey::ZJMF_FINANCE_API;
-            }
-
-            public function label(): string
-            {
-                return 'ZJMF 财务接口';
-            }
-
-            public function capabilities(): array
-            {
-                return [];
-            }
-
-            public function supports(string $capability): bool
-            {
-                return false;
-            }
-
-            public function resolve(string $capability): ?object
-            {
-                return null;
-            }
-        };
-        $dispatcher = new PaidOrderBusinessFlowDispatcher(new ProviderResolver(
-            new ProviderRegistry([$driver]),
-            $bindingResolver,
-        ));
-
-        $this->runAsWebRequest(function () use ($dispatcher, $invoice): void {
-            $dispatcher->dispatchPaidInvoice($invoice, 'trace-zjmf-async');
+        $this->runAsWebRequest(function () use ($invoice): void {
+            app(PaidOrderBusinessFlowDispatcher::class)->dispatchPaidInvoice($invoice->fresh(['order']), 'trace-sync-fallback');
         });
 
-        Queue::assertPushedOn('provision', ProcessPaidOrderFulfillmentJob::class, function (ProcessPaidOrderFulfillmentJob $job) use ($order): bool {
-            return (int) $job->orderId === (int) $order->id;
-        });
+        $this->assertProvisionJobQueued((int) $order->id);
     }
 
     public function test_paid_order_jobs_are_unique_by_order_id(): void
@@ -186,26 +94,28 @@ class PaidOrderBusinessFlowDispatcherTest extends TestCase
         $this->assertSame('123', $referralJob->uniqueId());
     }
 
-    public function test_renew_payment_dispatches_fulfillment_to_queue_without_referral_reward(): void
+    public function test_renew_payment_fulfills_synchronously_without_referral_reward(): void
     {
-        Queue::fake();
-        config()->set('queue.default', 'database');
-
         [$invoice, $order] = $this->createPaidInvoiceWithOrder('renew');
+
+        $service = new Service;
+        $service->setAttribute('id', 99901);
+        $this->mock(ServiceRenewService::class, function ($mock) use ($service): void {
+            $mock->shouldReceive('processPaidRenewOrder')
+                ->once()
+                ->andReturn($service);
+            $mock->shouldReceive('isRenewInvoiceFulfilled')
+                ->once()
+                ->andReturnTrue();
+        });
 
         $this->runAsWebRequest(function () use ($invoice): void {
             app(PaymentService::class)->handlePaidInvoice($invoice->fresh(['order']), 'trace-renew-payment');
         });
-
-        Queue::assertNotPushed(ProcessPaidOrderReferralRewardJob::class);
-        Queue::assertPushedOn('provision', ProcessPaidOrderFulfillmentJob::class, function (ProcessPaidOrderFulfillmentJob $job) use ($order): bool {
-            return (int) $job->orderId === (int) $order->id;
-        });
     }
 
-    public function test_balance_order_payment_keeps_fulfillment_pending_until_job_completes(): void
+    public function test_balance_order_payment_keeps_fulfillment_pending_and_falls_back_to_queue(): void
     {
-        Queue::fake();
         config()->set('queue.default', 'database');
 
         [$invoice, $order, $user] = $this->createPaidInvoiceWithOrder(
@@ -215,6 +125,15 @@ class PaidOrderBusinessFlowDispatcherTest extends TestCase
         );
         app(AccountService::class)->setCashBalance($user, '100.00');
 
+        $this->mock(ServiceRenewService::class, function ($mock): void {
+            $mock->shouldReceive('processPaidRenewOrder')
+                ->once()
+                ->andReturnNull();
+            $mock->shouldReceive('isRenewInvoiceFulfilled')
+                ->once()
+                ->andReturnFalse();
+        });
+
         $this->runAsWebRequest(function () use ($order, $user): void {
             app(PaymentService::class)->payOrderByBalance($order, $user, ['trace_id' => 'trace-pending-payment']);
         });
@@ -223,9 +142,7 @@ class PaidOrderBusinessFlowDispatcherTest extends TestCase
 
         $this->assertTrue((bool) ($configSnapshot['fulfillment_pending'] ?? false));
         $this->assertSame('renew', $configSnapshot['fulfillment_type'] ?? null);
-        Queue::assertPushedOn('provision', ProcessPaidOrderFulfillmentJob::class, function (ProcessPaidOrderFulfillmentJob $job) use ($order): bool {
-            return (int) $job->orderId === (int) $order->id;
-        });
+        $this->assertProvisionJobQueued((int) $order->id);
     }
 
     public function test_fulfillment_pending_is_cleared_after_successful_job_execution(): void
@@ -300,6 +217,37 @@ class PaidOrderBusinessFlowDispatcherTest extends TestCase
         $this->assertTrue((bool) ($configSnapshot['fulfillment_pending'] ?? false));
         $this->assertArrayNotHasKey('fulfillment_cleared_at', $configSnapshot);
         $this->assertSame(OrderStatus::PROCESSING, (int) $order->fresh()->status);
+    }
+
+    /**
+     * 断言 provision 队列中存在该订单的履约任务，并在断言后清理该任务。
+     */
+    private function assertProvisionJobQueued(int $orderId): void
+    {
+        $jobRow = DB::table('jobs')
+            ->where('queue', 'provision')
+            ->orderByDesc('id')
+            ->limit(50)
+            ->get()
+            ->first(function (object $row) use ($orderId): bool {
+                $payload = json_decode((string) $row->payload, true);
+                if (! is_array($payload) || ! isset($payload['data']['command'])) {
+                    return false;
+                }
+
+                $command = @unserialize((string) $payload['data']['command']);
+
+                return $command instanceof ProcessPaidOrderFulfillmentJob
+                    && (int) $command->orderId === $orderId;
+            });
+
+        try {
+            $this->assertNotNull($jobRow, "order {$orderId} 的履约任务未进入 provision 队列");
+        } finally {
+            if ($jobRow) {
+                DB::table('jobs')->where('id', $jobRow->id)->delete();
+            }
+        }
     }
 
     /**
