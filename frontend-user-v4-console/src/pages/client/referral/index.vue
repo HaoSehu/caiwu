@@ -57,9 +57,7 @@
         <t-tabs v-model="activeTab">
           <t-tab-panel value="direct" label="被邀请人列表">
             <t-table row-key="id" :data="directReferrals" :columns="directColumns" :pagination="null">
-              <template #user="{ row }">{{
-                row.display_name || row.nickname || row.email || '--'
-              }}</template>
+              <template #user="{ row }">{{ row.display_name || row.nickname || row.email || '--' }}</template>
               <template #referred_at="{ row }">{{ row.referred_at || row.created_at || '--' }}</template>
               <template #consumption="{ row }">¥{{ money(row.customer_consumption) }}</template>
               <template #earnings="{ row }">¥{{ money(row.my_earnings) }}</template>
@@ -75,7 +73,9 @@
               }}</template>
               <template #order_type="{ row }">{{ row.order_type || '--' }}</template>
               <template #order_amount="{ row }">¥{{ money(row.order_amount) }}</template>
-              <template #amount="{ row }">¥{{ money(row.reward_amount) }}({{ Number(row.reward_rate || 0) }}%)</template>
+              <template #amount="{ row }"
+                >¥{{ money(row.reward_amount) }}({{ Number(row.reward_rate || 0) }}%)</template
+              >
               <template #status="{ row }">
                 <t-tag :theme="rewardStatus(row.status).theme" variant="light">{{
                   rewardStatus(row.status).label
@@ -107,7 +107,7 @@
 
     <t-dialog v-model:visible="bindDialogVisible" header="绑定提现支付宝" width="min(30rem, calc(100vw - 2rem))">
       <t-form label-align="top">
-        <p class="bind-dialog-tip">仅需填写实名、支付宝绑定手机号和短信验证码，无需上传支付宝图片。</p>
+        <p class="bind-dialog-tip">请填写实名、支付宝绑定手机号、短信验证码与登录密码，用于提现打款。</p>
         <t-form-item label="真实姓名"
           ><t-input v-model="bindForm.real_name" placeholder="请输入支付宝实名姓名"
         /></t-form-item>
@@ -115,6 +115,9 @@
           ><t-input v-model="bindForm.account" placeholder="请输入支付宝绑定手机号"
         /></t-form-item>
         <t-form-item label="短信验证码"><t-input v-model="bindForm.code" placeholder="请输入短信验证码" /></t-form-item>
+        <t-form-item label="登录密码"
+          ><t-input v-model="bindForm.password" type="password" placeholder="请输入登录密码确认"
+        /></t-form-item>
       </t-form>
       <template #footer>
         <t-button variant="outline" @click="bindDialogVisible = false">取消</t-button>
@@ -259,13 +262,13 @@ const logColumns: PrimaryTableCol[] = [
   align-items: center;
 }
 
-@media (max-width: 80rem) {
+@media (width <= 80rem) {
   .referral-stats {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 48rem) {
+@media (width <= 48rem) {
   .referral-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
