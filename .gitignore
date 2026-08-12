@@ -109,7 +109,6 @@ _halo_build.bat
 _halo_status.txt
 _seo_build.bat
 _seo_status.txt
-frontend-admin/$null
 frontend-client/frontend-client/
 
 # Local run/test artifacts
@@ -137,6 +136,7 @@ frontend-client/
 frontend-www-v2/
 frontend-console-v2/
 zjmf/
+ZJMF-CBAP-10.4.6/
 zjmf-manger-decoded-main/
 
 # Claude

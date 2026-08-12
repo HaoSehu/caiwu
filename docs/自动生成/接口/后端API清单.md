@@ -1,8 +1,8 @@
 # 后端 API 清单
 
-- 生成时间: `2026-08-03 18:04:33`
-- API 总数: `340`
-- 分组统计: `公共 / 健康检查=1, 公共 / 其他=1, 公共 / 安全资源=1, 客户端 / VNC Token=1, 客户端 / 优惠券=5, 客户端 / 充值=3, 客户端 / 内容=8, 客户端 / 分销=6, 客户端 / 实名认证=8, 客户端 / 工单=9, 客户端 / 支付回调=2, 客户端 / 支付记录=3, 客户端 / 服务=36, 客户端 / 订单=4, 客户端 / 认证=16, 客户端 / 认证入口=3, 客户端 / 财务=6, 客户端 / 账单=9, 客户端 / 通知=5, 站点 / 产品=9, 站点 / 内容=5, 站点 / 首页=3, 管理端 / Integration Plugins=10, 管理端 / 产品=16, 管理端 / 产品分组=8, 管理端 / 产品类型=5, 管理端 / 仪表盘=3, 管理端 / 优惠券=17, 管理端 / 会员等级=4, 管理端 / 供应商=13, 管理端 / 其他=3, 管理端 / 内容=10, 管理端 / 分销=5, 管理端 / 员工=8, 管理端 / 媒体=5, 管理端 / 实名认证=5, 管理端 / 工单=10, 管理端 / 日志=5, 管理端 / 服务=3, 管理端 / 用户=28, 管理端 / 站点=2, 管理端 / 规格目录=4, 管理端 / 角色权限=7, 管理端 / 订单=2, 管理端 / 认证=5, 管理端 / 设置=5, 管理端 / 调度=2, 管理端 / 财务=8, 管理端 / 账单=3`
+- 生成时间: `2026-08-10 20:22:59`
+- API 总数: `343`
+- 分组统计: `公共 / 健康检查=1, 公共 / 其他=1, 公共 / 安全资源=1, 客户端 / VNC Token=1, 客户端 / 优惠券=5, 客户端 / 充值=3, 客户端 / 内容=8, 客户端 / 分销=6, 客户端 / 实名认证=8, 客户端 / 工单=9, 客户端 / 支付回调=2, 客户端 / 支付记录=3, 客户端 / 服务=36, 客户端 / 订单=4, 客户端 / 认证=16, 客户端 / 认证入口=3, 客户端 / 财务=6, 客户端 / 账单=9, 客户端 / 通知=5, 站点 / 产品=9, 站点 / 内容=5, 站点 / 首页=3, 管理端 / Integration Plugins=10, 管理端 / 产品=16, 管理端 / 产品分组=8, 管理端 / 产品类型=5, 管理端 / 仪表盘=3, 管理端 / 优惠券=17, 管理端 / 会员等级=4, 管理端 / 供应商=13, 管理端 / 其他=6, 管理端 / 内容=10, 管理端 / 分销=5, 管理端 / 员工=8, 管理端 / 媒体=5, 管理端 / 实名认证=5, 管理端 / 工单=10, 管理端 / 日志=5, 管理端 / 服务=3, 管理端 / 用户=28, 管理端 / 站点=2, 管理端 / 规格目录=4, 管理端 / 角色权限=7, 管理端 / 订单=2, 管理端 / 认证=5, 管理端 / 设置=5, 管理端 / 调度=2, 管理端 / 财务=8, 管理端 / 账单=3`
 
 > **自动生成**，由 `backend/scripts/export_api_inventory.php` 扫描 Laravel 路由表导出，**不要手工编辑**。
 >
@@ -234,6 +234,9 @@
 | 管理端 / 其他                | `POST`          | `/api/v2/admin/database/backups`                                          | `App\Http\Controllers\Admin\V2\DatabaseStatusController@exportBackup`               | `admin`  | `api, auth:sanctum, ensure.admin, permission:database.manage`                          |
 | 管理端 / 其他                | `POST`          | `/api/v2/admin/database/optimizations`                                    | `App\Http\Controllers\Admin\V2\DatabaseStatusController@optimize`                   | `admin`  | `api, auth:sanctum, ensure.admin, permission:database.manage`                          |
 | 管理端 / 其他                | `GET`           | `/api/v2/admin/database/status`                                           | `App\Http\Controllers\Admin\V2\DatabaseStatusController@status`                     | `admin`  | `api, auth:sanctum, ensure.admin, permission:database.view`                            |
+| 管理端 / 其他                | `GET`           | `/api/v2/admin/schedule-runs`                                             | `App\Http\Controllers\Admin\V2\ScheduleTaskController@index`                        | `admin`  | `api, auth:sanctum, ensure.admin, permission:schedule.view`                            |
+| 管理端 / 其他                | `GET`           | `/api/v2/admin/schedule-runs/{run}`                                       | `App\Http\Controllers\Admin\V2\ScheduleTaskController@show`                         | `admin`  | `api, auth:sanctum, ensure.admin, permission:schedule.view`                            |
+| 管理端 / 其他                | `POST`          | `/api/v2/admin/schedule-runs/{run}/retry`                                 | `App\Http\Controllers\Admin\V2\ScheduleTaskController@retry`                        | `admin`  | `api, auth:sanctum, ensure.admin, permission:schedule.retry`                           |
 | 管理端 / 内容                | `GET`           | `/api/v2/admin/content/articles`                                          | `App\Http\Controllers\Admin\V2\ContentArticleController@index`                      | `admin`  | `api, auth:sanctum, ensure.admin, permission:content.list`                             |
 | 管理端 / 内容                | `POST`          | `/api/v2/admin/content/articles`                                          | `App\Http\Controllers\Admin\V2\ContentArticleController@store`                      | `admin`  | `api, auth:sanctum, ensure.admin, permission:content.manage`                           |
 | 管理端 / 内容                | `DELETE`        | `/api/v2/admin/content/articles/{article}`                                | `App\Http\Controllers\Admin\V2\ContentArticleController@destroy`                    | `admin`  | `api, auth:sanctum, ensure.admin, permission:content.manage`                           |
