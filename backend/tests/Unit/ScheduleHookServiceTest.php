@@ -139,6 +139,35 @@ class ScheduleHookServiceTest extends TestCase
         $this->assertSame(['handled' => true], ScheduleHookServiceTestListener::$received[1]['context']['summary']);
     }
 
+    public function test_hook_context_carries_tick_slot_and_task_run_id_from_runner_context(): void
+    {
+        config()->set('schedule_hooks.listeners.'.ScheduleHookService::HOOK_TASK_BEFORE, [
+            ScheduleHookServiceTestListener::class,
+        ]);
+
+        app(ScheduleRunLogService::class)->record('hook tick context task', fn (): array => [
+            'ok' => true,
+        ], [
+            'task_key' => 'hook-tick-context-task',
+            'source' => 'heartbeat',
+            'tick_id' => 42,
+            'tick_slot' => '2026-07-05 12:00:00',
+            'tick_number' => 100,
+            'daily_tick_index' => 48,
+            'task_run_id' => 77,
+            'attempt' => 2,
+        ]);
+
+        $context = ScheduleHookServiceTestListener::$received[0]['context'];
+
+        $this->assertSame('heartbeat', $context['source'] ?? null);
+        $this->assertSame('2026-07-05 12:00:00', $context['tick_slot'] ?? null);
+        $this->assertSame(100, $context['tick_number'] ?? null);
+        $this->assertSame(48, $context['daily_tick_index'] ?? null);
+        $this->assertSame(77, $context['task_run_id'] ?? null);
+        $this->assertSame(2, $context['attempt'] ?? null);
+    }
+
     public function test_schedule_run_log_record_fires_failed_hook_and_rethrows(): void
     {
         config()->set('schedule_hooks.listeners.'.ScheduleHookService::HOOK_TASK_FAILED, [
