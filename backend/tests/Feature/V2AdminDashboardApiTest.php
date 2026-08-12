@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Constants\InvoiceStatus;
+use App\Constants\InvoiceType;
 use App\Models\AdminUser;
 use App\Models\Invoice;
 use App\Models\Role;
@@ -222,6 +223,89 @@ class V2AdminDashboardApiTest extends TestCase
         $this->assertSame(['date', 'day', 'amount', 'count'], array_keys($response->json('data.daily_revenue.0')));
         $this->assertNoSensitiveKeys($response->json());
         $this->assertLessThan(100 * 1024, strlen((string) $response->getContent()));
+    }
+
+    public function test_real_dashboard_revenue_excludes_non_sales_funds_and_keeps_refund_offset(): void
+    {
+        Cache::flush();
+
+        $suffix = strtoupper(bin2hex(random_bytes(4)));
+        $service = app(DashboardService::class);
+        $baselineStats = $service->stats();
+        $baselineRevenue = $service->monthlyRevenue();
+        $baselineProductTotal = (float) collect($baselineRevenue['revenue_by_product'])->sum('amount');
+        $today = now()->format('Y-m-d');
+        $baselineDailyRevenue = collect($baselineRevenue['daily_revenue'])->firstWhere('date', $today) ?? [];
+        $user = User::query()->create([
+            'email' => 'dashboard-revenue-'.$suffix.'@example.com',
+            'password' => 'Temp@123456',
+            'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
+            'status' => 1,
+            'nickname' => 'Dashboard Revenue '.$suffix,
+            'real_name' => '',
+            'id_card' => '',
+            'verification_status' => 0,
+            'verification_message' => '',
+            'verification_certify_id' => null,
+            'member_level_id' => null,
+            'total_sales_amount' => '0.00',
+            'referrer_user_id' => null,
+            'verified_at' => null,
+        ]);
+        $salesProductName = '销售收入-'.$suffix;
+
+        foreach ([
+            [InvoiceType::NEW_PURCHASE, '100.00', $salesProductName],
+            [InvoiceType::REFUND, '-20.00', $salesProductName],
+            [InvoiceType::RECHARGE, '300.00', '充值-'.$suffix],
+            [InvoiceType::DEDUCTION, '40.00', '扣款-'.$suffix],
+            [InvoiceType::REFERRAL_CREDIT, '60.00', '推荐奖励-'.$suffix],
+        ] as [$type, $paidAmount, $productName]) {
+            Invoice::query()->create([
+                'invoice_no' => 'V2DASHREV'.$suffix.'-'.strtoupper(substr(sha1($type.$paidAmount), 0, 6)),
+                'user_id' => (int) $user->id,
+                'type' => $type,
+                'amount' => $paidAmount,
+                'discount' => '0.00',
+                'paid_amount' => $paidAmount,
+                'status' => InvoiceStatus::PAID,
+                'product_spec_snapshot' => $productName,
+                'billing_cycle' => 'monthly',
+                'quantity' => 1,
+                'paid_at' => now(),
+                'due_date' => now()->addDay(),
+            ]);
+        }
+
+        Cache::flush();
+
+        $stats = $service->stats();
+        $revenue = $service->monthlyRevenue();
+        $dailyRevenue = collect($revenue['daily_revenue'])->firstWhere('date', $today) ?? [];
+
+        $this->assertSame(
+            (float) ($baselineStats['today']['income'] ?? 0) + 80.0,
+            (float) ($stats['today']['income'] ?? 0)
+        );
+        $this->assertSame(
+            (float) ($baselineStats['month']['income'] ?? 0) + 80.0,
+            (float) ($stats['month']['income'] ?? 0)
+        );
+        $this->assertSame(
+            $baselineProductTotal + 80.0,
+            (float) collect($revenue['revenue_by_product'])->sum('amount')
+        );
+        $this->assertSame(
+            (float) ($baselineDailyRevenue['amount'] ?? 0) + 80.0,
+            (float) ($dailyRevenue['amount'] ?? 0)
+        );
+        $this->assertSame(
+            (int) ($baselineDailyRevenue['count'] ?? 0) + 2,
+            (int) ($dailyRevenue['count'] ?? 0)
+        );
+        $this->assertNotContains('充值-'.$suffix, array_column($revenue['revenue_by_product'], 'label'));
+        $this->assertNotContains('扣款-'.$suffix, array_column($revenue['revenue_by_product'], 'label'));
+        $this->assertNotContains('推荐奖励-'.$suffix, array_column($revenue['revenue_by_product'], 'label'));
     }
 
     /**

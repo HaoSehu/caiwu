@@ -2,6 +2,19 @@ import type { RouteRecordRaw } from 'vue-router';
 
 export const financeRoutes: RouteRecordRaw[] = [
   {
+    path: 'orders',
+    name: 'AdminOrdersRedirect',
+    redirect: '/admin/finance/invoices',
+    meta: {
+      title: {
+        zh_CN: '旧订单入口',
+        en_US: 'Orders Redirect',
+      },
+      permission: 'invoice.list',
+      hidden: true,
+    },
+  },
+  {
     path: 'finance/orders',
     name: 'AdminFinanceOrders',
     component: () => import('@/pages/finance/orders/index.vue'),
@@ -103,6 +116,19 @@ export const financeRoutes: RouteRecordRaw[] = [
       title: {
         zh_CN: '新客户',
         en_US: 'New Customers',
+      },
+      permission: 'finance.report',
+      hidden: true,
+    },
+  },
+  {
+    path: 'finance/product-income',
+    name: 'AdminFinanceProductIncomeRedirect',
+    redirect: '/admin/services',
+    meta: {
+      title: {
+        zh_CN: '商品收入',
+        en_US: 'Product Income Redirect',
       },
       permission: 'finance.report',
       hidden: true,
