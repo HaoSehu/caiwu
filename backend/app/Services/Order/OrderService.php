@@ -292,7 +292,8 @@ class OrderService
         $sendEmail = (bool) ($payload['send_email'] ?? false);
         $remark = trim((string) ($payload['remark'] ?? ''));
         $syncBusinessFlow = (bool) ($payload['sync_business_flow'] ?? false);
-        $paidAmount = $payableAmount;
+        // paid_amount 记录账单累计实收额，$payableAmount 仅表示本次补款金额。
+        $paidAmount = $invoice->amount;
 
         throw_if($payableAmount <= 0, new BusinessException('当前账单无需再入账'));
         throw_if(abs($requestedAmount - $payableAmount) > 0.00001, new BusinessException('当前仅支持按账单应付金额全额入账'));

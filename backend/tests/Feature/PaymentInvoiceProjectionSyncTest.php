@@ -49,6 +49,32 @@ class PaymentInvoiceProjectionSyncTest extends TestCase
         $this->assertSame('90.00', number_format((float) $invoice->items[0]->line_amount, 2, '.', ''));
     }
 
+    public function test_referral_credit_and_deduction_invoices_materialize_invoice_items_on_creation(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+        $user = User::query()->create([
+            'email' => 'invoice-finance-projection-'.$suffix.'@example.com',
+            'password' => 'Temp@123456',
+            'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
+            'status' => 1,
+            'nickname' => 'Invoice Finance Projection',
+        ]);
+
+        $invoiceService = app(InvoiceService::class);
+        $referralInvoice = $invoiceService->createForReferralCredit($user, 12.34, '推荐奖励投影测试');
+        $deductionInvoice = $invoiceService->createForDeduction($user, 56.78, '扣款投影测试');
+
+        $referralInvoice->refresh()->load('items');
+        $deductionInvoice->refresh()->load('items');
+
+        $this->assertCount(1, $referralInvoice->items);
+        $this->assertSame('referral_credit', $referralInvoice->items->first()->item_type);
+        $this->assertSame('12.34', number_format((float) $referralInvoice->items->first()->line_amount, 2, '.', ''));
+        $this->assertCount(1, $deductionInvoice->items);
+        $this->assertSame('deduction', $deductionInvoice->items->first()->item_type);
+        $this->assertSame('56.78', number_format((float) $deductionInvoice->items->first()->line_amount, 2, '.', ''));
+    }
+
     public function test_invoice_client_detail_loads_order_without_selecting_virtual_display_column(): void
     {
         $suffix = bin2hex(random_bytes(4));
