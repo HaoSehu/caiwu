@@ -378,6 +378,7 @@ class NotificationService
     /**
      * @return array{id: int|null}
      */
+    // 邮件日志明文保存完整正文，供管理端真实审计；管理员端不做脱敏（项目红线）
     private function createEmailLog(string $to, string $subject, string $content, ?string $templateCode): array
     {
         $traceId = $this->notificationTraceId('email', $templateCode);
@@ -712,7 +713,7 @@ HTML;
         }
 
         try {
-            return (new CssToInlineStyles())->convert($content);
+            return (new CssToInlineStyles)->convert($content);
         } catch (\Throwable) {
             return $content;
         }

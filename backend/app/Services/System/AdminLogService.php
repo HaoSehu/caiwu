@@ -459,6 +459,7 @@ class AdminLogService
         ]);
     }
 
+    // 管理端短信/邮件日志查询返回完整 content、params 与收件人，不做脱敏（项目红线：管理员需真实审计信息）
     private function buildSmsLogQuery(array $filters): ?Builder
     {
         if (! Schema::hasTable('message_logs')) {
