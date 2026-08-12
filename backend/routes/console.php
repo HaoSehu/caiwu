@@ -36,6 +36,11 @@ $heartbeat = Schedule::command('scheduler:heartbeat')
     ->everyMinute()
     ->name('scheduler-heartbeat');
 
+// 存活探针与心跳解耦：即使心跳命令抛异常，探针仍能发现并告警。
+Schedule::command('scheduler:liveness')
+    ->everyMinute()
+    ->name('scheduler-liveness');
+
 if ($shouldUseScheduleMutex) {
     $heartbeat->withoutOverlapping(2);
 }

@@ -35,6 +35,12 @@ class HeartbeatScheduler
         $lock = Cache::lock('scheduler:heartbeat:'.$slot->format('YmdHi'), 900);
 
         if (! $lock->get()) {
+            Log::warning('[调度] 心跳槽位锁被占用，本槽位跳过派发，仅排空队列', [
+                'slot' => $slot->format('YmdHi'),
+                'tick_id' => $tick->id,
+                'lock' => 'scheduler:heartbeat:'.$slot->format('YmdHi'),
+            ]);
+
             return new TickSummary($tick, [], [], [], $this->safeDrain());
         }
 
@@ -219,7 +225,9 @@ class HeartbeatScheduler
                 return 0;
             }
 
+            // 只统计自动化调度队列，业务队列的正常积压不触发调度健康告警。
             return DB::table('jobs')
+                ->where('queue', (string) config('queue.caiwu_schedule_queue', 'automation'))
                 ->whereNull('reserved_at')
                 ->where('available_at', '<=', now()->getTimestamp())
                 ->count();

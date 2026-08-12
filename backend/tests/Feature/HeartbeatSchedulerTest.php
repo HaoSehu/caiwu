@@ -22,8 +22,10 @@ use App\Services\Automation\Heartbeat\TriggerRuleMatcher;
 use App\Services\Automation\ScheduleTaskTriggerService;
 use App\Services\System\ProductionReadinessService;
 use Carbon\CarbonImmutable;
+use Illuminate\Contracts\Cache\Lock;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
@@ -47,13 +49,14 @@ class HeartbeatSchedulerTest extends TestCase
             ->delete();
     }
 
-    public function test_laravel_schedule_only_registers_single_heartbeat_event(): void
+    public function test_laravel_schedule_only_registers_heartbeat_and_liveness_events(): void
     {
         Artisan::call('schedule:list');
         $output = Artisan::output();
 
         $this->assertSame(1, substr_count($output, 'scheduler:heartbeat'));
-        $this->assertStringContainsString('* * * * *', $output);
+        $this->assertSame(1, substr_count($output, 'scheduler:liveness'));
+        $this->assertSame(2, substr_count($output, '* * * * *'));
         $this->assertStringNotContainsString('接口认证刷新', $output);
         $this->assertStringNotContainsString('队列积压消费', $output);
     }
@@ -639,6 +642,122 @@ class HeartbeatSchedulerTest extends TestCase
             'task_key' => 'heartbeat-test-stale',
             'status' => ScheduleTaskRun::STATUS_FAILED,
         ]);
+    }
+
+    public function test_heartbeat_logs_warning_when_slot_lock_is_unavailable(): void
+    {
+        Queue::fake();
+        config(['queue.default' => 'sync']);
+
+        Log::shouldReceive('warning')
+            ->once()
+            ->with('[调度] 心跳槽位锁被占用，本槽位跳过派发，仅排空队列', Mockery::on(
+                fn (array $context): bool => ($context['slot'] ?? '') === '202607051300'
+                    && ($context['lock'] ?? '') === 'scheduler:heartbeat:202607051300'
+            ));
+
+        $lock = Mockery::mock(Lock::class);
+        $lock->shouldReceive('get')->once()->andReturn(false);
+        Cache::shouldReceive('lock')
+            ->once()
+            ->with('scheduler:heartbeat:202607051300', 900)
+            ->andReturn($lock);
+
+        $registry = new class(app()) extends HeartbeatTaskRegistry
+        {
+            public function enabledTasks(): array
+            {
+                return [];
+            }
+        };
+
+        $scheduler = new HeartbeatScheduler(
+            app(ScheduleTickRepository::class),
+            app(ScheduleTaskRunRepository::class),
+            $registry,
+            app(TriggerRuleMatcher::class),
+            app(QueueDrainService::class),
+        );
+
+        $summary = $scheduler->tick(CarbonImmutable::parse('2026-07-05 13:00:00', 'Asia/Shanghai'));
+
+        $this->assertSame([], $summary->queuedTasks);
+        $this->assertSame([], $summary->duplicateTasks);
+    }
+
+    public function test_liveness_command_fails_when_heartbeat_is_stale(): void
+    {
+        Log::shouldReceive('error')
+            ->once()
+            ->with('[调度] 心跳停滞告警', Mockery::on(
+                fn (array $context): bool => ($context['latest_heartbeat'] ?? '') === '2026-07-05 12:20:00'
+                    && ($context['max_age_seconds'] ?? 0) === 60
+            ));
+
+        CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-07-05 12:30:00', 'Asia/Shanghai'));
+
+        try {
+            ScheduleTick::query()->delete();
+            ScheduleTick::query()->create([
+                'slot_started_at' => '2026-07-05 12:15:00',
+                'global_number' => 1000,
+                'daily_index' => 50,
+                'triggered_at' => '2026-07-05 12:20:00',
+            ]);
+
+            $exit = Artisan::call('scheduler:liveness', ['--max-age' => '60']);
+            $this->assertSame(1, $exit);
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_liveness_command_passes_when_heartbeat_is_fresh(): void
+    {
+        CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-07-05 12:30:00', 'Asia/Shanghai'));
+
+        try {
+            ScheduleTick::query()->delete();
+            ScheduleTick::query()->create([
+                'slot_started_at' => '2026-07-05 12:15:00',
+                'global_number' => 1000,
+                'daily_index' => 50,
+                'triggered_at' => '2026-07-05 12:29:00',
+            ]);
+
+            $exit = Artisan::call('scheduler:liveness', ['--max-age' => '60']);
+            $this->assertSame(0, $exit);
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_unregistered_task_job_converges_to_terminal_failed_without_retry(): void
+    {
+        $run = ScheduleTaskRun::query()->create([
+            'task_key' => 'legacy-unknown-plugin-task',
+            'task_name' => '旧插件任务',
+            'rule_description' => '每次心跳',
+            'source' => 'heartbeat',
+            'queue' => 'automation',
+            'status' => ScheduleTaskRun::STATUS_QUEUED,
+            'queued_at' => now(),
+        ]);
+
+        $job = new RunHeartbeatTaskJob('legacy-unknown-plugin-task', null, (int) $run->id, null, 'heartbeat', 900);
+
+        $this->assertSame([], $job->middleware());
+        $job->handle(
+            app(HeartbeatTaskRegistry::class),
+            app(HeartbeatTaskRunner::class),
+            app(ScheduleTickRepository::class),
+        );
+
+        $this->assertDatabaseHas('schedule_task_runs', [
+            'id' => $run->id,
+            'status' => ScheduleTaskRun::STATUS_FAILED,
+        ]);
+        $this->assertStringContainsString('任务未注册', (string) $run->fresh()->error_msg);
     }
 
     public function test_queue_visibility_timeout_covers_the_longest_registered_task(): void

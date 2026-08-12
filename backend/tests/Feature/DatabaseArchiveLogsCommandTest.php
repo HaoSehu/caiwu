@@ -80,7 +80,7 @@ class DatabaseArchiveLogsCommandTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_dry_run_covers_eight_log_tables_and_has_no_archive_side_effects(): void
+    public function test_dry_run_covers_seven_log_tables_and_has_no_archive_side_effects(): void
     {
         Process::fake(fn () => Process::result(output: 'pt-archiver test'));
 
@@ -95,10 +95,10 @@ class DatabaseArchiveLogsCommandTest extends TestCase
         $this->assertSame('dry_run', $payload['mode'] ?? null);
         $this->assertSame('completed', $payload['status'] ?? null);
         $this->assertSame(45, (int) ($payload['retention_days'] ?? 0));
-        $this->assertSame(8, count((array) ($payload['ordinary_log_tables'] ?? [])));
+        $this->assertSame(7, count((array) ($payload['ordinary_log_tables'] ?? [])));
         $this->assertContains('activity_logs', (array) $payload['ordinary_log_tables']);
         $this->assertContains('gateway_logs', (array) $payload['ordinary_log_tables']);
-        $this->assertContains('schedule_task_runs', (array) $payload['ordinary_log_tables']);
+        $this->assertNotContains('schedule_task_runs', (array) $payload['ordinary_log_tables']);
         $this->assertDirectoryDoesNotExist($this->archiveRoot);
         $this->assertFileExists((string) $payload['report_path']);
         $this->assertFileExists((string) $payload['execution_log']);
