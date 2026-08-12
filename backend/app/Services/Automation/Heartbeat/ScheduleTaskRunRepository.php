@@ -61,6 +61,8 @@ class ScheduleTaskRunRepository
                     'finished_at' => null,
                     'duration_ms' => null,
                     'error_msg' => null,
+                    // 重派等同新的队列生命周期，attempt 与 Job 尝试次数同口径。
+                    'attempt' => 1,
                     'summary' => $summary,
                     'updated_at' => $now,
                 ]);
@@ -186,6 +188,8 @@ class ScheduleTaskRunRepository
             ScheduleTaskRun::STATUS_RETRYING,
         ];
 
+        // stale 的 COALESCE 表达式无法走单列索引；外层 status 索引已把扫描基数
+        // 压到活跃记录数，适合总览统计，不用于大范围筛选。
         return [
             'active' => ScheduleTaskRun::query()->whereIn('status', $activeStatuses)->count(),
             'stale' => ScheduleTaskRun::query()

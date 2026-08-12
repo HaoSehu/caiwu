@@ -71,6 +71,6 @@ class HeartbeatTaskTimedOutListener
             return null;
         }
 
-        return unserialize($command, ['allowed_classes' => true]);
+        return unserialize($command, ['allowed_classes' => [RunHeartbeatTaskJob::class]]);
     }
 }

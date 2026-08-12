@@ -58,6 +58,7 @@ class ScheduleTaskController extends Controller
     public function index(ListScheduleTaskRunsRequest $request): JsonResponse
     {
         $filters = $request->validated();
+        $filters['status'] = $request->statuses();
         $page = max(1, (int) ($filters['page'] ?? 1));
         $perPage = max(1, min(100, (int) ($filters['page_size'] ?? 20)));
 

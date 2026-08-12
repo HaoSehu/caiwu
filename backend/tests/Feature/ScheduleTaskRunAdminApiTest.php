@@ -137,6 +137,34 @@ class ScheduleTaskRunAdminApiTest extends TestCase
         }
     }
 
+    public function test_schedule_runs_list_supports_comma_separated_multi_status_filter(): void
+    {
+        $admin = $this->createAdmin([AdminPermissions::SCHEDULE_VIEW]);
+        Sanctum::actingAs($admin);
+
+        $taskKey = $this->uniqueTaskKey();
+        $queued = $this->runWithStatus(ScheduleTaskRun::STATUS_QUEUED, ['task_key' => $taskKey]);
+        $running = $this->runWithStatus(ScheduleTaskRun::STATUS_RUNNING, ['task_key' => $taskKey]);
+        $failed = $this->runWithStatus(ScheduleTaskRun::STATUS_FAILED, ['task_key' => $taskKey]);
+
+        $response = $this->getJson('/api/v2/admin/schedule-runs?task_key='.$taskKey.'&status=queued,running&page=1&page_size=10')
+            ->assertOk()
+            ->assertJsonPath('code', 0);
+
+        $ids = array_column((array) $response->json('data.list'), 'id');
+        $this->assertCount(2, $ids);
+        $this->assertContains((int) $queued->id, $ids);
+        $this->assertContains((int) $running->id, $ids);
+        $this->assertNotContains((int) $failed->id, $ids);
+
+        $statuses = array_column((array) $response->json('data.list'), 'status');
+        $this->assertNotContains(ScheduleTaskRun::STATUS_FAILED, $statuses);
+
+        $this->getJson('/api/v2/admin/schedule-runs?task_key='.$taskKey.'&status=queued,invalid')
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 42200);
+    }
+
     /** @param array<string, mixed> $overrides */
     private function failedRun(array $overrides = []): ScheduleTaskRun
     {

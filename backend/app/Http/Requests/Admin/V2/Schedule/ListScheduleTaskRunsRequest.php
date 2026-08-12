@@ -49,7 +49,7 @@ class ListScheduleTaskRunsRequest extends AdminFormRequest
         return [
             'keyword' => ['sometimes', 'string', 'max:80'],
             'task_key' => ['sometimes', 'string', 'max:120'],
-            'status' => ['sometimes', 'string', Rule::in(self::STATUSES)],
+            'status' => ['sometimes', 'string', 'max:100'],
             'source' => ['sometimes', 'string', Rule::in(self::SOURCES)],
             'start_date' => ['sometimes', 'date_format:Y-m-d'],
             'end_date' => ['sometimes', 'date_format:Y-m-d'],
@@ -67,6 +67,38 @@ class ListScheduleTaskRunsRequest extends AdminFormRequest
     {
         $validator->after(function (Validator $validator): void {
             $this->validateDateRange($validator);
+            $this->validateStatusList($validator);
         });
+    }
+
+    /**
+     * status 支持逗号分隔的多状态过滤，例如 queued,running,retrying。
+     *
+     * @return list<string>
+     */
+    public function statuses(): array
+    {
+        $raw = trim((string) ($this->validated()['status'] ?? ''));
+
+        return $raw === ''
+            ? []
+            : array_values(array_intersect(self::STATUSES, array_map('trim', explode(',', $raw))));
+    }
+
+    private function validateStatusList(Validator $validator): void
+    {
+        $raw = trim((string) $this->input('status'));
+        if ($raw === '') {
+            return;
+        }
+
+        $invalid = array_values(array_filter(
+            array_map('trim', explode(',', $raw)),
+            fn (string $item): bool => $item !== '' && ! in_array($item, self::STATUSES, true),
+        ));
+
+        if ($invalid !== []) {
+            $validator->errors()->add('status', '包含不支持的状态：'.implode(',', array_unique($invalid)));
+        }
     }
 }
