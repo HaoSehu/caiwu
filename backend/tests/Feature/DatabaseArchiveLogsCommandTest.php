@@ -274,8 +274,8 @@ class DatabaseArchiveLogsCommandTest extends TestCase
             $this->assertSame('completed', $table['status'] ?? null);
             $this->assertSame(1, (int) ($table['exported_rows'] ?? 0));
             $this->assertSame(1, (int) ($table['deleted_rows'] ?? 0));
-            $this->assertStringEndsWith(
-                'operation_logs'.DIRECTORY_SEPARATOR.'operation_logs_'.now()->format('Ymd').'.log',
+            $this->assertMatchesRegularExpression(
+                '/operation_logs_'.preg_quote(now()->format('Ymd'), '/').'_\d{6}_[0-9a-f]{8}\.log$/',
                 $archiveFile,
             );
             $this->assertFileExists($archiveFile);

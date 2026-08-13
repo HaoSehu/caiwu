@@ -47,9 +47,6 @@ class UserAccountProjectionService
 
         $chunkSize = max(1, $chunkSize);
         $before = $this->inspect();
-        $missingRows = $this->missingUsersQuery()
-            ->orderBy('u.id')
-            ->get();
 
         if (! $execute) {
             return [
@@ -61,35 +58,60 @@ class UserAccountProjectionService
             ];
         }
 
-        $backupPath = $this->writeBackup($missingRows->all());
+        $directory = storage_path('app/account-user-account-backfills');
+        File::ensureDirectoryExists($directory);
+
+        $backupPath = $directory.'/user_accounts_missing_'.now()->format('Ymd_His').'.json';
+        // 分块流式写出备份：避免一次性把全部缺失用户载入内存，大表回填更平稳。
+        // count 在结尾收尾时统一写入，避免占位与真实值重复键。
+        File::put($backupPath, '{"generated_at":'.json_encode(now()->toISOString(), JSON_UNESCAPED_SLASHES).',"rows":[');
+
         $inserted = 0;
         $lastId = 0;
+        $backupRows = 0;
+        $firstChunk = true;
 
-        DB::transaction(function () use (&$inserted, &$lastId, $chunkSize): void {
-            do {
-                $rows = $this->missingUsersQuery()
-                    ->where('u.id', '>', $lastId)
-                    ->orderBy('u.id')
-                    ->limit($chunkSize)
-                    ->get();
+        do {
+            $rows = $this->missingUsersQuery()
+                ->where('u.id', '>', $lastId)
+                ->orderBy('u.id')
+                ->limit($chunkSize)
+                ->get();
 
-                if ($rows->isEmpty()) {
-                    break;
-                }
+            if ($rows->isEmpty()) {
+                break;
+            }
 
-                $now = now()->toDateTimeString();
-                $payload = [];
+            $now = now()->toDateTimeString();
+            $payload = [];
+            $backupEntries = [];
 
-                foreach ($rows as $row) {
-                    $lastId = max($lastId, (int) $row->id);
-                    $payload[] = $this->buildAccountPayload((object) $row, $now);
-                }
+            foreach ($rows as $row) {
+                $lastId = max($lastId, (int) $row->id);
+                $accountPayload = $this->buildAccountPayload((object) $row, $now);
+                $payload[] = $accountPayload;
+                $backupEntries[] = [
+                    'user_id' => (int) $row->id,
+                    'user_account_payload' => $accountPayload,
+                ];
+            }
 
-                if ($payload !== []) {
-                    $inserted += DB::table('user_accounts')->insertOrIgnore($payload);
-                }
-            } while (true);
-        });
+            if (! $firstChunk) {
+                File::append($backupPath, ',');
+            }
+            File::append($backupPath, json_encode($backupEntries, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+            $backupRows += count($backupEntries);
+            $firstChunk = false;
+
+            if ($payload !== []) {
+                // 每个分块独立提交，避免大表回填的长时间事务（undo/binlog 膨胀、锁持有）。
+                $inserted += DB::transaction(static function () use ($payload): int {
+                    return DB::table('user_accounts')->insertOrIgnore($payload);
+                });
+            }
+        } while (true);
+
+        File::append($backupPath, '],"count":'.$backupRows.'}');
 
         return [
             'dry_run' => false,
@@ -115,31 +137,6 @@ class UserAccountProjectionService
             ->leftJoin('user_accounts as ua', 'ua.user_id', '=', 'u.id')
             ->whereNull('ua.user_id')
             ->select(['u.id']);
-    }
-
-    /**
-     * @param  array<int, object>  $rows
-     */
-    private function writeBackup(array $rows): string
-    {
-        $directory = storage_path('app/account-user-account-backfills');
-        File::ensureDirectoryExists($directory);
-
-        $path = $directory.'/user_accounts_missing_'.now()->format('Ymd_His').'.json';
-        $payload = [
-            'generated_at' => now()->toISOString(),
-            'count' => count($rows),
-            'rows' => array_map(function (object $row): array {
-                return [
-                    'user_id' => (int) $row->id,
-                    'user_account_payload' => $this->buildAccountPayload($row, now()->toDateTimeString()),
-                ];
-            }, $rows),
-        ];
-
-        File::put($path, json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
-
-        return $path;
     }
 
     /**
