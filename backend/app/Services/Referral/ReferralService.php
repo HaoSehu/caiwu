@@ -903,8 +903,11 @@ class ReferralService
             'account_name' => $privacy->name($item->account_name_display),
             'account_no' => $privacy->account($item->account_no),
             'status' => (int) $item->status,
+            'status_label' => ReferralWithdrawal::statusLabel((int) $item->status),
+            'payment_no' => $item->payment_no,
             'remark' => $item->remark,
             'operator' => $item->operator,
+            'paid_at' => $item->paid_at?->format('Y-m-d H:i:s'),
             'created_at' => $item->created_at?->format('Y-m-d H:i:s'),
             'processed_at' => $item->processed_at?->format('Y-m-d H:i:s'),
             'user' => $this->adminReferralUserProjection($item->user, $privacy),
@@ -1229,6 +1232,71 @@ class ReferralService
                     'method' => $record->method,
                     'operator' => $operator,
                     'remark' => $record->remark,
+                ],
+            );
+
+            return $record->refresh()->load($this->referralUserWithRelations('user'));
+        });
+    }
+
+    /**
+     * 打款确认（支付宝方式）：审核通过（APPROVED）后由管理员确认已打款，
+     * 回填打款单号与打款时间，状态推进为"已打款"（PAID）。
+     * 资金已在审核通过时从待提取转为已提取，此处仅做最终状态确认与凭证回填。
+     */
+    public function confirmWithdrawalPayment(
+        ReferralWithdrawal $withdrawal,
+        int $operatorUserId,
+        string $operator,
+        string $paymentNo,
+        ?string $remark = null,
+        ?string $traceId = null,
+    ): ReferralWithdrawal {
+        return DB::transaction(function () use (
+            $withdrawal,
+            $operatorUserId,
+            $operator,
+            $paymentNo,
+            $remark,
+            $traceId
+        ) {
+            $record = ReferralWithdrawal::query()->lockForUpdate()->findOrFail($withdrawal->id);
+
+            throw_if(
+                (int) $record->status !== ReferralWithdrawal::STATUS_APPROVED,
+                new BusinessException('仅审核通过的提现支持打款确认')
+            );
+            throw_if(
+                $record->method === ReferralWithdrawal::METHOD_BALANCE,
+                new BusinessException('余额提现无需打款确认')
+            );
+
+            $resolvedPaymentNo = trim($paymentNo);
+            throw_if($resolvedPaymentNo === '', new BusinessException('打款单号不能为空'));
+
+            $record->forceFill([
+                'status' => ReferralWithdrawal::STATUS_PAID,
+                'payment_no' => $resolvedPaymentNo,
+                'paid_at' => now(),
+                'operator' => $operator,
+                'remark' => trim((string) $remark) !== '' ? trim((string) $remark) : ($record->remark ?: '后台确认打款'),
+                'trace_id' => $traceId,
+                'processed_at' => now(),
+            ])->save();
+
+            $this->operationLogService->write(
+                userId: $operatorUserId,
+                userType: 'admin',
+                action: 'referral.withdraw.paid',
+                module: 'referral_withdrawal',
+                targetId: $record->id,
+                detail: [
+                    'amount' => $record->amount,
+                    'method' => $record->method,
+                    'payment_no' => $resolvedPaymentNo,
+                    'operator' => $operator,
+                    'remark' => $record->remark,
+                    'trace_id' => $traceId,
                 ],
             );
 
@@ -1626,8 +1694,8 @@ class ReferralService
                     ->where('referral_profiles.referrer_user_id', $referrerUserId)
                     ->orWhere(function (Builder $nested) use ($referrerUserId) {
                         $nested
-                        ->whereNull('referral_profiles.referrer_user_id')
-                        ->where('users.referrer_user_id', $referrerUserId);
+                            ->whereNull('referral_profiles.referrer_user_id')
+                            ->where('users.referrer_user_id', $referrerUserId);
                     });
             });
     }

@@ -26,6 +26,20 @@ class ScheduleTaskRun extends Model
 
     public const STATUS_FAILED = 'failed';
 
+    public const STATUS_LABELS = [
+        self::STATUS_QUEUED => '排队中',
+        self::STATUS_RUNNING => '执行中',
+        self::STATUS_RETRYING => '重试中',
+        self::STATUS_DISPATCH_FAILED => '派发失败',
+        self::STATUS_SUCCESS => '成功',
+        self::STATUS_FAILED => '失败',
+    ];
+
+    public static function statusLabel(string $status): string
+    {
+        return self::STATUS_LABELS[$status] ?? $status;
+    }
+
     protected $fillable = [
         'schedule_tick_id',
         'parent_run_id',

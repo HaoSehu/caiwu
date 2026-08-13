@@ -37,6 +37,7 @@ class AdminScheduleTaskRunResource extends JsonResource
             'rule_description' => $this->text($run->rule_description),
             'source' => (string) ($this->text($run->source) ?? ''),
             'status' => (string) ($this->text($run->status) ?? ''),
+            'status_label' => ScheduleTaskRun::statusLabel((string) ($run->status ?? '')),
             'attempt' => max(1, (int) ($run->attempt ?? 1)),
             'parent_run_id' => $run->parent_run_id !== null ? (int) $run->parent_run_id : null,
             'queue' => $this->text($run->queue),

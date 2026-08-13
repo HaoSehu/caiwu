@@ -170,4 +170,5 @@ Route::middleware(['auth:sanctum', 'ensure.client'])->group(function (): void {
     Route::post('/tickets/{ticket}/replies/{reply}/recalls', [ActionController::class, 'recallTicketReply'])
         ->middleware('throttle:10,1,client-ticket-recall');
     Route::post('/tickets/{id}/closures', [TicketWorkflowController::class, 'close'])->middleware('throttle:10,1,client-ticket-close');
+    Route::post('/tickets/{id}/reopen', [TicketWorkflowController::class, 'reopen'])->middleware('throttle:10,1,client-ticket-reopen');
 });

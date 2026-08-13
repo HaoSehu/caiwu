@@ -281,6 +281,7 @@ class V2AdminUserWriteApiTest extends TestCase
             'qq',
             'member_level_id',
             'verification_status',
+            'verification_status_label',
             'real_name',
             'cash_balance',
             'credit_limit',

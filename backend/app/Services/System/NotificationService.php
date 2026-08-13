@@ -20,8 +20,10 @@ class NotificationService
 
     public const TEMPLATE_REGISTRATION_SUCCESS = '100002';
 
+    /** 登录提醒：与 TEMPLATE_LOGIN_FAILURE_ALERT / TEMPLATE_LOGIN_LOCATION_ALERT 共用数据库模板 100003 */
     public const TEMPLATE_LOGIN_ALERT = '100003';
 
+    /** 账号绑定/安全提醒：与密码/手机/邮箱变更提醒共用数据库模板 100004 */
     public const TEMPLATE_ACCOUNT_BINDING_ALERT = '100004';
 
     public const TEMPLATE_SERVICE_ACTIVATED = '100005';
@@ -34,6 +36,7 @@ class NotificationService
 
     public const TEMPLATE_SERVICE_REINSTALL_SUCCESS = '100009';
 
+    /** 新订单待支付：与 TEMPLATE_INVOICE_NOTICE 共用数据库模板 100010 */
     public const TEMPLATE_CLIENT_ORDER_PENDING = '100010';
 
     public const TEMPLATE_INVOICE_NOTICE = '100010';
@@ -48,6 +51,7 @@ class NotificationService
 
     public const TEMPLATE_AUTO_RENEW_NOTICE = '100015';
 
+    /** 付款成功通知：与 TEMPLATE_MANUAL_PAYMENT_CONFIRM 共用数据库模板 100016 */
     public const TEMPLATE_PAYMENT_SUCCESS = '100016';
 
     public const TEMPLATE_MANUAL_PAYMENT_CONFIRM = '100016';

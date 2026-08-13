@@ -16,6 +16,7 @@ use App\Services\Integrations\Plugins\PluginConfigRepository;
 use App\Services\Integrations\Plugins\PluginFileLoader;
 use App\Services\Integrations\Plugins\PluginRuntimeRegistry;
 use App\Services\Integrations\Plugins\PluginScanner;
+use App\Services\System\OperationLogService;
 use App\Services\System\SettingService;
 use App\Support\AdminPermissions;
 use Illuminate\Contracts\Container\Container;
@@ -301,7 +302,8 @@ class V2AdminConfigurationApiTest extends TestCase
         $this->app->bind(
             V2IntegrationPluginController::class,
             fn ($app): V2IntegrationPluginController => new V2IntegrationPluginController(
-                $app->make(AdminConfigurationV2QueryService::class)
+                $app->make(AdminConfigurationV2QueryService::class),
+                $app->make(OperationLogService::class)
             )
         );
 

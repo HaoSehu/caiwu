@@ -2,13 +2,16 @@
 
 namespace App\Services\Auth;
 
+use App\Constants\FinanceLedgerEventType;
 use App\Exceptions\BusinessException;
+use App\Models\AccountTransaction;
 use App\Models\IntegrationPlugin;
 use App\Models\User;
 use App\Models\VerificationHistory;
 use App\Services\Integrations\Plugins\IntegrationDriverBindingResolver;
 use App\Services\Integrations\Plugins\PluginConfigRepository;
 use App\Services\Integrations\Plugins\PluginDomain;
+use App\Services\User\AccountService;
 use App\Services\Verification\Contracts\ProvidesVerificationFeeConfig;
 use App\Services\Verification\Contracts\VerificationDriver;
 use App\Services\Verification\Data\VerificationInitializeRequest;
@@ -57,6 +60,7 @@ class VerificationService
         VerificationDriverManager $driverManager,
         private ?PluginConfigRepository $pluginConfigRepository = null,
         private ?IntegrationDriverBindingResolver $driverBindingResolver = null,
+        private ?AccountService $accountService = null,
     ) {
         $this->driverManager = $driverManager;
     }
@@ -77,6 +81,9 @@ class VerificationService
         $certifyId = $response->certifyId;
 
         DB::transaction(function () use ($user, $realname, $idcard, $certifyId): void {
+            // 实名收费：免费次数内免费，超出后按插件配置扣余额（与状态持久化同事务保证原子）。
+            $this->chargeVerificationIfNeeded($user);
+
             $updatedUser = $this->persistVerificationState($user, [
                 'verification_status' => self::RESULT_STATUS_PENDING,
                 'real_name' => $realname,
@@ -582,6 +589,69 @@ class VerificationService
                 'amount' => 0.0,
             ];
         }
+    }
+
+    /**
+     * 实名收费消费点：免费次数内免费，超出后每次认证从账户余额扣取认证费用。
+     * 需在实名状态持久化同一事务内调用，余额不足抛出业务异常回滚本次认证发起。
+     */
+    private function chargeVerificationIfNeeded(User $user): void
+    {
+        $feeConfig = $this->safeFeeConfig();
+        if (! (bool) ($feeConfig['charge_enabled'] ?? false)) {
+            return;
+        }
+
+        $freeAttempts = max((int) ($feeConfig['free_attempts'] ?? 0), 0);
+        $feeAmount = round(max((float) ($feeConfig['retry_fee'] ?? $feeConfig['amount'] ?? 0), 0), 2);
+        if ($feeAmount <= 0) {
+            return;
+        }
+
+        // 已提交次数（含成功/失败/待认证）在免费次数内则免费。
+        if ($this->countSubmittedVerifications($user) < $freeAttempts) {
+            return;
+        }
+
+        $accounts = $this->accounts();
+        $currentBalance = $accounts->cashBalance($user, true);
+        throw_if(
+            $currentBalance < $feeAmount,
+            new BusinessException('实名认证需要支付认证费用，当前余额不足', 42200)
+        );
+
+        $balanceAfter = $accounts->setCashBalance($user, $currentBalance - $feeAmount, true);
+
+        AccountTransaction::query()->create([
+            'user_id' => (int) $user->id,
+            'account_type' => 'cash',
+            'event_type' => FinanceLedgerEventType::VERIFICATION_FEE,
+            'change_amount' => number_format(-$feeAmount, 2, '.', ''),
+            'balance_after' => $balanceAfter,
+            'source_type' => 'verification',
+            'origin_type' => 'verification',
+            'remark' => '实名认证费用',
+        ]);
+    }
+
+    /**
+     * 统计用户历史提交实名认证的次数（VerificationHistory 逐次记录）。
+     * 历史表不可用时回退为按用户实名快照估算，避免收费误判。
+     */
+    private function countSubmittedVerifications(User $user): int
+    {
+        if (! $this->canPersistVerificationHistory()) {
+            return (int) $user->verification_status > 0 ? 1 : 0;
+        }
+
+        return (int) VerificationHistory::query()
+            ->where('user_id', (int) $user->id)
+            ->count();
+    }
+
+    private function accounts(): AccountService
+    {
+        return $this->accountService ??= app(AccountService::class);
     }
 
     private function pluginConfigRepository(): PluginConfigRepository
