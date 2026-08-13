@@ -57,7 +57,7 @@ class InvoicePaymentEntrySwitchTest extends BaseTestCase
         parent::tearDown();
     }
 
-    public function test_invoice_manual_paid_entry_does_not_delegate_to_manual_payment_records(): void
+    public function test_invoice_manual_paid_entry_creates_manual_payment_audit_record(): void
     {
         $user = $this->createUser();
         $order = Order::query()->create([
@@ -127,7 +127,15 @@ class InvoicePaymentEntrySwitchTest extends BaseTestCase
         ]);
         $this->assertDatabaseMissing('payments', [
             'invoice_id' => (int) $invoice->id,
+            'gateway_key' => PaymentGatewayCode::ALIPAY,
+            'status' => PaymentStatus::SUCCESS,
+        ]);
+        $this->assertDatabaseHas('payments', [
+            'invoice_id' => (int) $invoice->id,
             'gateway_key' => 'manual',
+            'status' => PaymentStatus::SUCCESS,
+            'trade_no' => 'ADMIN-MANUAL',
+            'amount' => '80.00',
         ]);
         $this->assertDatabaseHas('operation_logs', [
             'module' => 'invoice',

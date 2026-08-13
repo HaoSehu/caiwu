@@ -1163,12 +1163,14 @@ class InvoiceService
             ? Carbon::parse((string) $payload['paid_at'])
             : now();
         $requestedAmount = round((float) ($payload['amount'] ?? $invoice->amount), 2);
+        $paymentGateway = trim((string) ($payload['payment_gateway'] ?? 'manual')) ?: 'manual';
+        $tradeNo = trim((string) ($payload['trade_no'] ?? ''));
         $sendEmail = (bool) ($payload['send_email'] ?? false);
         $remark = trim((string) ($payload['remark'] ?? ''));
         $syncBusinessFlow = (bool) ($payload['sync_business_flow'] ?? false);
         $traceId = trim((string) ($context['trace_id'] ?? ''));
 
-        $updatedInvoice = DB::transaction(function () use ($invoice, $paidAt, $requestedAmount, $traceId): Invoice {
+        $updatedInvoice = DB::transaction(function () use ($invoice, $paidAt, $requestedAmount, $traceId, $paymentGateway, $tradeNo, $remark, $context): Invoice {
             $lockedInvoice = Invoice::query()
                 ->lockForUpdate()
                 ->with('order')
@@ -1199,6 +1201,30 @@ class InvoiceService
                     ])->save();
                     app(PaymentService::class)->syncProjection($payment);
                 });
+
+            // 补一条 manual Payment 审计记录，保留 trade_no 与入账信息，供财务对账追溯。
+            $manualPayment = new Payment([
+                'payment_no' => Payment::generatePaymentNo(),
+                'user_id' => (int) $lockedInvoice->user_id,
+                'order_id' => (int) ($lockedInvoice->order_id ?? 0) ?: null,
+                'invoice_id' => (int) $lockedInvoice->id,
+                'gateway' => PaymentGatewayCode::MANUAL,
+                'trade_no' => $tradeNo !== '' ? $tradeNo : null,
+                'amount' => $lockedInvoice->amount,
+                'status' => PaymentStatus::SUCCESS,
+                'paid_at' => $paidAt,
+                'trace_id' => $traceId,
+                'callback_raw' => [
+                    'source' => 'admin_manual_entry',
+                    'payment_gateway' => $paymentGateway,
+                    'operator_id' => (int) ($context['operator_id'] ?? 0),
+                    'operator_name' => (string) ($context['operator_name'] ?? ''),
+                    'remark' => $remark,
+                    'trade_no' => $tradeNo,
+                ],
+            ]);
+            $manualPayment->allowNonThirdPartyGateway = true;
+            $manualPayment->save();
 
             $lockedInvoice->forceFill([
                 'status' => InvoiceStatus::PAID,

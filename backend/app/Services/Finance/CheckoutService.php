@@ -21,6 +21,7 @@ use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Services\System\OperationLogService;
 use App\Support\OrderInvoiceNoGenerator;
+use App\Support\StockReservation;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -127,6 +128,8 @@ class CheckoutService
                     $displayNamePayload = $this->resolveProductDisplayNameResolver()->resolveForProduct($product, $normalizedConfig);
                     $productDisplayName = $this->resolveCheckoutProductDisplayName($displayNamePayload);
                     $invoiceConfigSnapshot = $this->withProductDisplaySnapshot($product, $normalizedConfig, $productDisplayName);
+                    // 库存预扣只针对有限正库存，并把实际预扣量写入快照，供取消/退款时对称恢复。
+                    $invoiceConfigSnapshot['stock_reserved'] = StockReservation::reserve($product, $quantity);
                     throw_if($amount <= 0, new BusinessException('无效的计费周期'));
 
                     $couponPayload = $this->couponService->reserveOwnedCouponForInvoice(
@@ -180,10 +183,6 @@ class CheckoutService
                         $payableAmount,
                         $couponPayload
                     );
-
-                    if ((int) $product->stock > 0) {
-                        $product->decrement('stock', $quantity);
-                    }
 
                     $this->checkoutSecurityService->rememberCreatedInvoice(
                         $userId, $idempotencyKey, $fingerprint, (int) $invoice->id
@@ -286,11 +285,11 @@ class CheckoutService
 
             $this->couponService->releaseInvoiceCoupon($lockedInvoice);
 
-            // 新购账单取消时恢复库存
+            // 新购账单取消时按创建时实际预扣量恢复库存
             if (in_array((string) $lockedInvoice->type, [InvoiceType::NEW_PURCHASE, 'normal'], true) && $lockedInvoice->product_id) {
                 $product = Product::query()->lockForUpdate()->find($lockedInvoice->product_id);
-                if ($product instanceof Product && (int) $product->stock >= 0) {
-                    $product->increment('stock', max((int) ($lockedInvoice->quantity ?? 1), 1));
+                if ($product instanceof Product) {
+                    StockReservation::restore($product, $lockedInvoice->config_snapshot, (int) ($lockedInvoice->quantity ?? 1));
                 }
             }
 

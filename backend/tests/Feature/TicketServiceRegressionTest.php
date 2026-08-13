@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Constants\ServiceStatus;
+use App\Exceptions\BusinessException;
 use App\Jobs\SendTicketNotificationEmailJob;
 use App\Models\AdminUser;
 use App\Models\Product;
@@ -79,6 +80,67 @@ class TicketServiceRegressionTest extends TestCase
                 (int) Ticket::query()->findOrFail((int) $ticket->id)->status
             );
         });
+    }
+
+    public function test_client_reply_rejects_when_ticket_closed_between_check_and_transaction(): void
+    {
+        $service = $this->makeTicketService();
+        $user = $this->createClientUser('ticket-close-race');
+
+        $ticket = $service->create((int) $user->id, [
+            'department' => 'support',
+            'subject' => 'Close Race Ticket',
+            'content' => 'Initial message',
+            'priority' => 2,
+        ]);
+
+        // 模拟并发关闭已提交：DB 行已关闭，但传入的 $ticket 对象仍是过期的 OPEN 状态。
+        Ticket::query()->whereKey($ticket->id)->update([
+            'status' => TicketService::STATUS_CLOSED,
+            'close_reason' => 'admin',
+        ]);
+        $ticket->setAttribute('status', TicketService::STATUS_OPEN);
+
+        try {
+            $service->clientReply($ticket, (int) $user->id, 'Client reply after close', []);
+            $this->fail('工单已关闭时不允许再回复');
+        } catch (BusinessException $exception) {
+            $this->assertSame('工单已关闭', $exception->getMessage());
+        }
+
+        $this->assertSame(TicketService::STATUS_CLOSED, (int) $ticket->refresh()->status);
+        $this->assertSame(1, TicketReply::query()->where('ticket_id', (int) $ticket->id)->count());
+    }
+
+    public function test_staff_reply_rejects_when_ticket_closed_between_check_and_transaction(): void
+    {
+        $service = $this->makeTicketService();
+        $user = $this->createClientUser('ticket-staff-close-race');
+        $staff = $this->createStaffUser();
+
+        $ticket = $service->create((int) $user->id, [
+            'department' => 'support',
+            'subject' => 'Staff Close Race Ticket',
+            'content' => 'Initial message',
+            'priority' => 2,
+        ]);
+
+        // 模拟并发关闭已提交：DB 行已关闭，但传入的 $ticket 对象仍是过期的 OPEN 状态。
+        Ticket::query()->whereKey($ticket->id)->update([
+            'status' => TicketService::STATUS_CLOSED,
+            'close_reason' => 'auto',
+        ]);
+        $ticket->setAttribute('status', TicketService::STATUS_OPEN);
+
+        try {
+            $service->staffReply($ticket, (int) $staff->id, 'Staff reply after close', []);
+            $this->fail('工单已关闭时不允许再回复');
+        } catch (BusinessException $exception) {
+            $this->assertSame('工单已关闭', $exception->getMessage());
+        }
+
+        $this->assertSame(TicketService::STATUS_CLOSED, (int) $ticket->refresh()->status);
+        $this->assertSame(1, TicketReply::query()->where('ticket_id', (int) $ticket->id)->count());
     }
 
     public function test_admin_list_ongoing_status_only_returns_unclosed_tickets(): void

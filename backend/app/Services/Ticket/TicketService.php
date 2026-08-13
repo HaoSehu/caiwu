@@ -145,8 +145,12 @@ class TicketService
         }
 
         $formattedReply = DB::transaction(function () use ($ticket, $userId, $content, $attachments, $quoteReplyId) {
+            // 行锁内重读：关闭与回复并发时先到先得，关闭已提交则拒绝再写入回复，防止已关闭工单被重新打开。
+            $lockedTicket = Ticket::query()->lockForUpdate()->findOrFail($ticket->id);
+            throw_if((int) $lockedTicket->status === self::STATUS_CLOSED, new BusinessException('工单已关闭'));
+
             $reply = TicketReply::create([
-                'ticket_id' => $ticket->id,
+                'ticket_id' => $lockedTicket->id,
                 'user_id' => $userId,
                 'content' => $content,
                 'is_staff' => 0,
@@ -154,11 +158,11 @@ class TicketService
                 'quote_reply_id' => $quoteReplyId,
                 'created_at' => now(),
             ]);
-            $ticket->update(['status' => self::STATUS_CLIENT_REPLY]);
+            $lockedTicket->update(['status' => self::STATUS_CLIENT_REPLY]);
 
-            $ticket->loadMissing('user:id,email,nickname');
+            $lockedTicket->loadMissing('user:id,email,nickname');
 
-            return $this->formatReply($reply, $ticket->user?->display_name ?: '客户');
+            return $this->formatReply($reply, $lockedTicket->user?->display_name ?: '客户');
         });
 
         $this->notifyAdminsOfClientReply($ticket, $content, $attachments !== []);
@@ -196,8 +200,12 @@ class TicketService
         }
 
         $formattedReply = DB::transaction(function () use ($ticket, $staffId, $content, $attachments, $staffName, $quoteReplyId) {
+            // 行锁内重读：关闭与回复并发时先到先得，关闭已提交则拒绝再写入回复。
+            $lockedTicket = Ticket::query()->lockForUpdate()->findOrFail($ticket->id);
+            throw_if((int) $lockedTicket->status === self::STATUS_CLOSED, new BusinessException('工单已关闭'));
+
             $reply = TicketReply::create([
-                'ticket_id' => $ticket->id,
+                'ticket_id' => $lockedTicket->id,
                 'user_id' => $staffId,
                 'content' => $content,
                 'is_staff' => 1,
@@ -205,7 +213,7 @@ class TicketService
                 'quote_reply_id' => $quoteReplyId,
                 'created_at' => now(),
             ]);
-            $ticket->update(['status' => self::STATUS_STAFF_REPLY]);
+            $lockedTicket->update(['status' => self::STATUS_STAFF_REPLY]);
 
             return $this->formatReply($reply, $staffName);
         });
@@ -874,9 +882,15 @@ class TicketService
         $pathsToDelete = [];
 
         DB::transaction(function () use ($ticket, $reason, &$pathsToDelete) {
-            $ticket->update(['status' => self::STATUS_CLOSED, 'close_reason' => $reason]);
+            // 行锁内重读：关闭与回复并发时先到先得，已被关闭则直接结束，避免重复清理。
+            $lockedTicket = Ticket::query()->lockForUpdate()->findOrFail($ticket->id);
+            if ((int) $lockedTicket->status === self::STATUS_CLOSED) {
+                return;
+            }
 
-            $replies = TicketReply::where('ticket_id', $ticket->id)
+            $lockedTicket->update(['status' => self::STATUS_CLOSED, 'close_reason' => $reason]);
+
+            $replies = TicketReply::where('ticket_id', $lockedTicket->id)
                 ->whereNotNull('attachments')
                 ->get(['id', 'attachments']);
 
@@ -901,7 +915,7 @@ class TicketService
             }
 
             if ($pathsToDelete !== []) {
-                DB::afterCommit(fn () => $this->deleteTicketAttachmentFiles(array_values($pathsToDelete), (int) $ticket->id));
+                DB::afterCommit(fn () => $this->deleteTicketAttachmentFiles(array_values($pathsToDelete), (int) $lockedTicket->id));
             }
         });
     }

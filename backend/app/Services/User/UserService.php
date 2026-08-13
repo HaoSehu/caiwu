@@ -196,6 +196,45 @@ class UserService
     }
 
     /**
+     * 删除用户（资产保护）：
+     * 仅当无在用服务、无未付账单、账户余额为 0 时才允许删除，否则拒绝并提示先处理资产。
+     */
+    public function deleteUser(User $user, array $context = []): void
+    {
+        $activeServiceCount = Service::query()
+            ->where('user_id', (int) $user->id)
+            ->whereIn('status', [ServiceStatus::PENDING, ServiceStatus::ACTIVE, ServiceStatus::SUSPENDED])
+            ->count();
+        throw_if($activeServiceCount > 0, new BusinessException('该用户存在在用服务，请先处理服务后再删除'));
+
+        $unpaidInvoiceCount = Invoice::query()
+            ->where('user_id', (int) $user->id)
+            ->whereIn('status', [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE])
+            ->count();
+        throw_if($unpaidInvoiceCount > 0, new BusinessException('该用户存在未付账单，请先处理账单后再删除'));
+
+        $balance = (float) $user->balance;
+        throw_if($balance != 0, new BusinessException('该用户账户仍有余额，请先清零后再删除'));
+
+        $user->delete();
+
+        $this->operationLogService->write(
+            userId: ((int) ($context['operator_id'] ?? 0)) ?: null,
+            userType: 'admin',
+            action: 'user.deleted',
+            module: 'user',
+            targetId: (int) $user->id,
+            detail: [
+                'email' => (string) $user->email,
+                'nickname' => (string) $user->nickname,
+                'operator_name' => (string) ($context['operator_name'] ?? ''),
+                'trace_id' => (string) ($context['trace_id'] ?? ''),
+            ],
+            ipAddress: (string) ($context['ip_address'] ?? ''),
+        );
+    }
+
+    /**
      * 用户详情（含完整统计）
      */
     public function detail(User $user): array

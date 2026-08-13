@@ -565,6 +565,49 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
         ]);
     }
 
+    public function test_order_service_cancel_restores_reserved_mix_balance(): void
+    {
+        [$user, $order, $invoice] = $this->createUserOrderInvoice('ordmixcancel');
+
+        // 组合支付状态：余额已预扣 20（账户剩 10），剩余 30 走支付宝 pending 支付单。
+        $user->forceFill(['balance' => '10.00'])->save();
+        $invoice->forceFill(['paid_amount' => '20.00'])->save();
+        $order->forceFill(['paid_amount' => '20.00'])->save();
+        $payment = Payment::query()->create([
+            'payment_no' => 'PAYORDMIXCANCEL'.strtoupper(bin2hex(random_bytes(4))),
+            'user_id' => (int) $user->id,
+            'order_id' => (int) $order->id,
+            'invoice_id' => (int) $invoice->id,
+            'gateway' => PaymentGatewayCode::ALIPAY,
+            'gateway_key' => PaymentGatewayCode::ALIPAY,
+            'amount' => '30.00',
+            'status' => PaymentStatus::PENDING,
+            'callback_raw' => [
+                'mix_payment' => true,
+                'balance_amount' => '20.00',
+            ],
+        ]);
+
+        app(OrderService::class)->cancel($order, [
+            'actor_type' => 'client',
+            'actor_user_id' => (int) $user->id,
+            'trace_id' => 'ord-mix-cancel',
+        ]);
+
+        // 预扣的余额退回，支付单关闭，订单/账单回到未支付。
+        $this->assertSame('30.00', User::query()->findOrFail((int) $user->id)->balance);
+        $this->assertSame(PaymentStatus::FAILED, (int) $payment->refresh()->status);
+        $this->assertSame('0.00', (string) $invoice->refresh()->paid_amount);
+        $this->assertSame('0.00', (string) $order->refresh()->paid_amount);
+        $this->assertSame(OrderStatus::CANCELLED, (int) $order->refresh()->status);
+        $this->assertSame(InvoiceStatus::CANCELLED, (int) $invoice->refresh()->status);
+        $this->assertDatabaseHas('account_transactions', [
+            'user_id' => (int) $user->id,
+            'event_type' => FinanceLedgerEventType::INVOICE_REFUND,
+            'change_amount' => '20.00',
+        ]);
+    }
+
     public function test_mix_pay_success_sets_order_paid_amount_to_full_invoice_amount(): void
     {
         [$user, $order, $invoice] = $this->createUserOrderInvoice('mixsuccess');
@@ -847,15 +890,16 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
         ]);
     }
 
-    public function test_admin_manual_invoice_entry_does_not_create_payment_for_manual_gateway(): void
+    public function test_admin_manual_invoice_entry_creates_manual_payment_audit_record(): void
     {
         [$user, $order, $invoice] = $this->createUserOrderInvoice('manualpay');
+        $tradeNo = 'MANUAL-ENTRY-'.strtoupper(bin2hex(random_bytes(4)));
 
         app(OrderService::class)->updateManualPaymentStatus($order, [
             'action' => 'mark_paid',
             'amount' => '50.00',
             'payment_gateway' => 'manual',
-            'trade_no' => 'MANUAL-ENTRY-'.strtoupper(bin2hex(random_bytes(4))),
+            'trade_no' => $tradeNo,
             'remark' => '后台确认入账',
         ], [
             'operator_id' => 1,
@@ -863,9 +907,12 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
             'trace_id' => 'manual-entry-regression',
         ]);
 
-        $this->assertDatabaseMissing('payments', [
+        $this->assertDatabaseHas('payments', [
             'invoice_id' => (int) $invoice->id,
             'gateway_key' => 'manual',
+            'status' => PaymentStatus::SUCCESS,
+            'trade_no' => $tradeNo,
+            'amount' => '50.00',
         ]);
         $this->assertDatabaseHas('invoices', [
             'id' => (int) $invoice->id,
@@ -876,6 +923,88 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
             'id' => (int) $order->id,
             'status' => OrderStatus::PAID,
             'paid_amount' => '50.00',
+        ]);
+    }
+
+    public function test_admin_manual_invoice_entry_mark_unpaid_reverts_via_manual_payment_record(): void
+    {
+        [$user, $order, $invoice] = $this->createUserOrderInvoice('manualrevert');
+        $tradeNo = 'MANUAL-REVERT-'.strtoupper(bin2hex(random_bytes(4)));
+
+        app(OrderService::class)->updateManualPaymentStatus($order, [
+            'action' => 'mark_paid',
+            'amount' => '50.00',
+            'payment_gateway' => 'manual',
+            'trade_no' => $tradeNo,
+        ], [
+            'operator_id' => 1,
+            'operator_name' => 'tester',
+            'trace_id' => 'manual-revert-mark-paid',
+        ]);
+
+        $this->assertDatabaseHas('payments', [
+            'invoice_id' => (int) $invoice->id,
+            'gateway_key' => 'manual',
+            'status' => PaymentStatus::SUCCESS,
+        ]);
+
+        app(OrderService::class)->updateManualPaymentStatus($order->fresh(), [
+            'action' => 'mark_unpaid',
+        ], [
+            'operator_id' => 1,
+            'operator_name' => 'tester',
+            'trace_id' => 'manual-revert-mark-unpaid',
+        ]);
+
+        $this->assertDatabaseHas('payments', [
+            'invoice_id' => (int) $invoice->id,
+            'gateway_key' => 'manual',
+            'status' => PaymentStatus::FAILED,
+        ]);
+        $this->assertDatabaseHas('invoices', [
+            'id' => (int) $invoice->id,
+            'status' => InvoiceStatus::UNPAID,
+            'paid_amount' => '0.00',
+        ]);
+        $this->assertDatabaseHas('orders', [
+            'id' => (int) $order->id,
+            'status' => OrderStatus::PENDING,
+            'paid_amount' => '0.00',
+        ]);
+    }
+
+    public function test_admin_mark_unpaid_rejects_balance_paid_order_without_manual_payment(): void
+    {
+        [$user, $order, $invoice] = $this->createUserOrderInvoice('manualbalance');
+
+        // 余额支付不产生 Payment 记录，不能通过 mark_unpaid 回退（需走退款）。
+        $invoice->forceFill([
+            'status' => InvoiceStatus::PAID,
+            'paid_amount' => '50.00',
+            'paid_at' => now(),
+        ])->save();
+        $order->forceFill([
+            'status' => OrderStatus::PAID,
+            'paid_amount' => '50.00',
+            'paid_at' => now(),
+        ])->save();
+
+        try {
+            app(OrderService::class)->updateManualPaymentStatus($order, [
+                'action' => 'mark_unpaid',
+            ], [
+                'operator_id' => 1,
+                'operator_name' => 'tester',
+                'trace_id' => 'manual-balance-revert',
+            ]);
+            $this->fail('余额支付订单不应支持 mark_unpaid 回退');
+        } catch (BusinessException $exception) {
+            $this->assertSame('仅支持回退后台手动设为已支付的订单', $exception->getMessage());
+        }
+
+        $this->assertDatabaseHas('orders', [
+            'id' => (int) $order->id,
+            'status' => OrderStatus::PAID,
         ]);
     }
 
