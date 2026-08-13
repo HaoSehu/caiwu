@@ -60,7 +60,8 @@ class MessageRateLimitService
             )) {
                 return [
                     'ok' => false,
-                    'message' => '该接收方今日发送次数已达上限，请明日再试',
+                    // 限流 TTL 自首次命中起滚动 24 小时，不严格对齐自然日，避免"明日再试"误导。
+                    'message' => '该接收方发送过于频繁，已被临时限制，请稍后再试',
                 ];
             }
         }
