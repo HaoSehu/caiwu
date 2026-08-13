@@ -61,6 +61,7 @@ final class ZjmfRenewService
 
         return [
             'upstream_invoice_id' => $upstreamInvoiceId,
+            'upstream_amount' => $this->extractUpstreamAmount($renewResponse, $renewPayload),
             'renew_response' => $renewResponse,
             'fund_response' => $paymentResponse,
             'fund_status' => $paymentStatus,
@@ -71,6 +72,30 @@ final class ZjmfRenewService
                 ? $this->readHostDetailSafely($supplier, $hostId, $jwt, $upstreamInvoiceId)
                 : [],
         ];
+    }
+
+    /**
+     * 尽力提取上游续费实扣金额用于对账：上游字段名不统一，尝试常见金额键，
+     * 取到数值则返回两位小数字符串，取不到返回空串（不阻断续费流程）。
+     *
+     * @param  array<string, mixed>  $response
+     * @param  array<string, mixed>  $payload
+     */
+    private function extractUpstreamAmount(array $response, array $payload): string
+    {
+        foreach ([$payload, $response, $this->extractPayload($response)] as $candidate) {
+            if (! is_array($candidate)) {
+                continue;
+            }
+
+            foreach (['total', 'total_fee', 'amount', 'money', 'subtotal', 'order_amount'] as $key) {
+                if (isset($candidate[$key]) && is_numeric($candidate[$key])) {
+                    return number_format((float) $candidate[$key], 2, '.', '');
+                }
+            }
+        }
+
+        return '';
     }
 
     public function recoverRenewInvoice(Supplier $supplier, int $hostId, int $upstreamInvoiceId): ?array
