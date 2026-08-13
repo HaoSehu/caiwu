@@ -558,6 +558,12 @@ class VncRelayCommand extends Command
      */
     private function assertPublicUpstreamTarget(string $host): void
     {
+        // 代理 fake-ip 环境（Clash TUN 等）域名统一解析为保留地址，DNS 校验不可靠；
+        // 该环境仅限本地联调，Relay 只监听内网端口，默认跳过，生产保持严格。
+        if ((bool) config('idc.vnc_relay.allow_private_upstream', false)) {
+            return;
+        }
+
         $host = trim($host);
         if ($host === '') {
             return;

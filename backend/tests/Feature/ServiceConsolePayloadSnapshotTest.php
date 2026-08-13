@@ -120,7 +120,8 @@ class ServiceConsolePayloadSnapshotTest extends TestCase
         $this->assertSame('/ws/vnc', $publicPayload['relay_path']);
 
         $relayParams = $vncService->resolveVncToken((string) $publicPayload['token']);
-        $this->assertSame('snapshot-secret', $relayParams['password'] ?? null);
+        // relay 建连载荷不落明文 VNC 密码（第四轮安全加固），密码仅经 vnc_credentials 返回。
+        $this->assertArrayNotHasKey('password', $relayParams);
         $this->assertTrue(Cache::store('redis_volatile')->has(CacheKey::vncToken((string) $publicPayload['token'])));
     }
 
