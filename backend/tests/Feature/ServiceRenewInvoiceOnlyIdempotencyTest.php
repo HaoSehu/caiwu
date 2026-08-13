@@ -200,6 +200,95 @@ class ServiceRenewInvoiceOnlyIdempotencyTest extends TestCase
     }
 
     #[Test]
+    public function process_paid_renew_invoice_aborts_when_inflight_submitted_without_upstream_id(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+        ['service' => $service, 'invoice' => $invoice] = $this->createUpstreamRenewFixture($suffix);
+        $capability = new FakeInvoiceRenewalCapability;
+
+        // 模拟崩溃窗口：上次尝试已确认上游创建账单、但账单号未落库（renew_inflight.status=submitted）。
+        $service->forceFill([
+            'provision_data' => [
+                'renew_inflight' => [
+                    'invoice_id' => (int) $invoice->id,
+                    'billing_cycle' => 'monthly',
+                    'status' => 'submitted',
+                    'upstream_invoice_id' => 0,
+                ],
+            ],
+        ])->save();
+
+        $result = $this->makeUpstreamRenewService($capability)->processPaidRenewInvoice($invoice);
+
+        $this->assertNotNull($result);
+        // 不得重复提交 /host/renew，避免上游二次创建续费账单、二次扣供应商余额。
+        $this->assertSame(0, $capability->renewServiceInvoiceCalls);
+        $this->assertSame(0, $capability->recoverCalls);
+        $this->assertSame('failed', (string) (($result->provision_data ?? [])['renew_fulfillment_status'] ?? ''));
+        $this->assertStringContainsString('人工核实', (string) (($result->provision_data ?? [])['renew_error'] ?? ''));
+    }
+
+    #[Test]
+    public function process_paid_renew_invoice_aborts_when_inflight_pending_submit(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+        ['service' => $service, 'invoice' => $invoice] = $this->createUpstreamRenewFixture($suffix);
+        $capability = new FakeInvoiceRenewalCapability;
+
+        // 模拟崩溃窗口：调用上游前落库的 pending_submit。进程中断后无法区分
+        // 「上游调用前崩溃」与「上游已受理、结果未落库」，保守中止自动重试。
+        $service->forceFill([
+            'provision_data' => [
+                'renew_inflight' => [
+                    'invoice_id' => (int) $invoice->id,
+                    'billing_cycle' => 'monthly',
+                    'status' => 'pending_submit',
+                    'upstream_invoice_id' => 0,
+                ],
+            ],
+        ])->save();
+
+        $result = $this->makeUpstreamRenewService($capability)->processPaidRenewInvoice($invoice);
+
+        $this->assertNotNull($result);
+        // 不得重复提交 /host/renew：pending_submit 可能已被上游受理，重放会二次扣供应商余额。
+        $this->assertSame(0, $capability->renewServiceInvoiceCalls);
+        $this->assertSame(0, $capability->recoverCalls);
+        $this->assertSame('failed', (string) (($result->provision_data ?? [])['renew_fulfillment_status'] ?? ''));
+        $this->assertStringContainsString('人工核实', (string) (($result->provision_data ?? [])['renew_error'] ?? ''));
+    }
+
+    #[Test]
+    public function process_paid_renew_invoice_writes_back_known_inflight_upstream_id_and_recovers(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+        ['service' => $service, 'invoice' => $invoice] = $this->createUpstreamRenewFixture($suffix);
+        $capability = new FakeInvoiceRenewalCapability;
+
+        // 崩溃窗口内上游账单 id 已由 inflight 持久化但未落库到 upstream_invoice_id：
+        // 写回并走恢复路径，不重复提交 /host/renew。
+        $service->forceFill([
+            'provision_data' => [
+                'renew_inflight' => [
+                    'invoice_id' => (int) $invoice->id,
+                    'billing_cycle' => 'monthly',
+                    'status' => 'submitted',
+                    'upstream_invoice_id' => 78125,
+                ],
+            ],
+        ])->save();
+
+        $result = $this->makeUpstreamRenewService($capability)->processPaidRenewInvoice($invoice);
+
+        $this->assertNotNull($result);
+        $this->assertSame(0, $capability->renewServiceInvoiceCalls);
+        $this->assertSame(1, $capability->recoverCalls);
+        $this->assertSame(78125, $capability->lastRecoveredUpstreamInvoiceId);
+        $this->assertSame(78125, (int) (($result->provision_data ?? [])['upstream_invoice_id'] ?? 0));
+        $this->assertSame('上游续费账单仍未支付完成', (string) (($result->provision_data ?? [])['renew_error'] ?? ''));
+    }
+
+    #[Test]
     public function process_paid_renew_invoice_does_not_recover_an_upstream_invoice_owned_by_an_older_local_invoice(): void
     {
         $suffix = bin2hex(random_bytes(4));
@@ -466,6 +555,61 @@ class ServiceRenewInvoiceOnlyIdempotencyTest extends TestCase
             'attempt_status' => 'success',
             'trace_id' => 'renew-bind-'.$suffix,
         ]);
+    }
+
+    #[Test]
+    public function create_renew_invoice_blocks_when_same_cycle_already_fulfilled(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+        ['service' => $service, 'invoice' => $fulfilledInvoice] = $this->createUpstreamRenewFixture($suffix);
+
+        // 服务未过期，且同周期已有已履约续费账单（模拟自动续费先扣款履约后，用户再次手动续费）。
+        $service->forceFill([
+            'expires_at' => now()->addDays(20),
+            'provision_data' => [
+                'last_renew_invoice_id' => (int) $fulfilledInvoice->id,
+                'last_renew_invoice_no' => (string) $fulfilledInvoice->invoice_no,
+            ],
+        ])->save();
+
+        $renewService = new ServiceRenewService(
+            new InvoiceService,
+            new ProviderResolver(
+                new ProviderRegistry([
+                    new HostingPanelApiDriver($this->createMock(HostingPanelApiTransport::class)),
+                ])
+            ),
+            $this->createMock(CouponService::class),
+            $this->createMock(OperationLogService::class),
+            new class extends SettingService
+            {
+                public function getAutomationConfig(): array
+                {
+                    return array_merge(parent::defaultAutomationConfig(), [
+                        'expire_unsuspend_notify_enabled' => false,
+                    ]);
+                }
+            },
+            $this->createMock(NotificationService::class),
+        );
+
+        try {
+            $renewService->createRenewInvoiceForUser($service->user, (int) $service->id, 'monthly', 0, [
+                'trace_id' => 'renew-block-fulfilled-'.$suffix,
+            ]);
+            $this->fail('Expected fulfilled same-cycle renew to be blocked.');
+        } catch (BusinessException $exception) {
+            $this->assertSame('当前续费周期已完成，请勿重复续费', $exception->getMessage());
+        }
+
+        $this->assertSame(
+            0,
+            Invoice::query()
+                ->where('service_id', (int) $service->id)
+                ->where('type', 'renew')
+                ->where('status', InvoiceStatus::UNPAID)
+                ->count()
+        );
     }
 
     #[Test]

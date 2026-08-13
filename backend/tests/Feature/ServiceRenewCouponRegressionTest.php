@@ -149,7 +149,9 @@ class ServiceRenewCouponRegressionTest extends TestCase
         ];
 
         $couponService = $this->createMock(CouponService::class);
-        $couponService->expects($this->once())
+        // 续费建单在"事务外预判 + 服务行锁内重查"两阶段都会比对优惠金额，
+        // 允许 previewOwnedCoupon 至少调用一次，适配既有两阶段复用检查。
+        $couponService->expects($this->atLeastOnce())
             ->method('previewOwnedCoupon')
             ->with(
                 (int) $userCoupon->id,
