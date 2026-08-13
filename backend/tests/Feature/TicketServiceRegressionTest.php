@@ -240,6 +240,45 @@ class TicketServiceRegressionTest extends TestCase
         $this->assertCount(1, $autoClosedCalls);
     }
 
+    public function test_reopen_sends_dedicated_reopened_notification(): void
+    {
+        $calls = [];
+        $userNotification = $this->createMock(UserNotificationService::class);
+        $userNotification->method('create')
+            ->willReturnCallback(function (...$args) use (&$calls) {
+                $calls[] = $args;
+
+                return null;
+            });
+
+        $service = new TicketService(
+            $this->createMock(UploadedAssetReferenceService::class),
+            $this->createMock(NotificationService::class),
+            $this->createMock(ServiceTransformService::class),
+            $userNotification,
+        );
+        $user = $this->createClientUser('ticket-reopen');
+        $ticket = $service->create((int) $user->id, [
+            'department' => 'support',
+            'subject' => 'Reopen Ticket',
+            'content' => 'Initial message',
+            'priority' => 2,
+        ]);
+        $staff = $this->createStaffUser();
+        $service->staffReply($ticket->fresh(), (int) $staff->id, 'Staff reply', []);
+        $service->staffClose($ticket->fresh());
+        $this->assertSame(TicketService::STATUS_CLOSED, (int) $ticket->refresh()->status);
+
+        $service->reopen($ticket->fresh());
+
+        // 重开通知使用独立类型，不得复用"工单自动关闭"。
+        $reopenedCalls = collect($calls)
+            ->filter(fn (array $args): bool => ($args[1] ?? null) === UserNotificationType::TICKET_REOPENED)
+            ->values();
+        $this->assertCount(1, $reopenedCalls);
+        $this->assertSame(TicketService::STATUS_OPEN, (int) $ticket->refresh()->status);
+    }
+
     public function test_admin_list_ongoing_status_only_returns_unclosed_tickets(): void
     {
         $suffix = bin2hex(random_bytes(4));
