@@ -26,6 +26,7 @@ class IntegrationPlugin extends Model
         'config_schema_json',
         'status',
         'installed_at',
+        'manifest_hash',
     ];
 
     protected $casts = [
