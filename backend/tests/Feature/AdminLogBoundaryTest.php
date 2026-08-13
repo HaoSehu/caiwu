@@ -220,6 +220,58 @@ class AdminLogBoundaryTest extends TestCase
         }
     }
 
+    public function test_runtime_log_route_id_is_stable_when_log_file_window_slides(): void
+    {
+        Cache::flush();
+        $admin = $this->createAdminUser([AdminPermissions::LOG_LIST, AdminPermissions::PRIVACY_VIEW_RAW]);
+        Sanctum::actingAs($admin);
+
+        $originalStoragePath = app()->storagePath();
+        $tempStoragePath = $originalStoragePath.DIRECTORY_SEPARATOR.'framework'.DIRECTORY_SEPARATOR.'testing'.DIRECTORY_SEPARATOR.'runtime-log-'.bin2hex(random_bytes(4));
+
+        File::ensureDirectoryExists($tempStoragePath.DIRECTORY_SEPARATOR.'logs');
+        app()->useStoragePath($tempStoragePath);
+
+        try {
+            // 写入超过 1600 行尾部窗口的日志，目标行位于最新位置
+            $target = 'runtime-stable-'.bin2hex(random_bytes(4));
+            $lines = [];
+            for ($i = 0; $i < 1700; $i++) {
+                $lines[] = '['.now()->subMinutes(1700 - $i)->format('Y-m-d H:i:s')."] local.INFO: runtime-line-{$i}\n";
+            }
+            $lines[1699] = '['.now()->format('Y-m-d H:i:s')."] local.INFO: {$target}\n";
+            file_put_contents(storage_path('logs/laravel.log'), implode('', $lines));
+
+            $listUrl = '/api/v2/admin/logs/runtime?keyword='.$target.'&include_summary=0&page_size=100';
+            $targetId = (string) $this->getJson($listUrl)
+                ->assertOk()
+                ->assertJsonPath('code', 0)
+                ->json('data.list.0.id');
+            $this->assertNotEmpty($targetId);
+
+            // 追加新日志行，模拟文件持续增长导致尾部窗口滑动；目标行的 ID 必须保持稳定。
+            // 追加后需清空 stat 缓存，否则同一进程内 filesize() 返回旧值，服务端不会重新解析。
+            $logPath = storage_path('logs/laravel.log');
+            file_put_contents($logPath, '['.now()->addSecond()->format('Y-m-d H:i:s')."] local.INFO: newer-line\n", FILE_APPEND);
+            clearstatcache(true, $logPath);
+
+            $second = $this->getJson($listUrl)->assertOk()->assertJsonPath('code', 0);
+            $second->assertJsonPath('data.list.0.id', $targetId);
+
+            $this->getJson('/api/v2/admin/logs/runtime/'.$targetId)
+                ->assertOk()
+                ->assertJsonPath('code', 0)
+                ->assertJsonPath('data.log.id', $targetId)
+                ->assertJsonPath('data.log.channel', 'runtime')
+                ->assertJsonPath('data.log.source', 'laravel_log')
+                ->assertJsonPath('data.log.message', $target);
+        } finally {
+            app()->useStoragePath($originalStoragePath);
+            File::deleteDirectory($tempStoragePath);
+            Cache::flush();
+        }
+    }
+
     public function test_task_log_route_includes_schedule_run_logs(): void
     {
         $admin = $this->createAdminUser([AdminPermissions::LOG_LIST]);
