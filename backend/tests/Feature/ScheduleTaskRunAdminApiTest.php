@@ -33,6 +33,12 @@ class ScheduleTaskRunAdminApiTest extends TestCase
     {
         if (Schema::hasTable('schedule_task_runs') && $this->runIds !== []) {
             DB::table('schedule_task_runs')->whereIn('id', $this->runIds)->delete();
+            // 人工重跑产生的子记录由服务创建、不在 runIds 中，若不清理会残留到共享测试库，
+            // 使后续重跑测试的 activeRunForTask 误命中历史 queued 记录而 422。
+            DB::table('schedule_task_runs')
+                ->whereIn('parent_run_id', $this->runIds)
+                ->whereIn('source', ['manual_retry', 'manual_retry_redispatch'])
+                ->delete();
         }
 
         parent::tearDown();
@@ -135,6 +141,47 @@ class ScheduleTaskRunAdminApiTest extends TestCase
                 ->assertUnprocessable()
                 ->assertJsonPath('code', 42200);
         }
+    }
+
+    public function test_retry_redispatches_manual_retry_run_after_dispatch_failed(): void
+    {
+        Queue::fake();
+        config()->set('queue.default', 'array');
+        $parent = $this->failedRun();
+        $admin = $this->createAdmin([AdminPermissions::SCHEDULE_RETRY]);
+        Sanctum::actingAs($admin);
+        $this->mock(OperationLogService::class, function (MockInterface $mock): void {
+            $mock->shouldReceive('write')->atLeast()->once()->withAnyArgs()->andReturnNull();
+        });
+
+        // 第一次重跑成功，产生 manual_retry 子运行。
+        $first = $this->postJson('/api/v2/admin/schedule-runs/'.$parent->id.'/retry', ['reason' => '首次重跑'])
+            ->assertOk()
+            ->assertJsonPath('code', 0)
+            ->assertJsonPath('data.status', 'queued');
+        $childId = (int) $first->json('data.id');
+        $this->assertNotSame(0, $childId);
+
+        // 模拟该子运行在队列派发阶段失败（基础设施瞬时不可用）。
+        DB::table('schedule_task_runs')->where('id', $childId)->update([
+            'status' => ScheduleTaskRun::STATUS_DISPATCH_FAILED,
+            'error_msg' => '队列派发失败：connection refused',
+            'updated_at' => now(),
+        ]);
+
+        // 对派发失败的 manual_retry 子运行再次重跑：应重派同一记录，而非死胡同。
+        $retry = $this->postJson('/api/v2/admin/schedule-runs/'.$childId.'/retry', ['reason' => '恢复后重派'])
+            ->assertOk()
+            ->assertJsonPath('code', 0)
+            ->assertJsonPath('data.status', 'queued')
+            ->assertJsonPath('data.id', $childId)
+            ->assertJsonPath('data.detail.run.parent_run_id', (int) $parent->id);
+
+        $this->assertSame(ScheduleTaskRun::STATUS_QUEUED, DB::table('schedule_task_runs')->where('id', $childId)->value('status'));
+        $this->assertSame((int) $parent->id, (int) DB::table('schedule_task_runs')->where('id', $childId)->value('parent_run_id'));
+
+        Queue::assertPushed(RunHeartbeatTaskJob::class, fn (RunHeartbeatTaskJob $job): bool => $job->taskRunId === $childId
+            && $job->source === 'manual_retry_redispatch');
     }
 
     public function test_schedule_runs_list_supports_comma_separated_multi_status_filter(): void

@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Listeners\HeartbeatTaskTimedOutListener;
 use App\Models\Setting;
 use App\Services\Auth\LegacyPasswordVerifier;
+use App\Services\Automation\Heartbeat\HeartbeatTaskRegistry;
 use App\Services\System\UploadedAssetReferenceService;
 use Carbon\CarbonInterface;
 use Illuminate\Queue\Events\JobTimedOut;
@@ -32,6 +33,8 @@ class AppServiceProvider extends ServiceProvider
             LegacyPasswordVerifier::class,
             fn (): LegacyPasswordVerifier => new LegacyPasswordVerifier($this->app->tagged('auth.legacy_password_verifiers'))
         );
+        // 任务注册表跨请求/跨 Job 复用：避免每个心跳 Job 重复扫描全部 Provider（插件清单、任务类实例化、契约校验）。
+        $this->app->singleton(HeartbeatTaskRegistry::class);
     }
 
     public function boot(): void

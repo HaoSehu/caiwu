@@ -108,7 +108,55 @@ class ScheduleTaskTriggerService
             }
 
             if ($parent->status === ScheduleTaskRun::STATUS_DISPATCH_FAILED) {
-                throw new InvalidArgumentException('队列派发失败记录不能人工重跑，请先恢复队列基础设施');
+                // 心跳派发失败由同槽复用/租约回收收敛；只有人工重跑子运行需要管理员重派，
+                // 否则父记录已标记 manual_retry_at、无任何机制能恢复，重跑链路形成死胡同。
+                if ((string) $parent->source !== 'manual_retry') {
+                    throw new InvalidArgumentException('队列派发失败记录不能人工重跑，请先恢复队列基础设施');
+                }
+
+                $child = $this->taskRuns->requeueDispatchFailedRun((int) $parent->id);
+                if ($child === null) {
+                    throw new InvalidArgumentException('该运行记录状态已变化，无法重新派发');
+                }
+
+                $childId = (int) $child->id;
+                $ancestorRunId = (int) ($child->parent_run_id ?? $runId);
+
+                try {
+                    $executionMode = $this->dispatchRun(
+                        taskKey: $taskKey,
+                        task: $task,
+                        runId: $childId,
+                        adminUserId: $adminUserId,
+                        source: 'manual_retry_redispatch',
+                    );
+                } catch (\Throwable $exception) {
+                    $this->taskRuns->markDispatchFailed(
+                        $childId,
+                        '队列派发失败：'.$exception->getMessage(),
+                    );
+
+                    throw $exception;
+                }
+
+                $this->writeRetryAudit(
+                    adminUserId: $adminUserId,
+                    parentRunId: $ancestorRunId,
+                    childRunId: $childId,
+                    taskKey: $taskKey,
+                    reason: $safeReason.'（重新派发队列派发失败的运行）',
+                    ipAddress: $ipAddress,
+                );
+
+                return [
+                    'task' => $taskKey,
+                    'title' => $task->title(),
+                    'execution_mode' => $executionMode,
+                    'task_run_id' => $childId,
+                    'parent_run_id' => $ancestorRunId,
+                    'source' => 'manual_retry_redispatch',
+                    'status' => 'queued',
+                ];
             }
 
             if ($parent->status !== ScheduleTaskRun::STATUS_FAILED) {
@@ -118,6 +166,10 @@ class ScheduleTaskTriggerService
             if ($parent->manual_retry_at !== null) {
                 throw new InvalidArgumentException('该失败运行已经发起过人工重跑');
             }
+
+            // 与手动触发路径（dispatchLocked）对齐：先回收租约超时的陈旧运行，
+            // 避免一条已过租约的 queued/running/retrying 记录把失败任务的人工重跑永久阻塞到下一槽位。
+            $this->taskRuns->reclaimStaleRunsForTask($taskKey, $this->taskLeaseSeconds($task));
 
             if ($this->taskRuns->activeRunForTask($taskKey) !== null) {
                 throw new InvalidArgumentException('该任务已有排队或运行中的记录，请稍后重试');

@@ -20,6 +20,9 @@ final readonly class EveryTicks implements TriggerRule
         if ($this->interval < 1) {
             throw new InvalidArgumentException('心跳间隔必须大于 0');
         }
+        if ($this->offset < 0) {
+            throw new InvalidArgumentException('心跳偏移不能为负');
+        }
     }
 
     public function isDue(TickContext $tick): bool
