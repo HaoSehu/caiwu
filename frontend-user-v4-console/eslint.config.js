@@ -138,9 +138,14 @@ export default antfu(
       },
     },
     {
-      files: ['src/pages/client/service-console/index.vue'],
+      files: [
+        'src/pages/client/service-console/index.vue',
+        'src/pages/client/service-console/compute/index.vue',
+        'src/pages/client/service-console/nat/index.vue',
+      ],
       rules: {
         // The external stylesheet intentionally styles the complete composed console subtree.
+        // compute/nat 子页面与 index.vue 引入同一份 styles.less，一并豁免 scoped 要求。
         'vue-scoped-css/enforce-style-type': 'off',
       },
     },
