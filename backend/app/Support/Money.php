@@ -14,7 +14,7 @@ final class Money
 {
     private const SCALE = 2;
 
-    /** 金额比较容差（0.01 元） */
+    /** 金额比较容差（0.0001 元；两侧均已先 round 到分位） */
     private const EPSILON = 0.0001;
 
     public static function round(mixed $value): float
@@ -41,7 +41,12 @@ final class Money
     {
         $divisor = (float) ($b ?? 0);
 
-        return $divisor == 0 ? 0.0 : self::round((float) ($a ?? 0) / $divisor);
+        // 除零是调用方错误，显式抛错避免静默返回 0 掩盖真实除零。
+        if ($divisor == 0) {
+            throw new \DivisionByZeroError('金额除法除数不能为 0');
+        }
+
+        return self::round((float) ($a ?? 0) / $divisor);
     }
 
     /**

@@ -140,7 +140,7 @@ class BackendHealthFixRegressionTest extends TestCase
             app(ServiceTransformService::class)->buildProductConfigOptionsCacheKey($supplier, 123)
         );
         $this->assertSame(
-            "upstream:zjmf_finance_api:host_modules:{$supplierId}:456",
+            "upstream:zjmf_finance_api:host_modules:v2:{$supplierId}:456",
             app(ServiceDetailService::class)->buildMonitorModuleCacheKey($supplier, 456)
         );
         $this->assertSame(
@@ -301,6 +301,21 @@ class BackendHealthFixRegressionTest extends TestCase
 
         $this->assertIsString($source);
         $this->assertStringContainsString("'token' => \$this->maskToken(\$token)", $source);
+        // 上游连接失败日志中的 path 必须经 maskUpstreamPath 脱敏，禁止原样记录携带
+        // password/token 的 query（回归：VNC 密码以明文落入日志）。
+        $this->assertStringContainsString("'path' => \$this->maskUpstreamPath", $source);
+    }
+
+    public function test_sync_upstream_command_targets_service_detail_service_directly(): void
+    {
+        $source = file_get_contents(base_path('app/Console/Commands/SyncUpstreamServicesCommand.php'));
+
+        $this->assertIsString($source);
+        // fetchRemoteState/syncServiceFromRemote 只定义在 ServiceDetailService 上，
+        // 命令必须注入子服务直接调用，禁止对纯门面 ClientServiceConsoleService 反射（会必然失败）。
+        $this->assertStringContainsString('use App\Services\ClientServiceConsole\ServiceDetailService;', $source);
+        $this->assertStringContainsString('ServiceDetailService $detailService', $source);
+        $this->assertStringNotContainsString("getMethod('fetchRemoteState')", $source);
     }
 
     public function test_validation_language_uses_simplified_chinese(): void

@@ -92,7 +92,8 @@ class LogArchiveService
                 return $report;
             } catch (Throwable $exception) {
                 foreach ($audits as $table => $audit) {
-                    if ((string) ($report['tables'][$table]['status'] ?? 'running') === 'running') {
+                    // 收尾所有尚未完成的表（含 pending：中途失败时未开始执行的表审计行不得停留在 running）。
+                    if ((string) ($report['tables'][$table]['status'] ?? 'running') !== 'completed') {
                         $this->finishAuditLog($audit, [
                             'status' => 'failed',
                             'error_message' => mb_substr($exception->getMessage(), 0, 500),
@@ -320,7 +321,6 @@ class LogArchiveService
     {
         $batchId = Str::uuid()->toString();
         $now = CarbonImmutable::now();
-        $runDate = $now->format('Ymd');
         $reportPath = rtrim((string) $settings['report_root'], DIRECTORY_SEPARATOR.'/\\')
             .DIRECTORY_SEPARATOR.'run_'.$now->format('Ymd_His').'_'.substr(str_replace('-', '', $batchId), 0, 8).'.json';
         $executionLog = rtrim((string) $settings['report_root'], DIRECTORY_SEPARATOR.'/\\')
@@ -330,9 +330,11 @@ class LogArchiveService
 
         foreach ($policies as $table => $description) {
             $eligibleRows = (int) DB::table($table)->whereRaw($archiveWhere)->count();
+            // 文件名含到秒时间与批次号：同日失败重试/运维补跑不会覆盖前一批已归档文件
+            // （首运行行已从库 purge，一旦被覆盖即不可恢复）。
             $archiveFile = rtrim((string) $settings['archive_root'], DIRECTORY_SEPARATOR.'/\\')
                 .DIRECTORY_SEPARATOR.$table
-                .DIRECTORY_SEPARATOR.$table.'_'.$runDate.'.log';
+                .DIRECTORY_SEPARATOR.$table.'_'.$now->format('Ymd_His').'_'.substr(str_replace('-', '', $batchId), 0, 8).'.log';
 
             $tables[$table] = [
                 'description' => $description,

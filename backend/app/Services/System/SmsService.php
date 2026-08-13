@@ -76,8 +76,12 @@ class SmsService
 
         // 文案模板优先由短信驱动（插件）提供，系统层仅保留默认回退，避免硬编码特定服务商语法。
         $templateText = $driver instanceof ProvidesVerifyCodeTemplate
-            ? $driver->verifyCodeTemplate($purpose)
-            : $this->aliyunVerifyTemplateText($purpose);
+            ? trim((string) $driver->verifyCodeTemplate($purpose))
+            : '';
+        // 插件模板缺失/为空时回退系统文案，避免日志正文留空。
+        if ($templateText === '') {
+            $templateText = $this->aliyunVerifyTemplateText($purpose);
+        }
         $content = str_replace(['${code}', '${min}'], [$code, $expireMinutes], $templateText);
         $logContext = $this->createSmsLog(
             $phone,

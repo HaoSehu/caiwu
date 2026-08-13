@@ -693,7 +693,6 @@ class V2ProductApiTest extends TestCase
             'config_schema_json' => [],
             'status' => 1,
             'installed_at' => now(),
-            'enabled_at' => now(),
         ]);
         $supplier = Supplier::query()->create([
             'name' => 'ZJMF供应商 '.$suffix,
