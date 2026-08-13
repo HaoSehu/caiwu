@@ -42,7 +42,8 @@ class ServiceVncTokenSecurityTest extends TestCase
         $this->assertTrue(Cache::store('redis_volatile')->has('vnc_token:'.$payload['token']));
 
         $relayParams = $service->resolveVncToken((string) $payload['token']);
-        $this->assertSame('secret-password', $relayParams['password']);
+        // relay 建连仅需 host/port/path，不落明文 VNC 密码到 Redis。
+        $this->assertArrayNotHasKey('password', $relayParams);
 
         $this->expectException(BusinessException::class);
         $this->expectExceptionMessage('VNC 链接已过期或无效，请重新获取');
@@ -93,8 +94,21 @@ class ServiceVncTokenSecurityTest extends TestCase
         $this->assertSame('/ws/vnc', $payload['relay_path']);
         $this->assertArrayNotHasKey('password', $payload);
         $this->assertFalse(Cache::store('redis_volatile')->has('vnc_token:admin-token'));
-        $this->assertSame('admin-secret', $firstParams['password']);
-        $this->assertSame('admin-secret', $secondParams['password']);
+        // relay token 复用重连时同样不含明文 VNC 密码。
+        $this->assertArrayNotHasKey('password', $firstParams);
+        $this->assertArrayNotHasKey('password', $secondParams);
+    }
+
+    public function test_vnc_token_exchange_rejects_non_whitelisted_origin(): void
+    {
+        // 兑换端点 Origin 纵深校验：请求带非本站 Origin 时拒绝。
+        $this->getJson('/api/v2/client/vnc-tokens/test-token', [
+            'Origin' => 'https://evil.example.com',
+        ])->assertForbidden();
+
+        // 无 Origin（同源或非浏览器客户端）放行，交由 token 校验（无效 token 返回 404）。
+        $this->getJson('/api/v2/client/vnc-tokens/test-token')
+            ->assertStatus(404);
     }
 
     public function test_public_vnc_token_exchange_log_never_contains_raw_token_or_password(): void
