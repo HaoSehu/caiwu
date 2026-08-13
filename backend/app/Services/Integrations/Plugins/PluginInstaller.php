@@ -53,6 +53,7 @@ class PluginInstaller
                     'entry_class' => $manifest->entryClass,
                     'capabilities_json' => $manifest->capabilities,
                     'config_schema_json' => $manifest->configSchema,
+                    'manifest_hash' => $this->scanner->manifestContentHash($manifest->domain, $manifest->slug),
                     'installed_at' => now(),
                 ]
             );
@@ -196,6 +197,13 @@ class PluginInstaller
     {
         $this->fileLoader->ensureLoaded($manifest);
 
+        // 插件声明的类必须位于插件目录内：manifest 可被污染，若指向任意已加载类，
+        // 会在运行时被实例化/调用（entry、provider、任务、hook 监听器都是执行面）。
+        $this->assertPluginClassInsideDirectory($manifest, $manifest->entryClass, '入口');
+        if ($manifest->providerClass !== null && trim($manifest->providerClass) !== '') {
+            $this->assertPluginClassInsideDirectory($manifest, $manifest->providerClass, '服务提供者');
+        }
+
         if (! class_exists($manifest->entryClass)) {
             throw new BusinessException('插件入口类不存在', 42200);
         }
@@ -205,6 +213,34 @@ class PluginInstaller
         }
 
         $this->assertScheduleDeclarationsValid($manifest);
+    }
+
+    /**
+     * 插件声明的类必须位于插件目录内，防止 manifest 指向任意已加载类（越界执行面）。
+     */
+    private function assertPluginClassInsideDirectory(PluginManifest $manifest, string $class, string $what): void
+    {
+        if (! class_exists($class)) {
+            throw new BusinessException("插件{$what}类不存在 [{$class}]", 42200);
+        }
+
+        $reflection = new \ReflectionClass($class);
+        $classFile = $reflection->getFileName();
+        if ($classFile === false || trim($classFile) === '') {
+            return;  // 无文件（PHP 内部类等），放行
+        }
+
+        $basePath = $this->normalizePathForComparison(realpath($manifest->basePath) ?: $manifest->basePath);
+        $filePath = $this->normalizePathForComparison(realpath($classFile) ?: $classFile);
+
+        if ($basePath !== '' && ! str_starts_with($filePath, $basePath.'/')) {
+            throw new BusinessException("插件{$what}类必须位于插件目录内 [{$class}]", 42200);
+        }
+    }
+
+    private function normalizePathForComparison(string $path): string
+    {
+        return rtrim(str_replace('\\', '/', $path), '/');
     }
 
     /**
@@ -218,6 +254,8 @@ class PluginInstaller
             if ($class === '') {
                 continue;
             }
+
+            $this->assertPluginClassInsideDirectory($manifest, $class, '定时任务');
 
             if (! class_exists($class)) {
                 throw new BusinessException("插件声明的定时任务类不存在 [{$class}]", 42200);
@@ -240,6 +278,8 @@ class PluginInstaller
 
                     throw new BusinessException('插件调度 Hook 声明缺少 class', 42200);
                 }
+
+                $this->assertPluginClassInsideDirectory($manifest, $class, '调度 Hook 监听器');
 
                 if (! class_exists($class)) {
                     throw new BusinessException("插件声明的调度 Hook 类不存在 [{$class}]", 42200);

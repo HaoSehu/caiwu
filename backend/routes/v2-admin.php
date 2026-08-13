@@ -294,7 +294,8 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
     });
 
     Route::middleware(['permission:'.AdminPermissions::INTEGRATION_PLUGIN_TEST])->group(function (): void {
-        Route::post('/integration-plugins/{plugin}/tasks', [IntegrationPluginController::class, 'runTask']);
+        // 测试发送会真实触发短信/邮件，需节流防止对任意收件人轰炸（与密钥 reveal 同级限流）。
+        Route::post('/integration-plugins/{plugin}/tasks', [IntegrationPluginController::class, 'runTask'])->middleware('throttle:10,1');
     });
 
     Route::middleware(['permission:'.AdminPermissions::INTEGRATION_PLUGIN_SECRET_REVEAL])->group(function (): void {
