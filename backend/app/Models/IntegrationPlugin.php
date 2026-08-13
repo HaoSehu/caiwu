@@ -26,19 +26,12 @@ class IntegrationPlugin extends Model
         'config_schema_json',
         'status',
         'installed_at',
-        'enabled_at',
-        'disabled_at',
-        'installed_by',
-        'enabled_by',
-        'source_hash',
     ];
 
     protected $casts = [
         'capabilities_json' => 'array',
         'config_schema_json' => 'array',
         'installed_at' => 'datetime',
-        'enabled_at' => 'datetime',
-        'disabled_at' => 'datetime',
     ];
 
     public function config(): HasOne

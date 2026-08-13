@@ -6,6 +6,7 @@ use App\Models\MessageLog;
 use App\Models\Setting;
 use App\Services\Integrations\Plugins\IntegrationDriverBindingResolver;
 use App\Services\Integrations\Plugins\PluginConfigRepository;
+use App\Services\Sms\Contracts\ProvidesVerifyCodeTemplate;
 use App\Services\Sms\Contracts\SmsDriver;
 use App\Services\Sms\Data\SmsMessageRequest;
 use App\Services\Sms\Data\SmsSendRequest;
@@ -73,7 +74,10 @@ class SmsService
 
         // 短信日志含验证码明文，管理端需完整真实审计信息，不做脱敏（项目红线）
 
-        $templateText = $this->aliyunVerifyTemplateText($purpose);
+        // 文案模板优先由短信驱动（插件）提供，系统层仅保留默认回退，避免硬编码特定服务商语法。
+        $templateText = $driver instanceof ProvidesVerifyCodeTemplate
+            ? $driver->verifyCodeTemplate($purpose)
+            : $this->aliyunVerifyTemplateText($purpose);
         $content = str_replace(['${code}', '${min}'], [$code, $expireMinutes], $templateText);
         $logContext = $this->createSmsLog(
             $phone,

@@ -7,12 +7,13 @@ namespace App\Services\Integrations\Plugins\Adapters;
 use App\Exceptions\BusinessException;
 use App\Services\Integrations\Plugins\PluginManifest;
 use App\Services\Integrations\Plugins\PluginRuntimeRegistry;
+use App\Services\Sms\Contracts\ProvidesVerifyCodeTemplate;
 use App\Services\Sms\Contracts\SmsDriver;
 use App\Services\Sms\Data\SmsMessageRequest;
 use App\Services\Sms\Data\SmsSendRequest;
 use App\Services\Sms\Data\SmsSendResult;
 
-final readonly class PluginSmsDriver implements SmsDriver
+final readonly class PluginSmsDriver implements ProvidesVerifyCodeTemplate, SmsDriver
 {
     public function __construct(
         private PluginRuntimeRegistry $runtime,
@@ -50,6 +51,16 @@ final readonly class PluginSmsDriver implements SmsDriver
         ]);
 
         return $this->normalizeResult($result);
+    }
+
+    public function verifyCodeTemplate(string $purpose): string
+    {
+        $result = $this->runtime->execute($this->manifest->domain, $this->manifest->slug, 'sms.verify_code_template', [
+            'purpose' => $purpose,
+        ]);
+        $data = is_array($result['data'] ?? null) ? $result['data'] : [];
+
+        return (string) ($data['template'] ?? '');
     }
 
     /**
