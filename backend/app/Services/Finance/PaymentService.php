@@ -31,6 +31,7 @@ use App\Services\Provisioning\ProvisionService;
 use App\Services\Provisioning\ServiceRenewService;
 use App\Services\Referral\ReferralService;
 use App\Services\User\AccountService;
+use App\Support\StockReservation;
 use App\Support\VersionedJson;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Cache\LockTimeoutException;
@@ -1528,269 +1529,12 @@ class PaymentService
 
     /**
      * 支付宝异步通知处理
+     *
+     * 委托通用网关入口 handleGatewayNotify，消除金额字段兜底分叉与重复业务逻辑。
      */
     public function handleAlipayNotify(array $params): bool
     {
-        if (! $this->alipayGateway()->verifyNotify($params)) {
-            Log::warning('[支付宝回调] 签名验证失败', [
-                'payment_no' => (string) ($params['out_trade_no'] ?? ''),
-                'trade_no' => (string) ($params['trade_no'] ?? ''),
-                'trade_status' => (string) ($params['trade_status'] ?? ''),
-                'app_id' => (string) ($params['app_id'] ?? ''),
-            ]);
-
-            return false;
-        }
-
-        $paymentNo = $params['out_trade_no'] ?? '';
-        $tradeStatus = $params['trade_status'] ?? '';
-        $tradeNo = $params['trade_no'] ?? '';
-
-        // 支付单必须属于支付宝，否则其他网关的回调可确认支付宝订单
-        $payment = Payment::query()
-            ->whereGatewayKey(PaymentGatewayCode::ALIPAY)
-            ->where('payment_no', $paymentNo)
-            ->first();
-        if (! $payment) {
-            Log::warning('[支付宝回调] 支付记录不存在或不属于支付宝', ['payment_no' => $paymentNo]);
-
-            return false;
-        }
-
-        if (! $this->alipayGateway()->matchesMerchantId($params['app_id'] ?? '')) {
-            Log::warning('[支付宝回调] app_id 不匹配', [
-                'payment_no' => $paymentNo,
-                'app_id' => (string) ($params['app_id'] ?? ''),
-            ]);
-
-            return false;
-        }
-
-        $notifyAmount = round((float) ($params['total_amount'] ?? 0), 2);
-        $expectedAmount = round((float) $payment->amount, 2);
-        if ($notifyAmount <= 0 || abs($notifyAmount - $expectedAmount) > 0.0001) {
-            Log::warning('[支付宝回调] 金额校验失败', [
-                'payment_no' => $paymentNo,
-                'expected_amount' => $expectedAmount,
-                'notify_amount' => $notifyAmount,
-            ]);
-
-            return false;
-        }
-
-        $params['trace_id'] = $this->resolveTraceId(
-            ['trace_id' => $params['trace_id'] ?? $payment->trace_id],
-            'alipay:callback:'.$payment->id
-        );
-        $this->recordPaymentCallback($payment, 'payment', $params, true, $tradeNo);
-
-        if (! in_array($tradeStatus, ['TRADE_SUCCESS', 'TRADE_FINISHED'])) {
-            Log::info('[支付宝回调] 非成功状态，已记录回调并跳过业务入账', [
-                'payment_no' => $paymentNo,
-                'trade_status' => $tradeStatus,
-            ]);
-
-            return true;
-        }
-
-        // 幂等：已处理过
-        if ((int) $payment->status === PaymentStatus::SUCCESS) {
-            $this->ensureRechargeInvoiceProjection($payment);
-
-            return true;
-        }
-
-        // 充值类（无 invoice_id）走充值到账逻辑
-        if (! $payment->invoice_id) {
-            $this->completeRechargePayment($payment, $tradeNo, $params);
-
-            return true;
-        }
-
-        $lockKey = "lock:alipay:payment:{$payment->id}";
-
-        try {
-            $result = $this->withLock($lockKey, 30, function () use ($payment, $tradeNo, $params) {
-                return DB::transaction(function () use ($payment, $tradeNo, $params) {
-                    $lockedPayment = Payment::query()
-                        ->lockForUpdate()
-                        ->with(['invoice.order'])
-                        ->find($payment->id);
-
-                    if (! $lockedPayment) {
-                        return [
-                            'dispatch' => false,
-                            'invoice' => null,
-                            'payment_no' => '',
-                        ];
-                    }
-
-                    if ((int) $lockedPayment->status === PaymentStatus::SUCCESS) {
-                        return [
-                            'dispatch' => false,
-                            'invoice' => $lockedPayment->invoice,
-                            'payment_no' => (string) $lockedPayment->payment_no,
-                        ];
-                    }
-
-                    $invoice = $lockedPayment->invoice_id
-                        ? Invoice::query()->lockForUpdate()->with('order')->find($lockedPayment->invoice_id)
-                        : null;
-
-                    if (! $invoice) {
-                        return [
-                            'dispatch' => false,
-                            'invoice' => null,
-                            'payment_no' => (string) $lockedPayment->payment_no,
-                        ];
-                    }
-
-                    if ((int) $invoice->status === InvoiceStatus::PAID) {
-                        $this->creditCapturedPaymentToBalance($lockedPayment, $invoice, $tradeNo, $params, 'invoice_already_paid');
-
-                        Log::warning('[支付宝回调] 检测到重复支付回调，已拦截二次入账', [
-                            'payment_no' => $lockedPayment->payment_no,
-                            'invoice_id' => $invoice->id,
-                            'order_id' => $invoice->order?->id,
-                        ]);
-
-                        return [
-                            'dispatch' => false,
-                            'invoice' => $invoice,
-                            'payment_no' => (string) $lockedPayment->payment_no,
-                        ];
-                    }
-
-                    if ((int) $invoice->status === InvoiceStatus::CANCELLED) {
-                        $this->restoreReservedMixBalance($lockedPayment, [
-                            'closed_reason' => 'cancelled_invoice_captured',
-                            'mark_payment_failed' => false,
-                            'trace_id' => (string) ($params['trace_id'] ?? ''),
-                        ]);
-                        $lockedPayment->refresh();
-                        $this->creditCapturedPaymentToBalance($lockedPayment, $invoice, $tradeNo, $params, 'cancelled_invoice');
-
-                        Log::warning('[支付宝回调] 已取消账单收到支付回调，已拦截入账', [
-                            'payment_no' => $lockedPayment->payment_no,
-                            'invoice_id' => $invoice->id,
-                            'order_id' => $invoice->order?->id,
-                        ]);
-
-                        return [
-                            'dispatch' => false,
-                            'invoice' => $invoice,
-                            'payment_no' => (string) $lockedPayment->payment_no,
-                        ];
-                    }
-
-                    if ($this->invoicePaymentWindowExpired($invoice)) {
-                        $this->restoreReservedMixBalance($lockedPayment, [
-                            'closed_reason' => 'payment_window_expired_captured',
-                            'mark_payment_failed' => false,
-                            'trace_id' => (string) ($params['trace_id'] ?? ''),
-                        ]);
-                        $lockedPayment->refresh();
-                        $this->creditCapturedPaymentToBalance($lockedPayment, $invoice, $tradeNo, $params, 'payment_window_expired');
-                        $this->cancelExpiredInvoiceAfterCapturedPayment($invoice, $lockedPayment);
-
-                        Log::warning('[支付宝回调] 账单支付窗口已过期，已取消账单并拦截入账', [
-                            'payment_no' => $lockedPayment->payment_no,
-                            'invoice_id' => $invoice->id,
-                            'order_id' => $invoice->order?->id,
-                        ]);
-
-                        return [
-                            'dispatch' => false,
-                            'invoice' => $invoice,
-                            'payment_no' => (string) $lockedPayment->payment_no,
-                        ];
-                    }
-
-                    throw_if(
-                        ! in_array((int) $invoice->status, [InvoiceStatus::UNPAID, InvoiceStatus::OVERDUE], true),
-                        new BusinessException('账单状态异常，无法处理支付回调')
-                    );
-
-                    $invoice = $this->restoreConflictingMixBalancesForCapturedPayment(
-                        $invoice,
-                        $lockedPayment,
-                        'captured_payment_superseded_mix_balance',
-                        $params
-                    );
-
-                    if (abs(round((float) $lockedPayment->amount, 2) - $this->invoicePayableAmount($invoice)) > 0.0001) {
-                        $this->creditCapturedPaymentToBalance($lockedPayment, $invoice, $tradeNo, $params, 'payable_amount_mismatch');
-
-                        Log::warning('[支付宝回调] 支付金额与账单当前应付不匹配，已转入余额', [
-                            'payment_no' => $lockedPayment->payment_no,
-                            'invoice_id' => $invoice->id,
-                            'payment_amount' => number_format((float) $lockedPayment->amount, 2, '.', ''),
-                            'payable_amount' => number_format($this->invoicePayableAmount($invoice), 2, '.', ''),
-                        ]);
-
-                        return [
-                            'dispatch' => false,
-                            'invoice' => $invoice,
-                            'payment_no' => (string) $lockedPayment->payment_no,
-                        ];
-                    }
-
-                    $lockedPayment->forceFill([
-                        'trade_no' => $tradeNo,
-                        'status' => PaymentStatus::SUCCESS,
-                        'callback_raw' => $params,
-                        'paid_at' => now(),
-                        'trace_id' => (string) ($params['trace_id'] ?? $lockedPayment->trace_id),
-                    ])->save();
-                    $this->syncProjection($lockedPayment);
-
-                    $invoice->forceFill([
-                        'status' => InvoiceStatus::PAID,
-                        'paid_amount' => $invoice->amount,
-                        'paid_at' => now(),
-                        'trace_id' => (string) ($params['trace_id'] ?? $invoice->trace_id),
-                    ])->save();
-
-                    $invoice->order?->forceFill([
-                        'status' => OrderStatus::PAID,
-                        'paid_amount' => $invoice->amount,
-                        'paid_at' => now(),
-                    ])->save();
-
-                    $this->closeOtherPendingPayments($invoice, (int) $lockedPayment->id, 'invoice_paid_by_alipay');
-                    $this->recordSuccessfulInvoicePayment($lockedPayment, $invoice);
-
-                    return [
-                        'dispatch' => true,
-                        'invoice' => $invoice,
-                        'payment_no' => (string) $lockedPayment->payment_no,
-                    ];
-                });
-            }, '支付回调处理中，请稍后重试');
-        } catch (BusinessException $exception) {
-            Log::warning('[支付宝回调] 处理失败', [
-                'payment_no' => $paymentNo,
-                'trade_no' => $tradeNo,
-                'message' => $exception->getMessage(),
-            ]);
-
-            return false;
-        } catch (\Throwable $exception) {
-            Log::error('[支付宝回调] 处理异常', [
-                'payment_no' => $paymentNo,
-                'trade_no' => $tradeNo,
-                'message' => $exception->getMessage(),
-                'exception' => $exception::class,
-            ]);
-
-            return false;
-        }
-
-        if (($result['dispatch'] ?? false) && ($result['invoice'] ?? null) instanceof Invoice) {
-            $this->handlePaidInvoice($result['invoice'], 'alipay:'.($result['payment_no'] ?? $payment->payment_no));
-        }
-
-        return true;
+        return $this->handleGatewayNotify(PaymentGatewayCode::ALIPAY, $params);
     }
 
     /**
@@ -3037,8 +2781,8 @@ class PaymentService
         }
 
         $product = Product::query()->lockForUpdate()->find((int) $invoice->product_id);
-        if ($product instanceof Product && (int) $product->stock >= 0) {
-            $product->increment('stock', max((int) ($invoice->quantity ?? 1), 1));
+        if ($product instanceof Product) {
+            StockReservation::restore($product, $invoice->config_snapshot, (int) ($invoice->quantity ?? 1));
         }
     }
 
@@ -3496,8 +3240,8 @@ class PaymentService
             ->lockForUpdate()
             ->find($order->product_id);
 
-        if ($product instanceof Product && (int) $product->stock >= 0) {
-            $product->increment('stock', max((int) ($order->quantity ?? 1), 1));
+        if ($product instanceof Product) {
+            StockReservation::restore($product, $order->config_snapshot, (int) ($order->quantity ?? 1));
         }
     }
 
