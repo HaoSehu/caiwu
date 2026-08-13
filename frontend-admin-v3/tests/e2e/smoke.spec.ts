@@ -2196,6 +2196,65 @@ async function mockOrders(page: import('@playwright/test').Page) {
   });
 }
 
+async function mockOrderDetail(page: import('@playwright/test').Page, variant: 'new' | 'renew' = 'new') {
+  await page.route(/\/api\/v2\/admin\/orders\/\d+(?:\?.*)?$/, async (route) => {
+    const isNew = variant === 'new';
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        code: 0,
+        data: {
+          order: {
+            id: 800,
+            basic: {
+              order_no: 'ORD-DETAIL-001',
+              type: isNew ? 'new' : 'renew',
+              type_label: isNew ? '新购' : '续费',
+              status: 3,
+              status_label: '已完成',
+              billing_cycle: 'monthly',
+              quantity: 1,
+              remark: '',
+            },
+            financial: {
+              amount: '128.50',
+              discount: '0.00',
+              paid_amount: '128.50',
+              paid_at: '2026-06-06 10:02:00',
+            },
+            user: { id: 1, email: '2908990438@qq.com', nickname: '测试用户', phone: '' },
+            invoice: {
+              id: 900,
+              invoice_no: 'INV-DETAIL-001',
+              status: 1,
+              amount: '128.50',
+              paid_amount: '128.50',
+              paid_at: '2026-06-06 10:02:00',
+            },
+            product: { id: 10, name: '标准云服务器', full_path: '云产品 / 标准云服务器', type: 'vps' },
+            service: {
+              id: 11,
+              name: 'vm-001',
+              domain: 'vm-001.example.test',
+              status: 1,
+              expires_at: '2026-07-06 10:00:00',
+            },
+            coupon: null,
+            configuration: {
+              config_snapshot: { cpu: '2', memory: '4G' },
+              config_pricing_snapshot: { total_amount: '128.50' },
+              service_snapshot: isNew ? { instance_id: 11, hostname: 'vm-001.example.test' } : null,
+            },
+            payment_chain: { payments: [] },
+            audit: { trace_id: 'trace-order-detail-001' },
+            timestamps: { created_at: '2026-06-06 10:00:00', updated_at: '2026-06-06 10:02:00' },
+          },
+        },
+      }),
+    });
+  });
+}
+
 async function mockFinanceModeOrders(page: import('@playwright/test').Page) {
   const modeOrderRow = (
     mode: 'renewals' | 'upgrade',
@@ -4917,6 +4976,43 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await page.locator('.t-pagination').getByText('2', { exact: true }).click();
     await pageRequest;
     await expect(page.getByText('ORD-PAGE-002')).toBeVisible();
+  });
+
+  test('opens new purchase order detail and shows instance snapshot', async ({ page }) => {
+    await mockAdminInfo(page);
+    await mockOrderDetail(page, 'new');
+    await page.addInitScript(() => {
+      window.localStorage.setItem('admin_token', 'test-token');
+      window.localStorage.setItem('admin_last_active_at', String(Date.now()));
+    });
+
+    await page.goto('/admin/finance/orders/800', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByText('ORD-DETAIL-001').first()).toBeVisible();
+
+    await page.locator('.t-tabs__nav-item').getByText('产品配置', { exact: true }).click();
+    await expect(page.getByText('标准云服务器')).toBeVisible();
+    const instanceSection = page.locator('.order-detail-section').filter({ hasText: '实例快照' });
+    await expect(instanceSection).toBeVisible();
+    await expect(instanceSection.getByText('实例ID', { exact: true })).toBeVisible();
+    await expect(instanceSection.getByText('11', { exact: true })).toBeVisible();
+    await expect(instanceSection.getByText('主机名', { exact: true })).toBeVisible();
+    await expect(instanceSection.getByText('vm-001.example.test')).toBeVisible();
+  });
+
+  test('hides instance snapshot on renewal order detail', async ({ page }) => {
+    await mockAdminInfo(page);
+    await mockOrderDetail(page, 'renew');
+    await page.addInitScript(() => {
+      window.localStorage.setItem('admin_token', 'test-token');
+      window.localStorage.setItem('admin_last_active_at', String(Date.now()));
+    });
+
+    await page.goto('/admin/finance/orders/800', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByText('ORD-DETAIL-001').first()).toBeVisible();
+
+    await page.locator('.t-tabs__nav-item').getByText('产品配置', { exact: true }).click();
+    await expect(page.getByText('标准云服务器')).toBeVisible();
+    await expect(page.locator('.order-detail-section').filter({ hasText: '实例快照' })).toHaveCount(0);
   });
 
   test('opens finance renewal orders and handles filters and pagination', async ({ page }) => {

@@ -105,6 +105,7 @@ export interface OrderRecord {
   product_name?: string;
   product_full_path?: string;
   service?: Record<string, unknown> | null;
+  service_snapshot?: Record<string, unknown> | null;
   type?: string;
   type_label?: string;
   upgrade_kind?: string;

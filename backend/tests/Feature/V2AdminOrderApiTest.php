@@ -106,6 +106,11 @@ class V2AdminOrderApiTest extends TestCase
             ->assertJsonPath('data.order.basic.order_no', (string) $fixture['order']->order_no)
             ->assertJsonPath('data.order.financial.amount', '88.00')
             ->assertJsonPath('data.order.configuration.config_snapshot.cpu', '2')
+            ->assertJsonPath('data.order.configuration.service_snapshot.instance_id', 1)
+            ->assertJsonPath(
+                'data.order.configuration.service_snapshot.hostname',
+                (string) $fixture['order']->service_snapshot['hostname'],
+            )
             ->assertJsonPath('data.order.payment_chain.payments.0.payment_no', (string) $fixture['payment']->payment_no)
             ->assertJsonMissingPath('data.order.configuration.config_snapshot.password')
             ->assertJsonMissingPath('data.order.configuration.config_snapshot.api_key')
@@ -116,6 +121,24 @@ class V2AdminOrderApiTest extends TestCase
         $this->assertSame($this->orderDetailWhitelist(), array_keys($response->json('data.order')));
         $this->assertNoSensitiveKeys($response->json());
         $this->assertLessThan(100 * 1024, strlen((string) $response->getContent()));
+    }
+
+    public function test_admin_order_detail_only_exposes_service_snapshot_for_new_purchase_orders(): void
+    {
+        $fixture = $this->createOrderFixture();
+        $order = $fixture['order'];
+
+        // 续费订单即使残留快照数据，也不应在管理端暴露实例快照。
+        $order->forceFill([
+            'type' => 'renew',
+            'service_snapshot' => ['instance_id' => 999, 'hostname' => 'renew.example.test'],
+        ])->save();
+
+        Sanctum::actingAs($this->createAdmin([AdminPermissions::ORDER_DETAIL]));
+
+        $this->getJson('/api/v2/admin/orders/'.$order->id)
+            ->assertOk()
+            ->assertJsonPath('data.order.configuration.service_snapshot', null);
     }
 
     /**
@@ -183,6 +206,10 @@ class V2AdminOrderApiTest extends TestCase
             'coupon_snapshot' => [
                 'code' => 'COUPON'.$suffix,
                 'secret' => 'must-not-leak',
+            ],
+            'service_snapshot' => [
+                'instance_id' => 1,
+                'hostname' => 'v2-order-'.$suffix.'.example.test',
             ],
             'status' => OrderStatus::PAID,
             'paid_at' => now(),
