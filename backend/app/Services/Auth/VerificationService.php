@@ -181,8 +181,10 @@ class VerificationService
             }
         }
 
+        // 重试耗尽仍网络失败：返回网络错误状态（3），syncUserStatus 会保留原认证状态，
+        // 避免把上游暂时不可用误判为“认证失败”并写库。
         return [
-            'status' => self::RESULT_STATUS_FAILED,
+            'status' => self::RESULT_STATUS_NETWORK_ERROR,
             'msg' => '网络请求失败，请刷新页面重试',
         ];
     }
@@ -214,6 +216,11 @@ class VerificationService
             } else {
                 $payload['verification_status'] = 3;
                 $payload['verified_at'] = null;
+            }
+
+            if (! $this->verificationPayloadDiffersFromSnapshot($verification, $payload)) {
+                // 轮询期间状态与消息均未变化：跳过写库，避免每 1 秒一次的无意义 UPDATE 放大。
+                return;
             }
 
             $updatedUser = $this->persistVerificationState($user, $payload);
@@ -715,6 +722,49 @@ class VerificationService
         }
 
         return substr($idcard, 0, 4).str_repeat('*', $len - 8).substr($idcard, -4);
+    }
+
+    /**
+     * 判断待写库的实名状态字段是否与当前快照一致；一致时跳过写库，抑制状态轮询写放大。
+     *
+     * @param  array<string, mixed>  $snapshot
+     * @param  array<string, mixed>  $payload
+     */
+    private function verificationPayloadDiffersFromSnapshot(array $snapshot, array $payload): bool
+    {
+        if (array_key_exists('verification_status', $payload)
+            && (int) ($snapshot['verification_status'] ?? 0) !== (int) $payload['verification_status']) {
+            return true;
+        }
+
+        if (array_key_exists('verification_message', $payload)
+            && trim((string) ($snapshot['verification_message'] ?? '')) !== trim((string) $payload['verification_message'])) {
+            return true;
+        }
+
+        if (array_key_exists('certify_id', $payload)
+            && trim((string) ($snapshot['certify_id'] ?? '')) !== trim((string) $payload['certify_id'])) {
+            return true;
+        }
+
+        // verified_at 只关注“是否已设置”：成功态必然已设置，失败/解绑态必然清空。
+        // 状态未变化时时间精度差异不应触发写库，避免成功态重复同步反复 UPDATE。
+        if (array_key_exists('verified_at', $payload)
+            && ! $this->sameVerifiedAtPresence($snapshot['verified_at'] ?? null, $payload['verified_at'])) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function sameVerifiedAtPresence(mixed $left, mixed $right): bool
+    {
+        return $this->isBlankDateTime($left) === $this->isBlankDateTime($right);
+    }
+
+    private function isBlankDateTime(mixed $value): bool
+    {
+        return $value === null || $value === '' || $value === '0000-00-00 00:00:00';
     }
 
     private function getVerificationSnapshot(User $user): array

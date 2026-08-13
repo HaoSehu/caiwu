@@ -261,7 +261,7 @@ export function useVerification() {
       return;
     pollingTimer = window.setInterval(() => {
       void checkVerificationStatus(true);
-    }, 1000);
+    }, 3000);
   }
 
   async function checkVerificationStatus(silent = false) {
