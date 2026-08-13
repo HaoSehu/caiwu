@@ -216,7 +216,10 @@ class UserService
         $balance = (float) $user->balance;
         throw_if($balance != 0, new BusinessException('该用户账户仍有余额，请先清零后再删除'));
 
-        $user->delete();
+        // 事务内软删：唯一键释放（ReleasesUniqueKeysOnDelete）与 deleted_at 写入原子
+        DB::transaction(function () use ($user): void {
+            $user->delete();
+        });
 
         $this->operationLogService->write(
             userId: ((int) ($context['operator_id'] ?? 0)) ?: null,
