@@ -62,4 +62,4 @@ watch(
   },
 );
 </script>
-<style src="../components/styles.less" lang="less" scoped></style>
+<style src="../components/styles.less" lang="less"></style>
