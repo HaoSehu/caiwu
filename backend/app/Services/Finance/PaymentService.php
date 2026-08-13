@@ -1854,8 +1854,20 @@ class PaymentService
 
                 $refundableAmount = $this->resolveBalanceRefundableAmount($invoice, $payment);
                 $refundAmount = round((float) ($payload['amount'] ?? $refundableAmount), 2);
-                throw_if($refundAmount <= 0, new BusinessException('退款金额不正确'));
+                throw_if(
+                    $refundAmount <= 0,
+                    new BusinessException($this->invoiceCreditedToBalanceAmount($invoice) > 0
+                        ? '该账单款项已通过重复支付转入余额，无需再退款'
+                        : '退款金额不正确')
+                );
                 throw_if(abs($refundAmount - $refundableAmount) > 0.00001, new BusinessException('当前仅支持按原支付金额全额退款'));
+
+                // 混付账单：余额部分无法走支付宝原路退款，全额会超过支付宝该笔交易实收金额，
+                // 直接拒绝，避免向支付宝发起超额退款（支付宝返回"退款金额超过原交易金额"）。
+                throw_if(
+                    $refundAmount - round((float) $payment->amount, 2) > 0.00001,
+                    new BusinessException('该账单包含余额支付，无法全额原路退款，请使用「退回余额」')
+                );
 
                 $refundReason = trim((string) ($payload['remark'] ?? ''));
                 if ($refundReason === '') {
@@ -2039,7 +2051,12 @@ class PaymentService
 
                 $refundableAmount = $this->remainingRefundableAmount($lockedInvoice, $payment);
                 $refundAmount = round((float) ($payload['amount'] ?? $refundableAmount), 2);
-                throw_if($refundAmount <= 0, new BusinessException('退款金额不正确'));
+                throw_if(
+                    $refundAmount <= 0,
+                    new BusinessException($this->invoiceCreditedToBalanceAmount($lockedInvoice) > 0
+                        ? '该账单款项已通过重复支付转入余额，无需再退款'
+                        : '退款金额不正确')
+                );
                 throw_if($refundAmount - $refundableAmount > 0.00001, new BusinessException('退款金额超过原单可退金额'));
 
                 $refundReason = trim((string) ($payload['remark'] ?? ''));
@@ -3051,10 +3068,15 @@ class PaymentService
                 ->values();
         }
 
+        // 已转入余额的异常支付（重复支付/超额支付）不得作为主退款支付单：
+        // 其金额已通过 creditCapturedPaymentToBalance 退回用户余额，再按其原路/全额退款会造成双重退款。
+        $isRefundablePayment = fn (Payment $payment): bool => in_array((int) $payment->status, [PaymentStatus::SUCCESS, PaymentStatus::REFUNDED], true)
+            && ! (bool) data_get((array) ($payment->callback_raw ?? []), 'credited_to_balance', false);
+
         return $payments
-            ->first(fn (Payment $payment) => ! (bool) data_get((array) ($payment->callback_raw ?? []), 'duplicate_paid', false)
-                && in_array((int) $payment->status, [PaymentStatus::SUCCESS, PaymentStatus::REFUNDED], true))
-            ?? $payments->first(fn (Payment $payment) => in_array((int) $payment->status, [PaymentStatus::SUCCESS, PaymentStatus::REFUNDED], true));
+            ->first(fn (Payment $payment) => $isRefundablePayment($payment)
+                && ! (bool) data_get((array) ($payment->callback_raw ?? []), 'duplicate_paid', false))
+            ?? $payments->first($isRefundablePayment);
     }
 
     public function restoreReservedMixBalance(Payment $payment, array $context = []): bool
@@ -3176,10 +3198,35 @@ class PaymentService
     {
         $mixBalanceAmount = $payment instanceof Payment ? $this->resolveMixBalanceAmount($payment) : 0.0;
         if ($mixBalanceAmount > 0 || $this->invoiceHasBalancePayment($invoice)) {
-            return round(max((float) ($invoice->paid_amount ?? 0), (float) ($invoice->amount ?? 0)), 2);
+            $grossRefundable = round(max((float) ($invoice->paid_amount ?? 0), (float) ($invoice->amount ?? 0)), 2);
+
+            // 扣除已转入余额的异常支付（重复支付/超额支付）金额：
+            // 该部分已退回用户余额，若退款时未扣除会造成与"转入余额"重复返还。
+            return round(max($grossRefundable - $this->invoiceCreditedToBalanceAmount($invoice), 0), 2);
         }
 
         return $payment instanceof Payment ? round((float) $payment->amount, 2) : 0.0;
+    }
+
+    /**
+     * 账单名下累计已转入余额的异常支付金额（creditCapturedPaymentToBalance 产生）。
+     */
+    private function invoiceCreditedToBalanceAmount(Invoice $invoice): float
+    {
+        $payments = $invoice->relationLoaded('payments')
+            ? $invoice->payments
+            : Payment::query()
+                ->where('invoice_id', (int) $invoice->id)
+                ->where('status', PaymentStatus::SUCCESS)
+                ->get();
+
+        return round((float) $payments
+            ->filter(fn (Payment $payment) => (bool) data_get((array) ($payment->callback_raw ?? []), 'credited_to_balance', false))
+            ->sum(fn (Payment $payment) => (float) (
+                (float) data_get((array) ($payment->callback_raw ?? []), 'credited_amount', 0) > 0
+                    ? (float) data_get((array) ($payment->callback_raw ?? []), 'credited_amount', 0)
+                    : (float) ($payment->amount ?? 0)
+            )), 2);
     }
 
     private function invoiceHasBalancePayment(Invoice $invoice): bool

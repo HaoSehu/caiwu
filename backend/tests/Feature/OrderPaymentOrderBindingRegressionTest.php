@@ -30,6 +30,7 @@ use App\Services\Provisioning\ProvisionService;
 use App\Services\Provisioning\ServiceRenewService;
 use App\Services\Referral\ReferralService;
 use App\Services\System\SettingService;
+use App\Services\User\UserService;
 use Carbon\CarbonImmutable;
 use Tests\TestCase;
 
@@ -652,6 +653,245 @@ class OrderPaymentOrderBindingRegressionTest extends TestCase
             'status' => InvoiceStatus::PAID,
             'paid_amount' => '50.00',
         ]);
+    }
+
+    public function test_mix_paid_invoice_original_refund_is_blocked_before_gateway_call(): void
+    {
+        [$user, $order, $invoice] = $this->createUserOrderInvoice('mixrefund', '50.00', '30.00');
+
+        // 组合支付：余额 20 + 支付宝 30 尾款。
+        $precreateGateway = $this->makeFakePaymentGateway([
+            'enabled' => true,
+            'precreate' => [
+                'qr_code' => 'https://qr.alipay.test/mix-refund',
+                'out_trade_no' => 'mock-out-trade-no',
+            ],
+        ]);
+        $service = $this->makePaymentService($precreateGateway);
+        $result = $service->payByBalanceAndAlipay($invoice, $user, 20.00, ['trace_id' => 'mix-refund-precreate']);
+        $payment = Payment::query()->where('payment_no', (string) $result['payment_no'])->firstOrFail();
+
+        // 模拟支付宝尾款支付成功，账单全额付清。
+        $tradeNo = 'TRADE-MIX-REFUND-'.strtoupper(bin2hex(random_bytes(4)));
+        $queryGateway = $this->makeFakePaymentGateway([
+            'query' => [
+                'trade_status' => 'TRADE_SUCCESS',
+                'trade_no' => $tradeNo,
+                'out_trade_no' => (string) $payment->payment_no,
+                'total_amount' => '30.00',
+                'raw' => [
+                    'trade_status' => 'TRADE_SUCCESS',
+                    'trade_no' => $tradeNo,
+                    'out_trade_no' => (string) $payment->payment_no,
+                    'total_amount' => '30.00',
+                ],
+            ],
+        ]);
+        $this->makePaymentService($queryGateway)->queryAlipayStatus($payment->fresh());
+
+        $this->assertSame(InvoiceStatus::PAID, (int) $invoice->refresh()->status);
+        $this->assertSame('50.00', (string) $invoice->refresh()->paid_amount);
+
+        // 混付账单原路退款应被拦截：全额 50 超过支付宝该笔交易实收 30，且不触发任何网关退款请求。
+        $refundGateway = $this->makeFakePaymentGateway(['enabled' => true]);
+        $refundService = $this->makePaymentService($refundGateway);
+
+        try {
+            $refundService->refundOrder($order->fresh(['invoice']), ['refund_method' => 'original'], [
+                'operator_type' => 'admin',
+                'operator_id' => 1,
+                'operator_name' => 'test-admin',
+                'trace_id' => 'mix-refund-original',
+            ]);
+            $this->fail('混付账单原路退款应被拒绝');
+        } catch (BusinessException $exception) {
+            $this->assertSame('该账单包含余额支付，无法全额原路退款，请使用「退回余额」', $exception->getMessage());
+        }
+
+        $this->assertSame(0, $refundGateway->countCalls('refund'));
+        $this->assertSame(PaymentStatus::SUCCESS, (int) $payment->refresh()->status);
+        $this->assertSame(InvoiceStatus::PAID, (int) $invoice->refresh()->status);
+        $this->assertSame(OrderStatus::PAID, (int) $order->refresh()->status);
+    }
+
+    public function test_mix_paid_invoice_disables_original_refund_action(): void
+    {
+        [$user, $order, $invoice] = $this->createUserOrderInvoice('mixrefact', '50.00', '30.00');
+
+        $precreateGateway = $this->makeFakePaymentGateway([
+            'enabled' => true,
+            'precreate' => [
+                'qr_code' => 'https://qr.alipay.test/mix-refund-action',
+                'out_trade_no' => 'mock-out-trade-no',
+            ],
+        ]);
+        $service = $this->makePaymentService($precreateGateway);
+        $result = $service->payByBalanceAndAlipay($invoice, $user, 20.00, ['trace_id' => 'mix-refund-action-precreate']);
+        $payment = Payment::query()->where('payment_no', (string) $result['payment_no'])->firstOrFail();
+
+        $tradeNo = 'TRADE-MIX-REFACT-'.strtoupper(bin2hex(random_bytes(4)));
+        $queryGateway = $this->makeFakePaymentGateway([
+            'query' => [
+                'trade_status' => 'TRADE_SUCCESS',
+                'trade_no' => $tradeNo,
+                'out_trade_no' => (string) $payment->payment_no,
+                'total_amount' => '30.00',
+                'raw' => [
+                    'trade_status' => 'TRADE_SUCCESS',
+                    'trade_no' => $tradeNo,
+                    'out_trade_no' => (string) $payment->payment_no,
+                    'total_amount' => '30.00',
+                ],
+            ],
+        ]);
+        $this->makePaymentService($queryGateway)->queryAlipayStatus($payment->fresh());
+
+        $this->assertSame(InvoiceStatus::PAID, (int) $invoice->refresh()->status);
+
+        // 账单退款决策层同样禁用原路退款，返回明确原因，避免进入退款服务。
+        try {
+            app(UserService::class)->refundInvoice($user->fresh(), (int) $invoice->id, [
+                'refund_method' => 'original',
+                'remark' => '混付账单原路退款',
+            ], [
+                'operator_type' => 'admin',
+                'operator_id' => 1,
+                'operator_name' => 'test-admin',
+                'trace_id' => 'mix-refund-action',
+            ]);
+            $this->fail('混付账单应禁用原路退款');
+        } catch (BusinessException $exception) {
+            $this->assertSame('该账单包含余额支付，无法全额原路退款，请使用「退回余额」', $exception->getMessage());
+        }
+    }
+
+    public function test_duplicate_paid_credited_payment_cannot_be_refunded_again(): void
+    {
+        [$user, $order, $invoice] = $this->createUserOrderInvoice('dupcredit', '100.00', '100.00');
+
+        // 先开一张 100 元支付宝二维码，随后用余额付清账单。
+        $precreateGateway = $this->makeFakePaymentGateway([
+            'enabled' => true,
+            'precreate' => [
+                'qr_code' => 'https://qr.alipay.test/dup-credit',
+                'out_trade_no' => 'mock-out-trade-no',
+            ],
+        ]);
+        $service = $this->makePaymentService($precreateGateway);
+        $result = $service->payByAlipay($invoice, $user, ['trace_id' => 'dup-credit-precreate']);
+        $payment = Payment::query()->where('payment_no', (string) $result['payment_no'])->firstOrFail();
+
+        $service->payByBalance($invoice->refresh(), $user->refresh(), ['trace_id' => 'dup-credit-balance']);
+        $this->assertSame(InvoiceStatus::PAID, (int) $invoice->refresh()->status);
+        $this->assertSame('0.00', (string) User::query()->findOrFail((int) $user->id)->balance);
+
+        // 用户随后扫二维码，支付宝实收 100 → 账单已付，转入余额并标记 credited_to_balance。
+        $tradeNo = 'TRADE-DUP-CREDIT-'.strtoupper(bin2hex(random_bytes(4)));
+        $queryGateway = $this->makeFakePaymentGateway([
+            'query' => [
+                'trade_status' => 'TRADE_SUCCESS',
+                'trade_no' => $tradeNo,
+                'out_trade_no' => (string) $payment->payment_no,
+                'total_amount' => '100.00',
+                'raw' => [
+                    'trade_status' => 'TRADE_SUCCESS',
+                    'trade_no' => $tradeNo,
+                    'out_trade_no' => (string) $payment->payment_no,
+                    'total_amount' => '100.00',
+                ],
+            ],
+        ]);
+        $this->makePaymentService($queryGateway)->queryAlipayStatus($payment->fresh());
+
+        $this->assertSame('100.00', (string) User::query()->findOrFail((int) $user->id)->balance);
+        $this->assertTrue((bool) data_get((array) ($payment->refresh()->callback_raw ?? []), 'credited_to_balance', false));
+
+        $refundGateway = $this->makeFakePaymentGateway(['enabled' => true]);
+        $refundService = $this->makePaymentService($refundGateway);
+
+        // 原路退款：已入余额的支付单不得作为主退款单，直接拒绝且不触发网关退款。
+        try {
+            $refundService->refundOrder($order->fresh(['invoice']), ['refund_method' => 'original'], [
+                'operator_type' => 'admin',
+                'operator_id' => 1,
+                'operator_name' => 'test-admin',
+                'trace_id' => 'dup-credit-refund-original',
+            ]);
+            $this->fail('重复支付已入余额的支付单不应被原路退款');
+        } catch (BusinessException $exception) {
+            $this->assertSame('当前支付方式不支持原路退款', $exception->getMessage());
+        }
+        $this->assertSame(0, $refundGateway->countCalls('refund'));
+
+        // 退回余额：可退金额扣除已入余额部分后为 0，拒绝退款且余额不变。
+        try {
+            $refundService->refundOrder($order->fresh(['invoice']), ['refund_method' => 'balance'], [
+                'operator_type' => 'admin',
+                'operator_id' => 1,
+                'operator_name' => 'test-admin',
+                'trace_id' => 'dup-credit-refund-balance',
+            ]);
+            $this->fail('重复支付已入余额的账单不应再次退回余额');
+        } catch (BusinessException $exception) {
+            $this->assertSame('该账单款项已通过重复支付转入余额，无需再退款', $exception->getMessage());
+        }
+
+        $this->assertSame('100.00', (string) User::query()->findOrFail((int) $user->id)->balance);
+        $this->assertSame(PaymentStatus::SUCCESS, (int) $payment->refresh()->status);
+        $this->assertSame(InvoiceStatus::PAID, (int) $invoice->refresh()->status);
+    }
+
+    public function test_pure_alipay_invoice_original_refund_still_works(): void
+    {
+        [$user, $order, $invoice] = $this->createUserOrderInvoice('purealipay', '50.00', '0.00');
+
+        $precreateGateway = $this->makeFakePaymentGateway([
+            'enabled' => true,
+            'precreate' => [
+                'qr_code' => 'https://qr.alipay.test/pure-refund',
+                'out_trade_no' => 'mock-out-trade-no',
+            ],
+        ]);
+        $service = $this->makePaymentService($precreateGateway);
+        $result = $service->payByAlipay($invoice, $user, ['trace_id' => 'pure-refund-precreate']);
+        $payment = Payment::query()->where('payment_no', (string) $result['payment_no'])->firstOrFail();
+
+        // 模拟支付宝支付成功，账单全额付清（无余额参与）。
+        $tradeNo = 'TRADE-PURE-REFUND-'.strtoupper(bin2hex(random_bytes(4)));
+        $queryGateway = $this->makeFakePaymentGateway([
+            'query' => [
+                'trade_status' => 'TRADE_SUCCESS',
+                'trade_no' => $tradeNo,
+                'out_trade_no' => (string) $payment->payment_no,
+                'total_amount' => '50.00',
+                'raw' => [
+                    'trade_status' => 'TRADE_SUCCESS',
+                    'trade_no' => $tradeNo,
+                    'out_trade_no' => (string) $payment->payment_no,
+                    'total_amount' => '50.00',
+                ],
+            ],
+        ]);
+        $this->makePaymentService($queryGateway)->queryAlipayStatus($payment->fresh());
+
+        $this->assertSame(InvoiceStatus::PAID, (int) $invoice->refresh()->status);
+
+        // 纯支付宝账单原路退款应正常走通，不被混付/已入余额守卫误伤。
+        $refundGateway = $this->makeFakePaymentGateway(['enabled' => true]);
+        $refundService = $this->makePaymentService($refundGateway);
+
+        $result = $refundService->refundOrder($order->fresh(['invoice']), ['refund_method' => 'original'], [
+            'operator_type' => 'admin',
+            'operator_id' => 1,
+            'operator_name' => 'test-admin',
+            'trace_id' => 'pure-refund-original',
+        ]);
+
+        $this->assertFalse((bool) ($result['already_refunded'] ?? false));
+        $this->assertSame(1, $refundGateway->countCalls('refund'));
+        $this->assertSame(PaymentStatus::REFUNDED, (int) $payment->refresh()->status);
+        $this->assertSame(InvoiceStatus::REFUNDED, (int) $invoice->refresh()->status);
+        $this->assertSame(OrderStatus::REFUNDED, (int) $order->refresh()->status);
     }
 
     public function test_stale_full_alipay_qr_after_mix_payment_restores_reserved_balance(): void
