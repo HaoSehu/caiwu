@@ -460,6 +460,13 @@ final class ZjmfFinanceTransport
 
     private function resolveSupplierWebSessionCookie(Supplier $supplier): string
     {
+        // 优先使用加密存储的会话 Cookie（supplierWithRuntimeCredentials 解密注入），
+        // 回退历史明文 notes，兼容存量供应商。
+        $secretCookie = trim((string) ($supplier->getAttribute('web_session_cookie') ?? ''));
+        if ($secretCookie !== '') {
+            return $secretCookie;
+        }
+
         return $this->webSessionCookieParser()->parse((string) ($supplier->notes ?? ''));
     }
 

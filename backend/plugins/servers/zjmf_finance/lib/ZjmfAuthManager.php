@@ -158,12 +158,16 @@ final class ZjmfAuthManager
             return self::DEFAULT_JWT_CACHE_TTL_SECONDS;
         }
 
-        $ttlSeconds = $expiresAt - time() - 300;
+        // 剩余有效期再减 MIN_JWT_CACHE_TTL_SECONDS 安全余量，避免缓存即将过期/已过期的会话；
+        // 剩余不足时返回 0（不缓存），让下一个请求重新登录拿新 JWT，
+        // 而不是把失效 token 缓存至少 MIN 秒导致必然先 401 再重登。
+        $ttlSeconds = $expiresAt - time() - self::MIN_JWT_CACHE_TTL_SECONDS;
 
-        return max(
-            self::MIN_JWT_CACHE_TTL_SECONDS,
-            min($ttlSeconds, self::MAX_JWT_CACHE_TTL_SECONDS)
-        );
+        if ($ttlSeconds <= 0) {
+            return 0;
+        }
+
+        return min($ttlSeconds, self::MAX_JWT_CACHE_TTL_SECONDS);
     }
 
     private function decodeJwtPayload(string $jwt): array

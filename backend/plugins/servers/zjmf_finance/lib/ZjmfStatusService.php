@@ -72,8 +72,9 @@ final class ZjmfStatusService
             }
         }
 
+        // 不把会话 JWT 放进返回值：上游会话 token 是敏感凭据，调用方（状态同步等）
+        // 若整体记日志/缓存会把会话泄露落盘；JWT 只在方法内部使用与维护。
         return [
-            'jwt' => $jwt,
             'services' => $results,
         ];
     }
