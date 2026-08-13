@@ -484,6 +484,41 @@ class ScheduleTaskRunRepository
     }
 
     /**
+     * 将一次「队列派发失败」的人工重跑运行重置回 queued 并复用同一记录重新派发，
+     * 保留失败溯源（parent_run_id 与 manual_retry 摘要），避免重跑链路因派发失败形成死胡同。
+     * 通过 CAS 条件更新，避免与并发的心跳/重派相互覆盖。
+     */
+    public function requeueDispatchFailedRun(int $runId): ?ScheduleTaskRun
+    {
+        if ($runId <= 0 || ! $this->tableReady()) {
+            return null;
+        }
+
+        $now = now();
+        $updated = ScheduleTaskRun::query()
+            ->whereKey($runId)
+            ->where('status', ScheduleTaskRun::STATUS_DISPATCH_FAILED)
+            ->update([
+                'status' => ScheduleTaskRun::STATUS_QUEUED,
+                'queued_at' => $now,
+                'started_at' => null,
+                'finished_at' => null,
+                'duration_ms' => null,
+                'error_msg' => null,
+                'attempt' => 1,
+                'updated_at' => $now,
+            ]);
+
+        if ($updated !== 1) {
+            return null;
+        }
+
+        $run = ScheduleTaskRun::query()->find($runId);
+
+        return $run instanceof ScheduleTaskRun ? $run : null;
+    }
+
+    /**
      * 将明确超出安全租约的运行标记为失败，避免一条陈旧记录永久阻塞后续调度。
      * 这里不自动重跑，因为进程是否已经产生业务副作用无法仅凭数据库判断。
      */
@@ -500,12 +535,15 @@ class ScheduleTaskRunRepository
 
         $cutoff = now()->subSeconds(max(60, $leaseSeconds));
 
+        // dispatch_failed 也在回收范围：同槽复用只覆盖下一次心跳，队列故障跨槽位后
+        // 遗留的派发失败记录超出租约即收敛为终态 failed（可人工重跑），避免台账滞留孤儿。
         return ScheduleTaskRun::query()
             ->where('task_key', $taskKey)
             ->whereIn('status', [
                 ScheduleTaskRun::STATUS_QUEUED,
                 ScheduleTaskRun::STATUS_RUNNING,
                 ScheduleTaskRun::STATUS_RETRYING,
+                ScheduleTaskRun::STATUS_DISPATCH_FAILED,
             ])
             ->where(function ($query) use ($cutoff): void {
                 // 旧版本可能没有写入 updated_at/queued_at，回退到 created_at；三者都为空

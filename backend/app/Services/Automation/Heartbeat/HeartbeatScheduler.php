@@ -221,12 +221,17 @@ class HeartbeatScheduler
     private function pendingJobsCount(): int
     {
         try {
-            if (! Schema::hasTable('jobs')) {
+            // 队列可配置独立数据库连接（queue.connections.database.connection），
+            // 必须与其余模块一致解析该连接，否则独立队列库上统计恒为 0、积压告警被静默抑制。
+            $connection = trim((string) config('queue.connections.database.connection', '')) ?: (string) config('database.default');
+            $table = (string) config('queue.connections.database.table', 'jobs');
+
+            if ($table === '' || ! Schema::connection($connection)->hasTable($table)) {
                 return 0;
             }
 
             // 只统计自动化调度队列，业务队列的正常积压不触发调度健康告警。
-            return DB::table('jobs')
+            return DB::connection($connection)->table($table)
                 ->where('queue', (string) config('queue.caiwu_schedule_queue', 'automation'))
                 ->whereNull('reserved_at')
                 ->where('available_at', '<=', now()->getTimestamp())
