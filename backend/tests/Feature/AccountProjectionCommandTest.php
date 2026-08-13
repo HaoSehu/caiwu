@@ -54,7 +54,6 @@ class AccountProjectionCommandTest extends BaseTestCase
             (int) $before['users_without_account'] + 1,
             (int) $payload['users_without_account']
         );
-        $this->assertArrayHasKey('balance_mismatch_users_vs_accounts', $payload);
     }
 
     public function test_account_backfill_user_accounts_dry_run_does_not_write(): void
@@ -87,71 +86,21 @@ class AccountProjectionCommandTest extends BaseTestCase
 
             $this->assertFalse((bool) $payload['dry_run']);
             $this->assertGreaterThanOrEqual(1, (int) $payload['inserted']);
+            // users 旧余额列已删除，缺失账户按默认 0 回填。
             $this->assertDatabaseHas('user_accounts', [
                 'user_id' => $userId,
-                'cash_balance' => '123.45',
-                'credit_limit' => '67.89',
-                'referral_frozen_balance' => '1.11',
-                'referral_available_balance' => '2.22',
-                'referral_pending_withdrawal_balance' => '3.33',
-                'referral_withdrawn_balance' => '4.44',
+                'cash_balance' => '0.00',
+                'credit_limit' => '0.00',
+                'referral_frozen_balance' => '0.00',
+                'referral_available_balance' => '0.00',
+                'referral_pending_withdrawal_balance' => '0.00',
+                'referral_withdrawn_balance' => '0.00',
             ]);
             $this->assertIsString($backupPath);
             $this->assertFileExists($backupPath);
         } finally {
             if (is_string($backupPath) && File::exists($backupPath)) {
                 File::delete($backupPath);
-            }
-        }
-    }
-
-    public function test_account_backfill_user_accounts_execute_can_sync_legacy_user_projection(): void
-    {
-        $backupPath = null;
-        $legacyBackupPath = null;
-
-        try {
-            $userId = $this->insertUserWithoutAccount('account-sync-'.uniqid('', true).'@example.test');
-            DB::table('user_accounts')->insert([
-                'user_id' => $userId,
-                'cash_balance' => '500.00',
-                'credit_limit' => '88.88',
-                'referral_frozen_balance' => '9.00',
-                'referral_available_balance' => '8.00',
-                'referral_pending_withdrawal_balance' => '7.00',
-                'referral_withdrawn_balance' => '6.00',
-                'version' => 0,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-
-            Artisan::call('account:backfill-user-accounts', [
-                '--execute' => true,
-                '--sync-legacy-users' => true,
-                '--json' => true,
-            ]);
-
-            $payload = json_decode(Artisan::output(), true, 512, JSON_THROW_ON_ERROR);
-            $backupPath = $payload['backup_path'] ?? null;
-            $legacyBackupPath = $payload['legacy_sync_backup_path'] ?? null;
-
-            $this->assertSame(1, (int) $payload['legacy_users_synced']);
-            $this->assertDatabaseHas('users', [
-                'id' => $userId,
-                'balance' => '500.00',
-                'credit_limit' => '88.88',
-                'referral_frozen_amount' => '9.00',
-                'referral_available_amount' => '8.00',
-                'referral_withdrawing_amount' => '7.00',
-                'referral_withdrawn_amount' => '6.00',
-            ]);
-            $this->assertIsString($legacyBackupPath);
-            $this->assertFileExists($legacyBackupPath);
-        } finally {
-            foreach ([$backupPath, $legacyBackupPath] as $path) {
-                if (is_string($path) && File::exists($path)) {
-                    File::delete($path);
-                }
             }
         }
     }
@@ -168,12 +117,6 @@ class AccountProjectionCommandTest extends BaseTestCase
             $table->string('nickname')->default('');
             $table->string('phone')->nullable()->unique();
             $table->tinyInteger('status')->default(1);
-            $table->decimal('balance', 12, 2)->default(0);
-            $table->decimal('credit_limit', 12, 2)->default(0);
-            $table->decimal('referral_frozen_amount', 12, 2)->default(0);
-            $table->decimal('referral_available_amount', 12, 2)->default(0);
-            $table->decimal('referral_withdrawing_amount', 12, 2)->default(0);
-            $table->decimal('referral_withdrawn_amount', 12, 2)->default(0);
             $table->timestamps();
         });
 
@@ -198,12 +141,6 @@ class AccountProjectionCommandTest extends BaseTestCase
             'nickname' => '',
             'phone' => null,
             'status' => 1,
-            'balance' => '123.45',
-            'credit_limit' => '67.89',
-            'referral_frozen_amount' => '1.11',
-            'referral_available_amount' => '2.22',
-            'referral_withdrawing_amount' => '3.33',
-            'referral_withdrawn_amount' => '4.44',
             'created_at' => now(),
             'updated_at' => now(),
         ]);

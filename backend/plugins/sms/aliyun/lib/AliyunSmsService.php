@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Caiwu\Plugins\Sms\Aliyun\Lib;
 
+use Illuminate\Cache\RateLimiter;
+use Illuminate\Http\Request;
+
 class AliyunSmsService
 {
     public function key(): string
@@ -34,6 +37,14 @@ class AliyunSmsService
             return $this->handleFetchSignsAction($action, $config);
         }
 
+        if ($action === 'sms.verify_code_template') {
+            return [
+                'success' => true,
+                'action' => $action,
+                'data' => ['template' => $this->verifyCodeTemplate((string) ($payload['purpose'] ?? 'generic'))],
+            ];
+        }
+
         if ($action !== 'sms.send_verify_code') {
             return [
                 'success' => false,
@@ -44,6 +55,21 @@ class AliyunSmsService
         }
 
         return $this->handleSendVerifyCodeAction($action, $payload, $config);
+    }
+
+    /**
+     * 验证码文案模板（${code}/${min} 占位符），随阿里云短信插件维护，不在系统层硬编码。
+     */
+    private function verifyCodeTemplate(string $purpose): string
+    {
+        return match ($purpose) {
+            'change_phone', 'phone_change', 'update_phone' => '尊敬的客户，您正在进行修改手机号操作，您的验证码为${code}。以上验证码${min}分钟内有效，请注意保密，切勿告知他人。',
+            'reset', 'reset_password', 'password_reset' => '尊敬的客户，您正在进行重置密码操作，您的验证码为${code}。以上验证码${min}分钟内有效，请注意保密，切勿告知他人。',
+            'bind_phone', 'new_phone' => '尊敬的客户，您正在进行绑定手机号操作，您的验证码为${code}。以上验证码${min}分钟内有效，请注意保密，切勿告知他人。',
+            'verify_bound_phone', 'verify_phone' => '尊敬的客户，您正在验证绑定手机号操作，您的验证码为${code}。以上验证码${min}分钟内有效，请注意保密，切勿告知他人。',
+            default // login, register, generic
+            => '您的验证码为${code}。尊敬的客户，以上验证码${min}分钟内有效，请注意保密，切勿告知他人。',
+        };
     }
 
     /**
@@ -185,13 +211,13 @@ class AliyunSmsService
             return null;
         }
 
-        /** @var \Illuminate\Http\Request|null $request */
+        /** @var Request|null $request */
         $request = app('request');
-        $ip = $request instanceof \Illuminate\Http\Request ? $request->ip() : '127.0.0.1';
+        $ip = $request instanceof Request ? $request->ip() : '127.0.0.1';
 
-        /** @var \Illuminate\Cache\RateLimiter $limiter */
-        $limiter = app(\Illuminate\Cache\RateLimiter::class);
-        $key = 'sms-aliyun:' . $ip;
+        /** @var RateLimiter $limiter */
+        $limiter = app(RateLimiter::class);
+        $key = 'sms-aliyun:'.$ip;
 
         if ($limiter->tooManyAttempts($key, $limit)) {
             return '验证码发送过于频繁，请稍后再试';
