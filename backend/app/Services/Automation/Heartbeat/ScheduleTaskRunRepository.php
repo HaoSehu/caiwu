@@ -74,6 +74,19 @@ class ScheduleTaskRunRepository
     }
 
     /**
+     * 返回该槽位+任务已存在的运行记录（用于区分同槽位终态处理与真正的重复投递）。
+     */
+    public function existingRunForTick(ScheduleTick $tick, string $taskKey): ?ScheduleTaskRun
+    {
+        return ScheduleTaskRun::query()
+            ->where('schedule_tick_id', (int) $tick->id)
+            ->where('task_key', trim($taskKey))
+            ->where('source', 'heartbeat')
+            ->latest('id')
+            ->first();
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function appendDispatchFailure(mixed $summaryValue, string $message, string $at): array

@@ -235,13 +235,16 @@ class ScheduleTaskService
         $businessQueues = (string) config('queue.caiwu_business_queues', 'provision,referral,notification,coupon,default');
         $automationQueue = (string) config('queue.caiwu_schedule_queue', 'automation');
         $queueWorkerTries = (int) config('queue.caiwu_worker_tries', 3);
-        $queueWorkerTimeout = (int) config('queue.caiwu_worker_timeout', 1200);
+        $queueWorkerTimeout = max(
+            (int) config('queue.caiwu_worker_timeout', 1200),
+            (int) config('queue.caiwu_worker_max_timeout', 3600),
+        );
 
         return [
             [
                 'key' => 'schedule_run',
                 'title' => '调度入口',
-                'description' => '宝塔生产环境请仅保留这一条，每 1 分钟运行一次；业务队列与 automation 定时队列会并行消费。',
+                'description' => '宝塔生产环境请仅保留这一条，每 1 分钟运行一次；心跳派发定时任务，queue:drain 后台消费业务与 automation 队列。',
                 'command' => "{$quotedPhp} {$quotedArtisan} schedule:run",
             ],
             [
@@ -249,6 +252,12 @@ class ScheduleTaskService
                 'title' => '心跳命令',
                 'description' => '由 schedule:run 自动触发；排查时可手动执行一次心跳。',
                 'command' => "{$quotedPhp} {$quotedArtisan} scheduler:heartbeat",
+            ],
+            [
+                'key' => 'queue_drain',
+                'title' => '队列消费命令',
+                'description' => '由 schedule:run 每分钟后台触发；排查时可手动执行一次消费业务与 automation 队列。',
+                'command' => "{$quotedPhp} {$quotedArtisan} queue:drain",
             ],
             [
                 'key' => 'schedule_work',
@@ -344,7 +353,7 @@ class ScheduleTaskService
         $driver = (string) config('queue.default', 'sync');
 
         return match ($driver) {
-            'database' => $jobsTableReady ? 'database_queue_parallel_drained' : 'after_response_fallback',
+            'database' => $jobsTableReady ? 'database_queue_drain_command' : 'after_response_fallback',
             'redis' => 'redis_queue',
             'sync' => 'sync_inline',
             default => $driver,

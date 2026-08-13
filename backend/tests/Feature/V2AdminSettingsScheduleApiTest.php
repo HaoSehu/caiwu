@@ -82,7 +82,7 @@ class V2AdminSettingsScheduleApiTest extends TestCase
                         'failed_jobs_table_ready' => true,
                         'pending_jobs' => 2,
                         'failed_jobs' => 1,
-                        'queue_runtime_mode' => 'database_queue_parallel_drained',
+                        'queue_runtime_mode' => 'database_queue_drain_command',
                         'schedule_mutex' => ['enabled' => true, 'cache_store' => 'array'],
                         'automation_config' => ['status' => 'loaded'],
                     ],

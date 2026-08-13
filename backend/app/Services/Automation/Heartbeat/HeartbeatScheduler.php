@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Automation\Heartbeat;
 
 use App\Jobs\RunHeartbeatTaskJob;
+use App\Models\ScheduleTaskRun;
 use App\Models\ScheduleTick;
 use App\Services\Automation\Heartbeat\Contracts\ScheduledTask;
 use App\Services\Automation\Heartbeat\Data\TickContext;
@@ -23,25 +24,22 @@ class HeartbeatScheduler
         private ScheduleTaskRunRepository $taskRuns,
         private HeartbeatTaskRegistry $registry,
         private TriggerRuleMatcher $matcher,
-        private QueueDrainService $queueDrain,
     ) {}
 
     public function tick(CarbonImmutable $now): TickSummary
     {
         $slot = TickSlot::floorToFifteenMinutes($now);
-        $tickModel = $this->ticks->firstOrCreateSlot($now);
-        $tick = $this->ticks->toContext($tickModel);
-        // 锁 TTL 与槽位周期一致，避免极端卡顿下同槽位重入窗口。
+        // 先获取槽位锁再创建/读取 tick：避免多实例并发心跳对唯一索引的写入冲突；
+        // 锁失败时不触碰 tick 表，直接返回无 id 的空上下文。
         $lock = Cache::lock('scheduler:heartbeat:'.$slot->format('YmdHi'), 900);
 
         if (! $lock->get()) {
-            Log::warning('[调度] 心跳槽位锁被占用，本槽位跳过派发，仅排空队列', [
+            Log::warning('[调度] 心跳槽位锁被占用，本槽位跳过派发', [
                 'slot' => $slot->format('YmdHi'),
-                'tick_id' => $tick->id,
                 'lock' => 'scheduler:heartbeat:'.$slot->format('YmdHi'),
             ]);
 
-            return new TickSummary($tick, [], [], [], $this->safeDrain());
+            return new TickSummary(TickSlot::context(null, $slot), [], [], [], []);
         }
 
         $queued = [];
@@ -51,6 +49,9 @@ class HeartbeatScheduler
         $dispatchFailed = 0;
 
         try {
+            $tickModel = $this->ticks->firstOrCreateSlot($now);
+            $tick = $this->ticks->toContext($tickModel);
+
             foreach ($this->registry->enabledTasks() as $task) {
                 $this->dispatchTaskForTick($task, $tickModel, $tick, $queued, $skipped, $duplicates, $reclaimed, $dispatchFailed);
             }
@@ -60,7 +61,7 @@ class HeartbeatScheduler
 
         $this->reportHealth($slot, $queued, $skipped, $duplicates, $reclaimed, $dispatchFailed);
 
-        return new TickSummary($tick, $queued, $skipped, $duplicates, $this->safeDrain());
+        return new TickSummary($tick, $queued, $skipped, $duplicates, []);
     }
 
     /**
@@ -116,6 +117,15 @@ class HeartbeatScheduler
 
             $run = $this->taskRuns->markQueued($tickModel, $task, $matched);
             if ($run === null) {
+                // 同槽位已终态处理（成功/失败）不算重复，计入跳过；仅仍活跃或派发失败才视为重复，
+                // 避免任务失败后的同槽剩余心跳刷出无意义的 duplicates 告警。
+                $existingStatus = $this->taskRuns->existingRunForTick($tickModel, $task->key())?->status;
+                if (in_array($existingStatus, [ScheduleTaskRun::STATUS_SUCCESS, ScheduleTaskRun::STATUS_FAILED], true)) {
+                    $skipped[] = $task->key();
+
+                    return;
+                }
+
                 $duplicates[] = $task->key();
 
                 return;
@@ -187,7 +197,7 @@ class HeartbeatScheduler
     }
 
     /**
-     * 滞留运行、派发失败或队列积压出现时输出结构化告警；正常槽位保持静默。
+     * 滞留运行、派发失败或队列积压超过阈值时输出结构化告警；正常槽位保持静默。
      *
      * @param  list<string>  $queued
      * @param  list<string>  $skipped
@@ -202,8 +212,9 @@ class HeartbeatScheduler
         int $dispatchFailed,
     ): void {
         $pendingJobs = $this->pendingJobsCount();
+        $pendingThreshold = max(1, (int) config('health.queue_max_pending_jobs', 10000));
 
-        if ($reclaimed === 0 && $dispatchFailed === 0 && $pendingJobs <= 0) {
+        if ($reclaimed === 0 && $dispatchFailed === 0 && $pendingJobs <= $pendingThreshold) {
             return;
         }
 
@@ -215,6 +226,7 @@ class HeartbeatScheduler
             'reclaimed' => $reclaimed,
             'dispatch_failed' => $dispatchFailed,
             'jobs_table_pending' => $pendingJobs,
+            'pending_threshold' => $pendingThreshold,
         ]);
     }
 
@@ -230,33 +242,31 @@ class HeartbeatScheduler
                 return 0;
             }
 
-            // 只统计自动化调度队列，业务队列的正常积压不触发调度健康告警。
+            $queues = [];
+            foreach ([
+                (string) config('queue.caiwu_business_queues', ''),
+                (string) config('queue.caiwu_schedule_queue', ''),
+            ] as $configured) {
+                foreach (explode(',', $configured) as $queue) {
+                    $queue = trim($queue);
+                    if ($queue !== '' && ! in_array($queue, $queues, true)) {
+                        $queues[] = $queue;
+                    }
+                }
+            }
+
+            if ($queues === []) {
+                return 0;
+            }
+
+            // 统计全部可消费队列的待执行任务，业务队列积压超过阈值时同样告警。
             return DB::connection($connection)->table($table)
-                ->where('queue', (string) config('queue.caiwu_schedule_queue', 'automation'))
+                ->whereIn('queue', $queues)
                 ->whereNull('reserved_at')
                 ->where('available_at', '<=', now()->getTimestamp())
                 ->count();
         } catch (\Throwable) {
             return 0;
-        }
-    }
-
-    /** @return array<string, mixed> */
-    private function safeDrain(): array
-    {
-        try {
-            return $this->queueDrain->drainOnceIfDatabaseQueue();
-        } catch (\Throwable $exception) {
-            Log::error('[调度] 队列消费失败，心跳结果仍保留', [
-                'message' => $exception->getMessage(),
-                'exception' => $exception::class,
-            ]);
-
-            return [
-                'status' => 'failed',
-                'reason' => 'queue_drain_failed',
-                'message' => $exception->getMessage(),
-            ];
         }
     }
 }

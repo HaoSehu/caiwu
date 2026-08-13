@@ -42,19 +42,16 @@ final readonly class EveryTicks implements TriggerRule
         return $this->interval;
     }
 
-    public function nextDueAfter(CarbonInterface $time): ?CarbonImmutable
+    public function nextDueAfter(CarbonInterface $time): CarbonImmutable
     {
-        $slot = TickSlot::floorToFifteenMinutes($time)->addMinutes(15);
+        $slot = TickSlot::floorToFifteenMinutes($time);
+        $globalNumber = TickSlot::context(null, $slot)->globalNumber;
 
-        for ($i = 0; $i < 10000; $i++) {
-            $tick = TickSlot::context(null, $slot);
-            if ($this->isDue($tick)) {
-                return $slot;
-            }
+        // 下一个严格晚于当前槽、且满足 (gn - offset) % interval === 0 的命中槽序号。
+        // interval >= 1 保证结果始终严格在未来，O(1) 数学计算，无需逐槽枚举。
+        $remainder = ($globalNumber + 1 - $this->offset) % $this->interval;
+        $steps = (($this->interval - $remainder) % $this->interval) + 1;
 
-            $slot = $slot->addMinutes(15);
-        }
-
-        return null;
+        return $slot->addMinutes(15 * $steps);
     }
 }

@@ -112,8 +112,8 @@ class ServeBackendStackCommand extends Command
         $this->info(sprintf('VNC WebSocket 入口：ws://%s:%d%s', $publicHost, $publicPort, $relayPath));
         $this->line($this->scheduleProcess instanceof Process
             ? ($this->relayProcess instanceof Process
-                ? '已同时托管 Laravel HTTP、VNC Relay、调度 Worker；队列由每分钟心跳并行消费。'
-                : '已托管 Laravel HTTP、调度 Worker；VNC Relay 由独立进程托管，队列由每分钟心跳并行消费。')
+                ? '已同时托管 Laravel HTTP、VNC Relay、调度 Worker；队列由 queue:drain 后台消费。'
+                : '已托管 Laravel HTTP、调度 Worker；VNC Relay 由独立进程托管，队列由 queue:drain 后台消费。')
             : ($this->relayProcess instanceof Process
                 ? '已托管 Laravel HTTP、VNC Relay、队列 Worker；计划任务需独立运行。'
                 : '已托管 Laravel HTTP、队列 Worker；VNC Relay 由独立进程托管，计划任务需独立运行。'));
@@ -193,7 +193,10 @@ class ServeBackendStackCommand extends Command
                 '--queue='.(string) config('queue.caiwu_business_queues', 'provision,referral,notification,coupon,default'),
                 '--sleep=1',
                 '--tries='.(string) config('queue.caiwu_worker_tries', 3),
-                '--timeout='.(string) config('queue.caiwu_worker_timeout', 1200),
+                '--timeout='.max(
+                    (int) config('queue.caiwu_worker_timeout', 1200),
+                    (int) config('queue.caiwu_worker_max_timeout', 3600),
+                ),
             ], base_path());
         }
 
