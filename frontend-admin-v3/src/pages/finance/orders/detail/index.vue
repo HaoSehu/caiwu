@@ -194,6 +194,16 @@
             </div>
           </div>
         </section>
+
+        <section v-if="serviceSnapshotItems.length" class="order-detail-section">
+          <h4>实例快照</h4>
+          <div class="config-list">
+            <div v-for="item in serviceSnapshotItems" :key="item.label" class="config-item">
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+            </div>
+          </div>
+        </section>
       </template>
 
       <template #tab-payments>
@@ -294,6 +304,7 @@ const SNAPSHOT_LABEL_MAP: Record<string, string> = {
   memory: '内存',
   hostname: '主机名',
   quantity: '数量',
+  instance_id: '实例ID',
   // ── 金额 ──
   setup_fee: '初装费',
   base_amount: '基础金额',
@@ -418,6 +429,16 @@ const configItems = computed(() => {
 
 const pricingItems = computed(() => {
   const snapshot = order.value.config_pricing_snapshot;
+  if (!snapshot || typeof snapshot !== 'object') return [];
+  return flattenSnapshot(snapshot as Record<string, unknown>);
+});
+
+// 实例快照仅在「新购」订单写入，作为开通时实例的存档展示。
+const isNewOrder = computed(() => order.value.type === 'new');
+
+const serviceSnapshotItems = computed(() => {
+  if (!isNewOrder.value) return [];
+  const snapshot = order.value.service_snapshot;
   if (!snapshot || typeof snapshot !== 'object') return [];
   return flattenSnapshot(snapshot as Record<string, unknown>);
 });
