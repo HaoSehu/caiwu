@@ -148,6 +148,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
 
     Route::middleware(['permission:'.AdminPermissions::TICKET_MANAGE])->group(function (): void {
         Route::post('/tickets/{ticket}/closures', [TicketController::class, 'close']);
+        Route::post('/tickets/{ticket}/reopen', [TicketController::class, 'reopen'])->middleware('throttle:10,1,admin-ticket-reopen');
         Route::put('/tickets/{ticket}/assignment', [TicketController::class, 'assign']);
     });
 
@@ -297,7 +298,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
     });
 
     Route::middleware(['permission:'.AdminPermissions::INTEGRATION_PLUGIN_SECRET_REVEAL])->group(function (): void {
-        Route::get('/integration-plugins/{plugin}/secrets/{key}', [IntegrationPluginController::class, 'revealSecret']);
+        Route::get('/integration-plugins/{plugin}/secrets/{key}', [IntegrationPluginController::class, 'revealSecret'])->middleware('throttle:10,1');
     });
 
     Route::middleware(['permission:'.AdminPermissions::SUPPLIER_LIST])->group(function (): void {
@@ -325,7 +326,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
     });
 
     Route::middleware(['permission:'.AdminPermissions::SUPPLIER_SECRET_REVEAL])->group(function (): void {
-        Route::get('/suppliers/{supplier}/secrets/{key}', [SupplierController::class, 'revealSecret']);
+        Route::get('/suppliers/{supplier}/secrets/{key}', [SupplierController::class, 'revealSecret'])->middleware('throttle:10,1');
     });
 
     Route::middleware(['permission:'.AdminPermissions::SETTINGS_VIEW])->group(function (): void {
@@ -339,7 +340,7 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
     });
 
     Route::middleware(['permission:'.AdminPermissions::SETTINGS_SECRET_REVEAL])->group(function (): void {
-        Route::get('/settings/{group}/secrets/{key}', [SettingController::class, 'revealSecret']);
+        Route::get('/settings/{group}/secrets/{key}', [SettingController::class, 'revealSecret'])->middleware('throttle:10,1');
     });
 
     Route::middleware(['permission:'.AdminPermissions::DATABASE_VIEW])->group(function (): void {
@@ -393,5 +394,6 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
     Route::middleware(['permission:'.AdminPermissions::FINANCE_WITHDRAW])->group(function (): void {
         Route::post('/referral-withdrawals/{withdrawal}/approvals', [ReferralWithdrawalController::class, 'approve']);
         Route::post('/referral-withdrawals/{withdrawal}/rejections', [ReferralWithdrawalController::class, 'reject']);
+        Route::post('/referral-withdrawals/{withdrawal}/payment-confirmations', [ReferralWithdrawalController::class, 'confirmPayment']);
     });
 });

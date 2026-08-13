@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Constants\ServiceStatus;
+use App\Constants\UserNotificationType;
 use App\Exceptions\BusinessException;
 use App\Jobs\SendTicketNotificationEmailJob;
 use App\Models\AdminUser;
@@ -141,6 +142,102 @@ class TicketServiceRegressionTest extends TestCase
 
         $this->assertSame(TicketService::STATUS_CLOSED, (int) $ticket->refresh()->status);
         $this->assertSame(1, TicketReply::query()->where('ticket_id', (int) $ticket->id)->count());
+    }
+
+    public function test_close_soft_deletes_attachments_and_reopen_restores_them(): void
+    {
+        $service = $this->makeTicketService();
+        $user = $this->createClientUser('ticket-softdel');
+        $ticket = $service->create((int) $user->id, [
+            'department' => 'support',
+            'subject' => 'Soft Delete Ticket',
+            'content' => 'Initial message',
+            'priority' => 2,
+        ]);
+        $reply = TicketReply::query()->create([
+            'ticket_id' => (int) $ticket->id,
+            'user_id' => (int) $user->id,
+            'content' => 'with attachment',
+            'is_staff' => 0,
+            'attachments' => [[
+                'path' => 'private/tickets/temp/soft-del.png',
+                'name' => 'soft-del.png',
+                'size' => 1,
+                'mime_type' => 'image/png',
+                'type' => 'image',
+                'deleted' => false,
+            ]],
+        ]);
+
+        // 关闭：附件软删标记，不物理删除文件。
+        $service->staffClose($ticket->fresh());
+        $reply->refresh();
+        $this->assertTrue((bool) data_get($reply->attachments[0] ?? [], 'deleted'));
+
+        // 重开：CLOSED → OPEN，close_reason 清空，附件软删标记恢复。
+        $reopened = $service->reopen($ticket->fresh(), ['operator_type' => 'admin']);
+        $this->assertSame(TicketService::STATUS_OPEN, (int) $reopened->status);
+        $this->assertNull($reopened->close_reason);
+        $reply->refresh();
+        $this->assertFalse((bool) data_get($reply->attachments[0] ?? [], 'deleted'));
+    }
+
+    public function test_reopen_rejects_non_closed_ticket(): void
+    {
+        $service = $this->makeTicketService();
+        $user = $this->createClientUser('ticket-reopen-reject');
+        $ticket = $service->create((int) $user->id, [
+            'department' => 'support',
+            'subject' => 'Reopen Reject Ticket',
+            'content' => 'Initial message',
+            'priority' => 2,
+        ]);
+
+        try {
+            $service->reopen($ticket->fresh());
+            $this->fail('仅已关闭工单可重开');
+        } catch (BusinessException $exception) {
+            $this->assertSame('仅已关闭工单可重开', $exception->getMessage());
+        }
+    }
+
+    public function test_auto_close_sends_client_notification(): void
+    {
+        $calls = [];
+        $userNotification = $this->createMock(UserNotificationService::class);
+        $userNotification->method('create')
+            ->willReturnCallback(function (...$args) use (&$calls) {
+                $calls[] = $args;
+
+                return null;
+            });
+
+        $service = new TicketService(
+            $this->createMock(UploadedAssetReferenceService::class),
+            $this->createMock(NotificationService::class),
+            $this->createMock(ServiceTransformService::class),
+            $userNotification,
+        );
+        $user = $this->createClientUser('ticket-autoclose');
+        $ticket = $service->create((int) $user->id, [
+            'department' => 'support',
+            'subject' => 'Auto Close Ticket',
+            'content' => 'Initial message',
+            'priority' => 2,
+        ]);
+        $staff = $this->createStaffUser();
+        $service->staffReply($ticket->fresh(), (int) $staff->id, 'Staff reply', []);
+
+        $service->autoClose($ticket->fresh());
+
+        $this->assertSame(TicketService::STATUS_CLOSED, (int) $ticket->refresh()->status);
+        $this->assertSame(TicketService::CLOSE_REASON_AUTO, $ticket->refresh()->close_reason);
+
+        // 自动关闭接线：站内信类型为工单自动关闭。
+        $autoClosedCalls = collect($calls)
+            ->filter(fn (array $args): bool => ($args[1] ?? null) === UserNotificationType::TICKET_AUTO_CLOSED)
+            ->values();
+        $this->assertCount(1, $autoClosedCalls);
     }
 
     public function test_admin_list_ongoing_status_only_returns_unclosed_tickets(): void

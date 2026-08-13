@@ -207,6 +207,7 @@ class V2AdminVerificationApiTest extends TestCase
             'real_name',
             'id_card_masked',
             'verification_status',
+            'verification_status_label',
             'verification_message',
             'created_at',
         ];
@@ -225,6 +226,7 @@ class V2AdminVerificationApiTest extends TestCase
             'real_name',
             'id_card_masked',
             'verification_status',
+            'verification_status_label',
             'verification_message',
             'verification_biz_code',
             'verification_method_label',
@@ -247,6 +249,7 @@ class V2AdminVerificationApiTest extends TestCase
             'real_name',
             'id_card_masked',
             'verification_status',
+            'verification_status_label',
             'verification_message',
             'verification_method_label',
             'verification_type_label',

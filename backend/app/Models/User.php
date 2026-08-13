@@ -232,6 +232,20 @@ class User extends Authenticatable
         return (int) $this->is_verified === 1 || (int) $this->verification_status === 2;
     }
 
+    public const VERIFICATION_STATUS_LABELS = [
+        0 => '未认证',
+        1 => '待认证',
+        2 => '已认证',
+        3 => '认证失败',
+        4 => '待认证',
+        5 => '已解绑',
+    ];
+
+    public static function verificationStatusLabel(int $status): string
+    {
+        return self::VERIFICATION_STATUS_LABELS[$status] ?? (string) $status;
+    }
+
     // -------- 关联 --------
 
     public function orders(): HasMany

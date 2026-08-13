@@ -8,6 +8,7 @@ use App\Http\Requests\Client\V2\Referral\AccountLogsRequest;
 use App\Http\Requests\Client\V2\Referral\ApplyWithdrawalRequest;
 use App\Http\Requests\Client\V2\Referral\RewardsRequest;
 use App\Http\Requests\Client\V2\Referral\WithdrawalsRequest;
+use App\Models\ReferralWithdrawal;
 use App\Services\Referral\ReferralService;
 use App\Support\PublicUrl;
 use Illuminate\Http\Request;
@@ -121,6 +122,7 @@ class ReferralController extends Controller
 
         $perPage = max(1, min((int) $request->input('page_size', 15), 50));
         $paginator = $this->referralService->withdrawalLogs($request->user(), $perPage);
+
         return $this->success([
             'list' => collect($paginator->items())->map(fn ($item) => [
                 'id' => $item->id,
@@ -129,6 +131,7 @@ class ReferralController extends Controller
                 'account_name' => $item->account_name_display,
                 'account_no' => $item->account_no,
                 'status' => (int) $item->status,
+                'status_label' => ReferralWithdrawal::statusLabel((int) $item->status),
                 'remark' => $item->remark,
                 'created_at' => $item->created_at?->format('Y-m-d H:i:s'),
                 'processed_at' => $item->processed_at?->format('Y-m-d H:i:s'),
@@ -153,6 +156,7 @@ class ReferralController extends Controller
             'id' => $withdrawal->id,
             'amount' => number_format((float) $withdrawal->amount, 2, '.', ''),
             'status' => (int) $withdrawal->status,
+            'status_label' => ReferralWithdrawal::statusLabel((int) $withdrawal->status),
             'created_at' => $withdrawal->created_at?->format('Y-m-d H:i:s'),
         ], '提现申请已提交');
     }

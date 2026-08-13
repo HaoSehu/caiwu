@@ -239,6 +239,66 @@ class TicketService
         }
 
         $this->closeTicketAndReplaceAttachments($ticket, self::CLOSE_REASON_AUTO);
+
+        // 自动关闭后通知客户（模板 100025 接线），附件已软删保留可重开追溯。
+        $this->notifyClientOfAutoClose($ticket);
+    }
+
+    /**
+     * 重开已关闭工单：CLOSED → OPEN，并清空关闭原因。
+     * 附件在关闭时已软删保留，重开后历史附件仍可查看。
+     */
+    public function reopen(Ticket $ticket, array $context = []): Ticket
+    {
+        DB::transaction(function () use ($ticket) {
+            $lockedTicket = Ticket::query()->lockForUpdate()->findOrFail($ticket->id);
+
+            throw_if(
+                (int) $lockedTicket->status !== self::STATUS_CLOSED,
+                new BusinessException('仅已关闭工单可重开')
+            );
+
+            $lockedTicket->forceFill([
+                'status' => self::STATUS_OPEN,
+                'close_reason' => null,
+            ])->save();
+
+            // 重开后恢复历史附件可见（清除软删标记）。
+            TicketReply::query()
+                ->where('ticket_id', $lockedTicket->id)
+                ->whereNotNull('attachments')
+                ->get(['id', 'attachments'])
+                ->each(function (TicketReply $reply): void {
+                    $attachments = collect($reply->attachments ?? [])
+                        ->map(function ($attachment) {
+                            if (is_array($attachment)) {
+                                $attachment['deleted'] = false;
+                            }
+
+                            return $attachment;
+                        })
+                        ->all();
+
+                    $reply->update(['attachments' => $attachments]);
+                });
+        });
+
+        $updatedTicket = $ticket->fresh() ?? $ticket;
+
+        $this->userNotificationService->create(
+            (int) ($updatedTicket->user_id ?? 0),
+            UserNotificationType::TICKET_AUTO_CLOSED,
+            '工单已重新开启',
+            "工单「{$updatedTicket->subject}」已重新开启，请继续跟进。",
+            '/client/tickets/'.$updatedTicket->id,
+            [
+                'ticket_id' => (int) $updatedTicket->id,
+                'reopened_by' => (string) ($context['operator_type'] ?? 'admin'),
+                'trace_id' => (string) ($context['trace_id'] ?? ''),
+            ]
+        );
+
+        return $updatedTicket;
     }
 
     /**
@@ -724,6 +784,52 @@ class TicketService
         );
     }
 
+    /**
+     * 工单自动关闭通知：邮件模板 100025 + 站内信，告知客户工单因长期未跟进已自动关闭。
+     */
+    private function notifyClientOfAutoClose(Ticket $ticket): void
+    {
+        $ticket->loadMissing('user:id,email,nickname');
+
+        $userId = (int) ($ticket->user_id ?? 0);
+        $email = trim((string) ($ticket->user?->email ?? ''));
+
+        if ($userId <= 0 && $email === '') {
+            return;
+        }
+
+        $status = self::STATUS_LABELS[self::STATUS_CLOSED] ?? '已关闭';
+        $clientName = $ticket->user?->display_name ?: '客户';
+        $ticketsUrl = $this->clientTicketsUrl();
+
+        if ($email !== '') {
+            $this->sendTicketEmail($email, NotificationService::TEMPLATE_TICKET_AUTO_CLOSED, [
+                'site_name' => $this->siteName(),
+                'display_name' => $clientName,
+                'ticket_id' => (int) $ticket->id,
+                'ticket_subject' => (string) $ticket->subject,
+                'status' => $status,
+                'tickets_url' => $ticketsUrl,
+                'login_tip' => $ticketsUrl === '' ? '请登录会员中心的工单页面查看详情。' : '',
+            ], [
+                'scene' => 'ticket_auto_closed',
+                'ticket_id' => (int) $ticket->id,
+                'recipient_user_id' => $userId,
+            ]);
+        }
+
+        if ($userId > 0) {
+            $this->userNotificationService->create(
+                $userId,
+                UserNotificationType::TICKET_AUTO_CLOSED,
+                '工单已自动关闭',
+                "工单「{$ticket->subject}」因长期未跟进已自动关闭，如需继续处理请重新开启或提交新工单。",
+                '/client/tickets/'.$ticket->id,
+                ['ticket_id' => (int) $ticket->id]
+            );
+        }
+    }
+
     private function resolveTicketAdminRecipients(Ticket $ticket)
     {
         $admins = AdminUser::query()
@@ -879,9 +985,7 @@ class TicketService
 
     private function closeTicketAndReplaceAttachments(Ticket $ticket, string $reason = 'admin'): void
     {
-        $pathsToDelete = [];
-
-        DB::transaction(function () use ($ticket, $reason, &$pathsToDelete) {
+        DB::transaction(function () use ($ticket, $reason) {
             // 行锁内重读：关闭与回复并发时先到先得，已被关闭则直接结束，避免重复清理。
             $lockedTicket = Ticket::query()->lockForUpdate()->findOrFail($ticket->id);
             if ((int) $lockedTicket->status === self::STATUS_CLOSED) {
@@ -890,20 +994,20 @@ class TicketService
 
             $lockedTicket->update(['status' => self::STATUS_CLOSED, 'close_reason' => $reason]);
 
+            // 附件软删保留：仅标记 deleted，不物理删除文件，重开工单后可恢复查看。
             $replies = TicketReply::where('ticket_id', $lockedTicket->id)
                 ->whereNotNull('attachments')
                 ->get(['id', 'attachments']);
 
             foreach ($replies as $reply) {
                 $attachments = collect($reply->attachments ?? [])
-                    ->map(function ($attachment) use (&$pathsToDelete) {
+                    ->map(function ($attachment) {
                         if (! is_array($attachment)) {
                             return $attachment;
                         }
 
                         $path = trim((string) ($attachment['path'] ?? ''));
                         if ($path !== '' && empty($attachment['deleted'])) {
-                            $pathsToDelete[$path] = $path;
                             $attachment['deleted'] = true;
                         }
 
@@ -912,10 +1016,6 @@ class TicketService
                     ->all();
 
                 $reply->update(['attachments' => $attachments]);
-            }
-
-            if ($pathsToDelete !== []) {
-                DB::afterCommit(fn () => $this->deleteTicketAttachmentFiles(array_values($pathsToDelete), (int) $lockedTicket->id));
             }
         });
     }
@@ -1020,25 +1120,6 @@ class TicketService
     private function buildSecureAssetUrl(string $path): string
     {
         return SecureAsset::temporaryUrl($path, 10);
-    }
-
-    private function deleteTicketAttachmentFiles(array $paths, int $ticketId): void
-    {
-        foreach (array_values(array_unique($paths)) as $path) {
-            try {
-                $absolutePath = SecureAsset::absolutePath($this->normalizeAttachmentPath((string) $path));
-
-                if (File::exists($absolutePath)) {
-                    File::delete($absolutePath);
-                }
-            } catch (\Throwable $exception) {
-                Log::warning('工单附件物理删除失败', [
-                    'ticket_id' => $ticketId,
-                    'path' => $path,
-                    'message' => $exception->getMessage(),
-                ]);
-            }
-        }
     }
 
     private function resolveServiceDisplayName(Service $service): string
