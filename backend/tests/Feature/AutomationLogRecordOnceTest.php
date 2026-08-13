@@ -25,14 +25,14 @@ class AutomationLogRecordOnceTest extends TestCase
         $this->assertFalse(AutomationLog::recordOnce($task, 'action', 'service', 1001, 'rule'));
     }
 
-    public function test_record_once_reclaims_crash_residual_without_mark_executed(): void
+    public function test_record_once_blocks_duplicate_claim_within_window_without_mark_executed(): void
     {
         $task = $this->uniqueTask('task-crash');
 
         $this->assertTrue(AutomationLog::recordOnce($task, 'action', 'service', 2001, 'rule'));
 
-        // 模拟崩溃残留：executed_at 仍为 null → 允许重试
-        $this->assertTrue(AutomationLog::recordOnce($task, 'action', 'service', 2001, 'rule'));
+        // 未 markExecuted 时，新建窗口（TTL 内）的并发调用被拦截，避免双进程重复执行
+        $this->assertFalse(AutomationLog::recordOnce($task, 'action', 'service', 2001, 'rule'));
 
         $log = AutomationLog::query()
             ->where('task_key', $task)
@@ -50,9 +50,8 @@ class AutomationLogRecordOnceTest extends TestCase
 
         $this->assertTrue(AutomationLog::recordOnce($task, 'action', 'service', 3001, 'rule'));
 
-        // 第一次认领 → 允许
-        $this->assertTrue(AutomationLog::recordOnce($task, 'action', 'service', 3001, 'rule'));
-        // 认领窗口内并发重复调用 → 被拦截
+        // 创建即认领：窗口内后续并发调用全部被拦截，仅首个调用方获得执行权
+        $this->assertFalse(AutomationLog::recordOnce($task, 'action', 'service', 3001, 'rule'));
         $this->assertFalse(AutomationLog::recordOnce($task, 'action', 'service', 3001, 'rule'));
     }
 
@@ -61,7 +60,8 @@ class AutomationLogRecordOnceTest extends TestCase
         $task = $this->uniqueTask('task-expired');
 
         $this->assertTrue(AutomationLog::recordOnce($task, 'action', 'service', 4001, 'rule'));
-        $this->assertTrue(AutomationLog::recordOnce($task, 'action', 'service', 4001, 'rule'));
+        // 创建即认领：窗口内立即重试被拦截
+        $this->assertFalse(AutomationLog::recordOnce($task, 'action', 'service', 4001, 'rule'));
 
         // 把认领时间改到窗口外，模拟上次认领后又崩溃
         $log = AutomationLog::query()

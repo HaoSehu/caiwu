@@ -47,10 +47,12 @@ class AutomationLog extends Model
             'rule_key' => trim($ruleKey),
         ];
 
+        // 创建即写入认领标记：新建窗口（创建→markExecuted 之间）内的并发调用方
+        // 会被 claimCrashResidual 的 TTL 窗口拦截，保证"仅一个调用方获得执行权"。
         $log = static::query()->firstOrCreate(
             $where,
             [
-                'meta' => $meta,
+                'meta' => array_merge($meta, ['_retry_claimed_at' => now()->toDateTimeString()]),
                 'executed_at' => null,
             ]
         );
