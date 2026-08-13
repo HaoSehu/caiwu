@@ -12,6 +12,7 @@ use App\Services\Automation\Heartbeat\Contracts\ScheduledTask;
 use App\Services\Automation\Heartbeat\Contracts\ScheduledTaskProvider;
 use App\Services\Automation\Heartbeat\Contracts\TriggerRule;
 use App\Services\Automation\Heartbeat\Data\TaskContext;
+use App\Services\Automation\Heartbeat\HeartbeatTaskRegistry;
 use App\Services\Automation\Heartbeat\ScheduleRule;
 use App\Services\Automation\InvoiceCleanupAutomationService;
 use App\Services\Automation\ServiceLifecycleAutomationService;
@@ -117,7 +118,13 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 description: '定时拉取上游实例详情与运行状态，并同步回本地用户服务状态。',
                 triggers: [ScheduleRule::everyTicks(1)],
                 handler: function (): array {
-                    $summary = app(ServiceStatusSyncService::class)->handle();
+                    // 插件任务 sync-zjmf-finance-inventory-and-services 已定向同步 ZJMF 服务状态时，
+                    // 全量任务排除 ZJMF，避免同一服务每 15 分钟被上游拉取两轮；插件禁用时回退全量兜底。
+                    $excludedProviderKeys = app(HeartbeatTaskRegistry::class)
+                        ->supports('sync-zjmf-finance-inventory-and-services')
+                        ? [ProviderKey::ZJMF_FINANCE_API]
+                        : [];
+                    $summary = app(ServiceStatusSyncService::class)->handle(100, 10, $excludedProviderKeys);
                     Log::info('[定时任务] 用户产品状态同步执行完成', $summary);
 
                     return $summary;
