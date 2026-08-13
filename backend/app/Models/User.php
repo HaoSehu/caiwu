@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Casts\LegacyEncrypted;
+use App\Models\Concerns\ReleasesUniqueKeysOnDelete;
 use App\Services\User\AccountService;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -19,6 +20,7 @@ use Laravel\Sanctum\HasApiTokens;
 class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable, SoftDeletes;
+    use ReleasesUniqueKeysOnDelete;
 
     protected $fillable = [
         'email', 'password', 'phone', 'status',
@@ -55,6 +57,17 @@ class User extends Authenticatable
             'referrer_user_id' => 'integer',
             'password' => 'hashed',
         ];
+    }
+
+    /**
+     * 软删时释放 email/phone 全局唯一键（见 ReleasesUniqueKeysOnDelete）。
+     * 删除是终局性操作（UserService::deleteUser 含资产保护），原始值由操作日志留痕。
+     *
+     * @return array<int, string>
+     */
+    public function uniqueKeysToReleaseOnDelete(): array
+    {
+        return ['email', 'phone'];
     }
 
     public function getNicknameAttribute(mixed $value): string
