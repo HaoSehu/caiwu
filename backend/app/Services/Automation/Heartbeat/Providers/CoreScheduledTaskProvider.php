@@ -259,6 +259,25 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 lockTtlSeconds: 1800,
             ),
             $this->task(
+                key: 'audit-ledger-consistency',
+                title: '资金流水一致性审计',
+                category: '财务对账',
+                description: '每日审计账户流水来源完整性、余额与流水一致性、充值桥接覆盖，账实不符即告警。',
+                triggers: [ScheduleRule::cron('0 3 * * *')],
+                handler: function (): array {
+                    $summary = $this->runArtisan('finance:audit-ledger-consistency', ['--strict' => true], false);
+                    if (($summary['exit_code'] ?? 0) !== 0) {
+                        Log::warning('[定时任务] 资金流水一致性审计发现差异，已记录告警且不进行队列重试', $summary);
+                        $summary['status'] = 'warning';
+                    }
+
+                    return $summary;
+                },
+                timeout: 1200,
+                lockTtlSeconds: 1800,
+                manualTriggerable: false,
+            ),
+            $this->task(
                 key: 'provision-retry-failed',
                 title: '上游开通孤儿单补偿告警',
                 category: '上游开通',

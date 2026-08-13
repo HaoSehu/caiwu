@@ -77,6 +77,48 @@ class InvoiceOrderReconciliationCommandTest extends BaseTestCase
         $this->assertDatabaseMissing('invoices', ['order_id' => $orderWithoutInvoiceId]);
     }
 
+    public function test_dry_run_reports_amount_mismatch_and_completed_cancelled_without_writing(): void
+    {
+        $amountOrderId = $this->insertOrder([
+            'order_no' => 'dd202606160109020001',
+            'status' => OrderStatus::COMPLETED,
+            'amount' => '10.00',
+            'paid_amount' => '10.00',
+            'paid_at' => now(),
+        ]);
+        $this->insertInvoice([
+            'invoice_no' => 'zd202606160109020001',
+            'order_id' => $amountOrderId,
+            'status' => InvoiceStatus::PAID,
+            'amount' => '99.00',
+            'paid_amount' => '99.00',
+            'paid_at' => now(),
+        ]);
+
+        $cancelledOrderId = $this->insertOrder([
+            'order_no' => 'dd202606160109030001',
+            'status' => OrderStatus::COMPLETED,
+            'paid_at' => now(),
+        ]);
+        $this->insertInvoice([
+            'invoice_no' => 'zd202606160109030001',
+            'order_id' => $cancelledOrderId,
+            'status' => InvoiceStatus::CANCELLED,
+        ]);
+
+        Artisan::call('trade:reconcile-invoice-order', ['--json' => true]);
+
+        $payload = json_decode(Artisan::output(), true, 512, JSON_THROW_ON_ERROR);
+
+        // 金额口径漂移只报告、不自动修复；已完成+已取消状态矛盾同样只报告。
+        $this->assertSame(1, (int) $payload['summary']['amount_mismatch']);
+        $this->assertSame(1, (int) $payload['summary']['completed_invoice_cancelled']);
+        $this->assertDatabaseHas('invoices', ['id' => $cancelledOrderId, 'status' => InvoiceStatus::CANCELLED]);
+
+        $samples = $payload['samples']['amount_mismatch'];
+        $this->assertSame('manual_review', $samples[0]['suggested_action']);
+    }
+
     public function test_execute_snapshots_and_repairs_invoice_order_anomalies(): void
     {
         $snapshotDir = storage_path('framework/testing/invoice-order-reconciliation-'.uniqid());
