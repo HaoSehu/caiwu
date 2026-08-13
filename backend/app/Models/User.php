@@ -362,6 +362,7 @@ class User extends Authenticatable
 
         $keyword = trim($keyword);
 
+        // 注意：id_card 由 LegacyEncrypted 加密存储，明文 LIKE 永不命中，故不纳入搜索字段。
         return $query->where(function ($q) use ($keyword) {
             if (ctype_digit($keyword)) {
                 $q->where('id', (int) $keyword)
@@ -370,8 +371,7 @@ class User extends Authenticatable
                     ->orWhere('nickname', 'like', '%'.$keyword.'%')
                     ->orWhere('company', 'like', '%'.$keyword.'%')
                     ->orWhere('qq', 'like', '%'.$keyword.'%')
-                    ->orWhere('real_name', 'like', '%'.$keyword.'%')
-                    ->orWhere('id_card', 'like', '%'.$keyword.'%');
+                    ->orWhere('real_name', 'like', '%'.$keyword.'%');
 
                 return;
             }
@@ -381,8 +381,7 @@ class User extends Authenticatable
                 ->orWhere('nickname', 'like', '%'.$keyword.'%')
                 ->orWhere('company', 'like', '%'.$keyword.'%')
                 ->orWhere('qq', 'like', '%'.$keyword.'%')
-                ->orWhere('real_name', 'like', '%'.$keyword.'%')
-                ->orWhere('id_card', 'like', '%'.$keyword.'%');
+                ->orWhere('real_name', 'like', '%'.$keyword.'%');
         });
     }
 

@@ -133,6 +133,60 @@ class ClientVerificationInitValidationTest extends TestCase
         $this->assertSame('IDENTITY_CARD', $receivedCertType);
     }
 
+    public function test_restart_rejects_non_failed_status(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+        $user = $this->createUnverifiedUser($suffix);
+        $user->forceFill(['verification_status' => 4, 'verification_message' => '等待认证'])->save();
+        $token = $user->createToken('client-verification-restart-test')->plainTextToken;
+
+        $called = false;
+        $fakeService = new class($called) extends VerificationService
+        {
+            public function __construct(private bool &$called) {}
+
+            public function restartVerificationSession($user): array
+            {
+                $this->called = true;
+
+                return ['certify_id' => 'FAKE-CERTIFY-ID', 'status' => 'pending'];
+            }
+        };
+        $this->app->instance(VerificationService::class, $fakeService);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/v2/client/verification/restart')
+            ->assertStatus(422)
+            ->assertJsonPath('code', 42200)
+            ->assertJsonPath('message', '当前状态不支持重新认证，请先查询认证结果');
+
+        $this->assertFalse($called, '待认证状态不应触发重新认证会话');
+    }
+
+    public function test_restart_allows_failed_status(): void
+    {
+        $suffix = bin2hex(random_bytes(4));
+        $user = $this->createUnverifiedUser($suffix);
+        $user->forceFill(['verification_status' => 3, 'verification_message' => '认证失败'])->save();
+        $token = $user->createToken('client-verification-restart-test')->plainTextToken;
+
+        $fakeService = new class extends VerificationService
+        {
+            public function __construct() {}
+
+            public function restartVerificationSession($user): array
+            {
+                return ['certify_id' => 'FAKE-CERTIFY-ID', 'status' => 'pending'];
+            }
+        };
+        $this->app->instance(VerificationService::class, $fakeService);
+
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/v2/client/verification/restart')
+            ->assertOk()
+            ->assertJsonPath('data.certify_id', 'FAKE-CERTIFY-ID');
+    }
+
     public function test_fee_config_reads_enabled_verification_plugin_config(): void
     {
         $suffix = bin2hex(random_bytes(4));
