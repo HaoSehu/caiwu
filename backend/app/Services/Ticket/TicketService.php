@@ -238,7 +238,12 @@ class TicketService
             return;
         }
 
-        $this->closeTicketAndReplaceAttachments($ticket, self::CLOSE_REASON_AUTO);
+        // 仅在本次真正执行关闭时才通知：并发被抢先关闭/员工已关闭时，closeTicketAndReplaceAttachments
+        // 行锁内重读发现已关闭会跳过，若仍无条件通知会重复发信或发出误导的"已自动关闭"文案。
+        $closed = $this->closeTicketAndReplaceAttachments($ticket, self::CLOSE_REASON_AUTO);
+        if (! $closed) {
+            return;
+        }
 
         // 自动关闭后通知客户（模板 100025 接线），附件已软删保留可重开追溯。
         $this->notifyClientOfAutoClose($ticket);
@@ -287,7 +292,7 @@ class TicketService
 
         $this->userNotificationService->create(
             (int) ($updatedTicket->user_id ?? 0),
-            UserNotificationType::TICKET_AUTO_CLOSED,
+            UserNotificationType::TICKET_REOPENED,
             '工单已重新开启',
             "工单「{$updatedTicket->subject}」已重新开启，请继续跟进。",
             '/client/tickets/'.$updatedTicket->id,
@@ -983,9 +988,11 @@ class TicketService
         throw_if($content === '' && $attachments === [], new BusinessException('内容或图片至少填写一项'));
     }
 
-    private function closeTicketAndReplaceAttachments(Ticket $ticket, string $reason = 'admin'): void
+    private function closeTicketAndReplaceAttachments(Ticket $ticket, string $reason = 'admin'): bool
     {
-        DB::transaction(function () use ($ticket, $reason) {
+        $closed = false;
+
+        DB::transaction(function () use ($ticket, $reason, &$closed) {
             // 行锁内重读：关闭与回复并发时先到先得，已被关闭则直接结束，避免重复清理。
             $lockedTicket = Ticket::query()->lockForUpdate()->findOrFail($ticket->id);
             if ((int) $lockedTicket->status === self::STATUS_CLOSED) {
@@ -993,6 +1000,7 @@ class TicketService
             }
 
             $lockedTicket->update(['status' => self::STATUS_CLOSED, 'close_reason' => $reason]);
+            $closed = true;
 
             // 附件软删保留：仅标记 deleted，不物理删除文件，重开工单后可恢复查看。
             $replies = TicketReply::where('ticket_id', $lockedTicket->id)
@@ -1018,6 +1026,8 @@ class TicketService
                 $reply->update(['attachments' => $attachments]);
             }
         });
+
+        return $closed;
     }
 
     private function normalizeReplyContent(?string $content): string
