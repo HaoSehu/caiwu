@@ -13,7 +13,6 @@ use App\Services\Automation\Heartbeat\Data\TaskContext;
 use App\Services\Automation\Heartbeat\HeartbeatScheduler;
 use App\Services\Automation\Heartbeat\HeartbeatTaskRegistry;
 use App\Services\Automation\Heartbeat\HeartbeatTaskRunner;
-use App\Services\Automation\Heartbeat\QueueDrainService;
 use App\Services\Automation\Heartbeat\ScheduleRule;
 use App\Services\Automation\Heartbeat\ScheduleTaskRunRepository;
 use App\Services\Automation\Heartbeat\ScheduleTickRepository;
@@ -49,16 +48,16 @@ class HeartbeatSchedulerTest extends TestCase
             ->delete();
     }
 
-    public function test_laravel_schedule_only_registers_heartbeat_and_liveness_events(): void
+    public function test_laravel_schedule_only_registers_heartbeat_liveness_and_queue_drain_events(): void
     {
         Artisan::call('schedule:list');
         $output = Artisan::output();
 
         $this->assertSame(1, substr_count($output, 'scheduler:heartbeat'));
         $this->assertSame(1, substr_count($output, 'scheduler:liveness'));
-        $this->assertSame(2, substr_count($output, '* * * * *'));
+        $this->assertSame(1, substr_count($output, 'queue:drain'));
+        $this->assertSame(3, substr_count($output, '* * * * *'));
         $this->assertStringNotContainsString('接口认证刷新', $output);
-        $this->assertStringNotContainsString('队列积压消费', $output);
     }
 
     public function test_all_registered_heartbeat_tasks_use_the_automation_queue(): void
@@ -115,7 +114,6 @@ class HeartbeatSchedulerTest extends TestCase
             app(ScheduleTaskRunRepository::class),
             $registry,
             app(TriggerRuleMatcher::class),
-            app(QueueDrainService::class),
         );
 
         $summary = $scheduler->tick(CarbonImmutable::parse('2026-07-06 02:00:00', 'Asia/Shanghai'));
@@ -203,7 +201,6 @@ class HeartbeatSchedulerTest extends TestCase
             app(ScheduleTaskRunRepository::class),
             $registry,
             app(TriggerRuleMatcher::class),
-            app(QueueDrainService::class),
         );
 
         $summary = $scheduler->tick(CarbonImmutable::parse('2026-07-05 12:00:00', 'Asia/Shanghai'));
@@ -244,7 +241,6 @@ class HeartbeatSchedulerTest extends TestCase
             app(ScheduleTaskRunRepository::class),
             $registry,
             app(TriggerRuleMatcher::class),
-            app(QueueDrainService::class),
         );
 
         $scheduler->tick(CarbonImmutable::parse('2026-07-05 12:00:00', 'Asia/Shanghai'));
@@ -337,7 +333,6 @@ class HeartbeatSchedulerTest extends TestCase
             app(ScheduleTaskRunRepository::class),
             $registry,
             app(TriggerRuleMatcher::class),
-            app(QueueDrainService::class),
         );
 
         $summary = $scheduler->tick(CarbonImmutable::parse('2026-07-05 12:15:00', 'Asia/Shanghai'));
@@ -481,7 +476,6 @@ class HeartbeatSchedulerTest extends TestCase
             app(ScheduleTaskRunRepository::class),
             $registry,
             app(TriggerRuleMatcher::class),
-            app(QueueDrainService::class),
         );
 
         $summary = $scheduler->tick($slot);
@@ -632,7 +626,6 @@ class HeartbeatSchedulerTest extends TestCase
             app(ScheduleTaskRunRepository::class),
             $registry,
             app(TriggerRuleMatcher::class),
-            app(QueueDrainService::class),
         );
 
         $summary = $scheduler->tick(CarbonImmutable::parse('2026-07-05 13:00:00', 'Asia/Shanghai'));
@@ -651,7 +644,7 @@ class HeartbeatSchedulerTest extends TestCase
 
         Log::shouldReceive('warning')
             ->once()
-            ->with('[调度] 心跳槽位锁被占用，本槽位跳过派发，仅排空队列', Mockery::on(
+            ->with('[调度] 心跳槽位锁被占用，本槽位跳过派发', Mockery::on(
                 fn (array $context): bool => ($context['slot'] ?? '') === '202607051300'
                     && ($context['lock'] ?? '') === 'scheduler:heartbeat:202607051300'
             ));
@@ -676,7 +669,6 @@ class HeartbeatSchedulerTest extends TestCase
             app(ScheduleTaskRunRepository::class),
             $registry,
             app(TriggerRuleMatcher::class),
-            app(QueueDrainService::class),
         );
 
         $summary = $scheduler->tick(CarbonImmutable::parse('2026-07-05 13:00:00', 'Asia/Shanghai'));
@@ -773,14 +765,14 @@ class HeartbeatSchedulerTest extends TestCase
         );
     }
 
-    public function test_app_serve_with_schedule_uses_the_heartbeat_queue_drain_instead_of_a_second_worker(): void
+    public function test_app_serve_with_schedule_relies_on_queue_drain_instead_of_a_second_worker(): void
     {
         $source = file_get_contents(app_path('Console/Commands/ServeBackendStackCommand.php'));
 
         $this->assertIsString($source);
         $this->assertStringContainsString("&& ! (bool) \$this->option('with-schedule')", $source);
         $this->assertStringContainsString('{--without-vnc', $source);
-        $this->assertStringContainsString('队列由每分钟心跳并行消费', $source);
+        $this->assertStringContainsString('队列由 queue:drain 后台消费', $source);
     }
 
     private function ensureHeartbeatTables(): void

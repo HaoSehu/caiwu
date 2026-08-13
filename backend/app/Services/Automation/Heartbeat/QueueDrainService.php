@@ -86,7 +86,9 @@ class QueueDrainService
         try {
             foreach ($definitions as $name => $queues) {
                 $process = $this->buildWorkerProcess($queues);
-                $process->setTimeout(null);
+                // 进程级超时必须容纳最长的已注册任务（max_timeout），
+                // 否则 Windows（无 pcntl）下 job 超时失效时 worker 卡死会无限阻塞 drain。
+                $process->setTimeout($this->workerProcessTimeout());
                 $process->start();
                 $processes[$name] = $process;
                 $outputs[$name] = ['stdout' => '', 'stderr' => ''];
@@ -232,7 +234,7 @@ class QueueDrainService
             '--queue='.$queues,
             '--sleep=1',
             '--tries='.(string) config('queue.caiwu_worker_tries', 3),
-            '--timeout='.(string) config('queue.caiwu_worker_timeout', 1200),
+            '--timeout='.$this->workerTimeout(),
             '--stop-when-empty',
             '--max-time=50',
         ], base_path());
@@ -321,6 +323,25 @@ class QueueDrainService
             (int) config('queue.caiwu_worker_max_timeout', 3600) + 60,
             (int) config('queue.connections.database.retry_after', 3900) + 60,
         );
+    }
+
+    /**
+     * worker 级超时至少覆盖最长的已注册任务，避免无 timeout 属性的 Job 被
+     * caiwu_worker_timeout（默认 1200s）强杀；有 timeout 属性的 Job 仍由 Laravel
+     * timeoutForJob 优先采用自身 timeout。
+     */
+    private function workerTimeout(): int
+    {
+        return max(
+            (int) config('queue.caiwu_worker_timeout', 1200),
+            (int) config('queue.caiwu_worker_max_timeout', 3600),
+        );
+    }
+
+    /** 进程级硬超时：worker 处理最长任务之外再多留 60 秒余量。 */
+    private function workerProcessTimeout(): int
+    {
+        return $this->workerTimeout() + 60;
     }
 
     /** @return array{0:string,1:string} */

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Listeners;
 
 use App\Jobs\RunHeartbeatTaskJob;
+use App\Jobs\RunScheduleTaskJob;
 use App\Services\Automation\Heartbeat\ScheduleTaskRunRepository;
 use Illuminate\Queue\Events\JobTimedOut;
 use Illuminate\Support\Facades\Log;
@@ -71,6 +72,7 @@ class HeartbeatTaskTimedOutListener
             return null;
         }
 
-        return unserialize($command, ['allowed_classes' => [RunHeartbeatTaskJob::class]]);
+        // 白名单需覆盖继承同 Job 的 RunScheduleTaskJob 子类实例，否则超时收敛会失效。
+        return unserialize($command, ['allowed_classes' => [RunHeartbeatTaskJob::class, RunScheduleTaskJob::class]]);
     }
 }
