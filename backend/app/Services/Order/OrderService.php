@@ -309,7 +309,7 @@ class OrderService
         throw_if($payableAmount <= 0, new BusinessException('当前账单无需再入账'));
         throw_if(abs($requestedAmount - $payableAmount) > 0.00001, new BusinessException('当前仅支持按账单应付金额全额入账'));
 
-        DB::transaction(function () use ($order, $invoice, $paidAt, $paidAmount, $paymentGateway, $tradeNo, $remark, $context) {
+        DB::transaction(function () use ($order, $invoice, $paidAt, $paidAmount, $payableAmount, $paymentGateway, $tradeNo, $remark, $context) {
             Payment::query()
                 ->where('invoice_id', $invoice->id)
                 ->where('status', PaymentStatus::PENDING)
@@ -319,6 +319,8 @@ class OrderService
 
             // 补一条 manual Payment 审计记录，保留 trade_no 与入账信息，
             // 供 markUnpaidManually 回退判定与财务对账追溯。
+            // amount 记录本次实收（$payableAmount），累计口径只投影到 invoice/order.paid_amount，
+            // 避免先期已入账 + 本次补款时按 Payment.amount 汇总虚增。
             $manualPayment = new Payment([
                 'payment_no' => Payment::generatePaymentNo(),
                 'user_id' => (int) $order->user_id,
@@ -326,7 +328,7 @@ class OrderService
                 'invoice_id' => (int) $invoice->id,
                 'gateway' => PaymentGatewayCode::MANUAL,
                 'trade_no' => $tradeNo !== '' ? $tradeNo : null,
-                'amount' => $paidAmount,
+                'amount' => $payableAmount,
                 'status' => PaymentStatus::SUCCESS,
                 'paid_at' => $paidAt,
                 'trace_id' => (string) ($context['trace_id'] ?? ''),

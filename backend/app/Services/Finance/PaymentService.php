@@ -169,9 +169,13 @@ class PaymentService
                     );
                 }
 
+                // 订单 paid_amount 投影账单累计实收额（与 payByBalance 一致）：
+                // 先期部分支付后再补尾款时，不能把累计实收覆盖为本次剩余应付。
                 $lockedOrder->forceFill([
                     'status' => OrderStatus::PAID,
-                    'paid_amount' => $amount,
+                    'paid_amount' => $lockedOrder->invoice instanceof Invoice
+                        ? $lockedOrder->invoice->amount
+                        : $lockedOrder->amount,
                     'paid_at' => now(),
                 ])->save();
 
