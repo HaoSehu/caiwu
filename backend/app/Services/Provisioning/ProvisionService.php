@@ -386,10 +386,7 @@ class ProvisionService
 
     private function isAdminManualOrder(Order $order): bool
     {
-        $snapshot = $order->config_snapshot;
-        if (! is_array($snapshot)) {
-            return false;
-        }
+        $snapshot = (array) $order->config_snapshot;
 
         return filter_var($snapshot['admin_manual'] ?? false, FILTER_VALIDATE_BOOL);
     }
@@ -446,7 +443,15 @@ class ProvisionService
             $cartLockKey = $this->supplierCartLockKey($supplier);
 
             return Cache::lock($cartLockKey, $this->supplierCartLockTtl())->block(10, function () use ($order, $supplier, $provisioning, $service) {
-                return $provisioning->provisionOrder($order, $supplier, $service ?? $order->service);
+                // 锁内基于 DB 最新状态复查幂等：并发"队列履约 + 管理员手动重试"时，
+                // 另一路径可能已 checkout 并提交 checkpoint（upstream_invoice_id/upstream_host_id 已落库）。
+                // 必须用 fresh 数据做幂等回查，避免基于旧内存值重复走购物车流程造成上游二次开通。
+                $freshService = ($service ?? $order->service)?->fresh();
+                if ($freshService instanceof Service) {
+                    $this->assertNoUnresolvedUpstreamProvisionInvoice($freshService);
+                }
+
+                return $provisioning->provisionOrder($order, $supplier, $freshService ?? $service ?? $order->service);
             });
         }
 
@@ -1115,7 +1120,7 @@ class ProvisionService
             }
         })();
 
-        if (! is_array($rule) || $rule === []) {
+        if ($rule === []) {
             Cache::forget($cacheKey);
 
             return [];

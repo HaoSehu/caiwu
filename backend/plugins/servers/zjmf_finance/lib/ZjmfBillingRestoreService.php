@@ -8,6 +8,7 @@ use App\Constants\InvoiceStatus;
 use App\Services\Upstream\Contracts\UpstreamBillingRestoreProfile;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 
 class ZjmfBillingRestoreService
@@ -19,7 +20,7 @@ class ZjmfBillingRestoreService
     /**
      * @return array<string, int|bool|string>
      */
-    public function restoreFromSqlDump(string $dumpPath, bool $dryRun = false): array
+    public function restoreFromSqlDump(string $dumpPath, bool $dryRun = false, bool $forceOverwrite = false): array
     {
         if (! is_file($dumpPath)) {
             throw new RuntimeException('原始 SQL 文件不存在: '.$dumpPath);
@@ -44,6 +45,9 @@ class ZjmfBillingRestoreService
             'user_balances' => count($clientBalances),
             'skipped_missing_users' => 0,
             'skipped_deleted_invoices' => 0,
+            'existing_invoices' => 0,
+            'existing_balance_logs' => 0,
+            'overwrite_forced' => false,
         ];
 
         foreach ($tables['shd_invoices'] as $row) {
@@ -135,9 +139,25 @@ class ZjmfBillingRestoreService
         usort($invoicePayload, fn (array $a, array $b) => $a['id'] <=> $b['id']);
         usort($balanceLogPayload, fn (array $a, array $b) => $a['id'] <=> $b['id']);
 
+        // 空库强制审计：先统计目标表既有数据供 dry-run 预检展示；非 dry-run 且目标表
+        // 非空时必须显式 --force 才允许物理删除重插，防止误把 dump 快照后的新财务数据抹掉。
+        $existingInvoices = Schema::hasTable('invoices') ? (int) DB::table('invoices')->count() : 0;
+        $existingBalanceLogs = Schema::hasTable('balance_logs') ? (int) DB::table('balance_logs')->count() : 0;
+        $summary['existing_invoices'] = $existingInvoices;
+        $summary['existing_balance_logs'] = $existingBalanceLogs;
+
         if ($dryRun) {
             return $summary;
         }
+
+        if (($existingInvoices > 0 || $existingBalanceLogs > 0) && ! $forceOverwrite) {
+            throw new RuntimeException(
+                '目标库 invoices/balance_logs 已有数据（invoices='.$existingInvoices.', balance_logs='.$existingBalanceLogs.'），'
+                .'恢复将物理删除并覆盖全部现有财务数据；如确认覆盖，请追加 --force'
+            );
+        }
+
+        $summary['overwrite_forced'] = true;
 
         DB::transaction(function () use ($invoicePayload, $balanceLogPayload, $clientBalances): void {
             $now = now()->format('Y-m-d H:i:s');

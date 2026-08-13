@@ -64,6 +64,24 @@ final class ZjmfProvisionService
                 $hostDetail = is_array($detailPayload['host'] ?? null) ? $detailPayload['host'] : [];
                 $this->assertHostDetailPresent($hostDetail, $existingHostId);
 
+                // 幂等回查除确认 host 存在外，还需校验其上游账单已支付：
+                // 若 host 在欠费/待支付模式下仍返回详情，本地会把服务确认成 ACTIVE、订单 COMPLETED，
+                // 而上游账单实际未扣款，造成收入缺口；账单未付时重试供应商余额支付。
+                $existingInvoiceId = (int) ($existingProvisionData['upstream_invoice_id'] ?? 0);
+                if ($existingInvoiceId > 0) {
+                    $invoiceResponse = $this->responseWithHttpCode(
+                        $this->transport->get($supplier, "/v1/invoices/{$existingInvoiceId}", $jwt)
+                    );
+                    $this->assertUpstreamSuccess($invoiceResponse, [200, 1000, 1001], '校验上游开通账单支付状态');
+                    $invoicePayload = $this->extractPayload($invoiceResponse);
+                    $upstreamStatus = strtolower(trim((string) ($invoicePayload['status'] ?? '')));
+
+                    if ($upstreamStatus !== 'paid') {
+                        $fundResponse = $this->transport->post($supplier, "/v1/invoices/{$existingInvoiceId}/fund", [], $jwt);
+                        $this->assertUpstreamSuccess($fundResponse, [200, 1000, 1001], '重试供应商余额支付开通账单');
+                    }
+                }
+
                 Log::info('[ZJMF 财务开通] 上游 host 已存在，跳过重复开通', [
                     'order_id' => $order->id,
                     'upstream_host_id' => $existingHostId,
