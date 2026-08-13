@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\Auth\GeeTestService;
 use App\Services\Auth\LoginRiskControlService;
 use Illuminate\Support\Facades\RateLimiter;
+use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -107,6 +108,49 @@ class LoginSoftLockTest extends TestCase
             ->assertStatus(429)
             ->assertJsonPath('code', 42900)
             ->assertJsonPath('message', '登录尝试次数过多，请稍后再试');
+    }
+
+    #[Test]
+    public function alipay_rebind_password_confirmation_engages_soft_lock(): void
+    {
+        $user = User::query()->create([
+            'email' => 'soft-lock-alipay-'.bin2hex(random_bytes(4)).'@example.com',
+            'password' => 'Temp@123456',
+            'phone' => '13'.str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT),
+            'status' => 1,
+            'nickname' => 'Soft Lock Alipay',
+            'real_name' => '',
+            'id_card' => '',
+            'verification_status' => 0,
+            'verification_message' => '',
+            'verification_certify_id' => null,
+            'member_level_id' => null,
+            'total_sales_amount' => '0.00',
+            'referrer_user_id' => null,
+            'verified_at' => null,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $payload = [
+            'real_name' => '测试',
+            'account' => '13800001111',
+            'code' => '123456',
+            'password' => 'wrong-password',
+        ];
+
+        // 改绑密码二次确认失败须累积登录风险计数：前 5 次仍为密码错误。
+        for ($i = 0; $i < 5; $i++) {
+            $this->putJson('/api/v2/client/auth/alipay-account', $payload)
+                ->assertStatus(422)
+                ->assertJsonPath('code', 42200)
+                ->assertJsonPath('message', '登录密码错误');
+        }
+
+        // 第 6 次：账号+IP 维度软锁定已生效，接口拒绝继续尝试（防止无速率限制的密码爆破预言机）。
+        $this->putJson('/api/v2/client/auth/alipay-account', $payload)
+            ->assertStatus(429)
+            ->assertJsonPath('code', 42900);
     }
 
     private function disabledCaptcha(): GeeTestService

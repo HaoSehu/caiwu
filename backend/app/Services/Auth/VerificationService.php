@@ -211,6 +211,8 @@ class VerificationService
                 $payload['verification_status'] = $verification['verification_status'] > 0
                     ? $verification['verification_status']
                     : self::RESULT_STATUS_PENDING;
+                // 网络错误保留原认证状态与消息：不得把 pending 用户的文案覆盖为"网络请求失败"。
+                $payload['verification_message'] = (string) ($verification['verification_message'] ?? '');
             } elseif (($result['status'] ?? null) === self::RESULT_STATUS_PENDING) {
                 $payload['verification_status'] = self::RESULT_STATUS_PENDING;
             } else {
@@ -638,6 +640,8 @@ class VerificationService
             'source_type' => 'verification',
             'origin_type' => 'verification',
             'remark' => '实名认证费用',
+            // 系统按配置自动扣费，标记来源便于对账；认证发起链路暂不携带业务 trace。
+            'operator' => 'system',
         ]);
     }
 

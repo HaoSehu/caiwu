@@ -102,8 +102,9 @@ class AuthController extends Controller
         $accountType = AccountIdentifier::detectType($account);
         $code = (string) $data['code'];
 
-        // 验证码插件未启用时的兜底锁定：防止验证码登录通道被爆破
-        if ($this->loginRiskControlService->isLoginLocked($account, (string) $request->ip())) {
+        // 验证码插件未启用时的兜底锁定：防止验证码登录通道被爆破。
+        // 验证码本身就是第二因素，不连带密码通道的账号维度软锁定（避免第三方用密码通道失败锁定他人验证码登录）。
+        if ($this->loginRiskControlService->isLoginLocked($account, (string) $request->ip(), false)) {
             return $this->error(42900, '登录尝试次数过多，请稍后再试');
         }
 
@@ -304,11 +305,24 @@ class AuthController extends Controller
         $data = $request->validated();
 
         $user = $request->user();
+        $requestIp = (string) $request->ip();
+        $account = AccountIdentifier::normalizeAccount((string) ($user->email ?? $user->phone ?? ''));
+
+        // 密码二次确认失败会累积登录风险计数；先按锁定状态拒绝，防止该接口成为
+        // 无速率限制的密码爆破预言机（拿到 token 即可高频尝试、凭响应差异还原密码）。
+        if ($this->loginRiskControlService->isLoginLocked($account, $requestIp)) {
+            return $this->error(42900, '登录尝试次数过多，请稍后再试');
+        }
 
         // 提现账户改绑必须登录密码二次确认，防止登录态被滥用直接改绑提现账户
         if (! Hash::check((string) $data['password'], (string) $user->password)) {
+            $this->loginRiskControlService->recordFailedAttempt($account, $requestIp);
+
             return $this->error(42200, '登录密码错误');
         }
+
+        // 密码已确认：解除该账号密码通道的失败计数，避免后续验证码校验失败把已确认密码的用户连带锁定。
+        $this->loginRiskControlService->clearSuccessfulLogin($account, $requestIp);
 
         $phone = trim((string) $data['account']);
         $verified = $this->codeService->verifyPhoneCode($user->id, $phone, (string) $data['code']);
