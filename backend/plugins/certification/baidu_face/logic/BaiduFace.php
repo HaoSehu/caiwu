@@ -76,6 +76,8 @@ class BaiduFace
 
     /**
      * 百度 H5 方案采用后验结果查询，回跳请求本身不承载可信签名。
+     * 回跳参数缺失（certify_id 被百度回跳编码或丢弃）时仍放行，
+     * 由控制器返回引导提示，避免用户在手机端直接看到签名失败错误。
      *
      * @param  array<string, mixed>  $requestPayload
      * @return array{passed: bool, message: string, code: int, http_status: int, replay_key?: string}
@@ -87,10 +89,10 @@ class BaiduFace
 
         if ($certifyId === '') {
             return [
-                'passed' => false,
-                'message' => '签名验证失败',
-                'code' => 40001,
-                'http_status' => 401,
+                'passed' => true,
+                'message' => '回跳参数未携带 certify_id，请返回前端页面继续查询认证结果',
+                'code' => 0,
+                'http_status' => 200,
             ];
         }
 

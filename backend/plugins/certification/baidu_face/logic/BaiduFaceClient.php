@@ -412,13 +412,21 @@ class BaiduFaceClient
             return false;
         }
 
+        // verify_status 数值语义：0 表示核身通过，与直连接口一致（非 0 不通过）。
+        $verifyStatus = $this->stringFromPaths($result, [['result', 'verify_status']]);
+        if ($verifyStatus !== '' && ctype_digit($verifyStatus)) {
+            return (int) $verifyStatus === 0;
+        }
+
         $status = strtolower($this->textVerificationStatus($result));
         if ($status !== '') {
             return in_array($status, ['success', 'passed', 'pass', '1', 'true'], true);
         }
 
-        // 没有文本状态时才看 verify_status：数值语义，0 表示核身通过，与直连接口一致。
-        return $this->stringFromPaths($result, [['result', 'verify_status']]) === '0';
+        // result/detail 接口成功时不返回 verify_status，核身结论在 result.verify_result（score 等）。
+        $verifyResult = $result['result']['verify_result'] ?? null;
+
+        return is_array($verifyResult) && ($verifyResult['score'] ?? $verifyResult['verify_log_id'] ?? null) !== null;
     }
 
     /**
@@ -429,7 +437,8 @@ class BaiduFaceClient
     private function hasVerificationConclusion(array $result): bool
     {
         return $this->textVerificationStatus($result) !== ''
-            || $this->stringFromPaths($result, [['result', 'verify_status']]) !== '';
+            || $this->stringFromPaths($result, [['result', 'verify_status']]) !== ''
+            || is_array($result['result']['verify_result'] ?? null);
     }
 
     /**
@@ -438,6 +447,7 @@ class BaiduFaceClient
     private function textVerificationStatus(array $result): string
     {
         return $this->stringFromPaths($result, [
+            ['result', 'verify_status'],
             ['result', 'status'],
             ['result', 'auth_status'],
             ['status'],
@@ -465,6 +475,12 @@ class BaiduFaceClient
     {
         $code = (string) ($result['error_code'] ?? $result['code'] ?? '');
         if (in_array($code, ['18', '216402', '216403'], true)) {
+            return true;
+        }
+
+        // 百度 H5 结果查询接口：verify_status 文本值表示审核状态，AUDIT_* 为未完成。
+        $status = strtoupper($this->textVerificationStatus($result));
+        if (str_starts_with($status, 'AUDIT') || in_array($status, ['INIT', 'PROCESSING', 'PENDING', 'RUNNING'], true)) {
             return true;
         }
 
@@ -502,7 +518,7 @@ class BaiduFaceClient
      */
     private function safeProviderMessage(array $payload, string $fallback): string
     {
-        $text = trim((string) ($payload['error_msg'] ?? $payload['message'] ?? $payload['msg'] ?? ''));
+        $text = trim((string) ($payload['error_msg'] ?? $payload['message'] ?? $payload['msg'] ?? ($payload['result']['verify_user_msg'] ?? '')));
         if ($text === '') {
             return $fallback;
         }
@@ -580,5 +596,4 @@ class BaiduFaceClient
 
         return $value;
     }
-
 }
