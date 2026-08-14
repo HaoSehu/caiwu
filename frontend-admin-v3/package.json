@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --mode development",
-    "dev:linux": "vite --mode development",
-    "dev:ci": "vite --host 127.0.0.1 --mode development",
+    "dev": "vite --mode dev",
+    "dev:linux": "vite --mode dev",
+    "dev:ci": "vite --host 127.0.0.1 --mode dev",
     "build:test": "vite build --mode test",
     "build": "vue-tsc --noEmit && vite build --mode production",
     "build:type": "vue-tsc --noEmit",
