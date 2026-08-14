@@ -190,7 +190,7 @@ class BaiduFacePluginTest extends TestCase
         $this->assertTrue($result['data']['passed']);
     }
 
-    public function test_verify_callback_rejects_empty_certify_id(): void
+    public function test_verify_callback_accepts_empty_certify_id_for_guidance(): void
     {
         $plugin = new BaiduFace;
 
@@ -201,12 +201,12 @@ class BaiduFacePluginTest extends TestCase
         ]);
 
         $this->assertTrue($result['success']);
-        $this->assertFalse($result['data']['passed']);
-        $this->assertSame(401, $result['data']['http_status']);
-        $this->assertSame(40001, $result['data']['code']);
+        $this->assertTrue($result['data']['passed']);
+        $this->assertSame(200, $result['data']['http_status']);
+        $this->assertStringContainsString('前端页面', $result['data']['message']);
     }
 
-    public function test_verify_callback_rejects_empty_payload(): void
+    public function test_verify_callback_accepts_empty_payload_for_guidance(): void
     {
         $plugin = new BaiduFace;
 
@@ -217,8 +217,8 @@ class BaiduFacePluginTest extends TestCase
         ]);
 
         $this->assertTrue($result['success']);
-        $this->assertFalse($result['data']['passed']);
-        $this->assertSame(401, $result['data']['http_status']);
+        $this->assertTrue($result['data']['passed']);
+        $this->assertSame(200, $result['data']['http_status']);
     }
 
     // ============================================================
@@ -377,6 +377,89 @@ class BaiduFacePluginTest extends TestCase
         $result = $client->queryStatus('VT-CHINESE');
 
         $this->assertSame(4, $result['status']);
+    }
+
+    public function test_query_status_passes_on_verify_status_success(): void
+    {
+        Http::fake([
+            'aip.baidubce.com/oauth/2.0/token*' => Http::response([
+                'access_token' => 'token', 'expires_in' => 7200,
+            ], 200),
+            'aip.baidubce.com/rpc/2.0/brain/solution/faceprint/result/detail*' => Http::response([
+                'success' => true,
+                'result' => ['verify_status' => 'SUCCESS', 'verify_user_msg' => '审核通过'],
+            ], 200),
+        ]);
+
+        $client = new BaiduFaceClient($this->defaultConfig());
+        $result = $client->queryStatus('VT-SUCCESS');
+
+        $this->assertSame(1, $result['status']);
+        $this->assertSame('审核通过', $result['message']);
+    }
+
+    public function test_query_status_returns_pending_on_audit_status(): void
+    {
+        Http::fake([
+            'aip.baidubce.com/oauth/2.0/token*' => Http::response([
+                'access_token' => 'token', 'expires_in' => 7200,
+            ], 200),
+            'aip.baidubce.com/rpc/2.0/brain/solution/faceprint/result/detail*' => Http::response([
+                'success' => true,
+                'result' => ['verify_status' => 'AUDIT_PROCESSING'],
+            ], 200),
+        ]);
+
+        $client = new BaiduFaceClient($this->defaultConfig());
+        $result = $client->queryStatus('VT-AUDIT');
+
+        $this->assertSame(4, $result['status']);
+        $this->assertSame('认证处理中，请稍后再试', $result['message']);
+    }
+
+    public function test_query_status_returns_failed_on_verify_status_failed(): void
+    {
+        Http::fake([
+            'aip.baidubce.com/oauth/2.0/token*' => Http::response([
+                'access_token' => 'token', 'expires_in' => 7200,
+            ], 200),
+            'aip.baidubce.com/rpc/2.0/brain/solution/faceprint/result/detail*' => Http::response([
+                'success' => true,
+                'result' => ['verify_status' => 'FAILED', 'verify_user_msg' => '认证失败'],
+            ], 200),
+        ]);
+
+        $client = new BaiduFaceClient($this->defaultConfig());
+        $result = $client->queryStatus('VT-FAILED');
+
+        $this->assertSame(2, $result['status']);
+        $this->assertStringContainsString('认证失败', $result['message']);
+    }
+
+    public function test_query_status_passes_on_verify_result_structure(): void
+    {
+        Http::fake([
+            'aip.baidubce.com/oauth/2.0/token*' => Http::response([
+                'access_token' => 'token', 'expires_in' => 7200,
+            ], 200),
+            'aip.baidubce.com/rpc/2.0/brain/solution/faceprint/result/detail*' => Http::response([
+                'success' => true,
+                'result' => [
+                    'verify_result' => [
+                        'verify_log_id' => '1119154752105640727',
+                        'score' => 98.35,
+                        'liveness_score' => 0.99999726,
+                    ],
+                    'idcard_confirm' => ['idcard_number' => '610723200804157111', 'name' => '李维佳'],
+                ],
+            ], 200),
+        ]);
+
+        $client = new BaiduFaceClient($this->defaultConfig());
+        $result = $client->queryStatus('VT-VERIFY-RESULT');
+
+        $this->assertSame(1, $result['status']);
+        $this->assertSame('审核通过', $result['message']);
     }
 
     public function test_query_status_returns_failed(): void
