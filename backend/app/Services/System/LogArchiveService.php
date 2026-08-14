@@ -252,6 +252,8 @@ class LogArchiveService
         $fileSize = $fileExists ? filesize($archiveFile) : false;
         $checksum = $fileExists ? hash_file('sha256', $archiveFile) : false;
         $headerValid = $fileExists && $this->hasHeader($archiveFile);
+        // 无超期数据时 pt-archiver 不会创建文件；空归档视为成功，不要求文件存在。
+        $hasEligibleRows = (int) $tableReport['eligible_rows'] > 0;
 
         if ($fileExists) {
             @chmod($archiveFile, 0640);
@@ -262,7 +264,7 @@ class LogArchiveService
         $tableReport['deleted_rows'] = $deletedRows;
         $tableReport['file_size'] = $fileSize === false ? null : $fileSize;
         $tableReport['checksum_sha256'] = $checksum === false ? null : $checksum;
-        $tableReport['status'] = $successful && $fileExists && $headerValid ? 'completed' : 'failed';
+        $tableReport['status'] = $successful && ($fileExists && $headerValid || ! $hasEligibleRows) ? 'completed' : 'failed';
 
         if ($tableReport['status'] === 'failed') {
             $tableReport['error_message'] = ! $successful
@@ -300,7 +302,8 @@ class LogArchiveService
             '--retries=3',
             '--statistics',
             '--why-quit',
-            '--charset=utf8mb4',
+            // pt-archiver 3.2.1 对 MySQL 8.0+ 自动使用 utf8mb4 连接 + utf8 文件编码；
+            // 显式 --charset=utf8mb4 会触发 Perl :encoding(utf8mb4) 错误。
             '--pid='.$pidFile,
             '--no-version-check',
         ];
