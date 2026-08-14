@@ -52,16 +52,19 @@ shared/node_modules/
 
 # Frontend local environment overrides
 frontend-admin-v3/.env
+frontend-admin-v3/.env.dev
 frontend-admin-v3/.env.local
 frontend-admin-v3/.env.*.local
 frontend-admin-v3/.env.production
 frontend-admin-v3/.env.development
 frontend-user-v3-www/.env
+frontend-user-v3-www/.env.dev
 frontend-user-v3-www/.env.local
 frontend-user-v3-www/.env.*.local
 frontend-user-v3-www/.env.production
 frontend-user-v3-www/.env.development
 frontend-user-v4-console/.env
+frontend-user-v4-console/.env.dev
 frontend-user-v4-console/.env.local
 frontend-user-v4-console/.env.*.local
 frontend-user-v4-console/.env.production
@@ -121,6 +124,7 @@ backend/storage/app/account-user-account-backfills/
 backend/storage/app/invoice-order-reconciliations/
 backend/storage/app/json-schema-version-backfills/
 backend/storage/app/trace-id-backfills/
+backend/storage/app/archives/
 # 私有存储整体不入库：含客户附件、备份与临时脚本，历史上曾误提交凭据与工单图片
 backend/storage/app/private/
 backend/storage/framework/testing/*.sqlite

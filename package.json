@@ -16,7 +16,6 @@
     "build:user-v3-www": "node backend/scripts/build_frontends.mjs --target=www",
     "build:user-v4-console": "node backend/scripts/build_frontends.mjs --target=console",
     "build:frontends": "node backend/scripts/build_frontends.mjs",
-    "build:frontends:prod": "node backend/scripts/build_frontends.mjs --env production",
     "build:frontends:dry": "node backend/scripts/build_frontends.mjs --dry-run",
     "test:build-config": "node backend/scripts/build_frontends.test.mjs",
     "docs:check": "node backend/scripts/check_docs.mjs",
