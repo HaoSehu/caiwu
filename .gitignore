@@ -1,6 +1,7 @@
 # Laravel
 backend/.env
 backend/.env.local
+backend/.env.production
 backend/vendor/
 backend/taskkill
 backend/node_modules/

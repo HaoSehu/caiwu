@@ -54,7 +54,7 @@ function readEnvFile(filePath) {
 }
 
 function parseArguments(argv) {
-  const options = { dryRun: false, target: 'all' };
+  const options = { dryRun: false, target: 'all', env: 'dev' };
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -74,6 +74,17 @@ function parseArguments(argv) {
       continue;
     }
 
+    if (argument === '--env') {
+      options.env = argv[index + 1] || '';
+      index += 1;
+      continue;
+    }
+
+    if (argument.startsWith('--env=')) {
+      options.env = argument.slice('--env='.length);
+      continue;
+    }
+
     throw new Error(`不支持的参数：${argument}`);
   }
 
@@ -82,6 +93,19 @@ function parseArguments(argv) {
   }
 
   return options;
+}
+
+// --env 解析：dev（默认，backend/.env）、production（backend/.env.production）、或指向 env 文件的相对/绝对路径。
+function resolveEnvPath(env, repositoryRoot, backendEnvPath) {
+  if (!env || env === 'dev') {
+    return backendEnvPath;
+  }
+
+  if (env === 'production') {
+    return path.join(repositoryRoot, 'backend', '.env.production');
+  }
+
+  return path.resolve(repositoryRoot, env);
 }
 
 function normalizeOrigin(label, rawValue) {
@@ -131,13 +155,37 @@ function runNpm(args, env) {
 }
 
 const options = parseArguments(process.argv.slice(2));
-const backendEnv = readEnvFile(backendEnvPath);
-const value = (key) => String(process.env[key] || backendEnv[key] || '').trim();
+const selectedEnvPath = resolveEnvPath(options.env, repositoryRoot, backendEnvPath);
+const selectedEnv = readEnvFile(selectedEnvPath);
 
-const apiOrigin = normalizeOrigin('APP_URL', value('APP_URL'));
-const websiteOrigin = normalizeOrigin('FRONTEND_URL', value('FRONTEND_URL'));
-const consoleOrigin = normalizeOrigin('CLIENT_CONSOLE_URL', value('CLIENT_CONSOLE_URL'));
-const adminOrigin = normalizeOrigin('ADMIN_URL', value('ADMIN_URL'));
+// 读取构建键值：显式环境变量 > 所选 env 文件。
+// 使用 dev 之外的环境（如 production）时，四个公开地址必须显式提供，
+// 绝不回退到本地 backend/.env，避免静默打出指向 127.0.0.1 的错误产物。
+const isNonDevEnv = Boolean(options.env) && options.env !== 'dev';
+function valueOf(key, { required = false } = {}) {
+  const explicit = process.env[key];
+  if (explicit !== undefined && explicit !== '') {
+    return String(explicit).trim();
+  }
+
+  const raw = selectedEnv[key];
+  if (raw) {
+    return String(raw).trim();
+  }
+
+  if (required && isNonDevEnv) {
+    throw new Error(
+      `使用 ${options.env} 环境（${selectedEnvPath}）构建时缺少 ${key}，生产地址不得回退到本地 backend/.env。`,
+    );
+  }
+
+  return String(raw || '').trim();
+}
+
+const apiOrigin = normalizeOrigin('APP_URL', valueOf('APP_URL', { required: true }));
+const websiteOrigin = normalizeOrigin('FRONTEND_URL', valueOf('FRONTEND_URL', { required: true }));
+const consoleOrigin = normalizeOrigin('CLIENT_CONSOLE_URL', valueOf('CLIENT_CONSOLE_URL', { required: true }));
+const adminOrigin = normalizeOrigin('ADMIN_URL', valueOf('ADMIN_URL', { required: true }));
 const origins = [apiOrigin, websiteOrigin, consoleOrigin, adminOrigin];
 
 if (new Set(origins).size !== origins.length) {
@@ -157,10 +205,11 @@ const baseBuildEnvironment = {
   VITE_API_BASE_URL: `${apiOrigin}/api`,
   VITE_PUBLIC_SITE_URL: websiteOrigin,
   VITE_CONSOLE_SITE_URL: consoleOrigin,
-  VITE_SESSION_COOKIE_DOMAIN: value('CLIENT_SESSION_COOKIE_DOMAIN'),
+  VITE_SESSION_COOKIE_DOMAIN: valueOf('CLIENT_SESSION_COOKIE_DOMAIN'),
 };
 
 if (options.dryRun) {
+  console.log(`环境文件: ${selectedEnvPath}`);
   console.log(`API: ${apiOrigin}`);
   console.log(`API base: ${baseBuildEnvironment.VITE_API_BASE_URL}`);
   console.log(`WWW: ${websiteOrigin}`);
