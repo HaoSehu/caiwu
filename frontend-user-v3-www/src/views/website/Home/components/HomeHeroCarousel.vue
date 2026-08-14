@@ -16,7 +16,7 @@
           muted
           loop
           playsinline
-          :preload="activeVideoSlot === 'a' ? 'metadata' : 'none'"
+          :preload="videoSlotA && activeVideoSlot === 'a' ? 'auto' : 'none'"
           @loadeddata="onVideoALoadedData"
           @canplay="onVideoACanPlay"
           @loadedmetadata="onVideoMetadata($event, 'a')"
@@ -33,7 +33,7 @@
           muted
           loop
           playsinline
-          :preload="activeVideoSlot === 'b' ? 'metadata' : 'none'"
+          :preload="videoSlotB && activeVideoSlot === 'b' ? 'auto' : 'none'"
           @loadeddata="onVideoBLoadedData"
           @canplay="onVideoBCanPlay"
           @loadedmetadata="onVideoMetadata($event, 'b')"
@@ -774,7 +774,9 @@ function handleVisibilityChange() {
 
 onMounted(() => {
   startRotation()
-  scheduleHeroVideoEnable()
+  // 首屏视频是 LCP 元素：不等 idle 回调，立即启动加载，避免把 ~1.2s 的空等计入 LCP。
+  // 慢网络/移动端/减弱动效场景由 shouldEnableHeroVideo() 在内部拦截。
+  enableHeroVideo()
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', handleVisibilityChange)
   }
