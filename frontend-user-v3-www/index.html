@@ -17,8 +17,10 @@
   <meta name="twitter:card" content="summary_large_image" />
   <link rel="canonical" href="https://www.coyjs.cn/" />
   <title>创欧云 - 稳定、安全、高性价比的云服务器与 IDC 服务平台</title>
-  <link rel="icon" type="image/svg+xml" href="/branding/logo1.svg" fetchpriority="high" />
+  <link rel="icon" type="image/svg+xml" href="/branding/logo1.svg" />
   <link rel="alternate" hreflang="zh-CN" href="/" />
+  <!-- API 源站预连接：首屏数据请求与 hero 视频均指向该跨域源，提前 DNS + TLS -->
+  <link rel="preconnect" href="%VITE_API_BASE_URL%" crossorigin />
   <link rel="prefetch" href="%VITE_API_BASE_URL%/v2/site/config" as="fetch" crossorigin="anonymous" />
   
   <!-- 关键第三方域名预连接，减少 DNS + TLS 握手开销 -->
