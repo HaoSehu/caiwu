@@ -110,12 +110,29 @@ function deriveProductTypesFromGroups(groups: any[]) {
   return Array.from(map.values());
 }
 
+function resolveHome() {
+  // 优先消费 index.html 预热期 fetch 的 /v2/site/home 响应（window.__HOME_FETCH__），
+  // 复用正常化管线；预热失败/无预热则回退常规 axios 请求。
+  const prefetchPromise = (window as any).__HOME_FETCH__;
+  if (!prefetchPromise) {
+    return siteApi.home();
+  }
+
+  (window as any).__HOME_FETCH__ = undefined;
+  return prefetchPromise.then((raw: any) => {
+    if (raw && raw.code === 0 && raw.data && typeof raw.data === "object") {
+      return siteApi.homeFromRaw(raw);
+    }
+    return siteApi.home();
+  });
+}
+
 async function loadHomePage() {
   loading.value = true;
   homeLoaded.value = false;
   homeLoadSucceeded.value = false;
 
-  const homeRes = await siteApi.home().catch(() => undefined);
+  const homeRes = await resolveHome().catch(() => undefined);
   if (homeRes?.data) {
     homeLoadSucceeded.value = true;
     const data = homeRes.data || {};

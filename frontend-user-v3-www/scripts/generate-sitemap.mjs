@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { listSeoLandingSitemapRoutes } from '../src/data/seoLandingPages.js'
+import { listSeoLandingSitemapRoutes } from '../src/data/seoLandingMeta.js'
 import { loadBuildEnv } from './build-env.mjs'
 
 const distDir = path.resolve(process.cwd(), 'dist')

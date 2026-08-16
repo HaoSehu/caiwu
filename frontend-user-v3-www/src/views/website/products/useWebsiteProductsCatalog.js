@@ -1,6 +1,10 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import siteApi from "@/api/site";
+import siteApi, {
+  getCachedCatalog,
+  invalidateCatalogCache,
+  setCachedCatalog,
+} from "@/api/site";
 import { getPendingWebsiteCouponId } from "@/utils/websiteCoupon";
 import {
   buildWebsiteProductPath,
@@ -9,32 +13,11 @@ import {
 } from "@/utils/productRoute";
 
 const MOBILE_BREAKPOINT = 900;
-const CATALOG_CACHE_TTL = 3 * 60 * 1000;
 
-const catalogCache = new Map();
+// 进行中的目录请求去重（site.js 的 catalogCache 负责结果缓存）
 const catalogPendingMap = new Map();
-
-function getCachedCatalog(groupId) {
-  const entry = catalogCache.get(groupId);
-  if (!entry) {
-    return null;
-  }
-
-  if (Date.now() - entry.timestamp > CATALOG_CACHE_TTL) {
-    catalogCache.delete(groupId);
-    return null;
-  }
-
-  return entry.data;
-}
-
-function setCachedCatalog(groupId, data) {
-  catalogCache.set(groupId, { data, timestamp: Date.now() });
-}
-
-function invalidateCatalogCache(groupId) {
-  catalogCache.delete(groupId);
-}
+// 已访问类型的根分组缓存：切换类型时本地过滤，避免重复请求 productGroups
+const rootGroupsByType = new Map();
 
 function groupMatchesType(group, typeValue) {
   if (!typeValue) {
@@ -380,13 +363,18 @@ export function useWebsiteProductsCatalog({
     pageLoading.value = true;
 
     try {
-      const res = await siteApi.productGroups({
-        first_product_group_code: activeTypeValue.value || undefined,
-      });
-      rootGroups.value = filterGroupsByType(
-        res.data.list || [],
-        activeTypeValue.value,
-      );
+      const typeValue = activeTypeValue.value || "";
+      // 优先复用已加载过的类型分组，切换回已访问类型时不重复请求 productGroups
+      let groups = rootGroupsByType.get(typeValue);
+      if (!groups) {
+        const res = await siteApi.productGroups({
+          first_product_group_code: typeValue || undefined,
+        });
+        groups = filterGroupsByType(res.data.list || [], typeValue);
+        rootGroupsByType.set(typeValue, groups);
+      }
+
+      rootGroups.value = groups;
 
       if (rootGroups.value.length) {
         const targetGroupId = Number(options.targetGroupId || 0);
@@ -625,6 +613,31 @@ export function useWebsiteProductsCatalog({
       }
 
       if (hasRouteTarget) {
+        // 先用 productsInit 响应的 root_groups 与 catalog 填充本地状态/缓存，
+        // 让 applyRouteSelection 命中本地分组与目录，避免深链「purchase-context →
+        // product-groups → 完整目录」重复拉取首组目录。
+        const routePayload = readWebsiteProductRouteParams(route);
+        const targetType = productTypes.value.find(
+          (item) => String(item.value || "") === String(routePayload.typeId),
+        );
+        const nextTypeValue =
+          targetType?.value || productTypes.value[0]?.value || "";
+        if (nextTypeValue) {
+          activeTypeValue.value = nextTypeValue;
+          const groups = filterGroupsByType(
+            data.root_groups || [],
+            nextTypeValue,
+          );
+          rootGroupsByType.set(nextTypeValue, groups);
+          rootGroups.value = groups;
+        }
+        if (
+          data.catalog &&
+          Number(data.catalog.effective_product_group_id || 0) > 0
+        ) {
+          setCachedCatalog(data.catalog.effective_product_group_id, data.catalog);
+        }
+
         const linked = await applyRouteSelection();
         return linked;
       }
@@ -636,6 +649,7 @@ export function useWebsiteProductsCatalog({
         data.root_groups || [],
         firstTypeValue,
       );
+      rootGroupsByType.set(firstTypeValue, rootGroups.value);
 
       if (
         rootGroups.value.length &&

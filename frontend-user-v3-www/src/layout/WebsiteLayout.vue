@@ -209,45 +209,70 @@
         </transition>
 
         <div class="header-actions">
-          <el-dropdown
+          <div
             v-if="userStore.isLoggedIn"
-            trigger="click"
-            placement="bottom-end"
-            @command="handleUserMenuCommand"
+            ref="userMenuTriggerRef"
+            class="user-menu"
           >
-            <span class="header-user-trigger" aria-label="用户菜单">
-              <span class="user-avatar-initial">{{ userAvatarInitial }}</span>
-              <span class="header-user-name">{{ userDisplayName }}</span>
-              <el-icon class="header-user-arrow"><ArrowDown /></el-icon>
-            </span>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item :command="consoleUrl('/client/dashboard')">
-                  <el-icon><Monitor /></el-icon>
-                  控制台
-                </el-dropdown-item>
-                <el-dropdown-item :command="consoleUrl('/client/services')">
-                  <el-icon><Box /></el-icon>
-                  我的服务
-                </el-dropdown-item>
-                <el-dropdown-item
-                  divided
-                  :command="consoleUrl('/client/profile')"
-                >
-                  <el-icon><User /></el-icon>
-                  个人资料
-                </el-dropdown-item>
-                <el-dropdown-item :command="consoleUrl('/client/recharge')">
-                  <el-icon><Wallet /></el-icon>
-                  账户充值
-                </el-dropdown-item>
-                <el-dropdown-item divided command="logout">
-                  <el-icon><CircleClose /></el-icon>
-                  退出登录
-                </el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
+          <button
+            type="button"
+            class="header-user-trigger"
+            :class="{ 'is-active': userMenuOpen }"
+            aria-label="用户菜单"
+            :aria-expanded="userMenuOpen"
+            @click="toggleUserMenu"
+          >
+            <span class="user-avatar-initial">{{ userAvatarInitial }}</span>
+            <span class="header-user-name">{{ userDisplayName }}</span>
+            <el-icon class="header-user-arrow"><ArrowDown /></el-icon>
+          </button>
+          <transition name="user-menu-fade">
+            <div v-if="userMenuOpen" class="user-menu-panel" role="menu">
+              <button
+                type="button"
+                role="menuitem"
+                class="user-menu-item"
+                @click="onUserMenuCommand(consoleUrl('/client/dashboard'))"
+              >
+                <el-icon><Monitor /></el-icon>控制台
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                class="user-menu-item"
+                @click="onUserMenuCommand(consoleUrl('/client/services'))"
+              >
+                <el-icon><Box /></el-icon>我的服务
+              </button>
+              <div class="user-menu-divider"></div>
+              <button
+                type="button"
+                role="menuitem"
+                class="user-menu-item"
+                @click="onUserMenuCommand(consoleUrl('/client/profile'))"
+              >
+                <el-icon><User /></el-icon>个人资料
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                class="user-menu-item"
+                @click="onUserMenuCommand(consoleUrl('/client/recharge'))"
+              >
+                <el-icon><Wallet /></el-icon>账户充值
+              </button>
+              <div class="user-menu-divider"></div>
+              <button
+                type="button"
+                role="menuitem"
+                class="user-menu-item is-danger"
+                @click="onUserMenuCommand('logout')"
+              >
+                <el-icon><CircleClose /></el-icon>退出登录
+              </button>
+            </div>
+          </transition>
+          </div>
           <template v-if="!userStore.isLoggedIn">
             <a :href="consoleUrl('/client/login')" class="header-link">登录</a>
             <a :href="consoleUrl('/client/register')" class="header-register"
@@ -256,43 +281,67 @@
           </template>
         </div>
 
-        <el-dropdown
+        <div
           v-if="userStore.isLoggedIn"
-          trigger="click"
-          placement="bottom-end"
-          @command="handleUserMenuCommand"
+          ref="mobileUserMenuTriggerRef"
+          class="mobile-user-menu"
         >
-          <span class="mobile-user-icon is-avatar" aria-label="用户菜单">
+          <button
+            type="button"
+            class="mobile-user-icon is-avatar"
+            aria-label="用户菜单"
+            :aria-expanded="mobileUserMenuOpen"
+            @click="toggleMobileUserMenu"
+          >
             <span class="user-avatar-initial">{{ userAvatarInitial }}</span>
-          </span>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item :command="consoleUrl('/client/dashboard')">
-                <el-icon><Monitor /></el-icon>
-                控制台
-              </el-dropdown-item>
-              <el-dropdown-item :command="consoleUrl('/client/services')">
-                <el-icon><Box /></el-icon>
-                我的服务
-              </el-dropdown-item>
-              <el-dropdown-item
-                divided
-                :command="consoleUrl('/client/profile')"
+          </button>
+          <transition name="user-menu-fade">
+            <div v-if="mobileUserMenuOpen" class="user-menu-panel" role="menu">
+              <button
+                type="button"
+                role="menuitem"
+                class="user-menu-item"
+                @click="onUserMenuCommand(consoleUrl('/client/dashboard'))"
               >
-                <el-icon><User /></el-icon>
-                个人资料
-              </el-dropdown-item>
-              <el-dropdown-item :command="consoleUrl('/client/recharge')">
-                <el-icon><Wallet /></el-icon>
-                账户充值
-              </el-dropdown-item>
-              <el-dropdown-item divided command="logout">
-                <el-icon><CircleClose /></el-icon>
-                退出登录
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+                <el-icon><Monitor /></el-icon>控制台
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                class="user-menu-item"
+                @click="onUserMenuCommand(consoleUrl('/client/services'))"
+              >
+                <el-icon><Box /></el-icon>我的服务
+              </button>
+              <div class="user-menu-divider"></div>
+              <button
+                type="button"
+                role="menuitem"
+                class="user-menu-item"
+                @click="onUserMenuCommand(consoleUrl('/client/profile'))"
+              >
+                <el-icon><User /></el-icon>个人资料
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                class="user-menu-item"
+                @click="onUserMenuCommand(consoleUrl('/client/recharge'))"
+              >
+                <el-icon><Wallet /></el-icon>账户充值
+              </button>
+              <div class="user-menu-divider"></div>
+              <button
+                type="button"
+                role="menuitem"
+                class="user-menu-item is-danger"
+                @click="onUserMenuCommand('logout')"
+              >
+                <el-icon><CircleClose /></el-icon>退出登录
+              </button>
+            </div>
+          </transition>
+        </div>
         <a v-else :href="consoleUrl('/client/login')" class="mobile-user-icon">
           <el-icon :size="20"><User /></el-icon>
         </a>
@@ -695,7 +744,7 @@ import {
 import { useAppStore } from "@/stores/app";
 import { useUserStore } from "@/stores/user";
 import { buildSupportContacts } from "@/data/supportContacts";
-import { seoLandingFooterLinks } from "@/data/seoLandingPages";
+import { seoLandingFooterLinks } from "@/data/seoLandingMeta";
 import { buildConsoleUrl, isConsolePath } from "@/utils/consoleUrl";
 import { useNavProductMenu } from "./useNavProductMenu";
 import { useNavContentMenu } from "./useNavContentMenu";
@@ -776,6 +825,44 @@ function handleUserMenuCommand(command) {
     });
   } else {
     window.location.href = command;
+  }
+}
+
+// 轻量自定义用户下拉（替代 el-dropdown，避免 element-plus popper 机制进首屏）
+const userMenuOpen = ref(false);
+const mobileUserMenuOpen = ref(false);
+const userMenuTriggerRef = ref(null);
+const mobileUserMenuTriggerRef = ref(null);
+
+function toggleUserMenu() {
+  userMenuOpen.value = !userMenuOpen.value;
+}
+
+function toggleMobileUserMenu() {
+  mobileUserMenuOpen.value = !mobileUserMenuOpen.value;
+}
+
+function onUserMenuCommand(command) {
+  userMenuOpen.value = false;
+  mobileUserMenuOpen.value = false;
+  handleUserMenuCommand(command);
+}
+
+function closeUserMenusOnOutside(event) {
+  const desktopRoot = userMenuTriggerRef.value;
+  const mobileRoot = mobileUserMenuTriggerRef.value;
+  const insideDesktop = desktopRoot && desktopRoot.contains(event.target);
+  const insideMobile = mobileRoot && mobileRoot.contains(event.target);
+  if (!insideDesktop && !insideMobile) {
+    userMenuOpen.value = false;
+    mobileUserMenuOpen.value = false;
+  }
+}
+
+function closeUserMenusOnEscape(event) {
+  if (event.key === "Escape") {
+    userMenuOpen.value = false;
+    mobileUserMenuOpen.value = false;
   }
 }
 
@@ -960,11 +1047,15 @@ onMounted(() => {
   handleResize();
   window.addEventListener("scroll", handleScroll, { passive: true });
   window.addEventListener("resize", handleResize, { passive: true });
+  document.addEventListener("pointerdown", closeUserMenusOnOutside);
+  document.addEventListener("keydown", closeUserMenusOnEscape);
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener("scroll", handleScroll);
   window.removeEventListener("resize", handleResize);
+  document.removeEventListener("pointerdown", closeUserMenusOnOutside);
+  document.removeEventListener("keydown", closeUserMenusOnEscape);
   if (scrollRaf) cancelAnimationFrame(scrollRaf);
   scrollRaf = null;
   document.body.style.overflow = "";
@@ -1299,6 +1390,8 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   padding: 4px 12px 4px 4px;
+  border: none;
+  background: transparent;
   border-radius: 999px;
   cursor: pointer;
   transition: background 0.16s ease;
@@ -1347,22 +1440,105 @@ onBeforeUnmount(() => {
   }
 }
 
-// Dropdown 展开/关闭动画
-.el-dropdown__popper {
-  transform-origin: top right !important;
-  animation-duration: 0.2s !important;
+// 轻量自定义用户下拉（替代 el-dropdown，避免 element-plus popper 机制进首屏）
+.user-menu,
+.mobile-user-menu {
+  position: relative;
+}
 
-  &.el-zoom-in-top-enter-active,
-  &.el-zoom-in-top-leave-active {
-    transition:
-      opacity 0.2s ease,
-      transform 0.2s ease !important;
+.user-menu-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  min-width: 180px;
+  padding: 6px;
+  background: $bg-color-card;
+  border: 1px solid $border-color;
+  border-radius: 12px;
+  box-shadow: $shadow-lg;
+}
+
+.user-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: $text-color-primary;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background $motion-fast ease,
+    color $motion-fast ease;
+
+  .el-icon {
+    font-size: 16px;
+    color: $text-color-placeholder;
+    transition: color $motion-fast ease;
   }
 
-  &.el-zoom-in-top-enter-from,
-  &.el-zoom-in-top-leave-to {
-    opacity: 0 !important;
-    transform: scaleY(0.8) !important;
+  &:hover {
+    background: rgba(22, 93, 255, 0.06);
+    color: $color-primary;
+
+    .el-icon {
+      color: $color-primary;
+    }
+  }
+
+  &.is-danger {
+    color: $color-danger;
+
+    .el-icon {
+      color: $color-danger;
+    }
+  }
+
+  &.is-danger:hover {
+    background: rgba(240, 68, 56, 0.08);
+  }
+}
+
+.user-menu-divider {
+  height: 1px;
+  margin: 6px 4px;
+  background: $divider-color;
+}
+
+.user-menu-fade-enter-active,
+.user-menu-fade-leave-active {
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+  transform-origin: top right;
+}
+
+.user-menu-fade-enter-from,
+.user-menu-fade-leave-to {
+  opacity: 0;
+  transform: scaleY(0.85);
+}
+
+.mobile-user-menu {
+  display: none;
+
+  .mobile-user-icon {
+    border: none;
+    padding: 0;
+    font: inherit;
+    cursor: pointer;
+  }
+}
+
+@media (max-width: 960px) {
+  .mobile-user-menu {
+    display: block;
   }
 }
 

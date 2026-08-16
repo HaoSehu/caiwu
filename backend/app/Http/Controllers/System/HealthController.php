@@ -6,18 +6,14 @@ namespace App\Http\Controllers\System;
 
 use App\Http\Controllers\Controller;
 use App\Services\System\ProductionReadinessService;
+use App\Support\ApiResponseBuilder;
 use Illuminate\Http\JsonResponse;
 
 class HealthController extends Controller
 {
     public function live(): JsonResponse
     {
-        return response()->json([
-            'code' => 0,
-            'message' => 'ok',
-            'data' => ['status' => 'alive'],
-            'timestamp' => time(),
-        ]);
+        return ApiResponseBuilder::success(['status' => 'alive'], '服务正常');
     }
 
     public function ready(ProductionReadinessService $readiness): JsonResponse
@@ -25,14 +21,16 @@ class HealthController extends Controller
         $report = $readiness->check();
         $ready = $report['ready'];
 
-        return response()->json([
-            'code' => $ready ? 0 : 50300,
-            'message' => $ready ? 'ok' : '服务未就绪',
-            'data' => [
-                'status' => $ready ? 'ready' : 'not_ready',
+        if ($ready) {
+            return ApiResponseBuilder::success([
+                'status' => 'ready',
                 'checks' => $report['checks'],
-            ],
-            'timestamp' => time(),
-        ], $ready ? 200 : 503);
+            ], '服务已就绪');
+        }
+
+        return ApiResponseBuilder::error(50300, '服务未就绪', [
+            'status' => 'not_ready',
+            'checks' => $report['checks'],
+        ], 503);
     }
 }

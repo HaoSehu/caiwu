@@ -256,15 +256,6 @@ export const seoLandingPages = [
   },
 ]
 
-export const seoLandingFooterLinks = seoLandingPages.map((page) => ({
-  to: page.path,
-  label: page.keyword,
-}))
-
-const DEFAULT_SITE_URL = 'https://www.coyjs.cn'
-const SITE_NAME = '创欧云'
-const SITE_LANGUAGE = 'zh-CN'
-
 function normalizePath(path) {
   const value = String(path || '').trim()
   if (!value) return '/'
@@ -272,119 +263,7 @@ function normalizePath(path) {
   return withLeadingSlash === '/' ? '/' : withLeadingSlash.replace(/\/+$/, '')
 }
 
-function normalizeSiteUrl(siteUrl) {
-  return String(siteUrl || DEFAULT_SITE_URL).replace(/\/+$/, '') || DEFAULT_SITE_URL
-}
-
-function absoluteUrl(siteUrl, path) {
-  const normalizedSiteUrl = normalizeSiteUrl(siteUrl)
-  const normalizedPath = normalizePath(path)
-  return `${normalizedSiteUrl}${normalizedPath === '/' ? '/' : normalizedPath}`
-}
-
 export function getSeoLandingPageByPath(path) {
   const normalizedPath = normalizePath(path)
   return seoLandingPages.find((page) => page.path === normalizedPath) || null
-}
-
-export function buildSeoLandingStructuredData(page, siteUrl = DEFAULT_SITE_URL) {
-  const normalizedSiteUrl = normalizeSiteUrl(siteUrl)
-  const homeUrl = `${normalizedSiteUrl}/`
-  const productsUrl = absoluteUrl(normalizedSiteUrl, '/products')
-  const pageUrl = absoluteUrl(normalizedSiteUrl, page.path)
-  const organizationId = `${normalizedSiteUrl}/#organization`
-  const websiteId = `${normalizedSiteUrl}/#website`
-  const webpageId = `${pageUrl}#webpage`
-
-  return [
-    {
-      '@context': 'https://schema.org',
-      '@type': 'Organization',
-      '@id': organizationId,
-      name: SITE_NAME,
-      url: homeUrl,
-      logo: absoluteUrl(normalizedSiteUrl, '/branding/logo1.svg'),
-    },
-    {
-      '@context': 'https://schema.org',
-      '@type': 'WebSite',
-      '@id': websiteId,
-      name: SITE_NAME,
-      url: homeUrl,
-      inLanguage: SITE_LANGUAGE,
-      publisher: {
-        '@id': organizationId,
-      },
-    },
-    {
-      '@context': 'https://schema.org',
-      '@type': 'WebPage',
-      '@id': webpageId,
-      url: pageUrl,
-      name: page.title,
-      headline: page.hero.title,
-      description: page.description,
-      keywords: page.keywords,
-      inLanguage: SITE_LANGUAGE,
-      isPartOf: {
-        '@id': websiteId,
-      },
-      about: {
-        '@type': 'Service',
-        name: page.keyword,
-        description: page.hero.summary,
-        provider: {
-          '@id': organizationId,
-        },
-      },
-    },
-    {
-      '@context': 'https://schema.org',
-      '@type': 'BreadcrumbList',
-      itemListElement: [
-        {
-          '@type': 'ListItem',
-          position: 1,
-          name: '首页',
-          item: homeUrl,
-        },
-        {
-          '@type': 'ListItem',
-          position: 2,
-          name: '产品与服务',
-          item: productsUrl,
-        },
-        {
-          '@type': 'ListItem',
-          position: 3,
-          name: page.keyword,
-          item: pageUrl,
-        },
-      ],
-    },
-  ]
-}
-
-export function buildSeoLandingRouteMeta(page) {
-  return {
-    title: page.title,
-    description: page.description,
-    keywords: page.keywords,
-    canonical: page.path,
-    seoLandingPath: page.path,
-    seoLanding: true,
-    structuredData: ({ siteUrl } = {}) => buildSeoLandingStructuredData(page, siteUrl),
-  }
-}
-
-export function listSeoLandingSitemapRoutes() {
-  return seoLandingPages.map((page) => ({
-    path: page.path,
-    title: page.title,
-    description: page.description,
-    keywords: page.keywords,
-    changefreq: page.changefreq,
-    priority: page.priority,
-    structuredData: (siteUrl) => buildSeoLandingStructuredData(page, siteUrl),
-  }))
 }

@@ -19,6 +19,33 @@ import {
 
 const V2_SITE_PRODUCT_GROUP_PAGE_SIZE = 50;
 
+// 目录数据缓存下沉到 api 层，供 productsInit 兜底与前端 composable 共享，
+// 避免深链/切组重复拉取同一完整目录。存 normalizer 后的 catalog data（幂等）。
+const CATALOG_CACHE_TTL = 3 * 60 * 1000;
+const catalogCache = new Map();
+
+export function getCachedCatalog(groupId) {
+  const entry = catalogCache.get(groupId);
+  if (!entry) {
+    return null;
+  }
+
+  if (Date.now() - entry.timestamp > CATALOG_CACHE_TTL) {
+    catalogCache.delete(groupId);
+    return null;
+  }
+
+  return entry.data;
+}
+
+export function setCachedCatalog(groupId, data) {
+  catalogCache.set(groupId, { data, timestamp: Date.now() });
+}
+
+export function invalidateCatalogCache(groupId) {
+  catalogCache.delete(groupId);
+}
+
 function configWithoutParams(config = {}) {
   const { params: _params, ...requestConfig } = config || {};
   return requestConfig;
@@ -62,9 +89,15 @@ async function fetchAllV2SiteProductGroups(url, params = {}, config = {}) {
 
     baseResponse ||= response;
     const data = response.data || {};
-    list.push(...(data.list || []));
+    const pageList = data.list || [];
+    list.push(...pageList);
     total = Number(data.total || list.length);
     page += 1;
+    // 终止保护：本页返回空列表或已达最大页数即退出，
+    // 避免后端 total 与分页返回数不一致时无限翻页
+    if (!pageList.length || page > 100) {
+      break;
+    }
   } while (list.length < total);
 
   return { response: baseResponse, list, total };
@@ -90,28 +123,41 @@ async function fetchAllV2SiteProducts(groupId, level, config = {}) {
       );
 
     const data = response.data || {};
-    products.push(...(data.list || []));
+    const pageList = data.list || [];
+    products.push(...pageList);
     total = Number(data.total || products.length);
     page += 1;
+    // 终止保护：本页返回空列表或已达最大页数即退出，避免无限翻页
+    if (!pageList.length || page > 100) {
+      break;
+    }
   } while (products.length < total);
 
   return products;
 }
 
 async function fetchV2SiteProductGroupCatalog(groupId, config = {}) {
-  const childrenResult = await fetchAllV2SiteProductGroups(
-    `/v2/site/product-groups/${groupId}/children`,
-    {},
-    config,
-  );
-  const children = childrenResult.list || [];
-  const itemsByGroup = [];
-  const rootProducts = await fetchAllV2SiteProducts(groupId, 2, config);
+  const cached = getCachedCatalog(groupId);
+  if (cached) {
+    return { code: 0, message: "操作成功", data: cached };
+  }
 
-  itemsByGroup.push({
-    effective_product_group_id: Number(groupId),
-    products: rootProducts,
-  });
+  // children 列表与根产品无数据依赖，并行拉取省一个 RTT
+  const [childrenResult, rootProducts] = await Promise.all([
+    fetchAllV2SiteProductGroups(
+      `/v2/site/product-groups/${groupId}/children`,
+      {},
+      config,
+    ),
+    fetchAllV2SiteProducts(groupId, 2, config),
+  ]);
+  const children = childrenResult.list || [];
+  const itemsByGroup = [
+    {
+      effective_product_group_id: Number(groupId),
+      products: rootProducts,
+    },
+  ];
 
   const childItems = await Promise.all(
     children.map(async (child) => {
@@ -137,7 +183,7 @@ async function fetchV2SiteProductGroupCatalog(groupId, config = {}) {
 
   itemsByGroup.push(...childItems.filter(Boolean));
 
-  return normalizeProductResponse(
+  const response = normalizeProductResponse(
     {
       ...(childrenResult.response || { code: 0, message: "操作成功" }),
       data: {
@@ -149,6 +195,9 @@ async function fetchV2SiteProductGroupCatalog(groupId, config = {}) {
     },
     normalizeProductGroupCatalogPayload,
   );
+
+  setCachedCatalog(groupId, response.data);
+  return response;
 }
 
 async function fetchV2SiteProductPurchaseContext(params, config = {}) {
@@ -168,11 +217,15 @@ async function fetchV2SiteProductPurchaseContext(params, config = {}) {
   let catalog = response.data?.catalog;
 
   if (firstGroupId > 0 && !catalog) {
-    const catalogResponse = await fetchV2SiteProductGroupCatalog(
-      firstGroupId,
-      config,
-    );
-    catalog = catalogResponse.data;
+    // 优先复用 api 层目录缓存，避免每次进入 /products 都重复拉取首组完整目录
+    catalog = getCachedCatalog(firstGroupId);
+    if (!catalog) {
+      const catalogResponse = await fetchV2SiteProductGroupCatalog(
+        firstGroupId,
+        config,
+      );
+      catalog = catalogResponse.data;
+    }
   }
 
   return normalizeProductResponse(
@@ -198,6 +251,21 @@ export default {
       .then((response) =>
         normalizeProductResponse(response, normalizeSiteHomeProductPayload),
       ),
+  // 复用 index.html 预热期 fetch 到的原始 /v2/site/home 响应，
+  // 走与 home() 完全一致的 normalizer 管线，避免字段结构差异。
+  homeFromRaw: (rawResponse) => {
+    const response =
+      rawResponse && typeof rawResponse === "object" ? rawResponse : {};
+    const payload =
+      response.data && typeof response.data === "object" ? response.data : {};
+    return normalizeProductResponse(
+      withNormalizedData(
+        { ...response, data: payload },
+        normalizeSiteHomePayload,
+      ),
+      normalizeSiteHomeProductPayload,
+    );
+  },
   productsInit: (params, config = {}) =>
     fetchV2SiteProductPurchaseContext(params, config),
   productTypes: (config) =>

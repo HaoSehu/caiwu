@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Exceptions;
 
+use App\Support\ApiResponseBuilder;
+use Illuminate\Http\JsonResponse;
 use RuntimeException;
 
 class IntegrationException extends RuntimeException
@@ -20,5 +22,11 @@ class IntegrationException extends RuntimeException
         ?\Throwable $previous = null,
     ) {
         parent::__construct($message, $code, $previous);
+    }
+
+    public function render(): JsonResponse
+    {
+        // context 含上游原始报错，仅在日志中记录，不随响应下发给客户端。
+        return ApiResponseBuilder::error($this->code, $this->getMessage());
     }
 }

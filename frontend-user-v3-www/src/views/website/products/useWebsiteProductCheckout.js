@@ -43,6 +43,9 @@ export function useWebsiteProductCheckout({
   const productDetailCache = {};
   const productDetailPending = {};
   const PRODUCT_DETAIL_PREFETCH_CONCURRENCY = 2;
+  // 单分类详情预取上限：仅预取列表前若干个（多在首屏视口附近），
+  // 避免大分类（page_size=50）对全部商品逐个发请求
+  const PRODUCT_DETAIL_PREFETCH_LIMIT = 8;
 
   let currentProductId = 0;
   let detailToken = 0;
@@ -533,6 +536,8 @@ export function useWebsiteProductCheckout({
     detailAbortController?.abort();
     stockAbortController?.abort();
     quoteAbortController?.abort();
+    // 用户已选中商品，中止对该分类其余商品的详情预取，避免与当前商品的请求争抢连接
+    cancelProductDetailPrefetch();
     if (!cached) {
       productDetail.value = null;
       resetConfigForm();
@@ -571,7 +576,7 @@ export function useWebsiteProductCheckout({
               !productDetailPending[id],
           ),
       ),
-    );
+    ).slice(0, PRODUCT_DETAIL_PREFETCH_LIMIT);
 
     if (!ids.length) {
       return;

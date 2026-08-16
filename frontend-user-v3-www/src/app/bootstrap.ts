@@ -2,7 +2,9 @@ import { createApp } from "vue";
 import { createPinia } from "pinia";
 import { provideGlobalConfig } from "element-plus/es/components/config-provider/index.mjs";
 import zhCn from "element-plus/es/locale/lang/zh-cn";
-import "element-plus/es/components/message/style/css";
+// 用 sass 版样式走 Vite scss 管线（经 additionalData 注入主题变量编译），
+// 避免引入 element-plus/theme-chalk 默认主题 base.css（含未覆盖的 --el-color-primary-rgb 死块）。
+import "element-plus/es/components/message/style/index";
 
 import App from "@/App.vue";
 import { createClientRouter } from "@/app/router";
