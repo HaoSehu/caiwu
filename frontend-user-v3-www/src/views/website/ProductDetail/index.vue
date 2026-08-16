@@ -59,7 +59,7 @@
             :class="{ active: sib.id === product.id }"
             @click="switchProduct(sib.id)"
           >
-            {{ resolveMachineSpecPresentation(sib).displayName }}
+            {{ siblingDisplayNames[sib.id] }}
           </button>
         </div>
       </div>
@@ -597,6 +597,18 @@ const selectedMachineSpec = computed(() =>
     memory: configForm.memory,
   }),
 );
+
+// 同级 Tab 的规格展示名缓存：仅 siblings 变化时重算，避免每次渲染对每个同级重复正则解析
+const siblingDisplayNames = computed(() => {
+  const map = new Map();
+  (siblings.value || []).forEach((sib) => {
+    const id = Number(sib?.id || 0);
+    if (id > 0) {
+      map.set(id, resolveMachineSpecPresentation(sib).displayName);
+    }
+  });
+  return map;
+});
 
 function selectOsGroup(os) {
   configForm.os_group = os.id;

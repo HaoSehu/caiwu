@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict'
 import {
-  buildSeoLandingStructuredData,
-  buildSeoLandingRouteMeta,
   getSeoLandingPageByPath,
-  listSeoLandingSitemapRoutes,
   seoLandingPages,
 } from '../src/data/seoLandingPages.js'
+import {
+  buildSeoLandingRouteMeta,
+  buildSeoLandingStructuredData,
+  listSeoLandingSitemapRoutes,
+  seoLandingMetaPages,
+} from '../src/data/seoLandingMeta.js'
 
 const expectedPaths = [
   '/cloud-server',
@@ -15,6 +18,8 @@ const expectedPaths = [
   '/cloud-pc',
 ]
 
+// 内容数据（hero/features/scenarios 等全量文案）保留在 seoLandingPages.js，
+// 由懒加载落地页组件引入，不进 entry chunk
 assert.deepEqual(seoLandingPages.map((page) => page.path), expectedPaths)
 assert.equal(new Set(seoLandingPages.map((page) => page.path)).size, seoLandingPages.length)
 
@@ -27,6 +32,19 @@ for (const page of seoLandingPages) {
   assert.ok(page.features.length >= 3, `${page.path} should expose feature content`)
   assert.ok(page.scenarios.length >= 3, `${page.path} should expose scenario content`)
   assert.ok(page.faqs.length >= 3, `${page.path} should expose FAQ content`)
+}
+
+// 路由 meta 数据（轻量，进入 entry）拆分在 seoLandingMeta.js，路径与内容数据保持一致
+assert.deepEqual(seoLandingMetaPages.map((page) => page.path), expectedPaths)
+assert.equal(seoLandingMetaPages.length, seoLandingPages.length)
+
+for (const page of seoLandingMetaPages) {
+  assert.equal(getSeoLandingPageByPath(page.path)?.slug, page.slug)
+  assert.ok(page.title.includes('创欧云'), `${page.path} title should include brand`)
+  assert.ok(page.description.includes(page.keyword), `${page.path} description should include keyword`)
+  assert.ok(page.keywords.includes(page.keyword), `${page.path} keywords should include keyword`)
+  assert.ok(page.heroTitle.includes(page.keyword), `${page.path} meta heroTitle should include keyword`)
+  assert.ok(page.heroSummary, `${page.path} meta heroSummary should be present`)
 
   const meta = buildSeoLandingRouteMeta(page)
   assert.equal(meta.title, page.title)

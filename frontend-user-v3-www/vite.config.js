@@ -180,6 +180,24 @@ export default defineConfig(({ mode }) => {
       }),
       createPrecompressedAssetsPlugin(),
       {
+        // element-plus use-locale 用相对路径静态 import en 语言包作默认 fallback，
+        // 站点始终提供 zh-cn locale，用最小 stub 替代完整 en 语言包，消除入口 chunk 死代码。
+        // 用 resolveId 钩子返回绝对路径，避免 Vite alias 对相对路径 import 的拼接问题。
+        // 用 resolveId 钩子返回绝对路径，避免 Vite alias 对相对路径 import 的拼接问题。
+        // enforce: 'pre' 保证先于内置 vite:resolve 运行，否则内置解析已返回 en.mjs 的结果。
+        name: "strip-element-plus-en-locale",
+        enforce: "pre",
+        resolveId(source) {
+          if (
+            source === "element-plus/es/locale/lang/en.mjs" ||
+            /(?:^|[\\/])locale[\\/]lang[\\/]en\.mjs$/.test(source)
+          ) {
+            return path.resolve(__dirname, "src/shims/en-locale.mjs");
+          }
+          return null;
+        },
+      },
+      {
         name: "client-fetch-priority",
         apply: "build",
         transformIndexHtml(html) {

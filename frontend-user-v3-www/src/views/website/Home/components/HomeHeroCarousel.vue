@@ -15,6 +15,7 @@
             'hero-bg__video--instant': instantVideoReveal,
           }"
           :src="resolvedVideoSrc(videoSlotA)"
+          :poster="resolvedVideoSrc(activePoster)"
           autoplay
           muted
           loop
@@ -35,6 +36,7 @@
             'hero-bg__video--instant': instantVideoReveal,
           }"
           :src="resolvedVideoSrc(videoSlotB)"
+          :poster="resolvedVideoSrc(activePoster)"
           autoplay
           muted
           loop
@@ -80,7 +82,10 @@
         </button>
       </aside>
 
-      <div class="hero-body">
+      <div
+        class="hero-body"
+        :class="{ 'hero-body--instant': instantBodyReveal }"
+      >
         <h1 :key="activeSlide.key" class="hero-title">
           {{ activeSlide.title }}
         </h1>
@@ -182,6 +187,8 @@ const videoBRef = ref(null);
 const videoReady = ref(false);
 // 首次显示视频时跳过 0.8s 淡入，避免 LCP 首帧再叠加过渡延迟
 const instantVideoReveal = ref(true);
+// 首帧渲染禁用 hero 标题/描述的入场动画（LCP 文字立即绘制），首帧完成后恢复轮播切换淡入
+const instantBodyReveal = ref(true);
 const heroVideoEnabled = ref(false);
 const activeVideoSlot = ref("a");
 const videoSlotA = ref("");
@@ -360,6 +367,9 @@ function normalizeSlide(raw, index = 0) {
     ),
     shape: ALLOWED_SHAPES.has(shape) ? shape : "computer",
     video: pickString(source.video, ""),
+    // 视频首帧静态封面：管理端可配置，前端据此为 <video> 补 poster，
+    // 使 LCP 锚定在快速绘制的占位图上，而非等视频下载+解码。
+    poster: pickString(source.video_poster ?? source.videoPoster ?? source.poster, ""),
     ribbon: pickString(source.ribbon, ""),
     ribbonType: ALLOWED_RIBBON_TYPES.has(ribbonType) ? ribbonType : "new",
   };
@@ -436,6 +446,9 @@ const activeSlide = computed(
     heroSlides.value[0] ||
     DEFAULT_SLIDES[0],
 );
+
+// 当前 slide 的视频首帧封面：为空时不设 poster，由 video 默认行为兜底
+const activePoster = computed(() => String(activeSlide.value?.poster || ""));
 
 const MIN_ROTATION_INTERVAL = 6000;
 const MAX_ROTATION_INTERVAL = 15000;
@@ -851,6 +864,12 @@ function handleVisibilityChange() {
 
 onMounted(() => {
   startRotation();
+  // 首帧渲染完成后关闭 instantBodyReveal，让后续轮播切换恢复 hero-body-rise 淡入动画
+  if (instantBodyReveal.value) {
+    nextTick(() => {
+      instantBodyReveal.value = false;
+    });
+  }
   // 首屏视频是 LCP 元素：不等 idle 回调，立即启动加载，避免把 ~1.2s 的空等计入 LCP。
   // 慢网络/移动端/减弱动效场景由 shouldEnableHeroVideo() 在内部拦截。
   enableHeroVideo();
@@ -1686,6 +1705,15 @@ onBeforeUnmount(() => {
   .hero-cta:hover,
   .hero-cta:active {
     transform: none !important;
+  }
+}
+
+// 首帧渲染（LCP）禁用 hero 标题/描述的入场动画：instantBodyReveal 初始为 true，
+// onMounted + nextTick 后置 false，此后轮播切换恢复 hero-body-rise 淡入。
+.hero-body--instant {
+  .hero-title,
+  .hero-desc {
+    animation: none;
   }
 }
 </style>
