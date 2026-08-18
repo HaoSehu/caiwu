@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Client\V2;
 
-use App\Exceptions\BusinessException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Client\V2\Auth\ExchangeLoginAsCodeRequest;
 use App\Http\Requests\Client\V2\Auth\LoginByCodeRequest;
@@ -19,17 +18,15 @@ use App\Http\Requests\Client\V2\Auth\UpdateNotificationPreferencesRequest;
 use App\Http\Requests\Client\V2\Auth\UpdatePasswordRequest;
 use App\Http\Requests\Client\V2\Auth\UpdatePhoneRequest;
 use App\Http\Requests\Client\V2\Auth\UpdateProfileRequest;
+use App\Http\Resources\Client\V2\ClientUserInfoResource;
 use App\Models\User;
 use App\Services\Auth\AuthService;
+use App\Services\Auth\ClientLoginFlowService;
 use App\Services\Auth\GeeTestService;
-use App\Services\Auth\LoginRiskControlService;
-use App\Services\Auth\MessageRateLimitService;
+use App\Services\Auth\SendAccountCodeService;
 use App\Services\Auth\VerificationCodeService;
-use App\Services\System\NotificationService;
-use App\Services\System\SmsService;
 use App\Support\AccountIdentifier;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\PersonalAccessToken;
 
 class AuthController extends Controller
@@ -37,10 +34,8 @@ class AuthController extends Controller
     public function __construct(
         private AuthService $authService,
         private GeeTestService $geeTestService,
-        private LoginRiskControlService $loginRiskControlService,
-        private MessageRateLimitService $messageRateLimitService,
-        private NotificationService $notificationService,
-        private SmsService $smsService,
+        private ClientLoginFlowService $loginFlowService,
+        private SendAccountCodeService $sendAccountCodeService,
         private VerificationCodeService $codeService,
     ) {}
 
@@ -51,42 +46,13 @@ class AuthController extends Controller
     {
         $data = $request->validated();
 
-        $normalizedAccount = AccountIdentifier::normalizeAccount((string) $data['account']);
-        $requestIp = (string) $request->ip();
-
-        // 验证码插件未启用时的兜底锁定：失败次数超阈值直接拒绝登录
-        if ($this->loginRiskControlService->isLoginLocked($normalizedAccount, $requestIp)) {
-            return $this->error(42900, '登录尝试次数过多，请稍后再试');
-        }
-
-        if (
-            $this->loginRiskControlService->shouldRequireCaptcha($normalizedAccount, $requestIp)
-            && ($response = $this->ensureGeeTestVerified($request, true))
-        ) {
-            return $response;
-        }
-
-        try {
-            $result = $this->authService->clientLogin(
-                $normalizedAccount,
-                (string) $data['password'],
-                $requestIp,
-                $request->userAgent()
-            );
-        } catch (BusinessException $exception) {
-            if ($exception->getErrorCode() === 40100) {
-                $this->loginRiskControlService->recordFailedAttempt($normalizedAccount, $requestIp);
-                $this->authService->notifyClientLoginFailureOnce(
-                    $normalizedAccount,
-                    $requestIp,
-                    $request->userAgent()
-                );
-            }
-
-            throw $exception;
-        }
-
-        $this->loginRiskControlService->clearSuccessfulLogin($normalizedAccount, $requestIp);
+        $result = $this->loginFlowService->login(
+            (string) $data['account'],
+            (string) $data['password'],
+            (string) $request->ip(),
+            $request->userAgent(),
+            $request->input('captcha')
+        );
 
         return $this->success($result, '登录成功');
     }
@@ -104,24 +70,12 @@ class AuthController extends Controller
 
         // 验证码插件未启用时的兜底锁定：防止验证码登录通道被爆破。
         // 验证码本身就是第二因素，不连带密码通道的账号维度软锁定（避免第三方用密码通道失败锁定他人验证码登录）。
-        if ($this->loginRiskControlService->isLoginLocked($account, (string) $request->ip(), false)) {
-            return $this->error(42900, '登录尝试次数过多，请稍后再试');
-        }
+        $this->loginFlowService->assertLoginNotLocked($account, (string) $request->ip(), false);
 
         // 先校验验证码再解析用户，未注册与验证码错误统一文案并保持时序一致
         $user = $this->authService->findClientByAccount($accountType, $account);
 
-        $verified = $accountType === 'phone'
-            ? $this->codeService->verifyPhoneCode('guest', $account, $code)
-            : $this->codeService->verifyEmailCode('guest', $account, $code);
-
-        if (! $verified && $user) {
-            $verified = $accountType === 'phone'
-                ? $this->codeService->verifyPhoneCode((int) $user->id, $account, $code)
-                : $this->codeService->verifyEmailCode((int) $user->id, $account, $code);
-        }
-
-        if (! $verified || ! $user) {
+        if (! $this->codeService->verifyAccountCode($accountType, $account, $code, $user) || ! $user) {
             return $this->error(42200, '账号或验证码错误');
         }
 
@@ -213,54 +167,8 @@ class AuthController extends Controller
             'memberLevel',
             'account',
         ]);
-        $memberLevel = $user->memberLevel;
 
-        return $this->success([
-            'id' => $user->id,
-            'email' => (string) ($user->email ?? ''),
-            'nickname' => $user->nickname,
-            'display_name' => (string) ($user->display_name ?? ''),
-            'phone' => (string) ($user->phone ?? ''),
-            'cash_balance' => (string) $user->balance,
-            'credit_limit' => (string) $user->credit_limit,
-            'referral_frozen_balance' => (string) $user->referral_frozen_amount,
-            'referral_available_balance' => (string) $user->referral_available_amount,
-            'referral_pending_withdrawal_balance' => (string) $user->referral_withdrawing_amount,
-            'referral_withdrawn_balance' => (string) $user->referral_withdrawn_amount,
-            'referral_code' => $user->referral_code,
-            'referrer_user_id' => $user->referrer_user_id,
-            'member_level_id' => $user->member_level_id,
-            'total_sales_amount' => $user->total_sales_amount,
-            'member_level' => $memberLevel ? [
-                'id' => $memberLevel->id,
-                'name' => $memberLevel->name,
-                'code' => $memberLevel->code,
-                'reward_rate' => $memberLevel->reward_rate,
-            ] : null,
-            'status' => $user->status,
-            'is_verified' => $user->is_verified,
-            'real_name' => $user->real_name,
-            'id_card_masked' => $this->maskIdCard((string) $user->id_card),
-            'verification_status' => $user->verification_status,
-            'verification_message' => $user->verification_message,
-            'verification_certify_id' => $user->verification_certify_id,
-            'login_email_alert' => (int) $user->login_email_alert,
-            'login_notify' => (int) (($user->login_notify ?? null) ?? $user->login_email_alert),
-            'login_location_alert' => (int) ($user->login_location_alert ?? 1),
-            'password_change_alert' => (int) ($user->password_change_alert ?? 1),
-            'phone_change_alert' => (int) ($user->phone_change_alert ?? 1),
-            'email_change_alert' => (int) ($user->email_change_alert ?? 1),
-            'marketing_alert' => (int) ($user->marketing_alert ?? 0),
-            'alipay_account' => [
-                'real_name' => $user->alipay_real_name,
-                'account' => $user->alipay_account,
-                'is_bound' => $this->hasBoundAlipayAccount($user),
-            ],
-            'last_login_at' => $user->last_login_at?->format('Y-m-d H:i:s'),
-            'last_login_ip' => (string) ($user->last_login_ip ?? ''),
-            'verified_at' => $user->verified_at?->format('Y-m-d H:i:s'),
-            'created_at' => $user->created_at?->format('Y-m-d H:i:s'),
-        ]);
+        return $this->success(new ClientUserInfoResource($user));
     }
 
     /**
@@ -296,7 +204,7 @@ class AuthController extends Controller
         return $this->success([
             'real_name' => $user->alipay_real_name,
             'account' => $user->alipay_account,
-            'is_bound' => $this->hasBoundAlipayAccount($user),
+            'is_bound' => $user->hasBoundAlipayAccount(),
         ]);
     }
 
@@ -306,23 +214,9 @@ class AuthController extends Controller
 
         $user = $request->user();
         $requestIp = (string) $request->ip();
-        $account = AccountIdentifier::normalizeAccount((string) ($user->email ?? $user->phone ?? ''));
-
-        // 密码二次确认失败会累积登录风险计数；先按锁定状态拒绝，防止该接口成为
-        // 无速率限制的密码爆破预言机（拿到 token 即可高频尝试、凭响应差异还原密码）。
-        if ($this->loginRiskControlService->isLoginLocked($account, $requestIp)) {
-            return $this->error(42900, '登录尝试次数过多，请稍后再试');
-        }
 
         // 提现账户改绑必须登录密码二次确认，防止登录态被滥用直接改绑提现账户
-        if (! Hash::check((string) $data['password'], (string) $user->password)) {
-            $this->loginRiskControlService->recordFailedAttempt($account, $requestIp);
-
-            return $this->error(42200, '登录密码错误');
-        }
-
-        // 密码已确认：解除该账号密码通道的失败计数，避免后续验证码校验失败把已确认密码的用户连带锁定。
-        $this->loginRiskControlService->clearSuccessfulLogin($account, $requestIp);
+        $this->loginFlowService->verifyPasswordWithRiskControl($user, (string) $data['password'], $requestIp);
 
         $phone = trim((string) $data['account']);
         $verified = $this->codeService->verifyPhoneCode($user->id, $phone, (string) $data['code']);
@@ -343,7 +237,7 @@ class AuthController extends Controller
         return $this->success([
             'real_name' => $freshUser?->alipay_real_name,
             'account' => $freshUser?->alipay_account,
-            'is_bound' => $freshUser ? $this->hasBoundAlipayAccount($freshUser) : true,
+            'is_bound' => $freshUser ? $freshUser->hasBoundAlipayAccount() : true,
         ], '支付宝资料保存成功');
     }
 
@@ -414,52 +308,15 @@ class AuthController extends Controller
     {
         $data = $request->validated();
 
-        if ($response = $this->ensureGeeTestVerified($request)) {
-            return $response;
-        }
+        $this->loginFlowService->assertCaptchaVerified($request->input('captcha'), (string) $request->ip());
 
-        $phone = (string) $data['phone'];
-
-        // 登录场景：校验账号是否存在且正常
-        if (($data['purpose'] ?? null) === 'login') {
-            $accountType = AccountIdentifier::detectType($phone);
-            $user = $this->authService->findClientByAccount($accountType, $phone);
-            if (! $user) {
-                return $this->error(42200, '手机号未注册');
-            }
-            if ($user->status !== 1) {
-                return $this->error(40300, '账号已被禁用');
-            }
-        }
-
-        // 旧手机验证场景：目标必须是当前账号已绑定的手机，防止向任意号码发送旧码
-        if (in_array((string) ($data['purpose'] ?? ''), ['verify_bound_phone', 'verify_phone'], true)) {
-            $currentPhone = trim((string) ($request->user()->phone ?? ''));
-            if ($currentPhone === '' || $currentPhone !== $phone) {
-                return $this->error(42200, '目标手机号与当前绑定不一致');
-            }
-        }
-
-        $userId = $this->resolveCodeOwnerId($request);
-        $code = (string) random_int(100000, 999999);
-        $ip = $request->ip();
-
-        if ($response = $this->ensureMessageRateLimitPassed('sms', $phone, $ip)) {
-            return $response;
-        }
-
-        try {
-            $this->smsService->sendVerifyCode($phone, $code, [
-                'purpose' => (string) ($data['purpose'] ?? 'generic'),
-            ]);
-        } catch (\Throwable $exception) {
-            report($exception);
-
-            return $this->error(42200, '短信服务暂不可用，请稍后重试');
-        }
-
-        $this->messageRateLimitService->hit('sms', $phone, $ip);
-        $this->codeService->storePhoneCode($userId, $phone, $code);
+        $this->sendAccountCodeService->sendPhoneCode(
+            $request->user(),
+            (string) $data['phone'],
+            (string) ($data['purpose'] ?? 'generic'),
+            $request->ip(),
+            $this->resolveCodeOwnerId($request)
+        );
 
         return $this->success(null, '短信验证码已发送');
     }
@@ -497,50 +354,15 @@ class AuthController extends Controller
     {
         $data = $request->validated();
 
-        if ($response = $this->ensureGeeTestVerified($request)) {
-            return $response;
-        }
+        $this->loginFlowService->assertCaptchaVerified($request->input('captcha'), (string) $request->ip());
 
-        $email = (string) $data['email'];
-
-        // 登录场景：校验账号是否存在且正常
-        if (($data['purpose'] ?? null) === 'login') {
-            $accountType = AccountIdentifier::detectType($email);
-            $user = $this->authService->findClientByAccount($accountType, $email);
-            if (! $user) {
-                return $this->error(42200, '邮箱未注册');
-            }
-            if ($user->status !== 1) {
-                return $this->error(40300, '账号已被禁用');
-            }
-        }
-
-        // 旧邮箱验证场景：目标必须是当前账号已绑定的邮箱，防止向任意邮箱发送旧码
-        if (in_array((string) ($data['purpose'] ?? ''), ['verify_bound_email', 'change_email'], true)) {
-            $currentEmail = trim((string) ($request->user()->email ?? ''));
-            if ($currentEmail === '' || $currentEmail !== $email) {
-                return $this->error(42200, '目标邮箱与当前绑定不一致');
-            }
-        }
-
-        $userId = $this->resolveCodeOwnerId($request);
-        $code = (string) random_int(100000, 999999);
-        $ip = $request->ip();
-
-        if ($response = $this->ensureMessageRateLimitPassed('email', $email, $ip)) {
-            return $response;
-        }
-
-        try {
-            $this->notificationService->sendEmailCode($email, $code);
-        } catch (\Throwable $exception) {
-            report($exception);
-
-            return $this->error(42200, '邮件服务暂不可用，请稍后重试');
-        }
-
-        $this->messageRateLimitService->hit('email', $email, $ip);
-        $this->codeService->storeEmailCode($userId, $email, $code);
+        $this->sendAccountCodeService->sendEmailCode(
+            $request->user(),
+            (string) $data['email'],
+            (string) ($data['purpose'] ?? 'generic'),
+            $request->ip(),
+            $this->resolveCodeOwnerId($request)
+        );
 
         return $this->success(null, '邮箱验证码已发送');
     }
@@ -553,19 +375,9 @@ class AuthController extends Controller
         $account = AccountIdentifier::normalizeAccount((string) $data['account']);
 
         // 先校验验证码再解析用户，未注册与验证码错误统一文案并保持时序一致
-        $verified = $accountType === 'phone'
-            ? $this->codeService->verifyPhoneCode('guest', $account, (string) $data['code'])
-            : $this->codeService->verifyEmailCode('guest', $account, (string) $data['code']);
-
         $user = $this->authService->findClientByAccount($accountType, $account);
 
-        if (! $verified && $user) {
-            $verified = $accountType === 'phone'
-                ? $this->codeService->verifyPhoneCode((int) $user->id, $account, (string) $data['code'])
-                : $this->codeService->verifyEmailCode((int) $user->id, $account, (string) $data['code']);
-        }
-
-        if (! $verified || ! $user) {
+        if (! $this->codeService->verifyAccountCode($accountType, $account, (string) $data['code'], $user) || ! $user) {
             return $this->error(42200, '账号或验证码错误');
         }
 
@@ -613,51 +425,5 @@ class AuthController extends Controller
         }
 
         return 'guest';
-    }
-
-    private function hasBoundAlipayAccount(User $user): bool
-    {
-        return trim((string) $user->alipay_real_name) !== ''
-            && trim((string) $user->alipay_account) !== '';
-    }
-
-    private function ensureGeeTestVerified(Request $request, bool $captchaRequired = false)
-    {
-        $result = $this->geeTestService->verify($request->input('captcha'), (string) $request->ip());
-
-        if (! ($result['ok'] ?? false)) {
-            return $this->error(
-                42210,
-                $result['message'] ?? '行为验证未通过，请重试',
-                $captchaRequired ? ['captcha_required' => true] : null
-            );
-        }
-
-        return null;
-    }
-
-    private function ensureMessageRateLimitPassed(string $channel, string $target, ?string $ip)
-    {
-        $result = $this->messageRateLimitService->check($channel, $target, $ip);
-
-        if (! ($result['ok'] ?? false)) {
-            return $this->error(42200, $result['message'] ?? '发送过于频繁，请稍后重试');
-        }
-
-        return null;
-    }
-
-    private function maskIdCard(string $idCard): string
-    {
-        if ($idCard === '') {
-            return '';
-        }
-
-        $length = mb_strlen($idCard);
-        if ($length <= 8) {
-            return $idCard;
-        }
-
-        return mb_substr($idCard, 0, 1).str_repeat('*', max($length - 2, 1)).mb_substr($idCard, -1);
     }
 }

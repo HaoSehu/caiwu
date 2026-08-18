@@ -2,12 +2,31 @@
 
 namespace App\Services\Auth;
 
+use App\Models\User;
 use App\Support\CacheKey;
 use Illuminate\Support\Facades\Cache;
 
 class VerificationCodeService
 {
     private const MAX_VERIFY_ATTEMPTS = 5;
+
+    /**
+     * 账号维度验证码校验：先按 guest 维度校验，未命中且用户存在时回退用户维度。
+     */
+    public function verifyAccountCode(string $accountType, string $account, string $code, ?User $user): bool
+    {
+        $verified = $accountType === 'phone'
+            ? $this->verifyPhoneCode('guest', $account, $code)
+            : $this->verifyEmailCode('guest', $account, $code);
+
+        if (! $verified && $user) {
+            $verified = $accountType === 'phone'
+                ? $this->verifyPhoneCode((int) $user->id, $account, $code)
+                : $this->verifyEmailCode((int) $user->id, $account, $code);
+        }
+
+        return $verified;
+    }
 
     /**
      * 存储邮箱验证码

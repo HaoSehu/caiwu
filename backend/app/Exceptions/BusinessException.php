@@ -14,16 +14,28 @@ class BusinessException extends Exception
 
     protected int $httpStatus;
 
-    public function __construct(string $message = '业务异常', int $errorCode = 42200, int $httpStatus = 422)
+    /** @var array<string, mixed>|null */
+    protected ?array $data;
+
+    /**
+     * @param  array<string, mixed>|null  $data  随异常下发的业务载荷（如 captcha_required）
+     */
+    public function __construct(string $message = '业务异常', int $errorCode = 42200, int $httpStatus = 422, ?array $data = null)
     {
         $this->errorCode = $errorCode;
         $this->httpStatus = $httpStatus;
+        $this->data = $data;
         parent::__construct($message, $httpStatus);
     }
 
     public function getErrorCode(): int
     {
         return $this->errorCode;
+    }
+
+    public function getErrorData(): ?array
+    {
+        return $this->data;
     }
 
     /**
@@ -37,6 +49,6 @@ class BusinessException extends Exception
 
     public function render(): JsonResponse
     {
-        return ApiResponseBuilder::error($this->errorCode, $this->getMessage(), null, $this->httpStatus);
+        return ApiResponseBuilder::error($this->errorCode, $this->getMessage(), $this->data, $this->httpStatus);
     }
 }

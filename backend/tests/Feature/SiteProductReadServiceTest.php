@@ -627,15 +627,10 @@ class SiteProductReadServiceTest extends TestCase
             ->assertJsonPath('data.quote_token', 'quote-token-authenticated');
     }
 
-    public function test_site_product_controller_no_longer_contains_quote_and_read_helpers(): void
+    public function test_site_product_controller_no_longer_exists(): void
     {
-        $content = file_get_contents(base_path('app/Http/Controllers/SiteProductController.php'));
-
-        $this->assertIsString($content);
-        $this->assertStringNotContainsString('private function saleProductQuery', $content);
-        $this->assertStringNotContainsString('private function findSaleProductForQuote', $content);
-        $this->assertStringNotContainsString('private function normalizeCategoryIds', $content);
-        $this->assertStringNotContainsString('private function transformProduct', $content);
+        // 旧根目录 SiteProductController 已整体删除（路由仅使用 Site\V2\ProductController）。
+        $this->assertFileDoesNotExist(base_path('app/Http/Controllers/SiteProductController.php'));
     }
 
     private function createSchema(): void
