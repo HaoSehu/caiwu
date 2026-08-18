@@ -1,0 +1,45 @@
+# CodeRabbit 配置
+# 参考:https://docs.coderabbit.ai/reference/configuration
+# 修改后废弃:变更后运行 @coderabbitai configuration 可查看生效配置
+language: "zh-CN"
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  review_details: false
+  collapse_walkthrough: true
+  changed_files_summary: true
+  sequence_diagrams: true
+  path_filters:
+    - "!**/vendor/**"          # backend composer 依赖
+    - "!**/node_modules/**"    # 前端依赖
+    - "!**/dist/**"            # 构建产物
+    - "!**/coverage/**"        # 覆盖率报告
+    - "!**/playwright-report/**"
+    - "!**/test-results/**"
+    - "!migration-output/**"   # 迁移输出资料
+    - "!docs/自动生成/**"      # 自动生成物
+  path_instructions:
+    - path: "backend/**/*.php"
+      instructions: |
+        Laravel 12 后端。控制器保持薄层,业务逻辑放入 Service/插件目录;
+        数据库迁移只允许新增,不修改已执行迁移;Payment 相关禁止物理删除记录;
+        结合 backend/tests 判断更改是否有回归覆盖。
+    - path: "frontend-*/**"
+      instructions: |
+        Vue 3 + TypeScript 前端,分别使用 TDesign Vue Next 或 Element Plus,禁止混用 UI 框架;
+        注意对 shared/ 共享状态与组件的依赖关系。
+    - path: "**/docs/**"
+      instructions: "文档须满足 npm run docs:check 的链接与目录覆盖校验,归档到 docs/ 正确分区,不在仓库根或应用根新增临时说明。"
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+    ignore_title_keywords:
+      - "[skip ci]"
+      - "[skip review]"
+      - "wip"
+chat:
+  auto_reply: true
