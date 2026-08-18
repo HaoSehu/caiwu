@@ -50,6 +50,8 @@ function renderRobots() {
 Allow: /
 Disallow: /client/
 Disallow: /console/
+# 购买配置深链（/products/类型/分组/商品）不在 sitemap、不参与收录
+Disallow: /products/*/*/*
 Sitemap: ${siteUrl}/sitemap.xml
 `
 }

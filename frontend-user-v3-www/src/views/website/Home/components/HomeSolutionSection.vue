@@ -25,7 +25,12 @@
 
       <div class="container solution-stage__inner">
         <div class="solution-panel">
-          <aside class="solution-panel__rail" role="tablist" aria-label="行业解决方案">
+          <aside
+            class="solution-panel__rail"
+            role="tablist"
+            aria-label="行业解决方案"
+            @keydown="onRailKeydown"
+          >
             <button
               v-for="item in industrySolutions"
               :key="item.key"
@@ -42,8 +47,12 @@
           </aside>
 
           <div class="solution-panel__content">
-            <h3 class="solution-panel__title">{{ activeIndustrySolution.title }}</h3>
-            <p class="solution-panel__summary">{{ activeIndustrySolution.description }}</p>
+            <h3 class="solution-panel__title">
+              {{ activeIndustrySolution.title }}
+            </h3>
+            <p class="solution-panel__summary">
+              {{ activeIndustrySolution.description }}
+            </p>
 
             <div class="solution-panel__section-title">解决方案</div>
             <ul class="solution-panel__feature-list">
@@ -84,18 +93,47 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { ElIcon } from 'element-plus/es/components/icon/index.mjs'
-import { Select } from '@element-plus/icons-vue'
-import { industrySolutions } from '@/data/homeSolutions'
+import { computed, ref } from "vue";
+import { useRouter } from "vue-router";
+import { ElIcon } from "element-plus/es/components/icon/index.mjs";
+import { Select } from "@element-plus/icons-vue";
+import { industrySolutions } from "@/data/homeSolutions";
 
-const router = useRouter()
-const activeSolutionKey = ref(industrySolutions[0].key)
+const router = useRouter();
+const activeSolutionKey = ref(industrySolutions[0].key);
 
-const activeIndustrySolution = computed(() => (
-  industrySolutions.find((item) => item.key === activeSolutionKey.value) || industrySolutions[0]
-))
+const activeIndustrySolution = computed(
+  () =>
+    industrySolutions.find((item) => item.key === activeSolutionKey.value) ||
+    industrySolutions[0],
+);
+
+// WAI-ARIA Tabs 键盘模式：方向键移动选中项，Home/End 到首尾
+function onRailKeydown(event) {
+  const keys = ["ArrowLeft", "ArrowRight", "Home", "End"];
+  if (!keys.includes(event.key)) return;
+  if (!industrySolutions.length) return;
+  event.preventDefault();
+
+  const currentIndex = industrySolutions.findIndex(
+    (item) => item.key === activeSolutionKey.value,
+  );
+  const activeIndex = currentIndex >= 0 ? currentIndex : 0;
+  let nextIndex;
+
+  if (event.key === "Home") {
+    nextIndex = 0;
+  } else if (event.key === "End") {
+    nextIndex = industrySolutions.length - 1;
+  } else if (event.key === "ArrowRight") {
+    nextIndex = (activeIndex + 1) % industrySolutions.length;
+  } else {
+    nextIndex =
+      (activeIndex - 1 + industrySolutions.length) % industrySolutions.length;
+  }
+
+  activeSolutionKey.value = industrySolutions[nextIndex].key;
+}
 </script>
 
 <style scoped lang="scss">
@@ -158,7 +196,13 @@ const activeIndustrySolution = computed(() => (
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(180deg, rgba(246, 248, 252, 0.9) 0%, rgba(246, 248, 252, 0.55) 28%, rgba(233, 240, 250, 0.65) 70%, rgba(220, 230, 245, 0.82) 100%),
+    linear-gradient(
+      180deg,
+      rgba(246, 248, 252, 0.9) 0%,
+      rgba(246, 248, 252, 0.55) 28%,
+      rgba(233, 240, 250, 0.65) 70%,
+      rgba(220, 230, 245, 0.82) 100%
+    ),
     radial-gradient(circle at 70% 30%, rgba(22, 93, 255, 0.1), transparent 48%);
 
   /* 9.1 Visual Mode: Grain Texture for stage */
@@ -210,7 +254,9 @@ const activeIndustrySolution = computed(() => (
   font-weight: 500;
   text-align: left;
   cursor: pointer;
-  transition: color 0.22s cubic-bezier(0.22, 1, 0.36, 1), background 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  transition:
+    color 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    background 0.22s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .solution-panel__rail-item:hover {

@@ -14,15 +14,23 @@
     <div class="mrp-picker">
       <div class="mrp-frame" aria-hidden="true"></div>
 
-      <div ref="regionCol" class="mrp-col" aria-label="地区">
+      <div
+        ref="regionCol"
+        class="mrp-col"
+        role="listbox"
+        aria-label="地区"
+        @keydown="onRegionKeydown"
+      >
         <div class="mrp-spacer" :style="{ height: spacerH + 'px' }"></div>
         <button
           v-for="g in regions"
           :key="g.id"
           :data-id="g.id"
           type="button"
+          role="option"
           class="mrp-item"
           :class="{ 'is-active': tempGroupId === g.id }"
+          :aria-selected="tempGroupId === g.id"
           @click="handleRegionClick(g)"
         >
           {{ g.name }}
@@ -30,15 +38,23 @@
         <div class="mrp-spacer" :style="{ height: spacerH + 'px' }"></div>
       </div>
 
-      <div ref="zoneCol" class="mrp-col" aria-label="可用区">
+      <div
+        ref="zoneCol"
+        class="mrp-col"
+        role="listbox"
+        aria-label="可用区"
+        @keydown="onZoneKeydown"
+      >
         <div class="mrp-spacer" :style="{ height: spacerH + 'px' }"></div>
         <button
           v-for="z in zoneMap"
           :key="z.id"
           :data-id="z.id"
           type="button"
+          role="option"
           class="mrp-item"
           :class="{ 'is-active': tempZoneId === z.id }"
+          :aria-selected="tempZoneId === z.id"
           @click="handleZoneClick(z)"
         >
           {{ z.name }}
@@ -223,6 +239,27 @@ function handleZoneClick(z) {
   tempZoneId.value = z.id;
   const item = cachedZoneItems.find((el) => el.dataset.id === String(z.id));
   if (item) setActive(zoneCol.value, item);
+}
+
+// 键盘：方向键滚动对应滚轮（触发吸附更新选中项），与触摸交互一致
+function onRegionKeydown(event) {
+  if (event.key === "ArrowUp") {
+    event.preventDefault();
+    regionCol.value?.scrollBy({ top: -34, behavior: "smooth" });
+  } else if (event.key === "ArrowDown") {
+    event.preventDefault();
+    regionCol.value?.scrollBy({ top: 34, behavior: "smooth" });
+  }
+}
+
+function onZoneKeydown(event) {
+  if (event.key === "ArrowUp") {
+    event.preventDefault();
+    zoneCol.value?.scrollBy({ top: -34, behavior: "smooth" });
+  } else if (event.key === "ArrowDown") {
+    event.preventDefault();
+    zoneCol.value?.scrollBy({ top: 34, behavior: "smooth" });
+  }
 }
 
 function handleConfirm() {

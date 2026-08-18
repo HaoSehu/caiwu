@@ -44,26 +44,6 @@ const NETWORK_KEYS = [
   "ipv6",
   "数量",
 ];
-const REGION_FLAGS = {
-  美国: "🇺🇸",
-  US: "🇺🇸",
-  香港: "🇭🇰",
-  HK: "🇭🇰",
-  日本: "🇯🇵",
-  JP: "🇯🇵",
-  新加坡: "🇸🇬",
-  SG: "🇸🇬",
-  韩国: "🇰🇷",
-  KR: "🇰🇷",
-  台湾: "🇹🇼",
-  TW: "🇹🇼",
-  德国: "🇩🇪",
-  DE: "🇩🇪",
-  英国: "🇬🇧",
-  GB: "🇬🇧",
-  中国: "🇨🇳",
-  CN: "🇨🇳",
-};
 const QTY_OPTION_TYPES = [4, 7, 9, 11, 14, 15, 16, 17, 18, 19];
 
 export function useWebsiteProductConfigurator(productDetail) {
@@ -192,13 +172,7 @@ export function useWebsiteProductConfigurator(productDetail) {
     const options = parseSubOptions(item).length
       ? parseSubOptions(item)
       : parseParamOptions(item.parameter);
-    return options.map((option) => {
-      const flag =
-        Object.entries(REGION_FLAGS).find(([keyword]) =>
-          option.label.includes(keyword),
-        )?.[1] || "";
-      return { ...option, flag };
-    });
+    return options;
   });
 
   const regionConfigItem = computed(() => {

@@ -17,6 +17,7 @@
       <div
         ref="groupCol"
         class="mop-col"
+        role="listbox"
         aria-label="系统"
         tabindex="0"
         @keydown="handleGroupKeydown"
@@ -27,8 +28,10 @@
           :key="g.id"
           :data-id="g.id"
           type="button"
+          role="option"
           class="mop-item"
           :class="{ 'is-active': tempGroupId === g.id }"
+          :aria-selected="tempGroupId === g.id"
           tabindex="-1"
           @click="handleGroupClick(g)"
         >
@@ -48,6 +51,7 @@
       <div
         ref="verCol"
         class="mop-col"
+        role="listbox"
         aria-label="版本"
         tabindex="0"
         @keydown="handleVerKeydown"
@@ -58,8 +62,10 @@
           :key="v.id"
           :data-id="v.id"
           type="button"
+          role="option"
           class="mop-item"
           :class="{ 'is-active': tempVersionId === v.id }"
+          :aria-selected="tempVersionId === v.id"
           tabindex="-1"
           @click="handleVersionClick(v)"
         >

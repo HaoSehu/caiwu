@@ -102,6 +102,14 @@ function renderRouteHtml(template, route) {
     html = html.replace(/<meta name="keywords" content=".*?" \/>/i, `<meta name="keywords" content="${keywords}" />`)
   }
 
+  if (route.robots) {
+    html = replaceTag(
+      html,
+      /<meta name="robots" content=".*?" \/>/i,
+      `<meta name="robots" content="${route.robots}" />`,
+    )
+  }
+
   html = replaceTag(
     html,
     /<link rel="canonical" href=".*?" \/>/i,
@@ -135,5 +143,18 @@ const template = await readFile(indexPath, 'utf8')
 for (const route of routes) {
   await writeRoute(route, renderRouteHtml(template, route))
 }
+
+// 软 404：为不存在的 URL 输出静态 404.html，配合 Nginx `error_page 404 = /404.html`
+// 返回真实 404 状态码，避免未知 URL 被当作首页内容索引（soft-404）
+await writeFile(
+  path.join(distDir, '404.html'),
+  renderRouteHtml(template, {
+    path: '/404',
+    title: '404 - 页面不存在',
+    description: '您访问的页面不存在或已被移动。',
+    robots: 'noindex,nofollow',
+  }),
+  'utf8',
+)
 
 console.log(`Prerendered ${routes.length} public routes for ${siteUrl}`)

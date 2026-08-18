@@ -6,6 +6,7 @@
       :size="size"
       :with-header="false"
       :close-on-click-modal="closeOnPressModal"
+      :aria-label="title || '选择'"
       class="ms-drawer"
       @update:model-value="handleVisibleChange"
       @opened="$emit('opened')"

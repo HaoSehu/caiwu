@@ -52,7 +52,6 @@ export function useWebsiteProductsCatalog({
   const pageLoading = ref(false);
   const sidebarCollapsed = ref(false);
   const isMobile = ref(false);
-  const mobileTypeEntered = ref(false);
   const mobileCategoryDrawer = ref(false);
   const mobileProductDrawer = ref(false);
   const mobilePendingProductId = ref(0);
@@ -103,7 +102,6 @@ export function useWebsiteProductsCatalog({
 
     return Number(activeGroup.value?.effective_product_group_id || 0);
   });
-  const showMobileTypePicker = computed(() => false);
   const shouldAutoSelectProduct = computed(
     () => getPendingWebsiteCouponId() <= 0,
   );
@@ -218,18 +216,6 @@ export function useWebsiteProductsCatalog({
     }
 
     selectProduct(products[0].id, { syncRoute: shouldSyncRoute(options) });
-  }
-
-  function enterMobileType(value) {
-    mobileTypeEntered.value = true;
-    mobileCategoryDrawer.value = false;
-    return switchType(value, { syncRoute: true });
-  }
-
-  function returnToMobileTypePicker() {
-    mobileTypeEntered.value = false;
-    mobileCategoryDrawer.value = false;
-    mobileProductDrawer.value = false;
   }
 
   function openMobileCategoryDrawer() {
@@ -353,9 +339,6 @@ export function useWebsiteProductsCatalog({
     childGroups.value = [];
     mobileCategoryDrawer.value = false;
     mobileProductDrawer.value = false;
-    if (options.enterMobile !== false && isMobile.value) {
-      mobileTypeEntered.value = true;
-    }
 
     await loadRootGroups(options);
   }
@@ -526,10 +509,6 @@ export function useWebsiteProductsCatalog({
     }
 
     await withSuspendedRouteSync(async () => {
-      if (isMobile.value) {
-        mobileTypeEntered.value = true;
-      }
-
       if (activeTypeValue.value !== nextTypeValue || !rootGroups.value.length) {
         activeTypeValue.value = nextTypeValue;
         await loadRootGroups({
@@ -698,13 +677,11 @@ export function useWebsiteProductsCatalog({
 
   watch(isMobile, async (mobile) => {
     if (mobile) {
-      mobileTypeEntered.value = Boolean(activeTypeValue.value);
       return;
     }
 
     mobileCategoryDrawer.value = false;
     mobileProductDrawer.value = false;
-    mobileTypeEntered.value = false;
 
     if (!activeTypeValue.value && productTypes.value.length) {
       activeTypeValue.value = productTypes.value[0].value;
@@ -748,10 +725,6 @@ export function useWebsiteProductsCatalog({
 
         return;
       }
-
-      if (route.path === "/products" && isMobile.value) {
-        mobileTypeEntered.value = false;
-      }
     },
   );
 
@@ -770,7 +743,6 @@ export function useWebsiteProductsCatalog({
     pageLoading,
     sidebarCollapsed,
     isMobile,
-    mobileTypeEntered,
     mobileCategoryDrawer,
     mobileProductDrawer,
     mobileRegionDrawer,
@@ -787,10 +759,7 @@ export function useWebsiteProductsCatalog({
     activeTypeLabel,
     activeGroupName,
     activeChildName,
-    showMobileTypePicker,
     visibleProducts,
-    enterMobileType,
-    returnToMobileTypePicker,
     openMobileCategoryDrawer,
     openMobileRegionDrawer,
     selectTempGroup,
