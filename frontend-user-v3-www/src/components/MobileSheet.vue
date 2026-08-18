@@ -5,7 +5,7 @@
       direction="btt"
       :size="size"
       :with-header="false"
-      :close-on-press-modal="closeOnPressModal"
+      :close-on-click-modal="closeOnPressModal"
       class="ms-drawer"
       @update:model-value="handleVisibleChange"
       @opened="$emit('opened')"
@@ -17,8 +17,14 @@
             type="button"
             class="ms-action"
             @click="handleCancel"
-          >{{ cancelText }}</button>
-          <span v-else class="ms-action ms-action--placeholder" aria-hidden="true"></span>
+          >
+            {{ cancelText }}
+          </button>
+          <span
+            v-else
+            class="ms-action ms-action--placeholder"
+            aria-hidden="true"
+          ></span>
           <strong v-if="title" class="ms-title">{{ title }}</strong>
           <span v-else class="ms-title" aria-hidden="true"></span>
           <button
@@ -26,8 +32,14 @@
             type="button"
             class="ms-action ms-action--primary"
             @click="$emit('confirm')"
-          >{{ confirmText }}</button>
-          <span v-else class="ms-action ms-action--placeholder" aria-hidden="true"></span>
+          >
+            {{ confirmText }}
+          </button>
+          <span
+            v-else
+            class="ms-action ms-action--placeholder"
+            aria-hidden="true"
+          ></span>
         </div>
 
         <div class="ms-body">
@@ -39,7 +51,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch, onBeforeUnmount } from 'vue'
+import { computed, ref, watch, onBeforeUnmount } from "vue";
 
 const props = defineProps({
   modelValue: {
@@ -52,63 +64,76 @@ const props = defineProps({
   },
   size: {
     type: String,
-    default: '40%',
+    default: "40%",
   },
   title: {
     type: String,
-    default: '',
+    default: "",
   },
   cancelText: {
     type: String,
-    default: '',
+    default: "",
   },
   confirmText: {
     type: String,
-    default: '',
+    default: "",
   },
   closeOnPressModal: {
     type: Boolean,
     default: true,
   },
-})
+});
 
-const emit = defineEmits(['update:modelValue', 'update:visible', 'close', 'cancel', 'confirm', 'opened'])
+const emit = defineEmits([
+  "update:modelValue",
+  "update:visible",
+  "close",
+  "cancel",
+  "confirm",
+  "opened",
+]);
 
-const visibleValue = computed(() => props.visible ?? props.modelValue)
+const visibleValue = computed(() => props.visible ?? props.modelValue);
 
 // 抽屉关闭后延迟销毁 DOM，避免 10+ 个隐藏抽屉常驻 DOM 和 aria-modal 污染
-const drawerAlive = ref(false)
-let destroyTimer = null
+const drawerAlive = ref(false);
+let destroyTimer = null;
 
-watch(visibleValue, (v) => {
-  clearTimeout(destroyTimer)
-  if (v) {
-    drawerAlive.value = true
-  } else {
-    // 等关闭动画完成后再销毁（el-drawer 动画约 300ms）
-    destroyTimer = setTimeout(() => { drawerAlive.value = false }, 350)
-  }
-}, { immediate: true })
+watch(
+  visibleValue,
+  (v) => {
+    clearTimeout(destroyTimer);
+    if (v) {
+      drawerAlive.value = true;
+    } else {
+      // 等关闭动画完成后再销毁（el-drawer 动画约 300ms）
+      destroyTimer = setTimeout(() => {
+        drawerAlive.value = false;
+      }, 350);
+    }
+  },
+  { immediate: true },
+);
 
 onBeforeUnmount(() => {
-  clearTimeout(destroyTimer)
-})
+  clearTimeout(destroyTimer);
+});
 
 function updateVisible(value) {
-  emit('update:modelValue', value)
-  emit('update:visible', value)
+  emit("update:modelValue", value);
+  emit("update:visible", value);
   if (!value) {
-    emit('close')
+    emit("close");
   }
 }
 
 function handleVisibleChange(value) {
-  updateVisible(value)
+  updateVisible(value);
 }
 
 function handleCancel() {
-  emit('cancel')
-  updateVisible(false)
+  emit("cancel");
+  updateVisible(false);
 }
 </script>
 

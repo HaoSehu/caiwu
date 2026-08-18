@@ -214,64 +214,64 @@
             ref="userMenuTriggerRef"
             class="user-menu"
           >
-          <button
-            type="button"
-            class="header-user-trigger"
-            :class="{ 'is-active': userMenuOpen }"
-            aria-label="用户菜单"
-            :aria-expanded="userMenuOpen"
-            @click="toggleUserMenu"
-          >
-            <span class="user-avatar-initial">{{ userAvatarInitial }}</span>
-            <span class="header-user-name">{{ userDisplayName }}</span>
-            <el-icon class="header-user-arrow"><ArrowDown /></el-icon>
-          </button>
-          <transition name="user-menu-fade">
-            <div v-if="userMenuOpen" class="user-menu-panel" role="menu">
-              <button
-                type="button"
-                role="menuitem"
-                class="user-menu-item"
-                @click="onUserMenuCommand(consoleUrl('/client/dashboard'))"
-              >
-                <el-icon><Monitor /></el-icon>控制台
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                class="user-menu-item"
-                @click="onUserMenuCommand(consoleUrl('/client/services'))"
-              >
-                <el-icon><Box /></el-icon>我的服务
-              </button>
-              <div class="user-menu-divider"></div>
-              <button
-                type="button"
-                role="menuitem"
-                class="user-menu-item"
-                @click="onUserMenuCommand(consoleUrl('/client/profile'))"
-              >
-                <el-icon><User /></el-icon>个人资料
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                class="user-menu-item"
-                @click="onUserMenuCommand(consoleUrl('/client/recharge'))"
-              >
-                <el-icon><Wallet /></el-icon>账户充值
-              </button>
-              <div class="user-menu-divider"></div>
-              <button
-                type="button"
-                role="menuitem"
-                class="user-menu-item is-danger"
-                @click="onUserMenuCommand('logout')"
-              >
-                <el-icon><CircleClose /></el-icon>退出登录
-              </button>
-            </div>
-          </transition>
+            <button
+              type="button"
+              class="header-user-trigger"
+              :class="{ 'is-active': userMenuOpen }"
+              aria-label="用户菜单"
+              :aria-expanded="userMenuOpen"
+              @click="toggleUserMenu"
+            >
+              <span class="user-avatar-initial">{{ userAvatarInitial }}</span>
+              <span class="header-user-name">{{ userDisplayName }}</span>
+              <el-icon class="header-user-arrow"><ArrowDown /></el-icon>
+            </button>
+            <transition name="user-menu-fade">
+              <div v-if="userMenuOpen" class="user-menu-panel" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  class="user-menu-item"
+                  @click="onUserMenuCommand(consoleUrl('/client/dashboard'))"
+                >
+                  <el-icon><Monitor /></el-icon>控制台
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  class="user-menu-item"
+                  @click="onUserMenuCommand(consoleUrl('/client/services'))"
+                >
+                  <el-icon><Box /></el-icon>我的服务
+                </button>
+                <div class="user-menu-divider"></div>
+                <button
+                  type="button"
+                  role="menuitem"
+                  class="user-menu-item"
+                  @click="onUserMenuCommand(consoleUrl('/client/profile'))"
+                >
+                  <el-icon><User /></el-icon>个人资料
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  class="user-menu-item"
+                  @click="onUserMenuCommand(consoleUrl('/client/recharge'))"
+                >
+                  <el-icon><Wallet /></el-icon>账户充值
+                </button>
+                <div class="user-menu-divider"></div>
+                <button
+                  type="button"
+                  role="menuitem"
+                  class="user-menu-item is-danger"
+                  @click="onUserMenuCommand('logout')"
+                >
+                  <el-icon><CircleClose /></el-icon>退出登录
+                </button>
+              </div>
+            </transition>
           </div>
           <template v-if="!userStore.isLoggedIn">
             <a :href="consoleUrl('/client/login')" class="header-link">登录</a>
@@ -385,6 +385,15 @@
               >
                 <span class="mobile-first-level-label">{{ item.label }}</span>
               </a>
+              <router-link
+                v-else
+                :to="item.to"
+                class="mobile-first-level-item"
+                :class="{ active: isNavActive(item) }"
+                @click="mobileNavVisible = false"
+              >
+                <span class="mobile-first-level-label">{{ item.label }}</span>
+              </router-link>
             </template>
             <div class="mobile-left-bottom">
               <template v-if="userStore.isLoggedIn">
@@ -968,7 +977,8 @@ const aboutQuickLinks = [
   { to: "/notices", title: "公告动态", desc: "产品更新、活动与维护通知" },
 ];
 
-const logoSrc = "/branding/logo.svg";
+// 优先使用站点品牌配置的 logo（管理端可上传），失败时模板回退到文字标识
+const logoSrc = computed(() => appStore.siteLogo);
 const supportContacts = computed(() =>
   buildSupportContacts({
     serviceQqGroup: appStore.serviceQqGroup,

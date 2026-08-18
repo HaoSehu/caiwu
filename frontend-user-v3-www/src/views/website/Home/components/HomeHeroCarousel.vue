@@ -369,7 +369,10 @@ function normalizeSlide(raw, index = 0) {
     video: pickString(source.video, ""),
     // 视频首帧静态封面：管理端可配置，前端据此为 <video> 补 poster，
     // 使 LCP 锚定在快速绘制的占位图上，而非等视频下载+解码。
-    poster: pickString(source.video_poster ?? source.videoPoster ?? source.poster, ""),
+    poster: pickString(
+      source.video_poster ?? source.videoPoster ?? source.poster,
+      "",
+    ),
     ribbon: pickString(source.ribbon, ""),
     ribbonType: ALLOWED_RIBBON_TYPES.has(ribbonType) ? ribbonType : "new",
   };
@@ -702,6 +705,9 @@ function resumeRotation() {
 
 function handleTouchStart(event) {
   if (!event.touches || event.touches.length !== 1) return;
+  // 移动端触摸会合成 mouseenter 把 isHovering 置 true 且不触发 mouseleave，
+  // 这里复位，避免首次触摸后自动轮播永久停止
+  isHovering = false;
   touchStartX = event.touches[0].clientX;
 }
 

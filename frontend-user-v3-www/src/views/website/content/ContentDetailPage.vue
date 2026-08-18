@@ -12,7 +12,9 @@
       >
         {{ currentCategoryName }}
       </router-link>
-      <span v-else class="reader-breadcrumb__text">{{ currentCategoryName }}</span>
+      <span v-else class="reader-breadcrumb__text">{{
+        currentCategoryName
+      }}</span>
       <el-icon><ArrowRight /></el-icon>
       <span class="reader-breadcrumb__current">
         {{ currentArticle?.title || config.detailTitle }}
@@ -41,7 +43,11 @@
             />
           </template>
 
-          <el-empty v-else-if="!loading" :description="config.emptyText" class="reader-empty" />
+          <el-empty
+            v-else-if="!loading"
+            :description="config.emptyText"
+            class="reader-empty"
+          />
         </article>
       </section>
 
@@ -60,7 +66,9 @@
               @click="goCategoryList(item.id)"
             >
               <span class="category-item__name">{{ item.name }}</span>
-              <span class="category-item__count">{{ item.articles_count || 0 }}</span>
+              <span class="category-item__count">{{
+                item.articles_count || 0
+              }}</span>
             </button>
           </div>
         </section>
@@ -87,38 +95,40 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { ArrowRight } from '@element-plus/icons-vue'
-import siteApi from '@/api/site'
-import { renderMarkdown } from '@/utils/markdown'
-import { rewriteApiAssetUrlsInHtml } from '@/utils/apiAssetUrl'
-import { getContentConfig } from './contentConfig'
+import { computed, nextTick, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { ArrowRight } from "@element-plus/icons-vue";
+import siteApi from "@/api/site";
+import { renderMarkdown } from "@/utils/markdown";
+import { rewriteApiAssetUrlsInHtml } from "@/utils/apiAssetUrl";
+import { updatePageMeta } from "@/utils/pageMeta";
+import { useAppStore } from "@/stores/app";
+import { getContentConfig } from "./contentConfig";
 
 // ---- 模块级分类缓存 ----
-const overviewCache = new Map()
-const OVERVIEW_CACHE_TTL = 5 * 60 * 1000 // 5 分钟
+const overviewCache = new Map();
+const OVERVIEW_CACHE_TTL = 5 * 60 * 1000; // 5 分钟
 
 function getCachedOverview(cacheKey) {
-  const entry = overviewCache.get(cacheKey)
+  const entry = overviewCache.get(cacheKey);
   if (entry && Date.now() - entry.ts < OVERVIEW_CACHE_TTL) {
-    return entry.data
+    return entry.data;
   }
-  overviewCache.delete(cacheKey)
-  return null
+  overviewCache.delete(cacheKey);
+  return null;
 }
 
 function setCachedOverview(cacheKey, data) {
-  overviewCache.set(cacheKey, { data, ts: Date.now() })
+  overviewCache.set(cacheKey, { data, ts: Date.now() });
 }
 
 // ---- 工具函数 ----
 
 function sanitizeMarkdownSource(content) {
-  if (!content) return ''
+  if (!content) return "";
   return String(content)
-    .replace(/\*\*\s*(<[^>]+>)/g, '$1')
-    .replace(/(<\/[^>]+>)\s*\*\*/g, '$1')
+    .replace(/\*\*\s*(<[^>]+>)/g, "$1")
+    .replace(/(<\/[^>]+>)\s*\*\*/g, "$1");
 }
 
 const props = defineProps({
@@ -128,103 +138,193 @@ const props = defineProps({
   },
   scope: {
     type: String,
-    default: 'client',
+    default: "client",
   },
-})
+});
 
-const route = useRoute()
-const router = useRouter()
-const apiBaseUrl = String(import.meta.env.VITE_API_BASE_URL || '')
-const api = computed(() => siteApi)
-const config = computed(() => getContentConfig(props.contentType, props.scope))
+const route = useRoute();
+const router = useRouter();
+const apiBaseUrl = String(import.meta.env.VITE_API_BASE_URL || "");
+const api = computed(() => siteApi);
+const config = computed(() => getContentConfig(props.contentType, props.scope));
+const appStore = useAppStore();
+const publicSiteUrl = String(
+  import.meta.env.VITE_PUBLIC_SITE_URL || "https://www.coyjs.cn",
+).replace(/\/+$/, "");
 
-const loading = ref(false)
-const categories = ref([])
-const currentArticle = ref(null)
-const currentCategoryId = ref(null)
-const tocItems = ref([{ id: 'article-top', label: '全文', level: 1 }])
-const contentRef = ref(null)
+// 文章加载后同步 title/description/canonical 与 Article/BreadcrumbList JSON-LD，
+// 避免动态详情页沿用静态 meta 或缺失 description/canonical（SEO）
+function applyArticleMeta(article) {
+  if (!article || typeof document === "undefined") {
+    return;
+  }
+  const title = String(article.title || "").trim();
+  const description = String(
+    article.excerpt || article.summary || article.subtitle || "",
+  ).trim();
+  const siteName = appStore.siteName || "";
+  const fullTitle =
+    title && siteName && !title.includes(siteName)
+      ? `${title} - ${siteName}`
+      : title;
+  const canonicalPath = `${config.value.routeBasePath}/${article.id}`.replace(
+    /\/+/g,
+    "/",
+  );
+  const canonical = `${publicSiteUrl}${canonicalPath}`;
+  const listName = config.value.pageTitle || "内容";
+
+  updatePageMeta({
+    title: fullTitle,
+    description,
+    canonical,
+    ogTitle: fullTitle,
+    ogDescription: description,
+    ogUrl: canonical,
+    structuredData: [
+      {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        headline: title,
+        description: description || undefined,
+        url: canonical,
+        datePublished: article.publish_at || article.created_at,
+        dateModified: article.updated_at,
+        publisher: {
+          "@type": "Organization",
+          name: siteName || "创欧云",
+        },
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          {
+            "@type": "ListItem",
+            position: 1,
+            name: listName,
+            item: `${publicSiteUrl}${config.value.routeBasePath}`,
+          },
+          { "@type": "ListItem", position: 2, name: title, item: canonical },
+        ],
+      },
+    ],
+  });
+}
+
+const loading = ref(false);
+const categories = ref([]);
+const currentArticle = ref(null);
+const currentCategoryId = ref(null);
+const tocItems = ref([{ id: "article-top", label: "全文", level: 1 }]);
+const contentRef = ref(null);
+
+// 详情请求序号：快速切换 /help/:id 时丢弃过期响应，避免旧文章覆盖新文章
+let articleLoadToken = 0;
 
 const backToListRoute = computed(() => {
-  const query = {}
-  if (route.query.category) query.category = route.query.category
-  if (route.query.keyword) query.keyword = route.query.keyword
-  if (route.query.page) query.page = route.query.page
+  const query = {};
+  if (route.query.category) query.category = route.query.category;
+  if (route.query.keyword) query.keyword = route.query.keyword;
+  if (route.query.page) query.page = route.query.page;
   return {
     path: config.value.routeBasePath,
     query: Object.keys(query).length ? query : undefined,
-  }
-})
+  };
+});
 
 const categoryListRoute = computed(() => {
-  if (!currentCategoryId.value) return backToListRoute.value
+  if (!currentCategoryId.value) return backToListRoute.value;
   return {
     path: config.value.routeBasePath,
     query: { category: currentCategoryId.value },
-  }
-})
+  };
+});
 
-const timeLabel = computed(() => (
-  props.contentType === 'help' ? '更新时间' : '发布时间'
-))
+const timeLabel = computed(() =>
+  props.contentType === "help" ? "更新时间" : "发布时间",
+);
 
 const currentCategoryName = computed(() => {
-  const matched = categories.value.find((item) => item.id === currentCategoryId.value)
-  return matched?.name || currentArticle.value?.category_name || '未分类'
-})
+  const matched = categories.value.find(
+    (item) => item.id === currentCategoryId.value,
+  );
+  return matched?.name || currentArticle.value?.category_name || "未分类";
+});
 
-const currentPublisher = computed(() => (
-  currentArticle.value?.creator?.nickname
-  || currentArticle.value?.creator?.username
-  || currentArticle.value?.operator
-  || '官方客服'
-))
+const currentPublisher = computed(
+  () =>
+    currentArticle.value?.creator?.nickname ||
+    currentArticle.value?.creator?.username ||
+    currentArticle.value?.operator ||
+    "官方客服",
+);
 
-const currentPublishTime = computed(() => (
-  currentArticle.value?.updated_at
-  || currentArticle.value?.last_published_at
-  || currentArticle.value?.publish_at
-  || currentArticle.value?.created_at
-  || '--'
-))
+const currentPublishTime = computed(
+  () =>
+    currentArticle.value?.updated_at ||
+    currentArticle.value?.last_published_at ||
+    currentArticle.value?.publish_at ||
+    currentArticle.value?.created_at ||
+    "--",
+);
 
 const articleContentHtml = computed(() => {
-  const source = sanitizeMarkdownSource(currentArticle.value?.content || '')
+  const source = sanitizeMarkdownSource(currentArticle.value?.content || "");
   const rendered = renderMarkdown(source, {
-    imageAltFallback: currentArticle.value?.title || config.value.detailTitle || '相关配图',
-  })
-  return rewriteApiAssetUrlsInHtml(rendered, apiBaseUrl)
-})
+    imageAltFallback:
+      currentArticle.value?.title || config.value.detailTitle || "相关配图",
+  });
+  return rewriteApiAssetUrlsInHtml(rendered, apiBaseUrl);
+});
 
 async function loadOverview() {
-  const cacheKey = config.value.overviewCategoryKey
-  const cached = getCachedOverview(cacheKey)
+  const cacheKey = config.value.overviewCategoryKey;
+  const cached = getCachedOverview(cacheKey);
   if (cached) {
-    categories.value = cached
-    return
+    categories.value = cached;
+    return;
   }
-  const res = await api.value.contentOverview()
-  const data = res.data?.[cacheKey] || []
-  categories.value = data
-  setCachedOverview(cacheKey, data)
+  try {
+    const res = await api.value.contentOverview();
+    const data = res.data?.[cacheKey] || [];
+    categories.value = data;
+    setCachedOverview(cacheKey, data);
+  } catch {
+    // 分类拉取失败保留空态，错误提示由 HTTP 拦截器统一处理
+  }
 }
 
 async function loadArticleDetail(articleId) {
-  const res = await api.value[config.value.apiDetailMethod](articleId)
-  currentArticle.value = res.data || null
-  currentCategoryId.value = Number(res.data?.category_id || 0) || null
+  const token = ++articleLoadToken;
+  try {
+    const res = await api.value[config.value.apiDetailMethod](articleId);
+    // 已被更新的请求取代：不写状态，新请求会接管
+    if (token !== articleLoadToken) {
+      return;
+    }
+    currentArticle.value = res.data || null;
+    currentCategoryId.value = Number(res.data?.category_id || 0) || null;
+    applyArticleMeta(res.data);
+  } catch {
+    // 请求失败：仅当仍是当前请求时清空，避免残留上一篇文章
+    if (token === articleLoadToken) {
+      currentArticle.value = null;
+      currentCategoryId.value = null;
+    }
+  }
 }
 
 async function syncPage() {
-  loading.value = true
+  loading.value = true;
+  // 请求前清空旧文章，避免快速切换时旧文章短暂残留
+  currentArticle.value = null;
+  currentCategoryId.value = null;
 
   try {
-    await Promise.all([
-      loadOverview(),
-      loadArticleDetail(route.params.id),
-    ])
+    await Promise.all([loadOverview(), loadArticleDetail(route.params.id)]);
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 
@@ -234,66 +334,65 @@ function goCategoryList(categoryId) {
     query: {
       category: categoryId,
     },
-  })
+  });
 }
 
 function scrollToAnchor(anchorId) {
-  if (typeof document === 'undefined') {
-    return
+  if (typeof document === "undefined") {
+    return;
   }
 
   document.getElementById(anchorId)?.scrollIntoView({
-    behavior: 'smooth',
-    block: 'start',
-  })
+    behavior: "smooth",
+    block: "start",
+  });
 }
 
 function buildToc() {
-  const container = contentRef.value
+  const container = contentRef.value;
 
   if (!container) {
-    tocItems.value = [{ id: 'article-top', label: '全文', level: 1 }]
-    return
+    tocItems.value = [{ id: "article-top", label: "全文", level: 1 }];
+    return;
   }
 
-  const headings = [...container.querySelectorAll('h1, h2, h3, h4')]
-  const items = [{ id: 'article-top', label: '全文', level: 1 }]
+  const headings = [...container.querySelectorAll("h1, h2, h3, h4")];
+  const items = [{ id: "article-top", label: "全文", level: 1 }];
 
   headings.forEach((heading, index) => {
-    const text = heading.textContent?.trim()
+    const text = heading.textContent?.trim();
 
     if (!text) {
-      return
+      return;
     }
 
-    const id = `${props.contentType}-heading-${currentArticle.value?.id || 'current'}-${index + 1}`
-    heading.id = id
+    const id = `${props.contentType}-heading-${currentArticle.value?.id || "current"}-${index + 1}`;
+    heading.id = id;
     items.push({
       id,
       label: text,
       level: Number.parseInt(heading.tagName.slice(1), 10) || 2,
-    })
-  })
+    });
+  });
 
-  tocItems.value = items
+  tocItems.value = items;
 }
 
 watch(
   () => route.params.id,
   () => {
-    syncPage()
+    syncPage();
   },
   { immediate: true },
-)
+);
 
 watch(
   () => articleContentHtml.value,
   async () => {
-    await nextTick()
-    buildToc()
+    await nextTick();
+    buildToc();
   },
-)
-
+);
 </script>
 
 <style scoped lang="scss">
@@ -458,6 +557,11 @@ watch(
   :deep(img) {
     max-width: 100%;
     height: auto;
+    // 懒加载且无 width/height 时给占位高度与底色，减小加载完成后的高度跳变（CLS）。
+    // 根治需后端在正文响应中补充图片宽高。
+    min-height: 120px;
+    background: $bg-color-soft;
+    border-radius: 6px;
   }
 }
 

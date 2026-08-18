@@ -241,9 +241,13 @@ function normalizeQuery(query) {
 }
 
 async function loadOverview(token) {
-  const res = await api.value.contentOverview();
-  if (token !== syncToken) return;
-  categories.value = res.data?.[config.value.overviewCategoryKey] || [];
+  try {
+    const res = await api.value.contentOverview();
+    if (token !== syncToken) return;
+    categories.value = res.data?.[config.value.overviewCategoryKey] || [];
+  } catch {
+    // 分类拉取失败保留空态，错误提示由 HTTP 拦截器统一处理
+  }
 }
 
 async function loadList(token) {
@@ -271,6 +275,12 @@ async function loadList(token) {
     if (!categories.value.length) {
       categories.value = res.data?.categories || [];
     }
+  } catch {
+    // 请求失败：清空列表，避免展示与当前 URL 不一致的旧数据
+    if (token === syncToken) {
+      articleList.value = [];
+      total.value = 0;
+    }
   } finally {
     if (token === syncToken) {
       loading.value = false;
@@ -278,25 +288,37 @@ async function loadList(token) {
   }
 }
 
+// 侧边栏数据独立于列表：仅首次进入某个内容类型时拉取一次，翻页/切分类/搜索不再重复请求
+let sidebarLoadedKey = "";
+
 async function loadSidebarContent(token) {
-  const res = await api.value[config.value.apiListMethod]({
-    page: 1,
-    page_size: 20,
-  });
+  const typeKey = config.value.routeBasePath;
+  if (sidebarLoadedKey === typeKey) {
+    return;
+  }
+  try {
+    const res = await api.value[config.value.apiListMethod]({
+      page: 1,
+      page_size: 20,
+    });
 
-  if (token !== syncToken) return;
-  const list = res.data?.list || [];
-  hotArticles.value = [...list]
-    .sort((a, b) => Number(b.view_count || 0) - Number(a.view_count || 0))
-    .slice(0, 5);
+    if (token !== syncToken) return;
+    const list = res.data?.list || [];
+    hotArticles.value = [...list]
+      .sort((a, b) => Number(b.view_count || 0) - Number(a.view_count || 0))
+      .slice(0, 5);
 
-  recentArticles.value = [...list]
-    .sort((a, b) => {
-      const timeA = new Date(a.publish_at || a.created_at || 0).getTime();
-      const timeB = new Date(b.publish_at || b.created_at || 0).getTime();
-      return timeB - timeA;
-    })
-    .slice(0, 5);
+    recentArticles.value = [...list]
+      .sort((a, b) => {
+        const timeA = new Date(a.publish_at || a.created_at || 0).getTime();
+        const timeB = new Date(b.publish_at || b.created_at || 0).getTime();
+        return timeB - timeA;
+      })
+      .slice(0, 5);
+    sidebarLoadedKey = typeKey;
+  } catch {
+    // 侧边栏拉取失败保留旧数据，下次进入仍会尝试
+  }
 }
 
 let syncToken = 0;
@@ -309,11 +331,15 @@ async function syncPage() {
   page.value = parseQueryNumber(route.query.page, 1);
   activeCategoryId.value = parseQueryNumber(route.query.category, 0);
 
-  await Promise.all([
-    loadOverview(token),
-    loadList(token),
-    loadSidebarContent(token),
-  ]);
+  try {
+    await Promise.all([
+      loadOverview(token),
+      loadList(token),
+      loadSidebarContent(token),
+    ]);
+  } catch {
+    // 各子请求已内部处理失败，此处兜底避免 unhandled rejection
+  }
 }
 
 function replaceListQuery(nextQuery) {
@@ -372,7 +398,8 @@ function buildDetailRoute(item) {
     params: { id: item.id },
     query: normalizeQuery({
       category: activeCategoryId.value || undefined,
-      keyword: keyword.value || undefined,
+      // 只用已提交的搜索词，避免输入框未提交内容泄漏进详情链接
+      keyword: String(route.query.keyword || "") || undefined,
       page: page.value > 1 ? page.value : undefined,
     }),
   };
