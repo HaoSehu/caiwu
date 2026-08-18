@@ -236,6 +236,38 @@
       "path": "模板/exec-plan.md",
       "status": "template",
       "summary": "执行计划模板。"
+    },
+    {
+      "path": "执行计划/进行中/API通信结构治理重构方案-2026-08-16.md",
+      "status": "active",
+      "summary": "API 通信审查后续：后端两个过厚控制器拆薄与前端三端通信层 shared 收敛的分阶段重构。",
+      "review_by": "2026-08-30"
+    },
+    {
+      "path": "执行计划/进行中/数据库专家团审查修复-2026-08-13.md",
+      "status": "active",
+      "summary": "5 维度数据库结构专家团审查 25 条确认发现的分批修复与回归。",
+      "review_by": "2026-08-27"
+    },
+    {
+      "path": "参考资料/迁移记录/frontend-admin-v3-final-acceptance-report.md",
+      "status": "completed",
+      "summary": "管理端（frontend-admin-v3）迁移的最终验收报告。"
+    },
+    {
+      "path": "参考资料/迁移记录/frontend-admin-v3-migration-ledger.md",
+      "status": "completed",
+      "summary": "管理端（frontend-admin-v3）迁移台账与决策留痕。"
+    },
+    {
+      "path": "参考资料/迁移记录/frontend-user-v3-www-final-acceptance-report.md",
+      "status": "completed",
+      "summary": "官网（frontend-user-v3-www）迁移的最终验收报告。"
+    },
+    {
+      "path": "参考资料/迁移记录/frontend-user-v3-www-migration-ledger.md",
+      "status": "completed",
+      "summary": "官网（frontend-user-v3-www）迁移台账与决策留痕。"
     }
   ]
 }

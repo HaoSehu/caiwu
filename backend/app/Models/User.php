@@ -70,6 +70,12 @@ class User extends Authenticatable
         return ['email', 'phone'];
     }
 
+    public function hasBoundAlipayAccount(): bool
+    {
+        return trim((string) $this->alipay_real_name) !== ''
+            && trim((string) $this->alipay_account) !== '';
+    }
+
     public function getNicknameAttribute(mixed $value): string
     {
         $nickname = trim((string) ($value ?? ''));
