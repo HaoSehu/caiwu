@@ -126,3 +126,5 @@ chat:
 knowledge_base:
   learnings:
     scope: auto
+
+# test: coderaBBIT verify - 临时修改用于验证集成,验证后关闭 PR 并删除该行
