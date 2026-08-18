@@ -127,4 +127,4 @@ knowledge_base:
   learnings:
     scope: auto
 
-# test: coderaBBIT verify - 临时修改用于验证集成,验证后关闭 PR 并删除该行
+# test: coderaBBIT verify - pass 2 触发审查验证(验证后整个测试分支移除,mACIn 不受影响)
