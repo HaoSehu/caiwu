@@ -49,7 +49,7 @@ jobs:
       DB_USERNAME: root
       DB_PASSWORD: root
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: 安装 PHP
         uses: shivammathur/setup-php@v2
@@ -66,7 +66,7 @@ jobs:
         run: composer validate --strict --no-check-publish
 
       - name: 缓存 Composer 依赖
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: backend/vendor
           key: composer-${{ runner.os }}-${{ hashFiles('backend/composer.lock') }}
@@ -95,14 +95,14 @@ jobs:
       - name: 运行测试
         run: composer test
 
-  frontend:
-    name: 前端 (Vue 3)
+  frontend-admin:
+    name: 前端-管理端 (admin-v3)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: 安装 Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -111,19 +111,86 @@ jobs:
         run: npm ci
 
       - name: Lint 检查
-        run: npm run lint:frontends
+        run: npm run lint:admin-v3
 
       - name: 类型检查
-        run: npm run typecheck:frontends
+        run: npm run typecheck:admin-v3
 
-      - name: 测试（shared + www + console）
+      # admin 的 test 为 Playwright e2e（需浏览器与运行中的后端），常规 CI 只跑非 e2e 单测与 shared
+      - name: 单元测试（shared + admin 非 e2e）
         run: |
           npm run test:shared
-          npm run test --workspace chuangouyun-user-v3-www
-          npm run test --workspace chuangouyun-user-v4-console
+          npm run test:api-asset --workspace chuangouyun-admin-v3
+          npm run test:log-archive-settings --workspace chuangouyun-admin-v3
 
       - name: 构建
-        run: npm run build:frontends
+        run: npm run build:admin-v3
 
+  frontend-www:
+    name: 前端-官网 (user-v3-www)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: 安装 Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: Lint 检查
+        run: npm run lint:user-v3-www
+
+      - name: 类型检查
+        run: npm run typecheck:user-v3-www
+
+      - name: 单元测试
+        run: npm run test --workspace chuangouyun-user-v3-www
+
+      - name: 构建
+        run: npm run build:user-v3-www
+
+  frontend-console:
+    name: 前端-用户控制台 (user-v4-console)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: 安装 Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: Lint 检查
+        run: npm run lint:user-v4-console
+
+      - name: 类型检查
+        run: npm run typecheck:user-v4-console
+
+      - name: 单元测试
+        run: npm run test --workspace chuangouyun-user-v4-console
+
+      - name: 构建
+        run: npm run build:user-v4-console
+
+  docs:
+    name: 文档检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: 安装 Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      # check_docs.mjs 仅使用 Node 内置模块，无需 npm ci
       - name: 文档检查
         run: npm run docs:check
