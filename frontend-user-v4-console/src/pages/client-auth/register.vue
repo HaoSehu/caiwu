@@ -115,6 +115,7 @@
   </auth-shell>
 </template>
 <script setup lang="ts">
+import { toUserMessage } from '@caiwu/shared/runtime';
 import { LockOnIcon } from 'tdesign-icons-vue-next';
 import type { FormInstanceFunctions, FormRule, FormValidateMessage, SubmitContext } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
@@ -127,7 +128,6 @@ import PasswordToggle from '@/components/auth/PasswordToggle.vue';
 import { useGeeTestCaptcha } from '@/composables/useGeeTestCaptcha';
 import { useUserStore } from '@/store';
 import { buildAccountPayload, detectAccountType, normalizeAccountValue } from '@/utils/account';
-import { toUserMessage } from '@/utils/userMessage';
 
 interface RegisterForm {
   account: string;

@@ -1,9 +1,9 @@
 import request from "@/utils/request";
 import {
-  normalizeContentDetailPayload,
-  normalizeContentListPayload,
-  normalizeContentOverviewPayload,
-  normalizeSiteHomePayload,
+  normalizeContentDetailPayloadWithAsset,
+  normalizeContentListPayloadWithAsset,
+  normalizeContentOverviewPayloadWithAsset,
+  normalizeSiteHomePayloadWithAsset,
   withNormalizedData,
 } from "./contentNormalizer";
 import {
@@ -246,7 +246,7 @@ export default {
     request
       .get("/v2/site/home", config)
       .then((response) =>
-        withNormalizedData(response, normalizeSiteHomePayload),
+        withNormalizedData(response, normalizeSiteHomePayloadWithAsset),
       )
       .then((response) =>
         normalizeProductResponse(response, normalizeSiteHomeProductPayload),
@@ -261,7 +261,7 @@ export default {
     return normalizeProductResponse(
       withNormalizedData(
         { ...response, data: payload },
-        normalizeSiteHomePayload,
+        normalizeSiteHomePayloadWithAsset,
       ),
       normalizeSiteHomeProductPayload,
     );
@@ -321,30 +321,30 @@ export default {
     request
       .get("/v2/site/content/overview", config)
       .then((response) =>
-        withNormalizedData(response, normalizeContentOverviewPayload),
+        withNormalizedData(response, normalizeContentOverviewPayloadWithAsset),
       ),
   notices: (params, config = {}) =>
     request
       .get("/v2/site/notices", { ...config, params })
       .then((response) =>
-        withNormalizedData(response, normalizeContentListPayload),
+        withNormalizedData(response, normalizeContentListPayloadWithAsset),
       ),
   noticeDetail: (id, config) =>
     request
       .get(`/v2/site/notices/${id}`, config)
       .then((response) =>
-        withNormalizedData(response, normalizeContentDetailPayload),
+        withNormalizedData(response, normalizeContentDetailPayloadWithAsset),
       ),
   helpArticles: (params, config = {}) =>
     request
       .get("/v2/site/help-articles", { ...config, params })
       .then((response) =>
-        withNormalizedData(response, normalizeContentListPayload),
+        withNormalizedData(response, normalizeContentListPayloadWithAsset),
       ),
   helpDetail: (id, config) =>
     request
       .get(`/v2/site/help-articles/${id}`, config)
       .then((response) =>
-        withNormalizedData(response, normalizeContentDetailPayload),
+        withNormalizedData(response, normalizeContentDetailPayloadWithAsset),
       ),
 };

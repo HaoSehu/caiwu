@@ -2,25 +2,15 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "ignoreDeprecations": "5.0",
     "paths": {
-      "@/*": [
-        "./src/*"
-      ],
-      "@shared/*": [
-        "../shared/*"
-      ],
-      "@caiwu/shared": [
-        "../shared/index.ts"
-      ],
-      "@caiwu/shared/*": [
-        "../shared/*"
-      ]
+      "@/*": ["./src/*"],
+      "@shared/*": ["../shared/*"],
+      "@caiwu/shared": ["../shared/index.ts"],
+      "@caiwu/shared/*": ["../shared/*"]
     },
-    "types": [
-      "node",
-      "vite/client"
-    ]
+    "types": ["node", "vite/client"]
   },
   "include": [
     "src/**/*.ts",

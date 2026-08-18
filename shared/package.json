@@ -8,6 +8,9 @@
     "./status": "./status/index.ts",
     "./runtime": "./runtime/index.ts",
     "./content": "./content/index.ts",
+    "./content/contentNormalizer": "./content/contentNormalizer.ts",
+    "./content/createMarkdownRenderer": "./content/createMarkdownRenderer.ts",
+    "./content/htmlSanitizer": "./content/htmlSanitizer.ts",
     "./components/StatusTag.vue": "./components/StatusTag.vue",
     "./statusConfig": "./statusConfig.js",
     "./extraStatusMaps": "./extraStatusMaps.js",
@@ -26,6 +29,6 @@
   "scripts": {
     "lint": "eslint . --ext .js,.ts,.vue",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --experimental-strip-types ./tests/runtime.test.mjs && node --experimental-strip-types ./tests/sanitizer.test.mjs && node --experimental-strip-types ./tests/http-validation.test.mjs"
+    "test": "node --experimental-strip-types ./tests/runtime.test.mjs && node --experimental-strip-types ./tests/sanitizer.test.mjs && node --experimental-strip-types ./tests/http-validation.test.mjs && node --experimental-strip-types ./tests/http-core.test.mjs && node --experimental-strip-types ./tests/http-client.test.mjs && node --experimental-strip-types ./tests/content-normalizer.test.mjs"
   }
 }
