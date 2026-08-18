@@ -36,13 +36,27 @@
           </div>
           <div class="news-feature__body">
             <div class="news-feature__date">
-              <strong>{{ formatNoticeDay(featuredNotice.publish_at || featuredNotice.updated_at) }}</strong>
-              <span>{{ formatNoticeMonthYear(featuredNotice.publish_at || featuredNotice.updated_at) }}</span>
+              <strong>{{
+                formatNoticeDay(
+                  featuredNotice.publish_at || featuredNotice.updated_at,
+                )
+              }}</strong>
+              <span>{{
+                formatNoticeMonthYear(
+                  featuredNotice.publish_at || featuredNotice.updated_at,
+                )
+              }}</span>
             </div>
             <div class="news-feature__meta">
-              <strong class="news-feature__title">{{ featuredNotice.title }}</strong>
+              <strong class="news-feature__title">{{
+                featuredNotice.title
+              }}</strong>
               <p class="news-feature__summary">
-                {{ featuredNotice.summary || featuredNotice.excerpt || '资讯动态主焦点卡片展示区域，点击查看完整内容。' }}
+                {{
+                  featuredNotice.summary ||
+                  featuredNotice.excerpt ||
+                  "资讯动态主焦点卡片展示区域，点击查看完整内容。"
+                }}
               </p>
             </div>
           </div>
@@ -59,7 +73,9 @@
             <strong class="news-list__title">{{ item.title }}</strong>
             <div class="news-list__meta">
               <el-icon><Calendar /></el-icon>
-              <span>{{ formatNoticeDate(item.publish_at || item.updated_at) }}</span>
+              <span>{{
+                formatNoticeDate(item.publish_at || item.updated_at)
+              }}</span>
             </div>
           </button>
         </div>
@@ -78,7 +94,7 @@
           <div class="news-promo__body">
             <strong class="news-promo__title">{{ promo.title }}</strong>
             <p class="news-promo__desc">
-              {{ promo.summary || promo.excerpt || '点击查看详细内容。' }}
+              {{ promo.summary || promo.excerpt || "点击查看详细内容。" }}
             </p>
           </div>
           <span class="news-promo__arrow" aria-hidden="true">
@@ -91,76 +107,85 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
-import { useRouter } from 'vue-router'
-import { ElIcon } from 'element-plus/es/components/icon/index.mjs'
-import { ArrowRight, Calendar } from '@element-plus/icons-vue'
+import { computed } from "vue";
+import { useRouter } from "vue-router";
+import { ElIcon } from "element-plus/es/components/icon/index.mjs";
+import { ArrowRight, Calendar } from "@element-plus/icons-vue";
 
 const props = defineProps({
   notices: {
     type: Array,
     default: () => [],
   },
-})
+});
 
-const router = useRouter()
+const router = useRouter();
 
 const featuredNotice = computed(() => {
-  return props.notices.find((n) => n.is_pinned === 1) || props.notices[0] || null
-})
+  return (
+    props.notices.find((n) => n.is_pinned === 1) || props.notices[0] || null
+  );
+});
 
 const promoEntries = computed(() => {
+  const featuredId = featuredNotice.value?.id;
   return props.notices
-    .filter((n) => n.is_recommended === 1 && n.is_pinned !== 1)
-    .slice(0, 4)
-})
+    .filter(
+      (n) =>
+        n.is_recommended === 1 &&
+        n.is_pinned !== 1 &&
+        // 排除焦点大卡，避免同一条公告在焦点区与推荐横条重复展示
+        n.id !== featuredId,
+    )
+    .slice(0, 4);
+});
 
 const newsListEntries = computed(() => {
   const usedIds = new Set([
     featuredNotice.value?.id,
     ...promoEntries.value.map((n) => n.id),
-  ])
+  ]);
   return props.notices
     .filter((n) => !usedIds.has(n.id))
     .sort((a, b) => {
-      const da = a.publish_at || a.updated_at || ''
-      const db = b.publish_at || b.updated_at || ''
-      return da < db ? 1 : da > db ? -1 : 0 // Descending order for news list
+      const da = a.publish_at || a.updated_at || "";
+      const db = b.publish_at || b.updated_at || "";
+      return da < db ? 1 : da > db ? -1 : 0; // Descending order for news list
     })
-    .slice(0, 6)
-})
+    .slice(0, 6);
+});
 
 function formatNoticeDate(value) {
-  if (!value) return '--'
-  const date = new Date(value)
+  if (!value) return "--";
+  const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return String(value).split(' ')[0] || String(value)
+    return String(value).split(" ")[0] || String(value);
   }
-  const pad = (number) => String(number).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+  const pad = (number) => String(number).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
 function formatNoticeDay(value) {
-  if (!value) return '--'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return '--'
-  return String(date.getDate()).padStart(2, '0')
+  if (!value) return "--";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "--";
+  return String(date.getDate()).padStart(2, "0");
 }
 
 function formatNoticeMonthYear(value) {
-  if (!value) return ''
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
-  const pad = (number) => String(number).padStart(2, '0')
-  return `${date.getFullYear()}.${pad(date.getMonth() + 1)}`
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (number) => String(number).padStart(2, "0");
+  return `${date.getFullYear()}.${pad(date.getMonth() + 1)}`;
 }
 
 function openNotice(item) {
   if (!item?.id) {
-    router.push('/notices')
-    return
+    router.push("/notices");
+    return;
   }
-  router.push(`/notices/${item.id}`)
+  router.push(`/notices/${item.id}`);
 }
 </script>
 
@@ -257,7 +282,11 @@ function openNotice(item) {
   justify-content: center;
   height: 200px;
   background:
-    radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.18), transparent 55%),
+    radial-gradient(
+      circle at 30% 30%,
+      rgba(255, 255, 255, 0.18),
+      transparent 55%
+    ),
     #1e49cf;
   overflow: hidden;
 }
@@ -453,7 +482,11 @@ function openNotice(item) {
   width: 200px;
   height: 200px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(22, 93, 255, 0.18), rgba(22, 93, 255, 0) 70%);
+  background: radial-gradient(
+    circle,
+    rgba(22, 93, 255, 0.18),
+    rgba(22, 93, 255, 0) 70%
+  );
   pointer-events: none;
   z-index: -1;
 }
