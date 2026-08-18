@@ -112,10 +112,7 @@
                   type="button"
                   class="opt-btn"
                   :class="{ active: configForm[regionKey] === opt.id }"
-                  @click="
-                    configForm[regionKey] = opt.id;
-                    fetchQuote();
-                  "
+                  @click="configForm[regionKey] = opt.id"
                 >
                   {{ opt.label }}
                 </button>
@@ -149,7 +146,6 @@
                     v-model="configForm.os"
                     placeholder="请选择版本"
                     :disabled="!currentOsGroup?.versions?.length"
-                    @change="fetchQuote"
                   >
                     <el-option
                       v-for="ver in currentOsGroup?.versions"
@@ -176,7 +172,6 @@
                       :min="cfg.min ?? 1"
                       :max="cfg.max ?? undefined"
                       controls-position="right"
-                      @change="fetchQuote"
                     />
                   </template>
                   <div class="opt-wrap" v-else-if="cfg.options.length > 1">
@@ -186,10 +181,7 @@
                       type="button"
                       class="opt-btn"
                       :class="{ active: configForm[cfg.key] === opt.id }"
-                      @click="
-                        configForm[cfg.key] = opt.id;
-                        fetchQuote();
-                      "
+                      @click="configForm[cfg.key] = opt.id"
                     >
                       {{ opt.label }}
                     </button>
@@ -219,7 +211,6 @@
                       :min="cfg.min ?? 1"
                       :max="cfg.max ?? undefined"
                       controls-position="right"
-                      @change="fetchQuote"
                     />
                   </template>
                   <div class="opt-wrap" v-else-if="cfg.options.length > 1">
@@ -229,10 +220,7 @@
                       type="button"
                       class="opt-btn"
                       :class="{ active: configForm[cfg.key] === opt.id }"
-                      @click="
-                        configForm[cfg.key] = opt.id;
-                        fetchQuote();
-                      "
+                      @click="configForm[cfg.key] = opt.id"
                     >
                       {{ opt.label }}
                     </button>
@@ -440,7 +428,7 @@
                   class="cost-amount cost-amount--loading"
                   >计算中</span
                 >
-                <span v-else class="cost-amount">{{ totalAmount }}</span>
+                <span v-else class="cost-amount">{{ totalPrice }}</span>
                 <span class="cost-cycle"
                   >/{{ selectedCycleLabel || "月付" }}</span
                 >
@@ -451,7 +439,7 @@
               class="buy-btn"
               :disabled="!canSubmit || submitting || quoteLoading"
               :class="{ loading: submitting, 'is-sold-out': soldOut }"
-              @click="submitOrder"
+              @click="handleSubmit"
             >
               <span>{{ submitButtonText }}</span>
             </button>
@@ -467,9 +455,7 @@
             <div class="allocation-footer-price">
               <span class="allocation-footer-symbol">¥</span>
               <span class="allocation-footer-num" v-if="quoteLoading">…</span>
-              <span class="allocation-footer-num" v-else>{{
-                totalAmount
-              }}</span>
+              <span class="allocation-footer-num" v-else>{{ totalPrice }}</span>
               <span class="allocation-footer-cycle"
                 >/{{ selectedCycleLabel || "月付" }}</span
               >
@@ -489,7 +475,7 @@
             class="allocation-footer-action"
             :disabled="!canSubmit || submitting || quoteLoading"
             :class="{ loading: submitting, 'is-sold-out': soldOut }"
-            @click="submitOrder"
+            @click="handleSubmit"
           >
             <span>{{ submitButtonText }}</span>
           </button>
@@ -510,56 +496,65 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { ElMessage } from "element-plus/es/components/message/index.mjs";
 import siteApi from "@/api/site";
-import {
-  resolvePurchaseRequirementList,
-  resolvePurchaseRequirementSummary,
-} from "@/utils/productPurchaseRequirements";
 import {
   buildWebsiteProductPath,
   resolveWebsiteProductRoutePayloadByDetail,
 } from "@/utils/productRoute";
-import {
-  normalizeMoneyText,
-  resolveProductDisplayName,
-} from "@/utils/websiteProductConfig";
-import { navigateToConsole } from "@/utils/consoleUrl";
-import {
-  buildIdempotencyKey,
-  encodePendingWebsiteCheckout,
-  savePendingWebsiteCheckout,
-} from "@/utils/websiteCheckout";
-import { buildPendingCouponRedirectUrl } from "@/utils/websiteCoupon";
+import { resolveProductDisplayName } from "@/utils/websiteProductConfig";
 import {
   isCpuConfigKey,
   isMemoryConfigKey,
   resolveMachineSpecPresentation,
 } from "@/domains/products/machineSpecResolver";
 import { useWebsiteProductConfigurator } from "@/domains/products/useWebsiteProductConfigurator";
+import { useWebsiteProductCheckout } from "@/domains/products/useWebsiteProductCheckout";
 
 const route = useRoute();
 const router = useRouter();
 
 const loading = ref(false);
-const submitting = ref(false);
 const product = ref(null);
 const siblings = ref([]);
-const selectedCycle = ref("");
-const hostname = ref("");
-const password = ref("");
-const quantity = ref(1);
-const selectedCouponId = ref(0);
 
-const productDetailRef = computed(() => product.value);
-const configurator = useWebsiteProductConfigurator(productDetailRef);
+const configurator = useWebsiteProductConfigurator(
+  computed(() => product.value),
+);
 const configForm = configurator.configForm;
-const quoteResult = ref(null);
-const quoteLoading = ref(false);
-const quoteToken = ref("");
-const productStock = ref(null);
-const productStockLoading = ref(false);
-const productStockError = ref("");
+// 报价/库存/下单逻辑复用目录页同一套 composable，避免资金链路双实现
+const {
+  submitting,
+  selectedCycle,
+  quoteLoading,
+  productStockLoading,
+  productStockError,
+  baseAmount,
+  setupFee,
+  quoteItems,
+  appliedCoupon,
+  availableCoupons,
+  totalPrice,
+  selectedCycleLabel,
+  resolvedStock,
+  stockClass,
+  stockLabel,
+  stockHint,
+  selectedCouponId,
+  canSubmit,
+  purchaseRequirementList,
+  purchaseRequirementSummary,
+  handleCouponChange,
+  clearCoupon,
+  handleSubmit,
+  applyLoadedProduct,
+} = useWebsiteProductCheckout({
+  productDetail: product,
+  configForm: configurator.configForm,
+  pricingEntries: configurator.pricingEntries,
+  buildConfigPayload: configurator.buildConfigPayload,
+  initProductDefaults: configurator.initProductDefaults,
+  resetConfigForm: configurator.resetConfigForm,
+});
 
 // 网络关键词（带宽/IP/流量/防护等）
 const NET_KEYWORDS = [
@@ -613,14 +608,13 @@ const siblingDisplayNames = computed(() => {
 function selectOsGroup(os) {
   configForm.os_group = os.id;
   if (os.versions?.length) configForm.os = os.versions[0].id;
-  fetchQuote();
+  // configForm 变化会经 checkout 的 quoteTrigger 自动重新报价
 }
 
 function handleOsGroupChange(value) {
   const nextGroup = osGroups.value.find((item) => item.id === value);
   if (!nextGroup) {
     configForm.os = "";
-    fetchQuote();
     return;
   }
 
@@ -708,36 +702,6 @@ const showCatalogHero = computed(() =>
   ),
 );
 
-const selectedPricingEntry = computed(
-  () =>
-    pricingEntries.value.find((i) => i.cycle === selectedCycle.value) || null,
-);
-const selectedCycleLabel = computed(
-  () => selectedPricingEntry.value?.label || "",
-);
-const baseAmount = computed(
-  () =>
-    quoteResult.value?.base_amount ??
-    selectedPricingEntry.value?.amount ??
-    "0.00",
-);
-const setupFee = computed(
-  () =>
-    quoteResult.value?.setup_fee ??
-    product.value?.setup_fee_display ??
-    normalizeMoneyText(product.value?.setup_fee || 0),
-);
-const quoteItems = computed(() => quoteResult.value?.items || []);
-const appliedCoupon = computed(() => quoteResult.value?.coupon || null);
-const availableCoupons = computed(
-  () => quoteResult.value?.available_coupons || [],
-);
-const totalAmount = computed(() => {
-  if (quoteResult.value) return quoteResult.value.total_amount || "0.00";
-  return (
-    Number(selectedPricingEntry.value?.total_amount || 0) * quantity.value
-  ).toFixed(2);
-});
 const summaryItems = computed(() => {
   const items = [];
 
@@ -800,176 +764,9 @@ const summaryItems = computed(() => {
 
   return items;
 });
-const purchaseRequirementList = computed(() =>
-  resolvePurchaseRequirementList(product.value),
-);
-const purchaseRequirementSummary = computed(() =>
-  resolvePurchaseRequirementSummary(product.value),
-);
 
-let quoteTimer = null;
-let quoteAbortController = null;
-let quoteExecuteToken = 0;
 let productLoadToken = 0;
 
-function createQuoteSignal() {
-  // 新报价请求发出前取消上一次在途请求，避免卸载后旧响应回写组件状态
-  quoteAbortController?.abort();
-  quoteAbortController = new AbortController();
-  return quoteAbortController.signal;
-}
-
-function applyQuoteResult(payload, nextCouponId = selectedCouponId.value) {
-  quoteResult.value = payload || null;
-  quoteToken.value = String(payload?.quote_token || "");
-  selectedCouponId.value = Number(nextCouponId || payload?.user_coupon_id || 0);
-}
-
-async function requestQuote(nextCouponId = selectedCouponId.value) {
-  return siteApi.productQuote(
-    product.value.id,
-    {
-      billing_cycle: selectedCycle.value,
-      config: buildConfigPayload(),
-      quantity: quantity.value,
-      user_coupon_id: Number(nextCouponId || 0) || undefined,
-    },
-    { signal: createQuoteSignal() },
-  );
-}
-
-function looksLikeCouponError(error) {
-  const message = String(
-    error?.response?.data?.message || error?.message || "",
-  );
-  return message.includes("优惠券") || message.includes("优惠码");
-}
-
-async function executeQuote(
-  nextCouponId = selectedCouponId.value,
-  options = {},
-) {
-  if (!product.value || !selectedCycle.value) return;
-
-  const token = ++quoteExecuteToken;
-
-  const snapshot = options.rollbackOnError
-    ? {
-        quoteResult: quoteResult.value,
-        quoteToken: quoteToken.value,
-        selectedCouponId: selectedCouponId.value,
-      }
-    : null;
-
-  quoteLoading.value = true;
-
-  try {
-    const res = await requestQuote(nextCouponId);
-    // 已被更新的报价请求取代：不写状态，新请求会接管
-    if (token !== quoteExecuteToken) return true;
-    applyQuoteResult(res.data || null, nextCouponId);
-    return true;
-  } catch (error) {
-    if (token !== quoteExecuteToken) return false;
-
-    if (snapshot) {
-      quoteResult.value = snapshot.quoteResult;
-      quoteToken.value = snapshot.quoteToken;
-      selectedCouponId.value = snapshot.selectedCouponId;
-      return false;
-    }
-
-    if (
-      Number(nextCouponId || 0) > 0 &&
-      options.fallbackInvalidCoupon &&
-      looksLikeCouponError(error)
-    ) {
-      selectedCouponId.value = 0;
-
-      try {
-        const fallbackRes = await requestQuote(0);
-        if (token !== quoteExecuteToken) return false;
-        applyQuoteResult(fallbackRes.data || null, 0);
-        return false;
-      } catch {
-        quoteResult.value = null;
-        quoteToken.value = "";
-        return false;
-      }
-    }
-
-    quoteResult.value = null;
-    quoteToken.value = "";
-    return false;
-  } finally {
-    if (token === quoteExecuteToken) {
-      quoteLoading.value = false;
-    }
-  }
-}
-
-function handleCouponChange(value) {
-  if (!product.value || !selectedCycle.value) {
-    selectedCouponId.value = Number(value || 0);
-    return;
-  }
-
-  selectedCouponId.value = Number(value || 0);
-  fetchQuote();
-}
-
-async function clearCoupon() {
-  selectedCouponId.value = 0;
-  await executeQuote(0, { fallbackInvalidCoupon: false });
-}
-
-function fetchQuote() {
-  clearTimeout(quoteTimer);
-  quoteTimer = setTimeout(() => {
-    executeQuote(selectedCouponId.value, { fallbackInvalidCoupon: true });
-  }, 300);
-}
-
-function buildConfigPayload() {
-  return configurator.buildConfigPayload();
-}
-
-const defaultHostname = computed(
-  () => `svr${Math.floor(Math.random() * 9e8 + 1e8)}`,
-);
-const resolvedStock = computed(() => {
-  if (productStock.value !== null && productStock.value !== undefined) {
-    return Number(productStock.value);
-  }
-
-  return null;
-});
-const stockClass = computed(() => {
-  if (productStockLoading.value || productStockError.value) return "sync";
-  const stock = resolvedStock.value;
-  if (stock === null) return "sync";
-  if (stock === -1 || stock > 10) return "ok";
-  if (stock > 0) return "warn";
-  return "empty";
-});
-const stockLabel = computed(() => {
-  if (productStockLoading.value) return "库存同步中";
-  if (productStockError.value) return "库存同步失败";
-  const stock = resolvedStock.value;
-  if (stock === null) return "库存同步中";
-  if (stock === -1 || stock > 10) return "库存充足";
-  if (stock > 0) return "库存紧张";
-  return "暂无库存";
-});
-const stockHint = computed(() => {
-  if (productStockLoading.value) return "正在同步实时库存，请稍候。";
-  if (productStockError.value) return "实时库存同步失败，请稍后重试。";
-  const stock = resolvedStock.value;
-  if (stock === null) return "正在同步实时库存，请稍候。";
-  if (stock === -1 || stock > 10) return "当前库存充足，可直接提交账单。";
-  if (stock > 0) return `剩余 ${stock} 台，请尽快购买。`;
-  return "当前库存不足，请联系客服。";
-});
 const soldOut = computed(
   () =>
     resolvedStock.value !== null &&
@@ -977,96 +774,11 @@ const soldOut = computed(
     !productStockError.value &&
     resolvedStock.value === 0,
 );
-const canSubmit = computed(() => {
-  const stock = resolvedStock.value;
-  return (
-    Boolean(selectedCycle.value) &&
-    Boolean(quoteToken.value) &&
-    !quoteLoading.value &&
-    !productStockLoading.value &&
-    !productStockError.value &&
-    stock !== null &&
-    stock !== 0
-  );
-});
 const submitButtonText = computed(() => {
   if (submitting.value) return "提交中...";
   if (soldOut.value) return "已售罄";
   return "立即购买";
 });
-
-function buildOrderPayload() {
-  const payload = {
-    product_id: Number(product.value?.id || 0),
-    billing_cycle: selectedCycle.value,
-    quantity: quantity.value,
-    config: buildConfigPayload(),
-    quote_token: quoteToken.value,
-  };
-
-  if (selectedCouponId.value > 0) {
-    payload.user_coupon_id = selectedCouponId.value;
-  }
-
-  return payload;
-}
-
-function redirectToConsoleCheckout(orderPayload, idempotencyKey) {
-  const pendingCheckout = {
-    source: "website-product-detail",
-    createdAt: Date.now(),
-    idempotencyKey,
-    orderPayload,
-  };
-
-  savePendingWebsiteCheckout(pendingCheckout);
-  const checkoutPayload = encodePendingWebsiteCheckout(pendingCheckout);
-  const checkoutPath = buildPendingCouponRedirectUrl(
-    "/client/checkout-resume",
-    orderPayload.user_coupon_id,
-  );
-  ElMessage.success("正在进入控制台继续创建账单");
-
-  navigateToConsole(
-    checkoutPath,
-    checkoutPayload ? { checkout_payload: checkoutPayload } : {},
-  );
-}
-
-async function submitOrder() {
-  if (productStockLoading.value) {
-    ElMessage.warning("库存同步中，请稍候");
-    return;
-  }
-  if (productStockError.value) {
-    ElMessage.warning("库存同步失败，请稍后重试");
-    return;
-  }
-  if (resolvedStock.value === 0) {
-    ElMessage.warning("当前库存不足，暂时无法购买");
-    return;
-  }
-  if (!quoteToken.value) {
-    ElMessage.warning("报价凭证已失效，请稍后重试");
-    return;
-  }
-  if (!canSubmit.value) {
-    ElMessage.warning("请选择计费周期");
-    return;
-  }
-
-  submitting.value = true;
-  try {
-    const orderPayload = buildOrderPayload();
-    const idempotencyKey = buildIdempotencyKey("website-order");
-
-    redirectToConsoleCheckout(orderPayload, idempotencyKey);
-  } catch (err) {
-    ElMessage.error(err?.response?.data?.message || "跳转控制台失败，请重试");
-  } finally {
-    submitting.value = false;
-  }
-}
 
 function switchProduct(id) {
   const routePayload = resolveWebsiteProductRoutePayloadByDetail(product.value);
@@ -1078,21 +790,6 @@ function switchProduct(id) {
   );
 }
 
-function initDefaults() {
-  configurator.initProductDefaults({
-    selectedCycleRef: selectedCycle,
-    quantityRef: quantity,
-    resetQuoteState: () => {
-      quoteResult.value = null;
-      quoteToken.value = "";
-    },
-  });
-
-  hostname.value = defaultHostname.value;
-  password.value = "";
-  fetchQuote();
-}
-
 async function loadProduct() {
   const pid = Number(route.params.id || 0);
   if (!pid) {
@@ -1100,16 +797,14 @@ async function loadProduct() {
     return;
   }
   const token = ++productLoadToken;
-  productStock.value = null;
-  productStockError.value = "";
-  refreshProductStock(pid);
   loading.value = true;
   try {
     const res = await siteApi.product(pid);
     if (token !== productLoadToken) return;
     product.value = res.data.product || null;
     siblings.value = res.data.product?.siblings || [];
-    initDefaults();
+    // 注入已加载商品：由 checkout 统一完成默认配置初始化、报价与库存同步
+    applyLoadedProduct(res.data.product);
   } catch {
     if (token !== productLoadToken) return;
     product.value = null;
@@ -1120,36 +815,12 @@ async function loadProduct() {
   }
 }
 
-async function refreshProductStock(id) {
-  if (!id) return;
-
-  productStockLoading.value = true;
-  productStockError.value = "";
-  productStock.value = null;
-
-  try {
-    const res = await siteApi.productStock(id);
-    if (Number(route.params.id || 0) !== id) return;
-    productStock.value = Number(res.data?.stock ?? 0);
-  } catch (err) {
-    if (Number(route.params.id || 0) !== id) return;
-    productStockError.value = err?.response?.data?.message || "库存同步失败";
-  } finally {
-    if (Number(route.params.id || 0) === id) {
-      productStockLoading.value = false;
-    }
-  }
-}
-
 watch(
   () => route.params.id,
   (v) => {
     if (v) loadProduct();
   },
 );
-watch(selectedCycle, fetchQuote);
-watch(configForm, fetchQuote, { deep: true });
-watch(quantity, fetchQuote);
 watch(
   () => route.query.user_coupon_id,
   (value) => {
@@ -1159,21 +830,14 @@ watch(
       return;
     }
 
-    selectedCouponId.value = nextCouponId;
-
-    if (product.value && selectedCycle.value) {
-      fetchQuote();
-    }
+    handleCouponChange(nextCouponId);
   },
   { immediate: true },
 );
 onMounted(loadProduct);
 
 onBeforeUnmount(() => {
-  // 清理报价防抖定时器与在途请求，避免卸载后仍发请求/写已卸载组件状态
-  clearTimeout(quoteTimer);
-  quoteAbortController?.abort();
-  // 使仍在途的 loadProduct 响应失效
+  // 使仍在途的 loadProduct 响应失效；报价/库存在途请求由 checkout 的 onBeforeUnmount 中止
   productLoadToken += 1;
 });
 </script>
