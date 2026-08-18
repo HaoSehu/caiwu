@@ -1,5 +1,0 @@
-blank_issues_enabled: false
-contact_links:
-  - name: 安全漏洞报告
-    url: https://github.com/HaoSehu/caiwu/issues/new
-    about: 请通过 Issue 报告安全问题，避免在内容中包含敏感凭据
