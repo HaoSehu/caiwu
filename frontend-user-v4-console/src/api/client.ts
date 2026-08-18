@@ -1,3 +1,9 @@
+import {
+  normalizeContentDetailPayload,
+  normalizeContentListPayload,
+  normalizeContentOverviewPayload,
+  withNormalizedData,
+} from '@caiwu/shared/content/contentNormalizer';
 import type { AxiosRequestConfig } from 'axios';
 
 import type {
@@ -57,13 +63,6 @@ import type {
   TicketServiceOption,
 } from '@/types/client';
 import request from '@/utils/request';
-
-import {
-  normalizeContentDetailPayload,
-  normalizeContentListPayload,
-  normalizeContentOverviewPayload,
-  withNormalizedData,
-} from './contentNormalizer';
 
 type QueryParams = Record<string, unknown> | undefined;
 type RequestConfig = (AxiosRequestConfig & { silentError?: boolean }) | undefined;

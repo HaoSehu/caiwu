@@ -27,6 +27,7 @@
   </auth-shell>
 </template>
 <script setup lang="ts">
+import { toUserMessage } from '@caiwu/shared/runtime';
 import { CheckCircleIcon, ErrorCircleIcon, LoadingIcon } from 'tdesign-icons-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
@@ -34,7 +35,6 @@ import { useRoute, useRouter } from 'vue-router';
 
 import AuthShell from '@/components/auth/AuthShell.vue';
 import { useUserStore } from '@/store';
-import { toUserMessage } from '@/utils/userMessage';
 
 interface RuntimeHandledError {
   __handled?: boolean;

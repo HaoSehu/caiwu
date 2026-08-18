@@ -89,6 +89,7 @@
   </auth-shell>
 </template>
 <script setup lang="ts">
+import { toUserMessage } from '@caiwu/shared/runtime';
 import { LockOnIcon } from 'tdesign-icons-vue-next';
 import type { FormInstanceFunctions, FormRule, FormValidateMessage, SubmitContext } from 'tdesign-vue-next';
 import { MessagePlugin } from 'tdesign-vue-next';
@@ -100,7 +101,6 @@ import AuthShell from '@/components/auth/AuthShell.vue';
 import PasswordToggle from '@/components/auth/PasswordToggle.vue';
 import { useGeeTestCaptcha } from '@/composables/useGeeTestCaptcha';
 import { buildAccountPayload, detectAccountType, normalizeAccountValue } from '@/utils/account';
-import { toUserMessage } from '@/utils/userMessage';
 
 interface ResetPasswordForm {
   account: string;
