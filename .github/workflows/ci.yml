@@ -97,7 +97,6 @@ jobs:
       - name: 类型检查
         run: npm run typecheck:frontends
 
-      # admin 的 test 是 Playwright e2e（需要浏览器与运行中的后端），不放进常规 CI
       - name: 测试（shared + www + console）
         run: |
           npm run test:shared
