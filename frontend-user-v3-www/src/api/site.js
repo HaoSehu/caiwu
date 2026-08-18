@@ -1,4 +1,4 @@
-import request from "@/utils/request";
+import request from "@/app/http/request";
 import {
   normalizeContentDetailPayloadWithAsset,
   normalizeContentListPayloadWithAsset,
