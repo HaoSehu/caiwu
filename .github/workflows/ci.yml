@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   backend:
-    name: Backend (Laravel)
+    name: 后端 (Laravel)
     runs-on: ubuntu-latest
     services:
       mysql:
@@ -42,7 +42,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup PHP
+      - name: 安装 PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
@@ -50,13 +50,13 @@ jobs:
           coverage: none
           tools: composer:v2
 
-      - name: Generate APP key
+      - name: 生成 APP key
         run: echo "APP_KEY=base64:$(openssl rand -base64 32)" >> $GITHUB_ENV
 
-      - name: Validate composer.json
+      - name: 校验 composer.json
         run: composer validate --strict --no-check-publish
 
-      - name: Cache Composer dependencies
+      - name: 缓存 Composer 依赖
         uses: actions/cache@v4
         with:
           path: backend/vendor
@@ -64,48 +64,48 @@ jobs:
           restore-keys: |
             composer-${{ runner.os }}-
 
-      - name: Install dependencies
+      - name: 安装依赖
         run: composer install --no-interaction --prefer-dist --no-progress
 
-      - name: Check code style (Pint)
+      - name: 代码风格检查 (Pint)
         run: composer format:check
 
-      - name: Static analysis (PHPStan)
+      - name: 静态分析 (PHPStan)
         run: composer analyse
 
-      - name: Run tests
+      - name: 运行测试
         run: composer test
 
   frontend:
-    name: Frontend (Vue 3)
+    name: 前端 (Vue 3)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: 安装 Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
 
-      - name: Install dependencies
+      - name: 安装依赖
         run: npm ci
 
-      - name: Lint
+      - name: Lint 检查
         run: npm run lint:frontends
 
-      - name: Typecheck
+      - name: 类型检查
         run: npm run typecheck:frontends
 
       # admin 的 test 是 Playwright e2e（需要浏览器与运行中的后端），不放进常规 CI
-      - name: Test (shared + www + console)
+      - name: 测试（shared + www + console）
         run: |
           npm run test:shared
           npm run test --workspace chuangouyun-user-v3-www
           npm run test --workspace chuangouyun-user-v4-console
 
-      - name: Build
+      - name: 构建
         run: npm run build:frontends
 
-      - name: Check docs
+      - name: 文档检查
         run: npm run docs:check
