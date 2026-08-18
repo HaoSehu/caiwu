@@ -155,5 +155,6 @@ zjmf-manger-decoded-main/
 .codegraph/
 .reasonix/
 .devin_tmp/
+.mimosa/
 
 backend/.env.testing

@@ -1,4 +1,4 @@
-@use 'sass:meta';
+@use "sass:meta";
 
 :root {
   --el-color-primary: #{$color-primary};
@@ -32,8 +32,11 @@
   --el-border-radius-round: 999px;
   --el-box-shadow-light: #{$shadow-sm};
   --el-box-shadow: #{$shadow-md};
-  --site-grain:
-    radial-gradient(circle at 1px 1px, rgba(15, 23, 42, 0.045) 1px, transparent 0);
+  --site-grain: radial-gradient(
+    circle at 1px 1px,
+    rgba(15, 23, 42, 0.045) 1px,
+    transparent 0
+  );
 }
 
 .skip-to-content {
@@ -89,7 +92,11 @@ body,
 
 body {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.74), rgba(255, 255, 255, 0.74)),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.74),
+      rgba(255, 255, 255, 0.74)
+    ),
     $bg-color;
   background-size: auto, auto;
 }
@@ -282,9 +289,9 @@ ol {
 // ========== 自定义状态标签：紫色（已冻结/已暂停） ==========
 .el-tag--purple,
 .el-tag.is-purple {
-  --el-tag-bg-color: rgba(139, 92, 246, 0.10);
-  --el-tag-border-color: rgba(139, 92, 246, 0.20);
-  --el-tag-text-color: #8B5CF6;
+  --el-tag-bg-color: rgba(139, 92, 246, 0.1);
+  --el-tag-border-color: rgba(139, 92, 246, 0.2);
+  --el-tag-text-color: #8b5cf6;
   background-color: var(--el-tag-bg-color) !important;
   border-color: var(--el-tag-border-color) !important;
   color: var(--el-tag-text-color) !important;
@@ -308,8 +315,13 @@ ol {
 }
 
 @keyframes statusPulse {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.55; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
 }
 
 .el-menu {
@@ -484,7 +496,7 @@ ol {
   }
 }
 
-@include meta.load-css('record-list');
+@include meta.load-css("record-list");
 
 @media (max-width: 900px) {
   .client-metric-strip {
