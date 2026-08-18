@@ -28,6 +28,15 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
     defaults:
       run:
         working-directory: backend
@@ -66,6 +75,16 @@ jobs:
 
       - name: 安装依赖
         run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: 安装 mysql 客户端
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends mysql-client
+
+      # 项目迁移为增量，完整结构以 database/schema/mysql-schema.sql 为基线；
+      # 全新测试库须按 install_db.py 同款流程：导入基线 + 跑增量迁移
+      - name: 初始化测试数据库
+        run: |
+          mysql --default-character-set=utf8mb4 -h 127.0.0.1 -P 13306 -uroot -proot idc_test < database/schema/mysql-schema.sql
+          php artisan migrate --force
 
       - name: 代码风格检查 (Pint)
         run: composer format:check
