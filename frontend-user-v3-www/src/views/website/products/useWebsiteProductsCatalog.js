@@ -72,6 +72,7 @@ export function useWebsiteProductsCatalog({
 
   let routeSyncSuspendCount = 0;
   let groupToken = 0;
+  let rootToken = 0;
   let groupAbortController = null;
 
   const activeType = computed(
@@ -360,6 +361,7 @@ export function useWebsiteProductsCatalog({
   }
 
   async function loadRootGroups(options = {}) {
+    const token = ++rootToken;
     pageLoading.value = true;
 
     try {
@@ -372,6 +374,11 @@ export function useWebsiteProductsCatalog({
         });
         groups = filterGroupsByType(res.data.list || [], typeValue);
         rootGroupsByType.set(typeValue, groups);
+      }
+
+      // 已被更新的切换取代：不写状态，新切换会接管
+      if (token !== rootToken) {
+        return;
       }
 
       rootGroups.value = groups;
@@ -392,7 +399,9 @@ export function useWebsiteProductsCatalog({
         resetSelectedProduct({ syncRoute: shouldSyncRoute(options) });
       }
     } finally {
-      pageLoading.value = false;
+      if (token === rootToken) {
+        pageLoading.value = false;
+      }
     }
   }
 
@@ -635,7 +644,10 @@ export function useWebsiteProductsCatalog({
           data.catalog &&
           Number(data.catalog.effective_product_group_id || 0) > 0
         ) {
-          setCachedCatalog(data.catalog.effective_product_group_id, data.catalog);
+          setCachedCatalog(
+            data.catalog.effective_product_group_id,
+            data.catalog,
+          );
         }
 
         const linked = await applyRouteSelection();

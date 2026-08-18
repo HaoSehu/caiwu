@@ -58,6 +58,10 @@ export function useWebsiteProductCheckout({
   let quoteAbortController = null;
   let prefetchAbortController = null;
   let quoteWatchSuspendCount = 0;
+  // 配置版本守卫：配置/周期/数量每变化一次递增；报价成功时记录发起时的版本。
+  // canSubmit 要求当前配置版本与报价版本一致，杜绝「旧报价 token + 新配置」提交。
+  let quoteVersion = 0;
+  let quoteSnapshotVersion = -1;
 
   const selectedProduct = computed(() => productDetail.value);
   const selectedProductDisplayName = computed(() =>
@@ -90,9 +94,10 @@ export function useWebsiteProductCheckout({
       return quoteResult.value.total_amount || "0.00";
     }
 
-    return (
-      Number(selectedPricingEntry.value?.total_amount || 0) * quantity.value
-    ).toFixed(2);
+    // 无报价时估算：开通费按一次性计（每单仅收一次），基础价按台数计
+    const amount = Number(selectedPricingEntry.value?.amount || 0);
+    const setup = Number(productDetail.value?.setup_fee || 0);
+    return (amount * quantity.value + setup).toFixed(2);
   });
   const selectedCycleLabel = computed(
     () => selectedPricingEntry.value?.label || "",
@@ -136,6 +141,8 @@ export function useWebsiteProductCheckout({
       Boolean(
         selectedCycle.value && selectedProduct.value && quoteToken.value,
       ) &&
+      // 报价必须对应当前配置（周期/数量/配置项），防抖窗口内旧报价不可提交
+      quoteSnapshotVersion === quoteVersion &&
       !productStockLoading.value &&
       !productStockError.value &&
       stock !== null &&
@@ -152,6 +159,15 @@ export function useWebsiteProductCheckout({
   function resetQuoteState() {
     quoteResult.value = null;
     quoteToken.value = "";
+    quoteSnapshotVersion = -1;
+  }
+
+  // 配置/周期/数量/优惠券变化：递增版本并立即使旧报价凭证失效，
+  // 防抖窗口内旧 token 无法用于提交（canSubmit 依赖版本匹配）
+  function invalidateQuoteState() {
+    quoteVersion += 1;
+    quoteResult.value = null;
+    quoteToken.value = "";
   }
 
   function suspendQuoteWatch() {
@@ -166,12 +182,18 @@ export function useWebsiteProductCheckout({
     }
   }
 
-  function applyQuoteResult(payload, nextCouponId = selectedCouponId.value) {
+  function applyQuoteResult(
+    payload,
+    requestVersion,
+    nextCouponId = selectedCouponId.value,
+  ) {
     quoteResult.value = payload || null;
     quoteToken.value = String(payload?.quote_token || "");
     selectedCouponId.value = Number(
       nextCouponId || payload?.user_coupon_id || 0,
     );
+    // 报价结果只对发起时的配置版本有效；配置已变化时旧响应即使写回也无法通过 canSubmit
+    quoteSnapshotVersion = requestVersion;
   }
 
   function normalizeProductId(id) {
@@ -231,6 +253,9 @@ export function useWebsiteProductCheckout({
 
   function applyProductDetail(product) {
     productDetail.value = product;
+    // 切换到新商品：配置从零开始，旧报价版本整体失效
+    quoteVersion = 0;
+    quoteSnapshotVersion = -1;
     suspendQuoteWatch();
     try {
       initProductDefaults({
@@ -332,10 +357,12 @@ export function useWebsiteProductCheckout({
           quoteResult: quoteResult.value,
           quoteToken: quoteToken.value,
           selectedCouponId: selectedCouponId.value,
+          quoteSnapshotVersion,
         }
       : null;
 
     const token = ++quoteTokenId;
+    const requestVersion = quoteVersion;
     quoteAbortController?.abort();
     quoteAbortController = new AbortController();
     quoteLoading.value = true;
@@ -349,7 +376,7 @@ export function useWebsiteProductCheckout({
         return false;
       }
 
-      applyQuoteResult(res.data || null, nextCouponId);
+      applyQuoteResult(res.data || null, requestVersion, nextCouponId);
       return true;
     } catch (error) {
       if (error?.code === "ERR_CANCELED" || error?.name === "CanceledError") {
@@ -360,6 +387,7 @@ export function useWebsiteProductCheckout({
         quoteResult.value = snapshot.quoteResult;
         quoteToken.value = snapshot.quoteToken;
         selectedCouponId.value = snapshot.selectedCouponId;
+        quoteSnapshotVersion = snapshot.quoteSnapshotVersion;
         return false;
       }
 
@@ -373,7 +401,14 @@ export function useWebsiteProductCheckout({
 
         try {
           const fallbackRes = await requestQuote(0);
-          applyQuoteResult(fallbackRes.data || null, 0);
+          // 与主路径一致：回退报价同样校验是否已被更新的请求/商品取代
+          if (
+            token !== quoteTokenId ||
+            currentProductId !== Number(selectedProduct.value?.id || 0)
+          ) {
+            return false;
+          }
+          applyQuoteResult(fallbackRes.data || null, requestVersion, 0);
           return false;
         } catch {
           resetQuoteState();
@@ -397,6 +432,7 @@ export function useWebsiteProductCheckout({
     }
 
     selectedCouponId.value = Number(value || 0);
+    invalidateQuoteState();
     fetchQuote();
   }
 
@@ -433,6 +469,12 @@ export function useWebsiteProductCheckout({
       return;
     }
 
+    // 报价在途或防抖窗口内（配置已变、旧 token 已失效）：禁止提交，防止旧报价凭证配新配置
+    if (quoteLoading.value || quoteSnapshotVersion !== quoteVersion) {
+      ElMessage.warning("价格计算中，请稍候");
+      return;
+    }
+
     if (!quoteToken.value) {
       ElMessage.warning("报价凭证已失效，请稍后重试");
       return;
@@ -440,11 +482,6 @@ export function useWebsiteProductCheckout({
 
     if (!canSubmit.value) {
       ElMessage.warning("请选择计费周期");
-      return;
-    }
-
-    if (quoteLoading.value) {
-      ElMessage.warning("价格计算中，请稍候");
       return;
     }
 
@@ -652,12 +689,41 @@ export function useWebsiteProductCheckout({
     }
   }
 
+  // 供「页面自行加载商品详情」的场景（如 ProductDetail）注入已获取的商品，
+  // 复用同一套默认配置初始化、报价触发与竞态守卫；同时中止上一个商品的在途请求。
+  function applyLoadedProduct(product) {
+    const productId = normalizeProductId(product?.id);
+    if (!productId || !product) {
+      return false;
+    }
+
+    currentProductId = productId;
+    detailAbortController?.abort();
+    stockAbortController?.abort();
+    quoteAbortController?.abort();
+    cancelProductDetailPrefetch();
+    productStock.value = null;
+    productStockLoading.value = false;
+    productStockError.value = "";
+    applyProductDetail(product);
+    refreshProductStock(productId);
+    return true;
+  }
+
   // 用序列化键替代 deep watch，避免每次 configForm 深层遍历
   const quoteTrigger = computed(() => {
     const payload = buildConfigPayload();
     return `${selectedCycle.value}|${quantity.value}|${JSON.stringify(payload)}`;
   });
-  watch(quoteTrigger, () => fetchQuote(), { flush: "post" });
+  watch(
+    quoteTrigger,
+    () => {
+      // 配置变化立即失效旧报价凭证，防抖窗口内提交会被 canSubmit 拦截
+      invalidateQuoteState();
+      fetchQuote();
+    },
+    { flush: "post" },
+  );
   onBeforeUnmount(() => {
     clearTimeout(quoteTimer);
     detailAbortController?.abort();
@@ -696,6 +762,7 @@ export function useWebsiteProductCheckout({
     clearCoupon,
     handleSubmit: submitOrder,
     loadSelectedProduct,
+    applyLoadedProduct,
     prefetchProductDetails,
     resetSelection,
   };
