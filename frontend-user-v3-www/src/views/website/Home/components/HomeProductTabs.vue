@@ -4,7 +4,10 @@
       <header class="product-tabs__head">
         <h2 class="product-tabs__title">安全、稳定、可信赖的产品与服务</h2>
         <p class="product-tabs__desc">
-          {{ appStore.siteName }} 的技术积淀与交付实践，助力企业上云与产业互联网。
+          {{
+            appStore.siteName
+          }}
+          的技术积淀与交付实践，助力企业上云与产业互联网。
           <router-link to="/products" class="product-tabs__more">
             查看全部产品
             <el-icon><ArrowRight /></el-icon>
@@ -12,7 +15,12 @@
         </p>
       </header>
 
-      <div class="product-tabs__list" role="tablist" aria-label="产品分类">
+      <div
+        class="product-tabs__list"
+        role="tablist"
+        aria-label="产品分类"
+        @keydown="onTablistKeydown"
+      >
         <button
           v-for="item in enterpriseServiceItems"
           :key="item.key"
@@ -49,15 +57,15 @@
 </template>
 
 <script setup>
-import { computed, shallowRef, watch } from 'vue'
-import { useRouter } from 'vue-router'
-import { ElIcon } from 'element-plus/es/components/icon/index.mjs'
-import { ArrowRight } from '@element-plus/icons-vue'
-import { useAppStore } from '@/stores/app'
-import { buildWebsiteProductPath } from '@/utils/productRoute'
-import { resolveProductDisplayName } from '@/utils/websiteProductConfig'
+import { computed, shallowRef, watch } from "vue";
+import { useRouter } from "vue-router";
+import { ElIcon } from "element-plus/es/components/icon/index.mjs";
+import { ArrowRight } from "@element-plus/icons-vue";
+import { useAppStore } from "@/stores/app";
+import { buildWebsiteProductPath } from "@/utils/productRoute";
+import { resolveProductDisplayName } from "@/utils/websiteProductConfig";
 
-const EMPTY_LIST = Object.freeze([])
+const EMPTY_LIST = Object.freeze([]);
 
 const props = defineProps({
   loading: {
@@ -76,85 +84,90 @@ const props = defineProps({
     type: Object,
     default: () => ({}),
   },
-})
+});
 
-const router = useRouter()
-const appStore = useAppStore()
-const activeEnterpriseServiceKey = shallowRef('')
+const router = useRouter();
+const appStore = useAppStore();
+const activeEnterpriseServiceKey = shallowRef("");
 const resolvedProductTypes = computed(() => {
   if (props.productTypes.length) {
-    return props.productTypes
+    return props.productTypes;
   }
 
-  return deriveProductTypesFromGroups(props.rootGroups)
-})
+  return deriveProductTypesFromGroups(props.rootGroups);
+});
 
-const activeEnterpriseType = computed(() => (
-  resolvedProductTypes.value.find((item) => item.value === activeEnterpriseServiceKey.value)
-    || resolvedProductTypes.value[0]
-    || null
-))
+const activeEnterpriseType = computed(
+  () =>
+    resolvedProductTypes.value.find(
+      (item) => item.value === activeEnterpriseServiceKey.value,
+    ) ||
+    resolvedProductTypes.value[0] ||
+    null,
+);
 
 const activeEnterpriseGroups = computed(() => {
-  const activeTypeValue = activeEnterpriseType.value?.value || ''
-  return props.rootGroups.filter((group) => (
-    activeTypeValue === '' || group.first_product_group_code === activeTypeValue
-  ))
-})
+  const activeTypeValue = activeEnterpriseType.value?.value || "";
+  return props.rootGroups.filter(
+    (group) =>
+      activeTypeValue === "" ||
+      group.first_product_group_code === activeTypeValue,
+  );
+});
 
-const activeEnterpriseCards = computed(() => (
+const activeEnterpriseCards = computed(() =>
   activeEnterpriseGroups.value.map((group, index) => {
-    const groupId = Number(group?.id || 0)
-    const summary = props.groupCatalogMap[groupId] || null
-    const primaryProduct = resolveEnterprisePrimaryProduct(group, summary)
+    const groupId = Number(group?.id || 0);
+    const summary = props.groupCatalogMap[groupId] || null;
+    const primaryProduct = resolveEnterprisePrimaryProduct(group, summary);
 
     return {
       key: String(groupId || index + 1),
       title: group?.name || `二级分类 ${index + 1}`,
       desc: resolveEnterpriseCategoryDesc(group, summary, primaryProduct),
       path: resolveEnterpriseCategoryPath(group, primaryProduct),
-    }
-  })
-))
+    };
+  }),
+);
 
 const activeEnterpriseService = computed(() => {
   const cards = activeEnterpriseCards.value.length
     ? activeEnterpriseCards.value
     : [
-      {
-        key: 'catalog',
-        title: `${activeEnterpriseType.value?.label || '当前分类'}目录`,
-        desc: '当前分类暂无可展示的二级分类，点击后可进入产品目录查看更多内容。',
-        path: '/products',
-      },
-    ]
+        {
+          key: "catalog",
+          title: `${activeEnterpriseType.value?.label || "当前分类"}目录`,
+          desc: "当前分类暂无可展示的二级分类，点击后可进入产品目录查看更多内容。",
+          path: "/products",
+        },
+      ];
 
   return {
-    key: activeEnterpriseType.value?.value || '',
+    key: activeEnterpriseType.value?.value || "",
     cards,
-  }
-})
+  };
+});
 
-const enterpriseServiceItems = computed(() => (
+const enterpriseServiceItems = computed(() =>
   resolvedProductTypes.value.map((type, index) => ({
     key: type.value || String(Number(type.id || index + 1)),
     id: Number(type.id || index + 1),
     label: type.label || `产品分类 ${index + 1}`,
-  }))
-))
+  })),
+);
 
 function deriveProductTypesFromGroups(groups) {
   if (!groups.length) {
-    return EMPTY_LIST
+    return EMPTY_LIST;
   }
 
-  const map = new Map()
+  const map = new Map();
 
   groups.forEach((group, index) => {
-    const value = String(group?.first_product_group_code || '')
+    const value = String(group?.first_product_group_code || "");
 
     if (!value) {
-      return
+      return;
     }
 
     const current = map.get(value) || {
@@ -163,108 +176,150 @@ function deriveProductTypesFromGroups(groups) {
       label: group?.first_product_group_name || `产品分类 ${index + 1}`,
       group_count: 0,
       product_count: 0,
-    }
+    };
 
-    current.group_count += 1
-    current.product_count += Number(group?.product_count || 0)
-    map.set(value, current)
-  })
+    current.group_count += 1;
+    current.product_count += Number(group?.product_count || 0);
+    map.set(value, current);
+  });
 
-  return Array.from(map.values())
+  return Array.from(map.values());
 }
 
 function activateEnterpriseService(key) {
-  activeEnterpriseServiceKey.value = String(key)
+  activeEnterpriseServiceKey.value = String(key);
+}
+
+// WAI-ARIA Tabs 键盘模式：方向键移动选中项并管理 tabindex，Home/End 到首尾
+function onTablistKeydown(event) {
+  const keys = ["ArrowLeft", "ArrowRight", "Home", "End"];
+  if (!keys.includes(event.key)) return;
+  const items = enterpriseServiceItems.value;
+  if (!items.length) return;
+  event.preventDefault();
+
+  const currentIndex = items.findIndex(
+    (item) => item.key === activeEnterpriseServiceKey.value,
+  );
+  const activeIndex = currentIndex >= 0 ? currentIndex : 0;
+  let nextIndex;
+
+  if (event.key === "Home") {
+    nextIndex = 0;
+  } else if (event.key === "End") {
+    nextIndex = items.length - 1;
+  } else if (event.key === "ArrowRight") {
+    nextIndex = (activeIndex + 1) % items.length;
+  } else {
+    nextIndex = (activeIndex - 1 + items.length) % items.length;
+  }
+
+  const next = items[nextIndex];
+  if (next) activateEnterpriseService(next.key);
 }
 
 function resolveEnterpriseCategoryDesc(group, summary, primaryProduct) {
-  const featuredName = resolveProductDisplayName(summary?.featured_product)
+  const featuredName = resolveProductDisplayName(summary?.featured_product);
   if (featuredName) {
-    return `主推 ${featuredName}，可在线查看配置并快速完成选型。`
+    return `主推 ${featuredName}，可在线查看配置并快速完成选型。`;
   }
 
-  const previewName = resolveProductDisplayName(primaryProduct?.product)
+  const previewName = resolveProductDisplayName(primaryProduct?.product);
   if (previewName) {
-    return `主推 ${previewName}，可在线查看配置并快速完成选型。`
+    return `主推 ${previewName}，可在线查看配置并快速完成选型。`;
   }
 
   if (group?.slogan) {
-    return group.slogan
+    return group.slogan;
   }
 
-  const totalProducts = Number(group?.product_count || 0)
-  return `${group?.product_type_label || '当前分类'} 下已上架 ${totalProducts} 款在售产品，可按业务需求快速选型。`
+  const totalProducts = Number(group?.product_count || 0);
+  return `${group?.product_type_label || "当前分类"} 下已上架 ${totalProducts} 款在售产品，可按业务需求快速选型。`;
 }
 
 function resolveEnterpriseCategoryPath(group, primaryProduct) {
   if (!primaryProduct?.product) {
-    const typeCode = String(group?.first_product_group_code || '')
-    const groupId = Number(group?.id || 0)
+    const typeCode = String(group?.first_product_group_code || "");
+    const groupId = Number(group?.id || 0);
 
     if (typeCode && groupId > 0) {
       return {
-        path: '/products',
+        path: "/products",
         query: {
           type: typeCode,
           group: String(groupId),
         },
-      }
+      };
     }
 
-    return '/products'
+    return "/products";
   }
 
   return buildWebsiteProductPath({
-    typeId: String(group?.first_product_group_code || ''),
+    typeId: String(group?.first_product_group_code || ""),
     groupId: Number(group?.id || 0),
     childGroupId: Number(primaryProduct.childGroupId || 0),
     productId: Number(primaryProduct.product?.id || 0),
-  })
+  });
 }
 
 function resolveEnterprisePrimaryProduct(group, summary) {
-  const featuredProduct = summary?.featured_product && typeof summary.featured_product === 'object'
-    ? summary.featured_product
-    : null
+  const featuredProduct =
+    summary?.featured_product && typeof summary.featured_product === "object"
+      ? summary.featured_product
+      : null;
 
   if (featuredProduct) {
-    const productGroupId = Number(featuredProduct?.effective_product_group_id || 0)
+    const productGroupId = Number(
+      featuredProduct?.effective_product_group_id || 0,
+    );
     return {
       product: featuredProduct,
-      childGroupId: productGroupId > 0 && productGroupId !== Number(group?.id || 0) ? productGroupId : 0,
-    }
+      childGroupId:
+        productGroupId > 0 && productGroupId !== Number(group?.id || 0)
+          ? productGroupId
+          : 0,
+    };
   }
 
-  const previewProduct = Array.isArray(summary?.preview_products) ? summary.preview_products[0] : null
+  const previewProduct = Array.isArray(summary?.preview_products)
+    ? summary.preview_products[0]
+    : null;
 
-  if (previewProduct && typeof previewProduct === 'object') {
-    const productGroupId = Number(previewProduct?.effective_product_group_id || 0)
+  if (previewProduct && typeof previewProduct === "object") {
+    const productGroupId = Number(
+      previewProduct?.effective_product_group_id || 0,
+    );
     return {
       product: previewProduct,
-      childGroupId: productGroupId > 0 && productGroupId !== Number(group?.id || 0) ? productGroupId : 0,
-    }
+      childGroupId:
+        productGroupId > 0 && productGroupId !== Number(group?.id || 0)
+          ? productGroupId
+          : 0,
+    };
   }
 
-  return null
+  return null;
 }
 
 watch(
-  () => enterpriseServiceItems.value.map((item) => item.key).join('|'),
+  () => enterpriseServiceItems.value.map((item) => item.key).join("|"),
   () => {
     if (!enterpriseServiceItems.value.length) {
-      activeEnterpriseServiceKey.value = ''
-      return
+      activeEnterpriseServiceKey.value = "";
+      return;
     }
 
-    const currentExists = enterpriseServiceItems.value.some((item) => item.key === activeEnterpriseServiceKey.value)
+    const currentExists = enterpriseServiceItems.value.some(
+      (item) => item.key === activeEnterpriseServiceKey.value,
+    );
 
     if (!currentExists) {
-      activeEnterpriseServiceKey.value = enterpriseServiceItems.value[0].key
+      activeEnterpriseServiceKey.value = enterpriseServiceItems.value[0].key;
     }
   },
   { immediate: true },
-)
-
+);
 </script>
 
 <style scoped lang="scss">

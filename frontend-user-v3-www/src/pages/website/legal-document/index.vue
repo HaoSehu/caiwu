@@ -5,7 +5,9 @@
       <p>{{ pageDescription }}</p>
 
       <div class="legal-actions">
-        <el-button v-if="targetUrl" type="primary" @click="openDocument">打开原文</el-button>
+        <el-button v-if="targetUrl" type="primary" @click="openDocument"
+          >打开原文</el-button
+        >
         <el-button @click="router.push('/')">返回首页</el-button>
       </div>
 
@@ -19,31 +21,45 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { useAppStore } from '@/stores/app'
+import { computed } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { ElMessage } from "element-plus/es/components/message/index.mjs";
+import { useAppStore } from "@/stores/app";
 
-const route = useRoute()
-const router = useRouter()
-const appStore = useAppStore()
+const route = useRoute();
+const router = useRouter();
+const appStore = useAppStore();
 
-const documentKey = computed(() => String(route.meta?.documentKey || 'terms'))
-const isPrivacy = computed(() => documentKey.value === 'privacy')
-const targetUrl = computed(() => (
-  isPrivacy.value ? appStore.privacyUrl : appStore.termsUrl
-))
-const pageTitle = computed(() => (isPrivacy.value ? '隐私政策' : '服务条款'))
-const pageDescription = computed(() => (
+const documentKey = computed(() => String(route.meta?.documentKey || "terms"));
+const isPrivacy = computed(() => documentKey.value === "privacy");
+const targetUrl = computed(() =>
+  isPrivacy.value ? appStore.privacyUrl : appStore.termsUrl,
+);
+const pageTitle = computed(() => (isPrivacy.value ? "隐私政策" : "服务条款"));
+const pageDescription = computed(() =>
   isPrivacy.value
-    ? '查看平台的隐私政策与个人信息处理说明。'
-    : '查看平台的服务条款、使用约定与相关说明。'
-))
+    ? "查看平台的隐私政策与个人信息处理说明。"
+    : "查看平台的服务条款、使用约定与相关说明。",
+);
 
 function openDocument() {
   if (!targetUrl.value) {
-    return
+    return;
   }
-  window.open(targetUrl.value, '_blank', 'noopener,noreferrer')
+
+  // 防 javascript:/vbscript:/file: 等协议注入：仅允许 http/https 打开外部文档
+  try {
+    const parsed = new URL(targetUrl.value);
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      ElMessage.warning("文档地址配置无效");
+      return;
+    }
+  } catch {
+    ElMessage.warning("文档地址配置无效");
+    return;
+  }
+
+  window.open(targetUrl.value, "_blank", "noopener,noreferrer");
 }
 </script>
 

@@ -2,12 +2,12 @@
 
 四个站点独立部署、浏览器直连 API。三个前端站点不配置 API、上传资源或 WebSocket 反代。宝塔已经管理站点根目录、SSL 和 PHP-FPM 时，只编辑“设置 → 伪静态”，不要手工替换站点的完整 Nginx `server {}` 配置。
 
-| 站点 | 域名示例 | 运行目录 |
-| --- | --- | --- |
-| 官网 | `www.example.com` | `frontend-user-v3-www/dist` |
+| 站点       | 域名示例              | 运行目录                        |
+| ---------- | --------------------- | ------------------------------- |
+| 官网       | `www.example.com`     | `frontend-user-v3-www/dist`     |
 | 用户控制台 | `console.example.com` | `frontend-user-v4-console/dist` |
-| 管理端 | `admin.example.com` | `frontend-admin-v3/dist` |
-| API | `api.example.com` | `backend/public` |
+| 管理端     | `admin.example.com`   | `frontend-admin-v3/dist`        |
+| API        | `api.example.com`     | `backend/public`                |
 
 ## 宝塔面板设置
 
@@ -21,7 +21,39 @@
 location / {
     try_files $uri $uri/ /index.html;
 }
+
+# 不存在的静态资源（带扩展名）直接返回 404，避免被回退到首页
+location ~* \.(?:js|css|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|eot|map)$ {
+    try_files $uri =404;
+}
+
+# 构建产物 dist/404.html 供错误页引用；未知页面路径仍由 SPA 的 catch-all 路由渲染 404
+error_page 404 /404.html;
+location = /404.html {
+    internal;
+}
 ```
+
+未知的页面路径（无扩展名）继续回退 `index.html` 交给前端路由处理；不存在的 JS/CSS/图片等静态资源返回真实 404 状态码，避免 Search Console 累积 soft-404。`dist/404.html` 由 `npm run build` 的预渲染脚本自动生成。
+
+### 官网安全响应头（含 CSP）
+
+在宝塔官网站点的“伪静态”或“配置文件”中添加以下安全头，阻断点击劫持与大部分脚本注入面：
+
+```nginx
+# 统一安全头（首页预热内联脚本为构建期注入，故 script-src 含 unsafe-inline）
+add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https:; media-src 'self' https:; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self';" always;
+add_header X-Frame-Options "DENY" always;
+add_header X-Content-Type-Options "nosniff" always;
+add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+```
+
+说明：
+
+- `frame-ancestors 'none'` + `X-Frame-Options: DENY` 禁止第三方 iframe 嵌入官网，阻断点击劫持。
+- `object-src 'none'`、`base-uri 'self'`、`form-action 'self'` 收窄插件/表单跳转面。
+- 后续若把 `index.html` 的首页预热脚本抽为独立文件，可去掉 `script-src` 中的 `'unsafe-inline'` 进一步收紧。
+- 控制台/管理端站点如与官网同域，可套用同一组头；不同子域按各自资源需求调整 `connect-src`。
 
 ## 用户控制台：console
 

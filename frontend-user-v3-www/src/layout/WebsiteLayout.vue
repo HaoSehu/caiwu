@@ -18,6 +18,7 @@
         <nav
           class="main-nav"
           @mouseleave="scheduleCloseMegaMenu()"
+          @keydown.esc="closeMegaMenu"
           aria-label="主导航"
         >
           <router-link
@@ -27,6 +28,12 @@
             class="main-nav__link"
             :class="{ 'is-active': isNavActive(item) }"
             @mouseenter="handleNavHover(item)"
+            @focus="item.menuId && openMegaMenu(item.menuId)"
+            :aria-haspopup="item.menuId ? 'menu' : undefined"
+            :aria-expanded="
+              item.menuId ? activeMenuId === item.menuId : undefined
+            "
+            :aria-controls="item.menuId ? 'mega-menu' : undefined"
           >
             <span>{{ item.label }}</span>
             <el-icon v-if="item.menuId" class="main-nav__arrow"
@@ -38,6 +45,7 @@
         <transition name="mega-menu">
           <div
             v-if="activeMenuId"
+            id="mega-menu"
             class="mega-menu"
             @mouseenter="keepMegaMenu()"
             @mouseleave="scheduleCloseMegaMenu()"
@@ -346,10 +354,13 @@
           <el-icon :size="20"><User /></el-icon>
         </a>
         <button
+          ref="mobileMenuToggleRef"
           type="button"
           class="mobile-menu-toggle"
           :class="{ 'is-open': mobileNavVisible }"
           :aria-label="mobileNavVisible ? '关闭菜单' : '打开菜单'"
+          :aria-expanded="mobileNavVisible"
+          aria-controls="mobile-menu-panel"
           @click="mobileNavVisible = !mobileNavVisible"
         >
           <span class="hamburger">
@@ -370,21 +381,30 @@
     </transition>
 
     <transition name="mobile-menu-panel">
-      <div v-if="isMobile && mobileNavVisible" class="mobile-menu-panel">
+      <div
+        v-if="isMobile && mobileNavVisible"
+        id="mobile-menu-panel"
+        class="mobile-menu-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-label="移动端菜单"
+        @keydown.esc="closeMobileMenu"
+      >
         <div class="mobile-menu-two-col">
           <div class="mobile-menu-col mobile-menu-col--left">
             <template
               v-for="item in navigationItems"
               :key="`mobile-${item.to}`"
             >
-              <a
+              <button
                 v-if="item.menuId"
+                type="button"
                 class="mobile-first-level-item"
                 :class="{ active: mobileActiveFirstLevel === item.menuId }"
                 @click="mobileActiveFirstLevel = item.menuId"
               >
                 <span class="mobile-first-level-label">{{ item.label }}</span>
-              </a>
+              </button>
               <router-link
                 v-else
                 :to="item.to"
@@ -739,7 +759,14 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from "vue";
 import { useRoute } from "vue-router";
 import { ElIcon } from "element-plus/es/components/icon/index.mjs";
 import {
@@ -802,6 +829,7 @@ const {
 const mobileNavVisible = ref(false);
 const mobileActiveFirstLevel = ref("products");
 const mobileExpandedType = ref("");
+const mobileMenuToggleRef = ref(null);
 const headerScrolled = ref(false);
 const isMobile = ref(
   typeof window === "undefined" ? false : window.innerWidth <= 960,
@@ -891,6 +919,12 @@ function openMegaMenu(menuId) {
   } else if (menuId === "help") {
     navHelpMenu.init();
   }
+}
+
+function closeMegaMenu() {
+  clearTimeout(megaMenuCloseTimer);
+  clearTimeout(megaMenuOpenTimer);
+  activeMenuId.value = null;
 }
 
 function handleNavHover(item) {
@@ -1047,8 +1081,16 @@ watch(mobileNavVisible, (visible) => {
     navProductInit();
     navNoticesMenu.init();
     navHelpMenu.init();
+    // 焦点移入面板首个一级项，避免读屏/键盘从页面背后继续
+    nextTick(() => {
+      const panel = document.getElementById("mobile-menu-panel");
+      const firstItem = panel?.querySelector(".mobile-first-level-item");
+      if (firstItem) firstItem.focus();
+    });
   } else {
     document.body.style.overflow = "";
+    // 关闭后焦点归还触发按钮
+    mobileMenuToggleRef.value?.focus();
   }
 });
 
@@ -1782,8 +1824,14 @@ onBeforeUnmount(() => {
   position: relative;
   display: flex;
   align-items: center;
+  width: 100%;
   min-height: 48px;
   padding: 0 16px;
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
   color: $text-color-secondary;
   font-size: 14px;
   font-weight: 500;

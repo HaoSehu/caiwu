@@ -13,15 +13,23 @@
   >
     <div class="mopt-picker">
       <div class="mopt-frame" aria-hidden="true"></div>
-      <div ref="col" class="mopt-col">
+      <div
+        ref="col"
+        class="mopt-col"
+        role="listbox"
+        :aria-label="title"
+        @keydown="onKeydown"
+      >
         <div class="mopt-spacer" :style="{ height: spacerH + 'px' }"></div>
         <button
           v-for="opt in options"
           :key="opt.id"
           :data-id="opt.id"
           type="button"
+          role="option"
           class="mopt-item"
           :class="{ 'is-active': tempId === opt.id }"
+          :aria-selected="tempId === opt.id"
           @click="handleClick(opt)"
         >
           {{ opt.label }}
@@ -176,6 +184,17 @@ function handleClick(opt) {
   tempId.value = opt.id;
   const item = cachedItems.find((el) => el.dataset.id === String(opt.id));
   if (item) setActive(col.value, item);
+}
+
+// 键盘：方向键滚动滚轮（触发吸附更新选中项），与触摸交互行为一致
+function onKeydown(event) {
+  if (event.key === "ArrowUp") {
+    event.preventDefault();
+    col.value?.scrollBy({ top: -34, behavior: "smooth" });
+  } else if (event.key === "ArrowDown") {
+    event.preventDefault();
+    col.value?.scrollBy({ top: 34, behavior: "smooth" });
+  }
 }
 
 function handleConfirm() {
