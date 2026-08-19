@@ -148,10 +148,14 @@ zjmf-manger-decoded-main/
 .claude/
 
 # Codex CLI：本地代理人格模板与工具配置，非项目定制
-.codex/agents/
+.codex/
 .github/agents/
 
-# Local AI tool indices / config
+# Git hooks 本地钩子不入库
+.husky/
+
+# 本地 AI 工具会话、计划与索引
+.zcode/
 .codegraph/
 .reasonix/
 .devin_tmp/
