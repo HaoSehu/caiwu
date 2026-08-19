@@ -1,3 +1,9 @@
+---
+status: needs-review
+updated: 2026-08-19
+owner: backend-platform
+---
+
 # 后端工程规范
 
 本文档定义 caiwu Laravel 12 后端后续人工开发、审查、重构和第三方集成治理的长期标准。目标是让后端代码可读、可测、可替换、可追踪，并降低后续人工维护成本。

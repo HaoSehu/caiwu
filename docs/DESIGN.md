@@ -1,3 +1,9 @@
+---
+status: current
+updated: 2026-07-23
+owner: frontend-platform
+---
+
 # 页面风格
 
 ## 总体定位

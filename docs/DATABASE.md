@@ -1,6 +1,11 @@
+---
+status: generated
+updated: 2026-08-14
+owner: backend-data
+---
+
 # 当前数据库结构说明
 
-- 文档性质：参考资料 / 实库结构快照
 - 生成时间：`2026-08-14 00:05:01 +08:00`
 - 数据来源：Laravel 默认连接 `mysql` 直连 MySQL `information_schema` 与业务库 `idc`
 - 数据库：`idc`

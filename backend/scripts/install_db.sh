@@ -12,6 +12,17 @@ DEFAULT_ADMIN_PASSWORD="Temp@123456"
 
 DRY_RUN=0
 
+read -r -d '' DEFAULT_DATA_BOOTSTRAP_CODE <<'PHP' || true
+use Database\Seeders\SettingsSeeder;
+use Illuminate\Support\Facades\Schema;
+
+if (Schema::hasTable('settings')) {
+    SettingsSeeder::seed();
+}
+
+// 通知模板默认数据已包含在 schema baseline 中，无需额外迁移
+PHP
+
 log() {
   printf '[install-db] %s\n' "$*"
 }
@@ -33,7 +44,8 @@ usage() {
   4. 空库时优先导入基础 schema
   5. 清理 Laravel 缓存
   6. 执行数据库迁移
-  7. 自动创建默认管理员 cerbo / Temp@123456
+  7. 初始化默认配置和通知模板（SettingsSeeder）
+  8. 自动创建默认管理员 cerbo / Temp@123456
 
 参数：
   --dry-run   只打印将要执行的步骤，不真正写入数据库
@@ -163,6 +175,15 @@ run_artisan_php() {
   INSTALL_ADMIN_PASSWORD="${ADMIN_PASSWORD_VALUE}" php artisan tinker --execute="${php_code}"
 }
 
+run_default_data_bootstrap() {
+  if (( DRY_RUN )); then
+    log "dry-run: php artisan tinker --execute '<初始化默认配置和通知模板代码>'"
+    return 0
+  fi
+
+  php artisan tinker --execute="${DEFAULT_DATA_BOOTSTRAP_CODE}"
+}
+
 [[ -f "${ENV_FILE}" ]] || fail "未找到 ${ENV_FILE}，请先准备后端 .env 文件"
 [[ -f "${ARTISAN_FILE}" ]] || fail "未找到 ${ARTISAN_FILE}"
 [[ -f "${BACKEND_DIR}/vendor/autoload.php" ]] || fail "未检测到 Composer 依赖，请先在 backend 目录执行 composer install"
@@ -178,7 +199,7 @@ DB_USERNAME="$(read_env_value DB_USERNAME)"
 DB_PASSWORD="$(read_env_value DB_PASSWORD)"
 DB_SOCKET="$(read_env_value DB_SOCKET)"
 APP_KEY_VALUE="$(read_env_value APP_KEY)"
-APP_ENV_VALUE="$(read_env_value APP_ENV)"
+APP_ENV_VALUE="${APP_ENV:-$(read_env_value APP_ENV)}"
 APP_ENV_VALUE="${APP_ENV_VALUE:-local}"
 ADMIN_PASSWORD_VALUE="$(resolve_admin_password)"
 
@@ -262,6 +283,9 @@ elif [[ "${EXISTING_TABLE_COUNT}" == "0" ]]; then
 else
   run_cmd php artisan migrate --force
 fi
+
+log "初始化默认配置和通知模板"
+run_default_data_bootstrap
 
 log "初始化默认管理员 cerbo"
 read -r -d '' ADMIN_BOOTSTRAP_CODE <<'PHP' || true

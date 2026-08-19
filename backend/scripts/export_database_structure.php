@@ -187,9 +187,14 @@ foreach ($columnsByTable as $tableName => $columns) {
 ksort($dataTypeCounts);
 
 $lines = [
+    '---',
+    'status: generated',
+    'updated: '.date('Y-m-d'),
+    'owner: backend-data',
+    '---',
+    '',
     '# 当前数据库结构说明',
     '',
-    '- 文档性质：参考资料 / 实库结构快照',
     '- 生成时间：`'.date('Y-m-d H:i:s P').'`',
     '- 数据来源：Laravel 默认连接 `'.$connectionName.'` 直连 MySQL `information_schema` 与业务库 `'.$database.'`',
     '- 数据库：`'.$database.'`',

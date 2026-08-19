@@ -1,3 +1,9 @@
+---
+status: current
+updated: 2026-07-23
+owner: docs-governance
+---
+
 # 工作规则
 
 ## 基本原则
@@ -23,7 +29,7 @@
 
 ## 验证与提交
 
-- 文档改动运行 `npm run docs:check`；必要时运行 `npm run docs:freshness`。
+- 文档改动运行 `npm run docs:check`（提交涉及 `docs/` 时 `.husky/pre-commit` 也会自动执行）；必要时运行 `npm run docs:freshness`。新建文档从 `docs/模板/` 起手并填写 frontmatter，改状态要同步 `docs/catalog.json` 与对应索引行。
 - 后端改动运行受影响的 `php artisan test`；前端按受影响应用运行 `npm run build`，重构按各应用规范补充 `verify:refactor`。
 - 每个子任务先展示改动与验证摘要；得到用户确认后独立提交，格式为 `Fix:中文描述`、`Feat:中文描述` 或 `Refactor:中文描述`。
 

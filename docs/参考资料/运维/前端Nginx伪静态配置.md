@@ -1,3 +1,9 @@
+---
+status: current
+updated: 2026-08-19
+owner: ops
+---
+
 # 四端 Nginx 伪静态配置
 
 四个站点独立部署、浏览器直连 API。三个前端站点不配置 API、上传资源或 WebSocket 反代。宝塔已经管理站点根目录、SSL 和 PHP-FPM 时，只编辑“设置 → 伪静态”，不要手工替换站点的完整 Nginx `server {}` 配置。

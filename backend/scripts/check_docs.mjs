@@ -26,11 +26,20 @@ const catalogStatuses = new Set([
   "template",
 ]);
 
+// 计划 frontmatter 允许写中文 `进行中`，catalog.json 统一登记为机器状态 `active`
+const statusAliases = new Map([["进行中", "active"]]);
+
+function normaliseStatus(status) {
+  return statusAliases.get(status) ?? status;
+}
+
 const requiredGeneratedCatalogPaths = new Set([
   "DATABASE.md",
   "自动生成/接口/后端API清单.md",
 ]);
 const statusesRequiringReviewBy = new Set(["current", "active"]);
+// 同一天到期的复核记录超过该数量即视为“复核悬崖”：到期会一次性爆发而被整体忽略
+const reviewByClusterLimit = 6;
 const requiredDirectories = [
   "设计文档",
   "产品规格",
@@ -50,6 +59,13 @@ const requiredFiles = [
   "自动生成/README.md",
   "catalog.json",
 ];
+
+// 本地专用目录（短期文档）：被 .gitignore 忽略，不参与文档校验与 catalog 登记
+const localOnlyDirectories = new Set(["_local"]);
+// 模板目录内的 frontmatter 是给新文档抄的示例，不描述模板自身状态，故不参与元数据校验
+const frontMatterExemptTopLevel = new Set(["模板"]);
+// 这些旧式头部标签已由 frontmatter 承载，正文里不得再出现，否则会形成第二个元数据来源
+const reservedHeaderLabels = ["文档性质", "对齐时间", "状态", "日期", "更新时间"];
 
 for (const flag of flags) {
   if (!knownFlags.has(flag)) {
@@ -105,6 +121,10 @@ function walkMarkdown(directoryPath) {
   for (const entry of entries) {
     const entryPath = path.join(directoryPath, entry.name);
     if (entry.isDirectory()) {
+      if (localOnlyDirectories.has(entry.name)) {
+        continue;
+      }
+
       files.push(...walkMarkdown(entryPath));
     } else if (entry.isFile() && /\.md$/i.test(entry.name)) {
       files.push(entryPath);
@@ -379,28 +399,7 @@ function checkExecPlanRecords() {
       }
 
       const source = readFileSync(markdownFile, "utf8");
-      const frontMatter = parseFrontMatter(source);
       const displayPath = toRepoPath(markdownFile);
-      if (!frontMatter) {
-        errors.push(`${displayPath} must start with YAML front matter`);
-      } else {
-        for (const property of ["status", "updated", "owner"]) {
-          if (!frontMatter[property]) {
-            errors.push(`${displayPath} front matter is missing ${property}`);
-          }
-        }
-
-        if (frontMatter.status && !catalogStatuses.has(frontMatter.status)) {
-          errors.push(
-            `${displayPath} has unsupported status: ${frontMatter.status}`,
-          );
-        }
-
-        if (frontMatter.updated && !isValidDate(frontMatter.updated)) {
-          errors.push(`${displayPath} updated must use YYYY-MM-DD`);
-        }
-      }
-
       const prose = maskNonProse(source);
       for (const heading of ["进度", "决策日志"]) {
         const headingPattern = new RegExp(`^##\\s+${heading}\\s*#*\\s*$`, "m");
@@ -409,6 +408,163 @@ function checkExecPlanRecords() {
             `${displayPath} is missing required heading: ## ${heading}`,
           );
         }
+      }
+    }
+  }
+}
+
+// 所有正文文档（索引与模板除外）必须用统一的 YAML frontmatter 声明元数据，
+// 并且 status 必须与 catalog.json 登记一致，避免出现第二个状态真源。
+function checkDocumentFrontMatter(markdownFiles, catalogStatusByPath) {
+  for (const markdownFile of markdownFiles) {
+    if (isIndexMarkdown(markdownFile)) {
+      continue;
+    }
+
+    const docsPath = toDocsPath(markdownFile);
+    if (frontMatterExemptTopLevel.has(docsPath.split("/")[0])) {
+      continue;
+    }
+
+    const displayPath = toRepoPath(markdownFile);
+    const frontMatter = parseFrontMatter(readFileSync(markdownFile, "utf8"));
+    if (!frontMatter) {
+      errors.push(`${displayPath} must start with YAML front matter`);
+      continue;
+    }
+
+    for (const property of ["status", "updated", "owner"]) {
+      if (!frontMatter[property]) {
+        errors.push(`${displayPath} front matter is missing ${property}`);
+      }
+    }
+
+    if (frontMatter.updated && !isValidDate(frontMatter.updated)) {
+      errors.push(`${displayPath} updated must use YYYY-MM-DD`);
+    }
+
+    if (!frontMatter.status) {
+      continue;
+    }
+
+    if (!catalogStatuses.has(frontMatter.status)) {
+      errors.push(
+        `${displayPath} has unsupported status: ${frontMatter.status}`,
+      );
+      continue;
+    }
+
+    const catalogStatus = catalogStatusByPath.get(docsPath);
+    if (
+      catalogStatus &&
+      normaliseStatus(frontMatter.status) !== normaliseStatus(catalogStatus)
+    ) {
+      errors.push(
+        `${displayPath} front matter status ${frontMatter.status} disagrees with docs/catalog.json status ${catalogStatus}`,
+      );
+    }
+  }
+}
+
+// 正文不得用旧式头部条目重复声明元数据，否则 frontmatter 就不再是唯一来源
+function checkReservedHeaderLabels(markdownFiles) {
+  const labelPattern = new RegExp(
+    `^\\s{0,3}(?:[-*+]|>)\\s*(${reservedHeaderLabels.join("|")})\\s*[:：]`,
+  );
+
+  for (const markdownFile of markdownFiles) {
+    if (isIndexMarkdown(markdownFile)) {
+      continue;
+    }
+
+    const docsPath = toDocsPath(markdownFile);
+    if (frontMatterExemptTopLevel.has(docsPath.split("/")[0])) {
+      continue;
+    }
+
+    const source = readFileSync(markdownFile, "utf8");
+    const proseLines = maskNonProse(source).split(/\r?\n/);
+    for (const [offset, line] of proseLines.entries()) {
+      const match = line.match(labelPattern);
+      if (match) {
+        errors.push(
+          `${toRepoPath(markdownFile)}:${offset + 1} uses retired header label “${match[1]}”; declare it in YAML front matter instead`,
+        );
+      }
+    }
+  }
+}
+
+// 索引表里的状态列是 catalog.json 的人工副本，逐行比对防止漂移
+function checkIndexStatusCells(markdownFiles, catalogStatusByPath) {
+  for (const markdownFile of markdownFiles) {
+    if (!isIndexMarkdown(markdownFile)) {
+      continue;
+    }
+
+    const source = readFileSync(markdownFile, "utf8");
+    const prose = maskNonProse(source);
+    const lines = source.split(/\r?\n/);
+    const proseLines = prose.split(/\r?\n/);
+
+    for (const [offset, proseLine] of proseLines.entries()) {
+      if (!proseLine.trim().startsWith("|")) {
+        continue;
+      }
+
+      const cells = proseLine
+        .trim()
+        .replace(/^\|/, "")
+        .replace(/\|$/, "")
+        .split("|");
+      const statuses = cells
+        .map((cell) => cell.trim())
+        .filter((cell) => catalogStatuses.has(cell));
+      if (statuses.length !== 1) {
+        continue;
+      }
+
+      // 链接目标从原始行取，maskNonProse 会把行内代码抹成空格
+      const targets = [];
+      const inlinePattern = /!?\[[^\]\r\n]*]\(([^\r\n)]*)\)/g;
+      let match;
+      while ((match = inlinePattern.exec(lines[offset] ?? ""))) {
+        const destination = parseMarkdownDestination(match[1]);
+        if (!destination || isExternalDestination(destination)) {
+          continue;
+        }
+
+        const decoded = decodeLinkPath(destination.split(/[?#]/, 1)[0]).replace(
+          /\\/g,
+          "/",
+        );
+        if (!decoded) {
+          continue;
+        }
+
+        const resolved = decoded.startsWith("docs/")
+          ? path.resolve(root, decoded)
+          : path.resolve(path.dirname(markdownFile), decoded);
+        if (!isWithin(docsRoot, resolved)) {
+          continue;
+        }
+
+        const targetDocsPath = toDocsPath(resolved);
+        if (catalogStatusByPath.has(targetDocsPath)) {
+          targets.push(targetDocsPath);
+        }
+      }
+
+      const uniqueTargets = [...new Set(targets)];
+      if (uniqueTargets.length !== 1) {
+        continue;
+      }
+
+      const catalogStatus = catalogStatusByPath.get(uniqueTargets[0]);
+      if (normaliseStatus(statuses[0]) !== normaliseStatus(catalogStatus)) {
+        errors.push(
+          `${toRepoPath(markdownFile)}:${offset + 1} index status ${statuses[0]} disagrees with docs/catalog.json status ${catalogStatus} for ${uniqueTargets[0]}`,
+        );
       }
     }
   }
@@ -543,11 +699,12 @@ function checkCatalog(markdownFiles) {
 
 function checkCatalogFreshness(records) {
   const today = new Date().toISOString().slice(0, 10);
+  const reviewByCounts = new Map();
   for (const { index, path: recordPath, record } of records) {
     const label = `docs/catalog.json records[${index}] (${recordPath})`;
     const reviewBy = record.review_by;
     if (typeof reviewBy !== "string" || !reviewBy.trim()) {
-      if (statusesRequiringReviewBy.has(record.status)) {
+      if (statusesRequiringReviewBy.has(normaliseStatus(record.status))) {
         freshnessFindings.push(`${label} is missing required review_by`);
       }
       continue;
@@ -555,8 +712,21 @@ function checkCatalogFreshness(records) {
 
     if (!isValidDate(reviewBy)) {
       freshnessFindings.push(`${label} review_by must use YYYY-MM-DD`);
-    } else if (reviewBy < today) {
+      continue;
+    }
+
+    if (reviewBy < today) {
       freshnessFindings.push(`${label} review_by expired on ${reviewBy}`);
+    }
+
+    reviewByCounts.set(reviewBy, (reviewByCounts.get(reviewBy) ?? 0) + 1);
+  }
+
+  for (const [reviewBy, count] of [...reviewByCounts].sort()) {
+    if (count > reviewByClusterLimit) {
+      freshnessFindings.push(
+        `docs/catalog.json clusters ${count} records on review_by ${reviewBy} (max ${reviewByClusterLimit}); stagger the dates so reviews do not all fall due at once`,
+      );
     }
   }
 }
@@ -581,6 +751,15 @@ if (!isDirectory(docsRoot)) {
     .filter(isFile);
   checkMarkdownLinks(navigationFiles);
   const catalogRecords = checkCatalog(markdownFiles);
+  const catalogStatusByPath = new Map(
+    catalogRecords.map(({ path: recordPath, record }) => [
+      recordPath,
+      record.status,
+    ]),
+  );
+  checkDocumentFrontMatter(markdownFiles, catalogStatusByPath);
+  checkReservedHeaderLabels(markdownFiles);
+  checkIndexStatusCells(markdownFiles, catalogStatusByPath);
   checkExecPlanRecords();
   if (checkFreshness) {
     checkCatalogFreshness(catalogRecords);

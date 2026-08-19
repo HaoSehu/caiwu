@@ -6,7 +6,7 @@ owner: backend-platform
 
 # Zjmf 与 caiwu 新购/续费单据创建对比
 
-- 文档性质：对比智简魔方 ZJMF-CBAP 10.4.6 与 caiwu 的新购、续费流程，重点核对“账单 + 订单是否同步创建”，并记录 caiwu 上游对接版本的行为差异。
+- 文档摘要：对比智简魔方 ZJMF-CBAP 10.4.6 与 caiwu 的新购、续费流程，重点核对“账单 + 订单是否同步创建”，并记录 caiwu 上游对接版本的行为差异。
 - 参照真源：`ZJMF-CBAP-10.4.6/10.4.6/app/home/model/CartModel.php`、`app/common/model/OrderModel.php`、`OrderTmpModel.php`；`zjmf-manger-decoded-main/app/home/controller/CartController.php`、`app/common/logic/Renew.php`、`app/openapi/controller/HostController.php`、`data/route/home.php`。
 - caiwu 现状依据：`backend/app/Services/Finance/CheckoutService.php`、`backend/app/Services/Provisioning/ServiceRenewService.php`、`backend/app/Services/Finance/PaymentService.php`、`backend/app/Services/Order/PaidOrderBusinessFlowDispatcher.php`、`backend/plugins/servers/zjmf_finance/lib/ZjmfProvisionService.php`、`ZjmfRenewService.php`。
 - 当前状态：静态审查完成；未变更任何代码与数据。

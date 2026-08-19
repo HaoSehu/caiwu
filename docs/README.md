@@ -22,6 +22,7 @@
 
 ```text
 docs/
+├── catalog.json           # 机器可读目录，状态唯一真源
 ├── ARCHITECTURE.md       # 运行中的系统结构
 ├── BACKEND.md            # 后端工程约束
 ├── DATABASE.md           # 数据库结构快照
@@ -33,11 +34,13 @@ docs/
 ├── 参考资料/              # 稳定操作资料和外部接口参考
 ├── 自动生成/              # 由代码或脚本生成，禁止手工伪维护
 ├── 治理/                  # 工作规则与文档生命周期
-└── 模板/                  # 新工件模板
+└── 模板/                  # 新工件模板：exec-plan、design-doc、product-spec
 ```
 
-## 状态语义
+## 元数据与状态
+
+除索引文档（`README.md`、`index.md`）和 `模板/` 外，每份文档以 YAML frontmatter 声明 `status`、`updated`、`owner`；新文档从 `模板/` 起手。格式与 owner 取值见 [文档治理](治理/DOCUMENTATION_POLICY.md)。
 
 `current` 表示当前可依赖的规则或快照；`active` 表示正在执行；`completed` 表示保留结果；`tech-debt` 表示已知欠账；`needs-review` 表示不能在未对照代码前直接执行；`generated` 表示必须由对应脚本刷新；`template` 表示新工件模板；`archived` 只用于追溯。
 
-[catalog.json](catalog.json) 是机器可读目录。`npm run docs:check` 校验目录、链接、计划结构和目录覆盖；`npm run docs:freshness` 扫描到期复核项。
+[catalog.json](catalog.json) 是状态的唯一真源，文档 frontmatter 与索引表状态列都是它的副本。`npm run docs:check` 校验目录、链接、计划结构、目录覆盖，并逐条比对这三处状态是否一致；提交涉及 `docs/` 时 `.husky/pre-commit` 自动执行。`npm run docs:freshness` 扫描到期复核项与复核悬崖。

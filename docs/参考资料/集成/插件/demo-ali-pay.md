@@ -1,3 +1,9 @@
+---
+status: current
+updated: 2026-07-23
+owner: backend-platform
+---
+
 # Demo：支付宝当面付支付插件
 
 当前实现路径：

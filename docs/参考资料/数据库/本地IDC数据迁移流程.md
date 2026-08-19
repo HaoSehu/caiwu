@@ -1,3 +1,9 @@
+---
+status: current
+updated: 2026-07-23
+owner: backend-data
+---
+
 # 本地 IDC 数据迁移流程
 
 本文记录本地数据库从 MySQL dump 重置、初始化、迁移数据的固定流程。

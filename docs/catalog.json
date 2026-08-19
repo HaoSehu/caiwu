@@ -5,7 +5,7 @@
       "path": "ARCHITECTURE.md",
       "status": "current",
       "summary": "运行中的系统结构与边界。",
-      "review_by": "2026-08-21"
+      "review_by": "2026-09-15"
     },
     {
       "path": "BACKEND.md",
@@ -21,13 +21,13 @@
       "path": "DESIGN.md",
       "status": "current",
       "summary": "视觉 token 与交互边界。",
-      "review_by": "2026-08-21"
+      "review_by": "2026-09-15"
     },
     {
       "path": "FRONTEND.md",
       "status": "current",
       "summary": "三端前端与共享模块约束。",
-      "review_by": "2026-08-21"
+      "review_by": "2026-09-15"
     },
     {
       "path": "设计文档/架构/插件架构说明.md",
@@ -68,6 +68,11 @@
       "path": "产品规格/进行中/日志检索与归档协同-2026-08-01.md",
       "status": "tech-debt",
       "summary": "管理端日志检索、留存与归档的验收边界；2026-08-12 随计划转入技术债，冻结未排期。"
+    },
+    {
+      "path": "执行计划/进行中/命名空间统一方案-2026-08-19.md",
+      "status": "active",
+      "summary": "确立 caiwu 为代码内部统一代号，收敛 composer 包名与 npm workspace 名的孤立不一致。"
     },
     {
       "path": "执行计划/已完成/Zjmf统一迁移方案-20260723.md",
@@ -122,13 +127,13 @@
       "path": "参考资料/接口/API格式规范.md",
       "status": "current",
       "summary": "API 契约和工程化规范。",
-      "review_by": "2026-08-21"
+      "review_by": "2026-09-30"
     },
     {
       "path": "参考资料/接口/API清单导航.md",
       "status": "current",
       "summary": "接口业务域导航。",
-      "review_by": "2026-08-21"
+      "review_by": "2026-09-30"
     },
     {
       "path": "参考资料/后端/后端目录分类规范.md",
@@ -139,19 +144,19 @@
       "path": "参考资料/后端/财务单据生成规则.md",
       "status": "current",
       "summary": "财务单据生成规则。",
-      "review_by": "2026-08-21"
+      "review_by": "2026-09-30"
     },
     {
       "path": "参考资料/数据库/本地IDC数据迁移流程.md",
       "status": "current",
       "summary": "本地 IDC 数据迁移操作。",
-      "review_by": "2026-08-21"
+      "review_by": "2026-10-15"
     },
     {
       "path": "参考资料/数据库/日志归档与MySQL日志维护.md",
       "status": "current",
       "summary": "日志归档与 MySQL 维护。",
-      "review_by": "2026-08-21"
+      "review_by": "2026-10-15"
     },
     {
       "path": "参考资料/集成/本地对接说明.md",
@@ -162,37 +167,37 @@
       "path": "参考资料/集成/插件/demo-ali-pay.md",
       "status": "current",
       "summary": "支付插件示例。",
-      "review_by": "2026-08-21"
+      "review_by": "2026-10-15"
     },
     {
       "path": "参考资料/运维/前端Nginx伪静态配置.md",
       "status": "current",
       "summary": "前端站点 Nginx 规则。",
-      "review_by": "2026-08-21"
+      "review_by": "2026-10-31"
     },
     {
       "path": "参考资料/运维/宝塔部署项目指南.md",
       "status": "current",
       "summary": "全新服务器部署流程。",
-      "review_by": "2026-08-21"
+      "review_by": "2026-10-31"
     },
     {
       "path": "参考资料/运维/本地启动指南.md",
       "status": "current",
       "summary": "本地启动与构建命令。",
-      "review_by": "2026-08-21"
+      "review_by": "2026-10-31"
     },
     {
       "path": "参考资料/运维/测试指南.md",
       "status": "current",
       "summary": "测试环境和验证方法。",
-      "review_by": "2026-08-21"
+      "review_by": "2026-10-31"
     },
     {
       "path": "参考资料/运维/部署与调度指南.md",
       "status": "current",
       "summary": "生产部署、调度与队列规则。",
-      "review_by": "2026-08-21"
+      "review_by": "2026-10-31"
     },
     {
       "path": "自动生成/接口/后端API清单.md",
@@ -215,6 +220,16 @@
       "path": "模板/exec-plan.md",
       "status": "template",
       "summary": "执行计划模板。"
+    },
+    {
+      "path": "模板/design-doc.md",
+      "status": "template",
+      "summary": "设计文档模板。"
+    },
+    {
+      "path": "模板/product-spec.md",
+      "status": "template",
+      "summary": "产品规格模板。"
     }
   ]
 }

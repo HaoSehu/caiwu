@@ -8,6 +8,7 @@
 - 空库时优先导入由真实库导出的 schema baseline
 - 清理 Laravel 缓存
 - 执行数据库迁移
+- 初始化默认配置和通知模板（SettingsSeeder）
 - 自动创建默认管理员 cerbo / Temp@123456
 
 schema baseline 更新方式：
@@ -146,7 +147,8 @@ def mask_secret(value: str) -> str:
 
 
 def resolve_admin_password(app_env: str) -> str:
-    configured = read_env_value(ADMIN_PASSWORD_ENV_KEY) or os.environ.get(ADMIN_PASSWORD_ENV_KEY, "")
+    # 环境变量优先，其次 .env，与 install_db.sh 保持一致
+    configured = os.environ.get(ADMIN_PASSWORD_ENV_KEY, "") or read_env_value(ADMIN_PASSWORD_ENV_KEY)
     password = configured or DEFAULT_ADMIN_PASSWORD
     normalized_env = app_env.strip().lower()
 
@@ -465,7 +467,7 @@ def main() -> int:
         db_password = read_env_value("DB_PASSWORD")
         db_socket = read_env_value("DB_SOCKET")
         app_key_value = read_env_value("APP_KEY")
-        app_env = read_env_value("APP_ENV") or os.environ.get("APP_ENV", "local")
+        app_env = os.environ.get("APP_ENV", "") or read_env_value("APP_ENV") or "local"
         admin_password = resolve_admin_password(app_env)
 
         if not db_connection:

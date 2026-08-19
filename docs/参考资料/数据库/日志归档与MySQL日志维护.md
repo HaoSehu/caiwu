@@ -1,3 +1,9 @@
+---
+status: current
+updated: 2026-08-01
+owner: backend-data
+---
+
 # 日志归档与 MySQL 日志维护
 
 本文是生产环境日志归档、MySQL 日志轮转和 Binlog 过期策略的操作真源。
@@ -8,16 +14,16 @@
 
 `db:archive-logs` 固定处理以下 8 张 InnoDB 日志表：
 
-| 表 | 内容 |
-| --- | --- |
-| `operation_logs` | API、后台操作和管理员登录日志 |
-| `activity_logs` | 系统与业务活动日志 |
-| `message_logs` | 短信、邮件统一消息日志 |
-| `automation_logs` | 自动化业务任务日志 |
-| `schedule_run_logs` | Laravel 调度运行日志 |
-| `schedule_task_runs` | 平台自动任务运行日志 |
-| `integration_plugin_runtime_logs` | 插件运行日志 |
-| `gateway_logs` | 支付网关交互日志 |
+| 表                                | 内容                          |
+| --------------------------------- | ----------------------------- |
+| `operation_logs`                  | API、后台操作和管理员登录日志 |
+| `activity_logs`                   | 系统与业务活动日志            |
+| `message_logs`                    | 短信、邮件统一消息日志        |
+| `automation_logs`                 | 自动化业务任务日志            |
+| `schedule_run_logs`               | Laravel 调度运行日志          |
+| `schedule_task_runs`              | 平台自动任务运行日志          |
+| `integration_plugin_runtime_logs` | 插件运行日志                  |
+| `gateway_logs`                    | 支付网关交互日志              |
 
 归档条件固定为：
 

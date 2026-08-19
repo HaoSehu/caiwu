@@ -6,7 +6,7 @@ owner: backend-platform
 
 # Zjmf 定时任务系统解析（v10.4.6）
 
-- 文档性质：智简魔方（ZJMF-CBAP 10.4.6）定时任务系统源码深度解析，仅描述 Zjmf 自身方案
+- 文档摘要：智简魔方（ZJMF-CBAP 10.4.6）定时任务系统源码深度解析，仅描述 Zjmf 自身方案
 - 解析真源：`ZJMF-CBAP-10.4.6/10.4.6/cron/`、`ZJMF-CBAP-10.4.6/10.4.6/app/command/Cron.php`、`Task.php`、`app/common.php`、`app/common/model/TaskModel.php`、`TaskWaitModel.php`、`app/admin/controller/TaskController.php`、`public/install/idcsmart.sql`
 - 当前状态：静态审查完成；未变更任何代码与数据。
 

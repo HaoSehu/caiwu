@@ -44,6 +44,12 @@ $groupCounts = $routes
     ->implode(', ');
 
 $lines = [
+    '---',
+    'status: generated',
+    'updated: '.date('Y-m-d'),
+    'owner: backend-platform',
+    '---',
+    '',
     '# 后端 API 清单',
     '',
     '- 生成时间: `'.date('Y-m-d H:i:s').'`',

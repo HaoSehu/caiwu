@@ -1,3 +1,9 @@
+---
+status: generated
+updated: 2026-08-17
+owner: backend-platform
+---
+
 # 后端 API 清单
 
 - 生成时间: `2026-08-17 00:40:04`
