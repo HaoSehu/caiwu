@@ -54,6 +54,14 @@ final class CacheKey
     }
 
     /**
+     * 官网首页聚合缓存版本。
+     */
+    public static function siteHomeVersion(): string
+    {
+        return 'site:home:version';
+    }
+
+    /**
      * 站点目录缓存。
      */
     public static function siteCatalog(): string

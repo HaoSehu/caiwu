@@ -7,6 +7,7 @@ use App\Models\Setting;
 use App\Models\SystemSetting;
 use App\Models\ThirdProductGroup;
 use App\Support\AutomationScheduleExpression;
+use App\Support\SiteHomeCacheVersion;
 use Illuminate\Support\Collection;
 
 class SettingService
@@ -183,7 +184,12 @@ class SettingService
             $this->deleteStoredSettings($group, array_values(array_diff($templateSettingKeys, array_map('strval', array_keys($prepared)))));
         }
 
-        Setting::setValues($group, $this->filterPluginSettings($group, $prepared));
+        $filteredSettings = $this->filterPluginSettings($group, $prepared);
+        Setting::setValues($group, $filteredSettings);
+
+        if (trim($group) === 'basic' && $filteredSettings !== []) {
+            SiteHomeCacheVersion::bump();
+        }
     }
 
     public function revealSensitiveSetting(string $group, string $key): array

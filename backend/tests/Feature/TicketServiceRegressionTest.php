@@ -414,6 +414,54 @@ class TicketServiceRegressionTest extends TestCase
         $this->assertArrayNotHasKey('product_name', $response->json('data.ticket.service') ?? []);
     }
 
+    public function test_v2_ticket_detail_degrades_when_linked_service_transform_fails(): void
+    {
+        $user = $this->createClientUser('ticket-detail-degraded');
+        $product = Product::query()->create([
+            'product_type' => 'server',
+            'pricing' => ['monthly' => '9.90'],
+            'setup_fee' => '0.00',
+            'stock' => 10,
+            'status' => 1,
+            'sort_order' => 0,
+            'auto_setup' => 0,
+        ]);
+        $linkedService = Service::query()->create([
+            'user_id' => (int) $user->id,
+            'product_id' => (int) $product->id,
+            'name' => '实例降级',
+            'domain' => 'degraded.test',
+            'billing_cycle' => 'monthly',
+            'amount' => '9.90',
+            'status' => ServiceStatus::ACTIVE,
+            'provision_data' => [],
+        ]);
+        $ticket = Ticket::query()->create([
+            'user_id' => (int) $user->id,
+            'department' => 'support',
+            'subject' => 'Ticket Detail Degraded',
+            'priority' => 2,
+            'status' => TicketService::STATUS_OPEN,
+            'service_id' => (int) $linkedService->id,
+        ]);
+
+        $transform = $this->createMock(ServiceTransformService::class);
+        $transform->method('transformListItem')->willThrowException(new \RuntimeException('stale provider binding'));
+        $service = new TicketService(
+            $this->createMock(UploadedAssetReferenceService::class),
+            $this->createMock(NotificationService::class),
+            $transform,
+            $this->createMock(UserNotificationService::class),
+        );
+
+        $detail = $service->v2Detail($ticket);
+
+        $this->assertSame((int) $linkedService->id, (int) ($detail['service']['id'] ?? 0));
+        $this->assertSame('实例降级', (string) ($detail['service']['name'] ?? ''));
+        $this->assertSame('已开通', (string) ($detail['service']['status_label'] ?? ''));
+        $this->assertSame('月付', (string) ($detail['service']['billing_cycle_label'] ?? ''));
+    }
+
     public function test_ticket_create_schedules_notification_email_without_direct_mail_send(): void
     {
         Bus::fake();

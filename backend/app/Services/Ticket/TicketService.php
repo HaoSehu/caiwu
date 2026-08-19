@@ -1184,7 +1184,18 @@ class TicketService
     private function resolveLinkedServiceSummaryPayload(Service $service): array
     {
         $service->loadMissing('product');
-        $listItem = $this->serviceTransformService->transformListItem($service);
+        // 工单详情只需要服务摘要。历史服务可能已没有可用的上游插件绑定，
+        // 完整服务转换会在解析 provider/运行态时抛出异常，不能因此阻断工单查看。
+        try {
+            $listItem = $this->serviceTransformService->transformListItem($service);
+        } catch (\Throwable $exception) {
+            Log::warning('[工单] 关联服务摘要降级', [
+                'ticket_service_id' => (int) $service->id,
+                'exception' => $exception::class,
+                'message' => $exception->getMessage(),
+            ]);
+            $listItem = [];
+        }
         $specs = is_array($listItem['specs'] ?? null) ? $listItem['specs'] : [];
 
         return [
@@ -1193,9 +1204,14 @@ class TicketService
             'display_name' => $this->resolveServiceDisplayName($service),
             'domain' => (string) ($listItem['domain'] ?? $service->domain ?? ''),
             'status' => (int) $service->status,
-            'status_label' => (string) ($listItem['status_label'] ?? ''),
+            'status_label' => (string) ($listItem['status_label'] ?? (ServiceStatus::$labels[(int) $service->status] ?? (string) $service->status)),
             'billing_cycle' => (string) ($service->billing_cycle ?? ''),
-            'billing_cycle_label' => (string) ($listItem['billing_cycle_label'] ?? ''),
+            'billing_cycle_label' => (string) ($listItem['billing_cycle_label'] ?? ([
+                'monthly' => '月付',
+                'quarterly' => '季付',
+                'semiannually' => '半年付',
+                'annually' => '年付',
+            ][(string) ($service->billing_cycle ?? '')] ?? (string) ($service->billing_cycle ?? ''))),
             'amount' => number_format((float) $service->amount, 2, '.', ''),
             'expires_at' => $service->expires_at?->format('Y-m-d H:i:s'),
             'specs' => $specs,

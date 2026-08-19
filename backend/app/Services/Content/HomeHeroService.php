@@ -6,6 +6,7 @@ namespace App\Services\Content;
 
 use App\Models\Setting;
 use App\Support\ContentPublishedCacheVersion;
+use App\Support\SiteHomeCacheVersion;
 use Illuminate\Support\Facades\Cache;
 
 /**
@@ -85,9 +86,9 @@ class HomeHeroService
 
         Cache::forget(self::CACHE_KEY);
         $contentVersion = ContentPublishedCacheVersion::current();
-        Cache::forget(sprintf('site:home:%s:%d:%d:v%d', 'all', 50, 4, $contentVersion));
-        Cache::forget(sprintf('site:home:%d:%d:%d:v%d', 4, 50, 4, $contentVersion));
-        Cache::forget('site:home:4:50:4');
+        $homeVersion = SiteHomeCacheVersion::current();
+        Cache::forget(sprintf('site:home:%s:%d:%d:v%d:b%d', 'all', 50, 4, $contentVersion, $homeVersion));
+        Cache::forget(sprintf('site:home:%d:%d:%d:v%d:b%d', 4, 50, 4, $contentVersion, $homeVersion));
 
         return [
             'slides' => $normalizedSlides,
