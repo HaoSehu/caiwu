@@ -16,19 +16,22 @@ use App\Models\ScheduleRunLog;
 use App\Models\User;
 use App\Services\System\Concerns\HandlesAdminLogCleanup;
 use App\Support\AdminPrivacy;
+use App\Support\SchemaMetadataCache;
 use App\Support\SensitiveDataSanitizer;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Schema;
 
 class AdminLogService
 {
     use HandlesAdminLogCleanup;
 
     private const HTTP_ACTION_REGEXP = '^(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD) ';
+
+    /** @var list<string> */
+    private const HTTP_ACTION_PREFIXES = ['GET ', 'POST ', 'PUT ', 'PATCH ', 'DELETE ', 'OPTIONS ', 'HEAD '];
 
     private const LIST_SUMMARY_CACHE_TTL_SECONDS = 30;
 
@@ -190,8 +193,8 @@ class AdminLogService
 
     public function getApiLogs(array $filters, int $page, int $perPage, bool $withSummary = true): array
     {
-        $query = OperationLog::query()
-            ->whereRaw('action REGEXP ?', [self::HTTP_ACTION_REGEXP]);
+        $query = OperationLog::query();
+        $this->applyHttpActionFilter($query);
 
         if (! empty($filters['keyword'])) {
             $keyword = trim((string) $filters['keyword']);
@@ -243,11 +246,17 @@ class AdminLogService
             return $this->buildPaginatorPayload($logs);
         }
 
-        $summary = (clone $query)
-            ->selectRaw('COUNT(*) as total')
-            ->selectRaw("COALESCE(SUM(CASE WHEN CAST(JSON_UNQUOTE(JSON_EXTRACT(context, '$.status')) AS UNSIGNED) >= 500 THEN 1 ELSE 0 END), 0) as errors")
-            ->selectRaw("COALESCE(SUM(CASE WHEN user_type = 'admin' THEN 1 ELSE 0 END), 0) as admin_count")
-            ->first();
+        $summary = Cache::remember(
+            $this->buildListSummaryCacheKey('api', $filters),
+            now()->addSeconds(self::LIST_SUMMARY_CACHE_TTL_SECONDS),
+            function () use ($query) {
+                return (clone $query)
+                    ->selectRaw('COUNT(*) as total')
+                    ->selectRaw("COALESCE(SUM(CASE WHEN CAST(JSON_UNQUOTE(JSON_EXTRACT(context, '$.status')) AS UNSIGNED) >= 500 THEN 1 ELSE 0 END), 0) as errors")
+                    ->selectRaw("COALESCE(SUM(CASE WHEN user_type = 'admin' THEN 1 ELSE 0 END), 0) as admin_count")
+                    ->first();
+            }
+        );
 
         return $this->buildPaginatorPayload($logs, [
             'total' => (int) ($summary?->total ?? 0),
@@ -258,6 +267,20 @@ class AdminLogService
 
     public function getTaskLogs(array $filters, int $page, int $perPage): array
     {
+        if (SchemaMetadataCache::hasTable('schedule_run_logs') && ScheduleRunLog::query()->exists()) {
+            $fileEntries = $this->buildFileTaskLogEntries($filters);
+            if ($fileEntries->isEmpty()) {
+                $logs = $this->buildScheduleRunTaskLogQuery($filters)
+                    ->orderByDesc('started_at')
+                    ->paginate($perPage, $this->scheduleRunLogListColumns(), 'page', $page);
+                $logs->setCollection(
+                    $logs->getCollection()->map(fn (ScheduleRunLog $log): array => $this->mapScheduleRunTaskLogEntry($log))
+                );
+
+                return $this->buildPaginatorPayload($logs);
+            }
+        }
+
         $entries = $this->buildTaskLogEntries($filters);
 
         $paginator = $this->paginateCollection($entries, $page, $perPage);
@@ -271,6 +294,24 @@ class AdminLogService
             $this->buildFileLogSummaryCacheKey('task', $filters),
             now()->addSeconds(self::FILE_LOG_SUMMARY_CACHE_TTL_SECONDS),
             function () use ($filters) {
+                if (
+                    SchemaMetadataCache::hasTable('schedule_run_logs')
+                    && ScheduleRunLog::query()->exists()
+                    && $this->buildFileTaskLogEntries($filters)->isEmpty()
+                ) {
+                    $summary = $this->buildScheduleRunTaskLogQuery($filters)
+                        ?->selectRaw('COUNT(*) as total')
+                        ->selectRaw('COUNT(DISTINCT task_name) as tasks')
+                        ->selectRaw("COALESCE(SUM(CASE WHEN status IN ('failed', 'error') THEN 1 ELSE 0 END), 0) as errors")
+                        ->first();
+
+                    return [
+                        'total' => (int) ($summary?->total ?? 0),
+                        'tasks' => (int) ($summary?->tasks ?? 0),
+                        'errors' => (int) ($summary?->errors ?? 0),
+                    ];
+                }
+
                 $entries = $this->buildTaskLogEntries($filters);
 
                 return [
@@ -294,6 +335,21 @@ class AdminLogService
 
     public function getRuntimeLogs(array $filters, int $page, int $perPage): array
     {
+        if (
+            SchemaMetadataCache::hasTable('integration_plugin_runtime_logs')
+            && ($this->hasStructuredRuntimeFilter($filters) || $this->readLaravelLogEntries() === [])
+        ) {
+            $logs = $this->buildPluginRuntimeLogQuery($filters)
+                ->orderByDesc('created_at')
+                ->orderByDesc('id')
+                ->paginate($perPage, $this->pluginRuntimeLogListColumns(), 'page', $page);
+            $logs->setCollection(
+                $logs->getCollection()->map(fn (IntegrationPluginRuntimeLog $log): array => $this->mapPluginRuntimeLogEntry($log))
+            );
+
+            return $this->buildPaginatorPayload($logs);
+        }
+
         $entries = $this->buildRuntimeLogEntries($filters);
 
         $paginator = $this->paginateCollection($entries, $page, $perPage);
@@ -323,6 +379,25 @@ class AdminLogService
             $this->buildFileLogSummaryCacheKey('runtime', $filters),
             now()->addSeconds(self::FILE_LOG_SUMMARY_CACHE_TTL_SECONDS),
             function () use ($filters) {
+                if (
+                    SchemaMetadataCache::hasTable('integration_plugin_runtime_logs')
+                    && ($this->hasStructuredRuntimeFilter($filters) || $this->readLaravelLogEntries() === [])
+                ) {
+                    $summary = $this->buildPluginRuntimeLogQuery($filters)
+                        ->selectRaw('COUNT(*) as total')
+                        ->selectRaw("COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) as errors")
+                        ->first();
+                    $total = (int) ($summary?->total ?? 0);
+                    $errors = (int) ($summary?->errors ?? 0);
+
+                    return [
+                        'total' => $total,
+                        'errors' => $errors,
+                        'warnings' => 0,
+                        'infos' => $total - $errors,
+                    ];
+                }
+
                 $entries = $this->buildRuntimeLogEntries($filters);
 
                 return [
@@ -462,7 +537,7 @@ class AdminLogService
     // 管理端短信/邮件日志查询返回完整 content、params 与收件人，不做脱敏（项目红线：管理员需真实审计信息）
     private function buildSmsLogQuery(array $filters): ?Builder
     {
-        if (! Schema::hasTable('message_logs')) {
+        if (! SchemaMetadataCache::hasTable('message_logs')) {
             return null;
         }
 
@@ -498,7 +573,7 @@ class AdminLogService
 
     private function buildEmailLogQuery(array $filters): ?Builder
     {
-        if (! Schema::hasTable('message_logs')) {
+        if (! SchemaMetadataCache::hasTable('message_logs')) {
             return null;
         }
 
@@ -535,7 +610,7 @@ class AdminLogService
 
     private function buildNotificationSummaryQuery(string $channel, array $filters): ?Builder
     {
-        if (! Schema::hasTable('message_logs')) {
+        if (! SchemaMetadataCache::hasTable('message_logs')) {
             return null;
         }
 
@@ -641,7 +716,16 @@ class AdminLogService
 
     private function tableHasColumn(string $tableName, string $column): bool
     {
-        return Schema::hasTable($tableName) && Schema::hasColumn($tableName, $column);
+        return SchemaMetadataCache::hasColumn($tableName, $column);
+    }
+
+    private function applyHttpActionFilter(Builder $query): void
+    {
+        $query->where(function (Builder $builder): void {
+            foreach (self::HTTP_ACTION_PREFIXES as $prefix) {
+                $builder->orWhere('action', 'like', $prefix.'%');
+            }
+        });
     }
 
     private function normalizeNotificationParams(mixed $value): array
@@ -666,7 +750,7 @@ class AdminLogService
         // 当 schedule_run_logs 表存在并已有记录时，ScheduleRunLogService 同时会往 activity_logs
         // (module=cron) 写一条镜像记录，二者代表同一次执行。此时跳过 activity_logs cron 源，
         // 避免同一任务运行在列表中出现两行。
-        $cronActivityEntries = Schema::hasTable('schedule_run_logs') && ScheduleRunLog::query()->exists()
+        $cronActivityEntries = SchemaMetadataCache::hasTable('schedule_run_logs') && ScheduleRunLog::query()->exists()
             ? collect()
             : $this->buildCronActivityTaskLogEntries($filters);
 
@@ -718,8 +802,23 @@ class AdminLogService
 
     private function buildScheduleRunTaskLogEntries(array $filters): Collection
     {
-        if (! Schema::hasTable('schedule_run_logs')) {
+        $query = $this->buildScheduleRunTaskLogQuery($filters);
+        if ($query === null) {
             return collect();
+        }
+
+        return $query
+            ->orderByDesc('started_at')
+            ->limit(1000)
+            ->get($this->scheduleRunLogListColumns())
+            ->map(fn (ScheduleRunLog $log): array => $this->mapScheduleRunTaskLogEntry($log))
+            ->values();
+    }
+
+    private function buildScheduleRunTaskLogQuery(array $filters): ?Builder
+    {
+        if (! SchemaMetadataCache::hasTable('schedule_run_logs')) {
+            return null;
         }
 
         $query = ScheduleRunLog::query();
@@ -748,42 +847,55 @@ class AdminLogService
             $query->where('started_at', '<=', Carbon::parse((string) $filters['end_date'])->endOfDay());
         }
 
-        return $query
-            ->orderByDesc('started_at')
-            ->limit(1000)
-            ->get()
-            ->map(function (ScheduleRunLog $log) {
-                $taskKey = trim((string) $log->task_name);
-                $summary = is_array($log->summary) ? SensitiveDataSanitizer::sanitize($log->summary) : null;
-                $errorMessage = trim((string) ($log->error_msg ?? ''));
-                $message = $errorMessage !== ''
-                    ? $errorMessage
-                    : $this->taskSummaryText($summary, trim((string) $log->status));
+        return $query;
+    }
 
-                return [
-                    'id' => 'schedule-'.$log->id,
-                    'source' => 'schedule_run_logs',
-                    'time' => $log->started_at?->format('Y-m-d H:i:s') ?: $log->created_at?->format('Y-m-d H:i:s'),
-                    'started_at' => $log->started_at?->format('Y-m-d H:i:s'),
-                    'finished_at' => $log->finished_at?->format('Y-m-d H:i:s'),
-                    'task_key' => $taskKey,
-                    'task_name' => $taskKey,
-                    'task_title' => self::TASK_META[$taskKey]['title'] ?? $taskKey,
-                    'status' => trim((string) $log->status),
-                    'level' => $this->levelFromTaskStatus((string) $log->status),
-                    'duration_ms' => (int) $log->duration_ms,
-                    'summary' => $summary,
-                    'error_msg' => $errorMessage,
-                    'message' => $message,
-                    'raw' => $errorMessage,
-                ];
-            })
-            ->values();
+    /** @return list<string> */
+    private function scheduleRunLogListColumns(): array
+    {
+        return [
+            'id',
+            'task_name',
+            'status',
+            'duration_ms',
+            'error_msg',
+            'started_at',
+            'finished_at',
+            'created_at',
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function mapScheduleRunTaskLogEntry(ScheduleRunLog $log): array
+    {
+        $taskKey = trim((string) $log->task_name);
+        $errorMessage = trim((string) ($log->error_msg ?? ''));
+        $message = $errorMessage !== ''
+            ? $errorMessage
+            : $this->taskSummaryText(null, trim((string) $log->status));
+
+        return [
+            'id' => 'schedule-'.$log->id,
+            'source' => 'schedule_run_logs',
+            'time' => $log->started_at?->format('Y-m-d H:i:s') ?: $log->created_at?->format('Y-m-d H:i:s'),
+            'started_at' => $log->started_at?->format('Y-m-d H:i:s'),
+            'finished_at' => $log->finished_at?->format('Y-m-d H:i:s'),
+            'task_key' => $taskKey,
+            'task_name' => $taskKey,
+            'task_title' => self::TASK_META[$taskKey]['title'] ?? $taskKey,
+            'status' => trim((string) $log->status),
+            'level' => $this->levelFromTaskStatus((string) $log->status),
+            'duration_ms' => (int) $log->duration_ms,
+            'summary' => null,
+            'error_msg' => $errorMessage,
+            'message' => $message,
+            'raw' => $errorMessage,
+        ];
     }
 
     private function buildCronActivityTaskLogEntries(array $filters): Collection
     {
-        if (! Schema::hasTable('activity_logs')) {
+        if (! SchemaMetadataCache::hasTable('activity_logs')) {
             return collect();
         }
 
@@ -871,10 +983,20 @@ class AdminLogService
 
     private function buildPluginRuntimeLogEntries(array $filters): Collection
     {
-        if (! Schema::hasTable('integration_plugin_runtime_logs')) {
+        if (! SchemaMetadataCache::hasTable('integration_plugin_runtime_logs')) {
             return collect();
         }
 
+        return $this->buildPluginRuntimeLogQuery($filters)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->limit(1600)
+            ->get($this->pluginRuntimeLogListColumns())
+            ->map(fn (IntegrationPluginRuntimeLog $log): array => $this->mapPluginRuntimeLogEntry($log));
+    }
+
+    private function buildPluginRuntimeLogQuery(array $filters): Builder
+    {
         $query = IntegrationPluginRuntimeLog::query();
 
         if (! empty($filters['plugin_id'])) {
@@ -897,6 +1019,17 @@ class AdminLogService
             $query->where('status', trim((string) $filters['status']));
         }
 
+        if (! empty($filters['level'])) {
+            $level = strtoupper(trim((string) $filters['level']));
+            if ($level === 'ERROR') {
+                $query->where('status', 'failed');
+            } elseif ($level === 'INFO') {
+                $query->where('status', '<>', 'failed');
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+        }
+
         if (! empty($filters['keyword'])) {
             $keyword = trim((string) $filters['keyword']);
             $query->where(function (Builder $builder) use ($keyword): void {
@@ -910,12 +1043,26 @@ class AdminLogService
 
         $this->applyDateFilter($query, $filters);
 
-        return $query
-            ->orderByDesc('created_at')
-            ->orderByDesc('id')
-            ->limit(1600)
-            ->get()
-            ->map(fn (IntegrationPluginRuntimeLog $log): array => $this->mapPluginRuntimeLogEntry($log));
+        return $query;
+    }
+
+    /** @return list<string> */
+    private function pluginRuntimeLogListColumns(): array
+    {
+        return [
+            'id',
+            'trace_id',
+            'domain',
+            'plugin_id',
+            'plugin_key',
+            'slug',
+            'action',
+            'status',
+            'duration_ms',
+            'error_code',
+            'error_message',
+            'created_at',
+        ];
     }
 
     private function mapPluginRuntimeLogEntry(IntegrationPluginRuntimeLog $log): array
@@ -946,8 +1093,6 @@ class AdminLogService
             'action' => $action,
             'duration_ms' => $log->duration_ms,
             'error_msg' => $error,
-            'request_meta' => $log->request_meta_json ?? [],
-            'response_meta' => $log->response_meta_json ?? [],
         ];
     }
 
@@ -1222,7 +1367,7 @@ class AdminLogService
 
     public function getGatewayLogs(array $filters, int $page, int $perPage, bool $withSummary = true): array
     {
-        if (! Schema::hasTable('gateway_logs')) {
+        if (! SchemaMetadataCache::hasTable('gateway_logs')) {
             return $this->buildPaginatorPayload($this->emptyPaginator($perPage));
         }
 
@@ -1278,7 +1423,7 @@ class AdminLogService
     {
         // 仅在表不存在，或表完全没有任何数据（刚迁移、尚未写入）时才降级到 operation_logs。
         // 若表已存在并有历史数据，过滤条件导致的空结果不应降级，否则同一页面会混用两套数据源。
-        if (! Schema::hasTable('activity_logs') || ActivityLog::query()->doesntExist()) {
+        if (! SchemaMetadataCache::hasTable('activity_logs') || ActivityLog::query()->doesntExist()) {
             return $this->getBusinessOperationLogsAsActivityLogs($filters, $page, $perPage, $withSummary);
         }
 
@@ -1304,61 +1449,64 @@ class AdminLogService
             return $this->buildPaginatorPayload($logs);
         }
 
-        $summary = (clone $query)
-            ->selectRaw('COUNT(*) as total')
-            ->selectRaw('COUNT(DISTINCT module) as modules')
-            ->first();
+        $summary = $this->getActivityLogsSummary($filters);
 
         return $this->buildPaginatorPayload($logs, [
-            'total' => (int) ($summary?->total ?? 0),
-            'modules' => (int) ($summary?->modules ?? 0),
+            'total' => (int) ($summary['total'] ?? 0),
+            'modules' => (int) ($summary['modules'] ?? 0),
             'source' => 'activity_logs',
         ]);
     }
 
     public function getActivityLogsSummary(array $filters): array
     {
-        // 与 getActivityLogs 保持一致：仅当表不存在或完全无数据时才降级。
-        // 过滤条件导致的空结果不触发降级，否则 summary 与 list 的 source 不一致。
-        if (Schema::hasTable('activity_logs') && ActivityLog::query()->exists()) {
-            $query = ActivityLog::query();
-            $this->applyActivityLogFilters($query, $filters);
+        return Cache::remember(
+            $this->buildListSummaryCacheKey('activity', $filters),
+            now()->addSeconds(self::LIST_SUMMARY_CACHE_TTL_SECONDS),
+            function () use ($filters): array {
+                // 与 getActivityLogs 保持一致：仅当表不存在或完全无数据时才降级。
+                // 过滤条件导致的空结果不触发降级，否则 summary 与 list 的 source 不一致。
+                if (SchemaMetadataCache::hasTable('activity_logs') && ActivityLog::query()->exists()) {
+                    $query = ActivityLog::query();
+                    $this->applyActivityLogFilters($query, $filters);
 
-            $summary = (clone $query)
-                ->selectRaw('COUNT(*) as total')
-                ->selectRaw('COUNT(DISTINCT module) as modules')
-                ->first();
+                    $summary = (clone $query)
+                        ->selectRaw('COUNT(*) as total')
+                        ->selectRaw('COUNT(DISTINCT module) as modules')
+                        ->first();
 
-            return [
-                'total' => (int) ($summary?->total ?? 0),
-                'modules' => (int) ($summary?->modules ?? 0),
-                'source' => 'activity_logs',
-            ];
-        }
+                    return [
+                        'total' => (int) ($summary?->total ?? 0),
+                        'modules' => (int) ($summary?->modules ?? 0),
+                        'source' => 'activity_logs',
+                    ];
+                }
 
-        if (! Schema::hasTable('operation_logs')) {
-            return [
-                'total' => 0,
-                'modules' => 0,
-                'source' => 'none',
-            ];
-        }
+                if (! SchemaMetadataCache::hasTable('operation_logs')) {
+                    return [
+                        'total' => 0,
+                        'modules' => 0,
+                        'source' => 'none',
+                    ];
+                }
 
-        $query = OperationLog::query()
-            ->whereRaw('action NOT REGEXP ?', [self::HTTP_ACTION_REGEXP])
-            ->where('action', '<>', 'admin.login');
-        $this->applyBusinessOperationActivityFilters($query, $filters);
+                $query = OperationLog::query()
+                    ->whereRaw('action NOT REGEXP ?', [self::HTTP_ACTION_REGEXP])
+                    ->where('action', '<>', 'admin.login');
+                $this->applyBusinessOperationActivityFilters($query, $filters);
 
-        $summary = (clone $query)
-            ->selectRaw('COUNT(*) as total')
-            ->selectRaw('COUNT(DISTINCT module) as modules')
-            ->first();
+                $summary = (clone $query)
+                    ->selectRaw('COUNT(*) as total')
+                    ->selectRaw('COUNT(DISTINCT module) as modules')
+                    ->first();
 
-        return [
-            'total' => (int) ($summary?->total ?? 0),
-            'modules' => (int) ($summary?->modules ?? 0),
-            'source' => 'operation_logs',
-        ];
+                return [
+                    'total' => (int) ($summary?->total ?? 0),
+                    'modules' => (int) ($summary?->modules ?? 0),
+                    'source' => 'operation_logs',
+                ];
+            }
+        );
     }
 
     private function applyActivityLogFilters(Builder $query, array $filters): void
@@ -1415,7 +1563,7 @@ class AdminLogService
 
     private function getBusinessOperationLogsAsActivityLogs(array $filters, int $page, int $perPage, bool $withSummary = true): array
     {
-        if (! Schema::hasTable('operation_logs')) {
+        if (! SchemaMetadataCache::hasTable('operation_logs')) {
             return $this->buildPaginatorPayload($this->emptyPaginator($perPage));
         }
 
@@ -1550,11 +1698,11 @@ class AdminLogService
 
     private function operationLogSubjectIdColumn(): ?string
     {
-        if (Schema::hasColumn('operation_logs', 'subject_id')) {
+        if (SchemaMetadataCache::hasColumn('operation_logs', 'subject_id')) {
             return 'subject_id';
         }
 
-        if (Schema::hasColumn('operation_logs', 'target_id')) {
+        if (SchemaMetadataCache::hasColumn('operation_logs', 'target_id')) {
             return 'target_id';
         }
 
@@ -1623,7 +1771,7 @@ class AdminLogService
         }
 
         $adminIds = collect();
-        if (Schema::hasTable('admin_users')) {
+        if (SchemaMetadataCache::hasTable('admin_users')) {
             $adminIds = AdminUser::query()
                 ->where(function ($query) use ($keyword) {
                     $query->where('username', 'like', "%{$keyword}%")
@@ -1640,7 +1788,7 @@ class AdminLogService
         }
 
         $clientIds = collect();
-        if (Schema::hasTable('users')) {
+        if (SchemaMetadataCache::hasTable('users')) {
             $clientIds = User::query()
                 ->where(function ($query) use ($keyword) {
                     $query->where('email', 'like', "%{$keyword}%")

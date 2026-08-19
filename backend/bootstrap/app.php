@@ -5,6 +5,7 @@ use App\Http\Middleware\CheckPermission;
 use App\Http\Middleware\EnsureAdminAuthenticated;
 use App\Http\Middleware\EnsureClientAuthenticated;
 use App\Http\Middleware\EnsureEmailIsVerified;
+use App\Http\Middleware\EnsureInstallerAvailable;
 use App\Http\Middleware\LogOperation;
 use App\Http\Middleware\SetJsonEncodingOptions;
 use App\Http\Middleware\VerifyAlipayCallbackSignature;
@@ -63,6 +64,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->validateCsrfTokens(except: [
             'api/*',
+            'install/api/*',
         ]);
 
         $middleware->alias([
@@ -70,6 +72,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'permission' => CheckPermission::class,
             'ensure.admin' => EnsureAdminAuthenticated::class,
             'ensure.client' => EnsureClientAuthenticated::class,
+            'ensure.installer' => EnsureInstallerAvailable::class,
             'log.operation' => LogOperation::class,
             'verify.alipay.callback' => VerifyAlipayCallbackSignature::class,
             'verify.payment.callback' => VerifyPaymentCallbackSignature::class,
@@ -79,8 +82,15 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withExceptions(function (Exceptions $exceptions) {
         SentryIntegration::handles($exceptions);
 
+        // 安装阶段没有数据库表，限流和会话必须使用内存驱动，且要早于路由中间件初始化。
+        if (PHP_SAPI !== 'cli'
+            && str_starts_with((string) ($_SERVER['REQUEST_URI'] ?? ''), '/install/api')
+            && ! is_file((string) config('installer.lock_path'))) {
+            config(['cache.default' => 'array', 'session.driver' => 'array']);
+        }
+
         $exceptions->render(function (AuthenticationException $exception, Request $request) {
-            if ($request->is('api/*')) {
+            if ($request->is('api/*') || $request->is('install/api/*')) {
                 return ApiResponseBuilder::error(40100, '未登录或登录已过期', null, 401);
             }
 
@@ -88,7 +98,7 @@ return Application::configure(basePath: dirname(__DIR__))
         });
 
         $exceptions->render(function (ValidationException $exception, Request $request) {
-            if ($request->is('api/*')) {
+            if ($request->is('api/*') || $request->is('install/api/*')) {
                 return ApiResponseBuilder::error(42200, '参数验证失败', [
                     'errors' => $exception->errors(),
                 ], 422);
@@ -98,7 +108,7 @@ return Application::configure(basePath: dirname(__DIR__))
         });
 
         $exceptions->render(function (ModelNotFoundException $exception, Request $request) {
-            if ($request->is('api/*')) {
+            if ($request->is('api/*') || $request->is('install/api/*')) {
                 return ApiResponseBuilder::error(40400, '请求的资源不存在', null, 404);
             }
 
@@ -106,7 +116,7 @@ return Application::configure(basePath: dirname(__DIR__))
         });
 
         $exceptions->render(function (NotFoundHttpException $exception, Request $request) {
-            if ($request->is('api/*')) {
+            if ($request->is('api/*') || $request->is('install/api/*')) {
                 return ApiResponseBuilder::error(40400, '请求的接口不存在', null, 404);
             }
 
@@ -115,7 +125,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // 限流触发统一返回中文 429 消息，避免 Symfony 默认英文文案。
         $exceptions->render(function (ThrottleRequestsException $exception, Request $request) {
-            if ($request->is('api/*')) {
+            if ($request->is('api/*') || $request->is('install/api/*')) {
                 return ApiResponseBuilder::error(42900, '请求过于频繁，请稍后再试', null, 429);
             }
 
@@ -128,6 +138,10 @@ return Application::configure(basePath: dirname(__DIR__))
                 ? trim((string) ($_SERVER['argv'][1] ?? ''))
                 : '';
 
+            $isInstallerHttpRequest = PHP_SAPI !== 'cli'
+                && str_starts_with((string) ($_SERVER['REQUEST_URI'] ?? ''), '/install')
+                && ! is_file((string) config('installer.lock_path'));
+
             $allowedCommands = [
                 'key:generate',
                 'package:discover',
@@ -136,7 +150,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 'optimize:clear',
             ];
 
-            if (! in_array($currentCommand, $allowedCommands, true)) {
+            if (! in_array($currentCommand, $allowedCommands, true) && ! $isInstallerHttpRequest) {
                 throw new RuntimeException('APP_KEY is not set. Run: php artisan key:generate');
             }
         }

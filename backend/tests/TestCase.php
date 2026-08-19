@@ -8,6 +8,7 @@ use App\Contracts\Integrations\Payments\PaymentGatewayInterface;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
 use App\Services\Integrations\Payments\PaymentGatewayRegistry;
 use App\Services\Integrations\Plugins\PluginInstaller;
+use App\Support\SchemaMetadataCache;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Support\Facades\DB;
 use Tests\Fakes\TestPaymentGateway;
@@ -19,6 +20,8 @@ abstract class TestCase extends BaseTestCase
         $this->ensureMysqlClientOnPath();
 
         parent::setUp();
+
+        SchemaMetadataCache::flush();
 
         // 应用已存在的后续测试也再次校验，防止测试中修改连接配置后继续执行。
         $this->guardAgainstProductionDatabaseForTests();

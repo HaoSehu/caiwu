@@ -12,9 +12,9 @@ use App\Models\IntegrationPluginRuntimeLog;
 use App\Models\MessageLog;
 use App\Models\OperationLog;
 use App\Models\ScheduleRunLog;
+use App\Support\SchemaMetadataCache;
 use App\Support\SensitiveDataSanitizer;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Schema;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class AdminLogV2QueryService
@@ -168,7 +168,7 @@ class AdminLogV2QueryService
      */
     private function notificationDetail(string $channel, string $log): ?array
     {
-        if (! Schema::hasTable('message_logs')) {
+        if (! SchemaMetadataCache::hasTable('message_logs')) {
             return null;
         }
 
@@ -288,7 +288,7 @@ class AdminLogV2QueryService
             return $this->operationLogDetail($channel, substr($log, strlen('operation-')));
         }
 
-        $activity = Schema::hasTable('activity_logs') ? ActivityLog::query()->find($log) : null;
+        $activity = SchemaMetadataCache::hasTable('activity_logs') ? ActivityLog::query()->find($log) : null;
         if (! $activity instanceof ActivityLog) {
             return $this->operationLogDetail($channel, $log);
         }

@@ -15,12 +15,37 @@ use App\Models\Product;
 use App\Models\Role;
 use App\Models\Service;
 use App\Models\User;
+use App\Services\Finance\InvoiceService;
 use App\Support\AdminPermissions;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class V2InvoiceApiTest extends TestCase
 {
+    public function test_admin_invoice_list_uses_eager_product_name_and_callback_relations(): void
+    {
+        $fixture = $this->createInvoiceFixture();
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        app(InvoiceService::class)->adminList([
+            'invoice_no' => (string) $fixture['invoice']->invoice_no,
+        ], 10);
+        $queries = DB::getQueryLog();
+        DB::disableQueryLog();
+
+        $fallbackProductQueries = collect($queries)
+            ->pluck('query')
+            ->filter(fn (string $query): bool => str_contains($query, 'select `custom_display_name` from `products` where `products`.`id` = ?'));
+        $callbackQueries = collect($queries)
+            ->pluck('query')
+            ->filter(fn (string $query): bool => str_contains($query, 'from `payment_callbacks`'));
+
+        $this->assertCount(0, $fallbackProductQueries);
+        $this->assertCount(1, $callbackQueries);
+    }
+
     public function test_admin_invoice_list_requires_permission_rejects_per_page_and_returns_summary(): void
     {
         $fixture = $this->createInvoiceFixture();

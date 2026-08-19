@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Constants\PaymentGatewayCode;
 use App\Models\Concerns\EnsuresTraceId;
 use App\Models\Concerns\NormalizesTraceId;
+use App\Support\SchemaMetadataCache;
 use App\Support\VersionedJson;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -14,7 +15,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 
@@ -142,7 +142,11 @@ class Payment extends Model
 
     public function callbackPayload(string $callbackType = 'payment'): array
     {
-        if (! Schema::hasTable('payment_callbacks') || ! $this->exists) {
+        if (! $this->exists) {
+            return [];
+        }
+
+        if (! $this->relationLoaded('callbacks') && ! SchemaMetadataCache::hasTable('payment_callbacks')) {
             return [];
         }
 
@@ -240,7 +244,7 @@ class Payment extends Model
 
     private static function paymentColumnExists(string $column): bool
     {
-        return Schema::hasTable('payments') && Schema::hasColumn('payments', $column);
+        return SchemaMetadataCache::hasColumn('payments', $column);
     }
 
     private function resolveGatewayKeyFromAttributes(array $attributes): string
@@ -252,7 +256,11 @@ class Payment extends Model
 
     private function resolveCallbackPayloadFromStructure(): ?array
     {
-        if (! Schema::hasTable('payment_callbacks') || ! $this->exists) {
+        if (! $this->exists) {
+            return null;
+        }
+
+        if (! $this->relationLoaded('callbacks') && ! SchemaMetadataCache::hasTable('payment_callbacks')) {
             return null;
         }
 

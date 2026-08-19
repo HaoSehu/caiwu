@@ -183,10 +183,10 @@ class InvoiceService
         $query = Invoice::with([
             'user:id,email,nickname,phone',
             'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle',
-            'order.product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
-            'product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
+            'order.product:id,product_type,service_type_code,product_group_id,custom_display_name,remark,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,product_group_id,custom_display_name,remark,config_options,purchase_requires',
             'service:id,name,status,expires_at',
-            'payments',
+            'payments.callbacks:payment_id,callback_type,payload_json',
             'items',
         ]);
 
@@ -240,13 +240,13 @@ class InvoiceService
         $invoice = Invoice::with([
             'user:id,email,nickname,phone',
             'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle,product_spec_snapshot,product_type_snapshot,config_snapshot',
-            'order.product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
+            'order.product:id,product_type,service_type_code,product_group_id,custom_display_name,remark,config_options,purchase_requires',
             'order.product.productGroup:id,second_product_group_id,name',
             'order.product.productGroup.secondProductGroup:id,first_product_group_id,name',
             'order.product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
-            'product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,product_group_id,custom_display_name,remark,config_options,purchase_requires',
             'service:id,name,status,expires_at',
-            'payments',
+            'payments.callbacks:payment_id,callback_type,payload_json',
             'items',
         ])->findOrFail($id);
 

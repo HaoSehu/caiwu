@@ -8,9 +8,9 @@ use App\Exceptions\BusinessException;
 use App\Models\AdminUser;
 use App\Models\IntegrationPlugin;
 use App\Services\System\NotificationService;
+use App\Support\SchemaMetadataCache;
 use App\Support\SmsTemplateCatalog;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 class IntegrationPluginService
 {
@@ -200,7 +200,7 @@ class IntegrationPluginService
      */
     public function detectMissingManifests(): array
     {
-        if (! Schema::hasTable('integration_plugins')) {
+        if (! SchemaMetadataCache::hasTable('integration_plugins')) {
             return [];
         }
 
@@ -218,7 +218,7 @@ class IntegrationPluginService
 
     public function healthCheck(IntegrationPlugin $plugin): array
     {
-        if (! Schema::hasTable('integration_plugins')) {
+        if (! SchemaMetadataCache::hasTable('integration_plugins')) {
             throw new BusinessException('插件系统尚未初始化', 42200);
         }
 
@@ -231,7 +231,7 @@ class IntegrationPluginService
      */
     public function testEmail(IntegrationPlugin $plugin, array $payload): array
     {
-        if (! Schema::hasTable('integration_plugins')) {
+        if (! SchemaMetadataCache::hasTable('integration_plugins')) {
             throw new BusinessException('插件系统尚未初始化', 42200);
         }
 
@@ -253,7 +253,7 @@ class IntegrationPluginService
      */
     public function testSms(IntegrationPlugin $plugin, array $payload): array
     {
-        if (! Schema::hasTable('integration_plugins')) {
+        if (! SchemaMetadataCache::hasTable('integration_plugins')) {
             throw new BusinessException('插件系统尚未初始化', 42200);
         }
 
@@ -322,7 +322,7 @@ class IntegrationPluginService
      */
     private function installedPluginMap(?string $domain = null): array
     {
-        if (! Schema::hasTable('integration_plugins')) {
+        if (! SchemaMetadataCache::hasTable('integration_plugins')) {
             return [];
         }
 
@@ -338,7 +338,7 @@ class IntegrationPluginService
      */
     private function enabledPluginMap(?string $domain = null): array
     {
-        if (! Schema::hasTable('integration_plugins')) {
+        if (! SchemaMetadataCache::hasTable('integration_plugins')) {
             return [];
         }
 
@@ -555,7 +555,7 @@ class IntegrationPluginService
 
     private function deletePluginRows(string $table, int $pluginId): void
     {
-        if (! Schema::hasTable($table) || ! Schema::hasColumn($table, 'plugin_id')) {
+        if (! SchemaMetadataCache::hasColumn($table, 'plugin_id')) {
             return;
         }
 
@@ -574,7 +574,7 @@ class IntegrationPluginService
         }
 
         $logsByPluginId = array_fill_keys($pluginIds, null);
-        if (! Schema::hasTable('integration_plugin_runtime_logs')) {
+        if (! SchemaMetadataCache::hasTable('integration_plugin_runtime_logs')) {
             return $logsByPluginId;
         }
 
@@ -635,7 +635,7 @@ class IntegrationPluginService
     private function latestRuntimeLog(?IntegrationPlugin $plugin): ?array
     {
         $pluginId = (int) ($plugin?->id ?? 0);
-        if ($pluginId <= 0 || ! Schema::hasTable('integration_plugin_runtime_logs')) {
+        if ($pluginId <= 0 || ! SchemaMetadataCache::hasTable('integration_plugin_runtime_logs')) {
             return null;
         }
 
@@ -690,7 +690,7 @@ class IntegrationPluginService
     {
         return array_values(array_filter(
             $tables,
-            fn (string $table): bool => Schema::hasTable($table) && Schema::hasColumn($table, 'plugin_id'),
+            fn (string $table): bool => SchemaMetadataCache::hasColumn($table, 'plugin_id'),
         ));
     }
 

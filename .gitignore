@@ -168,3 +168,4 @@ AGENTS.md
 .mimosa/
 
 backend/.env.testing
+backend/storage/app/installer/

@@ -31,6 +31,7 @@ use App\Services\Provisioning\ProvisionService;
 use App\Services\Provisioning\ServiceRenewService;
 use App\Services\Referral\ReferralService;
 use App\Services\User\AccountService;
+use App\Support\SchemaMetadataCache;
 use App\Support\StockReservation;
 use App\Support\VersionedJson;
 use Carbon\CarbonImmutable;
@@ -38,7 +39,6 @@ use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 
 class PaymentService
 {
@@ -2613,7 +2613,7 @@ class PaymentService
 
         static $hasUserReferrals = null;
         if ($hasUserReferrals === null) {
-            $hasUserReferrals = Schema::hasTable('user_referrals');
+            $hasUserReferrals = SchemaMetadataCache::hasTable('user_referrals');
         }
         if ($hasUserReferrals) {
             $relations[] = 'user.referralProfile';
@@ -3356,21 +3356,21 @@ class PaymentService
             'status' => InvoiceStatus::REFUNDED,
         ];
 
-        if (Schema::hasColumn('invoices', 'refunded_at')) {
+        if (SchemaMetadataCache::hasColumn('invoices', 'refunded_at')) {
             $payload['refunded_at'] = $refundedAt !== '' ? $refundedAt : now();
         }
 
-        if (Schema::hasColumn('invoices', 'refund_amount')) {
+        if (SchemaMetadataCache::hasColumn('invoices', 'refund_amount')) {
             $payload['refund_amount'] = $normalizedRefundAmount;
         }
 
-        if (Schema::hasColumn('invoices', 'refund_method')) {
+        if (SchemaMetadataCache::hasColumn('invoices', 'refund_method')) {
             $payload['refund_method'] = trim($refundMethod) !== '' ? trim($refundMethod) : 'balance';
         }
 
-        if (Schema::hasColumn('invoices', 'refund_trace_id')) {
+        if (SchemaMetadataCache::hasColumn('invoices', 'refund_trace_id')) {
             $payload['refund_trace_id'] = $traceId !== '' ? $traceId : null;
-        } elseif ($traceId !== '' && Schema::hasColumn('invoices', 'trace_id')) {
+        } elseif ($traceId !== '' && SchemaMetadataCache::hasColumn('invoices', 'trace_id')) {
             $payload['trace_id'] = $traceId;
         }
 
@@ -3488,7 +3488,7 @@ class PaymentService
 
     public function syncProjection(Payment $payment): Payment
     {
-        if (! Schema::hasTable('payment_callbacks')) {
+        if (! SchemaMetadataCache::hasTable('payment_callbacks')) {
             return $payment->fresh() ?? $payment;
         }
 
@@ -3527,7 +3527,7 @@ class PaymentService
         ?string $gatewayTradeNo = null,
         ?string $traceId = null,
     ): void {
-        if (! Schema::hasTable('payment_callbacks') || ! $payment->exists) {
+        if (! SchemaMetadataCache::hasTable('payment_callbacks') || ! $payment->exists) {
             return;
         }
 
@@ -3546,23 +3546,23 @@ class PaymentService
         ];
         $gatewayContext = $this->paymentGatewayBindingResolver()->contextForPayment($payment);
 
-        if (Schema::hasColumn('payment_callbacks', 'plugin_id')) {
+        if (SchemaMetadataCache::hasColumn('payment_callbacks', 'plugin_id')) {
             $row['plugin_id'] = $gatewayContext['plugin_id'];
         }
 
-        if (Schema::hasColumn('payment_callbacks', 'gateway_key')) {
+        if (SchemaMetadataCache::hasColumn('payment_callbacks', 'gateway_key')) {
             $row['gateway_key'] = $gatewayContext['gateway_key'];
         }
 
-        if (Schema::hasColumn('payment_callbacks', 'trace_id')) {
+        if (SchemaMetadataCache::hasColumn('payment_callbacks', 'trace_id')) {
             $row['trace_id'] = $this->nullableString($resolvedTraceId);
         }
 
-        if (Schema::hasColumn('payment_callbacks', 'operator')) {
+        if (SchemaMetadataCache::hasColumn('payment_callbacks', 'operator')) {
             $row['operator'] = $this->nullableString($payload['operator'] ?? null);
         }
 
-        if (Schema::hasColumn('payment_callbacks', 'remark')) {
+        if (SchemaMetadataCache::hasColumn('payment_callbacks', 'remark')) {
             $row['remark'] = $this->nullableString($payload['remark'] ?? $payload['refund_reason'] ?? null);
         }
 
