@@ -171,8 +171,6 @@ reviews:
       enabled: true
     phpstan:
       enabled: true
-      # 指定项目实际配置路径（仓库根无 phpstan.neon）
-      config_file: "backend/phpstan.neon.dist"
     shellcheck:
       enabled: true
     markdownlint:
