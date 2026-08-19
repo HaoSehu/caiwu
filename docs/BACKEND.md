@@ -274,9 +274,9 @@ php artisan test
 - 后端文档：`docs/BACKEND.md`。
 - API 格式：`docs/参考资料/接口/API格式规范.md`。
 - API 分组导航：`docs/参考资料/接口/API清单导航.md`。
-- caiwu 主技能：`C:/Users/USER125536/.agents/skills/caiwu/SKILL.md`。
-- caiwu 后端审查技能：`C:/Users/USER125536/.agents/skills/caiwu/code-review/SKILL.md`。
-- caiwu reference：`C:/Users/USER125536/.agents/skills/caiwu/references/11-backend-engineering-governance.md`。
+- caiwu 主技能：本机 `~/.agents/skills/caiwu/SKILL.md`。
+- caiwu 后端审查技能：本机 `~/.agents/skills/caiwu/code-review/SKILL.md`。
+- caiwu reference：本机 `~/.agents/skills/caiwu/references/11-backend-engineering-governance.md`（以上均为本机路径，仅描述安装位置，跨机不可直接引用）。
 
 禁止手工编辑：
 

@@ -41,9 +41,8 @@
     },
     {
       "path": "设计文档/后端/日志与归档协同重构方案.md",
-      "status": "active",
-      "summary": "日志真源、冷热检索、两阶段归档与删除边界。",
-      "review_by": "2026-08-15"
+      "status": "tech-debt",
+      "summary": "日志真源、冷热检索、两阶段归档与删除边界；2026-08-12 随计划转入技术债，冻结未排期。"
     },
     {
       "path": "设计文档/后端/Zjmf定时任务系统解析.md",
@@ -67,14 +66,18 @@
     },
     {
       "path": "产品规格/进行中/日志检索与归档协同-2026-08-01.md",
-      "status": "active",
-      "summary": "管理端日志检索、留存与归档的验收边界。",
-      "review_by": "2026-08-15"
+      "status": "tech-debt",
+      "summary": "管理端日志检索、留存与归档的验收边界；2026-08-12 随计划转入技术债，冻结未排期。"
     },
     {
-      "path": "执行计划/已完成/Zjmf统一迁移方案.md",
+      "path": "执行计划/已完成/Zjmf统一迁移方案-20260723.md",
       "status": "completed",
       "summary": "ZJMF 实时上游绑定切换、实例控制验证与旧接口下线记录。"
+    },
+    {
+      "path": "执行计划/已完成/工作区整理与docs清理-2026-08-19.md",
+      "status": "completed",
+      "summary": "工作区审查、三端与 shared 清理及 docs 状态对齐。"
     },
     {
       "path": "执行计划/技术债/日志归档系统可靠性重构方案-2026-08-01.md",
@@ -107,13 +110,13 @@
       "path": "执行计划/已完成/财务账务一致性与回归修复-2026-08-04.md",
       "status": "completed",
       "summary": "账务金额、销售收入统计、单据明细投影与管理端财务回归修复。",
-      "review_by": "2026-08-18"
+      "review_by": "2026-11-18"
     },
     {
       "path": "执行计划/已完成/VNC与业务调度隔离方案-2026-08-04.md",
       "status": "completed",
       "summary": "VNC Relay、业务队列与定时队列隔离实施计划。",
-      "review_by": "2026-08-18"
+      "review_by": "2026-11-18"
     },
     {
       "path": "参考资料/接口/API格式规范.md",
@@ -212,26 +215,6 @@
       "path": "模板/exec-plan.md",
       "status": "template",
       "summary": "执行计划模板。"
-    },
-    {
-      "path": "参考资料/迁移记录/frontend-admin-v3-final-acceptance-report.md",
-      "status": "completed",
-      "summary": "管理端（frontend-admin-v3）迁移的最终验收报告。"
-    },
-    {
-      "path": "参考资料/迁移记录/frontend-admin-v3-migration-ledger.md",
-      "status": "completed",
-      "summary": "管理端（frontend-admin-v3）迁移台账与决策留痕。"
-    },
-    {
-      "path": "参考资料/迁移记录/frontend-user-v3-www-final-acceptance-report.md",
-      "status": "completed",
-      "summary": "官网（frontend-user-v3-www）迁移的最终验收报告。"
-    },
-    {
-      "path": "参考资料/迁移记录/frontend-user-v3-www-migration-ledger.md",
-      "status": "completed",
-      "summary": "官网（frontend-user-v3-www）迁移台账与决策留痕。"
     }
   ]
 }
