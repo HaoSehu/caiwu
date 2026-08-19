@@ -60,29 +60,32 @@ graph TB
   end
 
   subgraph Backend[Laravel 12 后端]
-    API[/api/v2/admin · /api/v2/client · /api/v2/site/]
-    Service[业务服务层<br/>Finance / Order / ProductCatalog /<br/>Provisioning / Upstream / Integrations / ...]
+    API[/API 网关 · /api/v2/admin|client|site/]
+    Service[业务服务层<br/>Finance / Order / ProductCatalog /<br/>Provisioning / Upstream / Integrations /<br/>Notification / Ticket / ...]
     Plugin[插件层<br/>servers / gateways / sms /<br/>captcha / certification / mail / addons]
-    Auto[调度 · 心跳 · 队列 Worker<br/>schedule:run / VNC Relay]
+    Auto[后台进程<br/>schedule:run · 队列 Worker · VNC Relay]
   end
 
   subgraph Data[数据与外部]
     MySQL[(MySQL 8)]
     Redis[(Redis · 缓存 / 分布式锁)]
     Upstream[上游供应商<br/>ZJMF / KangHostx]
-    PayGW[支付宝 / 易支付]
+    PayGW[支付网关<br/>支付宝 / 易支付]
+    Notify[通知渠道<br/>邮件 SMTP / 短信]
   end
 
-  Admin --> API
-  WWW --> API
-  Console --> API
+  Admin -->|鉴权 + 权限码| API
+  WWW -->|鉴权| API
+  Console -->|鉴权| API
+  PayGW -->|签名回调 · 限流| API
   API --> Service
   Service --> Plugin
   Service --> MySQL
   Service --> Redis
   Plugin --> Upstream
   Plugin --> PayGW
-  Auto --> Service
+  Plugin --> Notify
+  Auto -->|调度 / 消费队列| Service
   Auto --> MySQL
   Auto --> Redis
 ```
@@ -222,7 +225,13 @@ npm run verify:frontends
 - [架构 ARCHITECTURE.md](docs/ARCHITECTURE.md) · [后端 BACKEND.md](docs/BACKEND.md) · [前端 FRONTEND.md](docs/FRONTEND.md) · [数据库 DATABASE.md](docs/DATABASE.md) · [视觉约束 DESIGN.md](docs/DESIGN.md)
 - [产品规格](docs/产品规格/README.md) · [执行计划](docs/执行计划/README.md) · [参考资料](docs/参考资料/README.md) · [自动生成](docs/自动生成/README.md)
 
-## 📄 开源许可
+## 💬 交流群
+
+财务系统开发交流群：`994857138`
+
+![QQ 群二维码](docs/assets/qq-group.jpeg)
+
+## �📄 开源许可
 
 本项目采用**双轨授权**模式（详见 [COMMERCIAL_LICENSE.md](COMMERCIAL_LICENSE.md)）：
 
