@@ -104,7 +104,7 @@
 | 其中 image      | 47.4KB   | 11.4KB    | -36.0KB              |
 | 其中 stylesheet | 22.2KB   | 15.0KB    | -7.2KB               |
 
-报告：`docs/perf-audit/lighthouse/baseline.html` / `optimized.html`（可浏览器打开看明细）。
+报告：原 `docs/perf-audit/lighthouse/` 下的 baseline/optimized html/json 明细已于 2026-08-19 清理，可用 `scripts/lighthouse-audit.mjs` 重新生成，历史版本见 Git。
 
 说明：本地 preview 下数据请求跨域访问生产 API，节流后 API 往返计入 LCP；生产环境（同源 + HTTP 缓存）指标预计更优。LCP 仍有约 4.3s，主要来自 JS 关键链 + API 往返，若需进一步压缩可考虑 SSR/prerender hero 文案（见报告 P0-1 方案 c）。
 

@@ -11,7 +11,6 @@
     "./content/contentNormalizer": "./content/contentNormalizer.ts",
     "./content/createMarkdownRenderer": "./content/createMarkdownRenderer.ts",
     "./content/htmlSanitizer": "./content/htmlSanitizer.ts",
-    "./components/StatusTag.vue": "./components/StatusTag.vue",
     "./statusConfig": "./statusConfig.js",
     "./extraStatusMaps": "./extraStatusMaps.js",
     "./htmlSanitizer": "./htmlSanitizer.js"

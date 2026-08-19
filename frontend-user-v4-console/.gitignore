@@ -39,6 +39,8 @@ tsc.log
 *.out.log
 *.png
 *.jpg
+# 登录背景与 Logo 需要入库，覆盖全局图片忽略
+!src/assets/*.png
 
 .env.local
 .env.*.local
