@@ -231,7 +231,7 @@ npm run verify:frontends
 
 ![QQ 群二维码](docs/assets/qq-group.jpeg)
 
-## �📄 开源许可
+## 📄 开源许可
 
 本项目采用**双轨授权**模式（详见 [COMMERCIAL_LICENSE.md](COMMERCIAL_LICENSE.md)）：
 
