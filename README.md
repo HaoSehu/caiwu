@@ -1,6 +1,6 @@
 # 创欧云 Caiwu · IDC 业务/财务系统
 
-![PHP](https://img.shields.io/badge/PHP-8.2%2B-777BB4) ![Laravel](https://img.shields.io/badge/Laravel-12-FF2D20) ![Vue](https://img.shields.io/badge/Vue-3-42b883) ![MySQL](https://img.shields.io/badge/MySQL-8-4479A1) ![Redis](https://img.shields.io/badge/Redis-6%2B-DC382D) ![Node.js](https://img.shields.io/badge/Node.js-20.19%2B-339933) ![license](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)
+![PHP](https://img.shields.io/badge/PHP-8.2%2B-777BB4) ![Laravel](https://img.shields.io/badge/Laravel-12-FF2D20) ![Vue](https://img.shields.io/badge/Vue-3-42b883) ![MySQL](https://img.shields.io/badge/MySQL-8-4479A1) ![Redis](https://img.shields.io/badge/Redis-6%2B-DC382D) ![Node.js](https://img.shields.io/badge/Node.js-20.19%2B-339933) ![license](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue) [![CodeRabbit Pull Request Reviews](https://img.shields.io/badge/CodeRabbit-PRRs-yellowgreen)](https://github.com/marketplace/coderabbitai)
 
 面向 IDC / 云服务商的业务与财务经营系统。覆盖商品目录、订单计费、账单结算、自动开通、余额充值、退款、优惠券、分销返佣、提现、工单、通知等完整业务闭环，提供管理后台、官网门户与用户控制台三端前端，并通过可扩展插件机制对接上游供应商与第三方服务。
 

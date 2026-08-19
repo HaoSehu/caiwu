@@ -1,0 +1,232 @@
+# CodeRabbit 配置（创欧云 Caiwu · IDC 业务/财务系统）
+# 参考：https://docs.coderabbit.ai/reference/configuration
+#
+# 知识库默认读取 AGENTS.md、WORKING_RULES.md 等编码规范文件，
+# 因此 path_instructions 只写该路径独有的审查重点，不重复一般性约束。
+
+language: "zh-CN"
+tone_instructions: |
+  用简洁中文输出，按严重度分级：P0（阻断合并）> P2（建议修复）> P3（一般建议）> P4（无关紧要）。
+  优先关注资金安全、越权访问与数据完整性，避免纠缠格式风格问题。
+  对非显而易见的问题给出具体代码示例。不评论未变更的代码。
+early_access: false
+
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  high_level_summary_in_walkthrough: true
+  high_level_summary_instructions: |
+    使用中文，按以下结构输出：
+    1. 变更概要（一句话）
+    2. 影响范围（涉及的模块/服务）
+    3. 关键风险点（如有）
+  review_status: true
+  review_details: true
+  changed_files_summary: true
+  collapse_walkthrough: false
+  sequence_diagrams: true
+  estimate_code_review_effort: true
+  poem: false
+
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+    base_branches:
+      - main
+    ignore_title_keywords:
+      - "WIP"
+      - "DO NOT MERGE"
+      - "chore(deps)"
+      - "chore: bump"
+    ignore_usernames:
+      - "dependabot[bot]"
+      - "renovate[bot]"
+
+  # ── 排除规则 ──────────────────────────────────────────────
+  # 先排除大范围目录，再排除具体文件类型；已被目录规则覆盖的不重复列出
+  path_filters:
+    - "!**/node_modules/**"
+    - "!**/vendor/**"
+    - "!**/dist/**"
+    - "!**/build/**"
+    - "!**/*.lock"
+    - "!**/*.min.js"
+    - "!**/*.min.css"
+    - "!**/*.map"
+    - "!**/*.png"
+    - "!**/*.jpg"
+    - "!**/*.jpeg"
+    - "!**/*.gif"
+    - "!**/*.svg"
+    - "!**/*.ico"
+    - "!**/*.mp4"
+    - "!**/*.webm"
+    - "!**/*.woff"
+    - "!**/*.woff2"
+    - "!**/*.ttf"
+    - "!**/*.eot"
+    - "!**/*.pdf"
+    - "!backend/public/media/**"
+    - "!backend/storage/**"
+    - "!ZJMF-CBAP-10.4.6/**"
+    - "!docs/自动生成/**"
+    - "!frontend-*/playwright-report/**"
+    - "!frontend-*/test-results/**"
+
+  # ── 标签建议 ──────────────────────────────────────────────
+  auto_apply_labels: true
+  labeling_instructions:
+    - label: "backend"
+      instructions: "包含 backend/ 目录下的 PHP 代码变更"
+    - label: "frontend"
+      instructions: "包含 frontend-admin-v3/、frontend-user-v3-www/ 或 frontend-user-v4-console/ 目录下的变更"
+    - label: "shared"
+      instructions: "包含 shared/ 目录下的变更，影响三端前端"
+    - label: "plugin"
+      instructions: "包含 backend/plugins/ 目录下的变更"
+    - label: "database"
+      instructions: "包含数据库迁移、模型或 DATABASE.md 的变更"
+    - label: "docs"
+      instructions: "仅包含 docs/ 目录下的文档变更"
+    - label: "devops"
+      instructions: "包含 CI/CD、部署脚本或 .github/ 目录的变更"
+    - label: "security"
+      instructions: "涉及认证、授权、加密、密钥管理或安全相关的变更"
+    - label: "dependencies"
+      instructions: "主要为 package.json、composer.json 或 lock 文件的依赖更新"
+
+  # ── 路径级审查指令 ────────────────────────────────────────
+  # 知识库已加载 AGENTS.md / WORKING_RULES.md，此处只补充该路径独有的审查重点
+  path_instructions:
+    - path: "backend/app/**"
+      instructions: |
+        审查重点（独有约束）：
+        - 金额字段为 decimal(12,2)，禁止浮点运算，服务端权威计算
+        - 账户余额、订单/账单状态流转必须有事务保护与幂等
+        - 所有查询必须参数化（Eloquent/查询构造器），禁止字符串拼接 SQL
+        - 检查水平/垂直越权，未授权统一返回 403/404
+        - 日志中不得输出密码、密钥、完整手机号等敏感字段
+
+    - path: "backend/plugins/**"
+      instructions: |
+        审查重点（独有约束）：
+        - 支付回调必须验签、校验金额一致性、防重放（Redis 锁 + 唯一约束）
+        - 插件密钥不得硬编码或输出到日志
+        - 上游返回数据不得直接信任，检查越权与注入
+
+    - path: "backend/scripts/**"
+      instructions: |
+        审查重点：
+        - 不得硬编码数据库凭据或 API 密钥
+        - 批量写库必须检查事务、批量大小与幂等性
+        - 数据迁移脚本应支持 dry-run，防止误清空
+
+    - path: "backend/database/migrations/**"
+      instructions: |
+        审查重点：
+        - 迁移只新增字段/表，不删改现有结构
+        - 涉及大表的 ALTER 必须评估锁表影响
+        - 外键约束需确认数据完整性
+
+    - path: "backend/routes/**"
+      instructions: |
+        审查重点：
+        - 路由必须声明中间件（auth、permission 等）
+        - API 路由遵循 v1/v2 版本前缀
+        - 修改路由后需运行 API 清单生成脚本
+
+    - path: "frontend-*/src/**"
+      instructions: |
+        审查重点（独有约束）：
+        - XSS：禁止 v-html 直接渲染用户/上游内容，必须经 sanitizeRenderedHtml
+        - 页面路由与按钮需校验权限码
+        - 金额展示使用统一格式化工具
+        - admin-v3 / v4-console 用 TDesign Vue Next，v3-www 用 Element Plus，禁止混用
+
+    - path: "shared/**"
+      instructions: |
+        审查重点：
+        - 改动影响三端前端，必须检查向后兼容
+        - 导出接口变更需评估下游影响
+
+    - path: ".github/workflows/**"
+      instructions: |
+        审查重点：
+        - action 版本固定到 tag 或 SHA
+        - 不得将 secrets 打印到日志或写入文件
+        - 使用最小权限的 GITHUB_TOKEN scope
+
+    - path: "docs/**"
+      instructions: |
+        审查重点：
+        - 链接使用仓库内相对路径
+        - 不得包含真实凭据/密钥
+        - docs/自动生成/ 由脚本生成，禁止手工编辑
+
+  # ── 审查工具 ──────────────────────────────────────────────
+  tools:
+    eslint:
+      enabled: true
+    phpstan:
+      enabled: true
+      # 指定项目实际配置路径（仓库根无 phpstan.neon）
+      config_file: "backend/phpstan.neon.dist"
+    shellcheck:
+      enabled: true
+    markdownlint:
+      enabled: false
+    # 安全扫描
+    gitleaks:
+      enabled: true
+    trufflehog:
+      enabled: true
+    presidio:
+      enabled: true
+    # GitHub Actions 安全
+    actionlint:
+      enabled: true
+    zizmor:
+      enabled: true
+    # API 契约变更检测
+    oasdiff:
+      enabled: true
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  learnings:
+    scope: auto
+  # 自动读取编码规范文件（AGENTS.md、WORKING_RULES.md 等已在默认列表中）
+  code_guidelines:
+    enabled: true
+  web_search:
+    enabled: false
+
+code_generation:
+  docstrings:
+    language: "zh-CN"
+    path_instructions:
+      - path: "backend/app/**/*.php"
+        instructions: |
+          PHPDoc 使用中文描述；方法注释说明业务语义而非参数类型；
+          Eloquent 模型属性使用 @property 标注；Service 方法说明前置条件与副作用。
+      - path: "frontend-*/src/**/*.{ts,vue}"
+        instructions: |
+          TypeScript 使用中文 JSDoc；Vue 组件使用 @description 标注用途；
+          Props 使用 @prop 标注；composable 函数说明返回值语义。
+      - path: "shared/**/*.{ts,js}"
+        instructions: |
+          跨端共享代码必须详细说明向后兼容约束和使用示例。
+  unit_tests:
+    path_instructions:
+      - path: "backend/app/**/*.php"
+        instructions: |
+          使用 Laravel 内置测试方法；Service 测试使用 mock 隔离外部依赖；
+          金额相关测试必须覆盖边界值（0、负数、最大值）。
+      - path: "frontend-*/src/**/*.{ts,vue}"
+        instructions: |
+          使用 Vitest；组件测试使用 @vue/test-utils；
+          mock API 调用；测试用户交互与权限校验逻辑。
