@@ -300,6 +300,8 @@ class ZjmfFinanceTransportTest extends TestCase
         {
             public array $captured = [];
 
+            public array $parallelCaptured = [];
+
             public function request(
                 Supplier $supplier,
                 string $method,
@@ -332,6 +334,39 @@ class ZjmfFinanceTransportTest extends TestCase
                     default => ['status' => 400, 'msg' => 'unexpected uri'],
                 };
             }
+
+            public function parallelGet(Supplier $supplier, array $requests, ?string $jwt = null, array $headers = []): array
+            {
+                $this->parallelCaptured[] = compact('requests', 'jwt');
+
+                return [
+                    'detail-0' => [
+                        'response' => [
+                            'status' => 200,
+                            'data' => [
+                                'detail' => [453 => [
+                                    'id' => 453,
+                                    'description' => 'Demo description',
+                                    'allow_qty' => 1,
+                                    'stock_control' => 1,
+                                    'qty' => 9,
+                                    'product_pricings' => [[
+                                        'code' => 'CNY',
+                                        'monthly' => '99.00',
+                                        'msetupfee' => '10.00',
+                                        'quarterly' => '280.00',
+                                        'qsetupfee' => '0.00',
+                                        'semiannually' => '540.00',
+                                        'ssetupfee' => '0.00',
+                                        'annually' => '1000.00',
+                                        'asetupfee' => '0.00',
+                                    ]],
+                                ]],
+                            ],
+                        ],
+                    ],
+                ];
+            }
         };
 
         $transport = new ZjmfFinanceTransport($innerTransport, new ZjmfAuthManager($innerTransport));
@@ -348,6 +383,15 @@ class ZjmfFinanceTransportTest extends TestCase
         $this->assertSame('zjmf-jwt', $innerTransport->captured[1]['jwt']);
         $this->assertSame(453, $result['products'][0]['id']);
         $this->assertSame('United States / CN2', $result['products'][0]['group_label']);
+        $this->assertSame('99.00', $result['products'][0]['pricing']['monthly']);
+        $this->assertSame('280.00', $result['products'][0]['pricing']['quarterly']);
+        $this->assertSame('1000.00', $result['groups'][0]['items'][0]['pricing']['annually']);
+        $this->assertSame('monthly', $result['products'][0]['billingcycle']);
+        $this->assertSame('10.00', $result['products'][0]['setup_fee']);
+        $this->assertSame(9, $result['products'][0]['stock']);
+        $this->assertSame('zjmf-jwt', $innerTransport->parallelCaptured[0]['jwt']);
+        $this->assertSame('/api/product/prodetail', $innerTransport->parallelCaptured[0]['requests']['detail-0']['uri']);
+        $this->assertSame(['pids' => [453]], $innerTransport->parallelCaptured[0]['requests']['detail-0']['query']);
     }
 
     public function test_product_config_uses_cart_endpoint_with_pid_and_zjmf_jwt(): void

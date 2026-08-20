@@ -78,6 +78,12 @@ class SupplierBatchConnectRegressionTest extends TestCase
                     'billingcycle' => 'monthly',
                     'product_price' => '99.00',
                     'monthly_price' => '99.00',
+                    'pricing' => [
+                        'monthly' => '99.00',
+                        'quarterly' => '280.00',
+                        'semiannually' => '540.00',
+                        'annually' => '1000.00',
+                    ],
                     'setup_fee' => '10.00',
                     'stock' => 8,
                 ]],
@@ -112,6 +118,8 @@ class SupplierBatchConnectRegressionTest extends TestCase
 
         $this->assertNotNull($product);
         $this->assertSame('99.00', $product->pricing['monthly'] ?? null);
+        $this->assertSame('280.00', $product->pricing['quarterly'] ?? null);
+        $this->assertSame('1000.00', $product->pricing['annually'] ?? null);
         $this->assertSame('cloud_server', $product->product_type);
         $this->assertSame('cloud_server', $product->service_type_code);
         $this->assertSame(1, (int) $product->status);
