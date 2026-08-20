@@ -1,6 +1,5 @@
 <template>
   <div class="shop-wrap">
-    <template>
       <!-- 左侧产品目录侧边栏 -->
       <aside
         v-if="!isMobile"
@@ -1535,7 +1534,6 @@
           </div>
         </div>
       </MobileSheet>
-    </template>
   </div>
 </template>
 

@@ -6,6 +6,7 @@ namespace Caiwu\Plugins\Servers\ZjmfFinance\Lib;
 
 use App\Exceptions\BusinessException;
 use App\Models\Supplier;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 final class ZjmfCatalogService
@@ -56,6 +57,17 @@ final class ZjmfCatalogService
         'one_time' => 'one_time',
     ];
 
+    private const CATALOG_PRICING_CYCLES = [
+        'monthly' => 'msetupfee',
+        'quarterly' => 'qsetupfee',
+        'semiannually' => 'ssetupfee',
+        'annually' => 'asetupfee',
+    ];
+
+    private const PRODUCT_DETAIL_CHUNK_SIZE = 50;
+
+    private const CART_DETAIL_CHUNK_SIZE = 12;
+
     public function __construct(
         private readonly ZjmfFinanceTransport $transport,
         private readonly ZjmfCloudConfigTemplate $cloudConfigTemplate,
@@ -64,9 +76,30 @@ final class ZjmfCatalogService
 
     public function getProductCatalog(Supplier $supplier): array
     {
-        $response = $this->transport->get($supplier, '/cart/all', $this->transport->login($supplier));
+        $jwt = $this->transport->login($supplier);
+        $response = $this->transport->get($supplier, '/cart/all', $jwt);
+        $catalog = $this->normalizeProductCatalog($response);
+        $productIds = collect($catalog['products'] ?? [])
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
 
-        return $this->normalizeProductCatalog($response);
+        if ($productIds === []) {
+            return $catalog;
+        }
+
+        $payload = is_array($response['data'] ?? null) ? $response['data'] : $response;
+        $details = $this->fetchBatchCatalogProductDetails(
+            $supplier,
+            $productIds,
+            $jwt,
+            trim((string) ($payload['currency'] ?? '')),
+        );
+
+        return $this->mergeCatalogProductDetails($catalog, $details);
     }
 
     public function getProductConfigTemplate(Supplier $supplier, int $productId): array
@@ -224,6 +257,207 @@ final class ZjmfCatalogService
                 ->all(),
             'products' => $flatProducts,
         ];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function fetchBatchCatalogProductDetails(
+        Supplier $supplier,
+        array $productIds,
+        string $jwt,
+        string $currencyCode,
+    ): array {
+        $results = [];
+        $chunks = array_chunk($productIds, self::PRODUCT_DETAIL_CHUNK_SIZE);
+
+        try {
+            $responses = $this->transport->parallelGet(
+                $supplier,
+                collect($chunks)->mapWithKeys(fn (array $chunk, int $index) => [
+                    'detail-'.$index => [
+                        'uri' => '/api/product/prodetail',
+                        'query' => ['pids' => $chunk],
+                    ],
+                ])->all(),
+                $jwt,
+            );
+
+            foreach ($chunks as $index => $chunk) {
+                $response = $responses['detail-'.$index]['response'] ?? null;
+                $details = is_array($response['data']['detail'] ?? null) ? $response['data']['detail'] : [];
+
+                foreach ($chunk as $productId) {
+                    $product = $details[$productId] ?? $details[(string) $productId] ?? null;
+                    if (! is_array($product)) {
+                        continue;
+                    }
+
+                    $detail = $this->normalizeCatalogProductDetail($product, $productId, $currencyCode);
+                    if ($detail !== null) {
+                        $results[$productId] = $detail;
+                    }
+                }
+            }
+        } catch (\Throwable $exception) {
+            Log::warning('[ZJMF 商品目录] 批量商品详情接口不可用，回退商品配置接口', [
+                'supplier_id' => (int) $supplier->id,
+                'message' => $exception->getMessage(),
+            ]);
+        }
+
+        $missingProductIds = array_values(array_diff($productIds, array_keys($results)));
+        if ($missingProductIds !== []) {
+            $results = array_replace(
+                $results,
+                $this->fetchCatalogProductDetailsFromCart($supplier, $missingProductIds, $jwt, $currencyCode),
+            );
+        }
+
+        return $results;
+    }
+
+    /**
+     * Compatibility fallback for older ZJMF installations without prodetail.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function fetchCatalogProductDetailsFromCart(
+        Supplier $supplier,
+        array $productIds,
+        string $jwt,
+        string $currencyCode,
+    ): array {
+        $results = [];
+
+        foreach (array_chunk($productIds, self::CART_DETAIL_CHUNK_SIZE) as $chunk) {
+            try {
+                $responses = $this->transport->parallelGet(
+                    $supplier,
+                    collect($chunk)->mapWithKeys(fn (int $productId) => [
+                        (string) $productId => [
+                            'uri' => '/cart/get_product_config',
+                            'query' => ['pid' => $productId],
+                        ],
+                    ])->all(),
+                    $jwt,
+                );
+            } catch (\Throwable $exception) {
+                Log::warning('[ZJMF 商品目录] 回退读取商品配置失败', [
+                    'supplier_id' => (int) $supplier->id,
+                    'product_ids' => $chunk,
+                    'message' => $exception->getMessage(),
+                ]);
+
+                continue;
+            }
+
+            foreach ($chunk as $productId) {
+                $response = $responses[(string) $productId]['response'] ?? null;
+                $detail = $this->extractCatalogProductDetail($response, $productId, $currencyCode);
+                if ($detail !== null) {
+                    $results[$productId] = $detail;
+                }
+            }
+        }
+
+        return $results;
+    }
+
+    private function extractCatalogProductDetail(?array $response, int $productId, string $currencyCode): ?array
+    {
+        if (! is_array($response) || (int) ($response['status'] ?? 0) !== 200) {
+            return null;
+        }
+
+        $data = $response['data'] ?? null;
+        $product = is_array($data['products'] ?? null) ? $data['products'] : null;
+        if (! is_array($product)) {
+            return null;
+        }
+
+        $product['product_pricings'] = is_array($data['product_pricings'] ?? null)
+            ? $data['product_pricings']
+            : [];
+
+        return $this->normalizeCatalogProductDetail($product, $productId, $currencyCode);
+    }
+
+    private function normalizeCatalogProductDetail(array $product, int $productId, string $currencyCode): ?array
+    {
+        if ((int) ($product['id'] ?? 0) !== $productId) {
+            return null;
+        }
+
+        $pricingRows = collect($product['product_pricings'] ?? [])
+            ->filter(fn ($pricing) => is_array($pricing))
+            ->values();
+        $pricing = $currencyCode !== ''
+            ? $pricingRows->first(fn (array $row) => strcasecmp(trim((string) ($row['code'] ?? '')), $currencyCode) === 0)
+            : null;
+        $pricing = is_array($pricing) ? $pricing : $pricingRows->first();
+
+        $normalizedPricing = [];
+        $billingCycle = '';
+        $productPrice = null;
+        $setupFee = null;
+
+        if (is_array($pricing)) {
+            foreach (self::CATALOG_PRICING_CYCLES as $cycle => $setupFeeKey) {
+                if (! is_numeric($pricing[$cycle] ?? null) || (float) $pricing[$cycle] < 0) {
+                    continue;
+                }
+
+                $normalizedPricing[$cycle] = number_format((float) $pricing[$cycle], 2, '.', '');
+                if ($billingCycle === '') {
+                    $billingCycle = $cycle;
+                    $productPrice = $normalizedPricing[$cycle];
+                    $setupFee = is_numeric($pricing[$setupFeeKey] ?? null)
+                        ? number_format(max((float) $pricing[$setupFeeKey], 0), 2, '.', '')
+                        : '0.00';
+                }
+            }
+        }
+
+        return [
+            'description' => trim((string) ($product['description'] ?? '')),
+            'billingcycle' => $billingCycle,
+            'product_price' => $productPrice,
+            'monthly_price' => $normalizedPricing['monthly'] ?? null,
+            'setup_fee' => $setupFee,
+            'pricing' => $normalizedPricing,
+            'allow_qty' => (int) ($product['allow_qty'] ?? 0),
+            'stock_control' => (int) ($product['stock_control'] ?? 0),
+            'qty' => is_numeric($product['qty'] ?? null) ? max((int) $product['qty'], 0) : null,
+            'stock' => $this->normalizeCatalogStock($product),
+        ];
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $details
+     */
+    private function mergeCatalogProductDetails(array $catalog, array $details): array
+    {
+        if ($details === []) {
+            return $catalog;
+        }
+
+        $catalog['products'] = collect($catalog['products'] ?? [])
+            ->map(fn (array $product) => array_replace($product, $details[(int) ($product['id'] ?? 0)] ?? []))
+            ->all();
+        $productsById = collect($catalog['products'])->keyBy(fn (array $product) => (int) ($product['id'] ?? 0));
+
+        $catalog['groups'] = collect($catalog['groups'] ?? [])
+            ->map(function (array $group) use ($productsById): array {
+                $group['items'] = collect($group['items'] ?? [])
+                    ->map(fn (array $product) => $productsById->get((int) ($product['id'] ?? 0), $product))
+                    ->all();
+
+                return $group;
+            })
+            ->all();
+
+        return $catalog;
     }
 
     /**

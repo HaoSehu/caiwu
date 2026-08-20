@@ -164,6 +164,44 @@ class ZjmfCloudConfigTemplateTest extends TestCase
 
                 return ['status' => 200, 'data' => []];
             }
+
+            public function parallelGet(Supplier $supplier, array $requests, ?string $jwt = null, array $headers = []): array
+            {
+                $productsById = collect($this->products)->keyBy(fn (array $product) => (int) ($product['id'] ?? 0));
+
+                return collect($requests)->mapWithKeys(function (array $request, string|int $key) use ($productsById): array {
+                    if (($request['uri'] ?? '') === '/api/product/prodetail') {
+                        $details = collect($request['query']['pids'] ?? [])
+                            ->mapWithKeys(fn ($productId) => [
+                                (int) $productId => array_merge(
+                                    $productsById->get((int) $productId, ['id' => (int) $productId]),
+                                    ['product_pricings' => []],
+                                ),
+                            ])
+                            ->all();
+
+                        return [(string) $key => [
+                            'response' => [
+                                'status' => 200,
+                                'data' => ['detail' => $details],
+                            ],
+                        ]];
+                    }
+
+                    $productId = (int) ($request['query']['pid'] ?? 0);
+                    $product = $productsById->get($productId, ['id' => $productId]);
+
+                    return [(string) $key => [
+                        'response' => [
+                            'status' => 200,
+                            'data' => [
+                                'products' => $product,
+                                'product_pricings' => [],
+                            ],
+                        ],
+                    ]];
+                })->all();
+            }
         };
     }
 }

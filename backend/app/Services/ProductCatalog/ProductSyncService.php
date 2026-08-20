@@ -1187,6 +1187,11 @@ class ProductSyncService
 
     private function buildImportedPricing(array $supplierProduct): array
     {
+        $directPricing = $this->normalizePricing($supplierProduct['pricing'] ?? []);
+        if ($directPricing !== []) {
+            return $directPricing;
+        }
+
         $monthlyBasePrice = $this->resolveMonthlyBaseAmount(
             $supplierProduct['monthly_price'] ?? null,
             $supplierProduct['product_price'] ?? null,
