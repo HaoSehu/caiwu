@@ -123,6 +123,10 @@ backend/.env.bak*
 backend/public/.user.ini
 backend/public/.well-known/
 backend/public/uploads/
+# 媒体库上传目录：图片/视频/Logo 均由后台写入，不入库
+backend/public/media/
+# 根目录临时二维码
+qrcode_*.jpg
 backend/storage/app/account-user-account-backfills/
 backend/storage/app/invoice-order-reconciliations/
 backend/storage/app/json-schema-version-backfills/
