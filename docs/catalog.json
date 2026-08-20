@@ -75,11 +75,6 @@
       "summary": "确立 caiwu 为代码内部统一代号，收敛 composer 包名与 npm workspace 名的孤立不一致。"
     },
     {
-      "path": "执行计划/进行中/Web安装向导.md",
-      "status": "active",
-      "summary": "Web 安装向导、安装锁、数据库初始化与离线安装页。"
-    },
-    {
       "path": "执行计划/已完成/Zjmf统一迁移方案-20260723.md",
       "status": "completed",
       "summary": "ZJMF 实时上游绑定切换、实例控制验证与旧接口下线记录。"
@@ -185,11 +180,6 @@
       "status": "current",
       "summary": "全新服务器部署流程。",
       "review_by": "2026-10-31"
-    },
-    {
-      "path": "参考资料/运维/Web安装向导.md",
-      "status": "current",
-      "summary": "Web 安装向导部署、锁机制和安全说明。"
     },
     {
       "path": "参考资料/运维/本地启动指南.md",
