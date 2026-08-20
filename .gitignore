@@ -119,6 +119,9 @@ frontend-client/frontend-client/
 .runlogs/
 *.log
 backend/.env.bak*
+# 宝塔运行环境配置与证书验证文件，仅存在于生产服务器，不入库
+backend/public/.user.ini
+backend/public/.well-known/
 backend/public/uploads/
 backend/storage/app/account-user-account-backfills/
 backend/storage/app/invoice-order-reconciliations/
