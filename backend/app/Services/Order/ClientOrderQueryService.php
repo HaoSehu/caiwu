@@ -43,7 +43,7 @@ class ClientOrderQueryService
         }
         $this->applyDateFilter($query, $filters);
 
-        $paginator = $query->paginate((int) ($filters['page_size'] ?? 15));
+        $paginator = $query->paginate(max(1, min((int) ($filters['page_size'] ?? 15), 100)));
 
         return [
             'list' => collect($paginator->items())

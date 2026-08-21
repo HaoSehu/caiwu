@@ -42,7 +42,7 @@ class ServiceOverviewService
 
     public function paginateForUser(User $user, array $filters = []): array
     {
-        $pageSize = max((int) ($filters['page_size'] ?? 12), 1);
+        $pageSize = max(1, min((int) ($filters['page_size'] ?? 12), 100));
         $query = Service::query()
             ->select([
                 'id', 'user_id', 'product_id', 'order_id', 'invoice_id', 'name', 'domain',

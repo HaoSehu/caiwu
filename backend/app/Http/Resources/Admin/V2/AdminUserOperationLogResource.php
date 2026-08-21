@@ -7,6 +7,7 @@ namespace App\Http\Resources\Admin\V2;
 use App\Http\Resources\Admin\V2\Concerns\StripsSensitiveResourceData;
 use App\Models\OperationLog;
 use App\Support\AdminPrivacy;
+use App\Support\SensitiveDataSanitizer;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -32,9 +33,33 @@ class AdminUserOperationLogResource extends JsonResource
             'subject_id' => $this->subject_id !== null
                 ? (int) $this->subject_id
                 : ($this->target_id !== null ? (int) $this->target_id : null),
-            'context' => $this->stripSensitiveKeys($privacy->payload($context)),
+            'context' => $this->excerptContext($context, $privacy),
             'ip_address' => $privacy->ip($this->ip_address),
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
         ];
+    }
+
+    /**
+     * 截断 context 为摘要（列表场景，限 240 字符）
+     */
+    private function excerptContext(array $context, AdminPrivacy $privacy): string
+    {
+        if ($context === []) {
+            return '';
+        }
+
+        $json = (string) json_encode(
+            $this->stripSensitiveKeys($privacy->payload($context)),
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        );
+
+        $text = SensitiveDataSanitizer::sanitizeText($json);
+        $value = trim(preg_replace('/\s+/u', ' ', $text) ?? '');
+
+        if (mb_strlen($value) <= 240) {
+            return $value;
+        }
+
+        return mb_substr($value, 0, 240).'...';
     }
 }

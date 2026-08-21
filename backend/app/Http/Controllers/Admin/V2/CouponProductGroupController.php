@@ -68,6 +68,9 @@ class CouponProductGroupController extends Controller
             return $this->success([]);
         }
 
+        // 批量尺寸上限，防止一次请求传入超大分组数组触发全量查询放大
+        $groups = array_slice($groups, 0, 100);
+
         $result = $this->queryService->batchProducts($groups);
         $data = [];
 
