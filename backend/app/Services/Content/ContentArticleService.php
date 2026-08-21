@@ -168,6 +168,7 @@ class ContentArticleService
         }
 
         return $query
+            ->with('contentCategory:id,name,slug')
             ->orderByDesc('is_pinned')
             ->orderBy('sort_order')
             ->orderByDesc(DB::raw('COALESCE(publish_at, created_at)'))

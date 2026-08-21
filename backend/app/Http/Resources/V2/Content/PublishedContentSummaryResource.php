@@ -18,7 +18,7 @@ class PublishedContentSummaryResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        $category = $this->contentCategory;
+        $category = $this->whenLoaded('contentCategory');
 
         return [
             'id' => (int) $this->id,
