@@ -925,54 +925,6 @@ parameters:
 			path: app/Http/Resources/Client/V2/ClientUserInfoResource.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$description\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Resources/Content/ContentArticleResource.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Http/Resources/Content/ContentArticleResource.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Http/Resources/Content/ContentArticleResource.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$nickname\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Resources/Content/ContentArticleResource.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$slug\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Resources/Content/ContentArticleResource.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$sort_order\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/Content/ContentArticleResource.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$status\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/Content/ContentArticleResource.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$username\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Resources/Content/ContentArticleResource.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>config_snapshot" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
@@ -1001,24 +953,6 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Http/Resources/Finance/FinanceLedgerResource.php
-
-		-
-			message: '#^Offset ''combined_display…'' on array\{product_display_name\: string, product_spec_display\: string, custom_display_name\: string, cpu_memory_display\: string, cpu_memory_slug_display\: string, combined_display_name\: string, instance_spec_text\: string, cpu_display\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
-			identifier: nullCoalesce.offset
-			count: 1
-			path: app/Http/Resources/Product/ProductResource.php
-
-		-
-			message: '#^Offset ''cpu_memory_display'' on array\{product_display_name\: string, product_spec_display\: string, custom_display_name\: string, cpu_memory_display\: string, cpu_memory_slug_display\: string, combined_display_name\: string, instance_spec_text\: string, cpu_display\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
-			identifier: nullCoalesce.offset
-			count: 1
-			path: app/Http/Resources/Product/ProductResource.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>label" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Http/Resources/Product/ProductResource.php
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>label" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
@@ -1091,18 +1025,6 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Http/Resources/User/UserResource.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Resources/V2/Content/PublishedContentSummaryResource.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$slug\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/V2/Content/PublishedContentSummaryResource.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$label\.$#'
@@ -3705,7 +3627,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
 			identifier: property.notFound
-			count: 6
+			count: 5
 			path: app/Services/Finance/InvoiceService.php
 
 		-
@@ -3724,24 +3646,6 @@ parameters:
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$product\.$#'
 			identifier: property.notFound
 			count: 3
-			path: app/Services/Finance/InvoiceService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$product_type\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Finance/InvoiceService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$secondProductGroup\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Finance/InvoiceService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$service_type_code\.$#'
-			identifier: property.notFound
-			count: 1
 			path: app/Services/Finance/InvoiceService.php
 
 		-
@@ -3859,27 +3763,9 @@ parameters:
 			path: app/Services/Finance/InvoiceService.php
 
 		-
-			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 2
-			path: app/Services/Finance/InvoiceService.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>order_no" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 4
-			path: app/Services/Finance/InvoiceService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>product_type" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Finance/InvoiceService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>service_type_code" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
 			path: app/Services/Finance/InvoiceService.php
 
 		-
@@ -6117,13 +6003,13 @@ parameters:
 		-
 			message: '#^Access to an undefined property App\\Models\\ActivityLog\:\:\$modules\.$#'
 			identifier: property.notFound
-			count: 2
+			count: 1
 			path: app/Services/System/AdminLogService.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\ActivityLog\:\:\$total\.$#'
 			identifier: property.notFound
-			count: 2
+			count: 1
 			path: app/Services/System/AdminLogService.php
 
 		-
@@ -6201,7 +6087,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$total\.$#'
 			identifier: property.notFound
-			count: 2
+			count: 4
 			path: app/Services/System/AdminLogService.php
 
 		-
@@ -6213,7 +6099,7 @@ parameters:
 		-
 			message: '#^Call to function is_array\(\) with string\|null will always evaluate to false\.$#'
 			identifier: function.impossibleType
-			count: 2
+			count: 1
 			path: app/Services/System/AdminLogService.php
 
 		-
@@ -6273,12 +6159,6 @@ parameters:
 		-
 			message: '#^Offset non\-empty\-string on array\{refresh\-hosting\-panel\-auth\: array\{title\: ''接口认证刷新'', log_keywords\: array\{''JWT刷新'', ''接口认证刷新'', ''refresh\-hosting…''\}\}, refresh\-zjmf\-finance\-auth\: array\{title\: ''ZJMF 财务认证刷新'', log_keywords\: array\{''ZJMF 财务认证刷新'', ''refresh\-zjmf…''\}\}, service\-auto\-renew\: array\{title\: ''服务自动续费'', log_keywords\: array\{''自动续费执行完成'', ''\[自动续费\]'', ''service\-auto\-renew''\}\}, referral\-release\-rewards\: array\{title\: ''推荐奖励释放'', log_keywords\: array\{''推荐奖励释放执行完成'', ''推荐奖励'', ''referral\-release…''\}\}, service\-lifecycle\-maintenance\: array\{title\: ''服务生命周期维护'', log_keywords\: array\{''服务生命周期维护执行完成'', ''service\-lifecycle…''\}\}, service\-status\-sync\: array\{title\: ''用户产品状态同步'', log_keywords\: array\{''用户产品状态同步执行完成'', ''service\-status\-sync''\}\}, billing\-maintenance\: array\{title\: ''账单自动化维护'', log_keywords\: array\{''账单自动化维护执行完成'', ''billing\-maintenance''\}\}, product\-upstream\-config\-sync\: array\{title\: ''上游产品配置同步'', log_keywords\: array\{''上游产品配置同步执行完成'', ''product\-upstream…''\}\}, \.\.\.\} on left side of \?\? does not exist\.$#'
 			identifier: nullCoalesce.offset
-			count: 1
-			path: app/Services/System/AdminLogService.php
-
-		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Models\\ScheduleRunLog\>\:\:map\(\) contains unresolvable type\.$#'
-			identifier: argument.unresolvableType
 			count: 1
 			path: app/Services/System/AdminLogService.php
 
@@ -6351,7 +6231,7 @@ parameters:
 		-
 			message: '#^Using nullsafe property access "\?\-\>errors" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 1
+			count: 3
 			path: app/Services/System/AdminLogService.php
 
 		-
@@ -6363,7 +6243,7 @@ parameters:
 		-
 			message: '#^Using nullsafe property access "\?\-\>modules" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 4
+			count: 3
 			path: app/Services/System/AdminLogService.php
 
 		-
@@ -6381,7 +6261,7 @@ parameters:
 		-
 			message: '#^Using nullsafe property access "\?\-\>total" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 8
+			count: 9
 			path: app/Services/System/AdminLogService.php
 
 		-
@@ -6579,12 +6459,6 @@ parameters:
 		-
 			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
 			identifier: function.alreadyNarrowedType
-			count: 1
-			path: app/Services/System/DatabaseStatusService.php
-
-		-
-			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
-			identifier: larastan.noEnvCallsOutsideOfConfig
 			count: 1
 			path: app/Services/System/DatabaseStatusService.php
 
