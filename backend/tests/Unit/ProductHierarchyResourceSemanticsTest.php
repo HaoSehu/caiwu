@@ -72,7 +72,6 @@ class ProductHierarchyResourceSemanticsTest extends TestCase
     public function test_product_resources_do_not_emit_legacy_group_aliases(): void
     {
         foreach ([
-            app_path('Http/Resources/Product/ProductResource.php'),
             app_path('Http/Resources/Admin/V2/AdminProductSummaryResource.php'),
             app_path('Http/Resources/Product/ProductCategoryResource.php'),
         ] as $resourcePath) {

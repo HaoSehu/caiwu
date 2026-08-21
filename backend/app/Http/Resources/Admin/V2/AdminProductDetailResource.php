@@ -53,7 +53,7 @@ class AdminProductDetailResource extends JsonResource
             ],
             'configuration' => [
                 'console_template' => $product->console_template,
-                'config_options' => $this->removeSensitiveKeys((array) ($product->config_options ?? [])),
+                'config_options' => $this->trimConfigOptions($product->config_options),
             ],
             'purchase_requirements' => [
                 'require_verification' => (bool) ($purchaseRequires['require_verification'] ?? false),
@@ -208,5 +208,84 @@ class AdminProductDetailResource extends JsonResource
         }
 
         return false;
+    }
+
+    private function trimConfigOptions(mixed $configOptions): array
+    {
+        if (! is_array($configOptions)) {
+            return [];
+        }
+
+        return collect($configOptions)
+            ->filter(fn (mixed $item): bool => is_array($item))
+            ->map(function (array $item, int $index): array {
+                $clean = $this->removeSensitiveKeys($item);
+
+                return [
+                    'id' => isset($clean['id']) ? (int) $clean['id'] : 0,
+                    'field' => trim((string) ($clean['field'] ?? '')),
+                    'spec_key' => trim((string) ($clean['spec_key'] ?? '')),
+                    'name' => trim((string) ($clean['name'] ?? $clean['option_name'] ?? '')),
+                    'description' => trim((string) ($clean['description'] ?? '')),
+                    'hidden' => (int) ($clean['hidden'] ?? 0),
+                    'required' => (int) ($clean['required'] ?? 0),
+                    'sort_order' => (int) ($clean['sort_order'] ?? $clean['order'] ?? ($index + 1)),
+                    'option_type' => isset($clean['option_type']) ? (int) $clean['option_type'] : null,
+                    'option_mode' => trim((string) ($clean['option_mode'] ?? '')),
+                    'parameter' => trim((string) ($clean['parameter'] ?? '')),
+                    'qty_minimum' => $clean['qty_minimum'] ?? null,
+                    'qty_maximum' => $clean['qty_maximum'] ?? null,
+                    'qty_step' => $clean['qty_step'] ?? null,
+                    'qty_stage' => $clean['qty_stage'] ?? null,
+                    'suffix_text' => trim((string) ($clean['suffix_text'] ?? '')),
+                    'sub' => $this->trimSubOptions($clean['sub'] ?? []),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function trimSubOptions(mixed $subOptions): array
+    {
+        if (! is_array($subOptions)) {
+            return [];
+        }
+
+        return collect($subOptions)
+            ->filter(fn (mixed $item): bool => is_array($item))
+            ->map(function (array $item, int $index): array {
+                $clean = $this->removeSensitiveKeys($item);
+
+                return [
+                    'id' => isset($clean['id']) ? (string) $clean['id'] : '',
+                    'label' => trim((string) ($clean['label'] ?? '')),
+                    'version' => trim((string) ($clean['version'] ?? '')),
+                    'value' => trim((string) ($clean['value'] ?? '')),
+                    'fee' => is_numeric($clean['fee'] ?? null) ? number_format((float) $clean['fee'], 2, '.', '') : '0.00',
+                    'setup_fee' => is_numeric($clean['setup_fee'] ?? null) ? number_format((float) $clean['setup_fee'], 2, '.', '') : '0.00',
+                    'order' => (int) ($clean['order'] ?? ($index + 1)),
+                    'icon' => trim((string) ($clean['icon'] ?? '')),
+                    'group_id' => (string) ($clean['group_id'] ?? ''),
+                    'parameter' => trim((string) ($clean['parameter'] ?? '')),
+                    'pricings' => $this->trimPricings($clean['pricings'] ?? []),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function trimPricings(mixed $pricings): array
+    {
+        if (! is_array($pricings)) {
+            return [];
+        }
+
+        $clean = [];
+        foreach ($pricings as $cycle => $amount) {
+            $cycle = (string) $cycle;
+            $clean[$cycle] = is_numeric($amount) ? number_format((float) $amount, 2, '.', '') : '0.00';
+        }
+
+        return $clean;
     }
 }

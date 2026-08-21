@@ -6,6 +6,8 @@ use App\Listeners\HeartbeatTaskTimedOutListener;
 use App\Models\Setting;
 use App\Services\Auth\LegacyPasswordVerifier;
 use App\Services\Automation\Heartbeat\HeartbeatTaskRegistry;
+use App\Services\ProductCatalog\ProductDisplayNameResolver;
+use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Services\System\UploadedAssetReferenceService;
 use Carbon\CarbonInterface;
 use Illuminate\Queue\Events\JobTimedOut;
@@ -35,6 +37,9 @@ class AppServiceProvider extends ServiceProvider
         );
         // 任务注册表跨请求/跨 Job 复用：避免每个心跳 Job 重复扫描全部 Provider（插件清单、任务类实例化、契约校验）。
         $this->app->singleton(HeartbeatTaskRegistry::class);
+
+        $this->app->singleton(ProductDisplayNameResolver::class);
+        $this->app->singleton(ProductFullPathResolver::class);
     }
 
     public function boot(): void

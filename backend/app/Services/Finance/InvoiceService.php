@@ -8,7 +8,6 @@ use App\Constants\OrderStatus;
 use App\Constants\OrderType;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
-use App\Constants\ProductType;
 use App\Exceptions\BusinessException;
 use App\Models\Invoice;
 use App\Models\OperationLog;
@@ -17,6 +16,7 @@ use App\Models\Payment;
 use App\Models\Product;
 use App\Models\User;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
+use App\Services\ProductCatalog\ProductFullPathResolver;
 use App\Services\System\OperationLogService;
 use App\Support\AdminPrivacy;
 use Carbon\CarbonImmutable;
@@ -183,8 +183,14 @@ class InvoiceService
         $query = Invoice::with([
             'user:id,email,nickname,phone',
             'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle',
-            'order.product:id,product_type,service_type_code,product_group_id,custom_display_name,remark,config_options,purchase_requires',
-            'product:id,product_type,service_type_code,product_group_id,custom_display_name,remark,config_options,purchase_requires',
+            'order.product:id,product_type,service_type_code,product_group_id,custom_display_name,remark,purchase_requires',
+            'order.product.productGroup:id,second_product_group_id,name',
+            'order.product.productGroup.secondProductGroup:id,first_product_group_id,name',
+            'order.product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
+            'product:id,product_type,service_type_code,product_group_id,custom_display_name,remark,purchase_requires',
+            'product.productGroup:id,second_product_group_id,name',
+            'product.productGroup.secondProductGroup:id,first_product_group_id,name',
+            'product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
             'service:id,name,status,expires_at',
             'payments.callbacks:payment_id,callback_type,payload_json',
             'items',
@@ -240,11 +246,11 @@ class InvoiceService
         $invoice = Invoice::with([
             'user:id,email,nickname,phone',
             'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle,product_spec_snapshot,product_type_snapshot,config_snapshot',
-            'order.product:id,product_type,service_type_code,product_group_id,custom_display_name,remark,config_options,purchase_requires',
+            'order.product:id,product_type,service_type_code,product_group_id,custom_display_name,remark,purchase_requires',
             'order.product.productGroup:id,second_product_group_id,name',
             'order.product.productGroup.secondProductGroup:id,first_product_group_id,name',
             'order.product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
-            'product:id,product_type,service_type_code,product_group_id,custom_display_name,remark,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,product_group_id,custom_display_name,remark,purchase_requires',
             'service:id,name,status,expires_at',
             'payments.callbacks:payment_id,callback_type,payload_json',
             'items',
@@ -286,7 +292,6 @@ class InvoiceService
                 'id' => (int) $invoice->product->id,
                 'name' => (string) $invoice->product->name,
                 'product_type' => (string) ($invoice->product->product_type ?? ''),
-                'config_options' => (array) ($invoice->product->config_options ?? []),
             ] : null,
             'service' => $invoice->service ? [
                 'id' => (int) $invoice->service->id,
@@ -388,11 +393,11 @@ class InvoiceService
     {
         $invoice->loadMissing([
             'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle,amount,discount,paid_amount,quantity,product_spec_snapshot,product_type_snapshot,config_snapshot,config_pricing_snapshot',
-            'order.product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
+            'order.product:id,product_type,service_type_code,product_group_id,remark,purchase_requires',
             'order.product.productGroup:id,second_product_group_id,name',
             'order.product.productGroup.secondProductGroup:id,first_product_group_id,name',
             'order.product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
-            'product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,product_group_id,remark,purchase_requires',
             'product.productGroup:id,second_product_group_id,name',
             'product.productGroup.secondProductGroup:id,first_product_group_id,name',
             'product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
@@ -421,7 +426,6 @@ class InvoiceService
                 'id' => (int) $invoice->product->id,
                 'name' => (string) $invoice->product->name,
                 'product_type' => (string) ($invoice->product->product_type ?? ''),
-                'config_options' => (array) ($invoice->product->config_options ?? []),
             ] : null,
             'service' => $invoice->service ? [
                 'id' => (int) $invoice->service->id,
@@ -472,11 +476,11 @@ class InvoiceService
         $invoice->loadMissing([
             'user:id,email,nickname,phone',
             'order:id,order_no,status,type,service_id,paid_at,product_id,billing_cycle,product_spec_snapshot,product_type_snapshot,config_snapshot',
-            'order.product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
+            'order.product:id,product_type,service_type_code,product_group_id,remark,purchase_requires',
             'order.product.productGroup:id,second_product_group_id,name',
             'order.product.productGroup.secondProductGroup:id,first_product_group_id,name',
             'order.product.productGroup.secondProductGroup.firstProductGroup:id,code,name',
-            'product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,product_group_id,remark,purchase_requires',
             'service:id,name,status,expires_at',
             'payments',
             'items',
@@ -1006,7 +1010,7 @@ class InvoiceService
         return $invoice->fresh([
             'items',
             'order',
-            'product:id,product_type,service_type_code,product_group_id,remark,config_options,purchase_requires',
+            'product:id,product_type,service_type_code,product_group_id,remark,purchase_requires',
         ]) ?? $invoice;
     }
 
@@ -1061,38 +1065,11 @@ class InvoiceService
 
     private function resolveOrderProductPath(Order $order): string
     {
-        $product = $order->product;
-        $thirdGroup = $product instanceof Product && $product->relationLoaded('productGroup')
-            ? $product->productGroup
-            : null;
-        $secondGroup = $thirdGroup?->relationLoaded('secondProductGroup')
-            ? $thirdGroup->secondProductGroup
-            : null;
-        $firstGroup = $secondGroup?->relationLoaded('firstProductGroup')
-            ? $secondGroup->firstProductGroup
-            : null;
-        $productType = trim((string) ($order->product_type_snapshot ?? $product?->product_type ?? $product?->service_type_code ?? ''));
-        $productType = $productType !== ''
-            ? ProductType::normalizeBusinessValue($productType)
-            : ProductType::businessValueForFirstGroup($firstGroup, $firstGroup?->code);
-
-        $segments = [
-            ProductType::businessLabelOf($productType),
-            trim((string) ($secondGroup?->name ?? '')),
-            trim((string) ($thirdGroup?->name ?? '')),
-            $this->resolveOrderProductName($order),
-        ];
-
-        $clean = [];
-        foreach ($segments as $segment) {
-            $segment = trim((string) $segment);
-            if ($segment === '' || $segment === '-' || in_array($segment, $clean, true)) {
-                continue;
-            }
-            $clean[] = $segment;
+        if (! ($order->product instanceof Product)) {
+            return $this->resolveOrderProductName($order);
         }
 
-        return $clean !== [] ? implode('/', $clean) : $this->resolveOrderProductName($order);
+        return app(ProductFullPathResolver::class)->pathForOrder($order);
     }
 
     private function resolveInvoiceProductSpecDisplay(Invoice $invoice, array $scene, string $productDisplayName): string

@@ -44,7 +44,7 @@ class ClientInvoiceDetailResource extends AdminInvoiceSummaryResource
                 'paid_at' => $invoice['paid_at'] ?? null,
             ],
             'order' => $this->order($invoice['order'] ?? null),
-            'product' => $this->productWithOptions($invoice['product'] ?? null),
+            'product' => $this->product($invoice['product'] ?? null),
             'service' => $this->service($invoice['service'] ?? null),
             'scene' => $this->stripSensitiveKeys((array) ($invoice['scene'] ?? [])),
             'configuration' => [
@@ -72,18 +72,6 @@ class ClientInvoiceDetailResource extends AdminInvoiceSummaryResource
                 'created_at' => $invoice['created_at'] ?? null,
                 'updated_at' => $invoice['updated_at'] ?? null,
             ],
-        ];
-    }
-
-    private function productWithOptions(mixed $product): ?array
-    {
-        if (! is_array($product)) {
-            return null;
-        }
-
-        return [
-            ...($this->product($product) ?? []),
-            'config_options' => $this->cleanList($product['config_options'] ?? []),
         ];
     }
 }
