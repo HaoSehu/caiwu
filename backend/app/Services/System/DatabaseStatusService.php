@@ -333,10 +333,13 @@ class DatabaseStatusService
 
     private function resolveMysqldumpBinary(): string
     {
+        // 用 config() 而非 env()：config:cache 启用后 env() 读取 .env 会失效，
+        // 但 config() 仍能拿到缓存里的值（见 config/database.php:mysqldump_path）。
         $candidates = array_values(array_filter([
-            env('MYSQLDUMP_PATH'),
+            config('database.mysqldump_path'),
             'D:\\BtSoft\\mysql\\MySQL8.0\\bin\\mysqldump.exe',
             'D:\\BtSoft\\mysql\\MySQL5.7\\bin\\mysqldump.exe',
+            '/www/server/mysql/bin/mysqldump',
             '/usr/bin/mysqldump',
             '/usr/local/mysql/bin/mysqldump',
             'mysqldump',

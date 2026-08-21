@@ -29,6 +29,11 @@ return [
         'update_date_on_publish' => true,
     ],
 
+    // mysqldump 可执行文件路径，管理端数据库备份使用。留空时按 DatabaseStatusService
+    // 内置候选路径依次探测（含宝塔常见安装路径）。config:cache 后 env() 不再生效，
+    // 必须通过本项传递，不能指望运行时读取 .env。
+    'mysqldump_path' => env('MYSQLDUMP_PATH'),
+
     'redis' => [
         'client' => env('REDIS_CLIENT', 'phpredis'),
 
