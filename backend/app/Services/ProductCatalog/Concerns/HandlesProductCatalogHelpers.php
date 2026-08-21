@@ -44,12 +44,8 @@ trait HandlesProductCatalogHelpers
         Cache::forget(self::ADMIN_SUMMARY_CACHE_KEY);
         Cache::forget(self::SITE_CATALOG_CACHE_KEY);
 
-        // 清理所有 site:home 相关缓存
-        if (Cache::supportsTags()) {
-            Cache::tags(['site:home'])->flush();
-            Cache::tags(['site:products'])->flush();
-        }
-
+        // 站点商品缓存由 bumpSiteCatalogCacheVersion() 的版本号统一控制失效，
+        // 无需单独清理带 tag 的缓存键（且整个仓库从未向 tag 写入任何键）。
         $this->bumpSiteCatalogCacheVersion();
     }
 
