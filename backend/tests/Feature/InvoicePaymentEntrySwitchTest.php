@@ -137,7 +137,7 @@ class InvoicePaymentEntrySwitchTest extends BaseTestCase
             'trade_no' => 'ADMIN-MANUAL',
             'amount' => '80.00',
         ]);
-        $this->assertDatabaseHas('operation_logs', [
+        $this->assertDatabaseHas('activity_logs', [
             'module' => 'invoice',
             'action' => 'invoice.payment.mark_paid',
             'subject_id' => (int) $invoice->id,
@@ -259,12 +259,12 @@ class InvoicePaymentEntrySwitchTest extends BaseTestCase
         ]);
 
         $this->assertSame((int) $invoice->id, (int) $result['invoice_id']);
-        $this->assertDatabaseHas('operation_logs', [
+        $this->assertDatabaseHas('activity_logs', [
             'module' => 'invoice',
             'action' => 'invoice.payment.refund',
             'subject_id' => (int) $invoice->id,
         ]);
-        $this->assertDatabaseMissing('operation_logs', [
+        $this->assertDatabaseMissing('activity_logs', [
             'module' => 'order',
             'action' => 'order.payment.refund',
             'subject_id' => (int) $order->id,
@@ -273,7 +273,7 @@ class InvoicePaymentEntrySwitchTest extends BaseTestCase
 
     private function createSchema(): void
     {
-        foreach (['payment_callbacks', 'payments', 'invoice_items', 'invoices', 'orders', 'operation_logs', 'users'] as $table) {
+        foreach (['payment_callbacks', 'payments', 'invoice_items', 'invoices', 'orders', 'activity_logs', 'users'] as $table) {
             Schema::dropIfExists($table);
         }
 
@@ -376,16 +376,22 @@ class InvoicePaymentEntrySwitchTest extends BaseTestCase
             $table->unique(['payment_id', 'callback_type'], 'payment_callbacks_payment_type_unique');
         });
 
-        Schema::create('operation_logs', function (Blueprint $table): void {
+        Schema::create('activity_logs', function (Blueprint $table): void {
             $table->id();
-            $table->unsignedBigInteger('user_id')->nullable();
-            $table->string('user_type', 20)->nullable();
+            $table->string('event_id', 40)->nullable();
+            $table->string('stream', 20)->nullable();
+            $table->string('actor_type', 20)->nullable();
+            $table->unsignedBigInteger('actor_id')->nullable();
+            $table->string('actor_name', 100)->nullable();
             $table->string('action', 100);
             $table->string('module', 50);
+            $table->text('description')->nullable();
+            $table->string('subject_type', 50)->nullable();
             $table->unsignedBigInteger('subject_id')->nullable();
             $table->json('context')->nullable();
             $table->string('ip_address', 64)->nullable();
-            $table->timestamp('created_at')->nullable();
+            $table->string('trace_id', 64)->nullable();
+            $table->timestamps();
         });
     }
 

@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Models\AccountTransaction;
+use App\Models\ActivityLog;
 use App\Models\AdminUser;
 use App\Models\Invoice;
-use App\Models\OperationLog;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\PaymentCallback;
@@ -368,32 +368,40 @@ class FinanceLedgerControllerTest extends TestCase
             'received_at' => now()->subMinutes(17),
         ]);
 
-        OperationLog::query()->create([
-            'user_id' => (int) $user->id,
-            'user_type' => 'client',
+        ActivityLog::query()->create([
+            'actor_type' => 'client',
+            'actor_id' => (int) $user->id,
+            'actor_name' => 'Client User',
             'action' => 'invoice.paid',
             'module' => 'invoice',
+            'subject_type' => 'invoice',
             'subject_id' => (int) $invoice->id,
+            'description' => '[invoice] invoice.paid #'.$invoice->id,
             'context' => [
                 'trace_id' => 'ledger-trace-'.$suffix,
                 'actor_name' => 'Client User',
                 'invoice_no' => $invoice->invoice_no,
             ],
+            'trace_id' => 'ledger-trace-'.$suffix,
             'ip_address' => '127.0.0.1',
             'created_at' => now()->subMinutes(16),
         ]);
 
-        OperationLog::query()->create([
-            'user_id' => (int) $user->id,
-            'user_type' => 'client',
+        ActivityLog::query()->create([
+            'actor_type' => 'client',
+            'actor_id' => (int) $user->id,
+            'actor_name' => 'Client User',
             'action' => 'order.paid',
             'module' => 'order',
+            'subject_type' => 'order',
             'subject_id' => (int) $order->id,
+            'description' => '[order] order.paid #'.$order->id,
             'context' => [
                 'trace_id' => 'ledger-trace-'.$suffix,
                 'actor_name' => 'Client User',
                 'order_no' => $order->order_no,
             ],
+            'trace_id' => 'ledger-trace-'.$suffix,
             'ip_address' => '127.0.0.1',
             'created_at' => now()->subMinutes(19),
         ]);

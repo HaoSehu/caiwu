@@ -117,6 +117,27 @@ class V2AdminOperationalActionApiTest extends TestCase
         $this->assertActionResponse($response->json());
     }
 
+    public function test_log_cleanup_rejects_removed_file_cleanup_types(): void
+    {
+        // 文件日志清理类型已随 laravel.log 重写旁路一并移除，请求层必须直接拒绝
+        $this->mock(AdminLogService::class, function (MockInterface $mock): void {
+            $mock->shouldNotHaveReceived('cleanup');
+        });
+
+        Sanctum::actingAs($this->createAdmin([AdminPermissions::LOG_MANAGE]));
+
+        foreach (['task', 'runtime', 'system', 'all_file', 'all'] as $removedType) {
+            $this->postJson('/api/v2/admin/log-cleanups', [
+                'type' => $removedType,
+                'keep_days' => 30,
+                'confirm_text' => '立即清理',
+            ])
+                ->assertUnprocessable()
+                ->assertJsonPath('code', 42200)
+                ->assertJsonStructure(['data' => ['errors' => ['type']]]);
+        }
+    }
+
     public function test_schedule_trigger_action_validates_payload_and_returns_compact_result(): void
     {
         $this->mock(ScheduleTaskTriggerService::class, function (MockInterface $mock): void {

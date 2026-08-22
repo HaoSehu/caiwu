@@ -6,7 +6,7 @@ namespace App\Services\ClientServiceConsole;
 
 use App\Constants\ProductType;
 use App\Constants\ServiceStatus;
-use App\Models\OperationLog;
+use App\Models\ActivityLog;
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\Supplier;
@@ -327,12 +327,12 @@ class ServiceTransformService
 
     // ── Operation log transform ────────────────────────────────────────────
 
-    public function transformServiceOperationLog(OperationLog $log): array
+    public function transformServiceOperationLog(ActivityLog $log): array
     {
-        $detail = is_array($log->detail ?? null) ? $log->detail : [];
+        $detail = is_array($log->context ?? null) ? $log->context : [];
         $category = trim((string) ($detail['category'] ?? $this->resolveOperationCategoryByAction((string) $log->action)));
         $actionLabel = trim((string) ($detail['operation_label'] ?? self::OPERATION_ACTION_LABELS[$log->action] ?? '')) ?: '实例操作';
-        $actorType = trim((string) ($detail['actor_type'] ?? $log->user_type ?? ''));
+        $actorType = trim((string) ($detail['actor_type'] ?? $log->actor_type ?? ''));
         $summary = trim((string) ($detail['summary'] ?? '')) ?: $this->resolveOperationSummary((string) $log->action, $detail, $actionLabel);
 
         return [
@@ -343,9 +343,9 @@ class ServiceTransformService
             'category' => $category,
             'category_label' => self::OPERATION_CATEGORY_LABELS[$category] ?? '实例操作',
             'summary' => $summary,
-            'actor_type' => $actorType !== '' ? $actorType : ($log->user_id ? 'client' : 'system'),
-            'actor_label' => $this->resolveOperationActorLabel($actorType !== '' ? $actorType : ($log->user_id ? 'client' : 'system')),
-            'actor_name' => $this->resolveOperationActorName($detail, $actorType !== '' ? $actorType : ($log->user_id ? 'client' : 'system')),
+            'actor_type' => $actorType !== '' ? $actorType : ($log->actor_id ? 'client' : 'system'),
+            'actor_label' => $this->resolveOperationActorLabel($actorType !== '' ? $actorType : ($log->actor_id ? 'client' : 'system')),
+            'actor_name' => $this->resolveOperationActorName($detail, $actorType !== '' ? $actorType : ($log->actor_id ? 'client' : 'system')),
             'ip_address' => (string) ($log->ip_address ?? ''),
             'detail_items' => $this->buildOperationLogDetailItems($detail, $actionLabel, $summary),
         ];

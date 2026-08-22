@@ -31,6 +31,12 @@ parameters:
 			path: app/Console/Commands/BackfillInvoiceItemProjectionsCommand.php
 
 		-
+			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
+			identifier: larastan.noEnvCallsOutsideOfConfig
+			count: 2
+			path: app/Console/Commands/InstallSystemCommand.php
+
+		-
 			message: '#^Access to an undefined property App\\Models\\Supplier\:\:\$api_key\.$#'
 			identifier: property.notFound
 			count: 1
@@ -795,18 +801,6 @@ parameters:
 		-
 			message: '#^Call to function is_array\(\) with string\|null will always evaluate to false\.$#'
 			identifier: function.impossibleType
-			count: 1
-			path: app/Http/Resources/Admin/V2/AdminUserOperationLogResource.php
-
-		-
-			message: '#^Cannot call method format\(\) on string\.$#'
-			identifier: method.nonObject
-			count: 1
-			path: app/Http/Resources/Admin/V2/AdminUserOperationLogResource.php
-
-		-
-			message: '#^Using nullsafe method call on non\-nullable type string\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Http/Resources/Admin/V2/AdminUserOperationLogResource.php
 
@@ -2031,7 +2025,7 @@ parameters:
 		-
 			message: '#^Cannot call method format\(\) on string\.$#'
 			identifier: method.nonObject
-			count: 2
+			count: 1
 			path: app/Services/ClientServiceConsole/ServiceDetailService.php
 
 		-
@@ -2467,9 +2461,15 @@ parameters:
 			path: app/Services/ClientServiceConsole/ServiceTransformService.php
 
 		-
+			message: '#^Call to function is_array\(\) with string\|null will always evaluate to false\.$#'
+			identifier: function.impossibleType
+			count: 1
+			path: app/Services/ClientServiceConsole/ServiceTransformService.php
+
+		-
 			message: '#^Cannot call method format\(\) on string\.$#'
 			identifier: method.nonObject
-			count: 3
+			count: 2
 			path: app/Services/ClientServiceConsole/ServiceTransformService.php
 
 		-
@@ -2481,6 +2481,18 @@ parameters:
 		-
 			message: '#^Method App\\Services\\ClientServiceConsole\\ServiceTransformService\:\:resolveExpiry\(\) should return Carbon\\Carbon\|null but returns string\|null\.$#'
 			identifier: return.type
+			count: 1
+			path: app/Services/ClientServiceConsole/ServiceTransformService.php
+
+		-
+			message: '#^Offset ''actor_type'' on array\{\} on left side of \?\? does not exist\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Services/ClientServiceConsole/ServiceTransformService.php
+
+		-
+			message: '#^Offset ''category'' on array\{\} on left side of \?\? does not exist\.$#'
+			identifier: nullCoalesce.offset
 			count: 1
 			path: app/Services/ClientServiceConsole/ServiceTransformService.php
 
@@ -2497,14 +2509,20 @@ parameters:
 			path: app/Services/ClientServiceConsole/ServiceTransformService.php
 
 		-
+			message: '#^Offset ''operation_label'' on array\{\} on left side of \?\? does not exist\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Services/ClientServiceConsole/ServiceTransformService.php
+
+		-
 			message: '#^Offset ''product_display_name'' on array\{product_display_name\: string, product_spec_display\: string, custom_display_name\: string, cpu_memory_display\: string, cpu_memory_slug_display\: string, combined_display_name\: string, instance_spec_text\: string, cpu_display\: string, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
 			path: app/Services/ClientServiceConsole/ServiceTransformService.php
 
 		-
-			message: '#^Using nullsafe method call on non\-nullable type string\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
+			message: '#^Offset ''summary'' on array\{\} on left side of \?\? does not exist\.$#'
+			identifier: nullCoalesce.offset
 			count: 1
 			path: app/Services/ClientServiceConsole/ServiceTransformService.php
 
@@ -3423,7 +3441,7 @@ parameters:
 		-
 			message: '#^Cannot call method format\(\) on string\.$#'
 			identifier: method.nonObject
-			count: 2
+			count: 1
 			path: app/Services/Finance/FinanceLedgerQueryService.php
 
 		-
@@ -3465,12 +3483,6 @@ parameters:
 		-
 			message: '#^Strict comparison using \!\=\= between mixed and null will always evaluate to true\.$#'
 			identifier: notIdentical.alwaysTrue
-			count: 1
-			path: app/Services/Finance/FinanceLedgerQueryService.php
-
-		-
-			message: '#^Using nullsafe method call on non\-nullable type string\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Finance/FinanceLedgerQueryService.php
 
@@ -3663,7 +3675,7 @@ parameters:
 		-
 			message: '#^Cannot call method format\(\) on string\.$#'
 			identifier: method.nonObject
-			count: 12
+			count: 11
 			path: app/Services/Finance/InvoiceService.php
 
 		-
@@ -3697,12 +3709,6 @@ parameters:
 			path: app/Services/Finance/InvoiceService.php
 
 		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Models\\OperationLog\>\:\:map\(\) contains unresolvable type\.$#'
-			identifier: argument.unresolvableType
-			count: 1
-			path: app/Services/Finance/InvoiceService.php
-
-		-
 			message: '#^Parameter \#1 \$collection of method Illuminate\\Pagination\\AbstractPaginator\<int,App\\Models\\Invoice\>\:\:setCollection\(\) expects Illuminate\\Support\\Collection\<int, App\\Models\\Invoice\>, Illuminate\\Support\\Collection\<int, array\> given\.$#'
 			identifier: argument.type
 			count: 1
@@ -3724,12 +3730,6 @@ parameters:
 			message: '#^Strict comparison using \!\=\= between non\-empty\-string and '''' will always evaluate to true\.$#'
 			identifier: notIdentical.alwaysTrue
 			count: 2
-			path: app/Services/Finance/InvoiceService.php
-
-		-
-			message: '#^Using nullsafe method call on non\-nullable type string\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
 			path: app/Services/Finance/InvoiceService.php
 
 		-
@@ -6001,6 +6001,18 @@ parameters:
 			path: app/Services/System/ActivityLogService.php
 
 		-
+			message: '#^Access to an undefined property App\\Models\\ActivityLog\:\:\$admin_count\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/System/AdminLogService.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\ActivityLog\:\:\$errors\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/System/AdminLogService.php
+
+		-
 			message: '#^Access to an undefined property App\\Models\\ActivityLog\:\:\$modules\.$#'
 			identifier: property.notFound
 			count: 1
@@ -6009,7 +6021,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property App\\Models\\ActivityLog\:\:\$total\.$#'
 			identifier: property.notFound
-			count: 1
+			count: 2
 			path: app/Services/System/AdminLogService.php
 
 		-
@@ -6031,27 +6043,9 @@ parameters:
 			path: app/Services/System/AdminLogService.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\OperationLog\:\:\$admin_count\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/System/AdminLogService.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\OperationLog\:\:\$errors\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/System/AdminLogService.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\OperationLog\:\:\$modules\.$#'
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$errors\.$#'
 			identifier: property.notFound
 			count: 2
-			path: app/Services/System/AdminLogService.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\OperationLog\:\:\$total\.$#'
-			identifier: property.notFound
-			count: 3
 			path: app/Services/System/AdminLogService.php
 
 		-
@@ -6085,27 +6079,27 @@ parameters:
 			path: app/Services/System/AdminLogService.php
 
 		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$tasks\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/System/AdminLogService.php
+
+		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$total\.$#'
 			identifier: property.notFound
 			count: 4
 			path: app/Services/System/AdminLogService.php
 
 		-
-			message: '#^Call to function is_array\(\) with array will always evaluate to true\.$#'
-			identifier: function.alreadyNarrowedType
-			count: 1
-			path: app/Services/System/AdminLogService.php
-
-		-
 			message: '#^Call to function is_array\(\) with string\|null will always evaluate to false\.$#'
 			identifier: function.impossibleType
-			count: 1
+			count: 2
 			path: app/Services/System/AdminLogService.php
 
 		-
 			message: '#^Cannot call method format\(\) on string\.$#'
 			identifier: method.nonObject
-			count: 6
+			count: 5
 			path: app/Services/System/AdminLogService.php
 
 		-
@@ -6135,7 +6129,7 @@ parameters:
 		-
 			message: '#^Offset ''log_keywords'' on array\{title\: ''ZJMF 财务认证刷新'', log_keywords\: array\{''ZJMF 财务认证刷新'', ''refresh\-zjmf…''\}\}\|array\{title\: ''上游产品配置同步'', log_keywords\: array\{''上游产品配置同步执行完成'', ''product\-upstream…''\}\}\|array\{title\: ''优惠券活动发放'', log_keywords\: array\{''优惠券活动自动发放执行完成'', ''coupon\-campaign…''\}\}\|array\{title\: ''工单自动关闭'', log_keywords\: array\{''工单自动关闭执行完成'', ''ticket\-auto\-close''\}\}\|array\{title\: ''接口认证刷新'', log_keywords\: array\{''JWT刷新'', ''接口认证刷新'', ''refresh\-hosting…''\}\}\|array\{title\: ''推荐奖励释放'', log_keywords\: array\{''推荐奖励释放执行完成'', ''推荐奖励'', ''referral\-release…''\}\}\|array\{title\: ''服务生命周期维护'', log_keywords\: array\{''服务生命周期维护执行完成'', ''service\-lifecycle…''\}\}\|array\{title\: ''服务自动续费'', log_keywords\: array\{''自动续费执行完成'', ''\[自动续费\]'', ''service\-auto\-renew''\}\}\|array\{title\: ''用户产品状态同步'', log_keywords\: array\{''用户产品状态同步执行完成'', ''service\-status\-sync''\}\}\|array\{title\: ''账单与充值清理'', log_keywords\: array\{''账单与充值清理执行完成'', ''订单与充值清理执行完成'', ''order\-cleanup''\}\}\|array\{title\: ''账单自动化维护'', log_keywords\: array\{''账单自动化维护执行完成'', ''billing\-maintenance''\}\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
-			count: 2
+			count: 1
 			path: app/Services/System/AdminLogService.php
 
 		-
@@ -6163,8 +6157,14 @@ parameters:
 			path: app/Services/System/AdminLogService.php
 
 		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<\(int\|string\),mixed\>\:\:map\(\) contains unresolvable type\.$#'
-			identifier: argument.unresolvableType
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) expects callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: array, Closure\(App\\Models\\IntegrationPluginRuntimeLog\)\: array given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Services/System/AdminLogService.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) expects callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: array\<string, mixed\>, Closure\(App\\Models\\ScheduleRunLog\)\: array\<string, mixed\> given\.$#'
+			identifier: argument.type
 			count: 1
 			path: app/Services/System/AdminLogService.php
 
@@ -6172,6 +6172,24 @@ parameters:
 			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,App\\Models\\AdminUser\>\:\:map\(\) contains unresolvable type\.$#'
 			identifier: argument.unresolvableType
 			count: 1
+			path: app/Services/System/AdminLogService.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) expects callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: array, Closure\(App\\Models\\IntegrationPluginRuntimeLog\)\: array given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Services/System/AdminLogService.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) expects callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: array\<string, mixed\>, Closure\(App\\Models\\ScheduleRunLog\)\: array\<string, mixed\> given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Services/System/AdminLogService.php
+
+		-
+			message: '#^Parameter \#1 \$collection of method Illuminate\\Pagination\\AbstractPaginator\<int,App\\Models\\ActivityLog\>\:\:setCollection\(\) expects Illuminate\\Support\\Collection\<int, App\\Models\\ActivityLog\>, Illuminate\\Support\\Collection\<\(int\|string\), non\-empty\-array\> given\.$#'
+			identifier: argument.type
+			count: 2
 			path: app/Services/System/AdminLogService.php
 
 		-
@@ -6187,19 +6205,19 @@ parameters:
 			path: app/Services/System/AdminLogService.php
 
 		-
-			message: '#^Parameter \#1 \$collection of method Illuminate\\Pagination\\AbstractPaginator\<int,App\\Models\\OperationLog\>\:\:setCollection\(\) expects Illuminate\\Support\\Collection\<int, App\\Models\\OperationLog\>, Illuminate\\Support\\Collection\<\(int\|string\), array\> given\.$#'
+			message: '#^Parameter \#1 \$collection of method Illuminate\\Pagination\\AbstractPaginator\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:setCollection\(\) expects Illuminate\\Support\\Collection\<int, Illuminate\\Database\\Eloquent\\Model\>, Illuminate\\Support\\Collection\<int, array\<mixed\>\> given\.$#'
 			identifier: argument.type
 			count: 1
 			path: app/Services/System/AdminLogService.php
 
 		-
-			message: '#^Parameter \#1 \$collection of method Illuminate\\Pagination\\AbstractPaginator\<int,App\\Models\\OperationLog\>\:\:setCollection\(\) expects Illuminate\\Support\\Collection\<int, App\\Models\\OperationLog\>, Illuminate\\Support\\Collection\<\(int\|string\), non\-empty\-array\> given\.$#'
+			message: '#^Parameter \#1 \$collection of method Illuminate\\Pagination\\AbstractPaginator\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:setCollection\(\) expects Illuminate\\Support\\Collection\<int, Illuminate\\Database\\Eloquent\\Model\>, Illuminate\\Support\\Collection\<int, array\<string, mixed\>\> given\.$#'
 			identifier: argument.type
-			count: 2
+			count: 1
 			path: app/Services/System/AdminLogService.php
 
 		-
-			message: '#^Parameter \#1 \$collection of method Illuminate\\Pagination\\AbstractPaginator\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:setCollection\(\) expects Illuminate\\Support\\Collection\<int, Illuminate\\Database\\Eloquent\\Model\>, Illuminate\\Support\\Collection\<int, array\<mixed\>\> given\.$#'
+			message: '#^Parameter \#1 \$collection of method Illuminate\\Pagination\\AbstractPaginator\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:setCollection\(\) expects Illuminate\\Support\\Collection\<int, Illuminate\\Database\\Eloquent\\Model\>, Illuminate\\Support\\Collection\<int, array\> given\.$#'
 			identifier: argument.type
 			count: 1
 			path: app/Services/System/AdminLogService.php
@@ -6213,12 +6231,6 @@ parameters:
 		-
 			message: '#^Strict comparison using \!\=\= between ''\[自动续费\]''\|''billing\-maintenance''\|''coupon\-campaign…''\|''JWT刷新''\|''order\-cleanup''\|''product\-upstream…''\|''referral\-release…''\|''refresh\-hosting…''\|''refresh\-zjmf…''\|''service\-auto\-renew''\|''service\-lifecycle…''\|''service\-status\-sync''\|''ticket\-auto\-close''\|''ZJMF 财务认证刷新''\|''上游产品配置同步执行完成''\|''优惠券活动自动发放执行完成''\|''工单自动关闭执行完成''\|''接口认证刷新''\|''推荐奖励''\|''推荐奖励释放执行完成''\|''服务生命周期维护执行完成''\|''用户产品状态同步执行完成''\|''自动续费执行完成''\|''订单与充值清理执行完成''\|''账单与充值清理执行完成''\|''账单自动化维护执行完成'' and '''' will always evaluate to true\.$#'
 			identifier: notIdentical.alwaysTrue
-			count: 2
-			path: app/Services/System/AdminLogService.php
-
-		-
-			message: '#^Using nullsafe method call on non\-nullable type string\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/System/AdminLogService.php
 
@@ -6243,7 +6255,7 @@ parameters:
 		-
 			message: '#^Using nullsafe property access "\?\-\>modules" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 3
+			count: 1
 			path: app/Services/System/AdminLogService.php
 
 		-
@@ -6259,9 +6271,15 @@ parameters:
 			path: app/Services/System/AdminLogService.php
 
 		-
+			message: '#^Using nullsafe property access "\?\-\>tasks" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Services/System/AdminLogService.php
+
+		-
 			message: '#^Using nullsafe property access "\?\-\>total" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 9
+			count: 7
 			path: app/Services/System/AdminLogService.php
 
 		-
@@ -7077,7 +7095,7 @@ parameters:
 		-
 			message: '#^Cannot call method format\(\) on string\.$#'
 			identifier: method.nonObject
-			count: 7
+			count: 6
 			path: app/Services/User/UserService.php
 
 		-
@@ -7119,12 +7137,6 @@ parameters:
 		-
 			message: '#^Method App\\Services\\User\\UserService\:\:resolveInvoiceScene\(\) is unused\.$#'
 			identifier: method.unused
-			count: 1
-			path: app/Services/User/UserService.php
-
-		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Models\\OperationLog\>\:\:map\(\) contains unresolvable type\.$#'
-			identifier: argument.unresolvableType
 			count: 1
 			path: app/Services/User/UserService.php
 
@@ -7197,7 +7209,7 @@ parameters:
 		-
 			message: '#^Using nullsafe method call on non\-nullable type string\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 3
+			count: 2
 			path: app/Services/User/UserService.php
 
 		-

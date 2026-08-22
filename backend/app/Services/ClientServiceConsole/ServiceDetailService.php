@@ -7,7 +7,7 @@ namespace App\Services\ClientServiceConsole;
 use App\Constants\ProductType;
 use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
-use App\Models\OperationLog;
+use App\Models\ActivityLog;
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\Supplier;
@@ -266,7 +266,7 @@ class ServiceDetailService
     public function getOperationLogsForUser(User $user, int $serviceId, array $filters = [], int $perPage = 10): array
     {
         $service = $this->findUserService($user, $serviceId);
-        $query = OperationLog::query()
+        $query = ActivityLog::query()
             ->where(function (Builder $builder) use ($serviceId) {
                 $builder->where(function (Builder $serviceBuilder) use ($serviceId) {
                     $serviceBuilder->where('module', 'service')->where('subject_id', $serviceId);
@@ -305,7 +305,7 @@ class ServiceDetailService
 
         return [
             'list' => collect($paginator->items())
-                ->map(fn (OperationLog $log) => $this->transformService->transformServiceOperationLog($log))
+                ->map(fn (ActivityLog $log) => $this->transformService->transformServiceOperationLog($log))
                 ->values()->all(),
             'summary' => [
                 'total' => $paginator->total(),

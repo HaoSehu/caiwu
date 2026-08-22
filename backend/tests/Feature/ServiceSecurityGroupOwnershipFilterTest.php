@@ -124,19 +124,19 @@ HTML;
         $bindings = $this->invokePrivateMethod($service, 'collectOwnedSecurityGroupBindingsFromLogs', [[
             [
                 'action' => 'service.console.security_group.create',
-                'detail' => ['host_id' => 110231, 'group_name' => '19132'],
+                'context' => ['host_id' => 110231, 'group_name' => '19132'],
             ],
             [
                 'action' => 'service.console.security_group.apply',
-                'detail' => ['host_id' => 110231, 'group_id' => 1337, 'group_name' => '19132'],
+                'context' => ['host_id' => 110231, 'group_id' => 1337, 'group_name' => '19132'],
             ],
             [
                 'action' => 'service.console.security_group.apply',
-                'detail' => ['host_id' => 220462, 'group_id' => 1151, 'group_name' => '1'],
+                'context' => ['host_id' => 220462, 'group_id' => 1151, 'group_name' => '1'],
             ],
             [
                 'action' => 'service.console.security_group.delete',
-                'detail' => ['host_id' => 220462, 'group_id' => 1151, 'group_name' => '1'],
+                'context' => ['host_id' => 220462, 'group_id' => 1151, 'group_name' => '1'],
             ],
         ], 110231]);
 

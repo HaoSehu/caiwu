@@ -30,7 +30,7 @@ class AdminUserDeleteAssetProtectionTest extends TestCase
         ]);
 
         $this->assertSoftDeleted('users', ['id' => (int) $user->id]);
-        $this->assertDatabaseHas('operation_logs', [
+        $this->assertDatabaseHas('activity_logs', [
             'module' => 'user',
             'action' => 'user.deleted',
             'subject_id' => (int) $user->id,

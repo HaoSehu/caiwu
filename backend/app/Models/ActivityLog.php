@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 class ActivityLog extends Model
 {
     protected $fillable = [
+        'event_id',
+        'stream',
         'actor_type',
         'actor_id',
         'actor_name',
@@ -17,6 +19,7 @@ class ActivityLog extends Model
         'subject_id',
         'context',
         'ip_address',
+        'trace_id',
     ];
 
     protected function casts(): array

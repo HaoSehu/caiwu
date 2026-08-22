@@ -661,6 +661,73 @@ class PluginRuntimeRegistryIntegrationTest extends TestCase
         $this->assertSame([ProviderKey::ZJMF_FINANCE_API], $registry->keys());
     }
 
+    public function test_runtime_log_truncates_oversized_meta_to_protect_storage(): void
+    {
+        $this->ensurePluginTables();
+        $this->activatePlugin('verification', 'demo_verification', [
+            'api_url' => 'https://example.test',
+            'app_id' => 'demo-app',
+            'app_secret' => 'demo-secret',
+        ]);
+
+        $this->app->bind(DemoVerificationPlugin::class, fn (): object => new class
+        {
+            /**
+             * @param  array<string, mixed>  $request
+             * @return array<string, mixed>
+             */
+            public function execute(array $request): array
+            {
+                return [
+                    'success' => true,
+                    // 三个 9KB 字段各自叶子截断后仍超出整体 16KB 上限，应触发摘要降级
+                    'blob_a' => str_repeat('a', 9 * 1024),
+                    'blob_b' => str_repeat('b', 9 * 1024),
+                    'blob_c' => str_repeat('c', 9 * 1024),
+                ];
+            }
+        });
+
+        try {
+            app(PluginRuntimeRegistry::class)->execute(
+                domain: 'verification',
+                slugOrKey: 'demo_verification',
+                action: 'certification.initialize',
+                payload: ['big_field' => str_repeat('p', 64 * 1024)],
+                context: ['trace_id' => 'runtime-meta-truncate-test'],
+            );
+
+            $log = DB::table('integration_plugin_runtime_logs')
+                ->where('trace_id', 'runtime-meta-truncate-test')
+                ->first();
+
+            $this->assertNotNull($log, 'runtime log 应正常落库');
+
+            // 请求 meta：单叶子字符串截断到 8KB 并带标记，整体编码不超 16KB
+            $requestMetaRaw = (string) $log->request_meta_json;
+            $this->assertLessThanOrEqual(16384, strlen($requestMetaRaw));
+            $requestMeta = json_decode($requestMetaRaw, true);
+            $this->assertIsArray($requestMeta);
+            $this->assertStringContainsString(
+                '[truncated',
+                (string) ($requestMeta['payload']['big_field'] ?? ''),
+            );
+
+            // 响应 meta：整体超限降级为「标记 + 摘要 + 哈希」
+            $responseMeta = json_decode((string) $log->response_meta_json, true);
+            $this->assertIsArray($responseMeta);
+            $this->assertTrue($responseMeta['truncated'] ?? false);
+            $this->assertGreaterThan(0, $responseMeta['original_bytes'] ?? 0);
+            $this->assertArrayHasKey('sha256', $responseMeta);
+            $this->assertNotEmpty($responseMeta['sha256']);
+            $this->assertLessThanOrEqual(4096, strlen((string) ($responseMeta['preview'] ?? '')));
+        } finally {
+            DB::table('integration_plugin_runtime_logs')
+                ->where('trace_id', 'runtime-meta-truncate-test')
+                ->delete();
+        }
+    }
+
     /**
      * @param  array<string, mixed>  $config
      */

@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Models\ActivityLog;
 use App\Models\AdminUser;
 use App\Models\MessageLog;
-use App\Models\OperationLog;
 use App\Models\Role;
 use App\Services\System\AdminLogService;
 use App\Services\System\NotificationService;
@@ -250,13 +250,17 @@ class V2AdminLogApiTest extends TestCase
             ->assertJsonPath('data.log.context.params.api_key', 'email-key-visible');
     }
 
-    private function createApiLog(): OperationLog
+    private function createApiLog(): ActivityLog
     {
-        return OperationLog::query()->create([
-            'user_id' => 1,
-            'user_type' => 'admin',
-            'action' => 'GET /api/v2/client/orders',
+        return ActivityLog::query()->create([
+            'stream' => 'access',
+            'actor_type' => 'admin',
+            'actor_id' => 1,
+            'actor_name' => 'v2-api-log-admin',
             'module' => 'v2-api-log-test',
+            'action' => 'GET /api/v2/client/orders',
+            'description' => '[v2-api-log-test] GET /api/v2/client/orders',
+            'subject_type' => 'v2-api-log-test',
             'subject_id' => 1001,
             'context' => [
                 'status' => 200,

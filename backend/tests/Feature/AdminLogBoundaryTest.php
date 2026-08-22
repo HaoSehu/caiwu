@@ -149,7 +149,7 @@ class AdminLogBoundaryTest extends TestCase
             ->assertJsonPath('data.list.0.trace_id', 'notify-trace-'.$suffix);
     }
 
-    public function test_system_log_route_returns_business_audit_logs(): void
+    public function test_activity_log_route_returns_business_audit_logs(): void
     {
         $admin = $this->createAdminUser([AdminPermissions::LOG_LIST, AdminPermissions::PRIVACY_VIEW_RAW]);
         Sanctum::actingAs($admin);
@@ -171,7 +171,7 @@ class AdminLogBoundaryTest extends TestCase
             'ip_address' => '10.10.10.'.$admin->id,
         ]);
 
-        $this->getJson('/api/v2/admin/logs/system?description_keyword='.rawurlencode($suffix).'&ip_address=10.10.10')
+        $this->getJson('/api/v2/admin/logs/activity?description_keyword='.rawurlencode($suffix).'&ip_address=10.10.10')
             ->assertOk()
             ->assertJsonPath('code', 0)
             ->assertJsonPath('data.total', 1)
@@ -213,6 +213,37 @@ class AdminLogBoundaryTest extends TestCase
                 ->assertJsonPath('data.log.channel', 'runtime')
                 ->assertJsonPath('data.log.source', 'laravel_log')
                 ->assertJsonPath('data.log.message', $suffix);
+        } finally {
+            app()->useStoragePath($originalStoragePath);
+            File::deleteDirectory($tempStoragePath);
+            Cache::flush();
+        }
+    }
+
+    public function test_runtime_log_file_entry_backfills_provider_key_from_json_context(): void
+    {
+        Cache::flush();
+        $admin = $this->createAdminUser([AdminPermissions::LOG_LIST, AdminPermissions::PRIVACY_VIEW_RAW]);
+        Sanctum::actingAs($admin);
+
+        $originalStoragePath = app()->storagePath();
+        $tempStoragePath = $originalStoragePath.DIRECTORY_SEPARATOR.'framework'.DIRECTORY_SEPARATOR.'testing'.DIRECTORY_SEPARATOR.'runtime-file-source-'.bin2hex(random_bytes(4));
+
+        File::ensureDirectoryExists($tempStoragePath.DIRECTORY_SEPARATOR.'logs');
+        app()->useStoragePath($tempStoragePath);
+
+        try {
+            $suffix = 'runtime-provider-'.bin2hex(random_bytes(4));
+            file_put_contents(storage_path('logs/laravel.log'), '['.now()->format('Y-m-d H:i:s').'] local.INFO: [ZJMF 财务接口] '.$suffix.' {"supplier_id":1001,"provider_key":"zjmf_finance_api","duration_ms":3}'."\n");
+
+            $this->getJson('/api/v2/admin/logs/runtime?keyword='.$suffix)
+                ->assertOk()
+                ->assertJsonPath('code', 0)
+                ->assertJsonPath('data.total', 1)
+                ->assertJsonPath('data.list.0.level', 'INFO')
+                // 文件条目本无结构化列：行尾 JSON context 的 provider_key 应回填来源列
+                ->assertJsonPath('data.list.0.plugin_key', 'zjmf_finance_api')
+                ->assertJsonPath('data.list.0.message_excerpt', '[ZJMF 财务接口] '.$suffix);
         } finally {
             app()->useStoragePath($originalStoragePath);
             File::deleteDirectory($tempStoragePath);

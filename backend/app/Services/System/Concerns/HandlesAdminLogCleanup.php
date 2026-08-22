@@ -15,19 +15,15 @@ trait HandlesAdminLogCleanup
 {
     public function getCleanupOverview(): array
     {
-        $logPath = storage_path('logs/laravel.log');
-        $fileModifiedAt = is_file($logPath) ? (int) filemtime($logPath) : 0;
-        $fileSize = is_file($logPath) ? (int) filesize($logPath) : 0;
+        $fileSnapshot = $this->laravelLogFileSnapshot();
         $cacheVersion = (int) Cache::get(self::CLEANUP_OVERVIEW_CACHE_VERSION_KEY, 1);
-        $cacheKey = "admin_logs:cleanup_overview:{$cacheVersion}:{$fileModifiedAt}:{$fileSize}";
+        $cacheKey = "admin_logs:cleanup_overview:{$cacheVersion}:{$fileSnapshot['signature']}";
 
         return Cache::remember(
             $cacheKey,
             now()->addSeconds(self::CLEANUP_OVERVIEW_CACHE_TTL_SECONDS),
-            function () use ($logPath) {
-                $logEntries = $this->readLaravelLogEntries(10000);
-                $taskLogCount = collect($logEntries)->whereNotNull('task_key')->count();
-                $systemLogCount = collect($logEntries)->whereNull('task_key')->count();
+            function () use ($fileSnapshot) {
+                unset($fileSnapshot['signature']);
 
                 return [
                     'database' => [
@@ -35,30 +31,19 @@ trait HandlesAdminLogCleanup
                         'email' => MessageLog::query()->where('channel', 'email')->count(),
                         'api' => $this->baseApiLogQuery()->count(),
                         'admin_login' => $this->baseAdminLoginLogQuery()->count(),
-                        'business_audit' => $this->businessAuditLogCount(),
+                        'activity' => $this->activityLogCount(),
                         'schedule_run' => ScheduleRunLog::query()->count(),
                     ],
-                    'file' => [
-                        'path' => 'storage/logs/laravel.log',
-                        'exists' => is_file($logPath),
-                        'size_bytes' => is_file($logPath) ? (int) filesize($logPath) : 0,
-                        'updated_at' => is_file($logPath) ? date('Y-m-d H:i:s', (int) filemtime($logPath)) : null,
-                        'task_log_count' => $taskLogCount,
-                        'runtime_log_count' => $systemLogCount,
-                        'system_log_count' => $systemLogCount,
-                    ],
+                    // 文件日志只做只读展示；生命周期由日志轮转（daily，默认 14 天）管理
+                    'file' => $fileSnapshot,
                     'supported_cleanup_types' => [
                         ['value' => 'sms', 'label' => '短信日志'],
                         ['value' => 'email', 'label' => '邮件日志'],
                         ['value' => 'api', 'label' => 'API日志'],
                         ['value' => 'admin_login', 'label' => '管理员登录日志'],
-                        ['value' => 'business_audit', 'label' => '系统日志（业务审计）'],
+                        ['value' => 'activity', 'label' => '业务审计日志'],
                         ['value' => 'schedule_run', 'label' => '调度执行日志'],
-                        ['value' => 'task', 'label' => '自动任务日志'],
-                        ['value' => 'runtime', 'label' => '运行日志'],
                         ['value' => 'all_db', 'label' => '全部数据库日志'],
-                        ['value' => 'all_file', 'label' => '全部文件日志'],
-                        ['value' => 'all', 'label' => '全部日志'],
                     ],
                 ];
             }
@@ -72,7 +57,7 @@ trait HandlesAdminLogCleanup
         $cutoff = now()->subDays($keepDays)->startOfDay();
         $affected = [];
 
-        if ($type === 'all' || $type === 'all_db') {
+        if ($type === 'all_db') {
             DB::transaction(function () use ($cutoff, &$affected) {
                 $affected['sms'] = MessageLog::query()->where('channel', 'sms')->where('created_at', '<', $cutoff)->delete();
                 $affected['email'] = MessageLog::query()->where('channel', 'email')->where('created_at', '<', $cutoff)->delete();
@@ -82,7 +67,7 @@ trait HandlesAdminLogCleanup
                 $affected['admin_login'] = $this->baseAdminLoginLogQuery()
                     ->where('created_at', '<', $cutoff)
                     ->delete();
-                $affected['business_audit'] = $this->deleteBusinessAuditLogsBefore($cutoff);
+                $affected['activity'] = $this->deleteActivityLogsBefore($cutoff);
                 $affected['schedule_run'] = ScheduleRunLog::query()->where('created_at', '<', $cutoff)->delete();
             });
         } else {
@@ -107,8 +92,8 @@ trait HandlesAdminLogCleanup
                         ->delete();
                 }
 
-                if ($type === 'business_audit') {
-                    $affected['business_audit'] = $this->deleteBusinessAuditLogsBefore($cutoff);
+                if ($type === 'activity') {
+                    $affected['activity'] = $this->deleteActivityLogsBefore($cutoff);
                 }
 
                 if ($type === 'schedule_run') {
@@ -117,11 +102,8 @@ trait HandlesAdminLogCleanup
             });
         }
 
-        if ($type === 'all' || $type === 'all_file' || $type === 'task' || $type === 'runtime' || $type === 'system') {
-            $fileCleanup = $this->cleanupFileLogs($type, $cutoff);
-            $affected = array_merge($affected, $fileCleanup);
-        }
-
+        // 文件日志（laravel-*.log）不再提供清理：生产 daily 轮转自带生命周期，
+        // 旧实现整文件重写还会绕过审计并破坏并发写入。
         $this->bumpCleanupOverviewCacheVersion();
 
         return [
@@ -132,134 +114,47 @@ trait HandlesAdminLogCleanup
         ];
     }
 
-    private function cleanupFileLogs(string $type, Carbon $cutoff): array
+    /**
+     * 只读扫描 storage/logs 下的 Laravel 日志文件（daily 通道为 laravel-YYYY-MM-DD.log）。
+     * signature 不进响应，仅用于概览缓存键感知目录变化。
+     *
+     * @return array<string, mixed>
+     */
+    private function laravelLogFileSnapshot(): array
     {
-        $logPath = storage_path('logs/laravel.log');
-        $affected = [];
+        $files = collect(glob(storage_path('logs/*.log')) ?: [])
+            ->map(fn (string $path): array => [
+                'name' => basename($path),
+                'size_bytes' => (int) filesize($path),
+                'updated_at' => date('Y-m-d H:i:s', (int) filemtime($path)),
+            ])
+            ->sortByDesc('updated_at')
+            ->values();
 
-        if (! is_file($logPath)) {
-            return $affected;
-        }
-
-        $content = file_get_contents($logPath);
-        if ($content === false || $content === '') {
-            return $affected;
-        }
-
-        $lines = preg_split('/\r\n|\n|\r/', rtrim($content, "\r\n"));
-        if ($lines === false) {
-            return $affected;
-        }
-
-        $filteredLines = [];
-        $currentEntry = [];
-        $taskRemovedCount = 0;
-        $systemRemovedCount = 0;
-
-        $flushEntry = function (array $entry) use ($type, $cutoff, &$filteredLines, &$taskRemovedCount, &$systemRemovedCount): void {
-            if ($entry === []) {
-                return;
-            }
-
-            $logDate = $this->extractLogDate((string) $entry[0]);
-            if ($logDate === null) {
-                array_push($filteredLines, ...$entry);
-
-                return;
-            }
-
-            $isTaskLog = $this->isTaskLogLine(implode("\n", $entry));
-            $shouldRemoveTask = ($type === 'task' || $type === 'all' || $type === 'all_file')
-                && $isTaskLog
-                && $logDate < $cutoff;
-            $shouldRemoveSystem = ($type === 'runtime' || $type === 'system' || $type === 'all' || $type === 'all_file')
-                && ! $isTaskLog
-                && $logDate < $cutoff;
-
-            if ($shouldRemoveTask) {
-                $taskRemovedCount++;
-
-                return;
-            }
-
-            if ($shouldRemoveSystem) {
-                $systemRemovedCount++;
-
-                return;
-            }
-
-            array_push($filteredLines, ...$entry);
-        };
-
-        foreach ($lines as $line) {
-            $line = (string) $line;
-            $logDate = $this->extractLogDate($line);
-            if ($logDate !== null) {
-                $flushEntry($currentEntry);
-                $currentEntry = [$line];
-
-                continue;
-            }
-
-            if ($currentEntry === []) {
-                $filteredLines[] = $line;
-
-                continue;
-            }
-
-            $currentEntry[] = $line;
-        }
-
-        $flushEntry($currentEntry);
-
-        if ($taskRemovedCount > 0 || $systemRemovedCount > 0) {
-            $newContent = implode("\n", $filteredLines);
-            if (substr($newContent, -1) !== "\n") {
-                $newContent .= "\n";
-            }
-            file_put_contents($logPath, $newContent, LOCK_EX);
-        }
-
-        if ($type === 'task' || $type === 'all' || $type === 'all_file') {
-            $affected['task'] = $taskRemovedCount;
-        }
-        if ($type === 'runtime' || $type === 'system' || $type === 'all' || $type === 'all_file') {
-            $affected['runtime'] = $systemRemovedCount;
-        }
-
-        return $affected;
+        return [
+            'directory' => 'storage/logs',
+            'file_count' => $files->count(),
+            'total_size_bytes' => (int) $files->sum('size_bytes'),
+            'latest_updated_at' => $files->first()['updated_at'] ?? null,
+            'files' => $files->take(30)->all(),
+            'signature' => $files->count().':'.$files->sum('size_bytes').':'.($files->first()['updated_at'] ?? ''),
+        ];
     }
 
-    private function businessAuditLogCount(): int
+    private function activityLogCount(): int
     {
-        $activityCount = Schema::hasTable('activity_logs') ? DB::table('activity_logs')->count() : 0;
-        $operationCount = Schema::hasTable('operation_logs')
-            ? DB::table('operation_logs')
-                ->whereRaw('action NOT REGEXP ?', [self::HTTP_ACTION_REGEXP])
-                ->where('action', '<>', 'admin.login')
-                ->count()
-            : 0;
-
-        return (int) $activityCount + (int) $operationCount;
+        // operation_logs 已停写并转只读遗留表，业务审计清理只作用于唯一真源 activity_logs；
+        // operation_logs 存量由 30 天归档统一消化，不通过管理端清理删除
+        return Schema::hasTable('activity_logs') ? (int) DB::table('activity_logs')->count() : 0;
     }
 
-    private function deleteBusinessAuditLogsBefore(Carbon $cutoff): int
+    private function deleteActivityLogsBefore(Carbon $cutoff): int
     {
-        $deleted = 0;
-
-        if (Schema::hasTable('activity_logs')) {
-            $deleted += DB::table('activity_logs')->where('created_at', '<', $cutoff)->delete();
+        if (! Schema::hasTable('activity_logs')) {
+            return 0;
         }
 
-        if (Schema::hasTable('operation_logs')) {
-            $deleted += DB::table('operation_logs')
-                ->whereRaw('action NOT REGEXP ?', [self::HTTP_ACTION_REGEXP])
-                ->where('action', '<>', 'admin.login')
-                ->where('created_at', '<', $cutoff)
-                ->delete();
-        }
-
-        return (int) $deleted;
+        return (int) DB::table('activity_logs')->where('created_at', '<', $cutoff)->delete();
     }
 
     private function bumpCleanupOverviewCacheVersion(): void
@@ -268,31 +163,5 @@ trait HandlesAdminLogCleanup
             self::CLEANUP_OVERVIEW_CACHE_VERSION_KEY,
             (int) Cache::get(self::CLEANUP_OVERVIEW_CACHE_VERSION_KEY, 1) + 1
         );
-    }
-
-    private function extractLogDate(string $line): ?Carbon
-    {
-        if (preg_match('/^\[([^\]]+)\]/', $line, $matches)) {
-            try {
-                return Carbon::parse(trim($matches[1]));
-            } catch (\Throwable) {
-                return null;
-            }
-        }
-
-        return null;
-    }
-
-    private function isTaskLogLine(string $line): bool
-    {
-        foreach (self::TASK_META as $meta) {
-            foreach ((array) ($meta['log_keywords'] ?? []) as $keyword) {
-                if ($keyword !== '' && str_contains($line, $keyword)) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
     }
 }

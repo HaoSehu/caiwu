@@ -32,7 +32,7 @@ class ReferralWithdrawalPaymentConfirmationTest extends TestCase
         $this->assertSame(ReferralWithdrawal::STATUS_PAID, (int) $updated->status);
         $this->assertSame('PAY-20260813-001', (string) $updated->payment_no);
         $this->assertNotNull($updated->paid_at);
-        $this->assertDatabaseHas('operation_logs', [
+        $this->assertDatabaseHas('activity_logs', [
             'module' => 'referral_withdrawal',
             'action' => 'referral.withdraw.paid',
             'subject_id' => (int) $updated->id,

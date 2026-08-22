@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Services\ClientServiceConsole;
 
 use App\Exceptions\BusinessException;
-use App\Models\OperationLog;
+use App\Models\ActivityLog;
 use App\Models\Service;
 use App\Models\User;
 use App\Services\System\OperationLogService;
@@ -875,7 +875,7 @@ class ServiceSecurityGroupService
             return ['ids' => [], 'names' => []];
         }
 
-        $logs = OperationLog::query()
+        $logs = ActivityLog::query()
             ->where('module', 'service')
             ->whereIn('action', [
                 'service.console.security_group.create',
@@ -901,8 +901,8 @@ class ServiceSecurityGroupService
 
         foreach ($logs as $log) {
             $detail = is_array($log)
-                ? (array) ($log['detail'] ?? $log['context'] ?? [])
-                : (array) ($log->detail ?? []);
+                ? (array) ($log['context'] ?? [])
+                : (array) ($log->context ?? []);
             if ((int) ($detail['host_id'] ?? 0) !== $hostId) {
                 continue;
             }

@@ -10,7 +10,6 @@ use App\Models\AdminUser;
 use App\Models\GatewayLog;
 use App\Models\IntegrationPluginRuntimeLog;
 use App\Models\MessageLog;
-use App\Models\OperationLog;
 use App\Models\Role;
 use App\Models\ScheduleRunLog;
 use App\Models\User;
@@ -193,7 +192,7 @@ class AdminLogService
 
     public function getApiLogs(array $filters, int $page, int $perPage, bool $withSummary = true): array
     {
-        $query = OperationLog::query();
+        $query = ActivityLog::query();
         $this->applyHttpActionFilter($query);
 
         if (! empty($filters['keyword'])) {
@@ -219,13 +218,13 @@ class AdminLogService
         }
 
         if (! empty($filters['user_type'])) {
-            $query->where('user_type', trim((string) $filters['user_type']));
+            $query->where('actor_type', trim((string) $filters['user_type']));
         }
 
         $this->applyDateFilter($query, $filters);
 
         $logs = (clone $query)->orderByDesc('created_at')->paginate($perPage, ['*'], 'page', $page);
-        $rows = $this->mapOperationLogs($logs->getCollection(), false)->map(function (array $item) {
+        $rows = $this->mapActivityLogRows($logs->getCollection())->map(function (array $item) {
             [$method, $path] = $this->splitHttpAction((string) ($item['action'] ?? ''));
             $detail = SensitiveDataSanitizer::sanitize(
                 is_array($item['detail'] ?? null) ? $item['detail'] : []
@@ -253,7 +252,7 @@ class AdminLogService
                 return (clone $query)
                     ->selectRaw('COUNT(*) as total')
                     ->selectRaw("COALESCE(SUM(CASE WHEN CAST(JSON_UNQUOTE(JSON_EXTRACT(context, '$.status')) AS UNSIGNED) >= 500 THEN 1 ELSE 0 END), 0) as errors")
-                    ->selectRaw("COALESCE(SUM(CASE WHEN user_type = 'admin' THEN 1 ELSE 0 END), 0) as admin_count")
+                    ->selectRaw("COALESCE(SUM(CASE WHEN actor_type = 'admin' THEN 1 ELSE 0 END), 0) as admin_count")
                     ->first();
             }
         );
@@ -321,16 +320,6 @@ class AdminLogService
                 ];
             }
         );
-    }
-
-    public function getSystemLogs(array $filters, int $page, int $perPage, bool $withSummary = true): array
-    {
-        return $this->getActivityLogs($filters, $page, $perPage, $withSummary);
-    }
-
-    public function getSystemLogsSummary(array $filters): array
-    {
-        return $this->getActivityLogsSummary($filters);
     }
 
     public function getRuntimeLogs(array $filters, int $page, int $perPage): array
@@ -412,10 +401,10 @@ class AdminLogService
 
     public function getAdminLoginLogs(array $filters, int $page, int $perPage, bool $withSummary = true): array
     {
-        // 仅当 operation_logs 表中从未有过任何 admin.login 记录（全新部署）时，才降级到
+        // 仅当 activity_logs 表中从未有过任何 admin.login 记录（全新部署）时，才降级到
         // admin_users 快照。若表内有历史记录但当前过滤条件下为空，应返回空页而非降级，
         // 否则前端会看到与实际日志不一致的"最后一次登录"快照数据。
-        $hasAnyLoginRecord = OperationLog::query()
+        $hasAnyLoginRecord = ActivityLog::query()
             ->where('module', 'auth')
             ->where('action', 'admin.login')
             ->exists();
@@ -424,7 +413,7 @@ class AdminLogService
             return $this->getAdminLoginLogsFromSnapshot($filters, $page, $perPage, $withSummary);
         }
 
-        $query = OperationLog::query()
+        $query = ActivityLog::query()
             ->where('module', 'auth')
             ->where('action', 'admin.login');
 
@@ -442,12 +431,12 @@ class AdminLogService
 
         $logs = (clone $query)->orderByDesc('created_at')->paginate($perPage, ['*'], 'page', $page);
 
-        $rows = $this->mapOperationLogs($logs->getCollection(), false)->map(function (array $item) {
+        $rows = $this->mapActivityLogRows($logs->getCollection())->map(function (array $item) {
             $detail = is_array($item['detail'] ?? null) ? $item['detail'] : [];
             $item['admin_username'] = trim((string) ($detail['admin_username'] ?? $item['actor_name'] ?? ''));
             $item['admin_nickname'] = trim((string) ($detail['admin_nickname'] ?? ''));
-            $item['role_name'] = trim((string) ($detail['role_name'] ?? ''));
-            $item['source'] = 'operation_log';
+            $item['role_name'] = trim((string) ($detail['role_name'] ?? $item['role_name'] ?? ''));
+            $item['source'] = 'activity_log';
 
             return $item;
         });
@@ -458,7 +447,7 @@ class AdminLogService
             $withSummary
                 ? [
                     'total' => $logs->total(),
-                    'mode' => 'operation_log',
+                    'mode' => 'activity_log',
                 ]
                 : []
         );
@@ -517,12 +506,12 @@ class AdminLogService
 
     private function baseApiLogQuery()
     {
-        return OperationLog::query()->whereRaw('action REGEXP ?', [self::HTTP_ACTION_REGEXP]);
+        return ActivityLog::query()->whereRaw('action REGEXP ?', [self::HTTP_ACTION_REGEXP]);
     }
 
     private function baseAdminLoginLogQuery()
     {
-        return OperationLog::query()
+        return ActivityLog::query()
             ->where('module', 'auth')
             ->where('action', 'admin.login');
     }
@@ -1157,11 +1146,16 @@ class AdminLogService
         return new LengthAwarePaginator($data, $total, $perPage, $page);
     }
 
-    private function mapOperationLogs(Collection $logs, bool $includeMessageFields): Collection
+    /**
+     * 把 activity_logs 行映射为 api / admin-logins channel 的既有列表行结构
+     * （id/user_id/user_type/actor_name/role_name/action/module/target_id/detail/ip_address/created_at），
+     * 字段语义与旧 mapOperationLogs 保持一致，前端响应结构不变。
+     */
+    private function mapActivityLogRows(Collection $logs): Collection
     {
         $privacy = AdminPrivacy::current();
-        $adminIds = $logs->where('user_type', 'admin')->pluck('user_id')->filter()->unique()->values();
-        $clientIds = $logs->where('user_type', 'client')->pluck('user_id')->filter()->unique()->values();
+        $adminIds = $logs->where('actor_type', 'admin')->pluck('actor_id')->filter()->unique()->values();
+        $clientIds = $logs->where('actor_type', 'client')->pluck('actor_id')->filter()->unique()->values();
 
         $admins = $adminIds->isEmpty()
             ? collect()
@@ -1188,47 +1182,39 @@ class AdminLogService
                 ])
                 ->keyBy('id');
 
-        return $logs->map(function (OperationLog $log) use ($admins, $roles, $clients, $includeMessageFields, $privacy) {
-            $detail = is_array($log->detail) ? $log->detail : [];
-            $actorName = '';
+        return $logs->map(function (ActivityLog $log) use ($admins, $roles, $clients, $privacy) {
+            $detail = is_array($log->context) ? $log->context : [];
+            $actorName = trim((string) ($log->actor_name ?? ''));
             $roleName = '';
 
-            if ($log->user_type === 'admin') {
-                $admin = $admins->get($log->user_id);
+            if ($log->actor_type === 'admin') {
+                $admin = $admins->get($log->actor_id);
                 if ($admin) {
                     $actorName = trim((string) ($admin->nickname ?: $admin->username));
                     $role = $roles->get($admin->role_id);
                     $roleName = trim((string) ($role?->label ?: $role?->name ?: ''));
                 }
-            } elseif ($log->user_type === 'client') {
-                $client = $clients->get($log->user_id);
+            } elseif ($log->actor_type === 'client') {
+                $client = $clients->get($log->actor_id);
                 if ($client instanceof User) {
                     $actorName = $privacy->displayName($client->display_name, $client->email, $client->phone, $client->real_name);
                 }
             }
 
-            $item = [
+            return [
                 'id' => (int) $log->id,
-                'user_id' => $log->user_id ? (int) $log->user_id : null,
-                'user_type' => trim((string) ($log->user_type ?? '')),
+                'user_id' => $log->actor_id !== null ? (int) $log->actor_id : null,
+                'user_type' => trim((string) ($log->actor_type ?? '')),
                 'actor_name' => $actorName,
                 'role_name' => $roleName,
                 'action' => trim((string) $log->action),
                 'module' => trim((string) ($log->module ?? '')),
-                'target_id' => $log->target_id ? (int) $log->target_id : null,
+                'target_id' => $log->subject_id !== null ? (int) $log->subject_id : null,
                 'detail' => $privacy->payload($detail),
                 'ip_address' => $privacy->ip($log->ip_address ?? ''),
                 'created_at' => $log->created_at?->format('Y-m-d H:i:s'),
+                'request_id' => trim((string) ($log->trace_id ?? '')),
             ];
-
-            if ($includeMessageFields) {
-                $item['title'] = trim((string) ($detail['title'] ?? $detail['subject'] ?? ''));
-                $item['content'] = trim((string) ($detail['content'] ?? $detail['message'] ?? ''));
-                $item['target'] = trim((string) ($detail['target'] ?? $detail['to'] ?? ''));
-                $item['status'] = trim((string) ($detail['status'] ?? 'success'));
-            }
-
-            return $item;
         });
     }
 
@@ -1322,6 +1308,11 @@ class AdminLogService
         $message = SensitiveDataSanitizer::sanitizeText(trim((string) $matches['message']));
         $taskKey = $this->resolveTaskKeyFromMessage($message);
 
+        // 文件条目本身没有结构化列；行尾 JSON context 常带 provider_key/plugin_key/domain，
+        // 提取出来回填列表的「插件 key / 来源」列，避免把适配器日志误读为空来源
+        $context = $this->extractLogContext((string) $matches['message']);
+        $logSource = trim((string) ($context['provider_key'] ?? $context['plugin_key'] ?? $context['slug'] ?? ''));
+
         return [
             'id' => md5($line.'|'.$lineNo),
             'time' => trim((string) $matches['time']),
@@ -1330,7 +1321,25 @@ class AdminLogService
             'raw' => $message,
             'task_key' => $taskKey,
             'task_title' => $taskKey ? (self::TASK_META[$taskKey]['title'] ?? $taskKey) : '',
+            'plugin_key' => $logSource,
+            'log_origin' => isset($context['provider_key']) ? 'provider' : (isset($context['domain']) ? 'plugin' : ($logSource !== '' ? 'component' : '')),
         ];
+    }
+
+    /**
+     * 解析 Laravel 日志行尾的 JSON context（`message {"k":"v"}`）。
+     *
+     * @return array<string, mixed>
+     */
+    private function extractLogContext(string $message): array
+    {
+        if (! preg_match('/\s+(\{.*\})\s*$/s', $message, $matches)) {
+            return [];
+        }
+
+        $decoded = json_decode($matches[1], true);
+
+        return is_array($decoded) ? $decoded : [];
     }
 
     private function resolveTaskKeyFromMessage(string $message): ?string
@@ -1421,10 +1430,10 @@ class AdminLogService
 
     public function getActivityLogs(array $filters, int $page, int $perPage, bool $withSummary = true): array
     {
-        // 仅在表不存在，或表完全没有任何数据（刚迁移、尚未写入）时才降级到 operation_logs。
-        // 若表已存在并有历史数据，过滤条件导致的空结果不应降级，否则同一页面会混用两套数据源。
-        if (! SchemaMetadataCache::hasTable('activity_logs') || ActivityLog::query()->doesntExist()) {
-            return $this->getBusinessOperationLogsAsActivityLogs($filters, $page, $perPage, $withSummary);
+        // activity_logs 是唯一在线真源：表不存在或无数据时直接返回空页，
+        // 不再回退 operation_logs（隐式切源会让同一页面混用两套数据）。
+        if (! SchemaMetadataCache::hasTable('activity_logs')) {
+            return $this->buildPaginatorPayload($this->emptyPaginator($perPage));
         }
 
         $query = ActivityLog::query();
@@ -1464,25 +1473,7 @@ class AdminLogService
             $this->buildListSummaryCacheKey('activity', $filters),
             now()->addSeconds(self::LIST_SUMMARY_CACHE_TTL_SECONDS),
             function () use ($filters): array {
-                // 与 getActivityLogs 保持一致：仅当表不存在或完全无数据时才降级。
-                // 过滤条件导致的空结果不触发降级，否则 summary 与 list 的 source 不一致。
-                if (SchemaMetadataCache::hasTable('activity_logs') && ActivityLog::query()->exists()) {
-                    $query = ActivityLog::query();
-                    $this->applyActivityLogFilters($query, $filters);
-
-                    $summary = (clone $query)
-                        ->selectRaw('COUNT(*) as total')
-                        ->selectRaw('COUNT(DISTINCT module) as modules')
-                        ->first();
-
-                    return [
-                        'total' => (int) ($summary?->total ?? 0),
-                        'modules' => (int) ($summary?->modules ?? 0),
-                        'source' => 'activity_logs',
-                    ];
-                }
-
-                if (! SchemaMetadataCache::hasTable('operation_logs')) {
+                if (! SchemaMetadataCache::hasTable('activity_logs')) {
                     return [
                         'total' => 0,
                         'modules' => 0,
@@ -1490,10 +1481,8 @@ class AdminLogService
                     ];
                 }
 
-                $query = OperationLog::query()
-                    ->whereRaw('action NOT REGEXP ?', [self::HTTP_ACTION_REGEXP])
-                    ->where('action', '<>', 'admin.login');
-                $this->applyBusinessOperationActivityFilters($query, $filters);
+                $query = ActivityLog::query();
+                $this->applyActivityLogFilters($query, $filters);
 
                 $summary = (clone $query)
                     ->selectRaw('COUNT(*) as total')
@@ -1503,7 +1492,7 @@ class AdminLogService
                 return [
                     'total' => (int) ($summary?->total ?? 0),
                     'modules' => (int) ($summary?->modules ?? 0),
-                    'source' => 'operation_logs',
+                    'source' => 'activity_logs',
                 ];
             }
         );
@@ -1559,255 +1548,5 @@ class AdminLogService
         }
 
         $this->applyDateFilter($query, $filters);
-    }
-
-    private function getBusinessOperationLogsAsActivityLogs(array $filters, int $page, int $perPage, bool $withSummary = true): array
-    {
-        if (! SchemaMetadataCache::hasTable('operation_logs')) {
-            return $this->buildPaginatorPayload($this->emptyPaginator($perPage));
-        }
-
-        $query = OperationLog::query()
-            ->whereRaw('action NOT REGEXP ?', [self::HTTP_ACTION_REGEXP])
-            ->where('action', '<>', 'admin.login');
-        $this->applyBusinessOperationActivityFilters($query, $filters);
-
-        $logs = (clone $query)->orderByDesc('created_at')->paginate($perPage, ['*'], 'page', $page);
-        $logs->setCollection(
-            $this->mapOperationLogs($logs->getCollection(), true)
-                ->map(fn (array $item) => $this->mapOperationLogToActivityRow($item))
-        );
-
-        if (! $withSummary) {
-            return $this->buildPaginatorPayload($logs);
-        }
-
-        $summary = (clone $query)
-            ->selectRaw('COUNT(*) as total')
-            ->selectRaw('COUNT(DISTINCT module) as modules')
-            ->first();
-
-        return $this->buildPaginatorPayload($logs, [
-            'total' => (int) ($summary?->total ?? 0),
-            'modules' => (int) ($summary?->modules ?? 0),
-            'source' => 'operation_logs',
-        ]);
-    }
-
-    private function applyBusinessOperationActivityFilters(Builder $query, array $filters): void
-    {
-        if (! empty($filters['keyword'])) {
-            $keyword = trim((string) $filters['keyword']);
-            $actorCandidates = $this->resolveActorKeywordCandidates($keyword);
-            $subjectIdColumn = $this->operationLogSubjectIdColumn();
-            $query->where(function ($builder) use ($keyword, $actorCandidates, $subjectIdColumn) {
-                $builder->where('action', 'like', "%{$keyword}%")
-                    ->orWhere('module', 'like', "%{$keyword}%")
-                    ->orWhere('ip_address', 'like', "%{$keyword}%")
-                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.title')) like ?", ["%{$keyword}%"])
-                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.message')) like ?", ["%{$keyword}%"])
-                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.content')) like ?", ["%{$keyword}%"])
-                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.target')) like ?", ["%{$keyword}%"]);
-
-                if (ctype_digit($keyword) && $subjectIdColumn !== null) {
-                    $builder->orWhere($subjectIdColumn, (int) $keyword);
-                }
-
-                if ($actorCandidates['admin'] !== []) {
-                    $builder->orWhere(function ($query) use ($actorCandidates) {
-                        $query->where('user_type', 'admin')
-                            ->whereIn('user_id', $actorCandidates['admin']);
-                    });
-                }
-
-                if ($actorCandidates['client'] !== []) {
-                    $builder->orWhere(function ($query) use ($actorCandidates) {
-                        $query->where('user_type', 'client')
-                            ->whereIn('user_id', $actorCandidates['client']);
-                    });
-                }
-            });
-        }
-
-        if (! empty($filters['actor_keyword'])) {
-            $keyword = trim((string) $filters['actor_keyword']);
-            $actorCandidates = $this->resolveActorKeywordCandidates($keyword);
-            $query->where(function ($builder) use ($keyword, $actorCandidates) {
-                if (ctype_digit($keyword)) {
-                    $builder->where('user_id', (int) $keyword);
-                }
-
-                if ($actorCandidates['admin'] !== []) {
-                    $builder->orWhere(function ($query) use ($actorCandidates) {
-                        $query->where('user_type', 'admin')
-                            ->whereIn('user_id', $actorCandidates['admin']);
-                    });
-                }
-
-                if ($actorCandidates['client'] !== []) {
-                    $builder->orWhere(function ($query) use ($actorCandidates) {
-                        $query->where('user_type', 'client')
-                            ->whereIn('user_id', $actorCandidates['client']);
-                    });
-                }
-
-                if (! ctype_digit($keyword) && $actorCandidates['admin'] === [] && $actorCandidates['client'] === []) {
-                    $builder->whereRaw('1 = 0');
-                }
-            });
-        }
-
-        if (! empty($filters['description_keyword'])) {
-            $keyword = trim((string) $filters['description_keyword']);
-            $query->where(function ($builder) use ($keyword) {
-                $builder->where('action', 'like', "%{$keyword}%")
-                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.title')) like ?", ["%{$keyword}%"])
-                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.message')) like ?", ["%{$keyword}%"])
-                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.content')) like ?", ["%{$keyword}%"])
-                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.target')) like ?", ["%{$keyword}%"]);
-            });
-        }
-
-        if (! empty($filters['ip_address'])) {
-            $query->where('ip_address', 'like', '%'.trim((string) $filters['ip_address']).'%');
-        }
-
-        if (! empty($filters['module'])) {
-            $query->where('module', trim((string) $filters['module']));
-        }
-
-        if (! empty($filters['actor_type'])) {
-            $actorType = trim((string) $filters['actor_type']);
-            if ($actorType === 'system') {
-                $query->where(function ($builder) {
-                    $builder->whereNull('user_type')
-                        ->orWhere('user_type', '')
-                        ->orWhere('user_type', 'system');
-                });
-            } else {
-                $query->where('user_type', $actorType);
-            }
-        }
-
-        if (! empty($filters['subject_type'])) {
-            $query->where('module', trim((string) $filters['subject_type']));
-        }
-
-        $this->applyDateFilter($query, $filters);
-    }
-
-    private function operationLogSubjectIdColumn(): ?string
-    {
-        if (SchemaMetadataCache::hasColumn('operation_logs', 'subject_id')) {
-            return 'subject_id';
-        }
-
-        if (SchemaMetadataCache::hasColumn('operation_logs', 'target_id')) {
-            return 'target_id';
-        }
-
-        return null;
-    }
-
-    private function mapOperationLogToActivityRow(array $item): array
-    {
-        $detail = is_array($item['detail'] ?? null) ? $item['detail'] : [];
-        $module = trim((string) ($item['module'] ?? ''));
-        $actorType = trim((string) ($item['user_type'] ?? '')) ?: 'system';
-        $actorName = trim((string) ($item['actor_name'] ?? '')) ?: $this->fallbackActorName($actorType);
-
-        return [
-            'id' => 'operation-'.$item['id'],
-            'source' => 'operation_log',
-            'actor_type' => $actorType,
-            'actor_id' => $item['user_id'] ?? null,
-            'actor_name' => $actorName,
-            'module' => $module,
-            'action' => trim((string) ($item['action'] ?? '')),
-            'description' => $this->operationLogDescription($item),
-            'subject_type' => $module !== '' ? $module : null,
-            'subject_id' => $item['target_id'] ?? null,
-            'context' => SensitiveDataSanitizer::sanitize($detail),
-            'ip_address' => trim((string) ($item['ip_address'] ?? '')),
-            'created_at' => $item['created_at'] ?? null,
-        ];
-    }
-
-    private function operationLogDescription(array $item): string
-    {
-        foreach (['title', 'content', 'target'] as $key) {
-            $value = trim((string) ($item[$key] ?? ''));
-            if ($value !== '') {
-                return $value;
-            }
-        }
-
-        $detail = is_array($item['detail'] ?? null) ? $item['detail'] : [];
-        foreach (['title', 'message', 'content', 'target'] as $key) {
-            $value = trim((string) ($detail[$key] ?? ''));
-            if ($value !== '') {
-                return $value;
-            }
-        }
-
-        return trim((string) ($item['action'] ?? ''));
-    }
-
-    private function fallbackActorName(string $actorType): string
-    {
-        return [
-            'admin' => '管理员',
-            'client' => '客户',
-            'system' => '系统',
-            'sub_account' => '子账号',
-        ][$actorType] ?? $actorType;
-    }
-
-    private function resolveActorKeywordCandidates(string $keyword): array
-    {
-        $keyword = trim($keyword);
-        if ($keyword === '') {
-            return ['admin' => [], 'client' => []];
-        }
-
-        $adminIds = collect();
-        if (SchemaMetadataCache::hasTable('admin_users')) {
-            $adminIds = AdminUser::query()
-                ->where(function ($query) use ($keyword) {
-                    $query->where('username', 'like', "%{$keyword}%")
-                        ->orWhere('nickname', 'like', "%{$keyword}%")
-                        ->orWhere('email', 'like', "%{$keyword}%");
-
-                    if (ctype_digit($keyword)) {
-                        $query->orWhere('id', (int) $keyword);
-                    }
-                })
-                ->limit(200)
-                ->pluck('id')
-                ->map(fn ($id) => (int) $id);
-        }
-
-        $clientIds = collect();
-        if (SchemaMetadataCache::hasTable('users')) {
-            $clientIds = User::query()
-                ->where(function ($query) use ($keyword) {
-                    $query->where('email', 'like', "%{$keyword}%")
-                        ->orWhere('phone', 'like', "%{$keyword}%")
-                        ->orWhere('nickname', 'like', "%{$keyword}%")
-                        ->orWhere('real_name', 'like', "%{$keyword}%");
-
-                    if (ctype_digit($keyword)) {
-                        $query->orWhere('id', (int) $keyword);
-                    }
-                })
-                ->limit(200)
-                ->pluck('id')
-                ->map(fn ($id) => (int) $id);
-        }
-
-        return [
-            'admin' => $adminIds->values()->all(),
-            'client' => $clientIds->values()->all(),
-        ];
     }
 }

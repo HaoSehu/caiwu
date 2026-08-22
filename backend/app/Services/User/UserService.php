@@ -12,9 +12,9 @@ use App\Constants\PaymentStatus;
 use App\Constants\ServiceStatus;
 use App\Exceptions\BusinessException;
 use App\Http\Resources\Finance\FinanceLedgerResource;
+use App\Models\ActivityLog;
 use App\Models\Invoice;
 use App\Models\MessageLog;
-use App\Models\OperationLog;
 use App\Models\Payment;
 use App\Models\ReferralReward;
 use App\Models\ReferralWithdrawal;
@@ -647,7 +647,7 @@ class UserService
      */
     public function operationLogs(int $userId, array $filters, int $perPage = 20)
     {
-        $query = OperationLog::where('user_id', $userId)->where('user_type', 'client');
+        $query = ActivityLog::where('actor_id', $userId)->where('actor_type', 'client');
 
         if (! empty($filters['keyword'])) {
             $query->where('action', 'like', "%{$filters['keyword']}%");
@@ -1252,17 +1252,17 @@ class UserService
             return [];
         }
 
-        return OperationLog::query()
+        return ActivityLog::query()
             ->where('module', 'order')
             ->where('subject_id', $invoice->order_id)
             ->orderByDesc('id')
             ->limit(50)
             ->get()
-            ->map(fn (OperationLog $log) => [
+            ->map(fn (ActivityLog $log) => [
                 'id' => (int) $log->id,
                 'created_at' => $log->created_at?->format('Y-m-d H:i:s'),
                 'action' => $log->action,
-                'detail' => $this->stringifyOperationDetail((array) ($log->detail ?? [])),
+                'detail' => $this->stringifyOperationDetail((array) ($log->context ?? [])),
                 'ip_address' => $log->ip_address,
             ])
             ->values()

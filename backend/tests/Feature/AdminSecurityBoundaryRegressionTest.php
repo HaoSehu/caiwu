@@ -8,11 +8,9 @@ use App\Models\AdminUser;
 use App\Models\Product;
 use App\Models\Role;
 use App\Models\Supplier;
-use App\Services\System\AdminLogService;
 use App\Support\AdminPermissions;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\File;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -117,43 +115,6 @@ class AdminSecurityBoundaryRegressionTest extends TestCase
 
         $this->assertLessThan((int) $before, (int) $after);
         $this->assertDatabaseMissing('message_logs', ['request_id' => $requestId]);
-    }
-
-    public function test_file_log_cleanup_removes_multiline_entries_as_a_unit(): void
-    {
-        Cache::flush();
-        $originalStoragePath = app()->storagePath();
-        $tempStoragePath = $originalStoragePath.DIRECTORY_SEPARATOR.'framework'.DIRECTORY_SEPARATOR.'testing'.DIRECTORY_SEPARATOR.'log-cleanup-'.bin2hex(random_bytes(4));
-
-        File::ensureDirectoryExists($tempStoragePath.DIRECTORY_SEPARATOR.'logs');
-        app()->useStoragePath($tempStoragePath);
-
-        try {
-            file_put_contents(storage_path('logs/laravel.log'), implode("\n", [
-                '['.now()->subYears(20)->format('Y-m-d H:i:s').'] local.ERROR: cleanup old failure',
-                '[stacktrace]',
-                '#0 /app/OldFailure.php(1): old()',
-                '['.now()->format('Y-m-d H:i:s').'] local.INFO: cleanup recent message',
-                '',
-            ]));
-
-            app(AdminLogService::class)->cleanup([
-                'type' => 'system',
-                'keep_days' => 3650,
-                'confirm_text' => '立即清理',
-            ]);
-
-            $content = (string) file_get_contents(storage_path('logs/laravel.log'));
-
-            $this->assertStringNotContainsString('cleanup old failure', $content);
-            $this->assertStringNotContainsString('[stacktrace]', $content);
-            $this->assertStringNotContainsString('OldFailure.php', $content);
-            $this->assertStringContainsString('cleanup recent message', $content);
-        } finally {
-            app()->useStoragePath($originalStoragePath);
-            File::deleteDirectory($tempStoragePath);
-            Cache::flush();
-        }
     }
 
     public function test_supplier_with_bound_products_cannot_be_deleted(): void

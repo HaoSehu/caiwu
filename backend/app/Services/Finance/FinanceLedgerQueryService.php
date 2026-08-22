@@ -9,8 +9,8 @@ use App\Constants\OrderStatus;
 use App\Constants\PaymentStatus;
 use App\Http\Resources\Finance\FinanceLedgerResource;
 use App\Models\AccountTransaction;
+use App\Models\ActivityLog;
 use App\Models\Invoice;
-use App\Models\OperationLog;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\PaymentCallback;
@@ -859,25 +859,25 @@ class FinanceLedgerQueryService
             return [];
         }
 
-        return OperationLog::query()
+        return ActivityLog::query()
             ->where('module', $module)
             ->where('subject_id', $subjectId)
             ->orderByDesc('id')
             ->limit(50)
             ->get()
-            ->map(fn (OperationLog $log) => $this->transformOperationLog($log))
+            ->map(fn (ActivityLog $log) => $this->transformOperationLog($log))
             ->values()
             ->all();
     }
 
     private function queryTraceLogs(string $traceId): array
     {
-        return OperationLog::query()
-            ->where('context->trace_id', $traceId)
+        return ActivityLog::query()
+            ->where('trace_id', $traceId)
             ->orderByDesc('id')
             ->limit(50)
             ->get()
-            ->map(fn (OperationLog $log) => $this->transformOperationLog($log))
+            ->map(fn (ActivityLog $log) => $this->transformOperationLog($log))
             ->values()
             ->all();
     }
@@ -923,22 +923,22 @@ class FinanceLedgerQueryService
         };
     }
 
-    private function transformOperationLog(OperationLog $log): array
+    private function transformOperationLog(ActivityLog $log): array
     {
         $privacy = AdminPrivacy::current();
-        $detail = (array) $privacy->payload((array) ($log->detail ?? []));
+        $detail = (array) $privacy->payload((array) ($log->context ?? []));
 
         return [
             'id' => (int) $log->id,
             'module' => (string) ($log->module ?? ''),
             'action' => (string) ($log->action ?? ''),
-            'user_type' => (string) ($log->user_type ?? ''),
-            'user_id' => $log->user_id !== null ? (int) $log->user_id : null,
+            'user_type' => (string) ($log->actor_type ?? ''),
+            'user_id' => $log->actor_id !== null ? (int) $log->actor_id : null,
             'subject_id' => $log->subject_id !== null ? (int) $log->subject_id : null,
             'created_at' => $log->created_at?->format('Y-m-d H:i:s'),
             'ip_address' => $privacy->ip($log->ip_address ?? ''),
-            'trace_id' => trim((string) ($detail['trace_id'] ?? '')),
-            'operator_name' => trim((string) ($detail['operator_name'] ?? $detail['actor_name'] ?? '')),
+            'trace_id' => trim((string) ($log->trace_id ?? $detail['trace_id'] ?? '')),
+            'operator_name' => trim((string) ($detail['operator_name'] ?? $detail['actor_name'] ?? $log->actor_name ?? '')),
             'summary' => $this->stringifyDetail($detail),
             'detail' => $detail,
             'tone' => $this->resolveOperationLogTone((string) ($log->action ?? '')),

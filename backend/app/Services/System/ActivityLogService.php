@@ -7,6 +7,7 @@ namespace App\Services\System;
 use App\Models\ActivityLog;
 use App\Models\AdminUser;
 use App\Models\User;
+use Illuminate\Support\Str;
 
 class ActivityLogService
 {
@@ -67,8 +68,11 @@ class ActivityLogService
         ?string $subjectType = null,
         ?int $subjectId = null,
         array $context = [],
+        ?string $stream = null,
     ): void {
         ActivityLog::query()->create([
+            'event_id' => (string) Str::ulid(),
+            'stream' => $stream,
             'actor_type' => 'system',
             'actor_id' => null,
             'actor_name' => 'System',
@@ -79,7 +83,18 @@ class ActivityLogService
             'subject_id' => $subjectId,
             'context' => $context !== [] ? $context : null,
             'ip_address' => null,
+            'trace_id' => $this->contextTraceId($context),
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     */
+    private function contextTraceId(array $context): ?string
+    {
+        $value = trim((string) ($context['trace_id'] ?? ''));
+
+        return $value !== '' ? substr($value, 0, 64) : null;
     }
 
     private function resolveActor(): array

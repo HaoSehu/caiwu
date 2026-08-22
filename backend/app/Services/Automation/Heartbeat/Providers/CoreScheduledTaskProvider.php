@@ -62,7 +62,7 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 handler: function (): array {
                     $summary = app(AutoRenewService::class)->handle();
                     if (($summary['matched'] ?? 0) > 0) {
-                        Log::info('[定时任务] 自动续费执行完成', $summary);
+                        Log::debug('[定时任务] 自动续费执行完成', $summary);
                     } else {
                         Log::debug('[定时任务] 自动续费执行完成（无匹配）', $summary);
                     }
@@ -81,7 +81,7 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 handler: function (): array {
                     $released = app(ReferralService::class)->releaseMaturedRewards();
                     if ($released > 0) {
-                        Log::info('[定时任务] 推荐奖励释放执行完成', ['released' => $released]);
+                        Log::debug('[定时任务] 推荐奖励释放执行完成', ['released' => $released]);
                     }
 
                     return ['released' => $released];
@@ -103,7 +103,7 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 handler: function (): array {
                     $summary = app(ServiceLifecycleAutomationService::class)->handle();
                     if (array_sum($summary) > 0) {
-                        Log::info('[定时任务] 服务生命周期维护执行完成', $summary);
+                        Log::debug('[定时任务] 服务生命周期维护执行完成', $summary);
                     }
 
                     return $summary;
@@ -125,7 +125,7 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                         ? [ProviderKey::ZJMF_FINANCE_API]
                         : [];
                     $summary = app(ServiceStatusSyncService::class)->handle(100, 10, $excludedProviderKeys);
-                    Log::info('[定时任务] 用户产品状态同步执行完成', $summary);
+                    Log::debug('[定时任务] 用户产品状态同步执行完成', $summary);
 
                     return $summary;
                 },
@@ -145,7 +145,7 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 )],
                 handler: function (): array {
                     $summary = app(BillingAutomationService::class)->handle();
-                    Log::info('[定时任务] 账单自动化维护执行完成', $summary);
+                    Log::debug('[定时任务] 账单自动化维护执行完成', $summary);
 
                     return $summary;
                 },
@@ -160,7 +160,7 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 triggers: [ScheduleRule::cron('0 0 * * *')],
                 handler: function (): array {
                     $summary = app(ProductCatalogService::class)->syncUpstreamProductConfigOptions();
-                    Log::info('[定时任务] 上游产品配置同步执行完成', $summary);
+                    Log::debug('[定时任务] 上游产品配置同步执行完成', $summary);
 
                     return $summary;
                 },
@@ -190,7 +190,7 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 handler: function (): array {
                     $summary = app(CouponCampaignService::class)->dispatchDueCampaigns();
                     if (($summary['triggered'] ?? 0) > 0 || ($summary['failed'] ?? 0) > 0) {
-                        Log::info('[定时任务] 优惠券活动自动发放执行完成', $summary);
+                        Log::debug('[定时任务] 优惠券活动自动发放执行完成', $summary);
                     }
 
                     return $summary;
@@ -211,7 +211,7 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 )],
                 handler: function (): array {
                     $summary = app(TicketAutomationService::class)->handle();
-                    Log::info('[定时任务] 工单自动关闭执行完成', $summary);
+                    Log::debug('[定时任务] 工单自动关闭执行完成', $summary);
 
                     return $summary;
                 },
@@ -232,7 +232,7 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 handler: function (): array {
                     $summary = app(InvoiceCleanupAutomationService::class)->handle();
                     if (array_sum($summary) > 0) {
-                        Log::info('[定时任务] 账单与充值清理执行完成', $summary);
+                        Log::debug('[定时任务] 账单与充值清理执行完成', $summary);
                     }
 
                     return $summary;
@@ -415,7 +415,7 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 }
             });
 
-        Log::info('[定时任务] 接口认证刷新执行完成', $summary);
+        Log::debug('[定时任务] 接口认证刷新执行完成', $summary);
 
         return $summary;
     }

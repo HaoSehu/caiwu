@@ -9,8 +9,8 @@ use App\Constants\OrderType;
 use App\Constants\PaymentGatewayCode;
 use App\Constants\PaymentStatus;
 use App\Exceptions\BusinessException;
+use App\Models\ActivityLog;
 use App\Models\Invoice;
-use App\Models\OperationLog;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Product;
@@ -1299,17 +1299,17 @@ class InvoiceService
             return [];
         }
 
-        return OperationLog::query()
+        return ActivityLog::query()
             ->where('module', 'order')
             ->where('subject_id', $invoice->order_id)
             ->orderByDesc('id')
             ->limit(50)
             ->get()
-            ->map(fn (OperationLog $log) => [
+            ->map(fn (ActivityLog $log) => [
                 'id' => (int) $log->id,
                 'created_at' => $log->created_at?->format('Y-m-d H:i:s'),
                 'action' => $log->action,
-                'summary' => $this->stringifyOperationDetail((array) ($log->detail ?? [])),
+                'summary' => $this->stringifyOperationDetail((array) ($log->context ?? [])),
                 'tone' => $this->resolveLogTone((string) $log->action),
             ])
             ->values()

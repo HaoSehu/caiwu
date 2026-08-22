@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Models\OperationLog;
+use App\Models\ActivityLog;
 use App\Models\User;
 use App\Services\Auth\AuthService;
 use App\Services\Auth\VerificationCodeService;
@@ -80,19 +80,19 @@ class ClientProfileRegressionTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.nickname', 'Logged Nickname');
 
-        $log = OperationLog::query()
+        $log = ActivityLog::query()
             ->where('action', 'profile.nickname.update')
             ->where('module', 'auth')
-            ->where('user_id', (int) $user->id)
+            ->where('actor_id', (int) $user->id)
             ->latest('id')
             ->first();
 
         $this->assertNotNull($log);
         $this->assertSame('profile.nickname.update', $log->action);
         $this->assertSame('auth', $log->module);
-        $this->assertSame((int) $user->id, (int) $log->user_id);
+        $this->assertSame((int) $user->id, (int) $log->actor_id);
 
-        $detail = $log->detail;
+        $detail = $log->context;
 
         $this->assertTrue(
             ($detail['trace_id'] ?? null) === $traceId || ($detail['user_agent'] ?? null) === $userAgent,

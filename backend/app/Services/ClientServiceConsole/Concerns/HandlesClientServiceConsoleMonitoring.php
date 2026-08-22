@@ -116,7 +116,7 @@ trait HandlesClientServiceConsoleMonitoring
             $chartData = is_array($chart['chart'] ?? null) ? $chart['chart'] : null;
             $summary = is_array($chart['summary'] ?? null) ? $chart['summary'] : null;
 
-            Log::info('[客户端监控] 单图监控耗时', [
+            Log::debug('[客户端监控] 单图监控耗时', [
                 'service_id' => $service->id,
                 'host_id' => $hostId,
                 'type' => $selectedType,
@@ -163,7 +163,7 @@ trait HandlesClientServiceConsoleMonitoring
                 'summary' => null,
             ];
         } finally {
-            Log::info('[客户端监控] 单图监控结束', [
+            Log::debug('[客户端监控] 单图监控结束', [
                 'service_id' => $service->id,
                 'requested_type' => $selectedType,
                 'total_ms' => $this->elapsedMilliseconds($startedAt),
@@ -319,7 +319,7 @@ trait HandlesClientServiceConsoleMonitoring
             $charts = $this->fetchMonitorChartsBatch($supplier, $hostId, $jwt, $types, $range, $chartOptions, $fresh);
             $chartDurationMs = $this->elapsedMilliseconds($chartStartedAt);
 
-            Log::info('[客户端监控] 批量监控耗时', [
+            Log::debug('[客户端监控] 批量监控耗时', [
                 'service_id' => $service->id,
                 'host_id' => $hostId,
                 'requested_types' => $requestedTypes,
@@ -361,7 +361,7 @@ trait HandlesClientServiceConsoleMonitoring
                 'charts' => [],
             ];
         } finally {
-            Log::info('[客户端监控] 批量监控结束', [
+            Log::debug('[客户端监控] 批量监控结束', [
                 'service_id' => $service->id,
                 'requested_types' => $requestedTypes,
                 'total_ms' => $this->elapsedMilliseconds($startedAt),
@@ -390,12 +390,6 @@ trait HandlesClientServiceConsoleMonitoring
     ): array {
         $cachedChart = $fresh ? null : $this->getCachedMonitorChart($supplier, $hostId, $type, $start, $end);
         if (! $fresh && is_array($cachedChart)) {
-            Log::info('[客户端监控] 单图缓存命中', [
-                'supplier_id' => $supplier->id,
-                'host_id' => $hostId,
-                'type' => $type,
-            ]);
-
             return $cachedChart;
         }
 
@@ -435,15 +429,6 @@ trait HandlesClientServiceConsoleMonitoring
             ));
         } else {
             $missingTypes = $types;
-        }
-
-        if ($cachedCharts !== []) {
-            Log::info('[客户端监控] 批量图表缓存命中', [
-                'supplier_id' => $supplier->id,
-                'host_id' => $hostId,
-                'hit_types' => array_keys($cachedCharts),
-                'miss_types' => $missingTypes,
-            ]);
         }
 
         $responses = [];

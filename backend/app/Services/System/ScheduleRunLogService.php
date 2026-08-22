@@ -4,6 +4,7 @@ namespace App\Services\System;
 
 use App\Models\ScheduleRunLog;
 use App\Services\Automation\ScheduleHookService;
+use App\Support\ActivityLogStream;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -119,7 +120,8 @@ class ScheduleRunLogService
                     'duration_ms' => $durationMs,
                     'summary' => $summary,
                     'error_message' => $errorMessage !== null ? mb_substr($errorMessage, 0, 2000) : null,
-                ], static fn ($value): bool => $value !== null)
+                ], static fn ($value): bool => $value !== null),
+                ActivityLogStream::SCHEDULE,
             );
         } catch (Throwable $exception) {
             Log::warning('[定时任务] Cron 活动日志写入失败，已跳过本次日志记录', [

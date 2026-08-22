@@ -10,7 +10,6 @@ use App\Models\AdminUser;
 use App\Models\GatewayLog;
 use App\Models\IntegrationPluginRuntimeLog;
 use App\Models\MessageLog;
-use App\Models\OperationLog;
 use App\Models\ScheduleRunLog;
 use App\Support\SchemaMetadataCache;
 use App\Support\SensitiveDataSanitizer;
@@ -31,7 +30,6 @@ class AdminLogV2QueryService
         'runtime',
         'schedule',
         'sms',
-        'system',
         'tasks',
     ];
 
@@ -82,7 +80,7 @@ class AdminLogV2QueryService
             'sms' => $this->adminLogService->getSmsLogsSummary($filters),
             'email' => $this->adminLogService->getEmailLogsSummary($filters),
             'tasks' => $this->adminLogService->getTaskLogsSummary($filters),
-            'system', 'activity' => $this->adminLogService->getActivityLogsSummary($filters),
+            'activity' => $this->adminLogService->getActivityLogsSummary($filters),
             'runtime' => $this->adminLogService->getRuntimeLogsSummary($filters),
             'schedule' => $this->scheduleSummary($filters),
             default => $this->legacyList($channel, $filters, 1, 1)['summary'] ?? [],
@@ -97,9 +95,9 @@ class AdminLogV2QueryService
         $row = match ($channel) {
             'sms' => $this->notificationDetail('sms', $log),
             'email' => $this->notificationDetail('email', $log),
-            'api' => $this->operationLogDetail($channel, $log),
+            'api' => $this->activityRowDetail($channel, $log, 'access'),
             'admin-logins' => $this->adminLoginDetail($log),
-            'system', 'activity' => $this->activityDetail($channel, $log),
+            'activity' => $this->activityRowDetail($channel, $log),
             'gateway' => $this->gatewayDetail($log),
             'runtime' => $this->runtimeDetail($log),
             'tasks', 'schedule' => $this->scheduleDetail($channel, $log),
@@ -124,7 +122,6 @@ class AdminLogV2QueryService
             'email' => $this->adminLogService->getEmailLogs($filters, $perPage),
             'api' => $this->adminLogService->getApiLogs($filters, $page, $perPage, $withSummary),
             'tasks' => $this->adminLogService->getTaskLogs($filters, $page, $perPage),
-            'system' => $this->adminLogService->getSystemLogs($filters, $page, $perPage, $withSummary),
             'activity' => $this->adminLogService->getActivityLogs($filters, $page, $perPage, $withSummary),
             'runtime' => $this->adminLogService->getRuntimeLogs($filters, $page, $perPage),
             'admin-logins' => $this->adminLogService->getAdminLoginLogs($filters, $page, $perPage, $withSummary),
@@ -211,34 +208,45 @@ class AdminLogV2QueryService
     }
 
     /**
+     * activity_logs 行详情：api/activity channel 共用。
+     * $expectedStream 非空时校验行的日志流，防止跨 channel 串查。
+     *
      * @return array<string, mixed>|null
      */
-    private function operationLogDetail(string $channel, string $log): ?array
+    private function activityRowDetail(string $channel, string $log, ?string $expectedStream = null): ?array
     {
-        $model = OperationLog::query()->find($log);
-        if (! $model instanceof OperationLog) {
+        $activity = SchemaMetadataCache::hasTable('activity_logs') ? ActivityLog::query()->find($log) : null;
+        if (! $activity instanceof ActivityLog) {
             return null;
         }
 
-        $context = $this->dropSensitiveKeys((array) ($model->detail ?? []));
+        if ($expectedStream !== null && ($activity->stream ?? null) !== null && $activity->stream !== $expectedStream) {
+            // 历史行 stream 为空不做强校验；新行流名不符说明 ID 来自其他 channel
+            return null;
+        }
+
+        $row = $this->normalizeRow($activity);
 
         return [
-            'id' => (string) $model->id,
+            'id' => (string) $activity->id,
             'channel' => $channel,
-            'source' => 'operation_logs',
+            'source' => 'activity_logs',
             'fields' => [
-                'id' => (int) $model->id,
-                'user_type' => (string) ($model->user_type ?? ''),
-                'user_id' => $model->user_id !== null ? (int) $model->user_id : null,
-                'module' => (string) ($model->module ?? ''),
-                'action' => (string) ($model->action ?? ''),
-                'subject_id' => $model->subject_id !== null ? (int) $model->subject_id : null,
-                'ip_address' => SensitiveDataSanitizer::sanitize($model->ip_address ?? ''),
-                'created_at' => $this->dateValue($model, 'created_at'),
+                'id' => (int) $activity->id,
+                'actor_type' => (string) ($row['actor_type'] ?? ''),
+                'actor_id' => $row['actor_id'] ?? null,
+                'actor_name' => (string) ($row['actor_name'] ?? ''),
+                'module' => (string) ($row['module'] ?? ''),
+                'action' => (string) ($row['action'] ?? ''),
+                'subject_type' => $row['subject_type'] ?? null,
+                'subject_id' => $row['subject_id'] ?? null,
+                'ip_address' => SensitiveDataSanitizer::sanitize($row['ip_address'] ?? ''),
+                'request_id' => (string) ($row['trace_id'] ?? ''),
+                'created_at' => $this->dateValue($activity, 'created_at'),
             ],
-            'message' => (string) ($model->action ?? ''),
-            'context' => $context,
-            'created_at' => $this->dateValue($model, 'created_at'),
+            'message' => (string) ($row['action'] ?? $row['description'] ?? ''),
+            'context' => $this->dropSensitiveKeys((array) ($row['context'] ?? [])),
+            'created_at' => $this->dateValue($activity, 'created_at'),
         ];
     }
 
@@ -247,13 +255,24 @@ class AdminLogV2QueryService
      */
     private function adminLoginDetail(string $log): ?array
     {
-        $operation = OperationLog::query()
-            ->where('module', 'auth')
-            ->where('action', 'admin.login')
-            ->find($log);
+        $activity = SchemaMetadataCache::hasTable('activity_logs')
+            ? ActivityLog::query()
+                ->where('module', 'auth')
+                ->where('action', 'admin.login')
+                ->find($log)
+            : null;
 
-        if ($operation instanceof OperationLog) {
-            return $this->operationLogDetail('admin-logins', $log);
+        if ($activity instanceof ActivityLog) {
+            $detail = $this->activityRowDetail('admin-logins', $log);
+            if ($detail !== null) {
+                $context = (array) ($detail['context'] ?? []);
+
+                $detail['fields']['admin_username'] = trim((string) ($context['admin_username'] ?? $detail['fields']['actor_name'] ?? ''));
+                $detail['fields']['admin_nickname'] = trim((string) ($context['admin_nickname'] ?? ''));
+                $detail['fields']['role_name'] = trim((string) ($context['role_name'] ?? ''));
+            }
+
+            return $detail;
         }
 
         $admin = AdminUser::query()->with('role:id,name,label')->find($log);
@@ -276,44 +295,6 @@ class AdminLogV2QueryService
             'message' => '管理员登录快照',
             'context' => ['source' => 'admin_users.last_login_at'],
             'created_at' => $admin->last_login_at?->format('Y-m-d H:i:s'),
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>|null
-     */
-    private function activityDetail(string $channel, string $log): ?array
-    {
-        if (str_starts_with($log, 'operation-')) {
-            return $this->operationLogDetail($channel, substr($log, strlen('operation-')));
-        }
-
-        $activity = SchemaMetadataCache::hasTable('activity_logs') ? ActivityLog::query()->find($log) : null;
-        if (! $activity instanceof ActivityLog) {
-            return $this->operationLogDetail($channel, $log);
-        }
-
-        $row = $this->normalizeRow($activity);
-
-        return [
-            'id' => (string) $activity->id,
-            'channel' => $channel,
-            'source' => 'activity_logs',
-            'fields' => [
-                'id' => (int) $activity->id,
-                'actor_type' => (string) ($row['actor_type'] ?? ''),
-                'actor_id' => $row['actor_id'] ?? null,
-                'actor_name' => (string) ($row['actor_name'] ?? ''),
-                'module' => (string) ($row['module'] ?? ''),
-                'action' => (string) ($row['action'] ?? ''),
-                'subject_type' => $row['subject_type'] ?? null,
-                'subject_id' => $row['subject_id'] ?? null,
-                'ip_address' => SensitiveDataSanitizer::sanitize($row['ip_address'] ?? ''),
-                'created_at' => $this->dateValue($activity, 'created_at'),
-            ],
-            'message' => (string) ($row['description'] ?? ''),
-            'context' => $this->dropSensitiveKeys((array) ($row['context'] ?? [])),
-            'created_at' => $this->dateValue($activity, 'created_at'),
         ];
     }
 

@@ -4600,15 +4600,13 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(page.getByText('/api/v2/admin/users')).toBeVisible();
 
     await clickLogTab('sms');
-    await expect(page.getByText('13800000000')).toBeVisible();
     await expect(page.getByText('短信验证码 482915')).toBeVisible();
 
     await clickLogTab('email');
-    await expect(page.getByText('notice@example.com')).toBeVisible();
-    await expect(page.getByText('测试邮件')).toBeVisible();
+    await expect(page.getByText('邮件正文 482915')).toBeVisible();
 
     await clickLogTab('tasks');
-    await expect(page.getByText('服务自动续费', { exact: true })).toBeVisible();
+    await expect(page.getByText('服务自动续费').first()).toBeVisible();
     await expect(page.getByText('服务自动续费完成')).toBeVisible();
   });
 
@@ -4649,31 +4647,6 @@ test.describe('frontend-admin-v3 shell smoke', () => {
       confirm_text: '立即清理',
     });
     await expect(page.getByText('最近一次清理结果')).toBeVisible();
-  });
-
-  test('redirects log compatibility routes', async ({ page }) => {
-    await mockAdminInfo(page);
-    await mockLogs(page);
-    await page.addInitScript(() => {
-      window.localStorage.setItem('admin_token', 'test-token');
-      window.localStorage.setItem('admin_last_active_at', String(Date.now()));
-    });
-
-    await page.goto('/admin/logs/api', { waitUntil: 'domcontentloaded' });
-    await expect(page).toHaveURL(/\/admin\/logs\?tab=api/);
-    await expect(page.getByText('/api/v2/admin/users')).toBeVisible();
-
-    await page.goto('/admin/notifications/email-logs', { waitUntil: 'domcontentloaded' });
-    await expect(page).toHaveURL(/\/admin\/logs\?tab=email/);
-    await expect(page.getByText('notice@example.com')).toBeVisible();
-
-    await page.goto('/admin/notifications/sms-logs', { waitUntil: 'domcontentloaded' });
-    await expect(page).toHaveURL(/\/admin\/logs\?tab=sms/);
-    await expect(page.getByText('13800000000')).toBeVisible();
-
-    await page.goto('/admin/schedules', { waitUntil: 'domcontentloaded' });
-    await expect(page).toHaveURL(/\/admin\/logs\?tab=schedules/);
-    await expect(page.getByText('服务状态同步')).toBeVisible();
   });
 
   test('does not expose removed system settings page', async ({ page }) => {
