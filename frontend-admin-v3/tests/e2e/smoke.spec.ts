@@ -3024,13 +3024,6 @@ async function mockLogs(page: import('@playwright/test').Page) {
         summary: {},
       });
 
-      if (pathname.endsWith('/log-summaries/system')) {
-        await route.fulfill({
-          contentType: 'application/json',
-          body: JSON.stringify({ code: 0, data: { total: 21, errors: 2, warnings: 3, infos: 16 } }),
-        });
-        return;
-      }
       if (pathname.endsWith('/log-summaries/sms') || pathname.endsWith('/log-summaries/email')) {
         await route.fulfill({
           contentType: 'application/json',
@@ -3053,12 +3046,14 @@ async function mockLogs(page: import('@playwright/test').Page) {
             data: {
               database: { sms: 12, email: 8, api: 33, admin_login: 5 },
               file: {
+                directory: 'storage/logs',
                 exists: true,
                 size_bytes: 2048,
                 task_log_count: 9,
                 system_log_count: 18,
                 path: 'storage/logs/laravel.log',
                 updated_at: '2026-06-06 10:30:00',
+                files: [{ name: 'laravel.log', size_bytes: 2048, updated_at: '2026-06-06 10:30:00' }],
               },
               supported_cleanup_types: [
                 { label: '短信日志', value: 'sms' },
@@ -3093,42 +3088,31 @@ async function mockLogs(page: import('@playwright/test').Page) {
         });
         return;
       }
-      if (/\/api\/v2\/admin\/logs\/system\/[^/]+$/.test(pathname)) {
+      if (/\/api\/v2\/admin\/logs\/api\/[^/]+$/.test(pathname)) {
         await route.fulfill({
           contentType: 'application/json',
           body: JSON.stringify({
             code: 0,
             data: {
               log: {
-                id: 1,
-                channel: 'system',
-                source: 'system',
-                fields: { id: 1, level: 'WARNING', raw: '[INFO] Filtered system warning' },
-                message: '[INFO] Filtered system warning',
-                context: { keyword: 'filtered' },
-                created_at: '2026-06-06 10:00:00',
+                id: 201,
+                channel: 'api',
+                source: 'activity_log',
+                fields: {
+                  id: 201,
+                  method: 'GET',
+                  path: '/api/v2/admin/users',
+                  status: 200,
+                  request_id: 'REQ-LOG-001',
+                  user_type: 'admin',
+                  ip_address: '127.0.0.1',
+                  created_at: '2026-06-06 10:02:00',
+                },
+                message: 'API 请求完成',
+                context: { params: {}, status: 200, request_id: 'REQ-LOG-001' },
+                created_at: '2026-06-06 10:02:00',
               },
             },
-          }),
-        });
-        return;
-      }
-      if (pathname.endsWith('/logs/system')) {
-        const message = pageIndex === 2 ? 'System page 2' : keyword ? 'Filtered system warning' : 'System boot ok';
-        await route.fulfill({
-          contentType: 'application/json',
-          body: JSON.stringify({
-            code: 0,
-            data: paginator({
-              id: pageIndex,
-              channel: 'system',
-              source: 'system',
-              level: keyword ? 'WARNING' : 'INFO',
-              message_excerpt: message,
-              error_excerpt: '',
-              context_excerpt: `[INFO] ${message}`,
-              created_at: '2026-06-06 10:00:00',
-            }),
           }),
         });
         return;
@@ -3163,7 +3147,12 @@ async function mockLogs(page: import('@playwright/test').Page) {
               id: 201,
               channel: 'api',
               method: 'GET',
-              path: keyword ? '/api/v2/admin/logs/api' : '/api/v2/admin/users',
+              path:
+                pageIndex === 2
+                  ? '/api/v2/admin/logs/api?page=2'
+                  : keyword
+                    ? '/api/v2/admin/logs/api'
+                    : '/api/v2/admin/users',
               status: 200,
               module: 'admin',
               actor_name: 'cerbo',
@@ -4572,55 +4561,53 @@ test.describe('frontend-admin-v3 shell smoke', () => {
       window.localStorage.setItem('admin_last_active_at', String(Date.now()));
     });
 
-    const clickLogTab = async (name: string) => {
-      await page.locator('.t-tabs__nav-item-text-wrapper').filter({ hasText: name }).click();
+    const clickLogTab = async (path: string) => {
+      await page.goto(`/admin/logs/${path}`, { waitUntil: 'domcontentloaded' });
     };
 
     await page.goto('/admin/logs', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/admin\/logs/);
-    await expect(page.getByRole('heading', { name: '日志中心' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: '系统日志' })).toBeVisible();
-    await expect(page.getByText('System boot ok')).toBeVisible();
+    await expect(page.getByText('/api/v2/admin/users')).toBeVisible();
 
     const filterRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/v2/admin/logs/system') && request.url().includes('keyword=filtered'),
+      (request) => request.url().includes('/api/v2/admin/logs/api') && request.url().includes('keyword=filtered'),
     );
-    await page.getByPlaceholder('日志内容关键词').fill('filtered');
-    await page.getByRole('button', { name: '搜索' }).click();
+    await page.getByPlaceholder('路径、模块、请求号或 IP').fill('filtered');
+    await page.keyboard.press('Enter');
     await filterRequest;
-    await expect(page.getByText('Filtered system warning')).toBeVisible();
+    await expect(page.getByText('/api/v2/admin/logs/api')).toBeVisible();
 
     await page
-      .locator('.t-table__body tr')
-      .filter({ hasText: 'Filtered system warning' })
+      .locator('article.log-mobile-card, .t-table__body tr')
+      .filter({ hasText: '/api/v2/admin/logs/api' })
       .getByRole('button', { name: '详情' })
       .click();
-    await expect(page.locator('.t-drawer:visible').getByText('系统日志详情')).toBeVisible();
-    await expect(page.locator('.t-drawer:visible').getByText('[INFO] Filtered system warning')).toBeVisible();
+    await expect(page.locator('.t-drawer:visible').getByText('API 日志 · REQ-LOG-001')).toBeVisible();
+    await expect(page.locator('.t-drawer:visible').getByText('/api/v2/admin/users')).toBeVisible();
     await page.keyboard.press('Escape');
 
     const pageRequest = page.waitForRequest(
-      (request) => request.url().includes('/api/v2/admin/logs/system') && request.url().includes('page=2'),
+      (request) => request.url().includes('/api/v2/admin/logs/api') && request.url().includes('page=2'),
     );
     await page.locator('.t-pagination').getByText('2', { exact: true }).click();
     await pageRequest;
-    await expect(page.getByText('System page 2')).toBeVisible();
+    await expect(page.getByText('/api/v2/admin/logs/api?page=2')).toBeVisible();
 
-    await clickLogTab('管理员登录');
+    await clickLogTab('admin-logins');
     await expect(page.getByText('cerbo').first()).toBeVisible();
 
-    await clickLogTab('API 日志');
+    await clickLogTab('api');
     await expect(page.getByText('/api/v2/admin/users')).toBeVisible();
 
-    await clickLogTab('短信日志');
+    await clickLogTab('sms');
     await expect(page.getByText('13800000000')).toBeVisible();
     await expect(page.getByText('短信验证码 482915')).toBeVisible();
 
-    await clickLogTab('邮件日志');
+    await clickLogTab('email');
     await expect(page.getByText('notice@example.com')).toBeVisible();
     await expect(page.getByText('测试邮件')).toBeVisible();
 
-    await clickLogTab('任务日志');
+    await clickLogTab('tasks');
     await expect(page.getByText('服务自动续费', { exact: true })).toBeVisible();
     await expect(page.getByText('服务自动续费完成')).toBeVisible();
   });
@@ -4649,7 +4636,8 @@ test.describe('frontend-admin-v3 shell smoke', () => {
 
     await page.goto('/admin/logs?tab=cleanup', { waitUntil: 'domcontentloaded' });
     await expect(page.getByText('数据库日志概览')).toBeVisible();
-    await expect(page.getByText('storage/logs/laravel.log')).toBeVisible();
+    await expect(page.getByText('storage/logs', { exact: true })).toBeVisible();
+    await expect(page.getByText('laravel.log')).toBeVisible();
     await page.getByPlaceholder('请输入 立即清理').fill('立即清理');
     const cleanupRequest = page.waitForRequest(
       (request) => request.url().includes('/api/v2/admin/log-cleanups') && request.method() === 'POST',

@@ -228,7 +228,6 @@ const ADMIN_MENU_GROUPS: MenuGroupConfig[] = [
         path: '/admin/menu/log-center/log-management',
         title: { zh_CN: '日志管理', en_US: 'Log Management' },
         children: [
-          '/admin/logs/system',
           '/admin/logs/runtime',
           '/admin/logs/admin-logins',
           '/admin/logs/api',

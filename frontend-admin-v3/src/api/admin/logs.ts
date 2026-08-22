@@ -2,7 +2,7 @@ import { request } from '@/utils/request';
 
 import type { LogCleanupPayload, LogListParams, PaginatedList } from './types';
 
-type LogChannel = 'system' | 'runtime' | 'admin-logins' | 'api' | 'sms' | 'email' | 'tasks' | 'gateway' | 'activity';
+type LogChannel = 'runtime' | 'admin-logins' | 'api' | 'sms' | 'email' | 'tasks' | 'gateway';
 
 interface V2LogPage {
   list?: Record<string, unknown>[];
@@ -107,13 +107,10 @@ export const logsApi = {
   api: (params: LogListParams) => listChannel('api', params),
   tasks: (params: LogListParams) => listChannel('tasks', params),
   tasksSummary: (params: LogListParams) => summaryChannel('tasks', params),
-  system: (params: LogListParams) => listChannel('system', params),
-  systemSummary: (params: LogListParams) => summaryChannel('system', params),
   runtime: (params: LogListParams) => listChannel('runtime', params),
   runtimeSummary: (params: LogListParams) => summaryChannel('runtime', params),
   adminLogins: (params: LogListParams) => listChannel('admin-logins', params),
   gateway: (params: LogListParams) => listChannel('gateway', params),
-  activity: (params: LogListParams) => listChannel('activity', params),
   detail: (channel: LogChannel, id: number | string) => detailChannel(channel, id),
   cleanupOverview: () => request.get<Record<string, unknown>>({ url: '/v2/admin/log-cleanups/overview' }),
   cleanup: (data: LogCleanupPayload) =>

@@ -33,7 +33,7 @@ import { computed } from 'vue';
 
 import { fieldValue, formatDateTime } from '@/utils/format';
 
-type LogTab = 'system' | 'runtime' | 'admin-logins' | 'api' | 'sms' | 'email' | 'tasks' | 'gateway';
+type LogTab = 'runtime' | 'admin-logins' | 'api' | 'sms' | 'email' | 'tasks' | 'gateway';
 type RecordRow = Record<string, unknown>;
 
 defineOptions({ name: 'LogDetailDrawer' });
@@ -58,9 +58,8 @@ const headerTitle = computed(() => {
   if (props.activeTab === 'tasks') return `自动任务日志 · ${fieldValue(row.task_key) || '详情'}`;
   if (props.activeTab === 'gateway')
     return `网关日志 · ${fieldValue(row.gateway) || ''} ${fieldValue(row.action) || ''}`;
-  if (props.activeTab === 'system') return `系统日志 · ${fieldValue(row.actor_name) || '详情'}`;
   if (props.activeTab === 'runtime') return `运行日志 · ${fieldValue(row.id) || '详情'}`;
-  return `系统日志 · ${fieldValue(row.id) || '详情'}`;
+  return `运行日志 · ${fieldValue(row.id) || '详情'}`;
 });
 
 const detailFields = computed(() => {
@@ -142,19 +141,6 @@ const detailFields = computed(() => {
       { label: '记录时间', value: formatDate(row.created_at) },
     ];
   }
-  if (props.activeTab === 'system') {
-    return [
-      { label: '操作人', value: fieldValue(row.actor_name) },
-      { label: '操作人类型', value: fieldValue(row.actor_type) },
-      { label: '模块', value: fieldValue(row.module) },
-      { label: '动作', value: fieldValue(row.action) },
-      { label: '关联类型', value: fieldValue(row.subject_type) },
-      { label: '关联 ID', value: fieldValue(row.subject_id) },
-      { label: '记录时间', value: formatDate(row.created_at) },
-      { label: 'IP 地址', value: fieldValue(row.ip_address) },
-      { label: '数据来源', value: activitySourceLabel(row.source) },
-    ];
-  }
   return [
     { label: '日志级别', value: fieldValue(row.level) },
     { label: '插件 ID', value: fieldValue(row.plugin_id) },
@@ -200,12 +186,6 @@ const detailBlocks = computed(() => {
       { label: '摘要 JSON', value: formatJson(row.summary) },
       { label: '错误信息', value: fieldValue(row.error_msg) },
       { label: '原始日志', value: fieldValue(row.raw || row.message) },
-    ];
-  }
-  if (props.activeTab === 'system') {
-    return [
-      { label: '描述', value: fieldValue(row.description) },
-      { label: '上下文', value: formatJson(row.context) },
     ];
   }
   return [
@@ -263,17 +243,6 @@ function sourceLabel(value: unknown) {
       operation_log: '操作日志',
       admin_snapshot: '账号快照',
     }[String(value || '').toLowerCase()] || '未知来源'
-  );
-}
-
-function activitySourceLabel(value: unknown) {
-  return (
-    {
-      activity_log: '活动日志',
-      activity_logs: '活动日志',
-      operation_log: '操作日志',
-      operation_logs: '操作日志',
-    }[String(value || '').toLowerCase()] || fieldValue(value)
   );
 }
 

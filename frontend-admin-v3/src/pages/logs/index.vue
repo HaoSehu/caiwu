@@ -31,30 +31,6 @@
             <t-option v-for="item in methodOptions" :key="item" :label="item" :value="item" />
           </t-select>
           <t-input
-            v-if="showFilter('actor_keyword')"
-            v-model="filters.actor_keyword"
-            clearable
-            placeholder="操作人"
-            @enter="handleLogSearch"
-            @clear="handleLogSearch"
-          />
-          <t-input
-            v-if="showFilter('description_keyword')"
-            v-model="filters.description_keyword"
-            clearable
-            placeholder="描述关键词"
-            @enter="handleLogSearch"
-            @clear="handleLogSearch"
-          />
-          <t-input
-            v-if="showFilter('ip_address')"
-            v-model="filters.ip_address"
-            clearable
-            placeholder="IP 地址"
-            @enter="handleLogSearch"
-            @clear="handleLogSearch"
-          />
-          <t-input
             v-if="showFilter('module')"
             v-model="filters.module"
             clearable
@@ -162,31 +138,6 @@
               :value="item.value"
             />
           </t-select>
-          <t-select
-            v-if="showFilter('actor_type')"
-            v-model="filters.actor_type"
-            clearable
-            placeholder="操作人类型"
-            @change="handleLogSearch"
-          >
-            <t-option label="管理员" value="admin" />
-            <t-option label="客户" value="client" />
-            <t-option label="系统" value="system" />
-          </t-select>
-          <t-select
-            v-if="showFilter('subject_type')"
-            v-model="filters.subject_type"
-            clearable
-            placeholder="关联类型"
-            @change="handleLogSearch"
-          >
-            <t-option
-              v-for="item in activitySubjectOptions"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
-            />
-          </t-select>
           <t-input
             v-if="showFilter('keyword')"
             v-model="filters.keyword"
@@ -252,9 +203,6 @@
             </template>
             <template #httpStatus="{ row }">
               <t-tag :theme="httpStatusTheme(row.status)" variant="light">{{ fieldValue(row.status) }}</t-tag>
-            </template>
-            <template #subject_type="{ row }">
-              {{ subjectText(row) }}
             </template>
             <template #message="{ row }">
               <div v-if="isTextLog" class="log-message">
@@ -482,7 +430,7 @@
         <section class="cleanup-section">
           <div class="section-title">
             <h2>文件日志概览</h2>
-            <p>当前 laravel.log 的基础信息与日志条目数量。</p>
+            <p>storage/logs 下的日志文件只读展示；文件生命周期由日志轮转自动管理，不提供清理入口。</p>
           </div>
           <div class="cleanup-card-grid">
             <article v-for="item in fileCards" :key="item.key">
@@ -490,14 +438,10 @@
               <strong>{{ item.value }}</strong>
             </article>
           </div>
-          <div class="file-meta-grid">
-            <article>
-              <span>文件路径</span>
-              <strong>{{ fieldValue(toRecord(cleanupOverview.file).path) }}</strong>
-            </article>
-            <article>
-              <span>最后更新时间</span>
-              <strong>{{ formatDate(toRecord(cleanupOverview.file).updated_at) }}</strong>
+          <div v-if="fileEntries.length" class="file-meta-grid">
+            <article v-for="item in fileEntries" :key="item.name">
+              <span>{{ item.name }}</span>
+              <strong>{{ item.size }} · {{ item.updated_at }}</strong>
             </article>
           </div>
         </section>
@@ -593,7 +537,7 @@ import { errorMessage } from '@/utils/userMessage';
 
 import LogDetailDrawer from './components/LogDetailDrawer.vue';
 
-type LogTab = 'system' | 'runtime' | 'admin-logins' | 'api' | 'sms' | 'email' | 'tasks' | 'gateway';
+type LogTab = 'runtime' | 'admin-logins' | 'api' | 'sms' | 'email' | 'tasks' | 'gateway';
 type LogsTab = LogTab | 'schedules' | 'cleanup';
 type RecordRow = Record<string, unknown>;
 
@@ -602,7 +546,6 @@ const router = useRouter();
 const userStore = useUserStore();
 const isMobile = useMediaQuery('(max-width: 768px)');
 const validTabs: LogsTab[] = [
-  'system',
   'runtime',
   'admin-logins',
   'api',
@@ -629,9 +572,6 @@ const lastCleanupResult = ref<Record<string, unknown> | null>(null);
 
 const filters = reactive({
   keyword: '',
-  actor_keyword: '',
-  description_keyword: '',
-  ip_address: '',
   level: '',
   task_key: '',
   method: '',
@@ -649,8 +589,6 @@ const filters = reactive({
   trace_id: '',
   action: '',
   result_status: '',
-  actor_type: '',
-  subject_type: '',
 });
 type LogFilterKey = keyof typeof filters;
 
@@ -694,17 +632,6 @@ const gatewayResultOptions = [
   { label: '处理中', value: 'pending' },
   { label: '未知', value: 'unknown' },
 ];
-const activitySubjectOptions = [
-  { label: '账单', value: 'invoice' },
-  { label: '订单', value: 'order' },
-  { label: '支付', value: 'payment' },
-  { label: '服务', value: 'service' },
-  { label: '用户', value: 'user' },
-  { label: '工单', value: 'ticket' },
-  { label: '商品', value: 'product' },
-  { label: '优惠券', value: 'coupon' },
-  { label: '系统', value: 'system' },
-];
 const taskLogOptions = [
   { value: 'refresh-hosting-panel-auth', label: '接口认证刷新' },
   { value: 'service-auto-renew', label: '服务自动续费' },
@@ -718,12 +645,6 @@ const taskLogOptions = [
   { value: 'order-cleanup', label: '账单与充值清理' },
 ];
 const logMeta: Record<LogTab, { title: string; description: string; filters: string[]; keyword: string }> = {
-  system: {
-    title: '系统日志',
-    description: '业务操作审计日志，记录谁在什么时间、什么 IP 做了什么操作。',
-    filters: ['actor_keyword', 'description_keyword', 'ip_address', 'module', 'actor_type', 'subject_type', 'date'],
-    keyword: '操作人、模块或描述',
-  },
   runtime: {
     title: '运行日志',
     description: '查看应用运行日志、警告与错误信息。',
@@ -769,19 +690,10 @@ const logMeta: Record<LogTab, { title: string; description: string; filters: str
 };
 
 const baseLogColumns: Record<LogTab, PrimaryTableCol<RecordRow>[]> = {
-  system: [
-    { colKey: 'time', title: '时间', width: 170 },
-    { colKey: 'primary', title: '操作人', minWidth: 180 },
-    { colKey: 'actor_type', title: '操作人类型', width: 120 },
-    { colKey: 'message', title: '描述', minWidth: 320 },
-    { colKey: 'ip_address', title: 'IP 地址', width: 150 },
-    { colKey: 'subject_type', title: '关联对象', width: 140 },
-    { colKey: 'actions', title: '操作', fixed: 'right', width: 90 },
-  ],
   runtime: [
     { colKey: 'time', title: '记录时间', width: 170 },
     { colKey: 'level', title: '级别', width: 100 },
-    { colKey: 'plugin_key', title: '插件 key', minWidth: 120, ellipsis: true },
+    { colKey: 'plugin_key', title: '插件 key / 来源', minWidth: 120, ellipsis: true },
     { colKey: 'trace_id', title: 'Trace ID', minWidth: 180, ellipsis: true },
     { colKey: 'message', title: '日志内容', minWidth: 520 },
     { colKey: 'actions', title: '操作', fixed: 'right', width: 90 },
@@ -859,11 +771,9 @@ const scheduleColumns: PrimaryTableCol<RecordRow>[] = [
   { colKey: 'next', title: '下次执行', width: 170 },
   { colKey: 'actions', title: '操作', fixed: 'right', width: 120 },
 ];
-const currentLogMeta = computed(() => (isLogTab(activeTab.value) ? logMeta[activeTab.value] : logMeta.system));
+const currentLogMeta = computed(() => (isLogTab(activeTab.value) ? logMeta[activeTab.value] : logMeta.api));
 const logTableColumns = computed(() => (isLogTab(activeTab.value) ? baseLogColumns[activeTab.value] : []));
-const isTextLog = computed(
-  () => activeTab.value === 'system' || activeTab.value === 'runtime' || activeTab.value === 'tasks',
-);
+const isTextLog = computed(() => activeTab.value === 'runtime' || activeTab.value === 'tasks');
 const keywordPlaceholder = computed(() => currentLogMeta.value.keyword);
 const statusPlaceholder = computed(() => {
   if (activeTab.value === 'api') return '全部状态码';
@@ -1006,22 +916,31 @@ const databaseCards = computed(() => {
     { key: 'email', label: '邮件日志', value: numberText(database.email) },
     { key: 'api', label: 'API 日志', value: numberText(database.api) },
     { key: 'admin_login', label: '管理员登录日志', value: numberText(database.admin_login) },
+    { key: 'activity', label: '业务审计日志', value: numberText(database.activity) },
     { key: 'schedule_run', label: '调度执行日志', value: numberText(database.schedule_run) },
   ];
 });
 const fileCards = computed(() => {
   const file = toRecord(cleanupOverview.value.file);
   return [
-    { key: 'exists', label: '日志文件状态', value: file.exists ? '存在' : '缺失' },
-    { key: 'size_bytes', label: '文件大小', value: formatBytes(file.size_bytes) },
-    { key: 'task_log_count', label: '自动任务日志条数', value: numberText(file.task_log_count) },
-    {
-      key: 'runtime_log_count',
-      label: '运行日志条数',
-      value: numberText(file.runtime_log_count ?? file.system_log_count),
-    },
+    { key: 'directory', label: '日志目录', value: fieldValue(file.directory) },
+    { key: 'file_count', label: '日志文件数', value: numberText(file.file_count) },
+    { key: 'total_size_bytes', label: '总大小', value: formatBytes(file.total_size_bytes) },
+    { key: 'latest_updated_at', label: '最后写入时间', value: formatDate(file.latest_updated_at) },
   ];
 });
+const fileEntries = computed(() =>
+  asArray(toRecord(cleanupOverview.value.file).files)
+    .slice(0, 10)
+    .map((item) => {
+      const record = toRecord(item);
+      return {
+        name: fieldValue(record.name),
+        size: formatBytes(record.size_bytes),
+        updated_at: fieldValue(record.updated_at),
+      };
+    }),
+);
 const affectedCountText = computed(() => {
   const affected = Object.values(toRecord(lastCleanupResult.value?.affected));
   return affected.reduce((total: number, value) => total + Number(value || 0), 0);
@@ -1033,11 +952,11 @@ function resolveTabValue(value: unknown): LogsTab | null {
 }
 
 function resolveRouteTab(): LogsTab {
-  return resolveTabValue(route.query.tab) || resolveTabValue(route.meta.logTab) || 'system';
+  return resolveTabValue(route.query.tab) || resolveTabValue(route.meta.logTab) || 'api';
 }
 
 function isLogTab(value: LogsTab): value is LogTab {
-  return ['system', 'runtime', 'admin-logins', 'api', 'sms', 'email', 'tasks', 'gateway'].includes(value);
+  return ['runtime', 'admin-logins', 'api', 'sms', 'email', 'tasks', 'gateway'].includes(value);
 }
 
 function showFilter(name: string) {
@@ -1110,7 +1029,6 @@ async function loadLogs() {
 
 function requestLogList(tab: LogTab, params: LogListParams): Promise<PaginatedList> {
   const map = {
-    system: adminApi.logs.system,
     runtime: adminApi.logs.runtime,
     'admin-logins': adminApi.logs.adminLogins,
     api: adminApi.logs.api,
@@ -1130,9 +1048,6 @@ function handleLogSearch() {
 function resetLogFilters(shouldLoad = true) {
   Object.assign(filters, {
     keyword: '',
-    actor_keyword: '',
-    description_keyword: '',
-    ip_address: '',
     level: '',
     task_key: '',
     method: '',
@@ -1150,8 +1065,6 @@ function resetLogFilters(shouldLoad = true) {
     trace_id: '',
     action: '',
     result_status: '',
-    actor_type: '',
-    subject_type: '',
   });
   logPagination.page = 1;
   if (shouldLoad && isLogTab(activeTab.value)) loadLogs();
@@ -1271,7 +1184,6 @@ function closeDetailDrawer() {
 }
 
 function primaryTitle(row: RecordRow) {
-  if (activeTab.value === 'system') return fieldValue(row.actor_name || '系统');
   if (activeTab.value === 'admin-logins') return fieldValue(row.admin_username);
   if (activeTab.value === 'api') return fieldValue(row.actor_name || userTypeLabel(row.user_type));
   if (activeTab.value === 'sms') return fieldValue(row.phone);
@@ -1281,8 +1193,6 @@ function primaryTitle(row: RecordRow) {
 }
 
 function primarySubText(row: RecordRow) {
-  if (activeTab.value === 'system')
-    return fieldValue(row.actor_type === 'system' ? '系统操作' : `ID: ${row.actor_id || '-'}`);
   if (activeTab.value === 'admin-logins') return fieldValue(row.admin_nickname || row.actor_name || '未设置昵称');
   if (activeTab.value === 'api') return userTypeLabel(row.user_type);
   if (activeTab.value === 'sms' || activeTab.value === 'email') return `发送时间：${formatDate(row.sent_at)}`;
@@ -1292,17 +1202,7 @@ function primarySubText(row: RecordRow) {
 
 function messageText(row: RecordRow) {
   if (activeTab.value === 'email') return contentPreview(row.content);
-  if (activeTab.value === 'system') return fieldValue(row.description);
   return fieldValue(row.message || row.content);
-}
-
-function subjectText(row: RecordRow) {
-  const type = fieldValue(row.subject_type);
-  const id = fieldValue(row.subject_id);
-  if (type === '-' && id === '-') return '-';
-  if (id === '-') return type;
-  if (type === '-') return id;
-  return `${type} #${id}`;
 }
 
 function messageTag(row: RecordRow): string {
@@ -1437,7 +1337,9 @@ function logCardMessage(row: RecordRow) {
 }
 
 function statusTheme(status: unknown) {
-  if (activeTab.value === 'admin-logins') return String(status) === 'operation_log' ? 'success' : 'warning';
+  if (activeTab.value === 'admin-logins') {
+    return ['operation_log', 'activity_log'].includes(String(status)) ? 'success' : 'warning';
+  }
   return (
     {
       success: 'success',
@@ -1485,6 +1387,7 @@ function userTypeLabel(value: unknown) {
 function sourceLabel(value: unknown) {
   return (
     {
+      activity_log: '活动日志',
       operation_log: '操作日志',
       admin_snapshot: '账号快照',
     }[String(value || '').toLowerCase()] || '未知来源'

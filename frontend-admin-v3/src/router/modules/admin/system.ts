@@ -21,21 +21,7 @@ export const systemRoutes: RouteRecordRaw[] = [
       },
       permission: 'log.list',
       keepAlive: false,
-      logTab: 'system',
-    },
-  },
-  {
-    path: 'logs/system',
-    name: 'AdminSystemLogs',
-    component: () => import('@/pages/logs/index.vue'),
-    meta: {
-      title: {
-        zh_CN: '系统日志',
-        en_US: 'System Logs',
-      },
-      permission: 'log.list',
-      keepAlive: false,
-      logTab: 'system',
+      logTab: 'api',
     },
   },
   {
