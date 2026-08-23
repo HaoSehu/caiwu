@@ -14,7 +14,7 @@ CREATE TABLE `account_transactions` (
   `account_type` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '账户类型：cash/credit/referral 等',
   `event_type` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '流水事件类型：recharge/consume/refund/adjust/reward_frozen/reward_released 等',
   `change_amount` decimal(12,2) NOT NULL DEFAULT '0.00' COMMENT '本次变动金额，收入为正、支出为负',
-  `currency` varchar(3) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'CNY',
+  `currency` varchar(3) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'CNY',
   `balance_after` decimal(12,2) NOT NULL DEFAULT '0.00' COMMENT '本次变动后的账户余额',
   `source_type` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '业务来源类型，如 invoice/payment/referral_withdrawal',
   `source_id` bigint unsigned DEFAULT NULL COMMENT '业务来源ID',
@@ -31,8 +31,9 @@ CREATE TABLE `account_transactions` (
   KEY `account_transactions_origin_idx` (`origin_type`,`origin_id`),
   KEY `account_transactions_trace_id_idx` (`trace_id`),
   KEY `account_transactions_created_at_idx` (`created_at`),
+  KEY `account_transactions_source_idx` (`source_type`,`source_id`),
   CONSTRAINT `fk_stage2_account_transactions_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=1745 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='账户流水表，记录现金账户、授信账户、推荐奖励账户的每一次余额变化';
+) ENGINE=InnoDB AUTO_INCREMENT=1765 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='账户流水表，记录现金账户、授信账户、推荐奖励账户的每一次余额变化';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `activity_logs`;
@@ -40,6 +41,8 @@ DROP TABLE IF EXISTS `activity_logs`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `activity_logs` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `event_id` varchar(40) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `stream` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `actor_type` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'system' COMMENT '操作者类型: admin, client, system, sub_account',
   `actor_id` bigint unsigned DEFAULT NULL COMMENT '操作者ID',
   `actor_name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '操作者名称快照',
@@ -50,14 +53,18 @@ CREATE TABLE `activity_logs` (
   `subject_id` bigint unsigned DEFAULT NULL COMMENT '关联对象ID',
   `context` json DEFAULT NULL COMMENT '附加结构化上下文',
   `ip_address` varchar(45) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `trace_id` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
+  UNIQUE KEY `activity_logs_event_id_unique` (`event_id`),
   KEY `activity_logs_module_action_index` (`module`,`action`),
   KEY `activity_logs_subject_type_subject_id_index` (`subject_type`,`subject_id`),
   KEY `activity_logs_created_at_index` (`created_at`),
-  KEY `activity_logs_actor_id_index` (`actor_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1035904 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  KEY `activity_logs_actor_id_index` (`actor_id`),
+  KEY `activity_logs_stream_created_at_index` (`stream`,`created_at`),
+  KEY `activity_logs_trace_id_index` (`trace_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=1074289 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `admin_user_roles`;
@@ -72,7 +79,7 @@ CREATE TABLE `admin_user_roles` (
   KEY `admin_user_roles_role_id_idx` (`role_id`),
   CONSTRAINT `fk_stage2_admin_user_roles_admin_user_id` FOREIGN KEY (`admin_user_id`) REFERENCES `admin_users` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_stage2_admin_user_roles_role_id` FOREIGN KEY (`role_id`) REFERENCES `roles` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=207 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=243 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `admin_users`;
@@ -95,7 +102,7 @@ CREATE TABLE `admin_users` (
   KEY `admin_users_role_id_index` (`role_id`),
   KEY `admin_users_email_index` (`email`),
   CONSTRAINT `fk_stage2_admin_users_role_id` FOREIGN KEY (`role_id`) REFERENCES `roles` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=313 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=314 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `agent_applications`;
@@ -162,7 +169,7 @@ CREATE TABLE `automation_logs` (
   UNIQUE KEY `automation_logs_unique_rule` (`task_key`,`action`,`object_type`,`object_id`,`rule_key`),
   KEY `automation_logs_object_idx` (`object_type`,`object_id`),
   KEY `automation_logs_task_key_index` (`task_key`)
-) ENGINE=InnoDB AUTO_INCREMENT=1289 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=1717 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `content_articles`;
@@ -200,11 +207,7 @@ CREATE TABLE `content_articles` (
   KEY `idx_content_type_status_publish` (`content_type`,`status`,`publish_at`),
   KEY `idx_content_type_pin_sort` (`content_type`,`is_pinned`,`sort_order`,`id`),
   KEY `idx_content_type_recommend` (`content_type`,`is_recommended`,`publish_at`),
-  KEY `idx_content_category_type` (`category_name`,`content_type`),
-  KEY `content_articles_created_by_index` (`created_by`),
-  KEY `content_articles_updated_by_index` (`updated_by`),
   KEY `idx_content_article_type_category` (`content_type`,`category_id`),
-  KEY `idx_article_published` (`status`,`publish_at`,`is_pinned`),
   KEY `idx_article_category_published` (`category_id`,`status`,`publish_at`),
   CONSTRAINT `fk_stage2_content_articles_category_id` FOREIGN KEY (`category_id`) REFERENCES `content_categories` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB AUTO_INCREMENT=35 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -252,7 +255,7 @@ CREATE TABLE `coupon_campaigns` (
   `product_ids` json DEFAULT NULL,
   `first_order_only` tinyint(1) NOT NULL DEFAULT '0',
   `per_user_limit` int unsigned DEFAULT NULL,
-  `status` tinyint NOT NULL DEFAULT '1',
+  `status` tinyint NOT NULL DEFAULT '1' COMMENT '状态：0=禁用 1=启用',
   `sort_order` int unsigned NOT NULL DEFAULT '0',
   `last_dispatched_at` timestamp NULL DEFAULT NULL,
   `last_coupon_id` bigint unsigned DEFAULT NULL,
@@ -290,7 +293,7 @@ CREATE TABLE `coupons` (
   `total_usage_limit` int unsigned DEFAULT NULL,
   `per_user_limit` int unsigned DEFAULT NULL,
   `used_count` int unsigned NOT NULL DEFAULT '0',
-  `status` tinyint NOT NULL DEFAULT '1',
+  `status` tinyint NOT NULL DEFAULT '1' COMMENT '状态：0=禁用 1=启用',
   `sort_order` int unsigned NOT NULL DEFAULT '0',
   `starts_at` timestamp NULL DEFAULT NULL,
   `expires_at` timestamp NULL DEFAULT NULL,
@@ -320,7 +323,7 @@ CREATE TABLE `failed_jobs` (
   `failed_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `failed_jobs_uuid_unique` (`uuid`)
-) ENGINE=InnoDB AUTO_INCREMENT=277 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `first_product_groups`;
@@ -328,16 +331,16 @@ DROP TABLE IF EXISTS `first_product_groups`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `first_product_groups` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
-  `code` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '业务编码：vps/dedicated/domain/…',
-  `product_type` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '商品类型：cloud_server/game_cloud/…',
-  `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '名称',
-  `slug` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'URL标识',
-  `description` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '分组说明',
-  `icon` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '图标',
-  `banner_image` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '横幅图',
-  `sort_order` int NOT NULL DEFAULT '0' COMMENT '排序',
-  `is_visible` tinyint unsigned NOT NULL DEFAULT '1' COMMENT '前台可见',
-  `is_system` tinyint unsigned NOT NULL DEFAULT '0' COMMENT '系统内置',
+  `code` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `product_type` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `slug` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `description` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `icon` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `banner_image` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `sort_order` int NOT NULL DEFAULT '0',
+  `is_visible` tinyint unsigned NOT NULL DEFAULT '1',
+  `is_system` tinyint unsigned NOT NULL DEFAULT '0',
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -376,7 +379,7 @@ CREATE TABLE `gateway_logs` (
   KEY `gateway_logs_trace_idx` (`trace_id`),
   CONSTRAINT `fk_stage2_gateway_logs_invoice_id` FOREIGN KEY (`invoice_id`) REFERENCES `invoices` (`id`) ON DELETE SET NULL,
   CONSTRAINT `gateway_logs_plugin_fk` FOREIGN KEY (`plugin_id`) REFERENCES `integration_plugins` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=1000078 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=1000119 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `integration_plugin_bindings`;
@@ -460,7 +463,7 @@ CREATE TABLE `integration_plugin_runtime_logs` (
   KEY `plugin_runtime_status_created_idx` (`status`,`created_at`),
   KEY `plugin_runtime_bindable_idx` (`bindable_type`,`bindable_id`,`created_at`),
   CONSTRAINT `integration_plugin_runtime_logs_plugin_id_foreign` FOREIGN KEY (`plugin_id`) REFERENCES `integration_plugins` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=1014060 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=1031778 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `integration_plugins`;
@@ -473,6 +476,7 @@ CREATE TABLE `integration_plugins` (
   `plugin_key` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `name` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `version` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '1.0.0',
+  `manifest_hash` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `provider_class` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `entry_class` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `capabilities_json` json DEFAULT NULL,
@@ -511,7 +515,7 @@ CREATE TABLE `invoice_items` (
   PRIMARY KEY (`id`),
   KEY `invoice_items_invoice_id_index` (`invoice_id`),
   CONSTRAINT `fk_invoice_items_invoice_id` FOREIGN KEY (`invoice_id`) REFERENCES `invoices` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=2793 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='账单明细表，记录账单内每个收费项目和快照信息';
+) ENGINE=InnoDB AUTO_INCREMENT=2888 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='账单明细表，记录账单内每个收费项目和快照信息';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `invoices`;
@@ -532,7 +536,7 @@ CREATE TABLE `invoices` (
   `coupon_code` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '使用的优惠码快照',
   `type` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'normal' COMMENT '账单类型：normal/new/renew/recharge/deduction/referral_credit/manual/upgrade',
   `amount` decimal(12,2) NOT NULL COMMENT '账单应收金额',
-  `currency` varchar(3) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'CNY',
+  `currency` varchar(3) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'CNY',
   `discount` decimal(12,2) NOT NULL DEFAULT '0.00' COMMENT '账单优惠抵扣金额',
   `billing_cycle` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '计费周期：monthly/quarterly/annually/onetime 等',
   `quantity` int unsigned NOT NULL DEFAULT '1' COMMENT '购买数量或计费数量',
@@ -540,7 +544,7 @@ CREATE TABLE `invoices` (
   `config_pricing_snapshot` json DEFAULT NULL COMMENT '配置项计价快照 JSON',
   `coupon_snapshot` json DEFAULT NULL COMMENT '优惠券使用快照 JSON',
   `paid_amount` decimal(12,2) NOT NULL DEFAULT '0.00' COMMENT '已支付入账金额',
-  `status` tinyint NOT NULL DEFAULT '0' COMMENT '账单状态：0待支付 1已支付 2已取消 3已逾期 5已退款',
+  `status` tinyint NOT NULL DEFAULT '0' COMMENT '账单状态：0未付 1已付 2已取消 3逾期 5已退款 6部分退款',
   `due_date` date DEFAULT NULL,
   `paid_at` timestamp NULL DEFAULT NULL COMMENT '账单支付完成时间',
   `deleted_at` timestamp NULL DEFAULT NULL,
@@ -555,7 +559,6 @@ CREATE TABLE `invoices` (
   `trace_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '链路追踪号',
   PRIMARY KEY (`id`),
   UNIQUE KEY `invoices_invoice_no_unique` (`invoice_no`),
-  KEY `invoices_user_id_index` (`user_id`),
   KEY `invoices_status_due_date_index` (`status`,`due_date`),
   KEY `invoices_user_status_id_idx` (`user_id`,`status`,`id`),
   KEY `invoices_status_paid_at_idx` (`status`,`paid_at`),
@@ -574,7 +577,7 @@ CREATE TABLE `invoices` (
   CONSTRAINT `fk_stage2_invoices_coupon_id` FOREIGN KEY (`coupon_id`) REFERENCES `coupons` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_stage2_invoices_service_id` FOREIGN KEY (`service_id`) REFERENCES `services` (`id`) ON DELETE SET NULL,
   CONSTRAINT `invoices_origin_invoice_id_foreign` FOREIGN KEY (`origin_invoice_id`) REFERENCES `invoices` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=3011 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='账单主表，所有购买、续费、充值、扣款和退款流程以账单为财务入口';
+) ENGINE=InnoDB AUTO_INCREMENT=3106 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='账单主表，所有购买、续费、充值、扣款和退款流程以账单为财务入口';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `jobs`;
@@ -590,7 +593,7 @@ CREATE TABLE `jobs` (
   `created_at` int unsigned NOT NULL,
   PRIMARY KEY (`id`),
   KEY `jobs_queue_index` (`queue`)
-) ENGINE=InnoDB AUTO_INCREMENT=4002 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=4768 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `media_files`;
@@ -662,7 +665,6 @@ CREATE TABLE `message_logs` (
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
-  KEY `message_logs_channel_created_at_idx` (`channel`,`created_at`),
   KEY `message_logs_recipient_created_at_idx` (`recipient`,`created_at`),
   KEY `message_logs_driver_created_idx` (`driver_key`,`created_at`),
   KEY `message_logs_plugin_created_idx` (`plugin_id`,`created_at`),
@@ -671,7 +673,7 @@ CREATE TABLE `message_logs` (
   KEY `message_logs_trace_idx` (`trace_id`),
   KEY `message_logs_request_id_idx` (`request_id`),
   CONSTRAINT `message_logs_plugin_fk` FOREIGN KEY (`plugin_id`) REFERENCES `integration_plugins` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=2614 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=3284 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `migrations`;
@@ -682,7 +684,7 @@ CREATE TABLE `migrations` (
   `migration` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `batch` int NOT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=177 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=191 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `notice_reads`;
@@ -696,11 +698,10 @@ CREATE TABLE `notice_reads` (
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `notice_reads_user_id_article_id_unique` (`user_id`,`article_id`),
-  KEY `notice_reads_user_id_index` (`user_id`),
   KEY `notice_reads_article_id_index` (`article_id`),
   CONSTRAINT `fk_stage2_notice_reads_article_id` FOREIGN KEY (`article_id`) REFERENCES `content_articles` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_stage2_notice_reads_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=173 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=243 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `notification_templates`;
@@ -743,13 +744,13 @@ CREATE TABLE `operation_logs` (
   `ip_address` varchar(45) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  KEY `operation_logs_user_id_user_type_index` (`user_id`,`user_type`),
   KEY `operation_logs_module_created_at_index` (`module`,`created_at`),
   KEY `operation_logs_user_type_created_at_idx` (`user_id`,`user_type`,`created_at`),
   KEY `operation_logs_module_subject_created_idx` (`module`,`subject_id`,`created_at`,`id`),
   KEY `operation_logs_created_at_idx` (`created_at`),
-  KEY `operation_logs_user_created_at_idx` (`user_id`,`created_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=165667 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  KEY `operation_logs_user_created_at_idx` (`user_id`,`created_at`),
+  KEY `operation_logs_action_created_at_index` (`action`,`created_at`)
+) ENGINE=InnoDB AUTO_INCREMENT=190513 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `orders`;
@@ -768,7 +769,7 @@ CREATE TABLE `orders` (
   `user_coupon_id` bigint unsigned DEFAULT NULL,
   `coupon_code` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `amount` decimal(12,2) NOT NULL,
-  `currency` varchar(3) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'CNY',
+  `currency` varchar(3) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'CNY',
   `discount` decimal(12,2) NOT NULL DEFAULT '0.00',
   `paid_amount` decimal(12,2) NOT NULL DEFAULT '0.00',
   `billing_cycle` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -803,7 +804,7 @@ CREATE TABLE `orders` (
   CONSTRAINT `fk_stage2_orders_service_id` FOREIGN KEY (`service_id`) REFERENCES `services` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_stage2_orders_user_coupon_id` FOREIGN KEY (`user_coupon_id`) REFERENCES `user_coupons` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_stage2_orders_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=3081 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=3162 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `password_reset_tokens`;
@@ -844,7 +845,7 @@ CREATE TABLE `payment_callbacks` (
   KEY `payment_callbacks_gateway_key_idx` (`gateway_key`,`received_at`),
   CONSTRAINT `fk_payment_callbacks_payment_id` FOREIGN KEY (`payment_id`) REFERENCES `payments` (`id`) ON DELETE CASCADE,
   CONSTRAINT `payment_callbacks_plugin_fk` FOREIGN KEY (`plugin_id`) REFERENCES `integration_plugins` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=488 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='支付回调审计表，保存第三方通知、查询、退款等回调验签结果';
+) ENGINE=InnoDB AUTO_INCREMENT=530 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='支付回调审计表，保存第三方通知、查询、退款等回调验签结果';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `payments`;
@@ -860,8 +861,8 @@ CREATE TABLE `payments` (
   `gateway_key` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `trade_no` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '第三方交易号',
   `amount` decimal(12,2) NOT NULL COMMENT '第三方支付金额',
-  `currency` varchar(3) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'CNY',
-  `status` tinyint NOT NULL DEFAULT '0' COMMENT '支付状态：0待支付 1成功 2失败 3已退款',
+  `currency` varchar(3) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'CNY',
+  `status` tinyint NOT NULL DEFAULT '0' COMMENT '支付状态：0待支付 1成功 2失败 3已退款 4已取消',
   `callback_raw` json DEFAULT NULL COMMENT '最近一次回调原始载荷 JSON',
   `paid_at` timestamp NULL DEFAULT NULL COMMENT '第三方确认支付时间',
   `deleted_at` timestamp NULL DEFAULT NULL,
@@ -885,7 +886,7 @@ CREATE TABLE `payments` (
   CONSTRAINT `fk_payments_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT,
   CONSTRAINT `fk_stage2_payments_order_id` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE SET NULL,
   CONSTRAINT `payments_plugin_fk` FOREIGN KEY (`plugin_id`) REFERENCES `integration_plugins` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=364 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='第三方支付记录表，仅记录真实外部资金流入和退款状态，不记录余额/免费/手工开服';
+) ENGINE=InnoDB AUTO_INCREMENT=398 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='第三方支付记录表，仅记录真实外部资金流入和退款状态，不记录余额/免费/手工开服';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `personal_access_tokens`;
@@ -906,7 +907,7 @@ CREATE TABLE `personal_access_tokens` (
   UNIQUE KEY `personal_access_tokens_token_unique` (`token`),
   KEY `personal_access_tokens_tokenable_type_tokenable_id_index` (`tokenable_type`,`tokenable_id`),
   KEY `personal_access_tokens_expires_at_index` (`expires_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=174 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=566 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `product_upstream_bindings`;
@@ -950,7 +951,7 @@ CREATE TABLE `products` (
   `product_group_id` bigint unsigned DEFAULT NULL COMMENT '当前所属商品分组ID',
   `service_type_code` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '服务类型代码，用于前后端能力分流',
   `product_type` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '商品类型：vps/dedicated/hosting/domain/other',
-  `console_template` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'compute' COMMENT '用户控制台模板：compute 或 port_mapping',
+  `console_template` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'compute' COMMENT '用户控制台模板：compute 或 port_mapping',
   `custom_display_name` varchar(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '自定义展示名称',
   `remark` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '商品备注',
   `pricing` json NOT NULL COMMENT '周期价格 JSON，如 monthly/quarterly/annually',
@@ -966,7 +967,6 @@ CREATE TABLE `products` (
   `deleted_at` timestamp NULL DEFAULT NULL COMMENT '软删除时间',
   PRIMARY KEY (`id`),
   KEY `products_type_status_index` (`product_type`,`status`),
-  KEY `idx_product_status_groups` (`status`),
   KEY `products_group_status_sort_id_idx` (`product_group_id`,`status`,`sort_order`,`id`),
   CONSTRAINT `products_product_group_fk` FOREIGN KEY (`product_group_id`) REFERENCES `third_product_groups` (`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB AUTO_INCREMENT=379 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='商品表，记录可售卖产品的分类、定价、库存、上游绑定和开通策略';
@@ -977,7 +977,7 @@ DROP TABLE IF EXISTS `recharge_records`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `recharge_records` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
-  `record_no` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `record_no` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `user_id` bigint unsigned NOT NULL,
   `order_id` bigint unsigned DEFAULT NULL,
   `invoice_id` bigint unsigned DEFAULT NULL,
@@ -985,16 +985,16 @@ CREATE TABLE `recharge_records` (
   `account_transaction_id` bigint unsigned DEFAULT NULL,
   `refund_id` bigint unsigned DEFAULT NULL,
   `origin_recharge_record_id` bigint unsigned DEFAULT NULL,
-  `scene` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `direction` varchar(8) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `scene` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '业务场景：recharge=支付充值 admin_recharge=管理员充值 refund=退款 等',
+  `direction` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '资金方向：in=入账 out=出账',
   `amount` decimal(12,2) NOT NULL,
-  `currency` varchar(3) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'CNY',
-  `entry_type` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `remark` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `operator_type` varchar(30) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `currency` varchar(3) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'CNY',
+  `entry_type` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '入账类型：third_party_payment/manual_recharge/account_recharge/refund_offset',
+  `remark` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `operator_type` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `operator_id` bigint unsigned DEFAULT NULL,
-  `operator_name` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `trace_id` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `operator_name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `trace_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -1014,7 +1014,7 @@ CREATE TABLE `recharge_records` (
   CONSTRAINT `recharge_records_payment_id_foreign` FOREIGN KEY (`payment_id`) REFERENCES `payments` (`id`) ON DELETE SET NULL,
   CONSTRAINT `recharge_records_refund_id_foreign` FOREIGN KEY (`refund_id`) REFERENCES `refunds` (`id`) ON DELETE SET NULL,
   CONSTRAINT `recharge_records_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=32 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `referral_account_logs`;
@@ -1113,21 +1113,21 @@ DROP TABLE IF EXISTS `refunds`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `refunds` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
-  `refund_no` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `refund_no` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `user_id` bigint unsigned NOT NULL,
   `invoice_id` bigint unsigned NOT NULL,
   `refund_invoice_id` bigint unsigned DEFAULT NULL,
   `payment_id` bigint unsigned DEFAULT NULL,
   `amount` decimal(12,2) NOT NULL,
-  `status` tinyint unsigned NOT NULL DEFAULT '1',
-  `refund_method` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'balance',
-  `currency` varchar(3) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'CNY',
-  `reason` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `gateway_refund_no` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `operator_type` varchar(30) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` tinyint unsigned NOT NULL DEFAULT '1' COMMENT '退款状态：0=进行中 1=已完成 2=失败',
+  `refund_method` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'balance',
+  `currency` varchar(3) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'CNY',
+  `reason` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `gateway_refund_no` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `operator_type` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `operator_id` bigint unsigned DEFAULT NULL,
-  `operator_name` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `trace_id` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `operator_name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `trace_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `refunded_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
@@ -1142,7 +1142,7 @@ CREATE TABLE `refunds` (
   CONSTRAINT `refunds_payment_id_foreign` FOREIGN KEY (`payment_id`) REFERENCES `payments` (`id`) ON DELETE SET NULL,
   CONSTRAINT `refunds_refund_invoice_id_foreign` FOREIGN KEY (`refund_invoice_id`) REFERENCES `invoices` (`id`) ON DELETE SET NULL,
   CONSTRAINT `refunds_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `roles`;
@@ -1157,7 +1157,7 @@ CREATE TABLE `roles` (
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `roles_name_unique` (`name`)
-) ENGINE=InnoDB AUTO_INCREMENT=397 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=398 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `schedule_run_logs`;
@@ -1175,11 +1175,11 @@ CREATE TABLE `schedule_run_logs` (
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
-  KEY `schedule_run_logs_task_name_index` (`task_name`),
-  KEY `schedule_run_logs_status_index` (`status`),
   KEY `schedule_run_logs_created_at_index` (`created_at`),
-  KEY `schedule_run_logs_task_name_created_at_index` (`task_name`,`created_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=151566 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  KEY `schedule_run_logs_task_name_created_at_index` (`task_name`,`created_at`),
+  KEY `schedule_run_logs_status_created_at_index` (`status`,`created_at`),
+  KEY `schedule_run_logs_started_at_id_index` (`started_at`,`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=164896 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `schedule_task_runs`;
@@ -1187,6 +1187,7 @@ DROP TABLE IF EXISTS `schedule_task_runs`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `schedule_task_runs` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `parent_run_id` bigint unsigned DEFAULT NULL,
   `schedule_tick_id` bigint unsigned DEFAULT NULL,
   `task_key` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `task_name` varchar(160) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -1194,12 +1195,15 @@ CREATE TABLE `schedule_task_runs` (
   `source` varchar(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'heartbeat',
   `queue` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `status` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'queued',
+  `attempt` smallint unsigned NOT NULL DEFAULT '1',
   `duration_ms` int unsigned DEFAULT NULL,
   `summary` json DEFAULT NULL,
   `error_msg` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `queued_at` timestamp NULL DEFAULT NULL,
   `started_at` timestamp NULL DEFAULT NULL,
   `finished_at` timestamp NULL DEFAULT NULL,
+  `manual_retry_at` timestamp NULL DEFAULT NULL,
+  `manual_retry_by` bigint unsigned DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -1208,8 +1212,9 @@ CREATE TABLE `schedule_task_runs` (
   KEY `schedule_task_runs_status_created_at_index` (`status`,`created_at`),
   KEY `schedule_task_runs_source_created_at_index` (`source`,`created_at`),
   KEY `schedule_task_runs_active_lookup_index` (`task_key`,`status`,`queued_at`),
-  CONSTRAINT `schedule_task_runs_schedule_tick_id_foreign` FOREIGN KEY (`schedule_tick_id`) REFERENCES `schedule_ticks` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=3359 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  KEY `schedule_task_runs_parent_created_at_index` (`parent_run_id`,`created_at`),
+  CONSTRAINT `schedule_task_runs_schedule_tick_id_foreign` FOREIGN KEY (`schedule_tick_id`) REFERENCES `schedule_ticks` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB AUTO_INCREMENT=14414 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `schedule_ticks`;
@@ -1226,8 +1231,9 @@ CREATE TABLE `schedule_ticks` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `schedule_ticks_slot_started_at_unique` (`slot_started_at`),
   UNIQUE KEY `schedule_ticks_global_number_unique` (`global_number`),
-  KEY `schedule_ticks_daily_index_index` (`daily_index`)
-) ENGINE=InnoDB AUTO_INCREMENT=281 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  KEY `schedule_ticks_daily_index_index` (`daily_index`),
+  KEY `schedule_ticks_triggered_at_index` (`triggered_at`)
+) ENGINE=InnoDB AUTO_INCREMENT=1471 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `second_product_groups`;
@@ -1235,20 +1241,20 @@ DROP TABLE IF EXISTS `second_product_groups`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `second_product_groups` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
-  `first_product_group_id` bigint unsigned NOT NULL COMMENT '→ first_product_groups.id',
-  `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '名称',
-  `slug` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'URL标识',
-  `description` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '分组说明',
-  `banner_image` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '横幅图',
-  `sort_order` int NOT NULL DEFAULT '0' COMMENT '排序',
-  `is_visible` tinyint unsigned NOT NULL DEFAULT '1' COMMENT '前台可见',
+  `first_product_group_id` bigint unsigned NOT NULL,
+  `name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `slug` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `description` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `banner_image` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `sort_order` int NOT NULL DEFAULT '0',
+  `is_visible` tinyint unsigned NOT NULL DEFAULT '1',
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_second_first_slug` (`first_product_group_id`,`slug`),
   KEY `idx_second_first_visible_sort` (`first_product_group_id`,`is_visible`,`sort_order`),
   CONSTRAINT `fk_second_first_group` FOREIGN KEY (`first_product_group_id`) REFERENCES `first_product_groups` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=53 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=45 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `service_connection_snapshots`;
@@ -1280,7 +1286,7 @@ CREATE TABLE `service_connection_snapshots` (
   CONSTRAINT `service_connection_snapshots_plugin_id_foreign` FOREIGN KEY (`plugin_id`) REFERENCES `integration_plugins` (`id`) ON DELETE SET NULL,
   CONSTRAINT `service_connection_snapshots_service_id_foreign` FOREIGN KEY (`service_id`) REFERENCES `services` (`id`) ON DELETE CASCADE,
   CONSTRAINT `service_connection_snapshots_service_upstream_binding_id_foreign` FOREIGN KEY (`service_upstream_binding_id`) REFERENCES `service_upstream_bindings` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=194 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=219 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `service_provision_attempts`;
@@ -1312,7 +1318,7 @@ CREATE TABLE `service_provision_attempts` (
   CONSTRAINT `service_provision_attempts_plugin_id_foreign` FOREIGN KEY (`plugin_id`) REFERENCES `integration_plugins` (`id`) ON DELETE SET NULL,
   CONSTRAINT `service_provision_attempts_service_id_foreign` FOREIGN KEY (`service_id`) REFERENCES `services` (`id`) ON DELETE SET NULL,
   CONSTRAINT `service_provision_attempts_service_upstream_binding_id_foreign` FOREIGN KEY (`service_upstream_binding_id`) REFERENCES `service_upstream_bindings` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=427 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=472 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `service_runtime_snapshots`;
@@ -1342,7 +1348,7 @@ CREATE TABLE `service_runtime_snapshots` (
   CONSTRAINT `service_runtime_snapshots_plugin_id_foreign` FOREIGN KEY (`plugin_id`) REFERENCES `integration_plugins` (`id`) ON DELETE SET NULL,
   CONSTRAINT `service_runtime_snapshots_service_id_foreign` FOREIGN KEY (`service_id`) REFERENCES `services` (`id`) ON DELETE CASCADE,
   CONSTRAINT `service_runtime_snapshots_service_upstream_binding_id_foreign` FOREIGN KEY (`service_upstream_binding_id`) REFERENCES `service_upstream_bindings` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=194 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=219 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `service_upstream_bindings`;
@@ -1377,7 +1383,7 @@ CREATE TABLE `service_upstream_bindings` (
   CONSTRAINT `service_upstream_bindings_product_upstream_binding_id_foreign` FOREIGN KEY (`product_upstream_binding_id`) REFERENCES `product_upstream_bindings` (`id`) ON DELETE SET NULL,
   CONSTRAINT `service_upstream_bindings_service_id_foreign` FOREIGN KEY (`service_id`) REFERENCES `services` (`id`) ON DELETE RESTRICT,
   CONSTRAINT `service_upstream_bindings_supplier_plugin_binding_id_foreign` FOREIGN KEY (`supplier_plugin_binding_id`) REFERENCES `supplier_plugin_bindings` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=280 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=305 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `services`;
@@ -1418,7 +1424,7 @@ CREATE TABLE `services` (
   CONSTRAINT `fk_services_product_id` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE RESTRICT,
   CONSTRAINT `fk_services_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT,
   CONSTRAINT `fk_stage2_services_order_id` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=301 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='服务实例表，记录用户已购买产品的生命周期、计费、上游和续费状态';
+) ENGINE=InnoDB AUTO_INCREMENT=319 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='服务实例表，记录用户已购买产品的生命周期、计费、上游和续费状态';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `sessions`;
@@ -1512,19 +1518,19 @@ DROP TABLE IF EXISTS `third_product_groups`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `third_product_groups` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
-  `second_product_group_id` bigint unsigned NOT NULL COMMENT '→ second_product_groups.id',
-  `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '名称',
-  `slug` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'URL标识',
-  `description` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '分组说明',
-  `sort_order` int NOT NULL DEFAULT '0' COMMENT '排序',
-  `is_visible` tinyint unsigned NOT NULL DEFAULT '1' COMMENT '前台可见',
+  `second_product_group_id` bigint unsigned NOT NULL,
+  `name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `slug` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `description` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `sort_order` int NOT NULL DEFAULT '0',
+  `is_visible` tinyint unsigned NOT NULL DEFAULT '1',
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_third_second_slug` (`second_product_group_id`,`slug`),
   KEY `idx_third_second_visible_sort` (`second_product_group_id`,`is_visible`,`sort_order`),
   CONSTRAINT `fk_third_second_group` FOREIGN KEY (`second_product_group_id`) REFERENCES `second_product_groups` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=53 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=49 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `ticket_replies`;
@@ -1545,7 +1551,7 @@ CREATE TABLE `ticket_replies` (
   KEY `idx_stage2_ticket_replies_quote_reply_id` (`quote_reply_id`),
   CONSTRAINT `fk_stage2_ticket_replies_quote_reply_id` FOREIGN KEY (`quote_reply_id`) REFERENCES `ticket_replies` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_ticket_replies_ticket_id` FOREIGN KEY (`ticket_id`) REFERENCES `tickets` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=172 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=182 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `tickets`;
@@ -1564,7 +1570,6 @@ CREATE TABLE `tickets` (
   `updated_at` timestamp NULL DEFAULT NULL,
   `close_reason` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'admin, client, auto',
   PRIMARY KEY (`id`),
-  KEY `tickets_user_id_index` (`user_id`),
   KEY `tickets_user_status_updated_at_idx` (`user_id`,`status`,`updated_at`),
   KEY `tickets_status_updated_at_idx` (`status`,`updated_at`),
   KEY `tickets_user_updated_at_idx` (`user_id`,`updated_at`,`id`),
@@ -1573,7 +1578,7 @@ CREATE TABLE `tickets` (
   CONSTRAINT `fk_stage2_tickets_assignee_id` FOREIGN KEY (`assignee_id`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_stage2_tickets_service_id` FOREIGN KEY (`service_id`) REFERENCES `services` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_tickets_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=73 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=78 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `user_accounts`;
@@ -1604,7 +1609,7 @@ CREATE TABLE `user_coupons` (
   `coupon_id` bigint unsigned NOT NULL,
   `user_id` bigint unsigned NOT NULL,
   `receive_type` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'claim',
-  `status` tinyint NOT NULL DEFAULT '1',
+  `status` tinyint NOT NULL DEFAULT '1' COMMENT '优惠券状态：1=持有 2=已使用 3=已回收',
   `claimed_at` timestamp NULL DEFAULT NULL,
   `used_at` timestamp NULL DEFAULT NULL,
   `revoked_at` timestamp NULL DEFAULT NULL,
@@ -1623,7 +1628,7 @@ CREATE TABLE `user_coupons` (
   KEY `user_coupons_coupon_status_idx` (`coupon_id`,`status`),
   CONSTRAINT `fk_stage2_user_coupons_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT,
   CONSTRAINT `fk_user_coupons_coupon_id` FOREIGN KEY (`coupon_id`) REFERENCES `coupons` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=90 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=93 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `user_notifications`;
@@ -1645,7 +1650,7 @@ CREATE TABLE `user_notifications` (
   KEY `user_notifications_user_id_created_at_index` (`user_id`,`created_at`),
   KEY `user_notifications_type_index` (`type`),
   CONSTRAINT `fk_stage2_user_notifications_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=122 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=210 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `users`;
@@ -1696,12 +1701,11 @@ CREATE TABLE `users` (
   KEY `users_verification_status_id_idx` (`verification_status`,`id`),
   KEY `users_created_at_idx` (`created_at`),
   KEY `users_verification_certify_id_idx` (`verification_certify_id`),
-  KEY `users_login_email_alert_index` (`login_email_alert`),
   KEY `users_referrer_user_id_index` (`referrer_user_id`),
   KEY `users_member_level_id_index` (`member_level_id`),
   CONSTRAINT `fk_stage2_users_member_level_id` FOREIGN KEY (`member_level_id`) REFERENCES `member_levels` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_stage2_users_referrer_user_id` FOREIGN KEY (`referrer_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=988048 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=484 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 DROP TABLE IF EXISTS `verification_histories`;
@@ -1726,7 +1730,7 @@ CREATE TABLE `verification_histories` (
   KEY `verification_histories_verification_certify_id_index` (`verification_certify_id`),
   KEY `verification_histories_user_id_id_idx` (`user_id`,`id`),
   CONSTRAINT `fk_stage2_verification_histories_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT
-) ENGINE=InnoDB AUTO_INCREMENT=99 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=107 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (1,'0001_01_01_000000_create_users_table',1);
@@ -1903,6 +1907,20 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (173,'2026_07_20_00
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (174,'2026_07_21_000001_add_active_lookup_index_to_schedule_task_runs_table',91);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (175,'2026_07_21_000002_drop_legacy_product_group_mapping_columns',92);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (176,'2026_07_24_000001_add_soft_deletes_to_services_table',93);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (177,'2026_07_27_000001_add_console_template_to_products_table',94);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (178,'2026_08_10_000001_add_retry_lineage_to_schedule_task_runs_table',95);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (179,'2026_08_01_000001_default_services_auto_renew_to_disabled',96);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (180,'2026_08_12_000001_change_schedule_task_runs_tick_foreign_to_null_on_delete',96);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (181,'2026_08_13_000001_add_payment_voucher_to_referral_withdrawals_table',97);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (182,'2026_08_13_000002_add_manifest_hash_to_integration_plugins_table',98);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (183,'2026_08_13_000003_add_index_to_schedule_ticks_triggered_at',99);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (184,'2026_08_13_234137_cleanup_redundant_database_indexes',99);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (185,'2026_08_13_234138_add_source_composite_index_to_account_transactions',99);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (186,'2026_08_13_234138_backfill_status_enum_comments',99);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (187,'2026_08_14_000001_drop_product_groups_compatibility_table',100);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (188,'2026_08_19_000002_add_log_query_indexes',101);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (189,'2026_08_22_000001_add_activity_log_event_columns',101);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (190,'2026_08_23_000001_update_refunds_status_comment',102);
 
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;

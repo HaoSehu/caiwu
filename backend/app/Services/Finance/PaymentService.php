@@ -1913,6 +1913,7 @@ class PaymentService
 
                 if ((int) $lockedOrder->status === OrderStatus::REFUNDED || (int) $payment->status === PaymentStatus::REFUNDED) {
                     $refund = (array) data_get((array) ($payment->callback_raw ?? []), 'refund', []);
+                    $this->recordOriginalRefund($payment, $lockedOrder->invoice, $refund, $context);
                     if ($lockedOrder->invoice instanceof Invoice && (int) $lockedOrder->invoice->status !== InvoiceStatus::REFUNDED) {
                         $this->markInvoiceRefunded(
                             $lockedOrder->invoice,
@@ -1967,6 +1968,7 @@ class PaymentService
                         (float) $snapshot['refund_amount'],
                         $context
                     );
+                    $this->recordOriginalRefund($payment, $lockedOrder->invoice, $refundRecord, $context);
                 }
 
                 $lockedOrder->forceFill([
@@ -3336,6 +3338,51 @@ class PaymentService
         }
 
         $this->financeDocuments()->recordThirdPartyPayment($payment, $invoice);
+    }
+
+    private function recordOriginalRefund(
+        Payment $payment,
+        ?Invoice $invoice,
+        array $refundRecord,
+        array $context = [],
+    ): ?Refund {
+        if (! $invoice instanceof Invoice || (int) $invoice->user_id <= 0) {
+            return null;
+        }
+
+        $gatewayRefundNo = trim((string) ($refundRecord['out_request_no'] ?? $refundRecord['trade_no'] ?? ''));
+        $query = Refund::query()->where('payment_id', (int) $payment->id);
+        if ($gatewayRefundNo !== '') {
+            $query->where('gateway_refund_no', $gatewayRefundNo);
+        }
+
+        $existing = $query->lockForUpdate()->first();
+        if ($existing instanceof Refund) {
+            return $existing;
+        }
+
+        $amount = number_format((float) ($refundRecord['refund_amount'] ?? $refundRecord['refund_fee'] ?? 0), 2, '.', '');
+        if ((float) $amount <= 0) {
+            return null;
+        }
+
+        return Refund::query()->create([
+            'refund_no' => Refund::generateRefundNo(),
+            'payment_id' => (int) $payment->id,
+            'invoice_id' => (int) $invoice->id,
+            'user_id' => (int) $invoice->user_id,
+            'amount' => $amount,
+            'status' => Refund::STATUS_COMPLETED,
+            'refund_method' => 'alipay',
+            'currency' => (string) ($payment->currency ?: 'CNY'),
+            'reason' => (string) ($refundRecord['refund_reason'] ?? '支付宝原路退款'),
+            'gateway_refund_no' => $gatewayRefundNo !== '' ? $gatewayRefundNo : null,
+            'operator_type' => (string) ($context['operator_type'] ?? 'admin'),
+            'operator_id' => (int) ($context['operator_id'] ?? 0) ?: null,
+            'operator_name' => (string) ($context['operator_name'] ?? '') ?: null,
+            'refunded_at' => $refundRecord['refunded_at'] ?? now(),
+            'trace_id' => (string) ($context['trace_id'] ?? $payment->trace_id ?: ''),
+        ]);
     }
 
     private function markInvoiceRefunded(

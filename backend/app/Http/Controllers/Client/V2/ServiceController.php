@@ -41,7 +41,7 @@ class ServiceController extends Controller
         $detail = $this->services->getBaseDetailForUser($request->user(), $service, true);
 
         return $this->success([
-            'connection' => (new ServiceConnectionResource((array) ($detail['connection'] ?? []), true))->resolve(),
+            'connection' => (new ServiceConnectionResource((array) ($detail['connection'] ?? []), false))->resolve(),
         ]);
     }
 

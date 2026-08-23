@@ -37,7 +37,10 @@ export function useListPage<F extends Record<string, any>, T>(options: UseListPa
     pageSizeOptions: [20, 50, 100],
   });
 
+  let requestSeq = 0;
+
   async function loadList() {
+    const currentSeq = ++requestSeq;
     loading.value = true;
     try {
       const res = await fetch({
@@ -45,16 +48,19 @@ export function useListPage<F extends Record<string, any>, T>(options: UseListPa
         page: pagination.page,
         page_size: pagination.page_size,
       });
+      if (currentSeq !== requestSeq) return;
+      error.value = null;
       list.value = res.list || [];
       total.value = Number(res.total || 0);
       if (res.page) pagination.page = Number(res.page);
       if (res.page_size) pagination.page_size = Number(res.page_size);
     } catch (err) {
+      if (currentSeq !== requestSeq) return;
       error.value = err instanceof Error ? err.message : '加载失败，请稍后重试';
       console.error('[useListPage] 列表加载失败:', err);
       if (onError) onError(err);
     } finally {
-      loading.value = false;
+      if (currentSeq === requestSeq) loading.value = false;
     }
   }
 

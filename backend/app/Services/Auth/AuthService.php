@@ -808,7 +808,7 @@ class AuthService
         $this->ensureClientAvailable($user);
 
         $user->tokens()->where('name', 'admin-login-as')->delete();
-        $token = $user->createToken('admin-login-as', ['*'], now()->addHours(2));
+        $token = $user->createToken('admin-login-as', ['client:read', 'client:service-actions'], now()->addMinutes(30));
 
         $this->operationLogService->write(
             userId: (int) $user->id,

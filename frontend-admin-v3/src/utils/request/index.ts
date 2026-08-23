@@ -1,6 +1,7 @@
 // axios配置  可自行根据项目进行更改，只需更改该文件即可，其他文件可以不动
-import type { AxiosInstance } from 'axios';
+import type { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { isString, merge } from 'lodash-es';
+import { ensureSanctumCsrfCookie } from '@caiwu/shared/runtime';
 
 import { getAdminToken, removeAdminToken } from '@/app/runtime/session';
 import { ContentTypeEnum } from '@/constants';
@@ -27,7 +28,7 @@ const transform: AxiosTransform = {
 
     // 如果204无内容直接返回
     const method = res.config.method?.toLowerCase();
-    if (res.status === 204 && ['put', 'patch', 'delete'].includes(method)) {
+    if (res.status === 204 && method && ['put', 'patch', 'delete'].includes(method)) {
       return res;
     }
 
@@ -130,7 +131,13 @@ const transform: AxiosTransform = {
   },
 
   // 请求拦截器处理
-  requestInterceptors: (config, options) => {
+  requestInterceptors: async (config, options) => {
+    // 写请求先完成 Sanctum CSRF 握手（stateful 校验，缺少会返回 419）
+    const method = String(config.method || 'get').toLowerCase();
+    if (['post', 'put', 'patch', 'delete'].includes(method)) {
+      await ensureSanctumCsrfCookie(host, true);
+    }
+
     // 请求之前处理config
     const token = getAdminToken();
 
@@ -161,7 +168,7 @@ const transform: AxiosTransform = {
 
     config.retryCount += 1;
 
-    const backoff = new Promise((resolve) => {
+    const backoff = new Promise<AxiosRequestConfig>((resolve) => {
       setTimeout(() => {
         resolve(config);
       }, config.requestOptions.retry.delay || 1);
@@ -185,6 +192,8 @@ function createAxios(opt?: Partial<CreateAxiosOptions>) {
         timeout: 10 * 1000,
         // 携带Cookie
         withCredentials: true,
+        // 跨域请求也发送 X-XSRF-TOKEN 头（axios 默认仅同源发送）
+        withXSRFToken: true,
         // 头信息
         headers: { 'Content-Type': ContentTypeEnum.Json },
         // 数据处理方式

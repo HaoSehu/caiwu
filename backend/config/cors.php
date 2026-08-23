@@ -38,6 +38,7 @@ return [
         'Origin',
         'X-Requested-With',
         'X-CSRF-TOKEN',
+        'X-XSRF-TOKEN',
         'X-Request-Id',
         'X-Idempotency-Key',
     ],

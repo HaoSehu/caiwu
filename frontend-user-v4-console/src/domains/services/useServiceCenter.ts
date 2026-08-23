@@ -173,6 +173,7 @@ export function useServiceCenter() {
   const overviewLoading = ref(false);
   const list = shallowRef<ServiceInstance[]>([]);
   const total = ref(0);
+  const error = ref<string | null>(null);
   const overview = shallowRef<ServiceOverview>(createEmptyOverview());
 
   const filters = reactive({
@@ -271,6 +272,9 @@ export function useServiceCenter() {
     try {
       const res = await clientApi.groupedOverview();
       overview.value = { ...createEmptyOverview(), ...(res.data || {}) };
+      error.value = null;
+    } catch (requestError: unknown) {
+      error.value = getErrorMessage(requestError, '服务概览加载失败，请稍后重试');
     } finally {
       overviewLoading.value = false;
     }
@@ -298,6 +302,9 @@ export function useServiceCenter() {
       const res = await clientApi.services(params);
       list.value = Array.isArray(res.data?.list) ? res.data.list : [];
       total.value = Number(res.data?.total || 0);
+      error.value = null;
+    } catch (requestError: unknown) {
+      error.value = getErrorMessage(requestError, '服务列表加载失败，请稍后重试');
     } finally {
       loading.value = false;
     }
@@ -381,7 +388,9 @@ export function useServiceCenter() {
       );
       renewForm.user_coupon_id = Number(res.data?.selected_user_coupon_id || 0);
     } catch (error: unknown) {
-      MessagePlugin.error(getErrorMessage(error, '加载续费信息失败'));
+      if (!(error as { __handled?: boolean })?.__handled) {
+        MessagePlugin.error(getErrorMessage(error, '加载续费信息失败'));
+      }
     } finally {
       renewPreviewLoading.value = false;
     }
@@ -421,7 +430,9 @@ export function useServiceCenter() {
       MessagePlugin.success('续费账单已创建，正在跳转支付');
       router.push(invoiceId > 0 ? `/client/invoices/${invoiceId}/pay` : '/client/invoices');
     } catch (error: unknown) {
-      MessagePlugin.error(getErrorMessage(error, '续费账单创建失败'));
+      if (!(error as { __handled?: boolean })?.__handled) {
+        MessagePlugin.error(getErrorMessage(error, '续费账单创建失败'));
+      }
     } finally {
       renewSubmitting.value = false;
     }
@@ -448,7 +459,9 @@ export function useServiceCenter() {
       remarkVisible.value = false;
       MessagePlugin.success('备注已保存');
     } catch (error: unknown) {
-      MessagePlugin.error(getErrorMessage(error, '备注保存失败'));
+      if (!(error as { __handled?: boolean })?.__handled) {
+        MessagePlugin.error(getErrorMessage(error, '备注保存失败'));
+      }
     } finally {
       remarkSubmitting.value = false;
     }

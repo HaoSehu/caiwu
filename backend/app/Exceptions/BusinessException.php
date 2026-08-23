@@ -40,7 +40,7 @@ class BusinessException extends Exception
 
     /**
      * 业务异常属于预期内的受控错误，由各调用层按需主动记录日志。
-     * 禁止由顶层异常处理器再次上报，避免产生冗余的 ERROR 日志和无效的 Sentry 告警。
+     * 禁止由顶层异常处理器再次上报，避免产生冗余的 ERROR 日志。
      */
     public function report(): bool
     {

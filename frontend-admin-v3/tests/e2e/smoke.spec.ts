@@ -2984,6 +2984,17 @@ async function mockVerifications(page: import('@playwright/test').Page) {
 }
 
 async function mockLogin(page: import('@playwright/test').Page) {
+  // Sanctum CSRF 握手：写请求前先获取 XSRF-TOKEN cookie
+  await page.route('**/sanctum/csrf-cookie**', async (route) => {
+    await route.fulfill({
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Credentials': 'true',
+        'Set-Cookie': 'XSRF-TOKEN=e2e-xsrf-token; Path=/',
+      },
+    });
+  });
   await page.route('**/api/v2/admin/login**', async (route) => {
     const body = route.request().postDataJSON() as { username?: string; password?: string };
     await route.fulfill({
@@ -4114,10 +4125,12 @@ test.describe('frontend-admin-v3 shell smoke', () => {
 
     const isMobileViewport = () => (page.viewportSize()?.width || 1440) <= 768;
     const clickRowAction = async (rowText: string, action: string) => {
-      const row = page.locator('.t-table__body tr').filter({ hasText: rowText }).first();
+      const row = isMobileViewport()
+        ? page.locator('.invoice-mobile-list .mobile-record-card').filter({ hasText: rowText }).first()
+        : page.locator('.t-table__body tr').filter({ hasText: rowText }).first();
       if (isMobileViewport()) {
-        await row.getByRole('button', { name: '更多' }).click();
-        await clickVisibleDropdownItem(page, action);
+        await row.locator('.mobile-record-card__more').click();
+        await page.getByText(action, { exact: true }).last().click();
         return;
       }
       await row.getByRole('button', { name: action }).click();
@@ -4192,10 +4205,12 @@ test.describe('frontend-admin-v3 shell smoke', () => {
 
     const isMobileViewport = () => (page.viewportSize()?.width || 1440) <= 768;
     const clickRowAction = async (rowText: string, action: string) => {
-      const row = page.locator('.t-table__body tr').filter({ hasText: rowText }).first();
+      const row = isMobileViewport()
+        ? page.locator('.invoice-mobile-list .mobile-record-card').filter({ hasText: rowText }).first()
+        : page.locator('.t-table__body tr').filter({ hasText: rowText }).first();
       if (isMobileViewport()) {
-        await row.getByRole('button', { name: '更多' }).click();
-        await clickVisibleDropdownItem(page, action);
+        await row.locator('.mobile-record-card__more').click();
+        await page.getByText(action, { exact: true }).last().click();
         return;
       }
       await row.getByRole('button', { name: action }).click();
@@ -5447,7 +5462,7 @@ test.describe('frontend-admin-v3 shell smoke', () => {
     await expect(productTreePopup).toBeVisible();
     expect(selectedProductRequests).toEqual([]);
     await expect(productTreePopup.getByText('高宽云服务器 2C4G', { exact: true })).toBeVisible();
-    await productTreePopup.getByText('高宽云服务器 2C4G', { exact: true }).click();
+    await productTreePopup.getByText('高宽云服务器 2C40G', { exact: true }).click();
     await expect.poll(() => selectedProductRequests).toHaveLength(1);
     await expect(
       addServiceDialog.locator('.t-form__item').filter({ hasText: '服务名称' }).locator('input'),

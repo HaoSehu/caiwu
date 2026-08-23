@@ -11,6 +11,7 @@ import {
   isWriteRequest,
   retrySafeRequest,
 } from "./core.ts";
+import { ensureSanctumCsrfCookie } from "./csrf.ts";
 import { toUserMessage } from "./userMessage.ts";
 import { extractValidationErrors } from "./validationErrors.ts";
 
@@ -96,17 +97,26 @@ export function createHttpClient(
   const client = axios.create({
     baseURL: options.baseURL,
     timeout: DEFAULT_TIMEOUT,
+    // 跨域场景也携带 Cookie，Sanctum 状态化校验（XSRF-TOKEN / 会话）依赖它
+    withCredentials: true,
+    // 跨域请求也发送 X-XSRF-TOKEN 头（axios 默认仅同源发送）
+    withXSRFToken: true,
     headers: {
       Accept: "application/json",
     },
   });
 
   client.interceptors.request.use(
-    (config) => {
+    async (config) => {
       const runtimeConfig = config as ClientRuntimeRequestConfig;
       const method = String(runtimeConfig.method || "get").toLowerCase();
       const safeRequest = isSafeRequest(method);
       const writeRequest = isWriteRequest(method);
+
+      // 写请求先完成 Sanctum CSRF 握手，避免 stateful 校验返回 419
+      if (writeRequest) {
+        await ensureSanctumCsrfCookie(options.baseURL, true);
+      }
 
       runtimeConfig.silentError = Boolean(
         runtimeConfig.silentError || runtimeConfig.silent,

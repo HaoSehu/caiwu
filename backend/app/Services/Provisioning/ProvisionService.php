@@ -209,7 +209,7 @@ class ProvisionService
         return $this->submitUpstreamProvision($order, $service, true);
     }
 
-    private function submitUpstreamProvision(Order $order, Service $service, bool $throwOnFailure = false): Service
+    private function submitUpstreamProvision(Order $order, Service $service, bool $throwOnFailure = true): Service
     {
         $this->markPending($order, $service);
         $providerKey = $this->resolveProviderKeyForProduct($order->product);

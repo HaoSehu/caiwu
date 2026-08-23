@@ -30,12 +30,10 @@
     26 => 'Carbon\\Laravel\\ServiceProvider',
     27 => 'NunoMaduro\\Collision\\Adapters\\Laravel\\CollisionServiceProvider',
     28 => 'Termwind\\Laravel\\TermwindServiceProvider',
-    29 => 'Sentry\\Laravel\\ServiceProvider',
-    30 => 'Sentry\\Laravel\\Tracing\\ServiceProvider',
-    31 => 'App\\Providers\\AppServiceProvider',
-    32 => 'App\\Providers\\PluginServiceProvider',
-    33 => 'App\\Providers\\IntegrationServiceProvider',
-    34 => 'App\\Providers\\UpstreamServiceProvider',
+    29 => 'App\\Providers\\AppServiceProvider',
+    30 => 'App\\Providers\\PluginServiceProvider',
+    31 => 'App\\Providers\\IntegrationServiceProvider',
+    32 => 'App\\Providers\\UpstreamServiceProvider',
   ),
   'eager' => 
   array (
@@ -53,12 +51,10 @@
     11 => 'Carbon\\Laravel\\ServiceProvider',
     12 => 'NunoMaduro\\Collision\\Adapters\\Laravel\\CollisionServiceProvider',
     13 => 'Termwind\\Laravel\\TermwindServiceProvider',
-    14 => 'Sentry\\Laravel\\ServiceProvider',
-    15 => 'Sentry\\Laravel\\Tracing\\ServiceProvider',
-    16 => 'App\\Providers\\AppServiceProvider',
-    17 => 'App\\Providers\\PluginServiceProvider',
-    18 => 'App\\Providers\\IntegrationServiceProvider',
-    19 => 'App\\Providers\\UpstreamServiceProvider',
+    14 => 'App\\Providers\\AppServiceProvider',
+    15 => 'App\\Providers\\PluginServiceProvider',
+    16 => 'App\\Providers\\IntegrationServiceProvider',
+    17 => 'App\\Providers\\UpstreamServiceProvider',
   ),
   'deferred' => 
   array (

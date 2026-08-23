@@ -191,4 +191,23 @@ assert.equal(toUserMessage(undefined, '自定义回退'), '自定义回退')
   assert.equal(seen[1].headers.Authorization, 'Bearer token-123')
 }
 
+// Sanctum CSRF 握手：csrf-cookie 地址推导与 node 环境跳过
+{
+  const { resolveSanctumCsrfCookieUrl, ensureSanctumCsrfCookie } = await import('../runtime/http/csrf.ts')
+  assert.equal(
+    resolveSanctumCsrfCookieUrl('https://api.example.test/api'),
+    'https://api.example.test/sanctum/csrf-cookie'
+  )
+  assert.equal(
+    resolveSanctumCsrfCookieUrl('https://api.example.test/api/'),
+    'https://api.example.test/sanctum/csrf-cookie'
+  )
+  assert.equal(
+    resolveSanctumCsrfCookieUrl('https://api.example.test'),
+    'https://api.example.test/sanctum/csrf-cookie'
+  )
+  // 非浏览器环境必须直接跳过，不发起网络请求
+  await ensureSanctumCsrfCookie('https://api.example.test/api', true)
+}
+
 console.log('http client tests passed')

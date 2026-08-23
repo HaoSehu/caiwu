@@ -275,26 +275,6 @@ class BackendHealthFixRegressionTest extends TestCase
         $this->assertStringContainsString('CAIWU_SCHEDULE_QUEUE=automation', $environmentTemplate);
     }
 
-    public function test_sentry_is_configurable_without_enabling_default_pii(): void
-    {
-        $bootstrap = file_get_contents(base_path('bootstrap/app.php'));
-
-        $this->assertIsString($bootstrap);
-        $this->assertStringContainsString('SentryIntegration::handles($exceptions)', $bootstrap);
-        $composer = json_decode(
-            file_get_contents(base_path('composer.json')) ?: '{}',
-            true
-        );
-
-        $this->assertArrayHasKey('sentry/sentry-laravel', (array) ($composer['require'] ?? []));
-
-        $config = require base_path('config/sentry.php');
-
-        $this->assertSame('', (string) ($config['dsn'] ?? ''));
-        $this->assertFalse((bool) ($config['send_default_pii'] ?? true));
-        $this->assertContains('/up', (array) ($config['ignore_transactions'] ?? []));
-    }
-
     public function test_vnc_relay_log_masks_token(): void
     {
         $source = file_get_contents(base_path('app/Console/Commands/VncRelayCommand.php'));
