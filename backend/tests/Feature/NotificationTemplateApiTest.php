@@ -155,7 +155,14 @@ class NotificationTemplateApiTest extends TestCase
         $this->assertFalse($emailTemplates->pluck('name')->contains('新工单提醒'));
         $this->assertTrue($emailTemplates->every(
             fn (array $template): bool => ! str_contains((string) $template['content'], 'hero-visual')
-                && str_contains((string) $template['content'], '#1f5eff')
+                && str_contains((string) $template['content'], '#0067b8')
+        ));
+        // 微软风格视觉：Segoe UI、MSO 适配、logo 尺寸、卡片式处理建议、深色模式
+        $this->assertTrue($emailTemplates->every(
+            fn (array $template): bool => str_contains((string) $template['content'], '<!--[if mso]>')
+                && str_contains((string) $template['content'], 'width="148" height="36"')
+                && str_contains((string) $template['content'], 'Segoe UI')
+                && str_contains((string) $template['content'], 'prefers-color-scheme: dark')
         ));
         $this->assertTrue($emailTemplates->contains(
             fn (array $template): bool => $template['code'] === '100001'

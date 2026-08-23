@@ -87,7 +87,7 @@ final class EmailNotificationTemplateDefaults
         $actionTitle = '处理建议';
 
         foreach ($rows as $row) {
-            $rowHtml .= '                  <tr><td class="detail-label">'.(string) $row[0].'</td><td class="detail-value">'.(string) $row[1].'</td></tr>'."\n";
+            $rowHtml .= '                  <tr class="detail-row"><td class="detail-label">'.(string) $row[0].'</td><td class="detail-value">'.(string) $row[1].'</td></tr>'."\n";
         }
 
         return <<<HTML
@@ -105,11 +105,11 @@ final class EmailNotificationTemplateDefaults
     <table role="presentation" class="email-shell" cellpadding="0" cellspacing="0" width="100%">
       <tr>
         <td align="center">
-          <!--[if mso]><table role="presentation" width="680" cellpadding="0" cellspacing="0"><tr><td><![endif]-->
+          <!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0"><tr><td><![endif]-->
           <table role="presentation" class="email-card" cellpadding="0" cellspacing="0" width="100%">
             <tr>
               <td class="email-brand">
-                {{#site_logo}}<img class="email-logo" src="{{site_logo}}" alt="{{site_name}}" width="148" height="36">{{/site_logo}}<span class="email-brand-name">{{site_name}}</span>
+                {{#site_logo}}<img class="email-logo" src="{{site_logo}}" alt="{{site_name}}" width="148" height="36">{{/site_logo}}
               </td>
             </tr>
             <tr>
@@ -133,13 +133,16 @@ final class EmailNotificationTemplateDefaults
               </td>
             </tr>
             <tr>
-              <td class="email-action">
-                <div class="action-title">{$actionTitle}</div>
-                <div class="action-copy">{$notice}</div>
+              <td class="email-footer">
+                <div class="email-action">
+                  <div class="action-card">
+                    <div class="action-title">{$actionTitle}</div>
+                    <div class="action-copy">{$notice}</div>
+                  </div>
+                </div>
+                <p class="footer-copy">此为系统自动发送邮件，请勿直接回复。</p>
+                <p class="footer-brand">{{site_name}}</p>
               </td>
-            </tr>
-            <tr>
-              <td class="email-footer">本邮件由 {{site_name}} 系统发送，请勿直接回复。</td>
             </tr>
           </table>
           <!--[if mso]></td></tr></table><![endif]-->
@@ -157,177 +160,202 @@ HTML;
         return <<<CSS
 body {
   margin: 0;
-  background: #f3f6fb;
-  color: #111827;
-  font-family: "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+  padding: 0;
+  background: #f4f5f7;
+  color: #1b1b1b;
+  font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 .cw-email-template-{$code} {
   width: 100%;
-  background: #f3f6fb;
+  background: #f4f5f7;
 }
 .cw-email-template-{$code} .email-shell {
   width: 100%;
-  background: #f3f6fb;
-  padding: 28px 12px;
+  background: #f4f5f7;
+  padding: 40px 16px;
 }
 .cw-email-template-{$code} .email-card {
-  max-width: 680px;
-  border: 1px solid #d8e1ef;
-  border-top: 4px solid {$accent};
+  max-width: 600px;
   background: #ffffff;
+  border-radius: 4px;
   border-collapse: separate;
   border-spacing: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), 0 0 1px rgba(0, 0, 0, 0.08);
 }
 .cw-email-template-{$code} .email-brand {
-  padding: 22px 32px 18px;
-  border-bottom: 1px solid #e7edf6;
+  padding: 32px 40px 16px;
   white-space: nowrap;
 }
 .cw-email-template-{$code} .email-logo {
   max-width: 148px;
   max-height: 36px;
-  margin-right: 12px;
-  vertical-align: middle;
-}
-.cw-email-template-{$code} .email-brand-name {
-  color: #182033;
-  font-size: 15px;
-  font-weight: 700;
-  vertical-align: middle;
+  display: block;
+  border: 0;
 }
 .cw-email-template-{$code} .email-hero {
-  padding: 28px 32px 12px;
+  padding: 8px 40px 16px;
 }
 .cw-email-template-{$code} .hero-copy {
   vertical-align: top;
 }
 .cw-email-template-{$code} .email-eyebrow {
-  color: {$accent};
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0;
+  color: #0067b8;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
 }
 .cw-email-template-{$code} h1 {
-  margin: 8px 0 0;
-  color: #111827;
-  font-size: 24px;
-  font-weight: 700;
-  line-height: 1.35;
+  margin: 6px 0 0;
+  color: #1b1b1b;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.2px;
 }
 .cw-email-template-{$code} .email-lead {
   margin: 12px 0 0;
-  color: #4b5563;
+  color: #444444;
   font-size: 14px;
-  line-height: 1.8;
+  line-height: 1.6;
 }
 .cw-email-template-{$code} .email-section {
-  padding: 14px 32px 0;
+  padding: 12px 40px 0;
 }
 .cw-email-template-{$code} .section-title {
-  margin-bottom: 10px;
-  color: #182033;
-  font-size: 14px;
-  font-weight: 700;
+  margin-bottom: 12px;
+  color: #1b1b1b;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
 }
 .cw-email-template-{$code} .detail-table {
-  border: 1px solid #e1e7f0;
+  width: 100%;
   background: #ffffff;
   border-collapse: collapse;
 }
+.cw-email-template-{$code} .detail-row {
+  border-bottom: 1px solid #edebe9;
+}
 .cw-email-template-{$code} .detail-label,
 .cw-email-template-{$code} .detail-value {
-  padding: 13px 14px;
-  border-bottom: 1px solid #e1e7f0;
-  font-size: 14px;
-  line-height: 1.6;
+  padding: 12px 0;
+  font-size: 13px;
+  line-height: 1.5;
   vertical-align: top;
 }
 .cw-email-template-{$code} .detail-label {
-  width: 34%;
-  color: #667085;
-  background: #f8fafc;
+  width: 32%;
+  color: #605e5c;
+  font-weight: 400;
 }
 .cw-email-template-{$code} .detail-value {
-  color: #111827;
-  font-weight: 700;
+  color: #1b1b1b;
+  font-weight: 600;
   text-align: right;
   word-break: break-word;
 }
 .cw-email-template-{$code} .email-action {
-  padding: 20px 32px 0;
+  margin-bottom: 24px;
+}
+.cw-email-template-{$code} .action-card {
+  background: #f8f9fa;
+  padding: 12px 14px;
+  border-radius: 4px;
 }
 .cw-email-template-{$code} .action-title {
-  padding-left: 12px;
-  border-left: 3px solid {$accent};
-  color: #182033;
-  font-size: 14px;
-  font-weight: 700;
+  color: #1b1b1b;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
 }
 .cw-email-template-{$code} .action-copy {
-  margin-top: 8px;
-  padding-left: 15px;
-  color: #4b5563;
-  font-size: 14px;
-  line-height: 1.8;
+  margin-top: 4px;
+  color: #605e5c;
+  font-size: 12px;
+  line-height: 1.6;
 }
 .cw-email-template-{$code} .email-footer {
-  padding: 24px 32px 26px;
-  color: #8a95a5;
-  font-size: 12px;
-  line-height: 1.7;
+  padding: 28px 40px 36px;
+  border-top: 1px solid #edebe9;
+  margin-top: 24px;
+}
+.cw-email-template-{$code} .footer-copy {
+  margin: 0;
+  color: #797775;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.cw-email-template-{$code} .footer-brand {
+  margin: 4px 0 0;
+  color: #a19f9d;
+  font-size: 11px;
+  font-weight: 500;
 }
 @media screen and (max-width: 640px) {
   .cw-email-template-{$code} .email-shell {
-    padding: 16px 8px;
+    padding: 0 !important;
+  }
+  .cw-email-template-{$code} .email-card {
+    border-radius: 0 !important;
+    box-shadow: none !important;
   }
   .cw-email-template-{$code} .email-brand,
   .cw-email-template-{$code} .email-hero,
-  .cw-email-template-{$code} .email-section,
-  .cw-email-template-{$code} .email-action,
+  .cw-email-template-{$code} .email-section {
+    padding-left: 20px !important;
+    padding-right: 20px !important;
+  }
   .cw-email-template-{$code} .email-footer {
-    padding-left: 18px;
-    padding-right: 18px;
-  }
-  .cw-email-template-{$code} .hero-copy {
-    display: block;
-    width: auto;
-  }
-  .cw-email-template-{$code} .hero-copy {
-    padding-right: 0;
+    padding: 24px 20px 32px !important;
   }
   .cw-email-template-{$code} h1 {
-    font-size: 21px;
+    font-size: 19px !important;
+  }
+  .cw-email-template-{$code} .detail-row {
+    display: block;
+    padding: 8px 0;
   }
   .cw-email-template-{$code} .detail-label,
   .cw-email-template-{$code} .detail-value {
     display: block;
-    width: auto;
-    text-align: left;
+    width: 100% !important;
+    padding: 1px 0 !important;
+    text-align: left !important;
+  }
+  .cw-email-template-{$code} .detail-label {
+    font-size: 12px;
+    color: #797775;
+  }
+  .cw-email-template-{$code} .detail-value {
+    font-size: 13px;
+    color: #1b1b1b;
   }
   .cw-email-template-{$code} .email-brand {
     white-space: normal;
   }
 }
 @media (prefers-color-scheme: dark) {
-  .cw-email-template-{$code} { background: #1a1a2e; }
-  .cw-email-template-{$code} .email-shell { background: #1a1a2e; }
-  .cw-email-template-{$code} .email-card { background: #1e2130; border-color: #2d3244; }
+  .cw-email-template-{$code} { background: #181818; }
+  .cw-email-template-{$code} .email-shell { background: #181818; }
+  .cw-email-template-{$code} .email-card { background: #202020; box-shadow: none; }
   .cw-email-template-{$code} .email-hero,
-  .cw-email-template-{$code} .email-section,
-  .cw-email-template-{$code} .email-action { background: #1e2130; }
+  .cw-email-template-{$code} .email-section { background: #202020; }
+  .cw-email-template-{$code} .email-eyebrow { color: #2886de; }
   .cw-email-template-{$code} h1,
   .cw-email-template-{$code} .section-title,
-  .cw-email-template-{$code} .action-title,
-  .cw-email-template-{$code} .email-brand-name { color: #e5e7eb; }
+  .cw-email-template-{$code} .action-title { color: #ffffff; }
   .cw-email-template-{$code} .email-lead,
-  .cw-email-template-{$code} .action-copy,
-  .cw-email-template-{$code} .detail-value { color: #d1d5db; }
-  .cw-email-template-{$code} .detail-label { background: #252839; color: #9ca3af; }
-  .cw-email-template-{$code} .detail-table { border-color: #374151; }
-  .cw-email-template-{$code} .detail-label,
-  .cw-email-template-{$code} .detail-value { border-color: #374151; }
-  .cw-email-template-{$code} .email-brand { border-color: #2d3244; }
-  .cw-email-template-{$code} .email-footer { color: #6b7280; }
+  .cw-email-template-{$code} .detail-value { color: #d2d0ce; }
+  .cw-email-template-{$code} .action-copy { color: #a19f9d; }
+  .cw-email-template-{$code} .detail-label { color: #8a8886; }
+  .cw-email-template-{$code} .detail-row { border-color: #2d2d2d; }
+  .cw-email-template-{$code} .action-card { background: #292929; }
+  .cw-email-template-{$code} .email-footer { border-color: #2d2d2d; }
+  .cw-email-template-{$code} .footer-copy { color: #8a8886; }
+  .cw-email-template-{$code} .footer-brand { color: #605e5c; }
 }
 CSS;
     }
