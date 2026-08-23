@@ -57,6 +57,9 @@ class ServicePowerService
             $refreshError = SensitiveDataSanitizer::sanitizeText($exception->getMessage());
         }
 
+        // 清除远程快照共享缓存，保证操作后的状态轮询立即拉取新数据
+        $this->detailService->forgetDetailCaches($service);
+
         $actionLabel = ClientServiceConsoleService::POWER_ACTIONS[$action];
         $message = trim((string) ($response['msg'] ?? '')) ?: ($actionLabel.'指令已发送');
         $this->operationLogService->writeServiceConsoleLog($service, 'service.console.power.'.$action, [
@@ -244,6 +247,7 @@ class ServicePowerService
 
         $taskStatus = $this->detailService->buildPasswordResetPendingStatus();
         $message = trim((string) ($response['msg'] ?? '')) ?: '重置密码指令已提交';
+        $this->detailService->forgetDetailCaches($service);
         $this->operationLogService->writeServiceConsoleLog($service, 'service.console.password.reset', [
             'category' => 'password',
             'summary' => '提交密码重置请求',
@@ -286,6 +290,8 @@ class ServicePowerService
         } catch (\Throwable) {
             $taskStatus = null;
         }
+
+        $this->detailService->forgetDetailCaches($service);
 
         $message = trim((string) ($response['msg'] ?? '')) ?: '重装系统任务已提交';
         $this->operationLogService->writeServiceConsoleLog($service, 'service.console.reinstall.submit', [

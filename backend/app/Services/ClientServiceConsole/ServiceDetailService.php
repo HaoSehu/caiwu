@@ -41,6 +41,8 @@ class ServiceDetailService
 
     private const REMOTE_STATUS_CACHE_TTL_SECONDS = 30; // 30秒：远程状态
 
+    private const REMOTE_STATE_CACHE_TTL_SECONDS = 30; // 30秒：远程快照共享缓存（详情/状态/连接并发时只向上游请求一次）
+
     private const SERVICE_CONFIG_CACHE_TTL_SECONDS = 120; // 2分钟：服务配置
 
     private const PRODUCT_CONFIG_OPTIONS_CACHE_TTL_SECONDS = 604800; // 1周：产品配置选项 rarely change
@@ -131,7 +133,7 @@ class ServiceDetailService
 
         if ($needsRemoteRefresh && $this->transformService->canManageService($service)) {
             try {
-                $remote = $this->fetchRemoteState($service);
+                $remote = $this->fetchRemoteState($service, null, null, $refreshRemote);
                 if (! empty($remote['host']) || ! empty($remote['runtime']) || ! empty($remote['nat'])) {
                     $this->syncServiceFromRemote($service, $remote['host'] ?? [], $remote['runtime'] ?? [], $remote['nat'] ?? []);
                     $service->refresh()->loadMissing([
@@ -469,7 +471,7 @@ class ServiceDetailService
             : null;
     }
 
-    public function fetchRemoteState(Service $service, ?Supplier $supplier = null, ?string $jwt = null): array
+    public function fetchRemoteState(Service $service, ?Supplier $supplier = null, ?string $jwt = null, bool $freshSnapshot = false): array
     {
         $runtime = null;
 
@@ -480,6 +482,17 @@ class ServiceDetailService
             $provisionData = $this->serviceProvisionData($service);
             $hostId = (int) (($provisionData['upstream_host_id'] ?? 0) ?: 0);
             $runtime = $this->resolveRuntimeCapabilityForSupplier($supplier);
+        }
+
+        // 查看类请求（详情、远程状态、连接）共享同一份远程快照，避免并发时重复请求上游
+        $snapshotCacheKey = $freshSnapshot
+            ? null
+            : $this->buildRemoteStateCacheKey((int) $service->id, (int) $supplier->id, $hostId);
+        if ($snapshotCacheKey !== null) {
+            $cachedSnapshot = Cache::get($snapshotCacheKey);
+            if (is_array($cachedSnapshot) && $cachedSnapshot !== []) {
+                return $cachedSnapshot;
+            }
         }
 
         $detailPayload = [];
@@ -544,12 +557,24 @@ class ServiceDetailService
             ]);
         }
 
-        return [
+        $remoteState = [
             'host' => is_array($detailPayload['host'] ?? null) ? $detailPayload['host'] : [],
             'runtime' => is_array($statusPayload) ? $statusPayload : [],
             'nat' => $natPayload,
             'jwt' => $resolvedJwt,
         ];
+
+        // 上游失败时保留空结果不缓存，让下一次请求可重试
+        if ($snapshotCacheKey !== null && ($detailPayload !== [] || $statusPayload !== [] || $natPayload !== [])) {
+            Cache::put($snapshotCacheKey, $remoteState, now()->addSeconds(self::REMOTE_STATE_CACHE_TTL_SECONDS));
+        }
+
+        return $remoteState;
+    }
+
+    private function buildRemoteStateCacheKey(int $serviceId, int $supplierId, int $hostId): string
+    {
+        return 'service_console:remote_state:v2:'.$serviceId.':'.$supplierId.':'.$hostId;
     }
 
     private function fetchWebServiceDetailPayload(ProvidesConsoleRuntime $runtime, Supplier $supplier, int $hostId): array
@@ -843,6 +868,13 @@ class ServiceDetailService
         Cache::forget($this->buildDetailResponseCacheKey($service));
         Cache::forget($this->buildServiceConfigCacheKey($service));
         Cache::forget($this->buildRemoteStatusCacheKey($service));
+
+        $provisionData = $this->serviceProvisionData($service);
+        $supplierId = (int) (($provisionData['supplier_id'] ?? 0) ?: 0);
+        $hostId = (int) (($provisionData['upstream_host_id'] ?? 0) ?: 0);
+        if ($supplierId > 0 && $hostId > 0) {
+            Cache::forget($this->buildRemoteStateCacheKey((int) $service->id, $supplierId, $hostId));
+        }
     }
 
     // ── Private helpers ────────────────────────────────────────────────────
