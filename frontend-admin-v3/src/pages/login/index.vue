@@ -65,6 +65,8 @@ const formRules: Record<string, FormRule[]> = {
 
 function canAccessPath(path: string): boolean {
   const resolved = router.resolve(path);
+  // 未注册路由（已下架/角色权限不全）不应放行，交由兜底处理
+  if (resolved.matched.length === 0) return false;
   const required = resolved.meta?.permission as string | undefined;
   if (!required || required === '') return true;
   return hasPermissionInList(userStore.userInfo?.permissions || [], required);
@@ -83,10 +85,21 @@ async function handleLogin() {
     MessagePlugin.success('登录成功');
     // 先构建权限路由，无仪表盘权限角色也能落到其首个可访问页面而非 403
     if (!permissionStore.routesBuilt || !userStore.userInfo?.name) {
-      const routeList = await permissionStore.buildAsyncRoutes(userStore.userInfo?.permissions || []);
-      routeList.forEach((item) => router.addRoute(item));
+      try {
+        const routeList = await permissionStore.buildAsyncRoutes(userStore.userInfo?.permissions || []);
+        routeList.forEach((item) => router.addRoute(item));
+      } catch {
+        errorMessage.value = '菜单初始化失败，请刷新页面重试';
+        MessagePlugin.error(errorMessage.value);
+        return;
+      }
     }
     const fallbackPath = permissionStore.firstAccessibleAdminPath;
+    if (!canAccessPath(fallbackPath)) {
+      errorMessage.value = '当前账号无可用页面，请联系管理员';
+      MessagePlugin.error(errorMessage.value);
+      return;
+    }
     const redirect = router.currentRoute.value.query.redirect;
     if (redirect && typeof redirect === 'string') {
       try {

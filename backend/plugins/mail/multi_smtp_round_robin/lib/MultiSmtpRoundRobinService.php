@@ -34,7 +34,8 @@ class MultiSmtpRoundRobinService extends BaseMailPluginService
         $config = $this->configRepository->resolvedConfigByDomainAndSlug(PluginDomain::MAIL, 'multi_smtp_round_robin');
         $accounts = array_values(array_filter(
             is_array($config['accounts'] ?? null) ? $config['accounts'] : [],
-            static fn (mixed $item): bool => is_array($item) && (bool) ($item['enabled'] ?? true)
+            // filter_var 避免字符串 "false" 被 (bool) 误判为启用
+            static fn (mixed $item): bool => is_array($item) && filter_var($item['enabled'] ?? true, FILTER_VALIDATE_BOOL)
         ));
 
         if ($accounts === []) {

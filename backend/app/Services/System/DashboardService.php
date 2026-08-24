@@ -165,6 +165,7 @@ class DashboardService
         $allProducts = $this->salesIncomeInvoices()
             ->where('status', InvoiceStatus::PAID)
             ->where('paid_at', '>=', $month)
+            ->where('paid_at', '<', $month->copy()->addMonth())
             ->selectRaw('
                 COALESCE(NULLIF(product_spec_snapshot, ""), "未知产品") as product_name,
                 ROUND(COALESCE(SUM(paid_amount), 0) * 100) as total_amount_cents,
@@ -201,6 +202,7 @@ class DashboardService
         $dailyPaid = $this->salesIncomeInvoices()
             ->where('status', InvoiceStatus::PAID)
             ->where('paid_at', '>=', $month)
+            ->where('paid_at', '<', $month->copy()->addMonth())
             ->selectRaw('DATE(paid_at) as date, ROUND(COALESCE(SUM(paid_amount), 0) * 100) as daily_amount_cents, COUNT(*) as daily_count')
             ->groupByRaw('DATE(paid_at)')
             ->get()

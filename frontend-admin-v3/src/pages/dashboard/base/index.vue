@@ -5,7 +5,16 @@
 
       <section class="chart-grid">
         <t-card :bordered="false" title="商品收入占比" :subtitle="monthLabel || '本月'">
-          <div ref="productChartRef" class="chart-box" />
+          <div v-if="positiveChartData.length" ref="productChartRef" class="chart-box" />
+          <t-empty
+            v-else
+            class="chart-empty"
+            title="本月暂无正向收入"
+            description="整月退款冲抵或暂无已付收入时不生成占比图。"
+          />
+          <div v-if="refundAdjustment > 0" class="chart-refund-note">
+            含退款冲抵：{{ formatCurrency(refundAdjustment) }}
+          </div>
         </t-card>
         <t-card :bordered="false" title="每日收入趋势" :subtitle="monthLabel || '本月'">
           <div ref="dailyChartRef" class="chart-box" />
@@ -104,8 +113,14 @@ const productChartData = computed(() => {
     grouped.set(name, (grouped.get(name) || 0) + value);
   });
 
-  return Array.from(grouped, ([name, value]) => ({ name, value })).filter((item) => item.value > 0);
+  return Array.from(grouped, ([name, value]) => ({ name, value }));
 });
+
+// 饼图只绘制正向收入；退款冲抵单独提示，避免整月净退款时图表空白无解释
+const positiveChartData = computed(() => productChartData.value.filter((item) => item.value > 0));
+const refundAdjustment = computed(() =>
+  productChartData.value.filter((item) => item.value < 0).reduce((sum, item) => sum - item.value, 0),
+);
 
 function formatCurrency(value: unknown) {
   return `¥${Number(value || 0).toFixed(2)}`;
@@ -240,6 +255,17 @@ onBeforeUnmount(() => {
 .chart-box {
   width: 100%;
   height: 320px;
+}
+
+.chart-empty {
+  padding: var(--td-comp-paddingTB-xxl) 0;
+}
+
+.chart-refund-note {
+  margin-top: var(--td-comp-margin-s);
+  color: var(--td-text-color-placeholder);
+  font-size: var(--td-font-size-body-small);
+  text-align: center;
 }
 
 .recent-invoices-card :deep(.t-empty) {

@@ -561,6 +561,7 @@ async function loadDetail() {
   const rawId = route.params.id as string;
   // 无效 ID（空/非数字/≤0）直接回列表，避免无效请求与陈旧渲染
   if (!/^\d+$/.test(rawId) || Number(rawId) < 1) {
+    detailRequestSeq.value += 1;
     MessagePlugin.warning('无效的订单 ID');
     router.replace('/admin/finance/orders');
     return;

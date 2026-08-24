@@ -15,6 +15,7 @@ import type { RouteRecordRaw } from 'vue-router';
 
 import { hasPermissionInList } from '@/constants/permissions';
 import type { LocalizedTitle } from '@/locales';
+import type { MenuRoute } from '@/types/interface';
 import router, { homepageRouterList } from '@/router';
 import { store } from '@/store';
 
@@ -247,7 +248,8 @@ const ADMIN_MENU_GROUPS: MenuGroupConfig[] = [
 export const usePermissionStore = defineStore('permission', {
   state: () => ({
     whiteListRouters: ['/admin/login'] as string[],
-    routers: [] as RouteRecordRaw[],
+    // 分组构建后按菜单形态消费（Layout 侧栏/头部）；RouteRecordRaw 结构仅用于注册
+    routers: [] as MenuRoute[],
     removeRoutes: [] as RouteRecordRaw[],
     asyncRoutes: [] as RouteRecordRaw[],
     routesBuilt: false,
@@ -255,11 +257,9 @@ export const usePermissionStore = defineStore('permission', {
   getters: {
     // 已按权限过滤的菜单树上第一个可访问页面，供登录后跳转兜底
     firstAccessibleAdminPath(): string {
-      const groups = this.routers as ReadonlyArray<{ path?: unknown; redirect?: unknown }>;
-      const group = groups.find(
+      const group = this.routers.find(
         (route) =>
-          typeof route.path === 'string' &&
-          route.path.startsWith('/admin/menu/') &&
+          String(route.path).startsWith('/admin/menu/') &&
           typeof route.redirect === 'string' &&
           route.redirect.startsWith('/'),
       );
@@ -271,18 +271,22 @@ export const usePermissionStore = defineStore('permission', {
       const accessedRouters = this.asyncRoutes;
 
       // 菜单展示业务分组；真实路由仍使用 homepageRouterList 注册，不改变历史路径。
-      this.routers = buildGroupedMenuRouters(cloneDeep([...homepageRouterList, ...accessedRouters]), permissions);
+      // asyncRoutes 经 pinia UnwrapRef 展开后与 RouteRecordRaw 不完全等价，先收敛再分组
+      this.routers = buildGroupedMenuRouters(
+        cloneDeep([...homepageRouterList, ...(accessedRouters as RouteRecordRaw[])]),
+        permissions,
+      ) as unknown as MenuRoute[];
       // 在菜单只展示动态路由和首页
       // this.routers = [...homepageRouterList, ...accessedRouters];
       // 在菜单只展示动态路由
       // this.routers = [...accessedRouters];
     },
-    async buildAsyncRoutes(permissions: string[] = []) {
+    async buildAsyncRoutes(permissions: string[] = []): Promise<RouteRecordRaw[]> {
       try {
         this.asyncRoutes = [];
         this.routesBuilt = true;
         await this.initRoutes(permissions);
-        return this.asyncRoutes;
+        return this.asyncRoutes as RouteRecordRaw[];
       } catch (error) {
         // 构建失败时复位标记，允许下次登录/刷新时重建，避免永久停留在空菜单
         this.routesBuilt = false;
@@ -291,7 +295,7 @@ export const usePermissionStore = defineStore('permission', {
     },
     async restoreRoutes() {
       // 不需要在此额外调用initRoutes更新侧边导肮内容，在登录后asyncRoutes为空会调用
-      this.asyncRoutes.forEach((item: RouteRecordRaw) => {
+      this.asyncRoutes.forEach((item) => {
         if (item.name) {
           router.removeRoute(item.name);
         }

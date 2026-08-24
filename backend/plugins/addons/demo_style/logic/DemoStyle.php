@@ -151,7 +151,8 @@ class DemoStyle
             'key' => 'demo_style',
             'theme_name' => $this->themeName($config),
             'accent_color' => $this->accentColor($config),
-            'enabled' => (bool) ($config['enabled'] ?? true),
+            // filter_var 避免字符串 "false" 被 (bool) 误判为启用
+            'enabled' => filter_var($config['enabled'] ?? true, FILTER_VALIDATE_BOOL),
         ];
     }
 
