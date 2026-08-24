@@ -14,7 +14,7 @@ parameters:
         - bootstrap/cache
         - storage
         - vendor
-        - tests
+        - tests (?)
         - scripts
         - config
         - database/migrations

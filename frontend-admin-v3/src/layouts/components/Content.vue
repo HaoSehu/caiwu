@@ -42,7 +42,8 @@ const aliveViews = computed(() => {
       const isRouteKeepAlive = isUndefined(keepAliveConfig) || (isBoolean(keepAliveConfig) && keepAliveConfig); // 默认开启keepalive
       return route.isAlive && isRouteKeepAlive;
     })
-    .map((route) => route.name);
+    .map((route) => (route.meta?.keepAliveName as string) || (route.name as string))
+    .filter((name): name is string => Boolean(name));
 }) as ComputedRef<string[]>;
 
 const isRefreshing = computed(() => {

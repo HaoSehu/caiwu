@@ -162,7 +162,8 @@ class UserService
             $this->assertUniquePhone($baseUpdateData['phone'], (int) $user->id);
         }
 
-        if (! empty($data['password'])) {
+        $passwordChanged = ! empty($data['password']);
+        if ($passwordChanged) {
             $baseUpdateData['password'] = $data['password'];
         }
 
@@ -171,9 +172,13 @@ class UserService
             $accountUpdateData['credit_limit'] = number_format((float) $data['credit_limit'], 2, '.', '');
         }
 
-        DB::transaction(function () use ($user, $baseUpdateData, $accountUpdateData) {
+        DB::transaction(function () use ($user, $baseUpdateData, $accountUpdateData, $passwordChanged) {
             if ($baseUpdateData !== []) {
                 $user->update($baseUpdateData);
+            }
+
+            if ($passwordChanged) {
+                $user->tokens()->delete();
             }
 
             if ($accountUpdateData !== []) {

@@ -794,8 +794,7 @@ class AuthService
         $currentUserAgentHash = $this->hashLoginAsUserAgent((string) ($userAgent ?? ''));
         if (
             $issuedUserAgentHash !== ''
-            && $currentUserAgentHash !== ''
-            && ! hash_equals($issuedUserAgentHash, $currentUserAgentHash)
+            && ($currentUserAgentHash === '' || ! hash_equals($issuedUserAgentHash, $currentUserAgentHash))
         ) {
             throw new BusinessException('代登录环境校验失败，请在原浏览器窗口重新发起', 40300, 403);
         }

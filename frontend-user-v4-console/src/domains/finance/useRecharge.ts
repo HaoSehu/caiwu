@@ -23,7 +23,8 @@ export { formatMoney };
 export function normalizeRechargeAmount(value: unknown) {
   const amount = Number(value || 0);
   if (!Number.isFinite(amount)) return 20;
-  return Math.min(50000, Math.max(1, Math.round(amount)));
+  const clamped = Math.min(50000, Math.max(1, amount));
+  return Number(clamped.toFixed(2));
 }
 
 function parseDateTime(value: unknown) {

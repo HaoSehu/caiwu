@@ -31,6 +31,30 @@ parameters:
 			path: app/Console/Commands/BackfillInvoiceItemProjectionsCommand.php
 
 		-
+			message: '#^Offset ''retention_days'' on array\{retention_days\: int, file_retention_days\: int, pt_archiver_binary\: string, pt_archiver_defaults_file\: string, concurrency\: int, batch_size\: int, sleep_seconds\: int\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Console/Commands/DatabaseArchiveLogsHealthCommand.php
+
+		-
+			message: '#^Call to method verify\(\) on an unknown class App\\Services\\Installer\\DatabaseSetupService\.$#'
+			identifier: class.notFound
+			count: 1
+			path: app/Console/Commands/InstallSystemCommand.php
+
+		-
+			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
+			identifier: larastan.noEnvCallsOutsideOfConfig
+			count: 2
+			path: app/Console/Commands/InstallSystemCommand.php
+
+		-
+			message: '#^Parameter \$database of method App\\Console\\Commands\\InstallSystemCommand\:\:handle\(\) has invalid type App\\Services\\Installer\\DatabaseSetupService\.$#'
+			identifier: class.notFound
+			count: 1
+			path: app/Console/Commands/InstallSystemCommand.php
+
+		-
 			message: '#^Access to an undefined property App\\Models\\Supplier\:\:\$api_key\.$#'
 			identifier: property.notFound
 			count: 1
@@ -191,6 +215,12 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Http/Controllers/Admin/V2/IntegrationPluginController.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between mixed and null will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: app/Http/Controllers/Admin/V2/LogArchiveController.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\AdminUser\|App\\Models\\User\:\:\$name\.$#'
@@ -6015,7 +6045,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property App\\Models\\ActivityLog\:\:\$total\.$#'
 			identifier: property.notFound
-			count: 2
+			count: 1
 			path: app/Services/System/AdminLogService.php
 
 		-
@@ -6183,7 +6213,7 @@ parameters:
 		-
 			message: '#^Parameter \#1 \$collection of method Illuminate\\Pagination\\AbstractPaginator\<int,App\\Models\\ActivityLog\>\:\:setCollection\(\) expects Illuminate\\Support\\Collection\<int, App\\Models\\ActivityLog\>, Illuminate\\Support\\Collection\<\(int\|string\), non\-empty\-array\> given\.$#'
 			identifier: argument.type
-			count: 2
+			count: 1
 			path: app/Services/System/AdminLogService.php
 
 		-
@@ -6273,7 +6303,7 @@ parameters:
 		-
 			message: '#^Using nullsafe property access "\?\-\>total" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 7
+			count: 6
 			path: app/Services/System/AdminLogService.php
 
 		-
@@ -6491,6 +6521,162 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/System/GatewayLogService.php
+
+		-
+			message: '#^Call to an undefined method Traversable\<int, stdClass\>\:\:current\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Services/System/LogArchiveV2Service.php
+
+		-
+			message: '#^Call to an undefined method Traversable\<int, stdClass\>\:\:next\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Services/System/LogArchiveV2Service.php
+
+		-
+			message: '#^Call to an undefined method Traversable\<int, stdClass\>\:\:rewind\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Services/System/LogArchiveV2Service.php
+
+		-
+			message: '#^Call to an undefined method Traversable\<int, stdClass\>\:\:valid\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: app/Services/System/LogArchiveV2Service.php
+
+		-
+			message: '#^Cannot call method format\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 3
+			path: app/Services/System/LogArchiveV2Service.php
+
+		-
+			message: '#^Cannot call method toDateTimeString\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 7
+			path: app/Services/System/LogArchiveV2Service.php
+
+		-
+			message: '#^Comparison operation "\>" between \*NEVER\* and int results in an error\.$#'
+			identifier: greater.invalid
+			count: 1
+			path: app/Services/System/LogArchiveV2Service.php
+
+		-
+			message: '#^Offset ''batch_size'' on array\{retention_days\: int, file_retention_days\: int, pt_archiver_binary\: string, pt_archiver_defaults_file\: string, concurrency\: int, batch_size\: int, sleep_seconds\: int\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Services/System/LogArchiveV2Service.php
+
+		-
+			message: '#^Offset ''concurrency'' on array\{retention_days\: int, file_retention_days\: int, pt_archiver_binary\: string, pt_archiver_defaults_file\: string, concurrency\: int, batch_size\: int, sleep_seconds\: int\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Services/System/LogArchiveV2Service.php
+
+		-
+			message: '#^Offset ''end_date'' on array\{table\: string, start_date\: string, end_date\: string, limit\?\: int\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Services/System/LogArchiveV2Service.php
+
+		-
+			message: '#^Offset ''file_retention_days'' on array\{retention_days\: int, file_retention_days\: int, pt_archiver_binary\: string, pt_archiver_defaults_file\: string, concurrency\: int, batch_size\: int, sleep_seconds\: int\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Services/System/LogArchiveV2Service.php
+
+		-
+			message: '#^Offset ''page'' on array\{table\?\: string, status\?\: string, batch_id\?\: string, limit\?\: int\} in isset\(\) does not exist\.$#'
+			identifier: isset.offset
+			count: 1
+			path: app/Services/System/LogArchiveV2Service.php
+
+		-
+			message: '#^Offset ''page_size'' on array\{table\?\: string, status\?\: string, batch_id\?\: string, limit\?\: int\} in isset\(\) does not exist\.$#'
+			identifier: isset.offset
+			count: 1
+			path: app/Services/System/LogArchiveV2Service.php
+
+		-
+			message: '#^Offset ''pt_archiver_binary'' on array\{retention_days\: int, file_retention_days\: int, pt_archiver_binary\: string, pt_archiver_defaults_file\: string, concurrency\: int, batch_size\: int, sleep_seconds\: int\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Services/System/LogArchiveV2Service.php
+
+		-
+			message: '#^Offset ''pt_archiver…'' on array\{retention_days\: int, file_retention_days\: int, pt_archiver_binary\: string, pt_archiver_defaults_file\: string, concurrency\: int, batch_size\: int, sleep_seconds\: int\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Services/System/LogArchiveV2Service.php
+
+		-
+			message: '#^Offset ''retention_days'' on array\{retention_days\: int, file_retention_days\: int, pt_archiver_binary\: string, pt_archiver_defaults_file\: string, concurrency\: int, batch_size\: int, sleep_seconds\: int\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Services/System/LogArchiveV2Service.php
+
+		-
+			message: '#^Offset ''sleep_seconds'' on array\{retention_days\: int, file_retention_days\: int, pt_archiver_binary\: string, pt_archiver_defaults_file\: string, concurrency\: int, batch_size\: int, sleep_seconds\: int\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Services/System/LogArchiveV2Service.php
+
+		-
+			message: '#^Offset ''start_date'' on array\{table\: string, start_date\: string, end_date\: string, limit\?\: int\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Services/System/LogArchiveV2Service.php
+
+		-
+			message: '#^Offset ''table'' on array\{table\: string, start_date\: string, end_date\: string, limit\?\: int\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Services/System/LogArchiveV2Service.php
+
+		-
+			message: '#^Offset numeric\-string does not exist on Illuminate\\Process\\ProcessPoolResults\.$#'
+			identifier: offsetAccess.notFound
+			count: 1
+			path: app/Services/System/LogArchiveV2Service.php
+
+		-
+			message: '#^Result of && is always false\.$#'
+			identifier: booleanAnd.alwaysFalse
+			count: 2
+			path: app/Services/System/LogArchiveV2Service.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between null and null will always evaluate to false\.$#'
+			identifier: notIdentical.alwaysFalse
+			count: 4
+			path: app/Services/System/LogArchiveV2Service.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between int\<0, max\> and null will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 2
+			path: app/Services/System/LogArchiveV2Service.php
+
+		-
+			message: '#^Using nullsafe method call on non\-nullable type string\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Services/System/LogArchiveV2Service.php
+
+		-
+			message: '#^Variable \$page on left side of \?\? always exists and is always null\.$#'
+			identifier: nullCoalesce.variable
+			count: 1
+			path: app/Services/System/LogArchiveV2Service.php
+
+		-
+			message: '#^Variable \$pageSize on left side of \?\? always exists and is always null\.$#'
+			identifier: nullCoalesce.variable
+			count: 1
+			path: app/Services/System/LogArchiveV2Service.php
 
 		-
 			message: '#^Negated boolean expression is always true\.$#'
@@ -7379,6 +7565,18 @@ parameters:
 			identifier: nullCoalesce.offset
 			count: 1
 			path: app/Support/AdminPrivacy.php
+
+		-
+			message: '#^Method App\\Support\\ApiAccessLogFile\:\:configuredFileLimit\(\) never returns null so it can be removed from the return type\.$#'
+			identifier: return.unusedType
+			count: 1
+			path: app/Support/ApiAccessLogFile.php
+
+		-
+			message: '#^Offset ''filename'' on array\{dirname\?\: string, basename\: string, extension\?\: string, filename\: string\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Support/ApiAccessLogFile.php
 
 		-
 			message: '#^Offset 0 on non\-empty\-list\<string\> on left side of \?\? always exists and is not nullable\.$#'

@@ -628,6 +628,21 @@ class VncRelayCommand extends Command
     {
         $ip = trim($ip);
 
+        // IPv4-mapped 或 IPv4-compatible IPv6（如 ::ffff:127.0.0.1 或 ::127.0.0.1）还原为点分十进制
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+            $packed = @inet_pton($ip);
+            if ($packed !== false && strlen($packed) === 16) {
+                // 检查是否为 ::ffff:a.b.c.d (IPv4-mapped) 或 ::a.b.c.d (IPv4-compatible)
+                if (str_starts_with($packed, "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff")
+                    || (str_starts_with($packed, str_repeat("\x00", 12)) && $packed !== str_repeat("\x00", 16) && $packed !== str_repeat("\x00", 15)."\x01")) {
+                    $unpackedV4 = inet_ntop(substr($packed, 12));
+                    if ($unpackedV4 !== false) {
+                        $ip = $unpackedV4;
+                    }
+                }
+            }
+        }
+
         if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
             $long = ip2long($ip);
             if ($long === false) {
@@ -635,16 +650,23 @@ class VncRelayCommand extends Command
             }
             $long = (int) $long;
 
-            // 0.0.0.0/8、10/8、127/8、169.254/16、172.16/12、192.168/16、100.64/10、192.0.0/24
+            // 涵盖 RFC 6890 / 1918 / 3927 / 5737 / 6598 / 2544 等所有不可公网路由及特殊用途网段
             $networks = [
-                [0x00000000, 0xFF000000],
-                [0x0A000000, 0xFF000000],
-                [0x7F000000, 0xFF000000],
-                [0xA9FE0000, 0xFFFF0000],
-                [0xAC100000, 0xFFF00000],
-                [0xC0A80000, 0xFFFF0000],
-                [0x64400000, 0xFFC00000],
-                [0xC0000000, 0xFFFFFF00],
+                [0x00000000, 0xFF000000], // 0.0.0.0/8 本地网络
+                [0x0A000000, 0xFF000000], // 10.0.0.0/8 私有网络
+                [0x64400000, 0xFFC00000], // 100.64.0.0/10 运营商 CGNAT
+                [0x7F000000, 0xFF000000], // 127.0.0.0/8 回环
+                [0xA9FE0000, 0xFFFF0000], // 169.254.0.0/16 链路本地
+                [0xAC100000, 0xFFF00000], // 172.16.0.0/12 私有网络
+                [0xC0000000, 0xFFFFFF00], // 192.0.0.0/24 IETF 协议分配
+                [0xC0000200, 0xFFFFFF00], // 192.0.2.0/24 TEST-NET-1
+                [0xC0586300, 0xFFFFFF00], // 192.88.99.0/24 6to4 中继弃用
+                [0xC0A80000, 0xFFFF0000], // 192.168.0.0/16 私有网络
+                [0xC6120000, 0xFFFE0000], // 198.18.0.0/15 基准测试
+                [0xC6336400, 0xFFFFFF00], // 198.51.100.0/24 TEST-NET-2
+                [0xCB007100, 0xFFFFFF00], // 203.0.113.0/24 TEST-NET-3
+                [0xE0000000, 0xF0000000], // 224.0.0.0/4 组播
+                [0xF0000000, 0xF0000000], // 240.0.0.0/4 保留段及广播
             ];
 
             foreach ($networks as [$base, $mask]) {

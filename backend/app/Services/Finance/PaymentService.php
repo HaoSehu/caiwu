@@ -2644,7 +2644,7 @@ class PaymentService
         return $order;
     }
 
-    private function closeOtherPendingPayments(Invoice $invoice, int $excludePaymentId, string $reason): void
+    private function closeOtherPendingPayments(Invoice $invoice, int $excludePaymentId, string $reason, bool $restoreReservedBalance = false): void
     {
         $query = Payment::query()
             ->where('invoice_id', $invoice->id)
@@ -2657,6 +2657,13 @@ class PaymentService
         $pendingPayments = $query->lockForUpdate()->get();
 
         foreach ($pendingPayments as $pendingPayment) {
+            if ($restoreReservedBalance) {
+                $this->restoreReservedMixBalance($pendingPayment, [
+                    'closed_reason' => $reason,
+                ]);
+                $pendingPayment->refresh();
+            }
+
             $callbackRaw = (array) ($pendingPayment->callback_raw ?? []);
             $callbackRaw['closed_reason'] = $reason;
 
@@ -2689,7 +2696,7 @@ class PaymentService
         $this->cancelLinkedPendingOrderForInvoice($invoice);
         $this->couponService->releaseInvoiceCoupon($invoice);
         $this->restoreStockForCancelledInvoice($invoice);
-        $this->closeOtherPendingPayments($invoice, (int) $payment->id, 'payment_window_expired');
+        $this->closeOtherPendingPayments($invoice, (int) $payment->id, 'payment_window_expired', true);
     }
 
     private function cancelExpiredInvoiceAfterCapturedPayment(Invoice $invoice, Payment $payment): void
@@ -2698,7 +2705,7 @@ class PaymentService
         $this->cancelLinkedPendingOrderForInvoice($invoice);
         $this->couponService->releaseInvoiceCoupon($invoice);
         $this->restoreStockForCancelledInvoice($invoice);
-        $this->closeOtherPendingPayments($invoice, (int) $payment->id, 'payment_window_expired');
+        $this->closeOtherPendingPayments($invoice, (int) $payment->id, 'payment_window_expired', true);
     }
 
     private function restoreConflictingMixBalancesForCapturedPayment(
