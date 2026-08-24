@@ -159,40 +159,40 @@ class DashboardService
     private function buildMonthlyRevenue(): array
     {
         $month = now()->startOfMonth();
-        $today = now()->startOfDay();
         $daysInMonth = (int) now()->format('t');
 
-        // 本月各产品营收占比（已付账单，Top 8 + 其他）
+        // 本月已付账单按产品归一度量（同每日趋势的 paid_at 口径），金额按整数分累加避免浮点误差
         $allProducts = $this->salesIncomeInvoices()
-            ->where('created_at', '>=', $month)
             ->where('status', InvoiceStatus::PAID)
+            ->where('paid_at', '>=', $month)
             ->selectRaw('
                 COALESCE(NULLIF(product_spec_snapshot, ""), "未知产品") as product_name,
-                COALESCE(SUM(paid_amount), 0) as total_amount,
+                ROUND(COALESCE(SUM(paid_amount), 0) * 100) as total_amount_cents,
                 COUNT(*) as count
             ')
             ->groupByRaw('COALESCE(NULLIF(product_spec_snapshot, ""), "未知产品")')
-            ->orderByDesc('total_amount')
+            ->orderByDesc('total_amount_cents')
             ->get();
 
         $topProducts = $allProducts->take(8);
-        $otherAmount = $allProducts->skip(8)->sum('total_amount');
+        $otherCents = (int) $allProducts->skip(8)->sum('total_amount_cents');
 
         $revenueByProduct = $topProducts
             ->map(function ($row) {
                 return [
                     'label' => (string) ($row->product_name ?: '未知产品'),
-                    'amount' => (float) $row->total_amount,
+                    'amount' => $this->centsToAmount((int) $row->total_amount_cents),
                     'count' => (int) $row->count,
                 ];
             })
             ->values()
             ->all();
 
-        if ($otherAmount > 0) {
+        // 有剩余产品且有净值（含负的退款冲抵）时才追加"其他"分组
+        if ($allProducts->count() > 8 && $otherCents !== 0) {
             $revenueByProduct[] = [
                 'label' => '其他',
-                'amount' => (float) $otherAmount,
+                'amount' => $this->centsToAmount($otherCents),
                 'count' => (int) $allProducts->skip(8)->sum('count'),
             ];
         }
@@ -201,7 +201,7 @@ class DashboardService
         $dailyPaid = $this->salesIncomeInvoices()
             ->where('status', InvoiceStatus::PAID)
             ->where('paid_at', '>=', $month)
-            ->selectRaw('DATE(paid_at) as date, COALESCE(SUM(paid_amount), 0) as daily_amount, COUNT(*) as daily_count')
+            ->selectRaw('DATE(paid_at) as date, ROUND(COALESCE(SUM(paid_amount), 0) * 100) as daily_amount_cents, COUNT(*) as daily_count')
             ->groupByRaw('DATE(paid_at)')
             ->get()
             ->keyBy('date');
@@ -212,7 +212,7 @@ class DashboardService
             $dailyRevenue[] = [
                 'date' => $dateStr,
                 'day' => $d,
-                'amount' => (float) ($dailyPaid[$dateStr]->daily_amount ?? 0),
+                'amount' => $this->centsToAmount((int) ($dailyPaid[$dateStr]->daily_amount_cents ?? 0)),
                 'count' => (int) ($dailyPaid[$dateStr]->daily_count ?? 0),
             ];
         }
@@ -222,6 +222,11 @@ class DashboardService
             'daily_revenue' => $dailyRevenue,
             'month_label' => now()->format('Y年n月'),
         ];
+    }
+
+    private function centsToAmount(int $cents): float
+    {
+        return $cents / 100;
     }
 
     /**

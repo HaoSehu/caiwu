@@ -276,7 +276,7 @@ import {
   toTagTypeMap,
 } from '@shared/statusConfig';
 import { MessagePlugin } from 'tdesign-vue-next';
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import type { InvoiceRecord, OrderRecord } from '@/api/admin';
@@ -372,6 +372,9 @@ const SNAPSHOT_LABEL_MAP: Record<string, string> = {
 const route = useRoute();
 const router = useRouter();
 const detailLoading = ref(false);
+// 请求序号守卫：快速切换 ID/重开抽屉时旧响应不得覆盖最新数据
+const detailRequestSeq = ref(0);
+const invoiceRequestSeq = ref(0);
 const order = ref<OrderRecord>({} as OrderRecord);
 const activeTab = ref('basic');
 
@@ -555,16 +558,24 @@ function formatSnapshotValue(value: unknown, key = ''): string {
 }
 
 async function loadDetail() {
-  const id = route.params.id as string;
-  if (!id) return;
+  const rawId = route.params.id as string;
+  // 无效 ID（空/非数字/≤0）直接回列表，避免无效请求与陈旧渲染
+  if (!/^\d+$/.test(rawId) || Number(rawId) < 1) {
+    MessagePlugin.warning('无效的订单 ID');
+    router.replace('/admin/finance/orders');
+    return;
+  }
+  const seq = ++detailRequestSeq.value;
   detailLoading.value = true;
   try {
-    const response = await adminApi.orders.detail(id);
+    const response = await adminApi.orders.detail(rawId);
+    if (seq !== detailRequestSeq.value) return; // 旧响应不再覆盖最新数据
     order.value = response;
   } catch (error) {
+    if (seq !== detailRequestSeq.value) return;
     MessagePlugin.error(errorMessage(error, '加载订单详情失败'));
   } finally {
-    detailLoading.value = false;
+    if (seq === detailRequestSeq.value) detailLoading.value = false;
   }
 }
 
@@ -587,14 +598,17 @@ async function openInvoiceDetail(id: unknown) {
 
 async function reloadInvoiceDetail() {
   if (!invoiceDrawer.currentId) return;
+  const seq = ++invoiceRequestSeq.value;
   invoiceDrawer.loading = true;
   try {
     const response = await adminApi.invoices.detail(invoiceDrawer.currentId);
+    if (seq !== invoiceRequestSeq.value) return; // 旧响应不再覆盖最新数据
     invoiceDrawer.detail = normalizeInvoiceDetail(response, currentInvoice.value);
   } catch (error) {
+    if (seq !== invoiceRequestSeq.value) return;
     MessagePlugin.error(errorMessage(error, '加载账单详情失败'));
   } finally {
-    invoiceDrawer.loading = false;
+    if (seq === invoiceRequestSeq.value) invoiceDrawer.loading = false;
   }
 }
 
@@ -670,4 +684,11 @@ function toRecord(value: unknown): Record<string, unknown> {
 }
 
 onMounted(loadDetail);
+// 同组件参数复用（订单 A → B）时重新加载，避免残留 A 数据
+watch(() => route.params.id, loadDetail);
+onBeforeUnmount(() => {
+  // 卸载后到达的响应不再写组件状态
+  detailRequestSeq.value += 1;
+  invoiceRequestSeq.value += 1;
+});
 </script>

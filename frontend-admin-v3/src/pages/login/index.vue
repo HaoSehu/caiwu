@@ -42,10 +42,12 @@ import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { useUserStore } from '@/store';
+import { hasPermissionInList } from '@/constants/permissions';
+import { useUserStore, getPermissionStore } from '@/store';
 
 const router = useRouter();
 const userStore = useUserStore();
+const permissionStore = getPermissionStore();
 const formRef = ref<FormInstanceFunctions>();
 const loading = ref(false);
 const errorMessage = ref('');
@@ -61,6 +63,13 @@ const formRules: Record<string, FormRule[]> = {
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
 };
 
+function canAccessPath(path: string): boolean {
+  const resolved = router.resolve(path);
+  const required = resolved.meta?.permission as string | undefined;
+  if (!required || required === '') return true;
+  return hasPermissionInList(userStore.userInfo?.permissions || [], required);
+}
+
 async function handleLogin() {
   const valid = await formRef.value?.validate();
   if (valid !== true) return;
@@ -72,20 +81,27 @@ async function handleLogin() {
       password: formData.value.password,
     });
     MessagePlugin.success('登录成功');
+    // 先构建权限路由，无仪表盘权限角色也能落到其首个可访问页面而非 403
+    if (!permissionStore.routesBuilt || !userStore.userInfo?.name) {
+      const routeList = await permissionStore.buildAsyncRoutes(userStore.userInfo?.permissions || []);
+      routeList.forEach((item) => router.addRoute(item));
+    }
+    const fallbackPath = permissionStore.firstAccessibleAdminPath;
     const redirect = router.currentRoute.value.query.redirect;
     if (redirect && typeof redirect === 'string') {
       try {
         const decoded = decodeURIComponent(redirect);
-        if (decoded.startsWith('/')) {
+        // redirect 目标若不在当前角色权限内，回退到首个可访问页面，避免落入 403
+        if (decoded.startsWith('/') && canAccessPath(decoded)) {
           router.push(decoded);
         } else {
-          router.push('/admin/dashboard');
+          router.push(fallbackPath);
         }
       } catch {
-        router.push('/admin/dashboard');
+        router.push(fallbackPath);
       }
     } else {
-      router.push('/admin/dashboard');
+      router.push(fallbackPath);
     }
   } catch (error) {
     const msg = error instanceof Error ? error.message : '登录失败，请检查账号密码';

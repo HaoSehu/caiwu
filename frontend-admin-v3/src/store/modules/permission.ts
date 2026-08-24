@@ -252,6 +252,20 @@ export const usePermissionStore = defineStore('permission', {
     asyncRoutes: [],
     routesBuilt: false,
   }),
+  getters: {
+    // 已按权限过滤的菜单树上第一个可访问页面，供登录后跳转兜底
+    firstAccessibleAdminPath(): string {
+      const groups = this.routers as ReadonlyArray<{ path?: unknown; redirect?: unknown }>;
+      const group = groups.find(
+        (route) =>
+          typeof route.path === 'string' &&
+          route.path.startsWith('/admin/menu/') &&
+          typeof route.redirect === 'string' &&
+          route.redirect.startsWith('/'),
+      );
+      return (group?.redirect as string) || '/admin/dashboard';
+    },
+  },
   actions: {
     async initRoutes(permissions: string[] = []) {
       const accessedRouters = this.asyncRoutes;
@@ -270,6 +284,8 @@ export const usePermissionStore = defineStore('permission', {
         await this.initRoutes(permissions);
         return this.asyncRoutes;
       } catch (error) {
+        // 构建失败时复位标记，允许下次登录/刷新时重建，避免永久停留在空菜单
+        this.routesBuilt = false;
         throw new Error("Can't build routes", { cause: error });
       }
     },

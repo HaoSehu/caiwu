@@ -6373,7 +6373,7 @@ parameters:
 			path: app/Services/System/DashboardService.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Invoice\:\:\$total_amount\.$#'
+			message: '#^Access to an undefined property App\\Models\\Invoice\:\:\$total_amount_cents\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Services/System/DashboardService.php

@@ -29,7 +29,8 @@ return [
     'date' => ':attribute不是有效的日期。',
     'date_equals' => ':attribute必须是:date。',
     'date_format' => ':attribute与格式:format不匹配。',
-    'decimal' => ':attribute必须包含:decimal位小数。',
+    // Laravel decimal 校验规则无占位符替换器，:decimal 会原样输出，改用静态文案
+    'decimal' => ':attribute最多只能保留两位小数。',
     'declined' => ':attribute必须拒绝。',
     'declined_if' => '当:other为:value时，:attribute必须拒绝。',
     'different' => ':attribute和:other必须不同。',
