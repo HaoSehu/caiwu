@@ -41,7 +41,7 @@ defineOptions({ name: 'LogDetailDrawer' });
 const props = defineProps<{
   visible: boolean;
   currentLog: RecordRow | null;
-  activeTab: LogTab | 'schedules' | 'archives' | 'cleanup';
+  activeTab: LogTab | 'schedules' | 'cleanup';
   drawerSize: string;
 }>();
 

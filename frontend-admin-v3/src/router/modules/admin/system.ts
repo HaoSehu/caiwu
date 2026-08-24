@@ -151,20 +151,6 @@ export const systemRoutes: RouteRecordRaw[] = [
     },
   },
   {
-    path: 'logs/archives',
-    name: 'AdminLogArchives',
-    component: () => import('@/pages/logs/index.vue'),
-    meta: {
-      title: {
-        zh_CN: '归档检索',
-        en_US: 'Archives',
-      },
-      permission: 'log.list',
-      keepAlive: false,
-      logTab: 'archives',
-    },
-  },
-  {
     path: 'system/staff',
     name: 'AdminStaff',
     component: () => import('@/pages/admin/system/staff/index.vue'),

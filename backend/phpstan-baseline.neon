@@ -217,12 +217,6 @@ parameters:
 			path: app/Http/Controllers/Admin/V2/IntegrationPluginController.php
 
 		-
-			message: '#^Strict comparison using \!\=\= between mixed and null will always evaluate to true\.$#'
-			identifier: notIdentical.alwaysTrue
-			count: 1
-			path: app/Http/Controllers/Admin/V2/LogArchiveController.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\AdminUser\|App\\Models\\User\:\:\$name\.$#'
 			identifier: property.notFound
 			count: 1

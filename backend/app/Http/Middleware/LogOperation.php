@@ -153,8 +153,6 @@ class LogOperation
             || $request->is('api/v2/admin/logs/*')
             || $request->is('api/v2/admin/log-summaries')
             || $request->is('api/v2/admin/log-summaries/*')
-            || $request->is('api/v2/admin/log-archives')
-            || $request->is('api/v2/admin/log-archives/search')
             || $request->is('api/v2/admin/log-cleanups/overview')) {
             return false;
         }

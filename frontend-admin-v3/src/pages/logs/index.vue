@@ -305,132 +305,6 @@
       </t-card>
     </template>
 
-    <template v-else-if="activeTab === 'archives'">
-      <t-card :bordered="false" :loading="archiveLoading" class="archive-card">
-        <template #title>归档批次</template>
-        <template #subtitle>V2 归档物清单（只读），可查看行数与可恢复性校验结果</template>
-        <div class="log-filter-grid log-filter-grid--archives">
-          <t-select v-model="archiveFilters.table" clearable placeholder="归档表" @change="handleArchiveListSearch">
-            <t-option v-for="item in archiveTableOptions" :key="item" :label="item" :value="item" />
-          </t-select>
-          <t-select v-model="archiveFilters.status" clearable placeholder="归档状态" @change="handleArchiveListSearch">
-            <t-option v-for="item in archiveStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
-          </t-select>
-          <t-input
-            v-model="archiveFilters.batch_id"
-            clearable
-            placeholder="批次 ID"
-            @enter="handleArchiveListSearch"
-            @clear="handleArchiveListSearch"
-          />
-        </div>
-        <div class="table-scroll">
-          <t-table
-            :row-key="archiveRowKey"
-            :data="archiveRows"
-            :columns="archiveColumns"
-            hover
-            table-layout="fixed"
-            lazy-load
-          >
-            <template #status="{ row }">
-              <t-tag :theme="archiveStatusTheme(row.status)" variant="light">
-                {{ archiveStatusLabel(row.status) }}
-              </t-tag>
-            </template>
-            <template #id_range="{ row }">
-              {{ fieldValue(row.id_min) || '-' }} ~ {{ fieldValue(row.id_max) || '-' }}
-            </template>
-            <template #rows="{ row }">
-              {{ fieldValue(row.exported_rows) }} / {{ fieldValue(row.expected_rows) }} /
-              {{ fieldValue(row.deleted_rows) }}
-            </template>
-            <template #restorable="{ row }">
-              <t-tag
-                :theme="archiveRestorableTheme(row)"
-                variant="light"
-                :title="archiveRestorableReason(row)"
-              >
-                {{ archiveRestorableLabel(row) }}
-              </t-tag>
-            </template>
-            <template #purged_at="{ row }">{{ formatDate(row.purged_at) }}</template>
-            <template #created_at="{ row }">{{ formatDate(row.created_at) }}</template>
-          </t-table>
-        </div>
-        <t-pagination
-          v-model:current="archivePagination.page"
-          v-model:page-size="archivePagination.page_size"
-          :total="archivePagination.total"
-          :page-size-options="[10, 15, 20, 50]"
-          show-jumper
-          @change="handleArchiveListPageChange"
-        />
-      </t-card>
-
-      <t-card :bordered="false" :loading="archiveSearchLoading" class="archive-card">
-        <template #title>归档检索</template>
-        <template #subtitle>在已发布归档 CSV 中按表与时间窗口检索（只读，不导入不删除）</template>
-        <div class="log-filter-grid log-filter-grid--archives">
-          <t-select v-model="archiveSearchFilters.table" placeholder="归档表" @change="handleArchiveSearchQuery">
-            <t-option v-for="item in archiveTableOptions" :key="item" :label="item" :value="item" />
-          </t-select>
-          <t-date-picker
-            v-model="archiveSearchFilters.start_date"
-            value-type="YYYY-MM-DD"
-            placeholder="开始日期"
-            clearable
-            @change="handleArchiveSearchQuery"
-          />
-          <t-date-picker
-            v-model="archiveSearchFilters.end_date"
-            value-type="YYYY-MM-DD"
-            placeholder="结束日期"
-            clearable
-            @change="handleArchiveSearchQuery"
-          />
-          <t-button theme="primary" variant="outline" :loading="archiveSearchLoading" @click="handleArchiveSearchQuery">
-            检索
-          </t-button>
-        </div>
-        <t-alert
-          v-if="archiveSearchIncomplete"
-          theme="warning"
-          class="archive-search-warning"
-          :message="archiveSearchIncompleteMessage"
-        />
-        <div class="table-scroll">
-          <t-table
-            :row-key="archiveSearchRowKey"
-            :data="archiveSearchRows"
-            :columns="archiveSearchColumns"
-            hover
-            table-layout="fixed"
-            lazy-load
-          >
-            <template #created_at="{ row }">{{ formatDate(row.created_at) }}</template>
-            <template #restorable="{ row }">
-              <t-tag
-                :theme="archiveRestorableTheme(row)"
-                variant="light"
-                :title="archiveRestorableReason(row)"
-              >
-                {{ archiveRestorableLabel(row) }}
-              </t-tag>
-            </template>
-          </t-table>
-        </div>
-        <t-pagination
-          v-model:current="archiveSearchPagination.page"
-          v-model:page-size="archiveSearchPagination.page_size"
-          :total="archiveSearchPagination.total"
-          :page-size-options="[10, 15, 20, 50]"
-          show-jumper
-          @change="handleArchiveSearchPageChange"
-        />
-      </t-card>
-    </template>
-
     <template v-else-if="activeTab === 'schedules'">
       <t-card v-if="!canViewSchedules" :bordered="false">
         <t-alert theme="warning" message="当前账号缺少 schedule.view 权限，无法查看定时任务。" />
@@ -653,7 +527,7 @@ import { MessagePlugin } from 'tdesign-vue-next';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import type { LogArchiveUnavailable, LogListParams, PaginatedList } from '@/api/admin';
+import type { LogListParams, PaginatedList } from '@/api/admin';
 import { adminApi } from '@/api/admin';
 import { AdminPermissions, hasPermissionInList } from '@/constants/permissions';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -664,7 +538,7 @@ import { errorMessage } from '@/utils/userMessage';
 import LogDetailDrawer from './components/LogDetailDrawer.vue';
 
 type LogTab = 'runtime' | 'admin-logins' | 'api' | 'sms' | 'email' | 'tasks' | 'gateway';
-type LogsTab = LogTab | 'schedules' | 'archives' | 'cleanup';
+type LogsTab = LogTab | 'schedules' | 'cleanup';
 type RecordRow = Record<string, unknown>;
 
 const route = useRoute();
@@ -680,7 +554,6 @@ const validTabs: LogsTab[] = [
   'tasks',
   'gateway',
   'schedules',
-  'archives',
   'cleanup',
 ];
 const activeTab = ref<LogsTab>(resolveRouteTab());
@@ -729,88 +602,6 @@ const cleanupForm = reactive({
   keep_days: 30,
   confirm_text: '',
 });
-
-const archiveTableOptions = [
-  'operation_logs',
-  'activity_logs',
-  'message_logs',
-  'schedule_run_logs',
-  'integration_plugin_runtime_logs',
-];
-const archiveStatusOptions = [
-  { label: '已规划', value: 'planned' },
-  { label: '暂存中', value: 'staging' },
-  { label: '已校验', value: 'verified' },
-  { label: '已发布', value: 'published' },
-  { label: '清除中', value: 'purging' },
-  { label: '已清空', value: 'purged' },
-  { label: '失败', value: 'failed' },
-  { label: '待恢复', value: 'needs_recovery' },
-];
-const archiveLoading = ref(false);
-const archiveRows = ref<RecordRow[]>([]);
-const archiveFilters = reactive({ table: '', status: '', batch_id: '' });
-const archivePagination = reactive({ page: 1, page_size: 15, total: 0 });
-const archiveListRequestSeq = ref(0);
-
-const archiveSearchLoading = ref(false);
-const archiveSearchRows = ref<RecordRow[]>([]);
-const archiveSearchUnavailable = ref<LogArchiveUnavailable[]>([]);
-const archiveSearchUnavailableTruncated = ref(0);
-const archiveSearchIncomplete = ref(false);
-const archiveSearchFilters = reactive({ table: '', start_date: '', end_date: '' });
-const archiveSearchPagination = reactive({ page: 1, page_size: 15, total: 0 });
-const archiveSearchRequestSeq = ref(0);
-const archiveSearchIncompleteMessage = computed(
-  () => {
-    const visible = archiveSearchUnavailable.value.length;
-    const hidden = archiveSearchUnavailableTruncated.value;
-    if (visible > 0 && hidden > 0) {
-      return `发现 ${visible} 个不可用归档来源，另有 ${hidden} 个来源未展开；当前结果可能不完整，请先检查归档批次。`;
-    }
-    if (visible > 0) {
-      return `发现 ${visible} 个不可用归档来源，当前结果可能不完整，请先检查归档批次。`;
-    }
-    return '归档检索结果可能不完整，请先检查归档批次。';
-  },
-);
-
-const archiveColumns: PrimaryTableCol<TableRowData>[] = [
-  { colKey: 'batch_id', title: '批次', width: 220, ellipsis: true },
-  { colKey: 'table', title: '表', width: 160 },
-  { colKey: 'status', title: '状态', width: 110 },
-  { colKey: 'id_range', title: 'ID 范围', width: 140 },
-  { colKey: 'rows', title: '导出/计划/删除', width: 160 },
-  { colKey: 'restorable', title: '可恢复', width: 100 },
-  { colKey: 'purged_at', title: '清除时间', width: 170 },
-  { colKey: 'created_at', title: '创建时间', width: 170 },
-];
-
-const archiveSearchColumns: PrimaryTableCol<TableRowData>[] = [
-  { colKey: 'id', title: 'ID', width: 110 },
-  { colKey: 'table', title: '表', width: 160 },
-  { colKey: 'created_at', title: '记录时间', width: 170 },
-  { colKey: 'batch_id', title: '批次', width: 220, ellipsis: true },
-  { colKey: 'file', title: '归档文件', minWidth: 200, ellipsis: true },
-  { colKey: 'restorable', title: '可恢复', width: 100 },
-];
-
-function archiveRowKey(row: RecordRow): string {
-  const batchId = String(row.batch_id ?? '').trim();
-  const table = String(row.table ?? '').trim();
-  const id = String(row.id ?? '').trim();
-
-  return [batchId || 'unknown-batch', table || 'unknown-table', id || 'unknown-id'].join(':');
-}
-
-function archiveSearchRowKey(row: RecordRow): string {
-  const table = String(row.table ?? '').trim();
-  const id = String(row.id ?? '').trim();
-  const batchId = String(row.batch_id ?? '').trim();
-  const file = String(row.file ?? '').trim();
-
-  return [table || 'unknown-table', id || 'unknown-id', batchId || 'unknown-batch', file || 'unknown-file'].join(':');
-}
 
 const logLevelOptions = ['DEBUG', 'INFO', 'NOTICE', 'WARNING', 'ERROR', 'CRITICAL', 'ALERT', 'EMERGENCY'];
 const methodOptions = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'];
@@ -1175,137 +966,7 @@ function showFilter(name: string) {
 function refreshCurrentTab() {
   if (isLogTab(activeTab.value)) return loadLogs();
   if (activeTab.value === 'schedules') return loadScheduleOverview();
-  if (activeTab.value === 'archives') return loadArchives();
   return loadCleanupOverview();
-}
-
-function archiveListParams(): Record<string, unknown> {
-  const params: Record<string, unknown> = {
-    page: archivePagination.page,
-    page_size: archivePagination.page_size,
-  };
-  for (const key of ['table', 'status', 'batch_id'] as const) {
-    const value = archiveFilters[key];
-    if (value.trim()) params[key] = value.trim();
-  }
-  return params;
-}
-
-async function loadArchives() {
-  const seq = ++archiveListRequestSeq.value;
-  archiveLoading.value = true;
-  try {
-    const result = await adminApi.logs.archives(archiveListParams());
-    if (seq !== archiveListRequestSeq.value) return;
-    archiveRows.value = result.list || [];
-    archivePagination.total = Number(result.total || 0);
-    archivePagination.page = Number(result.page || 1);
-    archivePagination.page_size = Number(result.page_size || 15);
-  } catch (error) {
-    if (seq !== archiveListRequestSeq.value) return;
-    archiveRows.value = [];
-    archivePagination.total = 0;
-    archivePagination.page = 1;
-    MessagePlugin.error(errorMessage(error, '加载归档批次失败'));
-  } finally {
-    if (seq === archiveListRequestSeq.value) archiveLoading.value = false;
-  }
-}
-
-function handleArchiveListSearch() {
-  archivePagination.page = 1;
-  loadArchives();
-}
-
-function handleArchiveListPageChange(pageInfo: PageInfo) {
-  archivePagination.page = pageInfo.current;
-  archivePagination.page_size = pageInfo.pageSize;
-  loadArchives();
-}
-
-async function loadArchiveSearch() {
-  const seq = ++archiveSearchRequestSeq.value;
-  const table = archiveSearchFilters.table.trim();
-  const startDate = archiveSearchFilters.start_date.trim();
-  const endDate = archiveSearchFilters.end_date.trim();
-  if (!table || !startDate || !endDate) {
-    archiveSearchLoading.value = false;
-    archiveSearchRows.value = [];
-    archiveSearchUnavailable.value = [];
-    archiveSearchUnavailableTruncated.value = 0;
-    archiveSearchIncomplete.value = false;
-    archiveSearchPagination.total = 0;
-    MessagePlugin.warning('请先选择归档表和起止日期');
-    return;
-  }
-  archiveSearchLoading.value = true;
-  try {
-    const result = await adminApi.logs.archiveSearch({
-      table,
-      start_date: startDate,
-      end_date: endDate,
-      page: archiveSearchPagination.page,
-      page_size: archiveSearchPagination.page_size,
-    });
-    if (seq !== archiveSearchRequestSeq.value) return;
-    archiveSearchRows.value = result.list || [];
-    archiveSearchUnavailable.value = result.unavailable_archives || [];
-    archiveSearchUnavailableTruncated.value = Number(result.unavailable_archives_truncated || 0);
-    archiveSearchIncomplete.value = Boolean(result.incomplete);
-    archiveSearchPagination.total = Number(result.total || 0);
-    archiveSearchPagination.page = Number(result.page || 1);
-    archiveSearchPagination.page_size = Number(result.page_size || 15);
-  } catch (error) {
-    if (seq !== archiveSearchRequestSeq.value) return;
-    archiveSearchRows.value = [];
-    archiveSearchUnavailable.value = [];
-    archiveSearchUnavailableTruncated.value = 0;
-    archiveSearchIncomplete.value = false;
-    archiveSearchPagination.total = 0;
-    archiveSearchPagination.page = 1;
-    MessagePlugin.error(errorMessage(error, '归档检索加载失败'));
-  } finally {
-    if (seq === archiveSearchRequestSeq.value) archiveSearchLoading.value = false;
-  }
-}
-
-function handleArchiveSearchQuery() {
-  archiveSearchPagination.page = 1;
-  loadArchiveSearch();
-}
-
-function handleArchiveSearchPageChange(pageInfo: PageInfo) {
-  archiveSearchPagination.page = pageInfo.current;
-  archiveSearchPagination.page_size = pageInfo.pageSize;
-  loadArchiveSearch();
-}
-
-function archiveStatusLabel(value: unknown): string {
-  const status = String(value || '');
-  return archiveStatusOptions.find((item) => item.value === status)?.label || status;
-}
-
-function archiveStatusTheme(value: unknown): string {
-  const status = String(value || '');
-  if (status === 'purged' || status === 'published') return 'success';
-  if (status === 'failed') return 'danger';
-  if (status === 'needs_recovery') return 'warning';
-  return 'default';
-}
-
-function archiveRestorableLabel(row: RecordRow): string {
-  if (String(row.restorable_check || '') === 'unchecked') return '待校验';
-  return row.restorable ? '可恢复' : '不可用';
-}
-
-function archiveRestorableTheme(row: RecordRow): string {
-  if (String(row.restorable_check || '') === 'unchecked') return 'warning';
-  return row.restorable ? 'success' : 'default';
-}
-
-function archiveRestorableReason(row: RecordRow): string | undefined {
-  const reason = row.restorable_reason || row.reason;
-  return reason ? String(reason) : undefined;
 }
 
 function buildLogParams(): LogListParams {

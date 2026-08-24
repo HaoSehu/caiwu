@@ -265,60 +265,6 @@ export interface LogCleanupPayload {
   confirm_text: string;
 }
 
-export interface LogArchiveListParams {
-  page?: number;
-  page_size?: number;
-  table?: string;
-  status?: string;
-  batch_id?: string;
-}
-
-export interface LogArchiveSearchParams {
-  page?: number;
-  page_size?: number;
-  table: string;
-  start_date: string;
-  end_date: string;
-}
-
-export interface LogArchiveUnavailable {
-  batch_id?: string;
-  table?: string;
-  status?: string;
-  file?: string | null;
-  id_min?: number | null;
-  id_max?: number | null;
-  expected_rows?: number;
-  restorable?: boolean;
-  restorable_check?: 'verified' | 'invalid' | 'unavailable' | 'unchecked' | string;
-  restorable_reason?: string | null;
-  reason?: string;
-}
-
-export interface LogArchiveSearchResult extends PaginatedList<LogArchiveItem> {
-  incomplete?: boolean;
-  unavailable_archives?: LogArchiveUnavailable[];
-  unavailable_archives_truncated?: number;
-}
-
-export type LogArchiveItem = Record<string, unknown> & {
-  batch_id?: string;
-  table?: string;
-  status?: string;
-  id?: number;
-  id_min?: number | null;
-  id_max?: number | null;
-  expected_rows?: number;
-  exported_rows?: number;
-  deleted_rows?: number;
-  restorable?: boolean;
-  restorable_check?: 'verified' | 'invalid' | 'unavailable' | 'unchecked' | string;
-  restorable_reason?: string | null;
-  created_at?: string;
-  purged_at?: string;
-  file?: string;
-};
-
 // ─── Content ──────────────────────────────────────────────────
 export interface ContentListParams {
   content_type?: string;

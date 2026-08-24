@@ -15,7 +15,6 @@ use App\Http\Controllers\Admin\V2\HomeHeroController;
 use App\Http\Controllers\Admin\V2\InstanceSpecCatalogController;
 use App\Http\Controllers\Admin\V2\IntegrationPluginController;
 use App\Http\Controllers\Admin\V2\InvoiceController;
-use App\Http\Controllers\Admin\V2\LogArchiveController;
 use App\Http\Controllers\Admin\V2\LogController;
 use App\Http\Controllers\Admin\V2\MediaFileController;
 use App\Http\Controllers\Admin\V2\MemberLevelController;
@@ -227,8 +226,6 @@ Route::middleware(['auth:sanctum', 'ensure.admin'])->group(function (): void {
         Route::get('/logs/{channel}/{log}', [LogController::class, 'show']);
         Route::get('/log-summaries/{channel}', [LogController::class, 'summary']);
         Route::get('/log-cleanups/overview', [LogController::class, 'cleanupOverview']);
-        Route::get('/log-archives', [LogArchiveController::class, 'index']);
-        Route::get('/log-archives/search', [LogArchiveController::class, 'search']);
     });
 
     Route::middleware(['permission:'.AdminPermissions::LOG_MANAGE])->group(function (): void {
