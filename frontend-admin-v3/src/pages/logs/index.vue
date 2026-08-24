@@ -918,6 +918,7 @@ const databaseCards = computed(() => {
     { key: 'admin_login', label: '管理员登录日志', value: numberText(database.admin_login) },
     { key: 'activity', label: '业务审计日志', value: numberText(database.activity) },
     { key: 'schedule_run', label: '调度执行日志', value: numberText(database.schedule_run) },
+    { key: 'gateway', label: '支付网关日志', value: numberText(database.gateway) },
   ];
 });
 const fileCards = computed(() => {
@@ -1012,6 +1013,7 @@ async function loadLogs() {
     const response = await requestLogList(activeTab.value, params);
     if (seq !== logRequestSeq.value) return;
     logRows.value = response.list || [];
+    messageSegmentsCache.clear();
     logPagination.total = Number(response.total || 0);
     logPagination.page = Number(response.page || logPagination.page);
     logPagination.page_size = Number(response.page_size || logPagination.page_size);
@@ -1162,9 +1164,12 @@ async function handleCleanup() {
   }
 }
 
+const detailRequestSeq = ref(0);
+
 async function openDetail(row: TableRowData) {
   currentLog.value = row as RecordRow;
   detailVisible.value = true;
+  const seq = ++detailRequestSeq.value;
 
   if (!isLogTab(activeTab.value) || row.id === undefined || row.id === null || row.id === '') {
     return;
@@ -1172,13 +1177,16 @@ async function openDetail(row: TableRowData) {
 
   try {
     const detail = await adminApi.logs.detail(activeTab.value, row.id as string | number);
+    if (seq !== detailRequestSeq.value) return;
     currentLog.value = { ...(row as RecordRow), ...detail };
   } catch (error) {
+    if (seq !== detailRequestSeq.value) return;
     MessagePlugin.error(errorMessage(error, '加载日志详情失败'));
   }
 }
 
 function closeDetailDrawer() {
+  detailRequestSeq.value += 1;
   detailVisible.value = false;
   currentLog.value = null;
 }
@@ -1232,9 +1240,14 @@ const ID_PATTERNS: Array<{ label: string; regex: RegExp }> = [
   { label: 'Transaction ID', regex: /Transaction\s*ID\s*[:：]\s*(\d+)/gi },
 ];
 
+const messageSegmentsCache = new Map<string, MessageSegment[]>();
+
 function parseMessageSegments(row: RecordRow): MessageSegment[] {
   const text = messageBody(row);
   if (!text) return [{ type: 'text', text: '-' }];
+
+  const cached = messageSegmentsCache.get(text);
+  if (cached) return cached;
 
   const matches: Array<{ index: number; end: number; label: string; id: string }> = [];
 
@@ -1252,34 +1265,42 @@ function parseMessageSegments(row: RecordRow): MessageSegment[] {
     }
   }
 
-  if (matches.length === 0) return [{ type: 'text', text }];
+  let segments: MessageSegment[];
+  if (matches.length === 0) {
+    segments = [{ type: 'text', text }];
+  } else {
+    matches.sort((a, b) => a.index - b.index);
 
-  matches.sort((a, b) => a.index - b.index);
+    segments = [];
+    let cursor = 0;
 
-  const segments: MessageSegment[] = [];
-  let cursor = 0;
-
-  for (const m of matches) {
-    if (m.index > cursor) {
-      segments.push({ type: 'text', text: text.slice(cursor, m.index) });
+    for (const m of matches) {
+      if (m.index > cursor) {
+        segments.push({ type: 'text', text: text.slice(cursor, m.index) });
+      }
+      segments.push({ type: 'id', label: m.label, id: m.id });
+      cursor = m.end;
     }
-    segments.push({ type: 'id', label: m.label, id: m.id });
-    cursor = m.end;
+
+    if (cursor < text.length) {
+      segments.push({ type: 'text', text: text.slice(cursor) });
+    }
   }
 
-  if (cursor < text.length) {
-    segments.push({ type: 'text', text: text.slice(cursor) });
-  }
-
+  messageSegmentsCache.set(text, segments);
   return segments;
 }
 
 function copyId(label: string, id: string) {
   const value = `${label}:${id}`;
-  navigator.clipboard.writeText(value).then(
-    () => MessagePlugin.success(`已复制 ${value}`),
-    () => MessagePlugin.warning('复制失败，请手动选择'),
-  );
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(value).then(
+      () => MessagePlugin.success(`已复制 ${value}`),
+      () => MessagePlugin.warning('复制失败，请手动选择'),
+    );
+  } else {
+    MessagePlugin.warning('当前环境不支持自动复制，请手动选择');
+  }
   const routePath = routeForIdSegment(label, id);
   if (routePath) {
     router.push(routePath);
@@ -1295,13 +1316,11 @@ function idSegmentTitle(seg: Extract<MessageSegment, { type: 'id' }>) {
 function routeForIdSegment(label: string, id: string) {
   const cleanId = String(id || '').trim();
   if (!cleanId) return '';
+  // 仅保留目标页会消费参数的跳转；Host/Service/Product 目标页不读 query，避免空转
   const routes: Record<string, string> = {
     'Order ID': `/admin/finance/orders/${cleanId}`,
     'User ID': `/admin/users/${cleanId}`,
     'Ticket ID': `/admin/ticket-conversations/${cleanId}`,
-    'Host ID': `/admin/services?id=${encodeURIComponent(cleanId)}`,
-    'Service ID': `/admin/services?id=${encodeURIComponent(cleanId)}`,
-    'Product ID': `/admin/products?product_id=${encodeURIComponent(cleanId)}`,
   };
   return routes[label] || '';
 }

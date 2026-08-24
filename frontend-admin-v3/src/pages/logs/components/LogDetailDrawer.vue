@@ -9,6 +9,7 @@
       </div>
       <div v-for="item in detailBlocks" :key="item.label" class="detail-block">
         <h3>{{ item.label }}</h3>
+        <!-- 脚本执行防线：sandbox 未开放 allow-scripts，邮件正文脚本无法运行 -->
         <iframe
           v-if="item.html"
           class="mail-preview-frame"
@@ -32,6 +33,7 @@ import { ChevronLeftIcon } from 'tdesign-icons-vue-next';
 import { computed } from 'vue';
 
 import { fieldValue, formatDateTime } from '@/utils/format';
+import { sanitizeRenderedHtml } from '@shared/htmlSanitizer';
 
 type LogTab = 'runtime' | 'admin-logins' | 'api' | 'sms' | 'email' | 'tasks' | 'gateway';
 type RecordRow = Record<string, unknown>;
@@ -282,36 +284,35 @@ function buildContentPreviewDoc(value: unknown) {
   }
   if (/<!doctype\s+html|<html\b|<body\b/i.test(normalized)) return sanitizeHtmlDoc(normalized);
   if (/<[a-z][a-z0-9]*(?:\s|>)/i.test(normalized)) {
-    const sanitized = sanitizeHtml(normalized);
+    const sanitized = sanitizeRenderedHtml(normalized, { imageAltFallback: '图片' });
     return `<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:;"><style>body{margin:0;padding:24px;background:#f5f7fa;font-family:Arial,sans-serif;color:#1f2329}.mail-preview{max-width:680px;margin:0 auto;padding:24px;border:1px solid #dce7ff;border-radius: var(--td-radius-extraLarge, 12px);background:#fff}</style></head><body><div class="mail-preview">${sanitized}</div></body></html>`;
   }
   return `<!doctype html><html lang="zh-CN"><body style="margin:0;padding:24px;font-family:Arial,sans-serif;background:#f8fafc;color:#1f2329;"><pre style="margin:0;white-space:pre-wrap;line-height:1.75;">${escapeHtml(normalized)}</pre></body></html>`;
 }
 
-/** 消毒 HTML 片段：移除 script/iframe/object/embed 标签、事件处理器、javascript: 协议 */
-function sanitizeHtml(html: string): string {
-  return html
+/**
+ * 消毒完整 HTML 文档：注入 CSP 兜底，并移除脚本/外嵌与事件属性。
+ * 脚本执行第一道防线是 iframe sandbox（无 allow-scripts），CSP 为第二道；
+ * 片段场景由 shared/htmlSanitizer 的 sanitizeRenderedHtml 统一处理。
+ */
+function sanitizeHtmlDoc(doc: string): string {
+  const csp =
+    '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data:;">';
+  const cleaned = doc
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
     .replace(/<iframe\b[^>]*>[\s\S]*?<\/iframe>/gi, '')
     .replace(/<object\b[^>]*>[\s\S]*?<\/object>/gi, '')
     .replace(/<embed\b[^>]*>/gi, '')
-    .replace(/\bon\w+\s*=\s*["'][^"']*["']/gi, '')
-    .replace(/\bon\w+\s*=\s*[^\s>]+/gi, '')
-    .replace(/javascript\s*:/gi, '')
-    .replace(/<link\b[^>]*>/gi, '');
-}
-
-/** 消毒完整 HTML 文档：注入 CSP 头部 */
-function sanitizeHtmlDoc(doc: string): string {
-  const csp =
-    '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data:;">';
-  if (/<head\b/i.test(doc)) {
-    return doc.replace(/<head\b[^>]*>/i, `$&${csp}`);
+    .replace(/<link\b[^>]*>/gi, '')
+    .replace(/\son\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/javascript\s*:/gi, '');
+  if (/<head\b/i.test(cleaned)) {
+    return cleaned.replace(/<head\b[^>]*>/i, `$&${csp}`);
   }
-  if (/<html\b/i.test(doc)) {
-    return doc.replace(/<html\b[^>]*>/i, `$&<head>${csp}</head>`);
+  if (/<html\b/i.test(cleaned)) {
+    return cleaned.replace(/<html\b[^>]*>/i, `$&<head>${csp}</head>`);
   }
-  return `<!doctype html><html lang="zh-CN"><head>${csp}</head><body>${doc}</body></html>`;
+  return `<!doctype html><html lang="zh-CN"><head>${csp}</head><body>${cleaned}</body></html>`;
 }
 
 function escapeHtml(value: string) {

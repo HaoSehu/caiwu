@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\System\Concerns;
 
+use App\Models\GatewayLog;
 use App\Models\MessageLog;
 use App\Models\ScheduleRunLog;
 use Carbon\Carbon;
@@ -33,6 +34,7 @@ trait HandlesAdminLogCleanup
                         'admin_login' => $this->baseAdminLoginLogQuery()->count(),
                         'activity' => $this->activityLogCount(),
                         'schedule_run' => ScheduleRunLog::query()->count(),
+                        'gateway' => GatewayLog::query()->count(),
                     ],
                     // 文件日志只做只读展示；生命周期由日志轮转（daily，默认 14 天）管理
                     'file' => $fileSnapshot,
@@ -43,6 +45,7 @@ trait HandlesAdminLogCleanup
                         ['value' => 'admin_login', 'label' => '管理员登录日志'],
                         ['value' => 'activity', 'label' => '业务审计日志'],
                         ['value' => 'schedule_run', 'label' => '调度执行日志'],
+                        ['value' => 'gateway', 'label' => '支付网关日志'],
                         ['value' => 'all_db', 'label' => '全部数据库日志'],
                     ],
                 ];
@@ -69,6 +72,7 @@ trait HandlesAdminLogCleanup
                     ->delete();
                 $affected['activity'] = $this->deleteActivityLogsBefore($cutoff);
                 $affected['schedule_run'] = ScheduleRunLog::query()->where('created_at', '<', $cutoff)->delete();
+                $affected['gateway'] = GatewayLog::query()->where('created_at', '<', $cutoff)->delete();
             });
         } else {
             DB::transaction(function () use ($type, $cutoff, &$affected) {
@@ -98,6 +102,10 @@ trait HandlesAdminLogCleanup
 
                 if ($type === 'schedule_run') {
                     $affected['schedule_run'] = ScheduleRunLog::query()->where('created_at', '<', $cutoff)->delete();
+                }
+
+                if ($type === 'gateway') {
+                    $affected['gateway'] = GatewayLog::query()->where('created_at', '<', $cutoff)->delete();
                 }
             });
         }
