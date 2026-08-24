@@ -1770,7 +1770,9 @@ class LogArchiveV2Service
                     $path = $file->getPathname();
                     if (str_ends_with($filename, '.part')) {
                         $result['orphan_parts'][] = $path;
-                    } elseif (str_ends_with($filename, '.csv') || str_ends_with($filename, '.manifest.json')) {
+                    } elseif (str_ends_with($filename, '.csv')
+                        || str_ends_with($filename, '.log')
+                        || str_ends_with($filename, '.manifest.json')) {
                         $normalizedPath = $this->normalizePathKey($path);
                         if (! isset($referencedPaths[$normalizedPath])) {
                             $result['orphan_files'][] = $path;
@@ -2037,7 +2039,8 @@ class LogArchiveV2Service
     {
         $dir = $this->v2Directory($item->batch_id, $config, $item->created_at?->format('Y-m'));
 
-        return $dir.DIRECTORY_SEPARATOR.$item->table_name.'-'.$item->id_min.'-'.$item->id_max.'.csv';
+        // 归档数据产物统一 .log（兼容早期发布的 .csv：读取处两种扩展名均接受）
+        return $dir.DIRECTORY_SEPARATOR.$item->table_name.'-'.$item->id_min.'-'.$item->id_max.'.log';
     }
 
     private function manifestPath(ArchiveItem $item, array $config): string

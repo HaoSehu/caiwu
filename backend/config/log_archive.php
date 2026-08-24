@@ -6,7 +6,8 @@ return [
     // 归档协议：v1 = 旧版 pt-archiver --file --purge；v2 = 两阶段（暂存->校验->发布->清除，需生产演练批准后切换）。
     'protocol' => env('LOG_ARCHIVE_PROTOCOL', 'v1'),
 
-    'retention_days' => 30,
+    // 数据库日志统一在线 90 天，超期归档成文件（gateway 明细文件 GATEWAY_LOG_DAYS 亦为 90）。
+    'retention_days' => 90,
     'file_retention_days' => 180,
 
     // 归档文件始终落在后端 storage 目录内，不支持 NAS 或外部挂载目录。
@@ -33,6 +34,7 @@ return [
         'message_logs' => '短信/邮件统一消息日志',
         'schedule_run_logs' => 'Laravel 调度运行日志',
         'integration_plugin_runtime_logs' => '插件运行日志',
+        'gateway_logs' => '支付网关交互日志（明细已按日移文件，库行按 90 天归档）',
     ],
 
     'excluded_tables' => [
@@ -47,7 +49,5 @@ return [
         'schedule_task_runs',
         // 自动化幂等状态（recordOnce/markExecuted）不参与普通归档。
         'automation_logs',
-        // 支付网关交互日志在财务/合规确认前不属于普通日志，禁止归档。
-        'gateway_logs',
     ],
 ];

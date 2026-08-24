@@ -8,6 +8,7 @@ use App\Services\System\OperationLogService;
 use App\Support\SensitiveDataSanitizer;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
@@ -74,7 +75,7 @@ class LogOperation
         }
 
         try {
-            $user = $request->user();
+            $user = $this->resolveUserForLog($request);
             $requestId = trim((string) ($requestId ?? $request->attributes->get('request_id', $request->header('X-Request-Id', ''))));
             $userAgent = trim((string) $request->userAgent());
             $statusCode = $response?->getStatusCode();
@@ -104,6 +105,7 @@ class LogOperation
                 // 也保留 actor/module/IP，保证管理端合并视图可还原来源。
                 'user_id' => $user?->id ? (int) $user->id : null,
                 'user_type' => $this->resolveUserType($user),
+                'actor_name' => $this->resolveActorName($user),
                 'module' => $this->resolveModule($request),
                 'ip_address' => $request->ip(),
             ];
@@ -203,6 +205,35 @@ class LogOperation
         }
 
         return 'guest';
+    }
+
+    /**
+     * 解析日志身份：site 等公开路由不挂 auth:sanctum，登录用户的 Bearer token
+     * 无法经 $request->user() 获得。此处仅在带 token 时用 sanctum guard 兜底，
+     * 只用于日志身份识别，不改变路由鉴权；无 token 仍为 guest。
+     */
+    private function resolveUserForLog(Request $request): mixed
+    {
+        $user = $request->user();
+
+        if ($user !== null || $request->bearerToken() === null) {
+            return $user;
+        }
+
+        try {
+            return Auth::guard('sanctum')->user();
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function resolveActorName(mixed $user): string
+    {
+        if ($user === null) {
+            return '';
+        }
+
+        return trim((string) ($user->display_name ?? $user->nickname ?? $user->email ?? $user->username ?? ''));
     }
 
     private function resolveModule(Request $request): string

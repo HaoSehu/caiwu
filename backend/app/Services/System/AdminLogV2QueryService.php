@@ -12,6 +12,7 @@ use App\Models\IntegrationPluginRuntimeLog;
 use App\Models\MessageLog;
 use App\Models\ScheduleRunLog;
 use App\Support\ApiAccessLogFile;
+use App\Support\GatewayDetailFile;
 use App\Support\SchemaMetadataCache;
 use App\Support\SensitiveDataSanitizer;
 use Illuminate\Database\Eloquent\Model;
@@ -273,6 +274,7 @@ class AdminLogV2QueryService
                 'id' => (string) ($entry['id'] ?? $log),
                 'user_type' => (string) ($entry['user_type'] ?? 'guest'),
                 'user_id' => $entry['user_id'] ?? null,
+                'actor_name' => (string) ($entry['actor_name'] ?? ''),
                 'module' => $entry['module'] ?? null,
                 'action' => (string) ($entry['action'] ?? ''),
                 'ip_address' => $entry['ip_address'] ?? '',
@@ -362,11 +364,39 @@ class AdminLogV2QueryService
                 'error_msg' => $row['error_msg'] ?? '',
             ],
             'message' => (string) ($row['error_msg'] ?? $row['action'] ?? ''),
-            'context' => $this->dropSensitiveKeys([
-                'request_data' => $row['request_data'] ?? [],
-                'response_data' => $row['response_data'] ?? [],
-            ]),
+            'context' => $this->dropSensitiveKeys($this->gatewayDetailData($model)),
             'created_at' => $this->dateValue($model, 'created_at'),
+        ];
+    }
+
+    /**
+     * 取网关请求/响应明细：detail_key 的新行走 gateway-json 文件回读，历史行走库。
+     * 文件已过保留期或缺失时带 detail_unavailable 标记，管理端据此提示而非静默显示空。
+     *
+     * @return array{request_data: array<string, mixed>, response_data: array<string, mixed>, detail_unavailable?: true}
+     */
+    private function gatewayDetailData(GatewayLog $model): array
+    {
+        $locator = trim((string) ($model->detail_key ?? ''));
+        if ($locator !== '') {
+            $entry = GatewayDetailFile::read($locator);
+
+            $context = [
+                'request_data' => is_array($entry['request_data'] ?? null) ? $entry['request_data'] : [],
+                'response_data' => is_array($entry['response_data'] ?? null) ? $entry['response_data'] : [],
+            ];
+            if (($entry['detail_unavailable'] ?? false) === true) {
+                $context['detail_unavailable'] = true;
+            }
+
+            return $context;
+        }
+
+        $row = $this->normalizeRow($model);
+
+        return [
+            'request_data' => is_array($row['request_data'] ?? null) ? $row['request_data'] : [],
+            'response_data' => is_array($row['response_data'] ?? null) ? $row['response_data'] : [],
         ];
     }
 

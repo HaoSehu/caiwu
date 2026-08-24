@@ -7,6 +7,7 @@ use Monolog\Handler\StreamHandler;
 use Monolog\Processor\PsrLogMessageProcessor;
 
 $production = env('APP_ENV') === 'production';
+$testing = env('APP_ENV') === 'testing';
 $defaultLevel = $production ? 'info' : 'debug';
 
 return [
@@ -67,12 +68,31 @@ return [
             'handler' => NullHandler::class,
         ],
 
-        'api-json' => [
+        'api-json' => $testing ? [
+            'driver' => 'monolog',
+            'handler' => NullHandler::class,
+        ] : [
             'driver' => 'monolog',
             'handler' => RotatingFileHandler::class,
             'handler_with' => [
                 'filename' => storage_path('logs/api-json.log'),
                 'maxFiles' => (int) env('API_LOG_DAYS', 31),
+            ],
+            'formatter' => JsonFormatter::class,
+            'level' => 'info',
+            'replace_placeholders' => true,
+        ],
+
+        // 测试环境写 NullHandler，避免单元测试向 gateway-json 日志文件灌入噪音
+        'gateway-json' => $testing ? [
+            'driver' => 'monolog',
+            'handler' => NullHandler::class,
+        ] : [
+            'driver' => 'monolog',
+            'handler' => RotatingFileHandler::class,
+            'handler_with' => [
+                'filename' => storage_path('logs/gateway-json.log'),
+                'maxFiles' => (int) env('GATEWAY_LOG_DAYS', 90),
             ],
             'formatter' => JsonFormatter::class,
             'level' => 'info',

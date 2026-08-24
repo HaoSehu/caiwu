@@ -7,11 +7,18 @@ namespace App\Services\System;
 use App\Models\GatewayLog;
 use App\Models\Payment;
 use App\Services\Integrations\Plugins\PaymentGatewayBindingResolver;
+use App\Support\GatewayDetailFile;
+use App\Support\PayloadLimiter;
+use App\Support\SchemaMetadataCache;
 use App\Support\SensitiveDataSanitizer;
-use Illuminate\Support\Facades\Schema;
 
 class GatewayLogService
 {
+    /** 网关明细体积上限：先截叶子字符串，整体仍超限时降级为摘要，防止大报文撑爆 gateway_logs */
+    private const GATEWAY_DETAIL_MAX_BYTES = 65536;
+
+    private const GATEWAY_DETAIL_PREVIEW_BYTES = 4096;
+
     public function __construct(
         private readonly PaymentGatewayBindingResolver $paymentGatewayBindingResolver,
     ) {}
@@ -35,32 +42,66 @@ class GatewayLogService
             : $this->paymentGatewayBindingResolver->contextForGateway($gateway);
         $resolvedTraceId = trim((string) ($traceId ?? $payment?->trace_id ?? ''));
 
+        $requestDetail = SensitiveDataSanitizer::sanitize($requestData);
+        $responseDetail = SensitiveDataSanitizer::sanitize($responseData);
+        // 统一限量治理（叶子截断+整体摘要），文件与库内降级共用同一份结果，避免热路径重复计算
+        $limitedRequest = $this->limitGatewayDetail($requestDetail);
+        $limitedResponse = $this->limitGatewayDetail($responseDetail);
+
         $payload = [
             'gateway' => $gateway,
             'action' => $action,
             'out_trade_no' => $outTradeNo,
             'trade_no' => $tradeNo,
             'invoice_id' => $invoiceId,
-            'request_data' => SensitiveDataSanitizer::sanitize($requestData),
-            'response_data' => SensitiveDataSanitizer::sanitize($responseData),
+            'request_data' => $limitedRequest,
+            'response_data' => $limitedResponse,
             'result_status' => $resultStatus,
             'error_msg' => $errorMsg,
             'ip_address' => $ipAddress,
         ];
 
-        if (Schema::hasColumn('gateway_logs', 'plugin_id')) {
+        // 明细优先写按日文件，库行只留 locator（detail_key）；文件不可用时降级为库内截断摘要。
+        if (SchemaMetadataCache::hasColumn('gateway_logs', 'detail_key')) {
+            $locator = GatewayDetailFile::write($limitedRequest, $limitedResponse, $gateway);
+            if ($locator !== null) {
+                $payload['detail_key'] = $locator;
+                $payload['request_data'] = null;
+                $payload['response_data'] = null;
+            }
+        }
+
+        if (SchemaMetadataCache::hasColumn('gateway_logs', 'plugin_id')) {
             $payload['plugin_id'] = $context['plugin_id'];
         }
 
-        if (Schema::hasColumn('gateway_logs', 'gateway_key')) {
+        if (SchemaMetadataCache::hasColumn('gateway_logs', 'gateway_key')) {
             $payload['gateway_key'] = $context['gateway_key'];
         }
 
-        if (Schema::hasColumn('gateway_logs', 'trace_id')) {
+        if (SchemaMetadataCache::hasColumn('gateway_logs', 'trace_id')) {
             $payload['trace_id'] = $resolvedTraceId !== '' ? $resolvedTraceId : null;
         }
 
         return GatewayLog::query()->create($payload);
+    }
+
+    /**
+     * 压住网关明细行均：先截超长叶子字符串；整体编码仍超限时降级为
+     * 「截断标记 + 原始字节 + 预览」，保留可定位性而不保留全量报文。
+     *
+     * @return array<string, mixed>
+     */
+    private function limitGatewayDetail(mixed $detail): array
+    {
+        $data = is_array($detail) ? $detail : [];
+
+        return PayloadLimiter::limit(
+            $data,
+            PayloadLimiter::DEFAULT_LEAF_MAX_BYTES,
+            self::GATEWAY_DETAIL_MAX_BYTES,
+            self::GATEWAY_DETAIL_PREVIEW_BYTES,
+        );
     }
 
     public function recordSuccess(
@@ -115,7 +156,7 @@ class GatewayLogService
 
     private function resolvePayment(?string $outTradeNo, ?string $tradeNo, ?int $invoiceId): ?Payment
     {
-        if (! Schema::hasTable('payments')) {
+        if (! SchemaMetadataCache::hasTable('payments')) {
             return null;
         }
 

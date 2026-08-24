@@ -1,6 +1,12 @@
 <template>
   <t-drawer :visible="visible" :size="drawerSize" :header="headerTitle" :footer="false" @close="emit('close')">
     <template v-if="currentLog">
+      <t-alert
+        v-if="isGatewayDetailUnavailable"
+        theme="warning"
+        message="该条网关请求/响应明细已过保留期或文件缺失，无法回读报文内容。"
+        description="归档产物不内联明细；如需更长证据期请延长 GATEWAY_LOG_DAYS 或将明细一并归档。"
+      />
       <div class="detail-grid">
         <article v-for="item in detailFields" :key="item.label">
           <span>{{ item.label }}</span>
@@ -51,6 +57,13 @@ const emit = defineEmits<{
   (e: 'close'): void;
 }>();
 
+// gateway 明细经 detail_key 从按日文件回读；文件过保留期/缺失时后端回传该标记
+const isGatewayDetailUnavailable = computed(
+  () =>
+    props.activeTab === 'gateway' &&
+    (props.currentLog?.context as Record<string, unknown> | undefined)?.detail_unavailable === true,
+);
+
 const headerTitle = computed(() => {
   const row = props.currentLog || {};
   if (props.activeTab === 'admin-logins') return `管理员登录 · ${fieldValue(row.admin_username) || '详情'}`;
@@ -74,6 +87,7 @@ const detailFields = computed(() => {
       { label: '模块', value: fieldValue(row.module) },
       { label: '请求号', value: fieldValue(row.request_id) },
       { label: '记录时间', value: formatDate(row.created_at) },
+      { label: '调用用户', value: fieldValue(row.actor_name || '') },
       { label: '调用端', value: userTypeLabel(row.user_type) },
       { label: 'IP 地址', value: fieldValue(row.ip_address) },
     ];
@@ -177,9 +191,11 @@ const detailBlocks = computed(() => {
     ];
   }
   if (props.activeTab === 'gateway') {
+    // 明细经 detail_key 从文件回读，位于 detail.context；列表行顶层为 null
+    const context = (row.context ?? {}) as Record<string, unknown>;
     return [
-      { label: '请求数据', value: formatJson(row.request_data) },
-      { label: '响应数据', value: formatJson(row.response_data) },
+      { label: '请求数据', value: formatJson(context.request_data) },
+      { label: '响应数据', value: formatJson(context.response_data) },
       { label: '错误信息', value: fieldValue(row.error_msg) },
     ];
   }

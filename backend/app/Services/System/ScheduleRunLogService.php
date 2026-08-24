@@ -5,6 +5,7 @@ namespace App\Services\System;
 use App\Models\ScheduleRunLog;
 use App\Services\Automation\ScheduleHookService;
 use App\Support\ActivityLogStream;
+use App\Support\PayloadLimiter;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -12,7 +13,12 @@ use Throwable;
 
 class ScheduleRunLogService
 {
+    /** 活动镜像 summary 整体编码上限：超大结果数组降级为摘要，撑大 activity_logs 的元凶之一 */
+    private const CRON_MIRROR_SUMMARY_MAX_BYTES = 4096;
+
     private ?bool $scheduleRunLogTableReady = null;
+
+    private ?bool $activityLogTableReady = null;
 
     private static bool $mutexDegradedWarningEmitted = false;
 
@@ -118,7 +124,7 @@ class ScheduleRunLogService
                     'task_key' => $context['task_key'] ?? null,
                     'source' => $context['source'] ?? null,
                     'duration_ms' => $durationMs,
-                    'summary' => $summary,
+                    'summary' => $this->compactCronSummary($summary),
                     'error_message' => $errorMessage !== null ? mb_substr($errorMessage, 0, 2000) : null,
                 ], static fn ($value): bool => $value !== null),
                 ActivityLogStream::SCHEDULE,
@@ -173,16 +179,22 @@ class ScheduleRunLogService
 
     private function activityLogTableIsReady(): bool
     {
+        if ($this->activityLogTableReady !== null) {
+            return $this->activityLogTableReady;
+        }
+
         try {
-            return Schema::hasTable('activity_logs');
+            $this->activityLogTableReady = Schema::hasTable('activity_logs');
         } catch (Throwable $exception) {
             Log::warning('[定时任务] 活动日志表检查失败，已跳过本次日志记录', [
                 'message' => $exception->getMessage(),
                 'exception' => $exception::class,
             ]);
 
-            return false;
+            $this->activityLogTableReady = false;
         }
+
+        return $this->activityLogTableReady;
     }
 
     /**
@@ -283,5 +295,27 @@ class ScheduleRunLogService
         }
 
         return 'critical';
+    }
+
+    /**
+     * cron summary 只在 schedule_run_logs 缺失时作为活动镜像 fallback 展示。
+     * 复用统一的 PayloadLimiter::limit：叶子先限宽，整体编码超限时降级为
+     * 「截断标记 + 原始字节 + 哈希 + 预览」，不再把整段结果塞进 activity_logs.context。
+     *
+     * @param  array<string, mixed>|null  $summary
+     * @return array<string, mixed>|null
+     */
+    private function compactCronSummary(?array $summary): ?array
+    {
+        if ($summary === null) {
+            return null;
+        }
+
+        return PayloadLimiter::limit(
+            $summary,
+            PayloadLimiter::DEFAULT_LEAF_MAX_BYTES,
+            self::CRON_MIRROR_SUMMARY_MAX_BYTES,
+            self::CRON_MIRROR_SUMMARY_MAX_BYTES,
+        );
     }
 }

@@ -17,6 +17,7 @@ use App\Services\Mail\Contracts\MailDriver;
 use App\Services\Sms\Contracts\SmsDriver;
 use App\Services\Upstream\Contracts\UpstreamDriver;
 use App\Services\Verification\Contracts\VerificationDriver;
+use App\Support\PayloadLimiter;
 use App\Support\SensitiveDataSanitizer;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Support\Facades\Log;
@@ -29,8 +30,6 @@ class PluginRuntimeRegistry
     private const VERIFY_NOTIFY_ACTION = 'payment.verify_notify';
 
     /** 运行日志 meta 存储上限：叶子字符串与整体编码分别限宽，防止上游大报文撑爆日志表 */
-    private const RUNTIME_META_LEAF_MAX_BYTES = 8192;
-
     private const RUNTIME_META_MAX_BYTES = 16384;
 
     private const RUNTIME_META_PREVIEW_BYTES = 4096;
@@ -293,54 +292,13 @@ class PluginRuntimeRegistry
     {
         $sanitized = SensitiveDataSanitizer::sanitize($payload);
 
-        return $this->truncateRuntimeMeta(is_array($sanitized) ? $sanitized : []);
-    }
-
-    /**
-     * 截断超大 meta：异常上游报文曾把单行 runtime log 撑到兆级（表均行宽 1.6KB 的主因之一）。
-     * 先截叶子字符串；整体编码仍超限时降级为「标记 + 摘要 + 哈希」，
-     * 保留可定位性（sha256/原始大小）而不保留全量内容。
-     *
-     * @param  array<string, mixed>  $meta
-     * @return array<string, mixed>
-     */
-    private function truncateRuntimeMeta(array $meta): array
-    {
-        $meta = $this->truncateMetaLeaves($meta);
-
-        $encoded = json_encode($meta, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) ?: '';
-
-        if (strlen($encoded) <= self::RUNTIME_META_MAX_BYTES) {
-            return $meta;
-        }
-
-        return [
-            'truncated' => true,
-            'original_bytes' => strlen($encoded),
-            'sha256' => hash('sha256', $encoded),
-            'preview' => mb_strcut($encoded, 0, self::RUNTIME_META_PREVIEW_BYTES),
-        ];
-    }
-
-    /**
-     * @param  array<string, mixed>  $meta
-     * @return array<string, mixed>
-     */
-    private function truncateMetaLeaves(array $meta): array
-    {
-        foreach ($meta as $key => $value) {
-            if (is_string($value) && strlen($value) > self::RUNTIME_META_LEAF_MAX_BYTES) {
-                $meta[$key] = mb_strcut($value, 0, self::RUNTIME_META_LEAF_MAX_BYTES).'...[truncated '.strlen($value).' bytes]';
-
-                continue;
-            }
-
-            if (is_array($value)) {
-                $meta[$key] = $this->truncateMetaLeaves($value);
-            }
-        }
-
-        return $meta;
+        // 截断超大 meta：异常上游报文曾把单行 runtime log 撑到兆级（表均行宽 1.6KB 的主因之一）。
+        return PayloadLimiter::limit(
+            is_array($sanitized) ? $sanitized : [],
+            PayloadLimiter::DEFAULT_LEAF_MAX_BYTES,
+            self::RUNTIME_META_MAX_BYTES,
+            self::RUNTIME_META_PREVIEW_BYTES,
+        );
     }
 
     private function positiveInt(mixed $value): ?int

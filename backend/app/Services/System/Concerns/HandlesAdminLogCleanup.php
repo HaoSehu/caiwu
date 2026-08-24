@@ -45,7 +45,7 @@ trait HandlesAdminLogCleanup
                         ['value' => 'admin_login', 'label' => '管理员登录日志'],
                         ['value' => 'activity', 'label' => '业务审计日志'],
                         ['value' => 'schedule_run', 'label' => '调度执行日志'],
-                        ['value' => 'gateway', 'label' => '支付网关日志'],
+                        // gateway：支付证据，只读预览，不得随普通清理物理删除
                         ['value' => 'all_db', 'label' => '全部数据库日志'],
                     ],
                 ];
@@ -72,7 +72,7 @@ trait HandlesAdminLogCleanup
                     ->delete();
                 $affected['activity'] = $this->deleteActivityLogsBefore($cutoff);
                 $affected['schedule_run'] = ScheduleRunLog::query()->where('created_at', '<', $cutoff)->delete();
-                $affected['gateway'] = GatewayLog::query()->where('created_at', '<', $cutoff)->delete();
+                // gateway 为支付证据：不随 all_db 清理物理删除，仅保留只读预览
             });
         } else {
             DB::transaction(function () use ($type, $cutoff, &$affected) {
@@ -104,9 +104,7 @@ trait HandlesAdminLogCleanup
                     $affected['schedule_run'] = ScheduleRunLog::query()->where('created_at', '<', $cutoff)->delete();
                 }
 
-                if ($type === 'gateway') {
-                    $affected['gateway'] = GatewayLog::query()->where('created_at', '<', $cutoff)->delete();
-                }
+                // gateway 为支付证据，单独 type 也不得物理删除（校验层已排除）
             });
         }
 

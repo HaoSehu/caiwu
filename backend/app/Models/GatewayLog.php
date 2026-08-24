@@ -16,6 +16,7 @@ class GatewayLog extends Model
         'trade_no',
         'invoice_id',
         'trace_id',
+        'detail_key',
         'request_data',
         'response_data',
         'result_status',

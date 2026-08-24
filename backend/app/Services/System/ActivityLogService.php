@@ -8,6 +8,7 @@ use App\Models\ActivityLog;
 use App\Models\AdminUser;
 use App\Models\User;
 use App\Support\ActivityLogStream;
+use App\Support\PayloadLimiter;
 use Illuminate\Support\Str;
 
 /**
@@ -117,6 +118,15 @@ class ActivityLogService
             : $this->contextTraceId(
                 is_array($attributes['context'] ?? null) ? $attributes['context'] : [],
             );
+
+        // 防止大报文把单行 activity_logs 撑到兆级；只截超长叶子，
+        // 保留 request_id/status/trace_id 等结构化筛选字段，不整体降级。
+        if (is_array($attributes['context'] ?? null)) {
+            $attributes['context'] = PayloadLimiter::truncateLeaves(
+                $attributes['context'],
+                PayloadLimiter::DEFAULT_LEAF_MAX_BYTES,
+            );
+        }
 
         ActivityLog::query()->create($attributes);
     }
