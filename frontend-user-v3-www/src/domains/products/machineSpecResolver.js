@@ -55,18 +55,18 @@ export function normalizeMemorySpecText(value) {
 
   const compact = text.replace(/\s+/g, "");
   if (/^\d+(?:\.\d+)?g$/i.test(compact)) {
-    return `${compact.slice(0, -1)}GiB`;
+    return `${compact.slice(0, -1)} GiB`;
   }
 
   if (/^\d+(?:\.\d+)?m$/i.test(compact)) {
-    return `${compact.slice(0, -1)}MiB`;
+    return `${compact.slice(0, -1)} MiB`;
   }
 
   const normalized = compact
-    .replace(/gib/gi, "GiB")
-    .replace(/gb/gi, "GiB")
-    .replace(/mib/gi, "MiB")
-    .replace(/mb/gi, "MiB");
+    .replace(/gib/gi, " GiB")
+    .replace(/gb/gi, " GiB")
+    .replace(/mib/gi, " MiB")
+    .replace(/mb/gi, " MiB");
 
   return normalized;
 }

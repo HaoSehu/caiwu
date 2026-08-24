@@ -43,6 +43,12 @@ class ProductSyncService
 
     private const REMOTE_STOCK_CACHE_TTL_SECONDS = 15;
 
+    // 前台实时库存外层缓存：基于 redis_volatile，未命中时才会去上游实时拉取，
+    // 提高 TTL 减少每次进 /products 都命中冷缓存、重复打上游的窗口。
+    private const SITE_STOCK_CACHE_TTL_SECONDS = 30;
+
+    private const SITE_STOCK_MISS_CACHE_TTL_SECONDS = 20;
+
     private readonly ProductGroupHierarchyService $hierarchyService;
 
     public function __construct(
@@ -709,7 +715,11 @@ class ProductSyncService
         $product = $this->findSaleProductForStock($productId);
 
         if (! $product instanceof Product) {
-            Cache::store('redis_volatile')->put($cacheKey, false, now()->addSeconds(10));
+            Cache::store('redis_volatile')->put(
+                $cacheKey,
+                false,
+                now()->addSeconds(self::SITE_STOCK_MISS_CACHE_TTL_SECONDS)
+            );
 
             return null;
         }
@@ -721,7 +731,11 @@ class ProductSyncService
             'stock' => (int) ($product->live_stock ?? $product->stock),
         ];
 
-        Cache::store('redis_volatile')->put($cacheKey, $result, now()->addSeconds(15));
+        Cache::store('redis_volatile')->put(
+            $cacheKey,
+            $result,
+            now()->addSeconds(self::SITE_STOCK_CACHE_TTL_SECONDS)
+        );
 
         return $result;
     }

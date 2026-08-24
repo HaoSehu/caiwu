@@ -42,10 +42,10 @@ export function useWebsiteProductCheckout({
   const selectedCouponId = ref(getPendingWebsiteCouponId());
   const productDetailCache = {};
   const productDetailPending = {};
-  const PRODUCT_DETAIL_PREFETCH_CONCURRENCY = 2;
+  const PRODUCT_DETAIL_PREFETCH_CONCURRENCY = 1;
   // 单分类详情预取上限：仅预取列表前若干个（多在首屏视口附近），
   // 避免大分类（page_size=50）对全部商品逐个发请求
-  const PRODUCT_DETAIL_PREFETCH_LIMIT = 8;
+  const PRODUCT_DETAIL_PREFETCH_LIMIT = 4;
 
   let currentProductId = 0;
   let detailToken = 0;
@@ -593,11 +593,11 @@ export function useWebsiteProductCheckout({
     productStock.value = null;
     productStockLoading.value = false;
     productStockError.value = "";
-    void loadProductDetail(currentProductId).finally(() => {
-      if (currentProductId === normalizeProductId(id)) {
-        refreshProductStock(currentProductId);
-      }
-    });
+
+    // 详情与实时库存无数据依赖，并行发起省一个关键路径 RTT
+    const productId = currentProductId;
+    void loadProductDetail(productId);
+    void refreshProductStock(productId);
   }
 
   function cancelProductDetailPrefetch() {

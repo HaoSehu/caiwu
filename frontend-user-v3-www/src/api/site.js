@@ -136,10 +136,40 @@ async function fetchAllV2SiteProducts(groupId, level, config = {}) {
   return products;
 }
 
+function isUsableCatalogPayload(data) {
+  return (
+    data &&
+    typeof data === "object" &&
+    Number(data.effective_product_group_id || 0) > 0 &&
+    Array.isArray(data.children) &&
+    Array.isArray(data.items_by_group)
+  );
+}
+
 async function fetchV2SiteProductGroupCatalog(groupId, config = {}) {
   const cached = getCachedCatalog(groupId);
   if (cached) {
     return { code: 0, message: "操作成功", data: cached };
+  }
+
+  try {
+    // 优先单次聚合目录接口（后端 redis 缓存），切换分组仅 1 个 RTT；
+    // 失败时回退到下方逐级拼装，避免后端目录聚合异常导致目录不可用。
+    const aggregated = await request
+      .get(`/v2/site/product-groups/${groupId}/catalog`, {
+        ...configWithoutParams(config),
+        params: mergeParams(config, {}),
+      })
+      .then((payload) =>
+        normalizeProductResponse(payload, normalizeProductGroupCatalogPayload),
+      );
+
+    if (isUsableCatalogPayload(aggregated.data)) {
+      setCachedCatalog(groupId, aggregated.data);
+      return aggregated;
+    }
+  } catch {
+    // 聚合失败走原分页拼装
   }
 
   // children 列表与根产品无数据依赖，并行拉取省一个 RTT

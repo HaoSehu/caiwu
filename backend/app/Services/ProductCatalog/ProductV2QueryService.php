@@ -7,6 +7,7 @@ namespace App\Services\ProductCatalog;
 use App\Constants\ProductType;
 use App\Exceptions\BusinessException;
 use App\Models\Product;
+use App\Models\SecondProductGroup;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -121,9 +122,24 @@ class ProductV2QueryService
             'page_size' => $filters['root_page_size'] ?? 50,
         ]);
 
+        $firstGroup = $rootGroups->items()[0] ?? null;
+        $firstGroupId = $firstGroup instanceof SecondProductGroup ? (int) $firstGroup->id : 0;
+
+        // 首组目录随初始化一次带回，前端深链/首屏无需再逐级拉 children → level3 商品；
+        // 目录聚合异常不阻塞初始化，交由前端走既有兜底路径。
+        $catalog = null;
+        if ($firstGroupId > 0) {
+            try {
+                $catalog = $this->catalog->siteGroupCatalog($firstGroupId);
+            } catch (\Throwable) {
+                $catalog = null;
+            }
+        }
+
         return [
             'types' => $types,
             'root_groups' => $rootGroups,
+            'catalog' => $catalog,
         ];
     }
 

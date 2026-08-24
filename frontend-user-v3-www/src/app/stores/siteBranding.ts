@@ -66,6 +66,9 @@ export const useSiteBrandingStore = defineStore('site-branding', () => {
   const brandInitials = computed(() => deriveInitials(siteName.value))
 
   let fetchPromise = null
+  // 站点配置在页面生命周期内只拉一次；预热成功后 bootstrap 兜底路径的重复触发直接短路，
+  // 避免非首页入口重复请求 /v2/site/config
+  let hasLoadedSiteConfig = false
 
   function toggleSidebar() {
     sidebarCollapsed.value = !sidebarCollapsed.value
@@ -101,12 +104,17 @@ export const useSiteBrandingStore = defineStore('site-branding', () => {
   }
 
   async function fetchSiteConfig() {
+    if (hasLoadedSiteConfig) {
+      return
+    }
+
     if (fetchPromise) {
       return fetchPromise
     }
 
     fetchPromise = siteApi.config()
       .then((res) => {
+        hasLoadedSiteConfig = true
         hydrateSiteConfig(res.data || {})
       })
       .catch(() => {

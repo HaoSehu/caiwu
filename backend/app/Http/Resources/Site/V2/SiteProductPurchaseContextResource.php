@@ -29,6 +29,7 @@ class SiteProductPurchaseContextResource extends JsonResource
             'root_groups_total' => $rootGroups instanceof LengthAwarePaginator ? $rootGroups->total() : 0,
             'root_groups_page' => $rootGroups instanceof LengthAwarePaginator ? $rootGroups->currentPage() : 1,
             'root_groups_page_size' => $rootGroups instanceof LengthAwarePaginator ? $rootGroups->perPage() : 0,
+            'catalog' => $payload['catalog'] ?? null,
         ];
     }
 
