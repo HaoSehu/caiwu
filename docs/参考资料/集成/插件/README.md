@@ -526,13 +526,6 @@ final class ExampleScheduledTask implements ScheduledTask
 
 ### 调试和验证
 
-开发插件调度能力时优先跑最小测试：
-
-```bash
-cd backend
-php artisan test tests/Unit/ScheduleHookServiceTest.php tests/Feature/PluginSimulationTest.php
-```
-
 本地手动触发一次心跳：
 
 ```bash
@@ -651,27 +644,6 @@ php artisan schedule:list
 其他插件以各自目录内 `README.md` / `DEVELOPMENT.md` 和当前代码为准；不要在导航中保留不存在的说明文档链接。
 
 ## 验证命令
-
-只改插件后端逻辑：
-
-```bash
-cd backend
-php artisan test tests/Feature/AdminIntegrationPluginControllerTest.php tests/Feature/PluginRuntimeRegistryIntegrationTest.php
-```
-
-涉及插件定时任务或调度 Hook：
-
-```bash
-cd backend
-php artisan test tests/Unit/ScheduleHookServiceTest.php tests/Feature/PluginSimulationTest.php
-```
-
-涉及邮件插件：
-
-```bash
-cd backend
-php artisan test tests/Feature/MultiSmtpRoundRobinPluginTest.php
-```
 
 涉及管理端页面：
 

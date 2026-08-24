@@ -94,7 +94,7 @@ return [
     ],
 
     'frontend' => [
-        'dist_path' => env('FRONTEND_DIST_PATH', base_path('../frontend-client/dist')),
+        'dist_path' => env('FRONTEND_DIST_PATH', base_path('../frontend-admin-v3/dist')),
     ],
 
 ];

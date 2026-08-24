@@ -497,6 +497,9 @@ def main() -> int:
             log("检测到 DB_SOCKET，将优先使用 Unix Socket 连接")
 
         if args.reset:
+            app_env = str(env_map.get("APP_ENV", "")).strip().lower()
+            if app_env == "production":
+                fail("生产环境（APP_ENV=production）严禁使用 --reset 破坏性重置数据库")
             drop_database_sql = f"DROP DATABASE IF EXISTS `{escaped_database_name}`;"
             log(f"重置目标数据库：{db_database}")
             run_server_sql(

@@ -522,8 +522,16 @@ export function useWebsiteProductCheckout({
     detailAbortController = new AbortController();
     configLoading.value = true;
     try {
-      const product = await fetchProductDetail(productId, {
+      let product = await fetchProductDetail(productId, {
         signal: detailAbortController.signal,
+      }).catch(async (error) => {
+        if (isCanceledError(error) && token === detailToken && currentProductId === productId) {
+          detailAbortController = new AbortController();
+          return fetchProductDetail(productId, {
+            signal: detailAbortController.signal,
+          });
+        }
+        throw error;
       });
       if (token !== detailToken || currentProductId !== productId) {
         return false;

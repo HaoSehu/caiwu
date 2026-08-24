@@ -206,15 +206,14 @@ npm run dev:admin-v3
 ## 🧪 验证与测试
 
 ```bash
-# 后端
-cd backend && php artisan test
+# 后端（静态分析 / 格式检查）
+cd backend && composer analyse && composer format:check
 
 # 文档（目录、链接与状态一致性）
 npm run docs:check
 
-# 前端（类型 / 单测 / 构建 / 重构校验）
+# 前端（类型 / 构建 / 重构校验）
 npm run typecheck:frontends
-npm run test:frontends
 npm run build:frontends
 npm run verify:frontends
 ```

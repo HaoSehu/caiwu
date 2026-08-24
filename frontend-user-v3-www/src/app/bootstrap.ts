@@ -12,6 +12,7 @@ import {
   initClientRuntimeConnectionHints,
   primeClientConnectionHints,
 } from "@/app/runtime/network";
+import { initSessionActivityTracking } from "@/utils/auth";
 import { useAppStore } from "@/stores/app";
 import "@/assets/styles/global.scss";
 
@@ -54,6 +55,7 @@ export function bootstrapClientApp() {
   initClientRuntimeConnectionHints({
     apiBaseUrl: import.meta.env.VITE_API_BASE_URL,
   });
+  initSessionActivityTracking();
 
   const appStore = useAppStore();
   const splash = document.getElementById("app-splash");

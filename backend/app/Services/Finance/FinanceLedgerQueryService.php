@@ -196,9 +196,16 @@ class FinanceLedgerQueryService
     private function buildSummaryCacheKey(array $filters): string
     {
         $userId = (int) ($filters['user_id'] ?? 0);
-        $dateRange = trim((string) ($filters['start_date'] ?? '')).'_'.trim((string) ($filters['end_date'] ?? ''));
+        $fingerprint = md5((string) json_encode([
+            'tab' => $filters['tab'] ?? null,
+            'event_type' => $filters['event_type'] ?? null,
+            'status' => $filters['status'] ?? null,
+            'direction' => $filters['direction'] ?? null,
+            'start_date' => $filters['start_date'] ?? '',
+            'end_date' => $filters['end_date'] ?? '',
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 
-        return 'finance:ledger:summary:'.$userId.':'.md5($dateRange);
+        return 'finance:ledger:summary:'.$userId.':'.$fingerprint;
     }
 
     private function buildQuery(array $filters, bool $withRelations = true): Builder

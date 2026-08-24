@@ -175,7 +175,6 @@ function isFixturePath(relativePath) {
     return (
         normalized.includes("/tests/") ||
     normalized.includes("/fixtures/") ||
-    normalized.startsWith("backend/tests/") ||
     /\.(?:spec|test)\.[cm]?[jt]sx?$/.test(path.posix.basename(normalized))
     );
 }

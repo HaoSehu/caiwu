@@ -47,7 +47,10 @@ class InstallSystemCommand extends Command
             $roles->sync();
             $roleId = (int) DB::table('roles')->where('name', 'super_admin')->value('id');
             $admin = AdminUser::query()->firstOrNew(['username' => $username]);
-            $admin->password = $password;
+            $isNewAdmin = ! $admin->exists;
+            if ($isNewAdmin) {
+                $admin->password = $password;
+            }
             $admin->role_id = $roleId > 0 ? $roleId : null;
             $admin->status = 1;
             $admin->save();

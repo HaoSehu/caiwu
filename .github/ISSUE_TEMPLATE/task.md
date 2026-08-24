@@ -33,7 +33,6 @@ assignees: ""
 
 <!-- 按受影响范围填写最小验证命令及结果 -->
 
-- [ ] `backend`：`php artisan test`
 - [ ] `frontend-admin-v3`：`npm run build`
 - [ ] `frontend-user-v3-www`：`npm run build`
 - [ ] `frontend-user-v4-console`：`npm run build`

@@ -53,6 +53,13 @@ class AlipayService
         };
     }
 
+    public function buildNotifyResponse(bool $success): Response
+    {
+        return new Response($success ? 'success' : 'fail', 200, [
+            'Content-Type' => 'text/plain; charset=utf-8',
+        ]);
+    }
+
     /**
      * 每次调用都新建客户端，确保长进程（queue worker）中配置更新后立即生效。
      * 性能开销由 AlipayClient 构造时的 Redis 配置缓存（60s）抵消。

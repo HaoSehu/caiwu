@@ -69,10 +69,3 @@
 3. 在 `lib/` 内实现签名、请求、响应解析和错误映射。
 4. 保持 `sms.send_verify_code` 和 `sms.test` 返回结构稳定。
 5. 日志只能记录脱敏后的手机号、模板编号、请求 ID 和错误摘要。
-
-## 验证
-
-```bash
-cd backend
-php artisan test tests\Feature\PluginSimulationTest.php --filter=demo_sms
-```

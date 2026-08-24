@@ -102,7 +102,10 @@ export function createSessionDriver(options: SessionDriverOptions): SessionDrive
     const legacy = readStorageItem(key)
     if (legacy) {
       writeCookie(key, legacy, cookieDomain)
-      window.localStorage.removeItem(key)
+      const persisted = readCookie(key)
+      if (persisted === legacy) {
+        window.localStorage.removeItem(key)
+      }
       return legacy
     }
     return ''

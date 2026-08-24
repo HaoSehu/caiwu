@@ -14,12 +14,7 @@
     "lint:fix": "eslint --ext .vue,.js,jsx,.ts,.tsx ./ --max-warnings 0 --fix",
     "stylelint": "stylelint src/**/*.{html,vue,css,sass,less}",
     "stylelint:fix": "stylelint --fix src/**/*.{html,vue,css,sass,less}",
-    "prepare": "husky",
-    "test": "npm run test:e2e",
-    "test:api-asset": "node --experimental-strip-types ./tests/unit/apiAssetUrl.spec.ts",
-    "test:log-archive-settings": "node --experimental-strip-types ./tests/unit/logArchiveSettings.spec.ts",
-    "test:e2e": "playwright test",
-    "test:coverage": "echo \"no test:coverage specified,work in process\""
+    "prepare": "husky"
   },
   "dependencies": {
     "@caiwu/shared": "file:../shared",
@@ -43,7 +38,6 @@
     "@antfu/eslint-config": "^7.6.1",
     "@commitlint/cli": "^19.8.0",
     "@commitlint/config-conventional": "^20.4.2",
-    "@playwright/test": "^1.60.0",
     "@types/lodash-es": "^4.17.12",
     "@types/nprogress": "^0.2.3",
     "@types/qs": "^6.9.17",

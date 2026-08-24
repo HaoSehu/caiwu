@@ -154,13 +154,31 @@ const transform: AxiosTransform = {
 
   // 响应错误处理
   responseInterceptorsCatch: (error: any, instance: AxiosInstance) => {
-    const { config } = error;
+    const { config, response } = error;
+    const status = response?.status;
+    const responseCode = response?.data?.code;
     const responseMessage = error?.response?.data?.message;
     if (responseMessage) {
       error.message = toUserMessage(responseMessage, error.message || '请求接口错误');
     }
 
+    if (status === 401 || responseCode === 40100) {
+      removeAdminToken();
+      if (router.currentRoute.value.path !== '/admin/login') {
+        router.push('/admin/login');
+      }
+      return Promise.reject(error);
+    }
+
     if (!config || !config.requestOptions.retry) return Promise.reject(error);
+
+    const method = String(config.method || 'get').toLowerCase();
+    const isIdempotent = method === 'get' || method === 'head';
+    if (!isIdempotent) return Promise.reject(error);
+
+    const retryableStatuses = [408, 429, 500, 502, 503, 504];
+    const isRetryableStatus = status === undefined || retryableStatuses.includes(status);
+    if (!isRetryableStatus) return Promise.reject(error);
 
     config.retryCount = config.retryCount || 0;
 

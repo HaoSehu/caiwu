@@ -34,11 +34,6 @@ backend/plugins/servers/kanghostx/
 
 ## 验证
 
-```bash
-cd backend
-php artisan test tests/Feature/KangHostxPluginTest.php
-```
-
 语法检查：
 
 ```bash

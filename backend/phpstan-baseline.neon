@@ -31,12 +31,6 @@ parameters:
 			path: app/Console/Commands/BackfillInvoiceItemProjectionsCommand.php
 
 		-
-			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
-			identifier: larastan.noEnvCallsOutsideOfConfig
-			count: 2
-			path: app/Console/Commands/InstallSystemCommand.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\Supplier\:\:\$api_key\.$#'
 			identifier: property.notFound
 			count: 1

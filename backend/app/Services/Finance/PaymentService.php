@@ -1819,7 +1819,8 @@ class PaymentService
      */
     public function refundOrderByAlipay(Order $order, array $payload = [], array $context = []): array
     {
-        $lockKey = "lock:refund:alipay:order:{$order->id}";
+        $invoiceId = (int) ($order->invoice_id ?? Invoice::query()->where('order_id', $order->id)->value('id') ?? 0);
+        $lockKey = $invoiceId > 0 ? "lock:refund:invoice:{$invoiceId}" : "lock:refund:alipay:order:{$order->id}";
 
         return $this->withLock($lockKey, 40, function () use ($order, $payload, $context) {
             $snapshot = DB::transaction(function () use ($order, $payload) {

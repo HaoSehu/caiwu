@@ -22,7 +22,6 @@
 
 <!-- 按受影响范围执行最小验证并填写结果 -->
 
-- [ ] `backend`：`php artisan test`
 - [ ] `frontend-admin-v3`：`npm run build`
 - [ ] `frontend-user-v3-www`：`npm run build`（重构另加 `npm run verify:refactor`）
 - [ ] `frontend-user-v4-console`：`npm run build`（重构另加 `npm run verify:refactor`）

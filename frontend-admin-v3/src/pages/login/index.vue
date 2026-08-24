@@ -73,8 +73,17 @@ async function handleLogin() {
     });
     MessagePlugin.success('登录成功');
     const redirect = router.currentRoute.value.query.redirect;
-    if (redirect) {
-      router.push(decodeURIComponent(redirect as string));
+    if (redirect && typeof redirect === 'string') {
+      try {
+        const decoded = decodeURIComponent(redirect);
+        if (decoded.startsWith('/')) {
+          router.push(decoded);
+        } else {
+          router.push('/admin/dashboard');
+        }
+      } catch {
+        router.push('/admin/dashboard');
+      }
     } else {
       router.push('/admin/dashboard');
     }

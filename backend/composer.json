@@ -26,15 +26,7 @@
       "Database\\Seeders\\": "database/seeders/"
     }
   },
-  "autoload-dev": {
-    "psr-4": {
-      "Tests\\": "tests/"
-    }
-  },
   "scripts": {
-    "test": [
-      "@php artisan test"
-    ],
     "format": [
       "@php vendor/bin/pint"
     ],

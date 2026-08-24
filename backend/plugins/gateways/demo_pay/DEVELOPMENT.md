@@ -119,10 +119,3 @@
 3. 在 `lib/` 内实现第三方 SDK/API 客户端、签名、验签和错误映射。
 4. 保持六个 `payment.*` 动作返回结构稳定。
 5. 所有金额以系统传入金额为准，并校验第三方回调金额，异常交给系统流程处理。
-
-## 验证
-
-```bash
-cd backend
-php artisan test tests\Feature\PluginSimulationTest.php --filter=demo_pay
-```

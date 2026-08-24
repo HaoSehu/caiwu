@@ -26,7 +26,7 @@
           <div class="user-stat-card__label">
             <span>{{ item.label }}</span>
             <edit-icon
-              v-if="item.key === 'cash_balance'"
+              v-if="item.key === 'cash_balance' && canRecharge"
               class="balance-action-icon"
               :class="{ 'is-disabled': !user.id }"
               @click="user.id && openRechargeDialog()"
@@ -1062,6 +1062,7 @@ const invoiceDrawer = reactive({
   detail: { invoice: {}, payments: [], items: [], logs: [] } as Row,
 });
 const canLoginAs = computed(() => hasAdminPermission(AdminPermissions.USER_LOGIN_AS));
+const canRecharge = computed(() => hasAdminPermission(AdminPermissions.USER_RECHARGE));
 const LOGIN_AS_READY_EVENT = 'caiwu:login-as-ready';
 const LOGIN_AS_CODE_EVENT = 'caiwu:login-as-code';
 const LOGIN_AS_READY_TIMEOUT_MS = 10000;

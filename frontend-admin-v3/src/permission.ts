@@ -44,7 +44,12 @@ router.beforeEach(async (to, from, next) => {
           // 动态添加路由后，此处应当重定向到fullPath，否则会加载404页面内容
           next({ path: to.fullPath, replace: true, query: to.query });
         } else {
-          const redirect = decodeURIComponent((from.query.redirect || to.path) as string);
+          let redirect = to.path;
+          try {
+            redirect = decodeURIComponent((from.query.redirect || to.path) as string);
+          } catch {
+            redirect = to.path;
+          }
           next(to.path === redirect ? { ...to, replace: true } : { path: redirect, query: to.query });
         }
         return;
@@ -57,7 +62,7 @@ router.beforeEach(async (to, from, next) => {
         const hasPermission = hasPermissionInList(userPermissions, requiredPermission);
         if (!hasPermission) {
           MessagePlugin.warning('您没有访问该页面的权限');
-          next({ path: '/admin/dashboard', replace: true });
+          next({ path: '/admin/403', replace: true });
           NProgress.done();
           return;
         }

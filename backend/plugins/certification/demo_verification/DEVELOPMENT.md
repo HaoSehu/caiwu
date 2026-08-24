@@ -116,10 +116,3 @@
 3. 在 `logic/` 内实现第三方 API 客户端、签名、验签、状态映射和错误映射。
 4. 保持五个 `certification.*` 动作返回结构稳定。
 5. 第三方返回的姓名、证件号和原始响应必须脱敏后再进入日志或 `raw` 字段。
-
-## 验证
-
-```bash
-cd backend
-php artisan test tests\Feature\PluginSimulationTest.php --filter=demo_verification
-```

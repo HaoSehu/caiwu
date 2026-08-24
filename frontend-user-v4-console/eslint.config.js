@@ -132,12 +132,6 @@ export default antfu(
       },
     },
     {
-      files: ['tests/**/*.spec.ts'],
-      rules: {
-        'no-new-func': 'off',
-      },
-    },
-    {
       files: [
         'src/pages/client/service-console/index.vue',
         'src/pages/client/service-console/compute/index.vue',

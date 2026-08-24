@@ -76,10 +76,3 @@
 3. 在 `lib/` 内实现第三方客户端或 SMTP 调用。
 4. 保持 `mail.send_html` 和 `mail.test_smtp` 返回结构稳定。
 5. 第三方异常要转换为插件失败结果或业务异常，不要暴露原始密钥、完整请求体或第三方敏感响应。
-
-## 验证
-
-```bash
-cd backend
-php artisan test tests\Feature\PluginSimulationTest.php --filter=demo_mail
-```

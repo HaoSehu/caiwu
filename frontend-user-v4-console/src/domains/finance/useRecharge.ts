@@ -303,6 +303,7 @@ export function useRecharge() {
       let page = 1;
       let total = 0;
       let pageSize = 50;
+      const MAX_SCAN_PAGES = 3;
 
       do {
         const response = await clientApi.services({
@@ -317,7 +318,7 @@ export function useRecharge() {
         pageSize = Number(payload.page_size || pageSize || 50);
         collectedServices.push(...list);
         page += 1;
-      } while (collectedServices.length < total);
+      } while (collectedServices.length < total && page <= MAX_SCAN_PAGES);
 
       const now = Date.now();
       const sevenDaysLater = now + SEVEN_DAYS_MS;

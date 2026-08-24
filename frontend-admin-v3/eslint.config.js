@@ -132,12 +132,6 @@ export default antfu(
         'vue/padding-line-between-blocks': ['error', 'never'],
       },
     },
-    {
-      files: ['tests/**/*.spec.ts'],
-      rules: {
-        'no-new-func': 'off',
-      },
-    },
     globalIgnores([
       '**/snapshot*',
       '**/dist',

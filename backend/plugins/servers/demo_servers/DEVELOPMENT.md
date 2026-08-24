@@ -125,10 +125,3 @@ ZJMF 财务真实插件的 API 地址、账号、密钥目前来自供应商配�
 4. 保持 `server.*` 控制动作返回结构稳定。
 5. 按实际能力声明 capability，未实现的方法不要声明对应能力。
 6. 第三方异常要转换为中文业务错误或受控失败结果，不要暴露密钥、JWT、密码、VNC token、完整请求体或第三方敏感响应。
-
-## 验证
-
-```bash
-cd backend
-php artisan test tests\Feature\PluginSimulationTest.php --filter=demo_servers
-```
