@@ -143,4 +143,29 @@ return Application::configure(basePath: dirname(__DIR__))
         if (config('app.env') === 'production' && config('app.debug') === true) {
             throw new RuntimeException('APP_DEBUG must be false in production.');
         }
+
+        // 生产环境禁止 single 日志通道：single 不做轮转，日志文件会无限增长；
+        // 既检查默认通道，也检查 stack 的直接子通道，避免通过 stack 间接绕过。
+        if (config('app.env') === 'production') {
+            $loggingDefault = (string) config('logging.default', 'daily');
+            $loggingChannels = (array) config('logging.channels', []);
+            $stackChannels = array_values(array_filter(array_map(
+                static fn (mixed $channel): string => trim((string) $channel),
+                (array) ($loggingChannels['stack']['channels'] ?? []),
+            )));
+            $dailyDays = (int) ($loggingChannels['daily']['days'] ?? 0);
+            $apiLogDays = (int) ($loggingChannels['api-json']['handler_with']['maxFiles'] ?? 0);
+
+            if ($loggingDefault === 'single' || in_array('single', $stackChannels, true)) {
+                throw new RuntimeException('生产环境日志必须使用轮转通道，禁止 single。');
+            }
+
+            if ($dailyDays < 1) {
+                throw new RuntimeException('生产环境 daily 日志保留天数必须大于 0。');
+            }
+
+            if ($apiLogDays < 1) {
+                throw new RuntimeException('生产环境 API 日志保留天数必须大于 0。');
+            }
+        }
     })->create();

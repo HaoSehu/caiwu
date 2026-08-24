@@ -1,6 +1,8 @@
 <?php
 
+use Monolog\Formatter\JsonFormatter;
 use Monolog\Handler\NullHandler;
+use Monolog\Handler\RotatingFileHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Processor\PsrLogMessageProcessor;
 
@@ -63,6 +65,18 @@ return [
         'null' => [
             'driver' => 'monolog',
             'handler' => NullHandler::class,
+        ],
+
+        'api-json' => [
+            'driver' => 'monolog',
+            'handler' => RotatingFileHandler::class,
+            'handler_with' => [
+                'filename' => storage_path('logs/api-json.log'),
+                'maxFiles' => (int) env('API_LOG_DAYS', 31),
+            ],
+            'formatter' => JsonFormatter::class,
+            'level' => 'info',
+            'replace_placeholders' => true,
         ],
 
         'emergency' => [

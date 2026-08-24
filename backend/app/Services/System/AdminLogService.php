@@ -15,6 +15,7 @@ use App\Models\ScheduleRunLog;
 use App\Models\User;
 use App\Services\System\Concerns\HandlesAdminLogCleanup;
 use App\Support\AdminPrivacy;
+use App\Support\ApiAccessLogFile;
 use App\Support\SchemaMetadataCache;
 use App\Support\SensitiveDataSanitizer;
 use Carbon\Carbon;
@@ -41,6 +42,10 @@ class AdminLogService
     private const CLEANUP_OVERVIEW_CACHE_VERSION_KEY = 'admin_logs:cleanup_overview:version';
 
     private const FILE_LOG_SUMMARY_CACHE_TTL_SECONDS = 60;
+
+    // 合并 activity_logs 与文件窗口时最多载入的数据库候选行数；
+    // 防止恶意/误传超大 page 触发全表结果集进入 PHP 内存。
+    public const API_CANDIDATE_MAX_ROWS = 10000;
 
     private const TASK_META = [
         'refresh-hosting-panel-auth' => [
@@ -89,14 +94,19 @@ class AdminLogService
         ],
     ];
 
-    public function getSmsLogs(array $filters, int $perPage): array
+    public function getSmsLogs(array $filters, int $perPage, int $page = 1): array
     {
         $query = $this->buildSmsLogQuery($filters);
         if ($query === null) {
             return $this->buildPaginatorPayload($this->emptyPaginator($perPage));
         }
 
-        $logs = (clone $query)->orderByDesc('created_at')->paginate($perPage);
+        $logs = (clone $query)->orderByDesc('created_at')->orderByDesc('id')->paginate(
+            $perPage,
+            ['*'],
+            'page',
+            max(1, $page),
+        );
         $logs->setCollection($logs->getCollection()->map(function ($log) {
             $item = $log->toArray();
             $item['params_json'] = $this->normalizeNotificationParams($item['params_json'] ?? []);
@@ -142,14 +152,19 @@ class AdminLogService
         );
     }
 
-    public function getEmailLogs(array $filters, int $perPage): array
+    public function getEmailLogs(array $filters, int $perPage, int $page = 1): array
     {
         $query = $this->buildEmailLogQuery($filters);
         if ($query === null) {
             return $this->buildPaginatorPayload($this->emptyPaginator($perPage));
         }
 
-        $logs = (clone $query)->orderByDesc('created_at')->paginate($perPage);
+        $logs = (clone $query)->orderByDesc('created_at')->orderByDesc('id')->paginate(
+            $perPage,
+            ['*'],
+            'page',
+            max(1, $page),
+        );
         $logs->setCollection($logs->getCollection()->map(function ($log) {
             return $log->toArray();
         }));
@@ -192,6 +207,8 @@ class AdminLogService
 
     public function getApiLogs(array $filters, int $page, int $perPage, bool $withSummary = true): array
     {
+        $page = max(1, $page);
+        $perPage = max(1, $perPage);
         $query = ActivityLog::query();
         $this->applyHttpActionFilter($query);
 
@@ -203,6 +220,35 @@ class AdminLogService
                     ->orWhere('ip_address', 'like', "%{$keyword}%")
                     ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(context, '$.request_id')) like ?", ["%{$keyword}%"]);
             });
+        }
+
+        if (! empty($filters['ip_address'])) {
+            $query->where('ip_address', 'like', '%'.trim((string) $filters['ip_address']).'%');
+        }
+
+        // trace_id 是管理端 API 日志筛选契约的一部分。新请求写入
+        // activity_logs.trace_id，旧行/旧 schema 则把 request_id 放在 JSON
+        // context 中；两种形态都必须在数据库侧先收窄候选集，否则启用
+        // 文件日志合并后会把不相关的访问记录一起返回。
+        if (! empty($filters['trace_id'])) {
+            $traceId = trim((string) $filters['trace_id']);
+            if (SchemaMetadataCache::hasColumn('activity_logs', 'trace_id')) {
+                // 迁移后的新行把链路 ID 写入独立列；迁移前的历史行仍可能
+                // 只在 context.request_id 中保存。两种形态必须一起匹配，
+                // 否则同一个 trace_id 在切换窗口内会被分页结果漏掉。
+                $query->where(function ($builder) use ($traceId): void {
+                    $builder->where('trace_id', 'like', '%'.$traceId.'%')
+                        ->orWhereRaw(
+                            "JSON_UNQUOTE(JSON_EXTRACT(context, '$.request_id')) like ?",
+                            ['%'.$traceId.'%'],
+                        );
+                });
+            } else {
+                $query->whereRaw(
+                    "JSON_UNQUOTE(JSON_EXTRACT(context, '$.request_id')) like ?",
+                    ['%'.$traceId.'%'],
+                );
+            }
         }
 
         if (! empty($filters['module'])) {
@@ -223,30 +269,73 @@ class AdminLogService
 
         $this->applyDateFilter($query, $filters);
 
-        $logs = (clone $query)->orderByDesc('created_at')->paginate($perPage, ['*'], 'page', $page);
-        $rows = $this->mapActivityLogRows($logs->getCollection())->map(function (array $item) {
-            [$method, $path] = $this->splitHttpAction((string) ($item['action'] ?? ''));
-            $detail = SensitiveDataSanitizer::sanitize(
-                is_array($item['detail'] ?? null) ? $item['detail'] : []
-            );
+        $dbTotal = (int) (clone $query)->count();
+        $fileRows = $this->filterApiFileRows(
+            collect(ApiAccessLogFile::readRecent(
+                entryLimit: self::API_CANDIDATE_MAX_ROWS,
+            )),
+            $filters,
+        )->map(fn (array $item): array => $this->normalizeApiLogRow($this->mapApiFileRow($item)));
 
-            $item['method'] = $method;
-            $item['path'] = $path;
-            $item['status'] = isset($detail['status']) ? (int) $detail['status'] : null;
-            $item['request_id'] = trim((string) ($detail['request_id'] ?? ''));
-            $item['params'] = $detail['params'] ?? [];
-            $item['user_agent'] = trim((string) ($detail['user_agent'] ?? ''));
+        // 文件窗口中的行会参与全局排序；把它们计入候选窗口，避免分页时
+        // 只加载 page*perPage 条数据库行而在合并后留下不可见的空洞。两侧
+        // 都受同一个硬上限约束，不能因深页或大文件窗口无限扩大查询结果。
+        $candidateLimit = $this->apiCandidateLimit($dbTotal, $page, $perPage, $fileRows->count());
+        $dbLogs = $candidateLimit > 0
+            ? (clone $query)
+                ->orderByDesc('created_at')
+                ->orderByDesc('id')
+                ->limit($candidateLimit)
+                ->get()
+            : collect();
+        $dbRows = $this->mapActivityLogRows($dbLogs)
+            ->map(fn (array $item): array => $this->normalizeApiLogRow($item));
 
-            return $item;
-        });
-        $logs->setCollection($rows);
+        // 新旧写入路径切换期间，同一请求可能同时存在 activity_logs 与
+        // api-json 文件。request_id/trace_id 是跨来源的稳定关联键，展示和
+        // total 都只保留一条，避免管理员看到重复访问事件。
+        // 只依据已经载入候选窗口的数据库行去重。若重新从完整查询中按
+        // request_id 扫描，可能命中一个落在候选窗口之外的旧行；此时文件行
+        // 会被删掉，但对应数据库行又不会进入当前页，造成可见日志缺失，且
+        // 还会为最多 10000 个文件 ID 构造超大的 IN 查询。
+        $dbRequestIds = $dbRows
+            ->flatMap(static function (array $row): array {
+                $ids = [trim((string) ($row['request_id'] ?? ''))];
+                $detail = is_array($row['detail'] ?? null) ? $row['detail'] : [];
+                $ids[] = trim((string) ($detail['request_id'] ?? ''));
+
+                return $ids;
+            })
+            ->filter()
+            ->unique()
+            ->flip();
+        $fileOnlyRows = $fileRows->reject(
+            static fn (array $row): bool => ($requestId = trim((string) ($row['request_id'] ?? ''))) !== ''
+                && isset($dbRequestIds[$requestId]),
+        )->values();
+        $mergedRows = $this->sortApiLogRows($dbRows->merge($fileOnlyRows));
+        $rows = $mergedRows->forPage($page, $perPage)->values();
+        // 只从总数中扣除实际被丢弃的文件行。一个 request_id 可能对应多条
+        // activity_logs（例如重试/错误镜像），不能把所有匹配数据库行都当成
+        // 被去重，否则 total 会小于当前合并结果的真实行数。
+        $total = max(0, $dbTotal + $fileOnlyRows->count());
+        $logs = new LengthAwarePaginator($rows, $total, $perPage, $page);
 
         if (! $withSummary) {
             return $this->buildPaginatorPayload($logs);
         }
 
+        $fileSignature = md5(json_encode(
+            $fileOnlyRows->map(fn (array $row): array => [
+                'id' => $row['id'] ?? null,
+                'created_at' => $row['created_at'] ?? null,
+                'status' => $row['status'] ?? null,
+                'user_type' => $row['user_type'] ?? null,
+            ])->values()->all(),
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        ));
         $summary = Cache::remember(
-            $this->buildListSummaryCacheKey('api', $filters),
+            $this->buildListSummaryCacheKey('api', $filters).':'.$dbTotal.':'.$fileSignature,
             now()->addSeconds(self::LIST_SUMMARY_CACHE_TTL_SECONDS),
             function () use ($query) {
                 return (clone $query)
@@ -258,9 +347,15 @@ class AdminLogService
         );
 
         return $this->buildPaginatorPayload($logs, [
-            'total' => (int) ($summary?->total ?? 0),
-            'errors' => (int) ($summary?->errors ?? 0),
-            'admin_count' => (int) ($summary?->admin_count ?? 0),
+            'total' => $total,
+            'errors' => (int) ($summary?->errors ?? 0) + $fileOnlyRows->filter(
+                static fn (array $row): bool => (int) ($row['status'] ?? 0) >= 500
+            )->count(),
+            'admin_count' => (int) ($summary?->admin_count ?? 0) + $fileOnlyRows->filter(
+                static fn (array $row): bool => (string) ($row['user_type'] ?? '') === 'admin'
+            )->count(),
+            'file_window_count' => $fileOnlyRows->count(),
+            'source' => $fileOnlyRows->isNotEmpty() ? 'activity_logs+api_json_window' : 'activity_logs',
         ]);
     }
 
@@ -1216,6 +1311,178 @@ class AdminLogService
                 'request_id' => trim((string) ($log->trace_id ?? '')),
             ];
         });
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $rows
+     * @param  array<string, mixed>  $filters
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function filterApiFileRows(Collection $rows, array $filters): Collection
+    {
+        return $rows->filter(function (array $row) use ($filters): bool {
+            $createdAt = trim((string) ($row['created_at'] ?? ''));
+            if ($createdAt === '') {
+                return false;
+            }
+
+            try {
+                Carbon::parse($createdAt);
+            } catch (\Throwable) {
+                // 无法确定时间的文件行不能参与日期筛选和全局排序，避免
+                // 把损坏/不完整日志伪装成有效结果返回。
+                return false;
+            }
+
+            if (! empty($filters['keyword'])) {
+                $keyword = trim((string) $filters['keyword']);
+                $haystack = implode(' ', [
+                    (string) ($row['action'] ?? ''),
+                    (string) ($row['module'] ?? ''),
+                    (string) ($row['ip_address'] ?? ''),
+                    (string) ($row['request_id'] ?? ''),
+                ]);
+                if (stripos($haystack, $keyword) === false) {
+                    return false;
+                }
+            }
+
+            if (! empty($filters['module']) && (string) ($row['module'] ?? '') !== trim((string) $filters['module'])) {
+                return false;
+            }
+
+            if (! empty($filters['method']) && ! str_starts_with((string) ($row['action'] ?? ''), trim((string) $filters['method']).' ')) {
+                return false;
+            }
+
+            if (! empty($filters['status']) && (int) ($row['status'] ?? 0) !== (int) $filters['status']) {
+                return false;
+            }
+
+            if (! empty($filters['user_type']) && (string) ($row['user_type'] ?? '') !== trim((string) $filters['user_type'])) {
+                return false;
+            }
+
+            if (! empty($filters['ip_address']) && ! str_contains(
+                (string) ($row['ip_address'] ?? ''),
+                trim((string) $filters['ip_address'])
+            )) {
+                return false;
+            }
+
+            if (! empty($filters['trace_id']) && ! str_contains(
+                (string) ($row['request_id'] ?? ''),
+                trim((string) $filters['trace_id'])
+            )) {
+                return false;
+            }
+
+            return $this->matchLogDateRange((string) ($row['created_at'] ?? ''), $filters);
+        })->values();
+    }
+
+    /**
+     * @param  array<string, mixed>  $item
+     * @return array<string, mixed>
+     */
+    private function mapApiFileRow(array $item): array
+    {
+        $privacy = AdminPrivacy::current();
+        $detail = is_array($item['detail'] ?? null) ? $item['detail'] : [];
+
+        return [
+            'id' => (string) ($item['id'] ?? ''),
+            'source' => 'api_json',
+            'user_id' => $item['user_id'] ?? null,
+            'user_type' => trim((string) ($item['user_type'] ?? 'guest')) ?: 'guest',
+            'actor_name' => trim((string) ($item['actor_name'] ?? '')),
+            'role_name' => trim((string) ($item['role_name'] ?? '')),
+            'action' => trim((string) ($item['action'] ?? '')),
+            'module' => trim((string) ($item['module'] ?? '')),
+            'target_id' => $item['target_id'] ?? null,
+            'detail' => $privacy->payload($detail),
+            'ip_address' => $privacy->ip($item['ip_address'] ?? ''),
+            'created_at' => $item['created_at'] ?? null,
+        ];
+    }
+
+    /**
+     * 将数据库与文件来源统一为 API 列表行结构。
+     *
+     * @param  array<string, mixed>  $item
+     * @return array<string, mixed>
+     */
+    private function normalizeApiLogRow(array $item): array
+    {
+        [$method, $path] = $this->splitHttpAction((string) ($item['action'] ?? ''));
+        $detail = SensitiveDataSanitizer::sanitize(
+            is_array($item['detail'] ?? null) ? $item['detail'] : []
+        );
+
+        $item['method'] = $method;
+        $item['path'] = $path;
+        $item['status'] = isset($detail['status']) ? (int) $detail['status'] : null;
+        $item['request_id'] = trim((string) ($detail['request_id'] ?? $item['request_id'] ?? ''));
+        $item['params'] = $detail['params'] ?? [];
+        $item['user_agent'] = trim((string) ($detail['user_agent'] ?? ''));
+
+        return $item;
+    }
+
+    private function apiCandidateLimit(int $dbTotal, int $page, int $perPage, int $fileRowCount = 0): int
+    {
+        if ($dbTotal <= 0) {
+            return 0;
+        }
+
+        $safePageLimit = intdiv(PHP_INT_MAX, $perPage);
+        $pageRows = $page > $safePageLimit
+            ? self::API_CANDIDATE_MAX_ROWS
+            : $page * $perPage;
+        $fileRows = max(0, min($fileRowCount, self::API_CANDIDATE_MAX_ROWS));
+        $requested = $pageRows > self::API_CANDIDATE_MAX_ROWS - $fileRows
+            ? self::API_CANDIDATE_MAX_ROWS
+            : $pageRows + $fileRows;
+
+        return min($dbTotal, $requested, self::API_CANDIDATE_MAX_ROWS);
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $rows
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function sortApiLogRows(Collection $rows): Collection
+    {
+        return $rows->sort(static function (array $left, array $right): int {
+            $timeOrder = strcmp(
+                (string) ($right['created_at'] ?? ''),
+                (string) ($left['created_at'] ?? '')
+            );
+
+            if ($timeOrder !== 0) {
+                return $timeOrder;
+            }
+
+            $leftId = trim((string) ($left['id'] ?? ''));
+            $rightId = trim((string) ($right['id'] ?? ''));
+
+            // 数据库 ID 是整数，不能用字典序比较（"9" 会排在 "10" 前）。
+            // 采用去前导零后的长度/字典序比较，避免把 unsigned BIGINT 强转
+            // 为 PHP int 时发生溢出；文件 ID 保留字符串比较。
+            if (ctype_digit($leftId) && ctype_digit($rightId)) {
+                $leftNumeric = ltrim($leftId, '0') ?: '0';
+                $rightNumeric = ltrim($rightId, '0') ?: '0';
+
+                $lengthOrder = strlen($rightNumeric) <=> strlen($leftNumeric);
+                if ($lengthOrder !== 0) {
+                    return $lengthOrder;
+                }
+
+                return strcmp($rightNumeric, $leftNumeric);
+            }
+
+            return strcmp($rightId, $leftId);
+        })->values();
     }
 
     private function applyDateFilter($query, array $filters): void

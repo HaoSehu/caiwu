@@ -171,15 +171,49 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
                 key: 'log-archive',
                 title: '日志归档',
                 category: '系统维护',
-                description: '每天归档超过保留期限的普通日志，并写入归档审计与执行报告。',
+                description: '每天归档超过保留期限的普通日志，并写入归档审计与执行报告。协议由 log_archive.protocol 控制。',
                 triggers: [ScheduleRule::cron('0 2 * * *')],
-                handler: fn (): array => $this->runArtisan('db:archive-logs', [
-                    '--execute' => true,
-                    '--json' => true,
-                ]),
+                handler: function (): array {
+                    $protocol = strtolower(trim((string) config('log_archive.protocol', 'v1')));
+
+                    return match ($protocol) {
+                        'v1' => $this->runArtisan('db:archive-logs', [
+                            '--execute' => true,
+                            '--json' => true,
+                        ]),
+                        'v2' => $this->runArtisan('db:archive-logs-v2', [
+                            '--execute' => true,
+                            '--purge' => true,
+                            '--json' => true,
+                        ]),
+                        default => throw new RuntimeException("不支持的日志归档协议 [{$protocol}]，已拒绝执行归档。"),
+                    };
+                },
                 timeout: 3600,
                 lockTtlSeconds: 3660,
                 manualTriggerable: false,
+            ),
+            $this->task(
+                key: 'log-archive-health',
+                title: '日志归档健康检查',
+                category: '系统维护',
+                description: '每小时只读检查日志归档候选积压、最近成功/失败批次与归档文件规模。',
+                triggers: [ScheduleRule::everyTicks(4)],
+                handler: fn (): array => $this->runHealthCheck(),
+                timeout: 300,
+                lockTtlSeconds: 360,
+                manualTriggerable: true,
+            ),
+            $this->task(
+                key: 'log-capacity-snapshot',
+                title: '日志容量快照',
+                category: '系统维护',
+                description: '每天只读采集数据库日志表容量与日志目录体积，写入运行台账供趋势观测。',
+                triggers: [ScheduleRule::cron('0 3 * * *')],
+                handler: fn (): array => $this->runCapacitySnapshot(),
+                timeout: 300,
+                lockTtlSeconds: 360,
+                manualTriggerable: true,
             ),
             $this->task(
                 key: 'coupon-campaign-dispatch',
@@ -418,6 +452,111 @@ class CoreScheduledTaskProvider implements ScheduledTaskProvider
         Log::debug('[定时任务] 接口认证刷新执行完成', $summary);
 
         return $summary;
+    }
+
+    /**
+     * 容量命令的 JSON 包含完整表明细，不能复用 runArtisan 的通用输出截断；
+     * 这里只保留趋势所需的紧凑字段，避免运行台账被大表明细撑大。
+     *
+     * @return array<string, mixed>
+     */
+    private function runCapacitySnapshot(): array
+    {
+        $command = 'db:logs:capacity';
+        $parameters = ['--json' => true];
+        $exitCode = Artisan::call($command, $parameters);
+        $output = trim(Artisan::output());
+
+        if ($exitCode !== 0) {
+            $message = "Artisan command [{$command}] exited with code {$exitCode}.";
+            if ($output !== '') {
+                $message .= ' Output: '.mb_substr($output, 0, 1000);
+            }
+
+            throw new RuntimeException($message);
+        }
+
+        try {
+            $payload = json_decode($output, true, 512, JSON_THROW_ON_ERROR);
+        } catch (Throwable $exception) {
+            throw new RuntimeException('日志容量命令返回了无效 JSON。', 0, $exception);
+        }
+
+        if (! is_array($payload)) {
+            throw new RuntimeException('日志容量命令返回了无效 JSON 结构。');
+        }
+
+        foreach (['summary', 'storage_logs', 'log_archives', 'disk'] as $key) {
+            if (! array_key_exists($key, $payload)) {
+                throw new RuntimeException("日志容量命令响应缺少 {$key} 字段。");
+            }
+        }
+
+        return [
+            'command' => $command,
+            'exit_code' => $exitCode,
+            'parameters' => $parameters,
+            'generated_at' => $payload['generated_at'] ?? null,
+            'database' => $payload['database'] ?? null,
+            'summary' => $payload['summary'],
+            'storage_logs' => $payload['storage_logs'],
+            'log_archives' => $payload['log_archives'],
+            'disk' => $payload['disk'],
+        ];
+    }
+
+    /**
+     * 健康命令的 warning/unknown 状态即使 CLI 保持兼容退出码 0，也必须让心跳任务失败，
+     * 否则任务台账会把异常健康状态记为成功，外部监控无法感知。
+     *
+     * @return array<string, mixed>
+     */
+    private function runHealthCheck(): array
+    {
+        $command = 'db:archive-logs:health';
+        $parameters = ['--json' => true];
+        $exitCode = Artisan::call($command, $parameters);
+        $output = trim(Artisan::output());
+
+        if ($exitCode !== 0) {
+            $message = "Artisan command [{$command}] exited with code {$exitCode}.";
+            if ($output !== '') {
+                $message .= ' Output: '.mb_substr($output, 0, 1000);
+            }
+
+            throw new RuntimeException($message);
+        }
+
+        try {
+            $payload = json_decode($output, true, 512, JSON_THROW_ON_ERROR);
+        } catch (Throwable $exception) {
+            throw new RuntimeException('日志归档健康命令返回了无效 JSON。', 0, $exception);
+        }
+
+        if (! is_array($payload)) {
+            throw new RuntimeException('日志归档健康命令返回了无效 JSON 结构。');
+        }
+
+        $status = strtolower(trim((string) ($payload['status'] ?? '')));
+        if (! in_array($status, ['healthy', 'warning', 'unknown', 'critical'], true)) {
+            throw new RuntimeException('日志归档健康命令响应缺少有效 status。');
+        }
+        if ($status !== 'healthy') {
+            throw new RuntimeException("日志归档健康状态为 {$status}，已记录为任务失败。");
+        }
+
+        return [
+            'command' => $command,
+            'exit_code' => $exitCode,
+            'parameters' => $parameters,
+            'status' => $status,
+            'generated_at' => $payload['generated_at'] ?? null,
+            'protocol' => $payload['protocol'] ?? null,
+            'total_eligible_rows' => (int) ($payload['total_eligible_rows'] ?? 0),
+            'unavailable_tables' => $payload['unavailable_tables'] ?? [],
+            'audit' => $payload['audit'] ?? null,
+            'v2' => $payload['v2'] ?? null,
+        ];
     }
 
     /**

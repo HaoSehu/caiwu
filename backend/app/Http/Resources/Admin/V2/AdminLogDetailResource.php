@@ -30,18 +30,20 @@ class AdminLogDetailResource extends JsonResource
         $fields = is_array($row['fields'] ?? null) ? $row['fields'] : [];
         $channel = (string) ($row['channel'] ?? '');
         $rawNotification = $this->isRawNotificationChannel($channel);
+        $rawApiFile = $channel === 'api' && (string) ($row['source'] ?? '') === 'api_json';
+        $rawPayload = $rawNotification || $rawApiFile;
 
         $payload = [
             'id' => (string) ($row['id'] ?? $fields['id'] ?? ''),
             'channel' => $channel,
             'source' => (string) ($row['source'] ?? $fields['source'] ?? ''),
-            'fields' => $this->sanitizeFields($fields, $rawNotification),
-            'message' => $rawNotification ? (string) ($row['message'] ?? '') : SensitiveDataSanitizer::sanitizeText((string) ($row['message'] ?? '')),
-            'context' => $rawNotification ? ($row['context'] ?? []) : SensitiveDataSanitizer::sanitize($row['context'] ?? []),
+            'fields' => $this->sanitizeFields($fields, $rawPayload),
+            'message' => $rawPayload ? (string) ($row['message'] ?? '') : SensitiveDataSanitizer::sanitizeText((string) ($row['message'] ?? '')),
+            'context' => $rawPayload ? ($row['context'] ?? []) : SensitiveDataSanitizer::sanitize($row['context'] ?? []),
             'created_at' => $row['created_at'] ?? $fields['created_at'] ?? null,
         ];
 
-        return $rawNotification ? $payload : $this->dropSensitiveKeys($payload);
+        return $rawPayload ? $payload : $this->dropSensitiveKeys($payload);
     }
 
     /**

@@ -236,6 +236,7 @@ const ADMIN_MENU_GROUPS: MenuGroupConfig[] = [
           '/admin/logs/tasks',
           '/admin/logs/gateway',
           '/admin/logs/schedules',
+          '/admin/logs/archives',
           '/admin/logs/cleanup',
         ],
       },

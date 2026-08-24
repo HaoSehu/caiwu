@@ -8,6 +8,7 @@ use App\Services\System\OperationLogService;
 use App\Support\SensitiveDataSanitizer;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
@@ -24,18 +25,40 @@ class LogOperation
         $requestTime = now()->format('Y-m-d H:i:s.u');
         $requestId = $this->resolveRequestId($request);
 
+        // 结构化日志上下文：同一请求内所有 Log 调用自动携带 request_id 等链路字段。
+        try {
+            Log::shareContext([
+                'request_id' => $requestId,
+            ]);
+        } catch (\Throwable) {
+            // 日志上下文初始化失败不应阻断 API 主流程。
+        }
+
         try {
             $response = $next($request);
+            $response->headers->set('X-Request-Id', $requestId);
+            $this->writeApiAccessLog($request, $response, null, $startedAt, $requestTime, $requestId);
+
+            return $response;
         } catch (\Throwable $exception) {
             $this->writeApiAccessLog($request, null, $exception, $startedAt, $requestTime, $requestId);
 
             throw $exception;
+        } finally {
+            // flushSharedContext() 只清理 manager 级 sharedContext；已经解析的
+            // channel 仍可能保留 request_id，长驻 worker 下一请求会继承旧链路。
+            try {
+                Log::withoutContext(['request_id']);
+            } catch (\Throwable) {
+                // 清理失败不应覆盖业务异常。
+            }
+
+            try {
+                Log::flushSharedContext();
+            } catch (\Throwable) {
+                // 清理失败不应覆盖业务异常。
+            }
         }
-
-        $response->headers->set('X-Request-Id', $requestId);
-        $this->writeApiAccessLog($request, $response, null, $startedAt, $requestTime, $requestId);
-
-        return $response;
     }
 
     private function writeApiAccessLog(
@@ -72,28 +95,45 @@ class LogOperation
                 'request_time' => $requestTime ?? now()->format('Y-m-d H:i:s.u'),
                 'method' => $request->method(),
                 'path' => $request->path(),
-                'params' => SensitiveDataSanitizer::sanitize($request->all()),
                 'status' => $statusCode,
                 'request_id' => $requestId,
                 'duration_ms' => $this->elapsedMilliseconds($startedAt),
                 'user_agent' => $userAgent,
                 'service' => (string) config('app.name', 'caiwu-backend'),
+                // 文件日志与审计库共用的链路字段：普通请求写入 api-json 文件时
+                // 也保留 actor/module/IP，保证管理端合并视图可还原来源。
+                'user_id' => $user?->id ? (int) $user->id : null,
+                'user_type' => $this->resolveUserType($user),
+                'module' => $this->resolveModule($request),
+                'ip_address' => $request->ip(),
             ];
+
+            $shouldPersistAudit = $this->shouldPersistAccessAudit($request, $statusCode, (string) $detail['module']);
+            if ($shouldPersistAudit) {
+                $detail['params'] = SensitiveDataSanitizer::sanitize($request->all());
+            }
 
             if ($exception !== null) {
                 $detail['exception'] = class_basename($exception);
                 $detail['exception_message'] = SensitiveDataSanitizer::sanitizeText($exception->getMessage());
             }
 
-            $this->operationLogService->write(
-                userId: $user?->id ? (int) $user->id : null,
-                userType: $this->resolveUserType($user),
-                action: $request->method().' '.$request->path(),
-                module: $this->resolveModule($request),
-                targetId: null,
-                detail: $detail,
-                ipAddress: $request->ip(),
-            );
+            if ($shouldPersistAudit) {
+                $this->operationLogService->write(
+                    userId: $user?->id ? (int) $user->id : null,
+                    userType: $this->resolveUserType($user),
+                    action: $request->method().' '.$request->path(),
+                    module: $this->resolveModule($request),
+                    targetId: null,
+                    detail: $detail,
+                    ipAddress: $request->ip(),
+                );
+
+                return;
+            }
+
+            // 普通成功 GET 等非审计请求：只写入按日轮转的结构化文件，不落 activity_logs。
+            Log::channel('api-json')->info('api.access', $detail);
         } catch (\Throwable) {
             // 日志记录失败不影响主流程
         }
@@ -109,7 +149,13 @@ class LogOperation
             return false;
         }
 
-        if ($request->is('api/v2/admin/logs') || $request->is('api/v2/admin/logs/*')) {
+        if ($request->is('api/v2/admin/logs')
+            || $request->is('api/v2/admin/logs/*')
+            || $request->is('api/v2/admin/log-summaries')
+            || $request->is('api/v2/admin/log-summaries/*')
+            || $request->is('api/v2/admin/log-archives')
+            || $request->is('api/v2/admin/log-archives/search')
+            || $request->is('api/v2/admin/log-cleanups/overview')) {
             return false;
         }
 
@@ -129,6 +175,23 @@ class LogOperation
         return $request->is('api/v2/client/verification/status')
             || $request->is('api/v2/client/recharge/*/status')
             || $request->is('api/v2/client/invoices/*/pay/alipay/status');
+    }
+
+    /**
+     * 判定该请求是否属于需要落 activity_logs 的审计事件：
+     * 错误/异常请求、认证模块、非 GET 写请求保留审计；其余普通成功 GET 只写文件。
+     */
+    private function shouldPersistAccessAudit(Request $request, int $statusCode, string $module): bool
+    {
+        if ($statusCode >= 400) {
+            return true;
+        }
+
+        if ($module === 'auth') {
+            return true;
+        }
+
+        return $request->method() !== 'GET';
     }
 
     private function resolveUserType(mixed $user): string

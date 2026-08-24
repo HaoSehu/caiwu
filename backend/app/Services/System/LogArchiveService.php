@@ -78,9 +78,15 @@ class LogArchiveService
 
             try {
                 $report = $this->runPtArchiver($report, $settings, false, $audits);
-                $report['cleanup'] = $this->cleanupExpiredArchives(
-                    (string) $settings['archive_root'],
-                    (int) $settings['file_retention_days'],
+                $report['cleanup'] = $this->mergeCleanupResults(
+                    $this->cleanupExpiredArchives(
+                        (string) $settings['archive_root'],
+                        (int) $settings['file_retention_days'],
+                    ),
+                    $this->cleanupExpiredReports(
+                        (string) $settings['report_root'],
+                        (int) $settings['file_retention_days'],
+                    ),
                 );
                 $report = $this->finishReport($report);
                 if ($report['cleanup']['errors'] !== []) {
@@ -450,6 +456,15 @@ class LogArchiveService
         $excluded = array_values((array) config('log_archive.excluded_tables', []));
 
         if ($tables === []) {
+            // 默认批量模式同样必须经过排除表校验。配置被覆盖/合并时，
+            // 不能因为调用方没有传 --table 就把审计、财务或运行台账表
+            // 意外纳入普通日志归档。
+            foreach (array_keys($configured) as $table) {
+                if (in_array($table, $excluded, true)) {
+                    throw new InvalidArgumentException("{$table} is an audit/financial table and cannot be archived by this command.");
+                }
+            }
+
             return $configured;
         }
 
@@ -527,6 +542,47 @@ class LogArchiveService
         }
 
         return $result;
+    }
+
+    /**
+     * @return array{deleted_files: int, deleted_bytes: int, errors: list<string>}
+     */
+    private function cleanupExpiredReports(string $reportRoot, int $retentionDays): array
+    {
+        $result = ['deleted_files' => 0, 'deleted_bytes' => 0, 'errors' => []];
+        if (! is_dir($reportRoot)) {
+            return $result;
+        }
+
+        $threshold = CarbonImmutable::now()->subDays($retentionDays)->getTimestamp();
+        $patterns = ['run_*.json', 'archive-*.log'];
+        foreach ($patterns as $pattern) {
+            foreach (glob(rtrim($reportRoot, DIRECTORY_SEPARATOR.'/\\').DIRECTORY_SEPARATOR.$pattern) ?: [] as $path) {
+                if (! is_file($path) || is_link($path) || (int) filemtime($path) >= $threshold) {
+                    continue;
+                }
+
+                $size = max(0, (int) filesize($path));
+                if (@unlink($path)) {
+                    $result['deleted_files']++;
+                    $result['deleted_bytes'] += $size;
+                } else {
+                    $result['errors'][] = "Unable to delete expired report: {$path}";
+                }
+            }
+        }
+
+        return $result;
+    }
+
+    /** @return array{deleted_files: int, deleted_bytes: int, errors: list<string>} */
+    private function mergeCleanupResults(array $archive, array $reports): array
+    {
+        return [
+            'deleted_files' => (int) ($archive['deleted_files'] ?? 0) + (int) ($reports['deleted_files'] ?? 0),
+            'deleted_bytes' => (int) ($archive['deleted_bytes'] ?? 0) + (int) ($reports['deleted_bytes'] ?? 0),
+            'errors' => array_values(array_merge((array) ($archive['errors'] ?? []), (array) ($reports['errors'] ?? []))),
+        ];
     }
 
     /**

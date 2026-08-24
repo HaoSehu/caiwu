@@ -3,6 +3,9 @@
 declare(strict_types=1);
 
 return [
+    // 归档协议：v1 = 旧版 pt-archiver --file --purge；v2 = 两阶段（暂存->校验->发布->清除，需生产演练批准后切换）。
+    'protocol' => env('LOG_ARCHIVE_PROTOCOL', 'v1'),
+
     'retention_days' => 30,
     'file_retention_days' => 180,
 
@@ -18,14 +21,18 @@ return [
     'batch_size' => 1000,
     'sleep_seconds' => 1,
 
+    // 单次冷检索最多校验/扫描的归档行数；超出部分以 unavailable_archives
+    // 显式报告，避免管理端请求把超大 CSV 读入内存或长时间占满 PHP worker。
+    'cold_search_max_rows' => 50000,
+    // 冷检索完整校验与窗口扫描的估算总字节预算（约三次 CSV + 一次 manifest）。
+    'cold_search_max_bytes' => 128 * 1024 * 1024,
+
     'tables' => [
-        'operation_logs' => 'API/后台操作及管理员登录日志',
+        'operation_logs' => 'API/后台操作及管理员登录日志（只读遗留表，存量由归档消化）',
         'activity_logs' => '系统与业务活动日志',
         'message_logs' => '短信/邮件统一消息日志',
-        'automation_logs' => '自动化任务业务日志',
         'schedule_run_logs' => 'Laravel 调度运行日志',
         'integration_plugin_runtime_logs' => '插件运行日志',
-        'gateway_logs' => '支付网关交互日志',
     ],
 
     'excluded_tables' => [
@@ -38,5 +45,9 @@ return [
         'failed_jobs',
         // 运行台账是人工重跑和审计追溯的长期记录，不得随普通日志在线删除。
         'schedule_task_runs',
+        // 自动化幂等状态（recordOnce/markExecuted）不参与普通归档。
+        'automation_logs',
+        // 支付网关交互日志在财务/合规确认前不属于普通日志，禁止归档。
+        'gateway_logs',
     ],
 ];

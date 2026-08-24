@@ -1,6 +1,14 @@
 import { request } from '@/utils/request';
 
-import type { LogCleanupPayload, LogListParams, PaginatedList } from './types';
+import type {
+  LogArchiveItem,
+  LogArchiveListParams,
+  LogArchiveSearchParams,
+  LogArchiveSearchResult,
+  LogCleanupPayload,
+  LogListParams,
+  PaginatedList,
+} from './types';
 
 type LogChannel = 'runtime' | 'admin-logins' | 'api' | 'sms' | 'email' | 'tasks' | 'gateway';
 
@@ -122,4 +130,21 @@ export const logsApi = {
         const detail = (response as { detail?: { cleanup?: Record<string, unknown> } }).detail;
         return detail?.cleanup || response;
       }),
+  archives: (params: LogArchiveListParams): Promise<PaginatedList<LogArchiveItem>> =>
+    request.get<PaginatedList<LogArchiveItem>>({ url: '/v2/admin/log-archives', params }).then((payload) => ({
+      list: payload.list || [],
+      total: Number(payload.total || 0),
+      page: Number(payload.page || params.page || 1),
+      page_size: Number(payload.page_size || params.page_size || 15),
+    })),
+  archiveSearch: (params: LogArchiveSearchParams): Promise<LogArchiveSearchResult> =>
+    request.get<LogArchiveSearchResult>({ url: '/v2/admin/log-archives/search', params }).then((payload) => ({
+      list: payload.list || [],
+      total: Number(payload.total || 0),
+      page: Number(payload.page || params.page || 1),
+      page_size: Number(payload.page_size || params.page_size || 15),
+      incomplete: Boolean(payload.incomplete),
+      unavailable_archives: payload.unavailable_archives || [],
+      unavailable_archives_truncated: Number(payload.unavailable_archives_truncated || 0),
+    })),
 };

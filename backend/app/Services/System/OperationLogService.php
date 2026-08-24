@@ -2,11 +2,10 @@
 
 namespace App\Services\System;
 
-use App\Models\ActivityLog;
 use App\Models\Service;
 use App\Support\ActivityLogStream;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 
 class OperationLogService
 {
@@ -75,8 +74,8 @@ class OperationLogService
 
     /**
      * 写入 activity_logs（唯一在线真源）。
-     * 将既有调用方语义映射到 activity_logs 字段，满足其 NOT NULL 约束。
-     * 写入失败时记录告警不阻断主流程：日志失败不应影响业务事务。
+     * 统一经 ActivityLogService::record 落库并生成 event_id；写入失败时记录告警并
+     * 递增失败计数，便于容量/审计监控发现，但不阻断主流程（日志失败不影响业务事务）。
      */
     private function writeActivityLog(
         ?int $userId,
@@ -105,8 +104,7 @@ class OperationLogService
                 $description .= " #{$targetId}";
             }
 
-            ActivityLog::query()->create([
-                'event_id' => (string) Str::ulid(),
+            app(ActivityLogService::class)->record([
                 'stream' => ActivityLogStream::resolve($module, $action),
                 'actor_type' => $userType,
                 'actor_id' => $userId,
@@ -121,10 +119,22 @@ class OperationLogService
                 'trace_id' => $this->resolveDetailTraceId($detail),
             ]);
         } catch (\Throwable $e) {
-            Log::warning(
-                'activity_log write failed',
-                ['error' => $e->getMessage(), 'action' => $action, 'module' => $module]
-            );
+            // 失败计数与告警本身也是旁路能力，必须彼此隔离；Redis/缓存故障
+            // 不能从这里再次抛出并把原业务请求判定为失败。
+            try {
+                Cache::increment('activity_log:write_failures');
+            } catch (\Throwable) {
+                // 计数失败不影响主流程，也不覆盖原始日志异常。
+            }
+
+            try {
+                Log::error(
+                    'activity_log write failed',
+                    ['error' => $e->getMessage(), 'action' => $action, 'module' => $module]
+                );
+            } catch (\Throwable) {
+                // 日志后端故障同样不能阻断业务。
+            }
         }
     }
 

@@ -7,8 +7,15 @@ namespace App\Services\System;
 use App\Models\ActivityLog;
 use App\Models\AdminUser;
 use App\Models\User;
+use App\Support\ActivityLogStream;
 use Illuminate\Support\Str;
 
+/**
+ * activity_logs 唯一在线真源的统一写入入口。
+ *
+ * 所有业务/系统事件（含 OperationLogService 的访问审计映射）最终都必须经过
+ * record() 落库，保证 event_id、stream、trace_id 语义一致，避免旁路绕过。
+ */
 class ActivityLogService
 {
     public function log(
@@ -21,7 +28,7 @@ class ActivityLogService
     ): void {
         [$actorType, $actorId, $actorName] = $this->resolveActor();
 
-        ActivityLog::query()->create([
+        $this->record([
             'actor_type' => $actorType,
             'actor_id' => $actorId,
             'actor_name' => $actorName,
@@ -47,7 +54,7 @@ class ActivityLogService
         $user = User::query()->find($userId);
         $actorName = $user ? trim((string) ($user->nickname ?: $user->email ?: '')) : '';
 
-        ActivityLog::query()->create([
+        $this->record([
             'actor_type' => 'client',
             'actor_id' => $userId,
             'actor_name' => $actorName,
@@ -70,9 +77,7 @@ class ActivityLogService
         array $context = [],
         ?string $stream = null,
     ): void {
-        ActivityLog::query()->create([
-            'event_id' => (string) Str::ulid(),
-            'stream' => $stream,
+        $this->record([
             'actor_type' => 'system',
             'actor_id' => null,
             'actor_name' => 'System',
@@ -83,8 +88,37 @@ class ActivityLogService
             'subject_id' => $subjectId,
             'context' => $context !== [] ? $context : null,
             'ip_address' => null,
+            'stream' => $stream,
             'trace_id' => $this->contextTraceId($context),
         ]);
+    }
+
+    /**
+     * 唯一落库入口：统一生成 event_id、解析 stream，并截断 trace_id。
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    public function record(array $attributes): void
+    {
+        $attributes['event_id'] = trim((string) ($attributes['event_id'] ?? '')) !== ''
+            ? (string) $attributes['event_id']
+            : (string) Str::ulid();
+
+        if (trim((string) ($attributes['stream'] ?? '')) === '') {
+            $attributes['stream'] = ActivityLogStream::resolve(
+                (string) ($attributes['module'] ?? ''),
+                (string) ($attributes['action'] ?? ''),
+            );
+        }
+
+        $traceId = trim((string) ($attributes['trace_id'] ?? ''));
+        $attributes['trace_id'] = $traceId !== ''
+            ? substr($traceId, 0, 64)
+            : $this->contextTraceId(
+                is_array($attributes['context'] ?? null) ? $attributes['context'] : [],
+            );
+
+        ActivityLog::query()->create($attributes);
     }
 
     /**
@@ -97,6 +131,9 @@ class ActivityLogService
         return $value !== '' ? substr($value, 0, 64) : null;
     }
 
+    /**
+     * @return array{0: string, 1: int|null, 2: string}
+     */
     private function resolveActor(): array
     {
         $user = request()?->user();

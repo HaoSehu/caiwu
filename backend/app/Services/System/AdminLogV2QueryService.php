@@ -11,6 +11,7 @@ use App\Models\GatewayLog;
 use App\Models\IntegrationPluginRuntimeLog;
 use App\Models\MessageLog;
 use App\Models\ScheduleRunLog;
+use App\Support\ApiAccessLogFile;
 use App\Support\SchemaMetadataCache;
 use App\Support\SensitiveDataSanitizer;
 use Illuminate\Database\Eloquent\Model;
@@ -118,8 +119,8 @@ class AdminLogV2QueryService
     private function legacyList(string $channel, array $filters, int $page, int $perPage, bool $withSummary = true): array
     {
         return match ($channel) {
-            'sms' => $this->adminLogService->getSmsLogs($filters, $perPage),
-            'email' => $this->adminLogService->getEmailLogs($filters, $perPage),
+            'sms' => $this->adminLogService->getSmsLogs($filters, $perPage, $page),
+            'email' => $this->adminLogService->getEmailLogs($filters, $perPage, $page),
             'api' => $this->adminLogService->getApiLogs($filters, $page, $perPage, $withSummary),
             'tasks' => $this->adminLogService->getTaskLogs($filters, $page, $perPage),
             'activity' => $this->adminLogService->getActivityLogs($filters, $page, $perPage, $withSummary),
@@ -215,6 +216,10 @@ class AdminLogV2QueryService
      */
     private function activityRowDetail(string $channel, string $log, ?string $expectedStream = null): ?array
     {
+        if (ApiAccessLogFile::isFileEntry($log)) {
+            return $channel === 'api' ? $this->apiFileDetail($log) : null;
+        }
+
         $activity = SchemaMetadataCache::hasTable('activity_logs') ? ActivityLog::query()->find($log) : null;
         if (! $activity instanceof ActivityLog) {
             return null;
@@ -253,6 +258,34 @@ class AdminLogV2QueryService
     /**
      * @return array<string, mixed>|null
      */
+    private function apiFileDetail(string $log): ?array
+    {
+        $entry = ApiAccessLogFile::find($log);
+        if ($entry === null) {
+            return null;
+        }
+
+        return [
+            'id' => (string) ($entry['id'] ?? $log),
+            'channel' => 'api',
+            'source' => 'api_json',
+            'fields' => [
+                'id' => (string) ($entry['id'] ?? $log),
+                'user_type' => (string) ($entry['user_type'] ?? 'guest'),
+                'user_id' => $entry['user_id'] ?? null,
+                'module' => $entry['module'] ?? null,
+                'action' => (string) ($entry['action'] ?? ''),
+                'ip_address' => $entry['ip_address'] ?? '',
+                'request_id' => (string) ($entry['request_id'] ?? ''),
+                'status' => $entry['status'] ?? null,
+                'created_at' => $entry['created_at'] ?? null,
+            ],
+            'message' => (string) ($entry['action'] ?? ''),
+            'context' => (array) ($entry['detail'] ?? []),
+            'created_at' => $entry['created_at'] ?? null,
+        ];
+    }
+
     private function adminLoginDetail(string $log): ?array
     {
         $activity = SchemaMetadataCache::hasTable('activity_logs')

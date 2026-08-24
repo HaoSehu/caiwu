@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Http\Requests\Admin\V2\Log;
 
 use App\Http\Requests\Admin\V2\Common\AdminFormRequest;
+use App\Services\System\AdminLogService;
 use App\Services\System\AdminLogV2QueryService;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class ListLogsRequest extends AdminFormRequest
 {
@@ -56,6 +58,29 @@ class ListLogsRequest extends AdminFormRequest
         return array_merge(parent::validationData(), [
             'channel' => $this->route('channel'),
         ]);
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            if ((string) $this->route('channel') !== 'api') {
+                return;
+            }
+
+            $page = max(1, (int) $this->input('page', 1));
+            $pageSize = max(1, min((int) $this->input('page_size', 20), 100));
+            $maxPage = intdiv(
+                AdminLogService::API_CANDIDATE_MAX_ROWS + $pageSize - 1,
+                $pageSize,
+            );
+
+            if ($page > $maxPage) {
+                $validator->errors()->add(
+                    'page',
+                    'API 日志单次查询最多浏览前 '.AdminLogService::API_CANDIDATE_MAX_ROWS.' 条，请缩小筛选范围。',
+                );
+            }
+        });
     }
 
     /**
