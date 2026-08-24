@@ -246,10 +246,10 @@ const ADMIN_MENU_GROUPS: MenuGroupConfig[] = [
 
 export const usePermissionStore = defineStore('permission', {
   state: () => ({
-    whiteListRouters: ['/admin/login'],
-    routers: [],
-    removeRoutes: [],
-    asyncRoutes: [],
+    whiteListRouters: ['/admin/login'] as string[],
+    routers: [] as RouteRecordRaw[],
+    removeRoutes: [] as RouteRecordRaw[],
+    asyncRoutes: [] as RouteRecordRaw[],
     routesBuilt: false,
   }),
   getters: {
