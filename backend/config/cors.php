@@ -27,7 +27,7 @@ $allowedOrigins = array_values(array_unique(array_filter([
 ])));
 
 return [
-    'paths' => ['api/*', 'sanctum/csrf-cookie'],
+    'paths' => ['api/*'],
     'allowed_methods' => ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     'allowed_origins' => $allowedOrigins,
     'allowed_origins_patterns' => [],
@@ -37,12 +37,10 @@ return [
         'Content-Type',
         'Origin',
         'X-Requested-With',
-        'X-CSRF-TOKEN',
-        'X-XSRF-TOKEN',
         'X-Request-Id',
         'X-Idempotency-Key',
     ],
     'exposed_headers' => ['Content-Disposition', 'Retry-After', 'X-Request-Id'],
     'max_age' => 0,
-    'supports_credentials' => true,
+    'supports_credentials' => false,
 ];

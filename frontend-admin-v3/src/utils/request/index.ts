@@ -1,7 +1,6 @@
 // axios配置  可自行根据项目进行更改，只需更改该文件即可，其他文件可以不动
 import type { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { isString, merge } from 'lodash-es';
-import { ensureSanctumCsrfCookie } from '@caiwu/shared/runtime';
 
 import { getAdminToken, removeAdminToken } from '@/app/runtime/session';
 import { ContentTypeEnum } from '@/constants';
@@ -132,12 +131,6 @@ const transform: AxiosTransform = {
 
   // 请求拦截器处理
   requestInterceptors: async (config, options) => {
-    // 写请求先完成 Sanctum CSRF 握手（stateful 校验，缺少会返回 419）
-    const method = String(config.method || 'get').toLowerCase();
-    if (['post', 'put', 'patch', 'delete'].includes(method)) {
-      await ensureSanctumCsrfCookie(host, true);
-    }
-
     // 请求之前处理config
     const token = getAdminToken();
 
@@ -208,10 +201,6 @@ function createAxios(opt?: Partial<CreateAxiosOptions>) {
         authenticationScheme: '',
         // 超时
         timeout: 10 * 1000,
-        // 携带Cookie
-        withCredentials: true,
-        // 跨域请求也发送 X-XSRF-TOKEN 头（axios 默认仅同源发送）
-        withXSRFToken: true,
         // 头信息
         headers: { 'Content-Type': ContentTypeEnum.Json },
         // 数据处理方式

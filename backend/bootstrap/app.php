@@ -20,7 +20,6 @@ use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\ValidationException;
-use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -44,7 +43,6 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->api(
             prepend: [
                 SetJsonEncodingOptions::class,
-                EnsureFrontendRequestsAreStateful::class,
             ],
             append: [
                 AppendSecurityHeaders::class,
