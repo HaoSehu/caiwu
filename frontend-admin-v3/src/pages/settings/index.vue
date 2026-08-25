@@ -360,7 +360,7 @@
           @mouseenter="onVideoCardEnter($event)"
           @mouseleave="onVideoCardLeave($event)"
         >
-          <video class="video-drawer-card__video" :src="opt.value" muted loop playsinline preload="metadata"></video>
+          <video class="video-drawer-card__video" :src="resolveHeroVideoSrc(opt.value)" muted loop playsinline preload="metadata"></video>
           <div class="video-drawer-card__overlay">
             <check-circle-filled-icon v-if="videoDrawerCurrentSrc === opt.value" class="video-drawer-card__check" />
             <span class="video-drawer-card__name">{{ opt.filename || opt.value.split('/').pop() }}</span>
@@ -414,6 +414,7 @@ import type { HomeHeroFeature, HomeHeroPayload, HomeHeroSlide, MediaFileRecord, 
 import { adminApi } from '@/api/admin';
 import SecretInput from '@/components/secret-input/index.vue';
 import { AdminPermissions } from '@/constants/permissions';
+import { resolveApiAssetUrl } from '@/utils/apiAssetUrl';
 import { hasAdminPermission } from '@/utils/permission';
 import { errorMessage } from '@/utils/userMessage';
 
@@ -1281,7 +1282,7 @@ function normalizeHeroVideoOptions(list: unknown) {
   return list
     .map((item) => {
       const record = toRecord(item);
-      const value = String(record.path || record.url || '').trim();
+      const value = toManagedRelativePath(String(record.path || record.url || '').trim());
       if (!value) return null;
       const filename = String(record.filename || value.split('/').pop() || value);
       const size = Number(record.size || 0);
@@ -1295,11 +1296,21 @@ function normalizeHeroVideoOptions(list: unknown) {
     .filter(Boolean) as Array<{ label: string; value: string; filename?: string; size?: number }>;
 }
 
+// 后端可能仅返回完整 URL：托管资源还原为相对路径，与后端归一化的存储格式保持一致
+function toManagedRelativePath(value: string) {
+  const managed = value.match(/^(?:https?:\/\/[^/]+)?\/((?:uploads|media)\/.*)$/i);
+  return managed ? `/${managed[1]}` : value;
+}
+
 function formatFileSize(size: number) {
   if (!Number.isFinite(size) || size <= 0) return '';
   if (size >= 1024 * 1024) return `${(size / 1024 / 1024).toFixed(1)} MB`;
   if (size >= 1024) return `${Math.round(size / 1024)} KB`;
   return `${size} B`;
+}
+
+function resolveHeroVideoSrc(src: string) {
+  return resolveApiAssetUrl(src, import.meta.env.VITE_API_BASE_URL);
 }
 
 function onVideoCardEnter(event: MouseEvent) {
