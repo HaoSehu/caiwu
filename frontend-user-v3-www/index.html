@@ -22,7 +22,6 @@
   <link rel="alternate" hreflang="zh-CN" href="/" />
   <!-- API 源站预连接：首屏数据请求与 hero 视频均指向该跨域源，提前 DNS + TLS -->
   <link rel="preconnect" href="%VITE_API_BASE_URL%" crossorigin />
-  <link rel="prefetch" href="%VITE_API_BASE_URL%/v2/site/config" as="fetch" crossorigin="anonymous" />
 
   <!-- 首页 LCP 关键路径预热：在 JS 下载前提前发起 /v2/site/home，home 页消费 window.__HOME_FETCH__ 复用响应，砍掉 1 个串行 RTT -->
   <script>

@@ -459,6 +459,8 @@ const PLAYBACK_RETRY_DELAY = 400;
 const MAX_PLAYBACK_RETRIES = 3;
 const HERO_VIDEO_IDLE_TIMEOUT = 1200;
 const HERO_VIDEO_MOBILE_WIDTH = 768;
+// 慢首包时 load() 会中止在途请求重启下载，节流避免多次中止-重拉循环
+const FORCED_LOAD_THROTTLE_MS = 1500;
 const SLOW_CONNECTION_TYPES = new Set(["slow-2g", "2g"]);
 const SWIPE_THRESHOLD = 50;
 let rotationTimer = null;
@@ -467,6 +469,7 @@ let playbackRetryTimer = null;
 let videoEnableTimer = null;
 let videoEnableIdleId = null;
 let playbackRetryCount = 0;
+let lastForcedLoadAt = 0;
 let isUnmounting = false;
 let isHovering = false;
 let touchStartX = 0;
@@ -640,6 +643,8 @@ function pauseAllVideos() {
 function ensureActiveVideoPlayback() {
   if (isUnmounting) return;
   if (!isDocumentVisible()) return;
+  // 无视频 slide：暂停后不自动恢复，避免隐藏视频后台播放
+  if (!activeSlide.value?.video) return;
 
   const videoEl = getVideoElement();
   if (!videoEl) return;
@@ -650,7 +655,11 @@ function ensureActiveVideoPlayback() {
   if (!videoEl.currentSrc && !videoEl.src) return;
 
   if (videoEl.readyState === 0) {
-    videoEl.load?.();
+    const now = Date.now();
+    if (now - lastForcedLoadAt >= FORCED_LOAD_THROTTLE_MS) {
+      lastForcedLoadAt = now;
+      videoEl.load?.();
+    }
     return;
   }
 
@@ -738,9 +747,11 @@ function switchToSlide(index, auto = false) {
     return;
   }
 
+  // 无视频 slide：仅隐藏并暂停，保留 A/B 槽的已下载缓冲（src 不清空），
+  // 避免回切同一视频时中止在途下载并从头重拉
   if (!videoSrc) {
     resetPlaybackRetry();
-    clearVideoSlots();
+    videoReady.value = false;
     pauseAllVideos();
     if (auto) startRotation();
     return;
@@ -777,6 +788,8 @@ function switchToSlide(index, auto = false) {
   } else {
     videoSlotB.value = videoSrc;
   }
+  // 新视频不受旧节流时间戳约束，立即允许 load()
+  lastForcedLoadAt = 0;
   resetPlaybackRetry();
   videoReady.value = false;
   activeVideoSlot.value = nextSlot;
@@ -808,6 +821,8 @@ function onVideoBLoadedData() {
 
 function markVideoReady(slot) {
   if (activeVideoSlot.value !== slot) return;
+  // 无视频 slide 期间加载完成不得显示，等回切后再由 switchToSlide 置位
+  if (!activeSlide.value?.video) return;
   videoReady.value = true;
   // 首次渲染帧保留 --instant（无过渡立即显示），渲染完成后关闭，轮播切换恢复淡入
   if (instantVideoReveal.value) {
@@ -984,7 +999,7 @@ onBeforeUnmount(() => {
 }
 
 @media (min-width: 769px) {
-  .hero-bg__video {
+  .hero-bg__video--active {
     will-change: opacity;
   }
 }
@@ -1012,9 +1027,9 @@ onBeforeUnmount(() => {
   position: absolute;
   z-index: 1;
   border-radius: 50%;
-  filter: blur(60px);
+  // blur(60px) 每帧栅格化成本高且与视频 screen 混合，降为静态柔和雾效果
+  filter: blur(36px);
   opacity: 0.46;
-  mix-blend-mode: screen;
 }
 
 .hero-bg__cloud--a {
@@ -1339,10 +1354,9 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   margin-top: 32px;
-  background: rgba(255, 255, 255, 0.72);
+  // 去掉 backdrop-filter：位于实时视频上方时每帧全量重采样，改为近不透明底
+  background: rgba(255, 255, 255, 0.94);
   border: 1px solid rgba(22, 93, 255, 0.1);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
   border-radius: 12px;
   box-shadow: 0 12px 30px rgba(47, 94, 243, 0.08);
 }
