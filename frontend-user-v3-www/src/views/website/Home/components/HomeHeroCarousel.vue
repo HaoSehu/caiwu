@@ -1267,20 +1267,21 @@ onBeforeUnmount(() => {
 .hero-actions {
   display: flex;
   align-items: center;
-  gap: 14px;
-  margin-top: 36px;
+  gap: 10px;
+  margin-top: 32px;
+  width: fit-content;
 }
 
 .hero-cta {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 152px;
-  height: 48px;
-  padding: 0 28px;
+  min-width: 132px;
+  height: 44px;
+  padding: 0 18px;
   border: none;
   border-radius: 6px;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   transition:
@@ -1593,17 +1594,18 @@ onBeforeUnmount(() => {
 
   .hero-actions {
     flex-wrap: nowrap;
-    gap: 10px;
-    margin-top: 20px;
+    gap: 8px;
+    margin-top: 18px;
   }
 
   .hero-cta {
-    flex: 1 1 0;
-    min-width: 0;
-    height: 42px;
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 114px;
+    height: 38px;
     padding: 0 14px;
-    font-size: 14px;
-    border-radius: 8px;
+    font-size: 13px;
+    border-radius: 6px;
   }
 
   .hero-cta--primary {
@@ -1694,7 +1696,8 @@ onBeforeUnmount(() => {
   }
 
   .hero-cta {
-    height: 40px;
+    height: 36px;
+    min-width: 108px;
     padding: 0 10px;
     font-size: 13px;
   }

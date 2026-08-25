@@ -409,7 +409,7 @@
                 v-else
                 :to="item.to"
                 class="mobile-first-level-item"
-                :class="{ active: isNavActive(item) }"
+                :class="{ active: isMobileMenuNavActive(item) }"
                 @click="mobileNavVisible = false"
               >
                 <span class="mobile-first-level-label">{{ item.label }}</span>
@@ -1030,6 +1030,12 @@ function isNavActive(item) {
     return true;
   }
   return item.match.includes(route.name);
+}
+
+// 手机端菜单：首页仅作返回入口，不参与选中态；一级分类选中由 mobileActiveFirstLevel 驱动
+function isMobileMenuNavActive(item) {
+  if (item.to === "/") return false;
+  return isNavActive(item);
 }
 
 function handleLogoError() {
