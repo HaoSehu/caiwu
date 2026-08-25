@@ -458,7 +458,6 @@ const MAX_ROTATION_INTERVAL = 15000;
 const PLAYBACK_RETRY_DELAY = 400;
 const MAX_PLAYBACK_RETRIES = 3;
 const HERO_VIDEO_IDLE_TIMEOUT = 1200;
-const HERO_VIDEO_MOBILE_WIDTH = 768;
 // 慢首包时 load() 会中止在途请求重启下载，节流避免多次中止-重拉循环
 const FORCED_LOAD_THROTTLE_MS = 1500;
 const SLOW_CONNECTION_TYPES = new Set(["slow-2g", "2g"]);
@@ -493,11 +492,7 @@ function clearVideoSlots() {
 
 function shouldEnableHeroVideo() {
   if (typeof window === "undefined") return false;
-  if (
-    window.matchMedia?.(`(max-width: ${HERO_VIDEO_MOBILE_WIDTH}px)`).matches
-  ) {
-    return false;
-  }
+  // 移动端同样播放背景视频；仅对省流量与减弱动效场景禁用
   if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
     return false;
   }
@@ -892,7 +887,7 @@ onMounted(() => {
     });
   }
   // 首屏视频是 LCP 元素：不等 idle 回调，立即启动加载，避免把 ~1.2s 的空等计入 LCP。
-  // 慢网络/移动端/减弱动效场景由 shouldEnableHeroVideo() 在内部拦截。
+  // 慢网络/减弱动效场景由 shouldEnableHeroVideo() 在内部拦截。
   enableHeroVideo();
   if (typeof document !== "undefined") {
     document.addEventListener("visibilitychange", handleVisibilityChange);
