@@ -274,21 +274,23 @@ class Payment extends Model
             return null;
         }
 
-        $paymentPayload = VersionedJson::paymentCallback(
-            $callbacks->firstWhere('callback_type', 'payment')?->payload_json ?? [],
-            'payment'
-        );
-        $refundPayload = VersionedJson::paymentCallback(
-            $callbacks->firstWhere('callback_type', 'refund')?->payload_json ?? [],
-            'refund'
-        );
+        $paymentCallback = $callbacks->firstWhere('callback_type', 'payment');
+        $refundCallback = $callbacks->firstWhere('callback_type', 'refund');
 
-        if ($callbacks->firstWhere('callback_type', 'payment') === null && $callbacks->firstWhere('callback_type', 'refund') === null) {
+        if ($paymentCallback === null && $refundCallback === null) {
             return null;
         }
 
-        if ($refundPayload !== []) {
-            $paymentPayload['refund'] = $refundPayload;
+        $paymentPayload = VersionedJson::paymentCallback(
+            $paymentCallback?->payload_json ?? [],
+            'payment'
+        );
+
+        if ($refundCallback !== null) {
+            $paymentPayload['refund'] = VersionedJson::paymentCallback(
+                $refundCallback?->payload_json ?? [],
+                'refund'
+            );
         }
 
         return $paymentPayload;
