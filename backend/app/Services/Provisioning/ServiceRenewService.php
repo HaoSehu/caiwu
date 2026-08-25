@@ -1344,9 +1344,60 @@ class ServiceRenewService
             return null;
         }
 
-        return $this->isRenewInvoiceFulfilled($latestPaidInvoice, $service)
-            ? null
-            : $latestPaidInvoice;
+        // 已履约时服务到期已顺延，不阻塞正常续费。
+        if ($this->isRenewInvoiceFulfilled($latestPaidInvoice, $service)) {
+            return null;
+        }
+
+        // 履约已明确失败：不再复用该账单阻塞用户续费（否则永无新账单可支付），
+        // 放行创建新账单，旧账单资金通过 requires_refund 线索转人工退款。
+        if ($this->renewFulfillmentStatusOf($latestPaidInvoice, $service) === self::RENEW_FULFILLMENT_FAILED) {
+            $this->flagFailedPaidRenewForRefund($latestPaidInvoice);
+
+            return null;
+        }
+
+        // pending/processing 或未知状态：仍视为履约处理中，复用已付账单防止双扣。
+        return $latestPaidInvoice;
+    }
+
+    /**
+     * 读取账单自身的续费履约状态：账单快照优先（账单私有），服务级 provision_data 兜底。
+     */
+    private function renewFulfillmentStatusOf(Invoice $invoice, ?Service $service = null): string
+    {
+        $configSnapshot = is_array($invoice->config_snapshot ?? null) ? $invoice->config_snapshot : [];
+        $provisionData = $service instanceof Service ? $this->serviceProvisionData($service) : [];
+
+        return (string) (
+            $configSnapshot[self::RENEW_FULFILLMENT_STATUS_KEY]
+            ?? $provisionData[self::RENEW_FULFILLMENT_STATUS_KEY]
+            ?? ''
+        );
+    }
+
+    /**
+     * 已支付但履约失败的账单标记 requires_refund，提醒运营人工退款。
+     */
+    private function flagFailedPaidRenewForRefund(Invoice $invoice): void
+    {
+        $configSnapshot = is_array($invoice->config_snapshot ?? null) ? $invoice->config_snapshot : [];
+        if (! empty($configSnapshot['requires_refund'])) {
+            return;
+        }
+
+        $invoice->forceFill([
+            'config_snapshot' => array_merge($configSnapshot, ['requires_refund' => true]),
+        ])->save();
+
+        Log::warning('[服务续费·账单] 已支付续费账单履约失败，已标记退款并放行后续续费', [
+            'invoice_id' => (int) $invoice->id,
+            'invoice_no' => (string) ($invoice->invoice_no ?? ''),
+            'user_id' => (int) ($invoice->user_id ?? 0),
+            'service_id' => (int) ($invoice->service_id ?? 0),
+            'billing_cycle' => (string) ($invoice->billing_cycle ?? ''),
+            'paid_amount' => (string) ($invoice->paid_amount ?? ''),
+        ]);
     }
 
     private function findNewerPaidRenewInvoice(Invoice $invoice, ?Service $service = null): ?Invoice
