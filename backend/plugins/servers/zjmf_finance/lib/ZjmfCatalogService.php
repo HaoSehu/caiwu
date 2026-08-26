@@ -6,6 +6,7 @@ namespace Caiwu\Plugins\Servers\ZjmfFinance\Lib;
 
 use App\Exceptions\BusinessException;
 use App\Models\Supplier;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 final class ZjmfCatalogService
@@ -65,8 +66,10 @@ final class ZjmfCatalogService
     public function getProductCatalog(Supplier $supplier): array
     {
         $response = $this->transport->get($supplier, '/cart/all', $this->transport->login($supplier));
+        $catalog = $this->normalizeProductCatalog($response);
+        $catalog['products'] = $this->mergeUpstreamProductPricing($supplier, $catalog['products']);
 
-        return $this->normalizeProductCatalog($response);
+        return $catalog;
     }
 
     public function getProductConfigTemplate(Supplier $supplier, int $productId): array
@@ -264,10 +267,12 @@ final class ZjmfCatalogService
                 'name' => $name !== '' ? $name : '未命名商品',
                 'type' => trim((string) ($entry['type'] ?? '')),
                 'description' => trim((string) ($entry['description'] ?? '')),
-                'billingcycle' => trim((string) ($entry['upstream_cycle'] ?? $entry['billingcycle'] ?? '')),
-                'product_price' => $entry['upstream_price'] ?? null,
-                'monthly_price' => null,
-                'setup_fee' => null,
+                'billingcycle' => trim((string) ($entry['billingcycle'] ?? $entry['upstream_cycle'] ?? '')),
+                'product_price' => $this->normalizeCatalogAmount(
+                    $entry['product_price'] ?? $entry['upstream_price'] ?? $entry['price'] ?? null
+                ),
+                'monthly_price' => $this->normalizeCatalogAmount($entry['monthly'] ?? $entry['monthly_price'] ?? null),
+                'setup_fee' => $this->normalizeCatalogAmount($entry['setup_fee'] ?? null),
                 'allow_qty' => (int) ($entry['allow_qty'] ?? 0),
                 'stock_control' => (int) ($entry['stock_control'] ?? 0),
                 'qty' => is_numeric($entry['qty'] ?? null) ? max((int) $entry['qty'], 0) : null,
@@ -280,6 +285,173 @@ final class ZjmfCatalogService
             $groupedProducts[$groupLabel][] = $item;
             $flatProducts[] = $item;
         }
+    }
+
+    /**
+     * /cart/all 不含价格与库存，使用 api/product/prodetail 的详情补齐。
+     *
+     * @param  array<int, array<string, mixed>>  $products
+     * @return array<int, array<string, mixed>>
+     */
+    private function mergeUpstreamProductPricing(Supplier $supplier, array $products): array
+    {
+        $ids = collect($products)
+            ->map(fn (array $item) => (int) ($item['id'] ?? 0))
+            ->filter(fn (int $id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($ids === []) {
+            return $products;
+        }
+
+        $details = $this->fetchBatchProductDetails($supplier, $ids);
+        if ($details === []) {
+            return $products;
+        }
+
+        return collect($products)
+            ->map(function (array $item) use ($details): array {
+                $detail = $details[(int) ($item['id'] ?? 0)] ?? null;
+
+                return $this->applyUpstreamProductDetail($item, $detail);
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $item
+     * @param  array<string, mixed>|null  $detail
+     * @return array<string, mixed>
+     */
+    private function applyUpstreamProductDetail(array $item, ?array $detail): array
+    {
+        if (! is_array($detail)) {
+            return $item;
+        }
+
+        $pricingRow = collect($detail['product_pricings'] ?? [])->first(fn ($pricing) => is_array($pricing));
+        if (is_array($pricingRow)) {
+            [$cycle, $price, $setupFee] = $this->resolveUpstreamPricingCycle($pricingRow);
+            if ($cycle !== null) {
+                $item['billingcycle'] = $cycle;
+                $item['product_price'] = $price;
+                $item['setup_fee'] = $setupFee;
+            }
+
+            $monthly = $this->normalizeCatalogNonNegativeAmount($pricingRow['monthly'] ?? null);
+            if ($monthly !== null) {
+                $item['monthly_price'] = $monthly;
+            }
+        }
+
+        if (array_key_exists('stock_control', $detail)) {
+            $item['stock_control'] = (int) ($detail['stock_control'] ?? 0);
+        }
+
+        if (array_key_exists('qty', $detail)) {
+            $item['qty'] = is_numeric($detail['qty'] ?? null) ? max((int) $detail['qty'], 0) : null;
+        }
+
+        $item['stock'] = $this->normalizeCatalogStock($item);
+
+        return $item;
+    }
+
+    /**
+     * 上游 prodetail 单次最多返回 500 个商品，按批拉取。
+     *
+     * @param  array<int, int>  $productIds
+     * @return array<int, array<string, mixed>>
+     */
+    private function fetchBatchProductDetails(Supplier $supplier, array $productIds, int $chunkSize = 200): array
+    {
+        $chunkSize = max(1, min($chunkSize, 500));
+        $jwt = $this->transport->login($supplier);
+        $details = [];
+
+        foreach (array_chunk($productIds, $chunkSize) as $chunk) {
+            try {
+                $response = $this->transport->get(
+                    $supplier,
+                    '/api/product/prodetail',
+                    $jwt,
+                    ['pids' => $chunk],
+                );
+            } catch (\Throwable $exception) {
+                Log::warning('[ZJMF 商品目录] 拉取商品详情失败', [
+                    'supplier_id' => $supplier->id,
+                    'message' => $exception->getMessage(),
+                ]);
+
+                continue;
+            }
+
+            $payload = is_array($response['data'] ?? null) ? $response['data'] : [];
+            if (! is_array($payload['detail'] ?? null)) {
+                continue;
+            }
+
+            foreach ($payload['detail'] as $pid => $detail) {
+                if (is_array($detail)) {
+                    $details[(int) $pid] = $detail;
+                }
+            }
+        }
+
+        return $details;
+    }
+
+    /**
+     * 与上游一致：按周期顺序取第一个有效价格（>= 0）作为展示单价与周期。
+     *
+     * @return array{0: ?string, 1: ?string, 2: ?string}
+     */
+    private function resolveUpstreamPricingCycle(array $pricingRow): array
+    {
+        $cycleKeys = [
+            'hour' => 'hsetupfee',
+            'day' => 'dsetupfee',
+            'ontrial' => 'ontrialfee',
+            'monthly' => 'msetupfee',
+            'quarterly' => 'qsetupfee',
+            'semiannually' => 'ssetupfee',
+            'annually' => 'asetupfee',
+            'biennially' => 'bsetupfee',
+            'triennially' => 'tsetupfee',
+            'fourly' => 'foursetupfee',
+            'fively' => 'fivesetupfee',
+            'sixly' => 'sixsetupfee',
+            'sevenly' => 'sevensetupfee',
+            'eightly' => 'eightsetupfee',
+            'ninely' => 'ninesetupfee',
+            'tenly' => 'tensetupfee',
+            'onetime' => 'osetupfee',
+        ];
+
+        foreach ($cycleKeys as $cycle => $setupFeeKey) {
+            $price = $this->normalizeCatalogNonNegativeAmount($pricingRow[$cycle] ?? null);
+            if ($price === null) {
+                continue;
+            }
+
+            return [
+                $cycle,
+                $price,
+                $this->normalizeCatalogNonNegativeAmount($pricingRow[$setupFeeKey] ?? null),
+            ];
+        }
+
+        return [null, null, null];
+    }
+
+    private function normalizeCatalogNonNegativeAmount(mixed $value): ?string
+    {
+        $amount = $this->normalizeCatalogAmount($value);
+
+        return $amount !== null && (float) $amount >= 0 ? $amount : null;
     }
 
     private function extractLegacyProductStock(array $response, int $productId): ?array
@@ -512,16 +684,6 @@ final class ZjmfCatalogService
         $slug = Str::slug($normalizedDisplayName, '_');
 
         return $slug !== '' ? $slug : $normalizedDisplayName;
-    }
-
-    private function resolveCatalogMonthlyPrice(array $product): ?string
-    {
-        $billingCycle = strtolower(trim((string) ($product['billingcycle'] ?? '')));
-        if ($billingCycle !== '' && $billingCycle !== 'monthly') {
-            return null;
-        }
-
-        return $this->normalizeCatalogAmount($product['product_price'] ?? null);
     }
 
     private function normalizeCatalogStock(array $product): int

@@ -337,6 +337,11 @@
     <div v-if="supplierBatchResult" class="supplier-batch-result">
       新增 {{ supplierBatchResult.created_count || 0 }}，更新 {{ supplierBatchResult.updated_count || 0 }}，跳过
       {{ supplierBatchResult.skipped_count || 0 }}
+      <ul v-if="supplierBatchSkippedSummary.length" class="supplier-batch-skipped">
+        <li v-for="item in supplierBatchSkippedSummary" :key="item.reason">
+          {{ item.reason }} × {{ item.count }}
+        </li>
+      </ul>
     </div>
   </t-dialog>
 
@@ -619,6 +624,16 @@ const supplierBatchTargetGroup = computed(() =>
 );
 const supplierBatchTargetGroupLabel = computed(() => {
   return supplierBatchTargetGroup.value ? productGroupOptionLabel(supplierBatchTargetGroup.value) : '';
+});
+const supplierBatchSkippedSummary = computed(() => {
+  const items = supplierBatchResult.value?.skipped_items;
+  if (!Array.isArray(items)) return [];
+  const counts = new Map<string, number>();
+  for (const item of items) {
+    const reason = String((item as Record<string, unknown>)?.reason || '未知原因').trim() || '未知原因';
+    counts.set(reason, (counts.get(reason) || 0) + 1);
+  }
+  return Array.from(counts.entries()).map(([reason, count]) => ({ reason, count }));
 });
 
 // --- Methods ---
@@ -1352,7 +1367,14 @@ async function submitSupplierBatchConnect() {
       sync_config_options: Number(supplierBatchForm.sync_config_options || 0),
     });
     supplierBatchResult.value = toPlainRecord(response);
-    MessagePlugin.success('批量对接完成');
+    const createdCount = Number(response?.created_count || 0);
+    const updatedCount = Number(response?.updated_count || 0);
+    const skippedCount = Number(response?.skipped_count || 0);
+    if (createdCount + updatedCount === 0 && skippedCount > 0) {
+      MessagePlugin.warning(`所选商品均未对接成功：跳过 ${skippedCount} 个，请查看下方跳过明细`);
+    } else {
+      MessagePlugin.success(`批量对接完成：新增 ${createdCount}，更新 ${updatedCount}，跳过 ${skippedCount}`);
+    }
     await Promise.all([loadSupplierBatchProducts(), loadSupplierBatchLocalProducts(), loadSuppliers()]);
     setAllSupplierBatchRemoteExpanded(true);
     setAllSupplierBatchLocalExpanded(true);
