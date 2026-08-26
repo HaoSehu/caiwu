@@ -144,6 +144,7 @@ import PasswordToggle from '@/components/auth/PasswordToggle.vue';
 import { useGeeTestCaptcha } from '@/composables/useGeeTestCaptcha';
 import { useUserStore } from '@/store';
 import { buildAccountPayload, detectAccountType, normalizeAccountValue } from '@/utils/account';
+import { clearLoginRedirectHold, holdLoginRedirect } from '@/utils/request';
 
 interface LoginForm {
   account: string;
@@ -290,6 +291,8 @@ function validateForm() {
 }
 
 async function runLogin() {
+  // 登录提交期间屏蔽并发 401 弹跳，避免成功跳转被旧请求失效竞态打断
+  holdLoginRedirect();
   loading.value = true;
   try {
     if (enabled.value) {
@@ -305,6 +308,7 @@ async function runLogin() {
     MessagePlugin.success('登录成功');
     await router.push(redirectPath.value);
   } catch (error: unknown) {
+    clearLoginRedirectHold();
     const runtimeError = asRuntimeLoginError(error);
     if (!enabled.value && isCaptchaRequiredError(runtimeError)) {
       try {
@@ -409,6 +413,7 @@ function validateCodeForm() {
 }
 
 async function runCodeLogin() {
+  holdLoginRedirect();
   codeLoading.value = true;
   try {
     await userStore.clientLoginByCode({
@@ -418,6 +423,7 @@ async function runCodeLogin() {
     MessagePlugin.success('登录成功');
     await router.push(redirectPath.value);
   } catch (error: unknown) {
+    clearLoginRedirectHold();
     const runtimeError = error as RuntimeLoginError;
     if (!runtimeError.__handled) {
       MessagePlugin.error(toUserMessage(runtimeError.message, '登录失败'));

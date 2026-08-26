@@ -30,8 +30,12 @@ export interface ClientConfigExtras {
   __skipSafeDedupe?: boolean;
 }
 
-export type ClientRuntimeRequestConfig = InternalAxiosRequestConfig &
-  ClientConfigExtras;
+export interface ClientRuntimeRequestConfig
+  extends InternalAxiosRequestConfig,
+    ClientConfigExtras {
+  /** 请求发出时携带的凭证，用于 401 时判断该失效是否已经过时（期间重新登录则跳过） */
+  __requestToken?: string | null;
+}
 
 export interface RuntimeHandledError extends Error {
   __handled?: boolean;
@@ -43,8 +47,14 @@ export interface CreateHttpClientOptions {
   baseURL: string;
   /** 错误提示回调，由各端注入自己的 UI 实现（含去重） */
   showError: (message: string) => void;
-  /** 业务 40100 或 HTTP 401 时的统一处理（清 token、跳登录）；未提供则仅抛错 */
-  onUnauthorized?: (message: string) => void;
+  /**
+   * 业务 40100 或 HTTP 401 时的统一处理（清 token、跳登录）；未提供则仅抛错。
+   * requestToken 为触发 401 的请求发出时携带的凭证：与当前凭证不一致说明期间已重新登录，处理方应忽略该次失效。
+   */
+  onUnauthorized?: (
+    message: string,
+    requestToken?: string | null,
+  ) => void;
   /** 返回本次请求的 Bearer token；返回空值则不附带 Authorization */
   resolveToken?: (
     config: ClientRuntimeRequestConfig,
@@ -118,6 +128,7 @@ export function createHttpClient(
       if (token) {
         runtimeConfig.headers.Authorization = `Bearer ${token}`;
       }
+      runtimeConfig.__requestToken = token || null;
 
       if (writeRequest && !runtimeConfig.headers["Content-Type"]) {
         runtimeConfig.headers["Content-Type"] = "application/json";
@@ -149,7 +160,7 @@ export function createHttpClient(
         const captchaRequired = Boolean(res.data?.captcha_required);
 
         if (res.code === 40100) {
-          options.onUnauthorized?.(msg);
+          options.onUnauthorized?.(msg, runtimeConfig.__requestToken);
           return Promise.reject(new Error(msg));
         }
 
@@ -224,7 +235,8 @@ export function createHttpClient(
       }
 
       if (error.response?.status === 401) {
-        options.onUnauthorized?.(msg);
+        const requestToken = (error.config || {})?.__requestToken;
+        options.onUnauthorized?.(msg, requestToken);
         return Promise.reject(error);
       }
 

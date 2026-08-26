@@ -161,6 +161,39 @@ assert.equal(toUserMessage(undefined, '自定义回退'), '自定义回退')
   assert.equal(errors.length, 0)
 }
 
+// 401 透传请求发出时携带的凭证：onUnauthorized 第二参数可用于判断失效是否已过时
+{
+  const unauthorized = []
+  const client = createHttpClient({
+    baseURL: 'https://api.example.test/api',
+    showError: () => {},
+    onUnauthorized: (message, requestToken) => unauthorized.push([message, requestToken]),
+    resolveToken: () => 'token-123',
+  })
+  client.defaults.adapter = createAdapter(() => ({
+    reject: true,
+    response: envelopeResponse({ message: 'Unauthenticated.' }, 401),
+  }))
+  await assert.rejects(client.get('/need-auth'), (err) => err.response?.status === 401)
+  assert.deepEqual(unauthorized, [['网络异常', 'token-123']])
+}
+
+// 业务 40100 信封同样透传请求凭证
+{
+  const unauthorized = []
+  const client = createHttpClient({
+    baseURL: 'https://api.example.test/api',
+    showError: () => {},
+    onUnauthorized: (message, requestToken) => unauthorized.push([message, requestToken]),
+    resolveToken: () => 'token-456',
+  })
+  client.defaults.adapter = createAdapter(() => ({
+    response: envelopeResponse({ code: 40100, message: '未登录或登录已过期', data: null }),
+  }))
+  await assert.rejects(client.get('/anything'), (err) => err.message === '未登录或登录已过期')
+  assert.deepEqual(unauthorized, [['未登录或登录已过期', 'token-456']])
+}
+
 // 写请求：附带 X-Request-Id 与 Content-Type；resolveToken 注入 Authorization
 {
   const seen = []
