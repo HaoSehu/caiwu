@@ -15,6 +15,9 @@ use Throwable;
 
 final class ZjmfScheduledAuthRefreshHook implements ScheduleHook
 {
+    /** 供应商分批遍历大小。 */
+    private const BATCH_SIZE = 200;
+
     public function __construct(
         private readonly ProviderResolver $providerResolver,
         private readonly PluginBindingResolver $bindingResolver,
@@ -29,38 +32,44 @@ final class ZjmfScheduledAuthRefreshHook implements ScheduleHook
             'skipped' => 0,
         ];
 
+        // 分批遍历，避免供应商量大时一次性加载全表。
         Supplier::query()
             ->enabled()
             ->orderBy('id')
-            ->get()
-            ->each(function (Supplier $supplier) use (&$summary): void {
-                $provider = $this->providerResolver->resolveForSupplier($supplier);
-                $providerKey = trim((string) ($provider->key() ?? $provider->rawKey() ?? ''));
-                if ($providerKey !== ProviderKey::ZJMF_FINANCE_API) {
-                    return;
-                }
+            ->chunkById(self::BATCH_SIZE, function ($suppliers) use (&$summary): void {
+                foreach ($suppliers as $supplier) {
+                    if (! $supplier instanceof Supplier) {
+                        continue;
+                    }
 
-                $summary['matched']++;
+                    $provider = $this->providerResolver->resolveForSupplier($supplier);
+                    $providerKey = trim((string) ($provider->key() ?? $provider->rawKey() ?? ''));
+                    if ($providerKey !== ProviderKey::ZJMF_FINANCE_API) {
+                        continue;
+                    }
 
-                if (! $provider->supports(ProvidesScheduledAuthRefresh::class)) {
-                    $summary['skipped']++;
+                    $summary['matched']++;
 
-                    return;
-                }
+                    if (! $provider->supports(ProvidesScheduledAuthRefresh::class)) {
+                        $summary['skipped']++;
 
-                try {
-                    $provider->require(ProvidesScheduledAuthRefresh::class, '当前供应商不支持认证刷新')
-                        ->refreshJwt($this->bindingResolver->supplierWithRuntimeCredentials($supplier));
-                    $summary['refreshed']++;
-                } catch (Throwable $exception) {
-                    $summary['failed']++;
+                        continue;
+                    }
 
-                    Log::error('[定时任务] ZJMF 财务认证刷新失败', [
-                        'supplier_id' => $supplier->id,
-                        'provider_key' => ProviderKey::ZJMF_FINANCE_API,
-                        'error' => $exception->getMessage(),
-                        'exception' => $exception::class,
-                    ]);
+                    try {
+                        $provider->require(ProvidesScheduledAuthRefresh::class, '当前供应商不支持认证刷新')
+                            ->refreshJwt($this->bindingResolver->supplierWithRuntimeCredentials($supplier));
+                        $summary['refreshed']++;
+                    } catch (Throwable $exception) {
+                        $summary['failed']++;
+
+                        Log::error('[定时任务] ZJMF 财务认证刷新失败', [
+                            'supplier_id' => $supplier->id,
+                            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
+                            'error' => $exception->getMessage(),
+                            'exception' => $exception::class,
+                        ]);
+                    }
                 }
             });
 

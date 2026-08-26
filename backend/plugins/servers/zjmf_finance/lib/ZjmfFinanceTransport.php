@@ -7,10 +7,30 @@ namespace Caiwu\Plugins\Servers\ZjmfFinance\Lib;
 use App\Exceptions\BusinessException;
 use App\Models\Supplier;
 use App\Services\Upstream\Drivers\HostingPanelApi\HostingPanelApiTransport;
+use App\Services\Upstream\ProviderKey;
 use App\Services\Upstream\Support\WebSessionCookieParser;
+use Illuminate\Support\Facades\Log;
 
 final class ZjmfFinanceTransport
 {
+    /** 相对路径前缀白名单：新增上游调用必须先落入此处，避免任意路径透传到 ZJMF。 */
+    private const ALLOWED_RELATIVE_URI_PREFIXES = [
+        '/v1/',
+        '/cart/',
+        '/host/',
+        '/provision/',
+        '/api/',
+        '/apply_credit',
+        '/dcim/',
+    ];
+
+    private const ALLOWED_RELATIVE_URI_PATHS = [
+        '/zjmf_api_login',
+        '/pay',
+        '/check_order',
+        '/servicedetail',
+    ];
+
     public function __construct(
         private readonly HostingPanelApiTransport $transport,
         private readonly ZjmfAuthManager $authManager,
@@ -270,6 +290,10 @@ final class ZjmfFinanceTransport
 
     public function parallelGet(Supplier $supplier, array $requests, ?string $jwt = null, array $headers = []): array
     {
+        foreach ($requests as $request) {
+            $this->assertAllowedRequestUri((string) ($request['uri'] ?? ''));
+        }
+
         $resolvedJwt = $this->resolveRequestJwt($supplier, $jwt, '', $headers);
         $responses = $this->transport->parallelGet(
             $supplier,
@@ -304,6 +328,8 @@ final class ZjmfFinanceTransport
         array $headers = [],
         array $query = []
     ): string {
+        $this->assertAllowedRequestUri($uri);
+
         $resolvedJwt = $this->resolveRequestJwt($supplier, $jwt, $uri, $headers);
 
         return $this->transport->requestText(
@@ -326,6 +352,8 @@ final class ZjmfFinanceTransport
         array $headers = [],
         array $query = []
     ): array {
+        $this->assertAllowedRequestUri($uri);
+
         $resolvedJwt = $this->resolveRequestJwt($supplier, $jwt, $uri, $headers);
         $response = $this->transport->request(
             $supplier,
@@ -353,6 +381,8 @@ final class ZjmfFinanceTransport
         array $headers = [],
         array $query = []
     ): array {
+        $this->assertAllowedRequestUri($uri);
+
         $resolvedJwt = $this->resolveRequestJwt($supplier, $jwt, $uri, $headers);
         $meta = $this->transport->requestWithMeta(
             $supplier,
@@ -445,6 +475,68 @@ final class ZjmfFinanceTransport
 
         return $uri === '/zjmf_api_login'
             || str_contains($uri, '/zjmf_api_login?');
+    }
+
+    /**
+     * 相对路径必须在白名单内；绝对地址由底层传输层强制与供应商接口同源。
+     * 防止平台业务误传任意 URI 把请求打到 ZJMF。
+     */
+    private function assertAllowedRequestUri(string $uri): void
+    {
+        $uri = trim($uri);
+        if ($uri === '' || preg_match('#^https?://#i', $uri) === 1) {
+            return;
+        }
+
+        $path = trim((string) parse_url($uri, PHP_URL_PATH));
+        if ($path === '') {
+            $path = $uri;
+        }
+
+        foreach (self::ALLOWED_RELATIVE_URI_PREFIXES as $prefix) {
+            if (str_starts_with($path, $prefix)) {
+                return;
+            }
+        }
+
+        foreach (self::ALLOWED_RELATIVE_URI_PATHS as $allowedPath) {
+            if ($path === $allowedPath || str_starts_with($path, $allowedPath.'?')) {
+                return;
+            }
+        }
+
+        Log::warning('[ZJMF 财务接口] 拦截未在白名单的上游请求路径', [
+            'provider_key' => ProviderKey::ZJMF_FINANCE_API,
+            'uri' => $this->maskUriForLog($uri),
+        ]);
+
+        throw new BusinessException('上游请求路径不在允许范围内', 42200);
+    }
+
+    private function maskUriForLog(string $uri): string
+    {
+        // 仅暴露路径与参数名，隐藏参数值，避免敏感参数落日志。
+        $parsed = parse_url($uri);
+        if (! is_array($parsed)) {
+            return '(invalid)';
+        }
+
+        $masked = '';
+        if (isset($parsed['scheme'])) {
+            $masked .= $parsed['scheme'].'://';
+        }
+        $masked .= (string) ($parsed['host'] ?? '');
+        $masked .= (string) ($parsed['path'] ?? '');
+
+        if (isset($parsed['query']) && $parsed['query'] !== '') {
+            $keys = array_keys(collect(explode('&', (string) $parsed['query']))
+                ->flatMap(fn (string $pair) => explode('=', $pair, 2))
+                ->filter(fn (string $part, int $index) => $index % 2 === 0)
+                ->all());
+            $masked .= '?'.implode('=&', $keys).($keys !== [] ? '=' : '');
+        }
+
+        return $masked !== '' ? $masked : '(empty)';
     }
 
     private function hasCookieHeader(array $headers): bool

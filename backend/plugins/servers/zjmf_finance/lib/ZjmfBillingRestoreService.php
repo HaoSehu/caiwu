@@ -293,6 +293,15 @@ class ZjmfBillingRestoreService
                 }
 
                 if ($char === "'") {
+                    // SQL 中 '' 表示转义的单引号，不结束字符串。
+                    $nextChar = $payload[$index + 1] ?? null;
+                    if ($nextChar === "'") {
+                        $field .= $nextChar;
+                        $index++;
+
+                        continue;
+                    }
+
                     $inString = false;
                 }
 
@@ -548,12 +557,38 @@ class ZjmfBillingRestoreService
 
     private function decimalCompare(string $left, string $right): int
     {
-        return (float) $left <=> (float) $right;
+        // 整数分比较，避免 float 精度误差导致大金额误判。
+        return $this->toCents($left) <=> $this->toCents($right);
     }
 
     private function decimalNegate(string $value): string
     {
-        return number_format(0 - (float) $value, 2, '.', '');
+        return $this->fromCents(-$this->toCents($value));
+    }
+
+    private function toCents(string $decimal): int
+    {
+        $decimal = trim($decimal);
+        $negative = str_starts_with($decimal, '-');
+        $decimal = ltrim($decimal, '-');
+        [$whole, $fraction] = array_pad(explode('.', $decimal, 2), 2, '');
+        $whole = $whole !== '' ? (int) $whole : 0;
+        // 小数不足两位按右补零处理（'0.1' 表示 10 分）。
+        $fraction = str_pad(substr($fraction, 0, 2), 2, '0');
+        $cents = $whole * 100 + (int) $fraction;
+
+        return $negative ? -$cents : $cents;
+    }
+
+    private function fromCents(int $cents): string
+    {
+        $negative = $cents < 0;
+        $cents = abs($cents);
+
+        return ($negative ? '-' : '')
+            .((string) intdiv($cents, 100))
+            .'.'
+            .str_pad((string) ($cents % 100), 2, '0', STR_PAD_LEFT);
     }
 
     private function formatDateTime(int $timestamp): ?string

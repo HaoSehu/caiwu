@@ -290,7 +290,14 @@ class PluginRuntimeRegistry
      */
     private function runtimeMeta(array $payload): array
     {
-        $sanitized = SensitiveDataSanitizer::sanitize($payload);
+        // 对象/资源在 json_encode 时会被静默丢弃或产生无效结构（如 resolve_capability 返回的能力对象），
+        // 先递归归一为可序列化的类快照，保证 runtime log 恒为可读 JSON。
+        $jsonSafe = [];
+        foreach ($payload as $key => $value) {
+            $jsonSafe[$key] = $this->jsonSafeValue($value, new \WeakMap, 0);
+        }
+
+        $sanitized = SensitiveDataSanitizer::sanitize($jsonSafe);
 
         // 截断超大 meta：异常上游报文曾把单行 runtime log 撑到兆级（表均行宽 1.6KB 的主因之一）。
         return PayloadLimiter::limit(
@@ -299,6 +306,58 @@ class PluginRuntimeRegistry
             self::RUNTIME_META_MAX_BYTES,
             self::RUNTIME_META_PREVIEW_BYTES,
         );
+    }
+
+    /** 递归归一的最大对象/数组嵌套深度，超出后截断，防止循环引用或超深结构打崩 worker。 */
+    private const JSON_SAFE_MAX_DEPTH = 10;
+
+    private function jsonSafeValue(mixed $value, \WeakMap $seen, int $depth): mixed
+    {
+        if ($value instanceof \Closure) {
+            return null;
+        }
+
+        if (is_object($value)) {
+            if ($depth >= self::JSON_SAFE_MAX_DEPTH) {
+                return ['__class' => $value::class, '__truncated' => '(max depth)'];
+            }
+
+            if (isset($seen[$value])) {
+                return ['__class' => $value::class, '__circular' => true];
+            }
+
+            $seen[$value] = true;
+
+            $properties = [];
+
+            foreach (get_object_vars($value) as $key => $property) {
+                $properties[$key] = $this->jsonSafeValue($property, $seen, $depth + 1);
+            }
+
+            return [
+                '__class' => $value::class,
+                'properties' => $properties,
+            ];
+        }
+
+        if (is_resource($value)) {
+            return null;
+        }
+
+        if (is_array($value)) {
+            if ($depth >= self::JSON_SAFE_MAX_DEPTH) {
+                return '(max depth)';
+            }
+
+            $normalized = [];
+            foreach ($value as $key => $item) {
+                $normalized[$key] = $this->jsonSafeValue($item, $seen, $depth + 1);
+            }
+
+            return $normalized;
+        }
+
+        return $value;
     }
 
     private function positiveInt(mixed $value): ?int

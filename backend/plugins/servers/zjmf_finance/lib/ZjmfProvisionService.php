@@ -349,11 +349,10 @@ final class ZjmfProvisionService
     }
 
     /**
-     * Persist upstream references before any later network call can fail.
+     * 在任何后续网络调用可能失败之前，先把上游引用持久化到服务记录。
      *
-     * The supplied service instance is updated as well, allowing the core
-     * failure path to retain the checkpoint and a retry to verify the existing
-     * resource instead of checking out another cart.
+     * 同时更新传入的服务实例，让核心失败路径能保留检查点，
+     * 重试时校验已存在的资源而不是再结算一个购物车。
      */
     private function checkpointUpstreamProvision(
         ?Service $service,
@@ -670,8 +669,8 @@ final class ZjmfProvisionService
             }
         }
 
-        // The standard endpoint omits i on some Mofang Finance releases.
-        // The cart is cleared under the supplier-scoped lock before adding one item.
+        // 部分魔方财务版本的标准结算接口不返回购物车位置 i；
+        // 加购前已在供应商级锁内清空购物车，回退用位置 0 是安全的。
         return 0;
     }
 

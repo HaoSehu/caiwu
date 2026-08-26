@@ -20,6 +20,9 @@ final class ZjmfAuthManager
 
     private const MAX_JWT_CACHE_TTL_SECONDS = 7200;
 
+    /** 刷新防抖标记的默认 TTL：JWT 缓存有效期内不再强制重登。 */
+    private const DEFAULT_REFRESH_MARKER_TTL_SECONDS = 900;
+
     public function __construct(
         private readonly HostingPanelApiTransport $transport,
     ) {}
@@ -61,8 +64,14 @@ final class ZjmfAuthManager
         return $jwt;
     }
 
-    public function refreshJwt(Supplier $supplier): string
+    public function refreshJwt(Supplier $supplier, bool $force = false): string
     {
+        // 防抖：刷新标记有效期内且 JWT 缓存未过期时跳过强制重登，
+        // 避免 15 分钟心跳对全部供应商产生登录风暴。
+        if (! $force && $this->recentlyRefreshed($supplier)) {
+            return $this->login($supplier);
+        }
+
         $this->forget($supplier);
 
         $startedAt = microtime(true);
@@ -81,6 +90,8 @@ final class ZjmfAuthManager
 
         $ttlSeconds = $this->resolveJwtCacheTtlSeconds($jwt);
         $this->jwtCache()->put($this->jwtCacheKey($supplier), $jwt, now()->addSeconds($ttlSeconds));
+        // 刷新成功才写防抖标记；失败不写，下一轮心跳可重试。
+        $this->markRefreshed($supplier, $ttlSeconds);
 
         $this->safeLog('info', '[ZJMF 财务接口] JWT强制刷新', [
             'supplier_id' => $supplier->id,
@@ -103,7 +114,10 @@ final class ZjmfAuthManager
 
     public function forget(Supplier $supplier): void
     {
-        $this->jwtCache()->forget($this->jwtCacheKey($supplier));
+        $cache = $this->jwtCache();
+        $cache->forget($this->jwtCacheKey($supplier));
+        // 401 主动失效时同步清除防抖标记，保证自愈路径可立即重登。
+        $cache->forget($this->refreshMarkerKey($supplier));
     }
 
     public function forgetIfUnauthorizedResponse(Supplier $supplier, int $httpCode, mixed $decoded, ?string $jwt): void
@@ -120,6 +134,26 @@ final class ZjmfAuthManager
     public function jwtCacheKey(Supplier $supplier): string
     {
         return 'upstream:'.ProviderKey::ZJMF_FINANCE_API.':jwt:'.$supplier->id;
+    }
+
+    private function refreshMarkerKey(Supplier $supplier): string
+    {
+        return 'upstream:'.ProviderKey::ZJMF_FINANCE_API.':refresh:'.$supplier->id;
+    }
+
+    private function recentlyRefreshed(Supplier $supplier): bool
+    {
+        return trim((string) $this->jwtCache()->get($this->refreshMarkerKey($supplier), '')) !== '';
+    }
+
+    private function markRefreshed(Supplier $supplier, int $jwtTtlSeconds): void
+    {
+        $markerTtl = max(1, min(
+            $jwtTtlSeconds > 0 ? $jwtTtlSeconds : self::DEFAULT_JWT_CACHE_TTL_SECONDS,
+            self::DEFAULT_REFRESH_MARKER_TTL_SECONDS
+        ));
+
+        $this->jwtCache()->put($this->refreshMarkerKey($supplier), (string) time(), now()->addSeconds($markerTtl));
     }
 
     private function jwtCache(): CacheRepository

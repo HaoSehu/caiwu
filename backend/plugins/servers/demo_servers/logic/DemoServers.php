@@ -333,6 +333,8 @@ class DemoServers implements ProvidesConsoleAccess, ProvidesConsoleCatalog, Prov
         ];
     }
 
+    // 演示语义：账单恒已支付。真实插件的契约是：账单未支付时应返回 null，
+    // 让平台走支付确认/补款路径；作为参考插件不要照抄"恒成功"实现。
     public function recoverRenewInvoice(Supplier $supplier, int $hostId, int $upstreamInvoiceId): ?array
     {
         return [

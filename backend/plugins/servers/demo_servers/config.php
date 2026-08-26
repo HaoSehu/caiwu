@@ -57,7 +57,7 @@ return [
             'title' => '启用演示上游',
             'type' => 'switch',
             'value' => true,
-            'description' => '关闭后仍可安装，但不建议作为真实供应商使用。',
+            'description' => '仅演示 schema，无副作用：插件逻辑不读取该开关。',
         ],
     ],
 ];

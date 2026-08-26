@@ -568,8 +568,6 @@ class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsole
         $requestHeaders = $this->buildHeaders($jwt, $headers);
         $body = $this->buildRequestBody($method, $payload);
 
-        $this->applyUserAgent();
-
         $startedAt = microtime(true);
         $context = stream_context_create($this->buildContextOptions($method, $requestHeaders, $body));
         error_clear_last();
@@ -601,7 +599,7 @@ class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsole
             'url' => $this->maskUrlForLog($url),
             'http_code' => $httpCode,
             'duration_ms' => $this->elapsedMilliseconds($startedAt),
-            'response_preview' => $this->truncateLogValue(trim((string) $output, "\xEF\xBB\xBF")),
+            'response_preview' => $this->sanitizePagePreview(trim((string) $output, "\xEF\xBB\xBF")),
         ]);
 
         return (string) $output;
@@ -651,8 +649,6 @@ class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsole
         );
         $requestHeaders = $this->buildHeaders($jwt, $headers);
         $body = $this->buildRequestBody($method, $payload);
-
-        $this->applyUserAgent();
 
         $startedAt = microtime(true);
         $context = stream_context_create($this->buildContextOptions($method, $requestHeaders, $body));
@@ -704,15 +700,6 @@ class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsole
         ];
     }
 
-    private function applyUserAgent(): void
-    {
-        if ($this->serviceConfig['user_agent'] === '') {
-            return;
-        }
-
-        @ini_set('user_agent', $this->serviceConfig['user_agent']);
-    }
-
     private function buildHeaders(?string $jwt, array $headers = []): array
     {
         $requestHeaders = [];
@@ -728,13 +715,23 @@ class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsole
             }
         }
 
+        // 请求级 User-Agent：避免 ini_set 修改进程级全局配置影响同一进程其它请求。
+        if ($this->serviceConfig['user_agent'] !== '' && ! $this->hasHeader($requestHeaders, 'User-Agent')) {
+            $requestHeaders[] = 'User-Agent: '.$this->serviceConfig['user_agent'];
+        }
+
         return $requestHeaders;
     }
 
     private function hasAuthorizationHeader(array $headers): bool
     {
+        return $this->hasHeader($headers, 'Authorization');
+    }
+
+    private function hasHeader(array $headers, string $name): bool
+    {
         foreach ($headers as $header) {
-            if (preg_match('/^authorization\s*:/i', trim((string) $header)) === 1) {
+            if (preg_match('/^'.preg_quote($name, '/').'\s*:/i', trim((string) $header)) === 1) {
                 return true;
             }
         }
@@ -886,12 +883,18 @@ class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsole
     {
         $this->assertTrustedBaseUrl($baseUrl);
 
+        $isAbsoluteUri = preg_match('#^https?://#i', trim($uri)) === 1;
+        if ($isAbsoluteUri) {
+            // 绝对地址必须与供应商接口同源，防止页面抓取路径被构造为跨域跳转目标。
+            $this->assertSameOriginUrl($baseUrl, trim($uri));
+        }
+
         $baseUrl = rtrim($baseUrl, '/');
         $uri = trim($uri);
         $basePath = trim((string) parse_url($baseUrl, PHP_URL_PATH));
         $normalizedBasePath = $basePath === '' ? '' : '/'.trim($basePath, '/');
 
-        $url = preg_match('#^https?://#i', $uri)
+        $url = $isAbsoluteUri
             ? $uri
             : $baseUrl.'/'.ltrim($this->normalizeRelativeUri($uri, $normalizedBasePath), '/');
 
@@ -902,6 +905,32 @@ class HostingPanelApiTransport implements ProvidesConsoleAccess, ProvidesConsole
         $separator = str_contains($url, '?') ? '&' : '?';
 
         return $url.$separator.http_build_query($query);
+    }
+
+    private function assertSameOriginUrl(string $baseUrl, string $absoluteUrl): void
+    {
+        $base = parse_url(trim($baseUrl));
+        $target = parse_url(trim($absoluteUrl));
+
+        if (! is_array($base) || ! is_array($target)) {
+            throw new BusinessException('供应商接口地址格式不正确', 42200);
+        }
+
+        $baseScheme = strtolower((string) ($base['scheme'] ?? ''));
+        $targetScheme = strtolower((string) ($target['scheme'] ?? ''));
+        $baseHost = strtolower(trim((string) ($base['host'] ?? '')));
+        $targetHost = strtolower(trim((string) ($target['host'] ?? '')));
+
+        if ($baseScheme === '' || $baseHost === '' || $targetScheme === '' || $targetHost === '') {
+            throw new BusinessException('供应商接口地址格式不正确', 42200);
+        }
+
+        $basePort = (int) ($base['port'] ?? ($baseScheme === 'https' ? 443 : 80));
+        $targetPort = (int) ($target['port'] ?? ($targetScheme === 'https' ? 443 : 80));
+
+        if ($targetScheme !== $baseScheme || $targetHost !== $baseHost || $targetPort !== $basePort) {
+            throw new BusinessException('供应商接口请求地址必须与接口地址同源', 42200);
+        }
     }
 
     private function normalizeRelativeUri(string $uri, string $normalizedBasePath): string
@@ -1302,6 +1331,38 @@ PHP;
         return strlen($value) > 240
             ? substr($value, 0, 237).'...'
             : $value;
+    }
+
+    /**
+     * 页面抓取响应可能内嵌会话/CSRF token，先脱敏再截断落日志。
+     *
+     * 每条模式配对独立的替换串，避免引用不存在的捕获组导致输出畸形；
+     * 同时覆盖带引号与裸键值两种形态。
+     */
+    private function sanitizePagePreview(string $output): string
+    {
+        // 形态一：jwt=xxx / "token": "xxx" 等键值对（值带引号），保留键与两侧引号使输出结构完整。
+        $output = (string) preg_replace(
+            '/\b(jwt|token|session|sid|csrf_token|csrfmiddlewaretoken|access_token|apikey|api_key)(["\']?\s*[:=]\s*["\'])[^"\'\s]{6,}(["\'])/i',
+            '$1$2***$3',
+            $output
+        );
+
+        // 形态二：不带引号的裸值，如 jwt=eyJhbGciOi...（长度阈值过滤误伤短词）。
+        $output = (string) preg_replace(
+            '/\b(jwt|access_token|api_key|apikey)\s*[:=]\s*([A-Za-z0-9._\-]{16,})/i',
+            '$1=***',
+            $output
+        );
+
+        // 形态三：HTML 表单隐藏域 <input name="csrf_token" value="xxx">。
+        $output = (string) preg_replace(
+            '/(name=["\'](?:jwt|token|session|sid|csrf_token|csrfmiddlewaretoken)["\']\s+value=["\'])[^"\']*(["\'])/i',
+            '$1***$2',
+            $output
+        );
+
+        return $this->truncateLogValue($output);
     }
 
     private function normalizeBoolean(mixed $value): bool

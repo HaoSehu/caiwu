@@ -1,6 +1,6 @@
 # Demo 上游服务插件
 
-这是给开发者参考的 servers/upstream 插件代码包，会被后台插件管理扫描到。
+这是给开发者参考的 servers/upstream 插件代码包。会被插件扫描，但 `demo_*` 前缀插件按 demo 规则从管理端隐藏且不允许管理端安装，只能经 `PluginInstaller` / `LocalProductSimulateCommand` 安装。
 
 要点：
 
