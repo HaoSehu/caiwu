@@ -1,0 +1,77 @@
+.marketing-groups-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.stack-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+
+  span {
+    color: var(--td-text-color-secondary);
+    font-size: var(--td-font-size-body-small, 12px);
+  }
+}
+
+.mobile-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mg-mobile-card {
+  padding: 16px;
+  border: 1px solid var(--td-component-border);
+  border-radius: var(--td-radius-medium, 8px);
+}
+
+.mg-mobile-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+
+  > div {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+}
+
+.mg-mobile-card__more {
+  color: var(--td-text-color-secondary);
+}
+
+.mg-mobile-card dl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 0;
+
+  div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  dt {
+    color: var(--td-text-color-secondary);
+    font-size: var(--td-font-size-body-small, 12px);
+  }
+
+  dd {
+    margin: 0;
+    color: var(--td-text-color-primary);
+  }
+}
+
+.pick-alert {
+  margin-bottom: 12px;
+}
