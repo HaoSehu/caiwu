@@ -43,11 +43,4 @@ return [
             ],
         ],
     ],
-    'upstream' => [
-        'default' => env('UPSTREAM_PROVIDER_DEFAULT', ''),
-        'preserve_provider_keys' => [
-            'zjmf_finance_api',
-            'hosting_panel_api',
-        ],
-    ],
 ];
