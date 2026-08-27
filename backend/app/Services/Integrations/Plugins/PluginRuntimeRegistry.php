@@ -487,6 +487,29 @@ class PluginRuntimeRegistry
         return $entry;
     }
 
+    /**
+     * 探测网关插件是否声明支持给定动作（不实际执行插件逻辑）。
+     *
+     * 插件入口类通过 supportsAction(string): bool 自报能力；尚未升级、
+     * 缺少该方法的旧插件按不支持处理，调用方可据此决定可选动作的降级策略。
+     */
+    public function probeGatewaySupportsAction(PluginManifest $manifest, string $action): bool
+    {
+        $resolvedAction = trim($action);
+
+        if ($resolvedAction === '') {
+            return false;
+        }
+
+        $entry = $this->makeExecutableEntry($manifest);
+
+        if (! method_exists($entry, 'supportsAction')) {
+            return false;
+        }
+
+        return (bool) $entry->supportsAction($resolvedAction);
+    }
+
     private function makeAdapter(PluginManifest $manifest, string $contract): ?object
     {
         return match ($contract) {

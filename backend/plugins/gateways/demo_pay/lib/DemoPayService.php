@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Caiwu\Plugins\Gateways\DemoPay\Lib;
 
 // PaymentGatewayInterface contract is handled by PluginPaymentGateway adapter
+use App\Services\Integrations\Payments\Concerns\InteractsWithStandardPaymentActions;
 use App\Services\Integrations\Payments\Data\PaymentPrecreateRequest;
 use App\Services\Integrations\Payments\Data\PaymentPrecreateResult;
 use App\Services\Integrations\Payments\Data\PaymentQueryResult;
@@ -14,6 +15,18 @@ use Illuminate\Http\Response;
 
 class DemoPayService
 {
+    use InteractsWithStandardPaymentActions;
+
+    /** @var array<int, string> */
+    private const SUPPORTED_ACTIONS = [
+        'payment.is_enabled',
+        'payment.matches_merchant',
+        'payment.precreate',
+        'payment.query',
+        'payment.refund',
+        'payment.verify_notify',
+    ];
+
     public function key(): string
     {
         return 'demo_pay';
@@ -22,6 +35,16 @@ class DemoPayService
     public function name(): string
     {
         return 'Demo 支付网关';
+    }
+
+    /**
+     * 与 execute() 的动作分发保持同一口径；系统侧可选动作探测据此短路。
+     *
+     * @return array<int, string>
+     */
+    protected function supportedActions(): array
+    {
+        return self::SUPPORTED_ACTIONS;
     }
 
     /**

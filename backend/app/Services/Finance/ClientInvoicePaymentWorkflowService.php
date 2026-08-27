@@ -112,7 +112,7 @@ class ClientInvoicePaymentWorkflowService
         $invoice = $this->cancelExpiredInvoice($user, $invoiceId, $expiredContext);
         $this->checkoutSecurity->assertInvoicePaymentSessionToken($paymentSessionToken, $invoice, (int) $user->id);
 
-        $result = $this->payments->payByBalanceAndAlipay($invoice, $user, $balanceAmount, $operationContext);
+        $result = $this->payments->payByBalanceAndGateway($invoice, $user, $balanceAmount, PaymentGatewayCode::ALIPAY, $operationContext);
         $invoice->refresh()->load($this->invoiceRelations());
         $payment = $this->findInvoicePayment(
             $user,

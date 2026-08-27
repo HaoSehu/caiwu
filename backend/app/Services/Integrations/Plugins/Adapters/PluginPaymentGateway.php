@@ -48,6 +48,15 @@ final readonly class PluginPaymentGateway implements PaymentGatewayInterface
         return (bool) ($data['matched'] ?? false);
     }
 
+    /**
+     * 探测插件是否声明支持给定动作；可选动作（如 payment.options）
+     * 由此短路，替代历史上捕获「Unsupported plugin action」文案的脆弱判断。
+     */
+    public function supportsAction(string $action): bool
+    {
+        return $this->runtime->probeGatewaySupportsAction($this->manifest, $action);
+    }
+
     public function precreate(PaymentPrecreateRequest $request): PaymentPrecreateResult
     {
         $data = $this->executeData('payment.precreate', [
@@ -71,13 +80,11 @@ final readonly class PluginPaymentGateway implements PaymentGatewayInterface
      */
     public function paymentOptions(): array
     {
+        // 可选动作不能依赖 supportsAction 短路：旧插件未必自报能力但可能已实现该动作，
+        // 真实执行失败即视为插件不提供支付方式
         try {
             $data = $this->executeData('payment.options', []);
-        } catch (BusinessException $exception) {
-            if ($exception->getMessage() !== 'Unsupported plugin action') {
-                throw $exception;
-            }
-
+        } catch (BusinessException) {
             return [];
         }
 

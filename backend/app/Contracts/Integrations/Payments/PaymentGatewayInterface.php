@@ -21,6 +21,12 @@ interface PaymentGatewayInterface
 
     public function matchesMerchantId(?string $merchantId): bool;
 
+    /**
+     * 网关是否声明支持给定动作（如 payment.options）。
+     * 可选动作为缺省能力，调用方应在执行前用它短路，而不是解析异常文本。
+     */
+    public function supportsAction(string $action): bool;
+
     public function precreate(PaymentPrecreateRequest $request): PaymentPrecreateResult;
 
     public function query(string $outTradeNo): PaymentQueryResult;

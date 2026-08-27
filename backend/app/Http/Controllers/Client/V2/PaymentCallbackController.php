@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Client\V2;
 
+use App\Constants\PaymentGatewayCode;
 use App\Http\Controllers\Controller;
 use App\Services\Finance\PaymentService;
 use App\Services\Integrations\Payments\PaymentGatewayManager;
@@ -43,7 +44,7 @@ class PaymentCallbackController extends Controller
     }
 
     /**
-     * 支付宝异步通知（向后兼容，委托给通用入口）
+     * 支付宝异步通知（历史回调地址，内部走通用网关入口）
      */
     public function alipayNotify(Request $request)
     {
@@ -55,7 +56,7 @@ class PaymentCallbackController extends Controller
         ]);
 
         try {
-            $success = $this->paymentService->handleAlipayNotify($request->all());
+            $success = $this->paymentService->handleGatewayNotify(PaymentGatewayCode::ALIPAY, $request->all());
         } catch (\Throwable $exception) {
             Log::warning('[支付宝回调] 处理失败，已按 fail 响应', [
                 'payment_no' => (string) $request->input('out_trade_no', ''),

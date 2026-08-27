@@ -4,8 +4,22 @@ declare(strict_types=1);
 
 namespace Caiwu\Plugins\Gateways\AliPay\Lib;
 
+use App\Services\Integrations\Payments\Concerns\InteractsWithStandardPaymentActions;
+
 class AlipayService
 {
+    use InteractsWithStandardPaymentActions;
+
+    /** @var array<int, string> */
+    private const SUPPORTED_ACTIONS = [
+        'payment.is_enabled',
+        'payment.matches_merchant',
+        'payment.precreate',
+        'payment.query',
+        'payment.refund',
+        'payment.verify_notify',
+    ];
+
     public function key(): string
     {
         return 'alipay';
@@ -14,6 +28,16 @@ class AlipayService
     public function name(): string
     {
         return '支付宝当面付';
+    }
+
+    /**
+     * 与 execute() 的动作分发保持同一口径；系统侧可选动作探测据此短路。
+     *
+     * @return array<int, string>
+     */
+    protected function supportedActions(): array
+    {
+        return self::SUPPORTED_ACTIONS;
     }
 
     public function execute(array $request): array

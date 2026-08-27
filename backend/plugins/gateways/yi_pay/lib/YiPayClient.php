@@ -6,17 +6,19 @@ namespace Caiwu\Plugins\Gateways\YiPay\Lib;
 
 use App\Constants\PaymentGatewayCode;
 use App\Exceptions\BusinessException;
+use App\Services\Integrations\Payments\Concerns\BuildsGatewayHttpClient;
+use App\Services\Integrations\Payments\Concerns\WrapsPemKeys;
 use App\Services\Integrations\Payments\Data\PaymentRefundRequest;
 use App\Services\System\GatewayLogService;
 use App\Support\SensitiveDataSanitizer;
 use Illuminate\Http\Client\ConnectionException;
-use Illuminate\Http\Client\PendingRequest;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 class YiPayClient
 {
+    use BuildsGatewayHttpClient, WrapsPemKeys;
+
     private const PAYMENT_TYPE_LABELS = [
         'alipay' => '支付宝',
         'wxpay' => '微信支付',
@@ -447,14 +449,6 @@ class YiPayClient
         return in_array((string) $code, ['1', '200'], true);
     }
 
-    private function buildHttpClient(): PendingRequest
-    {
-        return Http::asForm()
-            ->withOptions(['verify' => true])
-            ->timeout(15)
-            ->retry(1, 200);
-    }
-
     /**
      * @param  array<string, mixed>  $payload
      * @return array<string, mixed>
@@ -488,7 +482,8 @@ class YiPayClient
 
     private function signRsa(string $content): string
     {
-        $privateKey = openssl_pkey_get_private($this->normalizePrivateKey($this->merchantPrivateKey));
+        // 私钥支持粘贴裸 base64，出站前统一规范成 PEM
+        $privateKey = openssl_pkey_get_private($this->pemWrappedPrivateKey($this->merchantPrivateKey));
         if ($privateKey === false) {
             throw new BusinessException('易支付 RSA 商户私钥无效');
         }
@@ -507,7 +502,8 @@ class YiPayClient
      */
     private function verifyRsaSignature(array $payload, string $sign): bool
     {
-        $publicKey = openssl_pkey_get_public($this->normalizePublicKey($this->platformPublicKey));
+        // 平台公钥同样统一走 PEM 规范化，保证与签名侧使用同一包装规则
+        $publicKey = openssl_pkey_get_public($this->pemWrappedPublicKey($this->platformPublicKey));
         if ($publicKey === false) {
             return false;
         }
@@ -518,26 +514,6 @@ class YiPayClient
         }
 
         return openssl_verify($this->canonicalString($payload), $decodedSign, $publicKey, OPENSSL_ALGO_SHA256) === 1;
-    }
-
-    private function normalizePrivateKey(string $key): string
-    {
-        $key = trim($key);
-        if ($key === '' || str_contains($key, '-----BEGIN')) {
-            return $key;
-        }
-
-        return "-----BEGIN PRIVATE KEY-----\n".chunk_split($key, 64, "\n").'-----END PRIVATE KEY-----';
-    }
-
-    private function normalizePublicKey(string $key): string
-    {
-        $key = trim($key);
-        if ($key === '' || str_contains($key, '-----BEGIN')) {
-            return $key;
-        }
-
-        return "-----BEGIN PUBLIC KEY-----\n".chunk_split($key, 64, "\n").'-----END PUBLIC KEY-----';
     }
 
     /**

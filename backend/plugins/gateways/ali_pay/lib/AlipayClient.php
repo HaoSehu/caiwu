@@ -5,16 +5,18 @@ namespace Caiwu\Plugins\Gateways\AliPay\Lib;
 use App\Constants\PaymentGatewayCode;
 use App\Exceptions\BusinessException;
 use App\Models\Setting;
+use App\Services\Integrations\Payments\Concerns\BuildsGatewayHttpClient;
+use App\Services\Integrations\Payments\Concerns\WrapsPemKeys;
 use App\Services\System\GatewayLogService;
 use App\Support\SensitiveDataSanitizer;
 use Illuminate\Http\Client\ConnectionException;
-use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class AlipayClient
 {
+    use BuildsGatewayHttpClient, WrapsPemKeys;
+
     private string $appId;
 
     private string $privateKey;
@@ -328,11 +330,7 @@ class AlipayClient
 
         $stringToSign = urldecode(http_build_query($params));
 
-        $publicKey = "-----BEGIN PUBLIC KEY-----\n"
-            .wordwrap($this->alipayPublicKey, 64, "\n", true)
-            ."\n-----END PUBLIC KEY-----";
-
-        $publicKeyResource = openssl_pkey_get_public($publicKey);
+        $publicKeyResource = openssl_pkey_get_public($this->wrapPemKey((string) $this->alipayPublicKey, 'PUBLIC KEY'));
         if ($publicKeyResource === false) {
             Log::warning('[支付宝回调] 公钥无效，签名验证失败');
 
@@ -385,25 +383,13 @@ class AlipayClient
         return $result;
     }
 
-    private function buildHttpClient(): PendingRequest
+    /**
+     * 支付宝出站支持 ssl_verify 开关与 CA 证书包配置，
+     * 覆盖共享客户端构建的默认「恒校验」行为。
+     */
+    protected function httpClientVerifyOption(): bool|string
     {
-        return Http::asForm()
-            ->withOptions(['verify' => $this->httpVerifyOption()])
-            ->timeout(15)
-            ->retry(1, 200);
-    }
-
-    private function httpVerifyOption(): bool|string
-    {
-        if (! $this->sslVerify) {
-            return false;
-        }
-
-        if ($this->caBundle !== '' && is_file($this->caBundle)) {
-            return $this->caBundle;
-        }
-
-        return true;
+        return $this->resolveGatewaySslVerifyOption($this->sslVerify, $this->caBundle);
     }
 
     /**
@@ -502,17 +488,11 @@ class AlipayClient
         ksort($params);
         $stringToSign = urldecode(http_build_query($params));
 
-        // 自动检测 PKCS8 / PKCS1 格式
+        // 自动检测 PKCS8 / PKCS1 格式后统一做 PEM 规范化包装
         $key = $this->privateKey;
-        if (str_starts_with($key, 'MIIEv')) {
-            $pemKey = "-----BEGIN PRIVATE KEY-----\n"
-                .wordwrap($key, 64, "\n", true)
-                ."\n-----END PRIVATE KEY-----";
-        } else {
-            $pemKey = "-----BEGIN RSA PRIVATE KEY-----\n"
-                .wordwrap($key, 64, "\n", true)
-                ."\n-----END RSA PRIVATE KEY-----";
-        }
+        $pemKey = str_starts_with($key, 'MIIEv')
+            ? $this->wrapPemKey($key, 'PRIVATE KEY')
+            : $this->wrapPemKey($key, 'RSA PRIVATE KEY');
 
         $algorithm = $this->signType === 'RSA2' ? OPENSSL_ALGO_SHA256 : OPENSSL_ALGO_SHA1;
 
