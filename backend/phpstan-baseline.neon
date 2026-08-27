@@ -799,24 +799,6 @@ parameters:
 			path: app/Http/Resources/Admin/V2/AdminUserDetailResource.php
 
 		-
-			message: '#^Using nullsafe property access "\?\-\>company" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Http/Resources/Admin/V2/AdminUserListItemResource.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>nickname" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Http/Resources/Admin/V2/AdminUserListItemResource.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>qq" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Http/Resources/Admin/V2/AdminUserListItemResource.php
-
-		-
 			message: '#^Call to function is_array\(\) with string\|null will always evaluate to false\.$#'
 			identifier: function.impossibleType
 			count: 1
@@ -907,12 +889,6 @@ parameters:
 			path: app/Http/Resources/Admin/V2/CouponProductResource.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$code\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/Client/V2/ClientUserInfoResource.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
 			count: 1
@@ -920,12 +896,6 @@ parameters:
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Resources/Client/V2/ClientUserInfoResource.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$reward_rate\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Resources/Client/V2/ClientUserInfoResource.php
@@ -1643,18 +1613,6 @@ parameters:
 			identifier: function.alreadyNarrowedType
 			count: 1
 			path: app/Services/Auth/AuthService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>email" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Auth/SendAccountCodeService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>phone" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Auth/SendAccountCodeService.php
 
 		-
 			message: '#^Constant App\\Services\\Auth\\VerificationService\:\:API_STATUS_FAILED is unused\.$#'
@@ -3801,7 +3759,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
-			count: 12
+			count: 10
 			path: app/Services/Finance/PaymentService.php
 
 		-
@@ -3915,7 +3873,7 @@ parameters:
 		-
 			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 12
+			count: 9
 			path: app/Services/Finance/PaymentService.php
 
 		-
@@ -3947,6 +3905,24 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Finance/PaymentService.php
+
+		-
+			message: '#^Trait App\\Services\\Integrations\\Payments\\Concerns\\BuildsGatewayHttpClient is used zero times and is not analysed\.$#'
+			identifier: trait.unused
+			count: 1
+			path: app/Services/Integrations/Payments/Concerns/BuildsGatewayHttpClient.php
+
+		-
+			message: '#^Trait App\\Services\\Integrations\\Payments\\Concerns\\InteractsWithStandardPaymentActions is used zero times and is not analysed\.$#'
+			identifier: trait.unused
+			count: 1
+			path: app/Services/Integrations/Payments/Concerns/InteractsWithStandardPaymentActions.php
+
+		-
+			message: '#^Trait App\\Services\\Integrations\\Payments\\Concerns\\WrapsPemKeys is used zero times and is not analysed\.$#'
+			identifier: trait.unused
+			count: 1
+			path: app/Services/Integrations/Payments/Concerns/WrapsPemKeys.php
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
@@ -5617,12 +5593,6 @@ parameters:
 			path: app/Services/Referral/AdminReferralOverviewService.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$code\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Referral/AdminReferralOverviewService.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
 			count: 1
@@ -5707,55 +5677,7 @@ parameters:
 			path: app/Services/Referral/AdminReferralOverviewService.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\UserReferral\:\:\$referral_code\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Referral/MemberLevelService.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\UserReferral\:\:\$referred_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Referral/MemberLevelService.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\UserReferral\:\:\$referrer_user_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Referral/MemberLevelService.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\UserReferral\:\:\$total_sales_amount\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Referral/MemberLevelService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>referred_at" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Referral/MemberLevelService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>referrer_user_id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Referral/MemberLevelService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>sort_order" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Referral/MemberLevelService.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>status" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Referral/MemberLevelService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>total_sales_amount" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Referral/MemberLevelService.php
@@ -5829,13 +5751,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property App\\Models\\UserReferral\:\:\$total_sales_amount\.$#'
 			identifier: property.notFound
-			count: 5
-			path: app/Services/Referral/ReferralService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$code\.$#'
-			identifier: property.notFound
-			count: 1
+			count: 3
 			path: app/Services/Referral/ReferralService.php
 
 		-
@@ -5853,7 +5769,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
-			count: 6
+			count: 4
 			path: app/Services/Referral/ReferralService.php
 
 		-
@@ -5962,12 +5878,6 @@ parameters:
 			message: '#^Using nullsafe property access "\?\-\>display_product_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
-			path: app/Services/Referral/ReferralService.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 2
 			path: app/Services/Referral/ReferralService.php
 
 		-
@@ -6817,12 +6727,6 @@ parameters:
 			path: app/Services/System/SettingService.php
 
 		-
-			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
-			identifier: function.alreadyNarrowedType
-			count: 1
-			path: app/Services/System/SmsService.php
-
-		-
 			message: '#^Offset 1 on array\{non\-falsy\-string, non\-empty\-string, string\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
@@ -6861,19 +6765,19 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_name\.$#'
 			identifier: property.notFound
-			count: 9
+			count: 8
 			path: app/Services/Ticket/TicketService.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$email\.$#'
 			identifier: property.notFound
-			count: 8
+			count: 6
 			path: app/Services/Ticket/TicketService.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
-			count: 7
+			count: 6
 			path: app/Services/Ticket/TicketService.php
 
 		-
@@ -6886,12 +6790,6 @@ parameters:
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$nickname\.$#'
 			identifier: property.notFound
 			count: 6
-			path: app/Services/Ticket/TicketService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$user\.$#'
-			identifier: property.notFound
-			count: 1
 			path: app/Services/Ticket/TicketService.php
 
 		-
@@ -6925,19 +6823,19 @@ parameters:
 			path: app/Services/Ticket/TicketService.php
 
 		-
+			message: '#^Method App\\Services\\Ticket\\TicketService\:\:restoreStoredAttachmentMeta\(\) is unused\.$#'
+			identifier: method.unused
+			count: 1
+			path: app/Services/Ticket/TicketService.php
+
+		-
 			message: '#^Offset 3 on array\{''开启'', ''客户回复'', ''员工回复'', ''已关闭''\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
 			path: app/Services/Ticket/TicketService.php
 
 		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) expects callable\(Illuminate\\Database\\Eloquent\\Model, int\)\: array, Closure\(App\\Models\\TicketReply\)\: array given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/Ticket/TicketService.php
-
-		-
-			message: '#^Parameter \#1 \$collection of method Illuminate\\Pagination\\AbstractPaginator\<int,App\\Models\\TicketReply\>\:\:setCollection\(\) expects Illuminate\\Support\\Collection\<int, App\\Models\\TicketReply\>, Illuminate\\Support\\Collection\<int, array\> given\.$#'
+			message: '#^Parameter \#1 \$collection of method Illuminate\\Pagination\\AbstractPaginator\<int,App\\Models\\TicketReply\>\:\:setCollection\(\) expects Illuminate\\Support\\Collection\<int, App\\Models\\TicketReply\>, Illuminate\\Support\\Collection\<int, array\<string, mixed\>\> given\.$#'
 			identifier: argument.type
 			count: 1
 			path: app/Services/Ticket/TicketService.php
@@ -6987,7 +6885,7 @@ parameters:
 		-
 			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 2
+			count: 1
 			path: app/Services/Ticket/TicketService.php
 
 		-
@@ -7183,12 +7081,6 @@ parameters:
 			path: app/Services/User/UserService.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$code\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/User/UserService.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$display_product_name\.$#'
 			identifier: property.notFound
 			count: 5
@@ -7197,7 +7089,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
-			count: 6
+			count: 7
 			path: app/Services/User/UserService.php
 
 		-
@@ -7215,7 +7107,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$name\.$#'
 			identifier: property.notFound
-			count: 3
+			count: 4
 			path: app/Services/User/UserService.php
 
 		-
@@ -7661,9 +7553,3 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Support/ServiceHostname.php
-
-		-
-			message: '#^Trait App\\Traits\\HasUuid is used zero times and is not analysed\.$#'
-			identifier: trait.unused
-			count: 1
-			path: app/Traits/HasUuid.php

@@ -40,25 +40,26 @@ $summary = DB::transaction(function () use ($now, $json, $money, $mockUserPasswo
     DB::table('member_levels')->insert([
         [
             'name' => '标准会员',
-            'code' => 'standard',
-            'sales_amount_min' => '0.00',
-            'sales_amount_max' => '9999.99',
-            'reward_rate' => '1.00',
             'status' => 1,
-            'sort_order' => 10,
             'remark' => '模拟数据：默认会员等级',
             'created_at' => $now,
             'updated_at' => $now,
         ],
         [
             'name' => '金牌会员',
-            'code' => 'gold',
-            'sales_amount_min' => '10000.00',
-            'sales_amount_max' => null,
-            'reward_rate' => '3.00',
             'status' => 1,
-            'sort_order' => 20,
             'remark' => '模拟数据：高等级会员',
+            'created_at' => $now,
+            'updated_at' => $now,
+        ],
+    ]);
+
+    DB::table('promotion_ambassadors')->insertOrIgnore([
+        [
+            'name' => '默认大使',
+            'reward_rate' => '10.00',
+            'status' => 1,
+            'remark' => '模拟数据：默认推广大使档位',
             'created_at' => $now,
             'updated_at' => $now,
         ],
