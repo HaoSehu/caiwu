@@ -43,6 +43,7 @@ const ADMIN_MENU_GROUPS: MenuGroupConfig[] = [
     icon: shallowRef(DashboardIcon),
     orderNo: 0,
     children: [
+      '/admin/dashboard',
       {
         path: '/admin/menu/data-dashboard/business-overview',
         title: { zh_CN: '经营概览', en_US: 'Business Overview' },
