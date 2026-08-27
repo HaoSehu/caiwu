@@ -705,6 +705,7 @@ trait HandlesOrderCalculation
             return (string) ((int) $number);
         }
 
-        return rtrim(rtrim(number_format($number, 2, '.', ''), '0'), '.');
+        // 整数直接输出整数；小数收敛到分位再去掉尾零
+        return Money::trimZero(number_format($number, 2, '.', ''));
     }
 }

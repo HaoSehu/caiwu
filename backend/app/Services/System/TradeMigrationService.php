@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\System;
 
+use App\Support\Money;
 use Illuminate\Support\Facades\DB;
 
 class TradeMigrationService
@@ -278,10 +279,10 @@ class TradeMigrationService
             'user_coupon_id' => $this->normalizeNullablePositiveInt($legacyInvoice['user_coupon_id'] ?? null),
             'status' => $status,
             'currency' => 'CNY',
-            'subtotal_amount' => $this->normalizeMoney($legacyInvoice['amount'] ?? null),
-            'discount_amount' => $this->normalizeMoney($legacyInvoice['discount'] ?? null),
-            'total_amount' => $this->normalizeMoney($legacyInvoice['amount'] ?? null),
-            'paid_amount' => $this->normalizeMoney($legacyInvoice['paid_amount'] ?? null),
+            'subtotal_amount' => Money::format($legacyInvoice['amount'] ?? null),
+            'discount_amount' => Money::format($legacyInvoice['discount'] ?? null),
+            'total_amount' => Money::format($legacyInvoice['amount'] ?? null),
+            'paid_amount' => Money::format($legacyInvoice['paid_amount'] ?? null),
             'billing_cycle' => $this->normalizeNullableString($legacyInvoice['billing_cycle'] ?? ($legacyOrder['billing_cycle'] ?? null)),
             'quantity' => max(1, (int) ($legacyInvoice['quantity'] ?? 1)),
             'due_at' => $this->normalizeDateStringToTimestamp($legacyInvoice['due_date'] ?? null),
@@ -316,7 +317,7 @@ class TradeMigrationService
             'user_id' => (int) ($legacyPayment['user_id'] ?? 0),
             'gateway' => $this->normalizeRequiredString($legacyPayment['gateway'] ?? null, 'unknown'),
             'gateway_trade_no' => $this->normalizeNullableString($legacyPayment['trade_no'] ?? null),
-            'amount' => $this->normalizeMoney($legacyPayment['amount'] ?? null),
+            'amount' => Money::format($legacyPayment['amount'] ?? null),
             'currency' => 'CNY',
             'status' => (int) ($legacyPayment['status'] ?? 0),
             'paid_at' => $this->normalizeDateTimeString($legacyPayment['paid_at'] ?? null),
@@ -372,7 +373,7 @@ class TradeMigrationService
             'payment_id' => (int) ($legacyPayment['id'] ?? 0),
             'invoice_id' => (int) ($legacyPayment['invoice_id'] ?? 0),
             'user_id' => $invoiceUserId,
-            'amount' => $this->normalizeMoney($refundAmount),
+            'amount' => Money::format($refundAmount),
             'status' => 1,
             'reason' => $this->normalizeNullableString($refundReason),
             'gateway_refund_no' => $this->normalizeNullableString($legacyPayment['trade_no'] ?? null),
@@ -473,9 +474,9 @@ class TradeMigrationService
                 'item_code' => null,
                 'item_name' => $this->normalizeRequiredString($item['item_name'] ?? null, '历史账单项 #'.(int) ($item['id'] ?? 0)),
                 'quantity' => max(1, (int) ($item['quantity'] ?? 1)),
-                'unit_price' => $this->normalizeMoney($item['unit_price'] ?? null),
-                'discount_amount' => $this->normalizeMoney($item['discount_amount'] ?? null),
-                'line_amount' => $this->normalizeMoney($item['line_amount'] ?? null),
+                'unit_price' => Money::format($item['unit_price'] ?? null),
+                'discount_amount' => Money::format($item['discount_amount'] ?? null),
+                'line_amount' => Money::format($item['line_amount'] ?? null),
                 'meta_json' => $this->encodeSnapshotValue($item['meta_json'] ?? null),
                 'created_at' => $this->normalizeDateTimeString($item['created_at'] ?? null),
                 'updated_at' => $this->normalizeDateTimeString($item['updated_at'] ?? null),
@@ -552,7 +553,7 @@ class TradeMigrationService
 
         $rows = $this->sourceQuery($sql);
 
-        return $this->normalizeMoney($rows[0]->total ?? 0);
+        return Money::format($rows[0]->total ?? 0);
     }
 
     public function targetSum(string $table, string $column, ?string $where = null): string
@@ -564,7 +565,7 @@ class TradeMigrationService
 
         $rows = $this->targetQuery($sql);
 
-        return $this->normalizeMoney($rows[0]->total ?? 0);
+        return Money::format($rows[0]->total ?? 0);
     }
 
     /**
@@ -635,15 +636,6 @@ class TradeMigrationService
         }
 
         return null;
-    }
-
-    private function normalizeMoney(mixed $value): string
-    {
-        if ($value === null || $value === '') {
-            return '0.00';
-        }
-
-        return number_format((float) $value, 2, '.', '');
     }
 
     private function normalizeDateTimeString(mixed $value): ?string

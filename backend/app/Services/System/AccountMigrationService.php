@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\System;
 
+use App\Support\Money;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -1104,7 +1105,7 @@ class AccountMigrationService
             return '0.00';
         }
 
-        return number_format((float) $value, 2, '.', '');
+        return Money::format($value);
     }
 
     private function normalizeNullablePositiveInt(mixed $value): ?int

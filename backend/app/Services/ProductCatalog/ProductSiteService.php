@@ -11,6 +11,7 @@ use App\Models\SecondProductGroup;
 use App\Models\ThirdProductGroup;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
 use App\Services\ProductCatalog\Concerns\HandlesProductCatalogHelpers;
+use App\Support\Money;
 use App\Support\ProductGroupHierarchyFields;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -516,7 +517,7 @@ class ProductSiteService
         $pricing = $this->formatPricingMap((array) ($product->pricing ?? []));
         $primaryCycle = '';
         $primaryPrice = '0.00';
-        $setupFee = $this->formatAmount((float) ($product->setup_fee ?? 0));
+        $setupFee = Money::format((float) ($product->setup_fee ?? 0));
         $hierarchyFields = ProductGroupHierarchyFields::fromProduct($product);
         $productType = (string) ($hierarchyFields['service_type_code'] ?? $product->product_type);
         $instanceSpec = $this->instanceSpecCatalogService->resolveProductSpecMap([(int) $product->id]);
@@ -812,7 +813,7 @@ class ProductSiteService
     private function formatPricingMap(array $pricing): array
     {
         return collect($pricing)
-            ->mapWithKeys(fn ($amount, $cycle) => [(string) $cycle => $this->formatAmount((float) $amount)])
+            ->mapWithKeys(fn ($amount, $cycle) => [(string) $cycle => Money::format((float) $amount)])
             ->all();
     }
 
@@ -820,7 +821,7 @@ class ProductSiteService
     {
         return collect($pricing)
             ->map(function ($amount, $cycle) use ($setupFee) {
-                $normalizedAmount = $this->formatAmount((float) $amount);
+                $normalizedAmount = Money::format((float) $amount);
 
                 return [
                     'cycle' => (string) $cycle,
@@ -836,16 +837,11 @@ class ProductSiteService
                     },
                     'amount' => $normalizedAmount,
                     'setup_fee' => $setupFee,
-                    'total_amount' => $this->formatAmount((float) $normalizedAmount + (float) $setupFee),
+                    'total_amount' => Money::format((float) $normalizedAmount + (float) $setupFee),
                 ];
             })
             ->values()
             ->all();
-    }
-
-    private function formatAmount(float $amount): string
-    {
-        return number_format($amount, 2, '.', '');
     }
 
     /**

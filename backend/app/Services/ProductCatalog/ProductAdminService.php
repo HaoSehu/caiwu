@@ -19,6 +19,7 @@ use App\Services\Integrations\Plugins\UpstreamBindingWriter;
 use App\Services\ProductCatalog\Concerns\HandlesProductCatalogHelpers;
 use App\Services\System\OperationLogService;
 use App\Services\System\SettingService;
+use App\Support\Money;
 use App\Support\ProductProvisionHostname;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -1396,7 +1397,7 @@ class ProductAdminService
 
         return fmod($value, 1.0) === 0.0
             ? (string) (int) $value
-            : rtrim(rtrim(number_format($value, 2, '.', ''), '0'), '.');
+            : Money::trimZero(number_format($value, 2, '.', ''));
     }
 
     private function parseSpecNumber(string $value): string

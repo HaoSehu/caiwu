@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\System;
 
 use App\Constants\ServiceStatus;
+use App\Support\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -1136,7 +1137,7 @@ class ServiceMigrationService
             return '0.00';
         }
 
-        return number_format((float) $value, 2, '.', '');
+        return Money::format($value);
     }
 
     private function normalizeDateTimeString(mixed $value): ?string

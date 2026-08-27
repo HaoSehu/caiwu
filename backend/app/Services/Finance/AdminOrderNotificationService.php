@@ -453,11 +453,14 @@ class AdminOrderNotificationService
     private function resolvePaymentGatewayLabel(string $gateway): string
     {
         return match ($gateway) {
+            // 「支付宝」「手动入账」是本通知场景的历史展示口径，与集中 LABELS 不同，保留本地文案。
             'alipay' => '支付宝',
-            'yipay' => '易支付',
-            'balance' => '余额支付',
+            // 与 LABELS 一致的词条走集中定义，避免多处文案漂移。
+            PaymentGatewayCode::YIPAY,
+            PaymentGatewayCode::BALANCE,
+            PaymentGatewayCode::WECHAT => PaymentGatewayCode::label($gateway),
+            // 业务侧扩展口径与本地历史文案不属于集中 LABELS，保留原样。
             'manual' => '手动入账',
-            'wechat' => '微信支付',
             'bank_transfer' => '银行转账',
             default => $gateway !== '' ? $gateway : '未知方式',
         };

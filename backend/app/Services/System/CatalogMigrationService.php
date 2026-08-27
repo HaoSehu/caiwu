@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\System;
 
+use App\Support\Money;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -777,7 +778,7 @@ class CatalogMigrationService
             return '0.00';
         }
 
-        return number_format((float) $value, 2, '.', '');
+        return Money::format($value);
     }
 
     /**

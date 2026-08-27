@@ -582,10 +582,12 @@ class OrderService
     private function resolvePaymentGatewayLabel(string $gateway): string
     {
         return match ($gateway) {
-            'alipay' => '支付宝支付',
-            'yipay' => '易支付',
-            'wechat' => '微信支付',
-            'balance' => '余额支付',
+            // 与 PaymentGatewayCode::LABELS 一致的词条统一走集中定义，避免多处文案漂移。
+            PaymentGatewayCode::ALIPAY,
+            PaymentGatewayCode::YIPAY,
+            PaymentGatewayCode::WECHAT,
+            PaymentGatewayCode::BALANCE => PaymentGatewayCode::label($gateway),
+            // 业务侧扩展口径与本地历史文案不属于集中 LABELS，保留原样。
             'free' => '免支付',
             'bank_transfer' => '银行转账',
             'offline' => '线下支付',

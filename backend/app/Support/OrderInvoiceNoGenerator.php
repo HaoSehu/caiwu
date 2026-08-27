@@ -8,6 +8,7 @@ use App\Models\Invoice;
 use App\Models\Order;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -91,6 +92,19 @@ final class OrderInvoiceNoGenerator
         }
 
         return self::ORDER_PREFIX.$matches[1].$matches[2];
+    }
+
+    /**
+     * 通用业务流水号：前缀 + 时间戳 + 大写随机串。
+     *
+     * 供退款号（RFD）、充值流水号（RR）、支付号（PAY）等
+     * “前缀 + 时间 + 随机段”形态的编号复用。随机字符集与 Laravel
+     * Str::random 一致（大小写字母与数字），大写后输出 [A-Z0-9]，
+     * 与既有生产数据格式完全兼容。
+     */
+    public static function generateSerialNumber(string $prefix, string $timeFormat = 'YmdHis', int $randomLength = 8): string
+    {
+        return $prefix.now()->format($timeFormat).Str::upper(Str::random($randomLength));
     }
 
     private static function pairExists(string $orderNo, string $invoiceNo): bool

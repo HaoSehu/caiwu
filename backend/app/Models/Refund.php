@@ -6,10 +6,10 @@ namespace App\Models;
 
 use App\Models\Concerns\EnsuresTraceId;
 use App\Models\Concerns\NormalizesTraceId;
+use App\Support\OrderInvoiceNoGenerator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Str;
 
 class Refund extends Model
 {
@@ -54,7 +54,8 @@ class Refund extends Model
 
     public static function generateRefundNo(): string
     {
-        return 'RFD'.now()->format('YmdHis').Str::upper(Str::random(8));
+        // RFD + 14 位时间戳 + 8 位大写随机串，格式与既有生产数据一致。
+        return OrderInvoiceNoGenerator::generateSerialNumber('RFD');
     }
 
     public function payment(): BelongsTo

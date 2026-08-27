@@ -16,6 +16,7 @@ use App\Services\ProductCatalog\ProductDisplayNameResolver;
 use App\Services\System\SettingService;
 use App\Services\Upstream\Contracts\ProvidesConsoleRuntime;
 use App\Services\Upstream\ProviderResolver;
+use App\Support\Money;
 use App\Support\ServiceHostname;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -1225,7 +1226,7 @@ class ServiceTransformService
     private function formatNumericSpecValue(string $field, string $text, ?array $definition): string
     {
         $value = str_contains($text, '.')
-            ? rtrim(rtrim(number_format((float) $text, 2, '.', ''), '0'), '.')
+            ? Money::trimZero(number_format((float) $text, 2, '.', ''))
             : (string) ((int) $text);
         $unit = trim((string) ($definition['unit'] ?? ''));
 
@@ -1546,7 +1547,7 @@ class ServiceTransformService
 
     private function trimTrafficNumber(float $value): string
     {
-        return rtrim(rtrim(number_format($value, 2, '.', ''), '0'), '.');
+        return Money::trimZero(number_format($value, 2, '.', ''));
     }
 
     private function resolveServiceProductPath(Service $service, string $productDisplayName): string

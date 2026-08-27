@@ -14,6 +14,7 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\RechargeRecord;
 use App\Models\Refund;
+use App\Support\Money;
 
 class FinanceDocumentService
 {
@@ -46,7 +47,7 @@ class FinanceDocumentService
             'payment_id' => (int) $payment->id,
             'scene' => $this->businessScene($invoice),
             'direction' => 'in',
-            'amount' => $this->money($payment->amount),
+            'amount' => Money::format($payment->amount),
             'currency' => 'CNY',
             'entry_type' => 'third_party_payment',
             'remark' => '第三方实付 '.(string) $payment->payment_no,
@@ -93,7 +94,7 @@ class FinanceDocumentService
             'account_transaction_id' => (int) $accountTransaction->id,
             'scene' => $scene,
             'direction' => 'in',
-            'amount' => $this->money($amount),
+            'amount' => Money::format($amount),
             'currency' => 'CNY',
             'entry_type' => $scene === 'admin_recharge' ? 'manual_recharge' : 'account_recharge',
             'remark' => (string) ($context['record_remark'] ?? ($scene === 'admin_recharge' ? '管理员手工充值' : '账户充值')),
@@ -126,7 +127,7 @@ class FinanceDocumentService
             'user_id' => (int) $invoice->user_id,
             'invoice_id' => (int) $invoice->id,
             'payment_id' => $payment?->id,
-            'amount' => $this->money($refundAmount),
+            'amount' => Money::format($refundAmount),
             'status' => Refund::STATUS_COMPLETED,
             'refund_method' => 'balance',
             'currency' => 'CNY',
@@ -143,8 +144,8 @@ class FinanceDocumentService
             'user_id' => (int) $invoice->user_id,
             'origin_invoice_id' => (int) $invoice->id,
             'type' => InvoiceType::REFUND,
-            'amount' => $this->money(-$refundAmount),
-            'paid_amount' => $this->money(-$refundAmount),
+            'amount' => Money::format(-$refundAmount),
+            'paid_amount' => Money::format(-$refundAmount),
             'status' => InvoiceStatus::PAID,
             'paid_at' => now(),
             'due_date' => null,
@@ -184,7 +185,7 @@ class FinanceDocumentService
                 'origin_recharge_record_id' => (int) $originRechargeRecord->id,
                 'scene' => 'refund',
                 'direction' => 'out',
-                'amount' => $this->money(-$offsetAmount),
+                'amount' => Money::format(-$offsetAmount),
                 'currency' => 'CNY',
                 'entry_type' => 'refund_offset',
                 'remark' => '退款冲抵原充值记录 '.(string) $originRechargeRecord->record_no,
@@ -282,11 +283,6 @@ class FinanceDocumentService
     private function assertPositiveAmount(float $amount, string $message): void
     {
         throw_if($amount <= 0, new BusinessException($message));
-    }
-
-    private function money(float|string $amount): string
-    {
-        return number_format(round((float) $amount, 2), 2, '.', '');
     }
 
     private function nullableString(mixed $value): ?string

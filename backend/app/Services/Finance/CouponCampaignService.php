@@ -9,6 +9,7 @@ use App\Exceptions\BusinessException;
 use App\Models\AutomationLog;
 use App\Models\Coupon;
 use App\Models\CouponCampaign;
+use App\Support\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Pagination\LengthAwarePaginator as SimpleLengthAwarePaginator;
@@ -339,13 +340,13 @@ class CouponCampaignService
             'discount_scope_label' => $this->resolveDiscountScopeLabel((string) ($campaign->discount_scope ?? 'first_month')),
             'discount_type' => (string) ($campaign->discount_type ?? 'fixed'),
             'discount_type_label' => $this->resolveDiscountTypeLabel((string) ($campaign->discount_type ?? 'fixed')),
-            'discount_value' => $this->formatAmount((float) ($campaign->discount_value ?? 0)),
+            'discount_value' => Money::format((float) ($campaign->discount_value ?? 0)),
             'discount_value_raw' => (float) ($campaign->discount_value ?? 0),
             'discount_label' => $this->buildDiscountLabel((string) ($campaign->discount_type ?? 'fixed'), (float) ($campaign->discount_value ?? 0)),
-            'min_amount' => $this->formatAmount((float) ($campaign->min_amount ?? 0)),
+            'min_amount' => Money::format((float) ($campaign->min_amount ?? 0)),
             'min_amount_raw' => (float) ($campaign->min_amount ?? 0),
             'max_discount_amount' => $campaign->max_discount_amount !== null
-                ? $this->formatAmount((float) $campaign->max_discount_amount)
+                ? Money::format((float) $campaign->max_discount_amount)
                 : null,
             'max_discount_amount_raw' => $campaign->max_discount_amount !== null
                 ? (float) $campaign->max_discount_amount
@@ -551,11 +552,11 @@ class CouponCampaignService
     private function buildDiscountLabel(string $discountType, float $discountValue): string
     {
         if ($discountType === 'fixed') {
-            return '立减 ¥'.$this->formatAmount($discountValue);
+            return '立减 ¥'.Money::format($discountValue);
         }
 
         if ($discountType === 'percentage') {
-            return rtrim(rtrim(number_format($discountValue / 10, 1, '.', ''), '0'), '.').' 折优惠';
+            return Money::trimZero(number_format($discountValue / 10, 1, '.', '')).' 折优惠';
         }
 
         return '优惠券';
@@ -699,10 +700,5 @@ class CouponCampaignService
         }
 
         return preg_match('/^\d{2}:\d{2}:\d{2}$/', $text) ? $text : '';
-    }
-
-    private function formatAmount(float $amount): string
-    {
-        return number_format($amount, 2, '.', '');
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\ProductCatalog;
 
 use App\Models\Product;
+use App\Support\Money;
 use Illuminate\Support\Str;
 
 class ProductDisplayNameResolver
@@ -879,7 +880,7 @@ class ProductDisplayNameResolver
             return (string) ((int) $number);
         }
 
-        return rtrim(rtrim(number_format($number, 2, '.', ''), '0'), '.');
+        return Money::trimZero(number_format($number, 2, '.', ''));
     }
 
     private function buildCombinedDisplayName(string $productSpecDisplay, string $cpuDisplay, string $memoryDisplay): string

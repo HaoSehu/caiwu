@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Constants\PaymentGatewayCode;
 use App\Models\Concerns\EnsuresTraceId;
 use App\Models\Concerns\NormalizesTraceId;
+use App\Support\OrderInvoiceNoGenerator;
 use App\Support\SchemaMetadataCache;
 use App\Support\VersionedJson;
 use Illuminate\Database\Eloquent\Builder;
@@ -15,7 +16,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 class Payment extends Model
@@ -206,14 +206,16 @@ class Payment extends Model
     public static function generatePaymentNo(): string
     {
         for ($attempt = 0; $attempt < 5; $attempt++) {
-            $no = 'PAY'.now()->format('YmdHisv').Str::upper(Str::random(8));
+            // PAY + 17 位时间戳（含毫秒）+ 8 位大写随机串。
+            $no = OrderInvoiceNoGenerator::generateSerialNumber('PAY', 'YmdHisv', 8);
 
             if (! static::query()->where('payment_no', $no)->exists()) {
                 return $no;
             }
         }
 
-        return 'PAY'.now()->format('YmdHisv').Str::upper(Str::random(12));
+        // 兜底路径保持原实现的 12 位随机段，进一步降低碰撞概率。
+        return OrderInvoiceNoGenerator::generateSerialNumber('PAY', 'YmdHisv', 12);
     }
 
     /**

@@ -6,6 +6,7 @@ namespace App\Services\User;
 
 use App\Models\User;
 use App\Models\UserAccount;
+use App\Support\Money;
 use App\Support\UserBalanceCache;
 
 class AccountService
@@ -118,10 +119,11 @@ class AccountService
 
     private function money(mixed $value): string
     {
+        // 非 numeric 输入直接落 0.00，避免 Money 对特殊字符串转换产生歧义
         if (! is_numeric($value)) {
             return '0.00';
         }
 
-        return number_format(round((float) $value, 2), 2, '.', '');
+        return Money::format($value);
     }
 }

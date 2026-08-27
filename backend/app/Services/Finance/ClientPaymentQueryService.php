@@ -153,9 +153,11 @@ class ClientPaymentQueryService
     private function gatewayLabel(string $gateway): string
     {
         return match ($gateway) {
+            // 「支付宝」是本列表的历史展示口径，与集中 LABELS 的「支付宝支付」不同，保留本地文案。
             PaymentGatewayCode::ALIPAY => '支付宝',
-            PaymentGatewayCode::YIPAY => PaymentGatewayCode::label(PaymentGatewayCode::YIPAY),
-            PaymentGatewayCode::WECHAT => PaymentGatewayCode::label(PaymentGatewayCode::WECHAT),
+            // 与 LABELS 一致的词条走集中定义。
+            PaymentGatewayCode::YIPAY,
+            PaymentGatewayCode::WECHAT => PaymentGatewayCode::label($gateway),
             default => $gateway,
         };
     }

@@ -8,6 +8,7 @@ use App\Models\Service;
 use App\Models\Supplier;
 use App\Models\User;
 use App\Services\Integrations\Plugins\PluginBindingResolver;
+use App\Support\Money;
 use App\Support\SensitiveDataSanitizer;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -1184,7 +1185,7 @@ trait HandlesClientServiceConsoleMonitoring
             return '--';
         }
 
-        $number = rtrim(rtrim(number_format((float) $value, 2, '.', ''), '0'), '.');
+        $number = Money::trimZero(number_format((float) $value, 2, '.', ''));
 
         if ($unit === '') {
             return $number;

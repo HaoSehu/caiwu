@@ -20,6 +20,7 @@ use App\Models\User;
 use App\Models\UserCoupon;
 use App\Services\ProductCatalog\InstanceSpecCatalogService;
 use App\Services\ProductCatalog\ProductDisplayNameResolver;
+use App\Support\Money;
 use App\Support\ProductGroupHierarchyFields;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
@@ -1256,13 +1257,13 @@ class CouponService
             'discount_scope_label' => $this->resolveDiscountScopeLabel((string) ($coupon->discount_scope ?? 'first_month')),
             'discount_type' => (string) $coupon->discount_type,
             'discount_type_label' => $this->resolveDiscountTypeLabel((string) $coupon->discount_type),
-            'discount_value' => $this->formatAmount((float) ($coupon->discount_value ?? 0)),
+            'discount_value' => Money::format((float) ($coupon->discount_value ?? 0)),
             'discount_value_raw' => (float) ($coupon->discount_value ?? 0),
             'discount_label' => $this->buildDiscountLabel($coupon),
-            'min_amount' => $this->formatAmount((float) ($coupon->min_amount ?? 0)),
+            'min_amount' => Money::format((float) ($coupon->min_amount ?? 0)),
             'min_amount_raw' => (float) ($coupon->min_amount ?? 0),
             'max_discount_amount' => $coupon->max_discount_amount !== null
-                ? $this->formatAmount((float) $coupon->max_discount_amount)
+                ? Money::format((float) $coupon->max_discount_amount)
                 : null,
             'max_discount_amount_raw' => $coupon->max_discount_amount !== null
                 ? (float) $coupon->max_discount_amount
@@ -1567,11 +1568,11 @@ class CouponService
             'receive_type' => (string) ($userCoupon->receive_type ?? 'claim'),
             'receive_type_label' => $this->resolveReceiveTypeLabel((string) ($userCoupon->receive_type ?? 'claim')),
             'discount_type' => (string) $coupon->discount_type,
-            'discount_value' => $this->formatAmount((float) ($coupon->discount_value ?? 0)),
+            'discount_value' => Money::format((float) ($coupon->discount_value ?? 0)),
             'discount_label' => $this->buildDiscountLabel($coupon),
-            'min_amount' => $this->formatAmount((float) ($coupon->min_amount ?? 0)),
+            'min_amount' => Money::format((float) ($coupon->min_amount ?? 0)),
             'max_discount_amount' => $coupon->max_discount_amount !== null
-                ? $this->formatAmount((float) $coupon->max_discount_amount)
+                ? Money::format((float) $coupon->max_discount_amount)
                 : null,
             'status' => $statusMeta['status'],
             'status_label' => $statusMeta['label'],
@@ -1615,9 +1616,9 @@ class CouponService
             'discount_scope_label' => $this->resolveDiscountScopeLabel((string) ($coupon->discount_scope ?? 'first_month')),
             'discount_type' => (string) $coupon->discount_type,
             'discount_label' => $this->buildDiscountLabel($coupon),
-            'min_amount' => $this->formatAmount((float) ($coupon->min_amount ?? 0)),
+            'min_amount' => Money::format((float) ($coupon->min_amount ?? 0)),
             'max_discount_amount' => $coupon->max_discount_amount !== null
-                ? $this->formatAmount((float) $coupon->max_discount_amount)
+                ? Money::format((float) $coupon->max_discount_amount)
                 : null,
             'status' => $statusMeta['status'],
             'status_label' => $statusMeta['label'],
@@ -1705,13 +1706,13 @@ class CouponService
             'discount_scope' => (string) ($coupon->discount_scope ?? 'first_month'),
             'discount_scope_label' => $this->resolveDiscountScopeLabel((string) ($coupon->discount_scope ?? 'first_month')),
             'discount_type' => (string) $coupon->discount_type,
-            'discount_value' => $this->formatAmount((float) ($coupon->discount_value ?? 0)),
+            'discount_value' => Money::format((float) ($coupon->discount_value ?? 0)),
             'discount_label' => $this->buildDiscountLabel($coupon),
-            'discount_amount' => $this->formatAmount($discountAmount),
-            'final_amount' => $this->formatAmount(max($amount - $discountAmount, 0)),
-            'min_amount' => $this->formatAmount((float) ($coupon->min_amount ?? 0)),
+            'discount_amount' => Money::format($discountAmount),
+            'final_amount' => Money::format(max($amount - $discountAmount, 0)),
+            'min_amount' => Money::format((float) ($coupon->min_amount ?? 0)),
             'max_discount_amount' => $coupon->max_discount_amount !== null
-                ? $this->formatAmount((float) $coupon->max_discount_amount)
+                ? Money::format((float) $coupon->max_discount_amount)
                 : null,
             'first_order_only' => (bool) $coupon->first_order_only,
             'per_user_limit' => $coupon->per_user_limit ? (int) $coupon->per_user_limit : null,
@@ -2317,11 +2318,11 @@ class CouponService
         $discountValue = (float) ($coupon->discount_value ?? 0);
 
         if ($discountType === 'fixed') {
-            return '立减 ¥'.$this->formatAmount($discountValue);
+            return '立减 ¥'.Money::format($discountValue);
         }
 
         if ($discountType === 'percentage') {
-            return rtrim(rtrim(number_format($discountValue / 10, 1, '.', ''), '0'), '.').' 折优惠';
+            return Money::trimZero(number_format($discountValue / 10, 1, '.', '')).' 折优惠';
         }
 
         return '优惠券';
@@ -2424,11 +2425,6 @@ class CouponService
         }
 
         return '长期有效';
-    }
-
-    private function formatAmount(float $amount): string
-    {
-        return number_format($amount, 2, '.', '');
     }
 
     private function normalizePositiveInteger(mixed $value): ?int

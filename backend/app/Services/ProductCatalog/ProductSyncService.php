@@ -20,6 +20,7 @@ use App\Services\Integrations\Plugins\UpstreamBindingWriter;
 use App\Services\ProductCatalog\Concerns\HandlesProductCatalogHelpers;
 use App\Services\Upstream\Contracts\ProvidesConsoleCatalog;
 use App\Services\Upstream\ProviderResolver;
+use App\Support\CacheKey;
 use App\Support\ProductGroupHierarchyFields;
 use App\Support\TextSanitizer;
 use Illuminate\Database\Eloquent\Builder;
@@ -705,7 +706,7 @@ class ProductSyncService
 
     public function siteProductStock(int $productId): ?array
     {
-        $cacheKey = 'site_product_stock:'.$productId;
+        $cacheKey = CacheKey::siteProductStock($productId);
         $cached = Cache::store('redis_volatile')->get($cacheKey);
 
         if ($cached !== null) {
@@ -804,7 +805,7 @@ class ProductSyncService
                     throw new BusinessException('暂时无法获取上游库存，请稍后重试');
                 }
 
-                $throttleKey = 'stock_log:detail_fail:'.$supplier->id;
+                $throttleKey = CacheKey::stockLogThrottle('detail_fail', (int) $supplier->id);
                 if (! Cache::store('redis_volatile')->has($throttleKey)) {
                     Cache::store('redis_volatile')->put($throttleKey, true, now()->addSeconds(60));
                     Log::warning('[商品库存] 拉取上游明细库存失败', [
@@ -829,7 +830,7 @@ class ProductSyncService
                         throw new BusinessException('未找到上游库存信息，请稍后重试');
                     }
 
-                    $notFoundThrottleKey = 'stock_log:not_found:'.$product->id;
+                    $notFoundThrottleKey = CacheKey::stockLogThrottle('not_found', (int) $product->id);
                     if (! Cache::store('redis_volatile')->has($notFoundThrottleKey)) {
                         Cache::store('redis_volatile')->put($notFoundThrottleKey, true, now()->addSeconds(60));
                         Log::warning('[商品库存] 未找到对应上游商品库存', [
@@ -882,7 +883,7 @@ class ProductSyncService
             return [];
         }
 
-        $cacheKey = $this->supplierRemoteStockCacheKey($supplier, $normalizedSupplierProductIds);
+        $cacheKey = CacheKey::productRemoteStock((int) $supplier->id, $normalizedSupplierProductIds);
         $cached = Cache::store('redis_volatile')->get($cacheKey);
 
         if (is_array($cached)) {
@@ -924,11 +925,6 @@ class ProductSyncService
         }
 
         return $remoteStocks;
-    }
-
-    private function supplierRemoteStockCacheKey(Supplier $supplier, array $supplierProductIds): string
-    {
-        return 'product_remote_stock:'.$supplier->id.':'.sha1(implode(',', $supplierProductIds));
     }
 
     private function findSaleProductForStock(int $productId): ?Product

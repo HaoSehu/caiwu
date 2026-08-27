@@ -24,6 +24,7 @@ use App\Services\System\OperationLogService;
 use App\Services\System\SettingService;
 use App\Services\Upstream\Contracts\ProvidesConsoleCatalog;
 use App\Services\Upstream\ProviderResolver;
+use App\Support\Money;
 use App\Support\OrderInvoiceNoGenerator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -1627,6 +1628,6 @@ class ServiceTrafficPackageService
 
     private function trimFloat(float $value): string
     {
-        return rtrim(rtrim(number_format($value, 2, '.', ''), '0'), '.');
+        return Money::trimZero(number_format($value, 2, '.', ''));
     }
 }
